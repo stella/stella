@@ -178,7 +178,6 @@ const capSpec = (
   inputOnly: [],
   paginated: false,
   destructive: false,
-  schemaTruncated: false,
   inputSchema: { type: "object", additionalProperties: false, properties: {} },
   ...overrides,
 });

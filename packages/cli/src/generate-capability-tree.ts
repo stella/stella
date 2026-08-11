@@ -13,6 +13,7 @@
 // recreate a parallel root command group beside the curated CLI.
 
 import { RESERVED_FLAGS, RESERVED_TOP_LEVEL_NAMES } from "./annotations.js";
+import { DEFS_KEY, expandSchemaDefs } from "./expand-schema-defs.js";
 import { flagKey } from "./flag-name.js";
 import {
   classifyProp,
@@ -47,12 +48,24 @@ export type CapabilityCatalogEntry = {
   additionalScopes?: readonly string[];
   requiresFileInput?: boolean;
   returnsFileResponse?: boolean;
-  inputSchemaTruncated?: boolean;
-  inputSchema?: {
+  /**
+   * The handler's input schema as the catalog carries it: `$defs`-compacted.
+   * Flag derivation works on the expanded form; the emitted leaf keeps the
+   * compacted one (see `deriveCapabilityLeaf`).
+   */
+  inputSchema: {
+    $defs?: JsonSchema;
     body?: JsonSchema;
     params?: JsonSchema;
     query?: JsonSchema;
   };
+};
+
+/** A capability's input schema with every `$defs` ref inlined. */
+type ExpandedInputSchema = {
+  body?: JsonSchema;
+  params?: JsonSchema;
+  query?: JsonSchema;
 };
 
 /** Stats surfaced by the codegen log line (spec 049 deliverable 2). */
@@ -181,10 +194,10 @@ const requiresWholePartInput = (schema: JsonSchema): boolean => {
  * `Page<T>` list contract; a lone `cursor` stays a normal (part-prefixed) flag.
  */
 const paginationPartOf = (
-  entry: CapabilityCatalogEntry,
+  inputSchema: ExpandedInputSchema,
 ): CapabilityPart | undefined => {
   for (const part of ["query", "body"] as const) {
-    const props = propertyMap(entry.inputSchema?.[part]);
+    const props = propertyMap(inputSchema[part]);
     if ("cursor" in props && "limit" in props) {
       return part;
     }
@@ -366,19 +379,29 @@ const resolveFlags = ({
  * validated against. `workspaceId` is injected into `params` when the
  * capability gets a synthetic `--workspace` flag, so `--input` accepts the same
  * shape the flag produces.
+ *
+ * `body` and `query` stay in their `$defs`-compacted form and the entry's
+ * `$defs` block rides along at the wrapper root, which is what `#/$defs/...`
+ * already points at. Baking the expanded schemas instead would put the same
+ * recursive condition subschema into the generated route map a dozen times per
+ * capability, for no gain: `--input` validation expands on demand. `params` is
+ * taken expanded, because injecting `workspaceId` has to merge into its
+ * properties, which a ref node does not carry.
  */
 const buildWrapperSchema = ({
-  entry,
+  compacted,
+  expanded,
   injectWorkspace,
 }: {
-  entry: CapabilityCatalogEntry;
+  compacted: CapabilityCatalogEntry["inputSchema"];
+  expanded: ExpandedInputSchema;
   injectWorkspace: boolean;
 }): JsonSchema => {
   const properties: Record<string, JsonSchema> = {};
-  if (entry.inputSchema?.body !== undefined) {
-    properties["body"] = entry.inputSchema.body;
+  if (compacted.body !== undefined) {
+    properties["body"] = compacted.body;
   }
-  const params = entry.inputSchema?.params;
+  const params = injectWorkspace ? expanded.params : compacted.params;
   if (injectWorkspace) {
     const base = isRecord(params) ? params : { type: "object" };
     const baseProps = isRecord(base["properties"]) ? base["properties"] : {};
@@ -394,10 +417,15 @@ const buildWrapperSchema = ({
   } else if (params !== undefined) {
     properties["params"] = params;
   }
-  if (entry.inputSchema?.query !== undefined) {
-    properties["query"] = entry.inputSchema.query;
+  if (compacted.query !== undefined) {
+    properties["query"] = compacted.query;
   }
-  return { type: "object", additionalProperties: false, properties };
+  return {
+    type: "object",
+    additionalProperties: false,
+    properties,
+    ...(compacted.$defs === undefined ? {} : { [DEFS_KEY]: compacted.$defs }),
+  };
 };
 
 /** Build one capability leaf from a catalog entry (spec 049 deliverable 2). */
@@ -410,38 +438,21 @@ export const deriveCapabilityLeaf = (
     const mapped = toolScopeOf(candidate);
     return mapped === undefined ? [] : [mapped];
   });
-  const paginationPart = paginationPartOf(entry);
-
-  // Truncated entries carry no snapshot schema: no flags, no client-side
-  // validation, `--input` only (the server validates against the live schema).
-  if (entry.inputSchemaTruncated === true) {
-    return {
-      spec: {
-        commandPath,
-        capabilityId: entry.id,
-        ...(entry.description === undefined
-          ? {}
-          : { description: entry.description }),
-        access: entry.access,
-        flags: [],
-        inputOnly: [],
-        paginated: paginationPart !== undefined,
-        ...(paginationPart === undefined ? {} : { paginationPart }),
-        ...(paginationPart === undefined ? {} : { itemsKey: "items" }),
-        destructive: entry.destructive,
-        ...(scope === undefined ? {} : { scope }),
-        ...(additionalScopes === undefined || additionalScopes.length === 0
-          ? {}
-          : { additionalScopes }),
-        schemaTruncated: true,
-      },
-      flagCollisions: [],
-    };
+  // Flags, pagination, and the workspace injection all read PROPERTY NAMES, so
+  // they need the schema with its `$defs` refs inlined. A catalog whose refs do
+  // not resolve is a corrupt artifact, not a schema to guess at.
+  const expanded = expandSchemaDefs(entry.inputSchema);
+  if (expanded === null) {
+    throw new RouteGenerationError(
+      `capability "${entry.id}": input schema has $defs references that do not resolve`,
+    );
   }
+  const expandedInputSchema: ExpandedInputSchema = expanded;
+  const paginationPart = paginationPartOf(expandedInputSchema);
 
   const inputOnly: string[] = [];
   const candidates: Candidate[] = [];
-  const paramsProps = propertyMap(entry.inputSchema?.params);
+  const paramsProps = propertyMap(expandedInputSchema.params);
   const injectWorkspace =
     entry.handlerKind === "workspace" && !("workspaceId" in paramsProps);
   for (const part of CAPABILITY_PARTS) {
@@ -453,7 +464,7 @@ export const deriveCapabilityLeaf = (
     candidates.push(
       ...candidatesForPart({
         part,
-        schema: entry.inputSchema?.[part],
+        schema: expandedInputSchema[part],
         skipProps: skip,
         inputOnly,
       }),
@@ -498,8 +509,11 @@ export const deriveCapabilityLeaf = (
       ...(additionalScopes === undefined || additionalScopes.length === 0
         ? {}
         : { additionalScopes }),
-      inputSchema: buildWrapperSchema({ entry, injectWorkspace }),
-      schemaTruncated: false,
+      inputSchema: buildWrapperSchema({
+        compacted: entry.inputSchema,
+        expanded: expandedInputSchema,
+        injectWorkspace,
+      }),
     },
     flagCollisions,
   };

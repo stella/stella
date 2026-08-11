@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { expandSchemaDefs } from "./expand-schema-defs.js";
 import { generatedRouteMap } from "./generated/route-map.js";
 import {
   buildInputContractHelp,
@@ -943,23 +944,26 @@ describe("generated --input help invariants", () => {
         }
         continue;
       }
-      if (
-        node.spec.inputSchema === undefined ||
-        node.spec.inputOnly.length === 0
-      ) {
+      if (node.spec.inputOnly.length === 0) {
         continue;
       }
+      // The baked schema is `$defs`-compacted and the help renderer does not
+      // resolve refs, so this invariant has to see what `buildCapabilityLeafCommand`
+      // renders and what the executor validates against: the expanded form.
+      const schema = expandSchemaDefs(node.spec.inputSchema);
+      if (schema === null) {
+        throw new Error(
+          `${node.spec.capabilityId} has unresolvable $defs references`,
+        );
+      }
       const help = buildInputContractHelp({
-        schema: node.spec.inputSchema,
+        schema,
         inputOnly: node.spec.inputOnly,
       });
       for (const path of node.spec.inputOnly) {
         expect(help?.fields.some((line) => line.includes(path))).toBe(true);
       }
-      const validation = validateAgainstSchema(
-        node.spec.inputSchema,
-        completeExample(help),
-      );
+      const validation = validateAgainstSchema(schema, completeExample(help));
       if (!validation.valid) {
         throw new Error(
           `${node.spec.capabilityId} generated invalid example at ${validation.path}: ${validation.message}`,

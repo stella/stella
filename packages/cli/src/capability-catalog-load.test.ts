@@ -18,6 +18,7 @@ const validEntry = (
   access: "read",
   destructive: false,
   scope: "stella:read",
+  inputSchema: {},
   ...overrides,
 });
 
@@ -80,16 +81,56 @@ describe("parseCapabilityCatalog fail-closed parsing", () => {
       "destructive",
       "handlerKind",
       "id",
+      "inputSchema",
       "scope",
     ]);
+  });
+
+  test("rejects an entry with no inputSchema at all", () => {
+    // Every capability carries a complete (`$defs`-compacted) input schema
+    // since the exporter stopped dropping oversize ones. An entry without one
+    // is a stale artifact, not something to degrade around.
+    const { inputSchema: _dropped, ...withoutSchema } = validEntry();
+    expect(parseCapabilityCatalog([withoutSchema])).toBeNull();
+  });
+
+  test("carries a compacted schema through unchanged", () => {
+    // The loader is the only path a compacted schema takes from the committed
+    // artifact to the expander. Dropping `$defs`, or any one of the three
+    // parts, would leave a leaf whose refs resolve to nothing.
+    const inputSchema = {
+      $defs: {
+        s_0123456789ab: {
+          type: "object",
+          properties: { operator: { type: "string" }, value: {} },
+          required: ["operator"],
+        },
+      },
+      body: {
+        type: "object",
+        properties: {
+          where: { $ref: "#/$defs/s_0123456789ab" },
+          having: { $ref: "#/$defs/s_0123456789ab" },
+        },
+      },
+      params: {
+        type: "object",
+        properties: { workspaceId: { type: "string" } },
+      },
+      query: { type: "object", properties: { limit: { type: "number" } } },
+    };
+
+    expect(
+      parseCapabilityCatalog([validEntry({ inputSchema })])?.at(0)?.inputSchema,
+    ).toEqual(inputSchema);
   });
 
   test("absent optional fields are dropped, not defaulted", () => {
     const entry = parseCapabilityCatalog([validEntry()])?.at(0);
     expect(entry).toBeDefined();
     expect("requiresFileInput" in (entry ?? {})).toBe(false);
-    expect("inputSchema" in (entry ?? {})).toBe(false);
-    expect("inputSchemaTruncated" in (entry ?? {})).toBe(false);
+    expect("returnsFileResponse" in (entry ?? {})).toBe(false);
+    expect("description" in (entry ?? {})).toBe(false);
   });
 
   test("projects inputSchema sub-parts, keeping only the present ones", () => {

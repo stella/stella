@@ -118,7 +118,6 @@ type CatalogEntry = {
   feature?: string;
   permissions?: unknown;
   inputSchema?: { body?: unknown; params?: unknown; query?: unknown };
-  inputSchemaTruncated?: true;
   mcp: CapabilityMcpDisposition;
 };
 

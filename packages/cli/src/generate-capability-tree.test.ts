@@ -9,7 +9,10 @@ import {
   deriveCapabilityLeaf,
   insertCapabilities,
 } from "./generate-capability-tree.js";
-import { generateRouteMap } from "./generate-route-map.js";
+import {
+  generateRouteMap,
+  RouteGenerationError,
+} from "./generate-route-map.js";
 import type {
   CapabilityFlagSpec,
   CapabilityLeafSpec,
@@ -32,6 +35,7 @@ const entry = (
   access: "read",
   destructive: false,
   scope: "stella:read",
+  inputSchema: {},
   ...overrides,
 });
 
@@ -377,17 +381,55 @@ describe("deriveCapabilityLeaf: pagination + suppression + truncation", () => {
     expect(flagByCli(spec, "--active")).toBeDefined();
   });
 
-  test("a truncated entry yields no flags and --input only", () => {
+  test("a $defs-compacted entry gets typed flags and keeps its refs in the leaf", () => {
+    // The catalog carries these schemas compacted, so flag derivation has to
+    // expand before it can see a property name at all. The emitted leaf keeps
+    // the compacted form (the CLI expands it only to validate `--input`).
     const { spec } = deriveCapabilityLeaf(
       entry({
         id: "views.create",
-        handlerKind: "workspace",
-        inputSchemaTruncated: true,
+        handlerKind: "root",
+        inputSchema: {
+          $defs: {
+            s_cond: {
+              type: "object",
+              properties: { operator: { type: "string" } },
+            },
+          },
+          body: {
+            type: "object",
+            required: ["name"],
+            properties: {
+              name: { type: "string" },
+              where: { $ref: "#/$defs/s_cond" },
+              having: { $ref: "#/$defs/s_cond" },
+            },
+          },
+        },
       }),
     );
-    expect(spec.flags).toHaveLength(0);
-    expect(spec.schemaTruncated).toBe(true);
-    expect(spec.inputSchema).toBeUndefined();
+    // `--where.operator` can only exist if the ref was resolved: an unexpanded
+    // `{"$ref": ...}` node carries no properties to derive a flag from.
+    expect(spec.flags.map((flag) => flag.flag)).toEqual([
+      "--name",
+      "--where.operator",
+      "--having.operator",
+    ]);
+    expect(spec.inputSchema["$defs"]).toEqual({
+      s_cond: { type: "object", properties: { operator: { type: "string" } } },
+    });
+  });
+
+  test("an entry whose $defs refs do not resolve fails the codegen", () => {
+    expect(() =>
+      deriveCapabilityLeaf(
+        entry({
+          id: "views.create",
+          handlerKind: "root",
+          inputSchema: { body: { $ref: "#/$defs/missing" } },
+        }),
+      ),
+    ).toThrow(RouteGenerationError);
   });
 
   test("scope maps stella:* to a ToolScope, else undefined", () => {
@@ -635,11 +677,6 @@ describe("every capability flag maps to a real path in its wrapper schema", () =
     const drift: string[] = [];
     for (const catalogEntry of entries ?? []) {
       const { spec } = deriveCapabilityLeaf(catalogEntry);
-      if (spec.inputSchema === undefined) {
-        // Truncated entry: no flags, `--input` only.
-        expect(spec.flags).toHaveLength(0);
-        continue;
-      }
       for (const flag of spec.flags) {
         if (!pathResolves(spec.inputSchema, flag.part, flag.partPath)) {
           drift.push(

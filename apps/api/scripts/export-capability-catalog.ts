@@ -14,10 +14,14 @@
 // trip), permissions, handler-scope kind, access (read/write) + destructive
 // flag, and the MCP OAuth scope for the capability's domain.
 //
-// The snapshot is compact JSON (id-sorted entries, no indentation), and each
-// entry's input schema is capped at MAX_CAPABILITY_SCHEMA_BYTES: oversize
-// schemas are omitted and the entry marked `inputSchemaTruncated` so the
-// committed artifact stays reviewable (see CapabilityEntry).
+// The snapshot is compact JSON (id-sorted entries, no indentation). Each
+// entry's input schema goes through `$defs` compaction (repeated subschemas
+// hoisted, occurrences replaced by same-document `$ref`s), then must fit
+// MAX_CAPABILITY_SCHEMA_BYTES. Compaction is asserted lossless per capability:
+// re-expanding the compacted schema must reproduce the source serialization
+// byte for byte, or the export fails. An entry still over the cap after
+// compaction also fails the export — no capability ships without a describable
+// input shape.
 //
 // Modes:
 //   bun --env-file=apps/api/.env apps/api/scripts/export-capability-catalog.ts
@@ -42,6 +46,7 @@ import path from "node:path";
 // collision fallbacks (curated command wins, capability relocates under
 // `stella capability <domain> <action>`) are never hand-replicated here.
 import { parseCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-load";
+import { expandSchemaDefs } from "../../../packages/cli/src/expand-schema-defs";
 import { buildCliRouteTree } from "../../../packages/cli/src/generate-capability-tree";
 import type { RouteNode } from "../../../packages/cli/src/route-types";
 import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
@@ -49,7 +54,6 @@ import type { McpToolDefinition } from "../src/mcp/tool-types";
 import {
   type CapabilityDispatchRecord,
   type AccessResolution,
-  capInputSchema,
   CANONICAL_ACTION_VERBS,
   CAPABILITY_ID_SEGMENT_PATTERN,
   type CapabilityInputSchema,
@@ -59,9 +63,11 @@ import {
   deriveDomain,
   deriveHandlerImportPath,
   findInlineCapabilityMismatches,
+  inputSchemaByteSize,
   isAllowedActionVerb,
   isDestructiveName,
   isWellFormedCapabilityId,
+  MAX_CAPABILITY_SCHEMA_BYTES,
   readScopeForDomainScope,
   resolveAccess,
   resolveHandlerKind,
@@ -75,6 +81,10 @@ import {
   serializeDispatchModule,
   WRITE_ONLY_SCOPES,
 } from "./lib/capability-catalog";
+import {
+  type CompactedCapabilityInputSchema,
+  compactSchemaDefs,
+} from "./lib/compact-schema-defs";
 import {
   discoverSafeHandlers,
   type HandlerKind,
@@ -458,19 +468,14 @@ type CapabilityEntry = {
   feature?: string;
   permissions?: unknown;
   /**
-   * Absent when the schema exceeded MAX_CAPABILITY_SCHEMA_BYTES (see
-   * `inputSchemaTruncated`). The server always has the live schema from the
-   * handler config; the snapshot omits oversize schemas to keep the committed
-   * artifact reviewable.
+   * The handler config's `body`/`params`/`query`, `$defs`-compacted: repeated
+   * subschemas are hoisted into `$defs` and their occurrences replaced by
+   * `#/$defs/...` refs. Consumers expand it with `expandSchemaDefs`, which
+   * reproduces the config's schema exactly. Always present: an entry whose
+   * schema cannot be compacted under MAX_CAPABILITY_SCHEMA_BYTES fails the
+   * export.
    */
-  inputSchema?: CapabilityInputSchema;
-  /**
-   * Set when `inputSchema` was omitted for size. Consumers must treat truncated
-   * entries as input-only: the capability still accepts input (validated
-   * server-side against the live handler schema), but the snapshot cannot
-   * describe its shape.
-   */
-  inputSchemaTruncated?: true;
+  inputSchema: CompactedCapabilityInputSchema;
   mcp: CapabilityMcp;
 };
 
@@ -597,8 +602,6 @@ type BuildResult = {
   entries: CapabilityEntry[];
   dispatchRecords: CapabilityDispatchRecord[];
   errors: string[];
-  /** Capability ids whose input schema was omitted for exceeding the byte cap. */
-  truncatedSchemas: string[];
   /**
    * Tally of `internal`-disposition endpoints by their `reason`: permanent
    * reviewed waivers (auth/token plumbing, transport mechanics, ...) that never
@@ -629,18 +632,19 @@ type BuildCatalogEntryOptions = {
   additionalScopes: readonly string[];
   hasPermissions: boolean;
   permissions: unknown;
-  /** Live (pre-cap) input schema; flag derivation must see the full schema. */
+  /** Live (pre-compaction) input schema; flag derivation reads the full shape. */
   inputSchema: CapabilityInputSchema;
-  capped: ReturnType<typeof capInputSchema>;
+  /** Same schema, `$defs`-compacted: what the entry carries. */
+  compactedInputSchema: CompactedCapabilityInputSchema;
   exposure: ParsedExposure;
   feature: string | undefined;
 };
 
 /**
  * Assemble one catalog entry from its resolved pieces. `requiresFileInput` is
- * derived from the LIVE (pre-cap) schema so a snapshot-truncated capability
- * still carries the flag; the boolean flags are emitted only when true so the
- * compact snapshot stays minimal.
+ * derived from the LIVE schema, which is the same shape the compacted one
+ * expands to; the boolean flags are emitted only when true so the compact
+ * snapshot stays minimal.
  */
 const buildCatalogEntry = ({
   id,
@@ -652,7 +656,7 @@ const buildCatalogEntry = ({
   hasPermissions,
   permissions,
   inputSchema,
-  capped,
+  compactedInputSchema,
   exposure,
   feature,
 }: BuildCatalogEntryOptions): CapabilityEntry => ({
@@ -674,11 +678,63 @@ const buildCatalogEntry = ({
     : {}),
   ...(feature === undefined ? {} : { feature }),
   ...(hasPermissions ? { permissions } : {}),
-  ...(capped.truncated
-    ? { inputSchemaTruncated: true as const }
-    : { inputSchema: capped.inputSchema }),
+  inputSchema: compactedInputSchema,
   mcp: toCapabilityMcp(exposure),
 });
+
+/**
+ * `$defs`-compact one capability's input schema, with the two invariants that
+ * make the compacted artifact trustworthy checked on the spot:
+ *
+ *  1. LOSSLESS: re-expanding the compacted schema must reproduce the source
+ *     serialization byte for byte. This is the gate that stops a compacted
+ *     schema from ever describing a different input set than the handler
+ *     validates — a widened schema would accept input the handler rejects, a
+ *     narrowed one would make the CLI reject input the handler accepts.
+ *  2. UNDER THE CAP: compaction is what brought the recursive view/condition
+ *     schemas under MAX_CAPABILITY_SCHEMA_BYTES. An entry still over it fails
+ *     the export instead of shipping as an opaque, flagless capability.
+ *
+ * Both failures are pushed onto `errors`, so the export reports every offender
+ * at once and writes nothing. The uncompacted schema is returned in that case
+ * purely so the remaining guards can keep running over a well-typed entry.
+ */
+const compactInputSchemaGuarded = ({
+  errors,
+  id,
+  inputSchema,
+}: {
+  errors: string[];
+  id: string;
+  inputSchema: CapabilityInputSchema;
+}): CompactedCapabilityInputSchema => {
+  const compaction = compactSchemaDefs(inputSchema);
+  if (compaction.status === "unsupported") {
+    errors.push(
+      `capability "${id}": input schema cannot be $defs-compacted: ${compaction.reason}`,
+    );
+    return inputSchema;
+  }
+  const compacted = compaction.inputSchema;
+  const expanded = expandSchemaDefs(compacted);
+  if (
+    expanded === null ||
+    JSON.stringify(expanded) !== JSON.stringify(inputSchema)
+  ) {
+    errors.push(
+      `capability "${id}": expanding the $defs-compacted input schema did not reproduce the source schema. The compacted snapshot would describe a different input set than the handler validates; fix compact-schema-defs.ts / expand-schema-defs.ts, never ship the mismatch`,
+    );
+    return inputSchema;
+  }
+  const bytes = inputSchemaByteSize(compacted);
+  if (bytes > MAX_CAPABILITY_SCHEMA_BYTES) {
+    errors.push(
+      `capability "${id}": input schema is ${bytes} bytes after $defs compaction, over the ${MAX_CAPABILITY_SCHEMA_BYTES}-byte cap. Shrink the handler's schema (factor the repeated shape into one reusable TypeBox type) or improve compaction; the cap is not the thing to raise`,
+    );
+    return compacted;
+  }
+  return compacted;
+};
 
 /**
  * Class guards over the built catalog entries. Each returns reviewer-actionable
@@ -874,7 +930,6 @@ const buildCatalog = async (): Promise<BuildResult> => {
   const kindOverrideUses: string[] = [];
   const optOutUses = new Set<string>();
   const scopeOverrideUses = new Set<string>();
-  const truncatedSchemas: string[] = [];
 
   // Enumerable `capability` endpoints per file, for the inline-capability
   // invariant: any textual `capability` disposition beyond these is an inline
@@ -1146,10 +1201,11 @@ const buildCatalog = async (): Promise<BuildResult> => {
     }
 
     const inputSchema = buildInputSchema(endpoint.config);
-    const capped = capInputSchema(inputSchema);
-    if (capped.truncated) {
-      truncatedSchemas.push(id);
-    }
+    const compactedInputSchema = compactInputSchemaGuarded({
+      errors,
+      id,
+      inputSchema,
+    });
     // Deployment feature gate: the covering tool's flag wins (mechanical
     // inheritance), the reviewed domain table covers the rest.
     const coveringToolName = coveringToolOf(endpoint.exposure);
@@ -1168,7 +1224,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
         hasPermissions,
         permissions,
         inputSchema,
-        capped,
+        compactedInputSchema,
         exposure: endpoint.exposure,
         feature: inheritedFeature ?? DOMAIN_FEATURE[domain],
       }),
@@ -1234,12 +1290,10 @@ const buildCatalog = async (): Promise<BuildResult> => {
 
   entries.sort((a, b) => a.id.localeCompare(b.id));
   dispatchRecords.sort((a, b) => a.id.localeCompare(b.id));
-  truncatedSchemas.sort((a, b) => a.localeCompare(b));
   return {
     entries,
     dispatchRecords,
     errors,
-    truncatedSchemas,
     internalWaiverCounts,
   };
 };
@@ -1429,23 +1483,12 @@ const computeCliCommandPaths = async (
 
 const main = async (): Promise<number> => {
   const checkMode = process.argv.includes("--check");
-  const {
-    entries,
-    dispatchRecords,
-    errors,
-    truncatedSchemas,
-    internalWaiverCounts,
-  } = await buildCatalog();
+  const { entries, dispatchRecords, errors, internalWaiverCounts } =
+    await buildCatalog();
 
   if (errors.length > 0) {
     printErrors(errors);
     return 1;
-  }
-
-  if (truncatedSchemas.length > 0) {
-    process.stderr.write(
-      `export-capability-catalog: ${truncatedSchemas.length} input schema(s) over the byte cap, omitted (inputSchemaTruncated): ${truncatedSchemas.join(", ")}\n`,
-    );
   }
 
   const serialized = serializeCatalog(entries);

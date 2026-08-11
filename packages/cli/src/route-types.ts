@@ -165,13 +165,11 @@ export type CapabilityLeafSpec = {
   additionalScopes?: readonly ToolScope[];
   /**
    * Synthesized `{ body?, params?, query? }` wrapper schema validated against
-   * the `--input` payload. Absent when the catalog entry's schema was truncated
-   * (`schemaTruncated`): then `--input` is passed through unvalidated (the
-   * server still validates against the live handler schema).
+   * the `--input` payload. Always present: every catalog entry carries a
+   * complete input schema. Kept `$defs`-compacted here, the way the catalog
+   * carries it; `--input` validation expands it (`expand-schema-defs.ts`).
    */
-  inputSchema?: JsonSchema;
-  /** The catalog entry carried `inputSchemaTruncated`: no flags, `--input` only. */
-  schemaTruncated: boolean;
+  inputSchema: JsonSchema;
 };
 
 /** stricli assembly: `LeafCommandSpec[]` folds into a nested route tree. */
