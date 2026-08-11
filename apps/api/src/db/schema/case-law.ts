@@ -10,6 +10,7 @@ import type {
   Polarity,
   RuleSource,
 } from "@/api/handlers/case-law/polarity/consts";
+import type { ConstantMap } from "@/api/lib/constant-map";
 
 import {
   caseLawIngestionOnlyPolicies,
@@ -44,16 +45,15 @@ import type {
   CorpusIndexJobStatus,
 } from "./corpus-index-jobs";
 
+/** The declaration the column's `enum` and the CHECK both derive from. */
+const CASE_LAW_CORPUS_MIRROR_STATUSES = ["settled", "pending"] as const;
+
+type CaseLawCorpusMirrorStatus = (typeof CASE_LAW_CORPUS_MIRROR_STATUSES)[number];
+
 export const CASE_LAW_CORPUS_MIRROR_STATUS = {
   PENDING: "pending",
   SETTLED: "settled",
-} as const;
-
-/** The same values as a list, for the column's `enum` and the CHECK. */
-const CASE_LAW_CORPUS_MIRROR_STATUSES = [
-  CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
-  CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
-] as const;
+} as const satisfies ConstantMap<CaseLawCorpusMirrorStatus>;
 
 export const CASE_LAW_CORPUS_UPLOAD_INTENT_STATUSES = [
   "active",
