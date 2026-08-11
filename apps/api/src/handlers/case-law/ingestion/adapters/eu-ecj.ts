@@ -9,6 +9,7 @@ import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   defineSourceAdapter,
   EMPTY_AST,
+  listingIdentityKey,
   STORED_RAW_REPARSE_REJECTION,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
@@ -642,24 +643,29 @@ export const fetchDecisionsByCelex = async ({
   });
 
   const decisions: IngestionResult[] = [];
-  const seen = new Set<string>();
+  const completedVariants = new Set<string>();
   for (const binding of bindings) {
     const lang = toEcjLanguage(binding.language.value);
     if (lang === undefined || (languages && !languages.includes(lang))) {
       continue;
     }
     // A work can expose several XHTML manifestations of one language
-    // (re-publications); the first is the one the crawl would take.
+    // (re-publications), and a variant is done only once one of them has
+    // built — the rule the crawl walks by. Marking it on sight instead
+    // would let an unreadable first manifestation stand for the variant
+    // while a later usable one goes unvisited, and every caller here reads
+    // an empty result as the publisher not serving the document at all.
     const variantKey = `${binding.celex.value}:${lang}`;
-    if (seen.has(variantKey)) {
+    if (completedVariants.has(variantKey)) {
       continue;
     }
-    seen.add(variantKey);
     // oxlint-disable-next-line no-await-in-loop -- rate-limited external calls stay sequential instead of fanning out across every manifestation
     const decision = await buildDecision(binding, signal);
-    if (decision) {
-      decisions.push(decision);
+    if (!decision) {
+      continue;
     }
+    decisions.push(decision);
+    completedVariants.add(variantKey);
   }
   return decisions;
 };
@@ -1008,8 +1014,15 @@ const ECJ_SLICE_PAGES = 12;
  * walked, and this publisher adds translations to a decision for a long time
  * after the judgment date that files it under a year. Two slices give a
  * decision between twelve and twenty-four months of tip coverage, depending on
- * where in its year it was decided; anything later is left to the ledger's
- * short-slice backlog.
+ * where in its year it was decided.
+ *
+ * And that is the whole of it: a year walked complete and left behind is not
+ * listed again. The ledger's backlog only revisits slices already recorded
+ * short, and the sweep only fills history never surveyed at all, so a
+ * translation arriving after its year leaves the window stays unseen until
+ * something re-surveys that year. Closing that means re-walking stale complete
+ * slices, which is the loop's selection policy and belongs with it rather than
+ * with one adapter's window.
  */
 const ECJ_TIP_WINDOW_SLICES = 2;
 
@@ -1056,6 +1069,66 @@ const ecjSlicePageRange = (slice: string, page: number): EcjSliceRange => {
   };
 };
 
+/** Shared identities named in the log line; enough to act on, bounded. */
+const SHARED_IDENTITY_SAMPLE = 3;
+
+/**
+ * Record listed variants that would be stored under one identity.
+ *
+ * Several document kinds settle one docket — an opinion, a judgment and an
+ * order all numbered C-100/23 — and this source keys its rows on the docket
+ * and the language, so those become one identity and one row. A slice's
+ * counts are computed over identities and stay self-consistent, but they
+ * cannot then speak for the documents behind a shared key: the slice settles
+ * while only one of them is held.
+ *
+ * The reconciliation must key items exactly as the ingest keys rows or it
+ * never reaches a fixed point, so this is not something the listing may fix
+ * on its own — the granularity is the persisted identity's. Counting it here
+ * is what keeps the gap measurable rather than silent, and gives a re-key the
+ * measurement it would need.
+ */
+const reportSharedIdentities = (
+  slice: string,
+  page: number,
+  variants: readonly EcjCelexVariant[],
+): void => {
+  const celexByIdentity = new Map<string, Set<string>>();
+  for (const variant of variants) {
+    const key = listingIdentityKey(ecjListingIdentity(variant));
+    if (key === null) {
+      continue;
+    }
+    const celexNumbers = celexByIdentity.get(key) ?? new Set<string>();
+    celexNumbers.add(variant.celex);
+    celexByIdentity.set(key, celexNumbers);
+  }
+  const shared = [...celexByIdentity].filter(
+    ([, celexNumbers]) => celexNumbers.size > 1,
+  );
+  if (shared.length === 0) {
+    return;
+  }
+  logger.warn("case_law.reconciliation.shared_identity", {
+    adapterKey: ADAPTER_KEYS.EU_ECJ,
+    slice,
+    page,
+    identities: shared.length,
+    documents: shared.reduce(
+      (total, [, celexNumbers]) => total + celexNumbers.size,
+      0,
+    ),
+    // One string, because a log attribute is a scalar: an array here is
+    // rejected at the type boundary rather than silently flattened.
+    sample: shared
+      .slice(0, SHARED_IDENTITY_SAMPLE)
+      .map(
+        ([key, celexNumbers]) => `${key}=${[...celexNumbers].sort().join(",")}`,
+      )
+      .join("; "),
+  });
+};
+
 /**
  * One page of what the publisher lists for a slice, with no manifestation
  * fetched.
@@ -1082,8 +1155,10 @@ const listEcjSlicePage = async ({
     truncation: SPARQL_TRUNCATION.REFUSE,
     signal: signal ?? AbortSignal.timeout(ECJ_LISTING_TIMEOUT_MS),
   });
+  const variants = distinctVariants(bindings);
+  reportSharedIdentities(slice, page, variants);
   return {
-    items: distinctVariants(bindings).map((variant) => ({
+    items: variants.map((variant) => ({
       identity: ecjListingIdentity(variant),
       payload: variant,
     })),

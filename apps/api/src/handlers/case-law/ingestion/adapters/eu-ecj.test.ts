@@ -1,6 +1,14 @@
 import { Result } from "better-result";
 /* eslint-disable typescript-eslint/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import {
@@ -12,6 +20,7 @@ import {
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import type { SourceReconciliation } from "@/api/lib/legal-search/ingestion-types";
 import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
+import { logger } from "@/api/lib/observability/logger";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import sparqlFixture from "./__fixtures__/eu-ecj-sparql.json";
@@ -768,6 +777,70 @@ describe("euEcjAdapter.reconciliation.listSlicePage", () => {
     expect(rejection).toBeInstanceOf(DOMException);
   });
 
+  test("records listed variants that share one stored identity", async () => {
+    // An opinion, a judgment and an order can settle one docket, and this
+    // source keys rows on the docket: those are one identity and one row, so
+    // the slice settles with one of the three held. The listing cannot key
+    // them apart without the persisted identity changing too — it must ask
+    // the question the ingest answers — so the collapse is counted instead of
+    // being left to look like completeness.
+    const orderBinding = {
+      ...withManifestation(firstFixtureBinding, {
+        cellarLanguage: "ENG",
+        manifestationId: "5f978357-b5e4-11ee-b164-01aa75ed71a1.0004.05",
+      }),
+      celex: { type: "literal", value: "62021CO0128" },
+    };
+    installSparqlMock({ bindings: [enBinding, orderBinding] });
+    const warn = spyOn(logger, "warn");
+
+    try {
+      const page = await reconciliation.listSlicePage({
+        slice: "2024",
+        page: 0,
+      });
+
+      // Both are listed; the engine is what collapses them, on the key the
+      // ingest would store.
+      expect(page.items.map(({ payload }) => payload)).toEqual([
+        { celex: "62021CJ0128", language: "EN" },
+        { celex: "62021CO0128", language: "EN" },
+      ]);
+      expect(
+        page.items.map(({ identity }) => listingIdentityKey(identity)),
+      ).toEqual(["case-number:en:C-128/21", "case-number:en:C-128/21"]);
+
+      const reported = warn.mock.calls.find(
+        ([message]) => message === "case_law.reconciliation.shared_identity",
+      );
+      expect(reported).toBeDefined();
+      expect(reported?.[1]?.["identities"]).toBe(1);
+      expect(reported?.[1]?.["documents"]).toBe(2);
+      expect(reported?.[1]?.["sample"]).toBe(
+        "case-number:en:C-128/21=62021CJ0128,62021CO0128",
+      );
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  test("says nothing when every listed variant keys to its own row", async () => {
+    installSparqlMock({ bindings: [enBinding, frBinding] });
+    const warn = spyOn(logger, "warn");
+
+    try {
+      await reconciliation.listSlicePage({ slice: "2024", page: 0 });
+
+      expect(
+        warn.mock.calls.filter(
+          ([message]) => message === "case_law.reconciliation.shared_identity",
+        ),
+      ).toEqual([]);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   test("refuses a page the slice does not have", async () => {
     installSparqlMock({ bindings: [] });
 
@@ -839,6 +912,31 @@ describe("euEcjAdapter.reconciliation.buildDecision", () => {
     expect(outcome.decision.caseNumber).toBe("C-128/21");
     expect(outcome.decision.language).toBe("fr");
     expect(outcome.decision.documentUrl).toContain(FR_MANIFESTATION_ID);
+  });
+
+  test("builds from a later manifestation when the first is unreadable", async () => {
+    // A work can expose several XHTML manifestations of one language. The
+    // crawl treats a variant as done only once one of them builds, so a
+    // rebuild that stopped at the first would park — and eventually retire —
+    // a document the crawl ingests without trouble.
+    const staleManifestation = withManifestation(firstFixtureBinding, {
+      cellarLanguage: "ENG",
+      manifestationId: "5f978357-b5e4-11ee-b164-01aa75ed71a1.0005.05",
+    });
+    installSparqlMock({
+      bindings: [staleManifestation, enBinding],
+      served: [EN_MANIFESTATION_ID],
+    });
+
+    const outcome = await reconciliation.buildDecision({
+      celex: "62021CJ0128",
+      language: "EN",
+    });
+
+    if (outcome.type !== "built") {
+      throw new TypeError(`Expected built, got ${outcome.type}`);
+    }
+    expect(outcome.decision.documentUrl).toContain(EN_MANIFESTATION_ID);
   });
 
   test("reports a variant the publisher lists but does not serve", async () => {
