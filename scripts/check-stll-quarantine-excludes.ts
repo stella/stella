@@ -2,7 +2,7 @@
  * Guard `bunfig.toml`'s `minimumReleaseAgeExcludes`:
  *
  * 1. Every first-party `@stll/*` package the lockfile resolves from npm must
- *    be excluded.
+ *    be excluded and record when that permanent exclusion began.
  * 2. A temporary third-party exclusion annotated with
  *    `# quarantine-expires: <timestamp>` must be removed once Bun's release-age
  *    gate can take over again.
@@ -38,6 +38,7 @@ const LOCKFILE = "bun.lock";
 const BUNFIG = "bunfig.toml";
 const SCRIPT_PATH = "scripts/check-stll-quarantine-excludes.ts";
 const EXPIRY_MARKER = "quarantine-expires:";
+const EXCLUDED_SINCE_MARKER = "quarantine-excluded-since:";
 const EXACT_UTC_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 
 /** Packages resolved from the workspace itself never hit the registry. */
@@ -62,20 +63,72 @@ const readExcludes = (bunfig: string): Set<string> => {
   );
 };
 
-const readUndatedThirdPartyExcludes = (bunfig: string): string[] =>
+const excludeDeclaration = (line: string): string | undefined =>
+  /^\s*"(?<name>[^"]+)",?\s*(?:#.*)?$/u.exec(line)?.groups?.["name"];
+
+const exactUtcTimestampError = ({
+  marker,
+  name,
+  timestamp,
+}: {
+  marker: string;
+  name: string;
+  timestamp: string;
+}): string | undefined => {
+  const timestampMs = Date.parse(timestamp);
+  if (
+    EXACT_UTC_TIMESTAMP.test(timestamp) &&
+    !Number.isNaN(timestampMs) &&
+    new Date(timestampMs).toISOString() === timestamp
+  ) {
+    return undefined;
+  }
+  return `${BUNFIG} minimum-release-age exclude "${name}" has an invalid ${marker} UTC timestamp: ${timestamp}`;
+};
+
+const readExcludeAnnotationErrors = (bunfig: string, now: Date): string[] =>
   readExcludeBlock(bunfig)
     .split("\n")
     .flatMap((line) => {
-      const match = /^\s*"(?<name>[^"]+)",?\s*(?:#.*)?$/u.exec(line);
-      const name = match?.groups?.["name"];
-      if (
-        name === undefined ||
-        name.startsWith("@stll/") ||
-        line.includes(EXPIRY_MARKER)
-      ) {
+      const name = excludeDeclaration(line);
+      if (name === undefined) {
         return [];
       }
-      return [name];
+
+      if (!name.startsWith("@stll/")) {
+        if (!line.includes(EXPIRY_MARKER)) {
+          return [
+            `${BUNFIG} third-party quarantine exclude "${name}" is missing an exact UTC expiry`,
+          ];
+        }
+        return [];
+      }
+
+      if (!line.includes(EXCLUDED_SINCE_MARKER)) {
+        return [
+          `${BUNFIG} first-party quarantine exclude "${name}" is missing an exact UTC exclusion date`,
+        ];
+      }
+
+      const excludedSince = line
+        .slice(
+          line.indexOf(EXCLUDED_SINCE_MARKER) + EXCLUDED_SINCE_MARKER.length,
+        )
+        .trim();
+      const invalid = exactUtcTimestampError({
+        marker: "exclusion-date",
+        name,
+        timestamp: excludedSince,
+      });
+      if (invalid !== undefined) {
+        return [invalid];
+      }
+      if (Date.parse(excludedSince) > now.getTime()) {
+        return [
+          `${BUNFIG} first-party quarantine exclude "${name}" has a future exclusion date: ${excludedSince}`,
+        ];
+      }
+      return [];
     });
 
 type TemporaryExclude = {
@@ -116,11 +169,12 @@ const parseTemporaryExcludeLine = (line: string): ParsedTemporaryExclude => {
 
   const name = quotedName.slice(1, -1);
   const expiresAt = comment.slice(EXPIRY_MARKER.length).trim();
-  const expiresAtMs = Date.parse(expiresAt);
   if (
-    !EXACT_UTC_TIMESTAMP.test(expiresAt) ||
-    Number.isNaN(expiresAtMs) ||
-    new Date(expiresAtMs).toISOString() !== expiresAt
+    exactUtcTimestampError({
+      marker: "expiry",
+      name,
+      timestamp: expiresAt,
+    }) !== undefined
   ) {
     return {
       error: `${BUNFIG} temporary quarantine exclude "${name}" has an invalid UTC expiry: ${expiresAt}`,
@@ -208,13 +262,10 @@ export const checkQuarantineExcludes = ({
     .filter((name) => !excludes.has(name))
     .sort();
   const temporary = readTemporaryExcludes(bunfig);
-  const errors = [...temporary.errors];
-
-  for (const name of readUndatedThirdPartyExcludes(bunfig)) {
-    errors.push(
-      `${BUNFIG} third-party quarantine exclude "${name}" is missing an exact UTC expiry`,
-    );
-  }
+  const errors = [
+    ...temporary.errors,
+    ...readExcludeAnnotationErrors(bunfig, now),
+  ];
 
   if (missing.length > 0) {
     errors.push(

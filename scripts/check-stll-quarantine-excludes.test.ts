@@ -15,7 +15,7 @@ const createBunfig = (temporaryLine: string) => `
 [install]
 minimumReleaseAge = 432_000
 minimumReleaseAgeExcludes = [
-  "@stll/native",
+  "@stll/native", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   ${temporaryLine}
 ]
 `;
@@ -29,6 +29,45 @@ describe("quarantine exclude guard", () => {
 
     expect(result.errors).toContain(
       'bunfig.toml third-party quarantine exclude "better-result" is missing an exact UTC expiry',
+    );
+  });
+
+  test("rejects every undated first-party exclusion", () => {
+    const result = checkQuarantineExcludes({
+      bunfig: createBunfig(
+        '"@stll/shipped", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z',
+      ).replace(
+        '"@stll/native", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z',
+        '"@stll/native",',
+      ),
+      lockfile,
+    });
+
+    expect(result.errors).toContain(
+      'bunfig.toml first-party quarantine exclude "@stll/native" is missing an exact UTC exclusion date',
+    );
+  });
+
+  test("rejects malformed and future first-party exclusion dates", () => {
+    const malformed = checkQuarantineExcludes({
+      bunfig: createBunfig(
+        '"@stll/shipped", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z',
+      ).replace("2026-07-08T00:22:40.000Z", "2026-07-08"),
+      lockfile,
+    });
+    const future = checkQuarantineExcludes({
+      bunfig: createBunfig(
+        '"@stll/shipped", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z',
+      ).replace("2026-07-08T00:22:40.000Z", "2099-01-01T00:00:00.000Z"),
+      lockfile,
+      now: new Date("2026-08-11T00:00:00.000Z"),
+    });
+
+    expect(malformed.errors.at(0)).toContain(
+      'minimum-release-age exclude "@stll/native" has an invalid exclusion-date UTC timestamp',
+    );
+    expect(future.errors.at(0)).toContain(
+      'first-party quarantine exclude "@stll/native" has a future exclusion date',
     );
   });
 
@@ -128,7 +167,7 @@ describe("quarantine exclude guard", () => {
 [install]
 minimumReleaseAge = 432_000
 minimumReleaseAgeExcludes = [
-  "@stll/native",
+  "@stll/native", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   # Security patches for dependency-audit findings.
   "brace-expansion", # quarantine-expires: 2026-08-04T10:00:32.762Z
   "fast-uri", # quarantine-expires: 2026-08-05T09:16:56.212Z
@@ -143,7 +182,9 @@ minimumReleaseAgeExcludes = [
     expect(result.pruned).toEqual(["brace-expansion"]);
     expect(result.bunfig).not.toContain("brace-expansion");
     expect(result.bunfig).toContain('"fast-uri", # quarantine-expires:');
-    expect(result.bunfig).toContain('"@stll/native"');
+    expect(result.bunfig).toContain(
+      '"@stll/native", # quarantine-excluded-since:',
+    );
     expect(result.bunfig).toContain('"drizzle-kit"');
     // The pruned file is what the guard should then accept.
     expect(
@@ -162,7 +203,7 @@ minimumReleaseAgeExcludes = [
 [install]
 minimumReleaseAge = 432_000
 minimumReleaseAgeExcludes = [
-  "@stll/native",
+  "@stll/native", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "fast-uri", # quarantine-expires: 2026-08-05T09:16:56.212Z
   "fast-uri", # quarantine-expires: 2026-09-01T09:16:56.212Z
 ]
