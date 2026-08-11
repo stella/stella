@@ -83,8 +83,7 @@ export const captureOutlookIngestion = ({
           ...(diagnostic.aggregateAttachmentBytes === null
             ? {}
             : {
-                aggregate_attachment_bytes:
-                  diagnostic.aggregateAttachmentBytes,
+                aggregate_attachment_bytes: diagnostic.aggregateAttachmentBytes,
               }),
           ...(diagnostic.host ? { host: diagnostic.host } : {}),
           ...(diagnostic.hostVersion

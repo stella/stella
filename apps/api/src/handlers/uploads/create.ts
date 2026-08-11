@@ -19,13 +19,13 @@ import {
 import { validateAgentSkill } from "@/api/handlers/uploads/agent-skill";
 import { validateEntityVersion } from "@/api/handlers/uploads/entity-version";
 import {
-  authorizeUploadPurpose,
-  uploadRoutePermission,
-} from "@/api/handlers/uploads/permissions";
-import {
   captureOutlookIngestion,
   outlookIngestionDiagnosticSchema,
 } from "@/api/handlers/uploads/outlook-ingestion-diagnostics";
+import {
+  authorizeUploadPurpose,
+  uploadRoutePermission,
+} from "@/api/handlers/uploads/permissions";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
