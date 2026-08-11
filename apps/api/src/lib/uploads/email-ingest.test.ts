@@ -1,6 +1,11 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { Transaction } from "@/api/db/root";
+import type { SafeDb } from "@/api/db/safe-db";
+import { toSafeId } from "@/api/lib/branded-types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { persistEmailIngestRecoveryKeys } from "@/api/lib/uploads/email-ingest";
 import {
   detectEmailContainer,
   emailIngestFinalObjectCleanupFailure,
@@ -9,6 +14,17 @@ import {
   validateEmailAttachmentMimeType,
   validateEmailIngestContainer,
 } from "@/api/lib/uploads/email-ingest-policy";
+
+const pendingUploadId = toSafeId<"pendingUpload">(
+  "00000000-0000-0000-0000-000000000001",
+);
+const userId = toSafeId<"user">("00000000-0000-0000-0000-000000000002");
+const workspaceId = toSafeId<"workspace">(
+  "00000000-0000-0000-0000-000000000003",
+);
+const propertyId = toSafeId<"property">(
+  "00000000-0000-0000-0000-000000000004",
+);
 
 describe("validateEmailAttachmentCount", () => {
   test("accepts the bounded maximum", () => {
@@ -31,6 +47,47 @@ test("classifies final-object cleanup failure as retryable", () => {
 
   expect(error.status).toBe(500);
   expect(error.rejectReason).toBe("final-object-cleanup-failed");
+});
+
+test("renews the finalize lease atomically with email recovery keys", async () => {
+  const writes: unknown[] = [];
+  const tx = asTestRaw<Transaction>({
+    update: () => ({
+      set: (values: unknown) => {
+        writes.push(values);
+        return {
+          where: () => ({
+            returning: async () => [{ id: pendingUploadId }],
+          }),
+        };
+      },
+    }),
+  });
+  const safeDb = asTestRaw<SafeDb>(async (run) =>
+    Result.ok(await run(tx)),
+  );
+
+  const result = await persistEmailIngestRecoveryKeys({
+    safeDb,
+    uploadId: pendingUploadId,
+    userId,
+    workspaceId,
+    claimRequestId: "claim-1",
+    purposeData: { type: "email_ingest", propertyId },
+    recoveryObjectKeys: ["org/workspace/message.eml"],
+  });
+
+  expect(Result.isOk(result)).toBe(true);
+  expect(writes).toEqual([
+    {
+      claimedAt: expect.any(Date),
+      purposeData: {
+        type: "email_ingest",
+        propertyId,
+        recoveryObjectKeys: ["org/workspace/message.eml"],
+      },
+    },
+  ]);
 });
 
 describe("email attachment policy", () => {
