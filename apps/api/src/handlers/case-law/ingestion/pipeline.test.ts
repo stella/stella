@@ -4,7 +4,6 @@ import { afterEach, describe, expect, mock, test } from "bun:test";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { DocumentAst, Inline } from "@/api/handlers/case-law/document-ast";
 import {
   EMPTY_AST,
@@ -22,6 +21,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
+import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 
 const concatInlineText = (inlines: Inline[]): string => {
   let out = "";
@@ -427,25 +427,7 @@ describe("sanitizeResult — documentAst text fields", () => {
 
 describe("runIngestionPipeline — database timeouts", () => {
   test("holds the source cursor when a decision DB operation times out", async () => {
-    const source = {
-      id: createSafeId<"caseLawSource">(),
-      adapterKey: ADAPTER_KEYS.CZ_NS,
-      name: "Timeout source",
-      enabled: true,
-      syncCursor: "cursor-1",
-      lastSyncAt: null,
-      observationOrder: 0n,
-      checkpointObservationOrder: 0n,
-      ingestionLeaseToken: null,
-      ingestionLeaseExpiresAt: null,
-      config: {},
-      descriptor: null,
-      reportedTotal: null,
-      reportedTotalAsOf: null,
-      reportedTotalOrigin: null,
-      createdAt: new Date("2026-01-01T00:00:00.000Z"),
-      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
-    } satisfies typeof caseLawSources.$inferSelect;
+    const source = caseLawSourceRow({ name: "Timeout source" });
 
     const decision = baseResult({});
     czNsAdapter.fetchPage = async () =>
@@ -505,25 +487,7 @@ describe("runIngestionPipeline — database timeouts", () => {
 
 describe("runIngestionPipeline — empty-page cursor progress", () => {
   test("persists the fetched cursor when the cycle aborts on an empty page", async () => {
-    const source = {
-      id: createSafeId<"caseLawSource">(),
-      adapterKey: ADAPTER_KEYS.CZ_NS,
-      name: "Empty-page source",
-      enabled: true,
-      syncCursor: "cursor-1",
-      lastSyncAt: null,
-      observationOrder: 0n,
-      checkpointObservationOrder: 0n,
-      ingestionLeaseToken: null,
-      ingestionLeaseExpiresAt: null,
-      config: {},
-      descriptor: null,
-      reportedTotal: null,
-      reportedTotalAsOf: null,
-      reportedTotalOrigin: null,
-      createdAt: new Date("2026-01-01T00:00:00.000Z"),
-      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
-    } satisfies typeof caseLawSources.$inferSelect;
+    const source = caseLawSourceRow({ name: "Empty-page source" });
 
     // The cycle deadline fires while the fetch is in flight; the page it
     // returns carries no decisions but real cursor progress. Acquiring the
