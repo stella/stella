@@ -100,16 +100,23 @@ const AUTH_SCHEMA_MODULE = "@/api/db/auth-schema";
 
 // ── Rule 4: require-raw-document-security-headers ─────────────
 //
-// Production file handlers return privileged document bytes through the
-// global Response constructor. Null-body status responses carry no document
-// data; every other Response must spread the shared security-header policy.
+// Production file handlers and attachment responses return privileged bytes
+// through the global Response constructor. Null-body status responses carry no
+// document data; every download must spread the shared security-header policy.
 
 const RAW_DOCUMENT_SECURITY_HEADERS = "RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS";
 const SECURITY_HEADERS_MODULE = "@/api/lib/security-headers";
+const PROTECTED_RAW_DOCUMENT_HEADERS = new Set([
+  "cache-control",
+  "content-security-policy",
+  "referrer-policy",
+  "x-content-type-options",
+  "x-frame-options",
+]);
 
-const hasRawDocumentSecurityHeaders = (node): boolean => {
+const getHeadersObject = (node) => {
   if (node.type !== "ObjectExpression") {
-    return false;
+    return null;
   }
 
   const headersProperty = node.properties.find(
@@ -118,18 +125,81 @@ const hasRawDocumentSecurityHeaders = (node): boolean => {
       getPropertyName(property.key) === "headers",
   );
   if (!headersProperty || headersProperty.type !== "Property") {
-    return false;
+    return null;
   }
-  if (headersProperty.value.type !== "ObjectExpression") {
+
+  return headersProperty.value;
+};
+
+const hasAttachmentDisposition = (node): boolean => {
+  if (node.type !== "ObjectExpression") {
     return false;
   }
 
-  return headersProperty.value.properties.some(
+  const disposition = node.properties.find(
+    (property) =>
+      property.type === "Property" &&
+      getPropertyName(property.key)?.toLowerCase() === "content-disposition",
+  );
+  if (!disposition || disposition.type !== "Property") {
+    return false;
+  }
+
+  if (
+    disposition.value.type === "Literal" &&
+    typeof disposition.value.value === "string"
+  ) {
+    return disposition.value.value.toLowerCase().startsWith("attachment;");
+  }
+
+  return isCallTo(disposition.value, "contentDisposition");
+};
+
+const hasRawDocumentSecurityHeaders = (
+  node,
+  secureHeadersIdentifiers: Set<string>,
+): boolean => {
+  const headers = getHeadersObject(node);
+  if (!headers) {
+    return false;
+  }
+
+  if (headers.type === "Identifier") {
+    return secureHeadersIdentifiers.has(headers.name);
+  }
+  if (headers.type !== "ObjectExpression") {
+    return false;
+  }
+
+  return hasUnshadowedRawDocumentSecurityHeaders(headers);
+};
+
+const hasUnshadowedRawDocumentSecurityHeaders = (headers): boolean => {
+  const sharedHeadersIndex = headers.properties.findIndex(
     (property) =>
       property.type === "SpreadElement" &&
       isIdentifier(property.argument, RAW_DOCUMENT_SECURITY_HEADERS),
   );
+  if (sharedHeadersIndex === -1) {
+    return false;
+  }
+
+  return headers.properties.slice(sharedHeadersIndex + 1).every((property) => {
+    if (property.type === "SpreadElement") {
+      return false;
+    }
+    if (property.type !== "Property") {
+      return true;
+    }
+    const propertyName = getPropertyName(property.key)?.toLowerCase();
+    return !propertyName || !PROTECTED_RAW_DOCUMENT_HEADERS.has(propertyName);
+  });
 };
+
+const isFileHandler = (context): boolean =>
+  (context.filename ?? context.getFilename?.() ?? "")
+    .replaceAll("\\", "/")
+    .includes("/apps/api/src/handlers/files/");
 
 export default eslintCompatPlugin({
   meta: { name: "security-guards" },
@@ -400,10 +470,16 @@ export default eslintCompatPlugin({
       },
       createOnce(context) {
         let hasSecurityHeadersImport = false;
+        let fileHandler = false;
+        const downloadHeadersIdentifiers = new Set<string>();
+        const secureHeadersIdentifiers = new Set<string>();
 
         return {
           before() {
             hasSecurityHeadersImport = false;
+            fileHandler = isFileHandler(context);
+            downloadHeadersIdentifiers.clear();
+            secureHeadersIdentifiers.clear();
           },
           ImportDeclaration(node) {
             if (node.source.value !== SECURITY_HEADERS_MODULE) {
@@ -416,6 +492,26 @@ export default eslintCompatPlugin({
                 isIdentifier(specifier.local, RAW_DOCUMENT_SECURITY_HEADERS),
             );
           },
+          VariableDeclarator(node) {
+            if (
+              !isIdentifier(node.id) ||
+              node.init?.type !== "NewExpression" ||
+              !isIdentifier(node.init.callee, "Headers")
+            ) {
+              return;
+            }
+
+            const init = node.init.arguments.at(0);
+            if (!init || init.type !== "ObjectExpression") {
+              return;
+            }
+            if (hasAttachmentDisposition(init)) {
+              downloadHeadersIdentifiers.add(node.id.name);
+            }
+            if (hasUnshadowedRawDocumentSecurityHeaders(init)) {
+              secureHeadersIdentifiers.add(node.id.name);
+            }
+          },
           NewExpression(node) {
             if (!isIdentifier(node.callee, "Response")) {
               return;
@@ -427,10 +523,21 @@ export default eslintCompatPlugin({
             }
 
             const init = node.arguments.at(1);
+            const headers = init ? getHeadersObject(init) : null;
+            const isDownloadResponse =
+              fileHandler ||
+              (headers?.type === "ObjectExpression" &&
+                hasAttachmentDisposition(headers)) ||
+              (headers?.type === "Identifier" &&
+                downloadHeadersIdentifiers.has(headers.name));
+            if (!isDownloadResponse) {
+              return;
+            }
+
             if (
               hasSecurityHeadersImport &&
               init &&
-              hasRawDocumentSecurityHeaders(init)
+              hasRawDocumentSecurityHeaders(init, secureHeadersIdentifiers)
             ) {
               return;
             }

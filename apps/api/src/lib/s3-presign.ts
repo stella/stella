@@ -34,6 +34,7 @@ import { Result, TaggedError } from "better-result";
 import { envBase } from "@/api/env-base";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { resolveS3Credentials } from "@/api/lib/s3";
+import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
 
 export class S3PresignError extends TaggedError("S3PresignError")<{
   message: string;
@@ -515,6 +516,8 @@ export const presignDownloadUrl = async (
         new GetObjectCommand({
           Bucket: envBase.S3_BUCKET,
           Key: key,
+          ResponseCacheControl:
+            RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS["Cache-Control"],
           ...(fileName
             ? { ResponseContentDisposition: contentDisposition(fileName) }
             : {}),

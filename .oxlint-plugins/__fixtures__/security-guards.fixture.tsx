@@ -21,9 +21,22 @@ export const UnsafeLink = () => (
 export const SafeLink = () => <a href={safeUrl}>Open</a>;
 
 // oxlint-disable-next-line security-guards/require-raw-document-security-headers -- fixture: privileged bytes omit the shared response policy
-export const unsafeDocumentResponse = new Response(bytes);
+export const unsafeDocumentResponse = new Response(bytes, {
+  headers: { "Content-Disposition": 'attachment; filename="unsafe.pdf"' },
+});
 export const safeDocumentResponse = new Response(bytes, {
-  headers: { ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS },
+  headers: {
+    ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
+    "Content-Disposition": 'attachment; filename="safe.pdf"',
+  },
+});
+// oxlint-disable-next-line security-guards/require-raw-document-security-headers -- fixture: a later protected override defeats the shared response policy
+export const overriddenDocumentResponse = new Response(bytes, {
+  headers: {
+    ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
+    "Cache-Control": "public",
+    "Content-Disposition": 'attachment; filename="unsafe.pdf"',
+  },
 });
 export const emptyResponse = new Response(null, { status: 404 });
 

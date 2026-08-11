@@ -1935,8 +1935,8 @@ export default defineConfig({
       },
     },
     {
-      files: ["apps/api/src/handlers/files/**/*.ts"],
-      excludeFiles: ["apps/api/src/handlers/files/**/*.test.ts"],
+      files: ["apps/api/src/handlers/**/*.ts"],
+      excludeFiles: ["apps/api/src/handlers/**/*.test.ts"],
       rules: {
         "security-guards/require-raw-document-security-headers": "error",
       },

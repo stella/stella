@@ -33,6 +33,7 @@ import { createFileKey } from "@/api/lib/files/utils";
 import { getS3 } from "@/api/lib/s3";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
 
 const downloadZipParamsSchema = workspaceParams({
   entityId: tSafeId("entity"),
@@ -315,6 +316,7 @@ const downloadZipHandler = async function* ({
   return Result.ok(
     new Response(makeZip(archiveEntries()), {
       headers: {
+        ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
         "Content-Type": "application/zip",
         "Content-Disposition": contentDisposition(zipFileName),
       },

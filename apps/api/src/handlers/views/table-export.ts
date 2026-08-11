@@ -19,6 +19,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { extractFormattingLocale } from "@/api/lib/locale";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
 import { excludedEntityKindsForView } from "@/api/lib/views";
 import { parseViewLayout } from "@/api/lib/views-schema";
 import {
@@ -768,6 +769,7 @@ const exportTableView = createSafeHandler(
     return Result.ok(
       new Response(body, {
         headers: {
+          ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
           "Content-Disposition": contentDisposition(filename),
           "Content-Type": contentType,
         },

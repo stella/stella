@@ -358,12 +358,12 @@ const pdfResponse = (buffer: ArrayBuffer, fileName: string) =>
 const streamedPdfResponse = (response: Response, fileName: string) =>
   new Response(response.body, {
     headers: {
-      ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
-      "Content-Type": PDF_MIME_TYPE,
-      "Content-Disposition": inlineContentDisposition(fileName),
       ...(response.headers.has("Content-Length")
         ? { "Content-Length": response.headers.get("Content-Length") ?? "" }
         : {}),
+      ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
+      "Content-Type": PDF_MIME_TYPE,
+      "Content-Disposition": inlineContentDisposition(fileName),
     },
   });
 
