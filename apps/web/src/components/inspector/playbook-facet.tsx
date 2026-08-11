@@ -52,13 +52,22 @@ import {
 import {
   createReviewBasis,
   playbookIdFromBasis,
-  referencesFromBasis,
 } from "@/components/ai-suggestions/document-review-basis.logic";
 import type {
   ReferenceFile,
   ReviewBasis,
 } from "@/components/ai-suggestions/document-review-basis.logic";
-import { documentReviewSourcesOptions } from "@/components/ai-suggestions/document-review-queries";
+import {
+  documentReviewRunOptions,
+  documentReviewRunsOptions,
+  documentReviewSourcesOptions,
+} from "@/components/ai-suggestions/document-review-queries";
+import {
+  resolveReviewRunRestore,
+  restoreReviewRun,
+  restoredRunId,
+  reviewRunView,
+} from "@/components/ai-suggestions/document-review-run.logic";
 import {
   isNegotiablePlaybookVerdict,
   reviewSessionKey,
@@ -76,6 +85,7 @@ import type {
   ReviewTopic,
   ReviewFindingFix,
   ReviewFixState,
+  StartReviewResult,
 } from "@/components/ai-suggestions/playbook-review-store";
 import { InlinePill } from "@/components/inline-pill";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
@@ -132,6 +142,7 @@ export const PlaybookFacet = ({
     (state) => state.sessions[reviewSessionKey(entityId, fileFieldId)],
   );
   const startReview = usePlaybookReviewStore((state) => state.startReview);
+  const startRun = usePlaybookReviewStore((state) => state.startRun);
   const confirmTopics = usePlaybookReviewStore((state) => state.confirmTopics);
   const setTopics = usePlaybookReviewStore((state) => state.setTopics);
   const setFixState = usePlaybookReviewStore((state) => state.setFixState);
@@ -148,52 +159,80 @@ export const PlaybookFacet = ({
   const playbooks =
     playbooksData && "items" in playbooksData ? playbooksData.items : [];
 
-  const reviewedPlaybookId = session?.basis
-    ? playbookIdFromBasis(session.basis)
-    : null;
-  const reviewedReferences = session?.basis
-    ? referencesFromBasis(session.basis)
-    : [];
-
-  // Negotiation guidance is authored on the playbook definition, not the
-  // review response (the backend Finding shape stays unchanged): fetch the
-  // reviewed playbook's positions and look each finding's guidance up by
-  // `sourceId` (== `finding.positionId`) so a deviation/fallback card can
-  // surface what to say without threading new fields through grading.
-  const { data: playbookDetail } = useQuery({
-    ...playbookDetailOptions(
-      user.activeOrganizationId,
-      reviewedPlaybookId ?? "",
-    ),
-    enabled: reviewedPlaybookId !== null,
+  // A facet with no session (a fresh open, or a reload mid-review) has decided
+  // nothing yet: the server's newest runs for this document are what it shows.
+  // A reviewer who went back to the launcher dismissed that restore, and the
+  // dismissal has to outlive the run.
+  const sessionRunId = session === undefined ? null : session.runId;
+  const restoreAllowed =
+    session === undefined ||
+    (session.runId === null && session.restore === "allowed");
+  const { data: runHistory, isPending: runHistoryPending } = useQuery({
+    ...documentReviewRunsOptions({ workspaceId, entityId, fileFieldId }),
+    enabled: restoreAllowed,
   });
-  const negotiationBySourceId = negotiationLookup(playbookDetail);
+  const restoredRun =
+    runHistory === undefined
+      ? null
+      : restoredRunId(resolveReviewRunRestore(runHistory.items));
+  const trackedRunId =
+    sessionRunId === null && restoreAllowed ? restoredRun : sessionRunId;
 
   const editorAvailable = registration !== undefined;
-  const playbookName =
-    playbooks.find((p) => p.id === reviewedPlaybookId)?.name ?? "";
+  const pendingPlaybookId =
+    session === undefined || session.basis === null
+      ? null
+      : playbookIdFromBasis(session.basis);
+  const pendingPlaybookName =
+    pendingPlaybookId === null
+      ? ""
+      : (playbooks.find((playbook) => playbook.id === pendingPlaybookId)?.name ??
+        "");
+
+  const reportStartFailure = (result: StartReviewResult) => {
+    if (result.ok) {
+      return;
+    }
+    // A thrown request (client timeout / network) carries no Eden error to
+    // capture; still surface the toast.
+    if (result.error) {
+      analytics.captureError(toAPIError(result.error));
+    }
+    stellaToast.add({
+      type: "error",
+      title: t("inspector.review.failed"),
+      description: result.message,
+    });
+  };
 
   const runReview = async (basis: ReviewBasis, seededTopics: ReviewTopic[]) => {
-    const result = await startReview({
-      workspaceId,
-      basis,
-      entityId,
-      fileFieldId,
-      unexpectedErrorMessage: t("common.unexpectedError"),
-      seededTopics,
-    });
-    if (!result.ok) {
-      // A thrown request (client timeout / network) carries no Eden error to
-      // capture; still surface the toast.
-      if (result.error) {
-        analytics.captureError(toAPIError(result.error));
-      }
-      stellaToast.add({
-        type: "error",
-        title: t("inspector.review.failed"),
-        description: result.message,
-      });
-    }
+    reportStartFailure(
+      await startReview({
+        workspaceId,
+        basis,
+        entityId,
+        fileFieldId,
+        unexpectedErrorMessage: t("common.unexpectedError"),
+        seededTopics,
+      }),
+    );
+  };
+
+  // Retrying a failed run starts a new one from the same pinned basis and the
+  // same confirmed topics: the run row is immutable, so a retry is a new run
+  // rather than a resumed one.
+  const retryRun = async (retry: ReviewRunRetry) => {
+    reportStartFailure(
+      await startRun({
+        workspaceId,
+        entityId,
+        fileFieldId,
+        playbookId: retry.playbookId,
+        references: retry.references,
+        topics: retry.topics,
+        unexpectedErrorMessage: t("common.unexpectedError"),
+      }),
+    );
   };
 
   const scrollToBlock = (blockId: string) => {
@@ -201,16 +240,10 @@ export const PlaybookFacet = ({
   };
 
   const openReferenceCitation = (
-    referenceFieldId: string,
+    reference: ReferenceFile,
     blockId: string,
     text: string,
   ) => {
-    const reference = reviewedReferences.find(
-      (candidate) => candidate.fileFieldId === referenceFieldId,
-    );
-    if (!reference) {
-      return;
-    }
     useInspectorCommandStore.getState().requestBlockScroll({
       tabId: reference.fileFieldId,
       blockId,
@@ -359,10 +392,10 @@ export const PlaybookFacet = ({
   };
 
   if (
-    session?.status === "reviewing" ||
+    session?.status === "starting" ||
     session?.status === "proposing-topics"
   ) {
-    return <ReviewingState sourceName={playbookName} />;
+    return <ReviewingState sourceName={pendingPlaybookName} />;
   }
 
   if (session?.status === "editing-topics") {
@@ -413,16 +446,19 @@ export const PlaybookFacet = ({
     );
   }
 
-  if (typeof session?.reviewedAt === "number") {
+  // Deciding between a restored run and the launcher needs the history answer
+  // first; showing the launcher meanwhile would flash a review the document
+  // has already had.
+  if (restoreAllowed && sessionRunId === null && runHistoryPending) {
+    return <ReviewLoadingState />;
+  }
+
+  if (trackedRunId !== null) {
     return (
-      <ResultsView
+      <ReviewRunPanel
+        commentStateByFinding={session === undefined ? {} : session.commentState}
         editorAvailable={editorAvailable}
-        playbookFindings={session.results.playbook}
-        referenceFindings={session.results.references}
-        references={reviewedReferences}
-        commentStateByFinding={session.commentState}
-        fixStateByFinding={session.fixState}
-        negotiationBySourceId={negotiationBySourceId}
+        fixStateByFinding={session === undefined ? {} : session.fixState}
         onAcceptFix={acceptFix}
         onAddReferenceComment={(finding) => {
           detached(addFindingComment(finding), "PlaybookFacet.addComment");
@@ -432,11 +468,15 @@ export const PlaybookFacet = ({
         }}
         onOpenReferenceCitation={openReferenceCitation}
         onRejectFix={rejectFix}
+        onRetry={(retry) => {
+          detached(retryRun(retry), "PlaybookFacet.retryRun");
+        }}
         onReviewAgain={() => resetSession(entityId, fileFieldId)}
         onScrollToBlock={scrollToBlock}
         onScrollToFix={scrollToFix}
-        playbookName={playbookName}
-        topics={session.topics}
+        organizationId={user.activeOrganizationId}
+        runId={trackedRunId}
+        workspaceId={workspaceId}
       />
     );
   }
@@ -449,6 +489,158 @@ export const PlaybookFacet = ({
       onReview={(basis, seededTopics) => {
         detached(runReview(basis, seededTopics), "PlaybookFacet");
       }}
+    />
+  );
+};
+
+// -- Durable run --
+
+/** What a retry needs to start an equivalent run: the same pinned basis and
+ *  the same confirmed topics the failed run carried. */
+export type ReviewRunRetry = {
+  playbookId: string | null;
+  references: readonly ReferenceFile[];
+  topics: readonly ReviewTopic[];
+};
+
+type ReviewRunPanelProps = {
+  workspaceId: string;
+  runId: string;
+  organizationId: string;
+  editorAvailable: boolean;
+  commentStateByFinding: Record<string, ReviewCommentState>;
+  fixStateByFinding: Record<string, ReviewFixState>;
+  onAcceptFix: (findingId: string, revisionIds: readonly number[]) => void;
+  onAddReferenceComment: (finding: ReferenceFinding) => void;
+  onInsertFix: (findingId: string, fix: ReviewFindingFix | null) => void;
+  onOpenReferenceCitation: (
+    reference: ReferenceFile,
+    blockId: string,
+    text: string,
+  ) => void;
+  onRejectFix: (findingId: string, revisionIds: readonly number[]) => void;
+  onRetry: (retry: ReviewRunRetry) => void;
+  onReviewAgain: () => void;
+  onScrollToBlock: (blockId: string) => void;
+  onScrollToFix: (revisionIds: readonly number[]) => void;
+};
+
+/**
+ * One durable review run: its progress while the worker executes it, its
+ * findings once it completes, its error code if it fails. Everything rendered
+ * here comes from the run row — including the playbook name and the reference
+ * documents, which the run pinned — so a completed review still describes
+ * itself after the playbook or the documents have moved on.
+ */
+const ReviewRunPanel = ({
+  workspaceId,
+  runId,
+  organizationId,
+  editorAvailable,
+  commentStateByFinding,
+  fixStateByFinding,
+  onAcceptFix,
+  onAddReferenceComment,
+  onInsertFix,
+  onOpenReferenceCitation,
+  onRejectFix,
+  onRetry,
+  onReviewAgain,
+  onScrollToBlock,
+  onScrollToFix,
+}: ReviewRunPanelProps) => {
+  const t = useTranslations();
+  const {
+    data: runDetail,
+    error: runError,
+    refetch: refetchRun,
+  } = useQuery(documentReviewRunOptions({ workspaceId, runId }));
+  const restored = runDetail === undefined ? null : restoreReviewRun(runDetail);
+  const restoredPlaybookId =
+    restored === null ? null : restored.basis.playbookId;
+
+  // Negotiation guidance is authored on the playbook definition, not on the
+  // finding: look each finding's guidance up by `sourceId`
+  // (== `finding.positionId`) so a deviation/fallback card can surface what to
+  // say without threading new fields through grading.
+  const { data: playbookDetail } = useQuery({
+    ...playbookDetailOptions(organizationId, restoredPlaybookId ?? ""),
+    enabled: restoredPlaybookId !== null,
+  });
+
+  // A poll that fails once must not blank a review already on screen, so the
+  // read error only surfaces while there is nothing to show.
+  if (runDetail === undefined || restored === null) {
+    return runError === null ? (
+      <ReviewLoadingState />
+    ) : (
+      <ErrorState
+        message={t("common.unexpectedError")}
+        onChangeBasis={onReviewAgain}
+        onRetry={() => {
+          detached(refetchRun(), "ReviewRunPanel.refetch");
+        }}
+      />
+    );
+  }
+
+  const { run } = runDetail;
+  const view = reviewRunView(run.status);
+
+  if (view === "progress") {
+    return (
+      <ReviewProgressState
+        completed={run.completed}
+        sourceName={restored.basis.playbookName}
+        total={run.total}
+      />
+    );
+  }
+
+  if (view === "failed") {
+    return (
+      <ErrorState
+        detail={run.errorCode}
+        message={t("inspector.review.failed")}
+        onChangeBasis={onReviewAgain}
+        onRetry={() =>
+          onRetry({
+            playbookId: restored.basis.playbookId,
+            references: restored.basis.references,
+            topics: run.topics,
+          })
+        }
+      />
+    );
+  }
+
+  return (
+    <ResultsView
+      commentStateByFinding={commentStateByFinding}
+      editorAvailable={editorAvailable}
+      fixStateByFinding={fixStateByFinding}
+      negotiationBySourceId={negotiationLookup(playbookDetail)}
+      onAcceptFix={onAcceptFix}
+      onAddReferenceComment={onAddReferenceComment}
+      onInsertFix={onInsertFix}
+      onOpenReferenceCitation={(referenceFieldId, blockId, text) => {
+        const reference = restored.basis.references.find(
+          (candidate) => candidate.fileFieldId === referenceFieldId,
+        );
+        if (reference === undefined) {
+          return;
+        }
+        onOpenReferenceCitation(reference, blockId, text);
+      }}
+      onRejectFix={onRejectFix}
+      onReviewAgain={onReviewAgain}
+      onScrollToBlock={onScrollToBlock}
+      onScrollToFix={onScrollToFix}
+      playbookFindings={restored.results.playbook}
+      playbookName={restored.basis.playbookName}
+      referenceFindings={restored.results.references}
+      references={restored.basis.references}
+      topics={restored.topics}
     />
   );
 };
@@ -912,10 +1104,11 @@ const ReviewingState = ({ sourceName }: { sourceName: string }) => {
   const t = useTranslations();
   const [progress, setProgress] = useState(6);
 
-  // Determinate-ish creep toward the ceiling: the run is one
+  // Determinate-ish creep toward the ceiling: proposing topics is one
   // synchronous server call with no progress channel, so the bar
   // eases asymptotically while we wait rather than claiming a real
-  // percentage. It is replaced by the results view on completion.
+  // percentage. The run itself reports real progress (see
+  // `ReviewProgressState`).
   useExternalSyncEffect(() => {
     const id = window.setInterval(() => {
       setProgress((current) =>
@@ -955,19 +1148,100 @@ const ReviewingState = ({ sourceName }: { sourceName: string }) => {
   );
 };
 
+// The run's own progress: the worker commits one finding per confirmed topic
+// per check kind and counts them on the row, so this is a real fraction of the
+// work rather than a timer pretending to be one.
+type ReviewProgressStateProps = {
+  sourceName: string;
+  completed: number;
+  total: number;
+};
+
+const ReviewProgressState = ({
+  sourceName,
+  completed,
+  total,
+}: ReviewProgressStateProps) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const ratio = total === 0 ? 0 : Math.min(1, completed / total);
+
+  return (
+    <div className="bg-background flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+      <div className="w-full max-w-xs space-y-2">
+        <p className="text-foreground text-sm font-medium">
+          {t("inspector.review.reviewing")}
+        </p>
+        {sourceName.length > 0 && (
+          <p className="text-muted-foreground truncate text-xs">{sourceName}</p>
+        )}
+        <div
+          aria-label={t("inspector.review.reviewing")}
+          aria-valuemax={total}
+          aria-valuemin={0}
+          aria-valuenow={completed}
+          className="bg-muted h-1.5 w-full overflow-hidden rounded-full"
+          role="progressbar"
+        >
+          <div
+            className="bg-primary h-full w-full origin-left rounded-full transition-transform duration-500 ease-out"
+            style={{ transform: `scaleX(${String(ratio)})` }}
+          />
+        </div>
+        <p className="text-muted-foreground text-[11px] tabular-nums">
+          {format.number(ratio, { style: "percent" })}
+        </p>
+        <p className="text-muted-foreground text-[11px]">
+          {t("inspector.review.reviewingHint")}
+        </p>
+      </div>
+    </div>
+  );
+};
+
+// The facet is asking the server what this document's latest run is; the
+// answer decides between a restored review and the launcher.
+const ReviewLoadingState = () => {
+  const t = useTranslations();
+  return (
+    <div
+      aria-busy="true"
+      aria-label={t("common.loading")}
+      className="bg-background flex h-full flex-col gap-3 p-4"
+    >
+      <div className="bg-muted h-4 w-1/3 animate-pulse rounded" />
+      <div className="bg-muted h-20 w-full animate-pulse rounded-lg" />
+      <div className="bg-muted h-20 w-full animate-pulse rounded-lg" />
+    </div>
+  );
+};
+
 // -- Error --
 
 type ErrorStateProps = {
   message: string;
+  /** A closed-vocabulary failure code from a failed run, when there is one:
+   *  it is what identifies the failure without exposing provider text. */
+  detail?: string | null;
   onRetry: () => void;
   onChangeBasis: () => void;
 };
 
-const ErrorState = ({ message, onRetry, onChangeBasis }: ErrorStateProps) => {
+const ErrorState = ({
+  message,
+  detail,
+  onRetry,
+  onChangeBasis,
+}: ErrorStateProps) => {
   const t = useTranslations();
   return (
     <div className="bg-background flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
       <p className="text-destructive max-w-sm text-sm">{message}</p>
+      {detail !== undefined && detail !== null && (
+        <p className="text-muted-foreground max-w-sm font-mono text-xs">
+          {detail}
+        </p>
+      )}
       <div className="flex items-center gap-2">
         <Button onClick={onRetry} size="sm">
           {t("common.retry")}
