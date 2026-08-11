@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, TaggedError } from "better-result";
 
 import { DOCUMENT_UPLOAD_POLICY } from "@stll/api-contract";
 import type { SafeId } from "@stll/api/types";
@@ -88,30 +88,24 @@ type PendingEmailUploadIdentity = {
   workspaceId: SafeId<"workspace">;
 };
 
+type PendingEmailUploadAbort = PendingEmailUploadIdentity & { type: "abort" };
+
+type PendingEmailUploadFinalize = PendingEmailUploadIdentity & {
+  skippedAttachments: string[];
+  type: "finalize";
+};
+
 export type PendingEmailUpload =
-  | (PendingEmailUploadIdentity & { type: "abort" })
-  | (PendingEmailUploadIdentity & {
-      skippedAttachments: string[];
-      type: "finalize";
-    });
+  | PendingEmailUploadAbort
+  | PendingEmailUploadFinalize;
 
-export class PendingUploadCleanupError extends APIError {
-  readonly pendingUpload: PendingEmailUpload;
-
-  constructor({
-    pendingUpload,
-    status,
-  }: {
-    pendingUpload: PendingEmailUpload;
-    status: number;
-  }) {
-    super({
-      message: "Upload failed; reservation cleanup could not be confirmed",
-      status,
-    });
-    this.pendingUpload = pendingUpload;
-  }
-}
+export class PendingUploadCleanupError extends TaggedError(
+  "PendingUploadCleanupError",
+)<{
+  message: string;
+  pendingUpload: PendingEmailUploadAbort;
+  status: number;
+}> {}
 
 type DirectEmailUploadDependencies = {
   abortReservation: (
@@ -175,6 +169,7 @@ export const putPresignedEmail = async (
   const status = Result.isOk(putResult) ? putResult.value.status : 502;
   if (Result.isError(abortResult)) {
     throw new PendingUploadCleanupError({
+      message: "Upload failed; reservation cleanup could not be confirmed",
       pendingUpload: { type: "abort", uploadId, workspaceId },
       status,
     });
@@ -202,7 +197,7 @@ export const prepareEmailUpload = async ({
   attachments: AttachmentDownloadResult[];
   snapshot: MailSnapshot;
   workspaceId: string;
-}): Promise<PendingEmailUpload> => {
+}): Promise<PendingEmailUploadFinalize> => {
   const workspaceId = toSafeId<"workspace">(workspaceIdString);
   const propertyId = await ensureFileProperty(workspaceId);
 
@@ -247,10 +242,7 @@ export const finalizeEmailUpload = async ({
   skippedAttachments,
   uploadId,
   workspaceId,
-}: Extract<
-  PendingEmailUpload,
-  { type: "finalize" }
->): Promise<IngestEmailResult> => {
+}: PendingEmailUploadFinalize): Promise<IngestEmailResult> => {
   const finalize = await api
     .uploads({ workspaceId })({ uploadId })
     .finalize.post(

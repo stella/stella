@@ -19,6 +19,16 @@ const directUpload = {
   workspaceId: toSafeId<"workspace">("workspace-1"),
 } satisfies Parameters<typeof putPresignedEmail>[0];
 
+const fetchInputUrl = (input: URL | Request | string): string => {
+  if (typeof input === "string") {
+    return input;
+  }
+  if (input instanceof URL) {
+    return input.toString();
+  }
+  return input.url;
+};
+
 test("upload timeout covers a maximum-size email at the supported slow rate", () => {
   const minimumTransferMs = Math.ceil(
     (DOCUMENT_UPLOAD_POLICY.maxBytes /
@@ -103,12 +113,7 @@ describe("direct email upload reservation", () => {
     let requestUrl: string | undefined;
     const abortFetch = mock(
       async (input: URL | Request | string, init?: RequestInit) => {
-        requestUrl =
-          typeof input === "string"
-            ? input
-            : input instanceof URL
-              ? input.toString()
-              : input.url;
+        requestUrl = fetchInputUrl(input);
         requestMethod = input instanceof Request ? input.method : init?.method;
         return Response.json({ ok: true });
       },
@@ -118,13 +123,14 @@ describe("direct email upload reservation", () => {
     });
 
     try {
-      await Result.tryPromise({
+      const result = await Result.tryPromise({
         try: async () =>
           await putPresignedEmail(directUpload, {
             put: mock(async () => new Response(null, { status: 503 })),
           }),
         catch: (cause) => cause,
       });
+      expect(Result.isError(result)).toBe(true);
     } finally {
       globalThis.fetch = originalFetch;
     }
