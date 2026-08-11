@@ -195,3 +195,13 @@ export const addUtcDays = (date: Date, n: number): Date => {
   result.setUTCDate(result.getUTCDate() + n);
   return result;
 };
+
+/**
+ * The UTC calendar day an instant falls on, as `YYYY-MM-DD`.
+ *
+ * The counterpart to `addUtcDays` for cursors and slice keys addressed in
+ * UTC: both sides of a day walk have to agree on where a day starts, and a
+ * local-calendar rendering of the same instant does not.
+ */
+export const toUtcDateString = (date: Date): string =>
+  date.toISOString().slice(0, ISO_DATE_LENGTH);

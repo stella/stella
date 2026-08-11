@@ -523,6 +523,91 @@ export const caseLawCoverageSlices = p.pgTable(
   ],
 );
 
+/**
+ * Where a listed decision sits once it has repeatedly refused to be ingested.
+ *
+ * The reconciliation loop hunts the difference between what a publisher lists
+ * for a slice and what is held. Without this, an item the publisher lists but
+ * never serves is re-fetched on every visit and the slice never settles: the
+ * hunt has no fixed point. A row here is that item's memory — how often it has
+ * been tried, when it may be tried again, and, once the schedule is exhausted,
+ * that it is `terminal` and counts as accounted for rather than missing.
+ */
+export const RECONCILIATION_ITEM_STATUSES = ["parked", "terminal"] as const;
+
+export const RECONCILIATION_ITEM_STATUS = {
+  /** Awaiting its next attempt; `next_attempt_at` says when. */
+  PARKED: RECONCILIATION_ITEM_STATUSES[0],
+  /** The retry schedule is exhausted; nothing re-attempts this on its own. */
+  TERMINAL: RECONCILIATION_ITEM_STATUSES[1],
+} as const;
+
+export type ReconciliationItemStatus =
+  (typeof RECONCILIATION_ITEM_STATUS)[keyof typeof RECONCILIATION_ITEM_STATUS];
+
+export const caseLawReconciliationItems = p.pgTable(
+  "case_law_reconciliation_items",
+  {
+    id: pUuid<"caseLawReconciliationItem">().primaryKey(),
+    sourceId: safeUuid<"caseLawSource">("source_id")
+      .notNull()
+      .references(() => caseLawSources.id, { onDelete: "cascade" }),
+    /** The slice the item was listed in; matches `case_law_coverage_slices`. */
+    slice: p.varchar({ length: 64 }).notNull(),
+    /** `document:<id>` or `case-number:<language>:<docket>`; see `listingIdentityKey`. */
+    identityKey: p.varchar("identity_key", { length: 320 }).notNull(),
+    /** The listing item verbatim, so a retry needs no second listing walk. */
+    payload: jsonb().$type<unknown>().notNull(),
+    status: p
+      .varchar({ length: 16, enum: RECONCILIATION_ITEM_STATUSES })
+      .default(RECONCILIATION_ITEM_STATUS.PARKED)
+      .notNull(),
+    attempts: p.integer().default(0).notNull(),
+    nextAttemptAt: timestamptz("next_attempt_at"),
+    /** Error tags only; a raw message may carry more than an operator asked for. */
+    lastError: p.text("last_error"),
+    firstSeenAt: timestamptz("first_seen_at").defaultNow().notNull(),
+    lastAttemptAt: timestamptz("last_attempt_at"),
+  },
+  (t) => [
+    p
+      .uniqueIndex("case_law_reconciliation_items_source_identity_idx")
+      .on(t.sourceId, t.identityKey),
+    // The due-retry read is the loop's highest-priority work unit, and it
+    // asks only about parked rows; terminal ones are dead weight in it.
+    p
+      .index("case_law_reconciliation_items_due_idx")
+      .on(t.sourceId, t.nextAttemptAt)
+      .where(eq(t.status, RECONCILIATION_ITEM_STATUS.PARKED)),
+    // Settledness per slice: a slice is done when what is held plus what is
+    // terminal accounts for everything the publisher listed.
+    p
+      .index("case_law_reconciliation_items_slice_idx")
+      .on(t.sourceId, t.slice, t.status),
+    // The accepted values are read off RECONCILIATION_ITEM_STATUS rather
+    // than restated, so a new member cannot land without the database
+    // learning about it.
+    p.check(
+      "case_law_reconciliation_items_status_values",
+      sql`${t.status} IN (${sql.join(
+        Object.values(RECONCILIATION_ITEM_STATUS).map((value) => sql`${value}`),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
+      "case_law_reconciliation_items_attempts_nonnegative",
+      sql`${t.attempts} >= 0`,
+    ),
+    // A parked row with no due time would never be selected again, which is
+    // the silent version of terminal without the accounting terminal brings.
+    p.check(
+      "case_law_reconciliation_items_parked_is_scheduled",
+      sql`${t.status} <> ${RECONCILIATION_ITEM_STATUS.PARKED} OR ${t.nextAttemptAt} IS NOT NULL`,
+    ),
+    ...globalCaseLawPolicies(),
+  ],
+);
+
 export const caseLawCitations = p.pgTable(
   "case_law_citations",
   {

@@ -4,6 +4,7 @@ import type { CzRegionalApiItem } from "@/api/handlers/case-law/ingestion/adapte
 import type { CzRegionalListingIdentity } from "@/api/scripts/cz-regional-repair-plan";
 import {
   CZ_REGIONAL_FEED_START,
+  CZ_REGIONAL_LANGUAGE,
   checkRepairRange,
   czRegionalListingIdentity,
   czRegionalListingKeys,
@@ -152,6 +153,7 @@ describe("czRegionalListingIdentity", () => {
     const fallback = {
       type: "case-number",
       caseNumber: "11 C 153/2025",
+      language: CZ_REGIONAL_LANGUAGE,
     } as const satisfies CzRegionalListingIdentity;
     for (const odkaz of [null, ""] as const) {
       expect(czRegionalListingIdentity(listingItem({ odkaz }))).toEqual(

@@ -15,6 +15,10 @@ import {
 import type {
   EmptyAst,
   IngestionResult,
+  ListingIdentity,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
@@ -31,7 +35,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
 import { captureError } from "@/api/lib/analytics/capture";
-import { addUtcDays } from "@/api/lib/dates";
+import { addUtcDays, isoCalendarDay, toUtcDateString } from "@/api/lib/dates";
 import {
   AdapterFetchError,
   FetchBoundaryError,
@@ -59,6 +63,20 @@ import { isRecord } from "@/api/lib/type-guards";
  */
 
 const BASE_URL = "https://rozhodnuti.justice.cz/api";
+
+/** The only language this source publishes; half of the fallback identity. */
+export const CZ_REGIONAL_LANGUAGE = "cs";
+
+/** First day of the publisher's open-data feed. */
+export const CZ_REGIONAL_FEED_START = "2020-10-01";
+
+/**
+ * Days near the tip that the reconciliation re-walks on a fast cadence. The
+ * publisher backfills a day after first listing it, so a day walked the hour
+ * it opened is not final; a fortnight is long enough for those late arrivals
+ * and short enough that the fast lane stays a fixed, small amount of work.
+ */
+const CZ_REGIONAL_TIP_WINDOW_DAYS = 14;
 
 /**
  * Concurrent finaldoc fetches per page. The court server
@@ -448,6 +466,31 @@ export const documentIdFromLink = (
   return id !== undefined && isPersistableSourceDocumentId(id) ? id : undefined;
 };
 
+/**
+ * The identity the ingest would store for this listing item.
+ *
+ * Stated once, here, rather than restated by every caller that has to decide
+ * whether a listed item is already held: the crawl, the reconciliation loop
+ * and the operator repair all key rows the same way, and a second copy of the
+ * rule would let them disagree about which rows exist.
+ */
+export const czRegionalListingIdentity = (
+  item: CzRegionalApiItem,
+): ListingIdentity => {
+  if (!item.jednaciCislo || !item.soud) {
+    return { type: "unidentifiable" };
+  }
+  const sourceDocumentId = documentIdFromLink(item.odkaz ?? undefined);
+  if (sourceDocumentId !== undefined) {
+    return { type: "document", sourceDocumentId };
+  }
+  return {
+    type: "case-number",
+    caseNumber: splitCaseReference(item.jednaciCislo).caseNumber,
+    language: CZ_REGIONAL_LANGUAGE,
+  };
+};
+
 const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
   if (!item.jednaciCislo || !item.soud) {
     return null;
@@ -791,6 +834,66 @@ export const buildCzRegionalDecision = async (
   return { type: "built", decision };
 };
 
+/**
+ * A reconciliation slice for this source is one UTC publication day, which is
+ * exactly what the publisher's opendata endpoint is addressed by. `YYYY-MM-DD`
+ * sorts lexicographically in chronological order, which is the ordering the
+ * ledger relies on.
+ */
+const czRegionalDayStart = (slice: string): Date => {
+  const day = isoCalendarDay(slice);
+  if (day === null || day !== slice) {
+    panic(`cz-regional slice is not a UTC calendar day: ${slice}`);
+  }
+  return new Date(`${day}T00:00:00.000Z`);
+};
+
+const czRegionalStepSlice = (slice: string, days: number): string =>
+  toUtcDateString(addUtcDays(czRegionalDayStart(slice), days));
+
+const czRegionalNextSlice = (slice: string): string | null => {
+  const next = czRegionalStepSlice(slice, 1);
+  return next > todayIso() ? null : next;
+};
+
+const czRegionalPreviousSlice = (slice: string): string | null => {
+  const previous = czRegionalStepSlice(slice, -1);
+  return previous < CZ_REGIONAL_FEED_START ? null : previous;
+};
+
+const listCzRegionalSlicePage = async ({
+  slice,
+  page,
+  signal,
+}: ReconciliationSlicePageOptions): Promise<ReconciliationSlicePage> => {
+  const { items, totalPages } = await listCzRegionalDayPage({
+    date: slice,
+    page,
+    ...(signal === undefined ? {} : { signal }),
+  });
+  return {
+    items: items.map((item) => ({
+      identity: czRegionalListingIdentity(item),
+      payload: item,
+    })),
+    totalPages,
+  };
+};
+
+/**
+ * Rebuild a decision from a payload the loop stored verbatim. The payload is
+ * revalidated rather than trusted: it may have been parked for days, and a
+ * shape the adapter no longer recognises has to be reported as unbuildable
+ * instead of parsed on faith.
+ */
+const buildCzRegionalFromPayload = async (
+  payload: unknown,
+  signal?: AbortSignal,
+): Promise<ReconciliationBuildOutcome> =>
+  isCzRegionalApiItem(payload)
+    ? await buildCzRegionalDecision(payload, signal)
+    : { type: "unkeyable" };
+
 export const czRegionalAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.CZ_REGIONAL,
   name: "Czech Regional Courts",
@@ -851,6 +954,21 @@ export const czRegionalAdapter = defineSourceAdapter({
     } catch {
       return null;
     }
+  },
+
+  /**
+   * The publisher lists each day independently of the crawl cursor, so what a
+   * day contains is answerable without re-crawling it: enumerate the day, key
+   * each item the way the ingest would, and compare against what is held.
+   */
+  reconciliation: {
+    firstSlice: CZ_REGIONAL_FEED_START,
+    sliceOf: toUtcDateString,
+    nextSlice: czRegionalNextSlice,
+    previousSlice: czRegionalPreviousSlice,
+    tipWindowDays: CZ_REGIONAL_TIP_WINDOW_DAYS,
+    listSlicePage: listCzRegionalSlicePage,
+    buildDecision: buildCzRegionalFromPayload,
   },
 
   async fetchPage(cursor, _config, signal) {
