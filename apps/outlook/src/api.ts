@@ -179,9 +179,11 @@ export const finalizeEmailUpload = async ({
   };
 };
 
-const RETRYABLE_FINALIZE_STATUS = new Set([409, 500]);
+const SERVER_ERROR_STATUS = 500;
 
 export const shouldRetainPendingEmailUpload = (error: unknown): boolean =>
-  !(error instanceof APIError) || RETRYABLE_FINALIZE_STATUS.has(error.status);
+  !(error instanceof APIError) ||
+  error.status === 409 ||
+  error.status >= SERVER_ERROR_STATUS;
 
 export { APIError };

@@ -26,8 +26,9 @@ export type IngestState =
   | { message: string; type: "error" };
 
 type IngestArgs = {
+  isCurrent: (itemInstanceKey: string) => boolean;
   loadLatest: () => Promise<MailSnapshot>;
-  selectedAttachmentIds: Set<string>;
+  selectedAttachmentIds: Set<string> | null;
   workspaceId: string;
 };
 
@@ -42,6 +43,7 @@ export const useIngestEmail = (errorFallback: string): UseIngestEmail => {
   const pendingUpload = useRef<PendingEmailUpload | null>(null);
 
   const save = async ({
+    isCurrent,
     loadLatest,
     selectedAttachmentIds,
     workspaceId,
@@ -49,18 +51,30 @@ export const useIngestEmail = (errorFallback: string): UseIngestEmail => {
     setState({ type: "saving" });
     const result = await Result.tryPromise(async () => {
       if (pendingUpload.current) {
+        if (pendingUpload.current.workspaceId !== workspaceId) {
+          throw new APIError({
+            message: errorFallback,
+            status: 409,
+          });
+        }
         return await finalizeEmailUpload(pendingUpload.current);
       }
 
       const snapshot = await loadLatest();
-      const attachments = snapshot.attachments.filter((attachment) =>
-        selectedAttachmentIds.has(attachment.id),
+      const attachments = snapshot.attachments.filter(
+        (attachment) =>
+          !attachment.isInline &&
+          (selectedAttachmentIds === null ||
+            selectedAttachmentIds.has(attachment.id)),
       );
       const downloaded: AttachmentDownloadResult[] = await Promise.all(
         attachments.map(
           async (attachment) => await downloadAttachment(attachment),
         ),
       );
+      if (!isCurrent(snapshot.itemInstanceKey)) {
+        throw new APIError({ message: errorFallback, status: 409 });
+      }
       const prepared = await prepareEmailUpload({
         attachments: downloaded,
         snapshot,

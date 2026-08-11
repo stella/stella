@@ -12,6 +12,7 @@ const s3DeleteMock = mock(
 
 const {
   lockActiveWorkspaceForBufferIntent,
+  pendingUploadRecoveryObjectKeys,
   reconcileBufferObjectCleanupIntents,
   reconcileStaleBufferIntentsGlobally,
 } = await import("@/api/lib/buffer-intent-reconciliation");
@@ -125,6 +126,30 @@ test("rejects a writer reservation after workspace deletion seals", async () => 
     _tag: "BufferIntentWorkspaceUnavailableError",
     message: "Workspace is not active",
   });
+});
+
+test("enumerates every persisted email-ingest recovery object", () => {
+  const recoveryObjectKeys = [
+    `${organizationId}/${workspaceId}/message.eml`,
+    `${organizationId}/${workspaceId}/attachment.pdf`,
+  ];
+
+  expect(
+    pendingUploadRecoveryObjectKeys({
+      declaredMime: "message/rfc822",
+      id: pendingUploadId,
+      organizationId,
+      purpose: "email_ingest",
+      purposeData: {
+        type: "email_ingest",
+        propertyId: toSafeId<"property">(
+          "00000000-0000-0000-0000-000000000004",
+        ),
+        recoveryObjectKeys,
+      },
+      workspaceId,
+    }),
+  ).toEqual(recoveryObjectKeys);
 });
 
 test("keeps a reclaimed writer intent recoverable after deleting its object", async () => {

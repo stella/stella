@@ -29,6 +29,28 @@ describe("pending upload recovery indexes", () => {
       "IN ('scanning', 'failed')",
     );
   });
+
+  test("the email-ingest recovery sweep indexes persisted object keys", () => {
+    const recoveryIndex = getTableConfig(pendingUploads).indexes.find(
+      (index) =>
+        index.config.name === "pending_uploads_email_ingest_recovery_idx",
+    );
+
+    expect(recoveryIndex).toBeDefined();
+    expect(
+      recoveryIndex?.config.columns.map((column) =>
+        "name" in column ? column.name : undefined,
+      ),
+    ).toEqual(["claimed_at", "id"]);
+    const recoveryPredicate = recoveryIndex?.config.where;
+    expect(recoveryPredicate).toBeDefined();
+    if (!recoveryPredicate) {
+      return;
+    }
+    const predicateSql = new PgDialect().sqlToQuery(recoveryPredicate).sql;
+    expect(predicateSql).toContain("email_ingest");
+    expect(predicateSql).toContain("recoveryObjectKeys");
+  });
 });
 
 // ── Storage-erasure outboxes must reference nothing ─────────────────────
@@ -82,10 +104,12 @@ describe("storage-erasure outboxes", () => {
     expect(workspaceColumn?.notNull).toBe(false);
   });
 
-  test("buffer object cleanup tombstones have a bounded scheduler index", () => {
-    const scheduleIndex = getTableConfig(
-      bufferObjectCleanupIntents,
-    ).indexes.find(
+  test("buffer object cleanup tombstones have a composite key and bounded scheduler index", () => {
+    const config = getTableConfig(bufferObjectCleanupIntents);
+    expect(
+      config.primaryKeys.at(0)?.columns.map((column) => column.name),
+    ).toEqual(["id", "object_key"]);
+    const scheduleIndex = config.indexes.find(
       (index) => index.config.name === "buffer_object_cleanup_schedule_idx",
     );
     expect(

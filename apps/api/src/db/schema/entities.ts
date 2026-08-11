@@ -1098,6 +1098,8 @@ export type PendingUploadPurposeData =
       type: "email_ingest";
       propertyId: SafeId<"property">;
       parentId?: SafeId<"entity"> | null;
+      /** Exact deterministic final keys owned by this recoverable ingest. */
+      recoveryObjectKeys?: string[];
     };
 
 export type PendingUploadFinalizedResult =
@@ -1201,6 +1203,14 @@ export const pendingUploads = p.pgTable(
         name: "pending_uploads_workspace_organization_fk",
       })
       .onDelete("cascade"),
+    p
+      .index("pending_uploads_email_ingest_recovery_idx")
+      .on(table.claimedAt, table.id)
+      .where(
+        sql`${table.status} IN ('scanning', 'failed')
+          AND ${table.purpose} = 'email_ingest'
+          AND jsonb_array_length(COALESCE(${table.purposeData}->'recoveryObjectKeys', '[]'::jsonb)) > 0`,
+      ),
     ...wsOrganizationPolicies("pending_uploads"),
   ],
 );
@@ -1225,7 +1235,7 @@ export const pendingUploads = p.pgTable(
 export const bufferObjectCleanupIntents = p.pgTable(
   "buffer_object_cleanup_intents",
   {
-    id: pUuid<"pendingUpload">().primaryKey(),
+    id: pUuid<"pendingUpload">().notNull(),
     organizationId: safeOrganizationId("organization_id").notNull(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     objectKey: p.text("object_key").notNull(),
@@ -1234,6 +1244,7 @@ export const bufferObjectCleanupIntents = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    p.primaryKey({ columns: [table.id, table.objectKey] }),
     p
       .index("buffer_object_cleanup_schedule_idx")
       .on(table.nextAttemptAt, table.id),
