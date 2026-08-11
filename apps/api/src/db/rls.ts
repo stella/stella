@@ -359,6 +359,44 @@ export const orgPolicies = () => [
   }),
 ];
 
+/**
+ * Contact preview passages may be appended by request transactions, but only
+ * beneath a search document owned by the active organization. Existing rows
+ * remain immutable so rebuilds still require the privileged maintenance path.
+ */
+export const contactSearchPreviewPassagePolicies = () => [
+  p.pgPolicy("contact_search_document_preview_passages_organization_select", {
+    for: "select",
+    to: stella,
+    using: organizationCheck,
+  }),
+  p.pgPolicy("contact_search_document_preview_passages_organization_insert", {
+    for: "insert",
+    to: stella,
+    withCheck: sql`(
+      ${organizationCheck}
+      AND EXISTS (
+        SELECT 1
+        FROM contact_search_documents parent
+        WHERE parent.contact_id = contact_search_document_preview_passages.contact_id
+          AND parent.organization_id = contact_search_document_preview_passages.organization_id
+      )
+    )`,
+  }),
+  p.pgPolicy("contact_search_document_preview_passages_no_update", {
+    as: "restrictive",
+    for: "update",
+    to: stella,
+    using: sql`false`,
+  }),
+  p.pgPolicy("contact_search_document_preview_passages_no_delete", {
+    as: "restrictive",
+    for: "delete",
+    to: stella,
+    using: sql`false`,
+  }),
+];
+
 export const orgReadOnlyPolicies = (tableName: string) => [
   p.pgPolicy(`${tableName}_organization_select`, {
     for: "select",

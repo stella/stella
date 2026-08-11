@@ -10,6 +10,7 @@ const FORMULA_PREFIX_RE = /^\s*[=+\-@\t\r\n]/u;
 
 export const CSV_PARSE_STATUS = {
   INVALID: "invalid",
+  ROW_LIMIT_EXCEEDED: "row-limit-exceeded",
   SUCCESS: "success",
 } as const;
 
@@ -22,9 +23,18 @@ type CSVParseResult =
       status: typeof CSV_PARSE_STATUS.INVALID;
     }
   | {
+      status: typeof CSV_PARSE_STATUS.ROW_LIMIT_EXCEEDED;
+      rows: string[][];
+    }
+  | {
       status: typeof CSV_PARSE_STATUS.SUCCESS;
       rows: string[][];
     };
+
+type CSVParseOptions = {
+  delimiter?: CSVDelimiter;
+  maxRows?: number;
+};
 
 const restoreGuardedFormula = (value: string): string => {
   if (!value.startsWith("\t")) {
@@ -43,8 +53,11 @@ const restoreGuardedFormula = (value: string): string => {
  */
 export const parseCSV = (
   text: string,
-  delimiter: CSVDelimiter = ",",
+  options: CSVDelimiter | CSVParseOptions = {},
 ): CSVParseResult => {
+  const delimiter = typeof options === "string" ? options : options.delimiter;
+  const selectedDelimiter = delimiter ?? ",";
+  const maxRows = typeof options === "string" ? undefined : options.maxRows;
   const rows: string[][] = [];
   let row: string[] = [];
   let cell = "";
@@ -57,12 +70,16 @@ export const parseCSV = (
     closedQuote = false;
   };
 
-  const finishRow = () => {
+  const finishRow = (): boolean => {
     finishCell();
     if (row.length > 1 || row.at(0) !== "") {
+      if (maxRows !== undefined && rows.length >= maxRows) {
+        return false;
+      }
       rows.push(row);
     }
     row = [];
+    return true;
   };
 
   for (let index = 0; index < text.length; index += 1) {
@@ -87,12 +104,14 @@ export const parseCSV = (
     }
 
     if (closedQuote) {
-      if (character === delimiter) {
+      if (character === selectedDelimiter) {
         finishCell();
         continue;
       }
       if (character === "\r" || character === "\n") {
-        finishRow();
+        if (!finishRow()) {
+          return { rows, status: CSV_PARSE_STATUS.ROW_LIMIT_EXCEEDED };
+        }
         if (character === "\r" && nextCharacter === "\n") {
           index += 1;
         }
@@ -108,12 +127,14 @@ export const parseCSV = (
       inQuotes = true;
       continue;
     }
-    if (character === delimiter) {
+    if (character === selectedDelimiter) {
       finishCell();
       continue;
     }
     if (character === "\r" || character === "\n") {
-      finishRow();
+      if (!finishRow()) {
+        return { rows, status: CSV_PARSE_STATUS.ROW_LIMIT_EXCEEDED };
+      }
       if (character === "\r" && nextCharacter === "\n") {
         index += 1;
       }
@@ -126,8 +147,8 @@ export const parseCSV = (
     return { status: CSV_PARSE_STATUS.INVALID };
   }
 
-  if (row.length > 0 || cell.length > 0 || closedQuote) {
-    finishRow();
+  if ((row.length > 0 || cell.length > 0 || closedQuote) && !finishRow()) {
+    return { rows, status: CSV_PARSE_STATUS.ROW_LIMIT_EXCEEDED };
   }
 
   return { rows, status: CSV_PARSE_STATUS.SUCCESS };

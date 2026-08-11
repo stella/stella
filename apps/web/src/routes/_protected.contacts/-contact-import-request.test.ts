@@ -74,7 +74,7 @@ describe("contact import request identity", () => {
     expect(later.id).not.toBe(first.id);
   });
 
-  test("isolates pending requests by organization and user", async () => {
+  test("isolates pending requests by each scope field", async () => {
     const storage = createStorage();
     const file = new Blob(["Name\nJane Doe"]);
     const originalScope = await resolveContactImportRequest({
@@ -83,14 +83,24 @@ describe("contact import request identity", () => {
       scope: SCOPE,
       storage,
     });
-    const otherScope = await resolveContactImportRequest({
+    const otherUser = await resolveContactImportRequest({
       file,
       mapping: MAPPING,
-      scope: { organizationId: "org-b", userId: "user-b" },
+      scope: { organizationId: SCOPE.organizationId, userId: "user-b" },
+      storage,
+    });
+    const otherOrganization = await resolveContactImportRequest({
+      file,
+      mapping: MAPPING,
+      scope: { organizationId: "org-b", userId: SCOPE.userId },
       storage,
     });
 
-    clearContactImportRequest({ storageKey: otherScope.storageKey, storage });
+    clearContactImportRequest({ storageKey: otherUser.storageKey, storage });
+    clearContactImportRequest({
+      storageKey: otherOrganization.storageKey,
+      storage,
+    });
     const originalScopeRetry = await resolveContactImportRequest({
       file,
       mapping: MAPPING,
@@ -98,7 +108,30 @@ describe("contact import request identity", () => {
       storage,
     });
 
-    expect(otherScope.id).not.toBe(originalScope.id);
+    expect(otherUser.id).not.toBe(originalScope.id);
+    expect(otherUser.storageKey).not.toBe(originalScope.storageKey);
+    expect(otherOrganization.id).not.toBe(originalScope.id);
+    expect(otherOrganization.storageKey).not.toBe(originalScope.storageKey);
     expect(originalScopeRetry).toEqual(originalScope);
+  });
+
+  test("rejects a new request when its retry identity cannot be stored", async () => {
+    const file = new Blob(["Name\nJane Doe"]);
+
+    await expect(
+      resolveContactImportRequest({
+        file,
+        mapping: MAPPING,
+        scope: SCOPE,
+        storage: {
+          ...createStorage(),
+          setItem: () => {
+            throw new DOMException("Quota exceeded", "QuotaExceededError");
+          },
+        },
+      }),
+    ).rejects.toMatchObject({
+      _tag: "ContactImportRequestPersistenceError",
+    });
   });
 });

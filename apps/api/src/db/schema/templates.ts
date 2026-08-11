@@ -6,8 +6,8 @@ import {
   ENTITY_KINDS,
   bytea,
   jsonb,
+  contactSearchPreviewPassagePolicies,
   orgPolicies,
-  orgReadOnlyPolicies,
   organization,
   p,
   pUuid,
@@ -348,7 +348,7 @@ export const contactSearchDocumentPreviewPassages = p.pgTable(
         table.ordinal,
       ),
     p.index("contact_preview_passages_tsv_idx").using("gin", table.tsv),
-    ...orgReadOnlyPolicies("contact_search_document_preview_passages"),
+    ...contactSearchPreviewPassagePolicies(),
   ],
 );
 

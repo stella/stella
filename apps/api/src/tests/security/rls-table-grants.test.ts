@@ -37,11 +37,10 @@ const BOOTSTRAP_COVERED_RLS_MIGRATIONS = new Set([
 ]);
 
 // Post-bootstrap RLS tables that are read-only for `stella`. Global legal-data
-// tables and derived preview passages are maintained by privileged background
-// writers, so the request role correctly receives SELECT only, not full DML.
+// tables and most derived preview passages are maintained by privileged
+// background writers, so the request role correctly receives SELECT only.
 const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   "search_document_preview_passages",
-  "contact_search_document_preview_passages",
   "workspace_search_document_preview_passages",
   "chat_thread_search_preview_passages",
   "case_law_search_document_preview_passages",
@@ -68,6 +67,7 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
 // narrowly scoped transition such as deleting an exact cleanup tombstone.
 const POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES = new Set([
   "buffer_object_cleanup_intents",
+  "contact_search_document_preview_passages",
   "entity_deletion_cleanup_requests",
 ]);
 

@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, TaggedError } from "better-result";
 
 import type { ContactImportMapping } from "@stll/api-contract";
 
@@ -23,6 +23,13 @@ export type ContactImportRequestScope = {
   organizationId: string;
   userId: string;
 };
+
+class ContactImportRequestPersistenceError extends TaggedError(
+  "ContactImportRequestPersistenceError",
+)<{
+  message: string;
+  cause?: unknown;
+}> {}
 
 const sessionStorageOrUndefined = (): ContactImportRequestStorage | undefined =>
   Result.try(() =>
@@ -61,14 +68,31 @@ export const resolveContactImportRequest = async ({
   storage?: ContactImportRequestStorage | undefined;
 }): Promise<PendingContactImportRequest> => {
   const storageKey = await operationStorageKey(file, mapping, scope);
-  const storedId = storage
-    ? Result.try(() => storage.getItem(storageKey)).unwrapOr(null)
-    : null;
+  if (!storage) {
+    throw new ContactImportRequestPersistenceError({
+      message: "Contact import retry identity storage is unavailable",
+    });
+  }
+
+  const stored = Result.try(() => storage.getItem(storageKey));
+  if (Result.isError(stored)) {
+    throw new ContactImportRequestPersistenceError({
+      message: "Contact import retry identity could not be read",
+      cause: stored.error,
+    });
+  }
+  const storedId = stored.value;
   const id =
     storedId && UUID_PATTERN.test(storedId) ? storedId : crypto.randomUUID();
 
-  if (storage && id !== storedId) {
-    Result.try(() => storage.setItem(storageKey, id)).unwrapOr(undefined);
+  if (id !== storedId) {
+    const persisted = Result.try(() => storage.setItem(storageKey, id));
+    if (Result.isError(persisted)) {
+      throw new ContactImportRequestPersistenceError({
+        message: "Contact import retry identity could not be stored",
+        cause: persisted.error,
+      });
+    }
   }
 
   return { id: toSafeId<"contactImportRequest">(id), storageKey };

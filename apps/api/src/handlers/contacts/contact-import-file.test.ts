@@ -1,7 +1,10 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { CONTACT_IMPORT_SCHEMA_VERSION } from "@stll/api-contract";
+import {
+  CONTACT_IMPORT_MAX_ROWS,
+  CONTACT_IMPORT_SCHEMA_VERSION,
+} from "@stll/api-contract";
 
 import {
   inspectContactImportDocument,
@@ -42,6 +45,26 @@ describe("contact import document", () => {
         { sourceIndex: 2, targetField: "ignore" },
       ],
     });
+  });
+
+  test("rejects files whose delimiter is ambiguous", () => {
+    const result = parseContactImportDocument(
+      "Name, legal;Email\nAcme, s.r.o.;a@example.com",
+    );
+
+    expect(Result.isError(result)).toBe(true);
+  });
+
+  test("rejects rows beyond the import bound without parsing the suffix", () => {
+    const rows = Array.from(
+      { length: CONTACT_IMPORT_MAX_ROWS + 1 },
+      (_, index) => `Contact ${index}`,
+    );
+    const result = parseContactImportDocument(
+      `Name\n${rows.join("\n")}\n"unterminated`,
+    );
+
+    expect(Result.isError(result)).toBe(true);
   });
 
   test("previews normalized contacts and reports invalid rows", () => {

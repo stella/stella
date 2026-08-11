@@ -182,23 +182,33 @@ export const parseContactImportDocument = (
   }
 
   const normalizedText = text.replace(/^\uFEFF/u, "");
-  let selected:
-    | { delimiter: CSVDelimiter; rows: string[][]; score: number }
-    | undefined;
+  const candidates: {
+    delimiter: CSVDelimiter;
+    rows: string[][];
+    score: number;
+    status:
+      | typeof CSV_PARSE_STATUS.SUCCESS
+      | typeof CSV_PARSE_STATUS.ROW_LIMIT_EXCEEDED;
+  }[] = [];
   for (const delimiter of CSV_DELIMITERS) {
-    const parsed = parseCSV(normalizedText, delimiter);
+    const parsed = parseCSV(normalizedText, {
+      delimiter,
+      maxRows: CONTACT_IMPORT_MAX_ROWS + 1,
+    });
     if (parsed.status === CSV_PARSE_STATUS.INVALID) {
       continue;
     }
-    const candidate = {
+    candidates.push({
       delimiter,
       rows: parsed.rows,
       score: delimiterScore(parsed.rows),
-    };
-    if (!selected || candidate.score > selected.score) {
-      selected = candidate;
-    }
+      status: parsed.status,
+    });
   }
+
+  const bestScore = Math.max(...candidates.map(({ score }) => score));
+  const bestCandidates = candidates.filter(({ score }) => score === bestScore);
+  const selected = bestCandidates.at(0);
 
   const firstRow = selected?.rows.at(0);
   if (!selected || !firstRow) {
@@ -206,6 +216,22 @@ export const parseContactImportDocument = (
       new HandlerError({
         status: 400,
         message: "Invalid or empty contact import file",
+      }),
+    );
+  }
+  if (bestCandidates.length > 1 && firstRow.length > 1) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Ambiguous contact import delimiter",
+      }),
+    );
+  }
+  if (selected.status === CSV_PARSE_STATUS.ROW_LIMIT_EXCEEDED) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: `Too many contacts. Maximum ${CONTACT_IMPORT_MAX_ROWS} per import.`,
       }),
     );
   }
@@ -231,14 +257,6 @@ export const parseContactImportDocument = (
   }
 
   const rows = selected.rows.slice(1);
-  if (rows.length > CONTACT_IMPORT_MAX_ROWS) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: `Too many contacts. Maximum ${CONTACT_IMPORT_MAX_ROWS} per import.`,
-      }),
-    );
-  }
 
   return Result.ok({
     delimiter: selected.delimiter,

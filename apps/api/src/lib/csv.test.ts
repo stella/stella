@@ -105,4 +105,13 @@ describe("parseCSV", () => {
       rows: [["\tplain", "plain"]],
     });
   });
+
+  test("stops parsing when the record limit is exceeded", () => {
+    expect(
+      parseCSV('name\nfirst\nsecond\n"unterminated', { maxRows: 2 }),
+    ).toEqual({
+      status: CSV_PARSE_STATUS.ROW_LIMIT_EXCEEDED,
+      rows: [["name"], ["first"]],
+    });
+  });
 });

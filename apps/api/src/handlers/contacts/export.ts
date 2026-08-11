@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { asc, eq, sql } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import {
@@ -71,16 +71,6 @@ const exportContacts = createSafeRootHandler(
     const format = query.format ?? "csv";
     const exportResult = yield* Result.await(
       safeDb(async (tx) => {
-        const [size] = await tx
-          .select({
-            bytes: sql<number>`coalesce(sum(pg_column_size(${contacts})), 0)::double precision`,
-          })
-          .from(contacts)
-          .where(eq(contacts.organizationId, session.activeOrganizationId));
-        if ((size?.bytes ?? 0) > CONTACT_EXPORT_BYTE_LIMIT) {
-          return { status: "too-large" as const };
-        }
-
         const contactsToExport = await tx
           .select({
             type: contacts.type,
@@ -102,7 +92,10 @@ const exportContacts = createSafeRootHandler(
           .from(contacts)
           .where(eq(contacts.organizationId, session.activeOrganizationId))
           .orderBy(asc(contacts.displayName), asc(contacts.id))
-          .limit(LIMITS.contactsCount);
+          .limit(LIMITS.contactsCount + 1);
+        if (contactsToExport.length > LIMITS.contactsCount) {
+          return { status: "too-many" as const };
+        }
         const document = serializeContactExport(
           contactsToExport.map(contactToPortableImport),
           format,
@@ -125,6 +118,14 @@ const exportContacts = createSafeRootHandler(
         new HandlerError({
           status: 413,
           message: "Contact export exceeds the download size limit",
+        }),
+      );
+    }
+    if (exportResult.status === "too-many") {
+      return Result.err(
+        new HandlerError({
+          status: 413,
+          message: "Contact export exceeds the row limit",
         }),
       );
     }
