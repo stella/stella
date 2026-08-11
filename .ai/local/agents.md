@@ -73,6 +73,11 @@ only the non-obvious caveats for this environment.
   `scripts/ratchet.ts` (`RATCHET_METRICS`); this includes cross-slice imports
   (API handler domains, route-private `-` paths, web features), which
   structurally enforce the vertical-slice principle.
+- Lint suppressions are budgeted per rule, not in aggregate: each rule in
+  `TRACKED_SUPPRESSION_RULES` (`scripts/lint-suppressions.ts`) has its own
+  decrease-only ratchet, and security-tier suppressions additionally need an
+  entry in `scripts/suppression-waivers.json`. Policy in
+  `.oxlint-plugins/README.md`.
 - Typecheck cost is guarded by `scripts/typecheck-baseline.ts`: per-project
   tsc `--extendedDiagnostics` Types/Instantiations counters with headroom,
   checked in the CI typecheck job. Reseeding either baseline

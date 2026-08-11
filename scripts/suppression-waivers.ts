@@ -793,6 +793,7 @@ const runSelfTest = (): number => {
       ledger: { waivers: [permanentWaiver()] },
       observation: fixtureObservation([fixtureObserved()]),
       evidenceExists: () => false,
+      evidenceContains: () => true,
       today: "2026-01-01",
     }),
     "does not exist",
