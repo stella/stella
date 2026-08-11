@@ -5,6 +5,7 @@ import { decryptAIConfig, maskApiKey } from "@/api/lib/ai-config-crypto";
 import {
   providerResponseExtras,
   providerResponseRegion,
+  storedAIConfigUnreadableError,
 } from "@/api/lib/ai-config-response";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -81,20 +82,23 @@ const readAIConfig = createSafeRootHandler(
 
       if (decryptResult.isErr()) {
         captureError(decryptResult.error);
-      } else {
-        const aiConfig = decryptResult.value;
-        result = {
-          configured: true,
-          providers: aiConfig.providers.map((providerConfig) => ({
-            provider: providerConfig.provider,
-            apiKeyMasked: maskApiKey(providerConfig.apiKey),
-            region: providerResponseRegion(providerConfig),
-            ...providerResponseExtras(providerConfig),
-          })),
-          overrideModels: aiConfig.overrideModels,
-          instanceProvisioned,
-        };
+        // Reporting the default here would present a stored-but-unreadable
+        // config as an unconfigured org and invite re-entry of the key.
+        return Result.err(storedAIConfigUnreadableError(decryptResult.error));
       }
+
+      const aiConfig = decryptResult.value;
+      result = {
+        configured: true,
+        providers: aiConfig.providers.map((providerConfig) => ({
+          provider: providerConfig.provider,
+          apiKeyMasked: maskApiKey(providerConfig.apiKey),
+          region: providerResponseRegion(providerConfig),
+          ...providerResponseExtras(providerConfig),
+        })),
+        overrideModels: aiConfig.overrideModels,
+        instanceProvisioned,
+      };
     }
 
     return Result.ok(result);
