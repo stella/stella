@@ -270,6 +270,149 @@ const checkExamples = () => {
   return false;
 };
 
+// Vite inlines client variables at build time, so the web container build must
+// carry every schema key into the build command: an ARG the image can receive,
+// and an entry in the build command's environment prefix. A key missing from
+// either section resolves to its schema default in every image, silently.
+const WEB_DOCKERFILE_PATH = path.join(REPO_ROOT, "apps/web/Dockerfile");
+const WEB_DOCKERFILE_LABEL = "apps/web/Dockerfile";
+const WEB_SCHEMA_LABEL = "apps/web/src/env-schema.ts";
+const WEB_BUILD_COMMAND = "bun --filter @stll/web build";
+const WEB_CLIENT_PREFIX = "VITE_";
+
+const DOCKER_NAME_PATTERN = /^[A-Z][A-Z0-9_]*$/u;
+const DOCKER_ARG_PATTERN = /^ARG\s+(\S.*)$/iu;
+const DOCKER_ASSIGNMENT_PATTERN = /\b([A-Z][A-Z0-9_]*)="([^"]*)"/gu;
+const DOCKER_REFERENCE_PATTERN = /\$\{([A-Z][A-Z0-9_]*)\}/gu;
+
+type WebBuildContract = {
+  /**
+   * Build arguments the builder stage declares before the build runs. Only
+   * `ARG` counts: `ENV` also puts a name in scope for the build, but
+   * `docker build --build-arg` cannot override it, so an `ENV`-only key is
+   * exactly the frozen default this guard exists to catch.
+   */
+  args: Set<string>;
+  /** Variables the build command exports, mapped to their exported value. */
+  exported: Map<string, string>;
+};
+
+const dockerInstructions = (dockerfile: string) =>
+  dockerfile
+    .replaceAll(/\\\r?\n\s*/gu, " ")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith("#"));
+
+export const parseWebBuildContract = (dockerfile: string): WebBuildContract => {
+  const args = new Set<string>();
+  for (const instruction of dockerInstructions(dockerfile)) {
+    if (/^FROM\s/iu.test(instruction)) {
+      args.clear();
+      continue;
+    }
+    const declaration = DOCKER_ARG_PATTERN.exec(instruction)?.at(1);
+    if (declaration !== undefined) {
+      for (const token of declaration.split(/\s+/u)) {
+        const name = token.split("=").at(0) ?? "";
+        if (DOCKER_NAME_PATTERN.test(name)) {
+          args.add(name);
+        }
+      }
+      continue;
+    }
+    if (
+      !instruction.startsWith("RUN ") ||
+      !instruction.includes(WEB_BUILD_COMMAND)
+    ) {
+      continue;
+    }
+    const prefix = instruction.slice(0, instruction.indexOf(WEB_BUILD_COMMAND));
+    const exported = new Map<string, string>();
+    for (const match of prefix.matchAll(DOCKER_ASSIGNMENT_PATTERN)) {
+      const name = match.at(1);
+      const value = match.at(2);
+      if (name !== undefined && value !== undefined) {
+        exported.set(name, value);
+      }
+    }
+    return { args, exported };
+  }
+  return panic(
+    `${WEB_DOCKERFILE_LABEL} no longer runs \`${WEB_BUILD_COMMAND}\`; update the build-argument guard in scripts/env-tool.ts.`,
+  );
+};
+
+type WebBuildArgGap =
+  | { name: string; reference: string; type: "undeclared" }
+  | { name: string; type: "missing" }
+  | { name: string; type: "unknown" };
+
+type FindWebBuildArgGapsOptions = {
+  clientKeys: string[];
+  dockerfile: string;
+};
+
+export const findWebBuildArgGaps = ({
+  clientKeys,
+  dockerfile,
+}: FindWebBuildArgGapsOptions): WebBuildArgGap[] => {
+  const { args, exported } = parseWebBuildContract(dockerfile);
+  const schemaKeys = new Set(clientKeys);
+  const gaps: WebBuildArgGap[] = [];
+  for (const name of clientKeys) {
+    if (!exported.has(name)) {
+      gaps.push({ name, type: "missing" });
+    }
+  }
+  for (const [name, value] of exported) {
+    if (name.startsWith(WEB_CLIENT_PREFIX) && !schemaKeys.has(name)) {
+      gaps.push({ name, type: "unknown" });
+      continue;
+    }
+    for (const match of value.matchAll(DOCKER_REFERENCE_PATTERN)) {
+      const reference = match.at(1);
+      if (reference !== undefined && !args.has(reference)) {
+        gaps.push({ name, reference, type: "undeclared" });
+      }
+    }
+  }
+  return gaps;
+};
+
+export const formatWebBuildArgGap = (gap: WebBuildArgGap) => {
+  switch (gap.type) {
+    case "missing":
+      return `${WEB_DOCKERFILE_LABEL}: ${gap.name} is declared in ${WEB_SCHEMA_LABEL} but the web build command never exports it; every image inlines its schema default.`;
+    case "undeclared":
+      return `${WEB_DOCKERFILE_LABEL}: ${gap.name} is exported from \${${gap.reference}}, which the builder stage never declares as an ARG; the build always sees an empty value.`;
+    case "unknown":
+      return `${WEB_DOCKERFILE_LABEL}: ${gap.name} is exported to the web build but ${WEB_SCHEMA_LABEL} does not declare it.`;
+    default: {
+      const exhaustive: never = gap;
+      return exhaustive;
+    }
+  }
+};
+
+const checkWebBuildArgs = () => {
+  const gaps = findWebBuildArgGaps({
+    clientKeys: Object.keys(WEB_ENV_SCHEMA),
+    dockerfile: readFileSync(WEB_DOCKERFILE_PATH, "utf-8"),
+  });
+  if (gaps.length === 0) {
+    console.log("Web container build arguments cover the client env schema.");
+    return true;
+  }
+  for (const gap of gaps) {
+    console.error(formatWebBuildArgGap(gap));
+  }
+  console.error(
+    `Declare each key as an ARG and export it in the build-command environment prefix in ${WEB_DOCKERFILE_LABEL}.`,
+  );
+  return false;
+};
+
 const STATIC_ENV_PATTERNS = [
   /\b(?:process|Bun)\.env\.([A-Z][A-Z0-9_]*)/gu,
   /\b(?:process|Bun)\.env\[["']([A-Z][A-Z0-9_]*)["']\]/gu,
@@ -914,8 +1057,9 @@ const main = async () => {
   }
   if (command === "check") {
     const examplesValid = checkExamples();
+    const buildArgsValid = checkWebBuildArgs();
     const auditValid = await auditEnvironment();
-    if (!(examplesValid && auditValid)) {
+    if (!(examplesValid && buildArgsValid && auditValid)) {
       process.exitCode = 1;
     }
     return;
