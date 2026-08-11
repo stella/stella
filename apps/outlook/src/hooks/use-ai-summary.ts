@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { Result } from "better-result";
 
+import { buildAISummaryRequest } from "@/hooks/ai-request.logic";
 import { api, withTimeout } from "@/lib/api";
 import { toAPIError, userErrorMessage } from "@/lib/api-error";
 
@@ -32,10 +33,7 @@ export const useAISummary = (errorFallback: string): UseAISummary => {
     const result = await Result.tryPromise(
       async () =>
         await api.ai.summarize.post(
-          {
-            text,
-            ...(language ? { language } : {}),
-          },
+          buildAISummaryRequest({ language, text }),
           withTimeout(AI_REQUEST_TIMEOUT_MS),
         ),
     );
