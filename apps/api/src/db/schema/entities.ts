@@ -43,6 +43,13 @@ import type {
 import { workspaces } from "./contacts";
 import { properties } from "./properties";
 
+const LIST_ITEM_TYPE_SQL_VALUES = LIST_ITEM_TYPES.map((itemType) =>
+  sql.raw(`'${itemType}'`),
+);
+
+const ENTITY_DELETION_CLEANUP_STATUS_SQL_VALUES =
+  ENTITY_DELETION_CLEANUP_STATUSES.map((status) => sql.raw(`'${status}'`));
+
 export const entities = p.pgTable(
   "entities",
   {
@@ -151,7 +158,7 @@ export const entities = p.pgTable(
       .where(isNotNull(table.dueDate)),
     p.check(
       "entities_list_item_type_task_only",
-      sql`${table.listItemType} IS NULL OR (${table.kind} = 'task' AND ${table.listItemType} IN ('task', 'fact', 'issue', 'requirement', 'event'))`,
+      sql`${table.listItemType} IS NULL OR (${table.kind} = 'task' AND ${table.listItemType} IN (${sql.join(LIST_ITEM_TYPE_SQL_VALUES, sql`, `)}))`,
     ),
     p
       .index("entities_agenda_kind_idx")
@@ -219,7 +226,7 @@ export const entityDeletionCleanupRequests = p.pgTable(
       .where(sql`${table.status} = 'processing'`),
     p.check(
       "entity_deletion_cleanup_status_values_check",
-      sql`${table.status} IN ('pending', 'processing', 'completed', 'failed')`,
+      sql`${table.status} IN (${sql.join(ENTITY_DELETION_CLEANUP_STATUS_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "entity_deletion_cleanup_attempt_count_nonnegative_check",

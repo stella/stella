@@ -30,6 +30,14 @@ export const EXTRACTION_RUN_SCOPES = [
 ] as const;
 export type ExtractionRunScope = (typeof EXTRACTION_RUN_SCOPES)[number];
 
+const EXTRACTION_RUN_STATUS_SQL_VALUES = EXTRACTION_RUN_STATUSES.map((status) =>
+  sql.raw(`'${status}'`),
+);
+
+const EXTRACTION_RUN_SCOPE_SQL_VALUES = EXTRACTION_RUN_SCOPES.map((scope) =>
+  sql.raw(`'${scope}'`),
+);
+
 /**
  * Durable lifecycle metadata for tabular-review extraction. Redis and BullMQ
  * remain the hot execution path; this row is the tenant-scoped source for run
@@ -80,11 +88,11 @@ export const extractionRuns = p.pgTable(
     ),
     p.check(
       "extraction_runs_scope_values_check",
-      sql`${table.scope} IN ('workspace', 'entities', 'properties', 'cells')`,
+      sql`${table.scope} IN (${sql.join(EXTRACTION_RUN_SCOPE_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "extraction_runs_status_values_check",
-      sql`${table.status} IN ('planning', 'running', 'finalizing', 'completed', 'failed', 'skipped')`,
+      sql`${table.status} IN (${sql.join(EXTRACTION_RUN_STATUS_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "extraction_runs_progress_nonnegative_check",

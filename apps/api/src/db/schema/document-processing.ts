@@ -41,6 +41,17 @@ export const DOCUMENT_PROCESSING_REQUEST_SOURCES = [
 export type DocumentProcessingRequestSource =
   (typeof DOCUMENT_PROCESSING_REQUEST_SOURCES)[number];
 
+const DOCUMENT_PROCESSING_KIND_SQL_VALUES = DOCUMENT_PROCESSING_KINDS.map(
+  (kind) => sql.raw(`'${kind}'`),
+);
+
+const DOCUMENT_PROCESSING_STATUS_SQL_VALUES = DOCUMENT_PROCESSING_STATUSES.map(
+  (status) => sql.raw(`'${status}'`),
+);
+
+const DOCUMENT_PROCESSING_REQUEST_SOURCE_SQL_VALUES =
+  DOCUMENT_PROCESSING_REQUEST_SOURCES.map((source) => sql.raw(`'${source}'`));
+
 /**
  * Durable execution record for processing one immutable document source.
  *
@@ -186,15 +197,15 @@ export const documentProcessingRuns = p.pgTable(
       .onDelete("cascade"),
     p.check(
       "document_processing_runs_kind_values_check",
-      sql`${table.kind} IN ('native-extraction', 'ocr')`,
+      sql`${table.kind} IN (${sql.join(DOCUMENT_PROCESSING_KIND_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "document_processing_runs_status_values_check",
-      sql`${table.status} IN ('queued', 'running', 'succeeded', 'failed', 'cancelled')`,
+      sql`${table.status} IN (${sql.join(DOCUMENT_PROCESSING_STATUS_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "document_processing_runs_request_source_values_check",
-      sql`${table.requestSource} IN ('upload', 'manual', 'repair')`,
+      sql`${table.requestSource} IN (${sql.join(DOCUMENT_PROCESSING_REQUEST_SOURCE_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "document_processing_runs_processor_version_positive_check",

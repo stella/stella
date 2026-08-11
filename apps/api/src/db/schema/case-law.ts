@@ -1,5 +1,16 @@
 import { eq } from "drizzle-orm";
 
+import { CITATION_KINDS } from "@/api/handlers/case-law/citation-kind";
+import {
+  POLARITIES,
+  RULE_SOURCE,
+  RULE_SOURCES,
+} from "@/api/handlers/case-law/polarity/consts";
+import type {
+  Polarity,
+  RuleSource,
+} from "@/api/handlers/case-law/polarity/consts";
+
 import {
   caseLawIngestionOnlyPolicies,
   globalCaseLawPolicies,
@@ -24,11 +35,25 @@ import type {
   PersistedDecisionAnalysis,
 } from "./common";
 import { workspaces } from "./contacts";
+import {
+  CORPUS_INDEX_JOB_OPERATION_SQL_VALUES,
+  CORPUS_INDEX_JOB_STATUS_SQL_VALUES,
+} from "./corpus-index-jobs";
+import type {
+  CorpusIndexJobOperation,
+  CorpusIndexJobStatus,
+} from "./corpus-index-jobs";
 
 export const CASE_LAW_CORPUS_MIRROR_STATUS = {
   PENDING: "pending",
   SETTLED: "settled",
 } as const;
+
+/** The same values as a list, for the column's `enum` and the CHECK. */
+const CASE_LAW_CORPUS_MIRROR_STATUSES = [
+  CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+  CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+] as const;
 
 export const CASE_LAW_CORPUS_UPLOAD_INTENT_STATUSES = [
   "active",
@@ -52,6 +77,26 @@ export const SOURCE_TOTAL_ORIGIN = {
 
 export type SourceTotalOrigin =
   (typeof SOURCE_TOTAL_ORIGIN)[keyof typeof SOURCE_TOTAL_ORIGIN];
+
+const CASE_LAW_CORPUS_MIRROR_STATUS_SQL_VALUES =
+  CASE_LAW_CORPUS_MIRROR_STATUSES.map((status) => sql.raw(`'${status}'`));
+
+const CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS_SQL_VALUES =
+  CASE_LAW_CORPUS_UPLOAD_INTENT_STATUSES.map((status) =>
+    sql.raw(`'${status}'`),
+  );
+
+const POLARITY_SQL_VALUES = POLARITIES.map((polarity) =>
+  sql.raw(`'${polarity}'`),
+);
+
+const CITATION_KIND_SQL_VALUES = CITATION_KINDS.map((kind) =>
+  sql.raw(`'${kind}'`),
+);
+
+const RULE_SOURCE_SQL_VALUES = RULE_SOURCES.map((source) =>
+  sql.raw(`'${source}'`),
+);
 
 export const caseLawSources = p.pgTable(
   "case_law_sources",
@@ -242,10 +287,7 @@ export const caseLawDecisions = p.pgTable(
     corpusMirrorStatus: p
       .varchar("corpus_mirror_status", {
         length: 16,
-        enum: [
-          CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
-          CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
-        ],
+        enum: CASE_LAW_CORPUS_MIRROR_STATUSES,
       })
       .default(CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED)
       .notNull(),
@@ -297,7 +339,7 @@ export const caseLawDecisions = p.pgTable(
   (t) => [
     p.check(
       "case_law_decisions_corpus_mirror_status_values",
-      sql`${t.corpusMirrorStatus} IN ('settled', 'pending')`,
+      sql`${t.corpusMirrorStatus} IN (${sql.join(CASE_LAW_CORPUS_MIRROR_STATUS_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "case_law_decisions_pending_corpus_mirror_has_no_pointers",
@@ -471,7 +513,7 @@ export const caseLawCorpusUploadIntents = p.pgTable(
       .where(eq(t.status, CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE)),
     p.check(
       "case_law_corpus_upload_intents_status_values",
-      sql`${t.status} IN ('active', 'cleanup')`,
+      sql`${t.status} IN (${sql.join(CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "case_law_corpus_upload_intents_cleanup_schedule",
@@ -662,11 +704,11 @@ export const caseLawCitations = p.pgTable(
       ),
     p.check(
       "citations_polarity_values",
-      sql`${t.polarity} IN ('positive','supportive','neutral','negative','unknown')`,
+      sql`${t.polarity} IN (${sql.join(POLARITY_SQL_VALUES, sql.raw(","))})`,
     ),
     p.check(
       "citations_kind_values",
-      sql`${t.kind} IN ('precedent','procedural')`,
+      sql`${t.kind} IN (${sql.join(CITATION_KIND_SQL_VALUES, sql.raw(","))})`,
     ),
     // Authority reads precedent only, so the index covers that arm.
     p
@@ -682,9 +724,13 @@ export const caseLawPolarityRules = p.pgTable(
   {
     id: pUuid<"caseLawPolarityRule">().primaryKey(),
     pattern: p.varchar("pattern", { length: 512 }).notNull(),
-    polarity: p.varchar("polarity", { length: 16 }).notNull(),
+    polarity: p.varchar("polarity", { length: 16 }).$type<Polarity>().notNull(),
     language: p.varchar("language", { length: 8 }).notNull(),
-    source: p.varchar("source", { length: 16 }).notNull().default("manual"),
+    source: p
+      .varchar("source", { length: 16 })
+      .$type<RuleSource>()
+      .notNull()
+      .default(RULE_SOURCE.MANUAL),
     confidence: p.doublePrecision("confidence").notNull().default(1),
     matchCount: p.integer("match_count").notNull().default(0),
     surfaceForms: jsonb("surface_forms").$type<string[]>().default([]),
@@ -701,11 +747,11 @@ export const caseLawPolarityRules = p.pgTable(
       .on(t.pattern, t.language),
     p.check(
       "polarity_rules_polarity_values",
-      sql`${t.polarity} IN ('positive','supportive','neutral','negative','unknown')`,
+      sql`${t.polarity} IN (${sql.join(POLARITY_SQL_VALUES, sql.raw(","))})`,
     ),
     p.check(
       "polarity_rules_source_values",
-      sql`${t.source} IN ('manual','llm-proposed','llm-promoted')`,
+      sql`${t.source} IN (${sql.join(RULE_SOURCE_SQL_VALUES, sql.raw(","))})`,
     ),
     ...globalCaseLawPolicies(),
   ],
@@ -897,8 +943,8 @@ export const caseLawIndexJobs = p.pgTable(
     operation: p
       .varchar({ length: 16 })
       .notNull()
-      .$type<"index" | "delete" | "redact" | "rebuild">(),
-    status: p.varchar({ length: 16 }).notNull().$type<"succeeded" | "failed">(),
+      .$type<CorpusIndexJobOperation>(),
+    status: p.varchar({ length: 16 }).notNull().$type<CorpusIndexJobStatus>(),
     contentHash: p.varchar("content_hash", { length: 64 }),
     errorMessage: p.varchar("error_message", { length: 2048 }),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
@@ -912,11 +958,11 @@ export const caseLawIndexJobs = p.pgTable(
       .where(sql`${t.operation} = 'redact' AND ${t.decisionId} IS NOT NULL`),
     p.check(
       "case_law_index_jobs_operation_values",
-      sql`${t.operation} IN ('index','delete','redact','rebuild')`,
+      sql`${t.operation} IN (${sql.join(CORPUS_INDEX_JOB_OPERATION_SQL_VALUES, sql.raw(","))})`,
     ),
     p.check(
       "case_law_index_jobs_status_values",
-      sql`${t.status} IN ('succeeded','failed')`,
+      sql`${t.status} IN (${sql.join(CORPUS_INDEX_JOB_STATUS_SQL_VALUES, sql.raw(","))})`,
     ),
     ...globalCaseLawPolicies(),
   ],

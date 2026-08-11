@@ -39,6 +39,17 @@ export const USAGE_POLICY_BILLING_INTERVALS = [
 
 export const USAGE_POLICY_VISIBILITIES = ["public", "hidden"] as const;
 
+const USAGE_POLICY_KIND_SQL_VALUES = USAGE_POLICY_KINDS.map((kind) =>
+  sql.raw(`'${kind}'`),
+);
+
+const USAGE_POLICY_BILLING_INTERVAL_SQL_VALUES =
+  USAGE_POLICY_BILLING_INTERVALS.map((interval) => sql.raw(`'${interval}'`));
+
+const USAGE_POLICY_VISIBILITY_SQL_VALUES = USAGE_POLICY_VISIBILITIES.map(
+  (visibility) => sql.raw(`'${visibility}'`),
+);
+
 export const usagePolicies = p.pgTable(
   "usage_policies",
   {
@@ -88,15 +99,15 @@ export const usagePolicies = p.pgTable(
     // database as well (root/manual writes included).
     p.check(
       "usage_policies_kind_domain",
-      sql`kind IN ('subscription', 'addon')`,
+      sql`kind IN (${sql.join(USAGE_POLICY_KIND_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "usage_policies_billing_interval_domain",
-      sql`billing_interval IS NULL OR billing_interval IN ('month', 'year', 'one_time')`,
+      sql`billing_interval IS NULL OR billing_interval IN (${sql.join(USAGE_POLICY_BILLING_INTERVAL_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "usage_policies_visibility_domain",
-      sql`visibility IN ('public', 'hidden')`,
+      sql`visibility IN (${sql.join(USAGE_POLICY_VISIBILITY_SQL_VALUES, sql`, `)})`,
     ),
     p
       .uniqueIndex("usage_policies_hosted_policy_ref_uidx")

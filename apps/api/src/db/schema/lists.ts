@@ -81,6 +81,42 @@ export const LEGAL_LIST_REVIEW_DECISIONS = [
 export type LegalListReviewDecision =
   (typeof LEGAL_LIST_REVIEW_DECISIONS)[number];
 
+const LEGAL_LIST_STATUS_SQL_VALUES = LEGAL_LIST_STATUSES.map((status) =>
+  sql.raw(`'${status}'`),
+);
+
+const LEGAL_LIST_ITEM_REVIEW_STATUS_SQL_VALUES =
+  LEGAL_LIST_ITEM_REVIEW_STATUSES.map((status) => sql.raw(`'${status}'`));
+
+const LEGAL_LIST_SOURCE_VERIFICATION_STATUS_SQL_VALUES =
+  LEGAL_LIST_SOURCE_VERIFICATION_STATUSES.map((status) =>
+    sql.raw(`'${status}'`),
+  );
+
+const LEGAL_LIST_GENERATION_STATUS_SQL_VALUES =
+  LEGAL_LIST_GENERATION_STATUSES.map((status) => sql.raw(`'${status}'`));
+
+const LEGAL_LIST_GENERATION_CANDIDATE_STATUS_SQL_VALUES =
+  LEGAL_LIST_GENERATION_CANDIDATE_STATUSES.map((status) =>
+    sql.raw(`'${status}'`),
+  );
+
+const LEGAL_LIST_REVIEW_DECISION_SQL_VALUES = LEGAL_LIST_REVIEW_DECISIONS.map(
+  (decision) => sql.raw(`'${decision}'`),
+);
+
+const LIST_ITEM_TYPE_SQL_VALUES = LIST_ITEM_TYPES.map((itemType) =>
+  sql.raw(`'${itemType}'`),
+);
+
+const TASK_STATUS_SQL_VALUES = TASK_STATUSES.map((status) =>
+  sql.raw(`'${status}'`),
+);
+
+const ENTITY_PRIORITY_SQL_VALUES = ENTITY_PRIORITIES.map((priority) =>
+  sql.raw(`'${priority}'`),
+);
+
 export const legalLists = p.pgTable(
   "legal_lists",
   {
@@ -104,7 +140,7 @@ export const legalLists = p.pgTable(
     p.unique("legal_lists_id_ws_unq").on(table.id, table.workspaceId),
     p.check(
       "legal_lists_status_check",
-      sql`${table.status} in ('active', 'archived')`,
+      sql`${table.status} in (${sql.join(LEGAL_LIST_STATUS_SQL_VALUES, sql`, `)})`,
     ),
     p
       .index("legal_lists_workspace_status_created_idx")
@@ -240,7 +276,7 @@ export const legalListItems = p.pgTable(
       .on(table.workspaceId, table.listId, table.reviewStatus, table.entityId),
     p.check(
       "legal_list_items_review_status_check",
-      sql`${table.reviewStatus} in ('unreviewed', 'in_review', 'verified', 'changes_requested', 'rejected')`,
+      sql`${table.reviewStatus} in (${sql.join(LEGAL_LIST_ITEM_REVIEW_STATUS_SQL_VALUES, sql`, `)})`,
     ),
     ...wsPolicies(),
   ],
@@ -304,7 +340,7 @@ export const legalListItemSources = p.pgTable(
       .onDelete("cascade"),
     p.check(
       "legal_list_item_sources_verification_status_check",
-      sql`${table.verificationStatus} in ('unverified', 'verified', 'rejected')`,
+      sql`${table.verificationStatus} in (${sql.join(LEGAL_LIST_SOURCE_VERIFICATION_STATUS_SQL_VALUES, sql`, `)})`,
     ),
     p
       .foreignKey({
@@ -382,7 +418,7 @@ export const legalListGenerationRuns = p.pgTable(
       .on(table.workspaceId, table.status, table.createdAt, table.id),
     p.check(
       "legal_list_generation_runs_status_check",
-      sql`${table.status} in ('queued', 'running', 'review', 'committed', 'failed', 'cancelled')`,
+      sql`${table.status} in (${sql.join(LEGAL_LIST_GENERATION_STATUS_SQL_VALUES, sql`, `)})`,
     ),
     ...wsPolicies(),
   ],
@@ -534,19 +570,19 @@ export const legalListGenerationCandidates = p.pgTable(
       ),
     p.check(
       "legal_list_generation_candidates_item_type_check",
-      sql`${table.itemType} in ('task', 'fact', 'issue', 'requirement', 'event')`,
+      sql`${table.itemType} in (${sql.join(LIST_ITEM_TYPE_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "legal_list_generation_candidates_item_status_check",
-      sql`${table.itemStatus} is null or ${table.itemStatus} in ('open', 'in_progress', 'in_review', 'done', 'cancelled')`,
+      sql`${table.itemStatus} is null or ${table.itemStatus} in (${sql.join(TASK_STATUS_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "legal_list_generation_candidates_priority_check",
-      sql`${table.priority} is null or ${table.priority} in ('none', 'urgent', 'high', 'medium', 'low')`,
+      sql`${table.priority} is null or ${table.priority} in (${sql.join(ENTITY_PRIORITY_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "legal_list_generation_candidates_status_check",
-      sql`${table.status} in ('pending', 'accepting', 'accepted', 'rejected')`,
+      sql`${table.status} in (${sql.join(LEGAL_LIST_GENERATION_CANDIDATE_STATUS_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "legal_list_generation_candidates_accepted_entity_scope_check",
@@ -717,7 +753,7 @@ export const legalListItemReviews = p.pgTable(
       .on(table.workspaceId, table.itemEntityId, table.createdAt, table.id),
     p.check(
       "legal_list_item_reviews_decision_check",
-      sql`${table.decision} in ('verified', 'changes_requested', 'rejected')`,
+      sql`${table.decision} in (${sql.join(LEGAL_LIST_REVIEW_DECISION_SQL_VALUES, sql`, `)})`,
     ),
     p.pgPolicy("workspace_select", {
       for: "select",

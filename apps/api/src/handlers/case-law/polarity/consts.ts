@@ -11,6 +11,15 @@ export const POLARITY = {
 
 export type Polarity = (typeof POLARITY)[keyof typeof POLARITY];
 
+/** The same values as a list, for the CHECK constraints that persist them. */
+export const POLARITIES = [
+  POLARITY.POSITIVE,
+  POLARITY.SUPPORTIVE,
+  POLARITY.NEUTRAL,
+  POLARITY.NEGATIVE,
+  POLARITY.UNKNOWN,
+] as const;
+
 /** Rule source types. */
 export const RULE_SOURCE = {
   MANUAL: "manual",
@@ -19,6 +28,13 @@ export const RULE_SOURCE = {
 } as const;
 
 export type RuleSource = (typeof RULE_SOURCE)[keyof typeof RULE_SOURCE];
+
+/** The same values as a list, for the CHECK constraint that persists them. */
+export const RULE_SOURCES = [
+  RULE_SOURCE.MANUAL,
+  RULE_SOURCE.LLM_PROPOSED,
+  RULE_SOURCE.LLM_PROMOTED,
+] as const;
 
 /**
  * Number of consistent LLM classifications needed before
