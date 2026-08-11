@@ -49,6 +49,7 @@ jobs:
       mobile_build_required: ${{ steps.changed-files.outputs.mobile_build_required }}
       ocr_image_required: ${{ steps.changed-files.outputs.ocr_image_required }}
       package_checks_required: ${{ steps.changed-files.outputs.package_checks_required }}
+      release_typecheck_required: ${{ steps.changed-files.outputs.release_typecheck_required }}
       web_build_required: ${{ steps.changed-files.outputs.web_build_required }}
       web_image_smoke_required: ${{ steps.changed-files.outputs.web_image_smoke_required }}
       windows_scripts_required: ${{ steps.changed-files.outputs.windows_scripts_required }}
@@ -102,6 +103,7 @@ jobs:
               echo "mobile_build_required=true"
               echo "ocr_image_required=true"
               echo "package_checks_required=true"
+              echo "release_typecheck_required=false"
               echo "web_build_required=true"
               echo "web_image_smoke_required=true"
               echo "windows_scripts_required=true"
@@ -124,6 +126,7 @@ jobs:
               echo "mobile_build_required=false"
               echo "ocr_image_required=false"
               echo "package_checks_required=true"
+              echo "release_typecheck_required=false"
               echo "web_build_required=false"
               echo "web_image_smoke_required=false"
               echo "windows_scripts_required=false"
@@ -157,10 +160,14 @@ jobs:
           legal_atlas_image_required=false
           mobile_build_required=false
           ocr_image_required=false
+          release_typecheck_required=false
           web_build_required=false
           web_image_smoke_required=false
           windows_scripts_required=false
           for file in "${changed_files[@]}"; do
+            if [[ "$file" == "VERSION" ]]; then
+              release_typecheck_required=true
+            fi
             case "$file" in
               .github/workflows/agent-sandbox-canary.yml|.github/workflows/ci.yml|packages/agent-engine/*|package.json|bun.lock|scripts/bun-ci-retry.sh)
                 agent_sandbox_docker_required=true
@@ -233,6 +240,7 @@ jobs:
             echo "mobile_build_required=$mobile_build_required"
             echo "ocr_image_required=$ocr_image_required"
             echo "package_checks_required=$package_checks_required"
+            echo "release_typecheck_required=$release_typecheck_required"
             echo "web_build_required=$web_build_required"
             echo "web_image_smoke_required=$web_image_smoke_required"
             echo "windows_scripts_required=$windows_scripts_required"
@@ -999,6 +1007,39 @@ jobs:
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         run: bun run test:postgres
+
+  # A VERSION change is the last review boundary before tag creation. Pay the
+  # cost of the compiler's complete, uncached project graph there while keeping
+  # ordinary pull requests on the fast Oxc diagnostics path.
+  release-typecheck:
+    needs: ci-plan
+    if: >-
+      github.event_name == 'pull_request'
+      && needs.ci-plan.outputs.release_typecheck_required == 'true'
+      && needs.ci-plan.outputs.trusted == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@859a61ee0a799ba1028281329555cadee15bfc4f
+
+      - name: Install dependencies
+        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Full release typecheck
+        run: bun run typecheck && bun run typecheck:repo
+        env:
+          TURBO_FORCE: "true"
 
   # Typecheck-cost baseline guard. What silently rots is the compiler's
   # workload: an annotation-heavy or inference-exploding pattern in a hot
@@ -2052,6 +2093,7 @@ jobs:
         ci-checks,
         code-quality,
         postgres-suites,
+        release-typecheck,
         typecheck-baseline,
         web-build,
         web-image-smoke,
@@ -2085,6 +2127,7 @@ jobs:
           TRUSTED: ${{ needs.ci-plan.outputs.trusted }}
           PLAN_RESULT: ${{ needs.ci-plan.result }}
           POSTGRES_SUITES_RESULT: ${{ needs.postgres-suites.result }}
+          RELEASE_TYPECHECK_RESULT: ${{ needs.release-typecheck.result }}
           TYPECHECK_BASELINE_RESULT: ${{ needs.typecheck-baseline.result }}
           WEB_RESULT: ${{ needs.web-build.result }}
           WEB_IMAGE_SMOKE_RESULT: ${{ needs.web-image-smoke.result }}
@@ -2103,6 +2146,7 @@ jobs:
                   || "$AGENT_SANDBOX_DOCKER_RESULT" == "failure" || "$AGENT_SANDBOX_DOCKER_RESULT" == "cancelled" \
                   || "$CODE_QUALITY_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "cancelled" \
                   || "$POSTGRES_SUITES_RESULT" == "failure" || "$POSTGRES_SUITES_RESULT" == "cancelled" \
+                  || "$RELEASE_TYPECHECK_RESULT" == "failure" || "$RELEASE_TYPECHECK_RESULT" == "cancelled" \
                   || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" \
                   || "$WEB_RESULT" == "failure" || "$WEB_RESULT" == "cancelled" \
                   || "$WEB_IMAGE_SMOKE_RESULT" == "failure" || "$WEB_IMAGE_SMOKE_RESULT" == "cancelled" \
@@ -2139,12 +2183,12 @@ jobs:
 
           # "cancelled" means cancel-in-progress replaced this
           # run with a newer one; the newer run is authoritative.
-          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "cancelled" || "$CI_RESULT" == "cancelled" || "$CODE_QUALITY_RESULT" == "cancelled" || "$POSTGRES_SUITES_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$WEB_IMAGE_SMOKE_RESULT" == "cancelled" || "$MOBILE_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$OCR_IMAGE_RESULT" == "cancelled" || "$LEGAL_ATLAS_IMAGE_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CHANGESET_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
+          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "cancelled" || "$CI_RESULT" == "cancelled" || "$CODE_QUALITY_RESULT" == "cancelled" || "$POSTGRES_SUITES_RESULT" == "cancelled" || "$RELEASE_TYPECHECK_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$WEB_IMAGE_SMOKE_RESULT" == "cancelled" || "$MOBILE_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$OCR_IMAGE_RESULT" == "cancelled" || "$LEGAL_ATLAS_IMAGE_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CHANGESET_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
             echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
             exit 0
           fi
 
-          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "failure" || "$CI_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "failure" || "$POSTGRES_SUITES_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$WEB_IMAGE_SMOKE_RESULT" == "failure" || "$MOBILE_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$OCR_IMAGE_RESULT" == "failure" || "$LEGAL_ATLAS_IMAGE_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CHANGESET_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
+          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "failure" || "$CI_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "failure" || "$POSTGRES_SUITES_RESULT" == "failure" || "$RELEASE_TYPECHECK_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$WEB_IMAGE_SMOKE_RESULT" == "failure" || "$MOBILE_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$OCR_IMAGE_RESULT" == "failure" || "$LEGAL_ATLAS_IMAGE_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CHANGESET_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
             echo "::error::CI checks failed."
             exit 1
           fi
