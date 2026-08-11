@@ -35502,6 +35502,15 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "fileFieldId",
                   },
+                  {
+                    kind: "string-array",
+                    repeatable: true,
+                    flag: "--position-ids",
+                    prop: "positionIds",
+                    required: false,
+                    part: "body",
+                    partPath: "positionIds",
+                  },
                 ],
                 inputOnly: [],
                 paginated: false,
@@ -35528,6 +35537,14 @@ export const generatedRouteMap: RouteNode = {
                           pattern:
                             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
+                        },
+                        positionIds: {
+                          maxItems: 200,
+                          type: "array",
+                          items: {
+                            format: "uuid",
+                            type: "string",
+                          },
                         },
                       },
                     },
