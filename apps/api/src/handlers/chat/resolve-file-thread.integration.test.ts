@@ -16,7 +16,7 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-import { lockFileChatThreadMapping } from "./resolve-file-thread";
+import { lockFileChatThreadMapping } from "./file-thread-mapping";
 
 let testDb: TestDatabase;
 let ids: TestIds;
