@@ -41,9 +41,7 @@ describe("createBackgroundAuditRecorder", () => {
 
     expect(insertedBatches.map((batch) => batch.length)).toEqual([500, 1]);
     const groupIds = new Set(
-      insertedBatches.flatMap((batch) =>
-        batch.map((row) => row["groupId"]),
-      ),
+      insertedBatches.flatMap((batch) => batch.map((row) => row["groupId"])),
     );
     expect(groupIds.size).toBe(1);
   });
