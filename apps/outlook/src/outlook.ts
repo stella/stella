@@ -171,11 +171,13 @@ export const subscribeMailboxItemChanges = (
   };
 };
 
-export const loadMailSnapshot = async (): Promise<MailSnapshot> => {
+export const loadMailSnapshot = async (
+  itemInstanceKey: string,
+): Promise<MailSnapshot> => {
   const office = getOffice();
   if (!office) {
     if (env.buildEnvironment === "dev") {
-      return createBrowserSampleSnapshot();
+      return createBrowserSampleSnapshot(itemInstanceKey);
     }
     throw new OutlookError({
       message:
@@ -195,20 +197,23 @@ export const loadMailSnapshot = async (): Promise<MailSnapshot> => {
     item.normalizedSubject ?? "",
   );
   const from = normalizeAddress(await readMaybeAsync(item.from, undefined));
-  const [to, cc, bodyText, attachments] = await Promise.all([
+  const [to, cc, bcc, bodyText, attachments] = await Promise.all([
     readAddressList(item.to),
     readAddressList(item.cc),
+    readAddressList(item.bcc),
     readBodyText(item),
     readAttachments(item),
   ]);
 
   return {
     attachments,
+    bcc,
     bodyText,
     cc,
     conversationId: item.conversationId ?? null,
     from,
     internetMessageId: item.internetMessageId ?? null,
+    itemInstanceKey,
     itemId: item.itemId ?? null,
     mode: getMode(item),
     sentAt: toIsoString(item.dateTimeCreated ?? item.dateTimeModified),
@@ -318,7 +323,9 @@ export const placeDraft = async (draft: string): Promise<DraftPlacement> => {
   return "clipboard";
 };
 
-const createBrowserSampleSnapshot = (): MailSnapshot => ({
+const createBrowserSampleSnapshot = (
+  itemInstanceKey: string,
+): MailSnapshot => ({
   attachments: [
     {
       contentType: "application/pdf",
@@ -328,12 +335,14 @@ const createBrowserSampleSnapshot = (): MailSnapshot => ({
       size: 348_200,
     },
   ],
+  bcc: [],
   bodyText:
     "Hi team,\n\nPlease review the attached draft SPA before Friday. Are we comfortable with the warranty cap and the disclosure schedule language?\n\nBest,\nClient",
   cc: [],
   conversationId: "sample-conversation",
   from: { email: "client@example.com", name: "Client" },
   internetMessageId: "<sample-message@example.com>",
+  itemInstanceKey,
   itemId: "sample-item",
   mode: "browser",
   sentAt: new Date().toISOString(),

@@ -3,14 +3,40 @@ import type { PropsWithChildren } from "react";
 import { IntlProvider } from "use-intl";
 import { createTranslator } from "use-intl/core";
 
-const OUTLOOK_LOCALE = "en";
+const DEFAULT_OUTLOOK_LOCALE = "en";
+const SUPPORTED_OUTLOOK_LOCALES = [DEFAULT_OUTLOOK_LOCALE] as const;
+type OutlookLocale = (typeof SUPPORTED_OUTLOOK_LOCALES)[number];
+
+export const resolveOutlookLocale = (
+  candidates: readonly string[],
+): OutlookLocale => {
+  for (const candidate of candidates) {
+    const language = candidate.toLowerCase().split(/[-_]/u).at(0);
+    if (language === DEFAULT_OUTLOOK_LOCALE) {
+      return language;
+    }
+  }
+  return DEFAULT_OUTLOOK_LOCALE;
+};
+
+const outlookLocale = (): OutlookLocale => {
+  const officeLanguage =
+    typeof Office === "undefined" ? undefined : Office.context.displayLanguage;
+  const browserLanguages =
+    typeof navigator === "undefined" ? [] : navigator.languages;
+  return resolveOutlookLocale([
+    ...(officeLanguage ? [officeLanguage] : []),
+    ...browserLanguages,
+  ]);
+};
+
 const messages = {
   outlook: {
     aiDataNotice:
       "AI actions send this email text to your organization's configured AI provider. Review every output before use.",
     aiUnavailable: "AI is unavailable right now",
     attachmentSelection: "Attachments",
-    attachmentsSaved: "{count} attachment(s) saved.",
+    attachmentsSaved: "{count, number} attachment(s) saved.",
     attachmentsSkipped: "Some attachments were skipped",
     browserMode: "Browser preview",
     checkDraft: "Check draft",
@@ -23,22 +49,35 @@ const messages = {
       "e.g. Acknowledge receipt and say we will review by Friday.",
     draftPlacementError: "Could not insert or copy the draft",
     draftReply: "Draft reply",
+    externalRecipients: "External recipients",
     handoffDescription: "Sign in to continue using stella in Outlook.",
     handoffMissingDialog: "Open this page from the stella Outlook task pane.",
     handoffSignInCta: "Sign in with Microsoft",
     handoffSuccess: "Signed in. You can close this window.",
     handoffTitle: "Sign in to stella",
     insertedIntoDraft: "Inserted into draft.",
+    inlineAttachmentSkipped: "Inline attachment skipped",
+    inlineAttachmentSkippedDescription:
+      "{count, number} inline attachment(s) will not be saved as matter files.",
     loadError: "Could not load the Outlook item.",
     loading: "Loading email",
     matterLoadError: "Could not load matters",
     matterSearch: "Search matters",
     noAttachments: "No ordinary attachments detected.",
     noBody: "No body text available.",
+    noIssuesDescription:
+      "No obvious pre-send issues were detected by V1 checks.",
+    noIssuesFound: "No issues found",
+    noMatterSelected: "No matter selected",
+    noMatterSelectedDescription:
+      "Choose the matter before saving or relying on matter context.",
     noMatterResults: "No matters matched.",
     openStella: "Open stella",
     openSavedEmail: "Open saved email",
     openedReplyDraft: "Opened a reply draft.",
+    possibleMissingAttachment: "Possible missing attachment",
+    possibleMissingAttachmentDescription:
+      "The email mentions an attachment, but Outlook reports none.",
     readMode: "Read mode",
     refresh: "Refresh",
     saveButtonLabel: "Save to matter: {matterName}",
@@ -55,16 +94,18 @@ const messages = {
     summarize: "Summarize",
     summarizing: "Summarizing email",
     summary: "Summary",
+    dateOrDeadlineLanguage: "Date or deadline language",
   },
 } as const;
 
 export const translator = createTranslator({
-  locale: OUTLOOK_LOCALE,
+  locale: DEFAULT_OUTLOOK_LOCALE,
   messages,
+  namespace: "outlook",
 });
 
 export const OutlookIntlProvider = ({ children }: PropsWithChildren) => (
-  <IntlProvider locale={OUTLOOK_LOCALE} messages={messages}>
+  <IntlProvider locale={outlookLocale()} messages={messages}>
     {children}
   </IntlProvider>
 );

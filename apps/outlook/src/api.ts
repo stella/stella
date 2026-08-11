@@ -76,6 +76,7 @@ const ensureFileProperty = async (
 export type IngestEmailResult = {
   attachmentCount: number;
   entityId: SafeId<"entity">;
+  fieldId: SafeId<"field">;
   skippedAttachments: string[];
 };
 
@@ -151,6 +152,7 @@ export const ingestEmailToMatter = async ({
   return {
     attachmentCount: result.attachmentEntityIds.length,
     entityId: result.entityId,
+    fieldId: result.fieldId,
     skippedAttachments: attachments
       .filter((attachment) => attachment.type === "skipped")
       .map((attachment) => attachment.reason),

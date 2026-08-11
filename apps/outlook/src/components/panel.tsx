@@ -1,10 +1,10 @@
 import type { PropsWithChildren, ReactNode } from "react";
 
-import type { useTranslations } from "use-intl";
-
 import { cn } from "@stll/ui/lib/utils";
 
-export type Translate = ReturnType<typeof useTranslations<"outlook">>;
+import type { translator } from "@/i18n";
+
+export type Translate = typeof translator;
 
 export const Panel = ({
   children,

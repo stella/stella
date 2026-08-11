@@ -1112,6 +1112,7 @@ export type PendingUploadFinalizedResult =
   | {
       type: "email_ingest";
       entityId: SafeId<"entity">;
+      fieldId: SafeId<"field">;
       /** UUIDv7 stored on `fields.content.id`; not a branded SafeId. */
       fileId: string;
       fileName: string;
