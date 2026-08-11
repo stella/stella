@@ -119,8 +119,8 @@ const isCaptureCall = (node: AstNode): boolean => {
 
 // The callback argument of a promise `.catch(handler)`, or null when the node
 // is not such a call (or hands `.catch` something other than a function).
-const promiseCatchCallback = (node: AstNode): AstNode | null => {
-  if (node.type !== "CallExpression") {
+const promiseCatchCallback = (node: unknown): AstNode | null => {
+  if (!isAstNode(node) || node.type !== "CallExpression") {
     return null;
   }
   const callee = isAstNode(node.callee) ? node.callee : null;
