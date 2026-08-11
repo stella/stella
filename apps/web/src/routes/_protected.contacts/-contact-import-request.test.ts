@@ -119,8 +119,8 @@ describe("contact import request identity", () => {
   test("rejects a new request when its retry identity cannot be stored", async () => {
     const file = new Blob(["Name\nJane Doe"]);
 
-    const result = await Result.tryPromise(
-      async () =>
+    const result = await Result.tryPromise({
+      try: async () =>
         await resolveContactImportRequest({
           file,
           mapping: MAPPING,
@@ -132,11 +132,14 @@ describe("contact import request identity", () => {
             },
           },
         }),
-    );
-
-    expect(result).toMatchObject({
-      error: { _tag: "ContactImportRequestPersistenceError" },
-      status: "error",
+      catch: (cause) => cause,
     });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toMatchObject({
+        _tag: "ContactImportRequestPersistenceError",
+      });
+    }
   });
 });
