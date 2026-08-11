@@ -1,5 +1,5 @@
 import { Result, TaggedError, panic } from "better-result";
-import { and, asc, eq, inArray, lte, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, lte, ne, or, sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 import { mapWithConcurrency } from "@stll/concurrency";
@@ -47,6 +47,21 @@ export const OBJECT_INTENT_WORKSPACE_AVAILABILITY = {
 
 type ObjectIntentWorkspaceAvailability =
   (typeof OBJECT_INTENT_WORKSPACE_AVAILABILITY)[keyof typeof OBJECT_INTENT_WORKSPACE_AVAILABILITY];
+
+const bufferCleanupIntentIdentityPredicate = (
+  rows: Pick<
+    typeof bufferObjectCleanupIntents.$inferSelect,
+    "id" | "objectKey"
+  >[],
+) =>
+  or(
+    ...rows.map(({ id, objectKey }) =>
+      and(
+        eq(bufferObjectCleanupIntents.id, id),
+        eq(bufferObjectCleanupIntents.objectKey, objectKey),
+      ),
+    ),
+  );
 
 export type BufferIntentPurpose = "entity_create" | "entity_version";
 
@@ -910,7 +925,6 @@ export const reconcileBufferObjectCleanupIntents = async ({
     if (rows.length === 0) {
       return [];
     }
-    const ids = rows.map(({ id }) => id);
     // audit: skip — bounded durable cleanup retry bookkeeping only.
     await tx
       .update(bufferObjectCleanupIntents)
@@ -929,7 +943,7 @@ export const reconcileBufferObjectCleanupIntents = async ({
           ELSE ${bufferObjectCleanupIntents.status}
         END`,
       })
-      .where(inArray(bufferObjectCleanupIntents.id, ids));
+      .where(bufferCleanupIntentIdentityPredicate(rows));
     return rows;
   });
   if (Result.isError(claimedResult)) {
