@@ -9,6 +9,12 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  description:
+    "Permanently delete a playbook definition from the organization, including " +
+    "every approved version and every matter column it materialized, with the " +
+    "answers and verdicts stored in those columns. There is no in-use check: a " +
+    "playbook that has been run across many matters is deleted along with its " +
+    "results.",
   permissions: { playbook: ["delete"] },
   mcp: { type: "capability", reason: "knowledge_library_admin" },
   params: playbookDefinitionParamsSchema,

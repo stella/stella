@@ -19,6 +19,11 @@ import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 const THREAD_FILE_CLEANUP_BATCH_SIZE = 200;
 
 const config = {
+  description:
+    "Permanently delete one of your own chat threads with its messages and the " +
+    "files uploaded to it; the stored file objects are deleted, not just " +
+    "dereferenced. Succeeds silently when the thread does not exist or belongs " +
+    "to someone else.",
   permissions: { chat: ["delete"] },
   mcp: { type: "capability", reason: "assistant_chat" },
   params: t.Object({ threadId: tSafeId("chatThread") }),

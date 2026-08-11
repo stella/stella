@@ -10,6 +10,11 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { syncFlowScheduleTrigger } from "@/api/lib/flows/sync-flow-schedule-trigger";
 
 const config = {
+  description:
+    "Permanently delete one automation flow definition from the organization " +
+    "and remove its schedule trigger. Past runs survive on their own " +
+    "definition snapshot; an enabled flow with runs in flight is deleted " +
+    "without warning.",
   permissions: { flow: ["delete"] },
   mcp: { type: "capability", reason: "workflow_orchestration" },
   params: flowDefinitionParamsSchema,

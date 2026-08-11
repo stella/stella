@@ -14,6 +14,11 @@ const deleteExpenseBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Delete an expense: a draft expense is permanently deleted, and any other " +
+    "unbilled expense is written off instead (kept for the audit trail, " +
+    "excluded from billing). A billed expense is refused until its invoice is " +
+    "reverted; the return value says which of the two happened.",
   permissions: { expense: ["delete"] },
   mcp: { type: "capability", reason: "billing_admin" },
   body: deleteExpenseBodySchema,

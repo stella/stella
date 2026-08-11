@@ -9,6 +9,11 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 
 const config = {
+  description:
+    "Remove one anonymization allowlist entry from a matter, so the term it " +
+    "exempted is masked again from the next detection run on. Only entries " +
+    "scoped to this matter can be removed here, never organization-wide ones, " +
+    "and output already anonymized is not revisited.",
   permissions: { workspace: ["update"] },
   mcp: { type: "capability", reason: "anonymization_admin" },
   params: t.Object({

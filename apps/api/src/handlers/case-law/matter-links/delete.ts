@@ -55,6 +55,10 @@ export const deleteMatterLinkHandler = async ({
 };
 
 const config = {
+  description:
+    "Unlink one case-law decision from a matter, deleting the link and the " +
+    "note recorded on it. The decision itself stays in the case-law corpus and " +
+    "can be linked again.",
   permissions: { entity: ["delete"] },
   mcp: { type: "capability", reason: "legal_corpus_admin" },
   params: t.Object({

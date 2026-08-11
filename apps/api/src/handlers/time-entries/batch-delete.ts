@@ -49,6 +49,12 @@ const buildBatchDeleteEvents = (params: {
 
 const batchDelete = createSafeHandler(
   {
+    description:
+      "Delete or write off many time entries in one matter at once: draft " +
+      "entries are permanently deleted and every other unbilled entry is " +
+      "written off. Billed, already written-off, and unknown ids are skipped " +
+      "without an error and there is no per-entry ownership check, so the " +
+      "returned count is the only report of what happened.",
     permissions: { timeEntry: ["approve"] },
     mcp: { type: "capability", reason: "billing_admin" },
     access: "write",

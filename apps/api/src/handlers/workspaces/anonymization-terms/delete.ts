@@ -9,6 +9,11 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 
 const config = {
+  description:
+    "Remove one always-mask term from a matter's anonymization gazetteer, so " +
+    "it is no longer force-masked and is redacted only when detection finds it " +
+    "on its own. Only entries scoped to this matter can be removed here, never " +
+    "organization-wide ones; text already sent to a provider is unaffected.",
   permissions: { workspace: ["update"] },
   mcp: { type: "capability", reason: "anonymization_admin" },
   params: t.Object({

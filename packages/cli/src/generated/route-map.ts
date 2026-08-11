@@ -4640,6 +4640,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "billing-codes", "delete"],
                 capabilityId: "billing-codes.delete",
+                description:
+                  "Permanently delete one billing code (a task or activity code) from a matter's code list. Time entries already recorded under it keep their stored code string, so past entries are not rewritten; the code just stops being offered.",
                 access: "write",
                 flags: [
                   {
@@ -5046,6 +5048,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "case-law", "matter-links-delete"],
                 capabilityId: "case-law.matter-links.delete",
+                description:
+                  "Unlink one case-law decision from a matter, deleting the link and the note recorded on it. The decision itself stays in the case-law corpus and can be linked again.",
                 access: "write",
                 flags: [
                   {
@@ -5224,6 +5228,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "chat", "delete-thread"],
                 capabilityId: "chat.delete-thread",
+                description:
+                  "Permanently delete one of your own chat threads with its messages and the files uploaded to it; the stored file objects are deleted, not just dereferenced. Succeeds silently when the thread does not exist or belongs to someone else.",
                 access: "write",
                 flags: [
                   {
@@ -5860,6 +5866,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "categories-delete"],
                 capabilityId: "clauses.categories-delete",
+                description:
+                  "Delete one category from the organization's clause library taxonomy. No clause is deleted: clauses filed under the category become uncategorized, and its child categories are re-parented to its own parent.",
                 access: "write",
                 flags: [
                   {
@@ -7106,6 +7114,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "variants-delete"],
                 capabilityId: "clauses.variants-delete",
+                description:
+                  "Permanently delete one variant (an alternative wording) of a clause, leaving the clause and its other variants in place. Templates that used the variant fall back to the clause itself and keep only a stale label snapshot of what was removed.",
                 access: "write",
                 flags: [
                   {
@@ -9105,6 +9115,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "document-types", "delete"],
                 capabilityId: "document-types.delete",
+                description:
+                  "Remove one document type from the organization's classification list so it can no longer be assigned. Documents already classified as that type keep their stored label; the call is refused while any playbook is scoped to the type.",
                 access: "write",
                 flags: [
                   {
@@ -9524,6 +9536,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "copy-to-workspace"],
                 capabilityId: "entities.copy-to-workspace",
+                description:
+                  "Copy a document or folder subtree into another matter, or move it with deleteSource, which permanently deletes the source documents, their version history, and their no-longer-referenced files. Fields whose property has no counterpart in the target matter are dropped rather than remapped, so a move can lose column values; read-only entities are refused.",
                 access: "write",
                 flags: [
                   {
@@ -9886,6 +9900,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "delete"],
                 capabilityId: "entities.delete",
+                description:
+                  "Permanently delete documents, folders, or tasks from one matter, together with their versions, field values, and stored files. Refused while any of them is read-only or has a document-processing run in flight; unlike entities.delete-version this is a real delete, not a tombstone.",
                 access: "write",
                 flags: [
                   {
@@ -9952,6 +9968,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "delete-version"],
                 capabilityId: "entities.delete-version",
+                description:
+                  "Tombstone one version of a document: it disappears from listings, downloads, and restores, but the row and its stored file are retained for chain of custody. Deleting the current version promotes the next surviving one; the last remaining version, a read-only document, and a version still being processed are refused.",
                 access: "write",
                 flags: [
                   {
@@ -21475,6 +21493,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "expenses", "delete"],
                 capabilityId: "expenses.delete",
+                description:
+                  "Delete an expense: a draft expense is permanently deleted, and any other unbilled expense is written off instead (kept for the audit trail, excluded from billing). A billed expense is refused until its invoice is reverted; the return value says which of the two happened.",
                 access: "write",
                 flags: [
                   {
@@ -25898,6 +25918,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "flows", "delete"],
                 capabilityId: "flows.delete",
+                description:
+                  "Permanently delete one automation flow definition from the organization and remove its schedule trigger. Past runs survive on their own definition snapshot; an enabled flow with runs in flight is deleted without warning.",
                 access: "write",
                 flags: [
                   {
@@ -26994,6 +27016,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "invoices", "delete"],
                 capabilityId: "invoices.delete",
+                description:
+                  "Delete a draft invoice and return every time entry and expense on it to approved, unbilled status so they can be invoiced again. Only draft invoices can be deleted: a sent, paid, or void invoice is refused.",
                 access: "write",
                 flags: [
                   {
@@ -35145,6 +35169,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "playbooks", "delete"],
                 capabilityId: "playbooks.delete",
+                description:
+                  "Permanently delete a playbook definition from the organization, including every approved version and every matter column it materialized, with the answers and verdicts stored in those columns. There is no in-use check: a playbook that has been run across many matters is deleted along with its results.",
                 access: "write",
                 flags: [
                   {
@@ -46909,6 +46935,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "properties", "delete"],
                 capabilityId: "properties.delete",
+                description:
+                  "Permanently delete one custom property (column) from a matter, with every value stored under it on every document version, plus its cell metadata and list placements. System properties, file properties, and properties another property depends on are refused.",
                 access: "write",
                 flags: [
                   {
@@ -51072,6 +51100,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "rates", "delete"],
                 capabilityId: "rates.delete",
+                description:
+                  "Permanently delete one rate table from a matter and, with it, every per-user rate line it holds. The matter's default rate table is refused until another table is made the default; time entries already recorded keep the rate they were billed at.",
                 access: "write",
                 flags: [
                   {
@@ -51254,6 +51284,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "rates", "entries-delete"],
                 capabilityId: "rates.entries-delete",
+                description:
+                  "Delete a single user's rate line (hourly rate and effective dates) from a rate table, leaving the table and its other lines in place. Use rates.delete to remove the whole table instead.",
                 access: "write",
                 flags: [
                   {
@@ -52272,6 +52304,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "skills", "delete"],
                 capabilityId: "skills.delete",
+                description:
+                  "Permanently delete an agent skill from the organization, with every resource file attached to it. Team skills may only be deleted by an admin or owner and private skills only by their author; bundled skills, which cannot be edited, can still be deleted here.",
                 access: "write",
                 flags: [
                   {
@@ -52898,6 +52932,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "skills", "resources-delete"],
                 capabilityId: "skills.resources.delete",
+                description:
+                  "Delete one resource file from an agent skill, addressed by its path; the skill and its other resources are untouched. Bundled skills are read-only and are refused.",
                 access: "write",
                 flags: [
                   {
@@ -53761,6 +53797,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "style-sets", "delete"],
                 capabilityId: "style-sets.delete",
+                description:
+                  "Permanently delete an organization style set and the stored package file behind it. Documents and templates already created from the style set are unaffected, because they copied its styles at creation time.",
                 access: "write",
                 flags: [
                   {
@@ -54575,6 +54613,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "tasks", "assignees-remove"],
                 capabilityId: "tasks.assignees-remove",
+                description:
+                  "Unassign one user from a task. Idempotent: removing a user who is not assigned still succeeds, and nothing stops a task from ending up with no assignee; a read-only task is refused.",
                 access: "write",
                 flags: [
                   {
@@ -58557,6 +58597,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "tasks", "entity-links-delete"],
                 capabilityId: "tasks.entity-links-delete",
+                description:
+                  "Remove one link between a task and another document, folder, or task, addressed by the link id. Both linked items survive; a link with a task on neither end, and a read-only task, are refused.",
                 access: "write",
                 flags: [
                   {
@@ -59247,6 +59289,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "template-recipes", "delete"],
                 capabilityId: "template-recipes.delete",
+                description:
+                  "Permanently delete one template recipe (a reusable, pre-configured block of template fields) from the organization. Templates already built with it keep the fields that were inserted, and there is no in-use check.",
                 access: "write",
                 flags: [
                   {
@@ -59403,6 +59447,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "categories-delete"],
                 capabilityId: "templates.categories-delete",
+                description:
+                  "Delete one category from the organization's template category tree. No template is deleted: templates filed under the category become uncategorized, and its child categories are promoted to its own parent.",
                 access: "write",
                 flags: [
                   {
@@ -60167,6 +60213,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "delete"],
                 capabilityId: "templates.delete",
+                description:
+                  "Permanently delete an organization template with its version history, its clause slots, and the stored file of every version. Recorded fills of the template survive as history, but the template and its files cannot be recovered.",
                 access: "write",
                 flags: [
                   {
@@ -61188,6 +61236,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "time-entries", "batch-delete"],
                 capabilityId: "time-entries.batch-delete",
+                description:
+                  "Delete or write off many time entries in one matter at once: draft entries are permanently deleted and every other unbilled entry is written off. Billed, already written-off, and unknown ids are skipped without an error and there is no per-entry ownership check, so the returned count is the only report of what happened.",
                 access: "write",
                 flags: [
                   {
@@ -62971,6 +63021,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "view-templates", "delete"],
                 capabilityId: "view-templates.delete",
+                description:
+                  "Delete one of your own saved view templates, the personal blueprint used to create new views. Views already created from it are untouched, and the call succeeds silently when the template does not exist or belongs to someone else.",
                 access: "write",
                 flags: [
                   {
@@ -63178,6 +63230,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "views", "delete"],
                 capabilityId: "views.delete",
+                description:
+                  "Delete one view (a shared tab) from a matter, removing it for everyone with access. Refused when it is the matter's last view, or the last view of a layout the matter must keep (overview, table, filesystem, kanban); past report exports keep their own layout snapshot.",
                 access: "write",
                 flags: [
                   {
@@ -63916,6 +63970,8 @@ export const generatedRouteMap: RouteNode = {
                   "anonymization-allowlist-delete",
                 ],
                 capabilityId: "workspaces.anonymization-allowlist.delete",
+                description:
+                  "Remove one anonymization allowlist entry from a matter, so the term it exempted is masked again from the next detection run on. Only entries scoped to this matter can be removed here, never organization-wide ones, and output already anonymized is not revisited.",
                 access: "write",
                 flags: [
                   {
@@ -64122,6 +64178,8 @@ export const generatedRouteMap: RouteNode = {
                   "anonymization-terms-delete",
                 ],
                 capabilityId: "workspaces.anonymization-terms.delete",
+                description:
+                  "Remove one always-mask term from a matter's anonymization gazetteer, so it is no longer force-masked and is redacted only when detection finds it on its own. Only entries scoped to this matter can be removed here, never organization-wide ones; text already sent to a provider is unaffected.",
                 access: "write",
                 flags: [
                   {
@@ -65187,6 +65245,8 @@ export const generatedRouteMap: RouteNode = {
                   "workspace-contacts-delete",
                 ],
                 capabilityId: "workspaces.workspace-contacts-delete",
+                description:
+                  "Remove one contact from a matter's party list, deleting the link with the party role and notes recorded on it. The contact stays in the organization address book; use contacts.delete to remove it from there.",
                 access: "write",
                 flags: [
                   {
@@ -65313,6 +65373,8 @@ export const generatedRouteMap: RouteNode = {
                   "workspace-members-remove",
                 ],
                 capabilityId: "workspaces.workspace-members-remove",
+                description:
+                  "Remove one member from a matter, revoking their live access and cancelling their open desktop editing sessions. Their active work obligations are unassigned rather than deleted; refused when they are the matter's last member, when a timer of theirs is still running, or when they own more work obligations than one call may unassign at once.",
                 access: "write",
                 flags: [
                   {

@@ -582,6 +582,13 @@ const copyToWorkspaceHandler = async function* ({
 };
 
 const config = {
+  description:
+    "Copy a document or folder subtree into another matter, or move it with " +
+    "deleteSource, which permanently deletes the source documents, their " +
+    "version history, and their no-longer-referenced files. Fields whose " +
+    "property has no counterpart in the target matter are dropped rather than " +
+    "remapped, so a move can lose column values; read-only entities are " +
+    "refused.",
   permissions: { entity: ["create", "delete"] },
   mcp: { type: "capability", reason: "document_processing" },
   body: copyToWorkspaceBodySchema,

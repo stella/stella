@@ -427,8 +427,9 @@ type CapabilityEntry = {
    * deciding whether to call this capability. Carried verbatim into both
    * committed catalog mirrors; the CLI renders it as the generated command's
    * `--help` brief and MCP renders it in list/describe. Absent only for a
-   * capability that has not been given one yet (see the description-coverage
-   * ratchet in scripts/ratchet.ts).
+   * capability that has not been given one yet; each of those is listed by id
+   * in apps/api/capability-description-ledger.json and guarded by
+   * apps/api/scripts/capability-description-guard.ts.
    */
   description?: string;
   handlerKind: HandlerKind;
@@ -532,7 +533,7 @@ const buildInputSchema = (
 /**
  * The handler config's tool-level `description`. A non-string or empty value is
  * reported as absent rather than emitted, so a malformed config shows up as a
- * gap in the description-coverage ratchet instead of putting junk prose in front
+ * gap in the description ledger instead of putting junk prose in front
  * of an agent.
  */
 const readDescription = (

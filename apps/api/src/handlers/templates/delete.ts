@@ -95,6 +95,11 @@ const deleteTemplateHandler = async function* ({
 };
 
 const config = {
+  description:
+    "Permanently delete an organization template with its version history, its " +
+    "clause slots, and the stored file of every version. Recorded fills of the " +
+    "template survive as history, but the template and its files cannot be " +
+    "recovered.",
   permissions: { template: ["delete"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   params: deleteTemplateParamsSchema,

@@ -255,6 +255,11 @@ export type UsageMeteringConfig = {
  * belong here; it goes on the property's own Elysia `t.*` schema
  * (`t.String({ description: "..." })`), which the same exporter already carries
  * into the catalog's `inputSchema`.
+ *
+ * Optional only until the remaining gaps are closed. Every capability without
+ * one is listed by id in `apps/api/capability-description-ledger.json`; a new
+ * capability may not join that list, and authoring prose means deleting its
+ * line in the same change (see apps/api/scripts/capability-description-guard.ts).
  */
 type CapabilityDescription = {
   description?: string;

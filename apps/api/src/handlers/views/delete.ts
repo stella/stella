@@ -14,6 +14,11 @@ import { isRequiredViewLayout } from "@/api/lib/views";
 import { parseViewLayout } from "@/api/lib/views-schema";
 
 const config = {
+  description:
+    "Delete one view (a shared tab) from a matter, removing it for everyone " +
+    "with access. Refused when it is the matter's last view, or the last view " +
+    "of a layout the matter must keep (overview, table, filesystem, kanban); " +
+    "past report exports keep their own layout snapshot.",
   permissions: { view: ["delete"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   params: workspaceParams({ viewId: tSafeId("workspaceView") }),
