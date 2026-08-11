@@ -31,10 +31,7 @@ import {
   BACKFILL_STATUS,
   backfillCorpusIndex,
 } from "@/api/handlers/case-law/corpus-index";
-import {
-  getAdapter,
-  listAdapters,
-} from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { runReconciliationWorkUnit } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import {
@@ -1542,11 +1539,26 @@ export const runCaseLawIngest = async (
   // Publisher-reported totals: the denominator held-vs-total coverage is
   // measured against. Only some publishers expose a count; those adapters
   // are asked here, and the rest keep the figure an operator recorded. The
-  // cadence is the recorded date rather than this loop's interval, so a
-  // deployment neither loses a cycle nor re-asks every publisher on boot.
+  // cadence is when a source was last recorded or asked, not this loop's
+  // interval, so a deployment neither loses a cycle nor re-asks every
+  // publisher on boot.
   const sourceTotalLoop = (async () => {
+    // The enabled set, not the registry: a poll is an external request like
+    // any other, so it must not reach a publisher an operator disabled, nor
+    // the adapter ALL_SOURCES holds back as not production-validated.
+    const pollableAdapters = SOURCES.flatMap(({ adapterKey }) => {
+      const adapter = getAdapter(adapterKey);
+      if (adapter === undefined) {
+        logError(
+          `[source-totals] No adapter registered for source ${adapterKey}`,
+        );
+        return [];
+      }
+      return [adapter];
+    });
+
     await runSourceTotalPoll({
-      adapters: listAdapters(),
+      adapters: pollableAdapters,
       isDraining,
       now: Date.now,
       readTotals: async () => await readSourceReportedTotals(ingestionDb),
@@ -1559,6 +1571,15 @@ export const runCaseLawIngest = async (
           origin: SOURCE_TOTAL_ORIGIN.ADAPTER_POLL,
         }),
       report: (summary) => {
+        // An adapter the sources table does not carry is registry drift: a
+        // number was read from a publisher and then had nowhere to go. That
+        // is a defect, not sweep noise, so it leaves a structured record of
+        // its own rather than a count inside the line below.
+        if (summary.unknownSource > 0) {
+          logger.error("case_law.source_totals.unknown_source", {
+            "caseLawSourceTotals.unknownSource": summary.unknownSource,
+          });
+        }
         logInfo(
           `[source-totals] case_law.source_totals.polled ` +
             `polled=${summary.polled} ` +

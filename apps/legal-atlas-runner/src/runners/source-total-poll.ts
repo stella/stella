@@ -7,10 +7,10 @@
  * with the origin kept alongside so a reader can tell a measured number
  * from a transcribed one.
  *
- * What decides a sweep is the recorded date, not an interval this process
- * has been awake for. The wake is frequent and cheap; the staleness gate is
- * what makes the cadence weekly, and it is the reason a deployment neither
- * loses a cycle nor re-asks every publisher on boot.
+ * What decides a sweep is when each source was last recorded or asked, not
+ * an interval this process has been awake for. The wake is frequent and
+ * cheap; that gate is what makes the cadence weekly, and it is the reason a
+ * deployment neither loses a cycle nor re-asks every publisher on boot.
  *
  * A probe that yields no usable number records NOTHING. The stored total is
  * the last figure a publisher actually stated, and a failed probe is not
@@ -30,7 +30,7 @@ import {
   type CountingSourceAdapter,
   type SourceTotalPollOutcome,
   type SourceTotalPollTally,
-  selectStaleCountingAdapters,
+  selectDueCountingAdapters,
   tallySourceTotalPollOutcomes,
 } from "./source-total-outcomes";
 
@@ -180,7 +180,10 @@ const recordProbedTotal = async ({
   }
 };
 
-type SweepOptions = Omit<SourceTotalPollOptions, "report" | "sleep">;
+type SweepOptions = Omit<SourceTotalPollOptions, "report" | "sleep"> & {
+  /** Written as each source is asked, so the gate can run off the ask. */
+  askedAt: Map<string, number>;
+};
 
 /**
  * One wake. Returns null when there was nothing to say: every total fresh,
@@ -188,6 +191,7 @@ type SweepOptions = Omit<SourceTotalPollOptions, "report" | "sleep">;
  */
 const sweepSourceTotals = async ({
   adapters,
+  askedAt,
   isDraining,
   now,
   readTotals,
@@ -203,20 +207,28 @@ const sweepSourceTotals = async ({
     return { ...tallySourceTotalPollOutcomes([]), lastError: error };
   }
 
-  const stale = selectStaleCountingAdapters({
+  const askedAtSweepStart = now();
+  const due = selectDueCountingAdapters({
     adapters,
-    now: now(),
+    askedAt,
+    now: askedAtSweepStart,
     staleAfterMs: timing.staleAfterMs,
     totals,
   });
-  if (stale.length === 0) {
+  if (due.length === 0) {
     return null;
+  }
+
+  // Recorded before the probes, not after: a source that answers nothing has
+  // still been asked, and that is what the next gate must see.
+  for (const { key } of due) {
+    askedAt.set(key, askedAtSweepStart);
   }
 
   // One request per publisher, each a different host, so the sweep runs them
   // together rather than serializing behind the slowest count.
   const probed = await Promise.all(
-    stale.map(
+    due.map(
       async (adapter) =>
         await probeSourceTotal({ adapter, timeoutMs: timing.probeTimeoutMs }),
     ),
@@ -254,7 +266,7 @@ const sweepSourceTotals = async ({
  *
  * The first sweep runs before the first sleep, which is what lets a source
  * that has never been measured be filled on the next deployment instead of
- * a wake later. The staleness gate is what keeps that from re-asking every
+ * a wake later. The recorded date is what keeps that from re-asking every
  * publisher each time the daemon restarts.
  */
 export const runSourceTotalPoll = async ({
@@ -267,10 +279,15 @@ export const runSourceTotalPoll = async ({
   sleep,
   timing,
 }: SourceTotalPollOptions): Promise<void> => {
+  // Per process: the persisted date is what survives a restart, this only
+  // keeps a source that persists nothing from being asked every wake.
+  const askedAt = new Map<string, number>();
+
   while (!isDraining()) {
     // oxlint-disable-next-line no-await-in-loop -- one sweep per wake; the interval only starts once this sweep has settled
     const summary = await sweepSourceTotals({
       adapters,
+      askedAt,
       isDraining,
       now,
       readTotals,

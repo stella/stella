@@ -15,7 +15,7 @@ import {
   SOURCE_TOTAL_POLL_OUTCOME,
   SOURCE_TOTAL_STALE_AFTER_MS,
   selectCountingAdapters,
-  selectStaleCountingAdapters,
+  selectDueCountingAdapters,
   tallySourceTotalPollOutcomes,
   type SourceTotalPollOutcome,
 } from "./source-total-outcomes";
@@ -37,6 +37,7 @@ const adapter = (
 
 const NOW = Date.UTC(2026, 7, 11, 12, 0, 0);
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
+const NEVER_ASKED: ReadonlyMap<string, number> = new Map();
 
 const recorded = (
   adapterKey: SourceAdapter["key"],
@@ -70,7 +71,7 @@ describe("selectCountingAdapters", () => {
 const czUs = adapter(ADAPTER_KEYS.CZ_US, async () => 1);
 const czRegional = adapter(ADAPTER_KEYS.CZ_REGIONAL, async () => 2);
 
-describe("selectStaleCountingAdapters", () => {
+describe("selectDueCountingAdapters", () => {
   const capable = [czUs, czRegional];
 
   test("a restart does not re-ask a publisher that answered recently", () => {
@@ -82,8 +83,9 @@ describe("selectStaleCountingAdapters", () => {
     ];
 
     expect(
-      selectStaleCountingAdapters({
+      selectDueCountingAdapters({
         adapters: capable,
+        askedAt: NEVER_ASKED,
         now: NOW,
         staleAfterMs: SOURCE_TOTAL_STALE_AFTER_MS,
         totals,
@@ -98,8 +100,9 @@ describe("selectStaleCountingAdapters", () => {
     ];
 
     expect(
-      selectStaleCountingAdapters({
+      selectDueCountingAdapters({
         adapters: capable,
+        askedAt: NEVER_ASKED,
         now: NOW,
         staleAfterMs: SOURCE_TOTAL_STALE_AFTER_MS,
         totals,
@@ -111,8 +114,9 @@ describe("selectStaleCountingAdapters", () => {
     const totals = [recorded(ADAPTER_KEYS.CZ_US, null)];
 
     expect(
-      selectStaleCountingAdapters({
+      selectDueCountingAdapters({
         adapters: capable,
+        askedAt: NEVER_ASKED,
         now: NOW,
         staleAfterMs: SOURCE_TOTAL_STALE_AFTER_MS,
         totals,
@@ -122,8 +126,9 @@ describe("selectStaleCountingAdapters", () => {
 
   test("a stale total on an adapter that cannot count is not asked", () => {
     expect(
-      selectStaleCountingAdapters({
+      selectDueCountingAdapters({
         adapters: [adapter(ADAPTER_KEYS.CZ_NS)],
+        askedAt: NEVER_ASKED,
         now: NOW,
         staleAfterMs: SOURCE_TOTAL_STALE_AFTER_MS,
         totals: [recorded(ADAPTER_KEYS.CZ_NS, null)],
@@ -131,10 +136,50 @@ describe("selectStaleCountingAdapters", () => {
     ).toEqual([]);
   });
 
+  test("a source asked recently is not asked again, whatever it answered", () => {
+    // `getTotalCount` returns null both for a publisher exposing no count
+    // and for a request that failed, and neither persists a date. Gating on
+    // the recorded date alone would re-ask those sources every wake, hours
+    // apart, which no failure surfaces.
+    expect(
+      selectDueCountingAdapters({
+        adapters: capable,
+        askedAt: new Map([
+          [ADAPTER_KEYS.CZ_US, NOW - DAY_IN_MS],
+          [ADAPTER_KEYS.CZ_REGIONAL, NOW - SOURCE_TOTAL_STALE_AFTER_MS],
+        ]),
+        now: NOW,
+        staleAfterMs: SOURCE_TOTAL_STALE_AFTER_MS,
+        totals: [
+          recorded(ADAPTER_KEYS.CZ_US, null),
+          recorded(ADAPTER_KEYS.CZ_REGIONAL, null),
+        ],
+      }).map(({ key }) => key),
+    ).toEqual([ADAPTER_KEYS.CZ_REGIONAL]);
+  });
+
+  test("a recorded total still gates a source this process never asked", () => {
+    // The ask memory is per process; a restart must not undo the cadence a
+    // recorded date already proves.
+    expect(
+      selectDueCountingAdapters({
+        adapters: capable,
+        askedAt: NEVER_ASKED,
+        now: NOW,
+        staleAfterMs: SOURCE_TOTAL_STALE_AFTER_MS,
+        totals: [
+          recorded(ADAPTER_KEYS.CZ_US, new Date(NOW - DAY_IN_MS)),
+          recorded(ADAPTER_KEYS.CZ_REGIONAL, new Date(NOW - DAY_IN_MS)),
+        ],
+      }),
+    ).toEqual([]);
+  });
+
   test("a total dated ahead of the clock reads as fresh, not overdue", () => {
     expect(
-      selectStaleCountingAdapters({
+      selectDueCountingAdapters({
         adapters: [czUs],
+        askedAt: NEVER_ASKED,
         now: NOW,
         staleAfterMs: SOURCE_TOTAL_STALE_AFTER_MS,
         totals: [recorded(ADAPTER_KEYS.CZ_US, new Date(NOW + DAY_IN_MS))],

@@ -34,9 +34,15 @@ export const SOURCE_TOTAL_POLL_OUTCOME = {
   /** The publisher stated a number and it is now the recorded total. */
   RECORDED: "recorded",
   /**
-   * The publisher exposes no readable count, which `getTotalCount` reports as
-   * null. Not a failure: a sweep over sources that never state a total would
-   * otherwise always end in one.
+   * The adapter yielded no number. `SourceAdapter.getTotalCount` returns null
+   * both for a publisher that exposes no readable count and for a request
+   * that failed, and the contract keeps no way to tell them apart, so this
+   * cannot mean "the publisher states no total" — only that none was read.
+   *
+   * Not tallied as a failure: several publishers permanently expose no count,
+   * and a sweep over them would otherwise always end in one. What keeps a
+   * source that never answers from being re-asked every wake is the ask
+   * gate below, not this classification.
    */
   NO_COUNT: "no-count",
   /** The probe or the write did not complete. Nothing was recorded. */
@@ -75,8 +81,10 @@ export const selectCountingAdapters = (
       adapter.getTotalCount !== undefined,
   );
 
-type SelectStaleCountingAdaptersOptions = {
+type SelectDueCountingAdaptersOptions = {
   adapters: readonly SourceAdapter[];
+  /** When this process last asked each adapter, whatever it answered. */
+  askedAt: ReadonlyMap<string, number>;
   /** The sweep's clock, in ms. */
   now: number;
   staleAfterMs: number;
@@ -84,19 +92,27 @@ type SelectStaleCountingAdaptersOptions = {
 };
 
 /**
- * The adapters to ask on this wake: those that can answer and whose recorded
- * total is missing or old enough.
+ * The adapters to ask on this wake: those that can answer, and that have
+ * neither been recorded nor asked inside the window.
+ *
+ * The gate is the last ask, not the last success. A publisher that exposes
+ * no count and one whose request failed both come back as null and persist
+ * nothing, so a gate on the recorded date alone would ask them again every
+ * wake — hours apart rather than the window this loop exists to keep. The
+ * ask memory is per process, so a deployment costs one extra attempt for
+ * those sources and none for a source that answered.
  *
  * A source carrying no row and one never measured are the same case, so both
- * are asked. A total dated in the future (a clock that ran backwards, an
+ * are asked. A date ahead of the clock (a clock that ran backwards, an
  * operator's forward-dated figure) reads as fresh rather than as overdue.
  */
-export const selectStaleCountingAdapters = ({
+export const selectDueCountingAdapters = ({
   adapters,
+  askedAt,
   now,
   staleAfterMs,
   totals,
-}: SelectStaleCountingAdaptersOptions): CountingSourceAdapter[] => {
+}: SelectDueCountingAdaptersOptions): CountingSourceAdapter[] => {
   const recordedAt = new Map(
     totals.map(({ adapterKey, reportedTotalAsOf }) => [
       adapterKey,
@@ -105,8 +121,12 @@ export const selectStaleCountingAdapters = ({
   );
 
   return selectCountingAdapters(adapters).filter((adapter) => {
-    const asOf = recordedAt.get(adapter.key) ?? null;
-    return asOf === null || now - asOf.getTime() >= staleAfterMs;
+    const recorded = recordedAt.get(adapter.key)?.getTime();
+    const asked = askedAt.get(adapter.key);
+    // The later of the two is what the window runs from: a recorded total
+    // proves the publisher answered, an ask proves it was given the chance.
+    const lastTouched = Math.max(recorded ?? -1, asked ?? -1);
+    return lastTouched < 0 || now - lastTouched >= staleAfterMs;
   });
 };
 

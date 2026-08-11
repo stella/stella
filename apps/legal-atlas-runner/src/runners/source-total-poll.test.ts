@@ -125,33 +125,56 @@ const runHarness = async ({
 
 describe("runSourceTotalPoll", () => {
   test("records what a publisher states, once, and stays quiet while it is fresh", async () => {
+    const sweeps = 3;
     const { reports, slept, written } = await runHarness({
       adapters: [adapter(ADAPTER_KEYS.CZ_US, async () => 8000)],
-      sweeps: 3,
+      sweeps,
       totals: [unmeasured(ADAPTER_KEYS.CZ_US)],
     });
 
-    // The read answers "never measured" on every wake, so every sweep is due
-    // and every sweep writes: what the gate does with a recorded date is
-    // pinned by the fresh-total case below.
-    expect(written).toHaveLength(3);
-    expect(written.at(0)).toEqual({
-      adapterKey: ADAPTER_KEYS.CZ_US,
-      asOf: new Date(NOW),
-      total: 8000,
-    });
-    expect(reports.at(0)).toEqual({
-      polled: 1,
-      recorded: 1,
-      noCount: 0,
-      failed: 0,
-      unknownSource: 0,
-      lastError: undefined,
-    });
+    // The read keeps answering "never measured", so only the ask gate stops
+    // the later sweeps: one write across three wakes, not one per wake.
+    expect(written).toEqual([
+      {
+        adapterKey: ADAPTER_KEYS.CZ_US,
+        asOf: new Date(NOW),
+        total: 8000,
+      },
+    ]);
+    expect(reports).toEqual([
+      {
+        polled: 1,
+        recorded: 1,
+        noCount: 0,
+        failed: 0,
+        unknownSource: 0,
+        lastError: undefined,
+      },
+    ]);
     // Sliced pacing: the gap between sweeps is the interval, not one sleep.
     expect(slept.reduce((sum, ms) => sum + ms, 0)).toBe(
-      TIMING.wakeIntervalMs * reports.length,
+      TIMING.wakeIntervalMs * sweeps,
     );
+  });
+
+  test("a source that answers nothing is not re-asked on the next wake", async () => {
+    let probes = 0;
+    const { reports, written } = await runHarness({
+      adapters: [
+        adapter(ADAPTER_KEYS.CZ_US, async () => {
+          probes += 1;
+          // What a failed request looks like through the adapter contract.
+          return null;
+        }),
+      ],
+      sweeps: 4,
+      totals: [unmeasured(ADAPTER_KEYS.CZ_US)],
+    });
+
+    expect(probes).toBe(1);
+    expect(written).toEqual([]);
+    expect(reports).toHaveLength(1);
+    expect(reports.at(0)).toMatchObject({ polled: 1, noCount: 1 });
   });
 
   test("a fresh total asks nobody and reports nothing", async () => {
@@ -215,17 +238,22 @@ describe("runSourceTotalPoll", () => {
   });
 
   test("a write rejection is counted, not thrown, and the loop continues", async () => {
-    const { reports } = await runHarness({
+    const sweeps = 2;
+    const { reports, slept } = await runHarness({
       adapters: [adapter(ADAPTER_KEYS.CZ_US, async () => 8000)],
       recordTotal: async () => {
         throw new TypeError("reported total must be a positive integer");
       },
-      sweeps: 2,
+      sweeps,
       totals: [unmeasured(ADAPTER_KEYS.CZ_US)],
     });
 
-    expect(reports).toHaveLength(2);
     expect(reports.at(0)).toMatchObject({ polled: 1, failed: 1, recorded: 0 });
+    // The rejection reached the tally instead of the loop: it kept pacing
+    // every wake rather than unwinding on the first bad write.
+    expect(slept.reduce((sum, ms) => sum + ms, 0)).toBe(
+      TIMING.wakeIntervalMs * sweeps,
+    );
   });
 
   test("an adapter with no source row is counted as registry drift", async () => {
