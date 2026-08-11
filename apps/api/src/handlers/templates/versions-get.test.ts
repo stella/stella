@@ -1,4 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
+import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -16,24 +17,32 @@ const templateId = toSafeId<"template">("tpl_1");
 const versionId = toSafeId<"templateVersion">("ver_2");
 const s3Key = "org_1/templates/tpl_1/v2.docx";
 
-const makeScopedDb = () => {
+type LookupScenario = "found" | "template-not-found" | "version-not-found";
+
+const makeScopedDb = (scenario: LookupScenario = "found") => {
   let transactionCount = 0;
   const tx = {
     query: {
       templates: {
-        findFirst: async () => ({
-          id: templateId,
-          fileName: "agreement.docx",
-        }),
+        findFirst: async () =>
+          scenario === "template-not-found"
+            ? undefined
+            : {
+                id: templateId,
+                fileName: "agreement.docx",
+              },
       },
       templateVersions: {
-        findFirst: async () => ({
-          id: versionId,
-          version: 2,
-          s3Key,
-          fieldCount: 4,
-          createdAt: new Date("2026-08-11T10:00:00.000Z"),
-        }),
+        findFirst: async () =>
+          scenario === "version-not-found"
+            ? undefined
+            : {
+                id: versionId,
+                version: 2,
+                s3Key,
+                fieldCount: 4,
+                createdAt: new Date("2026-08-11T10:00:00.000Z"),
+              },
       },
     },
   };
@@ -53,7 +62,7 @@ const makeScopedDb = () => {
 };
 
 describe("template version download", () => {
-  test("records the granted historical-version download", async () => {
+  test("records the granted template-version download", async () => {
     const events: Parameters<AuditRecorder>[1][] = [];
     const recordAuditEvent: AuditRecorder = async (_tx, event) => {
       events.push(event);
@@ -89,5 +98,54 @@ describe("template version download", () => {
         },
       },
     ]);
+  });
+
+  test("returns 404 without auditing when the template is missing", async () => {
+    const events: Parameters<AuditRecorder>[1][] = [];
+    const recordAuditEvent: AuditRecorder = async (_tx, event) => {
+      events.push(event);
+    };
+    const { getTransactionCount, scopedDb } =
+      makeScopedDb("template-not-found");
+
+    const result = await getTemplateVersionHandler({
+      scopedDb,
+      organizationId,
+      templateId,
+      versionId,
+      recordAuditEvent,
+    });
+
+    expect(result).toBeInstanceOf(ElysiaCustomStatusResponse);
+    if (result instanceof ElysiaCustomStatusResponse) {
+      expect(result.code).toBe(404);
+      expect(result.response).toEqual({ message: "Template not found" });
+    }
+    expect(getTransactionCount()).toBe(1);
+    expect(events).toEqual([]);
+  });
+
+  test("returns 404 without auditing when the version is missing", async () => {
+    const events: Parameters<AuditRecorder>[1][] = [];
+    const recordAuditEvent: AuditRecorder = async (_tx, event) => {
+      events.push(event);
+    };
+    const { getTransactionCount, scopedDb } = makeScopedDb("version-not-found");
+
+    const result = await getTemplateVersionHandler({
+      scopedDb,
+      organizationId,
+      templateId,
+      versionId,
+      recordAuditEvent,
+    });
+
+    expect(result).toBeInstanceOf(ElysiaCustomStatusResponse);
+    if (result instanceof ElysiaCustomStatusResponse) {
+      expect(result.code).toBe(404);
+      expect(result.response).toEqual({ message: "Version not found" });
+    }
+    expect(getTransactionCount()).toBe(1);
+    expect(events).toEqual([]);
   });
 });
