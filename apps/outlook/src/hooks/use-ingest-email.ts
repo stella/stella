@@ -24,13 +24,13 @@ import {
   transitionIngestState,
   type UploadingEmailUpload,
 } from "@/ingestion-state";
+import { APIError, userErrorMessage } from "@/lib/api-error";
 import { mapConcurrent } from "@/lib/bounded-concurrency";
 import {
   createIngestionDiagnosticBase,
   diagnosticBase,
   ingestionDiagnostic,
 } from "@/lib/ingestion-diagnostics";
-import { APIError, userErrorMessage } from "@/lib/api-error";
 import { isAttachmentReadError } from "@/lib/outlook-error";
 import { downloadAttachment } from "@/outlook";
 import type { MailSnapshot } from "@/types";
@@ -137,9 +137,7 @@ const toUploading = (reserved: ReservedEmailUpload): UploadingEmailUpload => ({
   workspaceId: reserved.workspaceId,
 });
 
-const toFinalizing = (
-  pending: PendingEmailUpload,
-): FinalizingEmailUpload => ({
+const toFinalizing = (pending: PendingEmailUpload): FinalizingEmailUpload => ({
   diagnostic: ingestionDiagnostic(
     diagnosticBase(pending.diagnostic),
     "finalize",
@@ -292,11 +290,7 @@ export const useIngestEmail = ({
       transition(withDiagnostic(existingPending, "reconcile"));
     } else {
       transition({
-        diagnostic: ingestionDiagnostic(
-          attemptBase,
-          "reserve",
-          "in_progress",
-        ),
+        diagnostic: ingestionDiagnostic(attemptBase, "reserve", "in_progress"),
         type: "downloading",
       });
     }
@@ -339,8 +333,7 @@ export const useIngestEmail = ({
           type: "downloading",
         });
         const downloaded = await mapConcurrent({
-          concurrency:
-            OUTLOOK_INGESTION_CONFIG.attachmentDownloadConcurrency,
+          concurrency: OUTLOOK_INGESTION_CONFIG.attachmentDownloadConcurrency,
           items: attachments,
           map: downloadAttachment,
         });
@@ -349,11 +342,7 @@ export const useIngestEmail = ({
         }
         const reserved = await reserveEmailUpload({
           attachments: downloaded,
-          diagnostic: ingestionDiagnostic(
-            attemptBase,
-            "upload",
-            "in_progress",
-          ),
+          diagnostic: ingestionDiagnostic(attemptBase, "upload", "in_progress"),
           snapshot: latest,
           workspaceId,
         });
@@ -366,8 +355,7 @@ export const useIngestEmail = ({
     if (Result.isError(result)) {
       const { error } = result;
       const pending = getPendingEmailUpload();
-      const retain =
-        pending !== null && shouldRetainPendingEmailUpload(error);
+      const retain = pending !== null && shouldRetainPendingEmailUpload(error);
       if (!retain) {
         setPendingEmailUpload(null);
       }

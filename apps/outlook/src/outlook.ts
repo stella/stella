@@ -1,5 +1,4 @@
 import { env } from "@/env";
-import { OutlookError } from "@/lib/outlook-error";
 import {
   attachmentCapabilityError,
   fromOfficeAsync,
@@ -11,6 +10,7 @@ import {
   waitForOffice as waitForOfficeRuntime,
 } from "@/lib/office";
 import type { OfficeAsyncCallback, OfficeItem } from "@/lib/office";
+import { OutlookError } from "@/lib/outlook-error";
 import type {
   AttachmentDownloadResult,
   MailAddress,
