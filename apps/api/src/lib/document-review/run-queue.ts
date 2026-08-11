@@ -1,0 +1,857 @@
+/**
+ * Background queue for durable document reviews.
+ *
+ * Reuses the BullMQ infrastructure that already backs the report-export and
+ * file-derivative queues (no new queue system). A review draws several metered
+ * model calls over a whole document and its references, which no synchronous
+ * request survives, so it is a one-shot background job from day one.
+ *
+ * One-shot semantics: `attempts: 1`. A retry would re-run metered model calls;
+ * instead ANY failure lands `status: "failed"` plus a closed-vocabulary
+ * `errorCode` on the run row, which the read endpoint surfaces and the client
+ * may retry deliberately by creating a new run.
+ *
+ * Convergence: the job id is derived from the run id, only a `queued` row is
+ * claimable, and findings upsert on `(runId, topicId, checkKind)`. A
+ * re-delivered job is therefore either a no-op or writes exactly the rows it
+ * wrote before.
+ */
+
+import { Result } from "better-result";
+import { Queue, Worker } from "bullmq";
+import { and, count, eq, inArray, lt, or, sql } from "drizzle-orm";
+
+import { DAY_IN_MS } from "@stll/time";
+
+import { rootDb } from "@/api/db/root";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import {
+  documentReviewFindings,
+  documentReviewRuns,
+  fields,
+} from "@/api/db/schema";
+import type { FieldContent } from "@/api/db/schema-validators";
+import type { OrgAIConfig } from "@/api/lib/ai-config";
+import {
+  loadOrgAIConfig,
+  loadPromptCachingPreference,
+} from "@/api/lib/ai-config-loader";
+import { captureError } from "@/api/lib/analytics/capture";
+import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
+import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
+import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
+import type { DocumentReviewTopic } from "@/api/lib/document-review/contract";
+import { compareReferenceDocuments } from "@/api/lib/document-review/reference-compare";
+import { extractAskContents } from "@/api/lib/document-review/review-extract";
+import type { ReviewAsk } from "@/api/lib/document-review/review-extract";
+import { buildFindings } from "@/api/lib/document-review/review-grade";
+import type { ReviewFinding } from "@/api/lib/document-review/review-grade";
+import {
+  basisPlaybook,
+  basisReferences,
+  findingOutcome,
+} from "@/api/lib/document-review/run-contract";
+import type {
+  DocumentReviewFindingPayload,
+  DocumentReviewRunBasis,
+  DocumentReviewRunErrorCode,
+} from "@/api/lib/document-review/run-contract";
+import { planReviewRun } from "@/api/lib/document-review/run-plan";
+import type { ReviewRunPlan } from "@/api/lib/document-review/run-plan";
+import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
+import { logger } from "@/api/lib/observability/logger";
+import { createBullMqConnection } from "@/api/lib/redis-client";
+import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
+import {
+  brandPersistedDocumentReviewRunId,
+  brandPersistedUserId,
+  brandValidatedWorkflowActorKey,
+} from "@/api/lib/safe-id-boundaries";
+import { fetchAndPrepareFiles } from "@/api/lib/workflow/generate-batch";
+import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
+import type { ResolvedFile } from "@/api/lib/workflow/generate-batch-shared";
+import type { ResolvedTiers } from "@/api/lib/workflow/playbook-positions";
+import { resolveEffectiveAsk } from "@/api/lib/workflow/position-runtime";
+import {
+  loadClauseSnapshots,
+  resolveTiers,
+} from "@/api/lib/workflow/resolve-standards";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
+
+const QUEUE_NAME = "document-review-runs";
+const JOB_NAME = "run-document-review";
+const WORKER_CONCURRENCY = 2;
+// One attempt: every pass runs metered model calls, so a BullMQ retry would
+// double the spend. Failures are persisted on the row instead.
+const JOB_ATTEMPTS = 1;
+const REVIEW_TIMEOUT_MS = 120_000;
+const SERVICE_TIER = "standard" as const;
+const ORPHAN_RECONCILE_INTERVAL_MS = 5 * 60 * 1000;
+/** A `running` row this old lost its worker to a hard death. */
+const STUCK_RUNNING_MS = 30 * 60 * 1000;
+/** A `queued` row this old lost its job to queue data loss; anything younger
+ *  may simply be backlogged and must be left for the worker. */
+const STUCK_QUEUED_MS = DAY_IN_MS;
+
+type DocumentReviewRunJobData = {
+  runId: string;
+  workspaceId: string;
+  organizationId: string;
+  userId: string;
+};
+
+export type EnqueueDocumentReviewRunArgs = {
+  runId: SafeId<"documentReviewRun">;
+  workspaceId: SafeId<"workspace">;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+};
+
+let queue: Queue<DocumentReviewRunJobData> | null = null;
+let queueConnection: ReturnType<typeof createBullMqConnection> | null = null;
+
+const getQueueConnection = () => {
+  queueConnection ??= createBullMqConnection();
+  return queueConnection;
+};
+
+const getQueue = (): Queue<DocumentReviewRunJobData> => {
+  queue ??= new Queue<DocumentReviewRunJobData>(QUEUE_NAME, {
+    connection: getQueueConnection(),
+    defaultJobOptions: {
+      attempts: JOB_ATTEMPTS,
+      removeOnComplete: 100,
+      removeOnFail: 500,
+    },
+  });
+  return queue;
+};
+
+export const enqueueDocumentReviewRun = async ({
+  runId,
+  workspaceId,
+  organizationId,
+  userId,
+}: EnqueueDocumentReviewRunArgs): Promise<void> => {
+  await getQueue().add(
+    JOB_NAME,
+    { runId, workspaceId, organizationId, userId },
+    // The run id IS the job identity: a duplicate enqueue collapses onto the
+    // job already in flight instead of scheduling a second execution.
+    { jobId: createBullMqJobId(workspaceId, runId) },
+  );
+};
+
+/**
+ * Janitor for runs orphaned by a hard worker death. A job-level failure
+ * self-heals through the worker `failed` handler; a `kill -9` emits no event,
+ * and the claim guard turns BullMQ's stalled re-delivery into a no-op, so the
+ * row would sit `running` forever, and its document would stay blocked by the
+ * one-active-run index. Cross-workspace by necessity, hence the RLS-exempt
+ * root handle, exactly as the report-export reconciler does.
+ *
+ * The two states age at different rates: a `running` row is timed from the
+ * claim that set `started_at`, a `queued` row from its creation, because a
+ * queued job survives a restart and may simply be backlogged.
+ */
+export const reconcileStuckDocumentReviewRuns = async (
+  now: Date = new Date(),
+): Promise<number> => {
+  const runningCutoff = new Date(now.getTime() - STUCK_RUNNING_MS);
+  const queuedCutoff = new Date(now.getTime() - STUCK_QUEUED_MS);
+  // audit: skip — janitor bookkeeping on already-audited run rows; flips
+  // abandoned runs to failed so the read endpoint surfaces them instead of
+  // polling a stuck row forever.
+  const recovered = await rootDb
+    .update(documentReviewRuns)
+    .set({ status: "failed", errorCode: "internal", finishedAt: now })
+    .where(
+      or(
+        and(
+          eq(documentReviewRuns.status, "running"),
+          // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
+          lt(documentReviewRuns.startedAt, runningCutoff),
+        ),
+        and(
+          eq(documentReviewRuns.status, "queued"),
+          // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
+          lt(documentReviewRuns.createdAt, queuedCutoff),
+        ),
+      ),
+    )
+    .returning({ id: documentReviewRuns.id });
+  return recovered.length;
+};
+
+export const initDocumentReviewRunWorker = () => {
+  const workerConnection = createBullMqConnection();
+
+  const worker = new Worker<DocumentReviewRunJobData>(
+    QUEUE_NAME,
+    async (job) => {
+      await processDocumentReviewRunJob(job.data);
+    },
+    { connection: workerConnection, concurrency: WORKER_CONCURRENCY },
+  );
+
+  worker.on("failed", (job, error) => {
+    // The job body already persists failures onto the row; this is the last
+    // resort if the process itself threw before that could run.
+    if (job) {
+      markRunFailed(job.data, "internal").catch((markError: unknown) => {
+        captureError(markError, {
+          runId: job.data.runId,
+          workspaceId: job.data.workspaceId,
+        });
+      });
+    }
+    const runId = job ? job.data.runId : "";
+    const workspaceId = job ? job.data.workspaceId : "";
+    captureError(error, { runId, workspaceId });
+    logger.error("document_review_run.failed", {
+      runId,
+      "error.type": errorTag(error),
+      workspaceId,
+    });
+  });
+
+  worker.on("error", (error) => {
+    logger.error(
+      "document_review_run.worker_error",
+      connectionErrorFields(error),
+    );
+  });
+
+  let closing = false;
+  let activeReconcile: Promise<void> | null = null;
+  const scheduleReconcile = (): void => {
+    if (closing || activeReconcile !== null) {
+      return;
+    }
+    activeReconcile = reconcileStuckDocumentReviewRuns()
+      .then((recovered) => {
+        if (recovered > 0) {
+          logger.warn("document_review_run.recovered_stuck", {
+            count: String(recovered),
+          });
+        }
+      })
+      .catch((error: unknown) => {
+        captureError(error, { operation: "document_review_run.reconcile" });
+      })
+      .finally(() => {
+        activeReconcile = null;
+      });
+  };
+  scheduleReconcile();
+  const reconcileTimer = setInterval(
+    scheduleReconcile,
+    ORPHAN_RECONCILE_INTERVAL_MS,
+  );
+  reconcileTimer.unref();
+
+  logger.info("document_review_run.worker_started", {
+    concurrency: String(WORKER_CONCURRENCY),
+  });
+
+  return {
+    close: async () => {
+      closing = true;
+      clearInterval(reconcileTimer);
+      if (activeReconcile !== null) {
+        await activeReconcile;
+      }
+      await worker.close();
+    },
+  };
+};
+
+type RunActor = {
+  scopedDb: ScopedDb;
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+  userId: SafeId<"user">;
+  runId: SafeId<"documentReviewRun">;
+};
+
+const brandActor = (data: DocumentReviewRunJobData): RunActor => {
+  const branded = brandValidatedWorkflowActorKey({
+    organizationId: data.organizationId,
+    workspaceId: data.workspaceId,
+  });
+  const userId = brandPersistedUserId(data.userId);
+  const tenant = {
+    organizationId: branded.organizationId,
+    userId,
+    workspaceIds: [branded.workspaceId],
+  };
+  return {
+    organizationId: branded.organizationId,
+    workspaceId: branded.workspaceId,
+    userId,
+    runId: brandPersistedDocumentReviewRunId(data.runId),
+    scopedDb: createRootScopedDb(tenant),
+    safeDb: createRootSafeDb(tenant),
+  };
+};
+
+/** The run fields the worker executes from, read at claim time. */
+type ClaimedRun = {
+  basis: DocumentReviewRunBasis;
+  topics: DocumentReviewTopic[];
+  entityId: SafeId<"entity">;
+  fileFieldId: SafeId<"field">;
+  entityVersionId: SafeId<"entityVersion">;
+  contentSha256: string;
+};
+
+/**
+ * Conditional `queued -> running` claim. The status predicate lives inside the
+ * UPDATE, so two deliveries of the same job cannot both proceed: the loser
+ * updates zero rows and returns nothing.
+ */
+const claimRun = async (actor: RunActor): Promise<ClaimedRun | null> => {
+  const claimed = await actor.scopedDb(async (tx) => {
+    // audit: skip — lifecycle bookkeeping on the run row audited at create.
+    const rows = await tx
+      .update(documentReviewRuns)
+      .set({ status: "running", startedAt: new Date() })
+      .where(
+        and(
+          eq(documentReviewRuns.id, actor.runId),
+          eq(documentReviewRuns.workspaceId, actor.workspaceId),
+          eq(documentReviewRuns.status, "queued"),
+        ),
+      )
+      .returning({
+        basis: documentReviewRuns.basis,
+        topics: documentReviewRuns.topics,
+        entityId: documentReviewRuns.entityId,
+        fileFieldId: documentReviewRuns.fileFieldId,
+        entityVersionId: documentReviewRuns.entityVersionId,
+        contentSha256: documentReviewRuns.contentSha256,
+      });
+    return rows.at(0);
+  });
+  return claimed === undefined ? null : claimed;
+};
+
+const processDocumentReviewRunJob = async (
+  data: DocumentReviewRunJobData,
+): Promise<void> => {
+  const actor = brandActor(data);
+  const claimed = await claimRun(actor);
+  // A re-delivered job, an already-terminal run, or a deleted row: nothing to
+  // do, and nothing to fail.
+  if (claimed === null) {
+    return;
+  }
+
+  const outcome = await Result.tryPromise({
+    try: async () => await executeRun(actor, claimed),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(outcome)) {
+    captureError(outcome.error, {
+      runId: actor.runId,
+      workspaceId: actor.workspaceId,
+    });
+    await setRunFailed(actor, "internal");
+    return;
+  }
+  if (outcome.value !== null) {
+    await setRunFailed(actor, outcome.value);
+  }
+};
+
+/** A pinned document, as recorded on the run. */
+type PinnedDocument = {
+  fileFieldId: SafeId<"field">;
+  entityVersionId: SafeId<"entityVersion">;
+  contentSha256: string;
+};
+
+type ResolvePinnedFilesResult =
+  | { type: "resolved"; files: ResolvedFile[] }
+  | { type: "failed"; errorCode: DocumentReviewRunErrorCode };
+
+/**
+ * Resolve every pinned document back to the file it named, refusing anything
+ * that has moved. `pdfFileId` is forced to null exactly as the interactive
+ * path does: reference comparison and playbook citations both need folio block
+ * identities, which the PDF preparation path does not carry.
+ */
+const resolvePinnedFiles = async (
+  actor: RunActor,
+  pins: readonly PinnedDocument[],
+): Promise<ResolvePinnedFilesResult> => {
+  const rows = await actor.scopedDb((tx) =>
+    tx
+      .select({
+        id: fields.id,
+        entityVersionId: fields.entityVersionId,
+        content: fields.content,
+      })
+      .from(fields)
+      .where(
+        and(
+          eq(fields.workspaceId, actor.workspaceId),
+          inArray(
+            fields.id,
+            pins.map((pin) => pin.fileFieldId),
+          ),
+          inArray(
+            fields.entityVersionId,
+            pins.map((pin) => pin.entityVersionId),
+          ),
+        ),
+      ),
+  );
+
+  const contentByPin = new Map<string, FieldContent>();
+  for (const row of rows) {
+    contentByPin.set(`${row.id}:${row.entityVersionId}`, row.content);
+  }
+
+  const files: ResolvedFile[] = [];
+  for (const pin of pins) {
+    const content = contentByPin.get(
+      `${pin.fileFieldId}:${pin.entityVersionId}`,
+    );
+    if (content === undefined || content.type !== "file") {
+      return { type: "failed", errorCode: "pin_unresolved" };
+    }
+    if (content.sha256Hex !== pin.contentSha256) {
+      return { type: "failed", errorCode: "pin_content_changed" };
+    }
+    if (content.mimeType !== DOCX_MIME_TYPE) {
+      return { type: "failed", errorCode: "unsupported_format" };
+    }
+    files.push({
+      fileFieldId: pin.fileFieldId,
+      fileId: content.id,
+      mimeType: content.mimeType,
+      sha256Hex: content.sha256Hex,
+      encrypted: content.encrypted,
+      pdfFileId: null,
+    });
+  }
+  return { type: "resolved", files };
+};
+
+/** Everything both passes need from the organization's AI configuration,
+ *  resolved once per run. */
+type PassDeps = {
+  abortSignal: AbortSignal;
+  entityVersionId: SafeId<"entityVersion">;
+  orgAIConfig: OrgAIConfig | null;
+  organizationId: SafeId<"organization">;
+  promptCachingEnabled: boolean;
+  serviceTier: typeof SERVICE_TIER;
+  usageMetering: AIUsageMetering;
+  workspaceId: SafeId<"workspace">;
+};
+
+/**
+ * Execute one claimed run. Returns `null` on success, or the error code the
+ * run failed with — the caller owns the terminal write so the failure path is
+ * identical whether this returned or threw.
+ */
+const executeRun = async (
+  actor: RunActor,
+  run: ClaimedRun,
+): Promise<DocumentReviewRunErrorCode | null> => {
+  const plan = planReviewRun({ basis: run.basis, topics: run.topics });
+
+  const references = basisReferences(run.basis);
+  const pins: PinnedDocument[] = [
+    {
+      fileFieldId: run.fileFieldId,
+      entityVersionId: run.entityVersionId,
+      contentSha256: run.contentSha256,
+    },
+    ...references.map((reference) => ({
+      fileFieldId: reference.fileFieldId,
+      entityVersionId: reference.entityVersionId,
+      contentSha256: reference.contentSha256,
+    })),
+  ];
+
+  const resolved = await resolvePinnedFiles(actor, pins);
+  if (resolved.type === "failed") {
+    return resolved.errorCode;
+  }
+
+  const prepared = await fetchAndPrepareFiles(
+    resolved.files,
+    actor.organizationId,
+    actor.workspaceId,
+  );
+  const preparedTarget = prepared.at(0);
+  if (preparedTarget?.kind !== "docx") {
+    return "unsupported_format";
+  }
+  const preparedReferences: PreparedDocxFile[] = [];
+  for (const file of prepared.slice(1)) {
+    if (file.kind !== "docx") {
+      return "unsupported_format";
+    }
+    preparedReferences.push(file);
+  }
+
+  const config = await Result.tryPromise({
+    try: async () => ({
+      orgAIConfig: await loadOrgAIConfig(actor.organizationId),
+      promptCachingEnabled: await loadPromptCachingPreference(
+        actor.organizationId,
+      ),
+    }),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(config)) {
+    captureError(config.error, {
+      runId: actor.runId,
+      workspaceId: actor.workspaceId,
+    });
+    return "ai_unavailable";
+  }
+
+  const deps: PassDeps = {
+    abortSignal: AbortSignal.timeout(REVIEW_TIMEOUT_MS),
+    entityVersionId: run.entityVersionId,
+    orgAIConfig: config.value.orgAIConfig,
+    organizationId: actor.organizationId,
+    promptCachingEnabled: config.value.promptCachingEnabled,
+    serviceTier: SERVICE_TIER,
+    usageMetering: {
+      actionType: "chat",
+      organizationId: actor.organizationId,
+      safeDb: actor.safeDb,
+      serviceTier: SERVICE_TIER,
+      userId: actor.userId,
+      workspaceId: actor.workspaceId,
+    },
+    workspaceId: actor.workspaceId,
+  };
+
+  // Both passes are independent reads over the same prepared blocks, so they
+  // run concurrently exactly as the interactive client dispatched them.
+  const [playbookOutcome, referenceOutcome] = await Promise.all([
+    runPlaybookPass({
+      actor,
+      deps,
+      plan,
+      run,
+      targetFile: resolved.files.slice(0, 1),
+    }),
+    runReferencePass({
+      actor,
+      deps,
+      plan,
+      run,
+      references: preparedReferences,
+      target: preparedTarget,
+    }),
+  ]);
+  if (playbookOutcome !== null) {
+    return playbookOutcome;
+  }
+  if (referenceOutcome !== null) {
+    return referenceOutcome;
+  }
+
+  return await finalizeRun(actor, plan);
+};
+
+const runPlaybookPass = async ({
+  actor,
+  deps,
+  plan,
+  run,
+  targetFile,
+}: {
+  actor: RunActor;
+  deps: PassDeps;
+  plan: ReviewRunPlan;
+  run: ClaimedRun;
+  targetFile: ResolvedFile[];
+}): Promise<DocumentReviewRunErrorCode | null> => {
+  if (basisPlaybook(run.basis) === null || plan.playbookChecks.length === 0) {
+    return null;
+  }
+
+  const positions = plan.playbookChecks.map((check) => check.position);
+  const clauseSnapshots = await actor.scopedDb((tx) =>
+    loadClauseSnapshots(tx, actor.organizationId, positions),
+  );
+  const tiersBySourceId = new Map<string, ResolvedTiers>();
+  const asks: ReviewAsk[] = [];
+  for (const position of positions) {
+    if (position.mode === "graded") {
+      tiersBySourceId.set(
+        position.sourceId,
+        resolveTiers(position, clauseSnapshots),
+      );
+    }
+    const ask = resolveEffectiveAsk(position);
+    const content = ask.content;
+    // `planReviewRun` already excluded file-typed and empty asks; this narrows
+    // the content union for the extractor rather than re-deciding eligibility.
+    if (content.type === "file") {
+      continue;
+    }
+    asks.push({
+      sourceId: position.sourceId,
+      question: ask.question.trim(),
+      content,
+    });
+  }
+
+  const extraction = await extractAskContents({
+    asks,
+    resolvedFiles: targetFile,
+    ...deps,
+  });
+  if (Result.isError(extraction)) {
+    return "playbook_check_failed";
+  }
+
+  const graded: ReviewFinding[] = await buildFindings({
+    positions,
+    contentBySourceId: extraction.value.contentBySourceId,
+    tiersBySourceId,
+    ...deps,
+  });
+
+  const checkByPositionId = new Map(
+    plan.playbookChecks.map((check) => [check.positionId, check]),
+  );
+  const rows: FindingRow[] = [];
+  for (const finding of graded) {
+    const check = checkByPositionId.get(finding.positionId);
+    if (check === undefined) {
+      continue;
+    }
+    rows.push(
+      buildFindingRow({
+        actor,
+        run,
+        topicId: check.topicId,
+        topicTitle: check.topicTitle,
+        positionId: check.positionId,
+        payload: { checkKind: "playbook", finding },
+      }),
+    );
+  }
+  await upsertFindings(actor, rows);
+  return null;
+};
+
+const runReferencePass = async ({
+  actor,
+  deps,
+  plan,
+  run,
+  references,
+  target,
+}: {
+  actor: RunActor;
+  deps: PassDeps;
+  plan: ReviewRunPlan;
+  run: ClaimedRun;
+  references: PreparedDocxFile[];
+  target: PreparedDocxFile;
+}): Promise<DocumentReviewRunErrorCode | null> => {
+  if (plan.referenceTopics.length === 0 || references.length === 0) {
+    return null;
+  }
+
+  const comparison = await compareReferenceDocuments({
+    abortSignal: deps.abortSignal,
+    orgAIConfig: deps.orgAIConfig,
+    organizationId: deps.organizationId,
+    promptCachingEnabled: deps.promptCachingEnabled,
+    references,
+    referenceEntityVersionIds: basisReferences(run.basis).map(
+      (reference) => reference.entityVersionId,
+    ),
+    serviceTier: deps.serviceTier,
+    target,
+    targetEntityVersionId: run.entityVersionId,
+    topics: plan.referenceTopics,
+    usageMetering: deps.usageMetering,
+    workspaceId: deps.workspaceId,
+  });
+  if (Result.isError(comparison)) {
+    return "reference_check_failed";
+  }
+
+  const titleByTopicId = new Map(
+    plan.referenceTopics.map((topic) => [topic.topicId, topic.title]),
+  );
+  const rows: FindingRow[] = [];
+  for (const finding of comparison.value) {
+    const topicTitle = titleByTopicId.get(finding.topicId);
+    if (topicTitle === undefined) {
+      continue;
+    }
+    rows.push(
+      buildFindingRow({
+        actor,
+        run,
+        topicId: finding.topicId,
+        topicTitle,
+        positionId: null,
+        payload: { checkKind: "reference", finding },
+      }),
+    );
+  }
+  await upsertFindings(actor, rows);
+  return null;
+};
+
+type FindingRow = typeof documentReviewFindings.$inferInsert;
+
+const buildFindingRow = ({
+  actor,
+  run,
+  topicId,
+  topicTitle,
+  positionId,
+  payload,
+}: {
+  actor: RunActor;
+  run: ClaimedRun;
+  topicId: string;
+  topicTitle: string;
+  positionId: string | null;
+  payload: DocumentReviewFindingPayload;
+}): FindingRow => ({
+  id: createSafeId<"documentReviewFinding">(),
+  organizationId: actor.organizationId,
+  workspaceId: actor.workspaceId,
+  runId: actor.runId,
+  entityId: run.entityId,
+  fileFieldId: run.fileFieldId,
+  entityVersionId: run.entityVersionId,
+  topicId,
+  topicTitle,
+  checkKind: payload.checkKind,
+  positionId,
+  outcome: findingOutcome(payload),
+  payload,
+});
+
+/**
+ * Commit one pass's findings on the `(runId, topicId, checkKind)` key. A
+ * replayed job overwrites the row it wrote before rather than adding a second
+ * judgment for the same topic, so duplicate delivery converges instead of
+ * doubling the review.
+ */
+const upsertFindings = async (
+  actor: RunActor,
+  rows: readonly FindingRow[],
+): Promise<void> => {
+  if (rows.length === 0) {
+    return;
+  }
+  await actor.scopedDb(async (tx) => {
+    // audit: skip — review output attached to the run row audited at create.
+    await tx
+      .insert(documentReviewFindings)
+      .values([...rows])
+      .onConflictDoUpdate({
+        target: [
+          documentReviewFindings.runId,
+          documentReviewFindings.topicId,
+          documentReviewFindings.checkKind,
+        ],
+        set: {
+          entityVersionId: sql`excluded.entity_version_id`,
+          topicTitle: sql`excluded.topic_title`,
+          positionId: sql`excluded.position_id`,
+          outcome: sql`excluded.outcome`,
+          payload: sql`excluded.payload`,
+          updatedAt: new Date(),
+        },
+      });
+  });
+};
+
+/**
+ * Complete the run only when the committed finding set is exactly the planned
+ * one. Counting the rows, rather than trusting what the passes returned, makes
+ * the terminal state a fact about the database instead of about this process.
+ */
+const finalizeRun = async (
+  actor: RunActor,
+  plan: ReviewRunPlan,
+): Promise<DocumentReviewRunErrorCode | null> => {
+  const committed = await actor.scopedDb(async (tx) => {
+    const rows = await tx
+      .select({ value: count() })
+      .from(documentReviewFindings)
+      .where(
+        and(
+          eq(documentReviewFindings.runId, actor.runId),
+          eq(documentReviewFindings.workspaceId, actor.workspaceId),
+        ),
+      );
+    const first = rows.at(0);
+    return first === undefined ? 0 : first.value;
+  });
+
+  if (committed !== plan.expectedFindingCount) {
+    return "internal";
+  }
+
+  await actor.scopedDb(async (tx) => {
+    // audit: skip — terminal bookkeeping on the run row audited at create.
+    await tx
+      .update(documentReviewRuns)
+      .set({
+        status: "completed",
+        errorCode: null,
+        completed: committed,
+        finishedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(documentReviewRuns.id, actor.runId),
+          eq(documentReviewRuns.workspaceId, actor.workspaceId),
+          eq(documentReviewRuns.status, "running"),
+        ),
+      );
+  });
+  return null;
+};
+
+const setRunFailed = async (
+  actor: RunActor,
+  errorCode: DocumentReviewRunErrorCode,
+): Promise<void> => {
+  await actor.scopedDb(async (tx) => {
+    // audit: skip — failure bookkeeping on the run row audited at create.
+    await tx
+      .update(documentReviewRuns)
+      .set({ status: "failed", errorCode, finishedAt: new Date() })
+      .where(
+        and(
+          eq(documentReviewRuns.id, actor.runId),
+          eq(documentReviewRuns.workspaceId, actor.workspaceId),
+          inArray(documentReviewRuns.status, ["queued", "running"]),
+        ),
+      );
+  });
+};
+
+/** Last-resort failure marker used from the worker `failed` handler: rebrands
+ *  the actor from raw job data. */
+const markRunFailed = async (
+  data: DocumentReviewRunJobData,
+  errorCode: DocumentReviewRunErrorCode,
+): Promise<void> => {
+  await setRunFailed(brandActor(data), errorCode);
+};
