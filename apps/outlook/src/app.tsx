@@ -75,6 +75,10 @@ type DraftPlacementState =
 
 const AuthedApp = ({ t }: { t: Translate }) => {
   const pendingEmailUpload = useRef<PendingEmailUpload | null>(null);
+  const getPendingEmailUpload = () => pendingEmailUpload.current;
+  const setPendingEmailUpload = (value: PendingEmailUpload | null) => {
+    pendingEmailUpload.current = value;
+  };
   const {
     isCurrent,
     loadLatest,
@@ -121,7 +125,8 @@ const AuthedApp = ({ t }: { t: Translate }) => {
             isCurrent={isCurrent}
             key={snapshotKey(snapshot)}
             loadLatest={loadLatest}
-            pendingEmailUpload={pendingEmailUpload}
+            getPendingEmailUpload={getPendingEmailUpload}
+            setPendingEmailUpload={setPendingEmailUpload}
             snapshot={snapshot}
             t={t}
             workspaceError={workspaceError}
@@ -134,18 +139,20 @@ const AuthedApp = ({ t }: { t: Translate }) => {
 };
 
 const MessageApp = ({
+  getPendingEmailUpload,
   isCurrent,
   snapshot,
   loadLatest,
-  pendingEmailUpload,
+  setPendingEmailUpload,
   t,
   workspaceError,
   workspaces,
 }: {
+  getPendingEmailUpload: () => PendingEmailUpload | null;
   isCurrent: (itemInstanceKey: string) => boolean;
   snapshot: MailSnapshot;
   loadLatest: () => Promise<MailSnapshot>;
-  pendingEmailUpload: { current: PendingEmailUpload | null };
+  setPendingEmailUpload: (value: PendingEmailUpload | null) => void;
   t: Translate;
   workspaceError: string | null;
   workspaces: ReturnType<typeof useWorkspaces>["workspaces"];
@@ -162,7 +169,10 @@ const MessageApp = ({
 
   const summary = useAISummary(t("saveErrorFallback"));
   const aiDraft = useAIDraft(t("saveErrorFallback"));
-  const ingest = useIngestEmail(t("saveErrorFallback"), pendingEmailUpload);
+  const ingest = useIngestEmail(t("saveErrorFallback"), {
+    getPendingEmailUpload,
+    setPendingEmailUpload,
+  });
 
   const [attachmentSelection, setAttachmentSelection] =
     useState<AttachmentSelection | null>(null);
