@@ -53,8 +53,50 @@ const calleeMethodName = (callee) => {
   return getPropertyName(unwrapped.property);
 };
 
-const isArrayLiteral = (node) =>
-  unwrapExpression(node)?.type === "ArrayExpression";
+// The initializer of a local `const` binding the node names, so a filters
+// object or a key hoisted into a variable resolves to the same literal the
+// inline form would have carried. One level only: a binding initialized from
+// another binding is not a hand-typed key at this call site. `let` is skipped
+// because a later write can replace the value this would report on.
+const constInitializer = (identifier, context) => {
+  let scope = context.sourceCode.getScope(identifier);
+  while (scope) {
+    const variable = scope.set.get(identifier.name);
+    if (variable) {
+      if (variable.defs.length !== 1) {
+        return null;
+      }
+      const definition = variable.defs.at(0);
+      if (
+        !isAstNode(definition?.node) ||
+        definition.node.type !== "VariableDeclarator" ||
+        definition.parent?.kind !== "const"
+      ) {
+        return null;
+      }
+      return unwrapExpression(definition.node.init) ?? null;
+    }
+    scope = scope.upper;
+  }
+  return null;
+};
+
+// A literal of `expected` type written here, or held by a local `const` this
+// names. Both forms restate the factory's layout where nothing checks it.
+const literalOf = (node, expected, context) => {
+  const unwrapped = unwrapExpression(node);
+  if (!unwrapped) {
+    return null;
+  }
+  if (unwrapped.type === expected) {
+    return unwrapped;
+  }
+  if (unwrapped.type !== "Identifier") {
+    return null;
+  }
+  const initializer = constInitializer(unwrapped, context);
+  return initializer?.type === expected ? initializer : null;
+};
 
 // `queryKey`, `query.queryKey`, `q.queryKey` — the value a predicate walks.
 const isQueryKeyReference = (node) => {
@@ -163,20 +205,23 @@ export default eslintCompatPlugin({
             }
             const args = Array.isArray(node.arguments) ? node.arguments : [];
 
-            const positionalKey = unwrapExpression(args.at(0));
-            if (
-              POSITIONAL_KEY_METHODS.has(method) &&
-              positionalKey?.type === "ArrayExpression"
-            ) {
-              context.report({
-                node: positionalKey,
-                messageId: "inlineQueryKey",
-              });
+            if (POSITIONAL_KEY_METHODS.has(method)) {
+              const positionalKey = literalOf(
+                args.at(0),
+                "ArrayExpression",
+                context,
+              );
+              if (positionalKey) {
+                context.report({
+                  node: positionalKey,
+                  messageId: "inlineQueryKey",
+                });
+              }
             }
 
             for (const argument of args) {
-              const options = unwrapExpression(argument);
-              if (!options || options.type !== "ObjectExpression") {
+              const options = literalOf(argument, "ObjectExpression", context);
+              if (!options) {
                 continue;
               }
               const properties = Array.isArray(options.properties)
@@ -185,15 +230,15 @@ export default eslintCompatPlugin({
               for (const property of properties) {
                 if (
                   property?.type !== "Property" ||
-                  getPropertyName(property.key) !== "queryKey" ||
-                  !isArrayLiteral(property.value)
+                  getPropertyName(property.key) !== "queryKey"
                 ) {
                   continue;
                 }
-                context.report({
-                  node: property.value,
-                  messageId: "inlineQueryKey",
-                });
+                const key = literalOf(property.value, "ArrayExpression", context);
+                if (!key) {
+                  continue;
+                }
+                context.report({ node: key, messageId: "inlineQueryKey" });
               }
             }
           },

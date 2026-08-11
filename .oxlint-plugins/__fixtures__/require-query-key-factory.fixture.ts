@@ -103,7 +103,32 @@ export const invalidatesViaHoistedFilters = async () => {
   await queryClient.invalidateQueries(filters);
 };
 
+export const invalidatesViaHoistedFiltersKey = async () => {
+  const filters = {
+    // oxlint-disable-next-line require-query-key-factory/require-query-key-factory
+    queryKey: ["fixture", organizationId],
+  };
+  await queryClient.invalidateQueries(filters);
+};
+
+export const invalidatesViaHoistedKey = async () => {
+  // oxlint-disable-next-line require-query-key-factory/require-query-key-factory
+  const queryKey = ["fixture", organizationId];
+  await queryClient.invalidateQueries({ queryKey });
+};
+
+export const writesViaHoistedKey = () => {
+  // oxlint-disable-next-line require-query-key-factory/require-query-key-factory
+  const queryKey = ["fixture", organizationId];
+  queryClient.setQueryData(queryKey, { items: [] });
+};
+
 // --- Cases the rule MUST NOT flag ---
+
+export const invalidatesHoistedFactoryKey = async () => {
+  const filters = { queryKey: fixtureKeys.scoped(organizationId) };
+  await queryClient.invalidateQueries(filters);
+};
 
 export const invalidatesFactoryKey = async () => {
   await queryClient.invalidateQueries({
