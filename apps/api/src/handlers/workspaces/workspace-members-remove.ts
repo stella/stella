@@ -32,6 +32,12 @@ import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { revokeWorkspaceSseAccess } from "@/api/lib/sse";
 
 const config = {
+  description:
+    "Remove one member from a matter, revoking their live access and " +
+    "cancelling their open desktop editing sessions. Their active work " +
+    "obligations are unassigned rather than deleted; refused when they are the " +
+    "matter's last member, when a timer of theirs is still running, or when " +
+    "they own more work obligations than one call may unassign at once.",
   permissions: { workspace: ["update"] },
   mcp: { type: "covered", by: "manage_organization" },
   params: workspaceParams({ userId: tUserId }),

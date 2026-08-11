@@ -14,6 +14,10 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { upsertWorkspaceSearchDocument } from "@/api/lib/search/index-global";
 
 const config = {
+  description:
+    "Remove one contact from a matter's party list, deleting the link with the " +
+    "party role and notes recorded on it. The contact stays in the " +
+    "organization address book; use contacts.delete to remove it from there.",
   permissions: { workspace: ["update"] },
   mcp: { type: "covered", by: "link_matter_contact" },
   params: workspaceParams({ workspaceContactId: tSafeId("workspaceContact") }),

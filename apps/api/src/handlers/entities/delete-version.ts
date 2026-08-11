@@ -33,6 +33,12 @@ const paramsSchema = workspaceParams({
 });
 
 const config = {
+  description:
+    "Tombstone one version of a document: it disappears from listings, " +
+    "downloads, and restores, but the row and its stored file are retained for " +
+    "chain of custody. Deleting the current version promotes the next " +
+    "surviving one; the last remaining version, a read-only document, and a " +
+    "version still being processed are refused.",
   permissions: { entity: ["update"] },
   mcp: { type: "covered", by: "delete_document" },
   params: paramsSchema,

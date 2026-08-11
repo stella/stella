@@ -17,6 +17,10 @@ import { deleteQueuedStyleSetPackages } from "@/api/lib/style-set-package-cleanu
 
 const paramsSchema = t.Object({ styleSetId: tSafeId("styleSet") });
 const config = {
+  description:
+    "Permanently delete an organization style set and the stored package file " +
+    "behind it. Documents and templates already created from the style set are " +
+    "unaffected, because they copied its styles at creation time.",
   permissions: { styleSet: ["delete"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   params: paramsSchema,

@@ -14,6 +14,11 @@ const deleteRateTableBodySchema = t.Object({
 
 const deleteRateTable = createSafeHandler(
   {
+    description:
+      "Permanently delete one rate table from a matter and, with it, every " +
+      "per-user rate line it holds. The matter's default rate table is refused " +
+      "until another table is made the default; time entries already recorded " +
+      "keep the rate they were billed at.",
     permissions: { rate: ["delete"] },
     mcp: { type: "capability", reason: "billing_admin" },
     body: deleteRateTableBodySchema,

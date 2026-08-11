@@ -9,6 +9,11 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 
 const config = {
+  description:
+    "Delete one of your own saved view templates, the personal blueprint used " +
+    "to create new views. Views already created from it are untouched, and the " +
+    "call succeeds silently when the template does not exist or belongs to " +
+    "someone else.",
   permissions: { view: ["delete"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   params: t.Object({

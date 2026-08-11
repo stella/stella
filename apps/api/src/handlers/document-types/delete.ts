@@ -9,6 +9,11 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  description:
+    "Remove one document type from the organization's classification list so " +
+    "it can no longer be assigned. Documents already classified as that type " +
+    "keep their stored label; the call is refused while any playbook is scoped " +
+    "to the type.",
   permissions: { organizationSettings: ["update"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   params: documentTypeParamsSchema,

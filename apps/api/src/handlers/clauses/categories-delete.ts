@@ -11,6 +11,10 @@ const deleteClauseCategoryParamsSchema = t.Object({
 });
 
 const config = {
+  description:
+    "Delete one category from the organization's clause library taxonomy. No " +
+    "clause is deleted: clauses filed under the category become uncategorized, " +
+    "and its child categories are re-parented to its own parent.",
   permissions: { clause: ["delete"] },
   mcp: { type: "capability", reason: "knowledge_library_admin" },
   params: deleteClauseCategoryParamsSchema,

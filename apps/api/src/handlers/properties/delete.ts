@@ -10,6 +10,11 @@ import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
 const config = {
+  description:
+    "Permanently delete one custom property (column) from a matter, with every " +
+    "value stored under it on every document version, plus its cell metadata " +
+    "and list placements. System properties, file properties, and properties " +
+    "another property depends on are refused.",
   permissions: { property: ["delete"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   params: workspaceParams({ propertyId: tSafeId("property") }),

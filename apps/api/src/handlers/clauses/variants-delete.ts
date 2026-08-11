@@ -12,6 +12,11 @@ const deleteVariantParamsSchema = t.Object({
 });
 
 const config = {
+  description:
+    "Permanently delete one variant (an alternative wording) of a clause, " +
+    "leaving the clause and its other variants in place. Templates that used " +
+    "the variant fall back to the clause itself and keep only a stale label " +
+    "snapshot of what was removed.",
   permissions: { clause: ["delete"] },
   mcp: { type: "capability", reason: "knowledge_library_admin" },
   params: deleteVariantParamsSchema,

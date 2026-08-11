@@ -14,6 +14,11 @@ const deleteSkillParamsSchema = t.Object({
 });
 
 const config = {
+  description:
+    "Permanently delete an agent skill from the organization, with every " +
+    "resource file attached to it. Team skills may only be deleted by an admin " +
+    "or owner and private skills only by their author; bundled skills, which " +
+    "cannot be edited, can still be deleted here.",
   permissions: { agentSkill: ["delete"] },
   mcp: { type: "capability", reason: "agent_tool_authoring" },
   params: deleteSkillParamsSchema,

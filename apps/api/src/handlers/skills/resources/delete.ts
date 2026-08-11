@@ -19,6 +19,10 @@ const deleteSkillResourceBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Delete one resource file from an agent skill, addressed by its path; the " +
+    "skill and its other resources are untouched. Bundled skills are read-only " +
+    "and are refused.",
   permissions: { agentSkill: ["update"] },
   mcp: { type: "capability", reason: "agent_tool_authoring" },
   params: deleteSkillResourceParamsSchema,

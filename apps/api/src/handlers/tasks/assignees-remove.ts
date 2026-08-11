@@ -85,6 +85,10 @@ export const removeAssigneeHandler = async function* ({
 
 const removeAssignee = createSafeHandler(
   {
+    description:
+      "Unassign one user from a task. Idempotent: removing a user who is not " +
+      "assigned still succeeds, and nothing stops a task from ending up with " +
+      "no assignee; a read-only task is refused.",
     permissions: { entity: ["update"] },
     mcp: { type: "covered", by: "save_task" },
     body: removeAssigneeBodySchema,
