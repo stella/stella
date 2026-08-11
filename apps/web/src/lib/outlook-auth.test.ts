@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   buildOutlookHandoffPath,
   buildOutlookOrganizationSelectionUrl,
+  buildOutlookSignInPath,
   outlookSessionHandoff,
 } from "@/lib/outlook-auth";
 
@@ -38,6 +39,12 @@ describe("Outlook authentication handoff", () => {
   test("encodes the dialog origin in a safe relative handoff", () => {
     expect(buildOutlookHandoffPath("https://outlook.example.test")).toBe(
       "/sign-in-outlook?parentOrigin=https%3A%2F%2Foutlook.example.test",
+    );
+  });
+
+  test("routes signed-out users through the configured Stella sign-in methods", () => {
+    expect(buildOutlookSignInPath("https://outlook.example.test")).toBe(
+      "/auth?redirectTo=%2Fsign-in-outlook%3FparentOrigin%3Dhttps%253A%252F%252Foutlook.example.test",
     );
   });
 });

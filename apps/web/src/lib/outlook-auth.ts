@@ -1,12 +1,19 @@
 import { normalizeRedirectTo } from "@/lib/redirect";
 
 const OUTLOOK_HANDOFF_PATH = "/sign-in-outlook";
+const AUTH_PATH = "/auth";
 const ORGANIZATION_PATH = "/auth/organization";
 
 export const buildOutlookHandoffPath = (parentOrigin: string): string => {
   const handoff = new URL(OUTLOOK_HANDOFF_PATH, "https://stella.invalid");
   handoff.searchParams.set("parentOrigin", parentOrigin);
   return `${handoff.pathname}${handoff.search}`;
+};
+
+export const buildOutlookSignInPath = (parentOrigin: string): string => {
+  const signIn = new URL(AUTH_PATH, "https://stella.invalid");
+  signIn.searchParams.set("redirectTo", buildOutlookHandoffPath(parentOrigin));
+  return `${signIn.pathname}${signIn.search}`;
 };
 
 type BuildOutlookSocialCallbackUrlOptions = {
