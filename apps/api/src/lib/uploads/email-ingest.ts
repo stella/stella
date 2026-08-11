@@ -23,7 +23,7 @@
 import { Result, panic } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import type {
   PendingUploadFinalizedResult,
   PendingUploadPurposeData,
@@ -40,6 +40,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { startBufferIntentHeartbeat } from "@/api/lib/buffer-intent-reconciliation";
 import { allocateEntityStamps } from "@/api/lib/document-counter";
 import {
   enqueueImageThumbnailOrMarkFailed,
@@ -103,10 +104,58 @@ const ATTACHMENT_PUBLICATION_CONCURRENCY = 4;
 const FINAL_OBJECT_CLEANUP_CONCURRENCY = 50;
 const FINAL_OBJECT_CLEANUP_TIMEOUT_MS = 15_000;
 
+const EMAIL_INGEST_HEARTBEAT_TELEMETRY = {
+  abandon: "email-ingest-intent-abandon",
+  heartbeat: "email-ingest-intent-heartbeat",
+  heartbeatUnhandled: "email-ingest-intent-heartbeat-unhandled",
+};
+
 type EmailIngestPurposeData = Extract<
   PendingUploadPurposeData,
   { type: "email_ingest" }
 >;
+
+type PersistEmailIngestRecoveryKeysOptions = {
+  safeDb: SafeDb;
+  uploadId: SafeId<"pendingUpload">;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace">;
+  claimRequestId: string;
+  purposeData: EmailIngestPurposeData;
+  recoveryObjectKeys: string[];
+};
+
+export const persistEmailIngestRecoveryKeys = async ({
+  safeDb,
+  uploadId,
+  userId,
+  workspaceId,
+  claimRequestId,
+  purposeData,
+  recoveryObjectKeys,
+}: PersistEmailIngestRecoveryKeysOptions): Promise<
+  Result<boolean, SafeDbError>
+> =>
+  await safeDb(async (tx) => {
+    // audit: skip — durable storage-recovery metadata for this claim.
+    const rows = await tx
+      .update(pendingUploads)
+      .set({
+        claimedAt: new Date(),
+        purposeData: { ...purposeData, recoveryObjectKeys },
+      })
+      .where(
+        and(
+          eq(pendingUploads.id, uploadId),
+          eq(pendingUploads.userId, userId),
+          eq(pendingUploads.workspaceId, workspaceId),
+          eq(pendingUploads.status, "scanning"),
+          eq(pendingUploads.claimedByRequestId, claimRequestId),
+        ),
+      )
+      .returning({ id: pendingUploads.id });
+    return rows.at(0) !== undefined;
+  });
 
 export type FinalizeEmailIngestProps = {
   safeDb: SafeDb;
@@ -415,28 +464,18 @@ export const finalizeEmailIngest = async function* ({
     ...accepted.map((attachment) => attachment.finalKey),
   ];
 
-  const recoveryRows = yield* Result.await(
-    safeDb(
-      async (tx) =>
-        // audit: skip — durable storage-recovery metadata for this claim.
-        await tx
-          .update(pendingUploads)
-          .set({
-            purposeData: { ...purposeData, recoveryObjectKeys: writtenKeys },
-          })
-          .where(
-            and(
-              eq(pendingUploads.id, uploadId),
-              eq(pendingUploads.userId, userId),
-              eq(pendingUploads.workspaceId, workspaceId),
-              eq(pendingUploads.status, "scanning"),
-              eq(pendingUploads.claimedByRequestId, claimRequestId),
-            ),
-          )
-          .returning({ id: pendingUploads.id }),
-    ),
+  const recoveryClaimed = yield* Result.await(
+    persistEmailIngestRecoveryKeys({
+      safeDb,
+      uploadId,
+      userId,
+      workspaceId,
+      claimRequestId,
+      purposeData,
+      recoveryObjectKeys: writtenKeys,
+    }),
   );
-  if (!recoveryRows.at(0)) {
+  if (!recoveryClaimed) {
     return finalizeErr({
       status: 409,
       message: "Email ingest claim was lost before storage publication",
@@ -444,473 +483,489 @@ export const finalizeEmailIngest = async function* ({
     });
   }
 
-  const cleanupFinalObjects = async (
-    stage: string,
-  ): Promise<Result<void, UploadFinalizeError>> => {
-    const renewal = await renewFinalizeClaim({
-      claimRequestId,
-      safeDb,
-      uploadId,
-      userId,
-      workspaceId,
-    });
-    if (Result.isError(renewal) || !renewal.value) {
-      captureError(
-        Result.isError(renewal)
-          ? renewal.error
-          : new UploadFinalizeError({
-              message: "Email ingest claim was lost before object cleanup",
-              status: 409,
-            }),
-        { stage, messageEntityId, uploadId },
-      );
-      return Result.err(
-        new UploadFinalizeError({
-          status: 500,
-          message: "Could not establish ownership for email ingest cleanup",
-          rejectReason: "final-object-cleanup-failed",
-        }),
-      );
-    }
-
-    const cleanupResults = await mapWithConcurrency({
-      items: writtenKeys,
-      limit: FINAL_OBJECT_CLEANUP_CONCURRENCY,
-      operation: async (key) =>
-        await Result.tryPromise({
-          try: async () =>
-            await withTimeout(
-              async (signal) => await deleteS3ObjectWithSignal(key, signal),
-              {
-                label: "email-ingest-final-object-cleanup",
-                timeoutMs: FINAL_OBJECT_CLEANUP_TIMEOUT_MS,
-              },
-            ),
-          catch: (cause) => cause,
-        }),
-    });
-    const failedCleanup = cleanupResults.find(Result.isError);
-    if (failedCleanup) {
-      captureError(failedCleanup.error, {
-        stage,
-        messageEntityId,
-        uploadId,
-      });
-      return Result.err(emailIngestFinalObjectCleanupFailure());
-    }
-    return Result.ok(undefined);
-  };
-
-  const promoteResult = await promoteTmpObject(messageFinalKey);
-  if (Result.isError(promoteResult)) {
-    return promoteResult;
-  }
-
-  // Server-extracted attachments have no tmp object to promote. Bounded
-  // retry uses the deterministic final keys above, so repeated writes are
-  // idempotent after a timeout or finalize retry.
-  const writeResults = await mapWithConcurrency({
-    items: accepted,
-    limit: ATTACHMENT_PUBLICATION_CONCURRENCY,
-    operation: async (attachment) =>
-      await Result.tryPromise(async () => {
-        await writeS3ObjectWithRetry({
-          contentType: attachment.mimeType,
-          data: attachment.buffer,
-          key: attachment.finalKey,
-        });
-      }),
+  // Attachment publication can outlive the generic finalize claim timeout.
+  // The recovery-key write above renews ownership atomically with the durable
+  // cleanup record; keep renewing it until all final objects and DB rows settle
+  // so a reconciler cannot steal this ingest while its S3 work is in flight.
+  const stopClaimHeartbeat = startBufferIntentHeartbeat({
+    safeDb,
+    intent: { id: uploadId, claimRequestId },
+    telemetry: EMAIL_INGEST_HEARTBEAT_TELEMETRY,
   });
-  const writeFailures = writeResults.filter(Result.isError);
-  if (writeFailures.length > 0) {
-    for (const failure of writeFailures) {
-      captureError(failure.error, {
-        messageEntityId,
-        stage: "attachment-write",
+
+  try {
+    const cleanupFinalObjects = async (
+      stage: string,
+    ): Promise<Result<void, UploadFinalizeError>> => {
+      const renewal = await renewFinalizeClaim({
+        claimRequestId,
+        safeDb,
+        uploadId,
+        userId,
+        workspaceId,
+      });
+      if (Result.isError(renewal) || !renewal.value) {
+        captureError(
+          Result.isError(renewal)
+            ? renewal.error
+            : new UploadFinalizeError({
+                message: "Email ingest claim was lost before object cleanup",
+                status: 409,
+              }),
+          { stage, messageEntityId, uploadId },
+        );
+        return Result.err(
+          new UploadFinalizeError({
+            status: 500,
+            message: "Could not establish ownership for email ingest cleanup",
+            rejectReason: "final-object-cleanup-failed",
+          }),
+        );
+      }
+
+      const cleanupResults = await mapWithConcurrency({
+        items: writtenKeys,
+        limit: FINAL_OBJECT_CLEANUP_CONCURRENCY,
+        operation: async (key) =>
+          await Result.tryPromise({
+            try: async () =>
+              await withTimeout(
+                async (signal) => await deleteS3ObjectWithSignal(key, signal),
+                {
+                  label: "email-ingest-final-object-cleanup",
+                  timeoutMs: FINAL_OBJECT_CLEANUP_TIMEOUT_MS,
+                },
+              ),
+            catch: (cause) => cause,
+          }),
+      });
+      const failedCleanup = cleanupResults.find(Result.isError);
+      if (failedCleanup) {
+        captureError(failedCleanup.error, {
+          stage,
+          messageEntityId,
+          uploadId,
+        });
+        return Result.err(emailIngestFinalObjectCleanupFailure());
+      }
+      return Result.ok(undefined);
+    };
+
+    const promoteResult = await promoteTmpObject(messageFinalKey);
+    if (Result.isError(promoteResult)) {
+      return promoteResult;
+    }
+
+    // Server-extracted attachments have no tmp object to promote. Bounded
+    // retry uses the deterministic final keys above, so repeated writes are
+    // idempotent after a timeout or finalize retry.
+    const writeResults = await mapWithConcurrency({
+      items: accepted,
+      limit: ATTACHMENT_PUBLICATION_CONCURRENCY,
+      operation: async (attachment) =>
+        await Result.tryPromise(async () => {
+          await writeS3ObjectWithRetry({
+            contentType: attachment.mimeType,
+            data: attachment.buffer,
+            key: attachment.finalKey,
+          });
+        }),
+    });
+    const writeFailures = writeResults.filter(Result.isError);
+    if (writeFailures.length > 0) {
+      for (const failure of writeFailures) {
+        captureError(failure.error, {
+          messageEntityId,
+          stage: "attachment-write",
+        });
+      }
+      const cleanupResult = await cleanupFinalObjects(
+        "attachment-write-failed",
+      );
+      if (Result.isError(cleanupResult)) {
+        return cleanupResult;
+      }
+      return finalizeErr({
+        status: 500,
+        message: "Failed to store an email attachment",
+        rejectReason: "attachment-write-failed",
       });
     }
-    const cleanupResult = await cleanupFinalObjects("attachment-write-failed");
-    if (Result.isError(cleanupResult)) {
-      return cleanupResult;
-    }
-    return finalizeErr({
-      status: 500,
-      message: "Failed to store an email attachment",
-      rejectReason: "attachment-write-failed",
-    });
-  }
 
-  const parentId = purposeData.parentId ?? null;
+    const parentId = purposeData.parentId ?? null;
 
-  type WriteResult =
-    | {
-        status: "ok";
-        finalized: Extract<
-          PendingUploadFinalizedResult,
-          { type: "email_ingest" }
-        >;
+    type WriteResult =
+      | {
+          status: "ok";
+          finalized: Extract<
+            PendingUploadFinalizedResult,
+            { type: "email_ingest" }
+          >;
+        }
+      | { status: EntityCreateWriteFailureStatus };
+
+    const writeResultResult = await safeDb(async (tx): Promise<WriteResult> => {
+      const capacityResult = await checkEntityCreateCapacityForInsert({
+        tx,
+        workspaceId,
+        entityCount: 1 + accepted.length,
+        excludeUploadId: uploadId,
+      });
+      if (Result.isError(capacityResult)) {
+        return { status: capacityResult.error };
       }
-    | { status: EntityCreateWriteFailureStatus };
 
-  const writeResultResult = await safeDb(async (tx): Promise<WriteResult> => {
-    const capacityResult = await checkEntityCreateCapacityForInsert({
-      tx,
-      workspaceId,
-      entityCount: 1 + accepted.length,
-      excludeUploadId: uploadId,
-    });
-    if (Result.isError(capacityResult)) {
-      return { status: capacityResult.error };
-    }
-
-    // Validates the file property + folder parent for the MESSAGE.
-    const targetResult = await checkEntityCreateTargetForInsert({
-      tx,
-      workspaceId,
-      propertyId: purposeData.propertyId,
-      parentId,
-    });
-    if (Result.isError(targetResult)) {
-      return { status: targetResult.error };
-    }
-    const propertyId = targetResult.value.propertyId;
-
-    const renamed = await resolveEntityCreateFileName({
-      tx,
-      workspaceId,
-      propertyId,
-      parentId,
-      name: messageName,
-    });
-    const storedMessageFileName = resolveStoredEmailFileName(
-      renamed.value,
-      declaredMime,
-    );
-    const stamps = await allocateEntityStamps(
-      tx,
-      workspaceId,
-      accepted.length + 1,
-    );
-    const messageStamp = stamps.at(0);
-    if (!messageStamp) {
-      panic("Email ingest stamp allocation returned no message stamp");
-    }
-    const attachmentRows = accepted.map((attachment, index) => {
-      const stamp = stamps.at(index + 1);
-      if (!stamp) {
-        panic("Email ingest stamp allocation returned too few stamps");
+      // Validates the file property + folder parent for the MESSAGE.
+      const targetResult = await checkEntityCreateTargetForInsert({
+        tx,
+        workspaceId,
+        propertyId: purposeData.propertyId,
+        parentId,
+      });
+      if (Result.isError(targetResult)) {
+        return { status: targetResult.error };
       }
-      return { attachment, stamp };
-    });
+      const propertyId = targetResult.value.propertyId;
 
-    await tx.insert(entities).values({
-      id: messageEntityId,
-      workspaceId,
-      kind: "message",
-      parentId,
-      name: renamed.value,
-      createdBy: userId,
-      docSequence: messageStamp.docSequence,
-    });
-    await tx.insert(entityVersions).values({
-      id: messageEntityVersionId,
-      workspaceId,
-      entityId: messageEntityId,
-      versionNumber: 1,
-      stamp: messageStamp.stamp,
-      verificationCode: messageStamp.verificationCode,
-    });
-    await tx
-      .update(entities)
-      .set({ currentVersionId: messageEntityVersionId })
-      .where(eq(entities.id, messageEntityId));
-    await tx.insert(fields).values({
-      id: messageFieldId,
-      workspaceId,
-      propertyId,
-      entityVersionId: messageEntityVersionId,
-      content: fileContentWithMintedObject({
-        type: "file",
-        version: 1,
-        id: messageFileId,
-        fileName: storedMessageFileName,
-        mimeType: declaredMime,
-        sizeBytes: declaredSize,
-        encrypted: messageEncrypted,
-        sha256Hex: declaredSha256Hex,
-        pdfFileId: null,
-        pdfDerivative: pdfDerivativeStateForFile({
-          encrypted: messageEncrypted,
-          mimeType: declaredMime,
-        }),
-        thumbnailFileId: null,
-        thumbnailDerivative: thumbnailDerivativeStateForFile({
-          encrypted: messageEncrypted,
-          mimeType: declaredMime,
-        }),
-        ...(scanWarnings !== undefined && { scanWarnings }),
-      }),
-    });
+      const renamed = await resolveEntityCreateFileName({
+        tx,
+        workspaceId,
+        propertyId,
+        parentId,
+        name: messageName,
+      });
+      const storedMessageFileName = resolveStoredEmailFileName(
+        renamed.value,
+        declaredMime,
+      );
+      const stamps = await allocateEntityStamps(
+        tx,
+        workspaceId,
+        accepted.length + 1,
+      );
+      const messageStamp = stamps.at(0);
+      if (!messageStamp) {
+        panic("Email ingest stamp allocation returned no message stamp");
+      }
+      const attachmentRows = accepted.map((attachment, index) => {
+        const stamp = stamps.at(index + 1);
+        if (!stamp) {
+          panic("Email ingest stamp allocation returned too few stamps");
+        }
+        return { attachment, stamp };
+      });
 
-    const auditEvents: AuditEvent[] = [
-      {
-        action: AUDIT_ACTION.CREATE,
-        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-        resourceId: messageEntityId,
-        changes: {
-          created: {
-            old: null,
-            new: {
-              kind: "message",
-              fileName: storedMessageFileName,
-              mimeType: declaredMime,
-              sizeBytes: declaredSize,
-              propertyId,
-              parentId,
-            },
-          },
-        },
-      },
-    ];
-
-    // Attachment children hang off the message entity we just created.
-    // The message is a valid container, so children skip the
-    // folder-only parent check.
-    if (attachmentRows.length > 0) {
-      await tx.insert(entities).values(
-        attachmentRows.map(({ attachment, stamp }) => ({
-          id: attachment.entityId,
-          workspaceId,
-          kind: ATTACHMENT_ENTITY_KIND,
-          parentId: messageEntityId,
-          name: attachment.fileName,
-          createdBy: userId,
-          docSequence: stamp.docSequence,
-        })),
-      );
-      await tx.insert(entityVersions).values(
-        attachmentRows.map(({ attachment, stamp }) => ({
-          id: attachment.entityVersionId,
-          workspaceId,
-          entityId: attachment.entityId,
-          versionNumber: 1,
-          stamp: stamp.stamp,
-          verificationCode: stamp.verificationCode,
-        })),
-      );
-      const currentVersionCases = attachmentRows.map(
-        ({ attachment }) =>
-          sql`when ${attachment.entityId} then ${attachment.entityVersionId}`,
-      );
+      await tx.insert(entities).values({
+        id: messageEntityId,
+        workspaceId,
+        kind: "message",
+        parentId,
+        name: renamed.value,
+        createdBy: userId,
+        docSequence: messageStamp.docSequence,
+      });
+      await tx.insert(entityVersions).values({
+        id: messageEntityVersionId,
+        workspaceId,
+        entityId: messageEntityId,
+        versionNumber: 1,
+        stamp: messageStamp.stamp,
+        verificationCode: messageStamp.verificationCode,
+      });
       await tx
         .update(entities)
-        .set({
-          currentVersionId: sql`case ${entities.id} ${sql.join(currentVersionCases, sql` `)} else ${entities.currentVersionId} end`,
-        })
-        .where(
-          inArray(
-            entities.id,
-            attachmentRows.map(({ attachment }) => attachment.entityId),
-          ),
-        );
-      await tx.insert(fields).values(
-        attachmentRows.map(({ attachment }) => ({
-          id: attachment.fieldId,
-          workspaceId,
-          propertyId,
-          entityVersionId: attachment.entityVersionId,
-          content: fileContentWithMintedObject({
-            type: "file",
-            version: 1,
-            id: attachment.fileId,
-            fileName: attachment.fileName,
-            mimeType: attachment.mimeType,
-            sizeBytes: attachment.sizeBytes,
-            encrypted: attachment.encrypted,
-            sha256Hex: attachment.sha256Hex,
-            pdfFileId: null,
-            pdfDerivative: pdfDerivativeStateForFile({
-              encrypted: attachment.encrypted,
-              mimeType: attachment.mimeType,
-            }),
-            thumbnailFileId: null,
-            thumbnailDerivative: thumbnailDerivativeStateForFile({
-              encrypted: attachment.encrypted,
-              mimeType: attachment.mimeType,
-            }),
-            ...(attachment.scanWarnings !== undefined && {
-              scanWarnings: attachment.scanWarnings,
-            }),
+        .set({ currentVersionId: messageEntityVersionId })
+        .where(eq(entities.id, messageEntityId));
+      await tx.insert(fields).values({
+        id: messageFieldId,
+        workspaceId,
+        propertyId,
+        entityVersionId: messageEntityVersionId,
+        content: fileContentWithMintedObject({
+          type: "file",
+          version: 1,
+          id: messageFileId,
+          fileName: storedMessageFileName,
+          mimeType: declaredMime,
+          sizeBytes: declaredSize,
+          encrypted: messageEncrypted,
+          sha256Hex: declaredSha256Hex,
+          pdfFileId: null,
+          pdfDerivative: pdfDerivativeStateForFile({
+            encrypted: messageEncrypted,
+            mimeType: declaredMime,
           }),
-        })),
-      );
+          thumbnailFileId: null,
+          thumbnailDerivative: thumbnailDerivativeStateForFile({
+            encrypted: messageEncrypted,
+            mimeType: declaredMime,
+          }),
+          ...(scanWarnings !== undefined && { scanWarnings }),
+        }),
+      });
 
-      auditEvents.push(
-        ...attachmentRows.map(({ attachment }): AuditEvent => ({
+      const auditEvents: AuditEvent[] = [
+        {
           action: AUDIT_ACTION.CREATE,
           resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-          resourceId: attachment.entityId,
+          resourceId: messageEntityId,
           changes: {
             created: {
               old: null,
               new: {
-                kind: "document",
-                fileName: attachment.fileName,
-                mimeType: attachment.mimeType,
-                sizeBytes: attachment.sizeBytes,
+                kind: "message",
+                fileName: storedMessageFileName,
+                mimeType: declaredMime,
+                sizeBytes: declaredSize,
                 propertyId,
-                parentId: messageEntityId,
+                parentId,
               },
             },
           },
-        })),
-      );
-    }
-    await recordAuditEvent(tx, auditEvents);
+        },
+      ];
 
-    await tx
-      .update(workspaces)
-      .set({ lastActivityAt: new Date() })
-      .where(eq(workspaces.id, workspaceId));
+      // Attachment children hang off the message entity we just created.
+      // The message is a valid container, so children skip the
+      // folder-only parent check.
+      if (attachmentRows.length > 0) {
+        await tx.insert(entities).values(
+          attachmentRows.map(({ attachment, stamp }) => ({
+            id: attachment.entityId,
+            workspaceId,
+            kind: ATTACHMENT_ENTITY_KIND,
+            parentId: messageEntityId,
+            name: attachment.fileName,
+            createdBy: userId,
+            docSequence: stamp.docSequence,
+          })),
+        );
+        await tx.insert(entityVersions).values(
+          attachmentRows.map(({ attachment, stamp }) => ({
+            id: attachment.entityVersionId,
+            workspaceId,
+            entityId: attachment.entityId,
+            versionNumber: 1,
+            stamp: stamp.stamp,
+            verificationCode: stamp.verificationCode,
+          })),
+        );
+        const currentVersionCases = attachmentRows.map(
+          ({ attachment }) =>
+            sql`when ${attachment.entityId} then ${attachment.entityVersionId}`,
+        );
+        await tx
+          .update(entities)
+          .set({
+            currentVersionId: sql`case ${entities.id} ${sql.join(currentVersionCases, sql` `)} else ${entities.currentVersionId} end`,
+          })
+          .where(
+            inArray(
+              entities.id,
+              attachmentRows.map(({ attachment }) => attachment.entityId),
+            ),
+          );
+        await tx.insert(fields).values(
+          attachmentRows.map(({ attachment }) => ({
+            id: attachment.fieldId,
+            workspaceId,
+            propertyId,
+            entityVersionId: attachment.entityVersionId,
+            content: fileContentWithMintedObject({
+              type: "file",
+              version: 1,
+              id: attachment.fileId,
+              fileName: attachment.fileName,
+              mimeType: attachment.mimeType,
+              sizeBytes: attachment.sizeBytes,
+              encrypted: attachment.encrypted,
+              sha256Hex: attachment.sha256Hex,
+              pdfFileId: null,
+              pdfDerivative: pdfDerivativeStateForFile({
+                encrypted: attachment.encrypted,
+                mimeType: attachment.mimeType,
+              }),
+              thumbnailFileId: null,
+              thumbnailDerivative: thumbnailDerivativeStateForFile({
+                encrypted: attachment.encrypted,
+                mimeType: attachment.mimeType,
+              }),
+              ...(attachment.scanWarnings !== undefined && {
+                scanWarnings: attachment.scanWarnings,
+              }),
+            }),
+          })),
+        );
 
-    const finalized: Extract<
-      PendingUploadFinalizedResult,
-      { type: "email_ingest" }
-    > = {
-      type: "email_ingest",
-      entityId: messageEntityId,
-      fieldId: messageFieldId,
-      fileId: messageFileId,
-      fileName: storedMessageFileName,
-      renamed: renamed.renamed,
-      attachmentEntityIds: accepted.map((attachment) => attachment.entityId),
-    };
+        auditEvents.push(
+          ...attachmentRows.map(({ attachment }): AuditEvent => ({
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+            resourceId: attachment.entityId,
+            changes: {
+              created: {
+                old: null,
+                new: {
+                  kind: "document",
+                  fileName: attachment.fileName,
+                  mimeType: attachment.mimeType,
+                  sizeBytes: attachment.sizeBytes,
+                  propertyId,
+                  parentId: messageEntityId,
+                },
+              },
+            },
+          })),
+        );
+      }
+      await recordAuditEvent(tx, auditEvents);
 
-    // audit: skip — final FSM transition on pending_uploads; the
-    // entity-level audit rows landed above in this same transaction.
-    const finalizedRows = await tx
-      .update(pendingUploads)
-      .set({
-        status: "finalized",
-        finalizedResult: finalized,
-        finalizedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(pendingUploads.id, uploadId),
-          eq(pendingUploads.userId, userId),
-          eq(pendingUploads.workspaceId, workspaceId),
-          eq(pendingUploads.status, "scanning"),
-          eq(pendingUploads.claimedByRequestId, claimRequestId),
-        ),
-      )
-      .returning({ id: pendingUploads.id });
-    if (!finalizedRows.at(0)) {
-      panic("Pending upload finalize marker update returned no rows");
-    }
+      await tx
+        .update(workspaces)
+        .set({ lastActivityAt: new Date() })
+        .where(eq(workspaces.id, workspaceId));
 
-    return { status: "ok", finalized };
-  });
-  if (Result.isError(writeResultResult)) {
-    const cleanupResult = await cleanupFinalObjects(
-      "final-cleanup-after-db-error",
-    );
-    if (Result.isError(cleanupResult)) {
-      return cleanupResult;
-    }
-  }
-  const writeResult = yield* writeResultResult;
-  if (writeResult.status !== "ok") {
-    const cleanupResult = await cleanupFinalObjects(
-      "final-cleanup-after-business-error",
-    );
-    if (Result.isError(cleanupResult)) {
-      return cleanupResult;
-    }
-    return finalizeErr({
-      status: 400,
-      message: entityCreateWriteErrorMessage(writeResult.status),
-      rejectReason: writeResult.status,
-    });
-  }
-  const { finalized } = writeResult;
-
-  const afterPromote = () => {
-    const kickoffs: DerivativeKickoff[] = [
-      {
+      const finalized: Extract<
+        PendingUploadFinalizedResult,
+        { type: "email_ingest" }
+      > = {
+        type: "email_ingest",
         entityId: messageEntityId,
-        mimeType: declaredMime,
         fieldId: messageFieldId,
-        fileName: finalized.fileName,
-        encrypted: messageEncrypted,
-      },
-    ];
-    for (const attachment of accepted) {
-      kickoffs.push({
-        entityId: attachment.entityId,
-        mimeType: attachment.mimeType,
-        fieldId: attachment.fieldId,
-        fileName: attachment.fileName,
-        encrypted: attachment.encrypted,
+        fileId: messageFileId,
+        fileName: storedMessageFileName,
+        renamed: renamed.renamed,
+        attachmentEntityIds: accepted.map((attachment) => attachment.entityId),
+      };
+
+      // audit: skip — final FSM transition on pending_uploads; the
+      // entity-level audit rows landed above in this same transaction.
+      const finalizedRows = await tx
+        .update(pendingUploads)
+        .set({
+          status: "finalized",
+          finalizedResult: finalized,
+          finalizedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(pendingUploads.id, uploadId),
+            eq(pendingUploads.userId, userId),
+            eq(pendingUploads.workspaceId, workspaceId),
+            eq(pendingUploads.status, "scanning"),
+            eq(pendingUploads.claimedByRequestId, claimRequestId),
+          ),
+        )
+        .returning({ id: pendingUploads.id });
+      if (!finalizedRows.at(0)) {
+        panic("Pending upload finalize marker update returned no rows");
+      }
+
+      return { status: "ok", finalized };
+    });
+    if (Result.isError(writeResultResult)) {
+      const cleanupResult = await cleanupFinalObjects(
+        "final-cleanup-after-db-error",
+      );
+      if (Result.isError(cleanupResult)) {
+        return cleanupResult;
+      }
+    }
+    const writeResult = yield* writeResultResult;
+    if (writeResult.status !== "ok") {
+      const cleanupResult = await cleanupFinalObjects(
+        "final-cleanup-after-business-error",
+      );
+      if (Result.isError(cleanupResult)) {
+        return cleanupResult;
+      }
+      return finalizeErr({
+        status: 400,
+        message: entityCreateWriteErrorMessage(writeResult.status),
+        rejectReason: writeResult.status,
       });
     }
+    const { finalized } = writeResult;
 
-    for (const kickoff of kickoffs) {
-      processExtraction(kickoff.entityId).catch((error: unknown) => {
-        captureError(error, {
-          entityId: kickoff.entityId,
-          mimeType: kickoff.mimeType,
+    const afterPromote = () => {
+      const kickoffs: DerivativeKickoff[] = [
+        {
+          entityId: messageEntityId,
+          mimeType: declaredMime,
+          fieldId: messageFieldId,
+          fileName: finalized.fileName,
+          encrypted: messageEncrypted,
+        },
+      ];
+      for (const attachment of accepted) {
+        kickoffs.push({
+          entityId: attachment.entityId,
+          mimeType: attachment.mimeType,
+          fieldId: attachment.fieldId,
+          fileName: attachment.fileName,
+          encrypted: attachment.encrypted,
         });
-      });
-      maybeStartUploadTriggeredFlows({
-        entityId: kickoff.entityId,
-        workspaceId,
-        organizationId,
-        fileName: kickoff.fileName,
-      }).catch((error: unknown) => {
-        captureError(error, {
+      }
+
+      for (const kickoff of kickoffs) {
+        processExtraction(kickoff.entityId).catch((error: unknown) => {
+          captureError(error, {
+            entityId: kickoff.entityId,
+            mimeType: kickoff.mimeType,
+          });
+        });
+        maybeStartUploadTriggeredFlows({
           entityId: kickoff.entityId,
           workspaceId,
+          organizationId,
+          fileName: kickoff.fileName,
+        }).catch((error: unknown) => {
+          captureError(error, {
+            entityId: kickoff.entityId,
+            workspaceId,
+          });
         });
-      });
-      enqueuePdfDerivativeOrMarkFailed({
-        encrypted: kickoff.encrypted,
-        entityId: kickoff.entityId,
-        fieldId: kickoff.fieldId,
-        mimeType: kickoff.mimeType,
-        organizationId,
-        userId,
-        workspaceId,
-      }).catch((error: unknown) => {
-        captureError(error, {
+        enqueuePdfDerivativeOrMarkFailed({
+          encrypted: kickoff.encrypted,
           entityId: kickoff.entityId,
           fieldId: kickoff.fieldId,
           mimeType: kickoff.mimeType,
+          organizationId,
+          userId,
+          workspaceId,
+        }).catch((error: unknown) => {
+          captureError(error, {
+            entityId: kickoff.entityId,
+            fieldId: kickoff.fieldId,
+            mimeType: kickoff.mimeType,
+          });
         });
-      });
-      enqueueImageThumbnailOrMarkFailed({
-        encrypted: kickoff.encrypted,
-        entityId: kickoff.entityId,
-        fieldId: kickoff.fieldId,
-        mimeType: kickoff.mimeType,
-        organizationId,
-        userId,
-        workspaceId,
-      }).catch((error: unknown) => {
-        captureError(error, {
+        enqueueImageThumbnailOrMarkFailed({
+          encrypted: kickoff.encrypted,
           entityId: kickoff.entityId,
           fieldId: kickoff.fieldId,
           mimeType: kickoff.mimeType,
+          organizationId,
+          userId,
+          workspaceId,
+        }).catch((error: unknown) => {
+          captureError(error, {
+            entityId: kickoff.entityId,
+            fieldId: kickoff.fieldId,
+            mimeType: kickoff.mimeType,
+          });
         });
-      });
-    }
-  };
+      }
+    };
 
-  return finalizeOk({
-    finalizedResult: finalized,
-    finalKey: messageFinalKey,
-    afterPromote,
-  });
+    return finalizeOk({
+      finalizedResult: finalized,
+      finalKey: messageFinalKey,
+      afterPromote,
+    });
+  } finally {
+    await stopClaimHeartbeat();
+  }
 };
 
 /** Local re-export so the generic dispatcher can narrow on it. */

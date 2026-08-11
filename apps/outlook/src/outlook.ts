@@ -95,8 +95,8 @@ const readBody = async (
   const body = item.body;
 
   const [bodyText, bodyHtml] = await Promise.all([
-    fromAsync((callback) => body.getAsync("text", callback)),
-    fromAsync((callback) => body.getAsync("html", callback)),
+    fromAsync<string>((callback) => body.getAsync("text", callback)),
+    fromAsync<string>((callback) => body.getAsync("html", callback)),
   ]);
 
   return {

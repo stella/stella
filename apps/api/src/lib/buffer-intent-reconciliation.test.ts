@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 import { beforeEach, expect, mock, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -225,6 +227,69 @@ test("keeps a lifecycle tombstone while backing off repeated deletion", async ()
       nextAttemptAt: expect.anything(),
     }),
   );
+});
+
+test("claims only the selected object-key tombstones for a shared upload id", async () => {
+  const objectKeys = [
+    `${organizationId}/${workspaceId}/message.eml`,
+    `${organizationId}/${workspaceId}/attachment-a.pdf`,
+    `${organizationId}/${workspaceId}/attachment-b.pdf`,
+  ];
+  const rows = objectKeys.map((objectKey) => ({
+    attemptCount: 0,
+    id: pendingUploadId,
+    objectKey,
+  }));
+  let updateCondition: SQL | undefined;
+  const tx = asTestRaw<Transaction>({
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          orderBy: () => ({
+            limit: () => ({
+              for: async () => rows.slice(0, 2),
+            }),
+          }),
+        }),
+      }),
+    }),
+    update: () => ({
+      set: () => ({
+        where: async (condition: SQL) => {
+          updateCondition = condition;
+        },
+      }),
+    }),
+  });
+  const safeDb = asTestRaw<SafeDb>(
+    async <T>(run: (transaction: Transaction) => Promise<T>) =>
+      await Result.tryPromise({
+        try: async () => await run(tx),
+        catch: (cause) => cause,
+      }),
+  );
+
+  const claimed = await reconcileBufferObjectCleanupIntents({
+    safeDb,
+    limit: 2,
+    deleteObject: s3DeleteMock,
+  });
+
+  expect(claimed).toBe(2);
+  expect(s3DeleteMock).toHaveBeenCalledTimes(2);
+  expect(updateCondition).toBeDefined();
+  if (!updateCondition) {
+    throw new Error("Expected composite tombstone claim predicate");
+  }
+
+  const compiled = new PgDialect().sqlToQuery(updateCondition);
+  expect(compiled.params).toEqual([
+    pendingUploadId,
+    objectKeys[0],
+    pendingUploadId,
+    objectKeys[1],
+  ]);
+  expect(compiled.params).not.toContain(objectKeys[2]);
 });
 
 test("stops an in-flight object cleanup when the scheduler aborts", async () => {

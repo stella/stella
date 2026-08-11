@@ -1,5 +1,5 @@
 import { Result, TaggedError, panic } from "better-result";
-import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, lte, or, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -26,6 +26,21 @@ const RECOVERY_DELETE_CONCURRENCY = 4;
 export const BUFFER_INTENT_DELETE_TIMEOUT_MS = 30 * 1000;
 export const BUFFER_INTENT_WRITE_TIMEOUT_MS = 2 * 60 * 1000;
 const BUFFER_CLEANUP_RETRY_MAX_EXPONENT = 14;
+
+const bufferCleanupIntentIdentityPredicate = (
+  rows: Pick<
+    typeof bufferObjectCleanupIntents.$inferSelect,
+    "id" | "objectKey"
+  >[],
+) =>
+  or(
+    ...rows.map(({ id, objectKey }) =>
+      and(
+        eq(bufferObjectCleanupIntents.id, id),
+        eq(bufferObjectCleanupIntents.objectKey, objectKey),
+      ),
+    ),
+  );
 
 export type BufferIntentPurpose = "entity_create" | "entity_version";
 
@@ -548,7 +563,6 @@ export const reconcileBufferObjectCleanupIntents = async ({
     if (rows.length === 0) {
       return [];
     }
-    const ids = rows.map(({ id }) => id);
     // audit: skip — bounded durable cleanup retry bookkeeping only.
     await tx
       .update(bufferObjectCleanupIntents)
@@ -562,7 +576,7 @@ export const reconcileBufferObjectCleanupIntents = async ({
           interval '24 hours'
         )`,
       })
-      .where(inArray(bufferObjectCleanupIntents.id, ids));
+      .where(bufferCleanupIntentIdentityPredicate(rows));
     return rows;
   });
   if (Result.isError(claimedResult)) {
