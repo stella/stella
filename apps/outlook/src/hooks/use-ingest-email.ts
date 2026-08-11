@@ -40,9 +40,14 @@ type UseIngestEmail = {
   state: IngestState;
 };
 
+type PendingEmailUploadStore = {
+  getPendingEmailUpload: () => PendingEmailUpload | null;
+  setPendingEmailUpload: (value: PendingEmailUpload | null) => void;
+};
+
 export const useIngestEmail = (
   errorFallback: string,
-  pendingUpload: { current: PendingEmailUpload | null },
+  { getPendingEmailUpload, setPendingEmailUpload }: PendingEmailUploadStore,
 ): UseIngestEmail => {
   const [state, setState] = useState<IngestState>({ type: "idle" });
 
@@ -55,24 +60,25 @@ export const useIngestEmail = (
     setState({ type: "saving" });
     const result = await Result.tryPromise({
       try: async () => {
-        if (pendingUpload.current?.type === "abort") {
+        const pendingUpload = getPendingEmailUpload();
+        if (pendingUpload?.type === "abort") {
           await abortEmailUploadReservation(
-            pendingUpload.current.workspaceId,
-            pendingUpload.current.uploadId,
+            pendingUpload.workspaceId,
+            pendingUpload.uploadId,
           );
-          pendingUpload.current = null;
+          setPendingEmailUpload(null);
         }
         if (
-          pendingUpload.current?.type === "finalize" &&
-          pendingUpload.current.workspaceId !== workspaceId
+          pendingUpload?.type === "finalize" &&
+          pendingUpload.workspaceId !== workspaceId
         ) {
           throw new APIError({
             message: errorFallback,
             status: 409,
           });
         }
-        if (pendingUpload.current?.type === "finalize") {
-          return await finalizeEmailUpload(pendingUpload.current);
+        if (pendingUpload?.type === "finalize") {
+          return await finalizeEmailUpload(pendingUpload);
         }
 
         const snapshot = await loadLatest();
@@ -95,7 +101,7 @@ export const useIngestEmail = (
           snapshot,
           workspaceId,
         });
-        pendingUpload.current = prepared;
+        setPendingEmailUpload(prepared);
         return await finalizeEmailUpload(prepared);
       },
       catch: (cause) => cause,
@@ -104,9 +110,9 @@ export const useIngestEmail = (
     if (Result.isError(result)) {
       const { error } = result;
       if (error instanceof PendingUploadCleanupError) {
-        pendingUpload.current = error.pendingUpload;
+        setPendingEmailUpload(error.pendingUpload);
       } else if (!shouldRetainPendingEmailUpload(error)) {
-        pendingUpload.current = null;
+        setPendingEmailUpload(null);
       }
       setState({
         message:
@@ -118,7 +124,7 @@ export const useIngestEmail = (
       return;
     }
 
-    pendingUpload.current = null;
+    setPendingEmailUpload(null);
     setState({
       attachmentCount: result.value.attachmentCount,
       entityId: result.value.entityId,
