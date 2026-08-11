@@ -4,7 +4,6 @@ import { describe, expect, test } from "bun:test";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { persistEmailIngestRecoveryKeys } from "@/api/lib/uploads/email-ingest";
 import {
   detectEmailContainer,
@@ -14,6 +13,7 @@ import {
   validateEmailAttachmentMimeType,
   validateEmailIngestContainer,
 } from "@/api/lib/uploads/email-ingest-policy";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const pendingUploadId = toSafeId<"pendingUpload">(
   "00000000-0000-0000-0000-000000000001",
@@ -22,9 +22,7 @@ const userId = toSafeId<"user">("00000000-0000-0000-0000-000000000002");
 const workspaceId = toSafeId<"workspace">(
   "00000000-0000-0000-0000-000000000003",
 );
-const propertyId = toSafeId<"property">(
-  "00000000-0000-0000-0000-000000000004",
-);
+const propertyId = toSafeId<"property">("00000000-0000-0000-0000-000000000004");
 
 describe("validateEmailAttachmentCount", () => {
   test("accepts the bounded maximum", () => {
@@ -63,8 +61,9 @@ test("renews the finalize lease atomically with email recovery keys", async () =
       },
     }),
   });
-  const safeDb = asTestRaw<SafeDb>(async (run) =>
-    Result.ok(await run(tx)),
+  const safeDb = asTestRaw<SafeDb>(
+    async <T>(run: (transaction: Transaction) => Promise<T>) =>
+      Result.ok(await run(tx)),
   );
 
   const result = await persistEmailIngestRecoveryKeys({
