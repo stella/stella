@@ -52,6 +52,62 @@ export const parseIsoDateLocal = (value: string): Date | null => {
   return date;
 };
 
+/** Length of the `YYYY-MM-DD` prefix a decision date is canonicalized to. */
+const ISO_DATE_LENGTH = 10;
+
+/**
+ * Year range a decision date may fall in. The floor predates any court whose
+ * decisions are published as machine-readable records, so a lower year is a
+ * transcription or parsing artifact rather than a real date. The ceiling is
+ * relative to the current year because a publisher may date a decision
+ * slightly ahead; a fixed upper year would go stale.
+ */
+const DECISION_YEAR_BOUNDS = {
+  min: 1800,
+  yearsAhead: 1,
+} as const;
+
+/**
+ * The `YYYY-MM-DD` prefix of a bare calendar date or of an ISO datetime,
+ * or `null` when `raw` is neither shape.
+ */
+const isoDatePrefix = (raw: string): string | null => {
+  if (raw.length === ISO_DATE_LENGTH) {
+    return raw;
+  }
+  const separator = raw.charAt(ISO_DATE_LENGTH);
+  if (separator !== "T" && separator !== " ") {
+    return null;
+  }
+  return raw.slice(0, ISO_DATE_LENGTH);
+};
+
+/**
+ * Canonical `YYYY-MM-DD` form of a published decision date, or `null` when
+ * the value cannot be one.
+ *
+ * Accepts a bare calendar date or an ISO datetime, and rejects anything that
+ * is not a real calendar day (e.g. "2024-02-30") or whose year falls outside
+ * `DECISION_YEAR_BOUNDS`. A date column takes a malformed year as readily as
+ * a correct one, so callers writing to one need this in front of the write.
+ */
+export const canonicalDecisionDate = (raw: string): string | null => {
+  const candidate = isoDatePrefix(raw);
+  if (candidate === null) {
+    return null;
+  }
+  const parsed = parseIsoDateLocal(candidate);
+  if (parsed === null) {
+    return null;
+  }
+  const year = parsed.getFullYear();
+  const maxYear = new Date().getUTCFullYear() + DECISION_YEAR_BOUNDS.yearsAhead;
+  if (year < DECISION_YEAR_BOUNDS.min || year > maxYear) {
+    return null;
+  }
+  return candidate;
+};
+
 /**
  * Add `n` calendar days to `date`, DST-safe.
  *

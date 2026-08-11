@@ -116,6 +116,57 @@ describe("sanitizeResult — adapter-supplied sections", () => {
   });
 });
 
+describe("sanitizeResult — decision date bounds", () => {
+  // Adapters normalize dates differently or not at all, and the column
+  // takes an impossible year as readily as a real one. A document whose
+  // date is unusable is still worth storing, so the date drops and the
+  // row survives.
+  test("drops a year outside the range a decision can carry", () => {
+    expect(
+      sanitizeResult({
+        ...baseResult(EMPTY_AST),
+        decisionDate: "2944-04-30",
+      }).decisionDate,
+    ).toBeUndefined();
+
+    expect(
+      sanitizeResult({
+        ...baseResult(EMPTY_AST),
+        decisionDate: "0001-01-01",
+      }).decisionDate,
+    ).toBeUndefined();
+  });
+
+  test("drops a day that does not exist on the calendar", () => {
+    expect(
+      sanitizeResult({
+        ...baseResult(EMPTY_AST),
+        decisionDate: "2026-02-30",
+      }).decisionDate,
+    ).toBeUndefined();
+  });
+
+  test("keeps a date the sources actually publish", () => {
+    expect(
+      sanitizeResult({
+        ...baseResult(EMPTY_AST),
+        decisionDate: "2026-04-15",
+      }).decisionDate,
+    ).toBe("2026-04-15");
+
+    expect(
+      sanitizeResult({
+        ...baseResult(EMPTY_AST),
+        decisionDate: "2026-04-15T00:00:00Z",
+      }).decisionDate,
+    ).toBe("2026-04-15");
+  });
+
+  test("leaves an absent date absent", () => {
+    expect(sanitizeResult(baseResult(EMPTY_AST)).decisionDate).toBeUndefined();
+  });
+});
+
 describe("sanitizeResult — shared partial-observation quality", () => {
   test("persists adapter-neutral quality and removes it after detail recovery", () => {
     const partial = sanitizeResult({
