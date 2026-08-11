@@ -33,6 +33,7 @@ import type {
 } from "@/components/ai-config-role-models.logic";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
@@ -46,9 +47,26 @@ export const AIConfigCard = () => {
     from: "/_protected",
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  const { data: config } = useQuery(
-    aiConfigOptions({ organizationId: activeOrganizationId }),
-  );
+  const {
+    data: config,
+    isError,
+    refetch,
+  } = useQuery(aiConfigOptions({ organizationId: activeOrganizationId }));
+
+  // The read fails closed when the stored config cannot be decrypted, and the
+  // form below is the only place the stored config can be removed. Rendering
+  // nothing would strand an administrator with no way back, so the failure gets
+  // its own state carrying the same remove action.
+  if (isError) {
+    return (
+      <AIConfigUnreadable
+        onRetry={() => {
+          detached(refetch(), "ai-config-card.refetch");
+        }}
+        organizationId={activeOrganizationId}
+      />
+    );
+  }
 
   if (!config) {
     return null;
@@ -60,6 +78,76 @@ export const AIConfigCard = () => {
       key={activeOrganizationId}
       organizationId={activeOrganizationId}
     />
+  );
+};
+
+type AIConfigUnreadableProps = {
+  onRetry: () => void;
+  organizationId: string;
+};
+
+const AIConfigUnreadable = ({
+  onRetry,
+  organizationId,
+}: AIConfigUnreadableProps) => {
+  const tCommon = useTranslations("common");
+  const tErrors = useTranslations("errors");
+  const tSuccess = useTranslations("success");
+  const analytics = useAnalytics();
+  const queryClient = useQueryClient();
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      const response = await api["organization-settings"]["ai-config"].delete(
+        {},
+      );
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: aiConfigKeys.byOrganization({ organizationId }),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: aiConfigKeys.availability({ organizationId }),
+        }),
+      ]);
+      stellaToast.add({
+        title: tSuccess("aiConfigDeleted"),
+        type: "success",
+      });
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+      stellaToast.add({
+        title: tErrors("actionFailed"),
+        type: "error",
+      });
+    },
+  });
+
+  return (
+    <div className="flex items-center justify-between gap-3 py-4">
+      <p className="text-destructive text-sm">
+        {tCommon("somethingWentWrong")}
+      </p>
+      <div className="flex items-center gap-2">
+        <Button onClick={onRetry} size="sm" variant="outline">
+          {tCommon("retry")}
+        </Button>
+        <Button
+          loading={deleteMutation.isPending}
+          onClick={() => deleteMutation.mutate()}
+          size="sm"
+          variant="ghost"
+        >
+          <Trash2Icon className="size-4" />
+          {tCommon("remove")}
+        </Button>
+      </div>
+    </div>
   );
 };
 
