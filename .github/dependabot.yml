@@ -4,9 +4,8 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "saturday"
-      time: "09:00"
+      interval: "daily"
+      time: "07:00"
       timezone: "Europe/Prague"
     # Match minimumReleaseAge (5 days) in bunfig.toml
     cooldown:
@@ -26,9 +25,8 @@ updates:
   - package-ecosystem: "docker"
     directory: "/apps/api"
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
+      interval: "daily"
+      time: "07:00"
       timezone: "Europe/Prague"
     cooldown:
       default-days: 5
@@ -42,9 +40,8 @@ updates:
   - package-ecosystem: "docker"
     directory: "/apps/web"
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
+      interval: "daily"
+      time: "07:00"
       timezone: "Europe/Prague"
     cooldown:
       default-days: 5
@@ -58,9 +55,8 @@ updates:
   - package-ecosystem: "docker"
     directory: "/apps/legal-atlas-runner"
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
+      interval: "daily"
+      time: "07:00"
       timezone: "Europe/Prague"
     cooldown:
       default-days: 5
@@ -74,9 +70,8 @@ updates:
   - package-ecosystem: "docker"
     directory: "/apps/ocr-service"
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
+      interval: "daily"
+      time: "07:00"
       timezone: "Europe/Prague"
     cooldown:
       default-days: 5
@@ -90,9 +85,8 @@ updates:
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
+      interval: "daily"
+      time: "07:00"
       timezone: "Europe/Prague"
     cooldown:
       default-days: 5
@@ -106,9 +100,8 @@ updates:
   - package-ecosystem: "cargo"
     directory: "/apps/desktop/src-tauri"
     schedule:
-      interval: "weekly"
-      day: "saturday"
-      time: "09:00"
+      interval: "daily"
+      time: "07:00"
       timezone: "Europe/Prague"
     # Match minimumReleaseAge (5 days) in bunfig.toml
     cooldown:
@@ -146,9 +139,8 @@ updates:
     labels:
       - "📦 dependencies"
     schedule:
-      interval: "weekly"
-      day: "saturday"
-      time: "09:00"
+      interval: "daily"
+      time: "07:00"
       timezone: "Europe/Prague"
     # Match minimumReleaseAge (5 days) in bunfig.toml
     cooldown:
