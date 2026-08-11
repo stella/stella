@@ -107,6 +107,7 @@ const fixtureRuleOverrides = [
     "security-guards/no-raw-filename-write",
     "security-guards/no-unsanitized-href",
     "security-guards/no-unscoped-user-query",
+    "security-guards/require-raw-document-security-headers",
   ]),
   fixtureRuleOverride("stella-toast.fixture.ts", ["stella-toast/stella-toast"]),
   fixtureRuleOverride("suppression-hygiene.fixture.ts", [
@@ -1413,8 +1414,7 @@ export default defineConfig({
         ".oxlint-plugins/__fixtures__/no-unowned-file-version-write.fixture.ts",
       ],
       rules: {
-        "no-unowned-file-version-write/no-unowned-file-version-write":
-          "error",
+        "no-unowned-file-version-write/no-unowned-file-version-write": "error",
       },
     },
     {
@@ -1903,8 +1903,7 @@ export default defineConfig({
       files: ["apps/api/src/**/*.ts"],
       excludeFiles: ["apps/api/src/**/*.test.ts", "apps/api/src/tests/**/*.ts"],
       rules: {
-        "no-unowned-file-version-write/no-unowned-file-version-write":
-          "error",
+        "no-unowned-file-version-write/no-unowned-file-version-write": "error",
       },
     },
     {
@@ -1933,6 +1932,13 @@ export default defineConfig({
           { drizzleObjectName: ["db", "tx"] },
         ],
         "security-guards/no-raw-filename-write": "error",
+      },
+    },
+    {
+      files: ["apps/api/src/handlers/**/*.ts"],
+      excludeFiles: ["apps/api/src/handlers/**/*.test.ts"],
+      rules: {
+        "security-guards/require-raw-document-security-headers": "error",
       },
     },
     {

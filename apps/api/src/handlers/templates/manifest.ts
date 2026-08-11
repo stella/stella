@@ -9,6 +9,7 @@ import type { TemplateManifest } from "@/api/lib/docx/types";
 import { isFieldMeta } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
 import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -103,6 +104,7 @@ export const manifestHandler = async ({
   return new Response(new Uint8Array(resultBuffer), {
     status: 200,
     headers: {
+      ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
       "Content-Type":
         "application/vnd.openxmlformats-officedocument" +
         ".wordprocessingml.document",

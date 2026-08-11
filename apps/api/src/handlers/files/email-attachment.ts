@@ -134,7 +134,6 @@ export default createSafeHandler(
       new Response(new Uint8Array(responseBytes), {
         headers: {
           ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
-          "Cache-Control": "private, no-store",
           "Content-Disposition": safeDisposition,
           "Content-Length": String(responseBytes.byteLength),
           "Content-Type": mimeType,

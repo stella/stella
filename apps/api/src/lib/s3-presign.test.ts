@@ -7,6 +7,7 @@ import {
   hasScopedSessionTimeForPresign,
   headObject,
   isS3KeyInSigningScope,
+  presignDownloadUrl,
   presignUploadUrl,
   resetAwsS3ClientForTesting,
 } from "@/api/lib/s3-presign";
@@ -181,6 +182,18 @@ describe("presignUploadUrl", () => {
     expect(parsed.searchParams.has("x-amz-tagging")).toBe(false);
     expect(result.value.headers["x-amz-tagging"]).toBe(
       "stella-upload-stage=tmp",
+    );
+  });
+});
+
+describe("presignDownloadUrl", () => {
+  test("requires storage to return the shared no-store cache policy", async () => {
+    const url = await presignDownloadUrl("org_1/ws_1/file_1.pdf", {
+      expiresIn: 60,
+    });
+
+    expect(new URL(url).searchParams.get("response-cache-control")).toBe(
+      "private, no-store",
     );
   });
 });

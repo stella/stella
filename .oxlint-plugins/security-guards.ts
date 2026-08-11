@@ -4,6 +4,8 @@
 //   1. no-raw-filename-write  — raw user input in fileName properties
 //   2. no-unsanitized-href    — dynamic href without sanitization
 //   3. no-unscoped-user-query — user table import without member scoping
+//   4. require-raw-document-security-headers — raw document responses
+//      without the shared cache/sniff/frame/CSP policy
 
 import { eslintCompatPlugin, type Ranged } from "@oxlint/plugins";
 
@@ -95,6 +97,109 @@ const isSanitizeHrefCall = (node): boolean => isCallTo(node, "sanitizeHref");
 // Only applies to handler files (configured via overrides).
 
 const AUTH_SCHEMA_MODULE = "@/api/db/auth-schema";
+
+// ── Rule 4: require-raw-document-security-headers ─────────────
+//
+// Production file handlers and attachment responses return privileged bytes
+// through the global Response constructor. Null-body status responses carry no
+// document data; every download must spread the shared security-header policy.
+
+const RAW_DOCUMENT_SECURITY_HEADERS = "RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS";
+const SECURITY_HEADERS_MODULE = "@/api/lib/security-headers";
+const PROTECTED_RAW_DOCUMENT_HEADERS = new Set([
+  "cache-control",
+  "content-security-policy",
+  "referrer-policy",
+  "x-content-type-options",
+  "x-frame-options",
+]);
+
+const getHeadersObject = (node) => {
+  if (node.type !== "ObjectExpression") {
+    return null;
+  }
+
+  const headersProperty = node.properties.find(
+    (property) =>
+      property.type === "Property" &&
+      getPropertyName(property.key) === "headers",
+  );
+  if (!headersProperty || headersProperty.type !== "Property") {
+    return null;
+  }
+
+  return headersProperty.value;
+};
+
+const hasAttachmentDisposition = (node): boolean => {
+  if (node.type !== "ObjectExpression") {
+    return false;
+  }
+
+  const disposition = node.properties.find(
+    (property) =>
+      property.type === "Property" &&
+      getPropertyName(property.key)?.toLowerCase() === "content-disposition",
+  );
+  if (!disposition || disposition.type !== "Property") {
+    return false;
+  }
+
+  if (
+    disposition.value.type === "Literal" &&
+    typeof disposition.value.value === "string"
+  ) {
+    return disposition.value.value.toLowerCase().startsWith("attachment;");
+  }
+
+  return isCallTo(disposition.value, "contentDisposition");
+};
+
+const hasRawDocumentSecurityHeaders = (
+  node,
+  secureHeadersIdentifiers: Set<string>,
+): boolean => {
+  const headers = getHeadersObject(node);
+  if (!headers) {
+    return false;
+  }
+
+  if (headers.type === "Identifier") {
+    return secureHeadersIdentifiers.has(headers.name);
+  }
+  if (headers.type !== "ObjectExpression") {
+    return false;
+  }
+
+  return hasUnshadowedRawDocumentSecurityHeaders(headers);
+};
+
+const hasUnshadowedRawDocumentSecurityHeaders = (headers): boolean => {
+  const sharedHeadersIndex = headers.properties.findIndex(
+    (property) =>
+      property.type === "SpreadElement" &&
+      isIdentifier(property.argument, RAW_DOCUMENT_SECURITY_HEADERS),
+  );
+  if (sharedHeadersIndex === -1) {
+    return false;
+  }
+
+  return headers.properties.slice(sharedHeadersIndex + 1).every((property) => {
+    if (property.type === "SpreadElement") {
+      return false;
+    }
+    if (property.type !== "Property") {
+      return true;
+    }
+    const propertyName = getPropertyName(property.key)?.toLowerCase();
+    return !propertyName || !PROTECTED_RAW_DOCUMENT_HEADERS.has(propertyName);
+  });
+};
+
+const isFileHandler = (context): boolean =>
+  (context.filename ?? context.getFilename?.() ?? "")
+    .replaceAll("\\", "/")
+    .includes("/apps/api/src/handlers/files/");
 
 export default eslintCompatPlugin({
   meta: { name: "security-guards" },
@@ -348,6 +453,96 @@ export default eslintCompatPlugin({
                 messageId: "unscopedUserQuery",
               });
             }
+          },
+        };
+      },
+    },
+
+    // ── require-raw-document-security-headers ─────────────────
+    "require-raw-document-security-headers": {
+      meta: {
+        type: "problem",
+        messages: {
+          missingHeaders:
+            "Raw document responses must spread " +
+            "RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS into their headers.",
+        },
+      },
+      createOnce(context) {
+        let hasSecurityHeadersImport = false;
+        let fileHandler = false;
+        const downloadHeadersIdentifiers = new Set<string>();
+        const secureHeadersIdentifiers = new Set<string>();
+
+        return {
+          before() {
+            hasSecurityHeadersImport = false;
+            fileHandler = isFileHandler(context);
+            downloadHeadersIdentifiers.clear();
+            secureHeadersIdentifiers.clear();
+          },
+          ImportDeclaration(node) {
+            if (node.source.value !== SECURITY_HEADERS_MODULE) {
+              return;
+            }
+
+            hasSecurityHeadersImport = node.specifiers.some(
+              (specifier) =>
+                getImportedName(specifier) === RAW_DOCUMENT_SECURITY_HEADERS &&
+                isIdentifier(specifier.local, RAW_DOCUMENT_SECURITY_HEADERS),
+            );
+          },
+          VariableDeclarator(node) {
+            if (
+              !isIdentifier(node.id) ||
+              node.init?.type !== "NewExpression" ||
+              !isIdentifier(node.init.callee, "Headers")
+            ) {
+              return;
+            }
+
+            const init = node.init.arguments.at(0);
+            if (!init || init.type !== "ObjectExpression") {
+              return;
+            }
+            if (hasAttachmentDisposition(init)) {
+              downloadHeadersIdentifiers.add(node.id.name);
+            }
+            if (hasUnshadowedRawDocumentSecurityHeaders(init)) {
+              secureHeadersIdentifiers.add(node.id.name);
+            }
+          },
+          NewExpression(node) {
+            if (!isIdentifier(node.callee, "Response")) {
+              return;
+            }
+
+            const body = node.arguments.at(0);
+            if (!body || (body.type === "Literal" && body.value === null)) {
+              return;
+            }
+
+            const init = node.arguments.at(1);
+            const headers = init ? getHeadersObject(init) : null;
+            const isDownloadResponse =
+              fileHandler ||
+              (headers?.type === "ObjectExpression" &&
+                hasAttachmentDisposition(headers)) ||
+              (headers?.type === "Identifier" &&
+                downloadHeadersIdentifiers.has(headers.name));
+            if (!isDownloadResponse) {
+              return;
+            }
+
+            if (
+              hasSecurityHeadersImport &&
+              init &&
+              hasRawDocumentSecurityHeaders(init, secureHeadersIdentifiers)
+            ) {
+              return;
+            }
+
+            context.report({ node, messageId: "missingHeaders" });
           },
         };
       },

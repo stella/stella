@@ -38,6 +38,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { DOCX_EXT_RE } from "@/api/lib/sanitize-filename";
+import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
 import { recordTemplateUse } from "@/api/lib/templates/record-use";
 import { containsNull } from "@/api/lib/templates/template-data";
 import { isRecord } from "@/api/lib/type-guards";
@@ -402,6 +403,7 @@ const fillByIdHandler = async function* ({
       new Response(new Uint8Array(pdfResult.value.buffer), {
         status: 200,
         headers: {
+          ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
           // Octet-stream, not application/pdf: see OCTET_STREAM_MIME_TYPE.
           "Content-Type": OCTET_STREAM_MIME_TYPE,
           "Content-Disposition": contentDisposition(pdfName),
@@ -411,6 +413,7 @@ const fillByIdHandler = async function* ({
   }
 
   const headers = new Headers({
+    ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
     // Octet-stream, not the DOCX mime type: the Eden treaty client
     // text-decodes unrecognized content types, which corrupts the ZIP
     // container (Word then reports unreadable content). See

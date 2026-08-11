@@ -12,6 +12,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { escapeCSV } from "@/api/lib/csv";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedClauseId } from "@/api/lib/safe-id-boundaries";
+import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { buildClauseCategoryPath } from "./category-path";
@@ -108,6 +109,7 @@ export const exportHandler = async function* ({
       new Response(csvContent, {
         status: 200,
         headers: {
+          ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
           "Content-Type": "text/csv",
           "Content-Disposition": 'attachment; filename="clauses-export.csv"',
         },
@@ -188,6 +190,7 @@ export const exportHandler = async function* ({
     new Response(JSON.stringify(payload, null, 2), {
       status: 200,
       headers: {
+        ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
         "Content-Type": "application/json",
         "Content-Disposition": 'attachment; filename="clauses-export.json"',
       },
