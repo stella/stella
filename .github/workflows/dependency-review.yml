@@ -4,10 +4,10 @@ name: Dependency Review
 # or copyleft licenses incompatible with Apache-2.0 distribution.
 #
 # stella ships under Apache-2.0 with optional commercial-license
-# arrangements (support, indemnity, custom terms). Absorbing copyleft
-# (GPL, AGPL, LGPL) dependencies would force their terms onto stella
-# as a whole and foreclose those commercial arrangements; we also
-# can't sublicense copyrights we don't own.
+# arrangements (support, indemnity, custom terms). Copyleft dependencies
+# linked into or distributed with stella could impose incompatible terms;
+# standalone development and CI tools are separate programs and require a
+# package-scoped exception when their licenses are blocked.
 #
 # Allowed: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, 0BSD,
 #          BlueOak-1.0.0, Unlicense, CC0-1.0, CC-BY-4.0, MIT-0,
@@ -77,9 +77,14 @@ jobs:
           # are recorded in apps/ocr-service/THIRD-PARTY-NOTICES.md.
           # @silurus/ooxml ships an Apache-2.0 LICENSE in its published package,
           # but its package manifest omits the SPDX license field.
+          # Swatinem/rust-cache is a standalone CI action executed on GitHub's
+          # runner; stella does not link, bundle, modify, or distribute it in
+          # product artifacts. Workflow uses must remain pinned to immutable
+          # commit SHAs and receive normal dependency-update review.
           # Keep these exceptions package-scoped; do not add namespace/group
           # exceptions.
           allow-dependencies-licenses: >-
+            pkg:githubactions/Swatinem/rust-cache,
             pkg:npm/@ai-sdk/provider,
             pkg:npm/@ai-sdk/provider-utils,
             pkg:npm/@aws-sdk/client-sts,
