@@ -34,30 +34,11 @@ const DIRECTIVE_KIND_MAP: Record<string, BlockDirectiveKind> = {
 
 // ── Public API ───────────────────────────────────────────
 
-const annotateDirective = ({
-  index,
-  text,
-  source,
-  style,
-  bold,
-  fontSize,
-  alignment,
-}: ExtractedDocxParagraph): ExtractedParagraph => {
-  const paragraph: ExtractedParagraph = { index, text, source };
-  if (style !== undefined) {
-    paragraph.style = style;
-  }
-  if (bold !== undefined) {
-    paragraph.bold = bold;
-  }
-  if (fontSize !== undefined) {
-    paragraph.fontSize = fontSize;
-  }
-  if (alignment !== undefined) {
-    paragraph.alignment = alignment;
-  }
-
-  const directiveMatch = DIRECTIVE_RE.exec(text);
+const annotateDirective = (
+  extractedParagraph: ExtractedDocxParagraph,
+): ExtractedParagraph => {
+  const paragraph: ExtractedParagraph = { ...extractedParagraph };
+  const directiveMatch = DIRECTIVE_RE.exec(extractedParagraph.text);
   if (!directiveMatch) {
     return paragraph;
   }
