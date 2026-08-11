@@ -81,6 +81,7 @@ import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import type { DocumentSource } from "@/api/lib/document-source";
 import type { TemplateManifest } from "@/api/lib/docx/types";
+import type { AgendaAttendeeType } from "@/api/lib/entity-constants";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
 import type {
   DecisionSection,
@@ -171,30 +172,21 @@ export type JustificationContent = {
   blocks: JustificationBlock[];
 };
 
-export type AgendaItemKind =
-  | "deadline"
-  | "event"
-  | "hearing"
-  | "meeting"
-  | "task";
-
-export type AgendaItemSource =
-  | "api"
-  | "calendar"
-  | "email"
-  | "import"
-  | "infosoud"
-  | "manual";
-
-export type AgendaAvailability =
-  | "busy"
-  | "free"
-  | "out_of_office"
-  | "tentative"
-  | "unknown"
-  | "working_elsewhere";
-
-export type AgendaSensitivity = "confidential" | "normal" | "private";
+/** Re-exported so the schema layer keeps one import surface; the agenda member
+ *  tuples are declared in `@/api/lib/entity-constants` and every other consumer
+ *  derives from them. */
+export {
+  AGENDA_AVAILABILITIES,
+  AGENDA_ITEM_KINDS,
+  AGENDA_ITEM_SOURCES,
+  AGENDA_SENSITIVITIES,
+} from "@/api/lib/entity-constants";
+export type {
+  AgendaAvailability,
+  AgendaItemKind,
+  AgendaItemSource,
+  AgendaSensitivity,
+} from "@/api/lib/entity-constants";
 
 export type AgendaParticipant = {
   email: string | null;
@@ -204,7 +196,7 @@ export type AgendaParticipant = {
 export type AgendaAttendee = AgendaParticipant & {
   optional?: boolean;
   responseStatus?: string | null;
-  type?: "optional" | "required" | "resource" | null;
+  type?: AgendaAttendeeType | null;
 };
 
 export type AgendaRecurrence = {
