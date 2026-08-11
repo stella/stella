@@ -44,23 +44,79 @@ const EXACT_UTC_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 /** Packages resolved from the workspace itself never hit the registry. */
 const WORKSPACE_PROTOCOL = "workspace:";
 
-const readExcludeBlock = (bunfig: string): string => {
-  const start = bunfig.indexOf("minimumReleaseAgeExcludes");
-  if (start === -1) {
-    return "";
+type ExcludeBlockRange = {
+  end: number;
+  start: number;
+};
+
+const findExcludeBlockRange = (
+  bunfig: string,
+): ExcludeBlockRange | undefined => {
+  const declaration = /^[\t ]*minimumReleaseAgeExcludes[\t ]*=/mu.exec(bunfig);
+  if (declaration === null) {
+    return undefined;
   }
-  const end = bunfig.indexOf("]", start);
-  return bunfig.slice(start, end === -1 ? undefined : end);
+
+  const start = declaration.index;
+  const arrayStart = bunfig.indexOf("[", start);
+  if (arrayStart === -1) {
+    return undefined;
+  }
+
+  let state: "basic" | "comment" | "literal" | "plain" = "plain";
+  let escaped = false;
+  for (let index = arrayStart; index < bunfig.length; index++) {
+    const character = bunfig[index];
+    if (state === "comment") {
+      if (character === "\n") {
+        state = "plain";
+      }
+      continue;
+    }
+    if (state === "basic") {
+      if (escaped) {
+        escaped = false;
+      } else if (character === "\\") {
+        escaped = true;
+      } else if (character === '"') {
+        state = "plain";
+      }
+      continue;
+    }
+    if (state === "literal") {
+      if (character === "'") {
+        state = "plain";
+      }
+      continue;
+    }
+    if (character === "#") {
+      state = "comment";
+    } else if (character === '"') {
+      state = "basic";
+    } else if (character === "'") {
+      state = "literal";
+    } else if (character === "]") {
+      return { end: index, start };
+    }
+  }
+  return undefined;
+};
+
+const readExcludeBlock = (bunfig: string): string => {
+  const range = findExcludeBlockRange(bunfig);
+  return range === undefined ? "" : bunfig.slice(range.start, range.end);
 };
 
 const readExcludes = (bunfig: string): Set<string> => {
-  const block = readExcludeBlock(bunfig);
-  return new Set(
-    [...block.matchAll(/"(?<name>@?[^"]+)"/gu)].flatMap((match) => {
-      const name = match.groups?.["name"];
-      return name === undefined ? [] : [name];
-    }),
-  );
+  const install = Bun.TOML.parse(bunfig)["install"];
+  if (typeof install !== "object" || install === null) {
+    return new Set();
+  }
+  const excludes = install["minimumReleaseAgeExcludes"];
+  if (!Array.isArray(excludes)) {
+    return new Set();
+  }
+  return new Set(excludes.filter((name) => typeof name === "string"));
 };
 
 const excludeDeclaration = (line: string): string | undefined =>
@@ -343,18 +399,17 @@ export const pruneExpiredExcludes = ({
   bunfig: string;
   now?: Date;
 }): PruneResult => {
-  const blockStart = bunfig.indexOf("minimumReleaseAgeExcludes");
-  if (blockStart === -1) {
+  const range = findExcludeBlockRange(bunfig);
+  if (range === undefined) {
     return { bunfig, pruned: [] };
   }
-  const blockEnd = bunfig.indexOf("]", blockStart);
   const pruned: string[] = [];
 
   // Each line is judged by its own annotation. Matching by name instead would
   // delete every entry sharing that name, including one whose expiry was
   // renewed and has not passed.
   const block = bunfig
-    .slice(blockStart, blockEnd)
+    .slice(range.start, range.end)
     .split("\n")
     .filter((line) => {
       if (!line.includes(EXPIRY_MARKER)) {
@@ -378,7 +433,7 @@ export const pruneExpiredExcludes = ({
   }
 
   return {
-    bunfig: bunfig.slice(0, blockStart) + block + bunfig.slice(blockEnd),
+    bunfig: bunfig.slice(0, range.start) + block + bunfig.slice(range.end),
     pruned,
   };
 };

@@ -63,6 +63,25 @@ minimumReleaseAgeExcludes = ["@stll/native", "better-result"]
     );
   });
 
+  test("does not treat a closing bracket in a comment as the array end", () => {
+    const result = checkQuarantineExcludes({
+      bunfig: `
+[install]
+minimumReleaseAge = 432_000
+minimumReleaseAgeExcludes = [
+  "@stll/native", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
+  # Temporary exceptions [remove after expiry]
+  "better-result",
+]
+`,
+      lockfile,
+    });
+
+    expect(result.errors).toContain(
+      'bunfig.toml third-party quarantine exclude "better-result" is missing an exact UTC expiry',
+    );
+  });
+
   test("rejects malformed and future first-party exclusion dates", () => {
     const malformed = checkQuarantineExcludes({
       bunfig: createBunfig(
@@ -202,7 +221,7 @@ minimumReleaseAgeExcludes = ["@stll/native", "better-result"]
 minimumReleaseAge = 432_000
 minimumReleaseAgeExcludes = [
   "@stll/native", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
-  # Security patches for dependency-audit findings.
+  # Security patches [temporary] for dependency-audit findings.
   "brace-expansion", # quarantine-expires: 2026-08-04T10:00:32.762Z
   "fast-uri", # quarantine-expires: 2026-08-05T09:16:56.212Z
   "drizzle-kit", # quarantine-expires: 2099-01-01T00:00:00.000Z
