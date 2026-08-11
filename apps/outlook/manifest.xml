@@ -23,7 +23,7 @@
   </Hosts>
   <Requirements>
     <Sets>
-      <Set Name="Mailbox" MinVersion="1.5" />
+      <Set Name="Mailbox" MinVersion="1.8" />
     </Sets>
   </Requirements>
   <FormSettings>
@@ -48,7 +48,7 @@
   <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides"
     xsi:type="VersionOverridesV1_0">
     <Requirements>
-      <bt:Sets DefaultMinVersion="1.5">
+      <bt:Sets DefaultMinVersion="1.8">
         <bt:Set Name="Mailbox" />
       </bt:Sets>
     </Requirements>
@@ -126,7 +126,7 @@
     <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides/1.1"
       xsi:type="VersionOverridesV1_1">
       <Requirements>
-        <bt:Sets DefaultMinVersion="1.5">
+        <bt:Sets DefaultMinVersion="1.8">
           <bt:Set Name="Mailbox" />
         </bt:Sets>
       </Requirements>
