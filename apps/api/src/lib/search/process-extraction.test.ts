@@ -386,15 +386,19 @@ describe("processExtraction", () => {
 
   test("propagates lifecycle cancellation to the caller-provided storage reader", async () => {
     const controller = new AbortController();
-    const started = Promise.withResolvers<void>();
+    const started = Promise.withResolvers<undefined>();
     const observedSignals: AbortSignal[] = [];
     const readSource = mock(async (_key: string, signal: AbortSignal) => {
       observedSignals.push(signal);
-      started.resolve();
+      started.resolve(undefined);
       await new Promise<void>((_resolve, reject) => {
-        signal.addEventListener("abort", () => reject(signal.reason), {
-          once: true,
-        });
+        signal.addEventListener(
+          "abort",
+          () => reject(new Error("Storage read aborted")),
+          {
+            once: true,
+          },
+        );
       });
       return new ArrayBuffer();
     });
