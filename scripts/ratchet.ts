@@ -24,7 +24,7 @@
 // CI-only wiring lives in .github/workflows/ci.yml and scripts/verify.sh
 // alongside the other ratchet guards.
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import {
   mkdirSync,
   mkdtempSync,
@@ -1440,15 +1440,9 @@ const ownValue = (record: Record<string, unknown>, key: string): unknown =>
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-// The metric table and its committed baseline are one mirrored declaration.
-// Validate both directions: otherwise deleting a metric leaves an ignored
-// baseline entry, while duplicate IDs silently overwrite one scan with another.
-// Snapshot totals are derived from their per-file map, so a hand-edited or
-// partially resolved baseline cannot weaken the ratchet or its diagnostics.
-const inspectConfiguration = (
+const inspectMetricRegistry = (
   metrics: readonly Pick<RatchetMetric, "id">[],
-  rawBaseline: unknown,
-): ConfigurationInspection => {
+) => {
   const errors: string[] = [];
   const metricIds = new Set<string>();
 
@@ -1461,6 +1455,20 @@ const inspectConfiguration = (
     }
     metricIds.add(id);
   }
+
+  return { errors, metricIds };
+};
+
+// The metric table and its committed baseline are one mirrored declaration.
+// Validate both directions: otherwise deleting a metric leaves an ignored
+// baseline entry, while duplicate IDs silently overwrite one scan with another.
+// Snapshot totals are derived from their per-file map, so a hand-edited or
+// partially resolved baseline cannot weaken the ratchet or its diagnostics.
+const inspectConfiguration = (
+  metrics: readonly Pick<RatchetMetric, "id">[],
+  rawBaseline: unknown,
+): ConfigurationInspection => {
+  const { errors, metricIds } = inspectMetricRegistry(metrics);
 
   if (!isRecord(rawBaseline)) {
     return {
@@ -1552,13 +1560,9 @@ const inspectConfiguration = (
 };
 
 const assertMetricRegistry = (): void => {
-  const inspection = inspectConfiguration(RATCHET_METRICS, {});
-  const registryErrors =
-    inspection.status === "invalid"
-      ? inspection.errors.filter((error) => error.includes("metric id"))
-      : [];
-  if (registryErrors.length > 0) {
-    panic(registryErrors.join("\n"));
+  const { errors } = inspectMetricRegistry(RATCHET_METRICS);
+  if (errors.length > 0) {
+    panic(errors.join("\n"));
   }
 };
 
@@ -1605,8 +1609,13 @@ const scanAll = (root: string): Baseline => {
 };
 
 const readBaseline = (): Baseline => {
-  const raw: unknown = JSON.parse(readFileSync(BASELINE_PATH, "utf-8"));
-  const inspection = inspectConfiguration(RATCHET_METRICS, raw);
+  const parsed = Result.try((): unknown =>
+    JSON.parse(readFileSync(BASELINE_PATH, "utf-8")),
+  );
+  if (Result.isError(parsed)) {
+    panic(`ratchet baseline ${BASELINE_REL} is not valid JSON`);
+  }
+  const inspection = inspectConfiguration(RATCHET_METRICS, parsed.value);
   if (inspection.status === "invalid") {
     panic(inspection.errors.join("\n"));
   }
@@ -2291,6 +2300,28 @@ const runSelfTest = (): number => {
         },
       }),
       expectedError: "does not equal its per-file total",
+    },
+    {
+      name: "non-kebab-case metric IDs",
+      inspection: inspectConfiguration([{ id: "One_Metric" }], {
+        One_Metric: { count: 0, files: {} },
+      }),
+      expectedError: "is not kebab-case",
+    },
+    {
+      name: "non-object baselines",
+      inspection: inspectConfiguration([{ id: "one-metric" }], []),
+      expectedError: "must be a JSON object",
+    },
+    {
+      name: "invalid per-file counts",
+      inspection: inspectConfiguration([{ id: "one-metric" }], {
+        "one-metric": {
+          count: 2,
+          files: { "apps/api/src/example.ts": 0 },
+        },
+      }),
+      expectedError: "has an invalid count for",
     },
   ] as const;
 
