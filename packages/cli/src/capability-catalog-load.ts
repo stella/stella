@@ -82,6 +82,10 @@ const projectTransport = (
           required: transport.input.required,
         },
       };
+    default: {
+      const exhaustive: never = transport;
+      return exhaustive;
+    }
   }
 };
 

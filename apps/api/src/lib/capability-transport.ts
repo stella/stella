@@ -111,6 +111,10 @@ export const transportFileInput = (
     case "file-input":
     case "file-both":
       return transport.input;
+    default: {
+      const exhaustive: never = transport;
+      return exhaustive;
+    }
   }
 };
 
@@ -125,6 +129,10 @@ export const transportFileResponse = (
     case "file-response":
     case "file-both":
       return transport.response;
+    default: {
+      const exhaustive: never = transport;
+      return exhaustive;
+    }
   }
 };
 
@@ -139,6 +147,10 @@ export const transportAlternative = (
     case "file-response":
     case "file-both":
       return transport.alternative;
+    default: {
+      const exhaustive: never = transport;
+      return exhaustive;
+    }
   }
 };
 
@@ -167,6 +179,10 @@ export const isTransportInvocable = (
     case "file-response":
     case "file-both":
       return false;
+    default: {
+      const exhaustive: never = transport;
+      return exhaustive;
+    }
   }
 };
 
@@ -200,5 +216,9 @@ export const describeTransportAlternative = (
       return `Use ${alternative.via.join(" then ")} instead: ${alternative.note}`;
     case "partial":
       return `${alternative.via.join(" then ")} covers part of this: ${alternative.limitation}`;
+    default: {
+      const exhaustive: never = alternative;
+      return exhaustive;
+    }
   }
 };

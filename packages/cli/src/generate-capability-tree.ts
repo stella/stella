@@ -100,6 +100,10 @@ export const isTransportInvocable = (
     case "file-response":
     case "file-both":
       return false;
+    default: {
+      const exhaustive: never = transport;
+      return exhaustive;
+    }
   }
 };
 

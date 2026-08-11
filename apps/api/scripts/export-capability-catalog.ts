@@ -612,9 +612,11 @@ type BuildCatalogEntryOptions = {
   additionalScopes: readonly string[];
   hasPermissions: boolean;
   permissions: unknown;
-  /** Live (pre-compaction) input schema; flag derivation reads the full shape. */
-  inputSchema: CapabilityInputSchema;
-  /** Same schema, `$defs`-compacted: what the entry carries. */
+  /**
+   * The `$defs`-compacted input schema: what the entry carries. The live
+   * pre-compaction shape is read at the call site, where the transport is
+   * derived and cross-checked against it.
+   */
   compactedInputSchema: CompactedCapabilityInputSchema;
   exposure: ParsedExposure;
   feature: string | undefined;
@@ -638,7 +640,6 @@ const buildCatalogEntry = ({
   additionalScopes,
   hasPermissions,
   permissions,
-  inputSchema,
   compactedInputSchema,
   exposure,
   feature,
@@ -1232,7 +1233,6 @@ const buildCatalog = async (): Promise<BuildResult> => {
         additionalScopes,
         hasPermissions,
         permissions,
-        inputSchema,
         compactedInputSchema,
         exposure: endpoint.exposure,
         feature: inheritedFeature ?? DOMAIN_FEATURE[domain],

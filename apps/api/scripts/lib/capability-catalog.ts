@@ -1525,6 +1525,10 @@ const renderTransportExclusion = (transport: CapabilityTransport): string => {
       return "returns bytes, which the generic transport cannot serialize";
     case "file-both":
       return `requires a file in \`${transport.input.field}\` and returns bytes`;
+    default: {
+      const exhaustive: never = transport;
+      return exhaustive;
+    }
   }
 };
 
