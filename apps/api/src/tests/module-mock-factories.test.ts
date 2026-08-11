@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import {
+  countModuleMockCallSites,
   readModuleExports,
   readModuleMockFactories,
   resolveModuleFile,
@@ -79,6 +80,49 @@ describe("module mock factories", () => {
     );
 
     expect(allFactories.length).toBeGreaterThanOrEqual(callSites.length);
+  });
+
+  test("returns one factory per call site, in every file", () => {
+    // A file may hold many mocks, so a repository-wide count has slack: the
+    // reader could stop recognizing a body shape and stay above any floor.
+    // Per file and in both directions there is no slack, and the two guards
+    // above cannot quietly narrow to the mocks that still happen to parse.
+    const mismatches = apiSourceFiles.flatMap((filePath) => {
+      const source = readFileSync(path.join(API_ROOT, filePath), "utf-8");
+      const sites = countModuleMockCallSites(source);
+      const read = readModuleMockFactories(source, filePath).length;
+      if (sites === read) {
+        return [];
+      }
+      return [`${filePath}: ${sites} call sites, ${read} factories read`];
+    });
+
+    expect(mismatches).toEqual([]);
+  });
+
+  test("reports a factory body it cannot read as opaque, not as absent", () => {
+    // Dropping these would remove the call site from every guard built on the
+    // reader. Reported instead, with no keys and marked as spreading, so the
+    // key-drift comparisons skip a shape they cannot judge.
+    const factories = readModuleMockFactories(
+      [
+        `void ${MOCK_CALL}"@/api/lib/analytics/capture", () => {`,
+        "  return { captureError: () => {} };",
+        "});",
+        `void ${MOCK_CALL}"@/api/lib/s3", () => stub);`,
+      ].join("\n"),
+      "src/lib/example.test.ts",
+    );
+
+    expect(factories.map((factory) => factory.moduleId)).toEqual([
+      "src/lib/analytics/capture",
+      "src/lib/s3",
+    ]);
+    expect(factories.map((factory) => factory.spreadsAnother)).toEqual([
+      true,
+      true,
+    ]);
+    expect(factories.flatMap((factory) => factory.declaredKeys)).toEqual([]);
   });
 
   test("reads keys, spreads, and quoted keys out of a factory", () => {

@@ -4,10 +4,16 @@ import path from "node:path";
 
 import { resolveModuleSpecifier } from "./module-mock-batching";
 
+// Every call site this reader must account for: a `mock.module` naming its
+// target with a string literal. A computed target names no module to compare
+// against and is out of scope for both this pattern and the reader.
+//
 // Written with an escaped dot so this module's own source does not read as a
 // `mock.module` call site to the runner's helper scan (scripts/run-tests.ts).
-const MODULE_MOCK_FACTORY_PATTERN =
-  /\bmock\.module\s*\(\s*["']([^"']+)["']\s*,\s*(?:async\s+)?\(\s*\)\s*=>\s*\(/gu;
+const MODULE_MOCK_CALL_PATTERN = /\bmock\.module\s*\(\s*["']([^"']+)["']\s*,/gu;
+// The `() => (` an object-literal factory opens with, measured from just past
+// the target literal's comma.
+const OBJECT_FACTORY_PREFIX_PATTERN = /^\s*(?:async\s+)?\(\s*\)\s*=>\s*\(\s*/u;
 const STAR_REEXPORT_PATTERN = /\bexport\s*\*\s*from\s*["']([^"']+)["']/gu;
 const OBJECT_KEY_PATTERN =
   /^(?:(?:get|set)\s+)?(?:([A-Za-z_$][\w$]*)|"([^"]+)"|'([^']+)')$/u;
@@ -154,65 +160,87 @@ const readEntryKey = (entry: string): string | undefined => {
   return match?.at(1) ?? match?.at(2) ?? match?.at(3);
 };
 
+type FactoryKeys = Pick<ModuleMockFactory, "declaredKeys" | "spreadsAnother">;
+
 /**
- * Every module-mock call in `source` that names a literal specifier and
- * returns an object literal. A factory whose keys cannot be read (computed
- * keys, a non-literal body) is reported with `declaredKeys: []` and
- * `spreadsAnother: true`, so the drift guard stays quiet on shapes it cannot
- * judge rather than guessing.
+ * A factory this reader cannot judge: a block body, a returned variable, a
+ * computed key. Reported with no declared keys and marked as spreading so the
+ * drift guards skip it rather than comparing keys that may be mis-parsed.
+ */
+const opaqueFactory = (): FactoryKeys => ({
+  declaredKeys: [],
+  spreadsAnother: true,
+});
+
+/** Keys of the object literal a factory returns, read from `bodyStart` (just
+ *  past the target literal's comma). */
+const readFactoryKeys = (
+  source: string,
+  bodyStart: number,
+  filePath: string,
+): FactoryKeys => {
+  const prefix = OBJECT_FACTORY_PREFIX_PATTERN.exec(source.slice(bodyStart));
+  if (prefix === null) {
+    return opaqueFactory();
+  }
+  const openIndex = bodyStart + prefix[0].length;
+  if (source[openIndex] !== "{") {
+    return opaqueFactory();
+  }
+  const literalBody = readObjectLiteral(source, openIndex);
+  if (literalBody === undefined) {
+    panic(`unterminated mock factory in ${filePath}`);
+  }
+  const declaredKeys: string[] = [];
+  let spreadsAnother = false;
+  for (const entry of splitTopLevelEntries(literalBody)) {
+    if (entry.startsWith("...")) {
+      spreadsAnother = true;
+      continue;
+    }
+    const key = readEntryKey(entry);
+    if (key === undefined) {
+      return opaqueFactory();
+    }
+    declaredKeys.push(key);
+  }
+  return { declaredKeys, spreadsAnother };
+};
+
+/**
+ * Every module-mock call in `source` that names a literal specifier, one entry
+ * per call site. A factory whose keys cannot be read is reported as opaque
+ * rather than skipped, so a body shape this reader stops recognizing cannot
+ * quietly narrow the guards built on it to the mocks that still parse.
  */
 export const readModuleMockFactories = (
   source: string,
   filePath: string,
 ): ModuleMockFactory[] => {
   const factories: ModuleMockFactory[] = [];
-  for (const match of source.matchAll(MODULE_MOCK_FACTORY_PATTERN)) {
+  for (const match of source.matchAll(MODULE_MOCK_CALL_PATTERN)) {
     const specifier = match.at(1);
     const matchIndex = match.index;
     if (specifier === undefined) {
       continue;
     }
-    const bodyStart = matchIndex + match[0].length;
-    const openIndex =
-      bodyStart + (source.slice(bodyStart).match(/^\s*/u)?.at(0)?.length ?? 0);
-    if (source[openIndex] !== "{") {
-      // The factory returns something other than an object literal; there are
-      // no keys to compare.
-      continue;
-    }
-    const literalBody = readObjectLiteral(source, openIndex);
-    if (literalBody === undefined) {
-      panic(`unterminated mock factory in ${filePath}`);
-    }
-    const entries = splitTopLevelEntries(literalBody);
-    const declaredKeys: string[] = [];
-    let spreadsAnother = false;
-    for (const entry of entries) {
-      if (entry.startsWith("...")) {
-        spreadsAnother = true;
-        continue;
-      }
-      const key = readEntryKey(entry);
-      if (key === undefined) {
-        // A computed or otherwise unreadable key: treat the whole factory as
-        // opaque rather than reporting keys we may have mis-parsed.
-        declaredKeys.length = 0;
-        spreadsAnother = true;
-        break;
-      }
-      declaredKeys.push(key);
-    }
     factories.push({
-      declaredKeys,
+      ...readFactoryKeys(source, matchIndex + match[0].length, filePath),
       filePath,
       line: source.slice(0, matchIndex).split("\n").length,
       moduleId: resolveModuleSpecifier(specifier, filePath),
       specifier,
-      spreadsAnother,
     });
   }
   return factories;
 };
+
+/**
+ * Call sites `readModuleMockFactories` is expected to return an entry for.
+ * Counted separately so the two can be compared per file, in both directions.
+ */
+export const countModuleMockCallSites = (source: string): number =>
+  [...source.matchAll(MODULE_MOCK_CALL_PATTERN)].length;
 
 /**
  * Resolve a canonicalized api-relative module id to a file on disk, or
