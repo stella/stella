@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -19,6 +19,7 @@ import {
 import type { ChatCompactionSummary } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { chatMessageCursorCodec } from "@/api/lib/chat/message-cursor";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -135,6 +136,22 @@ const seedActiveCheckpoint = async ({
   firstKeptMessageId: SafeId<"chatMessage">;
   summarizedMessageCount: number;
 }): Promise<void> => {
+  // The window seeks from the checkpoint's cursor, so it must be built from the
+  // boundary row's own microsecond timestamp as the compactor stores it. A JS
+  // Date would truncate to milliseconds and re-admit same-millisecond rows.
+  const boundary = await testDb
+    .select({
+      createdAtCursor:
+        chatMessageCursorCodec.cursorValue.as("created_at_cursor"),
+    })
+    .from(chatMessages)
+    .where(eq(chatMessages.id, lastSummarizedMessageId))
+    .limit(1);
+  const boundaryCursor = boundary.at(0)?.createdAtCursor;
+  if (boundaryCursor === undefined) {
+    throw new Error("seed precondition failed: boundary message not found");
+  }
+
   await testDb.insert(chatThreadCompactions).values({
     id: toSafeId<"chatThreadCompaction">(Bun.randomUUIDv7()),
     threadId,
@@ -145,6 +162,11 @@ const seedActiveCheckpoint = async ({
     lastSummarizedMessageId,
     firstKeptMessageId,
     summarizedMessageCount,
+    totalSummarizedMessageCount: summarizedMessageCount,
+    deltaCursor: chatMessageCursorCodec.encode(
+      boundaryCursor,
+      lastSummarizedMessageId,
+    ),
     totalTokens: 70_000,
     preservedTokens: 30_000,
     promptVersion: 1,
@@ -182,7 +204,7 @@ const byId = (a: SeededMessage, b: SeededMessage): number => {
 };
 
 describe("loadWindowedThreadMessages", () => {
-  test("loads the full history ascending when no checkpoint exists", async () => {
+  test("loads the newest messages ascending when no checkpoint exists", async () => {
     const base = Date.parse("2026-02-01T00:00:00.000Z");
     const { threadId, messages } = await seedThread(
       Array.from({ length: 5 }, (_, i) => ({
@@ -195,7 +217,6 @@ describe("loadWindowedThreadMessages", () => {
       await loadWindowedThreadMessages({
         safeDb,
         threadId,
-        isAnonymized: false,
       }),
     );
 
@@ -228,7 +249,6 @@ describe("loadWindowedThreadMessages", () => {
       await loadWindowedThreadMessages({
         safeDb,
         threadId,
-        isAnonymized: false,
       }),
     );
 
@@ -262,7 +282,6 @@ describe("loadWindowedThreadMessages", () => {
       await loadWindowedThreadMessages({
         safeDb,
         threadId,
-        isAnonymized: false,
       }),
     );
 
@@ -273,7 +292,7 @@ describe("loadWindowedThreadMessages", () => {
     );
   });
 
-  test("caps at the most recent `limit` rows for an anonymized thread with no checkpoint", async () => {
+  test("caps at the most recent `limit` rows when no checkpoint exists", async () => {
     const base = Date.parse("2026-02-15T00:00:00.000Z");
     const { threadId, messages } = await seedThread(
       Array.from({ length: 6 }, (_, i) => ({
@@ -287,42 +306,16 @@ describe("loadWindowedThreadMessages", () => {
         safeDb,
         threadId,
         limit: 3,
-        isAnonymized: true,
       }),
     );
 
-    // Only the most recent 3, ascending — an anonymized thread never forms a
-    // checkpoint, so its per-send read is hard-capped (older rows are dropped).
+    // Only the most recent 3, ascending. With no checkpoint the read spans the
+    // whole thread, so the row cap is the only thing bounding it.
     expect(window.map((m) => m.id)).toEqual(messages.slice(3).map((m) => m.id));
     expect(windowTexts(window)).toEqual(["m3", "m4", "m5"]);
   });
 
-  test("loads the full history for a non-anonymized thread even beyond `limit`", async () => {
-    const base = Date.parse("2026-02-25T00:00:00.000Z");
-    const { threadId, messages } = await seedThread(
-      Array.from({ length: 6 }, (_, i) => ({
-        createdAt: new Date(base + i),
-        text: `m${i}`,
-      })),
-    );
-
-    // A non-anonymized thread with no checkpoint loads its FULL history (the cap
-    // applies only to anonymized threads), so the older prefix reaches
-    // compactChatMessagesForModel instead of being dropped before the prompt.
-    const window = unwrap(
-      await loadWindowedThreadMessages({
-        safeDb,
-        threadId,
-        limit: 3,
-        isAnonymized: false,
-      }),
-    );
-
-    expect(window.map((m) => m.id)).toEqual(messages.map((m) => m.id));
-    expect(windowTexts(window)).toEqual(["m0", "m1", "m2", "m3", "m4", "m5"]);
-  });
-
-  test("loads the full checkpoint window even when it exceeds `limit` (boundary preserved)", async () => {
+  test("caps the post-checkpoint tail at `limit`, keeping its newest rows", async () => {
     const base = Date.parse("2026-02-20T00:00:00.000Z");
     const { threadId, messages } = await seedThread(
       Array.from({ length: 6 }, (_, i) => ({
@@ -342,25 +335,19 @@ describe("loadWindowedThreadMessages", () => {
       summarizedMessageCount: 1,
     });
 
-    // Even with a tiny limit, the checkpoint window [m1..m5] loads in full and
-    // keeps firstKept (m1) so applyChatCompactionCheckpoint can anchor the
-    // stored summary; the row cap applies only to the no-checkpoint case.
+    // The post-checkpoint tail is [m1..m5], longer than the cap, so the oldest
+    // of it is dropped and the newest 2 survive. The prompt loses m1..m3 for
+    // this send only: the compactor folds them into the next checkpoint and
+    // advances the cursor past them, and the read stays bounded either way.
     const window = unwrap(
       await loadWindowedThreadMessages({
         safeDb,
         threadId,
         limit: 2,
-        isAnonymized: false,
       }),
     );
 
-    expect(window.map((m) => m.id)).toEqual([
-      m1.id,
-      m2.id,
-      m3.id,
-      m4.id,
-      m5.id,
-    ]);
+    expect(window.map((m) => m.id)).toEqual([m4.id, m5.id]);
   });
 });
 
@@ -522,7 +509,6 @@ describe("chatMessageExistsForThread", () => {
       await loadWindowedThreadMessages({
         safeDb,
         threadId,
-        isAnonymized: false,
       }),
     );
     // The old id is excluded from the per-send window.

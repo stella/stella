@@ -5,10 +5,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 
 import {
   applyChatCompactionCheckpoint,
-  chatCompactionSnapshotMessagesEqual,
-  memoryExtractionExclusionStamp,
   shouldInvalidateChatCompactionCheckpoint,
-  summarizedMessagesAreMemoryEligible,
 } from "./persistent-compaction";
 
 const message = (id: string, text: string): ChatMessage => ({
@@ -29,6 +26,7 @@ describe("persistent chat compaction", () => {
     const applied = applyChatCompactionCheckpoint({
       messages,
       checkpoint: {
+        deltaCursor: null,
         id: toSafeId<"chatThreadCompaction">(
           "44444444-4444-4444-8444-444444444444",
         ),
@@ -48,20 +46,24 @@ describe("persistent chat compaction", () => {
           nextSteps: [],
           readFiles: [],
         },
+        totalSummarizedMessageCount: 1,
       },
     });
 
-    expect(applied?.map((item) => item.id)).toEqual([
+    expect(applied.map((item) => item.id)).toEqual([
       "stella-chat-compaction-summary",
       keptId,
       "33333333-3333-4333-8333-333333333333",
     ]);
   });
 
-  test("ignores a checkpoint whose first kept message is absent", () => {
+  test("keeps the whole window when the first kept message is absent", () => {
+    const olderId = "11111111-1111-4111-8111-111111111111";
+
     const applied = applyChatCompactionCheckpoint({
-      messages: [message("11111111-1111-4111-8111-111111111111", "old")],
+      messages: [message(olderId, "old")],
       checkpoint: {
+        deltaCursor: null,
         id: toSafeId<"chatThreadCompaction">(
           "44444444-4444-4444-8444-444444444444",
         ),
@@ -83,70 +85,51 @@ describe("persistent chat compaction", () => {
           nextSteps: [],
           readFiles: [],
         },
+        totalSummarizedMessageCount: 1,
       },
     });
 
-    expect(applied).toBeNull();
+    expect(applied.map((item) => item.id)).toEqual([
+      "stella-chat-compaction-summary",
+      olderId,
+    ]);
   });
 
-  test("rejects a checkpoint snapshot when message content changed", () => {
-    const id = "11111111-1111-4111-8111-111111111111";
+  test("reports the chain's cumulative count in the summary header", () => {
+    const keptId = "22222222-2222-4222-8222-222222222222";
 
-    expect(
-      chatCompactionSnapshotMessagesEqual(
-        [
-          {
-            id: toSafeId<"chatMessage">(id),
-            role: "user",
-            content: {
-              version: 1,
-              data: [{ type: "text", text: "edited" }],
-            },
-          },
-        ],
-        [message(id, "original")],
-      ),
-    ).toBe(false);
-  });
+    const applied = applyChatCompactionCheckpoint({
+      messages: [message(keptId, "kept")],
+      checkpoint: {
+        deltaCursor: null,
+        id: toSafeId<"chatThreadCompaction">(
+          "44444444-4444-4444-8444-444444444444",
+        ),
+        firstKeptMessageId: toSafeId<"chatMessage">(keptId),
+        summarizedMessageCount: 4,
+        summaryMarkdown: "summary",
+        summary: {
+          version: 1,
+          blocked: [],
+          constraints: [],
+          criticalContext: [],
+          done: [],
+          goal: null,
+          inProgress: [],
+          keyDecisions: [],
+          modifiedFiles: [],
+          nextSteps: [],
+          readFiles: [],
+        },
+        totalSummarizedMessageCount: 11,
+      },
+    });
 
-  test("accepts a checkpoint snapshot when message ids and content still match", () => {
-    const id = "11111111-1111-4111-8111-111111111111";
+    const summaryPart = applied.at(0)?.parts.at(0);
 
-    expect(
-      chatCompactionSnapshotMessagesEqual(
-        [
-          {
-            id: toSafeId<"chatMessage">(id),
-            role: "user",
-            content: {
-              version: 1,
-              data: [{ type: "text", text: "original" }],
-            },
-          },
-        ],
-        [message(id, "original")],
-      ),
-    ).toBe(true);
-  });
-
-  test("accepts a checkpoint snapshot when JSON key order differs", () => {
-    const id = "11111111-1111-4111-8111-111111111111";
-
-    expect(
-      chatCompactionSnapshotMessagesEqual(
-        [
-          {
-            id: toSafeId<"chatMessage">(id),
-            role: "user",
-            content: {
-              version: 1,
-              data: [{ text: "original", type: "text" }],
-            },
-          },
-        ],
-        [message(id, "original")],
-      ),
-    ).toBe(true);
+    expect(summaryPart?.type === "text" ? summaryPart.content : null).toContain(
+      "compacted from 11 message(s)",
+    );
   });
 
   test("invalidates active checkpoints when a retained message is updated", () => {
@@ -165,24 +148,5 @@ describe("persistent chat compaction", () => {
         persistencePlan: { type: "insert" },
       }),
     ).toBe(false);
-  });
-
-  test("permanently excludes checkpoints created while memory is disabled", () => {
-    const createdAt = new Date("2026-08-08T08:00:00.000Z");
-
-    expect(memoryExtractionExclusionStamp(false, createdAt)).toBe(createdAt);
-    expect(memoryExtractionExclusionStamp(true, createdAt)).toBeNull();
-  });
-
-  test("excludes a summarized prefix containing an opted-out message", () => {
-    const rows = [
-      { memoryExtractionEligible: true },
-      { memoryExtractionEligible: false },
-      { memoryExtractionEligible: true },
-    ];
-
-    expect(summarizedMessagesAreMemoryEligible(rows, 1)).toBe(true);
-    expect(summarizedMessagesAreMemoryEligible(rows, 2)).toBe(false);
-    expect(summarizedMessagesAreMemoryEligible(rows, 3)).toBe(false);
   });
 });

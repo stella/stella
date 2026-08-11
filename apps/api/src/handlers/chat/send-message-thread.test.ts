@@ -50,7 +50,6 @@ describe("send-message thread loading", () => {
     const result = await loadThread({
       initialDataWorkspaceIds: [],
       initialContextMatterIds: [],
-      isAnonymized: false,
       organizationId,
       recordAuditEvent: async () => undefined,
       safeDb,
@@ -142,7 +141,6 @@ describe("send-message thread loading", () => {
     const result = await loadThread({
       initialDataWorkspaceIds: [],
       initialContextMatterIds: [],
-      isAnonymized: false,
       organizationId,
       recordAuditEvent: async () => undefined,
       safeDb,
@@ -186,7 +184,6 @@ describe("send-message thread loading", () => {
     const result = await loadThread({
       initialDataWorkspaceIds: [],
       initialContextMatterIds: [],
-      isAnonymized: false,
       organizationId,
       recordAuditEvent,
       safeDb,
@@ -223,7 +220,6 @@ const expectCreatedThreadDataScope = async (
   const result = await loadThread({
     initialDataWorkspaceIds,
     initialContextMatterIds: [],
-    isAnonymized: false,
     organizationId,
     recordAuditEvent,
     safeDb,

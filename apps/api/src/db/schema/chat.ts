@@ -168,6 +168,21 @@ export const chatThreads = p.pgTable(
     recapPromptVersion: p.smallint("recap_prompt_version"),
     recapGeneratedAt: timestamptz("recap_generated_at"),
     usedAnonymization: p.boolean("used_anonymization").notNull().default(false),
+    /**
+     * Durable queue address for incremental thread compaction. Null means no
+     * compaction work is pending. A send whose history window crosses the
+     * compaction trigger stamps `now()`; the compactor claims a due thread by
+     * overwriting this with its lease expiry and settles it with a
+     * compare-and-set on that token, so a send that wakes the thread while a
+     * run is in flight is never erased.
+     */
+    compactionScheduledAt: timestamptz("compaction_scheduled_at"),
+    /**
+     * When the compactor last attempted this thread. Failed attempts stay
+     * eligible but rotate behind untouched work, so one permanently failing
+     * thread cannot monopolize a batch.
+     */
+    compactionAttemptedAt: timestamptz("compaction_attempted_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
       .notNull()
@@ -185,6 +200,16 @@ export const chatThreads = p.pgTable(
       .index("chat_threads_org_user_updated_id_idx")
       .on(table.organizationId, table.userId, table.updatedAt, table.id),
     p.index("chat_threads_user_updated_idx").on(table.userId, table.updatedAt),
+    // Serves the compactor's claim seek: due threads oldest-first, with
+    // never-attempted work ahead of previously failed work.
+    p
+      .index("chat_threads_compaction_due_idx")
+      .on(
+        table.compactionScheduledAt,
+        sql`${table.compactionAttemptedAt} ASC NULLS FIRST`,
+        table.id,
+      )
+      .where(sql`${table.compactionScheduledAt} IS NOT NULL`),
     p.check(
       "chat_threads_reasoning_effort_selection_check",
       sql`${table.chatReasoningEffort} IS NULL OR (${table.chatModel} IS NOT NULL AND ${table.chatReasoningEffort} IN (${sql.join(REASONING_EFFORT_SQL_VALUES, sql`, `)}))`,
@@ -641,6 +666,24 @@ export const chatThreadCompactions = p.pgTable(
       .notNull()
       .references(() => chatMessages.id, { onDelete: "cascade" }),
     summarizedMessageCount: p.integer("summarized_message_count").notNull(),
+    /**
+     * Encoded `(created_at, id)` keyset cursor for the last message this
+     * checkpoint chain summarized. Every compactor run reads only the bounded
+     * delta after it, so no run rereads lifetime history. Null on rows written
+     * before the cursor landed; such a chain resumes from the start of the
+     * thread and re-anchors on its next run.
+     */
+    deltaCursor: p.text("delta_cursor"),
+    /**
+     * Messages summarized by the whole checkpoint chain, not just this run.
+     * `summarizedMessageCount` deliberately stays per-run so the memory
+     * extractor's `[firstSummarized..lastSummarized]` transcript range remains
+     * bounded.
+     */
+    totalSummarizedMessageCount: p
+      .integer("total_summarized_message_count")
+      .notNull()
+      .default(0),
     totalTokens: p.integer("total_tokens").notNull(),
     preservedTokens: p.integer("preserved_tokens").notNull(),
     promptVersion: p.smallint("prompt_version").notNull(),

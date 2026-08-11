@@ -10,7 +10,6 @@ import { chatThreads, fileChatThreads } from "@/api/db/schema";
 import { estimateChatContextPromptTokens } from "@/api/handlers/chat/chat-prompt";
 import { computeThreadContextUsage } from "@/api/handlers/chat/compaction";
 import type { ThreadContextUsage } from "@/api/handlers/chat/compaction";
-import { resolveChatCompactionBudget } from "@/api/handlers/chat/compaction-budget";
 import {
   lockFileChatThreadMapping,
   type FileThreadLookupInput,
@@ -31,6 +30,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
+import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";
@@ -208,7 +208,6 @@ const loadResolvedThreadMessagePage = async ({
     await loadWindowedThreadMessages({
       tx,
       threadId,
-      isAnonymized: usedAnonymization,
       checkpoint,
     }),
   );

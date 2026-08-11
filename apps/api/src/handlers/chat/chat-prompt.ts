@@ -35,7 +35,6 @@ import type {
   IncomingActiveTemplate,
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
-import { estimateTextTokens } from "@/api/handlers/chat/compaction";
 import { buildMemoryPromptParts } from "@/api/handlers/chat/memory-context";
 import { CHAT_CODE_MODE_SYSTEM_PROMPT } from "@/api/handlers/chat/tools/execute/chat-code-mode";
 import { CHAT_REFERENCE_HREF_PREFIXES } from "@/api/handlers/chat/types";
@@ -51,6 +50,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { formatDecisionForPrompt } from "@/api/lib/case-law/analysis-prompt";
 import { parseDocumentAst } from "@/api/lib/case-law/document-ast";
+import { estimateTextTokens } from "@/api/lib/chat/compaction-tokens";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { formatDateInTimeZone } from "@/api/lib/date-format";
 import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";

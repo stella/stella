@@ -12,6 +12,10 @@ import {
   backfillCaseLawRedactionTombstones,
 } from "@/api/lib/scheduler/tasks/case-law-redaction-tombstone-backfill";
 import {
+  CHAT_THREAD_COMPACTOR_TASK,
+  compactChatThreads,
+} from "@/api/lib/scheduler/tasks/chat-thread-compactor";
+import {
   EXPIRE_DESKTOP_EDIT_SESSIONS_TASK,
   expireDesktopEditSessions,
 } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
@@ -74,6 +78,7 @@ const SCHEDULER_TASKS = {
   [RECONCILE_BUFFER_INTENTS_TASK]: reconcileBufferIntents,
   [REPAIR_CHAT_SEARCH_INDEX_TASK]: repairChatSearchIndex,
   [REPAIR_SEARCH_PROJECTIONS_TASK]: repairSearchProjections,
+  [CHAT_THREAD_COMPACTOR_TASK]: compactChatThreads,
   [BACKFILL_WORK_OBLIGATIONS_TASK]: backfillWorkObligations,
   [REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK]: repairSearchSemanticTimestampsTask,
   [MEMORY_CURATOR_TASK]: curateAiMemories,

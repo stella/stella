@@ -1,42 +1,32 @@
-import { Result } from "better-result";
-import { and, asc, eq, sql } from "drizzle-orm";
-
-import type { ReasoningEffort } from "@stll/ai-catalog";
+import type { Result } from "better-result";
+import { and, eq } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb, SafeDbError, SafeDbOrTx } from "@/api/db/safe-db";
+import type { SafeDbError, SafeDbOrTx } from "@/api/db/safe-db";
 import { withScopedTx } from "@/api/db/safe-db";
-import {
-  chatMessages,
-  chatThreadCompactions,
-  chatThreads,
-} from "@/api/db/schema";
-import { env } from "@/api/env";
-import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
-import {
-  CHAT_COMPACTION_PROMPT_VERSION,
-  createCompactionSummaryMessage,
-  summarizeChatCompactionForModel,
-} from "@/api/handlers/chat/compaction";
+import { chatThreadCompactions } from "@/api/db/schema";
+import { createCompactionSummaryMessage } from "@/api/handlers/chat/compaction";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
-import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import type {
   ChatCompactionSummary,
   ChatMessage,
-  PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
-import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 
 export type ChatThreadCompactionCheckpoint = {
+  /**
+   * Encoded keyset cursor of the last message the chain has summarized. Null
+   * on chains written before the cursor landed, which read from the start of
+   * the thread until the compactor re-anchors them.
+   */
+  deltaCursor: string | null;
   firstKeptMessageId: SafeId<"chatMessage">;
   id: SafeId<"chatThreadCompaction">;
   summarizedMessageCount: number;
   summary: ChatCompactionSummary;
   summaryMarkdown: string;
+  /** Messages the whole chain has folded in, across every run. */
+  totalSummarizedMessageCount: number;
 };
 
 type ReadLatestChatCompactionOnTxProps = {
@@ -60,11 +50,13 @@ export const readLatestChatCompactionOnTx = async ({
       status: { eq: "active" },
     },
     columns: {
+      deltaCursor: true,
       id: true,
       firstKeptMessageId: true,
       summarizedMessageCount: true,
       summary: true,
       summaryMarkdown: true,
+      totalSummarizedMessageCount: true,
     },
     orderBy: { createdAt: "desc" },
   });
@@ -91,23 +83,37 @@ type ApplyChatCompactionCheckpointProps = {
   messages: ChatMessage[];
 };
 
+/**
+ * Put the stored summary in front of the messages the model will see.
+ *
+ * The history window seeks past the checkpoint cursor, so `messages` is already
+ * the post-checkpoint tail and the summary simply goes ahead of it. When
+ * `firstKeptMessageId` does appear — a window read against an older checkpoint
+ * than the one resolved here — the prefix before it is dropped, because the
+ * newer summary already covers those messages and repeating them verbatim
+ * would double them in the prompt.
+ *
+ * The header reports the chain's cumulative count. Chains written before that
+ * column existed report 0, so fall back to the per-run count rather than
+ * telling the model zero messages were compacted.
+ */
 export const applyChatCompactionCheckpoint = ({
   checkpoint,
   messages,
-}: ApplyChatCompactionCheckpointProps): ChatMessage[] | null => {
+}: ApplyChatCompactionCheckpointProps): ChatMessage[] => {
   const firstKeptIndex = messages.findIndex(
     (message) => message.id === checkpoint.firstKeptMessageId,
   );
-  if (firstKeptIndex === -1) {
-    return null;
-  }
 
   return [
     createCompactionSummaryMessage({
-      summarizedMessageCount: checkpoint.summarizedMessageCount,
+      summarizedMessageCount: Math.max(
+        checkpoint.totalSummarizedMessageCount,
+        checkpoint.summarizedMessageCount,
+      ),
       summary: checkpoint.summaryMarkdown,
     }),
-    ...messages.slice(firstKeptIndex),
+    ...(firstKeptIndex === -1 ? messages : messages.slice(firstKeptIndex)),
   ];
 };
 
@@ -138,11 +144,6 @@ export const shouldInvalidateChatCompactionCheckpoint = ({
   }
 };
 
-export const memoryExtractionExclusionStamp = (
-  memoryEnabled: boolean,
-  createdAt = new Date(),
-): Date | null => (memoryEnabled ? null : createdAt);
-
 type MarkActiveChatCompactionCheckpointStaleProps = {
   threadId: SafeId<"chatThread">;
   tx: Transaction;
@@ -162,298 +163,4 @@ export const markActiveChatCompactionCheckpointStale = async ({
         eq(chatThreadCompactions.status, "active"),
       ),
     );
-};
-
-type PersistChatCompactionCheckpointProps = {
-  abortSignal: AbortSignal;
-  boundary: ChatThirdPartyBoundary;
-  dataWorkspaceIds: readonly SafeId<"workspace">[];
-  messages: ChatMessage[];
-  modelId?: string | undefined;
-  onSummaryError?: ((error: HandlerError<500>) => void) | undefined;
-  organizationId: SafeId<"organization">;
-  orgAIConfig: OrgAIConfig | null;
-  reasoningEffort?: ReasoningEffort | undefined;
-  preserveTokens?: number | undefined;
-  safeDb: SafeDb;
-  threadId: SafeId<"chatThread">;
-  triggerTokens?: number | undefined;
-};
-
-export const persistChatCompactionCheckpoint = async ({
-  abortSignal,
-  boundary,
-  dataWorkspaceIds,
-  messages,
-  modelId,
-  onSummaryError,
-  organizationId,
-  orgAIConfig,
-  reasoningEffort,
-  preserveTokens,
-  safeDb,
-  threadId,
-  triggerTokens,
-}: PersistChatCompactionCheckpointProps): Promise<
-  Result<void, HandlerError<422 | 500> | SafeDbError>
-> => {
-  const checkpointResult = await summarizeChatCompactionForModel({
-    abortSignal,
-    boundary,
-    messages,
-    modelId,
-    onSummaryError,
-    organizationId,
-    orgAIConfig,
-    reasoningEffort,
-    preserveTokens,
-    // The thread's own data workspaces: the checkpoint summarizer must not
-    // see their raw ids, and no wider set is in scope for a persisted turn.
-    tenantWorkspaceIds: dataWorkspaceIds,
-    triggerTokens,
-  });
-  if (Result.isError(checkpointResult)) {
-    return Result.err(checkpointResult.error);
-  }
-  const checkpoint = checkpointResult.value;
-  if (checkpoint === null) {
-    return Result.ok();
-  }
-
-  const firstSummarizedMessage = checkpoint.plan.messagesToSummarize.at(0)?.id;
-  const lastSummarizedMessage = checkpoint.plan.messagesToSummarize.at(-1)?.id;
-  const firstKeptMessage = checkpoint.plan.recentMessages.at(0)?.id;
-  if (!firstSummarizedMessage || !lastSummarizedMessage || !firstKeptMessage) {
-    return Result.ok();
-  }
-
-  const persistResult = await safeDb(async (tx) => {
-    await lockChatThreadForCompaction({ threadId, tx });
-
-    const snapshot = await validateChatCompactionSnapshot({
-      dataWorkspaceIds,
-      messages,
-      summarizedMessageCount: checkpoint.plan.messagesToSummarize.length,
-      threadId,
-      tx,
-    });
-    if (!snapshot.isCurrent) {
-      return;
-    }
-
-    await markActiveChatCompactionCheckpointStale({ threadId, tx });
-
-    // audit: skip — derived compaction checkpoint cache; no user-authored state change
-    await tx.insert(chatThreadCompactions).values({
-      id: createSafeId<"chatThreadCompaction">(),
-      threadId,
-      status: "active",
-      summary: checkpoint.summary,
-      summaryMarkdown: checkpoint.summaryMarkdown,
-      firstSummarizedMessageId: brandPersistedChatMessageId(
-        firstSummarizedMessage,
-      ),
-      lastSummarizedMessageId: brandPersistedChatMessageId(
-        lastSummarizedMessage,
-      ),
-      firstKeptMessageId: brandPersistedChatMessageId(firstKeptMessage),
-      summarizedMessageCount: checkpoint.plan.messagesToSummarize.length,
-      totalTokens: checkpoint.plan.totalTokens,
-      preservedTokens: checkpoint.plan.preservedTokens,
-      promptVersion: CHAT_COMPACTION_PROMPT_VERSION,
-      // The extraction trigger queues only rows whose completion stamp is
-      // null. Stamp checkpoints created during a deployment opt-out so a
-      // later re-enable cannot retrospectively mine those conversations.
-      memoryExtractedAt: memoryExtractionExclusionStamp(
-        env.FEATURE_AI_MEMORY && snapshot.summarizedMessagesEligible,
-      ),
-    });
-  });
-
-  return persistResult.andThen(() => Result.ok());
-};
-
-const lockChatThreadForCompaction = async ({
-  threadId,
-  tx,
-}: {
-  threadId: SafeId<"chatThread">;
-  tx: Transaction;
-}): Promise<void> => {
-  await tx
-    .select({ id: chatThreads.id })
-    .from(chatThreads)
-    .where(eq(chatThreads.id, threadId))
-    .for("update");
-};
-
-type ChatCompactionSnapshotMessageRow = {
-  id: SafeId<"chatMessage">;
-  role: ChatMessage["role"];
-  content: PersistedChatMessageContent;
-};
-
-type ValidateChatCompactionSnapshotProps = {
-  dataWorkspaceIds: readonly SafeId<"workspace">[];
-  messages: readonly ChatMessage[];
-  summarizedMessageCount: number;
-  threadId: SafeId<"chatThread">;
-  tx: Transaction;
-};
-
-type ChatCompactionSnapshotValidation = {
-  isCurrent: boolean;
-  summarizedMessagesEligible: boolean;
-};
-
-const invalidChatCompactionSnapshot = (): ChatCompactionSnapshotValidation => ({
-  isCurrent: false,
-  summarizedMessagesEligible: false,
-});
-
-export const summarizedMessagesAreMemoryEligible = (
-  rows: readonly { memoryExtractionEligible: boolean }[],
-  summarizedMessageCount: number,
-): boolean =>
-  rows
-    .slice(0, summarizedMessageCount)
-    .every(({ memoryExtractionEligible }) => memoryExtractionEligible);
-
-const validateChatCompactionSnapshot = async ({
-  dataWorkspaceIds,
-  messages,
-  summarizedMessageCount,
-  threadId,
-  tx,
-}: ValidateChatCompactionSnapshotProps): Promise<ChatCompactionSnapshotValidation> => {
-  const firstSnapshotMessage = messages.at(0);
-  if (!firstSnapshotMessage) {
-    return invalidChatCompactionSnapshot();
-  }
-
-  const thread = await tx.query.chatThreads.findFirst({
-    where: { id: { eq: threadId } },
-    columns: { dataWorkspaceIds: true },
-  });
-  if (
-    !thread ||
-    !workspaceIdsEqual(thread.dataWorkspaceIds, dataWorkspaceIds)
-  ) {
-    return invalidChatCompactionSnapshot();
-  }
-
-  const firstPersistedMessage = await tx.query.chatMessages.findFirst({
-    where: {
-      id: { eq: brandPersistedChatMessageId(firstSnapshotMessage.id) },
-      threadId: { eq: threadId },
-    },
-    columns: { id: true },
-  });
-  if (!firstPersistedMessage) {
-    return invalidChatCompactionSnapshot();
-  }
-
-  const rows = await tx
-    .select({
-      id: chatMessages.id,
-      role: chatMessages.role,
-      content: chatMessages.content,
-      memoryExtractionEligible: chatMessages.memoryExtractionEligible,
-    })
-    .from(chatMessages)
-    .where(
-      and(
-        eq(chatMessages.threadId, threadId),
-        // Resolve the exact tuple by id inside Postgres. Reading created_at
-        // through a Date here would narrow it before the snapshot comparison.
-        sql`(${chatMessages.createdAt}, ${chatMessages.id}) >= (select boundary.created_at, boundary.id from chat_messages boundary where boundary.id = ${firstPersistedMessage.id} and boundary.thread_id = ${threadId})`,
-      ),
-    )
-    .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
-    .limit(messages.length + 1);
-
-  const isCurrent = chatCompactionSnapshotMessagesEqual(rows, messages);
-  return {
-    isCurrent,
-    summarizedMessagesEligible:
-      isCurrent &&
-      summarizedMessagesAreMemoryEligible(rows, summarizedMessageCount),
-  };
-};
-
-export const chatCompactionSnapshotMessagesEqual = (
-  rows: readonly ChatCompactionSnapshotMessageRow[],
-  messages: readonly ChatMessage[],
-): boolean => {
-  if (rows.length !== messages.length) {
-    return false;
-  }
-
-  return rows.every((row, index) => {
-    const message = messages.at(index);
-    if (!message) {
-      return false;
-    }
-
-    return (
-      row.id === message.id &&
-      row.role === message.role &&
-      jsonEqual(
-        normalizePersistedChatMessageContent(row.content).parts,
-        message.parts,
-      )
-    );
-  });
-};
-
-const jsonEqual = (left: unknown, right: unknown): boolean => {
-  if (left === right) {
-    return true;
-  }
-
-  if (Array.isArray(left) || Array.isArray(right)) {
-    if (!Array.isArray(left) || !Array.isArray(right)) {
-      return false;
-    }
-    if (left.length !== right.length) {
-      return false;
-    }
-    return left.every((item, index) => jsonEqual(item, right.at(index)));
-  }
-
-  if (!isJsonRecord(left) || !isJsonRecord(right)) {
-    return false;
-  }
-
-  const leftKeys = Object.keys(left);
-  const rightKeys = Object.keys(right);
-  if (leftKeys.length !== rightKeys.length) {
-    return false;
-  }
-
-  return leftKeys.every(
-    (key) => Object.hasOwn(right, key) && jsonEqual(left[key], right[key]),
-  );
-};
-
-const isJsonRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const workspaceIdsEqual = (
-  left: readonly SafeId<"workspace">[],
-  right: readonly SafeId<"workspace">[],
-): boolean => {
-  const leftIds = new Set(left);
-  const rightIds = new Set(right);
-
-  if (leftIds.size !== rightIds.size) {
-    return false;
-  }
-
-  for (const id of leftIds) {
-    if (!rightIds.has(id)) {
-      return false;
-    }
-  }
-  return true;
 };

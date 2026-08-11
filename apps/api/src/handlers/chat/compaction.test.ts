@@ -3,25 +3,28 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
-import { resolveChatCompactionBudget } from "@/api/handlers/chat/compaction-budget";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
-
+import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import {
   COMPACTION_SYSTEM_PROMPT,
+  parseChatCompactionSummary,
+} from "@/api/lib/chat/compaction-summary";
+import {
+  resolveCompactionTriggerTokens,
+  resolvePreserveTokensForTrigger,
+} from "@/api/lib/chat/compaction-tokens";
+
+import {
   compactChatMessages,
   compactModelMessagesForModel,
   compactModelMessages,
   computeThreadContextUsage,
-  parseChatCompactionSummary,
   planChatCompaction,
   planModelCompaction,
   renderChatMessagesForCompaction,
   renderModelMessagesForCompaction,
-  resolveCompactionTriggerTokens,
-  resolvePreserveTokensForTrigger,
   shouldCompactChatMessages,
-  summarizeChatCompaction,
 } from "./compaction";
 
 // Mirrors the stable estimator contract in compaction.ts. If these change, the
@@ -396,64 +399,6 @@ Continue drafting the termination analysis.
       nextSteps: ["Pull amendment file"],
       readFiles: ["contracts/main-agreement.pdf"],
     });
-  });
-
-  test("returns a structured checkpoint for persistent compaction", async () => {
-    const messages = [
-      textMessage({ id: "msg_1", role: "user", text: "old fact ".repeat(80) }),
-      textMessage({ id: "msg_2", role: "assistant", text: "old answer" }),
-      textMessage({ id: "msg_3", role: "user", text: "latest question" }),
-    ];
-
-    const checkpoint = await summarizeChatCompaction({
-      messages,
-      preserveTokens: 20,
-      summarizeTranscript: async () => `
-## Goal
-Answer the latest question.
-
-## Constraints
-- None
-
-## Progress
-### Done
-- Captured old fact
-### In Progress
-- None
-### Blocked
-- None
-
-## Key Decisions
-- None
-
-## Next Steps
-- Answer user
-
-## Critical Context
-- old fact matters
-
-<read-files>
-</read-files>
-<modified-files>
-</modified-files>
-`,
-      triggerTokens: 50,
-    });
-
-    expect(Result.isOk(checkpoint)).toBe(true);
-    if (Result.isError(checkpoint) || checkpoint.value === null) {
-      return;
-    }
-
-    expect(checkpoint.value.plan.messagesToSummarize.map((m) => m.id)).toEqual([
-      "msg_1",
-      "msg_2",
-    ]);
-    expect(checkpoint.value.summary.goal).toBe("Answer the latest question.");
-    expect(checkpoint.value.summary.done).toEqual(["Captured old fact"]);
-    expect(checkpoint.value.plan.recentMessages.map((m) => m.id)).toEqual([
-      "msg_3",
-    ]);
   });
 
   test("compacts model messages for step-level tool loops", async () => {
