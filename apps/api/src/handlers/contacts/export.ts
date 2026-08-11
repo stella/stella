@@ -18,13 +18,14 @@ import {
 } from "@/api/lib/audit-log";
 import { escapeCSV } from "@/api/lib/csv";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 
 const exportQuerySchema = t.Object({
   format: t.Optional(t.Union([t.Literal("csv"), t.Literal("json")])),
 });
+
+const CONTACT_EXPORT_BYTE_LIMIT = 25 * 1024 * 1024;
 
 const config = {
   permissions: { workspace: ["read"] },
@@ -75,7 +76,7 @@ const exportContacts = createSafeRootHandler(
           })
           .from(contacts)
           .where(eq(contacts.organizationId, session.activeOrganizationId));
-        if ((size?.bytes ?? 0) > LIMITS.contactExportByteLimit) {
+        if ((size?.bytes ?? 0) > CONTACT_EXPORT_BYTE_LIMIT) {
           return { status: "too-large" as const };
         }
 
@@ -106,8 +107,7 @@ const exportContacts = createSafeRootHandler(
           format,
         );
         if (
-          Buffer.byteLength(document.body, "utf-8") >
-          LIMITS.contactExportByteLimit
+          Buffer.byteLength(document.body, "utf-8") > CONTACT_EXPORT_BYTE_LIMIT
         ) {
           return { status: "too-large" as const };
         }

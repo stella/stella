@@ -41,26 +41,30 @@ export const contactSearchableText = (
     contact.suffix,
     contact.organizationName,
     contact.notes,
-    compact(
-      contact.emails?.flatMap(({ address, label }) => [address, label]) ?? [],
-    ),
-    compact(
-      contact.phones?.flatMap(({ number, label }) => [number, label]) ?? [],
-    ),
-    compact(
-      contact.addresses?.flatMap(
-        ({ line1, line2, city, state, postalCode, country, label }) => [
-          line1,
-          line2,
-          city,
-          state,
-          postalCode,
-          country,
-          label,
-        ],
-      ) ?? [],
-    ),
-    compact(contact.tags ?? []),
+    contact.emails
+      ? compact(
+          contact.emails.flatMap(({ address, label }) => [address, label]),
+        )
+      : "",
+    contact.phones
+      ? compact(contact.phones.flatMap(({ number, label }) => [number, label]))
+      : "",
+    contact.addresses
+      ? compact(
+          contact.addresses.flatMap(
+            ({ line1, line2, city, state, postalCode, country, label }) => [
+              line1,
+              line2,
+              city,
+              state,
+              postalCode,
+              country,
+              label,
+            ],
+          ),
+        )
+      : "",
+    contact.tags ? compact(contact.tags) : "",
     contact.registrationNumber,
     contact.taxId,
     contact.currency,

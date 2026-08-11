@@ -4,6 +4,7 @@ import { CONTACT_TYPES } from "./workspace-contacts";
 
 export const CONTACT_IMPORT_SCHEMA_VERSION = 1 as const;
 export const CONTACT_IMPORT_MAX_COLUMNS = 100;
+export const CONTACT_IMPORT_MAX_ROWS = 500;
 
 export const CONTACT_IMPORT_FIELDS = [
   "type",

@@ -216,8 +216,6 @@ export const LIMITS = {
   /** Page sizes for the operator recent-registrations listing. */
   operatorRegistrationsPageSizeDefault: 50,
   operatorRegistrationsPageSizeMax: 200,
-  contactImportBatchLimit: 500,
-  contactExportByteLimit: 25 * 1024 * 1024,
   contactsCount: 10_000,
   contactsPageSizeDefault: 50,
   contactsPageSizeMax: 100,

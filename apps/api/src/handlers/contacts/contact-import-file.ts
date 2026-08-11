@@ -6,6 +6,7 @@ import {
   CONTACT_IMPORT_IGNORE_DESTINATION,
   CONTACT_IMPORT_ISSUE_CODE,
   CONTACT_IMPORT_MAX_COLUMNS,
+  CONTACT_IMPORT_MAX_ROWS,
   parseContactImportMapping,
   type ContactImportField,
   type ContactImportIssueCode,
@@ -21,7 +22,6 @@ import type {
 import { CSV_DELIMITERS, CSV_PARSE_STATUS, parseCSV } from "@/api/lib/csv";
 import type { CSVDelimiter } from "@/api/lib/csv";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { LIMITS } from "@/api/lib/limits";
 
 const CONTACT_IMPORT_SAMPLE_LIMIT = 3;
 const CONTACT_IMPORT_SAMPLE_LENGTH_LIMIT = 200;
@@ -231,11 +231,11 @@ export const parseContactImportDocument = (
   }
 
   const rows = selected.rows.slice(1);
-  if (rows.length > LIMITS.contactImportBatchLimit) {
+  if (rows.length > CONTACT_IMPORT_MAX_ROWS) {
     return Result.err(
       new HandlerError({
         status: 400,
-        message: `Too many contacts. Maximum ${LIMITS.contactImportBatchLimit} per import.`,
+        message: `Too many contacts. Maximum ${CONTACT_IMPORT_MAX_ROWS} per import.`,
       }),
     );
   }
