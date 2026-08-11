@@ -183,6 +183,26 @@ describe("extractText", () => {
     });
   });
 
+  test("annotates a block directive stored in a table cell", async () => {
+    const xml = WRAP(
+      `<w:tbl><w:tr><w:tc>
+        <w:p><w:r><w:t>{{#each fields}}</w:t></w:r></w:p>
+      </w:tc></w:tr></w:tbl>`,
+    );
+    const buf = await makeDocx(xml);
+    const result = await extractText(buf);
+
+    expect(result.paragraphs[2]).toEqual({
+      index: 2,
+      text: "| {{#each fields}} |",
+      source: "body",
+      tableRow: { table: 0, kind: "cells" },
+      isDirective: true,
+      directiveKind: "each",
+      directiveExpression: "fields",
+    });
+  });
+
   test("annotates #elseif and #else directives", async () => {
     const xml = WRAP(
       `<w:p><w:r><w:t>{{#if a}}</w:t></w:r></w:p>

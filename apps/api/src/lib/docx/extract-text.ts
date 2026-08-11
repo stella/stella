@@ -32,13 +32,31 @@ const DIRECTIVE_KIND_MAP: Record<string, BlockDirectiveKind> = {
   "/each": "endeach",
 };
 
+const directiveCandidate = ({
+  tableRow,
+  text,
+}: ExtractedDocxParagraph): string => {
+  if (tableRow?.kind !== "cells") {
+    return text;
+  }
+
+  // Folio renders a source table row as `| cell | cell |`. Removing only the
+  // two outer delimiters lets a sole-cell directive retain its semantics;
+  // internal delimiters remain, so mixed-content rows cannot become blocks.
+  return text.startsWith("|") && text.endsWith("|")
+    ? text.slice(1, -1).trim()
+    : text;
+};
+
 // ── Public API ───────────────────────────────────────────
 
 const annotateDirective = (
   extractedParagraph: ExtractedDocxParagraph,
 ): ExtractedParagraph => {
   const paragraph: ExtractedParagraph = { ...extractedParagraph };
-  const directiveMatch = DIRECTIVE_RE.exec(extractedParagraph.text);
+  const directiveMatch = DIRECTIVE_RE.exec(
+    directiveCandidate(extractedParagraph),
+  );
   if (!directiveMatch) {
     return paragraph;
   }
