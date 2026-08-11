@@ -87,7 +87,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 601,
+    "count": 614,
     "files": {
       "apps/api/src/db/migrate.ts": 2,
       "apps/api/src/db/schema.ts": 1,
@@ -115,7 +115,8 @@
       "apps/api/src/handlers/case-law/ingestion/adapters/update-fixtures.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/parsers/cz-ns.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 12,
-      "apps/api/src/handlers/case-law/ingestion/status.ts": 7,
+      "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts": 10,
+      "apps/api/src/handlers/case-law/ingestion/status.ts": 9,
       "apps/api/src/handlers/case-law/polarity/classifier.ts": 2,
       "apps/api/src/handlers/case-law/polarity/rule-engine.ts": 1,
       "apps/api/src/handlers/case-law/seed-court-weights.ts": 1,
@@ -221,6 +222,7 @@
       "apps/api/src/lib/legal-search/case-law-search-index.ts": 3,
       "apps/api/src/lib/legal-search/corpus-index-pagination.ts": 2,
       "apps/api/src/lib/legal-search/corpus-index-provider.ts": 1,
+      "apps/api/src/lib/legal-search/reconciliation-store.ts": 1,
       "apps/api/src/lib/mcp-upstream/connections.ts": 5,
       "apps/api/src/lib/mcp-upstream/oauth.ts": 6,
       "apps/api/src/lib/redis-client.ts": 2,

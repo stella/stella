@@ -33,6 +33,7 @@ import {
 } from "@/api/handlers/case-law/corpus-index";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
+import { runReconciliationWorkUnit } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import { backfillLegislationCorpusIndex } from "@/api/handlers/legislation/corpus-index";
 import { backfillLegislationSearchIndex } from "@/api/handlers/legislation/search-index";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
@@ -63,6 +64,12 @@ import {
   loadCourtWeightEntries,
 } from "../db";
 import { LEGAL_ATLAS_RUNNER_ENV } from "../env";
+import {
+  RECONCILIATION_LOOP_TIMING,
+  RECONCILIATION_TURN,
+  type ReconciliationSource,
+  runCaseLawReconciliationLoop,
+} from "./case-law-reconciliation";
 import {
   CORPUS_INDEX_STEP,
   type CorpusIndexStepKind,
@@ -1419,6 +1426,108 @@ export const runCaseLawIngest = async (
     });
   })();
 
+  // The standing listing reconciliation: for every source whose adapter can
+  // be asked what its publisher lists for a slice, keep verifying that what is
+  // listed is held, ingest the misses, and park what repeatedly refuses so the
+  // hunt reaches a fixed point instead of re-fetching the same unservable
+  // document forever. On unless a deployment turns it off.
+  //
+  // Each unit takes the source's ingestion lease, so overlapping runner
+  // replicas during a rolling deployment cannot interleave two writers on one
+  // source; the replacement simply finds the source leased and asks again.
+  const reconciliationLoop = (async () => {
+    if (!LEGAL_ATLAS_RUNNER_ENV.caseLawReconciliationEnabled) {
+      return;
+    }
+    const fetchDelayMs = LEGAL_ATLAS_RUNNER_ENV.reconciliationFetchDelayMs;
+    const reconcilable: ReconciliationSource[] = [];
+    for (const { adapterKey, name } of SOURCES) {
+      const reconciliation = getAdapter(adapterKey)?.reconciliation;
+      if (!reconciliation) {
+        continue;
+      }
+      // oxlint-disable-next-line no-await-in-loop -- one bounded source lookup per configured source, at startup
+      const source = await ensureSource(adapterKey, name, null);
+      reconcilable.push({
+        adapterKey,
+        runWorkUnit: async () => {
+          const outcome = await runWithHardDeadline(
+            "case-law-reconciliation",
+            BACKFILL_HARD_DEADLINE_MS,
+            async () =>
+              await runReconciliationWorkUnit({
+                adapterKey,
+                sourceId: source.id,
+                reconciliation,
+                scopedDb: backfillDb,
+                now: () => new Date(),
+                fetchDelayMs,
+                sleep: async (ms) => {
+                  await Bun.sleep(ms);
+                },
+              }),
+          );
+          switch (outcome.type) {
+            case "worked":
+              return {
+                turn: RECONCILIATION_TURN.WORKED,
+                counts: outcome.summary,
+              };
+            case "leased":
+              return { turn: RECONCILIATION_TURN.LEASED };
+            case "idle":
+              return { turn: RECONCILIATION_TURN.IDLE };
+            default: {
+              const exhaustive: never = outcome;
+              return panic(
+                `Unhandled reconciliation outcome: ${JSON.stringify(exhaustive)}`,
+              );
+            }
+          }
+        },
+      });
+    }
+    if (reconcilable.length === 0) {
+      return;
+    }
+    logInfo(
+      `[reconciliation] Enabled for ${reconcilable
+        .map(({ adapterKey }) => adapterKey)
+        .join(", ")} (one fetch per ${fetchDelayMs}ms)`,
+    );
+    await runCaseLawReconciliationLoop({
+      sources: reconcilable,
+      isDraining,
+      now: Date.now,
+      report: (summary) => {
+        logInfo(
+          `[reconciliation] case_law.reconciliation.swept ` +
+            `worked=${summary.worked} ` +
+            `idle=${summary.idle} ` +
+            `leased=${summary.leased} ` +
+            `listed=${summary.listed} ` +
+            `keyable=${summary.keyable} ` +
+            `unidentifiable=${summary.unidentifiable} ` +
+            `held=${summary.heldBefore} ` +
+            `scheduled=${summary.scheduled} ` +
+            `written=${summary.written} ` +
+            `parked=${summary.parked} ` +
+            `terminal=${summary.terminal} ` +
+            `resolved=${summary.resolved} ` +
+            `deferred=${summary.deferred} ` +
+            `pruned=${summary.pruned} ` +
+            `failed=${summary.failed} ` +
+            `errored=${summary.errored} ` +
+            `lastErrorType=${summary.errored === 0 ? "none" : errorTag(summary.lastError)}`,
+        );
+      },
+      sleep: async (ms) => {
+        await Bun.sleep(ms);
+      },
+      timing: { ...RECONCILIATION_LOOP_TIMING, unitDelayMs: fetchDelayMs },
+    });
+  })();
+
   await Promise.all([
     ...adapterLoops,
     healthLoop,
@@ -1428,6 +1537,7 @@ export const runCaseLawIngest = async (
     legislationSearchIndexLoop,
     legislationCorpusIndexLoop,
     skDocumentLoop,
+    reconciliationLoop,
   ]);
   return 0;
 };

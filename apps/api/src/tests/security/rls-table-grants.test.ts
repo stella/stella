@@ -57,6 +57,10 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // Crawl bookkeeping: the app role reads coverage for reporting, only
   // ingestion writes it.
   "case_law_coverage_slices",
+  // Listed decisions the reconciliation could not ingest. Same shape as the
+  // coverage ledger it sits beside: read by the ingestion status rollup,
+  // written only by the reconciliation loop.
+  "case_law_reconciliation_items",
 ]);
 
 // Internal handoff tables whose scoped role needs INSERT but not table-wide

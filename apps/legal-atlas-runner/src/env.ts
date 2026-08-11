@@ -107,6 +107,24 @@ export const LEGAL_ATLAS_RUNNER_ENV = {
     fallback: 500,
     min: 100,
   }),
+  // The standing listing reconciliation. On by default: a source drifting
+  // away from what its publisher lists is the failure this exists to prevent,
+  // and a check that has to be switched on is a check that is off when it
+  // matters. The flag is a kill switch, not an opt-in.
+  caseLawReconciliationEnabled: readBooleanEnv({
+    name: "CASE_LAW_RECONCILIATION_ENABLED",
+    fallback: true,
+  }),
+  // Gap between two document fetches inside a reconciliation unit, and
+  // therefore the whole throughput of the hunt. A manners default rather than
+  // a rate any publisher has confirmed; move it in steps while the loop's
+  // failure tallies are watched. The floor keeps a typo from turning the
+  // hunt into a stampede.
+  reconciliationFetchDelayMs: readIntegerEnv({
+    name: "RECONCILIATION_FETCH_DELAY_MS",
+    fallback: 250,
+    min: 100,
+  }),
   // Root-pool reads/writes (source lookup + one-time seed insert) are tiny;
   // a short ceiling fails fast on a dead connection at cycle start.
   dbRootQueryTimeoutMs: readIntegerEnv({

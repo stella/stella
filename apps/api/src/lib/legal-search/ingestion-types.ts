@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import type { Result } from "better-result";
 
 import type { DocumentAst } from "@/api/lib/case-law/document-ast";
@@ -196,6 +197,168 @@ export type StoredRawReparseOutcome =
     };
 
 /**
+ * How a listing item would be keyed once stored, mirroring the two halves of
+ * the decision identity index: the publisher's own document id where the item
+ * carries one, the docket plus its language otherwise.
+ *
+ * `unidentifiable` is the item an ingest also drops: with nothing to key the
+ * decision on it can never be held, so it must not be counted as missing
+ * either — a slice that counted it would stay short forever.
+ */
+export type ListingIdentity =
+  | { type: "document"; sourceDocumentId: string }
+  | { type: "case-number"; caseNumber: string; language: string }
+  | { type: "unidentifiable" };
+
+/**
+ * Mirrors `case_law_reconciliation_items.identity_key`. A key longer than the
+ * column cannot be parked, so it cannot be tracked to a fixed point either.
+ */
+export const LISTING_IDENTITY_KEY_MAX_LENGTH = 320;
+
+const IDENTITY_KEY_PREFIX = {
+  DOCUMENT: "document:",
+  CASE_NUMBER: "case-number:",
+} as const;
+
+/**
+ * The stable string form of a keyable identity, or `null` when there is none
+ * to key on. Both `unidentifiable` and an over-long key answer `null`: they
+ * mean the same thing to every caller — this item can be neither looked up
+ * nor parked, so it is excluded from what a slice is measured against.
+ */
+const unboundedListingIdentityKey = (
+  identity: ListingIdentity,
+): string | null => {
+  switch (identity.type) {
+    case "document":
+      return identity.sourceDocumentId.length === 0
+        ? null
+        : `${IDENTITY_KEY_PREFIX.DOCUMENT}${identity.sourceDocumentId}`;
+    case "case-number":
+      // Both halves, because either one empty produces a key the parser
+      // below rejects, and the round-trip is the property this pair exists
+      // to guarantee. An adapter that trims a docket to nothing gets an
+      // unkeyable identity rather than a key nothing can read back.
+      return identity.caseNumber.length === 0 || identity.language.length === 0
+        ? null
+        : `${IDENTITY_KEY_PREFIX.CASE_NUMBER}${identity.language}:${identity.caseNumber}`;
+    case "unidentifiable":
+      return null;
+    default: {
+      const exhaustive: never = identity;
+      return panic(`Unhandled listing identity: ${JSON.stringify(exhaustive)}`);
+    }
+  }
+};
+
+export const listingIdentityKey = (
+  identity: ListingIdentity,
+): string | null => {
+  const key = unboundedListingIdentityKey(identity);
+  return key !== null && key.length <= LISTING_IDENTITY_KEY_MAX_LENGTH
+    ? key
+    : null;
+};
+
+/**
+ * The identity a key names, or `null` when no current rule produces that key.
+ *
+ * The inverse of `listingIdentityKey`, deliberately its neighbour: a stored
+ * key has to be read back to ask whether its decision has since been stored,
+ * and a parser living apart from the format it parses is free to drift from
+ * it. `listingIdentityKey` round-trips through this for every keyable
+ * identity, which is the property that binds the two.
+ */
+export const parseListingIdentityKey = (
+  key: string,
+): ListingIdentity | null => {
+  if (key.startsWith(IDENTITY_KEY_PREFIX.DOCUMENT)) {
+    const sourceDocumentId = key.slice(IDENTITY_KEY_PREFIX.DOCUMENT.length);
+    return sourceDocumentId.length === 0
+      ? null
+      : { type: "document", sourceDocumentId };
+  }
+  if (!key.startsWith(IDENTITY_KEY_PREFIX.CASE_NUMBER)) {
+    return null;
+  }
+  const rest = key.slice(IDENTITY_KEY_PREFIX.CASE_NUMBER.length);
+  const separator = rest.indexOf(":");
+  if (separator <= 0 || separator === rest.length - 1) {
+    return null;
+  }
+  return {
+    type: "case-number",
+    language: rest.slice(0, separator),
+    caseNumber: rest.slice(separator + 1),
+  };
+};
+
+/** One item as the publisher lists it, plus how the ingest would key it. */
+export type ReconciliationListingItem = {
+  identity: ListingIdentity;
+  /** Verbatim listing payload, JSON-serializable; replayed into buildDecision. */
+  payload: unknown;
+};
+
+export type ReconciliationSlicePage = {
+  items: ReconciliationListingItem[];
+  /** 0 where the publisher lists nothing for the slice at all. */
+  totalPages: number;
+};
+
+export type ReconciliationSlicePageOptions = {
+  slice: string;
+  /** 0-indexed page within the slice. */
+  page: number;
+  signal?: AbortSignal | undefined;
+};
+
+/**
+ * What building one listed item produced. `detail-unavailable` must never be
+ * written: a detail-less row would make the identity held and take the
+ * document out of every later reconciliation.
+ */
+export type ReconciliationBuildOutcome =
+  | { type: "built"; decision: IngestionResult }
+  | { type: "unkeyable" }
+  | { type: "detail-unavailable" };
+
+/**
+ * The capability that makes a source reconcilable: the publisher can be asked
+ * what it holds for a slice, independently of the cursor the crawl advanced.
+ *
+ * Slices are opaque strings to the loop and must sort lexicographically in
+ * walk order, so the ledger's `(source, slice)` rows can be ordered and
+ * compared without the loop knowing what a slice means to the adapter.
+ */
+export type SourceReconciliation = {
+  /** First slice the publisher can list (e.g. the feed's first day). */
+  firstSlice: string;
+  /** Slice for a UTC instant (the tip). */
+  sliceOf: (now: Date) => string;
+  /** Next slice after `slice` in walk order, or null past the tip. */
+  nextSlice: (slice: string) => string | null;
+  /**
+   * Slice before `slice` in walk order, or null at `firstSlice`. The
+   * historical sweep runs newest-first, so it needs the walk order reversed:
+   * unsurveyed recent history is worth more than unsurveyed old history, and
+   * a sweep that could only step forward would have to start at the feed's
+   * beginning every time.
+   */
+  previousSlice: (slice: string) => string | null;
+  /** Slices near the tip that get re-walked on a fast cadence. */
+  tipWindowDays: number;
+  listSlicePage: (
+    options: ReconciliationSlicePageOptions,
+  ) => Promise<ReconciliationSlicePage>;
+  buildDecision: (
+    payload: unknown,
+    signal?: AbortSignal,
+  ) => Promise<ReconciliationBuildOutcome>;
+};
+
+/**
  * Interface for court data source adapters.
  *
  * Each adapter knows how to paginate through a specific
@@ -254,6 +417,17 @@ export type SourceAdapter = {
    * a count endpoint or if the request fails.
    */
   getTotalCount?: (signal: AbortSignal) => Promise<number | null>;
+  /**
+   * Ask the publisher what it lists for a slice, so the standing
+   * reconciliation loop can compare that against what is held and ingest the
+   * difference.
+   *
+   * Optional. It exists only for sources that publish a listing addressable
+   * independently of the crawl cursor; where the only way to reach a decision
+   * is to walk the cursor forward, there is nothing to reconcile against and
+   * the adapter omits this rather than re-crawling under another name.
+   */
+  reconciliation?: SourceReconciliation | undefined;
 };
 
 /** Preserve an adapter's literal registry key while contextualizing its API. */

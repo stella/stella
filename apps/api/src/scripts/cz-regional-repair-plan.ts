@@ -2,15 +2,20 @@ import { panic } from "better-result";
 
 import { DAY_IN_MS } from "@stll/time";
 
-import { splitCaseReference } from "@/api/handlers/case-law/case-number";
 import type { CzRegionalApiItem } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
-import { documentIdFromLink } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
+import {
+  CZ_REGIONAL_FEED_START,
+  CZ_REGIONAL_LANGUAGE,
+  czRegionalListingIdentity,
+} from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
+import { toUtcDateString } from "@/api/lib/dates";
+import type { ListingIdentity } from "@/api/lib/legal-search/ingestion-types";
+import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
 
 /**
- * Day enumeration, identity derivation and the listing diff for the
- * cz-regional reconciliation (`cz-regional-repair.ts`), kept apart from the
- * runnable script so they can be exercised without a database or the
- * publisher's API.
+ * Day enumeration and the listing diff for the cz-regional reconciliation
+ * (`cz-regional-repair.ts`), kept apart from the runnable script so they can
+ * be exercised without a database or the publisher's API.
  *
  * The identity helpers come from the adapter rather than being restated
  * here: what counts as this source's document id is one rule, and a second
@@ -19,21 +24,21 @@ import { documentIdFromLink } from "@/api/handlers/case-law/ingestion/adapters/c
  * nothing in this module performs I/O.
  */
 
-/** The only language this source publishes; half of the fallback identity. */
-export const CZ_REGIONAL_LANGUAGE = "cs";
+export {
+  CZ_REGIONAL_FEED_START,
+  CZ_REGIONAL_LANGUAGE,
+  czRegionalListingIdentity,
+  toUtcDateString,
+};
 
-/** First day of the publisher's open-data feed. */
-export const CZ_REGIONAL_FEED_START = "2020-10-01";
+/** Retained under the local name this script's callers already use. */
+export type CzRegionalListingIdentity = ListingIdentity;
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
 
 /** Midnight UTC on a `YYYY-MM-DD` day, as epoch milliseconds. */
 const utcDayStart = (date: string): number =>
   new Date(`${date}T00:00:00.000Z`).getTime();
-
-/** The UTC calendar day a timestamp falls on, as `YYYY-MM-DD`. */
-export const toUtcDateString = (date: Date): string =>
-  date.toISOString().slice(0, 10);
 
 /**
  * Whether a string names a real UTC calendar day. The round-trip rejects
@@ -66,39 +71,6 @@ export const enumerateUtcDays = ({ from, to }: UtcDayRange): string[] => {
     days.push(toUtcDateString(new Date(cursor)));
   }
   return days;
-};
-
-/**
- * How a listing item would be keyed once stored, mirroring the two halves of
- * the decision identity index: the publisher's document id where the item
- * carries one, the docket otherwise.
- */
-export type CzRegionalListingIdentity =
-  | { type: "document"; sourceDocumentId: string }
-  | { type: "case-number"; caseNumber: string }
-  | { type: "unidentifiable" };
-
-/**
- * The identity the ingest would store for this listing item.
- *
- * `unidentifiable` is the item the crawl also drops: without a docket and a
- * court there is nothing to key the decision on, so it can never be held and
- * must not be counted as missing either.
- */
-export const czRegionalListingIdentity = (
-  item: CzRegionalApiItem,
-): CzRegionalListingIdentity => {
-  if (!item.jednaciCislo || !item.soud) {
-    return { type: "unidentifiable" };
-  }
-  const sourceDocumentId = documentIdFromLink(item.odkaz ?? undefined);
-  if (sourceDocumentId !== undefined) {
-    return { type: "document", sourceDocumentId };
-  }
-  return {
-    type: "case-number",
-    caseNumber: splitCaseReference(item.jednaciCislo).caseNumber,
-  };
 };
 
 export type CzRegionalListingKeys = {
@@ -182,14 +154,11 @@ export const diffCzRegionalListing = ({
   const seen = new Set<string>();
   for (const item of items) {
     const identity = czRegionalListingIdentity(item);
-    if (identity.type === "unidentifiable") {
+    const key = listingIdentityKey(identity);
+    if (identity.type === "unidentifiable" || key === null) {
       diff.unidentifiable.push(item);
       continue;
     }
-    const key =
-      identity.type === "document"
-        ? `document:${identity.sourceDocumentId}`
-        : `case-number:${identity.caseNumber}`;
     if (seen.has(key)) {
       diff.duplicate.push(item);
       continue;

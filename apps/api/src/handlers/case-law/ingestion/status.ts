@@ -5,14 +5,37 @@ import { DAY_IN_MS } from "@stll/time";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  caseLawCoverageSlices,
   caseLawDecisions,
   caseLawIngestionEvents,
   caseLawIngestionFailures,
+  caseLawReconciliationItems,
   caseLawSources,
+  RECONCILIATION_ITEM_STATUS,
 } from "@/api/db/schema";
 import type { SourceTotalOrigin } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+
+/**
+ * Where the standing listing reconciliation stands for one source.
+ *
+ * Null for a source it has never touched. The handler cannot see adapters, so
+ * it cannot ask whether a source has the capability; the absence of both a
+ * ledger row and a parked item is the same answer either way — nothing has
+ * been reconciled here.
+ */
+type SourceReconciliationStatus = {
+  /** Slices surveyed at least once. */
+  slices: number;
+  /** Of those, slices holding fewer identities than the publisher listed. */
+  shortSlices: number;
+  /** Listed decisions awaiting another attempt. */
+  parked: number;
+  /** Listed decisions the retry schedule gave up on; accounted for, not held. */
+  terminal: number;
+  lastCheckedAt: string | null;
+};
 
 type SourceStatus = {
   adapterKey: string;
@@ -40,6 +63,7 @@ type SourceStatus = {
     errorMessage: string | null;
   } | null;
   topErrors: { errorType: string; count: number }[];
+  reconciliation: SourceReconciliationStatus | null;
 };
 
 type IngestionStatus = {
@@ -84,7 +108,7 @@ export const getIngestionStatus = async (
       // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential per-source aggregation reads on a single scoped connection
       const [hourRow] = await db
         .select({
-          inserted: sql<number>`coalesce(sum(${caseLawIngestionEvents.inserted}), 0)`,
+          inserted: sql<number>`coalesce(sum(${caseLawIngestionEvents.inserted}), 0)::int`,
         })
         .from(caseLawIngestionEvents)
         .where(
@@ -95,7 +119,7 @@ export const getIngestionStatus = async (
       // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential per-source aggregation reads on a single scoped connection
       const [dayRow] = await db
         .select({
-          inserted: sql<number>`coalesce(sum(${caseLawIngestionEvents.inserted}), 0)`,
+          inserted: sql<number>`coalesce(sum(${caseLawIngestionEvents.inserted}), 0)::int`,
         })
         .from(caseLawIngestionEvents)
         .where(
@@ -142,6 +166,39 @@ export const getIngestionStatus = async (
         .orderBy(desc(count()))
         .limit(3);
 
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential per-source aggregation reads on a single scoped connection
+      const [sliceRow] = await db
+        .select({
+          slices: count(),
+          shortSlices: sql<number>`coalesce(sum(case when ${caseLawCoverageSlices.collected} < ${caseLawCoverageSlices.reported} then 1 else 0 end), 0)::int`,
+          lastCheckedAt: sql<Date | null>`max(${caseLawCoverageSlices.checkedAt})`,
+        })
+        .from(caseLawCoverageSlices)
+        .where(sql`${caseLawCoverageSlices.sourceId} = ${source.id}`);
+
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential per-source aggregation reads on a single scoped connection
+      const [itemRow] = await db
+        .select({
+          parked: sql<number>`coalesce(sum(case when ${caseLawReconciliationItems.status} = ${RECONCILIATION_ITEM_STATUS.PARKED} then 1 else 0 end), 0)::int`,
+          terminal: sql<number>`coalesce(sum(case when ${caseLawReconciliationItems.status} = ${RECONCILIATION_ITEM_STATUS.TERMINAL} then 1 else 0 end), 0)::int`,
+        })
+        .from(caseLawReconciliationItems)
+        .where(sql`${caseLawReconciliationItems.sourceId} = ${source.id}`);
+
+      const slices = sliceRow?.slices ?? 0;
+      const parked = itemRow?.parked ?? 0;
+      const terminal = itemRow?.terminal ?? 0;
+      const reconciliation: SourceReconciliationStatus | null =
+        slices === 0 && parked === 0 && terminal === 0
+          ? null
+          : {
+              slices,
+              shortSlices: sliceRow?.shortSlices ?? 0,
+              parked,
+              terminal,
+              lastCheckedAt: sliceRow?.lastCheckedAt?.toISOString() ?? null,
+            };
+
       sourceStatuses.push({
         adapterKey: source.adapterKey,
         name: source.name,
@@ -168,6 +225,7 @@ export const getIngestionStatus = async (
           errorType: f.errorType,
           count: f.count,
         })),
+        reconciliation,
       });
     }
 
