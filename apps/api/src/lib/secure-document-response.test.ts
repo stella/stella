@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
-import { secureDocumentResponse } from "@/api/lib/secure-document-response";
+import {
+  parseContentLengthHeader,
+  secureDocumentResponse,
+} from "@/api/lib/secure-document-response";
 import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
 
 describe("secure document responses", () => {
@@ -40,4 +43,19 @@ describe("secure document responses", () => {
     expect(response.headers.get("Content-Type")).toBe("application/pdf");
     expect(response.headers.get("X-Document-Diagnostic")).toBe("preserved");
   });
+
+  test.each([
+    ["0", 0],
+    ["42", 42],
+    ["0042", 42],
+  ])("parses a valid upstream content length (%s)", (value, expected) => {
+    expect(parseContentLengthHeader(value)).toBe(expected);
+  });
+
+  test.each([null, "", "-1", "1.5", "1, 1", "9007199254740992"])(
+    "rejects an unsafe upstream content length (%s)",
+    (value) => {
+      expect(parseContentLengthHeader(value)).toBeUndefined();
+    },
+  );
 });

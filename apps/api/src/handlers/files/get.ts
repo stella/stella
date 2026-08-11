@@ -26,7 +26,10 @@ import { createFileKey } from "@/api/lib/files/utils";
 import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import { presignDownloadUrl } from "@/api/lib/s3-presign";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
-import { secureDocumentResponse } from "@/api/lib/secure-document-response";
+import {
+  parseContentLengthHeader,
+  secureDocumentResponse,
+} from "@/api/lib/secure-document-response";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const FILE_READ_URL_EXPIRY_SECONDS = 15 * 60;
@@ -354,6 +357,9 @@ const pdfResponse = (buffer: ArrayBuffer, fileName: string) =>
 const streamedPdfResponse = (response: Response, fileName: string) =>
   secureDocumentResponse({
     body: response.body,
+    contentLength: parseContentLengthHeader(
+      response.headers.get("Content-Length"),
+    ),
     contentType: PDF_MIME_TYPE,
     disposition: "inline",
     fileName: sanitizeFilename(fileName),
