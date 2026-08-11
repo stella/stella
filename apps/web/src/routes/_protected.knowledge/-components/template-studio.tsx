@@ -33,6 +33,7 @@ import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import {
+  isTemplateFillDiscoverKey,
   knowledgeKeys,
   templateDocxBufferOptions,
 } from "@/lib/knowledge/queries";
@@ -1095,7 +1096,7 @@ export const TemplateStudioPage = ({
         queryClient
           .invalidateQueries({
             queryKey: knowledgeKeys.templates.all(activeOrganizationId),
-            predicate: (query) => query.queryKey.at(-1) !== "fill-discover",
+            predicate: (query) => !isTemplateFillDiscoverKey(query.queryKey),
           })
           .then(
             async () =>

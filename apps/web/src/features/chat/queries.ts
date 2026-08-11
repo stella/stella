@@ -2677,22 +2677,21 @@ export const chatThreadTitleOptions = ({
     queryFn: async () => await fetchChatThreadTitle(key),
   });
 
+// Match every cached `chatKeys.groupedThreads` entry, whatever org and search
+// term it carries: the invalidator cannot reconstruct the org id, so it walks
+// by structural shape instead.
+const matchesGroupedChatThreads = (queryKey: readonly unknown[]): boolean =>
+  queryKey.at(0) === "chat" &&
+  queryKey.at(2) === "threads" &&
+  queryKey.at(3) === "grouped";
+
 export const invalidateGroupedChatThreads = async (queryClient: QueryClient) =>
   await queryClient.invalidateQueries({
     // Refetch mounted history surfaces immediately. Inactive search results
     // become stale and refresh only if the user returns to them, avoiding a
     // request fanout across every cached search after each completed turn.
     refetchType: "active",
-    // Match every cached `["chat", <orgId>, "threads", "grouped"]` entry —
-    // we cannot reconstruct orgId here so we walk by structural shape.
-    predicate: (query) => {
-      const queryKey = query.queryKey;
-      return (
-        queryKey.at(0) === "chat" &&
-        queryKey.at(2) === "threads" &&
-        queryKey.at(3) === "grouped"
-      );
-    },
+    predicate: (query) => matchesGroupedChatThreads(query.queryKey),
   });
 
 export const invalidateChatThreadLists = async ({

@@ -42,6 +42,8 @@ type ClausesListKey = {
   limit?: number | undefined;
 };
 
+const FILL_DISCOVER_SEGMENT = "fill-discover";
+
 export const knowledgeKeys = {
   skills: {
     root: agentSkillsQueryRoot(),
@@ -111,7 +113,7 @@ export const knowledgeKeys = {
     // must not be part of the cache identity.
     fillDiscover: (organizationId: string, templateId: string) => [
       ...knowledgeKeys.templates.detail(organizationId, templateId),
-      "fill-discover",
+      FILL_DISCOVER_SEGMENT,
     ],
   },
   templateCategories: {
@@ -198,6 +200,16 @@ export const knowledgeKeys = {
     ],
   },
 };
+
+/**
+ * Whether a key is a `templates.fillDiscover` entry. The template editor
+ * invalidates the templates subtree while excluding this one (it must refetch
+ * only after the new detail lands), and reads the marker the factory appends
+ * rather than restating it.
+ */
+export const isTemplateFillDiscoverKey = (
+  queryKey: readonly unknown[],
+): boolean => queryKey.at(-1) === FILL_DISCOVER_SEGMENT;
 
 // ── Template queries ────────────────────────────────
 
