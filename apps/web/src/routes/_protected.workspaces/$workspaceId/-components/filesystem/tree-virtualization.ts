@@ -20,7 +20,10 @@ export const flattenFilesystemRows = (
     for (const node of nodes) {
       rows.push({ node, depth, ancestorIds });
 
-      if (node.kind !== "folder" || !expandedIds.has(node.entityId)) {
+      const showsChildren =
+        node.kind === "message" ||
+        (node.kind === "folder" && expandedIds.has(node.entityId));
+      if (!showsChildren) {
         continue;
       }
 

@@ -64,7 +64,11 @@ import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-uplo
 import { deleteS3ObjectWithSignal, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
-import { validateEmailAttachmentCount } from "@/api/lib/uploads/email-ingest-policy";
+import {
+  resolveStoredEmailFileName,
+  validateEmailAttachmentCount,
+  validateEmailAttachmentMimeType,
+} from "@/api/lib/uploads/email-ingest-policy";
 import {
   checkEntityCreateCapacityForInsert,
   checkEntityCreateTargetForInsert,
@@ -200,6 +204,11 @@ const prepareAttachment = async ({
   const fileName = attachmentFileName(attachment);
   const mimeType = attachmentMimeType(attachment);
   const buffer = attachment.bytes;
+
+  const attachmentTypeResult = validateEmailAttachmentMimeType(mimeType);
+  if (Result.isError(attachmentTypeResult)) {
+    return attachmentTypeResult;
+  }
 
   const scanResult = await scanFile({
     buffer,
@@ -505,6 +514,10 @@ export const finalizeEmailIngest = async function* ({
       parentId,
       name: messageName,
     });
+    const storedMessageFileName = resolveStoredEmailFileName(
+      renamed.value,
+      declaredMime,
+    );
     const stamps = await allocateEntityStamps(
       tx,
       workspaceId,
@@ -552,7 +565,7 @@ export const finalizeEmailIngest = async function* ({
         type: "file",
         version: 1,
         id: messageFileId,
-        fileName: renamed.value,
+        fileName: storedMessageFileName,
         mimeType: declaredMime,
         sizeBytes: declaredSize,
         encrypted: messageEncrypted,
@@ -581,7 +594,7 @@ export const finalizeEmailIngest = async function* ({
             old: null,
             new: {
               kind: "message",
-              fileName: renamed.value,
+              fileName: storedMessageFileName,
               mimeType: declaredMime,
               sizeBytes: declaredSize,
               propertyId,
@@ -700,7 +713,7 @@ export const finalizeEmailIngest = async function* ({
       entityId: messageEntityId,
       fieldId: messageFieldId,
       fileId: messageFileId,
-      fileName: renamed.value,
+      fileName: storedMessageFileName,
       renamed: renamed.renamed,
       attachmentEntityIds: accepted.map((attachment) => attachment.entityId),
     };
