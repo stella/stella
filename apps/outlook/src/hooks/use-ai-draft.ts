@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { Result } from "better-result";
 
+import { buildAIDraftRequest } from "@/hooks/ai-request.logic";
 import { api, withTimeout } from "@/lib/api";
 import { toAPIError, userErrorMessage } from "@/lib/api-error";
 import type { MailSnapshot } from "@/types";
@@ -30,17 +31,10 @@ export const useAIDraft = (errorFallback: string): UseAIDraft => {
 
   const draftReply = async ({ intent, language, snapshot }: DraftArgs) => {
     setState({ type: "loading" });
-    const originalFrom = snapshot.from?.email;
     const result = await Result.tryPromise(
       async () =>
         await api.ai["draft-email"].post(
-          {
-            intent,
-            originalBody: snapshot.bodyText,
-            originalSubject: snapshot.subject,
-            ...(originalFrom ? { originalFrom } : {}),
-            ...(language ? { language } : {}),
-          },
+          buildAIDraftRequest({ intent, language, snapshot }),
           withTimeout(AI_REQUEST_TIMEOUT_MS),
         ),
     );

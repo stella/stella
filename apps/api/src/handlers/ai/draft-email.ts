@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { t } from "elysia";
 import * as v from "valibot";
 
+import { OUTLOOK_AI_INPUT_MAX_CHARS } from "@stll/api-contract";
+
 import { toOutlookGenerationError } from "@/api/handlers/ai/outlook-generation-error";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -11,7 +13,6 @@ import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
 const INTENT_MAX_CHARS = 2000;
 const ORIGINAL_SUBJECT_MAX_CHARS = 500;
-const ORIGINAL_BODY_MAX_CHARS = 20_000;
 const ORIGINAL_FROM_MAX_CHARS = 320;
 const LANGUAGE_MAX_CHARS = 32;
 const DRAFT_TIMEOUT_MS = 60_000;
@@ -22,7 +23,7 @@ const draftEmailBodySchema = t.Object({
   originalSubject: t.Optional(
     t.String({ maxLength: ORIGINAL_SUBJECT_MAX_CHARS }),
   ),
-  originalBody: t.String({ maxLength: ORIGINAL_BODY_MAX_CHARS }),
+  originalBody: t.String({ maxLength: OUTLOOK_AI_INPUT_MAX_CHARS }),
   originalFrom: t.Optional(t.String({ maxLength: ORIGINAL_FROM_MAX_CHARS })),
   language: t.Optional(t.String({ maxLength: LANGUAGE_MAX_CHARS })),
 });
