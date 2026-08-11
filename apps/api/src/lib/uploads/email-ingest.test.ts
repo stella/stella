@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   detectEmailContainer,
+  emailIngestFinalObjectCleanupFailure,
   resolveStoredEmailFileName,
   validateEmailAttachmentCount,
   validateEmailAttachmentMimeType,
@@ -23,6 +24,13 @@ describe("validateEmailAttachmentCount", () => {
       expect(result.error.rejectReason).toBe("too-many-attachments");
     }
   });
+});
+
+test("classifies final-object cleanup failure as retryable", () => {
+  const error = emailIngestFinalObjectCleanupFailure();
+
+  expect(error.status).toBe(500);
+  expect(error.rejectReason).toBe("final-object-cleanup-failed");
 });
 
 describe("email attachment policy", () => {
@@ -53,6 +61,22 @@ describe("email attachment policy", () => {
     expect(
       Result.isOk(validateEmailIngestContainer(bytes, "message/rfc822")),
     ).toBe(true);
+  });
+
+  test("detects an EML header when a large field pushes the separator past the sample", () => {
+    const bytes = new TextEncoder().encode(
+      `From: sender@example.com\r\nSubject: ${"x".repeat(70_000)}\r\n\r\nbody`,
+    );
+
+    expect(detectEmailContainer(bytes)).toBe("eml");
+    const result = validateEmailAttachmentMimeType(
+      bytes,
+      "application/octet-stream",
+    );
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.rejectReason).toBe("nested-email-attachment");
+    }
   });
 
   test("rejects an email container that differs from its declared MIME", () => {

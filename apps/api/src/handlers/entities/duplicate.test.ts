@@ -50,6 +50,8 @@ const organizationId = toSafeId<"organization">("organization_1");
 const rootFolderId = toSafeId<"entity">("root_folder");
 const documentId = toSafeId<"entity">("document_child");
 const nestedFolderId = toSafeId<"entity">("nested_folder");
+const messageId = toSafeId<"entity">("message_root");
+const attachmentId = toSafeId<"entity">("message_attachment");
 const propertyId = toSafeId<"property">("property_1");
 
 const fileContent = {
@@ -171,10 +173,29 @@ const sourceEntities = [
   },
 ];
 
+const messageSourceEntities = [
+  {
+    id: messageId,
+    kind: "message" as const,
+    name: "Email.eml",
+    parentId: null,
+    currentVersion: { fields: [] },
+  },
+  {
+    id: attachmentId,
+    kind: "document" as const,
+    name: "Attachment.pdf",
+    parentId: messageId,
+    currentVersion: { fields: [] },
+  },
+];
+
 const createContext = ({
   safeDb,
+  entityId = rootFolderId,
 }: {
   safeDb: Parameters<typeof duplicateEntity.handler>[0]["safeDb"];
+  entityId?: SafeId<"entity">;
 }): Parameters<typeof duplicateEntity.handler>[0] => {
   const recorderBindings = {
     organizationId,
@@ -190,7 +211,7 @@ const createContext = ({
     user: { id: userId },
     session: { activeOrganizationId: organizationId },
     memberRole: { role: "owner" },
-    body: { entityId: rootFolderId },
+    body: { entityId },
     request: recorderBindings.request,
     route: "/v1/entities/:workspaceId/duplicate",
     safeDb,
@@ -420,5 +441,75 @@ describe("duplicate entity", () => {
     expect(enqueueEntitySearchRepairsMock).not.toHaveBeenCalled();
     expect(flushEntitySearchRepairsMock).not.toHaveBeenCalled();
     expect(enqueueDocumentProcessingRunMock).not.toHaveBeenCalled();
+  });
+
+  test("duplicates ingested message with attachment children", async () => {
+    const insertedEntities: InsertedEntity[] = [];
+    const insertedVersions: unknown[] = [];
+    const insertedAuditLogs: unknown[] = [];
+    let nextDocumentSequence = 0;
+
+    const tx = {
+      query: {
+        entities: {
+          findFirst: async () => messageSourceEntities.at(0),
+          findMany: async () => messageSourceEntities,
+        },
+        workspaces: {
+          findFirst: async () => ({ reference: null }),
+        },
+      },
+      $count: async () => 0,
+      select: () => ({
+        from: () => ({
+          where: async () => [],
+        }),
+      }),
+      insert: (table: unknown) => ({
+        values: (value: unknown) => {
+          if (table === documentCounters) {
+            return {
+              onConflictDoUpdate: () => ({
+                returning: async () => {
+                  nextDocumentSequence += 1;
+                  return [{ lastValue: nextDocumentSequence }];
+                },
+              }),
+            };
+          }
+
+          if (table === entities) {
+            if (!isInsertedEntity(value)) {
+              throw new Error("Invalid inserted entity fixture value");
+            }
+            insertedEntities.push(value);
+          } else if (table === entityVersions) {
+            insertedVersions.push(value);
+          } else if (table === auditLogs) {
+            insertedAuditLogs.push(value);
+          }
+
+          return undefined;
+        },
+      }),
+      update: () => ({
+        set: () => ({
+          where: async () => {},
+        }),
+      }),
+    };
+
+    const { safeDb } = createScopedDbMock(tx);
+    const result = await duplicateEntity.handler(
+      createContext({ safeDb, entityId: messageId }),
+    );
+
+    expect(result).toEqual({ entityId: expect.any(String) });
+    expect(insertedEntities).toHaveLength(2);
+    expect(insertedVersions).toHaveLength(2);
+    expect(insertedAuditLogs).toHaveLength(1);
+    expect(insertedEntities.at(0)?.kind).toBe("message");
+    expect(insertedEntities.at(1)?.kind).toBe("document");
+    expect(insertedEntities.at(1)?.parentId).toBe(insertedEntities.at(0)?.id);
   });
 });

@@ -77,6 +77,9 @@ export const buildEmlFile = async ({
   }
 
   message.addMessage({ contentType: "text/plain", data: snapshot.bodyText });
+  if (snapshot.bodyHtml.trim().length > 0) {
+    message.addMessage({ contentType: "text/html", data: snapshot.bodyHtml });
+  }
 
   const encodedAttachments = await Promise.all(
     attachments

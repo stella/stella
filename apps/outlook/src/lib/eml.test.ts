@@ -6,6 +6,7 @@ import type { AttachmentDownloadResult, MailSnapshot } from "@/types";
 const baseSnapshot: MailSnapshot = {
   attachments: [],
   bcc: [{ email: "blind@example.net", name: "Blind Recipient" }],
+  bodyHtml: '<p>Please review the <a href="https://example.com">draft</a>.</p>',
   bodyText: "Please review the attached draft before Friday.",
   cc: [{ email: "partner@firm.example", name: "Partner" }],
   conversationId: "conv-1",
@@ -43,6 +44,9 @@ describe("buildEmlFile", () => {
     expect(raw).toContain("lawyer@firm.example");
     expect(raw).toContain("partner@firm.example");
     expect(raw).toContain("blind@example.net");
+    expect(raw).toContain("multipart/alternative");
+    expect(raw).toContain("https://example.com");
+    expect(raw).toContain("<p>Please review the");
     expect(raw).toContain("Message-ID: <msg-1@example.com>");
     expect(raw).toContain("Please review the attached draft before Friday.");
   });
