@@ -90,6 +90,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
     resourceType: RESOURCE_TYPE.CLAUSE_VERSION,
   },
   contact: { type: "resource", resourceType: RESOURCE_TYPE.CONTACT },
+  contactImportRequest: { type: "non_resource", reason: "workflow" },
   contactRelationship: { type: "non_resource", reason: "association" },
   usageAllocation: { type: "non_resource", reason: "policy" },
   usagePolicy: { type: "non_resource", reason: "policy" },

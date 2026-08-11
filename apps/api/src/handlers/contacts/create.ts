@@ -1,5 +1,4 @@
 import { Result, panic } from "better-result";
-import { count, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -13,19 +12,18 @@ import {
   contactMetadataSchema,
   contactPhoneSchema,
 } from "@/api/db/schema-validators";
+import { hasContactCapacity } from "@/api/handlers/contacts/contact-capacity";
 import { normalizeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
+import { insertContactSearchProjections } from "@/api/handlers/contacts/contact-search-projection";
 import { createContactTypeSchema } from "@/api/handlers/contacts/schema";
-import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
-import { upsertContactSearchDocument } from "@/api/lib/search/index-global";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 
 const createContactBodySchema = t.Object({
@@ -74,23 +72,6 @@ export const createContactHandler = async function* ({
   recordAuditEvent,
   body,
 }: CreateContactHandlerProps) {
-  const [totalRow] = yield* Result.await(
-    safeDb((tx) =>
-      tx
-        .select({ total: count() })
-        .from(contacts)
-        .where(eq(contacts.organizationId, organizationId)),
-    ),
-  );
-
-  const total = totalRow?.total ?? 0;
-
-  if (total >= LIMITS.contactsCount) {
-    return Result.err(
-      new HandlerError({ status: 400, message: "Contacts limit reached" }),
-    );
-  }
-
   const attorneyIds: string[] = [];
   if (body.originatingAttorneyId) {
     attorneyIds.push(body.originatingAttorneyId);
@@ -128,8 +109,17 @@ export const createContactHandler = async function* ({
     }
   }
 
-  const contact = yield* Result.await(
+  const result = yield* Result.await(
     safeDb(async (tx) => {
+      const hasCapacity = await hasContactCapacity({
+        tx,
+        organizationId,
+        incomingCount: 1,
+      });
+      if (!hasCapacity) {
+        return { status: "limit-reached" as const };
+      }
+
       const [row] = await tx
         .insert(contacts)
         .values({
@@ -182,15 +172,20 @@ export const createContactHandler = async function* ({
             },
           },
         });
+        await insertContactSearchProjections(tx, [row]);
       }
 
-      return row;
+      return { status: "created" as const, contact: row };
     }),
   );
 
-  const created = contact ?? panic("Contact insert returned no row");
+  if (result.status === "limit-reached") {
+    return Result.err(
+      new HandlerError({ status: 400, message: "Contacts limit reached" }),
+    );
+  }
 
-  upsertContactSearchDocument(created.id).catch(captureError);
+  const created = result.contact ?? panic("Contact insert returned no row");
 
   return Result.ok(created);
 };

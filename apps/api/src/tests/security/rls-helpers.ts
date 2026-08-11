@@ -18,6 +18,7 @@ import {
   clauses,
   clauseVariants,
   clauseVersions,
+  contactImportRequests,
   contactRelationships,
   contacts,
   documentCounters,
@@ -152,6 +153,8 @@ export const createTestIds = () => ({
   contactA2: id<"contact">(),
   contactB: id<"contact">(),
   contactB2: id<"contact">(),
+  contactImportRequestA: id<"contactImportRequest">(),
+  contactImportRequestB: id<"contactImportRequest">(),
   contactRelA: id<"contactRelationship">(),
   contactRelB: id<"contactRelationship">(),
   templateA: id<"template">(),
@@ -219,6 +222,7 @@ export const wsScopedTables = [
 /** All organization-only tables with `organization_id`. */
 export const orgScopedTables = [
   contacts,
+  contactImportRequests,
   templates,
   clauseCategories,
   clauses,
@@ -330,6 +334,25 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       organizationId: ids.orgB,
       type: "person" as const,
       displayName: "Contact B2",
+    },
+  ]);
+
+  await db.insert(contactImportRequests).values([
+    {
+      id: ids.contactImportRequestA,
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      idempotencyKey: ids.contactImportRequestA,
+      requestFingerprint: "a".repeat(64),
+      result: { created: 1 },
+    },
+    {
+      id: ids.contactImportRequestB,
+      organizationId: ids.orgB,
+      userId: ids.userB1,
+      idempotencyKey: ids.contactImportRequestB,
+      requestFingerprint: "b".repeat(64),
+      result: { created: 1 },
     },
   ]);
 

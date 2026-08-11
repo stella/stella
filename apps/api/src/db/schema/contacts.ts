@@ -30,6 +30,10 @@ import type {
   SchedulerSchedule,
 } from "./common";
 
+export type ContactImportResult = {
+  created: number;
+};
+
 export const contacts = p.pgTable(
   "contacts",
   {
@@ -124,6 +128,40 @@ export const contacts = p.pgTable(
 );
 
 export type ContactType = (typeof contacts.type)["enumValues"][number];
+
+export const contactImportRequests = p.pgTable(
+  "contact_import_requests",
+  {
+    id: pUuid<"contactImportRequest">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    idempotencyKey: p.varchar("idempotency_key", { length: 128 }).notNull(),
+    requestFingerprint: p
+      .varchar("request_fingerprint", { length: 64 })
+      .notNull(),
+    result: jsonb().$type<ContactImportResult>().notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .uniqueIndex("contact_import_requests_org_user_key_uidx")
+      .on(table.organizationId, table.userId, table.idempotencyKey),
+    p.check(
+      "contact_import_requests_key_nonempty_check",
+      sql`length(${table.idempotencyKey}) > 0`,
+    ),
+    p.check(
+      "contact_import_requests_fingerprint_check",
+      sql`${table.requestFingerprint} ~ '^[0-9a-f]{64}$'`,
+    ),
+    ...orgPolicies(),
+  ],
+);
 
 export const contactRelationships = p.pgTable(
   "contact_relationships",

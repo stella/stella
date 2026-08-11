@@ -29,6 +29,7 @@ export const AUDIT_ACTION = {
 export type AuditAction = (typeof AUDIT_ACTION)[keyof typeof AUDIT_ACTION];
 
 export const ORGANIZATION_AUDIT_LOG_RESOURCE_ID = "organization-logs";
+export const CONTACT_DIRECTORY_AUDIT_RESOURCE_ID = "contact-directory";
 
 export const AUDIT_RESOURCE_TYPE = {
   AUDIT_LOG: "audit_log",
@@ -44,6 +45,7 @@ export const AUDIT_RESOURCE_TYPE = {
   CLAUSE_TEMPLATE_LINK: "clause_template_link",
   CLAUSE_VARIANT: "clause_variant",
   CONTACT: "contact",
+  CONTACT_DIRECTORY: "contact_directory",
   DOCUMENT_TYPE: "document_type",
   USAGE_ALLOCATION: "usage_allocation",
   USAGE_ENTITLEMENT: "usage_entitlement",
@@ -290,6 +292,7 @@ const activityCategoryForEvent = (event: AuditEvent): AuditActivityCategory => {
     case "clause_template_link":
     case "clause_variant":
     case "contact":
+    case "contact_directory":
     case "document_type":
     case "usage_allocation":
     case "usage_entitlement":

@@ -6,11 +6,7 @@ import { isEntityKind, resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
 import { rootDb } from "@/api/db/root";
 import { contacts, workspaceContacts, workspaces } from "@/api/db/schema";
-import type {
-  ContactAddress,
-  ContactEmail,
-  ContactPhone,
-} from "@/api/db/schema-validators";
+import type { ContactEmail, ContactPhone } from "@/api/db/schema-validators";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { redistributableSourceJoin } from "@/api/lib/case-law/search-sql";
@@ -23,6 +19,7 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
+import { contactSearchableText } from "@/api/lib/search/contact-searchable-text";
 import {
   contactWorkspaceAccessSql,
   searchDocumentsAccessSql,
@@ -112,23 +109,6 @@ const phonesToText = (phones: readonly ContactPhone[] | null | undefined) =>
     phones === null || phones === undefined
       ? []
       : phones.flatMap((phone) => [phone.number, phone.label]),
-  );
-
-const addressesToText = (
-  addresses: readonly ContactAddress[] | null | undefined,
-) =>
-  compact(
-    addresses === null || addresses === undefined
-      ? []
-      : addresses.flatMap((address) => [
-          address.line1,
-          address.line2,
-          address.city,
-          address.state,
-          address.postalCode,
-          address.country,
-          address.label,
-        ]),
   );
 
 const tagsToText = (tags: readonly string[] | null | undefined) =>
@@ -1471,22 +1451,7 @@ export const upsertContactSearchDocument = async (
     return;
   }
 
-  const searchableText = compact([
-    contact.prefix,
-    contact.firstName,
-    contact.middleName,
-    contact.lastName,
-    contact.suffix,
-    contact.organizationName,
-    contact.notes,
-    emailsToText(contact.emails),
-    phonesToText(contact.phones),
-    addressesToText(contact.addresses),
-    tagsToText(contact.tags),
-    contact.registrationNumber,
-    contact.taxId,
-    contact.currency,
-  ]);
+  const searchableText = contactSearchableText(contact);
   const previewGeneration = Bun.randomUUIDv7();
   const previewPassages = buildSearchPreviewPassages(
     contact.displayName,

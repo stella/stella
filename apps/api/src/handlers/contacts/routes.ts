@@ -3,7 +3,11 @@ import Elysia from "elysia";
 import businessRegistriesLookup from "@/api/handlers/contacts/business-registries-lookup";
 import createContact from "@/api/handlers/contacts/create";
 import deleteContactById from "@/api/handlers/contacts/delete";
+import exportContacts from "@/api/handlers/contacts/export";
 import readContactById from "@/api/handlers/contacts/get";
+import importContacts from "@/api/handlers/contacts/import";
+import inspectContactImport from "@/api/handlers/contacts/import-inspect";
+import previewContactImport from "@/api/handlers/contacts/import-preview";
 import readContacts from "@/api/handlers/contacts/list";
 import searchContacts from "@/api/handlers/contacts/search";
 import updateContactById from "@/api/handlers/contacts/update";
@@ -28,6 +32,22 @@ export const contactsRoute = new Elysia({ prefix: "/contacts" })
   .get("/business-registries", businessRegistriesLookup.handler, {
     permissions: businessRegistriesLookup.config.permissions,
     query: businessRegistriesLookup.config.query,
+  })
+  .get("/export", exportContacts.handler, {
+    permissions: exportContacts.config.permissions,
+    query: exportContacts.config.query,
+  })
+  .post("/import/inspect", inspectContactImport.handler, {
+    body: inspectContactImport.config.body,
+    permissions: inspectContactImport.config.permissions,
+  })
+  .post("/import/preview", previewContactImport.handler, {
+    body: previewContactImport.config.body,
+    permissions: previewContactImport.config.permissions,
+  })
+  .post("/import", importContacts.handler, {
+    body: importContacts.config.body,
+    permissions: importContacts.config.permissions,
   })
   .put("/", createContact.handler, {
     body: createContact.config.body,

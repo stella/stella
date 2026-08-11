@@ -64,6 +64,23 @@ describe("parseCSV", () => {
     });
   });
 
+  test("parses semicolon and tab delimited records", () => {
+    expect(parseCSV('name;email\n"Doe, Jane";jane@example.com', ";")).toEqual({
+      status: CSV_PARSE_STATUS.SUCCESS,
+      rows: [
+        ["name", "email"],
+        ["Doe, Jane", "jane@example.com"],
+      ],
+    });
+    expect(parseCSV("name\temail\nJane\tjane@example.com", "\t")).toEqual({
+      status: CSV_PARSE_STATUS.SUCCESS,
+      rows: [
+        ["name", "email"],
+        ["Jane", "jane@example.com"],
+      ],
+    });
+  });
+
   test("rejects an unterminated quoted cell", () => {
     expect(
       parseCSV(

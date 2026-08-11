@@ -13,6 +13,10 @@ export const CSV_PARSE_STATUS = {
   SUCCESS: "success",
 } as const;
 
+export const CSV_DELIMITERS = [",", ";", "\t"] as const;
+
+export type CSVDelimiter = (typeof CSV_DELIMITERS)[number];
+
 type CSVParseResult =
   | {
       status: typeof CSV_PARSE_STATUS.INVALID;
@@ -37,7 +41,10 @@ const restoreGuardedFormula = (value: string): string => {
  * Blank records are ignored. Quotes may only open at the start of a cell, and
  * after a closing quote only a delimiter, record boundary, or EOF is valid.
  */
-export const parseCSV = (text: string): CSVParseResult => {
+export const parseCSV = (
+  text: string,
+  delimiter: CSVDelimiter = ",",
+): CSVParseResult => {
   const rows: string[][] = [];
   let row: string[] = [];
   let cell = "";
@@ -80,7 +87,7 @@ export const parseCSV = (text: string): CSVParseResult => {
     }
 
     if (closedQuote) {
-      if (character === ",") {
+      if (character === delimiter) {
         finishCell();
         continue;
       }
@@ -101,7 +108,7 @@ export const parseCSV = (text: string): CSVParseResult => {
       inQuotes = true;
       continue;
     }
-    if (character === ",") {
+    if (character === delimiter) {
       finishCell();
       continue;
     }

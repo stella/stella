@@ -2,7 +2,11 @@ import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useForm } from "@tanstack/react-form";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   createFileRoute,
   getRouteApi,
@@ -18,11 +22,14 @@ import {
   useTable,
 } from "@tanstack/react-table";
 import type { Column, ReactTable, Row } from "@tanstack/react-table";
+import { Result } from "better-result";
 import {
   BuildingIcon,
+  DownloadIcon,
   EllipsisVerticalIcon,
   PlusIcon,
   SearchIcon,
+  UploadIcon,
   UserIcon,
 } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
@@ -69,6 +76,10 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { EmptyScreen } from "@/components/empty-screen";
+import {
+  ResponsiveActionToolbar,
+  ResponsiveActionToolbarItem,
+} from "@/components/responsive-action-toolbar";
 import { TableSkeletonRows } from "@/components/table-skeleton-rows";
 import Tooltip from "@/components/tooltip";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -80,14 +91,22 @@ import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { pageTitle } from "@/lib/page-title";
+import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import { toFormErrors } from "@/lib/schema";
+import { downloadFile } from "@/lib/utils";
 
 const ARES_NATIVE_TOOL_SLUG = "ares";
 
 type ContactFilter = "all" | ContactType;
 
 export const Route = createFileRoute("/_protected/contacts/")({
+  loader: async ({ context }) => {
+    await ensureRouteInfiniteQueryData(
+      context.queryClient,
+      contactsOptions(context.user.activeOrganizationId),
+    );
+  },
   head: () => ({
     meta: [{ title: pageTitle("navigation.contacts") }],
   }),
@@ -102,6 +121,7 @@ function ContactsPage() {
   const tContacts = useTranslations("contacts");
   const canCreateContact = usePermissions({ contact: ["create"] });
   const [createContactOpen, setCreateContactOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [filter, setFilter] = useState<ContactFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -115,14 +135,17 @@ function ContactsPage() {
     select: (ctx) => ctx.user.activeOrganizationId,
   });
 
-  const { data, isLoading } = useQuery(
-    contactsOptions(activeOrganizationId, {
-      type: typeFilter,
-      q: debouncedQuery || undefined,
-    }),
-  );
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
+    useInfiniteQuery(
+      contactsOptions(activeOrganizationId, {
+        type: typeFilter,
+        q: debouncedQuery || undefined,
+      }),
+    );
 
-  const items: ContactItem[] = data ? data.items : [];
+  const items: ContactItem[] = data
+    ? data.pages.flatMap((page) => page.items)
+    : [];
   const isFirstUseEmpty =
     !isLoading &&
     items.length === 0 &&
@@ -138,47 +161,107 @@ function ContactsPage() {
     getRowId: (row) => row.id,
   });
 
+  const handleExport = async () => {
+    setIsExporting(true);
+    const result = await Result.tryPromise(async () => {
+      const response = await api.contacts.export.get({
+        query: { format: "csv" },
+      });
+      const exportData = unwrapEden(response);
+      return exportData instanceof Response
+        ? await exportData.blob()
+        : new Blob([String(exportData)], { type: "text/csv;charset=utf-8" });
+    });
+    setIsExporting(false);
+
+    if (Result.isError(result)) {
+      stellaToast.add({
+        title: userErrorFromThrown(result.error, t("contacts.exportFailed")),
+        type: "error",
+      });
+      return;
+    }
+
+    downloadFile(result.value, "contacts-export.csv");
+  };
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto border-t p-4">
-      <div className="flex items-center gap-2">
-        <InputGroup className="me-auto max-w-sm flex-1">
-          <InputGroupInput
-            onChange={(e) => {
-              const val = e.target.value;
-              setSearchQuery(val);
-              updateSearch(val);
-            }}
-            placeholder={t("contacts.search")}
-            value={searchQuery}
-          />
-          <InputGroupAddon>
-            <SearchIcon />
-          </InputGroupAddon>
-        </InputGroup>
-        <div className="flex gap-1">
-          <FilterButton
-            active={filter === "all"}
-            label={t("common.all")}
-            onClick={() => setFilter("all")}
-          />
-          <FilterButton
-            active={filter === "person"}
-            label={t("contacts.filterPersons")}
-            onClick={() => setFilter("person")}
-          />
-          <FilterButton
-            active={filter === "organization"}
-            label={t("contacts.filterOrganizations")}
-            onClick={() => setFilter("organization")}
-          />
-        </div>
-        {canCreateContact && (
-          <CreateContactDialog
-            onOpenChange={setCreateContactOpen}
-            open={createContactOpen}
-          />
-        )}
-      </div>
+      <ResponsiveActionToolbar>
+        <ResponsiveActionToolbarItem slot="primary">
+          <InputGroup className="min-h-11 sm:min-h-0 sm:max-w-sm">
+            <InputGroupInput
+              onChange={(e) => {
+                const val = e.target.value;
+                setSearchQuery(val);
+                updateSearch(val);
+              }}
+              placeholder={t("contacts.search")}
+              value={searchQuery}
+            />
+            <InputGroupAddon>
+              <SearchIcon />
+            </InputGroupAddon>
+          </InputGroup>
+        </ResponsiveActionToolbarItem>
+        <ResponsiveActionToolbarItem slot="secondary">
+          <div className="flex gap-1 overflow-x-auto">
+            <FilterButton
+              active={filter === "all"}
+              label={t("common.all")}
+              onClick={() => setFilter("all")}
+            />
+            <FilterButton
+              active={filter === "person"}
+              label={t("contacts.filterPersons")}
+              onClick={() => setFilter("person")}
+            />
+            <FilterButton
+              active={filter === "organization"}
+              label={t("contacts.filterOrganizations")}
+              onClick={() => setFilter("organization")}
+            />
+          </div>
+        </ResponsiveActionToolbarItem>
+        <ResponsiveActionToolbarItem className="ms-auto sm:ms-0" slot="action">
+          <div className="flex gap-1">
+            {canCreateContact && (
+              <Button
+                aria-label={t("common.import")}
+                render={<Link to="/contacts/import" />}
+                size="sm"
+                title={t("common.import")}
+                variant="outline"
+              >
+                <UploadIcon />
+                <span className="hidden sm:inline">{t("common.import")}</span>
+              </Button>
+            )}
+            <Button
+              aria-busy={isExporting}
+              aria-label={t("workspaces.views.exportCsv")}
+              disabled={isExporting}
+              onClick={() => {
+                detached(handleExport(), "ContactsPage.export");
+              }}
+              size="sm"
+              title={t("workspaces.views.exportCsv")}
+              variant="outline"
+            >
+              <DownloadIcon />
+              <span className="hidden sm:inline">
+                {t("workspaces.views.exportCsv")}
+              </span>
+            </Button>
+            {canCreateContact && (
+              <CreateContactDialog
+                onOpenChange={setCreateContactOpen}
+                open={createContactOpen}
+              />
+            )}
+          </div>
+        </ResponsiveActionToolbarItem>
+      </ResponsiveActionToolbar>
 
       {isFirstUseEmpty && canCreateContact ? (
         <EmptyScreen
@@ -191,7 +274,21 @@ function ContactsPage() {
           title={tContacts("emptyTitle")}
         />
       ) : (
-        <ContactsTable isLoading={isLoading} table={table} />
+        <>
+          <ContactsTable isLoading={isLoading} table={table} />
+          {hasNextPage && (
+            <Button
+              className="self-center"
+              loading={isFetchingNextPage}
+              onClick={() => {
+                detached(fetchNextPage(), "ContactsPage.fetchNextPage");
+              }}
+              variant="outline"
+            >
+              {t("common.loadMore")}
+            </Button>
+          )}
+        </>
       )}
     </div>
   );
@@ -204,7 +301,12 @@ type FilterButtonProps = {
 };
 
 const FilterButton = ({ label, active, onClick }: FilterButtonProps) => (
-  <Button onClick={onClick} size="sm" variant={active ? "default" : "outline"}>
+  <Button
+    aria-pressed={active}
+    onClick={onClick}
+    size="sm"
+    variant={active ? "default" : "outline"}
+  >
     {label}
   </Button>
 );
@@ -527,31 +629,68 @@ const ContactsTable = ({ table, isLoading }: ContactsTableProps) => {
 // same space and the page does not jump when it swaps in.
 const ContactsToolbarPlaceholder = () => {
   const t = useTranslations();
+  const canCreateContact = usePermissions({ contact: ["create"] });
 
   return (
-    <div className="flex items-center gap-2">
-      <InputGroup className="me-auto max-w-sm flex-1">
-        <InputGroupInput disabled placeholder={t("contacts.search")} />
-        <InputGroupAddon>
-          <SearchIcon />
-        </InputGroupAddon>
-      </InputGroup>
-      <div className="flex gap-1">
-        <Button disabled size="sm" variant="default">
-          {t("common.all")}
-        </Button>
-        <Button disabled size="sm" variant="outline">
-          {t("contacts.filterPersons")}
-        </Button>
-        <Button disabled size="sm" variant="outline">
-          {t("contacts.filterOrganizations")}
-        </Button>
-      </div>
-      <Button disabled size="sm">
-        <PlusIcon />
-        {t("contacts.newContact")}
-      </Button>
-    </div>
+    <ResponsiveActionToolbar>
+      <ResponsiveActionToolbarItem slot="primary">
+        <InputGroup className="min-h-11 sm:min-h-0 sm:max-w-sm">
+          <InputGroupInput disabled placeholder={t("contacts.search")} />
+          <InputGroupAddon>
+            <SearchIcon />
+          </InputGroupAddon>
+        </InputGroup>
+      </ResponsiveActionToolbarItem>
+      <ResponsiveActionToolbarItem slot="secondary">
+        <div className="flex gap-1 overflow-x-auto">
+          <Button disabled size="sm" variant="default">
+            {t("common.all")}
+          </Button>
+          <Button disabled size="sm" variant="outline">
+            {t("contacts.filterPersons")}
+          </Button>
+          <Button disabled size="sm" variant="outline">
+            {t("contacts.filterOrganizations")}
+          </Button>
+        </div>
+      </ResponsiveActionToolbarItem>
+      <ResponsiveActionToolbarItem className="ms-auto sm:ms-0" slot="action">
+        <div className="flex gap-1">
+          {canCreateContact && (
+            <Button
+              aria-label={t("common.import")}
+              disabled
+              size="sm"
+              title={t("common.import")}
+              variant="outline"
+            >
+              <UploadIcon />
+              <span className="hidden sm:inline">{t("common.import")}</span>
+            </Button>
+          )}
+          <Button
+            aria-label={t("workspaces.views.exportCsv")}
+            disabled
+            size="sm"
+            title={t("workspaces.views.exportCsv")}
+            variant="outline"
+          >
+            <DownloadIcon />
+            <span className="hidden sm:inline">
+              {t("workspaces.views.exportCsv")}
+            </span>
+          </Button>
+          {canCreateContact && (
+            <Button disabled size="sm">
+              <PlusIcon />
+              <span className="hidden sm:inline">
+                {t("contacts.newContact")}
+              </span>
+            </Button>
+          )}
+        </div>
+      </ResponsiveActionToolbarItem>
+    </ResponsiveActionToolbar>
   );
 };
 
@@ -789,9 +928,17 @@ const CreateContactDialog = ({
       }}
       open={open}
     >
-      <DialogTrigger render={<Button size="sm" />}>
+      <DialogTrigger
+        render={
+          <Button
+            aria-label={t("contacts.newContact")}
+            size="sm"
+            title={t("contacts.newContact")}
+          />
+        }
+      >
         <PlusIcon />
-        {t("contacts.newContact")}
+        <span className="hidden sm:inline">{t("contacts.newContact")}</span>
       </DialogTrigger>
       <DialogPopup>
         <Form
