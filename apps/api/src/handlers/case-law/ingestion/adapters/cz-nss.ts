@@ -1445,12 +1445,6 @@ export const czNssAdapter = defineSourceAdapter({
           };
         }
 
-        // No coverage row here: the reconciliation loop owns this source's
-        // ledger. It keys the same `(source, YYYY-MM-DD)` rows but counts
-        // something else — keyable identities listed against identities held,
-        // not items one crawl page walked — so a crawl-side write would
-        // overwrite the loop's answer with a different question's.
-
         // No more pages; advance to next day
         const next = nextDay(date);
         return {

@@ -1609,8 +1609,7 @@ export const czUsAdapter = defineSourceAdapter({
    * The search form answers a decision-date range on its own, so what a year
    * holds is answerable without the crawl cursor ever reaching it: list the
    * year, key each record the way the ingest would, and compare against what
-   * is held. This loop is the only writer of coverage for this source; the
-   * crawl states no `SliceCoverage`.
+   * is held. This loop is the only writer of coverage for this source.
    */
   reconciliation: {
     firstSlice: CZ_US_FIRST_SLICE,

@@ -330,11 +330,9 @@ describe("czUsAdapter.fetchPage", () => {
     expect(page.nextCursor).toMatch(
       /^search:historical:2026-08-07:1993:verify:0:0:[a-f0-9]+$/u,
     );
-    expect(page.coverage).toBeUndefined();
 
     const verified = unwrap(await czUsAdapter.fetchPage(page.nextCursor, {}));
     expect(verified.nextCursor).toBe(historicalCursor(1994));
-    expect(verified.coverage).toBeUndefined();
   });
 
   test("keeps multiple published decisions under one docket distinct", async () => {
@@ -467,7 +465,6 @@ describe("czUsAdapter.fetchPage", () => {
     expect(first.nextCursor).toMatch(
       /^search:historical:\d{4}-\d{2}-\d{2}:2024:collect:1:[a-f0-9]+:-$/u,
     );
-    expect(first.coverage).toBeUndefined();
 
     installSearchMock({
       rows: [
@@ -488,7 +485,6 @@ describe("czUsAdapter.fetchPage", () => {
       reported: 42,
     });
     const last = unwrap(await czUsAdapter.fetchPage(first.nextCursor, {}));
-    expect(last.coverage).toBeUndefined();
     expect(last.nextCursor).toMatch(
       /^search:historical:\d{4}-\d{2}-\d{2}:2024:verify:0:0:[a-f0-9]+$/u,
     );
@@ -519,7 +515,6 @@ describe("czUsAdapter.fetchPage", () => {
       await czUsAdapter.fetchPage(verifyFirst.nextCursor, {}),
     );
     expect(verified.nextCursor).toBe(historicalCursor(2025));
-    expect(verified.coverage).toBeUndefined();
   });
 
   test("restarts a traversal when a saved result page disappears", async () => {
@@ -564,7 +559,6 @@ describe("czUsAdapter.fetchPage", () => {
     const collected = unwrap(
       await czUsAdapter.fetchPage(historicalCursor(2024), {}),
     );
-    expect(collected.coverage).toBeUndefined();
 
     installSearchMock({
       rows: [
@@ -581,7 +575,6 @@ describe("czUsAdapter.fetchPage", () => {
       await czUsAdapter.fetchPage(collected.nextCursor, {}),
     );
 
-    expect(changed.coverage).toBeUndefined();
     expect(changed.nextCursor).toBe(historicalCursor(2024));
   });
 
@@ -598,7 +591,6 @@ describe("czUsAdapter.fetchPage", () => {
 
     expect(submitted?.get("ctl00$MainContent$decidedFrom")).toBe("1.1.1993");
     expect(page.nextCursor).toBe(historicalCursor(1994));
-    expect(page.coverage).toBeUndefined();
   });
 
   test("finishing the current decision year hands over to availability polling", async () => {
@@ -643,7 +635,7 @@ describe("czUsAdapter.fetchPage", () => {
       },
     });
 
-    const page = unwrap(
+    unwrap(
       await czUsAdapter.fetchPage(recentCursor("2026-06-24", "2026-08-07"), {}),
     );
 
@@ -653,7 +645,6 @@ describe("czUsAdapter.fetchPage", () => {
     expect(submitted?.get("ctl00$MainContent$availableFrom")).toBe("24.6.2026");
     expect(submitted?.get("ctl00$MainContent$availableTo")).toBe("7.8.2026");
     expect(submitted?.get("ctl00$MainContent$decidedFrom")).toBeNull();
-    expect(page.coverage).toBeUndefined();
   });
 
   test("abstract failure does not drop a listed decision", async () => {
