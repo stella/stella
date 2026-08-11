@@ -9,7 +9,10 @@ import { env } from "@/env";
 import { useMountEffect } from "@/hooks/use-effect";
 import { authClient } from "@/lib/auth";
 import { detached } from "@/lib/detached";
-import { buildOutlookSocialCallbackUrl } from "@/lib/outlook-auth";
+import {
+  buildOutlookOrganizationSelectionUrl,
+  outlookSessionHandoff,
+} from "@/lib/outlook-auth";
 
 const OFFICE_JS_URL =
   "https://appsforoffice.microsoft.com/lib/1.1/hosted/office.js";
@@ -93,9 +96,24 @@ const SignInOutlook = () => {
       const office = await loadOfficeJs();
 
       const session = await authClient.getSession();
+      const handoff = outlookSessionHandoff(session.data?.session);
+      switch (handoff) {
+        case "signed-out":
+          setState({ type: "signed-out" });
+          return;
+        case "select-organization":
+          window.location.replace(
+            buildOutlookOrganizationSelectionUrl({
+              frontendOrigin: window.location.origin,
+              parentOrigin: ALLOWED_PARENT_ORIGIN,
+            }),
+          );
+          return;
+        case "deliver":
+          break;
+      }
       const token = session.data?.session.token;
       if (!token) {
-        setState({ type: "signed-out" });
         return;
       }
 
@@ -120,7 +138,7 @@ const SignInOutlook = () => {
   const handleSignIn = async () => {
     setState({ type: "signing-in" });
     const { error } = await authClient.signIn.social({
-      callbackURL: buildOutlookSocialCallbackUrl({
+      callbackURL: buildOutlookOrganizationSelectionUrl({
         frontendOrigin: window.location.origin,
         parentOrigin: ALLOWED_PARENT_ORIGIN,
       }),

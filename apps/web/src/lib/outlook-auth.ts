@@ -14,7 +14,7 @@ type BuildOutlookSocialCallbackUrlOptions = {
   parentOrigin: string;
 };
 
-export const buildOutlookSocialCallbackUrl = ({
+export const buildOutlookOrganizationSelectionUrl = ({
   frontendOrigin,
   parentOrigin,
 }: BuildOutlookSocialCallbackUrlOptions): string => {
@@ -24,4 +24,21 @@ export const buildOutlookSocialCallbackUrl = ({
     normalizeRedirectTo(buildOutlookHandoffPath(parentOrigin)),
   );
   return callback.toString();
+};
+
+type OutlookSession = {
+  activeOrganizationId?: string | null | undefined;
+  token?: string | null | undefined;
+};
+
+export const outlookSessionHandoff = (
+  session: OutlookSession | null | undefined,
+): "deliver" | "select-organization" | "signed-out" => {
+  if (!session?.token) {
+    return "signed-out";
+  }
+  if (!session.activeOrganizationId) {
+    return "select-organization";
+  }
+  return "deliver";
 };
