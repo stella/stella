@@ -8,7 +8,10 @@
  * bookkeeping) is identical and lives here.
  */
 import { Result, TaggedError } from "better-result";
+import { and, eq } from "drizzle-orm";
 
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import { pendingUploads } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 
 /**
@@ -27,6 +30,44 @@ export const PRESIGN_URL_EXPIRY_SECONDS = 5 * 60;
  * down once async scanning lands in phase 6.
  */
 export const FINALIZE_CLAIM_TIMEOUT_MS = 60_000;
+
+type RenewFinalizeClaimOptions = {
+  claimRequestId: string;
+  safeDb: SafeDb;
+  uploadId: SafeId<"pendingUpload">;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace">;
+};
+
+/**
+ * Extend an upload lease immediately before destructive rollback work.
+ * A successful renewal prevents a competing finalizer from reclaiming the
+ * row while the bounded cleanup runs; a lost or uncertain claim must never
+ * delete retry-stable object keys that a newer owner may have published.
+ */
+export const renewFinalizeClaim = async ({
+  claimRequestId,
+  safeDb,
+  uploadId,
+  userId,
+  workspaceId,
+}: RenewFinalizeClaimOptions): Promise<Result<boolean, SafeDbError>> =>
+  await safeDb(async (tx) => {
+    const renewed = await tx
+      .update(pendingUploads)
+      .set({ claimedAt: new Date() })
+      .where(
+        and(
+          eq(pendingUploads.id, uploadId),
+          eq(pendingUploads.userId, userId),
+          eq(pendingUploads.workspaceId, workspaceId),
+          eq(pendingUploads.status, "scanning"),
+          eq(pendingUploads.claimedByRequestId, claimRequestId),
+        ),
+      )
+      .returning({ id: pendingUploads.id });
+    return renewed.at(0) !== undefined;
+  });
 
 type TmpUploadKeyProps = {
   organizationId: SafeId<"organization">;

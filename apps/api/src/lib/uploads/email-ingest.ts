@@ -61,7 +61,7 @@ import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivativ
 import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
 import { createFileKey } from "@/api/lib/files/utils";
 import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
-import { getS3, writeS3ObjectWithRetry } from "@/api/lib/s3";
+import { deleteS3ObjectWithSignal, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { validateEmailAttachmentCount } from "@/api/lib/uploads/email-ingest-policy";
@@ -75,8 +75,10 @@ import {
 import {
   finalizeErr,
   finalizeOk,
+  renewFinalizeClaim,
   UploadFinalizeError,
 } from "@/api/lib/uploads/runtime";
+import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 /** Default MIME for attachments the parser could not classify. */
@@ -89,6 +91,7 @@ const FALLBACK_ATTACHMENT_NAME = "attachment";
 const NO_SUBJECT_NAME = "(No subject)";
 
 const ATTACHMENT_ENTITY_KIND = "document" as const;
+const FINAL_OBJECT_CLEANUP_TIMEOUT_MS = 15_000;
 
 type EmailIngestPurposeData = Extract<
   PendingUploadPurposeData,
@@ -388,14 +391,38 @@ export const finalizeEmailIngest = async function* ({
   ];
 
   const cleanupFinalObjects = async (stage: string) => {
+    const renewal = await renewFinalizeClaim({
+      claimRequestId,
+      safeDb,
+      uploadId,
+      userId,
+      workspaceId,
+    });
+    if (Result.isError(renewal) || !renewal.value) {
+      captureError(
+        Result.isError(renewal)
+          ? renewal.error
+          : new UploadFinalizeError({
+              message: "Email ingest claim was lost before object cleanup",
+              status: 409,
+            }),
+        { stage, messageEntityId, uploadId },
+      );
+      return;
+    }
+
     await Promise.all(
       writtenKeys.map(
         async (key) =>
-          await getS3()
-            .delete(key)
-            .catch((deleteError: unknown) =>
-              captureError(deleteError, { key, stage, messageEntityId }),
-            ),
+          await withTimeout(
+            async (signal) => await deleteS3ObjectWithSignal(key, signal),
+            {
+              label: "email-ingest-final-object-cleanup",
+              timeoutMs: FINAL_OBJECT_CLEANUP_TIMEOUT_MS,
+            },
+          ).catch((deleteError: unknown) =>
+            captureError(deleteError, { key, stage, messageEntityId }),
+          ),
       ),
     );
   };

@@ -11,6 +11,7 @@ export type MailSnapshotState =
   | { message: string; type: "error" };
 
 type UseMailSnapshot = {
+  loadLatest: () => Promise<MailSnapshot>;
   refresh: () => void;
   state: MailSnapshotState;
 };
@@ -62,6 +63,12 @@ export const useMailSnapshot = (errorFallback: string): UseMailSnapshot => {
   }, [load]);
 
   return {
+    loadLatest: async () => {
+      const itemInstanceKey = `item-${String(itemInstanceSequence.current)}`;
+      const snapshot = await loadMailSnapshot(itemInstanceKey);
+      setState({ snapshot, type: "ready" });
+      return snapshot;
+    },
     refresh: () => {
       setState({ type: "loading" });
       void load(`item-${String(itemInstanceSequence.current)}`);

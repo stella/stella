@@ -73,7 +73,11 @@ type DraftPlacementState =
   | { message: string; source: string; type: "error" };
 
 const AuthedApp = ({ t }: { t: Translate }) => {
-  const { refresh, state: loadState } = useMailSnapshot(t("loadError"));
+  const {
+    loadLatest,
+    refresh,
+    state: loadState,
+  } = useMailSnapshot(t("loadError"));
   const { error: workspaceError, workspaces } = useWorkspaces(
     t("matterLoadError"),
   );
@@ -112,6 +116,7 @@ const AuthedApp = ({ t }: { t: Translate }) => {
         {snapshot ? (
           <MessageApp
             key={snapshotKey(snapshot)}
+            loadLatest={loadLatest}
             snapshot={snapshot}
             t={t}
             workspaceError={workspaceError}
@@ -125,11 +130,13 @@ const AuthedApp = ({ t }: { t: Translate }) => {
 
 const MessageApp = ({
   snapshot,
+  loadLatest,
   t,
   workspaceError,
   workspaces,
 }: {
   snapshot: MailSnapshot;
+  loadLatest: () => Promise<MailSnapshot>;
   t: Translate;
   workspaceError: string | null;
   workspaces: ReturnType<typeof useWorkspaces>["workspaces"];
@@ -202,10 +209,8 @@ const MessageApp = ({
       return;
     }
     ingest.save({
-      attachments: snapshot.attachments.filter((attachment) =>
-        selectedAttachmentIds.has(attachment.id),
-      ),
-      snapshot,
+      loadLatest,
+      selectedAttachmentIds,
       workspaceId: selectedWorkspaceId,
     });
   };
