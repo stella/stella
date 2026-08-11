@@ -1014,14 +1014,16 @@ export default defineConfig({
       },
     },
     {
-      // App source (the two surfaces the detached-promise ratchet counts):
-      // ban the value-level `void` operator so a floating promise is routed
-      // through the `detached(promise, context)` helper instead of throwing
-      // its rejection away. The `void` TYPE keyword is a different AST node
-      // and is untouched.
+      // Product source: ban the value-level `void` operator so a floating
+      // promise is routed through the `detached(promise, context)` helper
+      // instead of throwing its rejection away. The `void` TYPE keyword is a
+      // different AST node and is untouched. Shared packages are in scope
+      // too: they had no guard, and a rejection dropped in a package is as
+      // invisible as one dropped in an app.
       files: [
         "apps/api/src/**/*.{ts,tsx}",
         "apps/web/src/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
         ".oxlint-plugins/__fixtures__/no-detached-void.fixture.ts",
       ],
       rules: {
@@ -1072,6 +1074,9 @@ export default defineConfig({
         "apps/web/src/**/*.{test,spec}.{ts,tsx}",
         "apps/web/src/**/tests/**",
         "apps/web/src/**/__tests__/**",
+        "packages/*/src/**/*.{test,spec}.{ts,tsx}",
+        "packages/*/src/**/tests/**",
+        "packages/*/src/**/__tests__/**",
       ],
       rules: {
         "no-detached-void/no-detached-void": "off",

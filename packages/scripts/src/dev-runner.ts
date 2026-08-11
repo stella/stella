@@ -1573,6 +1573,9 @@ const openBrowser = (url: string) => {
     }, DEFAULT_OPEN_BROWSER_TIMEOUT_MS);
     timeout.unref();
 
+    // Dev tooling: no capture channel to route this through, and
+    // `child.exited` settles with a status rather than rejecting.
+    // eslint-disable-next-line no-detached-void/no-detached-void
     void child.exited.finally(() => {
       clearTimeout(timeout);
     });
@@ -1832,6 +1835,9 @@ const main = async () => {
 
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.on(signal, () => {
+      // `shutdown` ends in `process.exit`, so this promise never settles for
+      // a handler to observe.
+      // eslint-disable-next-line no-detached-void/no-detached-void
       void shutdown(0);
     });
   }
