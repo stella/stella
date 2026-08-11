@@ -1,7 +1,7 @@
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useBlocker } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
   ChevronDownIcon,
@@ -71,7 +71,11 @@ import {
   playbookDetailOptions,
 } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
-import { resolvePlaybookScrollTop } from "@/routes/_protected.knowledge/-components/playbook-editor.logic";
+import { LeaveConfirmDialog } from "@/routes/_protected.knowledge/-components/leave-confirm-dialog";
+import {
+  hasPlaybookDraftChanges,
+  resolvePlaybookScrollTop,
+} from "@/routes/_protected.knowledge/-components/playbook-editor.logic";
 import { PlaybookVersionHistorySheet } from "@/routes/_protected.knowledge/-components/playbook-version-history-sheet";
 import { PositionEditor } from "@/routes/_protected.knowledge/-components/position-editor";
 import { usePlaybookNavStore } from "@/stores/knowledge/playbook-nav-store";
@@ -103,6 +107,7 @@ export const PlaybookEditor = ({
         initialPerspective={null}
         initialStatus="draft"
         initialTrigger={null}
+        initialUpdatedAt={null}
         initialPositions={[]}
         onBack={onBack}
         onSaved={onSaved}
@@ -172,6 +177,7 @@ const PlaybookEditorLoader = ({
       initialPerspective={detail.scope?.perspective ?? null}
       initialStatus={detail.status}
       initialTrigger={detail.scope?.trigger ?? null}
+      initialUpdatedAt={detail.updatedAt}
       initialPositions={detail.positions.items}
       key={reloadKey}
       onBack={onBack}
@@ -200,6 +206,7 @@ type PlaybookEditorFormProps = {
   initialDocumentTypeKey: string | null;
   initialPerspective: PlaybookPerspective | null;
   initialTrigger: PlaybookTrigger | null;
+  initialUpdatedAt: string | null;
   initialPositions: Position[];
   initialStatus: PlaybookApprovalStatus;
   initialApprovedAt: string | null;
@@ -219,6 +226,7 @@ const PlaybookEditorForm = ({
   initialDocumentTypeKey,
   initialPerspective,
   initialTrigger,
+  initialUpdatedAt,
   initialPositions,
   initialStatus,
   initialApprovedAt,
@@ -235,6 +243,7 @@ const PlaybookEditorForm = ({
   const canDelete = usePermissions({ playbook: ["delete"] });
   const canApprove = usePermissions({ playbook: ["approve"] });
   const scrollRef = useRef<HTMLDivElement>(null);
+  const navigationLeaveRequestedRef = useRef(false);
 
   const [name, setName] = useState(initialName);
   const [description, setDescription] = useState(initialDescription);
@@ -242,6 +251,7 @@ const PlaybookEditorForm = ({
   const [approvedAt, setApprovedAt] = useState<string | null>(
     initialApprovedAt,
   );
+  const [expectedUpdatedAt, setExpectedUpdatedAt] = useState(initialUpdatedAt);
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
   const [positions, setPositions] = useState<Position[]>(() =>
     playbookId === null && initialPositions.length === 0
@@ -254,6 +264,7 @@ const PlaybookEditorForm = ({
   const [attemptedSave, setAttemptedSave] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   // Non-null while confirming a graded → extract conversion that would drop
   // authored tiers.
   const [convertConfirmId, setConvertConfirmId] = useState<string | null>(null);
@@ -273,12 +284,42 @@ const PlaybookEditorForm = ({
 
   const displayName = name.trim() || t("knowledge.playbooks.createPlaybook");
 
+  const isDirty =
+    playbookId === null ||
+    hasPlaybookDraftChanges({
+      initial: {
+        name: initialName,
+        description: initialDescription,
+        documentTypeKey: initialDocumentTypeKey,
+        positions: initialPositions,
+      },
+      current: { name, description, documentTypeKey, positions },
+    });
+
+  const navigationBlocker = useBlocker({
+    shouldBlockFn: () => isDirty,
+    enableBeforeUnload: isDirty,
+    withResolver: true,
+  });
+
+  const requestBack = useCallback(() => {
+    if (isDirty) {
+      setLeaveConfirmOpen(true);
+      return;
+    }
+    onBack();
+  }, [isDirty, onBack]);
+
   // Publish the open playbook to the breadcrumb (Knowledge › Playbooks › Name)
   // and wire its list crumb back through the in-page back affordance.
   useExternalSyncEffect(() => {
-    setNavOpen({ id: playbookId ?? "new", name: displayName, exit: onBack });
+    setNavOpen({
+      id: playbookId ?? "new",
+      name: displayName,
+      exit: requestBack,
+    });
     return () => clearNav();
-  }, [playbookId, displayName, onBack, setNavOpen, clearNav]);
+  }, [playbookId, displayName, requestBack, setNavOpen, clearNav]);
 
   const errorsById = new Map(
     positions.map((position): [string, PositionErrors] => [
@@ -405,7 +446,7 @@ const PlaybookEditorForm = ({
     });
   };
 
-  const handleSave = async () => {
+  const handleSave = async (): Promise<boolean> => {
     const trimmedName = name.trim();
     if (trimmedName === "") {
       setAttemptedSave(true);
@@ -413,7 +454,7 @@ const PlaybookEditorForm = ({
         type: "error",
         title: t("knowledge.playbooks.nameRequired"),
       });
-      return;
+      return false;
     }
 
     // Reuse the render-time validation map instead of re-running validatePosition
@@ -439,7 +480,7 @@ const PlaybookEditorForm = ({
         type: "error",
         title: t("knowledge.playbooks.fixErrorsBeforeSaving"),
       });
-      return;
+      return false;
     }
 
     const items = positions.map(normalizePosition);
@@ -498,7 +539,7 @@ const PlaybookEditorForm = ({
           t("common.unexpectedError"),
         ),
       });
-      return;
+      return false;
     }
 
     stellaToast.add({
@@ -513,7 +554,7 @@ const PlaybookEditorForm = ({
       }),
       "handleSave",
     );
-    onSaved();
+    return true;
   };
 
   const handleDelete = async () => {
@@ -553,15 +594,22 @@ const PlaybookEditorForm = ({
   };
 
   const approveMutation = useMutation({
-    mutationFn: async ({ id }: { id: string }) => {
+    mutationFn: async ({
+      id,
+      updatedAt,
+    }: {
+      id: string;
+      updatedAt: string;
+    }) => {
       const response = await api
         .playbooks({ playbookId: toSafeId<"playbookDefinition">(id) })
-        .approve.post();
+        .approve.post({ expectedUpdatedAt: updatedAt });
       return unwrapEden(response);
     },
     onSuccess: (data) => {
       setStatus("approved");
       setApprovedAt(data.approvedAt);
+      setExpectedUpdatedAt(data.approvedAt);
       detached(
         queryClient.invalidateQueries({
           queryKey: knowledgeKeys.playbooks.all(organizationId),
@@ -583,10 +631,10 @@ const PlaybookEditorForm = ({
   });
 
   const handleApprove = () => {
-    if (playbookId === null) {
+    if (playbookId === null || expectedUpdatedAt === null) {
       return;
     }
-    approveMutation.mutate({ id: playbookId });
+    approveMutation.mutate({ id: playbookId, updatedAt: expectedUpdatedAt });
   };
 
   return (
@@ -597,13 +645,23 @@ const PlaybookEditorForm = ({
       <div className="mx-auto flex w-full max-w-5xl gap-8 p-6">
         <div className="min-w-0 flex-1 space-y-6">
           <div className="flex items-center justify-between gap-2">
-            <Button onClick={onBack} size="sm" type="button" variant="ghost">
+            <Button
+              onClick={requestBack}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
               <ArrowLeftIcon />
               {t("common.back")}
             </Button>
             <div className="flex items-center gap-2">
               {isEdit && (
                 <PlaybookStatusBadge approvedAt={approvedAt} status={status} />
+              )}
+              {isDirty && (
+                <span className="text-muted-foreground text-xs">
+                  {t("knowledge.playbooks.unsavedChanges")}
+                </span>
               )}
               {isEdit && (
                 <Button
@@ -618,10 +676,15 @@ const PlaybookEditorForm = ({
               )}
               {isEdit && canApprove && (
                 <Button
-                  disabled={approveMutation.isPending}
+                  disabled={isDirty || approveMutation.isPending}
                   loading={approveMutation.isPending}
                   onClick={handleApprove}
                   size="sm"
+                  title={
+                    isDirty
+                      ? t("knowledge.playbooks.approval.saveBeforeApprove")
+                      : undefined
+                  }
                   type="button"
                   variant="outline"
                 >
@@ -667,10 +730,18 @@ const PlaybookEditorForm = ({
                 </AlertDialog>
               )}
               <Button
-                disabled={!canSave || saving}
+                disabled={!canSave || !isDirty || saving}
                 loading={saving}
                 onClick={() => {
-                  detached(handleSave(), "PlaybookEditorForm");
+                  detached(
+                    handleSave().then((saved) => {
+                      if (saved) {
+                        onSaved();
+                      }
+                      return saved;
+                    }),
+                    "PlaybookEditorForm",
+                  );
                 }}
                 type="button"
               >
@@ -825,6 +896,72 @@ const PlaybookEditorForm = ({
           playbookId={playbookId}
         />
       )}
+
+      <LeaveConfirmDialog
+        cancelLabel={t("common.goBackToEditing")}
+        description={t("common.unsavedLeaveConfirm")}
+        onOpenChange={setLeaveConfirmOpen}
+        open={leaveConfirmOpen}
+        primary={{
+          label: t("common.saveAndLeave"),
+          onClick: () => {
+            detached(
+              handleSave().then((saved) => {
+                if (saved) {
+                  onSaved();
+                }
+                return saved;
+              }),
+              "PlaybookEditorForm.leave",
+            );
+          },
+        }}
+        secondary={{
+          label: t("knowledge.playbooks.discardChanges"),
+          onClick: onBack,
+          variant: "destructive",
+        }}
+      />
+
+      <LeaveConfirmDialog
+        cancelLabel={t("common.goBackToEditing")}
+        description={t("common.unsavedLeaveConfirm")}
+        onOpenChange={(open) => {
+          if (open || navigationBlocker.status !== "blocked") {
+            return;
+          }
+          if (navigationLeaveRequestedRef.current) {
+            navigationLeaveRequestedRef.current = false;
+            return;
+          }
+          navigationBlocker.reset();
+        }}
+        open={navigationBlocker.status === "blocked"}
+        primary={{
+          label: t("common.saveAndLeave"),
+          onClick: () => {
+            navigationLeaveRequestedRef.current = true;
+            detached(
+              handleSave().then((saved) => {
+                if (saved && navigationBlocker.status === "blocked") {
+                  navigationBlocker.proceed();
+                }
+                return saved;
+              }),
+              "PlaybookEditorForm.navigate",
+            );
+          },
+        }}
+        secondary={{
+          label: t("knowledge.playbooks.discardChanges"),
+          onClick: () => {
+            if (navigationBlocker.status === "blocked") {
+              navigationBlocker.proceed();
+            }
+          },
+          variant: "destructive",
+        }}
+      />
     </div>
   );
 };

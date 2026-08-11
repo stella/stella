@@ -116,6 +116,7 @@ type PlaybookRow = {
   approvedAt: Date | null;
   approvedBy: string | null;
   name: string;
+  updatedAt: Date;
 };
 
 const readPlaybook = async (
@@ -128,10 +129,25 @@ const readPlaybook = async (
         approvedAt: playbookDefinitions.approvedAt,
         approvedBy: playbookDefinitions.approvedBy,
         name: playbookDefinitions.name,
+        updatedAt: playbookDefinitions.updatedAt,
       })
       .from(playbookDefinitions)
       .where(eq(playbookDefinitions.id, playbookId))
   ).at(0);
+
+const approvePlaybook = async (
+  context: OrgContext,
+  playbookId: SafeId<"playbookDefinition">,
+): Promise<unknown> => {
+  const playbook = await readPlaybook(playbookId);
+  if (!playbook) {
+    throw new Error("Expected an existing playbook before approval");
+  }
+  return runHandler(approvePlaybookDefinition, context, {
+    params: { playbookId },
+    body: { expectedUpdatedAt: playbook.updatedAt.toISOString() },
+  });
+};
 
 beforeAll(async () => {
   testDb = await getTestDb();
@@ -144,13 +160,37 @@ afterAll(async () => {
 });
 
 describe("POST /playbooks/:playbookId/approve", () => {
+  test("rejects approval when the definition changed after the editor loaded", async () => {
+    const context = createOrgContext(ids.orgA, ids.userA1);
+    const playbookId = await createPlaybook(context, "Stale approval target");
+    const loaded = await readPlaybook(playbookId);
+    if (!loaded) {
+      throw new Error("Expected the created playbook");
+    }
+
+    const updateResult = await runHandler(updatePlaybookDefinition, context, {
+      params: { playbookId },
+      body: {
+        name: "Changed in another editor",
+        positions: { version: 2, items: [] },
+      },
+    });
+    expect(getStatusCode(updateResult)).toBeNull();
+
+    const staleApproval = await runHandler(approvePlaybookDefinition, context, {
+      params: { playbookId },
+      body: { expectedUpdatedAt: loaded.updatedAt.toISOString() },
+    });
+
+    expect(getStatusCode(staleApproval)).toBe(409);
+    expect((await readPlaybook(playbookId))?.status).toBe("draft");
+  });
+
   test("snapshots version 1, then version 2 on re-approve; flips status to approved", async () => {
     const context = createOrgContext(ids.orgA, ids.userA1);
     const playbookId = await createPlaybook(context, "Approve me");
 
-    const firstApproval = await runHandler(approvePlaybookDefinition, context, {
-      params: { playbookId },
-    });
+    const firstApproval = await approvePlaybook(context, playbookId);
     expect(getStatusCode(firstApproval)).toBeNull();
     if (!isRecord(firstApproval)) {
       throw new Error("Expected an approve payload");
@@ -164,11 +204,7 @@ describe("POST /playbooks/:playbookId/approve", () => {
     expect(afterFirst?.approvedAt).not.toBeNull();
     expect(afterFirst?.approvedBy).toBe(ids.userA1);
 
-    const secondApproval = await runHandler(
-      approvePlaybookDefinition,
-      context,
-      { params: { playbookId } },
-    );
+    const secondApproval = await approvePlaybook(context, playbookId);
     expect(getStatusCode(secondApproval)).toBeNull();
     if (!isRecord(secondApproval)) {
       throw new Error("Expected a second approve payload");
@@ -182,6 +218,7 @@ describe("POST /playbooks/:playbookId/approve", () => {
       params: {
         playbookId: toSafeId<"playbookDefinition">(Bun.randomUUIDv7()),
       },
+      body: { expectedUpdatedAt: new Date(0).toISOString() },
     });
     expect(getStatusCode(result)).toBe(404);
   });
@@ -192,9 +229,7 @@ describe("update after approval", () => {
     const context = createOrgContext(ids.orgA, ids.userA1);
     const playbookId = await createPlaybook(context, "Revert on edit");
 
-    await runHandler(approvePlaybookDefinition, context, {
-      params: { playbookId },
-    });
+    await approvePlaybook(context, playbookId);
     expect((await readPlaybook(playbookId))?.status).toBe("approved");
 
     const updateResult = await runHandler(updatePlaybookDefinition, context, {
@@ -217,9 +252,7 @@ describe("POST /playbooks/:playbookId/versions/:version/restore", () => {
     const context = createOrgContext(ids.orgA, ids.userA1);
     const playbookId = await createPlaybook(context, "Restore original");
 
-    await runHandler(approvePlaybookDefinition, context, {
-      params: { playbookId },
-    }); // version 1, snapshot name = "Restore original"
+    await approvePlaybook(context, playbookId); // version 1, snapshot name = "Restore original"
 
     await runHandler(updatePlaybookDefinition, context, {
       params: { playbookId },
@@ -233,9 +266,7 @@ describe("POST /playbooks/:playbookId/versions/:version/restore", () => {
     );
     expect((await readPlaybook(playbookId))?.status).toBe("draft");
 
-    await runHandler(approvePlaybookDefinition, context, {
-      params: { playbookId },
-    }); // version 2, snapshot name = "Mutated after approval"
+    await approvePlaybook(context, playbookId); // version 2, snapshot name = "Mutated after approval"
     expect((await readPlaybook(playbookId))?.status).toBe("approved");
 
     const restoreResult = await runHandler(restorePlaybookVersion, context, {
@@ -268,15 +299,9 @@ describe("GET /playbooks/:playbookId/versions", () => {
     const context = createOrgContext(ids.orgA, ids.userA1);
     const playbookId = await createPlaybook(context, "List versions");
 
-    await runHandler(approvePlaybookDefinition, context, {
-      params: { playbookId },
-    });
-    await runHandler(approvePlaybookDefinition, context, {
-      params: { playbookId },
-    });
-    await runHandler(approvePlaybookDefinition, context, {
-      params: { playbookId },
-    });
+    await approvePlaybook(context, playbookId);
+    await approvePlaybook(context, playbookId);
+    await approvePlaybook(context, playbookId);
 
     const result = await runHandler(listPlaybookVersions, context, {
       params: { playbookId },
@@ -302,9 +327,7 @@ describe("cross-org isolation", () => {
     const orgB = createOrgContext(ids.orgB, ids.userB1);
     const playbookId = await createPlaybook(orgA, "Isolation approve target");
 
-    const result = await runHandler(approvePlaybookDefinition, orgB, {
-      params: { playbookId },
-    });
+    const result = await approvePlaybook(orgB, playbookId);
     expect(getStatusCode(result)).toBe(404);
     expect((await readPlaybook(playbookId))?.status).toBe("draft");
   });
@@ -313,9 +336,7 @@ describe("cross-org isolation", () => {
     const orgA = createOrgContext(ids.orgA, ids.userA1);
     const orgB = createOrgContext(ids.orgB, ids.userB1);
     const playbookId = await createPlaybook(orgA, "Isolation list target");
-    await runHandler(approvePlaybookDefinition, orgA, {
-      params: { playbookId },
-    });
+    await approvePlaybook(orgA, playbookId);
 
     const result = await runHandler(listPlaybookVersions, orgB, {
       params: { playbookId },
@@ -328,9 +349,7 @@ describe("cross-org isolation", () => {
     const orgA = createOrgContext(ids.orgA, ids.userA1);
     const orgB = createOrgContext(ids.orgB, ids.userB1);
     const playbookId = await createPlaybook(orgA, "Isolation restore target");
-    await runHandler(approvePlaybookDefinition, orgA, {
-      params: { playbookId },
-    });
+    await approvePlaybook(orgA, playbookId);
 
     const result = await runHandler(restorePlaybookVersion, orgB, {
       params: { playbookId, version: 1 },

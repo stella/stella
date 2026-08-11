@@ -13,6 +13,10 @@ export const playbookDefinitionBodySchema = t.Object({
   positions: playbookPositionsSchema,
 });
 
+export const approvePlaybookDefinitionBodySchema = t.Object({
+  expectedUpdatedAt: t.String({ format: "date-time" }),
+});
+
 export const playbookDefinitionParamsSchema = t.Object({
   playbookId: tSafeId("playbookDefinition"),
 });

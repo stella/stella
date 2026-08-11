@@ -50,6 +50,7 @@ export const playbooksRoute = new Elysia({
     permissions: deletePlaybookDefinition.config.permissions,
   })
   .post("/:playbookId/approve", approvePlaybookDefinition.handler, {
+    body: approvePlaybookDefinition.config.body,
     params: approvePlaybookDefinition.config.params,
     permissions: approvePlaybookDefinition.config.permissions,
   })

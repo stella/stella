@@ -935,6 +935,7 @@ type Messages = {
     "filter": "Filter";
     "formula": "Formula";
     "goBack": "Go back";
+    "goBackToEditing": "Go back to editing";
     "hideDetails": "Hide details";
     "hideSecretValue": "Hide secret value";
     "history": "History";
@@ -1030,6 +1031,7 @@ type Messages = {
     "run": "Run";
     "running": "Running";
     "save": "Save";
+    "saveAndLeave": "Save and leave";
     "saveAsPdf": "Save as PDF";
     "saveChanges": "Save changes";
     "scrollToBottom": "Scroll to bottom";
@@ -1065,6 +1067,7 @@ type Messages = {
     "unexpectedError": "An unexpected error occurred. Please contact support.";
     "unknownUser": "Unknown user";
     "unpin": "Unpin";
+    "unsavedLeaveConfirm": "You have unsaved changes. Leave without saving?";
     "unverified": "Unverified";
     "unverifiedCitationHint": "This quote could not be matched to the source document.";
     "uploadFiles": "Upload files";
@@ -2146,6 +2149,7 @@ type Messages = {
         "approveFailed": "Failed to approve playbook";
         "approvedOn": "Approved {date}";
         "approvedToast": "Playbook approved";
+        "saveBeforeApprove": "Save changes before approving this playbook.";
         "statusApproved": "Approved";
         "statusDraft": "Draft";
       };
@@ -2182,6 +2186,7 @@ type Messages = {
       "derivedType": "Derived type";
       "descriptionPlaceholder": "What does this playbook check?";
       "disabledBadge": "Off — skipped in runs";
+      "discardChanges": "Discard changes";
       "duplicatePosition": "Duplicate position";
       "empty": "No playbooks yet";
       "emptyDescription": "Create a playbook to review documents against your standards.";
@@ -2294,6 +2299,7 @@ type Messages = {
         "fallback": "Fallback";
         "notAcceptable": "Not acceptable";
       };
+      "unsavedChanges": "Unsaved changes";
       "untitledPosition": "Untitled position";
       "updated": "Playbook updated";
       "verdict": {
@@ -3407,7 +3413,6 @@ type Messages = {
     "fillForm": "Fill template";
     "generate": "Generate document";
     "generating": "Generating...";
-    "goBackToEditing": "Go back to editing";
     "inputTypes": {
       "boolean": "Yes / No";
       "company": "Company ID";
@@ -3453,7 +3458,6 @@ type Messages = {
     "registryLookup": "Look up";
     "registryNotFound": "No company found for that ID";
     "renameFailed": "Failed to rename template";
-    "saveAndLeave": "Save and leave";
     "saveFailed": "Failed to save template";
     "searchTemplates": "Search templates…";
     "structureWarningParagraph": "Paragraph {paragraph, number}";
@@ -3586,7 +3590,6 @@ type Messages = {
     "templateRenamed": "Template renamed";
     "templateSaved": "Template saved";
     "unmatchedPlaceholders": "Some placeholders were not filled: {list}";
-    "unsavedLeaveConfirm": "You have unsaved changes. Leave without saving?";
     "untitledTemplate": "Untitled template";
     "unusedFields": "{count, plural, one {# unused field} other {# unused fields}}";
     "unusedValues": "Some values were not used: {list}";
