@@ -15,12 +15,17 @@
 
 import { describe, expect, test } from "bun:test";
 
+import { DAY_IN_MS } from "@stll/time";
+
 import { czRegionalAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
 import type {
+  LedgerSlice,
   ShortSliceCandidate,
   SelectReconciliationWorkUnitInput,
+  SliceWalkReason,
 } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import {
+  RECONCILIATION_SETTLED_RECHECK_MS,
   RECONCILIATION_SLICE_STALE_MS,
   SLICE_WALK_REASON,
   isSliceSettled,
@@ -56,9 +61,23 @@ const baseInput = (
   tipCheckedAt: new Map(),
   unsettledShortSlices: [],
   sweepSlice: null,
+  recheckCandidate: null,
   staleAfterMs: RECONCILIATION_SLICE_STALE_MS,
+  recheckAfterMs: RECONCILIATION_SETTLED_RECHECK_MS,
   ...overrides,
 });
+
+/** A settled ledger row, checked long enough ago to be worth proving again. */
+const recheckCandidate = (checkedAt: Date): LedgerSlice => ({
+  slice: "2024-01-01",
+  reported: 12,
+  collected: 12,
+  checkedAt,
+});
+
+const LONG_SETTLED = new Date(
+  NOW.getTime() - RECONCILIATION_SETTLED_RECHECK_MS - DAY_IN_MS,
+);
 
 const shortSlice = (
   overrides: Partial<ShortSliceCandidate> = {},
@@ -285,6 +304,105 @@ describe("selectReconciliationWorkUnit", () => {
         }),
       ),
     ).toEqual({ type: "idle" });
+  });
+
+  test("an otherwise idle source spends the turn re-proving a settled slice", () => {
+    // The only unit that walks a slice nothing is known to owe. Idle turns
+    // become slow verification, which is the whole of the argument for it: a
+    // slice that settled early keeps stating what the publisher listed that
+    // day, and publishers go on adding to slices for months afterwards.
+    expect(
+      selectReconciliationWorkUnit(
+        baseInput({
+          tipSlices: ["2026-08-11"],
+          tipCheckedAt: new Map([["2026-08-11", FRESH]]),
+          recheckCandidate: recheckCandidate(LONG_SETTLED),
+        }),
+      ),
+    ).toEqual({
+      type: "slice",
+      slice: "2024-01-01",
+      reason: SLICE_WALK_REASON.RECHECK,
+    });
+  });
+
+  test("a settled slice inside the recheck window is left alone", () => {
+    // The candidate is always read; the window is what decides. Without it the
+    // loop re-walks proved history at the idle cadence, spending on slices it
+    // has already accounted for the politeness budget that short slices need.
+    expect(
+      selectReconciliationWorkUnit(
+        baseInput({
+          recheckCandidate: recheckCandidate(
+            new Date(
+              NOW.getTime() - RECONCILIATION_SETTLED_RECHECK_MS + DAY_IN_MS,
+            ),
+          ),
+        }),
+      ),
+    ).toEqual({ type: "idle" });
+  });
+
+  test("every nearer priority outranks the recheck, one at a time", () => {
+    // Stated as one case per competing priority rather than all four at once:
+    // a chain that fell through on three of them and was saved by the fourth
+    // would pass a combined assertion unchanged.
+    const nearer = [
+      { hasDueParkedItems: true },
+      { tipSlices: ["2026-08-11"], tipCheckedAt: new Map<string, Date>() },
+      { unsettledShortSlices: [shortSlice()] },
+      { sweepSlice: "2023-06-01" },
+    ] as const satisfies readonly Partial<SelectReconciliationWorkUnitInput>[];
+
+    for (const [index, overrides] of nearer.entries()) {
+      const unit = selectReconciliationWorkUnit(
+        baseInput({
+          ...overrides,
+          recheckCandidate: recheckCandidate(LONG_SETTLED),
+        }),
+      );
+      const rechecked =
+        unit.type === "slice" && unit.reason === SLICE_WALK_REASON.RECHECK;
+      expect({ index, rechecked }).toEqual({ index, rechecked: false });
+    }
+  });
+
+  test("every walk reason is reachable, and each input reaches only its own", () => {
+    // Total over the union, so a reason cannot be added without an input that
+    // produces it; the loop asserts the other direction, that each input
+    // reaches exactly the reason it is filed under.
+    const inputByReason = {
+      [SLICE_WALK_REASON.TIP]: baseInput({ tipSlices: ["2026-08-11"] }),
+      [SLICE_WALK_REASON.SHORT]: baseInput({
+        unsettledShortSlices: [shortSlice()],
+      }),
+      [SLICE_WALK_REASON.SWEEP]: baseInput({ sweepSlice: "2023-06-01" }),
+      [SLICE_WALK_REASON.RECHECK]: baseInput({
+        recheckCandidate: recheckCandidate(LONG_SETTLED),
+      }),
+    } as const satisfies Record<
+      SliceWalkReason,
+      SelectReconciliationWorkUnitInput
+    >;
+
+    for (const [reason, input] of Object.entries(inputByReason)) {
+      expect(selectReconciliationWorkUnit(input)).toMatchObject({
+        type: "slice",
+        reason,
+      });
+    }
+  });
+});
+
+describe("RECONCILIATION_SETTLED_RECHECK_MS", () => {
+  test("a recheck is an order of magnitude rarer than the tip cadence", () => {
+    // The two constants describe opposite ends of the same ledger. If the
+    // recheck window ever approached the staleness window, every settled slice
+    // in a source's history would come due about as often as the tip does, and
+    // the loop would spend its life re-walking history it had already proved.
+    expect(RECONCILIATION_SETTLED_RECHECK_MS).toBeGreaterThan(
+      RECONCILIATION_SLICE_STALE_MS * 10,
+    );
   });
 });
 

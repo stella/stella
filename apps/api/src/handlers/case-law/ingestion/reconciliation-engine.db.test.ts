@@ -2,24 +2,35 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { DAY_IN_MS } from "@stll/time";
+
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCoverageSlices,
+  caseLawDecisions,
   caseLawReconciliationItems,
   caseLawSources,
   RECONCILIATION_ITEM_STATUS,
   relations,
 } from "@/api/db/schema";
 import { runReconciliationWorkUnit } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
-import { SLICE_WALK_REASON } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
+import {
+  RECONCILIATION_SETTLED_RECHECK_MS,
+  SLICE_WALK_REASON,
+} from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { addUtcDays, toUtcDateString } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
+import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
+import {
+  EMPTY_AST,
+  listingIdentityKey,
+} from "@/api/lib/legal-search/ingestion-types";
 import type {
+  IngestionResult,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
   SourceReconciliation,
@@ -104,6 +115,11 @@ const LISTING_ITEMS = [
   },
 ] as const;
 
+/** Real dockets, so the fallback identity key is the shape the ledger keys. */
+const FIXTURE_CASE_NUMBERS = ["11 C 153/2025", "31 Cm 8/2024"] as const;
+const FIXTURE_COURT = "Krajský soud v Brně";
+const FIXTURE_LANGUAGE = "cs";
+
 /**
  * A publisher that lists two decisions and serves neither document. Enough to
  * drive a real walk without a pipeline write: what is under test is which
@@ -152,6 +168,28 @@ const stubReconciliation: SourceReconciliation = {
   buildDecision: async (payload) => {
     builds.push(payload);
     return await Promise.resolve({ type: "detail-unavailable" });
+  },
+};
+
+/**
+ * The same publisher, listing dockets instead of document ids: the other half
+ * of the identity index, which is answered by its own held query.
+ */
+const caseNumberStub: SourceReconciliation = {
+  ...stubReconciliation,
+  listSlicePage: async (options): Promise<ReconciliationSlicePage> => {
+    listed.push(options);
+    return await Promise.resolve({
+      items: FIXTURE_CASE_NUMBERS.map((caseNumber) => ({
+        identity: {
+          type: "case-number",
+          caseNumber,
+          language: FIXTURE_LANGUAGE,
+        },
+        payload: { caseNumber },
+      })),
+      totalPages: listing.totalPages,
+    });
   },
 };
 
@@ -229,11 +267,14 @@ const checkedAtBySlice = async (
     ).map(({ slice, checkedAt }) => [slice, checkedAt]),
   );
 
-const runUnit = async (sourceId: SafeId<"caseLawSource">) =>
+const runUnit = async (
+  sourceId: SafeId<"caseLawSource">,
+  reconciliation: SourceReconciliation = stubReconciliation,
+) =>
   await runReconciliationWorkUnit({
     adapterKey: "engine-fixture",
     sourceId,
-    reconciliation: stubReconciliation,
+    reconciliation,
     scopedDb,
     now: () => NOW,
     fetchDelayMs: 0,
@@ -591,4 +632,233 @@ test("a publisher claiming an absurd page count is refused, not walked", async (
     )
     .limit(1);
   expect(ledger).toEqual({ reported: 2, collected: 0 });
+});
+
+// ── Rechecking a settled slice ──────────────────────────
+
+/**
+ * A settled ledger row is the loop's blind spot. It records what the publisher
+ * listed on the day of the walk, nothing re-selects it, and a publisher that
+ * goes on adding to the slice for months makes that number quietly wrong, with
+ * no short row, no parked item and no failure to show for it. Both halves are
+ * asserted: that the recheck fires at all, and that it fires only once the row
+ * is old enough to be worth an otherwise-idle turn.
+ */
+const seedSettledHistory = async (
+  sourceId: SafeId<"caseLawSource">,
+  checkedAt: Date,
+): Promise<void> => {
+  await seedFreshTip(sourceId);
+  // Also the feed's first slice, so the historical sweep is exhausted and
+  // cannot answer the turn ahead of the recheck.
+  await seedSlice({
+    sourceId,
+    slice: OWED_SLICE,
+    reported: 1,
+    collected: 1,
+    checkedAt,
+  });
+};
+
+const ledgerRow = async (
+  sourceId: SafeId<"caseLawSource">,
+  slice: string,
+): Promise<{ reported: number; collected: number } | undefined> =>
+  (
+    await db
+      .select({
+        reported: caseLawCoverageSlices.reported,
+        collected: caseLawCoverageSlices.collected,
+      })
+      .from(caseLawCoverageSlices)
+      .where(
+        and(
+          eq(caseLawCoverageSlices.sourceId, sourceId),
+          eq(caseLawCoverageSlices.slice, slice),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+
+test("a settled slice past the recheck window is re-walked, and a grown listing re-opens it", async () => {
+  const sourceId = await seedSource();
+  await seedSettledHistory(
+    sourceId,
+    new Date(NOW.getTime() - RECONCILIATION_SETTLED_RECHECK_MS - DAY_IN_MS),
+  );
+
+  const outcome = await runUnit(sourceId);
+
+  expect(outcome).toMatchObject({
+    type: "worked",
+    summary: {
+      unit: "slice",
+      slice: OWED_SLICE,
+      reason: SLICE_WALK_REASON.RECHECK,
+    },
+  });
+  expect(listed.map(({ slice }) => slice)).toEqual([OWED_SLICE]);
+
+  // The publisher now lists two where the row claimed one, and the walk held
+  // neither: the row records short and the slice rejoins the ordinary cycle at
+  // priority 3. The recheck itself repairs nothing; it only re-states.
+  expect(await ledgerRow(sourceId, OWED_SLICE)).toEqual({
+    reported: 2,
+    collected: 0,
+  });
+});
+
+test("a settled slice inside the recheck window is left alone", async () => {
+  // Otherwise proved history is re-walked at nearly the tip's own cadence, and
+  // the politeness budget spent on it is budget not spent on slices that are
+  // actually short.
+  const sourceId = await seedSource();
+  await seedSettledHistory(
+    sourceId,
+    new Date(NOW.getTime() - RECONCILIATION_SETTLED_RECHECK_MS + DAY_IN_MS),
+  );
+
+  expect(await runUnit(sourceId)).toEqual({ type: "idle" });
+  expect(listed).toEqual([]);
+});
+
+// ── Heldness that means detail-held ─────────────────────
+
+/**
+ * Metadata exactly as the pipeline writes it, produced by the pipeline's own
+ * normalizer rather than spelled out here. The engine's filter reads a path
+ * inside this blob; a hand-written stand-in could agree with the filter while
+ * both disagreed with the column, and the test would prove nothing.
+ */
+const storedMetadata = (isListingOnly: boolean): Record<string, unknown> =>
+  sanitizeResult({
+    caseNumber: FIXTURE_CASE_NUMBERS[0],
+    court: FIXTURE_COURT,
+    country: "CZE",
+    language: FIXTURE_LANGUAGE,
+    isListingOnly,
+    metadata: {},
+    rawHash: "0".repeat(64),
+    documentAst: EMPTY_AST,
+  } satisfies IngestionResult).metadata;
+
+type SeedDecisionInput = {
+  sourceId: SafeId<"caseLawSource">;
+  caseNumber: string;
+  sourceDocumentId: string | null;
+  isListingOnly: boolean;
+};
+
+const seedDecision = async ({
+  caseNumber,
+  isListingOnly,
+  sourceDocumentId,
+  sourceId,
+}: SeedDecisionInput): Promise<void> => {
+  await db.insert(caseLawDecisions).values({
+    id: createSafeId<"caseLawDecision">(),
+    sourceId,
+    caseNumber,
+    sourceDocumentId,
+    court: FIXTURE_COURT,
+    country: "CZE",
+    language: FIXTURE_LANGUAGE,
+    metadata: storedMetadata(isListingOnly),
+  });
+};
+
+/** A short, stale slice: the walk under test, with no other arm firing. */
+const seedWalkableSlice = async (
+  sourceId: SafeId<"caseLawSource">,
+): Promise<void> => {
+  await seedFreshTip(sourceId);
+  await seedSlice({
+    sourceId,
+    slice: OWED_SLICE,
+    reported: 2,
+    collected: 0,
+    checkedAt: addUtcDays(NOW, -2),
+  });
+};
+
+/** One row per listed document identity; only the second carries detail. */
+const seedDocumentIdentityRows = async (
+  sourceId: SafeId<"caseLawSource">,
+): Promise<void> => {
+  for (const [index, item] of LISTING_ITEMS.entries()) {
+    // oxlint-disable-next-line no-await-in-loop -- fixture seeding, sequential on one pglite handle
+    await seedDecision({
+      sourceId,
+      caseNumber: FIXTURE_CASE_NUMBERS[index] ?? "",
+      sourceDocumentId: item.odkaz.split("/").at(-1) ?? "",
+      isListingOnly: index === 0,
+    });
+  }
+};
+
+test("a listing-only row is not held where the source requires detail", async () => {
+  // Such a row exists because a document fetch failed: the identity is stored
+  // and the document is not. Counting it as held is what takes the decision out
+  // of every later reconciliation — the slice reads reconciled and nothing ever
+  // asks the publisher for the document again.
+  const sourceId = await seedSource();
+  await seedWalkableSlice(sourceId);
+  await seedDocumentIdentityRows(sourceId);
+
+  const outcome = await runUnit(sourceId, {
+    ...stubReconciliation,
+    heldRequiresDetail: true,
+  });
+
+  expect(outcome).toMatchObject({
+    type: "worked",
+    summary: { slice: OWED_SLICE, keyable: 2, heldBefore: 1, parked: 1 },
+  });
+  // The stub row was hunted again; the row carrying detail was left alone.
+  expect(builds).toHaveLength(1);
+});
+
+test("without the declaration both rows count as held, whatever they carry", async () => {
+  // The default, and it has to stay the default: a source that ingests
+  // metadata first and drains documents later holds a large, legitimately
+  // detail-less corpus, and filtering those rows out would report millions of
+  // decisions missing and re-ingest every one of them.
+  const sourceId = await seedSource();
+  await seedWalkableSlice(sourceId);
+  await seedDocumentIdentityRows(sourceId);
+
+  expect(await runUnit(sourceId)).toMatchObject({
+    type: "worked",
+    summary: { slice: OWED_SLICE, keyable: 2, heldBefore: 2, parked: 0 },
+  });
+  expect(builds).toEqual([]);
+});
+
+test("the docket half of the identity index applies the same filter", async () => {
+  // Two queries answer "held", one per half of the identity index. A filter
+  // added to one and not the other would make heldness mean two things for one
+  // source, decided by whether the publisher happened to state a document id.
+  const sourceId = await seedSource();
+  await seedWalkableSlice(sourceId);
+  for (const [index, caseNumber] of FIXTURE_CASE_NUMBERS.entries()) {
+    // oxlint-disable-next-line no-await-in-loop -- fixture seeding, sequential on one pglite handle
+    await seedDecision({
+      sourceId,
+      caseNumber,
+      // The fallback half is exactly the rows stored without a publisher id.
+      sourceDocumentId: null,
+      isListingOnly: index === 0,
+    });
+  }
+
+  const outcome = await runUnit(sourceId, {
+    ...caseNumberStub,
+    heldRequiresDetail: true,
+  });
+
+  expect(outcome).toMatchObject({
+    type: "worked",
+    summary: { slice: OWED_SLICE, keyable: 2, heldBefore: 1, parked: 1 },
+  });
+  expect(builds).toHaveLength(1);
 });

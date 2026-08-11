@@ -1,3 +1,6 @@
+import type { Column, SQL } from "drizzle-orm";
+import { sql } from "drizzle-orm";
+
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import { isDocumentAst } from "@/api/lib/case-law/document-ast";
@@ -22,6 +25,17 @@ export type PartialObservation = {
   isListingOnly: boolean;
 };
 
+/**
+ * The marker's own field names, spelled once. The reader below and the SQL
+ * predicate beside it address the same stored path, and a literal repeated in
+ * both would be free to drift: a query looking under a key the pipeline stopped
+ * writing answers `false` for every row and says nothing about it.
+ */
+const PARTIAL_OBSERVATION_FIELD = {
+  CASE_NUMBER_IS_PLACEHOLDER: "caseNumberIsPlaceholder",
+  IS_LISTING_ONLY: "isListingOnly",
+} as const satisfies Record<string, keyof PartialObservation>;
+
 export const partialObservationFromMetadata = (
   metadata: unknown,
 ): PartialObservation => {
@@ -30,10 +44,33 @@ export const partialObservationFromMetadata = (
     : undefined;
   return {
     caseNumberIsPlaceholder:
-      isRecord(value) && value["caseNumberIsPlaceholder"] === true,
-    isListingOnly: isRecord(value) && value["isListingOnly"] === true,
+      isRecord(value) &&
+      value[PARTIAL_OBSERVATION_FIELD.CASE_NUMBER_IS_PLACEHOLDER] === true,
+    isListingOnly:
+      isRecord(value) &&
+      value[PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY] === true,
   };
 };
+
+/**
+ * Rows this reader would answer `isListingOnly: false` for, as a predicate
+ * over a decision's metadata column.
+ *
+ * The marker lives inside the metadata blob rather than in a column of its
+ * own, so this is a JSONB path extraction. Written as
+ * `jsonb_extract_path_text` rather than `-> ... ->>` because the key is a
+ * bound parameter and Postgres cannot resolve `jsonb -> unknown` — the
+ * function's variadic `text[]` can. Every caller applies it inside an
+ * already-bounded lookup (identities the publisher just listed, a hundred at
+ * a time), where the extraction is evaluated on rows the identity index has
+ * already selected; it is not a predicate anything scans the corpus with.
+ *
+ * `IS DISTINCT FROM` rather than `<>`: the marker is written only when it is
+ * true, so almost every row has no such key and the extraction yields NULL.
+ * A row with no marker is a row that carries detail.
+ */
+export const storedObservationHasDetail = (metadata: Column): SQL =>
+  sql`jsonb_extract_path_text(${metadata}, ${PARTIAL_OBSERVATION_KEY}, ${PARTIAL_OBSERVATION_FIELD.IS_LISTING_ONLY}) is distinct from 'true'`;
 
 /**
  * Sanitize text fields before DB insertion. Postgres rejects null bytes in

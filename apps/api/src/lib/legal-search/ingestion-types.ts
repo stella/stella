@@ -349,6 +349,28 @@ export type SourceReconciliation = {
   previousSlice: (slice: string) => string | null;
   /** Slices near the tip that get re-walked on a fast cadence. */
   tipWindowDays: number;
+  /**
+   * Whether a stored row counts as held only when it carries the document,
+   * and not when it carries the listing metadata alone.
+   *
+   * Defaults to false, and that default is load-bearing rather than lazy. A
+   * source may be metadata-only by design: sk-courts ingests the listing and
+   * a separate drain fetches documents afterwards, so at any moment a large
+   * part of its corpus legitimately holds no document. Treating those rows as
+   * not held would report millions of decisions missing and re-ingest them
+   * under reconciliation, which is a worse failure than the one this flag
+   * fixes.
+   *
+   * Set it only where a detail-less row means the document fetch failed for a
+   * decision the source otherwise stores whole. There the row is a stub the
+   * walk left behind, and reading it as held takes the decision out of every
+   * later reconciliation: the identity is present, the slice reads reconciled,
+   * and the document is never hunted again.
+   *
+   * Keyed on the pipeline's own `isListingOnly` marker, so it means the same
+   * thing for every source that opts in.
+   */
+  heldRequiresDetail?: boolean | undefined;
   listSlicePage: (
     options: ReconciliationSlicePageOptions,
   ) => Promise<ReconciliationSlicePage>;

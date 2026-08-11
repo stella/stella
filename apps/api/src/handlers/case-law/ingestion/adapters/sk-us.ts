@@ -765,6 +765,20 @@ export const skUsAdapter = defineSourceAdapter({
     nextSlice: skUsNextSlice,
     previousSlice: skUsPreviousSlice,
     tipWindowDays: SK_US_TIP_WINDOW_SLICES,
+    // The crawl keeps the listing-only row a failed PDF leaves behind and
+    // `buildSkUsDecision` marks it `isListingOnly`; unset, that row would count
+    // as held and its document would never be hunted again.
+    //
+    // Heldness stays a statement about the docket rather than the document,
+    // because this source stores one row per `(caseNumber, language)` and emits
+    // no `sourceDocumentId` at all — see `skUsListingIdentity`. A docket whose
+    // row carries detail is therefore held even where a sibling document
+    // failed, and a walk hunts one representative per docket, not all of them.
+    // That bound belongs to the identity model, not to this flag: without the
+    // flag the docket is held whatever its row carries, and fetching siblings
+    // before the stored rows carry `documentId` would only have them overwrite
+    // one another in the single row that exists for the docket.
+    heldRequiresDetail: true,
     listSlicePage: listSkUsSlicePage,
     buildDecision: buildSkUsFromPayload,
   },
