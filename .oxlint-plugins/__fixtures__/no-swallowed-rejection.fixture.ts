@@ -143,6 +143,7 @@ export const __noSwallowedRejectionFixture = {
   returnedConstant,
   boundButDropped,
   configuredFileRead,
+  configuredFileReadViaAlias,
   readerTeardown,
   bodyDrain,
   capturedFallback,
