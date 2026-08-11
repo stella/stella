@@ -10,7 +10,6 @@ import {
 } from "@stll/folio-core/server";
 import type { BlockDirectiveKind } from "@stll/template-conditions";
 
-import { extractPreviewText } from "./extract-preview-text";
 import type { ExtractedDocument, ExtractedParagraph, FieldMeta } from "./types";
 
 // ── Directive detection ─────────────────────────────────
@@ -88,11 +87,36 @@ export const extractText = async (
 export const extractTextForPreview = async (
   docxBytes: Uint8Array,
 ): Promise<ExtractedDocument> => {
-  const result = await extractPreviewText(docxBytes);
-  const paragraphs = result.paragraphs.map(annotateDirective);
+  const result = await extractDocxText(docxBytes);
+  const extractedParagraphs: ExtractedDocxParagraph[] = [];
+  for (const paragraph of result.paragraphs) {
+    if (paragraph.tableRow === undefined) {
+      extractedParagraphs.push({
+        ...paragraph,
+        index: extractedParagraphs.length,
+      });
+      continue;
+    }
+    if (paragraph.tableRow.kind !== "cells") {
+      continue;
+    }
+    for (const cell of paragraph.tableRow.cells) {
+      for (const cellParagraph of cell.paragraphs) {
+        extractedParagraphs.push({
+          index: extractedParagraphs.length,
+          source: paragraph.source,
+          ...cellParagraph,
+        });
+      }
+    }
+  }
+  const paragraphs = extractedParagraphs.map(annotateDirective);
   return {
     paragraphs,
-    charCount: result.charCount,
+    charCount: extractedParagraphs.reduce(
+      (count, paragraph) => count + paragraph.text.length,
+      0,
+    ),
     view: result.view,
   };
 };

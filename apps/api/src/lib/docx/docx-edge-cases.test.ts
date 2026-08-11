@@ -186,7 +186,11 @@ describe("extract-text: real OOXML patterns", () => {
       },
       {
         text: "| Cell A1 |",
-        tableRow: { table: 0, kind: "cells" },
+        tableRow: {
+          table: 0,
+          kind: "cells",
+          cells: [{ paragraphs: [{ text: "Cell A1" }] }],
+        },
       },
       { text: "After table", tableRow: undefined },
     ]);

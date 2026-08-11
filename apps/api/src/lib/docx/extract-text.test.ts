@@ -196,7 +196,11 @@ describe("extractText", () => {
       index: 2,
       text: "| {{#each fields}} |",
       source: "body",
-      tableRow: { table: 0, kind: "cells" },
+      tableRow: {
+        table: 0,
+        kind: "cells",
+        cells: [{ paragraphs: [{ text: "{{#each fields}}" }] }],
+      },
       isDirective: true,
       directiveKind: "each",
       directiveExpression: "fields",
