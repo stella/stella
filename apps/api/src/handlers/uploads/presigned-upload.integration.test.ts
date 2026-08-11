@@ -35,12 +35,14 @@ void mock.module("@/api/lib/s3", () => ({
 const { default: abortUpload } = await import("./delete");
 const { default: finalizeUpload } = await import("./update");
 const { default: presignUpload } = await import("./create");
+const { default: reconcileUpload } = await import("./reconcile");
 
 setDefaultTimeout(120_000);
 
 type PresignCtx = Parameters<typeof presignUpload.handler>[0];
 type AbortCtx = Parameters<typeof abortUpload.handler>[0];
 type FinalizeCtx = Parameters<typeof finalizeUpload.handler>[0];
+type ReconcileCtx = Parameters<typeof reconcileUpload.handler>[0];
 
 let testDb: TestDatabase;
 let ids: TestIds;
@@ -100,6 +102,22 @@ describe("presigned upload mutation flow", () => {
       purpose: "agent_skill",
       purposeData: { type: "agent_skill", scope: "private" },
       status: "pending",
+    });
+
+    const reconcileResult = await reconcileUpload.handler(
+      asTestRaw<ReconcileCtx>(
+        createContext({
+          body: undefined,
+          params: { workspaceId: ids.wsA1, uploadId },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+    expect(reconcileResult).toEqual({
+      code: 404,
+      response: { message: "Upload not found" },
     });
   });
 
@@ -276,6 +294,58 @@ describe("presigned upload mutation flow", () => {
     ).toEqual([{ objectKey: recoveryObjectKey }]);
   });
 
+  test("replays a completed email-ingest reconciliation without changing its durable result", async () => {
+    const uploadId = createSafeId<"pendingUpload">();
+    const finalizedResult = {
+      attachmentEntityIds: [],
+      entityId: ids.entityA1,
+      fieldId: ids.fieldA1,
+      fileId: Bun.randomUUIDv7(),
+      fileName: "message.eml",
+      renamed: false,
+      type: "email_ingest" as const,
+    };
+    await testDb.insert(pendingUploads).values({
+      id: uploadId,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+      purpose: "email_ingest",
+      purposeData: {
+        type: "email_ingest",
+        propertyId: ids.propertyA1,
+      },
+      declaredName: "message.eml",
+      declaredMime: "message/rfc822",
+      declaredSize: 12,
+      declaredSha256: "e".repeat(64),
+      status: "finalized",
+      finalizedResult,
+      finalizedAt: new Date(),
+      expiresAt: new Date(Date.now() + 60_000),
+      createdAt: new Date(),
+    });
+    seededUploadIds.push(uploadId);
+    const context = asTestRaw<ReconcileCtx>(
+      createContext({
+        body: undefined,
+        params: { workspaceId: ids.wsA1, uploadId },
+        workspaceId: ids.wsA1,
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
+    );
+
+    const first = await reconcileUpload.handler(context);
+    const replay = await reconcileUpload.handler(context);
+
+    expect(first).toEqual({
+      finalizedResult,
+      state: "complete",
+    });
+    expect(replay).toEqual(first);
+  });
+
   test("does not let workspace A abort workspace B upload IDs", async () => {
     const uploadId = createSafeId<"pendingUpload">();
     await testDb.insert(pendingUploads).values({
@@ -308,6 +378,21 @@ describe("presigned upload mutation flow", () => {
     );
 
     expect(result).toEqual({
+      code: 404,
+      response: { message: "Upload not found" },
+    });
+    const reconcileResult = await reconcileUpload.handler(
+      asTestRaw<ReconcileCtx>(
+        createContext({
+          body: undefined,
+          params: { workspaceId: ids.wsA1, uploadId },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+    expect(reconcileResult).toEqual({
       code: 404,
       response: { message: "Upload not found" },
     });

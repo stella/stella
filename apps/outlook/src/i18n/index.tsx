@@ -3,6 +3,8 @@ import type { PropsWithChildren } from "react";
 import { IntlProvider } from "use-intl";
 import { createTranslator } from "use-intl/core";
 
+import { getOfficeDisplayLanguage } from "@/lib/office";
+
 const DEFAULT_OUTLOOK_LOCALE = "en";
 const SUPPORTED_OUTLOOK_LOCALES = [DEFAULT_OUTLOOK_LOCALE] as const;
 type OutlookLocale = (typeof SUPPORTED_OUTLOOK_LOCALES)[number];
@@ -20,8 +22,7 @@ export const resolveOutlookLocale = (
 };
 
 const outlookLocale = (): OutlookLocale => {
-  const officeLanguage =
-    typeof Office === "undefined" ? undefined : Office.context.displayLanguage;
+  const officeLanguage = getOfficeDisplayLanguage();
   const browserLanguages =
     typeof navigator === "undefined" ? [] : navigator.languages;
   return resolveOutlookLocale([
@@ -36,6 +37,8 @@ const messages = {
       "AI actions send this email text to your organization's configured AI provider. Review every output before use.",
     aiUnavailable: "AI is unavailable right now",
     attachmentSelection: "Attachments",
+    attachmentReadError:
+      "Outlook could not read all attachments. No email was saved. Update Outlook or reopen the add-in, then try again.",
     attachmentsSaved: "{count, number} attachment(s) saved.",
     attachmentsSkipped: "Some attachments were skipped",
     browserMode: "Browser preview",

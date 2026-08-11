@@ -1,4 +1,5 @@
 import { OutlookError } from "@/lib/outlook-error";
+import { getOfficeRuntime } from "@/lib/office";
 
 const HANDOFF_MESSAGE_TYPE = "stella:auth";
 const DIALOG_BOOTSTRAP_PATH = "/dialog.html";
@@ -6,19 +7,6 @@ const MAX_TOKEN_LENGTH = 8192;
 
 const TOKEN_SUBSCRIBERS = new Set<(token: string | null) => void>();
 let currentToken: string | null = null;
-
-const isOffice = (
-  value: unknown,
-): value is { context: typeof Office.context } =>
-  typeof value === "object" &&
-  value !== null &&
-  "context" in value &&
-  typeof value.context === "object";
-
-const getOffice = () => {
-  const value: unknown = Reflect.get(globalThis, "Office");
-  return isOffice(value) ? value : null;
-};
 
 const notify = (token: string | null) => {
   currentToken = token;
@@ -95,7 +83,7 @@ export const signInViaDialog = async ({
   signInOrigin,
   taskpaneOrigin,
 }: SignInViaDialogOptions): Promise<string> => {
-  const office = getOffice();
+  const office = getOfficeRuntime();
   const ui = office?.context.ui;
   if (!ui?.displayDialogAsync) {
     throw new OutlookError({

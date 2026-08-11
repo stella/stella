@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { assertOutlookReleaseVersion } from "./release-artifact";
+
 const APP_ROOT = path.resolve(import.meta.dirname, "..");
 const TEMPLATE_PATH = path.resolve(APP_ROOT, "manifest.template.xml");
 
@@ -101,6 +103,7 @@ export const renderManifest = (
 ): string => {
   const template = readFileSync(TEMPLATE_PATH, "utf-8");
   const placeholders = resolveManifestPlaceholders(env, runtimeEnv);
+  assertOutlookReleaseVersion(placeholders.VERSION);
   let output = template;
   for (const [key, value] of Object.entries(placeholders)) {
     output = output.replaceAll(`{{${key}}}`, () => value);

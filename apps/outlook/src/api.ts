@@ -1,12 +1,27 @@
 import { Result, TaggedError } from "better-result";
 
-import { DOCUMENT_UPLOAD_POLICY } from "@stll/api-contract";
+import {
+  DOCUMENT_UPLOAD_POLICY,
+  type OutlookIngestionDiagnostic,
+} from "@stll/api-contract";
 import type { SafeId } from "@stll/api/types";
 import { toSafeId } from "@stll/api/types";
 
 import { api, withTimeout } from "@/lib/api";
 import { APIError, toAPIError } from "@/lib/api-error";
 import { buildEmlFile } from "@/lib/eml";
+import {
+  diagnosticBase,
+  ingestionDiagnostic,
+} from "@/lib/ingestion-diagnostics";
+import type {
+  AbortingEmailUpload,
+  FinalizingEmailUpload,
+  IngestEmailResult,
+  PendingEmailUpload,
+  ReservedEmailUpload,
+  UploadingEmailUpload,
+} from "@/ingestion-state";
 import type {
   AttachmentDownloadResult,
   MailSnapshot,
@@ -75,35 +90,16 @@ const ensureFileProperty = async (
   return created.data.id;
 };
 
-export type IngestEmailResult = {
-  attachmentCount: number;
-  entityId: SafeId<"entity">;
-  fieldId: SafeId<"field">;
-  skippedAttachments: string[];
-  workspaceId: SafeId<"workspace">;
-};
-
 type PendingEmailUploadIdentity = {
   uploadId: SafeId<"pendingUpload">;
   workspaceId: SafeId<"workspace">;
 };
 
-type PendingEmailUploadAbort = PendingEmailUploadIdentity & { type: "abort" };
-
-type PendingEmailUploadFinalize = PendingEmailUploadIdentity & {
-  skippedAttachments: string[];
-  type: "finalize";
-};
-
-export type PendingEmailUpload =
-  | PendingEmailUploadAbort
-  | PendingEmailUploadFinalize;
-
 export class PendingUploadCleanupError extends TaggedError(
   "PendingUploadCleanupError",
 )<{
   message: string;
-  pendingUpload: PendingEmailUploadAbort;
+  pendingUpload: PendingEmailUploadIdentity & { type: "aborting" };
   status: number;
 }> {}
 
@@ -111,6 +107,7 @@ type DirectEmailUploadDependencies = {
   abortReservation: (
     workspaceId: SafeId<"workspace">,
     uploadId: SafeId<"pendingUpload">,
+    diagnostic?: OutlookIngestionDiagnostic,
   ) => Promise<void>;
   put: (url: string, init: RequestInit) => Promise<Response>;
 };
@@ -118,10 +115,11 @@ type DirectEmailUploadDependencies = {
 export const abortEmailUploadReservation = async (
   workspaceId: SafeId<"workspace">,
   uploadId: SafeId<"pendingUpload">,
+  diagnostic?: OutlookIngestionDiagnostic,
 ): Promise<void> => {
   const aborted = await api
     .uploads({ workspaceId })({ uploadId })
-    .abort.post({}, withTimeout());
+    .abort.post(diagnostic ? { diagnostic } : {}, withTimeout());
   if (aborted.error) {
     throw toAPIError(aborted.error);
   }
@@ -133,15 +131,27 @@ const directEmailUploadDependencies: DirectEmailUploadDependencies = {
 };
 
 type PutPresignedEmailOptions = {
+  abortDiagnostic?: OutlookIngestionDiagnostic;
   eml: File;
   headers: Record<string, string>;
+  onAbortComplete?: () => void;
   uploadId: SafeId<"pendingUpload">;
   url: string;
   workspaceId: SafeId<"workspace">;
+  onAbortStart?: () => void;
 };
 
 export const putPresignedEmail = async (
-  { eml, headers, uploadId, url, workspaceId }: PutPresignedEmailOptions,
+  {
+    abortDiagnostic,
+    eml,
+    headers,
+    onAbortComplete,
+    onAbortStart,
+    uploadId,
+    url,
+    workspaceId,
+  }: PutPresignedEmailOptions,
   dependencyOverrides: Partial<DirectEmailUploadDependencies> = {},
 ): Promise<void> => {
   const dependencies = {
@@ -162,18 +172,25 @@ export const putPresignedEmail = async (
     return;
   }
 
+  onAbortStart?.();
   const abortResult = await Result.tryPromise({
-    try: async () => await dependencies.abortReservation(workspaceId, uploadId),
+    try: async () =>
+      await dependencies.abortReservation(
+        workspaceId,
+        uploadId,
+        abortDiagnostic,
+      ),
     catch: (cause) => cause,
   });
   const status = Result.isOk(putResult) ? putResult.value.status : 502;
   if (Result.isError(abortResult)) {
     throw new PendingUploadCleanupError({
       message: "Upload failed; reservation cleanup could not be confirmed",
-      pendingUpload: { type: "abort", uploadId, workspaceId },
+      pendingUpload: { type: "aborting", uploadId, workspaceId },
       status,
     });
   }
+  onAbortComplete?.();
 
   const responseSuffix = Result.isOk(putResult) ? ` (${status})` : "";
   throw new APIError({
@@ -183,21 +200,21 @@ export const putPresignedEmail = async (
 };
 
 /**
- * Reconstruct the message as a single `.eml`, then upload it through the
- * standard presigned flow with the `email_ingest` purpose. The API parses
- * it, stores it as a message entity, and fans each attachment out into a
- * child entity. One round-trip plus the direct S3 PUT replaces the former
- * per-field / per-attachment fan-out.
+ * Reconstruct the message as a single `.eml`, then reserve the standard
+ * presigned flow with the `email_ingest` purpose. The caller stores the
+ * returned identity before starting the direct PUT.
  */
-export const prepareEmailUpload = async ({
+export const reserveEmailUpload = async ({
   attachments,
+  diagnostic,
   snapshot,
   workspaceId: workspaceIdString,
 }: {
   attachments: AttachmentDownloadResult[];
+  diagnostic: OutlookIngestionDiagnostic;
   snapshot: MailSnapshot;
   workspaceId: string;
-}): Promise<PendingEmailUploadFinalize> => {
+}): Promise<ReservedEmailUpload> => {
   const workspaceId = toSafeId<"workspace">(workspaceIdString);
   const propertyId = await ensureFileProperty(workspaceId);
 
@@ -213,6 +230,7 @@ export const prepareEmailUpload = async ({
       purpose: "email_ingest",
       sha256Hex: sha256,
       size: eml.size,
+      diagnostic,
     },
     withTimeout(),
   );
@@ -220,33 +238,73 @@ export const prepareEmailUpload = async ({
     throw toAPIError(presign.error);
   }
 
-  await putPresignedEmail({
+  return {
+    diagnostic,
     eml,
     headers: presign.data.headers,
-    uploadId: presign.data.uploadId,
-    url: presign.data.url,
-    workspaceId,
-  });
-
-  return {
     skippedAttachments: attachments
       .filter((attachment) => attachment.type === "skipped")
       .map((attachment) => attachment.reason),
-    type: "finalize",
+    type: "reserved",
     uploadId: presign.data.uploadId,
+    url: presign.data.url,
     workspaceId,
   };
 };
 
+type UploadReservedEmailOptions = {
+  onAborted: () => void;
+  onAborting: (upload: AbortingEmailUpload) => void;
+};
+
+export const uploadReservedEmail = async (
+  upload: UploadingEmailUpload,
+  { onAborted, onAborting }: UploadReservedEmailOptions,
+): Promise<FinalizingEmailUpload> => {
+  const aborting: AbortingEmailUpload = {
+    diagnostic: ingestionDiagnostic(
+      diagnosticBase(upload.diagnostic),
+      "abort",
+      "in_progress",
+    ),
+    type: "aborting",
+    uploadId: upload.uploadId,
+    workspaceId: upload.workspaceId,
+  };
+  await putPresignedEmail({
+    abortDiagnostic: aborting.diagnostic,
+    eml: upload.eml,
+    headers: upload.headers,
+    onAbortComplete: onAborted,
+    onAbortStart: () => onAborting(aborting),
+    uploadId: upload.uploadId,
+    url: upload.url,
+    workspaceId: upload.workspaceId,
+  });
+
+  return {
+    diagnostic: ingestionDiagnostic(
+      diagnosticBase(upload.diagnostic),
+      "finalize",
+      "in_progress",
+    ),
+    skippedAttachments: upload.skippedAttachments,
+    type: "finalizing",
+    uploadId: upload.uploadId,
+    workspaceId: upload.workspaceId,
+  };
+};
+
 export const finalizeEmailUpload = async ({
+  diagnostic,
   skippedAttachments,
   uploadId,
   workspaceId,
-}: PendingEmailUploadFinalize): Promise<IngestEmailResult> => {
+}: FinalizingEmailUpload): Promise<IngestEmailResult> => {
   const finalize = await api
     .uploads({ workspaceId })({ uploadId })
     .finalize.post(
-      { queryKey: entitiesQueryKey(workspaceId) },
+      { diagnostic, queryKey: entitiesQueryKey(workspaceId) },
       withTimeout(EMAIL_FINALIZE_TIMEOUT_MS),
     );
   if (finalize.error) {
@@ -268,6 +326,56 @@ export const finalizeEmailUpload = async ({
     skippedAttachments,
     workspaceId,
   };
+};
+
+export type EmailUploadReconciliation =
+  | { state: "reserved" }
+  | { state: "finalizing" }
+  | { reason: string; state: "retryable" }
+  | { reason: string; state: "rejected" }
+  | { result: IngestEmailResult; state: "complete" };
+
+export const reconcileEmailUpload = async (
+  pending: PendingEmailUpload,
+): Promise<EmailUploadReconciliation> => {
+  const response = await api
+    .uploads({ workspaceId: pending.workspaceId })({
+      uploadId: pending.uploadId,
+    })
+    .reconcile.post({ diagnostic: pending.diagnostic }, withTimeout());
+  if (response.error) {
+    throw toAPIError(response.error);
+  }
+  switch (response.data.state) {
+    case "reserved":
+      return { state: "reserved" };
+    case "finalizing":
+      return { state: "finalizing" };
+    case "retryable":
+      return { reason: response.data.reason, state: "retryable" };
+    case "rejected":
+      return { reason: response.data.reason, state: "rejected" };
+    case "complete": {
+      const result = response.data.finalizedResult;
+      if (result.type !== "email_ingest") {
+        throw new APIError({
+          message: `Unexpected upload result: ${result.type}`,
+          status: 500,
+        });
+      }
+      return {
+        result: {
+          attachmentCount: result.attachmentEntityIds.length,
+          entityId: result.entityId,
+          fieldId: result.fieldId,
+          skippedAttachments:
+            pending.type === "aborting" ? [] : pending.skippedAttachments,
+          workspaceId: pending.workspaceId,
+        },
+        state: "complete",
+      };
+    }
+  }
 };
 
 const SERVER_ERROR_STATUS = 500;
