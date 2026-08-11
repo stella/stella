@@ -33,6 +33,13 @@ export const reportExportsKeys = {
   ],
 };
 
+// Built-in plus org-stored report templates offered by the export dialog.
+// Cloning a built-in writes to the same list, so the clone site invalidates
+// this key (and the knowledge templates list the clone shows up in).
+export const reportTemplatesKeys = {
+  all: (workspaceId: string) => ["report-templates", workspaceId],
+};
+
 type ReportExportsHistoryOptionsInput =
   QueryOptionsInput<ReportExportsHistoryKey>;
 type ReportExportDetailOptionsInput = QueryOptionsInput<ReportExportDetailKey>;

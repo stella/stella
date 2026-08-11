@@ -33,9 +33,13 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { knowledgeKeys } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceView } from "@/lib/types";
-import { reportExportsKeys } from "@/lib/workspaces/queries/report-exports";
+import {
+  reportExportsKeys,
+  reportTemplatesKeys,
+} from "@/lib/workspaces/queries/report-exports";
 
 import { ReportExportHistory } from "./report-export-history";
 import {
@@ -174,6 +178,11 @@ const ExportReportDialogBody = ({
   const t = useTranslations();
   const analytics = useAnalytics();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const activeOrganizationId = useRouteContext({
+    from: "/_protected",
+    select: (context) => context.user.activeOrganizationId,
+  });
   const [templateValue, setTemplateValue] = useState<string | null>(null);
   const [mode, setMode] = useState<ReportExportDeliveryMode>(initialMode);
   const [format, setFormat] = useState<ReportFormat>("docx");
@@ -184,7 +193,7 @@ const ExportReportDialogBody = ({
   const [customizing, setCustomizing] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["report-templates", workspaceId],
+    queryKey: reportTemplatesKeys.all(workspaceId),
     queryFn: async ({ signal }) => {
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
@@ -326,6 +335,21 @@ const ExportReportDialogBody = ({
       });
       return;
     }
+
+    // The clone lands in this dialog's template list and in the knowledge
+    // templates list we navigate to; both hold a stale window long enough to
+    // hide it, so drop them before leaving.
+    detached(
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: reportTemplatesKeys.all(workspaceId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: knowledgeKeys.templates.all(activeOrganizationId),
+        }),
+      ]),
+      "handleCustomize",
+    );
 
     stellaToast.add({
       type: "success",
