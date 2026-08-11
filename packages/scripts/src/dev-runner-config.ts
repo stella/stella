@@ -218,7 +218,7 @@ export const parseDevRunnerConfig = ({
     ...flags
   } = cli.value;
   const portOffset = parseIntegerOption(
-    cliPortOffset ?? environment.STELLA_PORT_OFFSET,
+    cliPortOffset ?? environment["STELLA_PORT_OFFSET"],
     cliPortOffset === undefined ? "STELLA_PORT_OFFSET" : "--port-offset",
     MAX_PORT_OFFSET,
   );
@@ -226,7 +226,7 @@ export const parseDevRunnerConfig = ({
     return portOffset;
   }
   const infraOffset = parseIntegerOption(
-    cliInfraOffset ?? environment.STELLA_INFRA_OFFSET ?? "0",
+    cliInfraOffset ?? environment["STELLA_INFRA_OFFSET"] ?? "0",
     cliInfraOffset === undefined ? "STELLA_INFRA_OFFSET" : "--infra-offset",
     MAX_INFRA_OFFSET,
   );
@@ -234,7 +234,7 @@ export const parseDevRunnerConfig = ({
     return infraOffset;
   }
   const devInstance = validateDevInstance(
-    cliDevInstance ?? environment.STELLA_DEV_INSTANCE,
+    cliDevInstance ?? environment["STELLA_DEV_INSTANCE"],
     cliDevInstance === undefined
       ? "numeric STELLA_DEV_INSTANCE"
       : "--dev-instance",
