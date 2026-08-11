@@ -39,7 +39,7 @@ const config = {
     "complete, or rejected state.",
   permissions: uploadRoutePermission,
   access: "read",
-  mcp: { type: "capability", reason: "file_transport" },
+  mcp: { type: "internal", reason: "upload_mechanics" },
   body: reconcileBodySchema,
   params: reconcileParamsSchema,
 } satisfies HandlerConfig;
