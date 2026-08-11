@@ -911,6 +911,10 @@ const transportBlockReason = (transport: CapabilityTransport): string => {
       return "returns a file or stream, which invoke_capability cannot serialize";
     case "file-both":
       return `requires a file in \`${transport.input.field}\` and returns a file or stream`;
+    default: {
+      const exhaustive: never = transport;
+      return exhaustive;
+    }
   }
 };
 
