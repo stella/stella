@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { propertyConfig } from "@stll/property-testing";
+
 import { buildGroundedReviewFix } from "@/api/lib/grounded-review-fix";
 
 describe("grounded review fixes", () => {
@@ -35,6 +37,7 @@ describe("grounded review fixes", () => {
           });
         },
       ),
+      propertyConfig(),
     );
   });
 });
