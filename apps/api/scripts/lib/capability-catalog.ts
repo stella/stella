@@ -887,16 +887,17 @@ export const schemaContainsBinaryFormat = (schema: unknown): boolean => {
 
 /**
  * Whether a handler's success path returns a file-like value constructed
- * inline: `Result.ok(new Response(...))` (file/stream export) or
- * `Result.ok(new Uint8Array(...))` / `Result.ok(new Blob(...))` (raw binary
- * payload). This catches the common export shapes as a hard class guard. A
- * handler that returns one via an intermediate variable (e.g. `templates.fill`
- * delegating to a helper, or `time-entries.export-pdf` building its bytes in a
- * helper) is not matched here; it is seeded manually into the flag table and
- * kept honest by the stale check below (`constructsBinaryLike`).
+ * inline: the canonical `secureDocumentResponse(...)`,
+ * `Result.ok(new Response(...))`, or a raw binary value such as
+ * `Result.ok(new Uint8Array(...))`. This catches the common export shapes as a
+ * hard class guard. A handler that returns raw bytes through an intermediate
+ * variable is seeded manually into the flag table and kept honest by the stale
+ * check below (`constructsBinaryLike`).
  */
 export const returnsInlineFileResponse = (source: string): boolean =>
-  /Result\.ok\(\s*new (?:Response|Uint8Array|Blob)\b/su.test(source);
+  /Result\.ok\(\s*new (?:Response|Uint8Array|Blob)\b|(?:Result\.ok\(\s*|return\s+)secureDocumentResponse\s*\(/su.test(
+    source,
+  );
 
 /**
  * Whether a handler constructs or names any file-like value — a web `Response`,
@@ -905,7 +906,7 @@ export const returnsInlineFileResponse = (source: string): boolean =>
  * flag plus the runtime backstop in `mapHandlerResult`.
  */
 export const constructsBinaryLike = (source: string): boolean =>
-  /\bnew Response\s*\(|\bUint8Array\b|\bArrayBuffer\b|\bnew Blob\s*\(|\bReadableStream\b/u.test(
+  /\bnew Response\s*\(|\bsecureDocumentResponse\s*\(|\bUint8Array\b|\bArrayBuffer\b|\bnew Blob\s*\(|\bReadableStream\b/u.test(
     source,
   );
 
