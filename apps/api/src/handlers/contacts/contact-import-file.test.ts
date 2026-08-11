@@ -19,6 +19,15 @@ const parseDocument = (text: string) => {
 };
 
 describe("contact import document", () => {
+  test("parses quoted headers after a UTF-8 BOM", () => {
+    const document = parseDocument(
+      '\uFEFF"Name","Email"\n"Jane Doe","jane@example.com"',
+    );
+
+    expect(document.headers).toEqual(["Name", "Email"]);
+    expect(document.rows).toEqual([["Jane Doe", "jane@example.com"]]);
+  });
+
   test("detects a semicolon file and suggests each destination once", () => {
     const document = parseDocument(
       "Jméno;E-mail;E-mail\nJan Novák;jan@example.com;other@example.com",

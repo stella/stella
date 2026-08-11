@@ -181,11 +181,12 @@ export const parseContactImportDocument = (
     );
   }
 
+  const normalizedText = text.replace(/^\uFEFF/u, "");
   let selected:
     | { delimiter: CSVDelimiter; rows: string[][]; score: number }
     | undefined;
   for (const delimiter of CSV_DELIMITERS) {
-    const parsed = parseCSV(text, delimiter);
+    const parsed = parseCSV(normalizedText, delimiter);
     if (parsed.status === CSV_PARSE_STATUS.INVALID) {
       continue;
     }

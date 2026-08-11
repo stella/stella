@@ -56,8 +56,11 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { pageTitle } from "@/lib/page-title";
-import { toSafeId } from "@/lib/safe-id";
-import type { SafeId } from "@/lib/safe-id";
+import {
+  clearContactImportRequest,
+  resolveContactImportRequest,
+} from "@/routes/_protected.contacts/-contact-import-request";
+import type { PendingContactImportRequest } from "@/routes/_protected.contacts/-contact-import-request";
 
 export const Route = createFileRoute("/_protected/contacts/import")({
   head: () => ({
@@ -116,7 +119,7 @@ type StudioState =
       inspection: Inspection;
       mapping: ContactImportMapping;
       preview: Preview;
-      importRequestId: SafeId<"contactImportRequest">;
+      importRequest: PendingContactImportRequest;
     };
 
 type BusyState = "idle" | "inspecting" | "previewing" | "importing";
@@ -292,7 +295,12 @@ function ContactImportStudio() {
         file: state.file,
         mapping: JSON.stringify(state.mapping),
       });
-      return unwrapEden(response);
+      const preview = unwrapEden(response);
+      const importRequest = await resolveContactImportRequest({
+        file: state.file,
+        mapping: state.mapping,
+      });
+      return { importRequest, preview };
     });
     setBusy("idle");
 
@@ -312,8 +320,8 @@ function ContactImportStudio() {
       file: state.file,
       inspection: state.inspection,
       mapping: state.mapping,
-      preview: result.value,
-      importRequestId: toSafeId<"contactImportRequest">(crypto.randomUUID()),
+      preview: result.value.preview,
+      importRequest: result.value.importRequest,
     });
     focusStepHeading();
   };
@@ -330,7 +338,7 @@ function ContactImportStudio() {
     const result = await Result.tryPromise(async () => {
       const response = await api.contacts.import.post({
         file: state.file,
-        importRequestId: state.importRequestId,
+        importRequestId: state.importRequest.id,
         mapping: JSON.stringify(state.mapping),
       });
       return unwrapEden(response);
@@ -354,6 +362,7 @@ function ContactImportStudio() {
       }),
       type: "success",
     });
+    clearContactImportRequest({ storageKey: state.importRequest.storageKey });
     await queryClient.invalidateQueries({ queryKey: contactsKeys.all });
     await navigate({ to: "/contacts" });
   };
@@ -709,9 +718,7 @@ const MappingStep = ({
         <Checkbox
           checked={state.mapping.generateDisplayName}
           disabled={busy !== "idle"}
-          onCheckedChange={(checked) =>
-            onGenerateDisplayNameChange(checked === true)
-          }
+          onCheckedChange={onGenerateDisplayNameChange}
         />
         {t("contacts.importStudio.generateDisplayName")}
       </label>
