@@ -9,6 +9,7 @@ import { Result } from "better-result";
 import { readFile } from "node:fs/promises";
 
 import type { Context } from "./context.js";
+import { expandSchemaDefs } from "./expand-schema-defs.js";
 import { validateAgainstSchema } from "./json-schema-validate.js";
 import { callTool, type CallToolResult } from "./mcp-client.js";
 import { EXIT_CODES } from "./mcp-constants.js";
@@ -327,14 +328,19 @@ export const runCapabilityCommand = async ({
 
   // Validate the COMPOSED input (JSON base + overlaid flags) against the snapshot
   // schema, only when `--input` supplied JSON. Flags-only requests keep relying on
-  // the required-flag check plus server validation (unchanged surface); truncated
-  // entries carry no snapshot schema and defer to the server.
-  if (
-    typeof inputRaw === "string" &&
-    !spec.schemaTruncated &&
-    spec.inputSchema !== undefined
-  ) {
-    const validation = validateAgainstSchema(spec.inputSchema, input);
+  // the required-flag check plus server validation (unchanged surface). The
+  // baked schema is `$defs`-compacted, so inline its refs first; expansion is
+  // per-command and only on this path, never at startup.
+  if (typeof inputRaw === "string") {
+    const schema = expandSchemaDefs(spec.inputSchema);
+    if (schema === null) {
+      writers.stderr(
+        `Cannot validate --input: the baked schema for ${spec.capabilityId} has unresolvable $defs references.\n`,
+      );
+      setExit(context, EXIT_CODES.validation);
+      return;
+    }
+    const validation = validateAgainstSchema(schema, input);
     if (!validation.valid) {
       writers.stderr(
         `--input invalid at ${validation.path}: ${validation.message}\n`,

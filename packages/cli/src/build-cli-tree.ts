@@ -255,9 +255,6 @@ const capabilityInputHint = (spec: CapabilityLeafSpec): string => {
   if (spec.inputOnly.length > 0) {
     return ` (via --input only: ${spec.inputOnly.join(", ")})`;
   }
-  if (spec.schemaTruncated) {
-    return " (--input only)";
-  }
   return "";
 };
 

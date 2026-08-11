@@ -566,11 +566,8 @@
     "files": {}
   },
   "capability-schemas-truncated": {
-    "count": 6,
-    "files": {
-      "apps/api/src/mcp/generated/capability-catalog.json": 3,
-      "packages/cli/src/generated/capability-catalog.json": 3
-    }
+    "count": 0,
+    "files": {}
   },
   "capability-file-transport-suppressed": {
     "count": 42,

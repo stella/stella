@@ -880,11 +880,12 @@ const countCrossSliceImports =
 
 // A capability whose input schema exceeded the exporter's byte cap
 // (`MAX_CAPABILITY_SCHEMA_BYTES` in apps/api/scripts/lib/capability-catalog.ts).
-// The exporter drops the schema and marks the entry, which silently costs that
-// capability its typed CLI flags and its MCP input schema — the command
-// degrades to an opaque `--input` JSON blob with no discoverable shape. Nothing
-// fails when this happens, so without a ratchet the untyped surface grows
-// unnoticed. Counting the committed artifacts (rather than re-running the
+// A capability whose schema was dropped for size degraded to an opaque
+// `--input` JSON blob: no typed CLI flags, no discoverable shape, and nothing
+// failed to say so. The exporter no longer has that escape hatch — it hoists
+// repeated subschemas into `$defs` and errors on anything still over the byte
+// cap — so this counter now guards the absence of the pathway rather than
+// burning it down. Counting the committed artifacts (rather than re-running the
 // exporter) keeps the scan cheap and deterministic; both mirrors are included
 // so drift between them also shows up.
 const countTruncatedCapabilitySchemas = (content: string): number => {
@@ -1238,7 +1239,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
   {
     id: "capability-schemas-truncated",
     description:
-      "capabilities whose input schema exceeded the exporter byte cap, losing typed CLI flags and MCP input schemas (counted across both committed catalog mirrors)",
+      "capabilities carrying `inputSchemaTruncated`, the flag that used to mark a schema dropped for size (counted across both committed catalog mirrors). The exporter now $defs-compacts schemas and FAILS on one still over the byte cap, so this can only be reached by reintroducing the truncation pathway: it stays at 0",
     include: [
       "packages/cli/src/generated/capability-catalog.json",
       "apps/api/src/mcp/generated/capability-catalog.json",

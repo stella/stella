@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  capInputSchema,
   classifyVerbs,
   compareScopeStrictness,
   countCapabilityDispositions,
@@ -13,6 +12,7 @@ import {
   findInlineCapabilityMismatches,
   findMalformedCapabilityIds,
   findStaleAccessOverrides,
+  inputSchemaByteSize,
   isDestructiveName,
   isWellFormedCapabilityId,
   MAX_CAPABILITY_SCHEMA_BYTES,
@@ -583,32 +583,22 @@ describe("resolveHandlerKind", () => {
   });
 });
 
-describe("capInputSchema", () => {
-  test("passes a schema under the cap through unchanged", () => {
-    const inputSchema = { body: { type: "object" } };
-    expect(capInputSchema(inputSchema)).toEqual({
-      truncated: false,
-      inputSchema,
-    });
-  });
-
-  test("truncates a schema whose compact serialization exceeds the cap", () => {
-    const inputSchema = { body: { blob: "x".repeat(32) } };
-    expect(capInputSchema(inputSchema, 16)).toEqual({ truncated: true });
+describe("inputSchemaByteSize", () => {
+  test("measures the compact serialization, not the pretty one", () => {
+    expect(inputSchemaByteSize({ body: { type: "object" } })).toBe(
+      '{"body":{"type":"object"}}'.length,
+    );
   });
 
   test("measures UTF-8 bytes, not UTF-16 code units", () => {
     // 8 four-byte emoji: 16 code units but 32 UTF-8 bytes, plus JSON overhead.
-    const inputSchema = { body: "😀".repeat(8) };
+    const inputSchema = { body: "\u{1F600}".repeat(8) };
     expect(JSON.stringify(inputSchema).length).toBeLessThanOrEqual(30);
-    expect(capInputSchema(inputSchema, 30)).toEqual({ truncated: true });
+    expect(inputSchemaByteSize(inputSchema)).toBeGreaterThan(30);
   });
 
-  test("defaults to the committed 64KiB cap", () => {
-    const under = { body: "x".repeat(MAX_CAPABILITY_SCHEMA_BYTES - 20) };
-    expect(capInputSchema(under).truncated).toBe(false);
-    const over = { body: "x".repeat(MAX_CAPABILITY_SCHEMA_BYTES + 1) };
-    expect(capInputSchema(over).truncated).toBe(true);
+  test("pins the committed cap", () => {
+    expect(MAX_CAPABILITY_SCHEMA_BYTES).toBe(64 * 1024);
   });
 });
 
@@ -627,7 +617,7 @@ describe("serializeCatalog", () => {
   });
 
   test("round-trips through JSON.parse", () => {
-    const entries = [{ id: "x", inputSchemaTruncated: true }];
+    const entries = [{ id: "x", inputSchema: { body: { type: "object" } } }];
     expect(JSON.parse(serializeCatalog(entries))).toEqual(entries);
   });
 });

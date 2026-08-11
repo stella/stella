@@ -485,11 +485,11 @@ export const resolveHandlerKind = ({
 
 /**
  * Per-entry input-schema byte cap for the committed catalog snapshot, mirroring
- * the CLI trust boundary's MAX_TOOL_SCHEMA_BYTES. A handful of view/table
- * schemas serialize to 150KB+ each (deep recursive condition/filter unions),
- * which would make the committed artifact unreviewable. The server always has
- * the live schema from the handler config; the snapshot omits oversize schemas
- * and marks the entry `inputSchemaTruncated` instead.
+ * the CLI trust boundary's MAX_TOOL_SCHEMA_BYTES, and measured AFTER `$defs`
+ * compaction (see `compactSchemaDefs`). The cap keeps the committed artifact
+ * reviewable; compaction is what keeps every capability under it, so an entry
+ * still over the cap fails the export rather than shipping a capability with no
+ * describable input shape.
  */
 export const MAX_CAPABILITY_SCHEMA_BYTES = 64 * 1024;
 
@@ -499,26 +499,12 @@ export type CapabilityInputSchema = {
   query?: unknown;
 };
 
-export type SchemaCapResult =
-  | { truncated: false; inputSchema: CapabilityInputSchema }
-  | { truncated: true };
-
 /**
- * Apply the snapshot byte cap to one entry's input schema. Size is measured on
- * the compact JSON serialization (the committed format), in UTF-8 bytes; an
- * oversize schema returns `truncated: true` so the exporter omits `inputSchema`
- * and sets `inputSchemaTruncated` on the entry.
+ * Size of one entry's input schema in the committed format: compact JSON, UTF-8
+ * bytes.
  */
-export const capInputSchema = (
-  inputSchema: CapabilityInputSchema,
-  maxBytes: number = MAX_CAPABILITY_SCHEMA_BYTES,
-): SchemaCapResult => {
-  const bytes = Buffer.byteLength(JSON.stringify(inputSchema), "utf-8");
-  if (bytes > maxBytes) {
-    return { truncated: true };
-  }
-  return { truncated: false, inputSchema };
-};
+export const inputSchemaByteSize = (inputSchema: unknown): number =>
+  Buffer.byteLength(JSON.stringify(inputSchema), "utf-8");
 
 /**
  * The committed catalog format: compact JSON (no indentation — pretty-printing

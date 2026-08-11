@@ -26,20 +26,23 @@ const catalogEntrySchema = v.looseObject({
   additionalScopes: v.optional(v.array(v.string())),
   requiresFileInput: v.optional(v.boolean()),
   returnsFileResponse: v.optional(v.boolean()),
-  inputSchemaTruncated: v.optional(v.boolean()),
-  inputSchema: v.optional(
-    v.looseObject({
-      body: v.optional(jsonSchemaSchema),
-      params: v.optional(jsonSchemaSchema),
-      query: v.optional(jsonSchemaSchema),
-    }),
-  ),
+  inputSchema: v.looseObject({
+    $defs: v.optional(jsonSchemaSchema),
+    body: v.optional(jsonSchemaSchema),
+    params: v.optional(jsonSchemaSchema),
+    query: v.optional(jsonSchemaSchema),
+  }),
 });
 
 /**
  * Validate a parsed catalog JSON value down to the fields the CLI consumes,
  * dropping absent optionals so `exactOptionalPropertyTypes` stays satisfied.
  * Returns `null` when the value does not match the expected entry shape.
+ *
+ * `inputSchema` is carried through in the artifact's `$defs`-compacted form.
+ * The codegen expands it where it needs the full shape (`expand-schema-defs.ts`)
+ * and re-emits the compacted form into the route map, so the CLI does not ship
+ * the same recursive condition subschema a dozen times over.
  */
 export const parseCapabilityCatalog = (
   raw: unknown,
@@ -49,12 +52,26 @@ export const parseCapabilityCatalog = (
     return null;
   }
   return parsed.output.map((entry) => {
+    const parts: CapabilityCatalogEntry["inputSchema"] = {};
+    if (entry.inputSchema.$defs !== undefined) {
+      parts.$defs = entry.inputSchema.$defs;
+    }
+    if (entry.inputSchema.body !== undefined) {
+      parts.body = entry.inputSchema.body;
+    }
+    if (entry.inputSchema.params !== undefined) {
+      parts.params = entry.inputSchema.params;
+    }
+    if (entry.inputSchema.query !== undefined) {
+      parts.query = entry.inputSchema.query;
+    }
     const projected: CapabilityCatalogEntry = {
       id: entry.id,
       handlerKind: entry.handlerKind,
       access: entry.access,
       destructive: entry.destructive,
       scope: entry.scope,
+      inputSchema: parts,
     };
     if (entry.additionalScopes !== undefined) {
       projected.additionalScopes = entry.additionalScopes;
@@ -67,22 +84,6 @@ export const parseCapabilityCatalog = (
     }
     if (entry.returnsFileResponse !== undefined) {
       projected.returnsFileResponse = entry.returnsFileResponse;
-    }
-    if (entry.inputSchemaTruncated !== undefined) {
-      projected.inputSchemaTruncated = entry.inputSchemaTruncated;
-    }
-    if (entry.inputSchema !== undefined) {
-      const parts: NonNullable<CapabilityCatalogEntry["inputSchema"]> = {};
-      if (entry.inputSchema.body !== undefined) {
-        parts.body = entry.inputSchema.body;
-      }
-      if (entry.inputSchema.params !== undefined) {
-        parts.params = entry.inputSchema.params;
-      }
-      if (entry.inputSchema.query !== undefined) {
-        parts.query = entry.inputSchema.query;
-      }
-      projected.inputSchema = parts;
     }
     return projected;
   });
