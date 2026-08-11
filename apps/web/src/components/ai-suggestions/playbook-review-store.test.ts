@@ -14,14 +14,13 @@ const key = reviewSessionKey(entityId, fileFieldId);
 const session = (): DocumentReviewSession => ({
   status: "idle",
   basis: null,
-  results: { playbook: null, references: null },
   fixState: {},
   commentState: {},
   error: null,
-  reviewedAt: 1,
-  runId: null,
+  runId: "0198f2c4-6a55-7c31-9a10-3b1d2f4c5e60",
+  restore: "allowed",
+  requestId: null,
   topics: [],
-  workspaceId: "workspace-example",
 });
 
 beforeEach(() => {
