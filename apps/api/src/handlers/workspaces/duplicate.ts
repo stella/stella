@@ -28,7 +28,10 @@ import {
   remapDependencyRefs,
   remapNodePropertyIds,
 } from "@/api/lib/conditions/ast-utils";
-import { allocateEntityStamp } from "@/api/lib/document-counter";
+import {
+  allocateEntityStamp,
+  entityKindHasDocumentReference,
+} from "@/api/lib/document-counter";
 import { handoffCommittedDocumentProcessingRuns } from "@/api/lib/document-processing-handoff";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
@@ -785,11 +788,10 @@ const duplicateWorkspace = createSafeHandler(
 
           const newEntityId = createSafeId<"entity">();
           const newVersionId = createSafeId<"entityVersion">();
-          const entityStamp =
-            source.kind === "document"
-              ? // oxlint-disable-next-line no-await-in-loop -- sequential by design: stamp allocation is a sequential per-workspace counter; must run in order within the transaction
-                await allocateEntityStamp(tx, targetWorkspaceId)
-              : null;
+          const entityStamp = entityKindHasDocumentReference(source.kind)
+            ? // oxlint-disable-next-line no-await-in-loop -- sequential by design: stamp allocation is a sequential per-workspace counter; must run in order within the transaction
+              await allocateEntityStamp(tx, targetWorkspaceId)
+            : null;
           const newParentId = source.parentId
             ? (entityIdMap.get(source.parentId) ?? null)
             : null;

@@ -3,12 +3,24 @@ import { sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { documentCounters } from "@/api/db/schema";
+import type { EntityKind } from "@/api/db/schema-validators";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   generateVerificationCode,
   toDocumentReference,
 } from "@/api/lib/document-reference";
+
+const DOCUMENT_REFERENCE_POLICY = {
+  document: "stamp",
+  folder: "unstamped",
+  task: "unstamped",
+  message: "stamp",
+  link: "unstamped",
+} as const satisfies Record<EntityKind, "stamp" | "unstamped">;
+
+export const entityKindHasDocumentReference = (kind: EntityKind): boolean =>
+  DOCUMENT_REFERENCE_POLICY[kind] === "stamp";
 
 /**
  * Atomically allocate the next block of document sequence numbers for
