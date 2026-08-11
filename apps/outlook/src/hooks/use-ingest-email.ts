@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 
 import { Result } from "better-result";
 
@@ -40,9 +40,11 @@ type UseIngestEmail = {
   state: IngestState;
 };
 
-export const useIngestEmail = (errorFallback: string): UseIngestEmail => {
+export const useIngestEmail = (
+  errorFallback: string,
+  pendingUpload: { current: PendingEmailUpload | null },
+): UseIngestEmail => {
   const [state, setState] = useState<IngestState>({ type: "idle" });
-  const pendingUpload = useRef<PendingEmailUpload | null>(null);
 
   const save = async ({
     isCurrent,
