@@ -28,7 +28,10 @@ import {
   remapDependencyRefs,
   remapNodePropertyIds,
 } from "@/api/lib/conditions/ast-utils";
-import { allocateEntityStamps } from "@/api/lib/document-counter";
+import {
+  allocateEntityStamps,
+  entityKindHasDocumentReference,
+} from "@/api/lib/document-counter";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
 import { handoffCommittedDocumentProcessingRuns } from "@/api/lib/document-processing-handoff";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -804,16 +807,15 @@ export const createDuplicateWorkspace = (
         );
 
         if (includeContent && entitiesToDuplicate.length > 0) {
-          // The document rows are known before the duplicate starts, so the
+          // Reference-bearing rows are known before the duplicate starts, so the
           // whole run of sequence numbers is allocated in one counter upsert
-          // plus one reference read instead of two statements per document.
-          // The filter keeps duplicate order, so each document consumes the
-          // stamp for its own position.
-          const documentStamps = await allocateEntityStamps({
+          // plus one reference read instead of two statements per item. The
+          // filter keeps duplicate order, so each item consumes its stamp.
+          const entityStamps = await allocateEntityStamps({
             tx,
             workspaceId: targetWorkspaceId,
-            count: entitiesToDuplicate.filter(
-              (source) => source.kind === "document",
+            count: entitiesToDuplicate.filter((source) =>
+              entityKindHasDocumentReference(source.kind),
             ).length,
           });
           let nextStampIndex = 0;
@@ -829,10 +831,10 @@ export const createDuplicateWorkspace = (
             const newEntityId = createSafeId<"entity">();
             const newVersionId = createSafeId<"entityVersion">();
             const entityStamp =
-              source.kind === "document"
-                ? (documentStamps.at(nextStampIndex++) ??
+              entityKindHasDocumentReference(source.kind)
+                ? (entityStamps.at(nextStampIndex++) ??
                   panic(
-                    "Fewer document stamps allocated than documents copied",
+                    "Fewer entity stamps allocated than reference-bearing items",
                   ))
                 : null;
             const newParentId = source.parentId
