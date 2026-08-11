@@ -96,19 +96,19 @@ describe("boundedAll", () => {
   test("returns the whole set and probes one row past the bound", async () => {
     const { rows, limits } = await runRolledBack(async (tx) => {
       const organizationId = await seedOrganizationWithTerms(tx, 3);
-      const limits: number[] = [];
+      const requested: number[] = [];
 
-      const rows = await boundedAll({
+      const read = await boundedAll({
         invariant: "test fixture seeds three terms",
         max: 3,
         table: "anonymization_blacklist_entries",
-        query: (limit) => {
-          limits.push(limit);
-          return readTerms(tx, organizationId, limit);
+        query: async (limit) => {
+          requested.push(limit);
+          return await readTerms(tx, organizationId, limit);
         },
       });
 
-      return { rows, limits };
+      return { rows: read, limits: requested };
     });
 
     expect(rows.map((row) => row.canonical)).toEqual([
