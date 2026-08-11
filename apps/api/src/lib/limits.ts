@@ -1,6 +1,7 @@
 import {
   AGENT_SKILLS_CHAT_METADATA_MAX,
   CHAT_RICH_PART_LIMITS,
+  DOCUMENT_UPLOAD_POLICY,
   ENTITIES_PER_WORKSPACE_MAX,
   FLOW_RUN_INPUT_ENTITIES_MAX,
   PROPERTIES_PER_WORKSPACE_MAX,
@@ -508,7 +509,7 @@ export const FILE_SIZE_LIMITS = {
  */
 export const FILE_SIZE_LIMIT_BYTES = {
   /** General document uploads (entities, templates). */
-  document: 50 * 1024 * 1024,
+  document: DOCUMENT_UPLOAD_POLICY.maxBytes,
   /** Agent skill packs (`SKILL.md` or a ZIP folder). */
   skillPack: 2 * 1024 * 1024,
   /** Chat context file attachments. */

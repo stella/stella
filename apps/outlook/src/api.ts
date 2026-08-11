@@ -1,3 +1,4 @@
+import { DOCUMENT_UPLOAD_POLICY } from "@stll/api-contract";
 import type { SafeId } from "@stll/api/types";
 import { toSafeId } from "@stll/api/types";
 
@@ -14,11 +15,6 @@ import type {
 // uploads use; the API does not provision one, so look it up (or create
 // it once) the way the web upload flow does.
 const EMAIL_FILE_PROPERTY_NAME = "Documents";
-export const EMAIL_UPLOAD_POLICY = {
-  maxBytes: 52_428_800,
-  minimumBytesPerSecond: 32_768,
-  putTimeoutMs: 1_800_000,
-} as const;
 const EMAIL_FINALIZE_TIMEOUT_MS = 120_000;
 
 const entitiesQueryKey = (workspaceId: SafeId<"workspace">) => [
@@ -133,7 +129,7 @@ export const prepareEmailUpload = async ({
     body: eml,
     headers: presign.data.headers,
     method: "PUT",
-    signal: AbortSignal.timeout(EMAIL_UPLOAD_POLICY.putTimeoutMs),
+    signal: AbortSignal.timeout(DOCUMENT_UPLOAD_POLICY.putTimeoutMs),
   });
   if (!putResponse.ok) {
     throw new APIError({

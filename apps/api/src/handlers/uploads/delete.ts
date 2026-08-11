@@ -22,6 +22,7 @@ import {
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { preserveBufferObjectCleanupIntents } from "@/api/lib/buffer-intent-reconciliation";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
@@ -90,8 +91,27 @@ const abortUpload = createSafeHandler(
     }
 
     const abortedRows = yield* Result.await(
-      // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-      safeDb((tx) => {
+      safeDb(async (tx) => {
+        const abortableRows = await tx
+          .select()
+          .from(pendingUploads)
+          .where(
+            and(
+              eq(pendingUploads.id, uploadId),
+              eq(pendingUploads.userId, user.id),
+              eq(pendingUploads.workspaceId, workspaceId),
+              inArray(pendingUploads.status, ["pending", "failed"]),
+            ),
+          )
+          .limit(1)
+          .for("update");
+        const abortable = abortableRows.at(0);
+        if (!abortable) {
+          return [];
+        }
+
+        await preserveBufferObjectCleanupIntents(tx, [abortable]);
+
         // audit: skip — pending_uploads bookkeeping; the row never
         // became a durable entity, so there's nothing for the audit
         // log to attribute it to.

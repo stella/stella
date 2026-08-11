@@ -128,6 +128,7 @@ export type {
 } from "./document-properties";
 export { ENTITY_KINDS, isEntityKind } from "./entity-kinds";
 export type { EntityKind } from "./entity-kinds";
+export { DOCUMENT_UPLOAD_POLICY } from "./upload-policy";
 export {
   FOLIO_COLLAB_REDIS_SCOPE,
   parseFolioCollabRoomName,

@@ -8,7 +8,7 @@ import {
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
-import { pendingUploads } from "@/api/db/schema";
+import { bufferObjectCleanupIntents, pendingUploads } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
 import { createSafeId, toSafeId, type SafeId } from "@/api/lib/branded-types";
@@ -53,6 +53,9 @@ afterAll(async () => {
   try {
     fake.stop();
     if (seededUploadIds.length > 0) {
+      await testDb
+        .delete(bufferObjectCleanupIntents)
+        .where(inArray(bufferObjectCleanupIntents.id, seededUploadIds));
       await testDb
         .delete(pendingUploads)
         .where(inArray(pendingUploads.id, seededUploadIds));
@@ -198,6 +201,99 @@ describe("presigned upload mutation flow", () => {
       code: 422,
       response: { message: "Aborted by client" },
     });
+  });
+
+  test("preserves published recovery keys when aborting a failed email ingest", async () => {
+    const uploadId = createSafeId<"pendingUpload">();
+    const recoveryObjectKey = `${ids.orgA}/${ids.wsA1}/recovery/message.eml`;
+    await testDb.insert(pendingUploads).values({
+      id: uploadId,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+      purpose: "email_ingest",
+      purposeData: {
+        type: "email_ingest",
+        propertyId: ids.propertyA1,
+        recoveryObjectKeys: [recoveryObjectKey],
+      },
+      declaredName: "message.eml",
+      declaredMime: "message/rfc822",
+      declaredSize: 12,
+      declaredSha256: "c".repeat(64),
+      status: "failed",
+      claimedAt: new Date(Date.now() - 120_000),
+      expiresAt: new Date(Date.now() + 60_000),
+      createdAt: new Date(),
+    });
+    seededUploadIds.push(uploadId);
+
+    const result = await abortUpload.handler(
+      asTestRaw<AbortCtx>(
+        createContext({
+          params: { workspaceId: ids.wsA1, uploadId },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(
+      await testDb
+        .select({ objectKey: bufferObjectCleanupIntents.objectKey })
+        .from(bufferObjectCleanupIntents)
+        .where(eq(bufferObjectCleanupIntents.id, uploadId)),
+    ).toEqual([{ objectKey: recoveryObjectKey }]);
+  });
+
+  test("preserves published recovery keys when expiring a failed email ingest", async () => {
+    const uploadId = createSafeId<"pendingUpload">();
+    const recoveryObjectKey = `${ids.orgA}/${ids.wsA1}/recovery/attachment.pdf`;
+    await testDb.insert(pendingUploads).values({
+      id: uploadId,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+      purpose: "email_ingest",
+      purposeData: {
+        type: "email_ingest",
+        propertyId: ids.propertyA1,
+        recoveryObjectKeys: [recoveryObjectKey],
+      },
+      declaredName: "message.eml",
+      declaredMime: "message/rfc822",
+      declaredSize: 12,
+      declaredSha256: "d".repeat(64),
+      status: "failed",
+      claimedAt: new Date(Date.now() - 120_000),
+      expiresAt: new Date(Date.now() - 60_000),
+      createdAt: new Date(Date.now() - 120_000),
+    });
+    seededUploadIds.push(uploadId);
+
+    const result = await finalizeUpload.handler(
+      asTestRaw<FinalizeCtx>(
+        createContext({
+          params: { workspaceId: ids.wsA1, uploadId },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+
+    expect(result).toEqual({
+      code: 422,
+      response: { message: "Upload URL expired" },
+    });
+    expect(
+      await testDb
+        .select({ objectKey: bufferObjectCleanupIntents.objectKey })
+        .from(bufferObjectCleanupIntents)
+        .where(eq(bufferObjectCleanupIntents.id, uploadId)),
+    ).toEqual([{ objectKey: recoveryObjectKey }]);
   });
 
   test("does not let workspace A abort workspace B upload IDs", async () => {
