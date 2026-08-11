@@ -14,7 +14,9 @@ const fixture = readFileSync(
 test("exercises every configured dev-runner environment name", () => {
   const exercisedNames = [
     ...fixture.matchAll(/process\.env\["(?<name>STELLA_[A-Z_]+)"\]/gu),
-  ].map((match) => match.groups?.["name"]);
+  ]
+    .map((match) => match.groups?.["name"])
+    .filter((name): name is string => name !== undefined);
 
   const compareNames = (left: string, right: string) =>
     left.localeCompare(right);
