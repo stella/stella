@@ -80,12 +80,11 @@ services:
 
   # Quickwit search engine for the legal-corpus benchmark. Opt-in:
   #   docker compose --profile dev --profile quickwit up
-  # Stores its splits in the MinIO `stella-quickwit` bucket. Point the
-  # API at it with QUICKWIT_ENDPOINT=http://localhost:7280 (and, when
-  # benchmarking the cutover, LEGAL_SEARCH_PROVIDER=quickwit).
+  # Stores its splits in the MinIO `stella-quickwit` bucket. This is a
+  # standalone benchmark service; the API has no Quickwit provider adapter.
   quickwit:
     profiles: [quickwit]
-    image: quickwit/quickwit:0.8.2
+    image: quickwit/quickwit:0.9.0@sha256:1e6169bf4e98a489fca397105f1698c1d80a0f9779f3cf652973bac8a0c3b2bd
     command: run
     environment:
       QW_METASTORE_URI: s3://stella-quickwit/metastore
