@@ -16,6 +16,29 @@ import type {
   DocumentAst,
   EmptyAst,
 } from "./common";
+import {
+  CORPUS_INDEX_JOB_OPERATION_SQL_VALUES,
+  CORPUS_INDEX_JOB_STATUS_SQL_VALUES,
+} from "./corpus-index-jobs";
+import type {
+  CorpusIndexJobOperation,
+  CorpusIndexJobStatus,
+} from "./corpus-index-jobs";
+
+/**
+ * Lifecycle of a legislative text at a given point in time. The column stays
+ * an unnarrowed varchar (the search filter accepts a free-form status string);
+ * the CHECK below is what actually constrains the values.
+ */
+const LEGISLATION_DOCUMENT_STATUSES = [
+  "current",
+  "historical",
+  "repealed",
+  "draft",
+] as const;
+
+const LEGISLATION_DOCUMENT_STATUS_SQL_VALUES =
+  LEGISLATION_DOCUMENT_STATUSES.map((status) => sql.raw(`'${status}'`));
 
 export const legislationSources = p.pgTable(
   "legislation_sources",
@@ -120,7 +143,7 @@ export const legislationDocuments = p.pgTable(
       .where(sql`${t.contentHash} is not null and ${t.indexedHash} is null`),
     p.check(
       "legislation_documents_status_values",
-      sql`${t.status} IN ('current','historical','repealed','draft')`,
+      sql`${t.status} IN (${sql.join(LEGISLATION_DOCUMENT_STATUS_SQL_VALUES, sql.raw(","))})`,
     ),
     ...globalCaseLawPolicies(),
   ],
@@ -157,8 +180,8 @@ export const legislationIndexJobs = p.pgTable(
     operation: p
       .varchar({ length: 16 })
       .notNull()
-      .$type<"index" | "delete" | "redact" | "rebuild">(),
-    status: p.varchar({ length: 16 }).notNull().$type<"succeeded" | "failed">(),
+      .$type<CorpusIndexJobOperation>(),
+    status: p.varchar({ length: 16 }).notNull().$type<CorpusIndexJobStatus>(),
     contentHash: p.varchar("content_hash", { length: 64 }),
     errorMessage: p.varchar("error_message", { length: 2048 }),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
@@ -168,11 +191,11 @@ export const legislationIndexJobs = p.pgTable(
     p.index("legislation_index_jobs_created_idx").on(t.createdAt),
     p.check(
       "legislation_index_jobs_operation_values",
-      sql`${t.operation} IN ('index','delete','redact','rebuild')`,
+      sql`${t.operation} IN (${sql.join(CORPUS_INDEX_JOB_OPERATION_SQL_VALUES, sql.raw(","))})`,
     ),
     p.check(
       "legislation_index_jobs_status_values",
-      sql`${t.status} IN ('succeeded','failed')`,
+      sql`${t.status} IN (${sql.join(CORPUS_INDEX_JOB_STATUS_SQL_VALUES, sql.raw(","))})`,
     ),
     ...globalCaseLawPolicies(),
   ],

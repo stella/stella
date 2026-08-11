@@ -1,3 +1,5 @@
+import type { ConstantMap } from "@/api/lib/constant-map";
+
 export {
   ENTITY_PRIORITIES,
   ENTITY_PRIORITY,
@@ -62,14 +64,6 @@ export const AGENDA_ATTENDEE_TYPES = [
 ] as const;
 
 export type AgendaAttendeeType = (typeof AGENDA_ATTENDEE_TYPES)[number];
-
-/**
- * Binds a member tuple to its named-constant map: total (every member needs a
- * key) and exact (a key cannot point at a different member, and an unknown key
- * is rejected), so adding a member without its constant fails typecheck rather
- * than drifting.
- */
-type ConstantMap<T extends string> = { [K in T as Uppercase<K>]: K };
 
 export const AGENDA_ITEM_KIND = {
   TASK: "task",

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { getTableConfig } from "drizzle-orm/pg-core";
+import { PgDialect, getTableConfig } from "drizzle-orm/pg-core";
 
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
@@ -10,9 +10,10 @@ import {
 import { POLARITY } from "@/api/handlers/case-law/polarity/consts";
 
 /**
- * Extract allowed values from a CHECK constraint's IN list.
- * Drizzle stores the SQL as chunks: column ref + raw string
- * containing ` IN ('a','b','c')`.
+ * Allowed values of a CHECK constraint's IN list, read off the statement the
+ * dialect renders. The list is built by interpolating the canonical const, so
+ * each value arrives as its own SQL chunk; only the rendered text shows what
+ * the database is asked to enforce.
  */
 const extractCheckValues = (
   tableDef: Parameters<typeof getTableConfig>[0],
@@ -24,25 +25,11 @@ const extractCheckValues = (
     throw new Error(`CHECK constraint "${constraintName}" not found`);
   }
 
-  // Walk SQL chunks to find the IN list string
-  const chunks = check.value.getSQL().queryChunks;
-  let inList: string | undefined;
-  for (const chunk of chunks) {
-    if (
-      typeof chunk === "object" &&
-      "value" in chunk &&
-      Array.isArray(chunk.value)
-    ) {
-      const str = String(chunk.value[0] ?? "");
-      const match = /IN\s*\((?<inList>[^)]+)\)/iu.exec(str);
-      if (match?.groups?.["inList"]) {
-        inList = match.groups["inList"];
-        break;
-      }
-    }
-  }
-
-  if (!inList) {
+  const rendered = new PgDialect().sqlToQuery(check.value).sql;
+  const inList = /IN\s*\((?<inList>[^)]+)\)/iu.exec(rendered)?.groups?.[
+    "inList"
+  ];
+  if (inList === undefined) {
     throw new Error(`Could not parse IN list from "${constraintName}"`);
   }
 

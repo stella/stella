@@ -120,8 +120,29 @@ export type WorkObligationEventDetails =
       nextStatus: WorkObligationStatus;
     };
 
+const WORK_OBLIGATION_TYPE_SQL_VALUES = WORK_OBLIGATION_TYPES.map((type) =>
+  sql.raw(`'${type}'`),
+);
+
 const WORK_OBLIGATION_STATUS_SQL_VALUES = WORK_OBLIGATION_STATUSES.map(
   (status) => sql.raw(`'${status}'`),
+);
+
+/** Closed obligations: the owner and acknowledgement invariants no longer hold. */
+const WORK_OBLIGATION_TERMINAL_STATUSES = [
+  WORK_OBLIGATION_STATUS.COMPLETED,
+  WORK_OBLIGATION_STATUS.CANCELLED,
+] as const satisfies readonly WorkObligationStatus[];
+
+const WORK_OBLIGATION_TERMINAL_STATUS_SQL_VALUES =
+  WORK_OBLIGATION_TERMINAL_STATUSES.map((status) => sql.raw(`'${status}'`));
+
+const WORK_OBLIGATION_SOURCE_SQL_VALUES = WORK_OBLIGATION_SOURCES.map(
+  (source) => sql.raw(`'${source}'`),
+);
+
+const WORK_OBLIGATION_EVENT_TYPE_SQL_VALUES = WORK_OBLIGATION_EVENT_TYPES.map(
+  (type) => sql.raw(`'${type}'`),
 );
 
 /**
@@ -188,7 +209,7 @@ export const workObligations = p.pgTable(
     }),
     p.check(
       "work_obligations_type_check",
-      sql`${table.type} IN ('task', 'deadline')`,
+      sql`${table.type} IN (${sql.join(WORK_OBLIGATION_TYPE_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "work_obligations_status_check",
@@ -196,7 +217,7 @@ export const workObligations = p.pgTable(
     ),
     p.check(
       "work_obligations_source_type_check",
-      sql`${table.sourceType} IN ('manual', 'calendar', 'email', 'document', 'import', 'api')`,
+      sql`${table.sourceType} IN (${sql.join(WORK_OBLIGATION_SOURCE_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "work_obligations_target_before_deadline_check",
@@ -208,7 +229,7 @@ export const workObligations = p.pgTable(
     ),
     p.check(
       "work_obligations_state_coherence_check",
-      sql`(${table.status} = 'unassigned' AND ${table.ownerUserId} IS NULL AND ${table.acknowledgedAt} IS NULL) OR (${table.status} = 'awaiting_acknowledgement' AND ${table.ownerUserId} IS NOT NULL AND ${table.acknowledgedAt} IS NULL) OR (${table.status} = 'active' AND ${table.ownerUserId} IS NOT NULL AND ${table.acknowledgedAt} IS NOT NULL AND ${table.acknowledgedByUserId} = ${table.ownerUserId}) OR ${table.status} IN ('completed', 'cancelled')`,
+      sql`(${table.status} = 'unassigned' AND ${table.ownerUserId} IS NULL AND ${table.acknowledgedAt} IS NULL) OR (${table.status} = 'awaiting_acknowledgement' AND ${table.ownerUserId} IS NOT NULL AND ${table.acknowledgedAt} IS NULL) OR (${table.status} = 'active' AND ${table.ownerUserId} IS NOT NULL AND ${table.acknowledgedAt} IS NOT NULL AND ${table.acknowledgedByUserId} = ${table.ownerUserId}) OR ${table.status} IN (${sql.join(WORK_OBLIGATION_TERMINAL_STATUS_SQL_VALUES, sql`, `)})`,
     ),
     p
       .index("work_obligations_ws_owner_status_target_entity_idx")
@@ -265,7 +286,7 @@ export const workObligationEvents = p.pgTable(
       .onDelete("cascade"),
     p.check(
       "work_obligation_events_type_check",
-      sql`${table.type} IN ('created', 'owner_assigned', 'acknowledged', 'delegated', 'working_target_changed', 'hard_deadline_changed', 'type_changed', 'provenance_changed', 'completed', 'reopened', 'cancelled')`,
+      sql`${table.type} IN (${sql.join(WORK_OBLIGATION_EVENT_TYPE_SQL_VALUES, sql`, `)})`,
     ),
     p
       .index("work_obligation_events_ws_obligation_occurred_id_idx")

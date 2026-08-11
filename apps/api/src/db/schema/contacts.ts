@@ -324,6 +324,22 @@ export const AUDIT_ACTIVITY_CATEGORIES = [
   "other",
 ] as const;
 
+const AUDIT_PERFORMER_TYPE_SQL_VALUES = AUDIT_PERFORMER_TYPES.map(
+  (performerType) => sql.raw(`'${performerType}'`),
+);
+
+const AUDIT_TRIGGER_TYPE_SQL_VALUES = AUDIT_TRIGGER_TYPES.map((triggerType) =>
+  sql.raw(`'${triggerType}'`),
+);
+
+const AUDIT_APPROVAL_STATUS_SQL_VALUES = AUDIT_APPROVAL_STATUSES.map(
+  (approvalStatus) => sql.raw(`'${approvalStatus}'`),
+);
+
+const AUDIT_ACTIVITY_CATEGORY_SQL_VALUES = AUDIT_ACTIVITY_CATEGORIES.map(
+  (activityCategory) => sql.raw(`'${activityCategory}'`),
+);
+
 export const auditLogs = p.pgTable(
   "audit_logs",
   {
@@ -366,19 +382,19 @@ export const auditLogs = p.pgTable(
   (table) => [
     p.check(
       "audit_logs_performer_type_check",
-      sql`${table.performerType} in ('user', 'agent', 'service')`,
+      sql`${table.performerType} in (${sql.join(AUDIT_PERFORMER_TYPE_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "audit_logs_trigger_type_check",
-      sql`${table.triggerType} in ('direct', 'user_dispatch', 'agent_delegation', 'schedule', 'webhook', 'credential', 'system')`,
+      sql`${table.triggerType} in (${sql.join(AUDIT_TRIGGER_TYPE_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "audit_logs_approval_status_check",
-      sql`${table.approvalStatus} in ('not_required', 'pending', 'approved', 'rejected')`,
+      sql`${table.approvalStatus} in (${sql.join(AUDIT_APPROVAL_STATUS_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "audit_logs_activity_category_check",
-      sql`${table.activityCategory} is null or ${table.activityCategory} in ('documents', 'tasks', 'matter', 'team', 'court', 'automation', 'other')`,
+      sql`${table.activityCategory} is null or ${table.activityCategory} in (${sql.join(AUDIT_ACTIVITY_CATEGORY_SQL_VALUES, sql`, `)})`,
     ),
     p
       .index("audit_logs_org_created_id_idx")

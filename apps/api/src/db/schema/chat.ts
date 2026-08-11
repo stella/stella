@@ -44,6 +44,28 @@ import { workspaces } from "./contacts";
 import { entities, fields } from "./entities";
 import { templates } from "./templates";
 
+const REASONING_EFFORT_SQL_VALUES = REASONING_EFFORTS.map((effort) =>
+  sql.raw(`'${effort}'`),
+);
+
+const CHAT_TURN_STATUS_SQL_VALUES = CHAT_TURN_STATUSES.map((status) =>
+  sql.raw(`'${status}'`),
+);
+
+const CHAT_TURN_INTERACTION_TYPE_SQL_VALUES = CHAT_TURN_INTERACTION_TYPES.map(
+  (interactionType) => sql.raw(`'${interactionType}'`),
+);
+
+const CHAT_TURN_FAILURE_CODE_SQL_VALUES = CHAT_TURN_FAILURE_CODES.map((code) =>
+  sql.raw(`'${code}'`),
+);
+
+const CHAT_TURN_CANCELLATION_REASON_SQL_VALUES =
+  CHAT_TURN_CANCELLATION_REASONS.map((reason) => sql.raw(`'${reason}'`));
+
+const CHAT_TURN_INTERRUPTION_REASON_SQL_VALUES =
+  CHAT_TURN_INTERRUPTION_REASONS.map((reason) => sql.raw(`'${reason}'`));
+
 export const chatThreads = p.pgTable(
   "chat_threads",
   {
@@ -165,7 +187,7 @@ export const chatThreads = p.pgTable(
     p.index("chat_threads_user_updated_idx").on(table.userId, table.updatedAt),
     p.check(
       "chat_threads_reasoning_effort_selection_check",
-      sql`${table.chatReasoningEffort} IS NULL OR (${table.chatModel} IS NOT NULL AND ${table.chatReasoningEffort} IN ('none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'))`,
+      sql`${table.chatReasoningEffort} IS NULL OR (${table.chatModel} IS NOT NULL AND ${table.chatReasoningEffort} IN (${sql.join(REASONING_EFFORT_SQL_VALUES, sql`, `)}))`,
     ),
     ...chatThreadPolicies(),
   ],
@@ -282,23 +304,23 @@ export const chatTurns = p.pgTable(
       .onDelete("cascade"),
     p.check(
       "chat_turns_status_values_check",
-      sql`${table.status} IN ('accepted', 'running', 'awaiting-user', 'completed', 'failed', 'cancelled', 'interrupted')`,
+      sql`${table.status} IN (${sql.join(CHAT_TURN_STATUS_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "chat_turns_interaction_values_check",
-      sql`${table.interactionType} IS NULL OR ${table.interactionType} IN ('ask-user', 'approval')`,
+      sql`${table.interactionType} IS NULL OR ${table.interactionType} IN (${sql.join(CHAT_TURN_INTERACTION_TYPE_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "chat_turns_failure_code_values_check",
-      sql`${table.failureCode} IS NULL OR ${table.failureCode} IN ('boundary-refusal', 'connector-discovery', 'empty-response', 'internal', 'persistence', 'provider-error', 'unsupported-input')`,
+      sql`${table.failureCode} IS NULL OR ${table.failureCode} IN (${sql.join(CHAT_TURN_FAILURE_CODE_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "chat_turns_cancellation_reason_values_check",
-      sql`${table.cancellationReason} IS NULL OR ${table.cancellationReason} IN ('superseded', 'user-stop')`,
+      sql`${table.cancellationReason} IS NULL OR ${table.cancellationReason} IN (${sql.join(CHAT_TURN_CANCELLATION_REASON_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "chat_turns_interruption_reason_values_check",
-      sql`${table.interruptionReason} IS NULL OR ${table.interruptionReason} IN ('client-disconnected', 'timeout')`,
+      sql`${table.interruptionReason} IS NULL OR ${table.interruptionReason} IN (${sql.join(CHAT_TURN_INTERRUPTION_REASON_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "chat_turns_state_payload_check",
@@ -683,6 +705,56 @@ export const chatThreadCompactions = p.pgTable(
   ],
 );
 
+/** Whose memory a row is: the firm, one lawyer, or one matter. */
+const AI_MEMORY_SCOPES = ["organization", "user", "workspace"] as const;
+
+/** What a memory asserts; drives which scopes may hold it. */
+const AI_MEMORY_KINDS = [
+  "preference",
+  "instruction",
+  "fact",
+  "decision",
+  "relationship",
+] as const;
+
+type AiMemoryKind = (typeof AI_MEMORY_KINDS)[number];
+
+/**
+ * Kinds that carry no matter-specific content, so any scope may hold them.
+ * Every other kind is matter-derived and belongs to a workspace.
+ */
+const AI_MEMORY_SCOPE_FREE_KINDS = [
+  "preference",
+  "instruction",
+] as const satisfies readonly AiMemoryKind[];
+
+/** Curator lifecycle: suggested -> active -> stale -> archived. */
+const AI_MEMORY_STATUSES = [
+  "suggested",
+  "active",
+  "stale",
+  "archived",
+] as const;
+
+/** Who wrote the memory: an explicit user or tool write, or the extractor. */
+const AI_MEMORY_SOURCES = ["user", "tool", "extracted"] as const;
+
+const AI_MEMORY_KIND_SQL_VALUES = AI_MEMORY_KINDS.map((kind) =>
+  sql.raw(`'${kind}'`),
+);
+
+const AI_MEMORY_SCOPE_FREE_KIND_SQL_VALUES = AI_MEMORY_SCOPE_FREE_KINDS.map(
+  (kind) => sql.raw(`'${kind}'`),
+);
+
+const AI_MEMORY_STATUS_SQL_VALUES = AI_MEMORY_STATUSES.map((status) =>
+  sql.raw(`'${status}'`),
+);
+
+const AI_MEMORY_SOURCE_SQL_VALUES = AI_MEMORY_SOURCES.map((source) =>
+  sql.raw(`'${source}'`),
+);
+
 /**
  * Persistent AI memory: typed facts and preferences the assistant
  * recalls across sessions, scoped to the firm (organization), the
@@ -699,19 +771,13 @@ export const aiMemories = p.pgTable(
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    scope: p
-      .text("scope", { enum: ["organization", "user", "workspace"] })
-      .notNull(),
+    scope: p.text("scope", { enum: AI_MEMORY_SCOPES }).notNull(),
     userId: p
       .text("user_id")
       .$type<SafeId<"user">>()
       .references(() => user.id, { onDelete: "cascade" }),
     workspaceId: safeWorkspaceId("workspace_id"),
-    kind: p
-      .text("kind", {
-        enum: ["preference", "instruction", "fact", "decision", "relationship"],
-      })
-      .notNull(),
+    kind: p.text("kind", { enum: AI_MEMORY_KINDS }).notNull(),
     content: p.text("content").notNull(),
     // SHA-256 over canonical scope, owner, kind, sanitized content, and
     // provenance. The org-led unique index makes every write path idempotent
@@ -726,11 +792,11 @@ export const aiMemories = p.pgTable(
       .notNull()
       .default([]),
     status: p
-      .text("status", { enum: ["suggested", "active", "stale", "archived"] })
+      .text("status", { enum: AI_MEMORY_STATUSES })
       .notNull()
       .default("active"),
     pinned: p.boolean("pinned").notNull().default(false),
-    source: p.text("source", { enum: ["user", "tool", "extracted"] }).notNull(),
+    source: p.text("source", { enum: AI_MEMORY_SOURCES }).notNull(),
     sourceMessageId: safeUuid<"chatMessage">("source_message_id").references(
       () => chatMessages.id,
       { onDelete: "set null" },
@@ -812,19 +878,19 @@ export const aiMemories = p.pgTable(
     // matter fact can never be stored as user/firm memory.
     p.check(
       "ai_memories_kind_scope_check",
-      sql`(kind IN ('preference', 'instruction') OR scope = 'workspace')`,
+      sql`(kind IN (${sql.join(AI_MEMORY_SCOPE_FREE_KIND_SQL_VALUES, sql`, `)}) OR scope = 'workspace')`,
     ),
     p.check(
       "ai_memories_kind_check",
-      sql`kind IN ('preference', 'instruction', 'fact', 'decision', 'relationship')`,
+      sql`kind IN (${sql.join(AI_MEMORY_KIND_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "ai_memories_status_check",
-      sql`status IN ('suggested', 'active', 'stale', 'archived')`,
+      sql`status IN (${sql.join(AI_MEMORY_STATUS_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "ai_memories_source_check",
-      sql`source IN ('user', 'tool', 'extracted')`,
+      sql`source IN (${sql.join(AI_MEMORY_SOURCE_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "ai_memories_confidence_check",

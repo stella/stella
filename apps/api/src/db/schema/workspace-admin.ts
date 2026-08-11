@@ -31,6 +31,10 @@ export type DocumentProcessingMode = (typeof DOCUMENT_PROCESSING_MODES)[number];
 export const DEFAULT_DOCUMENT_PROCESSING_MODE =
   "off" as const satisfies DocumentProcessingMode;
 
+const DOCUMENT_PROCESSING_MODE_SQL_VALUES = DOCUMENT_PROCESSING_MODES.map(
+  (mode) => sql.raw(`'${mode}'`),
+);
+
 export const matterCounters = p.pgTable(
   "matter_counters",
   {
@@ -179,7 +183,7 @@ export const organizationSettings = p.pgTable(
   (table) => [
     p.check(
       "organization_settings_document_processing_mode_check",
-      sql`${table.documentProcessingMode} IN ('off', 'searchable-text')`,
+      sql`${table.documentProcessingMode} IN (${sql.join(DOCUMENT_PROCESSING_MODE_SQL_VALUES, sql`, `)})`,
     ),
     p
       .index("organization_settings_memory_extraction_queue_idx")

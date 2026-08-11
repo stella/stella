@@ -91,6 +91,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-audit-on-mutation.fixture.ts", [
     "require-audit-on-mutation/require-audit-on-mutation",
   ]),
+  fixtureRuleOverride("require-derived-check-enum.fixture.ts", [
+    "require-derived-check-enum/require-derived-check-enum",
+  ]),
   fixtureRuleOverride("require-eden-error-check.fixture.ts", [
     "require-eden-error-check/require-eden-error-check",
   ]),
@@ -550,6 +553,7 @@ export default defineConfig({
     "./.oxlint-plugins/tagged-error-requires-message.ts",
     "./.oxlint-plugins/require-custom-jsonb-column.ts",
     "./.oxlint-plugins/no-bare-jsonb-cast.ts",
+    "./.oxlint-plugins/require-derived-check-enum.ts",
     "./.oxlint-plugins/require-timestamptz-column.ts",
     "./.oxlint-plugins/no-naive-timestamp-cast.ts",
     "./.oxlint-plugins/no-inline-timestamp-cursor-sql.ts",
@@ -1925,6 +1929,15 @@ export default defineConfig({
       rules: {
         "no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write":
           "error",
+      },
+    },
+    {
+      // Drizzle enum columns derive their values from a const; the paired
+      // check constraint must too, or a new member typechecks, passes the
+      // column, and fails the constraint at runtime.
+      files: ["apps/api/src/db/schema/**/*.ts"],
+      rules: {
+        "require-derived-check-enum/require-derived-check-enum": "error",
       },
     },
     {
