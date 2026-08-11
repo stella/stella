@@ -27,6 +27,15 @@ changes without an extra step. AppSource versions must remain four-part and
 at least `1.0.0.0`; increment `STELLA_OUTLOOK_VERSION` for every published
 update.
 
+For production, `STELLA_OUTLOOK_VERSION` is the release identity: the build
+rejects anything other than four numeric parts, stamps that exact value into
+the XML manifest, every HTML document, JavaScript, CSS, `release.json`, and
+`deployment-headers.json`. JavaScript and CSS filenames include a SHA-256
+content hash after the version banner, so their immutable cache entries can
+never name changed bytes. Do not deploy the source directory or reconstruct
+the manifest/HTML separately; publish one `apps/outlook/dist` output from one
+production build.
+
 ## Local test
 
 1. Start API and web in separate terminals:
@@ -107,9 +116,49 @@ any browser sign-in.
 ## Production hosting
 
 The production manifest expects the task pane at
-`https://outlook.stll.app`. This repository builds the static assets and
-manifest but does not deploy them. Publish `apps/outlook/dist` to that
-origin before distributing the production manifest.
+`https://outlook.stll.app`. This repository builds a static release artifact
+but does not deploy it. Publish one `apps/outlook/dist` directory to that
+origin before distributing its `manifest.xml`; do not combine files from
+different builds.
+
+The artifact includes `deployment-headers.json`, the delivery contract for
+the static host. It requires `no-cache, max-age=0, must-revalidate` on the
+manifest and all HTML documents; it requires one-year immutable caching only
+for content-hashed JavaScript and CSS. It also declares the strict HTML CSP
+and security headers. Configure the CDN/static host to apply those rules
+exactly, or run the included production server after a production build:
+
+```sh
+bun --filter @stll/outlook build -- --env=prod
+bun --filter @stll/outlook serve
+```
+
+The production CSP permits only the task-pane origin, Office.js CDN,
+configured Stella API/web origins, and a separately configured direct-upload
+origin. Set `STELLA_UPLOAD_ORIGIN` to the exact HTTPS S3/object-storage origin
+when the API returns cross-origin presigned upload URLs; leave it unset when
+uploads stay on the API origin. Never use a wildcard origin.
+
+The default CSP frame ancestors cover public Outlook, Outlook.com, its known
+preview hosts, China, GCC High, and DoD Outlook on the web. For an on-premises
+Exchange/OWA host or another explicit tenant host, set
+`STELLA_OUTLOOK_FRAME_ANCESTORS` to a comma-separated list of exact HTTPS
+origins, for example `https://mail.example.com`; the release rejects paths,
+wildcards, and empty values. This setting replaces the default list, so include
+every Outlook web origin that must host the add-in. Classic Outlook and Outlook
+for Mac use their managed webview rather than an OWA frame.
+
+After deployment, probe the public, non-authenticated release surface:
+
+```sh
+bun --filter @stll/outlook probe:deployment -- --origin=https://outlook.stll.app
+```
+
+The probe reads only the public manifest, release metadata, HTML documents,
+response headers, and version banners at the start of static JS/CSS files. It
+does not send credentials, read API data, or log response bodies. It fails if
+the served version, asset references, cache policy, CSP, or security headers
+do not match one artifact.
 
 Set `OUTLOOK_ORIGIN=https://outlook.stll.app` on the API deployment. This
 origin is explicit and fail-closed: without it, production API CORS and
@@ -130,6 +179,14 @@ prefers Office's display language, then the browser language, and falls back to
 the declared English catalog. Adding another language requires both a complete
 Outlook message catalog and matching localized manifest resources; do not
 advertise a locale in Partner Center until both are present and client-tested.
+
+V1 intentionally does not declare event-based activation or Smart Alerts.
+`src/commands.ts` is an isolated Office-only runtime, checked at build time
+against React/task-pane imports. If a later release needs an event runtime,
+give it a separate minimal entry point and function file; do not import the
+React task-pane application or share its startup path. Adding `src/events.ts`
+currently fails the build until that separate entry and manifest change have
+been explicitly reviewed.
 
 ## AppSource submission checklist
 

@@ -7,7 +7,7 @@ import { Notice } from "@/components/notice";
 import { Panel, PanelTitle } from "@/components/panel";
 import type { Translate } from "@/components/panel";
 import { env } from "@/env";
-import type { IngestState } from "@/hooks/use-ingest-email";
+import { isIngestActive, type IngestState } from "@/ingestion-state";
 import { buildSavedEmailUrl } from "@/lib/saved-email-url";
 import type { OutlookAttachment, WorkspaceSummary } from "@/types";
 
@@ -37,7 +37,7 @@ export const SavePanel = ({
     ? t("saveButtonLabel", { matterName: selectedWorkspace.name })
     : t("chooseMatter");
   const savedEmailUrl =
-    saveState.type === "saved"
+    saveState.type === "complete"
       ? buildSavedEmailUrl({
           baseUrl: env.stellaWebUrl,
           entityId: saveState.entityId,
@@ -71,16 +71,16 @@ export const SavePanel = ({
         className="w-full"
         disabled={
           !selectedWorkspace ||
-          saveState.type === "saving" ||
-          saveState.type === "saved"
+          isIngestActive(saveState) ||
+          saveState.type === "complete"
         }
-        loading={saveState.type === "saving"}
+        loading={isIngestActive(saveState)}
         onClick={onSave}
       >
         <SaveIcon />
-        {saveState.type === "saved" ? t("saved") : saveLabel}
+        {saveState.type === "complete" ? t("saved") : saveLabel}
       </Button>
-      {saveState.type === "saved" ? (
+      {saveState.type === "complete" ? (
         <Notice title={t("saveSuccess")} tone="success">
           {t("attachmentsSaved", { count: saveState.attachmentCount })}
           {saveState.skippedAttachments.length > 0 ? (

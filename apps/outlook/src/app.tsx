@@ -5,7 +5,6 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 
-import type { PendingEmailUpload } from "@/api";
 import { runDraftChecks } from "@/checks";
 import { ActionPanel } from "@/components/action-panel";
 import { AppHeader } from "@/components/app-header";
@@ -23,6 +22,7 @@ import { useIngestEmail } from "@/hooks/use-ingest-email";
 import { useMailSnapshot } from "@/hooks/use-mail-snapshot";
 import { useWorkspaceSelection } from "@/hooks/use-workspace-selection";
 import { useWorkspaces } from "@/hooks/use-workspaces";
+import type { PendingEmailUpload } from "@/ingestion-state";
 import { getAuthToken, signInViaDialog, subscribeAuthToken } from "@/lib/auth";
 import { placeDraft } from "@/outlook";
 import type { DraftPlacement } from "@/outlook";
@@ -84,7 +84,7 @@ const AuthedApp = ({ t }: { t: Translate }) => {
     loadLatest,
     refresh,
     state: loadState,
-  } = useMailSnapshot(t("loadError"));
+  } = useMailSnapshot(t("loadError"), t("attachmentReadError"));
   const { error: workspaceError, workspaces } = useWorkspaces(
     t("matterLoadError"),
   );
@@ -169,7 +169,9 @@ const MessageApp = ({
 
   const summary = useAISummary(t("saveErrorFallback"));
   const aiDraft = useAIDraft(t("saveErrorFallback"));
-  const ingest = useIngestEmail(t("saveErrorFallback"), {
+  const ingest = useIngestEmail({
+    attachmentErrorFallback: t("attachmentReadError"),
+    errorFallback: t("saveErrorFallback"),
     getPendingEmailUpload,
     setPendingEmailUpload,
   });
@@ -234,6 +236,7 @@ const MessageApp = ({
         attachmentSelection?.source === snapshot.itemInstanceKey
           ? attachmentSelection.ids
           : null,
+      snapshot,
       workspaceId: selectedWorkspaceId,
     });
   };

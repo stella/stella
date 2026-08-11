@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Result } from "better-result";
 
-import { OutlookError } from "@/lib/outlook-error";
+import { isAttachmentReadError, OutlookError } from "@/lib/outlook-error";
 import { loadMailSnapshot, subscribeMailboxItemChanges } from "@/outlook";
 import type { MailSnapshot } from "@/types";
 
@@ -18,7 +18,10 @@ type UseMailSnapshot = {
   state: MailSnapshotState;
 };
 
-export const useMailSnapshot = (errorFallback: string): UseMailSnapshot => {
+export const useMailSnapshot = (
+  errorFallback: string,
+  attachmentErrorFallback: string,
+): UseMailSnapshot => {
   const [state, setState] = useState<MailSnapshotState>({ type: "loading" });
   const itemInstanceSequence = useRef(0);
   const loadSequence = useRef(0);
@@ -35,14 +38,18 @@ export const useMailSnapshot = (errorFallback: string): UseMailSnapshot => {
       if (Result.isError(result)) {
         const { error } = result;
         setState({
-          message: error instanceof Error ? error.message : errorFallback,
+          message: isAttachmentReadError(error)
+            ? attachmentErrorFallback
+            : error instanceof Error
+              ? error.message
+              : errorFallback,
           type: "error",
         });
         return;
       }
       setState({ snapshot: result.value, type: "ready" });
     },
-    [errorFallback],
+    [attachmentErrorFallback, errorFallback],
   );
 
   useEffect(() => {
