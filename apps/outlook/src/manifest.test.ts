@@ -64,6 +64,17 @@ describe("manifest XSD validation", () => {
     expect(manifest).toContain('resid="Icon.48x48"');
   });
 
+  test("requires Mailbox 1.8 for attachment APIs", () => {
+    for (const environment of ["dev", "prod"] as const) {
+      const manifest = renderManifest(environment);
+
+      expect(manifest).toContain('<Set Name="Mailbox" MinVersion="1.8" />');
+      expect(manifest).not.toContain('<Set Name="Mailbox" MinVersion="1.5" />');
+      expect(manifest.match(/DefaultMinVersion="1\.8"/gu)).toHaveLength(2);
+      expect(manifest).not.toContain('DefaultMinVersion="1.5"');
+    }
+  });
+
   test("uses a Marketplace-compatible release version", () => {
     const manifest = renderManifest("prod");
 
