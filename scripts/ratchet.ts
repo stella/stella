@@ -15,6 +15,13 @@
 // to seed its baseline, and commit both files. The counter must count exactly
 // what its description claims — the `--self-test` fixtures enforce that.
 //
+// Lint-suppression budgets are the one generated family: one decrease-only
+// budget per rule in TRACKED_SUPPRESSION_RULES (scripts/lint-suppressions.ts)
+// plus a residual budget for every other rule, partitioned so no rule's
+// burn-down can fund another rule's new waiver. Security-tier rules carry a
+// waiver ledger on top (scripts/suppression-waivers.ts); the policy is written
+// up in .oxlint-plugins/README.md.
+//
 // Modes:
 //   bun scripts/ratchet.ts            report current counts vs baseline
 //   bun scripts/ratchet.ts --check    CI gate (exit 1 only when a count rose)
@@ -38,6 +45,15 @@ import { analyse } from "scslre";
 import ts from "typescript";
 
 import { MCP_WRITE_ONLY_RESOURCE_SCOPES } from "../packages/api-contract/src/mcp";
+import {
+  collectLintDirectives,
+  isResidualDirective,
+  suppressesRule,
+  suppressionMetricId,
+  TRACKED_SUPPRESSION_RULES,
+  type TrackedRule,
+} from "./lint-suppressions";
+import { ALL_SOURCE_GLOBS, isExcludedSource } from "./source-globs";
 
 const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
@@ -50,32 +66,6 @@ const APP_SOURCE_GLOBS = [
   "apps/api/src/**/*.{ts,tsx}",
   "apps/web/src/**/*.{ts,tsx}",
 ] as const;
-
-// Every hand-written source file in the repo. Used by metrics that guard a
-// property of the code itself rather than an app convention, so there is no
-// reason for the rule to stop at the two big apps.
-//
-// Deliberately not limited to `src`: a super-linear regex in an ingestion,
-// backfill or codegen script blocks the same event loop as one in a handler,
-// and a metric that claims to be repo-wide has to mean it.
-const ALL_SOURCE_GLOBS = [
-  "apps/*/src/**/*.{ts,tsx}",
-  "apps/*/scripts/**/*.{ts,tsx}",
-  "apps/*/e2e/**/*.{ts,tsx}",
-  "packages/*/src/**/*.{ts,tsx}",
-  "packages/*/scripts/**/*.{ts,tsx}",
-  "scripts/**/*.ts",
-  ".oxlint-plugins/*.ts",
-] as const;
-
-const isExcludedSource = (file: string): boolean =>
-  file.endsWith(".d.ts") ||
-  /\.gen\./u.test(file) ||
-  /\.test\./u.test(file) ||
-  /\.spec\./u.test(file) ||
-  file.includes("/tests/") ||
-  file.includes("/e2e/") ||
-  file.includes("/__tests__/");
 
 // --- Counters ---------------------------------------------------------------
 // All counters take raw file text and return a per-file occurrence count. They
@@ -655,105 +645,26 @@ const countModuleLevelMutableCollections = (content: string): number => {
   return total;
 };
 
-// A disable directive for the no-raw-use-effect rule. Literal-stripping first
-// keeps a directive spelled inside a string (docs, rule messages) from
-// counting; the directive itself is a `//` comment and survives the strip.
-const RAW_USE_EFFECT_DISABLE =
-  /\/\/\s*(?:eslint|oxlint)-disable(?:-next-line|-line)?\b[^\n]*no-raw-use-effect\/no-raw-use-effect/u;
+// Suppression budgets are a partition: each disable directive is charged to
+// exactly one budget, so no rule's improvement can fund another rule's new
+// waiver. `scripts/lint-suppressions.ts` owns the tracked-rule table and the
+// directive scanner; the same module backs the security-tier waiver ledger, so
+// budget and ledger can never disagree about what a suppression is.
+const countTrackedRuleSuppressions =
+  (rule: string): FileCounter =>
+  (content, file) =>
+    collectLintDirectives(content, file).filter((directive) =>
+      suppressesRule(directive, rule),
+    ).length;
 
-const countRawUseEffectSuppressions = (content: string): number => {
-  let total = 0;
-  let literalState = NO_OPEN_TEMPLATE;
-
-  for (const raw of content.split("\n")) {
-    const { code, state } = stripStringLiterals(raw, literalState);
-    literalState = state;
-    if (RAW_USE_EFFECT_DISABLE.test(code)) {
-      total += 1;
-    }
-  }
-  return total;
-};
-
-// A disable directive for ANY rule (either linter, any variant, `//` or `/*`
-// comment form). Whole-repo superset of the per-rule counter above: that one
-// keeps its own burn-down, this one freezes TOTAL suppression pressure so an
-// improvement on one rule cannot silently fund new suppressions elsewhere.
-const LINT_DISABLE_DIRECTIVE =
-  /^(?:\/\/|\/\*)\s*(?:eslint|oxlint)-disable(?:-next-line|-line)?\b/u;
-
-const lintDisableDirectives = (content: string, file: string): string[] => {
-  const source = ts.createSourceFile(
-    file,
-    content,
-    ts.ScriptTarget.Latest,
-    true,
-    file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
-  const comments = new Map<string, ts.CommentRange>();
-  const collect = (ranges: readonly ts.CommentRange[] | undefined) => {
-    for (const range of ranges ?? []) {
-      comments.set(`${range.pos}:${range.end}`, range);
-    }
-  };
-  const visit = (node: ts.Node): void => {
-    collect(ts.getLeadingCommentRanges(content, node.pos));
-    collect(ts.getTrailingCommentRanges(content, node.end));
-    for (const child of node.getChildren(source)) {
-      visit(child);
-    }
-  };
-  visit(source);
-
-  return [...comments.values()]
-    .sort((left, right) => left.pos - right.pos)
-    .map(({ pos, end }) => content.slice(pos, end))
-    .filter((comment) => LINT_DISABLE_DIRECTIVE.test(comment));
-};
-
-const countLintSuppressions = (content: string, file: string): number =>
-  lintDisableDirectives(content, file).length;
-
-const REQUIRE_QUERY_LIMIT_RULE = "require-query-limit/require-query-limit";
-
-const lintDisableRules = (directive: string): string[] | null => {
-  const match = LINT_DISABLE_DIRECTIVE.exec(directive);
-  if (!match) {
-    return null;
-  }
-
-  const remainder = directive.slice(match.index + match[0].length);
-  const boundaries = [remainder.indexOf("--"), remainder.indexOf("*/")].filter(
-    (index) => index >= 0,
-  );
-  const ruleList = remainder
-    .slice(0, boundaries.length > 0 ? Math.min(...boundaries) : undefined)
-    .trim();
-  if (ruleList.length === 0) {
-    return [];
-  }
-  return ruleList.split(/[\s,]+/u).filter(Boolean);
-};
-
-// A dedicated guard keeps one newly-added require-query-limit escape hatch
-// from being funded by removing an unrelated lint suppression elsewhere. A
-// bare disable applies to every rule, so it counts too.
-const countRequireQueryLimitSuppressions = (
+// The residual budget: directives naming only rules with no dedicated budget.
+// A bare directive is excluded here because it silences every tracked rule and
+// is already charged to each of their budgets.
+const countResidualLintSuppressions = (
   content: string,
   file: string,
-): number => {
-  let total = 0;
-  for (const directive of lintDisableDirectives(content, file)) {
-    const rules = lintDisableRules(directive);
-    if (
-      rules !== null &&
-      (rules.length === 0 || rules.includes(REQUIRE_QUERY_LIMIT_RULE))
-    ) {
-      total += 1;
-    }
-  }
-  return total;
-};
+): number =>
+  collectLintDirectives(content, file).filter(isResidualDirective).length;
 
 // A compiler-suppression directive. Fidelity limit: a prose comment that
 // STARTS with the directive token (`// @ts-expect-error is bad`) counts, one
@@ -1100,6 +1011,24 @@ type RatchetMetric = {
   readonly count: FileCounter;
 };
 
+// One decrease-only budget per tracked rule, derived from the single
+// tracked-rule table rather than hand-listed here: a rule added to that table
+// cannot be forgotten in the metric registry, and the residual budget's
+// subtraction always matches the set of budgets that exist.
+//
+// Scope is every hand-written source file in the repo, not just the two big
+// apps. A security waiver in an operational script stands down the same
+// invariant as one in a handler, and the rules are enabled well beyond
+// `apps/*/src` in `oxlint.config.ts`.
+const PER_RULE_SUPPRESSION_METRICS: readonly RatchetMetric[] =
+  TRACKED_SUPPRESSION_RULES.map(({ rule, tier, guards }) => ({
+    id: suppressionMetricId(rule),
+    description: `${rule} disable directives, repo-wide (${tier} tier: ${guards}). Bare directives count, because they silence this rule too.`,
+    include: ALL_SOURCE_GLOBS,
+    exclude: isExcludedSource,
+    count: countTrackedRuleSuppressions(rule),
+  }));
+
 const RATCHET_METRICS: readonly RatchetMetric[] = [
   {
     id: "as-casts",
@@ -1260,29 +1189,14 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     exclude: isExcludedSource,
     count: countUnboundedPaginationCursorSchema,
   },
-  {
-    id: "raw-use-effect-suppressions",
-    description:
-      "no-raw-use-effect disable directives in apps/web/src (each is a reviewed exception; new effects use the wrappers or a better primitive — see /conventions-use-effect)",
-    include: ["apps/web/src/**/*.{ts,tsx}"],
-    exclude: isExcludedSource,
-    count: countRawUseEffectSuppressions,
-  },
+  ...PER_RULE_SUPPRESSION_METRICS,
   {
     id: "lint-suppression-directives",
     description:
-      "eslint-/oxlint-disable directives in app source, any rule (whole-repo suppression pressure; superset of the per-rule raw-use-effect metric — overlap intentional)",
+      "eslint-/oxlint-disable directives in app source naming only rules with no dedicated budget (residual suppression pressure; the per-rule budgets above are subtracted, so no rule's burn-down can fund another rule's new waiver)",
     include: APP_SOURCE_GLOBS,
     exclude: isExcludedSource,
-    count: countLintSuppressions,
-  },
-  {
-    id: "require-query-limit-suppressions",
-    description:
-      "require-query-limit disable directives in API production source and operational scripts (each is a reviewed exception; a generic lint-suppression decrease cannot fund a new unbounded-read escape hatch)",
-    include: ["apps/api/src/**/*.{ts,tsx}", "apps/api/scripts/**/*.{ts,tsx}"],
-    exclude: isExcludedSource,
-    count: countRequireQueryLimitSuppressions,
+    count: countResidualLintSuppressions,
   },
   {
     id: "ts-suppression-directives",
@@ -1991,14 +1905,18 @@ const LINT_SUPPRESSION_FIXTURE_LINES = [
   "// eslint disables discussed in prose (no hyphenated directive) must not count",
 ];
 const SELF_TEST_LINT_SUPPRESSIONS = `${LINT_SUPPRESSION_FIXTURE_LINES.join("\n")}\n`;
-// Expected from THIS fixture: both linters' -next-line forms, the block-
-// comment form, and the bare `oxlint-disable` = 4. The string copy and the
-// ordinary block-comment examples, and prose comment are excluded. The
-// raw-use-effect fixture contributes 3 more
-// directives, while the query-limit fixtures below contribute 10, so the
-// whole-repo expectation is 4 + 3 + 10.
-const EXPECTED_LINT_SUPPRESSIONS_OWN_FILE = 4;
-const EXPECTED_LINT_SUPPRESSIONS_TOTAL = 17;
+// The residual budget takes only directives that name at least one rule and
+// no tracked rule. From THIS fixture: both linters' -next-line forms and the
+// block-comment form = 3. The bare `oxlint-disable` is excluded because it
+// silences every tracked rule and is charged to each of their budgets
+// instead; the string copy, the ordinary block-comment examples, and the
+// prose comment are not directives at all.
+const EXPECTED_LINT_SUPPRESSIONS_OWN_FILE = 3;
+// Repo-wide residual: 3 here, 1 in the raw-use-effect fixture (its two
+// no-raw-use-effect directives are tracked, its exhaustive-deps one is not),
+// and 3 in the query-limit fixture (its no-console-only directives). Every
+// directive naming a tracked rule is absent — that absence IS the partition.
+const EXPECTED_LINT_SUPPRESSIONS_TOTAL = 7;
 
 const REQUIRE_QUERY_LIMIT_SUPPRESSION_FIXTURE_LINES = [
   "// eslint-disable-next-line require-query-limit/require-query-limit -- fixed parent cardinality",
@@ -2019,11 +1937,42 @@ const REQUIRE_QUERY_LIMIT_SUPPRESSION_FIXTURE_LINES = [
   String.raw`const commentLike = /\/\//u; // eslint-disable-next-line require-query-limit/require-query-limit -- regex literal precedes the real directive`,
 ];
 const SELF_TEST_REQUIRE_QUERY_LIMIT_SUPPRESSIONS = `${REQUIRE_QUERY_LIMIT_SUPPRESSION_FIXTURE_LINES.join("\n")}\n`;
-// Seven targeted/bare directives above, one bare disable in the general lint
-// fixture, and one operational-script directive. The multiline no-console
-// directive followed by a targeted directive on its close line proves scanning
-// resumes after the first block.
-const EXPECTED_REQUIRE_QUERY_LIMIT_SUPPRESSIONS = 9;
+// The fixtures carry three bare directives (one in the general lint fixture,
+// two here). A bare directive names no rule, so it silences every rule and is
+// charged to every tracked rule's budget — that is what keeps a bare disable
+// from being a free pass through the per-rule budgets.
+const EXPECTED_BARE_FIXTURE_DIRECTIVES = 3;
+
+// Directives naming each tracked rule explicitly, across all fixtures. Total
+// over the tracked-rule union, so adding a rule to the table forces a decision
+// here instead of silently defaulting to zero. Each rule's expected budget is
+// this plus EXPECTED_BARE_FIXTURE_DIRECTIVES.
+//
+// require-query-limit: five here (the `-- reason` trailer on the fifth line
+// proves the rule list stops at the trailer, and the targeted directive on a
+// multiline block's close line proves scanning resumes after the first block)
+// plus one in the operational-script fixture, which also proves the budgets
+// reach beyond `apps/*/src`.
+const EXPECTED_NAMED_FIXTURE_SUPPRESSIONS = {
+  "no-body-ownership-ids/no-body-ownership-ids": 0,
+  "no-unbranded-ownership-id-param/no-unbranded-ownership-id-param": 0,
+  "require-search-scope/require-search-scope": 0,
+  "require-safe-route-handlers/require-safe-route-handlers": 0,
+  "security-guards/no-raw-filename-write": 0,
+  "security-guards/no-unsanitized-href": 0,
+  "security-guards/no-unscoped-user-query": 0,
+  "security-guards/require-secure-document-response": 0,
+  "mcp-security/no-direct-oauth-client-join": 0,
+  "mcp-security/redact-oauth-registration-response": 0,
+  "auth-lifecycle/after-remove-member-revokes-artifacts": 0,
+  "auth-lifecycle/no-direct-auth-artifact-delete": 0,
+  "no-unowned-file-version-write/no-unowned-file-version-write": 0,
+  "no-direct-audit-log-insert/no-direct-audit-log-insert": 0,
+  "no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write": 0,
+  "require-query-limit/require-query-limit": 6,
+  "no-db-await-in-loop/no-db-await-in-loop": 0,
+  "no-raw-use-effect/no-raw-use-effect": 2,
+} as const satisfies Record<TrackedRule, number>;
 
 const TS_SUPPRESSION_FIXTURE_LINES = [
   "// @ts-expect-error legacy upstream shape",
@@ -2152,9 +2101,6 @@ const SUPPRESSION_FIXTURE_LINES = [
   "// eslint-disable-next-line react-hooks/exhaustive-deps -- other-rule directive must not count",
 ];
 const SELF_TEST_SUPPRESSIONS = `${SUPPRESSION_FIXTURE_LINES.join("\n")}\n`;
-// Expected: the two disable directives; the string-literal copy, the prose
-// comment without a disable, and the other-rule directive are excluded.
-const EXPECTED_SUPPRESSIONS = 2;
 
 const writeFixture = (root: string, rel: string, content: string): void => {
   const full = path.join(root, rel);
@@ -2504,14 +2450,15 @@ const runSelfTest = (): number => {
       );
     }
 
-    const suppressionMetric = requireSnapshot(
-      snapshot,
-      "raw-use-effect-suppressions",
-    );
-    if (suppressionMetric.count !== EXPECTED_SUPPRESSIONS) {
-      failures.push(
-        `raw-use-effect-suppressions counted ${suppressionMetric.count}, expected ${EXPECTED_SUPPRESSIONS}`,
-      );
+    for (const [rule, named] of Object.entries(
+      EXPECTED_NAMED_FIXTURE_SUPPRESSIONS,
+    )) {
+      const id = suppressionMetricId(rule);
+      const expected = named + EXPECTED_BARE_FIXTURE_DIRECTIVES;
+      const budget = requireSnapshot(snapshot, id);
+      if (budget.count !== expected) {
+        failures.push(`${id} counted ${budget.count}, expected ${expected}`);
+      }
     }
 
     const lintSuppressionMetric = requireSnapshot(
@@ -2532,17 +2479,32 @@ const runSelfTest = (): number => {
       );
     }
 
-    const queryLimitSuppressionMetric = requireSnapshot(
+    // The partition, on the one fixture that mixes both kinds: ten directives,
+    // seven charged to the require-query-limit budget (five naming it, two
+    // bare), three left over for the residual budget. A file whose residual
+    // count silently absorbed its tracked directives would be the fungibility
+    // bug this design exists to kill.
+    const MIXED_FIXTURE = "apps/api/src/query-limit-suppressions.ts";
+    const mixedResidual = lintSuppressionMetric.files[MIXED_FIXTURE];
+    const mixedTracked = requireSnapshot(
       snapshot,
       "require-query-limit-suppressions",
-    );
-    if (
-      queryLimitSuppressionMetric.count !==
-      EXPECTED_REQUIRE_QUERY_LIMIT_SUPPRESSIONS
-    ) {
+    ).files[MIXED_FIXTURE];
+    if (mixedResidual !== 3 || mixedTracked !== 7) {
       failures.push(
-        `require-query-limit-suppressions counted ${queryLimitSuppressionMetric.count}, expected ${EXPECTED_REQUIRE_QUERY_LIMIT_SUPPRESSIONS}`,
+        `suppression budgets did not partition ${MIXED_FIXTURE}: residual ${mixedResidual} (expected 3), require-query-limit ${mixedTracked} (expected 7)`,
       );
+    }
+
+    // Every tracked rule reaches the metric registry. The other direction —
+    // a registered metric with no baseline entry, or the reverse — is already
+    // enforced by `inspectConfiguration`, so a rule added to the table without
+    // a `--write` fails loudly instead of going quietly unbudgeted.
+    const budgetIds = new Set(RATCHET_METRICS.map(({ id }) => id));
+    for (const { rule } of TRACKED_SUPPRESSION_RULES) {
+      if (!budgetIds.has(suppressionMetricId(rule))) {
+        failures.push(`tracked rule ${rule} has no ratchet budget`);
+      }
     }
 
     const tsSuppressionMetric = requireSnapshot(

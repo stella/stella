@@ -1,0 +1,124 @@
+{
+  "waivers": [
+    {
+      "id": "SW-0001",
+      "kind": "permanent",
+      "rule": "auth-lifecycle/no-direct-auth-artifact-delete",
+      "file": "apps/api/src/lib/account-deletion-steps.ts",
+      "symbol": "revokeAuthCredentialsAndInvitations",
+      "count": 1,
+      "reason": "Account deletion must revoke Better Auth session artifacts.",
+      "evidence": "apps/api/src/lib/account-deletion-coverage.test.ts"
+    },
+    {
+      "id": "SW-0002",
+      "kind": "permanent",
+      "rule": "auth-lifecycle/no-direct-auth-artifact-delete",
+      "file": "apps/api/src/lib/account-deletion-steps.ts",
+      "symbol": "revokeOAuthTokensAndGrants",
+      "count": 2,
+      "reason": "Account deletion must revoke Better Auth OAuth access and refresh tokens; both deletes are the revocation, so neither can route through the helper the rule points at.",
+      "evidence": "apps/api/src/lib/account-deletion-coverage.test.ts"
+    },
+    {
+      "id": "SW-0003",
+      "kind": "permanent",
+      "rule": "mcp-security/no-direct-oauth-client-join",
+      "file": "apps/api/src/lib/mcp-upstream/connections.ts",
+      "symbol": "loadActiveMcpConnectionsForUser",
+      "count": 1,
+      "reason": "this module is the shared typed MCP connection loader.",
+      "evidence": "apps/api/src/lib/mcp-upstream/connections.test.ts"
+    },
+    {
+      "id": "SW-0004",
+      "kind": "permanent",
+      "rule": "mcp-security/no-direct-oauth-client-join",
+      "file": "apps/api/src/lib/mcp-upstream/connections.ts",
+      "symbol": "loadMcpConnectionById",
+      "count": 1,
+      "reason": "this module is the shared typed MCP connection loader.",
+      "evidence": "apps/api/src/lib/mcp-upstream/connections.test.ts"
+    },
+    {
+      "id": "SW-0005",
+      "kind": "permanent",
+      "rule": "no-body-ownership-ids/no-body-ownership-ids",
+      "file": "apps/api/src/handlers/audit-logs/query.ts",
+      "symbol": "toAuditLogConditions",
+      "count": 1,
+      "reason": "org-scoped compliance filter, not an ownership source",
+      "evidence": "apps/api/src/handlers/audit-logs/query.ts#toAuditLogConditions"
+    },
+    {
+      "id": "SW-0006",
+      "kind": "permanent",
+      "rule": "no-body-ownership-ids/no-body-ownership-ids",
+      "file": "apps/api/src/handlers/chat/send-message.ts",
+      "symbol": "sendMessage",
+      "count": 1,
+      "reason": "root handler; resolveChatScope performs targeted workspace authorization",
+      "evidence": "apps/api/src/handlers/chat/chat-scope.test.ts"
+    },
+    {
+      "id": "SW-0007",
+      "kind": "permanent",
+      "rule": "require-search-scope/require-search-scope",
+      "file": "apps/api/src/lib/search/index-chat.ts",
+      "symbol": "backfillChatThreadSearchIndex",
+      "count": 1,
+      "reason": "system backfill repairs derived search documents across all threads; it does not return request data",
+      "evidence": "apps/api/src/lib/search/index-chat.test.ts"
+    },
+    {
+      "id": "SW-0008",
+      "kind": "permanent",
+      "rule": "require-search-scope/require-search-scope",
+      "file": "apps/api/src/lib/search/index-entity.ts",
+      "symbol": "upsertSearchDocument",
+      "count": 1,
+      "reason": "atomic INSERT SELECT fences one entity by explicit organization, workspace, entity, version, timestamp, and extracted-content provenance",
+      "evidence": "apps/api/src/lib/search/index-entity.test.ts"
+    },
+    {
+      "id": "SW-0009",
+      "kind": "permanent",
+      "rule": "security-guards/no-raw-filename-write",
+      "file": "apps/api/src/handlers/chat/stream-chat.ts",
+      "symbol": "hydrateMessages",
+      "count": 1,
+      "reason": "DB read-back from user_files, already sanitized on upload",
+      "evidence": "apps/api/src/lib/uploads/entity-create.test.ts"
+    },
+    {
+      "id": "SW-0010",
+      "kind": "permanent",
+      "rule": "security-guards/no-unscoped-user-query",
+      "file": "apps/api/src/handlers/operator/query.ts",
+      "symbol": "import @/api/db/auth-schema",
+      "count": 1,
+      "reason": "operator observability is deliberately instance-wide: the endpoint is token-gated at the deployment level and lists registrations across the whole instance, so there is no organization to scope by.",
+      "evidence": "apps/api/src/handlers/operator/query.test.ts#authorizeOperatorAccess"
+    },
+    {
+      "id": "SW-0011",
+      "kind": "permanent",
+      "rule": "security-guards/no-unscoped-user-query",
+      "file": "apps/api/src/handlers/workspaces/list.ts",
+      "symbol": "import @/api/db/auth-schema",
+      "count": 1,
+      "reason": "joined via RLS-scoped workspaceMembers filtered by org-derived wsIds (see comment above)",
+      "evidence": "apps/api/src/handlers/workspaces/list.ts#readWorkspaces"
+    },
+    {
+      "id": "SW-0012",
+      "kind": "permanent",
+      "rule": "security-guards/no-unscoped-user-query",
+      "file": "apps/api/src/handlers/workspaces/read-overview-activity.ts",
+      "symbol": "import @/api/db/auth-schema",
+      "count": 1,
+      "reason": "actor and affected-user IDs come only from audit rows already scoped to this authorized organization and workspace; a membership join would erase retained attribution after account deletion.",
+      "evidence": "apps/api/src/handlers/workspaces/read-overview-activity.ts#readOverviewActivity"
+    }
+  ]
+}
