@@ -33,7 +33,7 @@ import type { VerdictTier } from "@/api/lib/workflow/verdict-tiers";
 type PresenceState = "present" | "absent" | "missing";
 
 // The per-rule graders and ASK flatteners below are exported so the single-doc
-// ephemeral review handler (`handlers/playbooks/review-grade.ts`) grades an
+// ephemeral review (`lib/document-review/review-grade.ts`) grades an
 // in-memory ASK value with the exact same rules `computeVerdictBatch` applies to
 // persisted fields — one grading semantics across the files-table and
 // single-file surfaces.

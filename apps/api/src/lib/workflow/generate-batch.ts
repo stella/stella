@@ -41,7 +41,7 @@ import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
  * natively rendered Office file whose anydoc text we serialise.
  */
 // Exported (with `fetchAndPrepareFiles` / `buildJustificationFilenames` below)
-// so the single-doc ephemeral review (`handlers/playbooks/review-extract.ts`)
+// so the single-doc ephemeral review (`lib/document-review/review-extract.ts`)
 // reuses the exact same file-preparation + citation-allow-list wiring the batch
 // workflow uses, instead of forking a parallel DOCX→blocks / PDF→bates path.
 export { isAISupportedFile };

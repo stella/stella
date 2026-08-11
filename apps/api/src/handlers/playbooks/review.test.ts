@@ -1,8 +1,8 @@
 import { describe, expect, mock, test } from "bun:test";
 
-import type { ReviewFinding } from "@/api/handlers/playbooks/review-grade";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { ReviewFinding } from "@/api/lib/document-review/review-grade";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -61,8 +61,8 @@ const findings: ReviewFinding[] = [
 
 const buildFindingsMock = mock(async () => findings);
 
-const realReviewGrade = await import("@/api/handlers/playbooks/review-grade");
-void mock.module("@/api/handlers/playbooks/review-grade", () => ({
+const realReviewGrade = await import("@/api/lib/document-review/review-grade");
+void mock.module("@/api/lib/document-review/review-grade", () => ({
   ...realReviewGrade,
   buildFindings: buildFindingsMock,
 }));

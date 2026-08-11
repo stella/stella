@@ -1,6 +1,5 @@
 import { panic, Result } from "better-result";
 
-import { compareReferenceDocuments } from "@/api/handlers/document-reviews/reference-compare";
 import { buildReferenceReviewAuditEvent } from "@/api/handlers/document-reviews/reference-review-audit";
 import { resolveReviewSelection } from "@/api/handlers/document-reviews/review-selection";
 import { validateReviewTopics } from "@/api/handlers/document-reviews/review-topics";
@@ -10,6 +9,7 @@ import {
   createSafeHandler,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { compareReferenceDocuments } from "@/api/lib/document-review/reference-compare";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 import { fetchAndPrepareFiles } from "@/api/lib/workflow/generate-batch";

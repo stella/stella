@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { toSafeId } from "@/api/lib/branded-types";
 import {
   normalizeReferenceReview,
   referenceReviewSchema,
-} from "@/api/handlers/document-reviews/reference-compare";
-import { toSafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/document-review/reference-compare";
 
 const targetFieldId = toSafeId<"field">("target-field");
 const referenceFieldId = toSafeId<"field">("reference-field");

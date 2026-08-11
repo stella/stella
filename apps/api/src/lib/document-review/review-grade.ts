@@ -2,15 +2,15 @@ import { Result } from "better-result";
 
 import type { VerdictMatchedRef } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
-import type {
-  AskExtraction,
-  DocxFolioCitation,
-} from "@/api/handlers/playbooks/review-extract";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type {
+  AskExtraction,
+  DocxFolioCitation,
+} from "@/api/lib/document-review/review-extract";
 import {
   buildGroundedReviewFix,
   type GroundedReviewFix,

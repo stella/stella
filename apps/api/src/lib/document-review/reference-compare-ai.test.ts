@@ -31,7 +31,7 @@ void mock.module("@/api/lib/analytics/tanstack-ai", () => ({
 }));
 
 const { compareReferenceDocuments } =
-  await import("@/api/handlers/document-reviews/reference-compare");
+  await import("@/api/lib/document-review/reference-compare");
 
 const organizationId = toSafeId<"organization">("organization-fixture");
 const workspaceId = toSafeId<"workspace">("workspace-fixture");
