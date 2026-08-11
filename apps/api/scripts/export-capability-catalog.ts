@@ -49,6 +49,11 @@ import { parseCapabilityCatalog } from "../../../packages/cli/src/capability-cat
 import { expandSchemaDefs } from "../../../packages/cli/src/expand-schema-defs";
 import { buildCliRouteTree } from "../../../packages/cli/src/generate-capability-tree";
 import type { RouteNode } from "../../../packages/cli/src/route-types";
+import type { CapabilityTransport } from "../src/lib/capability-transport";
+import {
+  isTransportInvocable,
+  transportFileResponse,
+} from "../src/lib/capability-transport";
 import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
 import type { McpToolDefinition } from "../src/mcp/tool-types";
 import {
@@ -57,6 +62,7 @@ import {
   CANONICAL_ACTION_VERBS,
   CAPABILITY_ID_SEGMENT_PATTERN,
   type CapabilityInputSchema,
+  checkTransportAgainstDerived,
   compareScopeStrictness,
   deriveActionVerb,
   deriveCapabilityId,
@@ -68,14 +74,15 @@ import {
   isDestructiveName,
   isWellFormedCapabilityId,
   MAX_CAPABILITY_SCHEMA_BYTES,
+  parseCapabilityTransport,
   readScopeForDomainScope,
   resolveAccess,
   resolveHandlerKind,
   resolveScope,
+  scanBinarySchemaFields,
   scanContextFidelity,
   scanFileResponseReturns,
   scanRouteHookGuards,
-  schemaContainsBinaryFormat,
   serializeCatalog,
   serializeCoverageDoc,
   serializeDispatchModule,
@@ -346,32 +353,6 @@ const ALLOWS_ARCHIVED_WORKSPACE: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Capabilities whose success payload is a file: a web `Response` (file/stream)
- * or raw binary bytes. The generic invoke path cannot serialize either, so
- * these are refused pre-execution (a runtime backstop in `mapHandlerResult`
- * also rejects Response/binary values that slip past). Carried into the
- * catalog as `returnsFileResponse`. Sweep of catalog handlers:
- *  - `secureDocumentResponse(...)` (caught by the class-guard scan):
- *    clauses.export, entities.download-zip, templates.fill,
- *    templates.fill-by-id, templates.manifest, views.table-export;
- *  - raw binary via a helper: `time-entries.export-pdf` returns a `Uint8Array`
- *    through `exportPdfHandler`/`buildMinimalPdf`, invisible to the inline
- *    scan, so it is seeded explicitly (its siblings export-csv/export-ledes
- *    return plain strings, which serialize fine and stay invokable).
- * Stale-checked: a flagged id whose handler no longer constructs any file-like
- * value (Response/Uint8Array/ArrayBuffer/Blob/ReadableStream) fails the export.
- */
-const RETURNS_FILE_RESPONSE: ReadonlySet<string> = new Set([
-  "clauses.export",
-  "entities.download-zip",
-  "templates.fill",
-  "templates.fill-by-id",
-  "templates.manifest",
-  "time-entries.export-pdf",
-  "views.table-export",
-]);
-
-/**
  * Waivers for capability endpoints mounted under a route-level
  * `onBeforeHandle`/`beforeHandle` hook the generic invoke path would bypass
  * (see `scanRouteHookGuards`). Each entry is a reviewed decision that the hook's
@@ -450,16 +431,15 @@ type CapabilityEntry = {
   additionalScopes?: readonly string[];
   /** REST route uses `validateWorkspaceAccessIncludingArchived` (fix-4). */
   allowsArchivedWorkspace?: true;
-  /** Success payload is a file: a `Response` or raw binary bytes (fix-6). */
-  returnsFileResponse?: true;
   /**
-   * Config schema contains a `t.File()`/`t.Files()` field (`format: "binary"`).
-   * Derived mechanically from the live config (`schemaContainsBinaryFormat`),
-   * never hand-listed; the invoke gate refuses flagged entries because JSON
-   * input cannot carry a `File` (a plain string would pass validation and reach
-   * the handler where it expects a `File`). Use the presigned-upload flow.
+   * How this capability's payload crosses the generic JSON transport. Total and
+   * always present: every entry states `{ type: "json" }` or names the concrete
+   * file leg(s), the field carrying the bytes, whether that field is optional
+   * (a fileless mode), and the alternative transport. The handler declares it;
+   * the exporter cross-checks both legs against the live schema and the handler
+   * source, so it can be neither absent nor stale.
    */
-  requiresFileInput?: true;
+  transport: CapabilityTransport;
   /**
    * Deployment feature flag gating this capability: the covering tool's
    * `feature` (tool/covered dispositions) else the DOMAIN_FEATURE table.
@@ -638,13 +618,16 @@ type BuildCatalogEntryOptions = {
   compactedInputSchema: CompactedCapabilityInputSchema;
   exposure: ParsedExposure;
   feature: string | undefined;
+  /** Declared transport, already cross-checked against the live schema. */
+  transport: CapabilityTransport;
 };
 
 /**
- * Assemble one catalog entry from its resolved pieces. `requiresFileInput` is
- * derived from the LIVE schema, which is the same shape the compacted one
- * expands to; the boolean flags are emitted only when true so the compact
- * snapshot stays minimal.
+ * Assemble one catalog entry from its resolved pieces. `transport` is emitted on
+ * every entry (the field is total, so a consumer never has to read an absence as
+ * a decision), and it is derived from the LIVE schema, which is the same shape
+ * the compacted one expands to. The remaining optional flags stay
+ * omitted-when-false so the compact snapshot does not grow a column of `false`s.
  */
 const buildCatalogEntry = ({
   id,
@@ -659,6 +642,7 @@ const buildCatalogEntry = ({
   compactedInputSchema,
   exposure,
   feature,
+  transport,
 }: BuildCatalogEntryOptions): CapabilityEntry => ({
   id,
   ...(description === undefined ? {} : { description }),
@@ -670,12 +654,7 @@ const buildCatalogEntry = ({
   ...(ALLOWS_ARCHIVED_WORKSPACE.has(id)
     ? { allowsArchivedWorkspace: true as const }
     : {}),
-  ...(RETURNS_FILE_RESPONSE.has(id)
-    ? { returnsFileResponse: true as const }
-    : {}),
-  ...(schemaContainsBinaryFormat(inputSchema)
-    ? { requiresFileInput: true as const }
-    : {}),
+  transport,
   ...(feature === undefined ? {} : { feature }),
   ...(hasPermissions ? { permissions } : {}),
   inputSchema: compactedInputSchema,
@@ -792,16 +771,20 @@ const collectClassGuardErrors = ({
 
   const fileResponses = scanFileResponseReturns({
     entries: entrySources,
-    flaggedIds: RETURNS_FILE_RESPONSE,
+    flaggedIds: new Set(
+      entries
+        .filter((entry) => transportFileResponse(entry.transport) !== undefined)
+        .map((entry) => entry.id),
+    ),
   });
   for (const id of fileResponses.violations) {
     errors.push(
-      `file-response: capability "${id}" returns a web Response or raw binary payload on success, which the generic invoke path cannot serialize. Add "${id}" to RETURNS_FILE_RESPONSE (it will be refused at invoke), or refactor the handler to return a structured payload`,
+      `file-response: capability "${id}" returns a web Response or raw binary payload on success, which the generic invoke path cannot serialize. Declare a file-response (or file-both) transport on its handler config, naming the media types it produces and the alternative transport, or refactor the handler to return a structured payload`,
     );
   }
   for (const id of fileResponses.staleFlags) {
     errors.push(
-      `stale RETURNS_FILE_RESPONSE entry "${id}": it is no longer a catalog capability that constructs a file-like value (remove it)`,
+      `stale file-response transport on "${id}": its handler no longer constructs a file-like value, so the response leg of its transport declaration is a lie (remove it)`,
     );
   }
 
@@ -1206,6 +1189,32 @@ const buildCatalog = async (): Promise<BuildResult> => {
       id,
       inputSchema,
     });
+    // Transport disposition: parsed from the handler config, then bound to the
+    // LIVE (pre-compaction) schema so the check reads the same fields the
+    // handler declares. A malformed or contradicted declaration fails the
+    // export rather than shipping a catalog entry that misdescribes what the
+    // generic transport can carry.
+    const transportParse = parseCapabilityTransport(
+      endpoint.config["transport"],
+    );
+    if (transportParse.status === "malformed") {
+      errors.push(
+        `capability "${id}" has a malformed \`transport\` declaration; see CapabilityTransport in apps/api/src/lib/capability-transport.ts`,
+      );
+      continue;
+    }
+    const { transport } = transportParse;
+    const transportErrors = checkTransportAgainstDerived({
+      id,
+      transport,
+      binaryScan: scanBinarySchemaFields(inputSchema),
+    });
+    for (const message of transportErrors) {
+      errors.push(message);
+    }
+    if (transportErrors.length > 0) {
+      continue;
+    }
     // Deployment feature gate: the covering tool's flag wins (mechanical
     // inheritance), the reviewed domain table covers the rest.
     const coveringToolName = coveringToolOf(endpoint.exposure);
@@ -1227,6 +1236,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
         compactedInputSchema,
         exposure: endpoint.exposure,
         feature: inheritedFeature ?? DOMAIN_FEATURE[domain],
+        transport,
       }),
     );
     dispatchRecords.push({
@@ -1499,18 +1509,37 @@ const main = async (): Promise<number> => {
 
   const { cliCommandPathById, errors: pathErrors } =
     await computeCliCommandPaths(serialized);
-  // Every non-file capability-disposition entry must have a generated command
-  // path; a miss means the CLI tree and the catalog disagree, which must fail
-  // the export rather than ship a doc row with a wrong or absent invocation.
+  // Reachability agreement, asserted in BOTH directions over the real generated
+  // route tree: the set of capability entries this exporter calls invocable must
+  // equal the set the CLI generator actually emitted leaves for. That is what
+  // binds `isTransportInvocable` here to the CLI's mirrored copy of the same
+  // predicate — a divergence (a suppressed entry leaking into the CLI, or a
+  // fileless-exposed entry silently dropped) fails the export instead of
+  // shipping a doc row with a wrong or absent invocation.
+  const invocableIds = new Set(
+    entries
+      .filter(
+        (entry) =>
+          entry.mcp.type === "capability" &&
+          isTransportInvocable(entry.transport),
+      )
+      .map((entry) => entry.id),
+  );
+  for (const id of invocableIds) {
+    if (!cliCommandPathById.has(id)) {
+      pathErrors.push(
+        `capability "${id}" is invocable over the generic transport but the CLI generator emitted no command for it; the CLI's transport predicate disagrees with apps/api/src/lib/capability-transport.ts`,
+      );
+    }
+  }
   for (const entry of entries) {
     if (
       entry.mcp.type === "capability" &&
-      entry.requiresFileInput !== true &&
-      entry.returnsFileResponse !== true &&
-      !cliCommandPathById.has(entry.id)
+      !invocableIds.has(entry.id) &&
+      cliCommandPathById.has(entry.id)
     ) {
       pathErrors.push(
-        `coverage doc: capability "${entry.id}" has no generated CLI command path (missing from the built route tree)`,
+        `capability "${entry.id}" is not invocable over the generic transport but the CLI generator emitted a command for it; the CLI's transport predicate disagrees with apps/api/src/lib/capability-transport.ts`,
       );
     }
   }

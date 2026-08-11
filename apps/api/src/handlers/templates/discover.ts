@@ -53,6 +53,15 @@ const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   access: "read",
+  transport: {
+    type: "file-input",
+    input: { field: "file", required: true, mediaTypes: [DOCX_MIME_TYPE] },
+    alternative: {
+      type: "none",
+      reason:
+        "marker discovery reads the supplied DOCX; for a template already stored, templates.get returns the discovered fields",
+    },
+  },
   body: discoverBodySchema,
 } satisfies HandlerConfig;
 

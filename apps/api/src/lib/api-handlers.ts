@@ -19,6 +19,7 @@ import { captureRequestError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import {
   DatabaseError,
   DatabaseRlsError,
@@ -283,9 +284,31 @@ type CapabilityAccess = {
   access?: "read" | "write";
 };
 
+/**
+ * How this capability's payload crosses the generic JSON transport (see
+ * `lib/capability-transport.ts`). Omitting it declares `{ type: "json" }`: the
+ * ordinary case, where body/params/query go in as JSON and a structured value
+ * comes back.
+ *
+ * A handler whose schema declares a `t.File()`/`t.Files()` field, or whose
+ * success path returns a `Response`/raw bytes, MUST declare the matching file
+ * transport. That is not a convention anyone has to remember: the
+ * `require-file-transport-disposition` lint rule flags the schema side at author
+ * time, and the capability exporter re-derives BOTH legs from the live schema
+ * and the handler source and fails on any disagreement with what is declared
+ * here — a missing declaration, a declaration naming a field that is not binary,
+ * a stale `required` after an optionality flip, or a file transport on a handler
+ * that no longer returns bytes. So the default can never silently absorb a file
+ * capability, and the declaration can never drift away from the handler.
+ */
+type CapabilityTransportDisposition = {
+  transport?: CapabilityTransport;
+};
+
 export type HandlerConfig = InputSchema &
   CapabilityDescription &
-  CapabilityAccess & {
+  CapabilityAccess &
+  CapabilityTransportDisposition & {
     permissions: PermissionInput;
     requiresUsage?: UsageMeteringConfig;
     mcp: McpExposure;
@@ -293,16 +316,17 @@ export type HandlerConfig = InputSchema &
 
 export type SessionHandlerConfig = InputSchema &
   CapabilityDescription &
-  CapabilityAccess & {
+  CapabilityAccess &
+  CapabilityTransportDisposition & {
     mcp: McpExposure;
   };
 
 type ConfigRouteSchema<TConfig extends HandlerConfig> = UnwrapRoute<
-  Omit<TConfig, "permissions" | "mcp" | "description" | "access">
+  Omit<TConfig, "permissions" | "mcp" | "description" | "access" | "transport">
 >;
 
 type SessionConfigRouteSchema<TConfig extends SessionHandlerConfig> =
-  UnwrapRoute<Omit<TConfig, "mcp" | "description" | "access">>;
+  UnwrapRoute<Omit<TConfig, "mcp" | "description" | "access" | "transport">>;
 
 type SessionHandlerContext<
   TConfig extends SessionHandlerConfig = SessionHandlerConfig,

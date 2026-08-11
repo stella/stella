@@ -90,6 +90,20 @@ const createTemplateFromStylesHandler = async function* ({
 const config = {
   permissions: { template: ["create"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
+  transport: {
+    type: "file-input",
+    input: {
+      field: "styleSource",
+      required: true,
+      mediaTypes: [DOCX_MIME_TYPE],
+    },
+    alternative: {
+      type: "partial",
+      via: ["style-sets.create-from-editor", "templates.create-from-style-set"],
+      limitation:
+        "the styles must be declared as settings rather than extracted from a DOCX",
+    },
+  },
   body: createTemplateFromStylesBodySchema,
 } satisfies HandlerConfig;
 

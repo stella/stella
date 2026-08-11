@@ -4,10 +4,12 @@ import { TOOL_ANNOTATIONS } from "./annotations.js";
 import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import {
   type CapabilityCatalogEntry,
+  type CapabilityTransport,
   capabilityCommandPath,
   formatCapabilityCommand,
   deriveCapabilityLeaf,
   insertCapabilities,
+  isTransportInvocable,
 } from "./generate-capability-tree.js";
 import {
   generateRouteMap,
@@ -36,7 +38,13 @@ const entry = (
   destructive: false,
   scope: "stella:read",
   inputSchema: {},
+  transport: { type: "json" },
   ...overrides,
+});
+
+const fileInput = (field: string, required: boolean): CapabilityTransport => ({
+  type: "file-input",
+  input: { field, required },
 });
 
 const flagByCli = (
@@ -462,18 +470,55 @@ describe("deriveCapabilityLeaf: pagination + suppression + truncation", () => {
 });
 
 describe("insertCapabilities: namespaced merge", () => {
-  test("suppresses file-input/output entries but generates the rest", () => {
+  test("suppresses required-file and file-returning entries but generates the rest", () => {
     const { stats } = insertCapabilities({
       tree: { kind: "route", children: {} },
       entries: [
         entry({ id: "a.read" }),
-        entry({ id: "b.upload", requiresFileInput: true }),
-        entry({ id: "c.export", returnsFileResponse: true }),
+        entry({ id: "b.upload", transport: fileInput("file", true) }),
+        entry({ id: "c.export", transport: { type: "file-response" } }),
+        entry({
+          id: "d.fill",
+          transport: {
+            type: "file-both",
+            input: { field: "f", required: true },
+          },
+        }),
+        // An OPTIONAL file leaves a fileless JSON mode: generated, not
+        // suppressed. This is the case the two booleans could not express.
+        entry({ id: "e.prefill", transport: fileInput("file", false) }),
       ],
     });
-    expect(stats.generated).toBe(1);
-    expect(stats.suppressed).toBe(2);
-    expect(stats.suppressedIds).toEqual(["b.upload", "c.export"]);
+    expect(stats.generated).toBe(2);
+    expect(stats.suppressed).toBe(3);
+    expect(stats.suppressedIds).toEqual(["b.upload", "c.export", "d.fill"]);
+  });
+
+  test("a fileless-mode capability withholds its file field from flags and --input", () => {
+    // The field is `format: "binary"`, so a generated `--file <string>` flag
+    // would pass validation and reach a handler expecting a `File`. It must be
+    // absent from the flags AND from the `--input` wrapper schema, and named on
+    // the spec so `--help` can say why.
+    const { spec } = deriveCapabilityLeaf(
+      entry({
+        id: "templates.prefill",
+        transport: fileInput("file", false),
+        inputSchema: {
+          body: objectSchema({
+            file: { type: "string", format: "binary" },
+            text: { type: "string" },
+          }),
+        },
+      }),
+    );
+    expect(spec.flags.map((flag) => flag.flag)).toEqual(["--text"]);
+    expect(spec.inputOnly).toEqual([]);
+    expect(spec.filelessField).toBe("file");
+    expect(spec.inputSchema).toEqual({
+      type: "object",
+      additionalProperties: false,
+      properties: { body: objectSchema({ text: { type: "string" } }) },
+    });
   });
 
   test("a curated root command and namespaced capability never compete", () => {
@@ -561,10 +606,21 @@ describe("insertCapabilities: against the real curated tree + catalog", () => {
       entries: catalog,
     });
     const suppressed = catalog.filter(
-      (e) => e.requiresFileInput === true || e.returnsFileResponse === true,
+      (e) => !isTransportInvocable(e.transport),
     ).length;
     expect(stats.suppressed).toBe(suppressed);
     expect(stats.generated).toBe(catalog.length - suppressed);
+  });
+
+  test("every committed entry declares a transport", async () => {
+    // `transport` is total on the wire. A snapshot entry without it would be
+    // read as a plain JSON capability by anything less strict than
+    // `parseCapabilityCatalog`, which is exactly the silent default this
+    // field replaced.
+    const catalog: { transport?: unknown }[] = await Bun.file(
+      new URL("generated/capability-catalog.json", import.meta.url),
+    ).json();
+    expect(catalog.filter((e) => e.transport === undefined)).toEqual([]);
   });
 });
 

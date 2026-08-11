@@ -199,6 +199,16 @@ const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "knowledge_library_admin" },
   access: "read",
+  transport: {
+    type: "file-response",
+    response: { mediaTypes: ["text/csv", "application/json"] },
+    alternative: {
+      type: "partial",
+      via: ["clauses.list", "clauses.get"],
+      limitation:
+        "returns the same clause data page by page; the single downloadable export file is not produced",
+    },
+  },
   query: exportQuerySchema,
 } satisfies HandlerConfig;
 

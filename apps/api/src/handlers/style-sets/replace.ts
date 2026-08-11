@@ -10,6 +10,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { extractStyleSetBuffer } from "@/api/lib/style-sets";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const paramsSchema = t.Object({ styleSetId: tSafeId("styleSet") });
 const bodySchema = t.Object({
@@ -19,6 +20,20 @@ const bodySchema = t.Object({
 const config = {
   permissions: { styleSet: ["update"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
+  transport: {
+    type: "file-input",
+    input: {
+      field: "styleSource",
+      required: true,
+      mediaTypes: [DOCX_MIME_TYPE],
+    },
+    alternative: {
+      type: "partial",
+      via: ["style-sets.update-from-editor"],
+      limitation:
+        "replaces the styles from explicit settings in the body; styles cannot be extracted from an existing DOCX",
+    },
+  },
   params: paramsSchema,
   body: bodySchema,
 } satisfies HandlerConfig;

@@ -10,6 +10,7 @@ import {
   extractStyleSetBuffer,
   normalizeStyleSetName,
 } from "@/api/lib/style-sets";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const bodySchema = t.Object({
   name: tDefaultVarchar,
@@ -19,6 +20,20 @@ const bodySchema = t.Object({
 const config = {
   permissions: { styleSet: ["create"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
+  transport: {
+    type: "file-input",
+    input: {
+      field: "styleSource",
+      required: true,
+      mediaTypes: [DOCX_MIME_TYPE],
+    },
+    alternative: {
+      type: "partial",
+      via: ["style-sets.create-from-editor"],
+      limitation:
+        "builds the style set from explicit settings in the body; styles cannot be extracted from an existing DOCX",
+    },
+  },
   body: bodySchema,
 } satisfies HandlerConfig;
 

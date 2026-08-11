@@ -450,6 +450,17 @@ const config = {
   permissions: { template: ["use"] },
   access: "write",
   mcp: { type: "covered", by: "fill_template" },
+  transport: {
+    type: "file-response",
+    // Octet-stream on the wire regardless of the rendered format; see
+    // OCTET_STREAM_MIME_TYPE.
+    response: { mediaTypes: [OCTET_STREAM_MIME_TYPE] },
+    alternative: {
+      type: "complete",
+      via: ["templates.fill-to-workspace"],
+      note: "same stored template and values, with the filled document saved into a matter and its entity id returned instead of the bytes",
+    },
+  },
   params: fillByIdParamsSchema,
   body: fillByIdBodySchema,
   query: fillByIdQuerySchema,
