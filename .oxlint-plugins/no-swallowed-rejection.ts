@@ -35,8 +35,8 @@
 // `Bun.file(path).text()` is excluded from the allowlist even though it ends
 // in an allowlisted method: the path is configured, so a failed read means the
 // file is missing or unreadable, which is information, not an empty body. The
-// exclusion follows a function-local `const file = Bun.file(path)` too, so
-// extracting the handle does not buy back the allowlisted verdict.
+// exclusion follows a `const file = Bun.file(path)` binding too, so extracting
+// the handle does not buy back the allowlisted verdict.
 //
 // Everything else must either handle the rejection (capture it, surface it,
 // propagate it) or route the promise through `detached(promise, context)`,
@@ -49,11 +49,8 @@ import {
   getCalleeName,
   isAstNode,
   isIdentifier,
-  localConstInitializer,
   type AstNode,
 } from "./utils.ts";
-
-type ScopeContext = { sourceCode: { getScope: (node: unknown) => unknown } };
 
 const ALLOWED_RECEIVER_METHODS = new Set([
   // Response body consumption.
@@ -142,10 +139,46 @@ const isBunFileCall = (node: AstNode | null): boolean =>
   node.type === "CallExpression" &&
   getCalleeName(node.callee) === "Bun.file";
 
-// `Bun.file(path)` written inline, or held by a function-local `const` the
-// receiver names. Extracting the handle into a variable is the same read, so
-// it must reach the same verdict.
-const isBunFileReceiver = (node: unknown, context: ScopeContext): boolean => {
+// The initializer of a `const <name> = ...` declared in an enclosing block or
+// program body. Walked over the parent chain rather than resolved through
+// scopes because the rest of this rule works on the loose node shape and a
+// declaration this rule cares about is always a statement in one of these
+// bodies.
+const enclosingConstInitializer = (
+  identifier: AstNode & { name: string },
+): AstNode | null => {
+  let current = isAstNode(identifier.parent) ? identifier.parent : null;
+  while (current !== null) {
+    const body = Array.isArray(current.body) ? current.body : [];
+    for (const statement of body) {
+      if (
+        !isAstNode(statement) ||
+        statement.type !== "VariableDeclaration" ||
+        statement.kind !== "const"
+      ) {
+        continue;
+      }
+      const declarations = Array.isArray(statement.declarations)
+        ? statement.declarations
+        : [];
+      for (const declarator of declarations) {
+        if (
+          isAstNode(declarator) &&
+          isIdentifier(declarator.id, identifier.name)
+        ) {
+          return unwrap(declarator.init);
+        }
+      }
+    }
+    current = isAstNode(current.parent) ? current.parent : null;
+  }
+  return null;
+};
+
+// `Bun.file(path)` written inline, or held by a `const` the receiver names.
+// Extracting the handle into a variable is the same read, so it must reach the
+// same verdict.
+const isBunFileReceiver = (node: unknown): boolean => {
   const source = unwrap(node);
   if (source === null) {
     return false;
@@ -154,17 +187,13 @@ const isBunFileReceiver = (node: unknown, context: ScopeContext): boolean => {
     return true;
   }
   return (
-    source.type === "Identifier" &&
-    isBunFileCall(localConstInitializer(source, context))
+    isIdentifier(source) && isBunFileCall(enclosingConstInitializer(source))
   );
 };
 
 // The method whose result the `.catch` is attached to, e.g. `cancel` for
 // `reader.cancel().catch(...)`. Null when the receiver is not a method call.
-const receiverMethodName = (
-  calleeObject: unknown,
-  context: ScopeContext,
-): string | null => {
+const receiverMethodName = (calleeObject: unknown): string | null => {
   const receiver = unwrap(calleeObject);
   if (receiver === null || receiver.type !== "CallExpression") {
     return null;
@@ -179,7 +208,7 @@ const receiverMethodName = (
     return null;
   }
   // A filesystem read at a configured path is not an optional body read.
-  if (isBunFileReceiver(callee.object, context)) {
+  if (isBunFileReceiver(callee.object)) {
     return null;
   }
   return callee.property.name;
@@ -220,7 +249,7 @@ export default eslintCompatPlugin({
               return;
             }
 
-            const method = receiverMethodName(callee.object, context);
+            const method = receiverMethodName(callee.object);
             if (method !== null && ALLOWED_RECEIVER_METHODS.has(method)) {
               return;
             }

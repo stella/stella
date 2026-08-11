@@ -286,11 +286,17 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
+        // Visitor arguments arrive as oxlint's typed nodes, which do not
+        // satisfy the loose record shape the helpers in this folder walk, so
+        // they are narrowed here rather than at every call site.
         const check = (
-          handlerNode: AstNode,
+          handlerNode: unknown,
           param: unknown,
-          bodyRoot: AstNode,
+          bodyRoot: unknown,
         ): void => {
+          if (!isAstNode(handlerNode) || !isAstNode(bodyRoot)) {
+            return;
+          }
           const facts = collectHandlerFacts(bodyRoot);
           if (!facts.raisesErrorToast) {
             return;
