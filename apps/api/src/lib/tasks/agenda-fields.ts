@@ -1,12 +1,12 @@
-import type {
-  AgendaAttendee,
-  AgendaAvailability,
-  AgendaSensitivity,
-} from "@/api/db/schema";
+import type { AgendaAttendee } from "@/api/db/schema";
 import {
   AGENDA_ATTENDEE_TYPES,
   AGENDA_AVAILABILITIES,
   AGENDA_SENSITIVITIES,
+} from "@/api/lib/entity-constants";
+import type {
+  AgendaAvailability,
+  AgendaSensitivity,
 } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { includes } from "@/api/lib/type-guards";

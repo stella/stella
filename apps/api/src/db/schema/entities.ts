@@ -1,6 +1,10 @@
 import { DESKTOP_EDIT_FILE_TYPES } from "@/api/lib/desktop-edit-file-types";
 
 import {
+  AGENDA_AVAILABILITIES,
+  AGENDA_ITEM_KINDS,
+  AGENDA_ITEM_SOURCES,
+  AGENDA_SENSITIVITIES,
   ENTITY_DELETION_CLEANUP_STATUSES,
   ENTITY_KINDS,
   LIST_ITEM_TYPES,
@@ -75,9 +79,7 @@ export const entities = p.pgTable(
     status: p.varchar({ length: 32 }),
     priority: p.varchar({ length: 16 }),
     dueDate: p.date("due_date", { mode: "string" }),
-    agendaKind: p.text("agenda_kind", {
-      enum: ["task", "deadline", "meeting", "hearing", "event"],
-    }),
+    agendaKind: p.text("agenda_kind", { enum: AGENDA_ITEM_KINDS }),
     startAt: timestamptz("start_at"),
     endAt: timestamptz("end_at"),
     occurredAt: timestamptz("occurred_at"),
@@ -86,25 +88,12 @@ export const entities = p.pgTable(
     timeZone: p.varchar("time_zone", { length: 64 }),
     location: p.text("location"),
     onlineMeetingUrl: p.text("online_meeting_url"),
-    availability: p.text("availability", {
-      enum: [
-        "free",
-        "tentative",
-        "busy",
-        "out_of_office",
-        "working_elsewhere",
-        "unknown",
-      ],
-    }),
-    sensitivity: p.text("sensitivity", {
-      enum: ["normal", "private", "confidential"],
-    }),
+    availability: p.text("availability", { enum: AGENDA_AVAILABILITIES }),
+    sensitivity: p.text("sensitivity", { enum: AGENDA_SENSITIVITIES }),
     organizer: jsonb("organizer").$type<AgendaParticipant | null>(),
     attendees: jsonb("attendees").$type<AgendaAttendee[] | null>(),
     recurrence: jsonb("recurrence").$type<AgendaRecurrence | null>(),
-    agendaSource: p.text("agenda_source", {
-      enum: ["manual", "infosoud", "calendar", "email", "import", "api"],
-    }),
+    agendaSource: p.text("agenda_source", { enum: AGENDA_ITEM_SOURCES }),
     externalSource: p.varchar("external_source", { length: 64 }),
     externalId: p.varchar("external_id", { length: 256 }),
     externalChangeKey: p.varchar("external_change_key", { length: 512 }),
