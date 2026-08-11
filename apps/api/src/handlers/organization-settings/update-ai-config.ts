@@ -18,6 +18,7 @@ import {
 import {
   providerResponseExtras,
   providerResponseRegion,
+  storedAIConfigUnreadableError,
 } from "@/api/lib/ai-config-response";
 import { probeProvider } from "@/api/lib/ai-provider-probe";
 import type { ProviderProbeResult } from "@/api/lib/ai-provider-probe";
@@ -102,10 +103,11 @@ const updateAIConfig = createSafeRootHandler(
 
       if (decryptResult.isErr()) {
         captureError(decryptResult.error);
-        existingConfig = undefined;
-      } else {
-        existingConfig = decryptResult.value;
+        // The stored config is the merge base for a partial update, so an
+        // unreadable one cannot be treated as "no providers configured".
+        return Result.err(storedAIConfigUnreadableError(decryptResult.error));
       }
+      existingConfig = decryptResult.value;
     }
 
     const providerResult = resolveProviderConfigs(
