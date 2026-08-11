@@ -623,10 +623,15 @@ const listCzNsSlicePage = async ({
     });
   }
 
+  // This count is the day's true size, printed only when it exceeds what the
+  // publisher will serve. Any disagreement with the rows carried is refused,
+  // in both directions: above, the window truncated the day; below, the body
+  // contradicts itself and its rows are not the day it counted. Neither is a
+  // listing this walk may bank as a whole slice.
   const matched = parseListingCount(html, LISTING_COUNT_PATTERN.MATCHED);
-  if (matched !== undefined && matched > rows.length) {
+  if (matched !== undefined && matched !== rows.length) {
     throw new AdapterFetchError({
-      message: `CZ Supreme Court listing for ${slice} holds ${matched} decisions, past the ${CZ_NS_LISTING_WINDOW} one search addresses`,
+      message: `CZ Supreme Court listing for ${slice} counts ${matched} decisions and carries ${rows.length}, against the ${CZ_NS_LISTING_WINDOW} one search addresses`,
       adapterKey: ADAPTER_KEYS.CZ_NS,
       cursor: slice,
     });

@@ -428,6 +428,26 @@ describe("cz-ns listSlicePage", () => {
     expect(String(error)).toContain("50454");
   });
 
+  test("a counted size below the rows carried is refused too", async () => {
+    // A body contradicting itself: its rows are not the day it counted, and
+    // which of the two numbers is wrong is not knowable from here.
+    mockFetch({
+      listing: {
+        body: listingPageHtml({
+          rows: [
+            [UNID.FIRST, DOCKET.FIRST],
+            [UNID.SECOND, DOCKET.SECOND],
+          ],
+          shown: 2,
+          matched: 1,
+        }),
+      },
+    });
+
+    const error = await rejectionOf(listSlice("2026-07-01"));
+    expect(String(error)).toContain("counts 1 decisions and carries 2");
+  });
+
   test("a stated count the body does not carry is thrown", async () => {
     mockFetch({
       listing: {
