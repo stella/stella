@@ -254,11 +254,11 @@ describe("resolveAccess", () => {
     ).toBe("needs-override");
     expect(
       resolveAccess({
-        id: "playbooks.review",
+        id: "playbooks.run",
         verbs: ["apply"],
         hasPermissions: true,
         overrides: {
-          "playbooks.review": { access: "read", destructive: false },
+          "playbooks.run": { access: "read", destructive: false },
         },
       }),
     ).toEqual({ status: "resolved", access: "read", destructive: false });
