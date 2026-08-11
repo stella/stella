@@ -24,7 +24,8 @@
  */
 
 import { panic } from "better-result";
-import { and, eq, inArray, isNull, lt, min } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lt, min } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -44,6 +45,7 @@ import type {
   SliceWalkReason,
 } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import {
+  RECONCILIATION_SETTLED_RECHECK_MS,
   RECONCILIATION_SLICE_STALE_MS,
   partitionShortSliceCandidates,
   selectReconciliationWorkUnit,
@@ -54,6 +56,7 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { storedObservationHasDetail } from "@/api/lib/legal-search/ingestion-normalization";
 import type {
   ListingIdentity,
   ReconciliationListingItem,
@@ -202,11 +205,30 @@ const forEachChunk = async <T>(
   }
 };
 
+/**
+ * The extra condition `heldRequiresDetail` adds to a held lookup, or nothing.
+ *
+ * Both halves of the identity index take it, and that is the point: a filter
+ * applied to one query and not the other would make a source's heldness mean
+ * two different things depending on whether the publisher happened to state a
+ * document id for the item.
+ */
+const detailCondition = (requireDetail: boolean): SQL | undefined =>
+  requireDetail
+    ? storedObservationHasDetail(caseLawDecisions.metadata)
+    : undefined;
+
+type HeldDocumentIdsOptions = {
+  sourceId: SafeId<"caseLawSource">;
+  documentIds: readonly string[];
+  /** See `SourceReconciliation.heldRequiresDetail`. */
+  requireDetail: boolean;
+};
+
 /** Which of these publisher document ids this source already has rows for. */
 const selectHeldDocumentIds = async (
   scopedDb: ScopedDb,
-  sourceId: SafeId<"caseLawSource">,
-  documentIds: readonly string[],
+  { documentIds, requireDetail, sourceId }: HeldDocumentIdsOptions,
 ): Promise<string[]> => {
   if (documentIds.length === 0) {
     return [];
@@ -220,6 +242,7 @@ const selectHeldDocumentIds = async (
           and(
             eq(caseLawDecisions.sourceId, sourceId),
             inArray(caseLawDecisions.sourceDocumentId, [...documentIds]),
+            detailCondition(requireDetail),
           ),
         )
         .limit(documentIds.length),
@@ -229,6 +252,14 @@ const selectHeldDocumentIds = async (
   );
 };
 
+type HeldCaseNumbersOptions = {
+  sourceId: SafeId<"caseLawSource">;
+  language: string;
+  caseNumbers: readonly string[];
+  /** See `SourceReconciliation.heldRequiresDetail`. */
+  requireDetail: boolean;
+};
+
 /**
  * The same question for the fallback half of the identity index: rows stored
  * without a publisher document id are keyed on the docket and the language, so
@@ -236,9 +267,7 @@ const selectHeldDocumentIds = async (
  */
 const selectHeldCaseNumbers = async (
   scopedDb: ScopedDb,
-  sourceId: SafeId<"caseLawSource">,
-  language: string,
-  caseNumbers: readonly string[],
+  { caseNumbers, language, requireDetail, sourceId }: HeldCaseNumbersOptions,
 ): Promise<string[]> => {
   if (caseNumbers.length === 0) {
     return [];
@@ -254,6 +283,7 @@ const selectHeldCaseNumbers = async (
             inArray(caseLawDecisions.caseNumber, [...caseNumbers]),
             eq(caseLawDecisions.language, language),
             isNull(caseLawDecisions.sourceDocumentId),
+            detailCondition(requireDetail),
           ),
         )
         .limit(caseNumbers.length),
@@ -273,11 +303,17 @@ const addHeldKey = (held: Set<string>, identity: ListingIdentity): void => {
   }
 };
 
+type HeldIdentityKeysOptions = {
+  sourceId: SafeId<"caseLawSource">;
+  identities: readonly ListingIdentity[];
+  /** See `SourceReconciliation.heldRequiresDetail`. */
+  requireDetail: boolean;
+};
+
 /** The identity keys, out of the given ones, this source already holds. */
 const selectHeldIdentityKeys = async (
   scopedDb: ScopedDb,
-  sourceId: SafeId<"caseLawSource">,
-  identities: readonly ListingIdentity[],
+  { identities, requireDetail, sourceId }: HeldIdentityKeysOptions,
 ): Promise<Set<string>> => {
   const documentIds = new Set<string>();
   const caseNumbersByLanguage = new Map<string, Set<string>>();
@@ -296,11 +332,11 @@ const selectHeldIdentityKeys = async (
 
   const held = new Set<string>();
   await forEachChunk([...documentIds], async (chunk) => {
-    for (const sourceDocumentId of await selectHeldDocumentIds(
-      scopedDb,
+    for (const sourceDocumentId of await selectHeldDocumentIds(scopedDb, {
       sourceId,
-      chunk,
-    )) {
+      documentIds: chunk,
+      requireDetail,
+    })) {
       addHeldKey(held, { type: "document", sourceDocumentId });
     }
   });
@@ -308,12 +344,12 @@ const selectHeldIdentityKeys = async (
   for (const [language, caseNumbers] of caseNumbersByLanguage) {
     // oxlint-disable-next-line no-await-in-loop -- one language's dockets at a time; the fallback identity is language-scoped and the chunks inside are already sequential
     await forEachChunk([...caseNumbers], async (chunk) => {
-      for (const caseNumber of await selectHeldCaseNumbers(
-        scopedDb,
+      for (const caseNumber of await selectHeldCaseNumbers(scopedDb, {
         sourceId,
         language,
-        chunk,
-      )) {
+        caseNumbers: chunk,
+        requireDetail,
+      })) {
         addHeldKey(held, { type: "case-number", caseNumber, language });
       }
     });
@@ -380,6 +416,65 @@ const selectStaleShortSlices = async (
         .orderBy(caseLawCoverageSlices.checkedAt)
         .limit(SHORT_SLICE_CANDIDATES),
   );
+
+/**
+ * The oldest-checked settled slice below the tip window, or null. Whether it
+ * is old enough to walk is the selection's decision, not this query's.
+ *
+ * Settled here means `collected >= reported`: the row says the publisher's own
+ * count was met. Nothing else in the loop ever looks at such a row again, so it
+ * keeps stating what the publisher listed on the day of the walk however long
+ * the publisher goes on adding to that slice.
+ *
+ * That predicate is also what keeps this from fighting the settled-row touch in
+ * the assembly below. The two populations are disjoint by construction: the
+ * touch only ever re-stamps rows that are *short* and settled by retirement, so
+ * those rows are permanently young, while the rows read here are never touched
+ * at all and age freely. Sharing a population would break both — an oldest-first
+ * read over the union would be answered by whichever half was larger, and the
+ * rows that genuinely went stale would sit behind rows something else is
+ * already re-stamping every turn.
+ *
+ * The boundary that leaves: a slice settled by retired items stays short, so it
+ * lives in the touch population and its age is unobservable from `checkedAt`,
+ * which today means both "walked" and "rotated out of the candidate window".
+ * Separating the two is a schema change, not a query.
+ *
+ * One row, ordered, limit 1. The source's rows are reachable through
+ * `case_law_coverage_slices_source_slice_idx`; the short partial index is the
+ * exact complement of this predicate and deliberately does not serve it.
+ */
+const selectRecheckCandidate = async (
+  scopedDb: ScopedDb,
+  sourceId: SafeId<"caseLawSource">,
+  /** The tip window's own start; slices at or above it are re-walked anyway. */
+  belowSlice: string,
+): Promise<LedgerSlice | null> =>
+  (
+    await scopedDb(
+      async (tx) =>
+        await tx
+          .select({
+            slice: caseLawCoverageSlices.slice,
+            reported: caseLawCoverageSlices.reported,
+            collected: caseLawCoverageSlices.collected,
+            checkedAt: caseLawCoverageSlices.checkedAt,
+          })
+          .from(caseLawCoverageSlices)
+          .where(
+            and(
+              eq(caseLawCoverageSlices.sourceId, sourceId),
+              lt(caseLawCoverageSlices.slice, belowSlice),
+              gte(
+                caseLawCoverageSlices.collected,
+                caseLawCoverageSlices.reported,
+              ),
+            ),
+          )
+          .orderBy(caseLawCoverageSlices.checkedAt)
+          .limit(1),
+    )
+  ).at(0) ?? null;
 
 /**
  * The oldest slice this source has any ledger row for.
@@ -617,11 +712,11 @@ const walkSlice = async ({
 
   const items = [...keyed.values()];
   summary.keyable = items.length;
-  const held = await selectHeldIdentityKeys(
-    scopedDb,
+  const held = await selectHeldIdentityKeys(scopedDb, {
     sourceId,
-    items.map(({ identity }) => identity),
-  );
+    identities: items.map(({ identity }) => identity),
+    requireDetail: reconciliation.heldRequiresDetail === true,
+  });
   const missing = items.filter(({ identityKey }) => !held.has(identityKey));
   summary.heldBefore = items.length - missing.length;
 
@@ -734,11 +829,11 @@ const retryParkedItems = async ({
     }),
   );
 
-  const held = await selectHeldIdentityKeys(
-    scopedDb,
+  const held = await selectHeldIdentityKeys(scopedDb, {
     sourceId,
-    outstanding.map(({ identity }) => identity),
-  );
+    identities: outstanding.map(({ identity }) => identity),
+    requireDetail: reconciliation.heldRequiresDetail === true,
+  });
   const settled = outstanding.filter(({ identityKey }) =>
     held.has(identityKey),
   );
@@ -797,13 +892,22 @@ export const runReconciliationWorkUnit = async ({
   const staleBefore = new Date(
     startedAt.getTime() - RECONCILIATION_SLICE_STALE_MS,
   );
+  // The tip window's own start, which is also the ceiling on everything the
+  // sweep and the recheck may reach for: the tip is re-walked on its own
+  // cadence and needs neither.
+  const tipStart = tipSlices.at(-1) ?? reconciliation.sliceOf(startedAt);
 
-  const [tipLedger, shortRows, oldestLedgerSlice, dueParked] =
+  const [tipLedger, shortRows, oldestLedgerSlice, dueParked, recheckCandidate] =
     await Promise.all([
       selectLedgerSlices(scopedDb, sourceId, tipSlices),
       selectStaleShortSlices(scopedDb, sourceId, staleBefore),
       selectOldestLedgerSlice(scopedDb, sourceId),
       hasDueParkedItems(scopedDb, sourceId, startedAt),
+      // Asked every turn rather than only once the higher priorities come up
+      // empty: idle is the steady state of a surveyed source, so the branch
+      // that skipped it would almost never be taken, and one more bounded read
+      // in the batch already in flight costs no extra round trip.
+      selectRecheckCandidate(scopedDb, sourceId, tipStart),
     ]);
 
   const terminalBySlice = await countTerminalReconciliationItemsBySlice(
@@ -844,7 +948,6 @@ export const runReconciliationWorkUnit = async ({
 
   // The sweep frontier: the oldest slice with any row, bounded above by the
   // tip window's own start so a source with only tip rows still sweeps.
-  const tipStart = tipSlices.at(-1) ?? reconciliation.sliceOf(startedAt);
   const frontier =
     oldestLedgerSlice === null || oldestLedgerSlice > tipStart
       ? tipStart
@@ -859,7 +962,9 @@ export const runReconciliationWorkUnit = async ({
     ),
     unsettledShortSlices: unsettled,
     sweepSlice: reconciliation.previousSlice(frontier),
+    recheckCandidate,
     staleAfterMs: RECONCILIATION_SLICE_STALE_MS,
+    recheckAfterMs: RECONCILIATION_SETTLED_RECHECK_MS,
   });
 
   if (unit.type === "idle") {

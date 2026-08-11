@@ -24,6 +24,25 @@ import type { SourceReconciliation } from "@/api/lib/legal-search/ingestion-type
  */
 export const RECONCILIATION_SLICE_STALE_MS = DAY_IN_MS;
 
+/**
+ * How long a settled slice's ledger row stands before the loop is willing to
+ * spend an otherwise-idle turn proving it again.
+ *
+ * A slice that settles early is never re-selected: the row records what the
+ * publisher listed on the day it was walked, and a publisher that keeps
+ * adding to a slice for months afterwards makes that number quietly wrong.
+ * Measured on one publisher's judgment-date slices, a slice holds roughly one
+ * item at a fortnight old, a couple of hundred at four months and several
+ * hundred at sixteen; the same happens wherever language variants or late
+ * publication arrive after the fact. Nothing surfaces it, because a settled
+ * row looks exactly like a complete one.
+ *
+ * A month is the trade: long enough that re-walking history is a rounding
+ * error against the tip's daily cadence, short enough that a slice which grew
+ * is found within one quarter of its own drift.
+ */
+export const RECONCILIATION_SETTLED_RECHECK_MS = 30 * DAY_IN_MS;
+
 /** Why a slice was chosen, for the summary and nothing else. */
 export const SLICE_WALK_REASON = {
   /** Inside the tip window, where the publisher is still filling in. */
@@ -32,6 +51,8 @@ export const SLICE_WALK_REASON = {
   SHORT: "short",
   /** Never surveyed at all; the sweep works backward through history. */
   SWEEP: "sweep",
+  /** Settled long ago; walked again to prove the ledger still describes it. */
+  RECHECK: "recheck",
 } as const;
 
 export type SliceWalkReason =
@@ -172,7 +193,15 @@ export type SelectReconciliationWorkUnitInput = {
   unsettledShortSlices: readonly ShortSliceCandidate[];
   /** The newest never-surveyed slice below the tip window, if any remain. */
   sweepSlice: string | null;
+  /**
+   * The oldest-checked settled slice below the tip window, if the source has
+   * one. Which rows count as settled is the assembly's question, since only it
+   * can read the ledger; whether this one is old enough to walk is decided
+   * here, against `recheckAfterMs`.
+   */
+  recheckCandidate: LedgerSlice | null;
   staleAfterMs: number;
+  recheckAfterMs: number;
 };
 
 /**
@@ -183,15 +212,25 @@ export type SelectReconciliationWorkUnitInput = {
  *  2. the tip, where the publisher is still adding to slices and a miss is
  *     both most likely and most visible;
  *  3. slices known to be short and gone stale — the ledger's own backlog;
- *  4. history never surveyed at all, newest first.
+ *  4. history never surveyed at all, newest first;
+ *  5. a slice that settled long enough ago that its ledger row is no longer
+ *     evidence of anything — the only work that re-does work.
  *
  * Anything else is idle. The order is deliberately not round-robin between
  * these: history is unbounded and the tip is not, so a sweep that competed
  * with the tip on equal terms would let fresh misses age behind old ones.
+ *
+ * The recheck sits last for the same reason it exists at all. It is the only
+ * unit that walks a slice nothing is known to owe, so it must never displace
+ * a slice something is: reaching it means the source is surveyed to its first
+ * slice, its tip is fresh and its backlog is empty. Idle turns become slow
+ * verification, and a source with real work never spends a turn on it.
  */
 export const selectReconciliationWorkUnit = ({
   hasDueParkedItems,
   now,
+  recheckAfterMs,
+  recheckCandidate,
   staleAfterMs,
   sweepSlice,
   tipCheckedAt,
@@ -246,6 +285,25 @@ export const selectReconciliationWorkUnit = ({
       type: "slice",
       slice: sweepSlice,
       reason: SLICE_WALK_REASON.SWEEP,
+    };
+  }
+
+  // An ordinary walk, deliberately: a slice the publisher has since grown
+  // records short afterwards and re-enters the normal cycle at priority 3,
+  // so the recheck needs no repair path of its own.
+  //
+  // The age test lives here rather than in the query that reads the row: it is
+  // the same clock arithmetic the tip's staleness runs on, and a cutoff pushed
+  // into SQL would be the one part of the priority order no test could reach
+  // without a database.
+  if (
+    recheckCandidate !== null &&
+    recheckCandidate.checkedAt.getTime() < now.getTime() - recheckAfterMs
+  ) {
+    return {
+      type: "slice",
+      slice: recheckCandidate.slice,
+      reason: SLICE_WALK_REASON.RECHECK,
     };
   }
 
