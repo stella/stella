@@ -60,14 +60,22 @@ export const extractPreviewText = async (
 ): Promise<ExtractedDocxText> => {
   const archive = await loadDocxArchive(docxBytes);
   const previewArchive = new JSZip();
+  const contentPartPaths = templateContentPartPaths(
+    Object.keys(archive.zip.files),
+  );
+  const addContentPart = async (index: number): Promise<void> => {
+    const path = contentPartPaths.at(index);
+    if (path === undefined) {
+      return;
+    }
 
-  for (const path of templateContentPartPaths(Object.keys(archive.zip.files))) {
-    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- bounded reads remain serial and preserve the archive-wide decompression budget
     const xml = await archive.readEntryString(path);
     if (xml !== null) {
       previewArchive.file(path, unwrapTableParagraphs(xml));
     }
-  }
+    await addContentPart(index + 1);
+  };
+  await addContentPart(0);
 
   const relationships = await archive.readEntryString(
     DOCUMENT_RELATIONSHIPS_PATH,
