@@ -34,7 +34,9 @@
 //
 // `Bun.file(path).text()` is excluded from the allowlist even though it ends
 // in an allowlisted method: the path is configured, so a failed read means the
-// file is missing or unreadable, which is information, not an empty body.
+// file is missing or unreadable, which is information, not an empty body. The
+// exclusion follows a function-local `const file = Bun.file(path)` too, so
+// extracting the handle does not buy back the allowlisted verdict.
 //
 // Everything else must either handle the rejection (capture it, surface it,
 // propagate it) or route the promise through `detached(promise, context)`,
@@ -47,8 +49,11 @@ import {
   getCalleeName,
   isAstNode,
   isIdentifier,
+  localConstInitializer,
   type AstNode,
 } from "./utils.ts";
+
+type ScopeContext = { sourceCode: { getScope: (node: unknown) => unknown } };
 
 const ALLOWED_RECEIVER_METHODS = new Set([
   // Response body consumption.
@@ -132,9 +137,34 @@ const swallowsRejection = (handler: AstNode): boolean => {
   return only.argument === null || isLiteralValue(only.argument);
 };
 
+const isBunFileCall = (node: AstNode | null): boolean =>
+  node !== null &&
+  node.type === "CallExpression" &&
+  getCalleeName(node.callee) === "Bun.file";
+
+// `Bun.file(path)` written inline, or held by a function-local `const` the
+// receiver names. Extracting the handle into a variable is the same read, so
+// it must reach the same verdict.
+const isBunFileReceiver = (node: unknown, context: ScopeContext): boolean => {
+  const source = unwrap(node);
+  if (source === null) {
+    return false;
+  }
+  if (isBunFileCall(source)) {
+    return true;
+  }
+  return (
+    source.type === "Identifier" &&
+    isBunFileCall(localConstInitializer(source, context))
+  );
+};
+
 // The method whose result the `.catch` is attached to, e.g. `cancel` for
 // `reader.cancel().catch(...)`. Null when the receiver is not a method call.
-const receiverMethodName = (calleeObject: unknown): string | null => {
+const receiverMethodName = (
+  calleeObject: unknown,
+  context: ScopeContext,
+): string | null => {
   const receiver = unwrap(calleeObject);
   if (receiver === null || receiver.type !== "CallExpression") {
     return null;
@@ -149,12 +179,7 @@ const receiverMethodName = (calleeObject: unknown): string | null => {
     return null;
   }
   // A filesystem read at a configured path is not an optional body read.
-  const source = unwrap(callee.object);
-  if (
-    source !== null &&
-    source.type === "CallExpression" &&
-    getCalleeName(source.callee) === "Bun.file"
-  ) {
+  if (isBunFileReceiver(callee.object, context)) {
     return null;
   }
   return callee.property.name;
@@ -195,7 +220,7 @@ export default eslintCompatPlugin({
               return;
             }
 
-            const method = receiverMethodName(callee.object);
+            const method = receiverMethodName(callee.object, context);
             if (method !== null && ALLOWED_RECEIVER_METHODS.has(method)) {
               return;
             }

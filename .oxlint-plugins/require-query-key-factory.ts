@@ -28,7 +28,12 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // it is also the one place a predicate's positional walk belongs. When a call
 // site genuinely cannot reference one, suppress with a reason.
 
-import { getPropertyName, isAstNode, unwrapExpression } from "./utils.ts";
+import {
+  getPropertyName,
+  isAstNode,
+  localConstInitializer,
+  unwrapExpression,
+} from "./utils.ts";
 
 const CACHE_METHODS = new Set([
   "invalidateQueries",
@@ -53,43 +58,11 @@ const calleeMethodName = (callee) => {
   return getPropertyName(unwrapped.property);
 };
 
-// A module-scoped `const` holding a key is the file's own factory: the query
-// that defines the cache entry and the call that clears it read the same
-// declaration, so neither can drift from the other. A binding inside the
-// function is the opposite — a literal written at the call site and moved up a
-// few lines — so only those resolve.
-const MODULE_SCOPES = new Set(["global", "module"]);
-
-// The initializer of a function-local `const` binding the node names, so a
-// filters object or a key hoisted into a variable resolves to the same literal
-// the inline form would have carried. One level only: a binding initialized
-// from another binding is not a hand-typed key at this call site. `let` is
-// skipped because a later write can replace the value this would report on.
-const constInitializer = (identifier, context) => {
-  let scope = context.sourceCode.getScope(identifier);
-  while (scope) {
-    const variable = scope.set.get(identifier.name);
-    if (variable) {
-      if (MODULE_SCOPES.has(scope.type) || variable.defs.length !== 1) {
-        return null;
-      }
-      const definition = variable.defs.at(0);
-      if (
-        !isAstNode(definition?.node) ||
-        definition.node.type !== "VariableDeclarator" ||
-        definition.parent?.kind !== "const"
-      ) {
-        return null;
-      }
-      return unwrapExpression(definition.node.init) ?? null;
-    }
-    scope = scope.upper;
-  }
-  return null;
-};
-
-// A literal of `expected` type written here, or held by a local `const` this
-// names. Both forms restate the factory's layout where nothing checks it.
+// A literal of `expected` type written here, or held by a function-local
+// `const` this names. Both forms restate the factory's layout where nothing
+// checks it. A module-scoped key const is the file's own factory — the query
+// defining the entry and the call clearing it read one declaration — which is
+// why `localConstInitializer` stops at the function boundary.
 const literalOf = (node, expected, context) => {
   const unwrapped = unwrapExpression(node);
   if (!unwrapped) {
@@ -101,7 +74,7 @@ const literalOf = (node, expected, context) => {
   if (unwrapped.type !== "Identifier") {
     return null;
   }
-  const initializer = constInitializer(unwrapped, context);
+  const initializer = localConstInitializer(unwrapped, context);
   return initializer?.type === expected ? initializer : null;
 };
 

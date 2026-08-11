@@ -63,6 +63,7 @@ const AIUnavailableContext = createContext(false);
 
 export const AIAvailabilityProvider = ({ children }: PropsWithChildren) => {
   const [open, setOpen] = useState(false);
+  const tErrors = useTranslations("errors");
   const queryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const availabilityOptions = useMemo(
@@ -80,6 +81,12 @@ export const AIAvailabilityProvider = ({ children }: PropsWithChildren) => {
       .fetchQuery(availabilityOptions)
       .catch((error: unknown) => {
         getAnalytics().captureError(error);
+        // Callers read `false` as "do not proceed" and stop there, so without
+        // this the action the user just triggered would appear to do nothing.
+        stellaToast.add({
+          title: tErrors("actionFailed"),
+          type: "error",
+        });
         return null;
       });
 
@@ -95,7 +102,7 @@ export const AIAvailabilityProvider = ({ children }: PropsWithChildren) => {
 
     setOpen(true);
     return false;
-  }, [availabilityOptions, queryClient]);
+  }, [availabilityOptions, queryClient, tErrors]);
 
   const openIfAIUnavailable = useCallback(() => {
     if (data && !data.available && !isFetching) {

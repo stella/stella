@@ -51,6 +51,7 @@ import {
   supportedLanguages,
   useI18nStore,
 } from "@/i18n/i18n-store";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
 import { sessionOptions } from "@/lib/auth-queries";
@@ -468,10 +469,17 @@ function ProfilePageBody() {
                 });
                 return;
               }
-              detached(
-                updateDisplayName.mutateAsync(),
-                "account-profile.update-display-name",
-              );
+              // Awaited, not detached: `ProfileSubmitButton` disables itself
+              // from `useFormStatus().pending`, so returning before the save
+              // settles re-enables it mid-flight and lets a second submit
+              // race the first. The mutation's `onError` renders the toast;
+              // this catch keeps the rejection off the unhandled channel and
+              // records it.
+              try {
+                await updateDisplayName.mutateAsync();
+              } catch (error) {
+                getAnalytics().captureError(error);
+              }
             }}
             className="flex flex-col gap-4 p-4"
           >
@@ -528,10 +536,12 @@ function ProfilePageBody() {
           </div>
           <form
             action={async () => {
-              detached(
-                updateWordEditIdentity.mutateAsync(),
-                "account-profile.update-word-edit-identity",
-              );
+              // Awaited for the same reason as the display-name form above.
+              try {
+                await updateWordEditIdentity.mutateAsync();
+              } catch (error) {
+                getAnalytics().captureError(error);
+              }
             }}
             className="border-border flex flex-col gap-4 border-t p-4"
           >

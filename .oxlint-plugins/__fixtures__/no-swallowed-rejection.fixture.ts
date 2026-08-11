@@ -91,6 +91,15 @@ const configuredFileRead = async () => {
   return contents;
 };
 
+// MUST flag: extracting the file handle into a local is the same read, so it
+// must not buy the allowlisted-method verdict the inline form is denied.
+const configuredFileReadViaAlias = async () => {
+  const file = Bun.file("/etc/token");
+  // oxlint-disable-next-line no-swallowed-rejection/no-swallowed-rejection
+  const contents = await file.text().catch(() => null);
+  return contents;
+};
+
 // --- Cases the rule MUST NOT flag ---
 
 // Allowed receiver: stream-reader teardown during unwind.

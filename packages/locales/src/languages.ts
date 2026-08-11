@@ -775,8 +775,9 @@ export const LANGUAGES = [
 // `LANGUAGES` declaration itself so `isolatedDeclarations` can emit its type
 // from the literal (a `satisfies` clause there would require an explicit
 // annotation and erase the literal narrowing the derived types depend on).
-const _languagesConform: readonly Language[] = LANGUAGES;
-void _languagesConform;
+// The widened view is what the code set below reads, so the check is a real
+// use rather than a value discarded to keep the compiler quiet.
+const CONFORMING_LANGUAGES: readonly Language[] = LANGUAGES;
 
 /** A single canonical-list entry, narrowed to literal values. */
 export type LanguageEntry = (typeof LANGUAGES)[number];
@@ -785,7 +786,7 @@ export type LanguageEntry = (typeof LANGUAGES)[number];
 export type LanguageCode = LanguageEntry["code"];
 
 const LANGUAGE_CODE_SET: ReadonlySet<string> = new Set(
-  LANGUAGES.map((language) => language.code),
+  CONFORMING_LANGUAGES.map((language) => language.code),
 );
 
 export const isLanguageCode = (value: unknown): value is LanguageCode =>
