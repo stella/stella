@@ -86,13 +86,23 @@ const readAddressList = async (
 ): Promise<MailAddress[]> =>
   normalizeAddresses(await readMaybeAsync(value, []));
 
-const readBodyText = async (item: Office.MailboxItem): Promise<string> => {
+const readBody = async (
+  item: Office.MailboxItem,
+): Promise<{ bodyHtml: string; bodyText: string }> => {
   if (!item.body) {
-    return "";
+    return { bodyHtml: "", bodyText: "" };
   }
   const body = item.body;
 
-  return await fromAsync((callback) => body.getAsync("text", callback));
+  const [bodyText, bodyHtml] = await Promise.all([
+    fromAsync((callback) => body.getAsync("text", callback)),
+    fromAsync((callback) => body.getAsync("html", callback)),
+  ]);
+
+  return {
+    bodyHtml,
+    bodyText,
+  };
 };
 
 const normalizeAttachment = (
@@ -197,18 +207,19 @@ export const loadMailSnapshot = async (
     item.normalizedSubject ?? "",
   );
   const from = normalizeAddress(await readMaybeAsync(item.from, undefined));
-  const [to, cc, bcc, bodyText, attachments] = await Promise.all([
+  const [to, cc, bcc, body, attachments] = await Promise.all([
     readAddressList(item.to),
     readAddressList(item.cc),
     readAddressList(item.bcc),
-    readBodyText(item),
+    readBody(item),
     readAttachments(item),
   ]);
 
   return {
     attachments,
     bcc,
-    bodyText,
+    bodyHtml: body.bodyHtml,
+    bodyText: body.bodyText,
     cc,
     conversationId: item.conversationId ?? null,
     from,
@@ -336,6 +347,8 @@ const createBrowserSampleSnapshot = (
     },
   ],
   bcc: [],
+  bodyHtml:
+    "<p>Hi team,</p><p>Please review the attached draft before Friday.</p>",
   bodyText:
     "Hi team,\n\nPlease review the attached draft SPA before Friday. Are we comfortable with the warranty cap and the disclosure schedule language?\n\nBest,\nClient",
   cc: [],

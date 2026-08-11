@@ -67,6 +67,7 @@ import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import {
   resolveStoredEmailFileName,
+  emailIngestFinalObjectCleanupFailure,
   validateEmailAttachmentCount,
   validateEmailAttachmentMimeType,
   validateEmailIngestContainer,
@@ -98,6 +99,8 @@ const NO_SUBJECT_NAME = "(No subject)";
 
 const ATTACHMENT_ENTITY_KIND = "document" as const;
 const ATTACHMENT_PREPARATION_CONCURRENCY = 4;
+const ATTACHMENT_PUBLICATION_CONCURRENCY = 4;
+const FINAL_OBJECT_CLEANUP_CONCURRENCY = 50;
 const FINAL_OBJECT_CLEANUP_TIMEOUT_MS = 15_000;
 
 type EmailIngestPurposeData = Extract<
@@ -441,7 +444,9 @@ export const finalizeEmailIngest = async function* ({
     });
   }
 
-  const cleanupFinalObjects = async (stage: string) => {
+  const cleanupFinalObjects = async (
+    stage: string,
+  ): Promise<Result<void, UploadFinalizeError>> => {
     const renewal = await renewFinalizeClaim({
       claimRequestId,
       safeDb,
@@ -459,23 +464,41 @@ export const finalizeEmailIngest = async function* ({
             }),
         { stage, messageEntityId, uploadId },
       );
-      return;
+      return Result.err(
+        new UploadFinalizeError({
+          status: 500,
+          message: "Could not establish ownership for email ingest cleanup",
+          rejectReason: "final-object-cleanup-failed",
+        }),
+      );
     }
 
-    await Promise.all(
-      writtenKeys.map(
-        async (key) =>
-          await withTimeout(
-            async (signal) => await deleteS3ObjectWithSignal(key, signal),
-            {
-              label: "email-ingest-final-object-cleanup",
-              timeoutMs: FINAL_OBJECT_CLEANUP_TIMEOUT_MS,
-            },
-          ).catch((deleteError: unknown) =>
-            captureError(deleteError, { key, stage, messageEntityId }),
-          ),
-      ),
-    );
+    const cleanupResults = await mapWithConcurrency({
+      items: writtenKeys,
+      limit: FINAL_OBJECT_CLEANUP_CONCURRENCY,
+      operation: async (key) =>
+        await Result.tryPromise({
+          try: async () =>
+            await withTimeout(
+              async (signal) => await deleteS3ObjectWithSignal(key, signal),
+              {
+                label: "email-ingest-final-object-cleanup",
+                timeoutMs: FINAL_OBJECT_CLEANUP_TIMEOUT_MS,
+              },
+            ),
+          catch: (cause) => cause,
+        }),
+    });
+    const failedCleanup = cleanupResults.find(Result.isError);
+    if (failedCleanup) {
+      captureError(failedCleanup.error, {
+        stage,
+        messageEntityId,
+        uploadId,
+      });
+      return Result.err(emailIngestFinalObjectCleanupFailure());
+    }
+    return Result.ok(undefined);
   };
 
   const promoteResult = await promoteTmpObject(messageFinalKey);
@@ -486,18 +509,18 @@ export const finalizeEmailIngest = async function* ({
   // Server-extracted attachments have no tmp object to promote. Bounded
   // retry uses the deterministic final keys above, so repeated writes are
   // idempotent after a timeout or finalize retry.
-  const writeResults = await Promise.all(
-    accepted.map(
-      async (attachment) =>
-        await Result.tryPromise(async () => {
-          await writeS3ObjectWithRetry({
-            contentType: attachment.mimeType,
-            data: attachment.buffer,
-            key: attachment.finalKey,
-          });
-        }),
-    ),
-  );
+  const writeResults = await mapWithConcurrency({
+    items: accepted,
+    limit: ATTACHMENT_PUBLICATION_CONCURRENCY,
+    operation: async (attachment) =>
+      await Result.tryPromise(async () => {
+        await writeS3ObjectWithRetry({
+          contentType: attachment.mimeType,
+          data: attachment.buffer,
+          key: attachment.finalKey,
+        });
+      }),
+  });
   const writeFailures = writeResults.filter(Result.isError);
   if (writeFailures.length > 0) {
     for (const failure of writeFailures) {
@@ -506,7 +529,10 @@ export const finalizeEmailIngest = async function* ({
         stage: "attachment-write",
       });
     }
-    await cleanupFinalObjects("attachment-write-failed");
+    const cleanupResult = await cleanupFinalObjects("attachment-write-failed");
+    if (Result.isError(cleanupResult)) {
+      return cleanupResult;
+    }
     return finalizeErr({
       status: 500,
       message: "Failed to store an email attachment",
@@ -786,11 +812,21 @@ export const finalizeEmailIngest = async function* ({
     return { status: "ok", finalized };
   });
   if (Result.isError(writeResultResult)) {
-    await cleanupFinalObjects("final-cleanup-after-db-error");
+    const cleanupResult = await cleanupFinalObjects(
+      "final-cleanup-after-db-error",
+    );
+    if (Result.isError(cleanupResult)) {
+      return cleanupResult;
+    }
   }
   const writeResult = yield* writeResultResult;
   if (writeResult.status !== "ok") {
-    await cleanupFinalObjects("final-cleanup-after-business-error");
+    const cleanupResult = await cleanupFinalObjects(
+      "final-cleanup-after-business-error",
+    );
+    if (Result.isError(cleanupResult)) {
+      return cleanupResult;
+    }
     return finalizeErr({
       status: 400,
       message: entityCreateWriteErrorMessage(writeResult.status),

@@ -12,6 +12,7 @@ import type { MailSnapshot } from "@/types";
 const snapshot = (overrides: Partial<MailSnapshot> = {}): MailSnapshot => ({
   attachments: [],
   bcc: [],
+  bodyHtml: "",
   bodyText: "",
   cc: [],
   conversationId: null,

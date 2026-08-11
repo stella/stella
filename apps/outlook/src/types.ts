@@ -16,6 +16,7 @@ export type OutlookAttachment = {
 export type MailSnapshot = {
   attachments: OutlookAttachment[];
   bcc: MailAddress[];
+  bodyHtml: string;
   bodyText: string;
   cc: MailAddress[];
   conversationId: string | null;

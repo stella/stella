@@ -3,10 +3,7 @@ import { Result } from "better-result";
 import { EML_MIME_TYPE, MSG_MIME_TYPE } from "@/api/lib/files/email-to-html";
 import { parseOutlookMsg } from "@/api/lib/files/outlook-msg";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
-import {
-  finalizeErr,
-  type UploadFinalizeError,
-} from "@/api/lib/uploads/runtime";
+import { finalizeErr, UploadFinalizeError } from "@/api/lib/uploads/runtime";
 
 /** Upper bound on attachments materialized per email. */
 const MAX_EMAIL_ATTACHMENTS = 50;
@@ -23,6 +20,18 @@ export const validateEmailAttachmentCount = (
     rejectReason: "too-many-attachments",
   });
 };
+
+/**
+ * Final-object cleanup is retryable storage work. Keep it transient so the
+ * upload FSM leaves the pending row in `failed` and the recovery sweep can
+ * retry the persisted object keys.
+ */
+export const emailIngestFinalObjectCleanupFailure = (): UploadFinalizeError =>
+  new UploadFinalizeError({
+    status: 500,
+    message: "Failed to clean up email ingest objects",
+    rejectReason: "final-object-cleanup-failed",
+  });
 
 export const validateEmailAttachmentMimeType = (
   buffer: Uint8Array,
@@ -74,12 +83,14 @@ export const detectEmailContainer = (
     buffer.subarray(0, EMAIL_HEADER_LIMIT_BYTES),
   );
   const headerEnd = headerSample.search(/\r?\n\r?\n/u);
-  if (headerEnd === -1) {
-    return null;
-  }
-  return EMAIL_HEADER_PATTERN.test(headerSample.slice(0, headerEnd))
-    ? "eml"
-    : null;
+  // Keep this detector bounded. A valid header can contain a very large
+  // folded field, so its separator may fall outside the sample. Seeing a
+  // standard RFC 5322 header before that boundary is enough to classify the
+  // bytes as an email; rejecting a false positive attachment is safer than
+  // allowing a nested message to bypass the MIME guard.
+  const headerText =
+    headerEnd === -1 ? headerSample : headerSample.slice(0, headerEnd);
+  return EMAIL_HEADER_PATTERN.test(headerText) ? "eml" : null;
 };
 
 export const validateEmailIngestContainer = (
