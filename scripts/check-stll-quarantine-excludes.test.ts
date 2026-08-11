@@ -21,6 +21,17 @@ minimumReleaseAgeExcludes = [
 `;
 
 describe("quarantine exclude guard", () => {
+  test("rejects every undated third-party exclusion", () => {
+    const result = checkQuarantineExcludes({
+      bunfig: createBunfig('"better-result",'),
+      lockfile,
+    });
+
+    expect(result.errors).toContain(
+      'bunfig.toml third-party quarantine exclude "better-result" is missing an exact UTC expiry',
+    );
+  });
+
   test("accepts a temporary exclusion before its exact expiry", () => {
     const result = checkQuarantineExcludes({
       bunfig: createBunfig(
@@ -96,7 +107,9 @@ describe("quarantine exclude guard", () => {
   // too, and the coverage check silently stopped requiring it.
   test("counts a registry package followed by a workspace member", () => {
     const result = checkQuarantineExcludes({
-      bunfig: createBunfig('"better-result",'),
+      bunfig: createBunfig(
+        '"better-result", # quarantine-expires: 2099-01-01T00:00:00.000Z',
+      ),
       lockfile: `
 "packages": {
   "@stll/native": ["@stll/native@1.0.0", "", {}, "sha512-test"],
@@ -119,7 +132,7 @@ minimumReleaseAgeExcludes = [
   # Security patches for dependency-audit findings.
   "brace-expansion", # quarantine-expires: 2026-08-04T10:00:32.762Z
   "fast-uri", # quarantine-expires: 2026-08-05T09:16:56.212Z
-  "drizzle-kit",
+  "drizzle-kit", # quarantine-expires: 2099-01-01T00:00:00.000Z
 ]
 `;
     const result = pruneExpiredExcludes({
@@ -192,7 +205,9 @@ minimumReleaseAgeExcludes = [
 
   test("retains the first-party package coverage guard", () => {
     const result = checkQuarantineExcludes({
-      bunfig: createBunfig('"better-result",'),
+      bunfig: createBunfig(
+        '"better-result", # quarantine-expires: 2099-01-01T00:00:00.000Z',
+      ),
       lockfile: `${lockfile}\n"@stll/missing": ["@stll/missing@1.0.0"]`,
     });
 

@@ -62,6 +62,22 @@ const readExcludes = (bunfig: string): Set<string> => {
   );
 };
 
+const readUndatedThirdPartyExcludes = (bunfig: string): string[] =>
+  readExcludeBlock(bunfig)
+    .split("\n")
+    .flatMap((line) => {
+      const match = /^\s*"(?<name>[^"]+)",?\s*(?:#.*)?$/u.exec(line);
+      const name = match?.groups?.["name"];
+      if (
+        name === undefined ||
+        name.startsWith("@stll/") ||
+        line.includes(EXPIRY_MARKER)
+      ) {
+        return [];
+      }
+      return [name];
+    });
+
 type TemporaryExclude = {
   name: string;
   expiresAt: string;
@@ -193,6 +209,12 @@ export const checkQuarantineExcludes = ({
     .sort();
   const temporary = readTemporaryExcludes(bunfig);
   const errors = [...temporary.errors];
+
+  for (const name of readUndatedThirdPartyExcludes(bunfig)) {
+    errors.push(
+      `${BUNFIG} third-party quarantine exclude "${name}" is missing an exact UTC expiry`,
+    );
+  }
 
   if (missing.length > 0) {
     errors.push(
