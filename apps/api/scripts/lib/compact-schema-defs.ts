@@ -245,9 +245,17 @@ const findReservedKeyword = (node: unknown): string | null => {
 const byteLengthOf = (value: string): number =>
   Buffer.byteLength(value, "utf8");
 
-/** Net bytes saved by keeping `name` as a def rather than inlining it back. */
+/**
+ * Net bytes saved by keeping `name` as a def rather than inlining it back.
+ *
+ * Kept, the schema pays the body once inside `$defs`, one ref node per
+ * occurrence, and the `$defs` key. Inlined, it pays the body once per
+ * occurrence. Every ref node is a cost of keeping, including the one that
+ * replaces the occurrence the def body stands in for.
+ */
 const savingOf = (body: unknown, refCount: number): number =>
-  (refCount - 1) * (byteLengthOf(JSON.stringify(body)) - REF_NODE_BYTES) -
+  (refCount - 1) * byteLengthOf(JSON.stringify(body)) -
+  refCount * REF_NODE_BYTES -
   DEF_ENTRY_OVERHEAD_BYTES;
 
 /**

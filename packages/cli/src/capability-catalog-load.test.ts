@@ -94,6 +94,37 @@ describe("parseCapabilityCatalog fail-closed parsing", () => {
     expect(parseCapabilityCatalog([withoutSchema])).toBeNull();
   });
 
+  test("carries a compacted schema through unchanged", () => {
+    // The loader is the only path a compacted schema takes from the committed
+    // artifact to the expander. Dropping `$defs`, or any one of the three
+    // parts, would leave a leaf whose refs resolve to nothing.
+    const inputSchema = {
+      $defs: {
+        s_0123456789ab: {
+          type: "object",
+          properties: { operator: { type: "string" }, value: {} },
+          required: ["operator"],
+        },
+      },
+      body: {
+        type: "object",
+        properties: {
+          where: { $ref: "#/$defs/s_0123456789ab" },
+          having: { $ref: "#/$defs/s_0123456789ab" },
+        },
+      },
+      params: {
+        type: "object",
+        properties: { workspaceId: { type: "string" } },
+      },
+      query: { type: "object", properties: { limit: { type: "number" } } },
+    };
+
+    expect(
+      parseCapabilityCatalog([validEntry({ inputSchema })])?.at(0)?.inputSchema,
+    ).toEqual(inputSchema);
+  });
+
   test("absent optional fields are dropped, not defaulted", () => {
     const entry = parseCapabilityCatalog([validEntry()])?.at(0);
     expect(entry).toBeDefined();

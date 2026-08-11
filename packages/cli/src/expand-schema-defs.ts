@@ -104,20 +104,28 @@ const expandValue = (
     if (name === null) {
       return EXPANSION_FAILED;
     }
-    const target = state.defs[name];
     // An unknown name or a name already on the resolution path is a corrupt
     // artifact: the compactor only ever emits refs to defs it wrote, and a
     // subschema cannot structurally contain itself, so no cycle can arise from
     // a well-formed export.
-    if (target === undefined || state.resolving.has(name)) {
+    //
+    // `Object.hasOwn` rather than a plain read: `state.defs` comes from
+    // `JSON.parse` and still inherits `Object.prototype`, so a ref to
+    // `#/$defs/constructor` would otherwise resolve to an inherited function
+    // and be inlined as a lost subtree instead of failing loudly.
+    if (!Object.hasOwn(state.defs, name) || state.resolving.has(name)) {
       return EXPANSION_FAILED;
     }
+    const target = state.defs[name];
     state.resolving.add(name);
     const expanded = expandValue(target, depth + 1, state);
     state.resolving.delete(name);
     return expanded;
   }
-  const expanded: JsonRecord = {};
+  // Null-prototype accumulator: a JSON-parsed object can carry an own
+  // `__proto__` key, and assigning it on an ordinary object would invoke the
+  // prototype setter instead of creating the key.
+  const expanded: JsonRecord = Object.create(null) as JsonRecord;
   for (const [key, child] of Object.entries(value)) {
     const expandedChild = expandValue(child, depth + 1, state);
     if (expandedChild === EXPANSION_FAILED) {
