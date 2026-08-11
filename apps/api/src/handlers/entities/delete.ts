@@ -41,6 +41,10 @@ import {
 } from "@/api/lib/ocr-derivative-pages";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { getSearchProvider } from "@/api/lib/search/provider";
+import { MAX_EMAIL_ATTACHMENTS } from "@/api/lib/uploads/email-ingest-policy";
+
+const MAX_MESSAGE_ATTACHMENT_CHILDREN_PER_DELETE =
+  LIMITS.entitiesPageSizeMax * MAX_EMAIL_ATTACHMENTS;
 
 import { selectCanonicalFileContents } from "./delete-file-snapshot";
 
@@ -159,8 +163,20 @@ export const deleteEntitiesHandler = async function* ({
                 ),
               )
               .orderBy(asc(entities.id))
-              .limit(LIMITS.entitiesPageSizeMax)
+              .limit(MAX_MESSAGE_ATTACHMENT_CHILDREN_PER_DELETE + 1)
               .for("update");
+      if (
+        lockedAttachmentEntities.length >
+        MAX_MESSAGE_ATTACHMENT_CHILDREN_PER_DELETE
+      ) {
+        return {
+          status: "rejected" as const,
+          error: new HandlerError({
+            status: 422,
+            message: "Too many message attachments to delete in one request",
+          }),
+        };
+      }
       const entityIdsToDelete = [
         ...new Set([
           ...body.entityIds,
