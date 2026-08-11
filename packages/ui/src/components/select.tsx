@@ -11,6 +11,7 @@ import {
   ChevronUpIcon,
 } from "lucide-react";
 
+import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/lib/overlay-layer";
 import { cn } from "@stll/ui/lib/utils";
 
 type SelectItemProps = SelectPrimitive.Item.Props & {
@@ -173,7 +174,7 @@ const SelectPopup = ({
       align={align}
       alignItemWithTrigger={alignItemWithTrigger}
       alignOffset={alignOffset}
-      className="z-50 select-none"
+      className={cn(OVERLAY_LAYER_CLASS_NAMES.popup, "select-none")}
       collisionAvoidance={collisionAvoidance}
       data-slot="select-positioner"
       side={side}

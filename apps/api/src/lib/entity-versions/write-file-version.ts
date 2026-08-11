@@ -33,6 +33,10 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 export type FileVersionWritePolicy =
   | { type: "replace-current-file" }
   | {
+      type: "replace-current-file-from-version";
+      expectedCurrentVersionId: SafeId<"entityVersion">;
+    }
+  | {
       type: "automatic-docx-edit";
       expectedCurrentVersionId: SafeId<"entityVersion">;
       filePropertyId: SafeId<"property">;
@@ -161,6 +165,9 @@ export const writeFileVersion = async ({
     case "replace-current-file": {
       break;
     }
+    case "replace-current-file-from-version": {
+      break;
+    }
     case "automatic-docx-edit": {
       await lockDocxEditTarget({
         entityId,
@@ -213,7 +220,7 @@ export const writeFileVersion = async ({
 
   const currentVersionId = lockedEntity.currentVersionId;
   if (
-    writePolicy.type === "automatic-docx-edit" &&
+    writePolicy.type !== "replace-current-file" &&
     currentVersionId !== writePolicy.expectedCurrentVersionId
   ) {
     return { status: "current-version-changed" };

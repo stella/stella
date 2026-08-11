@@ -52,6 +52,9 @@ export const EmptyScreen = ({
   const sizeClass = hasMedia
     ? "min-h-[520px] flex-1 px-6 py-12"
     : "min-h-0 px-4 py-12 sm:py-16";
+  const helpBarPaddingClass = showHelpBar
+    ? "[@media(min-height:820px)]:pb-28"
+    : undefined;
   let layoutClass = "items-center justify-center";
 
   if (hasMedia && isBottomMedia) {
@@ -111,6 +114,7 @@ export const EmptyScreen = ({
         "relative flex flex-col overflow-hidden",
         sizeClass,
         layoutClass,
+        helpBarPaddingClass,
         className,
       )}
     >
@@ -263,7 +267,10 @@ const HelpBar = ({ docsHref, supportEmail }: HelpBarProps) => {
   const tEmptyScreen = useTranslations("common.emptyScreen");
 
   return (
-    <div className="pointer-events-none fixed inset-x-6 bottom-6 z-20 hidden [@media(min-height:820px)]:block">
+    // Anchored to the EmptyScreen section (which is `relative`), not the
+    // viewport: `fixed` centred the bar across the whole window, so on a split
+    // view it drifted out of the empty pane and straddled the divider.
+    <div className="pointer-events-none absolute inset-x-6 bottom-6 z-20 hidden [@media(min-height:820px)]:block">
       <div className="border-border/80 bg-background/85 text-muted-foreground pointer-events-auto mx-auto flex max-w-xl items-center justify-center gap-2 rounded-xl border px-4 py-3 text-center text-sm shadow-xs backdrop-blur">
         <CircleHelpIcon className="text-primary size-4 shrink-0" />
         <span>

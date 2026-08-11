@@ -7,6 +7,7 @@ import { ChevronRightIcon } from "lucide-react";
 
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { renderTooltipTrigger } from "@stll/ui/components/tooltip-trigger-helper";
+import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/lib/overlay-layer";
 import { cn } from "@stll/ui/lib/utils";
 
 const MenuCreateHandle = MenuPrimitive.createHandle;
@@ -48,7 +49,7 @@ const MenuPopup = ({
       align={anchor ? "start" : align}
       alignOffset={alignOffset}
       anchor={anchor}
-      className="z-50"
+      className={OVERLAY_LAYER_CLASS_NAMES.popup}
       data-slot="menu-positioner"
       side={anchor ? "bottom" : side}
       sideOffset={sideOffset}

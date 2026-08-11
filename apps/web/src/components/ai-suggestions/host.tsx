@@ -46,6 +46,7 @@ import {
   TooltipPopup,
   TooltipTrigger,
 } from "@stll/ui/components/tooltip";
+import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/lib/overlay-layer";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useChatComposerWiring } from "@/components/chat-editor-provider";
@@ -405,7 +406,12 @@ type DockedComposerProps = {
  * it (z-30) so an open thread wins the overlap.
  */
 export const DockedComposer = ({ chips, bar, dock }: DockedComposerProps) => (
-  <div className="pointer-events-none absolute inset-x-0 bottom-3.5 z-[80] flex flex-col items-center">
+  <div
+    className={cn(
+      "pointer-events-none absolute inset-x-0 bottom-3.5 flex flex-col items-center",
+      OVERLAY_LAYER_CLASS_NAMES.chrome,
+    )}
+  >
     <ComposerVeil variant="pane" />
     {chips !== undefined && (
       <div

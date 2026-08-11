@@ -556,7 +556,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
 
   const metadataLabels = useMemo(
     () => ({
-      [FILESYSTEM_CREATED_BY_ID]: t("workspaces.filesystem.author"),
+      [FILESYSTEM_CREATED_BY_ID]: t("common.author"),
       [FILESYSTEM_UPDATED_AT_ID]: t("workspaces.filesystem.lastUpdated"),
       [FILESYSTEM_VERSION_ID]: t("common.version"),
     }),

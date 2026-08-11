@@ -430,7 +430,13 @@ export type ForbiddenRule = {
   concept: string;
   triggers: string[];
   keyTriggers: string[];
+  // Substrings that exempt a key from this concept's bans entirely (see
+  // glossary `keyExempt`).
+  keyExempt: string[];
   byLocale: Record<string, string[]>;
+  // Forms banned in every string, with no concept gate (see glossary
+  // `forbiddenAlways`).
+  byLocaleAlways: Record<string, string[]>;
   // Forms enforced on key-trigger hits, and on the word trigger unless the
   // source matches `sourceExempt`.
   byLocaleOnKey: Record<string, string[]>;
@@ -444,7 +450,8 @@ export type ForbiddenRule = {
  * English trigger word(s) and/or `keyTriggers`. A forbidden rendering is only
  * flagged when the source string is actually about that concept (or the key
  * path declares it); otherwise a common word (e.g. Estonian "asi") would
- * false-fire on unrelated strings.
+ * false-fire on unrelated strings. `forbiddenAlways` opts out of that gate for
+ * wording that is wrong in every context.
  */
 export const buildForbiddenRules = (glossary: Glossary): ForbiddenRule[] => {
   const rules: ForbiddenRule[] = [];
@@ -453,14 +460,16 @@ export const buildForbiddenRules = (glossary: Glossary): ForbiddenRule[] => {
     ...glossary.legalConcepts,
     ...glossary.nouns,
   ]) {
-    if (!term.forbidden && !term.forbiddenOnKey) {
+    if (!term.forbidden && !term.forbiddenOnKey && !term.forbiddenAlways) {
       continue;
     }
     rules.push({
       concept: term.id,
       triggers: [term.en],
       keyTriggers: term.keyTriggers ?? [],
+      keyExempt: term.keyExempt ?? [],
       byLocale: { ...term.forbidden },
+      byLocaleAlways: { ...term.forbiddenAlways },
       byLocaleOnKey: { ...term.forbiddenOnKey },
       sourceExempt: (term.sourceExempt ?? []).map((s) => s.toLowerCase()),
     });
@@ -473,7 +482,8 @@ export const buildForbiddenRules = (glossary: Glossary): ForbiddenRule[] => {
  * A rule fires when the English source contains its trigger word, or when the
  * flattened key path contains one of its `keyTriggers` (the latter catches
  * keys whose English wording never names the concept). Pass `key` to enable
- * key-path triggering; omit it for source-only checks.
+ * key-path triggering; omit it for source-only checks. `forbiddenAlways` forms
+ * are checked regardless of either trigger.
  */
 export const findForbiddenTerms = (
   source: string,
@@ -484,6 +494,23 @@ export const findForbiddenTerms = (
 ): string[] => {
   const hits: string[] = [];
   for (const rule of rules) {
+    // An exempt key opts out of every ban this concept carries, including the
+    // ungated `byLocaleAlways` ones: the key reproduces another product's
+    // vocabulary, where the house rendering would name the wrong thing.
+    if (
+      key !== undefined &&
+      rule.keyExempt.some((exempt) => key.includes(exempt))
+    ) {
+      continue;
+    }
+    // `byLocaleAlways` bans skip the concept gate entirely: they cover wording
+    // that is wrong wherever it appears, including in a string whose English
+    // source has already been reworded away from the concept.
+    for (const term of rule.byLocaleAlways[locale] ?? []) {
+      if (containsWord(target, term, locale)) {
+        hits.push(term);
+      }
+    }
     const wordFires = rule.triggers.some((trigger) =>
       containsWord(source, trigger, "en"),
     );

@@ -9,13 +9,15 @@ import {
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { entities, entityVersions, fields, properties } from "@/api/db/schema";
-import { createSafeDb } from "@/api/db/scoped";
+import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { createEntitiesHandler } from "@/api/handlers/entities/create";
+import { updateDocumentProperties } from "@/api/handlers/files/update-document-properties";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
+import type { FileVersionWritePolicy } from "@/api/lib/entity-versions/write-file-version";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -30,6 +32,7 @@ setDefaultTimeout(120_000);
 let testDb: TestDatabase;
 let ids: TestIds;
 let safeDb: SafeDb;
+let scopedDb: ScopedDb;
 const createdEntityIds: SafeId<"entity">[] = [];
 const filePropertyId = createSafeId<"property">();
 const recordAuditEvent: AuditRecorder = async () => undefined;
@@ -40,6 +43,9 @@ beforeAll(async () => {
   ids = fixture.ids;
   safeDb = asTestRaw<SafeDb>(
     createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+  );
+  scopedDb = asTestRaw<ScopedDb>(
+    createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
   );
 
   await testDb.insert(properties).values({
@@ -84,7 +90,15 @@ const createEmptyEntity = async (kind: "document" | "folder") => {
   return created.value.entityId;
 };
 
-const writeTestFile = async (entityId: SafeId<"entity">) =>
+type WriteTestFileOptions = {
+  scanWarnings?: string[];
+  writePolicy?: FileVersionWritePolicy;
+};
+
+const writeTestFile = async (
+  entityId: SafeId<"entity">,
+  options: WriteTestFileOptions = {},
+) =>
   await safeDb(
     async (tx) =>
       await writeFileVersion({
@@ -104,7 +118,8 @@ const writeTestFile = async (entityId: SafeId<"entity">) =>
         sha256Hex:
           "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         source: null,
-        writePolicy: { type: "replace-current-file" },
+        scanWarnings: options.scanWarnings,
+        writePolicy: options.writePolicy ?? { type: "replace-current-file" },
       }),
   );
 
@@ -197,5 +212,128 @@ describe("first file version persistence", () => {
         eq(entityVersions.entityId, entityId),
       ),
     ).toBe(1);
+  });
+
+  test("rejects derived bytes when the current version changed before the lock", async () => {
+    const entityId = await createEmptyEntity("document");
+    const original = await testDb.query.entities.findFirst({
+      where: { id: { eq: entityId } },
+      columns: { currentVersionId: true },
+    });
+    if (!original?.currentVersionId) {
+      throw new Error("Created document has no current version");
+    }
+
+    const interveningWrite = await writeTestFile(entityId);
+    if (Result.isError(interveningWrite)) {
+      throw interveningWrite.error;
+    }
+    if (interveningWrite.value.status !== "ok") {
+      throw new Error(
+        `Intervening write failed: ${interveningWrite.value.status}`,
+      );
+    }
+
+    const staleWrite = await writeTestFile(entityId, {
+      writePolicy: {
+        type: "replace-current-file-from-version",
+        expectedCurrentVersionId: original.currentVersionId,
+      },
+    });
+    if (Result.isError(staleWrite)) {
+      throw staleWrite.error;
+    }
+
+    expect(staleWrite.value).toEqual({ status: "current-version-changed" });
+    const after = await testDb.query.entities.findFirst({
+      where: { id: { eq: entityId } },
+      columns: { currentVersionId: true },
+    });
+    expect(after?.currentVersionId).toBe(
+      interveningWrite.value.entityVersionId,
+    );
+    expect(
+      await testDb.$count(
+        entityVersions,
+        eq(entityVersions.entityId, entityId),
+      ),
+    ).toBe(2);
+  });
+
+  test("rejects a document-property write against a historical field", async () => {
+    const entityId = await createEmptyEntity("document");
+    const historical = await writeTestFile(entityId);
+    if (Result.isError(historical)) {
+      throw historical.error;
+    }
+    if (historical.value.status !== "ok") {
+      throw new Error(`Initial write failed: ${historical.value.status}`);
+    }
+    const current = await writeTestFile(entityId);
+    if (Result.isError(current)) {
+      throw current.error;
+    }
+    if (current.value.status !== "ok") {
+      throw new Error(`Current write failed: ${current.value.status}`);
+    }
+
+    const result = await updateDocumentProperties({
+      fieldId: historical.value.fieldId,
+      organizationId: ids.orgA,
+      recordAuditEvent,
+      safeDb,
+      scopedDb,
+      userId: ids.userA1,
+      values: { author: "Historical author" },
+      workspaceId: ids.wsA1,
+    });
+
+    expect(result).toMatchObject({ code: 404 });
+    const after = await testDb.query.entities.findFirst({
+      where: { id: { eq: entityId } },
+      columns: { currentVersionId: true },
+    });
+    expect(after?.currentVersionId).toBe(current.value.entityVersionId);
+    expect(
+      await testDb.$count(
+        entityVersions,
+        eq(entityVersions.entityId, entityId),
+      ),
+    ).toBe(3);
+  });
+
+  test("preserves scan warnings on a version derived from current bytes", async () => {
+    const entityId = await createEmptyEntity("document");
+    const warnings = ["Contains VBA", "Contains an external relationship"];
+    const uploaded = await writeTestFile(entityId, { scanWarnings: warnings });
+    if (Result.isError(uploaded)) {
+      throw uploaded.error;
+    }
+    if (uploaded.value.status !== "ok") {
+      throw new Error(`Initial write failed: ${uploaded.value.status}`);
+    }
+
+    const derived = await writeTestFile(entityId, {
+      scanWarnings: warnings,
+      writePolicy: {
+        type: "replace-current-file-from-version",
+        expectedCurrentVersionId: uploaded.value.entityVersionId,
+      },
+    });
+    if (Result.isError(derived)) {
+      throw derived.error;
+    }
+    if (derived.value.status !== "ok") {
+      throw new Error(`Derived write failed: ${derived.value.status}`);
+    }
+
+    const current = await testDb.query.entities.findFirst({
+      where: { id: { eq: entityId } },
+      with: { currentVersion: { with: { fields: true } } },
+    });
+    expect(current?.currentVersion?.fields.at(0)?.content).toMatchObject({
+      type: "file",
+      scanWarnings: warnings,
+    });
   });
 });

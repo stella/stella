@@ -270,7 +270,7 @@ export const OwnerPicker = ({
         {owner ? (
           <UserIdentity
             as="span"
-            avatarClassName="size-4 text-[10px]"
+            avatarClassName="size-4 shrink-0 text-[10px]"
             className="gap-1.5"
             deleted={hasDeletedAccount(owner.deletedAt)}
             image={owner.image}

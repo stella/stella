@@ -110,7 +110,7 @@
         "title": "An AI agent that works across your matters, files, and tools."
       },
       "anonymization": {
-        "blurb": "Remove names, entities, and identifying details before material reaches AI, directly from chat and document review, with a redacted result you can check before anything moves on.",
+        "blurb": "Remove names, organisations, and identifying details before material reaches AI, directly from chat and document review, with a redacted result you can check before anything moves on.",
         "discover": "Discover Anonymization",
         "eyebrow": "Anonymization",
         "title": "Prepare material for AI without exposing identifying details."
@@ -263,7 +263,7 @@
       },
       "capabilities": {
         "0": {
-          "body": "Removes names, entities, and identifying details before material reaches an AI step.",
+          "body": "Removes names, organisations, and identifying details before material reaches an AI step.",
           "title": "Keeps identifying details out"
         },
         "1": {
@@ -288,20 +288,20 @@
           "question": "Is anonymization available now?"
         },
         "1": {
-          "answer": "Preparing material for AI workflows without exposing names, entities, or identifying details, while keeping the redacted result available for review.",
+          "answer": "Preparing material for AI workflows without exposing names, organisations, or identifying details, while keeping the redacted result available for review.",
           "question": "What does it help with?"
         }
       },
-      "metaDescription": "Remove names, entities, and identifying details before material reaches AI, directly from chat and document review, with a redacted result you can check.",
+      "metaDescription": "Remove names, organisations, and identifying details before material reaches AI, directly from chat and document review, with a redacted result you can check.",
       "metaTitle": "Document anonymization for legal AI | stella",
       "quickAnswer": {
-        "answer": "It removes names, entities, and identifying details before material enters an AI workflow, and shows you the redacted result so you can confirm what leaves the matter. It is integrated directly into chat and document review.",
+        "answer": "It removes names, organisations, and identifying details before material enters an AI workflow, and shows you the redacted result so you can confirm what leaves the matter. It is integrated directly into chat and document review.",
         "question": "What is anonymization in stella?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Keeps names, entities, and identifying details out of AI steps",
+            "0": "Keeps names, organisations, and identifying details out of AI steps",
             "1": "Built for legal AI workflows rather than generic document masking",
             "2": "Leaves a reviewable redacted document before the next step"
           },

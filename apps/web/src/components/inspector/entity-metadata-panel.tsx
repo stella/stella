@@ -1,4 +1,4 @@
-import type { PropsWithChildren } from "react";
+import type { PropsWithChildren, ReactNode } from "react";
 import {
   useCallback,
   useOptimistic,
@@ -17,9 +17,11 @@ import { useTranslations } from "use-intl";
 
 import { cn } from "@stll/ui/lib/utils";
 
+import { DocumentPropertiesSection } from "@/components/inspector/document-properties-section";
 import { MetadataPanelSkeleton } from "@/components/inspector/file-facets";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import Tooltip from "@/components/tooltip";
+import { UserIdentity } from "@/components/user-avatar";
 import { CreateProperty } from "@/components/workspaces/create-property";
 import { EditableField } from "@/components/workspaces/editable-field";
 import { Justification } from "@/components/workspaces/justification";
@@ -34,6 +36,10 @@ import type {
   PropertyId,
   WorkspaceProperty,
 } from "@/lib/types";
+import {
+  isPlaybookVerdictProperty,
+  playbookVerdictByAskId,
+} from "@/lib/workspaces/playbook-verdicts";
 import { entitiesKeys, entityOptions } from "@/lib/workspaces/queries/entities";
 import { entityVersionsOptions } from "@/lib/workspaces/queries/entity-versions";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
@@ -326,14 +332,13 @@ const EntityMetadataContent = ({
     />
   );
 
-  // Resolve the current version (if loaded) for the Document info section.
+  // Resolve the current version (if loaded) for the stella record section.
   // We never block render on this — the section just shows a muted dash
   // until the versions query resolves.
   const currentVersion =
     versionsData?.versions.find(
       (v) => v.id === versionsData.currentVersionId,
     ) ?? null;
-  const authorLabel = currentVersion?.author?.name ?? null;
   const versionLabel = currentVersion
     ? t("inspector.metadata.versionCurrent", {
         version: String(currentVersion.versionNumber),
@@ -341,138 +346,205 @@ const EntityMetadataContent = ({
     : null;
   const updatedAtIso = currentVersion?.createdAt ?? null;
 
+  // A verdict is one fact with the value it grades, so it is never listed on
+  // its own. `playbook-verdicts` owns that rule for every surface; this panel
+  // used to rediscover it and got it wrong, rendering each grade as a row
+  // stranded from its answer.
+  const verdictPropertyByAskId = playbookVerdictByAskId(optimisticProperties);
+  const isVerdictField = (field: FieldInfoRow) => {
+    const property = visiblePropertyById.get(field.propertyId);
+    return property !== undefined && isPlaybookVerdictProperty(property);
+  };
+
+  /** The verdict row grading a given ASK property, if this entity has one. */
+  const verdictFieldByAskId = new Map<string, FieldInfoRow>();
+  for (const field of visibleFields) {
+    const property = visiblePropertyById.get(field.propertyId);
+    if (property !== undefined && isPlaybookVerdictProperty(property)) {
+      verdictFieldByAskId.set(property.tool.askPropertyId, field);
+    }
+  }
+
+  // The groups answer different questions and must not be mixed: what stella
+  // recorded, what the file says about itself, and the matter's own columns.
+  // Whether AI or a person filled a column is not a different question — it is
+  // an attribute of the row — so both live in one list.
+  const columnFields = visibleFields.filter((field) => !isVerdictField(field));
+
+  const renderField = (field: FieldInfoRow) => {
+    const property = visiblePropertyById.get(field.propertyId);
+    if (!property) {
+      return null;
+    }
+    const isPending = field.content?.type === "pending";
+    const isAiField = property.tool.type === "ai-model";
+    const canJustify =
+      isAiField &&
+      onAiFieldClick !== undefined &&
+      field.content !== undefined &&
+      field.content.type !== "pending" &&
+      field.content.type !== "error";
+    const isActive = isAiField && field.id === activeJustificationFieldId;
+    const handleJustifyClick = canJustify
+      ? () =>
+          onAiFieldClick({
+            fieldId: field.id,
+            propertyId: field.propertyId,
+          })
+      : undefined;
+    // The grade belongs beside the value it grades, not in a row of its own:
+    // "missing" means nothing without the answer it was reached from.
+    const verdictField = verdictFieldByAskId.get(property.id);
+    const verdictProperty = verdictPropertyByAskId.get(property.id);
+    const fieldBody = (
+      <>
+        <span
+          className={cn(
+            "text-foreground-strong-muted inline-flex items-center gap-1 text-[10px] font-medium tracking-wide uppercase",
+            isPending && "opacity-60",
+          )}
+        >
+          {/* Carries what the AI section heading used to say, now per row:
+              which columns AI filled is a fact about the column, not a
+              separate kind of metadata. */}
+          {isAiField && (
+            <Sparkles
+              aria-label={t("inspector.metadata.aiExtractedHeading")}
+              className="text-primary size-3 shrink-0"
+            />
+          )}
+          {property.name}
+          {verdictField !== undefined && verdictProperty !== undefined && (
+            <span className="normal-case">
+              <EditableField
+                content={verdictField.content}
+                entityId={entity.entityId}
+                entityKind={entity.kind}
+                property={verdictProperty}
+                propertyId={verdictField.propertyId}
+                readonly
+                workspaceId={workspaceId}
+              />
+            </span>
+          )}
+        </span>
+        <div className="text-foreground text-sm leading-snug">
+          <EditableField
+            content={field.content}
+            entityKind={entity.kind}
+            entityId={entity.entityId}
+            property={property}
+            propertyId={field.propertyId}
+            readonly={isAiField}
+            workspaceId={workspaceId}
+          />
+        </div>
+      </>
+    );
+    if (handleJustifyClick) {
+      return (
+        <div
+          className={cn(
+            "rounded-md transition-colors",
+            isActive && "bg-accent",
+          )}
+          key={field.id + field.propertyId}
+        >
+          <button
+            aria-pressed={isActive}
+            className={cn(
+              "flex w-full flex-col gap-1 rounded-md px-2 py-2 text-start transition-colors",
+              !isActive && "hover:bg-accent",
+            )}
+            onClick={handleJustifyClick}
+            type="button"
+          >
+            {fieldBody}
+          </button>
+          {isActive && activeJustification && fileFieldId !== null && (
+            <div className="border-s-primary mx-2 mb-2 max-h-48 overflow-y-auto border-s-2 ps-3">
+              <div className="text-primary mb-1 text-[10px] font-semibold tracking-wide uppercase">
+                {t("workspaces.justification")}
+              </div>
+              <div className="text-foreground-strong-muted text-xs leading-relaxed break-words">
+                <Justification
+                  justification={activeJustification}
+                  workspaceId={workspaceId}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+    return (
+      <div
+        className="flex flex-col gap-1 rounded-md px-2 py-2"
+        key={field.id + field.propertyId}
+      >
+        {fieldBody}
+      </div>
+    );
+  };
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <SectionHeading>
-          {t("inspector.metadata.documentInfoHeading")}
-        </SectionHeading>
+        <SectionHeading>{t("inspector.metadata.stellaHeading")}</SectionHeading>
         <div className="flex flex-col gap-px px-2 pb-2">
-          <ReadOnlyRow
-            label={t("inspector.metadata.author")}
-            value={authorLabel}
+          {/* A person is shown as a person here, the same as everywhere else
+              in the app; a bare name in a panel of machine fields read as one
+              more string. Version and its timestamp answer the same question
+              ("which revision am I looking at, and when"), so they share a
+              row instead of being read as two unrelated facts. */}
+          <PersonRow
+            label={t("inspector.metadata.lastUpdatedBy")}
+            person={currentVersion?.author ?? null}
           />
-          <ReadOnlyRow label={t("common.version")} value={versionLabel} />
-          {updatedAtIso !== null && (
-            <ReadOnlyRow
-              label={t("inspector.metadata.updatedAt")}
-              title={formatFullTimestamp(updatedAtIso)}
-              value={formatRelativeTime(updatedAtIso)}
-            />
-          )}
+          <ReadOnlyRow
+            label={t("common.version")}
+            title={
+              updatedAtIso === null
+                ? undefined
+                : formatFullTimestamp(updatedAtIso)
+            }
+            value={
+              versionLabel === null || updatedAtIso === null
+                ? versionLabel
+                : `${versionLabel} · ${formatRelativeTime(updatedAtIso)}`
+            }
+          />
         </div>
 
+        {fileFieldId !== null && (
+          <>
+            <SectionHeading>
+              {t("inspector.metadata.documentProperties.heading")}
+            </SectionHeading>
+            <DocumentPropertiesSection
+              fileFieldId={fileFieldId}
+              workspaceId={workspaceId}
+            />
+          </>
+        )}
+
+        {/* One list, not an AI section beside a manual one: those named
+            different things — who produced the value, and what the value is —
+            so they read as alternatives when an AI-filled column is also a
+            column. Which ones AI filled is a property of the row, and the
+            sparkle already says it. */}
         <SectionHeading>
           {t("inspector.metadata.matterColumnsHeading")}
         </SectionHeading>
-        {visibleFields.length === 0 ? (
+        {columnFields.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 px-6 py-6 text-center">
             <span className="text-muted-foreground text-sm">
-              {t("workspaces.noFieldsToView")}
+              {t("inspector.metadata.noMatterColumns")}
             </span>
           </div>
         ) : (
           <div className="flex flex-col gap-px p-2 pt-0">
-            {visibleFields.map((field) => {
-              const property = visibleProperties.find(
-                (p) => p.id === field.propertyId,
-              );
-              if (!property) {
-                return null;
-              }
-              const isPending = field.content?.type === "pending";
-              const isAiField = property.tool.type === "ai-model";
-              const canJustify =
-                isAiField &&
-                onAiFieldClick !== undefined &&
-                field.content !== undefined &&
-                field.content.type !== "pending" &&
-                field.content.type !== "error";
-              const isActive =
-                isAiField && field.id === activeJustificationFieldId;
-              const handleJustifyClick = canJustify
-                ? () =>
-                    onAiFieldClick({
-                      fieldId: field.id,
-                      propertyId: field.propertyId,
-                    })
-                : undefined;
-              const fieldBody = (
-                <>
-                  <span
-                    className={cn(
-                      "text-foreground-strong-muted inline-flex items-center gap-1 text-[10px] font-medium tracking-wide uppercase",
-                      isPending && "opacity-60",
-                    )}
-                  >
-                    {isAiField && (
-                      <Sparkles
-                        aria-hidden="true"
-                        className="text-primary size-3"
-                      />
-                    )}
-                    {property.name}
-                  </span>
-                  <div className="text-foreground text-sm leading-snug">
-                    <EditableField
-                      content={field.content}
-                      entityKind={entity.kind}
-                      entityId={entity.entityId}
-                      property={property}
-                      propertyId={field.propertyId}
-                      readonly={isAiField}
-                      workspaceId={workspaceId}
-                    />
-                  </div>
-                </>
-              );
-              if (handleJustifyClick) {
-                return (
-                  <div
-                    className={cn(
-                      "rounded-md transition-colors",
-                      isActive && "bg-accent",
-                    )}
-                    key={field.id + field.propertyId}
-                  >
-                    <button
-                      aria-pressed={isActive}
-                      className={cn(
-                        "flex w-full flex-col gap-1 rounded-md px-2 py-2 text-start transition-colors",
-                        !isActive && "hover:bg-accent",
-                      )}
-                      onClick={handleJustifyClick}
-                      type="button"
-                    >
-                      {fieldBody}
-                    </button>
-                    {isActive &&
-                      activeJustification &&
-                      fileFieldId !== null && (
-                        <div className="border-s-primary mx-2 mb-2 max-h-48 overflow-y-auto border-s-2 ps-3">
-                          <div className="text-primary mb-1 text-[10px] font-semibold tracking-wide uppercase">
-                            {t("workspaces.justification")}
-                          </div>
-                          <div className="text-foreground-strong-muted text-xs leading-relaxed break-words">
-                            <Justification
-                              justification={activeJustification}
-                              workspaceId={workspaceId}
-                            />
-                          </div>
-                        </div>
-                      )}
-                  </div>
-                );
-              }
-              return (
-                <div
-                  className="flex flex-col gap-1 rounded-md px-2 py-2"
-                  key={field.id + field.propertyId}
-                >
-                  {fieldBody}
-                </div>
-              );
-            })}
+            {columnFields.map(renderField)}
           </div>
         )}
       </div>
@@ -483,16 +555,42 @@ const EntityMetadataContent = ({
   );
 };
 
-const SectionHeading = ({ children }: PropsWithChildren) => (
-  <div className="bg-muted/40 text-foreground border-b px-4 py-2 text-sm font-semibold">
+const SectionHeading = ({
+  children,
+  icon,
+}: PropsWithChildren<{ icon?: ReactNode }>) => (
+  <div className="bg-muted/40 text-foreground flex items-center gap-1.5 border-b px-4 py-2 text-sm font-semibold">
+    {icon}
     {children}
+  </div>
+);
+
+type PersonRowProps = {
+  label: string;
+  person: { id: string; name: string; image: string | null } | null;
+};
+
+const PersonRow = ({ label, person }: PersonRowProps) => (
+  <div className="flex flex-col gap-1 rounded-md px-2 py-2">
+    <span className="text-muted-foreground text-xs font-medium">{label}</span>
+    {person === null ? (
+      <span className="text-muted-foreground text-sm">—</span>
+    ) : (
+      <UserIdentity
+        avatarClassName="size-5 shrink-0 text-[0.5625rem]"
+        className="min-w-0"
+        image={person.image}
+        name={person.name}
+        nameClassName="text-sm"
+      />
+    )}
   </div>
 );
 
 type ReadOnlyRowProps = {
   label: string;
   value: string | null;
-  title?: string;
+  title?: string | undefined;
 };
 
 const ReadOnlyRow = ({ label, value, title }: ReadOnlyRowProps) => {

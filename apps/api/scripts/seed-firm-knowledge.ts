@@ -16,8 +16,10 @@
  * Processing is queued, so it continues after this exits.
  *
  * Usage: bun run db:seed-firm-knowledge --matters 15 [--api <origin>]
+ *   [--replace-incomplete]
  */
 
+import { TaggedError } from "better-result";
 import { createHash } from "node:crypto";
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
@@ -38,7 +40,11 @@ const DEFAULT_MATTER_COUNT = 15;
 const REQUEST_TIMEOUT_MS = 60_000;
 const UPLOAD_TIMEOUT_MS = 120_000;
 const GIT_TIMEOUT_MS = 600_000;
+const RATE_LIMIT_STATUS = 429;
+const RATE_LIMIT_MAX_RETRIES = 8;
+const RATE_LIMIT_BASE_DELAY_MS = 1000;
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
+const WORKSPACES_QUERY_KEY = ["workspaces"] as const;
 
 /** What the web client names a new matter's file property. */
 const FILE_PROPERTY_NAME = "Documents";
@@ -149,12 +155,18 @@ const discoverApiOrigin = async (): Promise<string> => {
   );
 };
 
+class FirmKnowledgeSeedError extends TaggedError("FirmKnowledgeSeedError")<{
+  message: string;
+}> {}
+
 // Annotated on the variable, not just the arrow: TypeScript only narrows past
 // a never-returning call when the binding itself declares it.
 const fail: (message: string) => never = (message) => {
-  console.error(message);
-  process.exit(1);
+  throw new FirmKnowledgeSeedError({ message });
 };
+
+const getErrorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : "Seed failed";
 
 const parseArgs = () => {
   const args = process.argv.slice(2);
@@ -166,7 +178,36 @@ const parseArgs = () => {
   if (!Number.isInteger(matters) || matters < 1) {
     fail(`--matters must be a positive integer, got '${matters}'.`);
   }
-  return { apiOrigin: read("--api"), matters };
+  return {
+    apiOrigin: read("--api"),
+    matters,
+    replaceIncomplete: args.includes("--replace-incomplete"),
+  };
+};
+
+type CommandOptions = {
+  cwd?: string;
+  timeoutMs?: number;
+};
+
+const runCommand = async (command: string[], options: CommandOptions = {}) => {
+  const subprocess = Bun.spawn(command, {
+    ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
+    stderr: "pipe",
+    stdout: "pipe",
+  });
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    subprocess.kill();
+  }, options.timeoutMs ?? GIT_TIMEOUT_MS);
+  const [exitCode, stdout, stderr] = await Promise.all([
+    subprocess.exited,
+    new Response(subprocess.stdout).text(),
+    new Response(subprocess.stderr).text(),
+  ]);
+  clearTimeout(timeout);
+  return { exitCode, stderr, stdout, timedOut };
 };
 
 /** Blobless sparse clone: only the seeded matters are materialised. */
@@ -180,7 +221,7 @@ const ensureCorpus = async (matterCount: number): Promise<string> => {
   if (!cloned) {
     console.log(`Cloning ${CORPUS_REPOSITORY} into ${CACHE_DIRECTORY} ...`);
     // No --depth: a shallow tip cannot be moved to an arbitrary commit later.
-    const clone = Bun.spawnSync(
+    const clone = await runCommand(
       [
         "git",
         "clone",
@@ -190,35 +231,42 @@ const ensureCorpus = async (matterCount: number): Promise<string> => {
         CORPUS_REPOSITORY,
         cache,
       ],
-      { timeout: GIT_TIMEOUT_MS },
+      { timeoutMs: GIT_TIMEOUT_MS },
     );
     if (clone.exitCode !== 0) {
-      fail(`Corpus clone failed: ${clone.stderr.toString()}`);
+      fail(
+        clone.timedOut
+          ? "Corpus clone timed out."
+          : `Corpus clone failed: ${clone.stderr}`,
+      );
     }
   }
 
   // A cache left at an older pin needs the new commit fetched before checkout.
-  const head = Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: cache });
-  if (head.stdout.toString().trim() !== CORPUS_COMMIT) {
-    const fetched = Bun.spawnSync(
+  const head = await runCommand(["git", "rev-parse", "HEAD"], { cwd: cache });
+  if (head.stdout.trim() !== CORPUS_COMMIT) {
+    const fetched = await runCommand(
       ["git", "fetch", "--filter=blob:none", "origin", CORPUS_COMMIT],
-      { cwd: cache, timeout: GIT_TIMEOUT_MS },
+      { cwd: cache, timeoutMs: GIT_TIMEOUT_MS },
     );
     if (fetched.exitCode !== 0) {
-      fail(`Could not fetch corpus commit: ${fetched.stderr.toString()}`);
+      fail(
+        fetched.timedOut
+          ? "Fetching the corpus commit timed out."
+          : `Could not fetch corpus commit: ${fetched.stderr}`,
+      );
     }
   }
 
   // ls-tree reads the manifest without materialising anything.
-  const list = Bun.spawnSync(
+  const list = await runCommand(
     ["git", "ls-tree", "--name-only", CORPUS_COMMIT, `${CORPUS_SUBPATH}/`],
     { cwd: cache },
   );
   if (list.exitCode !== 0) {
-    fail(`Could not list corpus matters: ${list.stderr.toString()}`);
+    fail(`Could not list corpus matters: ${list.stderr}`);
   }
   const matters = list.stdout
-    .toString()
     .split("\n")
     .filter(Boolean)
     .map((entry) => path.basename(entry))
@@ -229,7 +277,7 @@ const ensureCorpus = async (matterCount: number): Promise<string> => {
     fail("Corpus listing returned no matters.");
   }
 
-  const sparse = Bun.spawnSync(
+  const sparse = await runCommand(
     [
       "git",
       "sparse-checkout",
@@ -239,17 +287,17 @@ const ensureCorpus = async (matterCount: number): Promise<string> => {
     { cwd: cache },
   );
   if (sparse.exitCode !== 0) {
-    fail(`Sparse checkout failed: ${sparse.stderr.toString()}`);
+    fail(`Sparse checkout failed: ${sparse.stderr}`);
   }
 
   // After the patterns, never before: the clone uses --no-checkout, so this is
   // what creates the working tree, and it also re-pins a stale cache.
-  const checkout = Bun.spawnSync(
+  const checkout = await runCommand(
     ["git", "checkout", "--force", CORPUS_COMMIT],
     { cwd: cache },
   );
   if (checkout.exitCode !== 0) {
-    fail(`Could not check out corpus commit: ${checkout.stderr.toString()}`);
+    fail(`Could not check out corpus commit: ${checkout.stderr}`);
   }
 
   console.log(`Corpus ready: ${matters.length} matters in ${CACHE_DIRECTORY}`);
@@ -332,6 +380,20 @@ const readSessionCookie = async (apiOrigin: string): Promise<string> => {
   return `${sessionCookieNameForDevPort(port)}=${sessionCookie.value}`;
 };
 
+/**
+ * A seed is precisely the burst the upload limiter exists to stop: thousands of
+ * `entity-create/tree` and `finalize` calls back to back. Treating 429 as fatal
+ * abandoned the run mid-matter and left a half-uploaded matter behind, so wait
+ * out the window instead. `Retry-After` is authoritative when the limiter sends
+ * it; the doubling fallback covers replies that do not.
+ */
+const rateLimitDelayMs = (response: Response, attempt: number): number => {
+  const seconds = Number(response.headers.get("retry-after"));
+  return Number.isFinite(seconds) && seconds > 0
+    ? seconds * 1000
+    : RATE_LIMIT_BASE_DELAY_MS * 2 ** attempt;
+};
+
 const createApiClient = (apiOrigin: string, cookie: string) => {
   const request = async <T>(
     route: string,
@@ -340,17 +402,36 @@ const createApiClient = (apiOrigin: string, cookie: string) => {
     // Every route used here is mounted inside the versioned group, so the
     // prefix is applied once rather than repeated at each call site.
     const url = `${apiOrigin}${STELLA_API_VERSION_PREFIX}${route}`;
-    const response = await fetch(url, {
-      body: init?.body === undefined ? undefined : JSON.stringify(init.body),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      headers: {
-        cookie,
-        ...(init?.body === undefined
-          ? {}
-          : { "content-type": "application/json" }),
-      },
-      method: init?.method ?? "GET",
-    });
+    // Spread the body in rather than passing `body: undefined`: under
+    // `exactOptionalPropertyTypes` an explicit undefined is not a valid
+    // `RequestInit["body"]`, so a GET would not typecheck.
+    const body =
+      init?.body === undefined
+        ? {}
+        : {
+            body: JSON.stringify(init.body),
+            headers: { cookie, "content-type": "application/json" },
+          };
+    const send = async () =>
+      await fetch(url, {
+        headers: { cookie },
+        ...body,
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        method: init?.method ?? "GET",
+      });
+
+    let response = await send();
+    for (
+      let attempt = 0;
+      response.status === RATE_LIMIT_STATUS && attempt < RATE_LIMIT_MAX_RETRIES;
+      attempt++
+    ) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential backoff: each retry must follow the prior wait
+      await Bun.sleep(rateLimitDelayMs(response, attempt));
+      // oxlint-disable-next-line no-await-in-loop -- see above
+      response = await send();
+    }
+
     if (!response.ok) {
       fail(
         `${init?.method ?? "GET"} ${url} -> ${response.status} ${await response.text()}`,
@@ -365,12 +446,44 @@ const createApiClient = (apiOrigin: string, cookie: string) => {
   return { request };
 };
 
-const main = async () => {
-  const { apiOrigin: explicitOrigin, matters: matterCount } = parseArgs();
-  const apiOrigin = explicitOrigin ?? (await discoverApiOrigin());
-  const cookie = await readSessionCookie(apiOrigin);
+export type SeedFirmKnowledgeOptions = {
+  /** Loopback origin of the API to upload through. */
+  apiOrigin: string;
+  /** Session cookie header sent with every request; decides the owning org. */
+  cookie: string;
+  matters: number;
+  /** Explicit CLI authorization to replace incomplete same-name matters. */
+  replaceIncomplete?: boolean;
+  /** Progress sink. The CLI prints; the dev endpoint collects. */
+  log?: (message: string) => void;
+};
+
+export type SeedFirmKnowledgeResult = {
+  seededFiles: number;
+  seededMatters: number;
+  skipped: number;
+  /** Matters that were found short from an interrupted run and rebuilt. */
+  reseeded: string[];
+};
+
+/**
+ * Seed matters through the real upload path as whoever owns `cookie`.
+ *
+ * Split out of the CLI so the dev endpoint can pass the caller's own session
+ * instead of a storage-state file: the file belongs to the e2e test user, so
+ * driving this from a browser used to deposit every matter in that user's
+ * organization, invisible to the person who asked for it.
+ */
+export const seedFirmKnowledge = async ({
+  apiOrigin,
+  cookie,
+  matters: matterCount,
+  replaceIncomplete = false,
+  log = () => undefined,
+}: SeedFirmKnowledgeOptions): Promise<SeedFirmKnowledgeResult> => {
   const api = createApiClient(apiOrigin, cookie);
   const corpusRoot = await ensureCorpus(matterCount);
+  const reseeded: string[] = [];
 
   const matterDirectories = (
     await readdir(corpusRoot, { withFileTypes: true })
@@ -378,12 +491,15 @@ const main = async () => {
 
   // The API suffixes duplicate names "(1)", "(2)", so re-runs would stack copies.
   const existing = await api.request<{
-    workspaces: { entityCount: number; name: string }[];
+    workspaces: { entityCount: number; id: string; name: string }[];
   }>("/workspaces");
   // Keyed on entity count, not name: a run interrupted mid-upload leaves the
   // matter present but short, and skipping on name alone would strand it.
   const seededCounts = new Map(
-    existing.workspaces.map(({ entityCount, name }) => [name, entityCount]),
+    existing.workspaces.map(({ entityCount, id, name }) => [
+      name,
+      { entityCount, id },
+    ]),
   );
 
   let seededFiles = 0;
@@ -401,20 +517,38 @@ const main = async () => {
     }
     const expectedEntities =
       manifest.files.length + manifest.directories.length;
-    const presentEntities = seededCounts.get(matterName(manifest.reference));
-    if (presentEntities !== undefined) {
-      // Seeding again would not fill the existing matter, it would create a
-      // second one beside it, so a short matter is reported rather than
-      // silently duplicated. Recovering in place needs per-file reconciliation.
-      if (presentEntities < expectedEntities) {
-        console.log(
-          `${manifest.reference}: present but incomplete ` +
-            `(${String(presentEntities)}/${String(expectedEntities)} entities). ` +
-            `Delete the matter and re-run to reseed it.`,
-        );
-      }
+    const present = seededCounts.get(matterName(manifest.reference));
+    if (present !== undefined && present.entityCount >= expectedEntities) {
       skipped += 1;
       continue;
+    }
+    if (present !== undefined) {
+      // A run interrupted mid-upload leaves the matter short. Re-running the
+      // tree upload would not fill it, it would build a second copy beside it,
+      // because the API suffixes duplicate names. Grafting only the missing
+      // files onto the existing folders is not expressible either: the tree
+      // endpoint creates its own directories and cannot target existing ones.
+      // A generated display name and entity count are not seed provenance.
+      // The browser path therefore skips the matter; only the CLI's explicit
+      // destructive flag authorizes replacing a same-name workspace.
+      if (!replaceIncomplete) {
+        skipped += 1;
+        log(
+          `${manifest.reference}: incomplete ` +
+            `(${String(present.entityCount)}/${String(expectedEntities)} entities), skipped because seed provenance cannot be verified.`,
+        );
+        continue;
+      }
+      reseeded.push(manifest.reference);
+      log(
+        `${manifest.reference}: incomplete ` +
+          `(${String(present.entityCount)}/${String(expectedEntities)} entities), reseeding.`,
+      );
+      // oxlint-disable-next-line no-await-in-loop -- sequential by design
+      await api.request(`/workspaces/${present.id}`, {
+        body: { queryKey: WORKSPACES_QUERY_KEY },
+        method: "DELETE",
+      });
     }
 
     // Minted client-side, as the web app does.
@@ -484,21 +618,44 @@ const main = async () => {
       seededFiles += 1;
     }
 
-    console.log(
+    log(
       `${manifest.reference}: ${manifest.files.length} files, ${manifest.directories.length} folders`,
     );
   }
 
   const seededMatters = matterDirectories.length - skipped - empty;
-  console.log(
+  log(
     `\nSeeded ${seededFiles} files across ${seededMatters} ${
       seededMatters === 1 ? "matter" : "matters"
     }${skipped > 0 ? `; skipped ${skipped} already present.` : "."}`,
   );
-  console.log(
+  log(
     "Derivatives and extraction are queued; spreadsheets and decks stay " +
       "unopenable until Gotenberg finishes converting them.",
   );
+
+  return { seededFiles, seededMatters, skipped, reseeded };
 };
 
-await main();
+/** CLI entry: resolves the origin and session itself, then runs the core. */
+const main = async () => {
+  const { apiOrigin: explicitOrigin, matters, replaceIncomplete } = parseArgs();
+  const apiOrigin = explicitOrigin ?? (await discoverApiOrigin());
+  const cookie = await readSessionCookie(apiOrigin);
+  await seedFirmKnowledge({
+    apiOrigin,
+    cookie,
+    matters,
+    replaceIncomplete,
+    log: (message) => console.log(message),
+  });
+};
+
+// `import.meta.main` is false when the dev endpoint imports this for
+// `seedFirmKnowledge`, so importing the module never starts a run.
+if (import.meta.main) {
+  await main().catch((error: unknown) => {
+    console.error(getErrorMessage(error));
+    process.exitCode = 1;
+  });
+}

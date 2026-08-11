@@ -28,6 +28,7 @@ import type {
   WorkspaceField,
   WorkspaceProperty,
 } from "@/lib/types";
+import { isPlaybookVerdictProperty } from "@/lib/workspaces/playbook-verdicts";
 import {
   selectJustificationByFieldId,
   useWorkspaceStore,
@@ -152,7 +153,7 @@ export const PropertyCell = ({
   // fallback / deviation / missing). Read-only — render the colored chip via
   // EditableField display mode, and surface the grading rationale through the
   // provenance card when a justification exists.
-  if (property.tool.type === "playbook-verdict") {
+  if (isPlaybookVerdictProperty(property)) {
     const verdictCell = (
       <span className="flex min-w-0 items-center gap-1.5">
         <CellMetadataFlags
@@ -336,16 +337,13 @@ export const VerdictBadge = ({
     selectJustificationByFieldId(s.justifications, field?.id),
   );
 
+  // The cell already spins in its top-right corner while the value recomputes,
+  // and the badge sits in the same cell: a second spinner beside the first
+  // reads as two things loading. Withhold the badge rather than duplicating the
+  // signal — showing the stale tier while its value is being regraded would be
+  // worse than showing nothing.
   if (loading) {
-    return (
-      <span
-        aria-label={t("common.loading")}
-        className="text-muted-foreground flex size-4 shrink-0 items-center justify-center self-center group-data-[expanded-cell]/cell-content:self-end"
-        role="img"
-      >
-        <RefreshCwIcon aria-hidden="true" className="size-3 animate-spin" />
-      </span>
-    );
+    return null;
   }
 
   const tier = verdictTier(field);

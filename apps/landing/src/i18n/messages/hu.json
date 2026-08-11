@@ -110,7 +110,7 @@
         "title": "AI-ügynök, amely átfogja az ügyeit, fájljait és eszközeit."
       },
       "anonymization": {
-        "blurb": "Távolítsa el a neveket, az entitásokat és az azonosító adatokat, mielőtt az anyag az AI-hoz kerül, közvetlenül a csevegésből és a dokumentumok ellenőrzéséből, kitakart eredménnyel, amelyet még azelőtt ellenőrizhet, hogy bármi továbbmenne.",
+        "blurb": "Távolítsa el a neveket, a szervezeteket és az azonosító adatokat, mielőtt az anyag az AI-hoz kerül, közvetlenül a csevegésből és a dokumentumok ellenőrzéséből, kitakart eredménnyel, amelyet még azelőtt ellenőrizhet, hogy bármi továbbmenne.",
         "discover": "Fedezze fel az Anonimizálást",
         "eyebrow": "Anonimizálás",
         "title": "Készítse elő az anyagot az AI számára az azonosító adatok felfedése nélkül."
@@ -263,7 +263,7 @@
       },
       "capabilities": {
         "0": {
-          "body": "Eltávolítja a neveket, az entitásokat és az azonosító adatokat, mielőtt az anyag AI-lépésbe kerülne.",
+          "body": "Eltávolítja a neveket, a szervezeteket és az azonosító adatokat, mielőtt az anyag AI-lépésbe kerülne.",
           "title": "Az azonosító adatok kívül maradnak"
         },
         "1": {
@@ -288,20 +288,20 @@
           "question": "Elérhető már az anonimizálás?"
         },
         "1": {
-          "answer": "Az anyag előkészítésében az AI-munkafolyamatokhoz, nevek, entitások és azonosító adatok felfedése nélkül, miközben a kitakart eredmény ellenőrizhető marad.",
+          "answer": "Az anyag előkészítésében az AI-munkafolyamatokhoz, nevek, szervezetek és azonosító adatok felfedése nélkül, miközben a kitakart eredmény ellenőrizhető marad.",
           "question": "Miben segít?"
         }
       },
-      "metaDescription": "Távolítsa el a neveket, az entitásokat és az azonosító adatokat, mielőtt az anyag az AI-hoz kerül, közvetlenül a csevegésből és a dokumentumok ellenőrzéséből.",
+      "metaDescription": "Távolítsa el a neveket, a szervezeteket és az azonosító adatokat, mielőtt az anyag az AI-hoz kerül, közvetlenül a csevegésből és a dokumentumellenőrzésből.",
       "metaTitle": "Dokumentumok anonimizálása a jogi AI-hoz | stella",
       "quickAnswer": {
-        "answer": "Eltávolítja a neveket, az entitásokat és az azonosító adatokat, mielőtt az anyag AI-munkafolyamatba kerülne, és megmutatja a kitakart eredményt, hogy megerősíthesse, mi hagyja el az ügyet. Közvetlenül a csevegésbe és a dokumentumok ellenőrzésébe van beépítve.",
+        "answer": "Eltávolítja a neveket, a szervezeteket és az azonosító adatokat, mielőtt az anyag AI-munkafolyamatba kerülne, és megmutatja a kitakart eredményt, hogy megerősíthesse, mi hagyja el az ügyet. Közvetlenül a csevegésbe és a dokumentumok ellenőrzésébe van beépítve.",
         "question": "Mi az anonimizálás a stella alkalmazásban?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "A neveket, entitásokat és azonosító adatokat távol tartja az AI-lépésektől",
+            "0": "A neveket, szervezeteket és azonosító adatokat távol tartja az AI-lépésektől",
             "1": "Jogi AI-munkafolyamatokra készült, nem általános dokumentummaszkolásra",
             "2": "A következő lépés előtt ellenőrizhető, kitakart dokumentumot hagy maga után"
           },

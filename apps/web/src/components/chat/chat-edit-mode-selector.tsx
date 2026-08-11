@@ -1,6 +1,6 @@
 import {
   ChevronDownIcon,
-  HistoryIcon,
+  FileDiffIcon,
   LockIcon,
   UserCheckIcon,
   WandSparklesIcon,
@@ -23,8 +23,11 @@ import {
   CHAT_EDIT_MODE_OPTION_IDS,
 } from "@/lib/chat-edit-mode";
 
+// Tracked changes is a diff — insertions and deletions recorded in the
+// document — not a rewind. The clock-arrow glyph read as "restore an earlier
+// version", which is a different (and destructive-sounding) promise.
 const OPTION_ICON = {
-  [CHAT_EDIT_MODE_OPTION_ID.autoTrackedChanges]: HistoryIcon,
+  [CHAT_EDIT_MODE_OPTION_ID.autoTrackedChanges]: FileDiffIcon,
   [CHAT_EDIT_MODE_OPTION_ID.autoDirect]: WandSparklesIcon,
   [CHAT_EDIT_MODE_OPTION_ID.manual]: UserCheckIcon,
 } as const satisfies Record<ChatEditModeOptionId, LucideIcon>;
@@ -86,11 +89,14 @@ const ViewOnlyEditModeChip = () => {
   const t = useTranslations();
   return (
     <span
-      className="text-muted-foreground inline-flex max-w-[180px] items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px]"
+      className="text-muted-foreground inline-flex max-w-[180px] min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px]"
       title={t("folio.unsupportedDocxEditDescription")}
     >
       <LockIcon aria-hidden="true" className="size-3 shrink-0" />
-      <span className="truncate">{t("folio.viewOnly")}</span>
+      {/* min-w-0: a flex item defaults to min-width:auto, so without this the
+          label refuses to shrink below its content and the chip overruns
+          max-w, colliding with the row's end cluster in longer locales. */}
+      <span className="min-w-0 truncate">{t("folio.viewOnly")}</span>
     </span>
   );
 };
@@ -121,11 +127,13 @@ const ChatEditModeSelector = ({
   return (
     <Menu>
       <MenuTrigger
-        className="text-muted-foreground hover:text-foreground hover:bg-accent inline-flex max-w-[180px] items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition-colors"
+        className="text-muted-foreground hover:text-foreground hover:bg-accent inline-flex max-w-[180px] min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition-colors"
         title={t(OPTION_LABEL_KEY[optionId])}
       >
         <TriggerIcon aria-hidden="true" className="size-3 shrink-0" />
-        <span className="truncate">{t(OPTION_LABEL_KEY[optionId])}</span>
+        <span className="min-w-0 truncate">
+          {t(OPTION_LABEL_KEY[optionId])}
+        </span>
         <ChevronDownIcon
           aria-hidden="true"
           className="size-3 shrink-0 opacity-70"

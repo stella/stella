@@ -54,6 +54,26 @@ export type {
   ChatReferenceCategory,
   ChatReferenceHrefPrefix,
 } from "./chat-references";
+export {
+  AUTHORED_DOCUMENT_PROPERTY_KEYS,
+  DOCUMENT_PROPERTIES_RESULT_SCHEMA,
+  DOCUMENT_PROPERTIES_MAX_BYTES,
+  DOCUMENT_PROPERTY_KEYS,
+  DOCUMENT_PROPERTY_MIME_TYPES,
+  documentContainerFormat,
+  GENERATED_DOCUMENT_PROPERTY_KEYS,
+  hasDocumentProperties,
+  isAuthoredDocumentPropertyKey,
+} from "./document-properties";
+export type {
+  AuthoredDocumentPropertyKey,
+  DocumentContainerFormat,
+  DocumentPropertiesResult,
+  DocumentPropertiesStatus,
+  DocumentProperty,
+  DocumentPropertyKey,
+  DocumentPropertyValue,
+} from "./document-properties";
 export { ENTITY_KINDS, isEntityKind } from "./entity-kinds";
 export type { EntityKind } from "./entity-kinds";
 export {

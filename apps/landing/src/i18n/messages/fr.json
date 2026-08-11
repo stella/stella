@@ -110,7 +110,7 @@
         "title": "Un agent IA qui travaille dans vos dossiers, vos fichiers et vos outils."
       },
       "anonymization": {
-        "blurb": "Supprimez les noms, les entités et les éléments identifiants avant qu’un document n’atteigne l’IA, directement depuis le chat et la revue de documents, avec un résultat caviardé à vérifier avant d’aller plus loin.",
+        "blurb": "Supprimez les noms, les organisations et les éléments identifiants avant qu’un document n’atteigne l’IA, directement depuis le chat et la revue de documents, avec un résultat caviardé à vérifier avant d’aller plus loin.",
         "discover": "Découvrir l’anonymisation",
         "eyebrow": "Anonymisation",
         "title": "Préparez vos documents pour l’IA sans exposer les éléments identifiants."
@@ -263,7 +263,7 @@
       },
       "capabilities": {
         "0": {
-          "body": "Supprime les noms, les entités et les éléments identifiants avant qu’un document n’atteigne une étape IA.",
+          "body": "Supprime les noms, les organisations et les éléments identifiants avant qu’un document n’atteigne une étape IA.",
           "title": "Aucun élément identifiant ne passe"
         },
         "1": {
@@ -288,20 +288,20 @@
           "question": "L’anonymisation est-elle déjà disponible ?"
         },
         "1": {
-          "answer": "À préparer vos documents pour les flux IA sans exposer de noms, d’entités ni d’éléments identifiants, tout en gardant le résultat caviardé disponible pour vérification.",
+          "answer": "À préparer vos documents pour les flux IA sans exposer de noms, d’organisations ni d’éléments identifiants, tout en gardant le résultat caviardé disponible pour vérification.",
           "question": "À quoi sert-elle ?"
         }
       },
-      "metaDescription": "Supprimez noms, entités et éléments identifiants avant que vos documents n’atteignent l’IA, depuis le chat et la revue, avec un résultat caviardé vérifiable.",
+      "metaDescription": "Supprimez noms, organisations et éléments identifiants avant que vos documents n’atteignent l’IA, depuis le chat et la revue, avec un résultat vérifiable.",
       "metaTitle": "Anonymisation de documents pour l’IA juridique | stella",
       "quickAnswer": {
-        "answer": "Elle supprime les noms, les entités et les éléments identifiants avant que vos documents n’entrent dans un flux IA, et vous montre le résultat caviardé pour que vous confirmiez ce qui sort du dossier. Elle est intégrée directement au chat et à la revue de documents.",
+        "answer": "Elle supprime les noms, les organisations et les éléments identifiants avant que vos documents n’entrent dans un flux IA, et vous montre le résultat caviardé pour que vous confirmiez ce qui sort du dossier. Elle est intégrée directement au chat et à la revue de documents.",
         "question": "Qu’est-ce que l’anonymisation dans stella ?"
       },
       "sections": {
         "0": {
           "bullets": {
-            "0": "Noms, entités et éléments identifiants restent hors des étapes IA",
+            "0": "Noms, organisations et éléments identifiants restent hors des étapes IA",
             "1": "Pensée pour les flux juridiques, pas pour un masquage générique",
             "2": "Laisse un document caviardé à vérifier avant l’étape suivante"
           },
