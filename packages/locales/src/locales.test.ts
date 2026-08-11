@@ -7,8 +7,17 @@ import {
   LANGUAGES,
   resolveUiLocale,
   toLanguageCode,
+  UI_LOCALE_DIRECTIONS,
   UI_LANGUAGES,
 } from "./index.js";
+
+test("locale directions preserve their public literal types", () => {
+  const arabicDirection: "rtl" = UI_LOCALE_DIRECTIONS.ar;
+  const englishDirection: "ltr" = UI_LOCALE_DIRECTIONS.en;
+
+  expect(arabicDirection).toBe("rtl");
+  expect(englishDirection).toBe("ltr");
+});
 
 describe("LANGUAGES", () => {
   test("contains every code exactly once", () => {
