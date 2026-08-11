@@ -10,6 +10,7 @@ import {
   relations,
   SOURCE_TOTAL_ORIGIN,
 } from "@/api/db/schema";
+import type { SourceTotalOrigin } from "@/api/db/schema";
 import {
   readSourceReportedTotals,
   setSourceReportedTotal,
@@ -150,6 +151,96 @@ test("an adapter key no source carries reports back, and writes nothing", async 
 
   expect(applied).toBe(false);
   expect(await readTrio(present)).toEqual({
+    reportedTotal: null,
+    reportedTotalAsOf: null,
+    reportedTotalOrigin: null,
+  });
+});
+
+// The origin values live in two places by necessity: the TypeScript union and
+// the column's check constraint. Exercising every declared member against the
+// real constraint binds the two — a member added to one and not the other
+// fails here rather than at a write.
+test.each(Object.values(SOURCE_TOTAL_ORIGIN))(
+  "the database accepts the declared origin %p",
+  async (origin) => {
+    const adapterKey = await seedSource();
+
+    const applied = await setSourceReportedTotal({
+      scopedDb,
+      adapterKey,
+      total: 3,
+      asOf: new Date("2026-08-11T09:00:00.000Z"),
+      origin,
+    });
+
+    expect(applied).toBe(true);
+    expect((await readTrio(adapterKey))?.reportedTotalOrigin).toBe(origin);
+  },
+);
+
+test("the database refuses an origin outside the declared set", async () => {
+  const adapterKey = await seedSource();
+
+  const rejection = await db
+    .update(caseLawSources)
+    .set({
+      reportedTotal: 5,
+      reportedTotalAsOf: new Date("2026-08-11T09:00:00.000Z"),
+      // SAFETY: the point of this test is the value the union forbids, so
+      // the cast is what lets the constraint be the thing under test.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- exercising the database's own guard against an unlisted origin
+      reportedTotalOrigin: "guessed" as SourceTotalOrigin,
+    })
+    .where(eq(caseLawSources.adapterKey, adapterKey))
+    .catch((error: unknown) => error);
+
+  expect(rejection).toBeInstanceOf(Error);
+  expect(await readTrio(adapterKey)).toEqual({
+    reportedTotal: null,
+    reportedTotalAsOf: null,
+    reportedTotalOrigin: null,
+  });
+});
+
+// The writer always sets the three together, so only a path that bypasses it
+// can split them. That is exactly what the constraint exists for.
+test.each([
+  ["total alone", { reportedTotal: 5 }],
+  ["date alone", { reportedTotalAsOf: new Date("2026-08-11T09:00:00.000Z") }],
+  ["origin alone", { reportedTotalOrigin: SOURCE_TOTAL_ORIGIN.OPERATOR }],
+])("the database refuses a partial trio: %s", async (_label, patch) => {
+  const adapterKey = await seedSource();
+
+  const rejection = await db
+    .update(caseLawSources)
+    .set(patch)
+    .where(eq(caseLawSources.adapterKey, adapterKey))
+    .catch((error: unknown) => error);
+
+  expect(rejection).toBeInstanceOf(Error);
+  expect(await readTrio(adapterKey)).toEqual({
+    reportedTotal: null,
+    reportedTotalAsOf: null,
+    reportedTotalOrigin: null,
+  });
+});
+
+test("the database refuses a non-positive total written around the writer", async () => {
+  const adapterKey = await seedSource();
+
+  const rejection = await db
+    .update(caseLawSources)
+    .set({
+      reportedTotal: 0,
+      reportedTotalAsOf: new Date("2026-08-11T09:00:00.000Z"),
+      reportedTotalOrigin: SOURCE_TOTAL_ORIGIN.OPERATOR,
+    })
+    .where(eq(caseLawSources.adapterKey, adapterKey))
+    .catch((error: unknown) => error);
+
+  expect(rejection).toBeInstanceOf(Error);
+  expect(await readTrio(adapterKey)).toEqual({
     reportedTotal: null,
     reportedTotalAsOf: null,
     reportedTotalOrigin: null,

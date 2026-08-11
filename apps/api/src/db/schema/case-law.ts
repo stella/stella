@@ -83,9 +83,10 @@ export const caseLawSources = p.pgTable(
      * was observed and where the number came from. Held-vs-total coverage is
      * otherwise uncomputable for a publisher that exposes no cheap count.
      *
-     * The three move together — all set or all null. That invariant belongs
-     * to the single writer (`ingestion/source-totals.ts`), not to a check
-     * constraint, because the writer is also what validates the number.
+     * The three are one fact and move together — all set or all null. The
+     * writer (`ingestion/source-totals.ts`) validates the number at the
+     * boundary so a caller gets a usable error; the check constraints below
+     * make the half-written states unrepresentable for every other path.
      */
     reportedTotal: p.integer("reported_total"),
     reportedTotalAsOf: timestamptz("reported_total_as_of"),
@@ -106,6 +107,25 @@ export const caseLawSources = p.pgTable(
     p.check(
       "case_law_sources_ingestion_lease_pair",
       sql`(${t.ingestionLeaseToken} IS NULL) = (${t.ingestionLeaseExpiresAt} IS NULL)`,
+    ),
+    p.check(
+      "case_law_sources_reported_total_trio",
+      sql`(${t.reportedTotal} IS NULL) = (${t.reportedTotalAsOf} IS NULL)
+        AND (${t.reportedTotal} IS NULL) = (${t.reportedTotalOrigin} IS NULL)`,
+    ),
+    p.check(
+      "case_law_sources_reported_total_positive",
+      sql`${t.reportedTotal} IS NULL OR ${t.reportedTotal} > 0`,
+    ),
+    // The accepted values are read off SOURCE_TOTAL_ORIGIN rather than
+    // re-listed, so a new origin cannot reach the database without also
+    // reaching this constraint.
+    p.check(
+      "case_law_sources_reported_total_origin_allowed",
+      sql`${t.reportedTotalOrigin} IS NULL OR ${t.reportedTotalOrigin} IN (${sql.join(
+        Object.values(SOURCE_TOTAL_ORIGIN).map((origin) => sql`${origin}`),
+        sql`, `,
+      )})`,
     ),
     p.uniqueIndex("case_law_sources_adapter_key_idx").on(t.adapterKey),
     ...globalCaseLawPolicies(),
