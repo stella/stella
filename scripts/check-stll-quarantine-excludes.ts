@@ -86,10 +86,26 @@ const exactUtcTimestampError = ({
   return `${BUNFIG} minimum-release-age exclude "${name}" has an invalid ${marker} UTC timestamp: ${timestamp}`;
 };
 
-const readExcludeAnnotationErrors = (bunfig: string, now: Date): string[] =>
-  readExcludeBlock(bunfig)
-    .split("\n")
-    .flatMap((line) => {
+const readExcludeAnnotationErrors = (bunfig: string, now: Date): string[] => {
+  const lines = readExcludeBlock(bunfig).split("\n");
+  const declaredNames = new Set(
+    lines.flatMap((line) => {
+      const name = excludeDeclaration(line);
+      return name === undefined ? [] : [name];
+    }),
+  );
+  const unrecognizedEntries = [...readExcludes(bunfig)].filter(
+    (name) => !declaredNames.has(name),
+  );
+  const errors =
+    unrecognizedEntries.length === 0
+      ? []
+      : [
+          `${BUNFIG} minimumReleaseAgeExcludes must declare one annotated package per line; unrecognized entries: ${unrecognizedEntries.join(", ")}`,
+        ];
+
+  errors.push(
+    ...lines.flatMap((line) => {
       const name = excludeDeclaration(line);
       if (name === undefined) {
         return [];
@@ -129,7 +145,10 @@ const readExcludeAnnotationErrors = (bunfig: string, now: Date): string[] =>
         ];
       }
       return [];
-    });
+    }),
+  );
+  return errors;
+};
 
 type TemporaryExclude = {
   name: string;

@@ -48,6 +48,21 @@ describe("quarantine exclude guard", () => {
     );
   });
 
+  test("rejects compact exclusion arrays that cannot carry per-entry annotations", () => {
+    const result = checkQuarantineExcludes({
+      bunfig: `
+[install]
+minimumReleaseAge = 432_000
+minimumReleaseAgeExcludes = ["@stll/native", "better-result"]
+`,
+      lockfile,
+    });
+
+    expect(result.errors).toContain(
+      "bunfig.toml minimumReleaseAgeExcludes must declare one annotated package per line; unrecognized entries: @stll/native, better-result",
+    );
+  });
+
   test("rejects malformed and future first-party exclusion dates", () => {
     const malformed = checkQuarantineExcludes({
       bunfig: createBunfig(
