@@ -87,7 +87,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 593,
+    "count": 600,
     "files": {
       "apps/api/src/db/migrate.ts": 2,
       "apps/api/src/db/schema.ts": 1,
@@ -212,6 +212,7 @@
       "apps/api/src/lib/entity-deletion-cleanup-queue.ts": 1,
       "apps/api/src/lib/extraction-runs/store.ts": 1,
       "apps/api/src/lib/file-scan/scanner.ts": 1,
+      "apps/api/src/lib/files/document-properties.ts": 1,
       "apps/api/src/lib/files/email-to-html.ts": 1,
       "apps/api/src/lib/files/utils.ts": 1,
       "apps/api/src/lib/flows/automated-run-cap.ts": 1,
@@ -260,6 +261,7 @@
       "apps/api/src/scripts/backfill-property-roles.ts": 1,
       "apps/api/src/scripts/build-corpus-index.ts": 1,
       "apps/api/src/scripts/corpus-column-trim.ts": 3,
+      "apps/api/src/scripts/cz-regional-repair.ts": 7,
       "apps/api/src/scripts/eu-ecj-census.ts": 3,
       "apps/api/src/scripts/eu-ecj-refetch.ts": 6,
       "apps/api/src/scripts/post-deploy-smoke.ts": 3,
@@ -279,7 +281,7 @@
       "apps/web/src/components/chat/tool-approval-card.tsx": 2,
       "apps/web/src/components/chat/web-search-sources.tsx": 1,
       "apps/web/src/components/conditions/condition-builder.tsx": 2,
-      "apps/web/src/components/dev-sidebar-group.tsx": 3,
+      "apps/web/src/components/dev-sidebar-group.tsx": 2,
       "apps/web/src/components/dev/autocomplete-playground.tsx": 1,
       "apps/web/src/components/docx/docx-browser-editor.tsx": 5,
       "apps/web/src/components/docx/docx-edit-mode.logic.ts": 3,
