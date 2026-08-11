@@ -39,8 +39,8 @@ describe("bounded concurrent mapping", () => {
     expect(peakActive).toBe(2);
   });
 
-  test("rejects an invalid concurrency limit", async () => {
-    await expect(
+  test("rejects an invalid concurrency limit", () => {
+    expect(
       mapConcurrent({ concurrency: 0, items: [1], map: async (item) => item }),
     ).rejects.toBeInstanceOf(RangeError);
   });

@@ -63,7 +63,7 @@ const normalizeAddresses = (
 };
 
 const readAddressList = async (
-  value: OfficeItem["to"],
+  value: Office.EmailAddressDetails[] | Office.MessageCompose["to"] | undefined,
 ): Promise<MailAddress[]> =>
   normalizeAddresses(
     await readMaybeAsync<Office.EmailAddressDetails[]>(value, []),
