@@ -1,4 +1,4 @@
-import { Result, TaggedError } from "better-result";
+import { Result, TaggedError, panic } from "better-result";
 
 import {
   DOCUMENT_UPLOAD_POLICY,
@@ -346,17 +346,18 @@ export const reconcileEmailUpload = async (
   if (response.error) {
     throw toAPIError(response.error);
   }
-  switch (response.data.state) {
+  const reconciliation = response.data;
+  switch (reconciliation.state) {
     case "reserved":
       return { state: "reserved" };
     case "finalizing":
       return { state: "finalizing" };
     case "retryable":
-      return { reason: response.data.reason, state: "retryable" };
+      return { reason: reconciliation.reason, state: "retryable" };
     case "rejected":
-      return { reason: response.data.reason, state: "rejected" };
+      return { reason: reconciliation.reason, state: "rejected" };
     case "complete": {
-      const result = response.data.finalizedResult;
+      const result = reconciliation.finalizedResult;
       if (result.type !== "email_ingest") {
         throw new APIError({
           message: `Unexpected upload result: ${result.type}`,
@@ -375,6 +376,8 @@ export const reconcileEmailUpload = async (
         state: "complete",
       };
     }
+    default:
+      return panic("Unknown Outlook upload reconciliation state");
   }
 };
 

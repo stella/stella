@@ -84,8 +84,14 @@ export const signInViaDialog = async ({
   taskpaneOrigin,
 }: SignInViaDialogOptions): Promise<string> => {
   const office = getOfficeRuntime();
-  const ui = office?.context.ui;
-  if (!ui?.displayDialogAsync) {
+  if (!office) {
+    throw new OutlookError({
+      message: "Office dialog API is not available in this Outlook host.",
+    });
+  }
+
+  const ui = office.context.ui;
+  if (typeof Reflect.get(ui, "displayDialogAsync") !== "function") {
     throw new OutlookError({
       message: "Office dialog API is not available in this Outlook host.",
     });
@@ -99,53 +105,58 @@ export const signInViaDialog = async ({
       startAddress,
       { height: 60, promptBeforeOpen: false, width: 40 },
       (result) => {
-        if (result.status !== "succeeded") {
+        if (result.status !== office.AsyncResultStatus.Succeeded) {
           reject(
             new OutlookError({
-              message:
-                result.error?.message ?? "Sign-in dialog failed to open.",
+              message: result.error.message,
             }),
           );
           return;
         }
 
         const dialog = result.value;
-        dialog.addEventHandler("DialogMessageReceived", (event) => {
-          if (!("message" in event)) {
-            return;
-          }
-          if (event.origin !== expectedOrigin) {
+        dialog.addEventHandler(
+          office.EventType.DialogMessageReceived,
+          (event) => {
+            if (!("message" in event)) {
+              return;
+            }
+            if (event.origin !== expectedOrigin) {
+              dialog.close();
+              reject(
+                new OutlookError({
+                  message: "Sign-in response came from an unexpected origin.",
+                }),
+              );
+              return;
+            }
+            const token = parseHandoffToken({
+              actualOrigin: event.origin,
+              expectedOrigin,
+              raw: event.message,
+            });
+            if (!token) {
+              return;
+            }
+            dialog.close();
+            notify(token);
+            resolve(token);
+          },
+        );
+        dialog.addEventHandler(
+          office.EventType.DialogEventReceived,
+          (event) => {
+            if (!("error" in event)) {
+              return;
+            }
             dialog.close();
             reject(
               new OutlookError({
-                message: "Sign-in response came from an unexpected origin.",
+                message: `Sign-in dialog closed (code ${event.error}).`,
               }),
             );
-            return;
-          }
-          const token = parseHandoffToken({
-            actualOrigin: event.origin,
-            expectedOrigin,
-            raw: event.message,
-          });
-          if (!token) {
-            return;
-          }
-          dialog.close();
-          notify(token);
-          resolve(token);
-        });
-        dialog.addEventHandler("DialogEventReceived", (event) => {
-          if (!("error" in event)) {
-            return;
-          }
-          dialog.close();
-          reject(
-            new OutlookError({
-              message: `Sign-in dialog closed (code ${event.error ?? "unknown"}).`,
-            }),
-          );
-        });
+          },
+        );
       },
     );
   });

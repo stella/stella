@@ -18,10 +18,33 @@ type UseMailSnapshot = {
   state: MailSnapshotState;
 };
 
-export const useMailSnapshot = (
-  errorFallback: string,
-  attachmentErrorFallback: string,
-): UseMailSnapshot => {
+type UseMailSnapshotOptions = {
+  attachmentErrorFallback: string;
+  errorFallback: string;
+};
+
+const snapshotErrorMessage = ({
+  attachmentErrorFallback,
+  error,
+  errorFallback,
+}: {
+  attachmentErrorFallback: string;
+  error: unknown;
+  errorFallback: string;
+}): string => {
+  if (isAttachmentReadError(error)) {
+    return attachmentErrorFallback;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return errorFallback;
+};
+
+export const useMailSnapshot = ({
+  attachmentErrorFallback,
+  errorFallback,
+}: UseMailSnapshotOptions): UseMailSnapshot => {
   const [state, setState] = useState<MailSnapshotState>({ type: "loading" });
   const itemInstanceSequence = useRef(0);
   const loadSequence = useRef(0);
@@ -38,11 +61,11 @@ export const useMailSnapshot = (
       if (Result.isError(result)) {
         const { error } = result;
         setState({
-          message: isAttachmentReadError(error)
-            ? attachmentErrorFallback
-            : error instanceof Error
-              ? error.message
-              : errorFallback,
+          message: snapshotErrorMessage({
+            attachmentErrorFallback,
+            error,
+            errorFallback,
+          }),
           type: "error",
         });
         return;
