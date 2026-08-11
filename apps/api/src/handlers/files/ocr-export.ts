@@ -33,7 +33,7 @@ type ReadOcrExportOptions = {
   workspaceId: SafeId<"workspace">;
 };
 
-const replaceExtension = (fileName: string, suffix: string): string => {
+const replaceExtension = (fileName: string, suffix: string) => {
   const dotIndex = fileName.lastIndexOf(".");
   const baseName = dotIndex <= 0 ? fileName : fileName.slice(0, dotIndex);
   return sanitizeFilenamePreservingExtension(`${baseName}${suffix}`);
