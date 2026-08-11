@@ -38,8 +38,8 @@ update.
 
 2. Sign in at `http://localhost:3000`. The Microsoft OAuth provider must
    already be configured in better-auth (it is in production; locally you
-   may need `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET` env vars on
-   the API).
+   may need `MICROSOFT_AUTH_CLIENT_ID` /
+   `MICROSOFT_AUTH_CLIENT_SECRET` env vars on the API).
 
 3. Generate the localhost HTTPS cert (one-time):
 
@@ -67,16 +67,18 @@ update.
 
 5. **Browser smoke test:** open `https://localhost:3002/taskpane.html`.
    You should see a "Sign in with Microsoft" panel on first visit. The
-   panel opens a dialog at `/sign-in-outlook` on the web app, which runs
-   the OAuth round-trip and delivers a bearer token back via
-   `Office.context.ui.messageParent`. Both sides validate the configured
-   origin. The task pane keeps the token in memory only, so a reload
-   requires a new handoff.
+   panel opens the task-pane-origin `/dialog.html` bootstrap, which redirects
+   to `/sign-in-outlook` on the web app. The web app runs the OAuth round-trip,
+   including organization selection and two-factor authentication, then
+   delivers a bearer token back via `Office.context.ui.messageParent`. Both
+   sides validate the configured origin. The task pane keeps the token in
+   memory only, so a reload requires a new handoff.
 
 6. **Outlook sideload:**
-   - Open Outlook on the web (outlook.office.com or outlook.live.com).
-   - Open any email → message-header **...** → **Get Add-ins**.
-   - **My add-ins** → **Add a custom add-in** → **Add from file**.
+   - Open <https://aka.ms/olksideload>. Microsoft opens the current
+     **Add-Ins for Outlook** dialog for your signed-in mailbox.
+   - **My add-ins** → **Custom Addins** → **Add a custom add-in** →
+     **Add from File**.
    - Pick `apps/outlook/manifest.xml`.
    - The ribbon now shows **stella** on read + compose surfaces. Pinning the
      pane is supported; switching messages refreshes all message-scoped state.
@@ -84,25 +86,23 @@ update.
 ## Auth flow
 
 ```
-┌────────────────┐                  ┌──────────────────────────┐
-│ Outlook iframe │                  │ apps/web                 │
-│  (taskpane)    │                  │  /sign-in-outlook         │
-│                │  displayDialog   │                          │
-│  ──────────────┼─────────────────►│  loads office.js          │
-│                │                  │  authClient.signIn.social │
-│                │                  │   (provider: microsoft)   │
-│                │                  │  ◄── OAuth round-trip    │
-│                │                  │  reads session.token      │
-│                │  messageParent   │                          │
-│  ◄─────────────┼──────────────────│  posts                    │
-│  keep token in memory              │  {type, token}           │
-│  Eden + Bearer                     └──────────────────────────┘
+┌────────────────┐       ┌─────────────────┐       ┌─────────────────────────┐
+│ Outlook iframe │       │ apps/outlook    │       │ apps/web                │
+│  (taskpane)    │       │  /dialog.html   │       │  /sign-in-outlook       │
+│                │ dialog│  same-origin    │redirect│  Microsoft OAuth        │
+│  ──────────────┼──────►│  bootstrap      ├──────►│  organization + 2FA     │
+│                │       └─────────────────┘       │  reads session.token    │
+│                │              messageParent     │                         │
+│  ◄─────────────┼─────────────────────────────────┤  posts {type, token}     │
+│  keep token in memory                           └─────────────────────────┘
+│  Eden + Bearer
 └────────────────┘
 ```
 
-No third-party cookies or separate Azure AD app are required: the Office Dialog is
-a real browser window same-origin with `my.stll.app`, so better-auth's
-existing Microsoft provider works as it does for any browser sign-in.
+No third-party cookies or separate Azure AD app are required. The Office Dialog
+starts on the task pane's origin, as required by Office, then navigates to the
+web origin where better-auth's existing Microsoft provider works as it does for
+any browser sign-in.
 
 ## Production hosting
 

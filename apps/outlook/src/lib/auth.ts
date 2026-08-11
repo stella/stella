@@ -1,7 +1,7 @@
 import { OutlookError } from "@/lib/outlook-error";
 
 const HANDOFF_MESSAGE_TYPE = "stella:auth";
-const DIALOG_PATH = "/sign-in-outlook";
+const DIALOG_BOOTSTRAP_PATH = "/dialog.html";
 const MAX_TOKEN_LENGTH = 8192;
 
 const TOKEN_SUBSCRIBERS = new Set<(token: string | null) => void>();
@@ -79,10 +79,22 @@ export const parseHandoffToken = ({
   }
 };
 
-export const signInViaDialog = async (
-  signInOrigin: string,
-  taskpaneOrigin: string,
-): Promise<string> => {
+export const buildDialogStartAddress = (taskpaneOrigin: string): string => {
+  const origin = new URL(taskpaneOrigin).origin;
+  const startAddress = new URL(DIALOG_BOOTSTRAP_PATH, origin);
+  startAddress.searchParams.set("parentOrigin", origin);
+  return startAddress.toString();
+};
+
+type SignInViaDialogOptions = {
+  signInOrigin: string;
+  taskpaneOrigin: string;
+};
+
+export const signInViaDialog = async ({
+  signInOrigin,
+  taskpaneOrigin,
+}: SignInViaDialogOptions): Promise<string> => {
   const office = getOffice();
   const ui = office?.context.ui;
   if (!ui?.displayDialogAsync) {
@@ -92,12 +104,11 @@ export const signInViaDialog = async (
   }
 
   const expectedOrigin = new URL(signInOrigin).origin;
-  const startAddress = new URL(DIALOG_PATH, expectedOrigin);
-  startAddress.searchParams.set("parentOrigin", new URL(taskpaneOrigin).origin);
+  const startAddress = buildDialogStartAddress(taskpaneOrigin);
 
   return await new Promise<string>((resolve, reject) => {
     ui.displayDialogAsync(
-      startAddress.toString(),
+      startAddress,
       { height: 60, promptBeforeOpen: false, width: 40 },
       (result) => {
         if (result.status !== "succeeded") {

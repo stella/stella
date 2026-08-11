@@ -8,7 +8,12 @@ import {
 } from "node:fs";
 import path from "node:path";
 
-import { type ManifestEnv, renderManifest } from "./render-manifest";
+import {
+  type ManifestEnv,
+  renderManifest,
+  resolveManifestPlaceholders,
+  resolveOutlookRuntimeConfig,
+} from "./render-manifest";
 import { validateManifestFile } from "./validate-manifest";
 
 const APP_ROOT = path.resolve(import.meta.dirname, "..");
@@ -30,6 +35,11 @@ const parseEnv = (): ManifestEnv => {
 };
 
 const targetEnv = parseEnv();
+const placeholders = resolveManifestPlaceholders(targetEnv);
+const runtimeConfig = resolveOutlookRuntimeConfig({
+  env: targetEnv,
+  placeholders,
+});
 
 const decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
 
@@ -54,6 +64,12 @@ const build = Bun.spawnSync(
     "[name].[ext]",
     "--define",
     `globalThis.STELLA_BUILD_ENV=${JSON.stringify(targetEnv)}`,
+    "--define",
+    `globalThis.STELLA_API_ORIGIN=${JSON.stringify(runtimeConfig.apiBaseUrl)}`,
+    "--define",
+    `globalThis.STELLA_WEB_ORIGIN=${JSON.stringify(runtimeConfig.webOrigin)}`,
+    "--define",
+    `globalThis.STELLA_TASKPANE_ORIGIN=${JSON.stringify(runtimeConfig.taskpaneOrigin)}`,
   ],
   {
     cwd: APP_ROOT,
@@ -143,6 +159,34 @@ writeFileSync(
     <script type="module" src="/assets/commands.js"></script>
   </head>
   <body></body>
+</html>
+`,
+);
+
+writeFileSync(
+  path.resolve(DIST_DIR, "dialog.html"),
+  `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>stella sign in</title>
+  </head>
+  <body>
+    <script>
+      const destination = new URL(
+        "/sign-in-outlook",
+        ${JSON.stringify(placeholders.WEB_ORIGIN)},
+      );
+      const parentOrigin = new URL(window.location.href).searchParams.get(
+        "parentOrigin",
+      );
+      if (parentOrigin) {
+        destination.searchParams.set("parentOrigin", parentOrigin);
+      }
+      window.location.replace(destination);
+    </script>
+  </body>
 </html>
 `,
 );
