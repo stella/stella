@@ -18,7 +18,7 @@ checks.
    ```
 
    If this exits before the runner starts with a missing-package or
-   module-resolution error, run `bun install` once and retry the exact same
+   module-resolution error, run `bun ci` once and retry the exact same
    dry-run command. Do not treat other failures as bootstrap errors or retry
    them this way.
 
