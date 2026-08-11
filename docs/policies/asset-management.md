@@ -48,10 +48,10 @@ and container base images used in the Stella monorepo.
 
 5. **Dependabot monitoring.** Dependabot tracks four
    ecosystems (`.github/dependabot.yml`):
-   - **Bun packages:** weekly checks, grouped by library family.
-   - **GitHub Actions:** weekly checks, grouped.
-   - **Docker base images:** weekly checks.
-   - **Cargo crates:** weekly checks, grouped by runtime family.
+   - **Bun packages:** daily checks, grouped by library family.
+   - **GitHub Actions:** daily checks, grouped.
+   - **Docker base images:** daily checks.
+   - **Cargo crates:** daily checks, grouped by runtime family.
 
    All updates use a five-day cooldown before adoption, aligned with
    Bun's `minimumReleaseAge` quarantine.
