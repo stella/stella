@@ -77,7 +77,7 @@ const CZ_NSS_COURT = "Nejvyšší správní soud";
  * assumed: a day-filtered search stating 50 records renders 40 rows inline and
  * serves the remaining 10 as the next page.
  */
-const RESULTS_PER_PAGE = 40;
+export const CZ_NSS_RESULTS_PER_PAGE = 40;
 
 /**
  * How many records the court says its own search matched, as the results page
@@ -971,11 +971,21 @@ export const CZ_NSS_FIRST_SLICE = "2003-02-04";
 /**
  * Days near the tip that the reconciliation re-walks on a fast cadence.
  *
- * A slice is the decision date, and the portal posts a decision some time
- * after it is handed down, so the tip window is where the newest dates fill
- * in. A fortnight keeps the fast lane a fixed, small amount of work; a date
- * that fills in later is reached by the ledger's standing re-check of short
- * slices and by the historical sweep.
+ * A slice is the decision date, not the date the portal published it, and the
+ * portal posts a decision some time after it is handed down. So the tip window
+ * is where the newest dates fill in, and a fortnight keeps the fast lane a
+ * fixed, small amount of work.
+ *
+ * What that does NOT cover, stated plainly rather than assumed away: a
+ * decision published more than this window after its decision date lands in a
+ * slice the loop has already walked and recorded complete. The ledger's
+ * standing re-check only revisits rows recorded short, and the historical
+ * sweep only reaches slices never surveyed, so neither returns to it; the
+ * crawl cannot either, since its date cursor is forward-only. Closing that
+ * needs a bounded periodic resurvey of settled slices in
+ * `reconciliation-plan.ts`, which is engine-level and applies to every
+ * date-sliced source, not something this adapter can decide for itself.
+ * Widening the window here would only move the boundary, not remove it.
  */
 const CZ_NSS_TIP_WINDOW_DAYS = 14;
 
@@ -1074,6 +1084,11 @@ const listCzNssSlicePage = async ({
   const search = await executeSearch(session, slice, effectiveSignal);
 
   if (search.statedCount === null) {
+    // A 200 that is not a results page is what an expired ASP.NET session
+    // looks like: the portal re-renders the unsubmitted form. Dropping the
+    // session turns one expiry into one failed request instead of ten minutes
+    // of them.
+    invalidateSession();
     throw new AdapterFetchError({
       message: `NSS stated no result count for ${slice}`,
       adapterKey: ADAPTER_KEYS.CZ_NSS,
@@ -1097,6 +1112,10 @@ const listCzNssSlicePage = async ({
 
   const { continuation } = search;
   if (continuation === undefined) {
+    // Same reasoning as the missing count: a results page always carries the
+    // state its own infinite scroll pages with, so a page without it is not
+    // one the current session produced.
+    invalidateSession();
     throw new AdapterFetchError({
       message: `NSS results for ${slice} carried no pagination state`,
       adapterKey: ADAPTER_KEYS.CZ_NSS,
@@ -1117,12 +1136,33 @@ const listCzNssSlicePage = async ({
           }),
         );
 
+  // How many rows this page must carry, from the count the portal stated for
+  // the whole day. A short page is refused rather than returned, because the
+  // engine measures a slice by the identities the walk produced: a page that
+  // quietly came back empty (the continuation endpoint answers 200 with no
+  // body when it does not recognise the query) or that a changed table markup
+  // parsed only part of would undercount `reported`, and an undercounted
+  // `reported` reads as a fully collected day and settles it forever. Left
+  // unwritten, the day keeps its previous row and the failure surfaces in the
+  // loop's tally.
+  const expectedRows = Math.min(
+    CZ_NSS_RESULTS_PER_PAGE,
+    search.statedCount - page * CZ_NSS_RESULTS_PER_PAGE,
+  );
+  if (rows.length < expectedRows) {
+    throw new AdapterFetchError({
+      message: `NSS page ${page} of ${slice} carried ${rows.length} of the ${expectedRows} rows its stated count of ${search.statedCount} requires`,
+      adapterKey: ADAPTER_KEYS.CZ_NSS,
+      cursor: slice,
+    });
+  }
+
   return {
     items: rows.map((row) => ({
       identity: czNssListingIdentity(row),
       payload: row,
     })),
-    totalPages: Math.ceil(search.statedCount / RESULTS_PER_PAGE),
+    totalPages: Math.ceil(search.statedCount / CZ_NSS_RESULTS_PER_PAGE),
   };
 };
 
@@ -1351,7 +1391,7 @@ export const czNssAdapter = defineSourceAdapter({
         }
 
         // Determine next cursor
-        if (rows.length >= RESULTS_PER_PAGE) {
+        if (rows.length >= CZ_NSS_RESULTS_PER_PAGE) {
           // More pages for this date
           return {
             decisions,

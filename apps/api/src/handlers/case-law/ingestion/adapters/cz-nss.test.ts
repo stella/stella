@@ -22,6 +22,7 @@ import {
   czNssAdapter,
   czNssListingIdentity,
   CZ_NSS_FIRST_SLICE,
+  CZ_NSS_RESULTS_PER_PAGE,
   parseResultRows,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import type { ParsedRow } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
@@ -96,6 +97,20 @@ const REGIONAL_ROW = {
   court: "Krajsk&#xE9;ho soudu v Hradci Kr&#xE1;lov&#xE9;",
   date: "10.06.2026",
 } as const satisfies RowFixture;
+
+/**
+ * A page's worth of distinct rows. Sized from the adapter's own page constant
+ * so the fixture cannot drift from the cardinality the walk enforces.
+ */
+const fullPageRows = (count: number): RowFixture[] =>
+  Array.from({ length: count }, (_, index) => ({
+    index,
+    documentId: String(780_000 + index),
+    citedCaseNumber: `${index + 1} As ${index + 1}/2026-10`,
+    displayedCaseNumber: `${index + 1}&#xA0;As&#xA0;${index + 1}/2026&#xA0;-&#xA0;10`,
+    court: "Nejvy&#x161;&#x161;&#xED; spr&#xE1;vn&#xED; soud",
+    date: "10.06.2026",
+  }));
 
 /** The pagination state the portal hands to its own infinite scroll. */
 const CURR_PARAMS_JSON =
@@ -411,21 +426,12 @@ describe("cz-nss listing rows", () => {
 
 describe("cz-nss listSlicePage", () => {
   const originalFetch = globalThis.fetch;
-  let clock = 0;
-
-  beforeEach(() => {
-    // Every test starts past the cached session's TTL, so each one exercises
-    // session establishment rather than inheriting its predecessor's.
-    clock += 1;
-    setSystemTime(new Date(Date.UTC(2026, 7, 11, clock)));
-  });
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
-    setSystemTime();
   });
 
-  test("establishes a session, then searches the day", async () => {
+  test("searches the day the slice names", async () => {
     const { requests } = installStub({
       search: [
         htmlResponse(
@@ -439,16 +445,38 @@ describe("cz-nss listSlicePage", () => {
       page: 0,
     });
 
-    expect(requests.map(({ method, url }) => `${method} ${url}`)).toEqual([
-      `GET ${BASE_URL}/`,
+    const search = requests.at(-1);
+    expect(`${search?.method} ${search?.url}`).toBe(
       `POST ${BASE_URL}/Home/Index`,
-    ]);
+    );
     // The court's own date field, in its own format.
-    expect(requests.at(1)?.body).toContain("HodnotaDatumACasOd=10.06.2026");
+    expect(search?.body).toContain("HodnotaDatumACasOd=10.06.2026");
     expect(listed.totalPages).toBe(1);
     expect(listed.items.map(({ identity }) => identity)).toEqual([
       { type: "case-number", caseNumber: "1 Az 4/2026", language: "cs" },
       { type: "case-number", caseNumber: "52 Af 4/2026", language: "cs" },
+    ]);
+  });
+
+  test("establishes its own session when it holds none", async () => {
+    // The adapter's session cache is module-level, so it is shared with every
+    // other suite in this process and its state cannot be assumed. A failed
+    // search drops it, which is the adapter's own way of reaching the one
+    // state this asserts about.
+    const { requests } = installStub({
+      search: [
+        htmlResponse("upstream failure", 503),
+        htmlResponse(searchPage({ statedCount: 1, rows: [MUNICIPAL_ROW] })),
+      ],
+    });
+    await rejectionOf(reconciliation.listSlicePage({ slice: SLICE, page: 0 }));
+    requests.length = 0;
+
+    await reconciliation.listSlicePage({ slice: SLICE, page: 0 });
+
+    expect(requests.map(({ method, url }) => `${method} ${url}`)).toEqual([
+      `GET ${BASE_URL}/`,
+      `POST ${BASE_URL}/Home/Index`,
     ]);
   });
 
@@ -494,6 +522,29 @@ describe("cz-nss listSlicePage", () => {
   });
 
   test("derives the page count from the court's own record count", async () => {
+    const statedCount = CZ_NSS_RESULTS_PER_PAGE + 10;
+    installStub({
+      search: [
+        htmlResponse(
+          searchPage({
+            statedCount,
+            rows: fullPageRows(CZ_NSS_RESULTS_PER_PAGE),
+          }),
+        ),
+      ],
+    });
+
+    // A day whose count runs past one page is two pages.
+    expect(
+      (await reconciliation.listSlicePage({ slice: SLICE, page: 0 }))
+        .totalPages,
+    ).toBe(2);
+  });
+
+  test("refuses a first page shorter than the stated count requires", async () => {
+    // The exact shape a changed results table would produce: the count still
+    // says 50, the parser recovers two rows. Returning them would record the
+    // day as holding two decisions and settle it.
     installStub({
       search: [
         htmlResponse(
@@ -502,17 +553,45 @@ describe("cz-nss listSlicePage", () => {
       ],
     });
 
-    // 50 records at 40 per page is two pages, whatever one page renders.
+    const error = await rejectionOf(
+      reconciliation.listSlicePage({ slice: SLICE, page: 0 }),
+    );
+    expect(error).toBeInstanceOf(Error);
+    expect(String(error)).toContain("carried 2 of the 40 rows");
+  });
+
+  test("refuses a continuation page the endpoint answered empty", async () => {
+    // A 200 with no body is how the endpoint answers a query it does not
+    // recognise; read as the end of the day it would lose every row past the
+    // first page, permanently.
+    installStub({
+      search: [
+        htmlResponse(
+          searchPage({
+            statedCount: CZ_NSS_RESULTS_PER_PAGE + 10,
+            rows: fullPageRows(CZ_NSS_RESULTS_PER_PAGE),
+          }),
+        ),
+      ],
+      continuation: [htmlResponse("")],
+    });
+
     expect(
-      (await reconciliation.listSlicePage({ slice: SLICE, page: 0 }))
-        .totalPages,
-    ).toBe(2);
+      await rejectionOf(
+        reconciliation.listSlicePage({ slice: SLICE, page: 1 }),
+      ),
+    ).toBeInstanceOf(Error);
   });
 
   test("asks the portal's own continuation endpoint for a later page", async () => {
     const { requests } = installStub({
       search: [
-        htmlResponse(searchPage({ statedCount: 50, rows: [MUNICIPAL_ROW] })),
+        htmlResponse(
+          searchPage({
+            statedCount: CZ_NSS_RESULTS_PER_PAGE + 1,
+            rows: fullPageRows(CZ_NSS_RESULTS_PER_PAGE),
+          }),
+        ),
       ],
       continuation: [htmlResponse(rowBlock(REGIONAL_ROW))],
     });
@@ -622,16 +701,9 @@ describe("cz-nss listSlicePage", () => {
 
 describe("cz-nss buildDecision", () => {
   const originalFetch = globalThis.fetch;
-  let clock = 100;
-
-  beforeEach(() => {
-    clock += 1;
-    setSystemTime(new Date(Date.UTC(2026, 7, 11, clock)));
-  });
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
-    setSystemTime();
   });
 
   const listedRow = async (): Promise<unknown> => {
