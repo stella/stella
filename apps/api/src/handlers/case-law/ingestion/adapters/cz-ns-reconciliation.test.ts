@@ -12,6 +12,7 @@ import {
 import {
   listingIdentityKey,
   parseListingIdentityKey,
+  SOURCE_DOCUMENT_ID_MAX_LENGTH,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SourceReconciliation } from "@/api/handlers/case-law/ingestion/adapter";
 import {
@@ -252,27 +253,16 @@ describe("cz-ns reconciliation slices", () => {
 // ── Identity ────────────────────────────────────────────────
 
 describe("czNsListingIdentity", () => {
-  test("keys on the docket and the language, never the universal id", () => {
+  test("keys on the universal id, never the docket", () => {
     const identity = czNsListingIdentity({
       unid: UNID.FIRST,
       caseNumber: DOCKET.FIRST,
     });
     expect(identity).toEqual({
-      type: "case-number",
-      caseNumber: DOCKET.FIRST,
-      language: "cs",
+      type: "document",
+      sourceDocumentId: UNID.FIRST,
     });
-    expect(listingIdentityKey(identity)).toBe(`case-number:cs:${DOCKET.FIRST}`);
-  });
-
-  test("keeps the docket exactly as the publisher writes it, suffix included", () => {
-    expect(
-      czNsListingIdentity({ unid: UNID.THIRD, caseNumber: DOCKET.SUFFIXED }),
-    ).toEqual({
-      type: "case-number",
-      caseNumber: DOCKET.SUFFIXED,
-      language: "cs",
-    });
+    expect(listingIdentityKey(identity)).toBe(`document:${UNID.FIRST}`);
   });
 
   test("a row missing either half is unidentifiable, matching what the crawl drops", () => {
@@ -289,16 +279,27 @@ describe("czNsListingIdentity", () => {
     ).toBeNull();
   });
 
+  test("an id the decision column cannot hold keys nothing", () => {
+    // Storing it is impossible, so hunting a row under it would keep the slice
+    // short for a document nothing can ever write.
+    expect(
+      czNsListingIdentity({
+        unid: "F".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
+        caseNumber: DOCKET.FIRST,
+      }),
+    ).toEqual({ type: "unidentifiable" });
+  });
+
   test("every keyable identity round-trips through its key", () => {
-    for (const caseNumber of [DOCKET.FIRST, DOCKET.SECOND, DOCKET.SUFFIXED]) {
-      const identity = czNsListingIdentity({ unid: UNID.FIRST, caseNumber });
+    for (const unid of [UNID.FIRST, UNID.SECOND, UNID.THIRD]) {
+      const identity = czNsListingIdentity({ unid, caseNumber: DOCKET.FIRST });
       const key = listingIdentityKey(identity);
       expect(key).not.toBeNull();
       expect(parseListingIdentityKey(key ?? "")).toEqual(identity);
     }
   });
 
-  test("two documents under one docket collapse to one key, as the store does", () => {
+  test("two documents under one docket are two keys, as the store now is", () => {
     const first = czNsListingIdentity({
       unid: UNID.FIRST,
       caseNumber: DOCKET.FIRST,
@@ -307,7 +308,7 @@ describe("czNsListingIdentity", () => {
       unid: UNID.SECOND,
       caseNumber: DOCKET.FIRST,
     });
-    expect(listingIdentityKey(first)).toBe(listingIdentityKey(second));
+    expect(listingIdentityKey(first)).not.toBe(listingIdentityKey(second));
   });
 });
 
@@ -335,8 +336,8 @@ describe("cz-ns listSlicePage", () => {
       { unid: UNID.SECOND, caseNumber: DOCKET.SECOND },
     ]);
     expect(listed.items.map(({ identity }) => identity)).toEqual([
-      { type: "case-number", caseNumber: DOCKET.FIRST, language: "cs" },
-      { type: "case-number", caseNumber: DOCKET.SECOND, language: "cs" },
+      { type: "document", sourceDocumentId: UNID.FIRST },
+      { type: "document", sourceDocumentId: UNID.SECOND },
     ]);
 
     const url = requestedUrls.at(0) ?? "";
@@ -524,16 +525,34 @@ describe("cz-ns buildDecision", () => {
     if (built.type !== "built") {
       return;
     }
-    // The adapter writes no document id, so the row is keyed on the docket —
-    // which is what the listing identity has to say too.
-    expect(built.decision.sourceDocumentId).toBeUndefined();
+    // Silent drift here is the whole failure mode: a walk that keys a row one
+    // way and a build that stores it another leaves the slice permanently
+    // short and re-fetches the same document forever.
+    expect(built.decision.sourceDocumentId).toBe(UNID.FIRST);
     expect(
       listingIdentityKey({
-        type: "case-number",
-        caseNumber: built.decision.caseNumber,
-        language: built.decision.language,
+        type: "document",
+        sourceDocumentId: built.decision.sourceDocumentId ?? "",
       }),
     ).toBe(listingIdentityKey(czNsListingIdentity(row)));
+  });
+
+  test("the built decision carries the URL its docket-keyed row was stored under", async () => {
+    mockFetch({ printStatus: 404 });
+
+    const built = await reconciliation.buildDecision({
+      unid: UNID.FIRST,
+      caseNumber: DOCKET.FIRST,
+    });
+    expect(built.type).toBe("built");
+    if (built.type !== "built") {
+      return;
+    }
+    // The hint the pipeline re-keys an existing null-id row by: it must be the
+    // URL that row carries, which is the one this build stores as `sourceUrl`.
+    expect(built.decision.legacySourceUrls).toEqual([
+      built.decision.sourceUrl ?? "",
+    ]);
   });
 
   test("a detail page that does not come back is reported, never written", async () => {

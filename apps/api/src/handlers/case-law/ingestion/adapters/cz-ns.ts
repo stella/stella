@@ -9,6 +9,7 @@ import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   defineSourceAdapter,
   EMPTY_AST,
+  isPersistableSourceDocumentId,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
@@ -56,7 +57,7 @@ const COMMON_HEADERS = {
 const BASE_URL = "https://rozhodnuti.nsoud.cz/Judikatura/judikatura_ns.nsf";
 const PAGE_SIZE = 40;
 
-/** The only language this court publishes; half of every identity it keys. */
+/** The only language this court publishes. */
 const CZ_NS_LANGUAGE = "cs";
 
 /** Domino ReadViewEntries JSON shape. */
@@ -262,6 +263,25 @@ export type CzNsListingRow = {
 };
 
 /**
+ * The two fields a row must state for this adapter to keep it: the docket it
+ * is stored under and the universal id its document is keyed on.
+ *
+ * Stated once, because the crawl, the identity rule and the listing walk must
+ * agree exactly on which rows exist — a row one of them keeps and another
+ * drops is either a decision nothing ever stores or a slice that can never be
+ * filled. The id is bounded here rather than at the pipeline, since it is the
+ * stored identity: one the column cannot hold would key a row nothing can
+ * write.
+ */
+const czNsIdentityFields = ({
+  caseNumber,
+  unid,
+}: CzNsListingRow): CzNsListingRow | null =>
+  caseNumber.length === 0 || !isPersistableSourceDocumentId(unid)
+    ? null
+    : { caseNumber, unid };
+
+/**
  * What building one listed decision produced. `detail-unavailable` carries
  * the status the publisher answered with so the crawl can log it; the
  * reconciliation drops it, having only the three outcomes its contract names.
@@ -287,12 +307,14 @@ type CzNsBuildResult =
  * metadata the detail page states, and is stored with an empty AST.
  */
 export const buildCzNsDecision = async (
-  { caseNumber, unid }: CzNsListingRow,
+  row: CzNsListingRow,
   signal?: AbortSignal,
 ): Promise<CzNsBuildResult> => {
-  if (unid.length === 0 || caseNumber.length === 0) {
+  const fields = czNsIdentityFields(row);
+  if (fields === null) {
     return { type: "unkeyable" };
   }
+  const { caseNumber, unid } = fields;
 
   const webUrl = `${BASE_URL}/WebSearch/${unid}?openDocument`;
   const printUrl = `${BASE_URL}/WebPrint/${unid}?openDocument`;
@@ -349,6 +371,15 @@ export const buildCzNsDecision = async (
     type: "built",
     decision: {
       caseNumber,
+      sourceDocumentId: unid,
+      // What every row this adapter wrote before it stated an id was stored
+      // under: one row per docket, carrying the document URL of whichever of
+      // the docket's decisions was written last. The URL names one document
+      // exactly, so it re-keys that row to the document it was built from
+      // rather than inserting a second one beside it; the docket's further
+      // decisions find no null-id row and are inserted, which is the collapse
+      // being undone.
+      legacySourceUrls: [webUrl],
       ecli: meta["ecli"],
       court: "Nejvyšší soud",
       country: "CZE",
@@ -532,32 +563,30 @@ const parseListingRows = (html: string): CzNsListingRow[] =>
 /**
  * The identity the ingest would store for a listed row.
  *
- * The docket and the language, never the universal id the row also carries:
- * this adapter sets no `sourceDocumentId`, so every row it has ever written
- * is keyed on `(caseNumber, language)` against a null document id. Keying the
- * listing on the id would match no held row at all and read the whole archive
- * as missing.
+ * The Domino universal id, which is stable and unique per document and is
+ * what {@link buildCzNsDecision} now stores as `sourceDocumentId`. The docket
+ * is not: the court publishes a docket's further decisions under the same
+ * `znacka`, sometimes distinguished only by a suffix it writes into the number
+ * itself ("21 Cdo 288/2026- III.") and often not at all, so a
+ * `(caseNumber, language)` key names a docket rather than a document and
+ * collapses those rows into one.
  *
- * That key is coarser than the source is. The court publishes a docket's
- * further decisions under the same `znacka`, sometimes distinguished only by
- * a suffix it writes into the docket itself ("21 Cdo 288/2026- III."), and
- * where it does not, the crawl already collapses them into one row. The walk
- * inherits exactly that: two such rows in one slice are one identity, counted
- * once. Giving them separate identities is an identity migration of the
- * stored rows, not something a reconciliation pass may decide on its own —
- * until those rows carry the universal id, this is what "held" means.
+ * Rows written before the adapter stated an id are re-keyed by the
+ * deterministic `WebSearch/{unid}` URL they carry — see `legacySourceUrls` in
+ * the build. The two must state one rule: a walk that keyed rows differently
+ * from the ingest would read stored decisions as missing and re-fetch them
+ * forever.
  *
  * A row missing either half is unidentifiable rather than keyed on what is
  * left: the crawl drops such an entry, so a slice that counted it would stay
  * short forever.
  */
-export const czNsListingIdentity = ({
-  caseNumber,
-  unid,
-}: CzNsListingRow): ListingIdentity =>
-  unid.length === 0 || caseNumber.length === 0
+export const czNsListingIdentity = (row: CzNsListingRow): ListingIdentity => {
+  const fields = czNsIdentityFields(row);
+  return fields === null
     ? { type: "unidentifiable" }
-    : { type: "case-number", caseNumber, language: CZ_NS_LANGUAGE };
+    : { type: "document", sourceDocumentId: fields.unid };
+};
 
 /**
  * One publication day, in one request.

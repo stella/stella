@@ -56,6 +56,13 @@ const PAGE_SIZE = 100;
 const LEGACY_PAGE_SIZE = 100;
 const ITEM_CONCURRENCY = 10;
 
+/**
+ * SAOS numbers `pageNumber` from zero, on both the dump the crawl walks and
+ * the search the slice listing walks: the listing asks for the slice's page
+ * number unchanged, and the crawl derives the same number from its offset.
+ */
+const FIRST_PAGE = 0;
+
 /** The only language this source publishes; half of the fallback identity. */
 export const PL_COURTS_LANGUAGE = "pl";
 
@@ -946,7 +953,7 @@ export const listPlCourtsDayPage = async ({
 }: ListPlCourtsDayPageOptions): Promise<PlCourtsDayPage> => {
   const url = `${SEARCH_URL}?${new URLSearchParams({
     pageSize: String(PAGE_SIZE),
-    pageNumber: String(page),
+    pageNumber: String(page + FIRST_PAGE),
     sortingField: SLICE_SORTING_FIELD,
     sortingDirection: SLICE_SORTING_DIRECTION,
     judgmentDateFrom: date,
@@ -1083,7 +1090,7 @@ export const plCourtsAdapter = defineSourceAdapter({
       const response = await fetchWithTimeout(
         `${SEARCH_URL}?${new URLSearchParams({
           pageSize: "1",
-          pageNumber: "0",
+          pageNumber: String(FIRST_PAGE),
           sortingField: "JUDGMENT_DATE",
           sortingDirection: "DESC",
         }).toString()}`,
@@ -1132,7 +1139,7 @@ export const plCourtsAdapter = defineSourceAdapter({
     adapterKey: ADAPTER_KEYS.PL_COURTS,
     pageSize: PAGE_SIZE,
     legacyPageSize: LEGACY_PAGE_SIZE,
-    zeroIndexed: true,
+    firstPage: FIRST_PAGE,
     listTimeoutMs: 60_000,
     itemConcurrency: ITEM_CONCURRENCY,
 

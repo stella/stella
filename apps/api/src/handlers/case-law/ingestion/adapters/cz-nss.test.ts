@@ -27,7 +27,10 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import type { ParsedRow } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
-import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
+import {
+  listingIdentityKey,
+  SOURCE_DOCUMENT_ID_MAX_LENGTH,
+} from "@/api/lib/legal-search/ingestion-types";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const { reconciliation } = czNssAdapter;
@@ -382,43 +385,62 @@ describe("cz-nss listing rows", () => {
     );
   });
 
-  test("keys a row on its docket and this source's language", () => {
+  test("keys a row on the portal's own document id", () => {
     const row = parseResultRows(rowBlock(MUNICIPAL_ROW)).at(0);
     expect(row).toBeDefined();
     if (row === undefined) {
       return;
     }
     expect(czNssListingIdentity(row)).toEqual({
-      type: "case-number",
-      caseNumber: "1 Az 4/2026",
-      language: "cs",
+      type: "document",
+      sourceDocumentId: "784237",
     });
     expect(listingIdentityKey(czNssListingIdentity(row))).toBe(
-      "case-number:cs:1 Az 4/2026",
+      "document:784237",
     );
   });
 
-  test("keys on the docket even where the portal states a document id", () => {
-    // The store holds no `sourceDocumentId` for this source, so a document
-    // identity would match no held row and read the archive as missing.
-    const row = parseResultRows(rowBlock(REGIONAL_ROW)).at(0);
-    expect(row?.documentId).toBe("783863");
-    expect(row === undefined ? null : czNssListingIdentity(row).type).toBe(
-      "case-number",
+  test("two courts' decisions under one docket are two keys", () => {
+    // The portal carries the regional and city administrative courts
+    // alongside the NSS, and their dockets are numbered per court; keyed on
+    // the docket, two unrelated decisions were one row.
+    const municipal = parseResultRows(rowBlock(MUNICIPAL_ROW)).at(0);
+    const regional = parseResultRows(
+      rowBlock({
+        ...REGIONAL_ROW,
+        citedCaseNumber: MUNICIPAL_ROW.citedCaseNumber,
+      }),
+    ).at(0);
+    expect(municipal).toBeDefined();
+    expect(regional).toBeDefined();
+    if (municipal === undefined || regional === undefined) {
+      return;
+    }
+    expect(regional.caseNumber).toBe(municipal.caseNumber);
+    expect(listingIdentityKey(czNssListingIdentity(regional))).not.toBe(
+      listingIdentityKey(czNssListingIdentity(municipal)),
     );
   });
 
-  test("a row with no docket has nothing to key on", () => {
+  test("a row the portal lists without a document link has nothing to key on", () => {
     const row: ParsedRow = {
-      caseNumber: "",
+      caseNumber: "1 Az 4/2026",
       decisionDate: undefined,
       decisionType: undefined,
       outcome: undefined,
       documentUrl: undefined,
-      documentId: "784237",
+      documentId: undefined,
     };
+    // Nothing can be read for it, now or later, so counting it as missing
+    // would keep its slice short forever.
     expect(czNssListingIdentity(row)).toEqual({ type: "unidentifiable" });
     expect(listingIdentityKey(czNssListingIdentity(row))).toBeNull();
+    expect(
+      czNssListingIdentity({
+        ...row,
+        documentId: "9".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
+      }),
+    ).toEqual({ type: "unidentifiable" });
   });
 });
 
@@ -453,8 +475,8 @@ describe("cz-nss listSlicePage", () => {
     expect(search?.body).toContain("HodnotaDatumACasOd=10.06.2026");
     expect(listed.totalPages).toBe(1);
     expect(listed.items.map(({ identity }) => identity)).toEqual([
-      { type: "case-number", caseNumber: "1 Az 4/2026", language: "cs" },
-      { type: "case-number", caseNumber: "52 Af 4/2026", language: "cs" },
+      { type: "document", sourceDocumentId: MUNICIPAL_ROW.documentId },
+      { type: "document", sourceDocumentId: REGIONAL_ROW.documentId },
     ]);
   });
 
@@ -611,7 +633,7 @@ describe("cz-nss listSlicePage", () => {
     expect(body.get("pageNum")).toBe("1");
     expect(body.get("resultOrder")).toBe(CURR_SORT);
     expect(listed.items.map(({ identity }) => identity)).toEqual([
-      { type: "case-number", caseNumber: "52 Af 4/2026", language: "cs" },
+      { type: "document", sourceDocumentId: REGIONAL_ROW.documentId },
     ]);
   });
 
@@ -735,8 +757,25 @@ describe("cz-nss buildDecision", () => {
     expect(built.decision.language).toBe("cs");
     expect(built.decision.court).toBe("Nejvyšší správní soud");
     expect(built.decision.ecli).toBe("ECLI:CZ:NSS:2026:1.Az.4.2026.79");
-    expect(built.decision.sourceDocumentId).toBeUndefined();
     expect(built.decision.fulltext ?? "").not.toBe("");
+    // Silent drift here is the whole failure mode: a walk that keys a row one
+    // way and a build that stores it another leaves the slice permanently
+    // short and re-fetches the same document forever.
+    expect(built.decision.sourceDocumentId).toBe(MUNICIPAL_ROW.documentId);
+    expect(
+      listingIdentityKey({
+        type: "document",
+        sourceDocumentId: built.decision.sourceDocumentId ?? "",
+      }),
+    ).toBe(`document:${MUNICIPAL_ROW.documentId}`);
+    // The hint the pipeline re-keys an existing null-id row by: it must be the
+    // URL that row carries, which is the one this build stores as `sourceUrl`.
+    expect(built.decision.legacySourceUrls).toEqual([
+      built.decision.sourceUrl ?? "",
+    ]);
+    expect(built.decision.sourceUrl).toBe(
+      `${BASE_URL}/DokumentDetail/Index/${MUNICIPAL_ROW.documentId}`,
+    );
   });
 
   test("refuses to write a row whose document the court did not serve", async () => {
