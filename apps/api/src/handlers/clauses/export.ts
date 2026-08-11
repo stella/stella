@@ -12,7 +12,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { escapeCSV } from "@/api/lib/csv";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedClauseId } from "@/api/lib/safe-id-boundaries";
-import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { buildClauseCategoryPath } from "./category-path";
@@ -106,13 +107,11 @@ export const exportHandler = async function* ({
     const csvContent = csvRows.join("\n");
 
     return Result.ok(
-      new Response(csvContent, {
-        status: 200,
-        headers: {
-          ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
-          "Content-Type": "text/csv",
-          "Content-Disposition": 'attachment; filename="clauses-export.csv"',
-        },
+      secureDocumentResponse({
+        body: csvContent,
+        contentType: "text/csv",
+        disposition: "attachment",
+        fileName: sanitizeFilename("clauses-export.csv"),
       }),
     );
   }
@@ -187,13 +186,11 @@ export const exportHandler = async function* ({
   };
 
   return Result.ok(
-    new Response(JSON.stringify(payload, null, 2), {
-      status: 200,
-      headers: {
-        ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
-        "Content-Type": "application/json",
-        "Content-Disposition": 'attachment; filename="clauses-export.json"',
-      },
+    secureDocumentResponse({
+      body: JSON.stringify(payload, null, 2),
+      contentType: "application/json",
+      disposition: "attachment",
+      fileName: sanitizeFilename("clauses-export.json"),
     }),
   );
 };

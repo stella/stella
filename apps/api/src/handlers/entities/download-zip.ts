@@ -22,7 +22,6 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { compareCodepoint } from "@/api/lib/collation";
-import { contentDisposition } from "@/api/lib/content-disposition";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import {
   FetchBoundaryError,
@@ -33,7 +32,7 @@ import { createFileKey } from "@/api/lib/files/utils";
 import { getS3 } from "@/api/lib/s3";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
-import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
+import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 
 const downloadZipParamsSchema = workspaceParams({
   entityId: tSafeId("entity"),
@@ -314,12 +313,11 @@ const downloadZipHandler = async function* ({
   };
 
   return Result.ok(
-    new Response(makeZip(archiveEntries()), {
-      headers: {
-        ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
-        "Content-Type": "application/zip",
-        "Content-Disposition": contentDisposition(zipFileName),
-      },
+    secureDocumentResponse({
+      body: makeZip(archiveEntries()),
+      contentType: "application/zip",
+      disposition: "attachment",
+      fileName: zipFileName,
     }),
   );
 };

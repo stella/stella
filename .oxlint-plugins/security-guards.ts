@@ -4,8 +4,8 @@
 //   1. no-raw-filename-write  — raw user input in fileName properties
 //   2. no-unsanitized-href    — dynamic href without sanitization
 //   3. no-unscoped-user-query — user table import without member scoping
-//   4. require-raw-document-security-headers — raw document responses
-//      without the shared cache/sniff/frame/CSP policy
+//   4. require-secure-document-response — direct raw document Response
+//      construction outside the typed security boundary
 
 import { eslintCompatPlugin, type Ranged } from "@oxlint/plugins";
 
@@ -98,21 +98,15 @@ const isSanitizeHrefCall = (node): boolean => isCallTo(node, "sanitizeHref");
 
 const AUTH_SCHEMA_MODULE = "@/api/db/auth-schema";
 
-// ── Rule 4: require-raw-document-security-headers ─────────────
+// ── Rule 4: require-secure-document-response ──────────────────
 //
 // Production file handlers and attachment responses return privileged bytes
 // through the global Response constructor. Null-body status responses carry no
-// document data; every download must spread the shared security-header policy.
+// document data; every download must use the typed constructor that owns its
+// security headers, MIME type, disposition, and sanitized filename.
 
 const RAW_DOCUMENT_SECURITY_HEADERS = "RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS";
 const SECURITY_HEADERS_MODULE = "@/api/lib/security-headers";
-const PROTECTED_RAW_DOCUMENT_HEADERS = new Set([
-  "cache-control",
-  "content-security-policy",
-  "referrer-policy",
-  "x-content-type-options",
-  "x-frame-options",
-]);
 
 const getHeadersObject = (node) => {
   if (node.type !== "ObjectExpression") {
@@ -153,47 +147,6 @@ const hasAttachmentDisposition = (node): boolean => {
   }
 
   return isCallTo(disposition.value, "contentDisposition");
-};
-
-const hasRawDocumentSecurityHeaders = (
-  node,
-  secureHeadersIdentifiers: Set<string>,
-): boolean => {
-  const headers = getHeadersObject(node);
-  if (!headers) {
-    return false;
-  }
-
-  if (headers.type === "Identifier") {
-    return secureHeadersIdentifiers.has(headers.name);
-  }
-  if (headers.type !== "ObjectExpression") {
-    return false;
-  }
-
-  return hasUnshadowedRawDocumentSecurityHeaders(headers);
-};
-
-const hasUnshadowedRawDocumentSecurityHeaders = (headers): boolean => {
-  const sharedHeadersIndex = headers.properties.findIndex(
-    (property) =>
-      property.type === "SpreadElement" &&
-      isIdentifier(property.argument, RAW_DOCUMENT_SECURITY_HEADERS),
-  );
-  if (sharedHeadersIndex === -1) {
-    return false;
-  }
-
-  return headers.properties.slice(sharedHeadersIndex + 1).every((property) => {
-    if (property.type === "SpreadElement") {
-      return false;
-    }
-    if (property.type !== "Property") {
-      return true;
-    }
-    const propertyName = getPropertyName(property.key)?.toLowerCase();
-    return !propertyName || !PROTECTED_RAW_DOCUMENT_HEADERS.has(propertyName);
-  });
 };
 
 const isFileHandler = (context): boolean =>
@@ -458,39 +411,43 @@ export default eslintCompatPlugin({
       },
     },
 
-    // ── require-raw-document-security-headers ─────────────────
-    "require-raw-document-security-headers": {
+    // ── require-secure-document-response ──────────────────────
+    "require-secure-document-response": {
       meta: {
         type: "problem",
         messages: {
-          missingHeaders:
-            "Raw document responses must spread " +
-            "RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS into their headers.",
+          directResponse:
+            "Use secureDocumentResponse() for raw document bytes so the " +
+            "security policy, MIME type, and disposition are applied by construction.",
+          manualHeaders:
+            "Handler modules must not assemble raw document security headers " +
+            "manually. Use secureDocumentResponse().",
         },
       },
       createOnce(context) {
-        let hasSecurityHeadersImport = false;
         let fileHandler = false;
         const downloadHeadersIdentifiers = new Set<string>();
-        const secureHeadersIdentifiers = new Set<string>();
 
         return {
           before() {
-            hasSecurityHeadersImport = false;
             fileHandler = isFileHandler(context);
             downloadHeadersIdentifiers.clear();
-            secureHeadersIdentifiers.clear();
           },
           ImportDeclaration(node) {
             if (node.source.value !== SECURITY_HEADERS_MODULE) {
               return;
             }
 
-            hasSecurityHeadersImport = node.specifiers.some(
+            const manualSecurityHeadersImport = node.specifiers.find(
               (specifier) =>
-                getImportedName(specifier) === RAW_DOCUMENT_SECURITY_HEADERS &&
-                isIdentifier(specifier.local, RAW_DOCUMENT_SECURITY_HEADERS),
+                getImportedName(specifier) === RAW_DOCUMENT_SECURITY_HEADERS,
             );
+            if (manualSecurityHeadersImport) {
+              context.report({
+                node: manualSecurityHeadersImport,
+                messageId: "manualHeaders",
+              });
+            }
           },
           VariableDeclarator(node) {
             if (
@@ -507,9 +464,6 @@ export default eslintCompatPlugin({
             }
             if (hasAttachmentDisposition(init)) {
               downloadHeadersIdentifiers.add(node.id.name);
-            }
-            if (hasUnshadowedRawDocumentSecurityHeaders(init)) {
-              secureHeadersIdentifiers.add(node.id.name);
             }
           },
           NewExpression(node) {
@@ -534,15 +488,7 @@ export default eslintCompatPlugin({
               return;
             }
 
-            if (
-              hasSecurityHeadersImport &&
-              init &&
-              hasRawDocumentSecurityHeaders(init, secureHeadersIdentifiers)
-            ) {
-              return;
-            }
-
-            context.report({ node, messageId: "missingHeaders" });
+            context.report({ node, messageId: "directResponse" });
           },
         };
       },

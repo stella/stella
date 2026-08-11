@@ -11,11 +11,11 @@ import { entities, entityVersions, fields } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { contentDisposition } from "@/api/lib/content-disposition";
 import { scrubDocumentProperties } from "@/api/lib/files/document-properties";
 import { createFileKey } from "@/api/lib/files/utils";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
-import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 const SCRUBBED_DOWNLOAD_READ_TIMEOUT_MS = 30 * 1000;
@@ -121,12 +121,11 @@ export const readScrubbedDownload = async ({
   const body = new ArrayBuffer(scrubbed.bytes.byteLength);
   new Uint8Array(body).set(scrubbed.bytes);
 
-  return new Response(body, {
-    headers: {
-      ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
-      "Content-Type": content.mimeType,
-      "Content-Disposition": contentDisposition(content.fileName),
-      "Content-Length": String(body.byteLength),
-    },
+  return secureDocumentResponse({
+    body,
+    contentLength: body.byteLength,
+    contentType: content.mimeType,
+    disposition: "attachment",
+    fileName: sanitizeFilename(content.fileName),
   });
 };
