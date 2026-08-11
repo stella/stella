@@ -100,7 +100,11 @@ const insertAuditRows = async (
   tx: Transaction,
   rows: (typeof auditLogs.$inferInsert)[],
 ): Promise<void> => {
-  for (let offset = 0; offset < rows.length; offset += AUDIT_INSERT_BATCH_SIZE) {
+  for (
+    let offset = 0;
+    offset < rows.length;
+    offset += AUDIT_INSERT_BATCH_SIZE
+  ) {
     const batch = rows.slice(offset, offset + AUDIT_INSERT_BATCH_SIZE);
     // oxlint-disable-next-line no-await-in-loop, no-db-await-in-loop/no-db-await-in-loop -- bounded audit batches share one transaction and group ID while staying below PostgreSQL's bind-parameter limit
     await tx.insert(auditLogs).values(batch);
