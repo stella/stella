@@ -24,6 +24,12 @@
  * Cursor format: "YYYY:offset" (e.g. "1993:0", "2020:1500").
  * Legacy cursors (plain offset like "3060") are migrated
  * to the current year on first use.
+ *
+ * The same search endpoint is addressable by an arbitrary
+ * decision-date range, which is what makes this source
+ * reconcilable: a month can be listed on its own, without
+ * the crawl cursor ever reaching it. See `reconciliation`
+ * at the bottom of this file.
  */
 
 import { Result, panic } from "better-result";
@@ -41,13 +47,20 @@ import {
 import type {
   EmptyAst,
   IngestionResult,
+  ListingIdentity,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
   hashContent,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { FetchBoundaryError } from "@/api/lib/errors/tagged-errors";
+import {
+  AdapterFetchError,
+  FetchBoundaryError,
+} from "@/api/lib/errors/tagged-errors";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import { parseSkDecisionPdf } from "@/api/lib/legal-search/parsers/sk-courts";
 import { isRecord } from "@/api/lib/type-guards";
@@ -61,8 +74,19 @@ const DOC_DOWNLOAD_URL = `${BASE_URL}/docDownload`;
 const PAGE_SIZE = 10;
 const SEARCH_RETRY_DELAY_MS = 500;
 
+/**
+ * Page size for a listing walk. The crawl takes ten at a time because every
+ * item it keeps costs a PDF download; a listing walk downloads nothing, so it
+ * asks for the largest page the DMS was observed to honour (a 361-decision
+ * month answers 100, 100, 100, 61).
+ */
+const LISTING_PAGE_SIZE = 100;
+
 /** First year with decisions in the API. */
 const FIRST_YEAR = 1993;
+
+/** The only language this source publishes; half of the stored identity. */
+const SK_US_LANGUAGE = "sk";
 
 /**
  * Fields to request from the search API. Empty array
@@ -206,14 +230,88 @@ const fetchPdfBytes = async (
 const dedupe = (arr: readonly string[] | undefined): string[] =>
   arr ? [...new Set(arr)] : [];
 
-const parseDocument = async (
+/**
+ * The two fields an item must state for this adapter to keep it: the docket it
+ * is stored under and the id its document is downloaded by. Stated once,
+ * because the crawl, the identity rule and the listing walk must agree exactly
+ * on which items exist — an item one of them keeps and another drops is either
+ * a decision nothing ever stores or a slice that can never be filled.
+ */
+const skUsIdentityFields = (
   doc: SearchDocument,
-  signal?: AbortSignal,
-): Promise<IngestionResult | null> => {
-  const caseNumber = doc.mkRSAPNumberOfFile;
-  if (!caseNumber || !doc.documentId) {
+): { caseNumber: string; documentId: string } | null => {
+  const { documentId, mkRSAPNumberOfFile: caseNumber } = doc;
+  if (
+    typeof caseNumber !== "string" ||
+    caseNumber.length === 0 ||
+    typeof documentId !== "string" ||
+    documentId.length === 0
+  ) {
     return null;
   }
+  return { caseNumber, documentId };
+};
+
+/**
+ * The identity the ingest would store for this listing item.
+ *
+ * The docket and the language, never the DMS `documentId`: this adapter emits
+ * no `sourceDocumentId`, so every row it has ever written is keyed on
+ * `(caseNumber, language)` with a null document id. Keying the listing on the
+ * id the publisher does supply would match no held row at all, and the loop
+ * would read the entire archive as missing.
+ *
+ * The cost of that is real and measurable — the court publishes each opinion
+ * of a plenary decision as its own document under one docket (19 documents
+ * under `PL. ÚS 4/2020` in March 2020 alone), and the crawl collapses them
+ * into a single row. Recovering them is an identity migration of the source
+ * (adopt `documentId` as `sourceDocumentId`, with the deterministic
+ * `docDownload/{id}` URL as the `legacySourceUrls` hint that attaches it to
+ * the right null-id row), not something a reconciliation pass may decide on
+ * its own: until the stored rows carry that id, this is what "held" means.
+ */
+export const skUsListingIdentity = (doc: SearchDocument): ListingIdentity => {
+  const fields = skUsIdentityFields(doc);
+  return fields === null
+    ? { type: "unidentifiable" }
+    : {
+        type: "case-number",
+        caseNumber: fields.caseNumber,
+        language: SK_US_LANGUAGE,
+      };
+};
+
+/**
+ * What building one listed item produced.
+ *
+ * `detail-unavailable` still carries the decision the listing alone describes,
+ * because the two callers dispose of it differently: the crawl's cursor moves
+ * past this document either way, so a listing-only row is worth more to it
+ * than nothing, while the reconciliation must refuse it — a detail-less row
+ * would make the identity held and take the document out of every later
+ * reconciliation.
+ */
+export type SkUsBuildResult =
+  | { type: "built"; decision: IngestionResult }
+  /** No docket or no document id to key on; nothing can store this item. */
+  | { type: "unkeyable" }
+  /** The court served no document for the id the listing states. */
+  | { type: "detail-unavailable"; decision: IngestionResult };
+
+/**
+ * Build one decision from a search-listing item, downloading and parsing its
+ * PDF. Shared by the crawl and the reconciliation walk so neither can key,
+ * parse or enrich an item differently from the other.
+ */
+export const buildSkUsDecision = async (
+  doc: SearchDocument,
+  signal?: AbortSignal,
+): Promise<SkUsBuildResult> => {
+  const fields = skUsIdentityFields(doc);
+  if (fields === null) {
+    return { type: "unkeyable" };
+  }
+  const { caseNumber, documentId } = fields;
 
   const decisionDate = parseApiDate(doc.mkDateOfDecision);
   const decisionType = doc.mkFormOfDecision?.toLowerCase();
@@ -221,7 +319,7 @@ const parseDocument = async (
   const court = "Ústavný súd SR";
 
   // Fetch and parse PDF
-  const pdfBytes = await fetchPdfBytes(doc.documentId, signal);
+  const pdfBytes = await fetchPdfBytes(documentId, signal);
 
   let documentAst: DocumentAst | EmptyAst = EMPTY_AST;
   let fulltext: string | undefined;
@@ -246,24 +344,27 @@ const parseDocument = async (
 
   const rawHash = hashContent(JSON.stringify(doc));
 
-  return {
+  const decision: IngestionResult = {
     caseNumber,
     ecli,
     court,
     country: "SVK",
-    language: "sk",
+    language: SK_US_LANGUAGE,
     decisionDate,
     decisionType,
     fulltext,
-    sourceUrl: `${DOC_DOWNLOAD_URL}/${doc.documentId}`,
-    documentUrl: `${DOC_DOWNLOAD_URL}/${doc.documentId}`,
+    // The listing proves the document exists; without its PDF this row carries
+    // metadata only, and must never overwrite detail a later fetch recovered.
+    ...(pdfBytes === undefined ? { isListingOnly: true } : {}),
+    sourceUrl: `${DOC_DOWNLOAD_URL}/${documentId}`,
+    documentUrl: `${DOC_DOWNLOAD_URL}/${documentId}`,
     metadata: {
       caseNumber,
       ecli,
       court,
       decisionDate,
       decisionType,
-      documentId: doc.documentId,
+      documentId,
       documentType: doc.mkDocumentType,
       rvpNumber: doc.mkRVPNumberOfFile,
       judge: doc.mkJudgeReporter,
@@ -304,6 +405,10 @@ const parseDocument = async (
     sourceRawBytes: pdfBytes,
     sourceRawContentType: pdfBytes ? "application/pdf" : "application/json",
   };
+
+  return pdfBytes === undefined
+    ? { type: "detail-unavailable", decision }
+    : { type: "built", decision };
 };
 
 // ── Search helper ───────────────────────────────────────
@@ -316,11 +421,26 @@ const isAuthFailure = (error: unknown): boolean =>
   error.status !== undefined &&
   AUTH_FAILURE_STATUSES.has(error.status);
 
-const executeSearch = async (
-  year: number,
-  offset: number,
-  signal?: AbortSignal,
-): Promise<SearchResponse | null> => {
+/**
+ * A closed decision-date window, `YYYY-MM-DD` on both ends, as the DMS
+ * `DATE_RANGE` filter states it. The crawl windows by year to stay under the
+ * endpoint's internal pagination cap; the reconciliation windows by month.
+ */
+type SearchDateRange = { from: string; to: string };
+
+type ExecuteSearchOptions = {
+  offset: number;
+  pageSize: number;
+  range: SearchDateRange;
+  signal?: AbortSignal | undefined;
+};
+
+const executeSearch = async ({
+  offset,
+  pageSize,
+  range,
+  signal,
+}: ExecuteSearchOptions): Promise<SearchResponse | null> => {
   const response = await fetchWithTimeout(SEARCH_URL, {
     method: "POST",
     headers: {
@@ -330,15 +450,15 @@ const executeSearch = async (
     body: JSON.stringify({
       docType: "USSR_DECISION_MK",
       start: offset,
-      pageSize: PAGE_SIZE,
+      pageSize,
       searchFilter: {
         filterNameValue: [
           {
             type: "DATE_RANGE",
             fieldName: "mkDateOfDecision",
             fieldValue: {
-              FROM: `${year}-01-01`,
-              TO: `${year}-12-31`,
+              FROM: range.from,
+              TO: range.to,
             },
           },
         ],
@@ -377,18 +497,16 @@ const executeSearch = async (
   return data;
 };
 
-type ExecuteSearchWithRetryOptions = {
+type ExecuteSearchWithRetryOptions = ExecuteSearchOptions & {
   cursor: string | null;
-  offset: number;
-  signal?: AbortSignal | undefined;
-  year: number;
 };
 
 const executeSearchWithRetry = async ({
   cursor,
   offset,
+  pageSize,
+  range,
   signal,
-  year,
 }: ExecuteSearchWithRetryOptions) =>
   await Result.tryPromise(
     {
@@ -396,7 +514,12 @@ const executeSearchWithRetry = async ({
         if (attemptSignal?.aborted) {
           throw new DOMException("Cycle aborted", "AbortError");
         }
-        return await executeSearch(year, offset, attemptSignal);
+        return await executeSearch({
+          offset,
+          pageSize,
+          range,
+          ...(attemptSignal === undefined ? {} : { signal: attemptSignal }),
+        });
       },
       catch: adapterCatch(ADAPTER_KEYS.SK_US, cursor),
     },
@@ -411,6 +534,171 @@ const executeSearchWithRetry = async ({
       },
     },
   );
+
+// ── Reconciliation ───────────────────────────────────────
+
+/**
+ * A reconciliation slice is one calendar month of decision dates, `YYYY-MM`,
+ * which sorts lexicographically in chronological order — the ordering the
+ * ledger relies on.
+ *
+ * The month rather than the year, even though the crawl windows by year: the
+ * DMS honours an arbitrary `DATE_RANGE`, and a year is too coarse to walk
+ * safely. The endpoint caps pagination at roughly 3,000 results per query, and
+ * the recent years are already close to it (2,454 decisions in 2020, 361 in
+ * June 2026 alone), so a year slice would silently stop listing the moment the
+ * court has a busy enough year — and a slice that cannot be listed to the end
+ * is a slice the ledger can never call complete. A month is a few hundred
+ * decisions, four pages of {@link LISTING_PAGE_SIZE}.
+ *
+ * The day, which would be finer still, is the wrong unit in the other
+ * direction: the court sits in panels on a handful of days a month, so most
+ * days are empty and the walk would spend its requests proving that.
+ */
+export const SK_US_FIRST_SLICE = `${FIRST_YEAR}-01`;
+
+/**
+ * Slices near the tip that get re-walked on a fast cadence. The contract
+ * counts slices, not days, so for this adapter the window is six months: a
+ * decision is listed only once the court has released it, this API states no
+ * publication date to measure that lag from (`mkPublicationDate` and
+ * `mkEntryDate` come back empty on current-year items), and a slice outside
+ * the window is re-walked only if the ledger already recorded it short. Six
+ * months of half-yearly-lagged releases is generous, and still a smaller fast
+ * lane than a day-sliced source's fortnight.
+ */
+const SK_US_TIP_WINDOW_SLICES = 6;
+
+const SLICE_PATTERN = /^(?<year>\d{4})-(?<month>0[1-9]|1[0-2])$/u;
+
+type SliceMonth = { year: number; month: number };
+
+const parseSlice = (slice: string): SliceMonth => {
+  const groups = SLICE_PATTERN.exec(slice)?.groups;
+  if (!groups?.["year"] || !groups["month"]) {
+    panic(`sk-us slice is not a calendar month: ${slice}`);
+  }
+  return {
+    year: Number.parseInt(groups["year"], 10),
+    month: Number.parseInt(groups["month"], 10),
+  };
+};
+
+const formatSlice = ({ month, year }: SliceMonth): string =>
+  `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}`;
+
+const skUsSliceOf = (now: Date): string =>
+  formatSlice({ year: now.getUTCFullYear(), month: now.getUTCMonth() + 1 });
+
+/** Step a slice by whole months, normalizing the year through UTC. */
+const stepSlice = (slice: string, months: number): string => {
+  const { month, year } = parseSlice(slice);
+  return skUsSliceOf(new Date(Date.UTC(year, month - 1 + months, 1)));
+};
+
+const skUsNextSlice = (slice: string): string | null => {
+  const next = stepSlice(slice, 1);
+  return next > skUsSliceOf(new Date()) ? null : next;
+};
+
+const skUsPreviousSlice = (slice: string): string | null => {
+  const previous = stepSlice(slice, -1);
+  return previous < SK_US_FIRST_SLICE ? null : previous;
+};
+
+/** The publisher's own filter bounds for a slice: the month, end to end. */
+const sliceDateRange = (slice: string): SearchDateRange => {
+  const { month, year } = parseSlice(slice);
+  // Day 0 of the next month is the last day of this one.
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return { from: `${slice}-01`, to: `${slice}-${String(lastDay)}` };
+};
+
+/**
+ * One page of the publisher's own listing for a month, with no PDF downloads.
+ *
+ * A failed request is thrown, never flattened into an empty page. The crawl
+ * can afford to read a 204 or a dead window as "nothing here" because a cursor
+ * that moves on can be walked again; a ledger row cannot, since an outage
+ * recorded as an empty month makes that month settled and it is never revisited.
+ * So only a body that states a count answers what a month holds: `numFound: 0`
+ * is an empty slice, and everything else — a 5xx (this endpoint has been
+ * observed answering 500 and 524 under load), a 204, a body the validator
+ * rejects — is an error the engine retries on a later pass.
+ */
+const listSkUsSlicePage = async ({
+  page,
+  signal,
+  slice,
+}: ReconciliationSlicePageOptions): Promise<ReconciliationSlicePage> => {
+  const searchResult = await executeSearchWithRetry({
+    cursor: slice,
+    offset: page * LISTING_PAGE_SIZE,
+    pageSize: LISTING_PAGE_SIZE,
+    range: sliceDateRange(slice),
+    signal,
+  });
+  if (Result.isError(searchResult)) {
+    throw searchResult.error;
+  }
+
+  const data = searchResult.value;
+  if (data === null) {
+    throw new AdapterFetchError({
+      message: `SK ÚS search returned no body for ${slice}`,
+      adapterKey: ADAPTER_KEYS.SK_US,
+      cursor: slice,
+    });
+  }
+
+  return {
+    items: data.documents.map((doc) => ({
+      identity: skUsListingIdentity(doc),
+      payload: doc,
+    })),
+    totalPages: Math.ceil(data.numFound / LISTING_PAGE_SIZE),
+  };
+};
+
+/**
+ * Validate a payload the loop stored verbatim well enough to key it.
+ *
+ * Deliberately as lenient as {@link isSearchResponse}, and for the same
+ * reason: the DMS adds fields and changes their types without notice, and all
+ * of it lands in JSONB. Only the two fields the identity is made of are
+ * checked, so a parked payload that no longer states them is reported rather
+ * than parsed on faith.
+ */
+const isSearchDocument = (value: unknown): value is SearchDocument =>
+  isRecord(value) &&
+  (value["documentId"] === undefined ||
+    typeof value["documentId"] === "string") &&
+  (value["mkRSAPNumberOfFile"] === undefined ||
+    typeof value["mkRSAPNumberOfFile"] === "string");
+
+const buildSkUsFromPayload = async (
+  payload: unknown,
+  signal?: AbortSignal,
+): Promise<ReconciliationBuildOutcome> => {
+  if (!isSearchDocument(payload)) {
+    return { type: "unkeyable" };
+  }
+  const built = await buildSkUsDecision(payload, signal);
+  switch (built.type) {
+    case "built":
+      return { type: "built", decision: built.decision };
+    case "unkeyable":
+      return { type: "unkeyable" };
+    case "detail-unavailable":
+      // The decision the listing describes is deliberately dropped: storing it
+      // would make the identity held while its document stayed unread.
+      return { type: "detail-unavailable" };
+    default: {
+      const exhaustive: never = built;
+      return panic(`Unhandled SK ÚS build result: ${String(exhaustive)}`);
+    }
+  }
+};
 
 // ── Adapter ──────────────────────────────────────────────
 
@@ -434,6 +722,21 @@ export const skUsAdapter = defineSourceAdapter({
     return await Promise.resolve(null);
   },
 
+  /**
+   * The DMS answers a decision-date range on its own, so what a month holds is
+   * answerable without the crawl cursor ever reaching it: list the month, key
+   * each item the way the ingest would, and compare against what is held.
+   */
+  reconciliation: {
+    firstSlice: SK_US_FIRST_SLICE,
+    sliceOf: skUsSliceOf,
+    nextSlice: skUsNextSlice,
+    previousSlice: skUsPreviousSlice,
+    tipWindowDays: SK_US_TIP_WINDOW_SLICES,
+    listSlicePage: listSkUsSlicePage,
+    buildDecision: buildSkUsFromPayload,
+  },
+
   async fetchPage(cursor, _config, signal) {
     return await Result.tryPromise({
       try: async () => {
@@ -443,8 +746,9 @@ export const skUsAdapter = defineSourceAdapter({
         const searchResult = await executeSearchWithRetry({
           cursor,
           offset,
+          pageSize: PAGE_SIZE,
+          range: { from: `${year}-01-01`, to: `${year}-12-31` },
           signal,
-          year,
         });
         if (Result.isError(searchResult)) {
           if (signal?.aborted) {
@@ -476,9 +780,21 @@ export const skUsAdapter = defineSourceAdapter({
         for (const doc of data.documents) {
           try {
             // oxlint-disable-next-line no-await-in-loop -- sequential per-document PDF download/parse, rate-limited via Bun.sleep below
-            const result = await parseDocument(doc, signal);
-            if (result) {
-              decisions.push(result);
+            const built = await buildSkUsDecision(doc, signal);
+            switch (built.type) {
+              case "unkeyable":
+                break;
+              // The cursor moves past this document either way, so the crawl
+              // keeps the listing-only row a failed PDF still describes; only
+              // the reconciliation refuses it.
+              case "detail-unavailable":
+              case "built":
+                decisions.push(built.decision);
+                break;
+              default: {
+                const exhaustive: never = built;
+                panic(`Unhandled SK ÚS build result: ${String(exhaustive)}`);
+              }
             }
           } catch (error) {
             if (error instanceof DOMException) {
