@@ -10,7 +10,6 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { extractStyleSetBuffer } from "@/api/lib/style-sets";
-import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const paramsSchema = t.Object({ styleSetId: tSafeId("styleSet") });
 const bodySchema = t.Object({
@@ -25,7 +24,9 @@ const config = {
     input: {
       field: "styleSource",
       required: true,
-      mediaTypes: [DOCX_MIME_TYPE],
+      // Empty because the handler enforces no media type: `validateStyleSource`
+      // accepts any type whose filename ends in `.docx`.
+      mediaTypes: [],
     },
     alternative: {
       type: "partial",

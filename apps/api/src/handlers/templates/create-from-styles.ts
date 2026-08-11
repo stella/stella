@@ -95,7 +95,9 @@ const config = {
     input: {
       field: "styleSource",
       required: true,
-      mediaTypes: [DOCX_MIME_TYPE],
+      // Empty because the handler enforces no media type: it accepts any type
+      // whose filename ends in `.docx`.
+      mediaTypes: [],
     },
     alternative: {
       type: "partial",

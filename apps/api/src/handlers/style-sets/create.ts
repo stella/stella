@@ -10,7 +10,6 @@ import {
   extractStyleSetBuffer,
   normalizeStyleSetName,
 } from "@/api/lib/style-sets";
-import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const bodySchema = t.Object({
   name: tDefaultVarchar,
@@ -25,7 +24,11 @@ const config = {
     input: {
       field: "styleSource",
       required: true,
-      mediaTypes: [DOCX_MIME_TYPE],
+      // Empty because the handler enforces no media type: `validateStyleSource`
+      // accepts any type whose filename ends in `.docx`, which is what a browser
+      // upload of a DOCX commonly looks like. Listing DOCX_MIME_TYPE here would
+      // tell `describe_capability` that everything else is rejected.
+      mediaTypes: [],
     },
     alternative: {
       type: "partial",
