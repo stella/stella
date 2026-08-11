@@ -18,9 +18,20 @@
  */
 import type { CompareOp, ConditionNode, Operand } from "@stll/conditions";
 
+const COMPARE_SYMBOL_TO_OP = {
+  "==": "eq",
+  "!=": "neq",
+  ">": "gt",
+  "<": "lt",
+  ">=": "gte",
+  "<=": "lte",
+} as const satisfies Record<string, CompareOp>;
+
+type CompareSymbol = keyof typeof COMPARE_SYMBOL_TO_OP;
+
 type Token =
   | { type: "value"; raw: string }
-  | { type: "op"; raw: string }
+  | { type: "op"; raw: CompareSymbol | "contains" }
   | { type: "not" }
   | { type: "and" }
   | { type: "or" }
@@ -39,19 +50,23 @@ type Token =
 // strings with a dedicated, guaranteed-single-pass scan instead, so this
 // regex only ever needs to match (or fail to match, in O(1)) at the exact
 // position it is asked to start from.
-const NON_STRING_TOKEN_RE =
-  /(?<token>==|!=|>=|<=|>|<|!(?!=)|and\b|or\b|contains\b|[()]|-?\d[\p{N}_.]*|[\p{L}\p{N}_.]+(?:-[\p{L}\p{N}_.]+)*)/uy;
+const escapeRegexLiteral = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+
+const COMPARE_SYMBOL_PATTERN = Object.keys(COMPARE_SYMBOL_TO_OP)
+  .sort((left, right) => right.length - left.length)
+  .map(escapeRegexLiteral)
+  .join("|");
+
+const NON_STRING_TOKEN_RE = new RegExp(
+  String.raw`(?<token>${COMPARE_SYMBOL_PATTERN}|!(?!=)|and\b|or\b|contains\b|[()]|-?\d[\p{N}_.]*|[\p{L}\p{N}_.]+(?:-[\p{L}\p{N}_.]+)*)`,
+  "uy",
+);
 
 const STARTS_WITH_DIGIT_RE = /^-?\d/u;
 
-const COMPARE_SYMBOL_TO_OP: Record<string, CompareOp> = {
-  "==": "eq",
-  "!=": "neq",
-  ">": "gt",
-  "<": "lt",
-  ">=": "gte",
-  "<=": "lte",
-};
+const isCompareSymbol = (raw: string): raw is CompareSymbol =>
+  Object.hasOwn(COMPARE_SYMBOL_TO_OP, raw);
 
 type StringScan = { content: string; end: number };
 
@@ -86,7 +101,7 @@ const classifyNonString = (raw: string): Token => {
   if (raw === "!") {
     return { type: "not" };
   }
-  if (raw === "contains" || Object.hasOwn(COMPARE_SYMBOL_TO_OP, raw)) {
+  if (raw === "contains" || isCompareSymbol(raw)) {
     return { type: "op", raw };
   }
   if (raw === "(") {
@@ -258,7 +273,7 @@ export const parseCondition = (expression: string): ConditionNode | null => {
     return {
       type: "compare",
       left,
-      op: COMPARE_SYMBOL_TO_OP[opTok.raw] ?? "eq",
+      op: COMPARE_SYMBOL_TO_OP[opTok.raw],
       right: operandFromToken(rightTok),
     };
   };

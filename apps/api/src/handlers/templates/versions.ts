@@ -4,6 +4,9 @@ import { status } from "elysia";
 import { member, user } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { templateVersions } from "@/api/db/schema";
+import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import { auditedPresignDownload } from "@/api/lib/audited-download";
 import type { SafeId } from "@/api/lib/branded-types";
 import { extractText } from "@/api/lib/docx/extract-text";
 import {
@@ -12,7 +15,6 @@ import {
   encodePaginationCursor,
 } from "@/api/lib/pagination";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
-import { presignDownloadUrl } from "@/api/lib/s3-presign";
 
 /** Presigned download URLs expire after 15 minutes, matching every
  *  other read path (`templates/get.ts`, `files/read-by-id.ts`). */
@@ -146,6 +148,7 @@ type GetVersionProps = {
   organizationId: SafeId<"organization">;
   templateId: SafeId<"template">;
   versionId: SafeId<"templateVersion">;
+  recordAuditEvent: AuditRecorder;
 };
 
 export const getTemplateVersionHandler = async ({
@@ -153,22 +156,19 @@ export const getTemplateVersionHandler = async ({
   organizationId,
   templateId,
   versionId,
+  recordAuditEvent,
 }: GetVersionProps) => {
-  const template = await scopedDb((tx) =>
-    tx.query.templates.findFirst({
+  const result = await scopedDb(async (tx) => {
+    const template = await tx.query.templates.findFirst({
       where: { id: { eq: templateId }, organizationId: { eq: organizationId } },
       columns: { id: true, fileName: true },
-    }),
-  );
-
-  if (!template) {
-    return status(404, {
-      message: "Template not found",
     });
-  }
 
-  const version = await scopedDb((tx) =>
-    tx.query.templateVersions.findFirst({
+    if (!template) {
+      return { type: "template-not-found" as const };
+    }
+
+    const version = await tx.query.templateVersions.findFirst({
       where: { id: { eq: versionId }, templateId: { eq: templateId } },
       columns: {
         id: true,
@@ -177,28 +177,52 @@ export const getTemplateVersionHandler = async ({
         fieldCount: true,
         createdAt: true,
       },
-    }),
-  );
-
-  if (!version) {
-    return status(404, {
-      message: "Version not found",
     });
-  }
 
-  const downloadUrl = await presignDownloadUrl(version.s3Key, {
-    expiresIn: PRESIGN_EXPIRES_IN,
-    fileName: template.fileName,
-    scope: { organizationId },
+    if (!version) {
+      return { type: "version-not-found" as const };
+    }
+
+    const downloadUrl = await auditedPresignDownload({
+      tx,
+      recordAuditEvent,
+      resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,
+      resourceId: templateId,
+      s3Key: version.s3Key,
+      expiresInSeconds: PRESIGN_EXPIRES_IN,
+      fileName: template.fileName,
+      organizationId,
+      metadata: { versionId: version.id, version: version.version },
+    });
+
+    return {
+      type: "found" as const,
+      id: version.id,
+      version: version.version,
+      fieldCount: version.fieldCount,
+      createdAt: version.createdAt,
+      downloadUrl,
+    };
   });
 
-  return {
-    id: version.id,
-    version: version.version,
-    fieldCount: version.fieldCount,
-    createdAt: version.createdAt,
-    downloadUrl,
-  };
+  switch (result.type) {
+    case "found":
+      return {
+        id: result.id,
+        version: result.version,
+        fieldCount: result.fieldCount,
+        createdAt: result.createdAt,
+        downloadUrl: result.downloadUrl,
+      };
+    case "template-not-found":
+      return status(404, { message: "Template not found" });
+    case "version-not-found":
+      return status(404, { message: "Version not found" });
+    default: {
+      const exhaustive: never = result;
+      return exhaustive;
+    }
+  }
 };
 
 // ── Diff sources ─────────────────────────────────────

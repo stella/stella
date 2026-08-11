@@ -11,6 +11,10 @@ import { estimateChatContextPromptTokens } from "@/api/handlers/chat/chat-prompt
 import { computeThreadContextUsage } from "@/api/handlers/chat/compaction";
 import type { ThreadContextUsage } from "@/api/handlers/chat/compaction";
 import { resolveChatCompactionBudget } from "@/api/handlers/chat/compaction-budget";
+import {
+  lockFileChatThreadMapping,
+  type FileThreadLookupInput,
+} from "@/api/handlers/chat/file-thread-mapping";
 import { loadWindowedThreadMessages } from "@/api/handlers/chat/history-window";
 import type { ClientMessage } from "@/api/handlers/chat/message-page";
 import { loadChatMessagePage } from "@/api/handlers/chat/message-page";
@@ -57,14 +61,6 @@ const config = {
 } satisfies HandlerConfig;
 
 const CHAT_THREAD_TITLE_MAX_LENGTH = 255;
-
-type FileThreadLookupInput = {
-  entityId: SafeId<"entity">;
-  fieldId: SafeId<"field">;
-  organizationId: SafeId<"organization">;
-  userId: SafeId<"user">;
-  workspaceId: SafeId<"workspace">;
-};
 
 /**
  * Thread columns needed to load its initial message page. Fetched inline
@@ -274,76 +270,6 @@ const loadResolvedThreadMessagePage = async ({
     context,
   };
 };
-
-const findFileChatThread = async (
-  tx: Transaction,
-  {
-    entityId,
-    fieldId,
-    organizationId,
-    userId,
-    workspaceId,
-  }: FileThreadLookupInput,
-) =>
-  (
-    await tx
-      .select({
-        chatThreadId: fileChatThreads.chatThreadId,
-        chatModel: chatThreads.chatModel,
-        chatReasoningEffort: chatThreads.chatReasoningEffort,
-        contextMatterIds: chatThreads.contextMatterIds,
-        usedAnonymization: chatThreads.usedAnonymization,
-        webSearchEnabled: chatThreads.webSearchEnabled,
-      })
-      .from(fileChatThreads)
-      .innerJoin(chatThreads, eq(fileChatThreads.chatThreadId, chatThreads.id))
-      .where(
-        and(
-          eq(fileChatThreads.entityId, entityId),
-          eq(fileChatThreads.fieldId, fieldId),
-          eq(fileChatThreads.organizationId, organizationId),
-          eq(fileChatThreads.userId, userId),
-          eq(fileChatThreads.workspaceId, workspaceId),
-        ),
-      )
-      .limit(1)
-  ).at(0);
-
-/**
- * The file mapping is scoped to the destination workspace, while its target
- * chat thread can become unreadable when its historical data scope includes
- * a matter the user no longer has access to. Lock the visible mapping before
- * deciding whether to reuse it or replace it with a fresh destination thread.
- */
-const lockFileChatThreadMapping = async (
-  tx: Transaction,
-  {
-    entityId,
-    fieldId,
-    organizationId,
-    userId,
-    workspaceId,
-  }: FileThreadLookupInput,
-) =>
-  (
-    await tx
-      .select({
-        chatThreadId: fileChatThreads.chatThreadId,
-        id: fileChatThreads.id,
-      })
-      .from(fileChatThreads)
-      .where(
-        and(
-          eq(fileChatThreads.entityId, entityId),
-          eq(fileChatThreads.fieldId, fieldId),
-          eq(fileChatThreads.organizationId, organizationId),
-          eq(fileChatThreads.userId, userId),
-          eq(fileChatThreads.workspaceId, workspaceId),
-        ),
-      )
-      .limit(1)
-      .for("update")
-  ).at(0);
 
 const findFieldKeyedChatThread = async (
   tx: Transaction,
@@ -568,13 +494,17 @@ const resolveFileThread = createSafeHandler(
         input.organizationId,
       );
 
+      // One indexed read both fences the unique mapping slot and resolves its
+      // thread. The left join deliberately preserves a visible mapping whose
+      // historical thread is hidden by chat-thread RLS, so that branch can
+      // detach it without issuing a second lookup.
       const mapping = await lockFileChatThreadMapping(tx, input);
-      const existing = await findFileChatThread(tx, input);
+      const existing = mapping?.thread;
 
       if (existing) {
         const messagePage = await loadResolvedThreadMessagePage({
           tx,
-          threadId: existing.chatThreadId,
+          threadId: existing.id,
           userId: input.userId,
           organizationId: input.organizationId,
           orgAIConfig,
@@ -588,7 +518,7 @@ const resolveFileThread = createSafeHandler(
 
         return {
           ok: true as const,
-          chatThreadId: existing.chatThreadId,
+          chatThreadId: existing.id,
           messagePage,
         };
       }
@@ -603,7 +533,7 @@ const resolveFileThread = createSafeHandler(
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
-          resourceId: mapping.chatThreadId,
+          resourceId: mapping.mappedChatThreadId,
           workspaceId: input.workspaceId,
           metadata: {
             entityId: input.entityId,
@@ -637,26 +567,26 @@ const resolveFileThread = createSafeHandler(
             input.organizationId,
           );
 
-          const found = await findFileChatThread(tx, input);
-          if (!found) {
+          const mapping = await lockFileChatThreadMapping(tx, input);
+          if (!mapping?.thread) {
             return null;
           }
 
           const messagePage = await loadResolvedThreadMessagePage({
             tx,
-            threadId: found.chatThreadId,
+            threadId: mapping.thread.id,
             userId: input.userId,
             organizationId: input.organizationId,
             orgAIConfig,
             webSearchAvailable,
-            chatModel: found.chatModel,
-            chatReasoningEffort: found.chatReasoningEffort,
-            contextMatterIds: found.contextMatterIds,
-            usedAnonymization: found.usedAnonymization,
-            webSearchEnabled: found.webSearchEnabled,
+            chatModel: mapping.thread.chatModel,
+            chatReasoningEffort: mapping.thread.chatReasoningEffort,
+            contextMatterIds: mapping.thread.contextMatterIds,
+            usedAnonymization: mapping.thread.usedAnonymization,
+            webSearchEnabled: mapping.thread.webSearchEnabled,
           });
 
-          return { chatThreadId: found.chatThreadId, messagePage };
+          return { chatThreadId: mapping.thread.id, messagePage };
         }),
       );
 
