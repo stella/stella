@@ -83,11 +83,35 @@ export type IngestEmailResult = {
   workspaceId: SafeId<"workspace">;
 };
 
-export type PendingEmailUpload = {
-  skippedAttachments: string[];
+type PendingEmailUploadIdentity = {
   uploadId: SafeId<"pendingUpload">;
   workspaceId: SafeId<"workspace">;
 };
+
+export type PendingEmailUpload =
+  | (PendingEmailUploadIdentity & { type: "abort" })
+  | (PendingEmailUploadIdentity & {
+      skippedAttachments: string[];
+      type: "finalize";
+    });
+
+export class PendingUploadCleanupError extends APIError {
+  readonly pendingUpload: PendingEmailUpload;
+
+  constructor({
+    pendingUpload,
+    status,
+  }: {
+    pendingUpload: PendingEmailUpload;
+    status: number;
+  }) {
+    super({
+      message: "Upload failed; reservation cleanup could not be confirmed",
+      status,
+    });
+    this.pendingUpload = pendingUpload;
+  }
+}
 
 type DirectEmailUploadDependencies = {
   abortReservation: (
@@ -97,15 +121,20 @@ type DirectEmailUploadDependencies = {
   put: (url: string, init: RequestInit) => Promise<Response>;
 };
 
+export const abortEmailUploadReservation = async (
+  workspaceId: SafeId<"workspace">,
+  uploadId: SafeId<"pendingUpload">,
+): Promise<void> => {
+  const aborted = await api
+    .uploads({ workspaceId })({ uploadId })
+    .abort.post({}, withTimeout());
+  if (aborted.error) {
+    throw toAPIError(aborted.error);
+  }
+};
+
 const directEmailUploadDependencies: DirectEmailUploadDependencies = {
-  abortReservation: async (workspaceId, uploadId) => {
-    const aborted = await api
-      .uploads({ workspaceId })({ uploadId })
-      .abort.post({}, withTimeout());
-    if (aborted.error) {
-      throw toAPIError(aborted.error);
-    }
-  },
+  abortReservation: abortEmailUploadReservation,
   put: fetch,
 };
 
@@ -119,8 +148,12 @@ type PutPresignedEmailOptions = {
 
 export const putPresignedEmail = async (
   { eml, headers, uploadId, url, workspaceId }: PutPresignedEmailOptions,
-  dependencies: DirectEmailUploadDependencies = directEmailUploadDependencies,
+  dependencyOverrides: Partial<DirectEmailUploadDependencies> = {},
 ): Promise<void> => {
+  const dependencies = {
+    ...directEmailUploadDependencies,
+    ...dependencyOverrides,
+  };
   const putResult = await Result.tryPromise({
     try: async () =>
       await dependencies.put(url, {
@@ -139,13 +172,17 @@ export const putPresignedEmail = async (
     try: async () => await dependencies.abortReservation(workspaceId, uploadId),
     catch: (cause) => cause,
   });
-  const cleanupSuffix = Result.isError(abortResult)
-    ? "; reservation cleanup could not be confirmed"
-    : "";
   const status = Result.isOk(putResult) ? putResult.value.status : 502;
+  if (Result.isError(abortResult)) {
+    throw new PendingUploadCleanupError({
+      pendingUpload: { type: "abort", uploadId, workspaceId },
+      status,
+    });
+  }
+
   const responseSuffix = Result.isOk(putResult) ? ` (${status})` : "";
   throw new APIError({
-    message: `Upload failed${responseSuffix}${cleanupSuffix}`,
+    message: `Upload failed${responseSuffix}`,
     status,
   });
 };
@@ -200,6 +237,7 @@ export const prepareEmailUpload = async ({
     skippedAttachments: attachments
       .filter((attachment) => attachment.type === "skipped")
       .map((attachment) => attachment.reason),
+    type: "finalize",
     uploadId: presign.data.uploadId,
     workspaceId,
   };
@@ -209,7 +247,10 @@ export const finalizeEmailUpload = async ({
   skippedAttachments,
   uploadId,
   workspaceId,
-}: PendingEmailUpload): Promise<IngestEmailResult> => {
+}: Extract<
+  PendingEmailUpload,
+  { type: "finalize" }
+>): Promise<IngestEmailResult> => {
   const finalize = await api
     .uploads({ workspaceId })({ uploadId })
     .finalize.post(

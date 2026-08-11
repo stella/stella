@@ -6,6 +6,7 @@ import { toSafeId } from "@stll/api/types";
 
 import {
   APIError,
+  PendingUploadCleanupError,
   putPresignedEmail,
   shouldRetainPendingEmailUpload,
 } from "@/api";
@@ -69,6 +70,67 @@ describe("direct email upload reservation", () => {
       expect(result.error).toMatchObject({ status: 502 });
     }
     expect(abortReservation).toHaveBeenCalledTimes(1);
+  });
+
+  test("retains the reservation identity when abort cannot be confirmed", async () => {
+    const result = await Result.tryPromise({
+      try: async () =>
+        await putPresignedEmail(directUpload, {
+          abortReservation: mock(async () => {
+            throw new DOMException("offline");
+          }),
+          put: mock(async () => new Response(null, { status: 503 })),
+        }),
+      catch: (cause) => cause,
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toBeInstanceOf(PendingUploadCleanupError);
+      if (result.error instanceof PendingUploadCleanupError) {
+        expect(result.error.pendingUpload).toEqual({
+          type: "abort",
+          uploadId: directUpload.uploadId,
+          workspaceId: directUpload.workspaceId,
+        });
+      }
+    }
+  });
+
+  test("posts the production abort route after a failed PUT", async () => {
+    const originalFetch = globalThis.fetch;
+    let requestMethod: string | undefined;
+    let requestUrl: string | undefined;
+    const abortFetch = mock(
+      async (input: URL | Request | string, init?: RequestInit) => {
+        requestUrl =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url;
+        requestMethod = input instanceof Request ? input.method : init?.method;
+        return Response.json({ ok: true });
+      },
+    );
+    globalThis.fetch = Object.assign(abortFetch, {
+      preconnect: originalFetch.preconnect,
+    });
+
+    try {
+      await Result.tryPromise({
+        try: async () =>
+          await putPresignedEmail(directUpload, {
+            put: mock(async () => new Response(null, { status: 503 })),
+          }),
+        catch: (cause) => cause,
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(requestMethod).toBe("POST");
+    expect(requestUrl).toEndWith("/api/v1/uploads/workspace-1/upload-1/abort");
   });
 
   test("keeps a successful reservation for finalize", async () => {
