@@ -993,32 +993,11 @@ const countTruncatedCapabilitySchemas = (content: string): number => {
   ).length;
 };
 
-// A capability carrying no authored `description`. The description is the ONE
-// place a capability says what it does: the exporter carries it from the
-// handler config into both catalog mirrors, and from there it becomes the
-// generated CLI command's `--help` brief and the prose an MCP client sees in
-// list/describe. Without one the CLI falls back to "Invoke the <id>
-// capability", which tells a caller (usually an agent) nothing, and the real
-// prose ends up hand-written a second time in apps/api/src/mcp/*-tools.ts —
-// the duplication this metric exists to burn down. A blank/whitespace-only
-// string counts as missing so an empty description cannot be used to silence
-// the ratchet. Counting the committed artifacts keeps the scan cheap and
-// deterministic; both mirrors are included so drift between them also shows up.
-const countCapabilitiesWithoutDescription = (content: string): number => {
-  const parsed: unknown = JSON.parse(content);
-  if (!Array.isArray(parsed)) {
-    return 0;
-  }
-  return parsed.filter((entry) => {
-    if (typeof entry !== "object" || entry === null) {
-      return false;
-    }
-    const description: unknown = Object.hasOwn(entry, "description")
-      ? Object.getOwnPropertyDescriptor(entry, "description")?.value
-      : undefined;
-    return typeof description !== "string" || description.trim().length === 0;
-  }).length;
-};
+// Capabilities carrying no authored `description` are tracked by exact id in
+// apps/api/capability-description-ledger.json, not by an aggregate count here:
+// see apps/api/scripts/capability-description-guard.ts. Any set of the same
+// size satisfies a count, so it could not name the gap an author had just
+// closed, nor force that entry to be deleted in the same change as the prose.
 
 // A capability suppressed from the generic transport because its input carries
 // a `t.File()` field (`requiresFileInput`) or its success value is a web
@@ -1357,19 +1336,6 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     // exclusions (which skip `.gen.`/generated paths) must not apply.
     exclude: () => false,
     count: countTruncatedCapabilitySchemas,
-  },
-  {
-    id: "capabilities-without-description",
-    description:
-      'capabilities with no authored description, so the CLI briefs them as "Invoke the <id> capability" and the real prose stays duplicated in the hand-written MCP tool files (counted across both committed catalog mirrors)',
-    include: [
-      "packages/cli/src/generated/capability-catalog.json",
-      "apps/api/src/mcp/generated/capability-catalog.json",
-    ],
-    // Generated artifacts are the subject here, so the shared source
-    // exclusions (which skip `.gen.`/generated paths) must not apply.
-    exclude: () => false,
-    count: countCapabilitiesWithoutDescription,
   },
   {
     id: "capability-file-transport-suppressed",
@@ -2203,49 +2169,21 @@ const SELF_TEST_CAPABILITY_CATALOG = `${JSON.stringify([
   { id: "beta.read", inputSchemaTruncated: false },
   { id: "gamma.update" },
   { id: "delta.delete", inputSchemaTruncated: true },
-  // Description shapes: a real one (not counted as missing) and a
-  // whitespace-only one (counted, so a blank string cannot silence the guard).
-  { id: "epsilon.list", description: "Lists the epsilons." },
-  { id: "zeta.get", description: "   " },
   // File-transport suppression shapes: input-only, output-only, BOTH (must
   // count once, not twice), and `false` (must not count at all).
   { id: "eta.create", requiresFileInput: true },
   { id: "theta.get", returnsFileResponse: true },
   { id: "iota.update", requiresFileInput: true, returnsFileResponse: true },
   { id: "kappa.delete", requiresFileInput: false, returnsFileResponse: false },
-  // Read-scope shapes (each carries a description so the without-description
-  // count is unaffected): two reads on a write-only scope MUST count, a read on
-  // a read scope and a write on a write scope must NOT.
-  {
-    id: "lambda.list",
-    access: "read",
-    scope: "stella:matters_write",
-    description: "Reads on a write-only scope: counts.",
-  },
-  {
-    id: "mu.get",
-    access: "read",
-    scope: "stella:admin_write",
-    description: "Reads on another write-only scope: counts.",
-  },
-  {
-    id: "nu.get",
-    access: "read",
-    scope: "stella:read",
-    description: "Read on a read scope: excluded.",
-  },
-  {
-    id: "xi.create",
-    access: "write",
-    scope: "stella:matters_write",
-    description: "Write on a write scope: excluded.",
-  },
+  // Read-scope shapes: two reads on a write-only scope MUST count, a read on a
+  // read scope and a write on a write scope must NOT.
+  { id: "lambda.list", access: "read", scope: "stella:matters_write" },
+  { id: "mu.get", access: "read", scope: "stella:admin_write" },
+  { id: "nu.get", access: "read", scope: "stella:read" },
+  { id: "xi.create", access: "write", scope: "stella:matters_write" },
 ])}\n`;
 // Two truncated entries in each of the two mirror fixtures.
 const EXPECTED_TRUNCATED_CAPABILITY_SCHEMAS = 4;
-// Five of the six fixture entries lack usable prose (only `epsilon.list` has
-// it), in each of the two mirror fixtures.
-const EXPECTED_CAPABILITIES_WITHOUT_DESCRIPTION = 18;
 // Three suppressed entries (input-only, output-only, and the both-flags entry
 // counted ONCE) in each of the two mirror fixtures; the `false`/`false` entry
 // is excluded.
@@ -2658,19 +2596,6 @@ const runSelfTest = (): number => {
     ) {
       failures.push(
         `read-capabilities-with-write-scope counted ${readWriteScopeMetric.count}, expected ${EXPECTED_READ_CAPABILITIES_WITH_WRITE_SCOPE}`,
-      );
-    }
-
-    const missingDescriptionMetric = requireSnapshot(
-      snapshot,
-      "capabilities-without-description",
-    );
-    if (
-      missingDescriptionMetric.count !==
-      EXPECTED_CAPABILITIES_WITHOUT_DESCRIPTION
-    ) {
-      failures.push(
-        `capabilities-without-description counted ${missingDescriptionMetric.count}, expected ${EXPECTED_CAPABILITIES_WITHOUT_DESCRIPTION}`,
       );
     }
 

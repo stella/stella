@@ -265,7 +265,8 @@ const capabilityInputHint = (spec: CapabilityLeafSpec): string => {
  * The command's `--help` brief. The catalog's authored description is the whole
  * point of the single-registry design, so it wins outright; the id-derived line
  * survives only as the fallback for a capability that has not been given a
- * description yet (a shrinking set — see the description-coverage ratchet).
+ * description yet (a shrinking set, listed by id in
+ * apps/api/capability-description-ledger.json).
  */
 const capabilityLeafBrief = (spec: CapabilityLeafSpec): string => {
   const hint = capabilityInputHint(spec);

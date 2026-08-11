@@ -699,6 +699,21 @@ jobs:
         run: |
           bun apps/api/scripts/export-capability-catalog.ts --check
 
+      - name: Capability description ledger
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # A capability's `description` is what an MCP client reads before
+        # deciding whether to call it, so every capability still missing one is
+        # listed by exact id in apps/api/capability-description-ledger.json. A
+        # capability missing prose that is not in the ledger fails (no new
+        # debt); a ledger entry whose capability now has prose, or no longer
+        # exists, fails as stale — so authoring a description means deleting its
+        # ledger line in the same change and the list can only shrink. The
+        # --self-test run first proves the detectors still fire, so a broken
+        # guard cannot pass silently.
+        run: |
+          bun apps/api/scripts/capability-description-guard.ts --self-test
+          bun apps/api/scripts/capability-description-guard.ts
+
       - name: exactMirror route guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # Elysia builds an "exactMirror" serializer per route schema. Some

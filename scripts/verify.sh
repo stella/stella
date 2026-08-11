@@ -172,6 +172,17 @@ run_capability_catalog() {
   bun apps/api/scripts/export-capability-catalog.ts --check
 }
 
+run_capability_description_ledger() {
+  # Every capability still missing the `description` an MCP client reads before
+  # calling it is listed by exact id in
+  # apps/api/capability-description-ledger.json. An unledgered gap fails (no new
+  # debt); a ledger entry that now has prose, or that names a capability which
+  # no longer exists, fails as stale — so the list can only shrink. The
+  # --self-test run first proves the detectors still fire.
+  bun apps/api/scripts/capability-description-guard.ts --self-test || return 1
+  bun apps/api/scripts/capability-description-guard.ts
+}
+
 run_knip() {
   local workspace
   for workspace in apps/api apps/legal-atlas-runner apps/web; do
@@ -228,6 +239,7 @@ run_step "MCP coverage guard" run_mcp_coverage_guard
 run_step "CLI registry snapshot" run_cli_registry_snapshot
 run_step "MCP App bundle" run_mcp_app_bundle
 run_step "Capability catalog drift" run_capability_catalog
+run_step "Capability description ledger" run_capability_description_ledger
 run_step "Knip production deps" run_knip
 run_step "Test" run_test
 run_step "Bridge-version guard self-test" bash scripts/check-bridge-version.test.sh
