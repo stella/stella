@@ -1428,6 +1428,140 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
 type MetricSnapshot = { count: number; files: Record<string, number> };
 type Baseline = Record<string, MetricSnapshot>;
 
+type ConfigurationInspection =
+  | { status: "valid"; baseline: Baseline }
+  | { status: "invalid"; errors: readonly string[] };
+
+const METRIC_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+
+const ownValue = (record: Record<string, unknown>, key: string): unknown =>
+  Object.getOwnPropertyDescriptor(record, key)?.value;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+// The metric table and its committed baseline are one mirrored declaration.
+// Validate both directions: otherwise deleting a metric leaves an ignored
+// baseline entry, while duplicate IDs silently overwrite one scan with another.
+// Snapshot totals are derived from their per-file map, so a hand-edited or
+// partially resolved baseline cannot weaken the ratchet or its diagnostics.
+const inspectConfiguration = (
+  metrics: readonly Pick<RatchetMetric, "id">[],
+  rawBaseline: unknown,
+): ConfigurationInspection => {
+  const errors: string[] = [];
+  const metricIds = new Set<string>();
+
+  for (const { id } of metrics) {
+    if (!METRIC_ID.test(id)) {
+      errors.push(`ratchet metric id ${JSON.stringify(id)} is not kebab-case`);
+    }
+    if (metricIds.has(id)) {
+      errors.push(`ratchet metric id ${JSON.stringify(id)} is duplicated`);
+    }
+    metricIds.add(id);
+  }
+
+  if (!isRecord(rawBaseline)) {
+    return {
+      status: "invalid",
+      errors: [...errors, "ratchet baseline must be a JSON object"],
+    };
+  }
+
+  for (const id of metricIds) {
+    if (!Object.hasOwn(rawBaseline, id)) {
+      errors.push(
+        `ratchet metric ${JSON.stringify(id)} is missing from baseline`,
+      );
+    }
+  }
+  for (const id of Object.keys(rawBaseline)) {
+    if (!metricIds.has(id)) {
+      errors.push(
+        `ratchet baseline metric ${JSON.stringify(id)} is not registered`,
+      );
+    }
+  }
+
+  const baseline: Baseline = {};
+  for (const id of metricIds) {
+    const rawSnapshot = ownValue(rawBaseline, id);
+    if (!isRecord(rawSnapshot)) {
+      if (rawSnapshot !== undefined) {
+        errors.push(
+          `ratchet baseline metric ${JSON.stringify(id)} must be an object`,
+        );
+      }
+      continue;
+    }
+
+    const count = ownValue(rawSnapshot, "count");
+    const rawFiles = ownValue(rawSnapshot, "files");
+    if (
+      typeof count !== "number" ||
+      !Number.isSafeInteger(count) ||
+      count < 0
+    ) {
+      errors.push(
+        `ratchet baseline metric ${JSON.stringify(id)} count must be a non-negative safe integer`,
+      );
+      continue;
+    }
+    if (!isRecord(rawFiles)) {
+      errors.push(
+        `ratchet baseline metric ${JSON.stringify(id)} files must be an object`,
+      );
+      continue;
+    }
+
+    const files: Record<string, number> = {};
+    let fileTotal = 0;
+    let filesValid = true;
+    for (const [file, value] of Object.entries(rawFiles)) {
+      if (
+        file.length === 0 ||
+        typeof value !== "number" ||
+        !Number.isSafeInteger(value) ||
+        value <= 0
+      ) {
+        filesValid = false;
+        errors.push(
+          `ratchet baseline metric ${JSON.stringify(id)} has an invalid count for ${JSON.stringify(file)}`,
+        );
+        continue;
+      }
+      files[file] = value;
+      fileTotal += value;
+    }
+    if (!filesValid) {
+      continue;
+    }
+    if (fileTotal !== count) {
+      errors.push(
+        `ratchet baseline metric ${JSON.stringify(id)} count ${count} does not equal its per-file total ${fileTotal}`,
+      );
+      continue;
+    }
+    baseline[id] = { count, files };
+  }
+
+  return errors.length === 0
+    ? { status: "valid", baseline }
+    : { status: "invalid", errors };
+};
+
+const assertMetricRegistry = (): void => {
+  const inspection = inspectConfiguration(RATCHET_METRICS, {});
+  const registryErrors =
+    inspection.status === "invalid"
+      ? inspection.errors.filter((error) => error.includes("metric id"))
+      : [];
+  if (registryErrors.length > 0) {
+    panic(registryErrors.join("\n"));
+  }
+};
+
 const requireSnapshot = (baseline: Baseline, id: string): MetricSnapshot =>
   baseline[id] ?? panic(`ratchet metric ${id} is missing from the snapshot`);
 
@@ -1462,6 +1596,7 @@ const scanMetric = (metric: RatchetMetric, root: string): MetricSnapshot => {
 };
 
 const scanAll = (root: string): Baseline => {
+  assertMetricRegistry();
   const snapshot: Baseline = {};
   for (const metric of RATCHET_METRICS) {
     snapshot[metric.id] = scanMetric(metric, root);
@@ -1469,8 +1604,14 @@ const scanAll = (root: string): Baseline => {
   return snapshot;
 };
 
-const readBaseline = (): Baseline =>
-  JSON.parse(readFileSync(BASELINE_PATH, "utf-8"));
+const readBaseline = (): Baseline => {
+  const raw: unknown = JSON.parse(readFileSync(BASELINE_PATH, "utf-8"));
+  const inspection = inspectConfiguration(RATCHET_METRICS, raw);
+  if (inspection.status === "invalid") {
+    panic(inspection.errors.join("\n"));
+  }
+  return inspection.baseline;
+};
 
 const writeBaseline = (snapshot: Baseline): void => {
   writeFileSync(BASELINE_PATH, `${JSON.stringify(snapshot, null, 2)}\n`);
@@ -2108,6 +2249,59 @@ const EXPECTED_READ_CAPABILITIES_WITH_WRITE_SCOPE = 4;
 const runSelfTest = (): number => {
   const failures: string[] = [];
   const root = mkdtempSync(path.join(tmpdir(), "ratchet-selftest-"));
+
+  const validConfiguration = inspectConfiguration([{ id: "one-metric" }], {
+    "one-metric": {
+      count: 2,
+      files: { "apps/api/src/example.ts": 2 },
+    },
+  });
+  if (validConfiguration.status !== "valid") {
+    failures.push("configuration validation rejected a valid baseline");
+  }
+
+  const configurationRegressions = [
+    {
+      name: "duplicate metric IDs",
+      inspection: inspectConfiguration(
+        [{ id: "one-metric" }, { id: "one-metric" }],
+        { "one-metric": { count: 0, files: {} } },
+      ),
+      expectedError: "is duplicated",
+    },
+    {
+      name: "missing baseline metrics",
+      inspection: inspectConfiguration([{ id: "one-metric" }], {}),
+      expectedError: "is missing from baseline",
+    },
+    {
+      name: "stale baseline metrics",
+      inspection: inspectConfiguration([{ id: "one-metric" }], {
+        "one-metric": { count: 0, files: {} },
+        "removed-metric": { count: 0, files: {} },
+      }),
+      expectedError: "is not registered",
+    },
+    {
+      name: "inconsistent snapshot totals",
+      inspection: inspectConfiguration([{ id: "one-metric" }], {
+        "one-metric": {
+          count: 1,
+          files: { "apps/api/src/example.ts": 2 },
+        },
+      }),
+      expectedError: "does not equal its per-file total",
+    },
+  ] as const;
+
+  for (const { name, inspection, expectedError } of configurationRegressions) {
+    if (
+      inspection.status !== "invalid" ||
+      !inspection.errors.some((error) => error.includes(expectedError))
+    ) {
+      failures.push(`configuration validation did not reject ${name}`);
+    }
+  }
 
   try {
     writeFixture(root, "apps/api/src/casts.ts", SELF_TEST_AS_CASTS);
