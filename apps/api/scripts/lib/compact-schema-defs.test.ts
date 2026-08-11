@@ -29,12 +29,26 @@ const catalogEntries: readonly Record<string, unknown>[] = JSON.parse(
   ).text(),
 );
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** Narrow a schema node for assertions; anything else is a test failure. */
+const recordOf = (value: unknown): Record<string, unknown> => {
+  if (!isRecord(value)) {
+    throw new TypeError(`expected a schema object, got ${typeof value}`);
+  }
+  return value;
+};
+
 /** Every entry's compacted `inputSchema`, keyed by capability id. */
 const compactedById = new Map(
-  catalogEntries.map((entry) => [
-    String(entry["id"]),
-    entry["inputSchema"] as Record<string, unknown> | undefined,
-  ]),
+  catalogEntries.map(
+    (entry) =>
+      [
+        String(entry["id"]),
+        isRecord(entry["inputSchema"]) ? entry["inputSchema"] : undefined,
+      ] as const,
+  ),
 );
 
 describe("committed capability catalog", () => {
@@ -266,11 +280,12 @@ describe("compactSchemaDefs", () => {
     if (result.status !== "compacted") {
       return;
     }
-    const body = result.inputSchema.body as Record<string, unknown>;
-    const properties = body["properties"] as Record<string, unknown>;
+    const properties = recordOf(
+      recordOf(result.inputSchema.body)["properties"],
+    );
     expect(Object.keys(properties)).toEqual(["first", "second"]);
     for (const value of Object.values(properties)) {
-      expect(Object.keys(value as Record<string, unknown>)).toEqual(["$ref"]);
+      expect(Object.keys(recordOf(value))).toEqual(["$ref"]);
     }
     expect(expandSchemaDefs(result.inputSchema)).toEqual(source);
   });

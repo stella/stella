@@ -77,7 +77,9 @@ const expandValue = (
   value: unknown,
   depth: number,
   state: ExpansionState,
-): unknown | typeof EXPANSION_FAILED => {
+  // `unknown` already covers the sentinel; naming it in the union would widen
+  // to `unknown` anyway. Callers compare against EXPANSION_FAILED directly.
+): unknown => {
   if (depth > MAX_EXPANSION_DEPTH) {
     return EXPANSION_FAILED;
   }
@@ -122,18 +124,18 @@ const expandValue = (
     state.resolving.delete(name);
     return expanded;
   }
-  // Null-prototype accumulator: a JSON-parsed object can carry an own
-  // `__proto__` key, and assigning it on an ordinary object would invoke the
-  // prototype setter instead of creating the key.
-  const expanded: JsonRecord = Object.create(null) as JsonRecord;
+  // Collected then built with `Object.fromEntries`, which defines own data
+  // properties: a JSON-parsed document can carry an own `__proto__` key, and
+  // assigning that key would invoke the prototype setter instead of storing it.
+  const entries: [string, unknown][] = [];
   for (const [key, child] of Object.entries(value)) {
     const expandedChild = expandValue(child, depth + 1, state);
     if (expandedChild === EXPANSION_FAILED) {
       return EXPANSION_FAILED;
     }
-    expanded[key] = expandedChild;
+    entries.push([key, expandedChild]);
   }
-  return expanded;
+  return Object.fromEntries(entries);
 };
 
 /**

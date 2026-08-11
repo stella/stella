@@ -677,11 +677,6 @@ describe("every capability flag maps to a real path in its wrapper schema", () =
     const drift: string[] = [];
     for (const catalogEntry of entries ?? []) {
       const { spec } = deriveCapabilityLeaf(catalogEntry);
-      if (spec.inputSchema === undefined) {
-        // Truncated entry: no flags, `--input` only.
-        expect(spec.flags).toHaveLength(0);
-        continue;
-      }
       for (const flag of spec.flags) {
         if (!pathResolves(spec.inputSchema, flag.part, flag.partPath)) {
           drift.push(
