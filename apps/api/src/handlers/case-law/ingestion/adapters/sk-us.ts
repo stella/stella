@@ -61,8 +61,10 @@ import {
   AdapterFetchError,
   FetchBoundaryError,
 } from "@/api/lib/errors/tagged-errors";
+import { errorTag } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import { parseSkDecisionPdf } from "@/api/lib/legal-search/parsers/sk-courts";
+import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
 // ── Constants ─────────────────────────────────────────────
@@ -203,6 +205,26 @@ const parseApiDate = (raw: string | undefined): string | undefined => {
 
 // ── PDF download ─────────────────────────────────────────
 
+/** Every PDF starts with this; nothing else the portal serves does. */
+const PDF_SIGNATURE = "%PDF-";
+
+const PDF_SIGNATURE_BYTES = new TextEncoder().encode(PDF_SIGNATURE);
+
+const isPdf = (bytes: Uint8Array): boolean =>
+  bytes.length >= PDF_SIGNATURE_BYTES.length &&
+  PDF_SIGNATURE_BYTES.every((byte, index) => bytes[index] === byte);
+
+/**
+ * The decision's PDF, or `undefined` when the court served no document.
+ *
+ * The status alone does not answer that: this portal answers a document
+ * request with a 200 error page, and those bytes taken on faith would be
+ * stored as the decision's raw payload under `application/pdf` — an
+ * unparseable blob every later re-parse would read as the document itself.
+ * Checking the signature is what makes "the court served something else" and
+ * "the court served a PDF this parser cannot read" different answers: only the
+ * second is a payload worth keeping.
+ */
 const fetchPdfBytes = async (
   documentId: string,
   signal?: AbortSignal,
@@ -219,7 +241,8 @@ const fetchPdfBytes = async (
     if (!response.ok) {
       return undefined;
     }
-    return new Uint8Array(await response.arrayBuffer());
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    return isPdf(bytes) ? bytes : undefined;
   } catch {
     return undefined;
   }
@@ -337,8 +360,17 @@ export const buildSkUsDecision = async (
       });
       documentAst = parsed.documentAst;
       fulltext = parsed.fulltext;
-    } catch {
-      // Parser failed; keep empty AST
+    } catch (error) {
+      // The document itself came back and is stored verbatim, so its text is
+      // recoverable by re-parsing what was kept rather than by asking the
+      // court again. Reported rather than swallowed: a parser that starts
+      // failing across a whole page is otherwise indistinguishable from
+      // decisions that genuinely carry no text.
+      logger.warn("case_law.ingestion.document_parse_failed", {
+        adapterKey: ADAPTER_KEYS.SK_US,
+        caseNumber,
+        "error.type": errorTag(error),
+      });
     }
   }
 

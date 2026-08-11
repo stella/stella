@@ -100,12 +100,43 @@ type SearchStub =
   | { type: "body"; json: string }
   | { type: "status"; status: number };
 
+/** How the stubbed document download answers. */
+type DownloadStub =
+  | { type: "pdf" }
+  /** A 200 carrying the portal's error page instead of the document. */
+  | { type: "not-a-pdf" }
+  | { type: "status"; status: number };
+
 type MockOptions = {
   /** Search responses, one per request, in order. */
   search: readonly SearchStub[];
-  /** Status the document download answers with. */
-  downloadStatus?: number;
+  download?: DownloadStub;
   onSearch?: (body: SearchBody, headers: Headers) => void;
+};
+
+/** A payload that opens like a real PDF; its body is not a parseable one. */
+const PDF_BYTES = new TextEncoder().encode("%PDF-1.4\n1 0 obj\n<<>>\n");
+
+const downloadResponse = (stub: DownloadStub): Response => {
+  switch (stub.type) {
+    case "pdf":
+      return new Response(PDF_BYTES, {
+        headers: { "Content-Type": "application/pdf" },
+      });
+    case "not-a-pdf":
+      return new Response(
+        "<html><body>Dokument nie je dostupný</body></html>",
+        {
+          headers: { "Content-Type": "text/html" },
+        },
+      );
+    case "status":
+      return new Response(null, { status: stub.status });
+    default: {
+      const exhaustive: never = stub;
+      throw new Error(`unhandled download stub: ${JSON.stringify(exhaustive)}`);
+    }
+  }
 };
 
 /**
@@ -141,7 +172,7 @@ const searchResponse = (stub: SearchStub): Response => {
 };
 
 const mockFetch = ({
-  downloadStatus = 200,
+  download = { type: "pdf" },
   onSearch,
   search,
 }: MockOptions): { calls: () => number } => {
@@ -160,13 +191,7 @@ const mockFetch = ({
         );
       }
       if (url.pathname.startsWith(DOWNLOAD_PREFIX)) {
-        return Promise.resolve(
-          downloadStatus === 200
-            ? new Response(new Uint8Array([37, 80, 68, 70]), {
-                headers: { "Content-Type": "application/pdf" },
-              })
-            : new Response(null, { status: downloadStatus }),
-        );
+        return Promise.resolve(downloadResponse(download));
       }
       return Promise.resolve(
         new Response(`unexpected request: ${url.toString()}`, { status: 500 }),
@@ -430,6 +455,10 @@ describe("sk-us buildDecision", () => {
     );
     expect(outcome.decision.sourceRawContentType).toBe("application/pdf");
     expect(outcome.decision.isListingOnly).toBeUndefined();
+    // A PDF this parser cannot read is still the document: the bytes are kept
+    // verbatim, so recovering its text is a re-parse of what was stored rather
+    // than another download of the same payload.
+    expect(outcome.decision.sourceRawBytes).toEqual(PDF_BYTES);
   });
 
   test("the identity the walk keys is the identity the build stores", async () => {
@@ -453,8 +482,19 @@ describe("sk-us buildDecision", () => {
   });
 
   test("a document the court does not serve is never written", async () => {
-    mockFetch({ search: [], downloadStatus: 404 });
+    mockFetch({ search: [], download: { type: "status", status: 404 } });
 
+    expect(await reconciliation.buildDecision(CHAMBER_RESOLUTION)).toEqual({
+      type: "detail-unavailable",
+    });
+  });
+
+  test("a 200 that is not a PDF is no document either", async () => {
+    mockFetch({ search: [], download: { type: "not-a-pdf" } });
+
+    // The portal answers a missing document with an error page under a 200.
+    // Kept apart from a PDF this parser cannot read: those bytes are the
+    // decision and are stored for re-parsing, an error page never is.
     expect(await reconciliation.buildDecision(CHAMBER_RESOLUTION)).toEqual({
       type: "detail-unavailable",
     });
@@ -509,7 +549,7 @@ describe("sk-us crawl and reconciliation dispose of a missing document different
   });
 
   test("the crawl keeps the listing-only row the reconciliation refuses", async () => {
-    mockFetch({ search: [], downloadStatus: 404 });
+    mockFetch({ search: [], download: { type: "status", status: 404 } });
 
     const built = await buildSkUsDecision(CHAMBER_RESOLUTION);
 
