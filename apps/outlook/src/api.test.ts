@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
 import { DOCUMENT_UPLOAD_POLICY } from "@stll/api-contract";
@@ -33,28 +34,40 @@ describe("direct email upload reservation", () => {
   test("aborts the reservation after an HTTP PUT failure", async () => {
     const abortReservation = mock(async () => undefined);
 
-    await expect(
-      putPresignedEmail(directUpload, {
-        abortReservation,
-        put: mock(async () => new Response(null, { status: 503 })),
-      }),
-    ).rejects.toMatchObject({ status: 503 });
+    const result = await Result.tryPromise({
+      try: async () =>
+        await putPresignedEmail(directUpload, {
+          abortReservation,
+          put: mock(async () => new Response(null, { status: 503 })),
+        }),
+      catch: (cause) => cause,
+    });
 
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toMatchObject({ status: 503 });
+    }
     expect(abortReservation).toHaveBeenCalledTimes(1);
   });
 
   test("aborts the reservation after a transport failure", async () => {
     const abortReservation = mock(async () => undefined);
 
-    await expect(
-      putPresignedEmail(directUpload, {
-        abortReservation,
-        put: mock(async () => {
-          throw new DOMException("timeout");
+    const result = await Result.tryPromise({
+      try: async () =>
+        await putPresignedEmail(directUpload, {
+          abortReservation,
+          put: mock(async () => {
+            throw new DOMException("timeout");
+          }),
         }),
-      }),
-    ).rejects.toMatchObject({ status: 502 });
+      catch: (cause) => cause,
+    });
 
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toMatchObject({ status: 502 });
+    }
     expect(abortReservation).toHaveBeenCalledTimes(1);
   });
 
