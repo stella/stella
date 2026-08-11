@@ -17,7 +17,10 @@ import { tSafeId, withDescription } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { validateParentId } from "@/api/lib/entities/validate-parent-id";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { getSearchProvider } from "@/api/lib/search/provider";
+import {
+  enqueueEntitySearchRepairs,
+  flushEntitySearchRepairs,
+} from "@/api/lib/search/projection-repair-queue";
 import { checkEntityCreateCapacityForInsert } from "@/api/lib/uploads/entity-create";
 
 const createEntityBodySchema = t.Object({
@@ -137,6 +140,8 @@ export const createEntitiesHandler = async function* ({
         },
       });
 
+      await enqueueEntitySearchRepairs(tx, [entityId]);
+
       return { ok: true as const, entityId };
     }),
   );
@@ -147,7 +152,7 @@ export const createEntitiesHandler = async function* ({
     );
   }
 
-  getSearchProvider().indexEntity(txResult.entityId).catch(captureError);
+  flushEntitySearchRepairs([txResult.entityId]).catch(captureError);
 
   return Result.ok({ entityId: txResult.entityId });
 };

@@ -12,7 +12,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
-import { upsertWorkspaceSearchDocuments } from "@/api/lib/search/index-global";
+import {
+  enqueueWorkspaceSearchRepairs,
+  flushWorkspaceSearchRepairs,
+} from "@/api/lib/search/projection-repair-queue";
 
 const deleteContactParamsSchema = t.Object({
   contactId: tSafeId("contact", { description: "Contact ID to delete" }),
@@ -106,10 +109,12 @@ export const deleteContactHandler = async function* ({
       },
     });
 
-    return {
-      ok: true as const,
-      affectedWorkspaceIds: affectedWorkspaces.map(({ id }) => id),
-    };
+    // The matters this contact was a party to keep its name in their
+    // searchable text until they are reprojected.
+    const affectedWorkspaceIds = affectedWorkspaces.map(({ id }) => id);
+    await enqueueWorkspaceSearchRepairs(tx, affectedWorkspaceIds);
+
+    return { ok: true as const, affectedWorkspaceIds };
   });
 
   if (Result.isError(txResult)) {
@@ -136,7 +141,7 @@ export const deleteContactHandler = async function* ({
     );
   }
 
-  upsertWorkspaceSearchDocuments(txResult.value.affectedWorkspaceIds).catch(
+  flushWorkspaceSearchRepairs(txResult.value.affectedWorkspaceIds).catch(
     captureError,
   );
 

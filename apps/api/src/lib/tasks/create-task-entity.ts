@@ -29,7 +29,10 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
-import { getSearchProvider } from "@/api/lib/search/provider";
+import {
+  enqueueEntitySearchRepairs,
+  flushEntitySearchRepairs,
+} from "@/api/lib/search/projection-repair-queue";
 import { validateAgendaFields } from "@/api/lib/tasks/agenda-fields";
 import {
   deployedTaskFeatures,
@@ -456,6 +459,8 @@ export const createTaskEntityHandler = async function* ({
           : []),
       ]);
 
+      await enqueueEntitySearchRepairs(tx, [entityId]);
+
       return { ok: true as const, entityId };
     }),
   );
@@ -469,7 +474,7 @@ export const createTaskEntityHandler = async function* ({
     );
   }
 
-  getSearchProvider().indexEntity(txResult.entityId).catch(captureError);
+  flushEntitySearchRepairs([txResult.entityId]).catch(captureError);
 
   return Result.ok({ entityId: txResult.entityId });
 };

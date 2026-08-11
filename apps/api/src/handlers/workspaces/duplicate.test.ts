@@ -51,11 +51,29 @@ void mock.module("@/api/lib/search/process-extraction", () => ({
   processExtraction: processExtractionMock,
 }));
 
-const upsertWorkspaceSearchDocumentMock = mock(async () => undefined);
 const syncWorkspaceSearchActivityMock = mock(async () => undefined);
 void mock.module("@/api/lib/search/index-global", () => ({
   syncWorkspaceSearchActivity: syncWorkspaceSearchActivityMock,
-  upsertWorkspaceSearchDocument: upsertWorkspaceSearchDocumentMock,
+}));
+
+const enqueueWorkspaceSearchRepairsMock = mock(async () => undefined);
+const flushWorkspaceSearchRepairsMock = mock(async () => ({
+  failed: 0,
+  repaired: 0,
+}));
+// The full export set, not just the two this suite asserts on: a partial
+// factory silently leaves the rest of the module real, so a handler reaching
+// the queue through another entry point would open a transaction here.
+const idleRepairOutcome = async () => ({ failed: 0, repaired: 0 });
+void mock.module("@/api/lib/search/projection-repair-queue", () => ({
+  SEARCH_PROJECTION_REPAIR_BATCH_SIZE: 32,
+  drainSearchProjectionRepairQueue: idleRepairOutcome,
+  enqueueContactSearchRepairs: async () => undefined,
+  enqueueEntitySearchRepairs: async () => undefined,
+  enqueueWorkspaceSearchRepairs: enqueueWorkspaceSearchRepairsMock,
+  flushContactSearchRepairs: idleRepairOutcome,
+  flushEntitySearchRepairs: idleRepairOutcome,
+  flushWorkspaceSearchRepairs: flushWorkspaceSearchRepairsMock,
 }));
 
 const { default: duplicateWorkspace } = await import("./duplicate");
@@ -354,7 +372,8 @@ describe("duplicateWorkspace", () => {
     s3DeleteMock.mockClear();
     processExtractionMock.mockClear();
     syncWorkspaceSearchActivityMock.mockClear();
-    upsertWorkspaceSearchDocumentMock.mockClear();
+    enqueueWorkspaceSearchRepairsMock.mockClear();
+    flushWorkspaceSearchRepairsMock.mockClear();
 
     const insertedFields: InsertedWorkspaceField[] = [];
 

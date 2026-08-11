@@ -17,7 +17,10 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
-import { upsertWorkspaceSearchDocument } from "@/api/lib/search/index-global";
+import {
+  enqueueWorkspaceSearchRepairs,
+  flushWorkspaceSearchRepairs,
+} from "@/api/lib/search/projection-repair-queue";
 
 const createWorkspaceContactBodySchema = t.Object({
   contactId: tSafeId("contact", {
@@ -121,6 +124,10 @@ export const createWorkspaceContactHandler = async function* ({
       });
     }
 
+    // The matter folds each party's name into its searchable text, so adding
+    // one changes the matter's projection, not the contact's.
+    await enqueueWorkspaceSearchRepairs(tx, [workspaceId]);
+
     return { ok: true as const, created };
   });
 
@@ -148,7 +155,7 @@ export const createWorkspaceContactHandler = async function* ({
     );
   }
 
-  upsertWorkspaceSearchDocument(workspaceId).catch(captureError);
+  flushWorkspaceSearchRepairs([workspaceId]).catch(captureError);
 
   const created = txResult.value.created;
   if (!created) {

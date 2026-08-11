@@ -15,7 +15,10 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
-import { getSearchProvider } from "@/api/lib/search/provider";
+import {
+  enqueueEntitySearchRepairs,
+  flushEntitySearchRepairs,
+} from "@/api/lib/search/projection-repair-queue";
 
 const renameEntityBodySchema = t.Object({
   entityId: tSafeId("entity"),
@@ -126,6 +129,8 @@ export const renameEntityHandler = async function* ({
         },
       });
 
+      await enqueueEntitySearchRepairs(tx, [body.entityId]);
+
       return { ok: true as const };
     }),
   );
@@ -136,7 +141,7 @@ export const renameEntityHandler = async function* ({
     );
   }
 
-  getSearchProvider().indexEntity(body.entityId).catch(captureError);
+  flushEntitySearchRepairs([body.entityId]).catch(captureError);
 
   return Result.ok({ entityId: body.entityId });
 };

@@ -248,6 +248,19 @@ export const ENTITY_DELETION_CLEANUP_STATUSES = [
 export type EntityDeletionCleanupStatus =
   (typeof ENTITY_DELETION_CLEANUP_STATUSES)[number];
 
+/**
+ * Search projections driven by the transactional repair queue. This one list
+ * types the queue column, generates the table's CHECK constraint, and keys
+ * the drain's repair dispatch, so a fourth projection cannot be added to one
+ * of the three and forgotten in the others.
+ */
+export const SEARCH_PROJECTION_KINDS = [
+  "contact",
+  "entity",
+  "workspace",
+] as const;
+export type SearchProjectionKind = (typeof SEARCH_PROJECTION_KINDS)[number];
+
 export type AccountDeletionStorageCleanup = {
   s3Keys: string[];
 };

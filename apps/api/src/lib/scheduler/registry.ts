@@ -40,6 +40,10 @@ import {
   repairChatSearchIndex,
 } from "@/api/lib/scheduler/tasks/search-chat-index";
 import {
+  REPAIR_SEARCH_PROJECTIONS_TASK,
+  repairSearchProjections,
+} from "@/api/lib/scheduler/tasks/search-projection-repair";
+import {
   REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK,
   repairSearchSemanticTimestampsTask,
 } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
@@ -69,6 +73,7 @@ const SCHEDULER_TASKS = {
     reconcileCaseLawCorpusUploadIntentsTask,
   [RECONCILE_BUFFER_INTENTS_TASK]: reconcileBufferIntents,
   [REPAIR_CHAT_SEARCH_INDEX_TASK]: repairChatSearchIndex,
+  [REPAIR_SEARCH_PROJECTIONS_TASK]: repairSearchProjections,
   [BACKFILL_WORK_OBLIGATIONS_TASK]: backfillWorkObligations,
   [REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK]: repairSearchSemanticTimestampsTask,
   [MEMORY_CURATOR_TASK]: curateAiMemories,

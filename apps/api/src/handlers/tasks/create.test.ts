@@ -206,6 +206,8 @@ describe("createTaskHandler validation", () => {
       $count: async () => 0,
       select: () => ({
         from: () => ({
+          // The search-repair mark reads its tenant from the source row.
+          innerJoin: () => ({ where: () => [] }),
           where: () => ({
             limit: () => ({ for: async () => [{ userId }] }),
           }),
@@ -219,6 +221,7 @@ describe("createTaskHandler validation", () => {
             assigneeRows.push(...(Array.isArray(values) ? values : [values]));
           }
         },
+        select: () => ({ onConflictDoUpdate: async () => [] }),
       }),
       update: () => ({
         set: () => ({ where: async () => [] }),
@@ -280,6 +283,8 @@ describe("createTaskHandler validation", () => {
       $count: async () => 0,
       select: () => ({
         from: () => ({
+          // The search-repair mark reads its tenant from the source row.
+          innerJoin: () => ({ where: () => [] }),
           where: () => ({
             limit: () => ({ for: async () => [] }),
           }),
@@ -291,6 +296,7 @@ describe("createTaskHandler validation", () => {
             obligationRows.push(values);
           }
         },
+        select: () => ({ onConflictDoUpdate: async () => [] }),
       }),
       update: () => ({
         set: () => ({

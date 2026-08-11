@@ -4,6 +4,7 @@ import { CONTACT_TYPES } from "@stll/api-contract";
 
 import {
   ENTITY_KINDS,
+  SEARCH_PROJECTION_KINDS,
   bytea,
   jsonb,
   orgPolicies,
@@ -21,7 +22,12 @@ import {
   wsOrganizationReadOnlyPolicies,
   timestamptz,
 } from "./common";
-import type { AnyPgColumn, SafeId, TemplateManifest } from "./common";
+import type {
+  AnyPgColumn,
+  SafeId,
+  SearchProjectionKind,
+  TemplateManifest,
+} from "./common";
 import { contacts, workspaces } from "./contacts";
 import { TEMPLATE_KINDS, entities, entityVersions, fields } from "./entities";
 
@@ -412,6 +418,63 @@ export const workspaceSearchDocumentPreviewPassages = p.pgTable(
     ...wsOrganizationReadOnlyPolicies(
       "workspace_search_document_preview_passages",
     ),
+  ],
+);
+
+const SEARCH_PROJECTION_KIND_SQL_VALUES = SEARCH_PROJECTION_KINDS.map((kind) =>
+  sql.raw(`'${kind}'`),
+);
+
+/**
+ * The durable record that a search projection is behind its source.
+ *
+ * Every mutation that changes searchable text writes its source here inside
+ * the same transaction, so the dirty mark commits or rolls back with the
+ * mutation itself. The projection write that follows the commit is only an
+ * acceleration; this row is the guarantee, and it survives the restart,
+ * crash, or deploy that loses the write.
+ *
+ * One row per source: a burst of edits collapses onto the same key and is
+ * repaired once. `revision` is rewritten by every enqueue, and the drain
+ * removes or reschedules only the exact revision it repaired, so an edit that
+ * lands while a repair is in flight is not deleted as already handled.
+ * `attempts` and `next_attempt_at` keep a source the repair cannot fix from
+ * occupying the head of every batch.
+ */
+export const searchProjectionRepairQueue = p.pgTable(
+  "search_projection_repair_queue",
+  {
+    kind: p
+      .text("kind", { enum: SEARCH_PROJECTION_KINDS })
+      .$type<SearchProjectionKind>()
+      .notNull(),
+    sourceId: p.uuid("source_id").notNull(),
+    // Tenancy for the row policies only, and deliberately without a foreign
+    // key: a mark whose source is gone is not an error to prevent but work to
+    // discard, and the drain discards it on its next pass.
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    revision: p.uuid("revision").notNull(),
+    enqueuedAt: timestamptz("enqueued_at").notNull().defaultNow(),
+    attempts: p.integer("attempts").notNull().default(0),
+    nextAttemptAt: timestamptz("next_attempt_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.primaryKey({
+      columns: [table.kind, table.sourceId],
+      name: "search_projection_repair_queue_pk",
+    }),
+    p
+      .index("search_projection_repair_due_idx")
+      .on(table.nextAttemptAt, table.enqueuedAt),
+    p.check(
+      "search_projection_repair_kind_values_check",
+      sql`${table.kind} IN (${sql.join(SEARCH_PROJECTION_KIND_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "search_projection_repair_attempts_nonnegative_check",
+      sql`${table.attempts} >= 0`,
+    ),
+    ...orgPolicies(),
   ],
 );
 

@@ -25,7 +25,10 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
-import { upsertContactSearchDocument } from "@/api/lib/search/index-global";
+import {
+  enqueueContactSearchRepairs,
+  flushContactSearchRepairs,
+} from "@/api/lib/search/projection-repair-queue";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 
 const createContactBodySchema = t.Object({
@@ -182,6 +185,7 @@ export const createContactHandler = async function* ({
             },
           },
         });
+        await enqueueContactSearchRepairs(tx, [row.id]);
       }
 
       return row;
@@ -190,7 +194,7 @@ export const createContactHandler = async function* ({
 
   const created = contact ?? panic("Contact insert returned no row");
 
-  upsertContactSearchDocument(created.id).catch(captureError);
+  flushContactSearchRepairs([created.id]).catch(captureError);
 
   return Result.ok(created);
 };
