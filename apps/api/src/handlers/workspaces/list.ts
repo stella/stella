@@ -1,12 +1,10 @@
 import { Result, panic } from "better-result";
 import {
   and,
-  count,
   eq,
   inArray,
   isNull,
   max,
-  min,
   notInArray,
   or,
   sql,
@@ -39,161 +37,121 @@ const readWorkspaces = createSafeRootHandler(
   config,
   async function* ({ safeDb, session }) {
     const organizationId = session.activeOrganizationId;
-    const { result, counts, memberRows, taskCounts, deadlineRows } =
-      yield* Result.await(
-        safeDb(async (tx) => {
-          const allRows = await tx.query.workspaces.findMany({
-            where: {
-              organizationId: { eq: organizationId },
-              status: { eq: "active" },
-            },
-            columns: {
-              id: true,
-              name: true,
-              reference: true,
-              clientId: true,
-              color: true,
-              status: true,
-              leadUserId: true,
-              lastActivityAt: true,
-              createdAt: true,
-            },
-            with: {
-              client: {
-                columns: {
-                  id: true,
-                  displayName: true,
-                },
-                with: {
-                  responsibleAttorney: {
-                    columns: { name: true },
-                  },
+    const { result, entityAggregates, memberRows } = yield* Result.await(
+      safeDb(async (tx) => {
+        const workspaceRows = await tx.query.workspaces.findMany({
+          where: {
+            organizationId: { eq: organizationId },
+            status: { eq: "active" },
+          },
+          columns: {
+            id: true,
+            name: true,
+            reference: true,
+            clientId: true,
+            color: true,
+            status: true,
+            leadUserId: true,
+            lastActivityAt: true,
+            createdAt: true,
+          },
+          with: {
+            client: {
+              columns: {
+                id: true,
+                displayName: true,
+              },
+              with: {
+                responsibleAttorney: {
+                  columns: { name: true },
                 },
               },
             },
-            orderBy: {
-              lastActivityAt: "desc",
-            },
-            limit: LIMITS.workspacesCount,
-          });
+          },
+          orderBy: {
+            lastActivityAt: "desc",
+          },
+          limit: LIMITS.workspacesCount,
+        });
 
-          const workspaceRows = allRows.filter((w) => w.status === "active");
+        const wsIds = workspaceRows.map((w) => brandPersistedWorkspaceId(w.id));
 
-          const wsIds = workspaceRows.map((w) =>
-            brandPersistedWorkspaceId(w.id),
-          );
-
-          if (wsIds.length === 0) {
-            return {
-              result: workspaceRows,
-              counts: [],
-              memberRows: [],
-              taskCounts: [],
-              deadlineRows: [],
-            };
-          }
-
-          const closedStatuses = [TASK_STATUS.DONE, TASK_STATUS.CANCELLED];
-
-          const [entityCounts, members, openTaskRows, dueDateRows] =
-            await Promise.all([
-              tx
-                .select({
-                  workspaceId: entities.workspaceId,
-                  count: count(),
-                })
-                .from(entities)
-                .where(inArray(entities.workspaceId, wsIds))
-                .groupBy(entities.workspaceId),
-              tx
-                .select({
-                  workspaceId: workspaceMembers.workspaceId,
-                  userId: workspaceMembers.userId,
-                  userEmail: user.email,
-                  userName: user.name,
-                  userImage: user.image,
-                  lastActivity: max(entities.updatedAt),
-                })
-                .from(workspaceMembers)
-                .innerJoin(user, eq(user.id, workspaceMembers.userId))
-                .leftJoin(
-                  entities,
-                  and(
-                    eq(entities.workspaceId, workspaceMembers.workspaceId),
-                    eq(entities.lastEditedBy, workspaceMembers.userId),
-                  ),
-                )
-                .where(inArray(workspaceMembers.workspaceId, wsIds))
-                .groupBy(
-                  workspaceMembers.workspaceId,
-                  workspaceMembers.userId,
-                  user.email,
-                  user.name,
-                  user.image,
-                )
-                // SAFETY: member rows fan out across the org's active workspaces; bounded by LIMITS.workspacesCount * LIMITS.workspaceMembersCount, and a single-workspace cap would truncate multi-workspace orgs.
-                // eslint-disable-next-line require-query-limit/require-query-limit
-                .orderBy(
-                  workspaceMembers.workspaceId,
-                  sql`${max(entities.updatedAt)} DESC NULLS LAST`,
-                  user.name,
-                ),
-              tx
-                .select({
-                  workspaceId: entities.workspaceId,
-                  count: count(),
-                })
-                .from(entities)
-                .where(
-                  and(
-                    inArray(entities.workspaceId, wsIds),
-                    eq(entities.kind, "task"),
-                    or(
-                      notInArray(entities.status, closedStatuses),
-                      isNull(entities.status),
-                    ),
-                  ),
-                )
-                .groupBy(entities.workspaceId),
-              tx
-                .select({
-                  workspaceId: entities.workspaceId,
-                  deadline: min(entities.dueDate),
-                })
-                .from(entities)
-                .where(
-                  and(
-                    inArray(entities.workspaceId, wsIds),
-                    eq(entities.kind, "task"),
-                    or(
-                      notInArray(entities.status, closedStatuses),
-                      isNull(entities.status),
-                    ),
-                  ),
-                )
-                .groupBy(entities.workspaceId),
-            ]);
-
+        if (wsIds.length === 0) {
           return {
             result: workspaceRows,
-            counts: entityCounts,
-            memberRows: members,
-            taskCounts: openTaskRows,
-            deadlineRows: dueDateRows,
+            entityAggregates: [],
+            memberRows: [],
           };
-        }),
-      );
+        }
 
-    const countMap = new Map<string, number>(
-      counts.map((c) => [c.workspaceId, c.count]),
+        const closedStatuses = [TASK_STATUS.DONE, TASK_STATUS.CANCELLED];
+
+        const openTaskCondition = and(
+          eq(entities.kind, "task"),
+          or(
+            notInArray(entities.status, closedStatuses),
+            isNull(entities.status),
+          ),
+        );
+
+        const [aggregateRows, members] = await Promise.all([
+          tx
+            .select({
+              workspaceId: entities.workspaceId,
+              entityCount: sql<number>`count(*)::int`,
+              openTaskCount: sql<number>`count(*) filter (where ${openTaskCondition})::int`,
+              nextDeadline: sql<
+                string | null
+              >`min(${entities.dueDate}) filter (where ${openTaskCondition})`,
+            })
+            .from(entities)
+            .where(inArray(entities.workspaceId, wsIds))
+            .groupBy(entities.workspaceId),
+          tx
+            .select({
+              workspaceId: workspaceMembers.workspaceId,
+              userId: workspaceMembers.userId,
+              userEmail: user.email,
+              userName: user.name,
+              userImage: user.image,
+              lastActivity: max(entities.updatedAt),
+            })
+            .from(workspaceMembers)
+            .innerJoin(user, eq(user.id, workspaceMembers.userId))
+            .leftJoin(
+              entities,
+              and(
+                eq(entities.workspaceId, workspaceMembers.workspaceId),
+                eq(entities.lastEditedBy, workspaceMembers.userId),
+              ),
+            )
+            .where(inArray(workspaceMembers.workspaceId, wsIds))
+            .groupBy(
+              workspaceMembers.workspaceId,
+              workspaceMembers.userId,
+              user.email,
+              user.name,
+              user.image,
+            )
+            // SAFETY: member rows fan out across the org's active workspaces; bounded by LIMITS.workspacesCount * LIMITS.workspaceMembersCount, and a single-workspace cap would truncate multi-workspace orgs.
+            // eslint-disable-next-line require-query-limit/require-query-limit
+            .orderBy(
+              workspaceMembers.workspaceId,
+              sql`${max(entities.updatedAt)} DESC NULLS LAST`,
+              user.name,
+            ),
+        ]);
+
+        return {
+          result: workspaceRows,
+          entityAggregates: aggregateRows,
+          memberRows: members,
+        };
+      }),
     );
 
-    const openTaskMap = new Map<string, number>(
-      taskCounts.map((c) => [c.workspaceId, c.count]),
-    );
-
-    const deadlineMap = new Map<string, string | null>(
-      deadlineRows.map((d) => [d.workspaceId, d.deadline]),
+    const entityAggregateMap = new Map(
+      entityAggregates.map((aggregate) => [aggregate.workspaceId, aggregate]),
     );
 
     const memberMap = new Map<string, typeof memberRows>();
@@ -213,6 +171,7 @@ const readWorkspaces = createSafeRootHandler(
         // resolves via the eager-loaded `client` relation.
         panic(`workspace ${workspace.id} has clientId set but no client row`);
       }
+      const entityAggregate = entityAggregateMap.get(workspace.id);
       const storedMembers = memberMap.get(workspace.id);
       const allMembers = arrayOrEmpty(storedMembers);
       const leadIdx = workspace.leadUserId
@@ -243,9 +202,9 @@ const readWorkspaces = createSafeRootHandler(
               responsibleAttorneyName: client.responsibleAttorney?.name ?? null,
             }
           : null,
-        entityCount: countMap.get(workspace.id) ?? 0,
-        openTaskCount: openTaskMap.get(workspace.id) ?? 0,
-        nextDeadline: deadlineMap.get(workspace.id) ?? null,
+        entityCount: entityAggregate?.entityCount ?? 0,
+        openTaskCount: entityAggregate?.openTaskCount ?? 0,
+        nextDeadline: entityAggregate?.nextDeadline ?? null,
         members: orderedMembers,
       };
     });
