@@ -51,49 +51,52 @@ export const useIngestEmail = (errorFallback: string): UseIngestEmail => {
     workspaceId,
   }: IngestArgs) => {
     setState({ type: "saving" });
-    const result = await Result.tryPromise(async () => {
-      if (pendingUpload.current?.type === "abort") {
-        await abortEmailUploadReservation(
-          pendingUpload.current.workspaceId,
-          pendingUpload.current.uploadId,
-        );
-        pendingUpload.current = null;
-      }
-      if (
-        pendingUpload.current?.type === "finalize" &&
-        pendingUpload.current.workspaceId !== workspaceId
-      ) {
-        throw new APIError({
-          message: errorFallback,
-          status: 409,
-        });
-      }
-      if (pendingUpload.current?.type === "finalize") {
-        return await finalizeEmailUpload(pendingUpload.current);
-      }
+    const result = await Result.tryPromise({
+      try: async () => {
+        if (pendingUpload.current?.type === "abort") {
+          await abortEmailUploadReservation(
+            pendingUpload.current.workspaceId,
+            pendingUpload.current.uploadId,
+          );
+          pendingUpload.current = null;
+        }
+        if (
+          pendingUpload.current?.type === "finalize" &&
+          pendingUpload.current.workspaceId !== workspaceId
+        ) {
+          throw new APIError({
+            message: errorFallback,
+            status: 409,
+          });
+        }
+        if (pendingUpload.current?.type === "finalize") {
+          return await finalizeEmailUpload(pendingUpload.current);
+        }
 
-      const snapshot = await loadLatest();
-      const attachments = snapshot.attachments.filter(
-        (attachment) =>
-          !attachment.isInline &&
-          (selectedAttachmentIds === null ||
-            selectedAttachmentIds.has(attachment.id)),
-      );
-      const downloaded: AttachmentDownloadResult[] = await Promise.all(
-        attachments.map(
-          async (attachment) => await downloadAttachment(attachment),
-        ),
-      );
-      if (!isCurrent(snapshot.itemInstanceKey)) {
-        throw new APIError({ message: errorFallback, status: 409 });
-      }
-      const prepared = await prepareEmailUpload({
-        attachments: downloaded,
-        snapshot,
-        workspaceId,
-      });
-      pendingUpload.current = prepared;
-      return await finalizeEmailUpload(prepared);
+        const snapshot = await loadLatest();
+        const attachments = snapshot.attachments.filter(
+          (attachment) =>
+            !attachment.isInline &&
+            (selectedAttachmentIds === null ||
+              selectedAttachmentIds.has(attachment.id)),
+        );
+        const downloaded: AttachmentDownloadResult[] = await Promise.all(
+          attachments.map(
+            async (attachment) => await downloadAttachment(attachment),
+          ),
+        );
+        if (!isCurrent(snapshot.itemInstanceKey)) {
+          throw new APIError({ message: errorFallback, status: 409 });
+        }
+        const prepared = await prepareEmailUpload({
+          attachments: downloaded,
+          snapshot,
+          workspaceId,
+        });
+        pendingUpload.current = prepared;
+        return await finalizeEmailUpload(prepared);
+      },
+      catch: (cause) => cause,
     });
 
     if (Result.isError(result)) {
