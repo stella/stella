@@ -7,8 +7,9 @@
  *
  * Backs the MCP `configure_template_fields` tool. Mirrors save-document's
  * restore-by-path discipline (overlay merged onto the source manifest fields by
- * path) but stays in place: no new version, no marker re-discovery, just the
- * manifest re-embedded into the same stored object.
+ * path) but stays on the same version: no new version, no marker re-discovery,
+ * just the manifest re-embedded and stored under a fresh key the current
+ * version's rows are repointed to.
  */
 
 import { Result } from "better-result";
@@ -28,7 +29,11 @@ import {
 } from "@/api/lib/docx/template-manifest";
 import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { errorTag } from "@/api/lib/errors/utils";
+import { deleteS3Keys } from "@/api/lib/files/utils";
+import { logger } from "@/api/lib/observability/logger";
 import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
+import { buildTemplateRevisionS3Key } from "@/api/lib/templates/storage-keys";
 
 type ConfigureTemplateFieldsOptions = {
   safeDb: SafeDb;
@@ -72,13 +77,14 @@ export const configureTemplateFields = async function* ({
     );
   }
 
-  // All S3 I/O (read the stored DOCX, re-embed the manifest, write it back) and
-  // the row updates happen under the advisory lock, after re-reading s3Key /
-  // currentVersion fresh. Reading the buffer and writing it back *outside* the
-  // lock let a concurrent save-document commit a new vN+1 (a fresh per-version
-  // s3Key) between this read and write, so the manifest would be embedded into
-  // the now-stale object while templates.s3Key points elsewhere, diverging the
-  // DB manifest from the bytes the row references. Mirrors save-document.ts.
+  // All S3 I/O (read the stored DOCX, re-embed the manifest, store the result)
+  // and the row updates happen under the advisory lock, after re-reading s3Key /
+  // currentVersion fresh. Reading the buffer and writing the result *outside*
+  // the lock let a concurrent save-document commit a new vN+1 (a fresh
+  // per-version s3Key) between this read and write, so the manifest would be
+  // embedded into the now-stale object while templates.s3Key points elsewhere,
+  // diverging the DB manifest from the bytes the row references. Mirrors
+  // save-document.ts.
   const txResult = yield* Result.await(
     safeDb(async (tx) => {
       await tx.execute(
@@ -140,10 +146,25 @@ export const configureTemplateFields = async function* ({
         fields: mergedFields,
       };
 
-      // Re-embed the manifest into the locked object; markers and every other
+      // Re-embed the manifest into the bytes just read; markers and every other
       // part of the DOCX are preserved by writeManifest.
       const updatedDocx = await writeManifest(buffer, manifest);
-      await getS3().write(locked.s3Key, new Uint8Array(updatedDocx));
+      const updatedBytes = new Uint8Array(updatedDocx);
+
+      // The result goes to a fresh key rather than over the object the rows
+      // still point at: this transaction can still roll back after the write
+      // (a later statement, a serialization failure), and an in-place overwrite
+      // would leave the stored bytes carrying an overlay the rows never
+      // recorded. Writing beside the current object leaves at worst an
+      // unreferenced one. Same discipline as save-document.ts / update.ts,
+      // which allocate a per-version key.
+      const revisionS3Key = buildTemplateRevisionS3Key({
+        contents: updatedBytes,
+        organizationId,
+        templateId,
+        version: locked.currentVersion,
+      });
+      await getS3().write(revisionS3Key, updatedBytes);
 
       await tx
         .update(templates)
@@ -151,16 +172,22 @@ export const configureTemplateFields = async function* ({
           manifest,
           fieldCount: mergedFields.length,
           sizeBytes: updatedDocx.byteLength,
+          s3Key: revisionS3Key,
           updatedAt: new Date(),
         })
         .where(eq(templates.id, templateId));
 
-      // Keep ONLY the current version row's manifest in sync so a later
-      // save-document / fill reads the configured fields back; historical
-      // versions stay immutable.
+      // Keep ONLY the current version row in sync (its manifest and the key
+      // holding the bytes that manifest is embedded in) so a later
+      // save-document / fill / version download reads the configured fields
+      // back; historical versions keep their own key and stay immutable.
       await tx
         .update(templateVersions)
-        .set({ manifest, fieldCount: mergedFields.length })
+        .set({
+          manifest,
+          fieldCount: mergedFields.length,
+          s3Key: revisionS3Key,
+        })
         .where(
           and(
             eq(templateVersions.templateId, templateId),
@@ -175,10 +202,19 @@ export const configureTemplateFields = async function* ({
         workspaceId: null,
         changes: {
           fieldCount: { old: null, new: mergedFields.length },
+          s3Key: { old: locked.s3Key, new: revisionS3Key },
         },
       });
 
-      return { ok: true as const, manifest };
+      return {
+        ok: true as const,
+        manifest,
+        // Reclaimed after the commit, not here: only a committed transaction
+        // proves no row still names it. Identical bytes resolve to the same
+        // key, in which case there is nothing to reclaim.
+        supersededS3Key:
+          locked.s3Key === revisionS3Key ? undefined : locked.s3Key,
+      };
     }),
   );
 
@@ -197,6 +233,22 @@ export const configureTemplateFields = async function* ({
           "describe_template to list them).",
       }),
     );
+  }
+
+  // The superseded object is referenced by no row once the transaction has
+  // committed: template deletion discovers keys from templates.s3Key and the
+  // template_versions rows only (handlers/templates/delete.ts), so leaving it
+  // in place would strand it beyond the reach of every cleanup path. A failed
+  // delete is not a failed configuration: the rows are already consistent, so
+  // it is reported and the request still succeeds.
+  if (txResult.supersededS3Key !== undefined) {
+    const reclaimed = await deleteS3Keys([txResult.supersededS3Key]);
+    if (Result.isError(reclaimed)) {
+      logger.warn("templates.superseded_object_reclaim_failed", {
+        "error.type": errorTag(reclaimed.error),
+        templateId,
+      });
+    }
   }
 
   return Result.ok({ manifest: txResult.manifest });

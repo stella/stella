@@ -45,6 +45,20 @@ export type WritableFieldContent =
 export const allocateFileObject = (): MintedFileId =>
   brandMintedFileId(Bun.randomUUIDv7());
 
+/**
+ * The object id a queued derivative job carries, allocated once by the
+ * producer so every attempt of that job writes the same storage key. Allocating
+ * per attempt instead is what this replaces: an attempt that dies after its
+ * write leaves an object no row will ever name.
+ *
+ * The fallback covers jobs enqueued before the id moved into the payload, which
+ * carry none; it can go once no such job remains queued.
+ */
+export const resolveQueuedFileObject = (
+  fileId: string | undefined,
+): MintedFileId =>
+  fileId === undefined ? allocateFileObject() : brandMintedFileId(fileId);
+
 export const fileContentWithMintedObject = (
   content: MintedFileFieldContent,
 ): WritableFileFieldContent => {
