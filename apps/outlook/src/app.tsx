@@ -60,7 +60,7 @@ export const App = () => {
 
 type AttachmentSelection = {
   ids: Set<string>;
-  source: MailSnapshot;
+  source: string;
 };
 
 type DraftEdit = {
@@ -74,6 +74,7 @@ type DraftPlacementState =
 
 const AuthedApp = ({ t }: { t: Translate }) => {
   const {
+    isCurrent,
     loadLatest,
     refresh,
     state: loadState,
@@ -115,6 +116,7 @@ const AuthedApp = ({ t }: { t: Translate }) => {
         ) : null}
         {snapshot ? (
           <MessageApp
+            isCurrent={isCurrent}
             key={snapshotKey(snapshot)}
             loadLatest={loadLatest}
             snapshot={snapshot}
@@ -129,12 +131,14 @@ const AuthedApp = ({ t }: { t: Translate }) => {
 };
 
 const MessageApp = ({
+  isCurrent,
   snapshot,
   loadLatest,
   t,
   workspaceError,
   workspaces,
 }: {
+  isCurrent: (itemInstanceKey: string) => boolean;
   snapshot: MailSnapshot;
   loadLatest: () => Promise<MailSnapshot>;
   t: Translate;
@@ -168,7 +172,7 @@ const MessageApp = ({
       .map((attachment) => attachment.id),
   );
   const selectedAttachmentIds =
-    attachmentSelection?.source === snapshot
+    attachmentSelection?.source === snapshot.itemInstanceKey
       ? attachmentSelection.ids
       : defaultAttachmentIds;
   const draftSource = aiDraft.state.type === "ready" ? aiDraft.state : null;
@@ -209,8 +213,12 @@ const MessageApp = ({
       return;
     }
     ingest.save({
+      isCurrent,
       loadLatest,
-      selectedAttachmentIds,
+      selectedAttachmentIds:
+        attachmentSelection?.source === snapshot.itemInstanceKey
+          ? attachmentSelection.ids
+          : null,
       workspaceId: selectedWorkspaceId,
     });
   };
@@ -222,7 +230,7 @@ const MessageApp = ({
     } else {
       ids.add(attachmentId);
     }
-    setAttachmentSelection({ ids, source: snapshot });
+    setAttachmentSelection({ ids, source: snapshot.itemInstanceKey });
   };
 
   return (

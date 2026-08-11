@@ -27,6 +27,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { EML_MIME_TYPE } from "@/api/lib/files/email-to-html";
 import { resolveUploadMime } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { presignUploadUrl } from "@/api/lib/s3-presign";
@@ -87,6 +88,7 @@ const emailIngestPresignBodySchema = t.Object({
   propertyId: tSafeId("property"),
   parentId: t.Optional(t.Nullable(tSafeId("entity"))),
   ...baseFileMetadataSchema,
+  mimeType: t.Literal(EML_MIME_TYPE),
 });
 
 const agentSkillPresignBodySchema = t.Object({

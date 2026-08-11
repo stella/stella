@@ -2,6 +2,7 @@ import { Result, TaggedError, panic } from "better-result";
 import { and, asc, eq, inArray, lte, ne, sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
+import { mapWithConcurrency } from "@stll/concurrency";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -29,6 +30,7 @@ export const BUFFER_INTENT_TTL_MS = 5 * 60 * 1000;
 export const BUFFER_INTENT_STALE_MS = 60 * 1000;
 export const BUFFER_INTENT_HEARTBEAT_MS = 15 * 1000;
 const BUFFER_INTENT_RECONCILE_LIMIT = 25;
+const RECOVERY_DELETE_CONCURRENCY = 4;
 export const BUFFER_INTENT_DELETE_TIMEOUT_MS = 30 * 1000;
 export const BUFFER_INTENT_WRITE_TIMEOUT_MS = 2 * 60 * 1000;
 export const OBJECT_WRITE_RECOVERY_DELAY_MS = BUFFER_INTENT_WRITE_TIMEOUT_MS;
@@ -93,6 +95,11 @@ type RecoverableBufferIntent = PendingUploadPurposeData & {
   reservedFileId: string;
   type: BufferIntentPurpose;
 };
+
+type RecoverableEmailIngest = Extract<
+  PendingUploadPurposeData,
+  { type: "email_ingest" }
+> & { recoveryObjectKeys: string[] };
 
 type BufferIntentDeletionRow = Pick<
   typeof pendingUploads.$inferSelect,
@@ -635,6 +642,16 @@ export const isBufferIntentPurpose = (
 ): purpose is BufferIntentPurpose =>
   purpose === "entity_create" || purpose === "entity_version";
 
+const isRecoverableEmailIngest = (
+  value: PendingUploadPurposeData,
+): value is RecoverableEmailIngest =>
+  value.type === "email_ingest" &&
+  Array.isArray(value.recoveryObjectKeys) &&
+  value.recoveryObjectKeys.length > 0 &&
+  value.recoveryObjectKeys.every(
+    (objectKey) => typeof objectKey === "string" && objectKey.length > 0,
+  );
+
 export const bufferIntentObjectKey = (
   row: BufferIntentDeletionRow,
 ): string | null => {
@@ -652,6 +669,22 @@ export const bufferIntentObjectKey = (
   });
 };
 
+export const pendingUploadRecoveryObjectKeys = (
+  row: BufferIntentDeletionRow,
+): string[] => {
+  const bufferKey = bufferIntentObjectKey(row);
+  if (bufferKey !== null) {
+    return [bufferKey];
+  }
+  if (
+    row.purpose === "email_ingest" &&
+    isRecoverableEmailIngest(row.purposeData)
+  ) {
+    return row.purposeData.recoveryObjectKeys;
+  }
+  return [];
+};
+
 /**
  * Transfer final-key cleanup ownership before lifecycle cascades remove the
  * pending-upload row. The tombstone has no user/workspace foreign keys, so a
@@ -661,21 +694,15 @@ export const preserveBufferObjectCleanupIntents = async (
   tx: Transaction,
   rows: BufferIntentDeletionRow[],
 ): Promise<void> => {
-  const values = rows.flatMap((row) => {
-    const objectKey = bufferIntentObjectKey(row);
-    if (objectKey === null) {
-      return [];
-    }
-    return [
-      {
-        id: row.id,
-        organizationId: row.organizationId,
-        workspaceId: row.workspaceId,
-        objectKey,
-        status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING,
-      },
-    ];
-  });
+  const values = rows.flatMap((row) =>
+    pendingUploadRecoveryObjectKeys(row).map((objectKey) => ({
+      id: row.id,
+      organizationId: row.organizationId,
+      workspaceId: row.workspaceId,
+      objectKey,
+      status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.RECOVERING,
+    })),
+  );
   if (values.length === 0) {
     return;
   }
@@ -704,7 +731,7 @@ const reconcileStaleBufferIntentBatch = async ({
   const timeoutSeconds = Math.floor(BUFFER_INTENT_STALE_MS / 1000);
   const ownershipPredicate =
     scope === undefined
-      ? sql`${pendingUploads.purpose} IN ('entity_create', 'entity_version')`
+      ? sql`${pendingUploads.purpose} IN ('entity_create', 'entity_version', 'email_ingest')`
       : sql`${pendingUploads.organizationId} = ${scope.organizationId}
           AND ${pendingUploads.workspaceId} = ${scope.workspaceId}
           AND ${pendingUploads.purpose} = ${scope.purpose}`;
@@ -722,7 +749,13 @@ const reconcileStaleBufferIntentBatch = async ({
       .where(
         and(
           ownershipPredicate,
-          sql`${pendingUploads.purposeData}->>'reservedFileId' IS NOT NULL`,
+          sql`(
+            ${pendingUploads.purposeData}->>'reservedFileId' IS NOT NULL
+            OR (
+              ${pendingUploads.purpose} = 'email_ingest'
+              AND jsonb_array_length(COALESCE(${pendingUploads.purposeData}->'recoveryObjectKeys', '[]'::jsonb)) > 0
+            )
+          )`,
           inArray(pendingUploads.status, PENDING_UPLOAD_RECOVERABLE_STATUSES),
           sql`${pendingUploads.claimedAt} < NOW() - ${timeoutSeconds} * interval '1 second'`,
         ),
@@ -758,40 +791,37 @@ const reconcileStaleBufferIntentBatch = async ({
 
   const cleanupResults = await Promise.all(
     claimedResult.value.map(async (row) => {
-      if (
-        !isBufferIntentPurpose(row.purpose) ||
-        !isRecoverableBufferIntent(row.purposeData, row.purpose)
-      ) {
+      const objectKeys = pendingUploadRecoveryObjectKeys(row);
+      if (objectKeys.length === 0) {
         return null;
       }
-      const objectKey = createFileKey({
-        organizationId: row.organizationId,
-        workspaceId: row.workspaceId,
-        fileId: row.purposeData.reservedFileId,
-        mimeType: row.declaredMime,
+
+      const cleanups = await mapWithConcurrency({
+        items: objectKeys,
+        limit: RECOVERY_DELETE_CONCURRENCY,
+        operation: async (objectKey) =>
+          await Result.tryPromise({
+            try: async () =>
+              await withTimeout(
+                async (operationSignal) =>
+                  await deleteObject(objectKey, operationSignal),
+                {
+                  label: "buffer-intent-reconciliation.delete",
+                  signal,
+                  timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
+                },
+              ),
+            catch: (cause) => cause,
+          }),
       });
-      const cleanup = await Result.tryPromise({
-        try: async () =>
-          await withTimeout(
-            async (operationSignal) =>
-              await deleteObject(objectKey, operationSignal),
-            {
-              label: "buffer-intent-reconciliation.delete",
-              signal,
-              timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
-            },
-          ),
-        catch: (cause) => cause,
-      });
-      if (Result.isError(cleanup)) {
-        if (signal?.aborted) {
-          return null;
+      const failedCleanup = cleanups.find(Result.isError);
+      if (failedCleanup) {
+        if (!signal?.aborted) {
+          captureError(failedCleanup.error, {
+            pendingUploadId: row.id,
+            stage: `buffer-${row.purpose}-intent-reconcile`,
+          });
         }
-        captureError(cleanup.error, {
-          objectKey,
-          pendingUploadId: row.id,
-          stage: `buffer-${row.purpose}-intent-reconcile`,
-        });
         return null;
       }
       return row.id;
@@ -818,7 +848,9 @@ const reconcileStaleBufferIntentBatch = async ({
         rejectReason: sql<string>`CASE
           WHEN ${pendingUploads.purpose} = 'entity_create'
             THEN ${rejectionReason("entity_create")}
-          ELSE ${rejectionReason("entity_version")}
+          WHEN ${pendingUploads.purpose} = 'entity_version'
+            THEN ${rejectionReason("entity_version")}
+          ELSE 'Reconciled abandoned email ingest bytes'
         END`,
         status: "failed",
       })

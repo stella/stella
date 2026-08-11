@@ -17,6 +17,7 @@ const {
   lockObjectCleanupIntentsForWriter,
   lockActiveWorkspaceForBufferIntent,
   OBJECT_INTENT_WORKSPACE_AVAILABILITY,
+  pendingUploadRecoveryObjectKeys,
   reconcileBufferObjectCleanupIntents,
   reconcileStaleBufferIntentsGlobally,
   releaseObjectCleanupIntentsForLifecycle,
@@ -400,6 +401,30 @@ test("retires recovering cleanup ownership after the late-write quarantine", asy
   expect(claimed).toBe(1);
   expect(s3DeleteMock).toHaveBeenCalledTimes(1);
   expect(retired).toBe(1);
+});
+
+test("enumerates every persisted email-ingest recovery object", () => {
+  const recoveryObjectKeys = [
+    `${organizationId}/${workspaceId}/message.eml`,
+    `${organizationId}/${workspaceId}/attachment.pdf`,
+  ];
+
+  expect(
+    pendingUploadRecoveryObjectKeys({
+      declaredMime: "message/rfc822",
+      id: pendingUploadId,
+      organizationId,
+      purpose: "email_ingest",
+      purposeData: {
+        type: "email_ingest",
+        propertyId: toSafeId<"property">(
+          "00000000-0000-0000-0000-000000000004",
+        ),
+        recoveryObjectKeys,
+      },
+      workspaceId,
+    }),
+  ).toEqual(recoveryObjectKeys);
 });
 
 test("keeps a reclaimed writer intent recoverable after deleting its object", async () => {
