@@ -1602,7 +1602,7 @@
       "GET /v1/chat/threads": 6,
       "GET /v1/my-tasks": 6,
       "GET /v1/organization-settings/ai-availability": 4,
-      "GET /v1/workspaces": 10,
+      "GET /v1/workspaces": 8,
       "GET /v1/workspaces/navigation": 6
     },
     "responseSizes": {
@@ -1646,7 +1646,7 @@
       "GET /health": 1,
       "GET /v1/chat/threads": 6,
       "GET /v1/organization-settings/ai-availability": 4,
-      "GET /v1/workspaces": 10,
+      "GET /v1/workspaces": 8,
       "GET /v1/workspaces/navigation": 6
     },
     "responseSizes": {
