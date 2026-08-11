@@ -80,7 +80,8 @@ alternative transport.
 | `views.table-export`           |            | x   | none                                                                |
 | `templates.prefill`            | x (opt.)   |     | none (exposed: fileless mode)                                       |
 
-Four complete, eight partial, nine none.
+Four complete alternatives, eight partial alternatives, and nine entries with no
+alternative.
 
 ## Fileless mode
 

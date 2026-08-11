@@ -881,6 +881,36 @@ export const schemaContainsBinaryFormat = (schema: unknown): boolean => {
   return Object.values(record).some(schemaContainsBinaryFormat);
 };
 
+/**
+ * Whether a top-level property IS the file, rather than merely containing one
+ * somewhere beneath it. `transport.input.field` names a property a caller
+ * supplies directly, so `body.payload` is not a usable name for a file that
+ * actually sits at `body.payload.file`: no client can put bytes there through
+ * that name. A part whose only binary lives nested is reported unnameable
+ * instead, which fails the export rather than shipping a name nobody can use.
+ *
+ * A direct file is `format: "binary"` on the property itself, or an array whose
+ * items are; `anyOf`/`oneOf`/`allOf` branches count when a branch is direct.
+ */
+const isDirectBinaryProp = (schema: unknown): boolean => {
+  if (Array.isArray(schema)) {
+    return schema.some(isDirectBinaryProp);
+  }
+  if (typeof schema !== "object" || schema === null) {
+    return false;
+  }
+  const record: Record<string, unknown> = { ...schema };
+  if (record["format"] === "binary") {
+    return true;
+  }
+  if (isDirectBinaryProp(record["items"])) {
+    return true;
+  }
+  return ["anyOf", "oneOf", "allOf"].some((keyword) =>
+    isDirectBinaryProp(record[keyword]),
+  );
+};
+
 /** One top-level input property whose schema carries binary bytes. */
 export type BinarySchemaField = {
   part: "body" | "params" | "query";
@@ -947,7 +977,7 @@ export const scanBinarySchemaFields = (
     for (const [field, propSchema] of Object.entries(
       schemaProperties(schema),
     )) {
-      if (!schemaContainsBinaryFormat(propSchema)) {
+      if (!isDirectBinaryProp(propSchema)) {
         continue;
       }
       named += 1;

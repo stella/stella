@@ -487,11 +487,26 @@ describe("insertCapabilities: namespaced merge", () => {
         // An OPTIONAL file leaves a fileless JSON mode: generated, not
         // suppressed. This is the case the two booleans could not express.
         entry({ id: "e.prefill", transport: fileInput("file", false) }),
+        // The same optionality on a `file-both` must NOT generate: the file
+        // input can be omitted, but the response is still bytes the generic
+        // transport cannot serialize.
+        entry({
+          id: "f.render",
+          transport: {
+            type: "file-both",
+            input: { field: "f", required: false },
+          },
+        }),
       ],
     });
     expect(stats.generated).toBe(2);
-    expect(stats.suppressed).toBe(3);
-    expect(stats.suppressedIds).toEqual(["b.upload", "c.export", "d.fill"]);
+    expect(stats.suppressed).toBe(4);
+    expect(stats.suppressedIds).toEqual([
+      "b.upload",
+      "c.export",
+      "d.fill",
+      "f.render",
+    ]);
   });
 
   test("a fileless-mode capability withholds its file field from flags and --input", () => {

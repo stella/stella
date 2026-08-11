@@ -1059,6 +1059,41 @@ describe("scanBinarySchemaFields", () => {
     ).toEqual({ fields: [], unnameableParts: ["body"] });
   });
 
+  test("reports a part whose binary field is nested inside an object property", () => {
+    // `body.payload` CONTAINS a file but is not one, so naming it in a
+    // disposition would give a caller a field they cannot put bytes in. The
+    // ordinary nested shape has to be unnameable for the same reason the
+    // array-item shape is.
+    expect(
+      scanBinarySchemaFields({
+        body: {
+          type: "object",
+          properties: {
+            payload: {
+              type: "object",
+              properties: { file: FILE_SCHEMA, note: { type: "string" } },
+            },
+          },
+        },
+      }),
+    ).toEqual({ fields: [], unnameableParts: ["body"] });
+  });
+
+  test("names a file array, which a caller can still supply by that field", () => {
+    expect(
+      scanBinarySchemaFields({
+        body: {
+          type: "object",
+          required: ["files"],
+          properties: { files: { type: "array", items: FILE_SCHEMA } },
+        },
+      }),
+    ).toEqual({
+      fields: [{ part: "body", field: "files", required: true }],
+      unnameableParts: [],
+    });
+  });
+
   test("is empty for a schema with no binary field", () => {
     expect(
       scanBinarySchemaFields({

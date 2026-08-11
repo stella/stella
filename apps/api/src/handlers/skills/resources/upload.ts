@@ -59,7 +59,11 @@ const config = {
     input: {
       field: "file",
       required: true,
-      mediaTypes: [DOCX_MIME_TYPE, PDF_MIME_TYPE],
+      // Empty because the handler enforces no media type: DOCX and PDF go
+      // through extraction, and anything else is decoded as UTF-8 text. Listing
+      // the two extracted types would make a client reject the text uploads
+      // this endpoint accepts.
+      mediaTypes: [],
     },
     alternative: {
       type: "partial",

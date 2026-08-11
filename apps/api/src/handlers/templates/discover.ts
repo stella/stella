@@ -57,9 +57,10 @@ const config = {
     type: "file-input",
     input: { field: "file", required: true, mediaTypes: [DOCX_MIME_TYPE] },
     alternative: {
-      type: "none",
-      reason:
-        "marker discovery reads the supplied DOCX; for a template already stored, templates.get returns the discovered fields",
+      type: "partial",
+      via: ["templates.get"],
+      limitation:
+        "returns the discovered fields of a template already stored; it cannot inspect a newly supplied DOCX",
     },
   },
   body: discoverBodySchema,

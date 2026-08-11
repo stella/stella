@@ -287,9 +287,13 @@ const config = {
     response: { mediaTypes: [PDF_MIME_TYPE] },
     alternative: {
       type: "partial",
-      via: ["time-entries.export-csv", "time-entries.export-ledes"],
+      // One sufficient call, not a sequence: `via` is an ordered list of calls
+      // to make, and naming both exports here would tell a client to run the
+      // second one for nothing. LEDES is named in the limitation as the other
+      // single-call option.
+      via: ["time-entries.export-csv"],
       limitation:
-        "returns the same entries as CSV or LEDES text; the rendered PDF is not produced",
+        "returns the same entries as CSV text (time-entries.export-ledes returns LEDES instead); the rendered PDF is not produced",
     },
   },
   query: exportPdfQuerySchema,

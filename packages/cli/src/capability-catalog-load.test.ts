@@ -173,6 +173,27 @@ describe("parseCapabilityCatalog fail-closed parsing", () => {
     });
   });
 
+  test("keeps an optional file-both transport distinct from a file-input one", () => {
+    // Optionality is what makes a file-input capability invokable, so a
+    // `file-both` whose input is optional is the shape most likely to be
+    // mistaken for one: its RESPONSE still cannot cross the JSON transport.
+    // The projection must carry the discriminant through unchanged.
+    const entry = parseCapabilityCatalog([
+      validEntry({
+        transport: {
+          type: "file-both",
+          input: { field: "file", required: false, mediaTypes: ["text/csv"] },
+          response: { mediaTypes: ["application/pdf"] },
+          alternative: { type: "none", reason: "bytes are bytes" },
+        },
+      }),
+    ])?.at(0);
+    expect(entry?.transport).toEqual({
+      type: "file-both",
+      input: { field: "file", required: false },
+    });
+  });
+
   test("projects inputSchema sub-parts, keeping only the present ones", () => {
     const entry = parseCapabilityCatalog([
       validEntry({ inputSchema: { body: { type: "object" } } }),
