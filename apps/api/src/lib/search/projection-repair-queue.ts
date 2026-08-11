@@ -323,6 +323,7 @@ const repairClaim = async ({
       searchProjectionSourceId: claim.sourceId,
     });
     logger.error("search.projection_repair_failed", {
+      error: attempt.error,
       searchProjectionKind: claim.kind,
       searchProjectionSourceId: claim.sourceId,
     });
