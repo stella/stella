@@ -26,6 +26,12 @@
  * ```
  */
 
+import { panic } from "better-result";
+
+import type {
+  SourceAdapter,
+  SourceReconciliation,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
@@ -166,3 +172,20 @@ export const recordFixture = async (
   await saveFixture(filename, text);
   return text;
 };
+
+/**
+ * The reconciliation capability an adapter's own tests exist to exercise.
+ *
+ * Every adapter declares the field, so reaching the implementation means
+ * narrowing past `unsupported`. Shared rather than restated per adapter: a
+ * test that reached for the capability and found the source exempted is a
+ * broken test file, not a case to handle, and it should say so once.
+ */
+export const requireReconciliation = (
+  adapter: SourceAdapter,
+): SourceReconciliation =>
+  adapter.reconciliation.type === "unsupported"
+    ? panic(
+        `${adapter.key} declares reconciliation unsupported: ${adapter.reconciliation.reason}`,
+      )
+    : adapter.reconciliation;

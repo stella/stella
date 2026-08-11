@@ -25,6 +25,7 @@ import {
   skCourtsAdapter,
   skCourtsListingIdentity,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
+import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { toUtcDateString } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
@@ -34,10 +35,7 @@ import {
 } from "@/api/lib/legal-search/ingestion-types";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
-const { reconciliation } = skCourtsAdapter;
-if (reconciliation === undefined) {
-  throw new Error("sk-courts must declare a reconciliation capability");
-}
+const reconciliation = requireReconciliation(skCourtsAdapter);
 
 const LIST_PATH = "/v1/rozhodnutie";
 const SLICE = "2026-06-10";

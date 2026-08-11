@@ -35,7 +35,7 @@ const NOW = Date.UTC(2026, 7, 11, 12, 0, 0);
 
 const adapter = (
   key: SourceAdapter["key"],
-  getTotalCount?: SourceAdapter["getTotalCount"],
+  getTotalCount: SourceAdapter["getTotalCount"] = async () => null,
 ): SourceAdapter => ({
   key,
   name: `${key} fixture`,
@@ -45,7 +45,11 @@ const adapter = (
   fetchPage: () => {
     throw new Error("fetchPage is not exercised by the poll");
   },
-  ...(getTotalCount && { getTotalCount }),
+  getTotalCount,
+  reconciliation: {
+    type: "unsupported",
+    reason: "fixture: the totals poll never reconciles",
+  },
 });
 
 const unmeasured = (adapterKey: SourceAdapter["key"]): SourceReportedTotal => ({

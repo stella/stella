@@ -188,7 +188,7 @@ type SourceTotal = {
  * Fetch the total available decisions from each court
  * website via the adapter's `getTotalCount` method.
  * Each fetch is independent and has its own timeout.
- * Adapters without `getTotalCount` return null.
+ * A key with no registered adapter returns null.
  */
 const getSourceTotals = async (): Promise<SourceTotal[]> => {
   const keys = listAdapterKeys();
@@ -197,7 +197,7 @@ const getSourceTotals = async (): Promise<SourceTotal[]> => {
     keys.map(async (adapterKey: string) => {
       try {
         const adapter = await loadAdapterByKey(adapterKey);
-        if (!adapter?.getTotalCount) {
+        if (!adapter) {
           return { adapterKey, remoteTotal: null };
         }
         const signal = AbortSignal.timeout(SOURCE_TOTAL_TIMEOUT);

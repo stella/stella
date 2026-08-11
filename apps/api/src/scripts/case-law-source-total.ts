@@ -182,11 +182,10 @@ if (totalFlag !== undefined) {
 const POLL_OUTCOME = {
   RECORDED: "recorded",
   /**
-   * The adapter states no total. Covers both an adapter that implements no
-   * `getTotalCount` and one whose implementation answers null because its
-   * publisher exposes no readable count — `SourceAdapter.getTotalCount`
-   * defines null as exactly that. Not a failure: a sweep over every adapter
-   * would otherwise always end in one, whatever the count-capable sources did.
+   * The adapter's implementation answers null because its publisher exposes
+   * no readable count — `SourceAdapter.getTotalCount` defines null as exactly
+   * that. Not a failure: a sweep over every adapter would otherwise always end
+   * in one, whatever the count-capable sources did.
    */
   NO_COUNT: "no-count",
   FAILED: "failed",
@@ -207,11 +206,11 @@ type PollResult = {
  */
 const pollOne = async (adapterKey: string): Promise<PollResult> => {
   const adapter = getAdapter(adapterKey);
-  if (!adapter?.getTotalCount) {
+  if (!adapter) {
     return {
       adapterKey,
-      outcome: POLL_OUTCOME.NO_COUNT,
-      line: `${adapterKey}: exposes no count, nothing recorded`,
+      outcome: POLL_OUTCOME.FAILED,
+      line: `${adapterKey}: no adapter registered, nothing recorded`,
     };
   }
 

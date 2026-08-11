@@ -333,6 +333,12 @@ export type ReconciliationBuildOutcome =
  * compared without the loop knowing what a slice means to the adapter.
  */
 export type SourceReconciliation = {
+  /**
+   * The discriminant against `ReconciliationUnsupported`, absent here so an
+   * implemented capability is written plainly rather than wrapped. Declared so
+   * every reader narrows on one field instead of probing for another.
+   */
+  type?: undefined;
   /** First slice the publisher can list (e.g. the feed's first day). */
   firstSlice: string;
   /** Slice for a UTC instant (the tip). */
@@ -378,6 +384,21 @@ export type SourceReconciliation = {
     payload: unknown,
     signal?: AbortSignal,
   ) => Promise<ReconciliationBuildOutcome>;
+};
+
+/**
+ * An adapter that declares reconciliation and cannot do it.
+ *
+ * The capability is required rather than optional so that a new adapter has to
+ * answer for it: an omitted field is a decision nobody made, while this one is
+ * a decision written down with its reason. Discriminated against
+ * `SourceReconciliation`, which carries no `type`, so an implemented
+ * capability pays no wrapper and every reader narrows on the same field.
+ */
+export type ReconciliationUnsupported = {
+  type: "unsupported";
+  /** Why this source cannot be reconciled. Printed to operators. */
+  reason: string;
 };
 
 /**
@@ -434,22 +455,26 @@ export type SourceAdapter = {
     stored: StoredRawReparseInput,
   ) => StoredRawReparseOutcome | Promise<StoredRawReparseOutcome>;
   /**
-   * Fetch the total number of decisions available from
-   * the source. Returns null if the source doesn't expose
-   * a count endpoint or if the request fails.
+   * Ask the source how many decisions it holds, so held-vs-total coverage has
+   * a denominator the publisher itself states.
+   *
+   * Required: a source nobody can count is a source whose coverage nobody can
+   * report, and that has to be a stated property of the adapter rather than a
+   * field somebody forgot.
    */
-  getTotalCount?: (signal: AbortSignal) => Promise<number | null>;
+  getTotalCount: (signal: AbortSignal) => Promise<number | null>;
   /**
    * Ask the publisher what it lists for a slice, so the standing
    * reconciliation loop can compare that against what is held and ingest the
    * difference.
    *
-   * Optional. It exists only for sources that publish a listing addressable
-   * independently of the crawl cursor; where the only way to reach a decision
-   * is to walk the cursor forward, there is nothing to reconcile against and
-   * the adapter omits this rather than re-crawling under another name.
+   * Required, and answerable with `ReconciliationUnsupported`: it exists only
+   * for sources that publish a listing addressable independently of the crawl
+   * cursor, and where the only way to reach a decision is to walk the cursor
+   * forward there is nothing to reconcile against. Declaring that explicitly
+   * is what keeps "cannot" apart from "nobody looked".
    */
-  reconciliation?: SourceReconciliation | undefined;
+  reconciliation: SourceReconciliation | ReconciliationUnsupported;
 };
 
 /** Preserve an adapter's literal registry key while contextualizing its API. */

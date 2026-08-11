@@ -27,7 +27,6 @@ import { DRAIN_CHECK_SLICE_MS } from "./sk-document-drain";
 import {
   SOURCE_TOTAL_POLL_OUTCOME,
   SOURCE_TOTAL_STALE_AFTER_MS,
-  type CountingSourceAdapter,
   type SourceTotalPollOutcome,
   type SourceTotalPollTally,
   selectDueCountingAdapters,
@@ -87,7 +86,7 @@ type SourceTotalProbe =
   | { status: "failed"; error: unknown };
 
 type ProbedSourceTotal = {
-  adapter: CountingSourceAdapter;
+  adapter: SourceAdapter;
   probe: SourceTotalProbe;
 };
 
@@ -97,7 +96,7 @@ type SettledSourceTotal = {
 };
 
 type ProbeSourceTotalOptions = {
-  adapter: CountingSourceAdapter;
+  adapter: SourceAdapter;
   timeoutMs: number;
 };
 

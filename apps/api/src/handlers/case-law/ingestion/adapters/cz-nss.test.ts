@@ -26,6 +26,7 @@ import {
   parseResultRows,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import type { ParsedRow } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
+import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import {
   listingIdentityKey,
@@ -33,10 +34,7 @@ import {
 } from "@/api/lib/legal-search/ingestion-types";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
-const { reconciliation } = czNssAdapter;
-if (reconciliation === undefined) {
-  throw new Error("cz-nss must declare a reconciliation capability");
-}
+const reconciliation = requireReconciliation(czNssAdapter);
 
 const BASE_URL = "https://vyhledavac.nssoud.cz";
 

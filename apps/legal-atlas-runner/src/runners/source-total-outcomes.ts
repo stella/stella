@@ -59,25 +59,6 @@ export type SourceTotalPollTally = {
   unknownSource: number;
 };
 
-/** An adapter whose publisher exposes a count it can read. */
-export type CountingSourceAdapter = SourceAdapter & {
-  getTotalCount: NonNullable<SourceAdapter["getTotalCount"]>;
-};
-
-/**
- * The adapters worth asking at all, by capability rather than by name. An
- * adapter that starts implementing `getTotalCount` joins the sweep on its
- * own; a hand-kept list would leave it out and report nothing about the
- * omission.
- */
-export const selectCountingAdapters = (
-  adapters: readonly SourceAdapter[],
-): CountingSourceAdapter[] =>
-  adapters.filter(
-    (adapter): adapter is CountingSourceAdapter =>
-      adapter.getTotalCount !== undefined,
-  );
-
 type SelectDueCountingAdaptersOptions = {
   adapters: readonly SourceAdapter[];
   /** When this process last asked each adapter, whatever it answered. */
@@ -89,8 +70,9 @@ type SelectDueCountingAdaptersOptions = {
 };
 
 /**
- * The adapters to ask on this wake: those that can answer, and that have
- * neither been recorded nor asked inside the window.
+ * The adapters to ask on this wake: those that have neither been recorded nor
+ * asked inside the window. Every adapter can be asked — the capability is
+ * required — so the only gate left is the cadence.
  *
  * The gate is the last ask, not the last success. A publisher that exposes
  * no count and one whose request failed both come back as null and persist
@@ -109,7 +91,7 @@ export const selectDueCountingAdapters = ({
   now,
   staleAfterMs,
   totals,
-}: SelectDueCountingAdaptersOptions): CountingSourceAdapter[] => {
+}: SelectDueCountingAdaptersOptions): SourceAdapter[] => {
   const recordedAt = new Map(
     totals.map(({ adapterKey, reportedTotalAsOf }) => [
       adapterKey,
@@ -117,7 +99,7 @@ export const selectDueCountingAdapters = ({
     ]),
   );
 
-  return selectCountingAdapters(adapters).filter((adapter) => {
+  return adapters.filter((adapter) => {
     const recorded = recordedAt.get(adapter.key)?.getTime();
     const asked = askedAt.get(adapter.key);
     // The later of the two is what the window runs from: a recorded total

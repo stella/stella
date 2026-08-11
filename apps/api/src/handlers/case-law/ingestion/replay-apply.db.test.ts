@@ -103,6 +103,13 @@ const stubAdapter = (
   fetchPage: async () => {
     throw new Error("a replay must never fetch from the publisher");
   },
+  getTotalCount: async () => {
+    throw new Error("a replay must never fetch from the publisher");
+  },
+  reconciliation: {
+    type: "unsupported",
+    reason: "replay stub: a replay never contacts the publisher",
+  },
   reparseStoredRaw: reparse,
 });
 

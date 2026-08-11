@@ -16,6 +16,7 @@ import {
   skUsListingIdentity,
   SK_US_FIRST_SLICE,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
+import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import {
   listingIdentityKey,
@@ -23,10 +24,7 @@ import {
 } from "@/api/lib/legal-search/ingestion-types";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
-const { reconciliation } = skUsAdapter;
-if (reconciliation === undefined) {
-  throw new Error("sk-us must declare a reconciliation capability");
-}
+const reconciliation = requireReconciliation(skUsAdapter);
 
 const SEARCH_PATH = "/o/v1/dms/search";
 const DOWNLOAD_PREFIX = "/docDownload/";

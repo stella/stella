@@ -478,6 +478,13 @@ export const atCourtsAdapter = defineSourceAdapter({
     }
   },
 
+  reconciliation: {
+    type: "unsupported",
+    reason:
+      "adapter exists but has not been validated in production yet, so it " +
+      "runs no crawl for a reconciliation loop to reconcile against",
+  },
+
   fetchPage: createPagePaginatedFetch<RisApiResponse>({
     adapterKey: ADAPTER_KEYS.AT_COURTS,
     pageSize: PAGE_SIZE,

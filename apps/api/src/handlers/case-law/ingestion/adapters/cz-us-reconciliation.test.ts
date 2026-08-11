@@ -1,5 +1,5 @@
 /* eslint-disable typescript-eslint/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
-import { Result, panic } from "better-result";
+import { Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -18,13 +18,13 @@ import {
 import type {
   ReconciliationListingItem,
   ReconciliationSlicePage,
-  SourceReconciliation,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   czUsAdapter,
   czUsListingIdentity,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import type { ListedDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
+import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 /** Frozen so "the current year" and "yesterday" are the same in every test. */
@@ -32,8 +32,7 @@ const NOW = new Date("2026-08-08T12:00:00.000Z");
 const LATEST_CLOSED_DAY = "7.8.2026";
 const LISTING_PAGE_SIZE = 80;
 
-const reconciliation: SourceReconciliation =
-  czUsAdapter.reconciliation ?? panic("cz-us states no reconciliation");
+const reconciliation = requireReconciliation(czUsAdapter);
 
 // ── Publisher fixtures ───────────────────────────────────
 
