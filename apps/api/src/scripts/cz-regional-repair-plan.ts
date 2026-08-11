@@ -216,7 +216,10 @@ export type CzRegionalRepairArgs = {
   outPath: string;
   /** Process exactly these items instead of walking the listing. */
   itemsFilePath: string | null;
-  /** null = no cap on the missing decisions processed this run. */
+  /**
+   * Work items this run: decisions written when applying, missing items
+   * recorded when not. null only for an explicitly unbounded pass.
+   */
   limit: number | null;
   /** Resume strictly after this UTC day. */
   after: string | null;

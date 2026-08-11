@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { CzRegionalApiItem } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
+import type { CzRegionalListingIdentity } from "@/api/scripts/cz-regional-repair-plan";
 import {
   CZ_REGIONAL_FEED_START,
   checkRepairRange,
@@ -148,12 +149,20 @@ describe("czRegionalListingIdentity", () => {
   test("without a link, identity falls back to the docket alone", () => {
     // The sheet number is dropped: it names where the document sits in the
     // file, not the case, and the stored row is keyed on the docket.
-    for (const odkaz of [null, undefined, ""]) {
-      expect(czRegionalListingIdentity(listingItem({ odkaz }))).toEqual({
-        type: "case-number",
-        caseNumber: "11 C 153/2025",
-      });
+    const fallback = {
+      type: "case-number",
+      caseNumber: "11 C 153/2025",
+    } as const satisfies CzRegionalListingIdentity;
+    for (const odkaz of [null, ""] as const) {
+      expect(czRegionalListingIdentity(listingItem({ odkaz }))).toEqual(
+        fallback,
+      );
     }
+    // …and when the publisher omits the field altogether, which is a
+    // different shape from a null one under exactOptionalPropertyTypes.
+    const { odkaz, ...withoutLink } = listingItem();
+    expect(typeof odkaz).toBe("string");
+    expect(czRegionalListingIdentity(withoutLink)).toEqual(fallback);
   });
 
   test("an item the adapter would drop is unidentifiable", () => {

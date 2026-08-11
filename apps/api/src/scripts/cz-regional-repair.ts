@@ -55,13 +55,20 @@ import {
  * under its ingestion lease, so a run cannot interleave with a live crawl.
  * The default refresh policy is the right one here: this run exists to add
  * rows the source never stored, and a row that is already held is left
- * exactly as it is.
+ * exactly as it is. Items whose document could not be read are left missing
+ * rather than stored listing-only, so a later run finds them again instead of
+ * reading the day as reconciled.
+ *
+ * Every run is bounded by `--limit` and continues from the resume point it
+ * prints, in both modes: the walk's own accumulation is the cost without
+ * `--apply`, just as pipeline writes are the cost with it.
  *
  * Without `--apply` nothing is fetched in full, nothing is leased and
  * nothing is written; the walk reports per-day and total missing counts and
  * writes the report file. The report carries the missing listing items
- * verbatim, so `--items-file` can process exactly them later. Failed items
- * are written the same way at the end of an apply run. Interrupt with
+ * verbatim, so `--items-file` can process exactly them later — diffed again
+ * first, because a file is a snapshot and the crawl keeps running. Failed
+ * items are written the same way at the end of an apply run. Interrupt with
  * Ctrl-C: the current decision finishes and the report names the resume
  * point.
  *
@@ -81,6 +88,17 @@ import {
  */
 
 const DEFAULT_DELAY_MS = 250;
+/**
+ * Work items per run, in both modes: decisions written under `--apply`,
+ * missing items recorded without it. The default range is the whole feed and
+ * a sparsely stored source can miss most of it, so an uncapped run would hold
+ * every raw item in memory and write one impractical report at the end. The
+ * cap makes a run finite and the printed resume point continues it; pass
+ * `--no-limit` for a deliberate single-pass census.
+ */
+const DEFAULT_LIMIT = 5000;
+/** Identity lookups per query, matching the publisher's own page size. */
+const HELD_LOOKUP_CHUNK = 100;
 /** Consecutive failed items before the run halts; mirrors the re-fetch. */
 const FAILURE_HALT_THRESHOLD = 10;
 const LIST_TIMEOUT_MS = 60_000;
@@ -104,9 +122,11 @@ const USAGE = `Usage: bun run src/scripts/cz-regional-repair.ts [options]
   --apply              Fetch and write the missing decisions. Omitted, the
                        run walks and diffs only.
   --out <path>         Where the walk's report is written (default ${DEFAULT_OUT}).
-  --items-file <path>  Process exactly the listing items in this JSON array
-                       instead of walking; requires --apply.
-  --limit <n>          Maximum missing decisions processed this run.
+  --items-file <path>  Process the listing items in this JSON array instead of
+                       walking, skipping any since stored; requires --apply.
+  --limit <n>          Work items this run: decisions written under --apply,
+                       missing items recorded without it (default ${DEFAULT_LIMIT}).
+  --no-limit           Run the whole range in one pass, however large.
   --after <YYYY-MM-DD> Resume strictly after this day.
   --delay-ms <n>       Pause between decisions (default ${DEFAULT_DELAY_MS}).
   --failed-out <path>  Where failed items are written (default ${DEFAULT_FAILED_OUT}).`;
@@ -147,7 +167,13 @@ const positiveInteger = (
   return parsed;
 };
 
+const noLimit = hasFlag("no-limit");
 const limitFlag = flagValue("limit");
+if (noLimit && limitFlag !== undefined) {
+  console.error("--no-limit and --limit contradict each other; pass one.");
+  console.error(USAGE);
+  process.exit(1);
+}
 
 const args = {
   from: flagValue("from") ?? CZ_REGIONAL_FEED_START,
@@ -155,8 +181,7 @@ const args = {
   apply: hasFlag("apply"),
   outPath: flagValue("out") ?? DEFAULT_OUT,
   itemsFilePath: flagValue("items-file") ?? null,
-  limit:
-    limitFlag === undefined ? null : positiveInteger(limitFlag, 0, "limit"),
+  limit: noLimit ? null : positiveInteger(limitFlag, DEFAULT_LIMIT, "limit"),
   after: flagValue("after") ?? null,
   delayMs: positiveInteger(flagValue("delay-ms"), DEFAULT_DELAY_MS, "delay-ms"),
   failedOutPath: flagValue("failed-out") ?? DEFAULT_FAILED_OUT,
@@ -202,7 +227,10 @@ const suppliedItems = await (async (): Promise<CzRegionalApiItem[] | null> => {
     console.error(`${itemsFilePath} is not a JSON array of listing items`);
     process.exit(1);
   }
-  return limit === null ? parsed : parsed.slice(0, limit);
+  // Not truncated to --limit: the run halts on the cap and a re-run with the
+  // same file picks up where it stopped, because everything already written
+  // is now held and skipped.
+  return parsed;
 })();
 
 const days =
@@ -310,6 +338,31 @@ const heldIdentities = async (
   };
 };
 
+/**
+ * The same question over an arbitrary number of items, in bounded queries.
+ * A report file carries as many items as a whole walk found, which is more
+ * than one lookup may name.
+ */
+const heldIdentitiesChunked = async (
+  items: readonly CzRegionalApiItem[],
+): Promise<CzRegionalHeldIdentities> => {
+  const documentIds = new Set<string>();
+  const caseNumbers = new Set<string>();
+  for (let index = 0; index < items.length; index += HELD_LOOKUP_CHUNK) {
+    // oxlint-disable-next-line no-await-in-loop -- bounded lookups stay sequential rather than fanning out across the connection pool
+    const held = await heldIdentities(
+      items.slice(index, index + HELD_LOOKUP_CHUNK),
+    );
+    for (const value of held.documentIds) {
+      documentIds.add(value);
+    }
+    for (const value of held.caseNumbers) {
+      caseNumbers.add(value);
+    }
+  }
+  return { documentIds, caseNumbers };
+};
+
 const INGEST_OUTCOMES = {
   WRITTEN: "written",
   RETRYABLE: "retryable",
@@ -324,17 +377,24 @@ const ingestItem = async (
   item: CzRegionalApiItem,
   lease: CaseLawSourceIngestionLease,
 ): Promise<IngestOutcome> => {
+  const docket = item.jednaciCislo ?? "(no docket)";
   try {
-    const decision = await buildCzRegionalDecision(
+    const built = await buildCzRegionalDecision(
       item,
       AbortSignal.timeout(ITEM_FETCH_TIMEOUT_MS),
     );
-    if (decision === null) {
-      console.error(
-        `${item.jednaciCislo ?? "(no docket)"}: no docket and court to key on; skipped`,
-      );
+    if (built.type === "unkeyable") {
+      console.error(`${docket}: no docket and court to key on; skipped`);
       return INGEST_OUTCOMES.UNINGESTABLE;
     }
+    if (built.type === "detail-unavailable") {
+      // Deliberately not written: a listing-only row would make the identity
+      // held, and the next walk would report the day as reconciled while the
+      // document stayed unread. Left missing, it is found again.
+      console.error(`${docket}: document unavailable; left for a retry`);
+      return INGEST_OUTCOMES.RETRYABLE;
+    }
+    const { decision } = built;
     await lease.beforeDatabaseMark();
     const observationOrder = await allocateSourceObservationOrder({
       leaseToken: lease.leaseToken,
@@ -354,7 +414,7 @@ const ingestItem = async (
     }
     return INGEST_OUTCOMES.WRITTEN;
   } catch (error) {
-    console.error(`${item.jednaciCislo ?? "(no docket)"}: failed —`, error);
+    console.error(`${docket}: failed —`, error);
     return INGEST_OUTCOMES.FAILED;
   }
 };
@@ -417,6 +477,14 @@ let listedAnyPage = false;
 /** Last day walked end to end; the only safe resume boundary. */
 let lastCompletedDate: string | null = null;
 
+/**
+ * What `--limit` counts. Under `--apply` the run's cost is the decisions it
+ * puts through the pipeline; without it, the cost is the missing items it
+ * accumulates for the report, and those must be capped just as hard or a
+ * plan-only run over a sparsely stored range grows without bound.
+ */
+const workDone = (): number => (apply ? counts.processed : missingItems.length);
+
 const stopReason = (): Halt | null => {
   if (runState.interrupted) {
     return { reason: "interrupted", failure: false };
@@ -427,7 +495,7 @@ const stopReason = (): Halt | null => {
       failure: true,
     };
   }
-  if (limit !== null && counts.processed >= limit) {
+  if (limit !== null && workDone() >= limit) {
     return { reason: `--limit ${limit} reached`, failure: false };
   }
   return null;
@@ -529,6 +597,13 @@ try {
           }
         }
 
+        // Checked per page, not only per item: without --apply nothing walks
+        // the missing list, so this is the only place the plan-only run's
+        // accumulation is bounded.
+        halt = stopReason();
+        if (halt !== null) {
+          dayComplete = false;
+        }
         if (!dayComplete || page + 1 >= listed.totalPages) {
           break;
         }
@@ -545,7 +620,18 @@ try {
       }
     }
   } else if (sourceLease !== null) {
-    for (const item of suppliedItems) {
+    // A file is a snapshot of what was missing when it was written, and the
+    // crawl keeps running. Diffed again here so the run stays what it claims
+    // to be — it adds rows the source does not hold — instead of replaying a
+    // stale item over a newer one the crawl has since stored.
+    const held = await heldIdentitiesChunked(suppliedItems);
+    const fileDiff = diffCzRegionalListing({ items: suppliedItems, held });
+    counts.listed += suppliedItems.length;
+    counts.held += fileDiff.held.length;
+    counts.missing += fileDiff.missing.length;
+    counts.uningestable += fileDiff.unidentifiable.length;
+    counts.duplicate += fileDiff.duplicate.length;
+    for (const item of fileDiff.missing) {
       halt = stopReason();
       if (halt !== null) {
         break;
@@ -577,11 +663,11 @@ if (suppliedItems === null) {
 console.log("--- outcomes ---");
 if (suppliedItems === null) {
   console.log(`days visited:      ${reportDays.length} of ${days.length}`);
-  console.log(`items listed:      ${counts.listed}`);
-  console.log(`already held:      ${counts.held}`);
-  console.log(`missing:           ${counts.missing}`);
-  console.log(`duplicate listing: ${counts.duplicate}`);
 }
+console.log(`items listed:      ${counts.listed}`);
+console.log(`already held:      ${counts.held}`);
+console.log(`missing:           ${counts.missing}`);
+console.log(`duplicate listing: ${counts.duplicate}`);
 if (apply) {
   console.log(`processed:         ${counts.processed}`);
   console.log(`written:           ${counts.written}`);

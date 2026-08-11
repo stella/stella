@@ -751,26 +751,44 @@ export const listCzRegionalDayPage = async ({
   };
 };
 
+export type CzRegionalBuildResult =
+  | { type: "built"; decision: IngestionResult }
+  /** No docket and court to key on; the crawl drops these too. */
+  | { type: "unkeyable" }
+  /** The item links a document, but nothing came back for it. */
+  | { type: "detail-unavailable" };
+
 /**
  * Build one decision from a listing item, through the adapter's own parse and
  * enrichment path.
  *
- * Returns null for an item the crawl would also drop: without a docket and a
- * court there is nothing to key the decision on.
+ * `fetchFinaldoc` degrades to empty enrichment when the document cannot be
+ * read, which is right for the crawl: the page keeps moving and the listing
+ * observation is still worth storing. A caller filling gaps needs the
+ * opposite, so the failure is reported instead of folded into the decision —
+ * storing a detail-less row would make the identity held and take the
+ * document out of every later reconciliation. The signal is `sourceRaw`,
+ * which is set whenever a response body was read at all (even one the
+ * validator then rejected), so its absence is exactly "nothing came back".
  */
 export const buildCzRegionalDecision = async (
   item: CzRegionalApiItem,
   signal?: AbortSignal,
-): Promise<IngestionResult | null> => {
+): Promise<CzRegionalBuildResult> => {
   const decision = parseItem(item);
-  if (!decision?.documentUrl) {
-    return decision;
+  if (decision === null) {
+    return { type: "unkeyable" };
   }
-  applyFinaldoc(
-    decision,
-    await fetchFinaldoc(decision.documentUrl, decision, signal),
-  );
-  return decision;
+  // The publisher linked no document; the listing metadata is all there is.
+  if (!decision.documentUrl) {
+    return { type: "built", decision };
+  }
+  const finaldoc = await fetchFinaldoc(decision.documentUrl, decision, signal);
+  if (finaldoc.sourceRaw === undefined) {
+    return { type: "detail-unavailable" };
+  }
+  applyFinaldoc(decision, finaldoc);
+  return { type: "built", decision };
 };
 
 export const czRegionalAdapter = defineSourceAdapter({
