@@ -18,19 +18,21 @@ describe("grounded review fixes", () => {
             supportingEvidenceVerified,
             targetAnchors: blockIds.map((blockId) => ({ blockId })),
           });
+          const firstBlockId = blockIds.at(0);
           const shouldExist =
             proposedText.trim().length > 0 &&
             supportingEvidenceVerified &&
-            blockIds.length > 0;
+            firstBlockId !== undefined;
 
           expect(fix !== null).toBe(shouldExist);
-          if (fix !== null) {
-            expect(fix).toEqual({
-              kind,
-              blockId: blockIds.at(0),
-              text: proposedText.trim(),
-            });
+          if (fix === null || firstBlockId === undefined) {
+            return;
           }
+          expect(fix).toEqual({
+            kind,
+            blockId: firstBlockId,
+            text: proposedText.trim(),
+          });
         },
       ),
     );

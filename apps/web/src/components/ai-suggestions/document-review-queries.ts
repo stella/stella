@@ -31,7 +31,7 @@ export const documentReviewSourcesOptions = ({
           query: {
             q,
             limit: DOCUMENT_REVIEW_SOURCE_LIMIT,
-            cursor: pageParam,
+            ...(pageParam ? { cursor: pageParam } : {}),
           },
         });
       return unwrapEden(response);

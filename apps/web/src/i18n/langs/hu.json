@@ -1982,7 +1982,7 @@
       "referenceFindings": "Referencia-összehasonlítás",
       "referenceLimitReached": "Elérte a referencialimitet",
       "referencePlaceholder": "Referenciadokumentumok keresése",
-      "referencesCount": "{count}/{max}",
+      "referencesCount": "{count, number}/{max, number}",
       "referencesDisagree": "A referenciák eltérnek",
       "referencesLabel": "Referenciadokumentumok (nem kötelező)",
       "removeReference": "{name} referencia eltávolítása",

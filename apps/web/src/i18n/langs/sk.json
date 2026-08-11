@@ -1982,7 +1982,7 @@
       "referenceFindings": "Porovnanie s referenciami",
       "referenceLimitReached": "Dosiahnutý limit referencií",
       "referencePlaceholder": "Hľadať referenčné dokumenty",
-      "referencesCount": "{count}/{max}",
+      "referencesCount": "{count, number}/{max, number}",
       "referencesDisagree": "Referencie sa líšia",
       "referencesLabel": "Referenčné dokumenty (voliteľné)",
       "removeReference": "Odstrániť referenciu {name}",

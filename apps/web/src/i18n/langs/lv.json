@@ -1982,7 +1982,7 @@
       "referenceFindings": "Atsauču salīdzinājums",
       "referenceLimitReached": "Sasniegts atsauču limits",
       "referencePlaceholder": "Meklēt atsauces dokumentus",
-      "referencesCount": "{count}/{max}",
+      "referencesCount": "{count, number}/{max, number}",
       "referencesDisagree": "Atsauces atšķiras",
       "referencesLabel": "Atsauces dokumenti (nav obligāti)",
       "removeReference": "Noņemt atsauci {name}",

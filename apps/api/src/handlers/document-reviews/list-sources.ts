@@ -18,12 +18,16 @@ import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
+/** Bounded reference-document picker page size. */
+const SOURCES_PAGE_SIZE_DEFAULT = 20;
+const SOURCES_PAGE_SIZE_MAX = 50;
+
 const listSourcesQuerySchema = t.Object({
   q: t.Optional(t.String({ maxLength: LIMITS.entityNameMaxLength })),
   limit: t.Optional(
     t.Integer({
       minimum: 1,
-      maximum: LIMITS.documentReviewSourcesPageSizeMax,
+      maximum: SOURCES_PAGE_SIZE_MAX,
     }),
   ),
   cursor: t.Optional(t.String({ maxLength: 512 })),
@@ -41,7 +45,7 @@ const listSourcesHandler = async function* ({
   workspaceId,
   query,
 }: ListSourcesArgs) {
-  const limit = query.limit ?? LIMITS.documentReviewSourcesPageSizeDefault;
+  const limit = query.limit ?? SOURCES_PAGE_SIZE_DEFAULT;
   const search = query.q?.trim() ?? "";
   const cursor = decodeEntityFileListCursor(query.cursor);
   const cursorCondition = entityFileListCursorCondition(cursor);

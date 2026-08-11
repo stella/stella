@@ -1982,7 +1982,7 @@
       "referenceFindings": "مقارنة المراجع",
       "referenceLimitReached": "تم بلوغ حد المراجع",
       "referencePlaceholder": "البحث في المستندات المرجعية",
-      "referencesCount": "{count}/{max}",
+      "referencesCount": "{count, number}/{max, number}",
       "referencesDisagree": "المراجع غير متفقة",
       "referencesLabel": "المستندات المرجعية (اختياري)",
       "removeReference": "إزالة المرجع {name}",

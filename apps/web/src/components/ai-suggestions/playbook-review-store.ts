@@ -332,31 +332,29 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
 
     const references = referencesFromBasis(basis);
     if (references.length > 0) {
-      const proposalResult = await Result.tryPromise(
-        async () => {
-          const { data, error } = await api
-            .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-            ["document-reviews"].topics.post(
-              {
-                target: {
-                  entityId: toSafeId<"entity">(entityId),
-                  fileFieldId: toSafeId<"field">(fileFieldId),
-                },
-                references: references.map((reference) => ({
-                  entityId: toSafeId<"entity">(reference.entityId),
-                  fileFieldId: toSafeId<"field">(reference.fileFieldId),
-                })),
-                seededTopics,
+      const proposalResult = await Result.tryPromise(async () => {
+        const { data, error } = await api
+          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          ["document-reviews"].topics.post(
+            {
+              target: {
+                entityId: toSafeId<"entity">(entityId),
+                fileFieldId: toSafeId<"field">(fileFieldId),
               },
-              {
-                fetch: {
-                  signal: AbortSignal.timeout(REVIEW_CLIENT_TIMEOUT_MS),
-                },
+              references: references.map((reference) => ({
+                entityId: toSafeId<"entity">(reference.entityId),
+                fileFieldId: toSafeId<"field">(reference.fileFieldId),
+              })),
+              seededTopics,
+            },
+            {
+              fetch: {
+                signal: AbortSignal.timeout(REVIEW_CLIENT_TIMEOUT_MS),
               },
-            );
-          return { data, error };
-        },
-      );
+            },
+          );
+        return { data, error };
+      });
       const proposalError = Result.isError(proposalResult)
         ? null
         : proposalResult.value.error;

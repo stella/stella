@@ -41,16 +41,25 @@ export const buildReviewResultItems = ({
   playbookFindings,
   referenceFindings,
 }: BuildReviewResultItemsArgs): ReviewResultItem[] => {
-  const playbookByPositionId = uniqueById(
-    playbookFindings ?? [],
-    (finding) => finding.positionId,
-    "playbook",
-  );
-  const referenceByTopicId = uniqueById(
-    referenceFindings ?? [],
-    (finding) => finding.topicId,
-    "reference",
-  );
+  // `null` findings mean that basis was not part of the run; an empty array
+  // means it ran and returned nothing. A basis that never ran gets no index, so
+  // the two states stay apart both here and in the reconciliation below.
+  const playbookByPositionId =
+    playbookFindings === null
+      ? null
+      : uniqueById(
+          playbookFindings,
+          (finding) => finding.positionId,
+          "playbook",
+        );
+  const referenceByTopicId =
+    referenceFindings === null
+      ? null
+      : uniqueById(
+          referenceFindings,
+          (finding) => finding.topicId,
+          "reference",
+        );
   const consumedPlaybookIds = new Set<string>();
   const consumedReferenceIds = new Set<string>();
   const results: ReviewResultItem[] = [];
@@ -60,10 +69,13 @@ export const buildReviewResultItems = ({
       continue;
     }
     const playbook =
-      topic.type === "playbook"
+      topic.type === "playbook" && playbookByPositionId !== null
         ? (playbookByPositionId.get(topic.positionId) ?? null)
         : null;
-    const reference = referenceByTopicId.get(topic.topicId) ?? null;
+    const reference =
+      referenceByTopicId === null
+        ? null
+        : (referenceByTopicId.get(topic.topicId) ?? null);
     if (playbook === null && reference === null) {
       return panic(`Review topic ${topic.topicId} has no result`);
     }
@@ -81,10 +93,16 @@ export const buildReviewResultItems = ({
     });
   }
 
-  if (consumedPlaybookIds.size !== playbookByPositionId.size) {
+  if (
+    playbookByPositionId !== null &&
+    consumedPlaybookIds.size !== playbookByPositionId.size
+  ) {
     return panic("Playbook review returned a result outside confirmed topics");
   }
-  if (consumedReferenceIds.size !== referenceByTopicId.size) {
+  if (
+    referenceByTopicId !== null &&
+    consumedReferenceIds.size !== referenceByTopicId.size
+  ) {
     return panic("Reference review returned a result outside confirmed topics");
   }
   return results;

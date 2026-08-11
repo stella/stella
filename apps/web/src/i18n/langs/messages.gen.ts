@@ -1985,7 +1985,7 @@ type Messages = {
       "referenceFindings": "Reference comparison";
       "referenceLimitReached": "Reference limit reached";
       "referencePlaceholder": "Search reference documents";
-      "referencesCount": "{count}/{max}";
+      "referencesCount": "{count, number}/{max, number}";
       "referencesDisagree": "References disagree";
       "referencesLabel": "Reference documents (optional)";
       "removeReference": "Remove reference {name}";

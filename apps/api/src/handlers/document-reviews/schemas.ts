@@ -1,8 +1,9 @@
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
+
 import { tSafeId } from "@/api/lib/custom-schema";
-import { LIMITS } from "@/api/lib/limits";
 
 export const documentReviewRefSchema = t.Object({
   entityId: tSafeId("entity"),
@@ -40,14 +41,14 @@ const reviewDocumentsSchema = {
   target: documentReviewRefSchema,
   references: t.Array(documentReviewRefSchema, {
     minItems: 1,
-    maxItems: LIMITS.documentReviewReferencesMax,
+    maxItems: DOCUMENT_REVIEW_LIMITS.referencesMax,
   }),
 };
 
 export const proposeReviewTopicsBodySchema = t.Object({
   ...reviewDocumentsSchema,
   seededTopics: t.Array(documentReviewTopicSchema, {
-    maxItems: LIMITS.documentReviewTopicsMax,
+    maxItems: DOCUMENT_REVIEW_LIMITS.topicsMax,
   }),
 });
 
@@ -55,6 +56,6 @@ export const compareReferencesBodySchema = t.Object({
   ...reviewDocumentsSchema,
   topics: t.Array(documentReviewTopicSchema, {
     minItems: 1,
-    maxItems: LIMITS.documentReviewTopicsMax,
+    maxItems: DOCUMENT_REVIEW_LIMITS.topicsMax,
   }),
 });

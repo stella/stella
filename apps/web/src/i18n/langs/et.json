@@ -1982,7 +1982,7 @@
       "referenceFindings": "Võrdluste võrdlus",
       "referenceLimitReached": "Võrdluste limiit on täis",
       "referencePlaceholder": "Otsi võrdlusdokumente",
-      "referencesCount": "{count}/{max}",
+      "referencesCount": "{count, number}/{max, number}",
       "referencesDisagree": "Võrdlused erinevad",
       "referencesLabel": "Võrdlusdokumendid (valikuline)",
       "removeReference": "Eemalda võrdlus {name}",

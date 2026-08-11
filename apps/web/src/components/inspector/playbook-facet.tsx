@@ -274,11 +274,8 @@ export const PlaybookFacet = ({
 
   const addFindingComment = async (finding: ReferenceFinding) => {
     const blockId = finding.targetCitations.at(0)?.blockId;
-    if (
-      !blockId ||
-      !registration ||
-      finding.explanation.type !== "comparison"
-    ) {
+    const { explanation } = finding;
+    if (!blockId || !registration || explanation.type !== "comparison") {
       return;
     }
     const editor = registration.editorRef.current;
@@ -303,7 +300,7 @@ export const PlaybookFacet = ({
             id: `review-comment-${uuidv7()}`,
             type: "commentOnBlock",
             blockId,
-            comment: { text: finding.explanation.text },
+            comment: { text: explanation.text },
           },
         ],
         mode: "tracked-changes",
@@ -488,21 +485,25 @@ const Launcher = ({
     ),
     enabled: selectedPlaybookId !== null,
   });
+  // No playbook selected, or its detail is still loading: seed no topics. The
+  // `playbookReady` flag below is what holds the review back meanwhile.
   const seededTopics: ReviewTopic[] =
-    selectedPlaybook?.positions.items.flatMap((position) =>
-      position.enabled
-        ? [
-            {
-              type: "playbook" as const,
-              topicId: position.sourceId,
-              positionId: position.sourceId,
-              title: position.issue,
-              context: position.guidance ?? "",
-              included: true,
-            },
-          ]
-        : [],
-    ) ?? [];
+    selectedPlaybook === undefined
+      ? []
+      : selectedPlaybook.positions.items.flatMap((position) =>
+          position.enabled
+            ? [
+                {
+                  type: "playbook" as const,
+                  topicId: position.sourceId,
+                  positionId: position.sourceId,
+                  title: position.issue,
+                  context: position.guidance ?? "",
+                  included: true,
+                },
+              ]
+            : [],
+        );
   const playbookReady =
     selectedPlaybookId === null || selectedPlaybook !== undefined;
 
@@ -595,7 +596,10 @@ const ReferenceFilePicker = ({
   } = useInfiniteQuery(
     documentReviewSourcesOptions({ workspaceId, q: debouncedQuery }),
   );
-  const sources = sourcePages?.pages.flatMap((page) => page.items) ?? [];
+  const sources =
+    sourcePages === undefined
+      ? []
+      : sourcePages.pages.flatMap((page) => page.items);
   const selectedIds = new Set(
     references.map((reference) => reference.fileFieldId),
   );
@@ -1298,10 +1302,14 @@ const ReviewResultCard = ({
   const assessmentLabels = useReferenceAssessmentLabels();
   const detailId = `review-result-${item.id}`;
   const { playbook, reference } = item;
-  const targetCitations = uniqueCitations([
-    ...(playbook?.citations ?? []),
-    ...(reference?.targetCitations ?? []),
-  ]);
+  const citations: PlaybookCitation[] = [];
+  if (playbook !== null) {
+    citations.push(...playbook.citations);
+  }
+  if (reference !== null) {
+    citations.push(...reference.targetCitations);
+  }
+  const targetCitations = uniqueCitations(citations);
   const hasBothSources = playbook !== null && reference !== null;
 
   return (
@@ -1656,7 +1664,7 @@ const ReviewResultActions = ({
           />
         </div>
       )}
-      {showReferenceActions && reference !== null && (
+      {showReferenceActions && (
         <div>
           {hasBothActionSources && (
             <p className="text-foreground-strong-muted text-[11px] font-medium">

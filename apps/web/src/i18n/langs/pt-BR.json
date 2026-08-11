@@ -1982,7 +1982,7 @@
       "referenceFindings": "Comparação de referências",
       "referenceLimitReached": "Limite de referências atingido",
       "referencePlaceholder": "Pesquisar documentos de referência",
-      "referencesCount": "{count}/{max}",
+      "referencesCount": "{count, number}/{max, number}",
       "referencesDisagree": "As referências divergem",
       "referencesLabel": "Documentos de referência (opcional)",
       "removeReference": "Remover referência {name}",

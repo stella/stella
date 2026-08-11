@@ -1982,7 +1982,7 @@
       "referenceFindings": "Referencijų palyginimas",
       "referenceLimitReached": "Pasiektas referencijų limitas",
       "referencePlaceholder": "Ieškoti referencinių dokumentų",
-      "referencesCount": "{count}/{max}",
+      "referencesCount": "{count, number}/{max, number}",
       "referencesDisagree": "Referencijos nesutampa",
       "referencesLabel": "Referenciniai dokumentai (pasirinktinai)",
       "removeReference": "Pašalinti referenciją {name}",

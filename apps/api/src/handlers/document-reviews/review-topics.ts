@@ -1,8 +1,9 @@
 import { Result } from "better-result";
 
+import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
+
 import type { DocumentReviewTopic } from "@/api/handlers/document-reviews/schemas";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { LIMITS } from "@/api/lib/limits";
 
 type ProposedReviewTopic = {
   title: string;
@@ -16,7 +17,7 @@ export const validateReviewTopics = (
   topics: readonly DocumentReviewTopic[],
   stage: "proposal" | "comparison",
 ): Result<void, HandlerError> => {
-  if (topics.length > LIMITS.documentReviewTopicsMax) {
+  if (topics.length > DOCUMENT_REVIEW_LIMITS.topicsMax) {
     return Result.err(
       new HandlerError({ status: 422, message: "Too many review topics." }),
     );
@@ -74,7 +75,7 @@ export const mergeProposedReviewTopics = (
     seededTopics.map((topic) => normalizeTitle(topic.title)),
   );
   for (const proposed of proposedTopics) {
-    if (merged.length >= LIMITS.documentReviewTopicsMax) {
+    if (merged.length >= DOCUMENT_REVIEW_LIMITS.topicsMax) {
       break;
     }
     const title = proposed.title.trim();
