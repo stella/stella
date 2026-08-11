@@ -44,6 +44,13 @@ const RIS_DOCUMENT_HOST_POLICY = {
 /** RIS API enforces a maximum page size of 20. */
 const PAGE_SIZE = 20;
 
+/**
+ * RIS numbers `Seitennummer` from one, which is also what the count probe
+ * below asks for. Stated once, so the crawl's page arithmetic and every direct
+ * request agree about where the collection starts.
+ */
+const FIRST_PAGE = 1;
+
 type RisContentUrl = {
   DataType?: string | null;
   Url?: string | null;
@@ -444,7 +451,7 @@ export const atCourtsAdapter = defineSourceAdapter({
     try {
       const response = await fetchWithTimeout(
         `${API_URL}?${new URLSearchParams({
-          Seitennummer: "1",
+          Seitennummer: String(FIRST_PAGE),
           Seitengroesse: String(PAGE_SIZE),
           Sortierung: "Aenderungsdatum",
           Aufsteigend: "false",
@@ -475,6 +482,7 @@ export const atCourtsAdapter = defineSourceAdapter({
     adapterKey: ADAPTER_KEYS.AT_COURTS,
     pageSize: PAGE_SIZE,
     legacyPageSize: PAGE_SIZE,
+    firstPage: FIRST_PAGE,
 
     buildRequest: (page) => ({
       url: `${API_URL}?${new URLSearchParams({

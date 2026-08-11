@@ -6,6 +6,7 @@ import { propertyConfig } from "@stll/property-testing";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
 
+import type { FirstPageNumber } from "./pagination";
 import {
   createPagePaginatedFetch,
   decodeOffsetCursor,
@@ -36,7 +37,7 @@ const itemToDecision = (item: TestItem): IngestionResult => ({
 const createTestFetch = (opts?: {
   pageSize?: number;
   legacyPageSize?: number;
-  zeroIndexed?: boolean;
+  firstPage?: FirstPageNumber;
   skipEven?: boolean;
 }) => {
   const pageSize = opts?.pageSize ?? 3;
@@ -45,7 +46,7 @@ const createTestFetch = (opts?: {
     adapterKey: "test",
     pageSize,
     legacyPageSize: opts?.legacyPageSize,
-    zeroIndexed: opts?.zeroIndexed,
+    firstPage: opts?.firstPage ?? 1,
 
     buildRequest: (page) => ({
       url: `https://example.com/test-api?page=${page}`,
@@ -167,7 +168,7 @@ describe("createPagePaginatedFetch", () => {
       { pattern: "/test-api", fixture: FIXTURE_NAME },
     ]);
 
-    const fetchPage = createTestFetch({ zeroIndexed: true });
+    const fetchPage = createTestFetch({ firstPage: 0 });
     const result = await fetchPage("offset:21", {});
     const page = result.unwrap();
     expect(page.nextCursor).toBe("offset:22");
@@ -183,7 +184,7 @@ describe("createPagePaginatedFetch", () => {
       { pattern: "/test-api", fixture: FIXTURE_NAME },
     ]);
 
-    const fetchPage = createTestFetch({ zeroIndexed: true });
+    const fetchPage = createTestFetch({ firstPage: 0 });
     const result = await fetchPage("10", {});
     const page = result.unwrap();
     expect(page.decisions).toHaveLength(0);
@@ -219,7 +220,7 @@ describe("createPagePaginatedFetch", () => {
 
     const fetchPage = createTestFetch({
       pageSize: 5,
-      zeroIndexed: true,
+      firstPage: 0,
     });
 
     const result = await fetchPage(null, {});
@@ -260,7 +261,7 @@ describe("createPagePaginatedFetch", () => {
     const fetchAtPageSize20 = createPagePaginatedFetch<TestResponse>({
       adapterKey: "test",
       pageSize: 20,
-      zeroIndexed: true,
+      firstPage: 0,
       buildRequest: (page) => ({
         url: `https://example.com/test-api?page=${page}&pageSize=20`,
       }),
@@ -286,7 +287,7 @@ describe("createPagePaginatedFetch", () => {
       adapterKey: "test",
       pageSize: 100,
       legacyPageSize: 20,
-      zeroIndexed: true,
+      firstPage: 0,
       buildRequest: (page) => ({
         url: `https://example.com/test-api?page=${page}&pageSize=100`,
       }),
@@ -321,7 +322,7 @@ describe("createPagePaginatedFetch", () => {
     const fetchPage = createPagePaginatedFetch<TestResponse>({
       adapterKey: "test",
       pageSize: 10,
-      zeroIndexed: true,
+      firstPage: 0,
       itemConcurrency: 3,
       buildRequest: (page) => ({
         url: `https://example.com/test-api?page=${page}`,
@@ -352,6 +353,129 @@ describe("createPagePaginatedFetch", () => {
     expect(page.decisions.at(-1)?.caseNumber).toBe("CASE-3");
     expect(page.nextCursor).toBe("offset:3");
   });
+});
+
+const requestUrl = (input: string | URL | Request): string => {
+  if (typeof input === "string") {
+    return input;
+  }
+  return input instanceof URL ? input.href : input.url;
+};
+
+/**
+ * A publisher that numbers pages from one usually clamps below it — asking for
+ * page zero answers page one rather than an error — so a walk configured with
+ * the wrong origin does not fail, it silently reads one page behind its own
+ * cursor. The model here clamps for exactly that reason.
+ */
+const mockClampedEndpoint = (
+  items: TestItem[],
+  firstPage: FirstPageNumber,
+  pageSize: number,
+): { restore: () => void; requestedPages: number[] } => {
+  const originalFetch = globalThis.fetch;
+  const requestedPages: number[] = [];
+
+  globalThis.fetch = Object.assign(
+    async (input: string | URL | Request): Promise<Response> => {
+      const url = new URL(requestUrl(input));
+      const requested = Number.parseInt(url.searchParams.get("page") ?? "", 10);
+      requestedPages.push(requested);
+      const start = (Math.max(firstPage, requested) - firstPage) * pageSize;
+      return await Promise.resolve(
+        new Response(
+          makeFixture(items.slice(start, start + pageSize), items.length),
+          { headers: { "Content-Type": "application/json; charset=utf-8" } },
+        ),
+      );
+    },
+    { preconnect: originalFetch.preconnect.bind(originalFetch) },
+  );
+
+  return {
+    restore: () => {
+      globalThis.fetch = originalFetch;
+    },
+    requestedPages,
+  };
+};
+
+describe("an offset names the same items whatever the publisher numbers from", () => {
+  const PAGE_SIZE = 10;
+  const dataset = Array.from({ length: 200 }, (_, index) => ({
+    id: index + 1,
+  }));
+  let restore: (() => void) | undefined;
+
+  afterEach(() => {
+    restore?.();
+    restore = undefined;
+  });
+
+  const firstPages = [0, 1] as const satisfies readonly FirstPageNumber[];
+
+  /** The offset a cursor names is the item the page it fetches begins at. */
+  const assertOffsetNamesItsPage = async (
+    firstPage: FirstPageNumber,
+  ): Promise<void> => {
+    const endpoint = mockClampedEndpoint(dataset, firstPage, PAGE_SIZE);
+    restore = endpoint.restore;
+    const fetchPage = createTestFetch({ pageSize: PAGE_SIZE, firstPage });
+
+    for (const offset of [0, PAGE_SIZE, 3 * PAGE_SIZE, 19 * PAGE_SIZE]) {
+      // oxlint-disable-next-line no-await-in-loop -- one offset at a time so a failure names the offset that broke
+      const result = await fetchPage(encodeOffsetCursor(offset), {});
+      const page = result.unwrap();
+      // The cursor is an item offset, so the first decision it yields is the
+      // item at that offset — the property a wrong page origin breaks while
+      // every count in the response still adds up.
+      expect(page.decisions.at(0)?.caseNumber).toBe(`CASE-${offset + 1}`);
+      expect(page.decisions).toHaveLength(PAGE_SIZE);
+      expect(page.nextCursor).toBe(encodeOffsetCursor(offset + PAGE_SIZE));
+    }
+
+    expect(endpoint.requestedPages).toEqual([
+      firstPage,
+      firstPage + 1,
+      firstPage + 3,
+      firstPage + 19,
+    ]);
+  };
+
+  /** Walking from the start reads every item once and none of them twice. */
+  const assertNoPageIsReadTwice = async (
+    firstPage: FirstPageNumber,
+  ): Promise<void> => {
+    const endpoint = mockClampedEndpoint(dataset, firstPage, PAGE_SIZE);
+    restore = endpoint.restore;
+    const fetchPage = createTestFetch({ pageSize: PAGE_SIZE, firstPage });
+
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    for (let step = 0; step < 5; step += 1) {
+      // oxlint-disable-next-line no-await-in-loop -- each step's cursor is the previous step's output
+      const result = await fetchPage(cursor, {});
+      const page = result.unwrap();
+      seen.push(...page.decisions.map(({ caseNumber }) => caseNumber));
+      cursor = page.nextCursor;
+    }
+
+    // A first page re-read by a clamping publisher shows up here and nowhere
+    // else: the counts, the cursors and the page numbers all stay plausible.
+    expect(new Set(seen).size).toBe(seen.length);
+    expect(seen.at(0)).toBe("CASE-1");
+    expect(seen.at(-1)).toBe(`CASE-${5 * PAGE_SIZE}`);
+  };
+
+  for (const firstPage of firstPages) {
+    test(`INVARIANT: the page fetched for an offset begins at that offset (firstPage ${firstPage})`, async () => {
+      await assertOffsetNamesItsPage(firstPage);
+    });
+
+    test(`INVARIANT: no page is read twice while the offset advances (firstPage ${firstPage})`, async () => {
+      await assertNoPageIsReadTwice(firstPage);
+    });
+  }
 });
 
 describe("offset cursor codec", () => {

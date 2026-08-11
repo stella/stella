@@ -40,13 +40,15 @@ import { isRecord } from "@/api/lib/type-guards";
 /**
  * Slovak Courts adapter.
  *
- * Fetches decisions from the obcan.justice.sk REST API.
- * Page-based pagination (0-indexed).
+ * Fetches decisions from the obcan.justice.sk REST API,
+ * whose pages are numbered from one (see {@link FIRST_PAGE}).
  *
  * Each list item is enriched with a detail fetch for
  * ECLI, document URL, and referenced legislation.
  *
- * Cursor format: item offset as string (e.g. "offset:100").
+ * Cursor format: the walk and an item offset within it
+ * ("backfill:1200", "live:0"); a bare "offset:100" predates
+ * the walks and restarts the first of them.
  *
  * The same list endpoint is addressable by a decision-date range, which is
  * what makes this source reconcilable: one date can be listed on its own,
@@ -55,6 +57,20 @@ import { isRecord } from "@/api/lib/type-guards";
 
 const BASE_URL =
   "https://obcan.justice.sk/pilot/api/ress-isu-service/v1/rozhodnutie";
+
+/**
+ * This endpoint numbers pages from one and clamps below it: `page=0` and
+ * `page=1` both answer the first hundred records, `page=2` the second hundred,
+ * and the response echoes `page` one lower than the request asked for.
+ *
+ * One statement for the whole adapter. The crawl and the slice listing walk
+ * the same endpoint, so a second statement of this fact is a second chance to
+ * state it differently — which is what happened: the crawl declared the
+ * endpoint zero-indexed, re-read the first page on every traversal and read
+ * every later page one hundred records behind its own cursor.
+ */
+const FIRST_PAGE = 1;
+
 const PAGE_SIZE = 100;
 const LEGACY_PAGE_SIZE = 100;
 const ITEM_CONCURRENCY = 10;
@@ -562,12 +578,11 @@ const SK_COURTS_TIP_WINDOW_DAYS = 140;
 const LISTING_PAGE_SIZE = 1000;
 
 /**
- * This endpoint numbers pages from one and clamps below it: `page=0` and
- * `page=1` both answer the first page, and the response echoes `page` one
- * lower than the request asked for. The contract numbers a slice's pages from
- * zero, so a page is requested one higher than it is named.
+ * A reconciliation slice numbers its pages from zero, so a page is requested
+ * one higher than it is named. Same endpoint fact as {@link FIRST_PAGE},
+ * stated through it rather than beside it.
  */
-const LISTING_FIRST_PAGE = 1;
+const LISTING_FIRST_PAGE = FIRST_PAGE;
 
 /**
  * Ordering for a slice listing. `guid` is unique and never reassigned, so it
@@ -813,7 +828,7 @@ export const skCourtsAdapter = defineSourceAdapter({
     adapterKey: ADAPTER_KEYS.SK_COURTS,
     pageSize: PAGE_SIZE,
     legacyPageSize: LEGACY_PAGE_SIZE,
-    zeroIndexed: true,
+    firstPage: FIRST_PAGE,
     listTimeoutMs: 60_000,
     itemConcurrency: ITEM_CONCURRENCY,
 

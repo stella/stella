@@ -53,11 +53,28 @@ export type TraversalMode = {
   windowItems?: number | undefined;
 };
 
+/**
+ * The number a publisher gives its own first page. Every endpoint numbers
+ * pages from one or from zero, and which one it is is a fact about that
+ * endpoint that the adapter must state rather than infer.
+ *
+ * Getting it wrong is silent, because a clamping endpoint answers an
+ * out-of-range page with its first one instead of an error: the walk then
+ * re-reads that page every traversal and reads every later page one page
+ * short of where its cursor says it is.
+ */
+export type FirstPageNumber = 0 | 1;
+
 type PagePaginationOptions<TResponse> = {
   /** Adapter key for error context. */
   adapterKey: string;
-  /** Whether page numbers are 0-indexed (default: false = 1-indexed). */
-  zeroIndexed?: boolean | undefined;
+  /**
+   * The page number this endpoint gives its first page. Cursors are item
+   * offsets either way: this is only how an offset is turned into the number
+   * the publisher is asked for, so the page fetched for offset `n` always
+   * begins at item `n - (n % pageSize)`.
+   */
+  firstPage: FirstPageNumber;
   /** Number of items per page (used to detect last page). */
   pageSize: number;
   /**
@@ -138,6 +155,7 @@ type PagePaginationOptions<TResponse> = {
  *   fetchPage: createPagePaginatedFetch({
  *     adapterKey: ADAPTER_KEYS.MY_ADAPTER,
  *     pageSize: 20,
+ *     firstPage: 1,
  *     buildRequest: (page) => ({
  *       url: `https://api.example.com/search?page=${page}`,
  *     }),
@@ -234,7 +252,7 @@ export const encodeTraversalCursor = (mode: string, offset: number): string =>
 export const createPagePaginatedFetch = <TResponse>(
   opts: PagePaginationOptions<TResponse>,
 ) => {
-  const firstPage = opts.zeroIndexed ? 0 : 1;
+  const { firstPage } = opts;
   const modes = opts.traversal;
 
   return async (

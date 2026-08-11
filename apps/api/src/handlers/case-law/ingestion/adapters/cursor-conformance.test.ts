@@ -169,13 +169,16 @@ const ADAPTER_CONFORMANCE = {
   },
   [ADAPTER_KEYS.SK_COURTS]: {
     disposition: "exercised",
+    // Numbered from one and clamped below it, as the endpoint is: `page=0`
+    // answers the first hundred records, exactly like `page=1`. Modelling it
+    // zero-indexed would hide a walk that re-reads its first page forever.
     exhaustedSource: ({ url }) => {
-      const page = Number(new URL(url).searchParams.get("page"));
+      const page = Math.max(1, Number(new URL(url).searchParams.get("page")));
       const pageSize = 100;
       const archiveEntries = 5100;
       const count = Math.max(
         0,
-        Math.min(pageSize, archiveEntries - page * pageSize),
+        Math.min(pageSize, archiveEntries - (page - 1) * pageSize),
       );
       return jsonResponse({
         rozhodnutieList: Array.from({ length: count }, () => ({})),
