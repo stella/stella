@@ -141,8 +141,8 @@ const promiseCatchCallback = (node: AstNode): AstNode | null => {
 
 // `result.isErr()` as an `if` test: the Result equivalent of a catch clause.
 // Returns the Result binding's name, or null when the test is another shape.
-const errResultBindingName = (node: AstNode): string | null => {
-  if (node.type !== "IfStatement") {
+const errResultBindingName = (node: unknown): string | null => {
+  if (!isAstNode(node) || node.type !== "IfStatement") {
     return null;
   }
   const test = isAstNode(node.test) ? node.test : null;
