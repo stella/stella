@@ -163,12 +163,20 @@ test("the dirty mark rolls back with the mutation that wrote it", async () => {
   const matter = await seedWorkspace(workspaceId(1));
   const document = await seedEntity(entityId(10), matter);
 
-  await expect(
-    db.transaction(async (tx) => {
+  // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
+  // type-aware lint; capture the rejection explicitly instead.
+  const rejection: unknown = await db
+    .transaction(async (tx) => {
       await enqueueEntitySearchRepairs(asTestRaw<Transaction>(tx), [document]);
       throw new Error("mutation failed after enqueue");
-    }),
-  ).rejects.toThrow("mutation failed after enqueue");
+    })
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+  expect(rejection).toBeInstanceOf(Error);
+  expect(rejection).toMatchObject({ message: "mutation failed after enqueue" });
 
   expect(await queueRows()).toEqual([]);
 

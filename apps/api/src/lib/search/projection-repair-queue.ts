@@ -389,7 +389,11 @@ const flushSearchRepairs = async ({
   if (ids.length === 0) {
     return { failed: 0, repaired: 0 };
   }
-  const claims = await claimQueuedRepairs({ db: deps.db, kind, sourceIds: ids });
+  const claims = await claimQueuedRepairs({
+    db: deps.db,
+    kind,
+    sourceIds: ids,
+  });
   return await repairClaimed({ claims, deps, signal: undefined });
 };
 
