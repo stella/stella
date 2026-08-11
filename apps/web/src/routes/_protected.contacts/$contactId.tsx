@@ -316,7 +316,6 @@ function ContactDetailPage() {
                 contact={contact}
                 field="defaultHourlyRate"
                 label={t("contacts.fields.defaultHourlyRate")}
-                type="number"
                 value={
                   contact.defaultHourlyRate !== null
                     ? String(contact.defaultHourlyRate)
@@ -333,7 +332,6 @@ function ContactDetailPage() {
                 contact={contact}
                 field="paymentTermDays"
                 label={t("contacts.fields.paymentTermDays")}
-                type="number"
                 value={
                   contact.paymentTermDays !== null
                     ? String(contact.paymentTermDays)
