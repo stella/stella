@@ -1,10 +1,10 @@
 import type { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDbError, SafeDbOrTx } from "@/api/db/safe-db";
 import { withScopedTx } from "@/api/db/safe-db";
-import { chatThreadCompactions } from "@/api/db/schema";
+import { chatThreadCompactions, chatThreads } from "@/api/db/schema";
 import { createCompactionSummaryMessage } from "@/api/handlers/chat/compaction";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
 import type {
@@ -144,15 +144,25 @@ export const shouldInvalidateChatCompactionCheckpoint = ({
   }
 };
 
-type MarkActiveChatCompactionCheckpointStaleProps = {
+type InvalidateChatCompactionChainProps = {
   threadId: SafeId<"chatThread">;
   tx: Transaction;
 };
 
-export const markActiveChatCompactionCheckpointStale = async ({
+/**
+ * Invalidate a thread's compaction chain after an edit, replay, or delete.
+ *
+ * Retires the active checkpoint and bumps the thread's compaction epoch, and
+ * does both in one place on purpose. Retiring the checkpoint alone is invisible
+ * to a compaction of a thread that has none: nothing is marked stale, so a run
+ * in flight would compare `null === null` and accept a summary built from the
+ * content this call is invalidating. The epoch is the signal that survives that
+ * case, so it must move wherever the checkpoint does.
+ */
+export const invalidateChatCompactionChain = async ({
   threadId,
   tx,
-}: MarkActiveChatCompactionCheckpointStaleProps): Promise<void> => {
+}: InvalidateChatCompactionChainProps): Promise<void> => {
   // audit: skip - derived compaction checkpoint cache; no user-authored state change
   await tx
     .update(chatThreadCompactions)
@@ -163,4 +173,11 @@ export const markActiveChatCompactionCheckpointStale = async ({
         eq(chatThreadCompactions.status, "active"),
       ),
     );
+
+  // Written as a statement so the bump does not drag `chat_threads`'
+  // `$onUpdate` columns (the list-ordering stamp and the rollback token) along
+  // with it. audit: skip - derived compaction chain marker.
+  await tx.execute(
+    sql`update ${chatThreads} set compaction_epoch = compaction_epoch + 1 where ${chatThreads.id} = ${threadId}`,
+  );
 };

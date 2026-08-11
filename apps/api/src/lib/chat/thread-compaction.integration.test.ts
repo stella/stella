@@ -8,16 +8,19 @@ import {
   test,
 } from "bun:test";
 import type { Logger } from "drizzle-orm";
-import { asc, eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
+  CHAT_COMPACTION_MEMORY_ELIGIBILITY,
+  CHAT_COMPACTION_MEMORY_EXTRACTABLE,
   chatMessages,
   chatThreadCompactions,
   chatThreads,
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import { invalidateChatCompactionChain } from "@/api/handlers/chat/persistent-compaction";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -29,7 +32,9 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+import { parseChatCompactionSummary } from "./compaction-summary";
 import type { IncrementalSummaryPrompt } from "./compaction-summary";
+import { chatMessageCursorCodec } from "./message-cursor";
 import {
   CHAT_COMPACTION_DELTA_BATCH_MAX,
   runChatThreadCompaction,
@@ -85,39 +90,90 @@ const countedSafeDb = (): SafeDb => {
   );
 };
 
-const seedThread = async (
-  messageCount: number,
-): Promise<SafeId<"chatThread">> => {
-  const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
-  await testDb.insert(chatThreads).values({
-    id: threadId,
-    organizationId: ids.orgA,
-    userId: ids.userA1,
-    title: "Compaction test thread",
-    workspaceId: ids.wsA1,
-  });
-  seededThreadIds.push(threadId);
+type SeedThreadOptions = {
+  messageCount: number;
+  /** Zero-based offsets within this batch that carry a memory opt-out. */
+  optedOutOffsets?: readonly number[];
+  /** Append to an existing thread instead of creating one. */
+  threadId?: SafeId<"chatThread">;
+};
 
+/**
+ * Seed a thread, or append a further batch to one. Later batches start after
+ * every message already recorded, so a test can grow a thread between runs the
+ * way sends do.
+ */
+const seedThread = async ({
+  messageCount,
+  optedOutOffsets = [],
+  threadId: existingThreadId,
+}: SeedThreadOptions): Promise<SafeId<"chatThread">> => {
+  const threadId =
+    existingThreadId ?? toSafeId<"chatThread">(Bun.randomUUIDv7());
+  if (!existingThreadId) {
+    await testDb.insert(chatThreads).values({
+      id: threadId,
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      title: "Compaction test thread",
+      workspaceId: ids.wsA1,
+    });
+    seededThreadIds.push(threadId);
+  }
+
+  const existingCount = await countThreadMessages(threadId);
+  const optedOut = new Set(optedOutOffsets);
   const base = Date.parse("2026-03-01T00:00:00.000Z");
   await testDb.insert(chatMessages).values(
-    Array.from({ length: messageCount }, (_, index) => ({
-      id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
-      threadId,
-      userId: ids.userA1,
-      workspaceId: ids.wsA1,
-      role: index % 2 === 0 ? ("user" as const) : ("assistant" as const),
-      // Version-1 payloads, matching the sibling history-window fixture: the
-      // compactor reads persisted content directly, so the legacy `text` key
-      // is the shape most worth covering.
-      content: {
-        version: 1 as const,
-        data: [{ type: "text" as const, text: `message ${index}` }],
-      },
-      createdAt: new Date(base + index),
-    })),
+    Array.from({ length: messageCount }, (_, offset) => {
+      const index = existingCount + offset;
+      return {
+        id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+        threadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+        role: index % 2 === 0 ? ("user" as const) : ("assistant" as const),
+        // Version-1 payloads, matching the sibling history-window fixture: the
+        // compactor reads persisted content directly, so the legacy `text` key
+        // is the shape most worth covering.
+        content: {
+          version: 1 as const,
+          data: [{ type: "text" as const, text: `message ${index}` }],
+        },
+        memoryExtractionEligible: !optedOut.has(offset),
+        createdAt: new Date(base + index),
+      };
+    }),
   );
 
   return threadId;
+};
+
+const countThreadMessages = async (
+  threadId: SafeId<"chatThread">,
+): Promise<number> => {
+  const rows = await testDb
+    .select({ id: chatMessages.id })
+    .from(chatMessages)
+    .where(eq(chatMessages.threadId, threadId));
+  return rows.length;
+};
+
+/**
+ * Invalidate the chain exactly as an edit or replay does, through the same
+ * production helper, so these tests pin the guard rather than a stand-in for
+ * it: if the epoch bump ever stops travelling with the staleness marking, they
+ * fail.
+ */
+const invalidateChain = async (
+  threadId: SafeId<"chatThread">,
+): Promise<void> => {
+  const result = await countedSafeDb()(
+    async (tx) => await invalidateChatCompactionChain({ threadId, tx }),
+  );
+  if (Result.isError(result)) {
+    throw new TypeError(`invalidation failed: ${result.error.message}`);
+  }
 };
 
 const SUMMARY_MARKDOWN = [
@@ -164,8 +220,16 @@ const runCompaction = async ({
   threadId,
   triggerTokens = 1,
   preserveTokens = 1,
+  extractionFeatureEnabled = true,
+  onSummarize,
 }: {
   threadId: SafeId<"chatThread">;
+  extractionFeatureEnabled?: boolean;
+  /**
+   * Runs while the summarizer is in flight, which is between the delta read
+   * and the advance transaction: the window a concurrent edit would land in.
+   */
+  onSummarize?: () => Promise<void>;
   preserveTokens?: number;
   triggerTokens?: number;
 }): Promise<RecordedRun> => {
@@ -175,13 +239,15 @@ const runCompaction = async ({
   const result = await runChatThreadCompaction({
     abortSignal: AbortSignal.timeout(60_000),
     dataWorkspaceIds: [ids.wsA1],
+    extractionFeatureEnabled,
     orgAIConfig: null,
     organizationId: ids.orgA,
     preserveTokens,
     safeDb: countedSafeDb(),
     summarize: async (prompt) => {
       prompts.push(prompt);
-      return await Promise.resolve(SUMMARY_MARKDOWN);
+      await onSummarize?.();
+      return SUMMARY_MARKDOWN;
     },
     threadId,
     triggerTokens,
@@ -200,6 +266,8 @@ const readChain = async (threadId: SafeId<"chatThread">) =>
       deltaCursor: chatThreadCompactions.deltaCursor,
       firstSummarizedMessageId: chatThreadCompactions.firstSummarizedMessageId,
       lastSummarizedMessageId: chatThreadCompactions.lastSummarizedMessageId,
+      memoryEligibility: chatThreadCompactions.memoryEligibility,
+      memoryExtractedAt: chatThreadCompactions.memoryExtractedAt,
       status: chatThreadCompactions.status,
       summarizedMessageCount: chatThreadCompactions.summarizedMessageCount,
       totalSummarizedMessageCount:
@@ -216,7 +284,7 @@ const transcriptMessageIds = (transcript: string): string[] =>
 
 describe("chat thread compaction", () => {
   test("advances the checkpoint exactly once per run", async () => {
-    const threadId = await seedThread(6);
+    const threadId = await seedThread({ messageCount: 6 });
 
     const run = await runCompaction({ threadId });
 
@@ -237,7 +305,9 @@ describe("chat thread compaction", () => {
 
   test("successive runs partition the thread instead of resummarizing it", async () => {
     // More than one batch, so the second run has delta of its own to fold in.
-    const threadId = await seedThread(CHAT_COMPACTION_DELTA_BATCH_MAX + 40);
+    const threadId = await seedThread({
+      messageCount: CHAT_COMPACTION_DELTA_BATCH_MAX + 40,
+    });
 
     const first = await runCompaction({ threadId });
     const second = await runCompaction({ threadId });
@@ -279,7 +349,7 @@ describe("chat thread compaction", () => {
   });
 
   test("two runs over the same delta advance the chain only once", async () => {
-    const threadId = await seedThread(8);
+    const threadId = await seedThread({ messageCount: 8 });
 
     // Both runs read the same active checkpoint before either writes, which is
     // exactly what a retry after a crash between summarizing and committing
@@ -306,7 +376,9 @@ describe("chat thread compaction", () => {
   });
 
   test("folds in at most one batch per run and reports the rest as pending", async () => {
-    const threadId = await seedThread(CHAT_COMPACTION_DELTA_BATCH_MAX + 40);
+    const threadId = await seedThread({
+      messageCount: CHAT_COMPACTION_DELTA_BATCH_MAX + 40,
+    });
 
     const run = await runCompaction({ threadId });
 
@@ -331,7 +403,9 @@ describe("chat thread compaction", () => {
   });
 
   test("never reads the thread without a row cap", async () => {
-    const threadId = await seedThread(CHAT_COMPACTION_DELTA_BATCH_MAX + 40);
+    const threadId = await seedThread({
+      messageCount: CHAT_COMPACTION_DELTA_BATCH_MAX + 40,
+    });
 
     const run = await runCompaction({ threadId });
 
@@ -351,7 +425,9 @@ describe("chat thread compaction", () => {
   });
 
   test("seeks past the checkpoint instead of rereading from the start", async () => {
-    const threadId = await seedThread(CHAT_COMPACTION_DELTA_BATCH_MAX + 40);
+    const threadId = await seedThread({
+      messageCount: CHAT_COMPACTION_DELTA_BATCH_MAX + 40,
+    });
 
     await runCompaction({ threadId });
     const second = await runCompaction({ threadId });
@@ -365,5 +441,303 @@ describe("chat thread compaction", () => {
     expect(
       messageReads.some(({ query }) => query.includes('"created_at" >')),
     ).toBe(true);
+  });
+});
+
+describe("chat thread compaction memory provenance", () => {
+  test("a clean segment under an enabled deployment stays extractable", async () => {
+    const threadId = await seedThread({ messageCount: 6 });
+
+    await runCompaction({ threadId, extractionFeatureEnabled: true });
+
+    const checkpoint = (await readChain(threadId)).at(-1);
+    expect(checkpoint?.memoryEligibility).toBe(
+      CHAT_COMPACTION_MEMORY_ELIGIBILITY.ELIGIBLE,
+    );
+    // A null stamp is what leaves the row visible to the extractor's queue.
+    expect(checkpoint?.memoryExtractedAt).toBeNull();
+  });
+
+  test("one opted-out message keeps the summary out of the extraction queue", async () => {
+    const threadId = await seedThread({
+      messageCount: 6,
+      optedOutOffsets: [1],
+    });
+
+    await runCompaction({ threadId, extractionFeatureEnabled: true });
+
+    const checkpoint = (await readChain(threadId)).at(-1);
+    expect(checkpoint?.memoryEligibility).toBe(
+      CHAT_COMPACTION_MEMORY_ELIGIBILITY.MESSAGE_OPTED_OUT,
+    );
+    // The extractor claims only rows whose stamp is null, so stamping here is
+    // what actually withholds the summary.
+    expect(checkpoint?.memoryExtractedAt).not.toBeNull();
+  });
+
+  test("re-enabling extraction cannot mine a chain summarized while it was off", async () => {
+    // The consent boundary this provenance exists for. The first segment is
+    // summarized with extraction disabled; by the time the second runs the
+    // deployment has been re-enabled and every new message is eligible. The
+    // second summary still folds in the first, so it must stay withheld.
+    const threadId = await seedThread({ messageCount: 6 });
+    await runCompaction({ threadId, extractionFeatureEnabled: false });
+
+    const afterDisabledRun = (await readChain(threadId)).at(-1);
+    expect(afterDisabledRun?.memoryEligibility).toBe(
+      CHAT_COMPACTION_MEMORY_ELIGIBILITY.CONSENT_INACTIVE,
+    );
+
+    await seedThread({ messageCount: 6, threadId });
+    const reEnabled = await runCompaction({
+      threadId,
+      extractionFeatureEnabled: true,
+    });
+    expect(reEnabled.outcome.type).toBe("advanced");
+
+    const chain = await readChain(threadId);
+    const active = chain.filter((row) => row.status === "active");
+    expect(active).toHaveLength(1);
+    expect(active.at(0)?.memoryEligibility).toBe(
+      CHAT_COMPACTION_MEMORY_ELIGIBILITY.CONSENT_INACTIVE,
+    );
+    expect(active.at(0)?.memoryExtractedAt).not.toBeNull();
+
+    // No checkpoint anywhere in the chain became extractable after the flag
+    // flipped: the verdict travels with the content, not with the deployment.
+    expect(
+      chain.every(
+        (row) => !CHAT_COMPACTION_MEMORY_EXTRACTABLE[row.memoryEligibility],
+      ),
+    ).toBe(true);
+  });
+
+  test("an opt-out in an early segment withholds every later summary", async () => {
+    const threadId = await seedThread({
+      messageCount: 6,
+      optedOutOffsets: [2],
+    });
+    await runCompaction({ threadId });
+
+    await seedThread({ messageCount: 6, threadId });
+    await runCompaction({ threadId });
+
+    const chain = await readChain(threadId);
+    expect(chain.length).toBeGreaterThan(1);
+    expect(
+      chain.every(
+        (row) =>
+          row.memoryEligibility ===
+          CHAT_COMPACTION_MEMORY_ELIGIBILITY.MESSAGE_OPTED_OUT,
+      ),
+    ).toBe(true);
+    expect(chain.every((row) => row.memoryExtractedAt !== null)).toBe(true);
+  });
+});
+
+/**
+ * The migration statement that re-anchors chains predating `delta_cursor`,
+ * read from the migration itself rather than restated here. A copy would be a
+ * mirror that could drift; this fails if the statement is renamed or removed.
+ */
+const readCursorBackfillStatement = async (): Promise<string> => {
+  const migration = await Bun.file(
+    new URL(
+      "../../../drizzle/20260812100000_chat_incremental_compaction/migration.sql",
+      import.meta.url,
+    ),
+  ).text();
+
+  const statement = migration
+    .split("--> statement-breakpoint")
+    .map((chunk) => chunk.trim())
+    .find((chunk) => /^UPDATE "chat_thread_compactions"/mu.test(chunk));
+
+  if (statement === undefined) {
+    throw new TypeError("migration has no chat_thread_compactions backfill");
+  }
+  return statement;
+};
+
+const seedLegacyCheckpoint = async ({
+  memoryExtractedAt,
+  messageIds,
+  threadId,
+}: {
+  memoryExtractedAt: Date | null;
+  messageIds: readonly SafeId<"chatMessage">[];
+  threadId: SafeId<"chatThread">;
+}): Promise<void> => {
+  const first = messageIds.at(0);
+  const last = messageIds.at(-1);
+  const firstKept = messageIds.at(-1);
+  if (!first || !last || !firstKept) {
+    throw new TypeError("legacy checkpoint needs a message range");
+  }
+
+  await testDb.insert(chatThreadCompactions).values({
+    id: toSafeId<"chatThreadCompaction">(Bun.randomUUIDv7()),
+    threadId,
+    status: "active",
+    summary: parseChatCompactionSummary(SUMMARY_MARKDOWN),
+    summaryMarkdown: SUMMARY_MARKDOWN,
+    firstSummarizedMessageId: first,
+    lastSummarizedMessageId: last,
+    firstKeptMessageId: firstKept,
+    summarizedMessageCount: messageIds.length,
+    totalTokens: 70_000,
+    preservedTokens: 30_000,
+    promptVersion: 1,
+    memoryExtractedAt,
+    // The shape a row written before these columns existed reads back as.
+    deltaCursor: null,
+    totalSummarizedMessageCount: 0,
+    memoryEligibility: CHAT_COMPACTION_MEMORY_ELIGIBILITY.UNKNOWN,
+  });
+};
+
+const readThreadMessages = async (threadId: SafeId<"chatThread">) =>
+  await testDb
+    .select({
+      cursorValue: chatMessageCursorCodec.cursorValue.as("created_at_cursor"),
+      id: chatMessages.id,
+    })
+    .from(chatMessages)
+    .where(eq(chatMessages.threadId, threadId))
+    .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id));
+
+describe("chat thread compaction cursor backfill", () => {
+  test("re-anchors a legacy chain on the cursor the codec would have written", async () => {
+    const threadId = await seedThread({ messageCount: 8 });
+    const messages = await readThreadMessages(threadId);
+    const summarized = messages.slice(0, 5);
+    await seedLegacyCheckpoint({
+      memoryExtractedAt: null,
+      messageIds: summarized.map(({ id }) => id),
+      threadId,
+    });
+
+    await testDb.execute(sql.raw(await readCursorBackfillStatement()));
+
+    const checkpoint = (await readChain(threadId)).at(-1);
+    const boundary = summarized.at(-1);
+    if (!boundary) {
+      throw new TypeError("expected a summarized boundary");
+    }
+
+    // The migration builds the cursor in SQL while every reader decodes it with
+    // the codec. A cursor this side cannot decode reads as "no cursor" and
+    // silently restarts the delta at message zero, so the two must agree
+    // exactly, not merely look similar.
+    expect(checkpoint?.deltaCursor).toBe(
+      chatMessageCursorCodec.encode(boundary.cursorValue, boundary.id),
+    );
+    expect(
+      chatMessageCursorCodec.decode(checkpoint?.deltaCursor ?? ""),
+    ).toEqual({
+      id: boundary.id,
+      timestamp: expect.objectContaining({ precision: "microseconds" }),
+    });
+
+    // The header count would otherwise under-report for the rest of the
+    // chain's life, because the column starts at zero.
+    expect(checkpoint?.totalSummarizedMessageCount).toBe(summarized.length);
+  });
+
+  test("the re-anchored chain summarizes only what it had not already", async () => {
+    const threadId = await seedThread({ messageCount: 8 });
+    const messages = await readThreadMessages(threadId);
+    const summarized = messages.slice(0, 5);
+    await seedLegacyCheckpoint({
+      memoryExtractedAt: null,
+      messageIds: summarized.map(({ id }) => id),
+      threadId,
+    });
+
+    await testDb.execute(sql.raw(await readCursorBackfillStatement()));
+    const run = await runCompaction({ threadId });
+
+    // Without the backfill this run would read from message zero while also
+    // passing the existing summary as the previous checkpoint, folding the
+    // first five messages in a second time.
+    const alreadySummarized = new Set(summarized.map(({ id }) => id));
+    const resummarized = transcriptMessageIds(
+      run.prompts.at(0)?.newMessages ?? "",
+    ).filter((id) => alreadySummarized.has(toSafeId<"chatMessage">(id)));
+    expect(resummarized).toEqual([]);
+  });
+
+  test("recovers extractability only where the previous writer recorded it", async () => {
+    const threadId = await seedThread({ messageCount: 8 });
+    const messages = await readThreadMessages(threadId);
+    await seedLegacyCheckpoint({
+      // A stamped row is ambiguous: excluded, or already mined. Provenance is
+      // not recoverable, so it must not be promoted.
+      memoryExtractedAt: new Date(),
+      messageIds: messages.slice(0, 5).map(({ id }) => id),
+      threadId,
+    });
+
+    await testDb.execute(sql.raw(await readCursorBackfillStatement()));
+
+    expect((await readChain(threadId)).at(-1)?.memoryEligibility).toBe(
+      CHAT_COMPACTION_MEMORY_ELIGIBILITY.UNKNOWN,
+    );
+  });
+});
+
+describe("chat thread compaction invalidation guard", () => {
+  test("declines to advance when an edit invalidates the chain mid-run", async () => {
+    // No checkpoint yet, which is precisely where comparing checkpoint ids is
+    // vacuous: invalidation has no active row to mark stale, so without the
+    // epoch both sides read null and the stale summary would be accepted.
+    const threadId = await seedThread({ messageCount: 6 });
+
+    const run = await runCompaction({
+      threadId,
+      onSummarize: async () => {
+        await invalidateChain(threadId);
+      },
+    });
+
+    expect(run.outcome.type).toBe("superseded");
+    // Nothing was written, so the corrected content is still unsummarized and
+    // no cursor advanced past it.
+    expect(await readChain(threadId)).toEqual([]);
+  });
+
+  test("still advances when nothing invalidated the chain", async () => {
+    // The guard must not decline on its own: same shape, no invalidation.
+    const threadId = await seedThread({ messageCount: 6 });
+
+    const run = await runCompaction({
+      threadId,
+      onSummarize: async () => {
+        await Promise.resolve();
+      },
+    });
+
+    expect(run.outcome.type).toBe("advanced");
+    expect(await readChain(threadId)).toHaveLength(1);
+  });
+
+  test("declines when an edit invalidates an existing chain mid-run", async () => {
+    const threadId = await seedThread({ messageCount: 6 });
+    await runCompaction({ threadId });
+    const before = await readChain(threadId);
+
+    await seedThread({ messageCount: 6, threadId });
+    const run = await runCompaction({
+      threadId,
+      onSummarize: async () => {
+        await invalidateChain(threadId);
+      },
+    });
+
+    expect(run.outcome.type).toBe("superseded");
+    // The invalidation retired the old checkpoint and the run added none.
+    const after = await readChain(threadId);
+    expect(after).toHaveLength(before.length);
+    expect(after.every((row) => row.status === "stale")).toBe(true);
   });
 });

@@ -33,6 +33,7 @@ import {
   truncateForCompaction,
 } from "@/api/lib/chat/compaction-tokens";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
 const COMPACTION_SUMMARY_MESSAGE_ID = "stella-chat-compaction-summary";
@@ -84,6 +85,35 @@ export const shouldCompactChatMessages = (
   messages: readonly ChatMessage[],
   triggerTokens: number = DEFAULT_TRIGGER_TOKENS,
 ): boolean => estimateMessagesTokens(messages) > triggerTokens;
+
+type ChatThreadNeedsCompactionOptions = {
+  /** The post-checkpoint history window, as loaded for this send. */
+  messages: readonly ChatMessage[];
+  triggerTokens?: number | undefined;
+};
+
+/**
+ * Whether a send should put its thread on the compaction queue.
+ *
+ * Two independent signals, because the token estimate alone is measured over a
+ * window that is itself capped. A thread of short messages keeps every capped
+ * slice under the token trigger no matter how long it grows, while everything
+ * past the cap has already fallen out of model context: the exact state
+ * compaction exists to prevent, and one no token gate over that slice can
+ * report. A full window is the durable evidence of that backlog: the loader
+ * returns at most `chatSendHistoryWindowMax` rows after the checkpoint cursor,
+ * so reaching the cap means unsummarized messages exist beyond it.
+ *
+ * Enqueuing on a full window that turns out to be exactly the cap costs one
+ * bounded run that settles as up-to-date, which is far cheaper than a thread
+ * that can never be compacted at all.
+ */
+export const chatThreadNeedsCompaction = ({
+  messages,
+  triggerTokens,
+}: ChatThreadNeedsCompactionOptions): boolean =>
+  messages.length >= LIMITS.chatSendHistoryWindowMax ||
+  shouldCompactChatMessages(messages, triggerTokens);
 
 export type ThreadContextUsage = {
   estimatedTokens: number;

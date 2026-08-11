@@ -75,7 +75,7 @@ import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistenc
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import {
   compactChatMessagesForModel,
-  shouldCompactChatMessages,
+  chatThreadNeedsCompaction,
 } from "@/api/handlers/chat/compaction";
 import {
   computeAssistantTurnWorkspaceIds,
@@ -1999,7 +1999,7 @@ const markChatCompactionDue = async ({
     organizationId,
   });
 
-  if (!shouldCompactChatMessages(messages, triggerTokens)) {
+  if (!chatThreadNeedsCompaction({ messages, triggerTokens })) {
     return;
   }
 

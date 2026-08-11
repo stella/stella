@@ -32,10 +32,13 @@ import type { ReasoningEffort } from "@stll/ai-catalog";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
+  CHAT_COMPACTION_MEMORY_ELIGIBILITY,
+  CHAT_COMPACTION_MEMORY_EXTRACTABLE,
   chatMessages,
   chatThreadCompactions,
   chatThreads,
 } from "@/api/db/schema";
+import type { ChatCompactionMemoryEligibility } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -87,14 +90,32 @@ type DeltaMessage = {
   /** Raw `to_char` cursor value; encoded through the codec before storage. */
   cursorValue: string;
   id: SafeId<"chatMessage">;
+  /**
+   * The message's own memory opt-out, captured when its content was written.
+   * Carried into the checkpoint so a summary that folds this message in can
+   * never be mined later, whatever the deployment flag says by then.
+   */
+  memoryExtractionEligible: boolean;
   role: string;
 };
 
 type ChatCompactionCheckpointRow = {
   deltaCursor: string | null;
   id: SafeId<"chatThreadCompaction">;
+  memoryEligibility: ChatCompactionMemoryEligibility;
   summaryMarkdown: string;
   totalSummarizedMessageCount: number;
+};
+
+/**
+ * Everything the compactor must observe before summarizing and re-observe
+ * before writing. Both halves matter: the checkpoint id catches a competing
+ * compaction, and the epoch catches a message edit or replay, including on a
+ * thread with no checkpoint where the id comparison is `null === null`.
+ */
+type ChatCompactionChainState = {
+  checkpoint: ChatCompactionCheckpointRow | null;
+  epoch: number;
 };
 
 export type ChatCompactionOutcome =
@@ -108,6 +129,13 @@ export type ChatCompactionOutcome =
 type RunChatThreadCompactionOptions = {
   abortSignal: AbortSignal;
   dataWorkspaceIds: readonly SafeId<"workspace">[];
+  /**
+   * Whether this deployment may derive AI memory from chat. Passed in rather
+   * than read from `env` here so the value that lands on the checkpoint is the
+   * one the caller observed, and so the re-enable path is exercisable.
+   * Defaults to the deployment flag.
+   */
+  extractionFeatureEnabled?: boolean | undefined;
   modelId?: string | undefined;
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
@@ -142,9 +170,10 @@ export const runChatThreadCompaction = async (
   await Result.gen(async function* () {
     const { safeDb, threadId } = options;
 
-    const checkpoint = yield* Result.await(
-      safeDb(async (tx) => await readActiveCheckpointOnTx({ threadId, tx })),
+    const observed = yield* Result.await(
+      safeDb(async (tx) => await readChainStateOnTx({ threadId, tx })),
     );
+    const { checkpoint } = observed;
 
     const delta = yield* Result.await(
       safeDb(
@@ -178,10 +207,9 @@ export const runChatThreadCompaction = async (
       safeDb(
         async (tx) =>
           await advanceCheckpointOnTx({
-            expectedCheckpointId: checkpoint?.id ?? null,
+            observed,
             options,
             plan,
-            priorTotal: checkpoint?.totalSummarizedMessageCount ?? 0,
             summaryMarkdown,
             tx,
           }),
@@ -210,6 +238,7 @@ const readActiveCheckpointOnTx = async ({
     .select({
       deltaCursor: chatThreadCompactions.deltaCursor,
       id: chatThreadCompactions.id,
+      memoryEligibility: chatThreadCompactions.memoryEligibility,
       summaryMarkdown: chatThreadCompactions.summaryMarkdown,
       totalSummarizedMessageCount:
         chatThreadCompactions.totalSummarizedMessageCount,
@@ -226,6 +255,59 @@ const readActiveCheckpointOnTx = async ({
 
   return row.at(0) ?? null;
 };
+
+/**
+ * Read the chain's active checkpoint and the thread's invalidation epoch.
+ *
+ * Read together and compared together: a run that observed one but not the
+ * other could still write a summary built from content an edit has since
+ * replaced.
+ */
+const readChainStateOnTx = async ({
+  threadId,
+  tx,
+}: {
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<ChatCompactionChainState> => {
+  const [checkpoint, epoch] = await Promise.all([
+    readActiveCheckpointOnTx({ threadId, tx }),
+    readCompactionEpochOnTx({ lock: false, threadId, tx }),
+  ]);
+  return { checkpoint, epoch };
+};
+
+/**
+ * The thread's invalidation epoch, optionally taking the row lock that
+ * serializes concurrent compactions of the same thread.
+ *
+ * Returns null when the thread is gone, which the caller treats the same way
+ * as a changed epoch: there is nothing left to checkpoint.
+ */
+const readCompactionEpochOnTx = async ({
+  lock,
+  threadId,
+  tx,
+}: {
+  lock: boolean;
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<number> => {
+  const query = tx
+    .select({ compactionEpoch: chatThreads.compactionEpoch })
+    .from(chatThreads)
+    .where(eq(chatThreads.id, threadId))
+    .limit(1);
+  const rows = await (lock ? query.for("update") : query);
+  // A missing thread cannot match any observed epoch, so the advance declines.
+  return rows.at(0)?.compactionEpoch ?? MISSING_THREAD_EPOCH;
+};
+
+/**
+ * Sentinel for "this thread no longer exists". Never equals a real epoch,
+ * which starts at zero and only increases.
+ */
+const MISSING_THREAD_EPOCH = -1;
 
 const decodeCheckpointCursor = (
   checkpoint: ChatCompactionCheckpointRow | null,
@@ -265,6 +347,7 @@ const readCompactionDeltaOnTx = async ({
       content: chatMessages.content,
       cursorValue: chatMessageCursorCodec.cursorValue.as("created_at_cursor"),
       id: chatMessages.id,
+      memoryExtractionEligible: chatMessages.memoryExtractionEligible,
       role: chatMessages.role,
     })
     .from(chatMessages)
@@ -528,10 +611,9 @@ const createModelSummarizer =
     });
 
 type AdvanceCheckpointOptions = {
-  expectedCheckpointId: SafeId<"chatThreadCompaction"> | null;
+  observed: ChatCompactionChainState;
   options: RunChatThreadCompactionOptions;
   plan: Extract<IncrementalCompactionPlan, { type: "compact" }>;
-  priorTotal: number;
   summaryMarkdown: string;
   tx: Transaction;
 };
@@ -540,32 +622,38 @@ type AdvanceCheckpointOptions = {
  * Retire the checkpoint this run started from and install its replacement, or
  * decline if the chain moved underneath us.
  *
- * The compare-and-set on the active checkpoint id is the idempotence key. It
- * fails closed in both directions that matter: a concurrent run that already
- * advanced the chain leaves a different id, and a message truncation marks the
- * chain stale so no active row is found at all. Either way this returns false
- * and no summary is written twice.
+ * Two compare-and-sets, both against state read before summarization:
+ *
+ *  - the active checkpoint id, which catches a competing compaction that
+ *    already advanced the chain and is the idempotence key for a crashed run;
+ *  - the thread's invalidation epoch, which catches a message edit or replay.
+ *    It is the only guard that means anything on a thread with no checkpoint:
+ *    there is no row for invalidation to mark stale, so the id comparison is
+ *    `null === null` and would accept a summary built from replaced content,
+ *    then advance the cursor past the corrected row so no later run revisits it.
  */
 const advanceCheckpointOnTx = async ({
-  expectedCheckpointId,
+  observed,
   options,
   plan,
-  priorTotal,
   summaryMarkdown,
   tx,
 }: AdvanceCheckpointOptions): Promise<boolean> => {
   const { threadId } = options;
 
   // Serialize concurrent compactions of the same thread behind its row, so the
-  // compare-and-set below reads a settled chain rather than racing one.
-  await tx
-    .select({ id: chatThreads.id })
-    .from(chatThreads)
-    .where(eq(chatThreads.id, threadId))
-    .for("update");
+  // comparisons below read a settled chain rather than racing one.
+  const currentEpoch = await readCompactionEpochOnTx({
+    lock: true,
+    threadId,
+    tx,
+  });
+  if (currentEpoch !== observed.epoch) {
+    return false;
+  }
 
   const current = await readActiveCheckpointOnTx({ threadId, tx });
-  if ((current?.id ?? null) !== expectedCheckpointId) {
+  if ((current?.id ?? null) !== (observed.checkpoint?.id ?? null)) {
     return false;
   }
 
@@ -574,6 +662,13 @@ const advanceCheckpointOnTx = async ({
   if (!lastSummarized || !firstSummarized) {
     return false;
   }
+
+  const memoryEligibility = resolveCheckpointMemoryEligibility({
+    extractionFeatureEnabled:
+      options.extractionFeatureEnabled ?? env.FEATURE_AI_MEMORY,
+    previous: observed.checkpoint?.memoryEligibility ?? null,
+    segmentMessages: plan.messagesToSummarize,
+  });
 
   // audit: skip — derived compaction checkpoint cache; no user-authored state change
   await tx
@@ -598,17 +693,61 @@ const advanceCheckpointOnTx = async ({
     firstKeptMessageId: plan.firstKeptMessageId,
     deltaCursor: plan.advanceCursor,
     summarizedMessageCount: plan.messagesToSummarize.length,
-    totalSummarizedMessageCount: priorTotal + plan.messagesToSummarize.length,
+    totalSummarizedMessageCount:
+      (observed.checkpoint?.totalSummarizedMessageCount ?? 0) +
+      plan.messagesToSummarize.length,
     totalTokens: plan.totalTokens,
     preservedTokens: plan.preservedTokens,
     promptVersion: CHAT_COMPACTION_PROMPT_VERSION,
-    // The extraction trigger queues only rows whose completion stamp is null.
-    // Stamp checkpoints created during a deployment opt-out so a later
-    // re-enable cannot retrospectively mine those conversations.
-    memoryExtractedAt: env.FEATURE_AI_MEMORY ? null : new Date(),
+    memoryEligibility,
+    // The extraction trigger queues only rows whose completion stamp is null,
+    // so stamping here is what keeps a non-eligible summary out of the queue
+    // permanently. The reason lives in `memoryEligibility`; this column only
+    // records that the decision was made.
+    memoryExtractedAt: CHAT_COMPACTION_MEMORY_EXTRACTABLE[memoryEligibility]
+      ? null
+      : new Date(),
   });
 
   return true;
+};
+
+type ResolveCheckpointMemoryEligibilityOptions = {
+  extractionFeatureEnabled: boolean;
+  /** The chain's current verdict, or null on a thread's first compaction. */
+  previous: ChatCompactionMemoryEligibility | null;
+  segmentMessages: readonly Pick<DeltaMessage, "memoryExtractionEligible">[];
+};
+
+/**
+ * The extractability verdict for the checkpoint this run is about to write.
+ *
+ * Monotone by construction: an ineligible chain keeps its original reason
+ * rather than being re-evaluated, because the content that caused the verdict
+ * survives in every later summary. That is the whole point of recording it —
+ * re-deriving extractability from the current deployment flag is what let a
+ * re-enable reach content from an opted-out period.
+ */
+export const resolveCheckpointMemoryEligibility = ({
+  extractionFeatureEnabled,
+  previous,
+  segmentMessages,
+}: ResolveCheckpointMemoryEligibilityOptions): ChatCompactionMemoryEligibility => {
+  if (previous !== null && !CHAT_COMPACTION_MEMORY_EXTRACTABLE[previous]) {
+    return previous;
+  }
+
+  if (
+    !segmentMessages.every(
+      ({ memoryExtractionEligible }) => memoryExtractionEligible,
+    )
+  ) {
+    return CHAT_COMPACTION_MEMORY_ELIGIBILITY.MESSAGE_OPTED_OUT;
+  }
+
+  return extractionFeatureEnabled
+    ? CHAT_COMPACTION_MEMORY_ELIGIBILITY.ELIGIBLE
+    : CHAT_COMPACTION_MEMORY_ELIGIBILITY.CONSENT_INACTIVE;
 };
 
 const estimateSummaryTokens = (

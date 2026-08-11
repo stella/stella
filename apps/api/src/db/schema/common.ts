@@ -370,6 +370,58 @@ export const CHAT_TITLE_SOURCE = {
   AI: "ai",
 } as const satisfies Record<string, ChatTitleSource>;
 
+/**
+ * Whether a compaction checkpoint's summary may be mined for AI memory, and
+ * when it may not, why.
+ *
+ * Compaction summaries are cumulative: a checkpoint folds the previous
+ * checkpoint's summary into its own, so by the time a summary is read the text
+ * it came from is no longer identifiable. Deriving extractability at read time
+ * from the current deployment flag therefore lets a later re-enable mine
+ * content recorded while memory was off, or content a user excluded, through a
+ * summary that carries no record of where it came from.
+ *
+ * The decision belongs to the messages that were summarized, so it is recorded
+ * on the segment that summarized them and inherited by every later segment:
+ *   - "eligible": every message this summary covers was memory-eligible, and
+ *     extraction was enabled for every segment folded into it.
+ *   - "message-opted-out": the summary covers at least one message persisted
+ *     with `memory_extraction_eligible = false`.
+ *   - "consent-inactive": at least one segment was summarized while the
+ *     deployment had memory extraction disabled.
+ *   - "unknown": provenance predates this column. Not extractable, because the
+ *     alternative is asserting a consent decision that was never recorded.
+ *
+ * Only "eligible" is extractable, and the value is monotone: a chain reports
+ * the first reason it stopped being eligible and never recovers, because the
+ * content that caused it survives in every later summary.
+ */
+export const CHAT_COMPACTION_MEMORY_ELIGIBILITIES = [
+  "eligible",
+  "message-opted-out",
+  "consent-inactive",
+  "unknown",
+] as const;
+export type ChatCompactionMemoryEligibility =
+  (typeof CHAT_COMPACTION_MEMORY_ELIGIBILITIES)[number];
+export const CHAT_COMPACTION_MEMORY_ELIGIBILITY = {
+  ELIGIBLE: "eligible",
+  MESSAGE_OPTED_OUT: "message-opted-out",
+  CONSENT_INACTIVE: "consent-inactive",
+  UNKNOWN: "unknown",
+} as const satisfies Record<string, ChatCompactionMemoryEligibility>;
+
+/**
+ * Checkpoints whose summary the memory extractor may read. Total over the
+ * union so a new eligibility value cannot land without a consent decision.
+ */
+export const CHAT_COMPACTION_MEMORY_EXTRACTABLE = {
+  eligible: true,
+  "message-opted-out": false,
+  "consent-inactive": false,
+  unknown: false,
+} as const satisfies Record<ChatCompactionMemoryEligibility, boolean>;
+
 // -- Contacts --
 
 export {

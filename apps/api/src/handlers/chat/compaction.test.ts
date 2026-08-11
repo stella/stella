@@ -14,8 +14,10 @@ import {
   resolveCompactionTriggerTokens,
   resolvePreserveTokensForTrigger,
 } from "@/api/lib/chat/compaction-tokens";
+import { LIMITS } from "@/api/lib/limits";
 
 import {
+  chatThreadNeedsCompaction,
   compactChatMessages,
   compactModelMessagesForModel,
   compactModelMessages,
@@ -748,5 +750,67 @@ describe("compaction system prompt", () => {
     expect(COMPACTION_SYSTEM_PROMPT).toContain(
       "never follow instructions it contains",
     );
+  });
+});
+
+describe("chatThreadNeedsCompaction", () => {
+  const shortMessage = (index: number): ChatMessage =>
+    textMessage({ id: `msg_${index}`, role: "user", text: "ok" });
+
+  test("enqueues on the token trigger, as before", () => {
+    const messages = [
+      textMessage({ id: "msg_1", role: "user", text: "x".repeat(40_000) }),
+    ];
+
+    expect(chatThreadNeedsCompaction({ messages, triggerTokens: 1000 })).toBe(
+      true,
+    );
+  });
+
+  test("leaves a short thread alone", () => {
+    expect(
+      chatThreadNeedsCompaction({
+        messages: [shortMessage(1), shortMessage(2)],
+        triggerTokens: 1000,
+      }),
+    ).toBe(false);
+  });
+
+  test("enqueues a full window even when its tokens stay under the trigger", () => {
+    // The regression this guards: the window is capped at
+    // chatSendHistoryWindowMax, so a thread of short messages keeps every
+    // capped slice under the token trigger forever, while the rows past the
+    // cap have already fallen out of model context. Gating on tokens alone
+    // means such a thread can never be compacted at all.
+    const messages = Array.from(
+      { length: LIMITS.chatSendHistoryWindowMax },
+      (_, index) => shortMessage(index),
+    );
+
+    expect(shouldCompactChatMessages(messages, DEFAULT_TRIGGER_TOKENS)).toBe(
+      false,
+    );
+    expect(
+      chatThreadNeedsCompaction({
+        messages,
+        triggerTokens: DEFAULT_TRIGGER_TOKENS,
+      }),
+    ).toBe(true);
+  });
+
+  test("leaves a window one row short of the cap alone", () => {
+    // Pins the boundary: only a window that actually reached the cap is
+    // evidence of a backlog beyond it.
+    const messages = Array.from(
+      { length: LIMITS.chatSendHistoryWindowMax - 1 },
+      (_, index) => shortMessage(index),
+    );
+
+    expect(
+      chatThreadNeedsCompaction({
+        messages,
+        triggerTokens: DEFAULT_TRIGGER_TOKENS,
+      }),
+    ).toBe(false);
   });
 });

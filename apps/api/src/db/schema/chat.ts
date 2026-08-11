@@ -34,6 +34,7 @@ import {
 } from "./common";
 import type {
   AnyPgColumn,
+  ChatCompactionMemoryEligibility,
   ChatCompactionSummary,
   ChatMessageRole,
   ChatTitleSource,
@@ -183,6 +184,18 @@ export const chatThreads = p.pgTable(
      * thread cannot monopolize a batch.
      */
     compactionAttemptedAt: timestamptz("compaction_attempted_at"),
+    /**
+     * Bumped whenever an edit, replay, or delete invalidates the checkpoint
+     * chain. The compactor reads it with the delta and compares it again under
+     * the thread lock, so a message change that commits mid-run is detected
+     * before the summary is written.
+     *
+     * Needed because the compactor's other guard compares active checkpoint
+     * ids, which is vacuous on a thread that has none: invalidation marks no
+     * row stale, both sides read null, and a summary built from superseded
+     * content would be accepted and its cursor advanced past the corrected row.
+     */
+    compactionEpoch: p.integer("compaction_epoch").notNull().default(0),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
       .notNull()
@@ -689,6 +702,17 @@ export const chatThreadCompactions = p.pgTable(
     promptVersion: p.smallint("prompt_version").notNull(),
     modelProvider: p.text("model_provider"),
     modelId: p.text("model_id"),
+    /**
+     * Whether this summary may be mined for AI memory, and when not, why.
+     * Recorded per segment and inherited along the chain, because a cumulative
+     * summary cannot be re-derived from the messages it replaced. See
+     * `ChatCompactionMemoryEligibility` for the values and their monotonicity.
+     */
+    memoryEligibility: p
+      .varchar("memory_eligibility", { length: 20 })
+      .$type<ChatCompactionMemoryEligibility>()
+      .notNull()
+      .default("unknown"),
     // Set by the memory extractor once it has proposed memories from
     // this compaction, so the background job stays idempotent.
     memoryExtractedAt: timestamptz("memory_extracted_at"),
