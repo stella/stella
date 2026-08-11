@@ -92,10 +92,9 @@ services:
       AWS_ACCESS_KEY_ID: minioadmin
       AWS_SECRET_ACCESS_KEY: minioadmin
       AWS_REGION: us-east-1
-      # S3-compatible endpoint for MinIO. If splits fail to read/write,
-      # MinIO needs path-style access — see Quickwit storage-config docs
-      # (flavor: minio).
-      AWS_ENDPOINT: http://minio:9000
+      # Quickwit's MinIO endpoint requires path-style S3 requests.
+      QW_S3_ENDPOINT: http://minio:9000
+      QW_S3_FORCE_PATH_STYLE_ACCESS: "true"
     ports:
       - "${STELLA_QUICKWIT_REST_PORT:-7280}:7280"
       - "${STELLA_QUICKWIT_GRPC_PORT:-7281}:7281"
