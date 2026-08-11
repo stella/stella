@@ -77,16 +77,27 @@ export const PL_COURTS_FIRST_SLICE = "1986-05-28";
 /**
  * Slices near the tip the reconciliation re-walks on a fast cadence.
  *
- * A slice here is the judgment date, not the date the publisher listed it, and
- * SAOS posts a judgment some time after it is handed down. So the tip window
- * is where the newest dates fill in, and it is deliberately not sized to the
- * publication lag: the loop re-walks every tip slice daily, so a window wide
- * enough to cover a months-long lag would spend the source's whole turn on
- * dates that mostly gain nothing. A fortnight keeps the fast lane a fixed,
- * small amount of work; a date that fills in later is reached by the ledger's
- * standing re-check of short slices and by the historical sweep, and the crawl
- * itself never misses one, since it walks the dump in id order and new
- * judgments take new ids whatever date they carry.
+ * A slice here is the judgment date, which is the only axis this API can
+ * filter on, and not the date the publisher posted it. SAOS posts a judgment
+ * long after it is handed down, and keeps posting against the same date for
+ * more than a year: measured against the search endpoint's own result totals,
+ * a fortnight of judgment dates held 1 judgment while it was the current
+ * fortnight, 232 at four months old, and 667 at sixteen months old.
+ *
+ * So this window is not where the newest dates fill in, and no width would
+ * make it so — the fill-in outlives any bounded window, and the loop re-walks
+ * every tip slice daily, so a window sized to it would be a standing
+ * re-survey rather than a fast lane. It is kept narrow for what it does do:
+ * re-check the active frontier cheaply, over dates that are nearly empty.
+ *
+ * The consequence is worth stating plainly. A date walked while it is fresh
+ * records `reported === collected` over almost nothing, which is not short, so
+ * the ledger never re-selects it and later arrivals into that date are not
+ * reconciled. Closing that needs a recheck cadence for settled slices, which
+ * belongs to `reconciliation-plan.ts` and applies to every reconciled source,
+ * not to this adapter. Until then the crawl remains the path that reaches a
+ * late arrival at all: it walks the dump in id order, and a judgment posted
+ * today takes a new id whatever date it carries.
  */
 const PL_COURTS_TIP_WINDOW_DAYS = 14;
 
@@ -978,10 +989,27 @@ export const listPlCourtsDayPage = async ({
     });
   }
 
-  return {
-    items: normalizeOptionalArray(json.items).map(normalizeSaosDumpItem),
-    totalPages: Math.ceil(totalResults / PAGE_SIZE),
-  };
+  const items = normalizeOptionalArray(json.items).map(normalizeSaosDumpItem);
+  const totalPages = Math.ceil(totalResults / PAGE_SIZE);
+
+  // A page the publisher's own total says holds judgments has to return them.
+  // Checked against the total rather than against the key's presence, because
+  // an omitted `items` and an empty one do the same damage and only this
+  // catches both: the walk would read the page as a date with nothing on it,
+  // record `reported` from the identities it saw instead of the ones the
+  // publisher counted, and leave a historical slice looking fully collected
+  // and never worth re-selecting. Refused rather than truncated, exactly as an
+  // over-long listing is: the slice keeps its previous ledger row and the
+  // failure surfaces in the loop's tally.
+  if (items.length === 0 && page < totalPages) {
+    throw new AdapterFetchError({
+      message: `SAOS search API returned no judgments on page ${page} of ${totalPages} for the slice`,
+      adapterKey: ADAPTER_KEYS.PL_COURTS,
+      cursor: date,
+    });
+  }
+
+  return { items, totalPages };
 };
 
 const listPlCourtsSlicePage = async ({

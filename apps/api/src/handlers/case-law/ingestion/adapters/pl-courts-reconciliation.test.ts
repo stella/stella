@@ -310,6 +310,33 @@ describe("pl-courts listSlicePage", () => {
 
     expect(await sliceRejection(SLICE)).toBeInstanceOf(AdapterFetchError);
   });
+
+  test("a page the result total says has judgments must return them", async () => {
+    // Both spellings of the same malformed page do the same damage: the walk
+    // would record the slice from the identities it saw rather than the ones
+    // the publisher counted, leaving it settled with the rows never fetched.
+    for (const body of [
+      JSON.stringify({ items: [], info: { totalResults: 283 } }),
+      JSON.stringify({ info: { totalResults: 283 } }),
+    ]) {
+      mockFetchWithBodies([{ pattern: SEARCH_PATTERN, body }]);
+      // oxlint-disable-next-line no-await-in-loop -- one mocked response at a time; the mock is process-global
+      expect(await sliceRejection(SLICE)).toBeInstanceOf(AdapterFetchError);
+    }
+  });
+
+  test("a page past the stated total is empty rather than a failure", async () => {
+    // The last page of a day is genuinely empty when the total divides evenly;
+    // only a page the total still covers is a contradiction.
+    mockFetchWithBodies([
+      { pattern: SEARCH_PATTERN, body: searchBody([], 200) },
+    ]);
+
+    const page = await reconciliation.listSlicePage({ slice: SLICE, page: 2 });
+
+    expect(page.items).toEqual([]);
+    expect(page.totalPages).toBe(2);
+  });
 });
 
 describe("pl-courts buildDecision", () => {
