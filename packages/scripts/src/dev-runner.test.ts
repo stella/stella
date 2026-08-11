@@ -81,6 +81,17 @@ describe("parseArgs", () => {
       skipInstall: true,
     });
   });
+
+  test.each(["8oops", "1.5", "1e2", "9007199254740992"])(
+    "rejects invalid offset value %s for both offset flags",
+    (value) => {
+      for (const flag of ["--port-offset", "--infra-offset"]) {
+        expect(() => parseArgs([flag, value])).toThrow(
+          `${flag} must be an integer`,
+        );
+      }
+    },
+  );
 });
 
 describe("resolveOffset", () => {

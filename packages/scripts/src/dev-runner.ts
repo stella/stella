@@ -195,6 +195,18 @@ const validateOffset = (offset: number, source: string) => {
   }
 };
 
+const parseIntegerValue = (value: string, source: string) => {
+  if (!/^[+-]?\d+$/u.test(value)) {
+    panic(`${source} must be an integer`);
+  }
+
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) {
+    panic(`${source} must be an integer`);
+  }
+  return parsed;
+};
+
 export const parseArgs = (args: readonly string[]): ParsedArgs => {
   let mode: DevMode = "dev";
   let portOffset: number | undefined;
@@ -241,7 +253,7 @@ export const parseArgs = (args: readonly string[]): ParsedArgs => {
       if (!value) {
         panic("--port-offset requires a value");
       }
-      portOffset = Number.parseInt(value, 10);
+      portOffset = parseIntegerValue(value, "--port-offset");
       i++;
       continue;
     }
@@ -261,7 +273,7 @@ export const parseArgs = (args: readonly string[]): ParsedArgs => {
       if (!value) {
         panic("--infra-offset requires a value");
       }
-      infraOffset = Number.parseInt(value, 10);
+      infraOffset = parseIntegerValue(value, "--infra-offset");
       i++;
       continue;
     }
@@ -1760,7 +1772,10 @@ const main = async () => {
   const infraOffset =
     parsedArgs.infraOffset ??
     (process.env["STELLA_INFRA_OFFSET"]
-      ? Number.parseInt(process.env["STELLA_INFRA_OFFSET"], 10)
+      ? parseIntegerValue(
+          process.env["STELLA_INFRA_OFFSET"],
+          "STELLA_INFRA_OFFSET",
+        )
       : 0);
   if (
     !Number.isInteger(infraOffset) ||
@@ -1794,7 +1809,10 @@ const main = async () => {
     portOffset:
       parsedArgs.portOffset ??
       (process.env["STELLA_PORT_OFFSET"]
-        ? Number.parseInt(process.env["STELLA_PORT_OFFSET"], 10)
+        ? parseIntegerValue(
+            process.env["STELLA_PORT_OFFSET"],
+            "STELLA_PORT_OFFSET",
+          )
         : undefined),
     worktreeName: path.basename(gitContext.currentRoot),
   });
