@@ -19,6 +19,7 @@ import {
   RECONCILIATION_TERMINAL_ATTEMPTS,
   countReconciliationItems,
   countTerminalReconciliationItemsBySlice,
+  listReconciliationItems,
   parkReconciliationItem,
   resetTerminalReconciliationItems,
   resolveReconciliationItem,
@@ -300,6 +301,114 @@ test("a reset puts retired items back into the hunt, due immediately", async () 
       })
     ).map(({ identityKey }) => identityKey),
   ).toEqual([DOCUMENT_KEY]);
+});
+
+test("a sliced reset leaves the other slices retired", async () => {
+  const sourceId = await seedSource();
+  const now = new Date("2026-08-11T09:00:00.000Z");
+  const otherSlice = "2026-08-05";
+  await retireReconciliationItem(scopedDb, {
+    sourceId,
+    slice: SLICE,
+    identityKey: DOCUMENT_KEY,
+    payload: PAYLOAD,
+    errorTag: "unkeyable",
+    now,
+  });
+  await retireReconciliationItem(scopedDb, {
+    sourceId,
+    slice: otherSlice,
+    identityKey: DOCKET_KEY,
+    payload: PAYLOAD,
+    errorTag: "unkeyable",
+    now,
+  });
+
+  // The point of the narrowing: an operator who fixed one bad day re-hunts
+  // that day, not every identity the adapter has ever retired.
+  expect(
+    await resetTerminalReconciliationItems(scopedDb, {
+      sourceId,
+      now,
+      limit: 10,
+      slice: SLICE,
+    }),
+  ).toBe(1);
+
+  expect((await readRow(sourceId, DOCUMENT_KEY))?.status).toBe(
+    RECONCILIATION_ITEM_STATUS.PARKED,
+  );
+  expect((await readRow(sourceId, DOCKET_KEY))?.status).toBe(
+    RECONCILIATION_ITEM_STATUS.TERMINAL,
+  );
+});
+
+test("the listing names what a source carries, in both states", async () => {
+  const sourceId = await seedSource();
+  const now = new Date("2026-08-11T09:00:00.000Z");
+  await parkReconciliationItem(scopedDb, {
+    sourceId,
+    slice: SLICE,
+    identityKey: DOCUMENT_KEY,
+    payload: PAYLOAD,
+    errorTag: "detail-unavailable",
+    now,
+  });
+  await retireReconciliationItem(scopedDb, {
+    sourceId,
+    slice: SLICE,
+    identityKey: DOCKET_KEY,
+    payload: PAYLOAD,
+    errorTag: "unkeyable",
+    now,
+  });
+
+  const listed = await listReconciliationItems(scopedDb, {
+    sourceId,
+    limit: 10,
+  });
+
+  expect(
+    listed.map(({ identityKey, status, slice, lastError }) => ({
+      identityKey,
+      status,
+      slice,
+      lastError,
+    })),
+  ).toEqual([
+    {
+      identityKey: DOCUMENT_KEY,
+      status: RECONCILIATION_ITEM_STATUS.PARKED,
+      slice: SLICE,
+      lastError: "detail-unavailable",
+    },
+    {
+      identityKey: DOCKET_KEY,
+      status: RECONCILIATION_ITEM_STATUS.TERMINAL,
+      slice: SLICE,
+      lastError: "unkeyable",
+    },
+  ]);
+});
+
+test("the listing is bounded by its limit", async () => {
+  const sourceId = await seedSource();
+  const now = new Date("2026-08-11T09:00:00.000Z");
+  for (const identityKey of [DOCUMENT_KEY, DOCKET_KEY]) {
+    // oxlint-disable-next-line no-await-in-loop -- two fixture rows whose insertion order is what the ordering assertion above rests on
+    await parkReconciliationItem(scopedDb, {
+      sourceId,
+      slice: SLICE,
+      identityKey,
+      payload: PAYLOAD,
+      errorTag: "detail-unavailable",
+      now,
+    });
+  }
+
+  expect(
+    await listReconciliationItems(scopedDb, { sourceId, limit: 1 }),
+  ).toHaveLength(1);
 });
 
 test("one source's items are invisible to another", async () => {

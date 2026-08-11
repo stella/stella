@@ -579,10 +579,64 @@ export const countTerminalReconciliationItemsBySlice = async (
   return new Map(rows.map(({ slice, total }) => [slice, total]));
 };
 
+export type ReconciliationItemListing = {
+  slice: string;
+  identityKey: string;
+  status: ReconciliationItemStatus;
+  attempts: number;
+  nextAttemptAt: Date | null;
+  lastError: string | null;
+  firstSeenAt: Date;
+  lastAttemptAt: Date | null;
+};
+
+export type ListReconciliationItemsInput = {
+  sourceId: SafeId<"caseLawSource">;
+  /** Rows returned per call. Bounds the read on a source with many items. */
+  limit: number;
+};
+
+/**
+ * What one source is still carrying, oldest first, for an operator deciding
+ * whether a terminal reset is warranted.
+ *
+ * No payload: the listing item is the publisher's own record, and an operator
+ * asking which identities are stuck does not need its contents. Bounded like
+ * every other read here, so a source with a bad week cannot be listed whole.
+ */
+export const listReconciliationItems = async (
+  scopedDb: ScopedDb,
+  { sourceId, limit }: ListReconciliationItemsInput,
+): Promise<ReconciliationItemListing[]> =>
+  await scopedDb(
+    async (tx) =>
+      await tx
+        .select({
+          slice: caseLawReconciliationItems.slice,
+          identityKey: caseLawReconciliationItems.identityKey,
+          status: caseLawReconciliationItems.status,
+          attempts: caseLawReconciliationItems.attempts,
+          nextAttemptAt: caseLawReconciliationItems.nextAttemptAt,
+          lastError: caseLawReconciliationItems.lastError,
+          firstSeenAt: caseLawReconciliationItems.firstSeenAt,
+          lastAttemptAt: caseLawReconciliationItems.lastAttemptAt,
+        })
+        .from(caseLawReconciliationItems)
+        .where(eq(caseLawReconciliationItems.sourceId, sourceId))
+        .orderBy(caseLawReconciliationItems.firstSeenAt)
+        .limit(limit),
+  );
+
 export type ResetTerminalReconciliationItemsInput = {
   sourceId: SafeId<"caseLawSource">;
   now: Date;
   limit: number;
+  /**
+   * Narrow the reset to one slice. An operator who fixed one publisher's bad
+   * day should be able to re-hunt that day without also re-hunting every
+   * identity the adapter has ever retired.
+   */
+  slice?: string | undefined;
 };
 
 /**
@@ -595,7 +649,7 @@ export type ResetTerminalReconciliationItemsInput = {
  */
 export const resetTerminalReconciliationItems = async (
   scopedDb: ScopedDb,
-  { sourceId, now, limit }: ResetTerminalReconciliationItemsInput,
+  { sourceId, now, limit, slice }: ResetTerminalReconciliationItemsInput,
 ): Promise<number> =>
   await scopedDb(async (tx) => {
     const due = await tx
@@ -608,6 +662,9 @@ export const resetTerminalReconciliationItems = async (
             caseLawReconciliationItems.status,
             RECONCILIATION_ITEM_STATUS.TERMINAL,
           ),
+          ...(slice === undefined
+            ? []
+            : [eq(caseLawReconciliationItems.slice, slice)]),
         ),
       )
       .orderBy(caseLawReconciliationItems.firstSeenAt)
