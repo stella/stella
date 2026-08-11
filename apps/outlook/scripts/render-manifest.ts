@@ -95,9 +95,12 @@ export const resolveOutlookRuntimeConfig = ({
 
 const UNRESOLVED_PATTERN = /\{\{[A-Z_]+\}\}/u;
 
-export const renderManifest = (env: ManifestEnv): string => {
+export const renderManifest = (
+  env: ManifestEnv,
+  runtimeEnv: Record<string, string | undefined> = process.env,
+): string => {
   const template = readFileSync(TEMPLATE_PATH, "utf-8");
-  const placeholders = resolveManifestPlaceholders(env);
+  const placeholders = resolveManifestPlaceholders(env, runtimeEnv);
   let output = template;
   for (const [key, value] of Object.entries(placeholders)) {
     output = output.replaceAll(`{{${key}}}`, () => value);

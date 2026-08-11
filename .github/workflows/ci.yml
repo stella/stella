@@ -1528,6 +1528,12 @@ jobs:
         env:
           NPM_TOKEN: ""
 
+      - name: Check checked-in development manifest
+        if: steps.changed.outputs.run == 'true'
+        run: |
+          bun --filter @stll/outlook build
+          git diff --exit-code -- apps/outlook/manifest.xml
+
       - name: Build production add-in and validate manifest
         if: steps.changed.outputs.run == 'true'
         run: bun --filter @stll/outlook build -- --env=prod

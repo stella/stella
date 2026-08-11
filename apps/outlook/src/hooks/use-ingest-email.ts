@@ -1,15 +1,16 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { Result } from "better-result";
 
-import { ingestEmailToMatter } from "@/api";
+import {
+  finalizeEmailUpload,
+  prepareEmailUpload,
+  shouldRetainPendingEmailUpload,
+} from "@/api";
+import type { PendingEmailUpload } from "@/api";
 import { APIError, userErrorMessage } from "@/lib/api-error";
 import { downloadAttachment } from "@/outlook";
-import type {
-  AttachmentDownloadResult,
-  MailSnapshot,
-  OutlookAttachment,
-} from "@/types";
+import type { AttachmentDownloadResult, MailSnapshot } from "@/types";
 
 export type IngestState =
   | { type: "idle" }
@@ -25,8 +26,8 @@ export type IngestState =
   | { message: string; type: "error" };
 
 type IngestArgs = {
-  attachments: OutlookAttachment[];
-  snapshot: MailSnapshot;
+  loadLatest: () => Promise<MailSnapshot>;
+  selectedAttachmentIds: Set<string>;
   workspaceId: string;
 };
 
@@ -38,24 +39,42 @@ type UseIngestEmail = {
 
 export const useIngestEmail = (errorFallback: string): UseIngestEmail => {
   const [state, setState] = useState<IngestState>({ type: "idle" });
+  const pendingUpload = useRef<PendingEmailUpload | null>(null);
 
-  const save = async ({ attachments, snapshot, workspaceId }: IngestArgs) => {
+  const save = async ({
+    loadLatest,
+    selectedAttachmentIds,
+    workspaceId,
+  }: IngestArgs) => {
     setState({ type: "saving" });
     const result = await Result.tryPromise(async () => {
+      if (pendingUpload.current) {
+        return await finalizeEmailUpload(pendingUpload.current);
+      }
+
+      const snapshot = await loadLatest();
+      const attachments = snapshot.attachments.filter((attachment) =>
+        selectedAttachmentIds.has(attachment.id),
+      );
       const downloaded: AttachmentDownloadResult[] = await Promise.all(
         attachments.map(
           async (attachment) => await downloadAttachment(attachment),
         ),
       );
-      return await ingestEmailToMatter({
+      const prepared = await prepareEmailUpload({
         attachments: downloaded,
         snapshot,
         workspaceId,
       });
+      pendingUpload.current = prepared;
+      return await finalizeEmailUpload(prepared);
     });
 
     if (Result.isError(result)) {
       const { error } = result;
+      if (!shouldRetainPendingEmailUpload(error)) {
+        pendingUpload.current = null;
+      }
       setState({
         message:
           error instanceof APIError
@@ -66,13 +85,14 @@ export const useIngestEmail = (errorFallback: string): UseIngestEmail => {
       return;
     }
 
+    pendingUpload.current = null;
     setState({
       attachmentCount: result.value.attachmentCount,
       entityId: result.value.entityId,
       fieldId: result.value.fieldId,
       skippedAttachments: result.value.skippedAttachments,
       type: "saved",
-      workspaceId,
+      workspaceId: result.value.workspaceId,
     });
   };
 

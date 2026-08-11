@@ -78,6 +78,13 @@ export type IngestEmailResult = {
   entityId: SafeId<"entity">;
   fieldId: SafeId<"field">;
   skippedAttachments: string[];
+  workspaceId: SafeId<"workspace">;
+};
+
+export type PendingEmailUpload = {
+  skippedAttachments: string[];
+  uploadId: SafeId<"pendingUpload">;
+  workspaceId: SafeId<"workspace">;
 };
 
 /**
@@ -87,7 +94,7 @@ export type IngestEmailResult = {
  * child entity. One round-trip plus the direct S3 PUT replaces the former
  * per-field / per-attachment fan-out.
  */
-export const ingestEmailToMatter = async ({
+export const prepareEmailUpload = async ({
   attachments,
   snapshot,
   workspaceId: workspaceIdString,
@@ -95,7 +102,7 @@ export const ingestEmailToMatter = async ({
   attachments: AttachmentDownloadResult[];
   snapshot: MailSnapshot;
   workspaceId: string;
-}): Promise<IngestEmailResult> => {
+}): Promise<PendingEmailUpload> => {
   const workspaceId = toSafeId<"workspace">(workspaceIdString);
   const propertyId = await ensureFileProperty(workspaceId);
 
@@ -131,8 +138,22 @@ export const ingestEmailToMatter = async ({
     });
   }
 
+  return {
+    skippedAttachments: attachments
+      .filter((attachment) => attachment.type === "skipped")
+      .map((attachment) => attachment.reason),
+    uploadId: presign.data.uploadId,
+    workspaceId,
+  };
+};
+
+export const finalizeEmailUpload = async ({
+  skippedAttachments,
+  uploadId,
+  workspaceId,
+}: PendingEmailUpload): Promise<IngestEmailResult> => {
   const finalize = await api
-    .uploads({ workspaceId })({ uploadId: presign.data.uploadId })
+    .uploads({ workspaceId })({ uploadId })
     .finalize.post(
       { queryKey: entitiesQueryKey(workspaceId) },
       withTimeout(EMAIL_FINALIZE_TIMEOUT_MS),
@@ -153,10 +174,14 @@ export const ingestEmailToMatter = async ({
     attachmentCount: result.attachmentEntityIds.length,
     entityId: result.entityId,
     fieldId: result.fieldId,
-    skippedAttachments: attachments
-      .filter((attachment) => attachment.type === "skipped")
-      .map((attachment) => attachment.reason),
+    skippedAttachments,
+    workspaceId,
   };
 };
+
+const RETRYABLE_FINALIZE_STATUS = new Set([409, 500]);
+
+export const shouldRetainPendingEmailUpload = (error: unknown): boolean =>
+  !(error instanceof APIError) || RETRYABLE_FINALIZE_STATUS.has(error.status);
 
 export { APIError };

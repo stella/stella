@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -25,6 +25,15 @@ const validateXml = (xml: string): void => {
 };
 
 describe("manifest XSD validation", () => {
+  test("keeps the checked-in sideload manifest bound to the dev template", () => {
+    const checkedInManifest = readFileSync(
+      path.resolve(import.meta.dirname, "..", "manifest.xml"),
+      "utf-8",
+    );
+
+    expect(checkedInManifest).toBe(renderManifest("dev", {}));
+  });
+
   test("the rendered dev and prod manifests are schema-valid", () => {
     expect(() => validateXml(renderManifest("dev"))).not.toThrow();
     expect(() => validateXml(renderManifest("prod"))).not.toThrow();
