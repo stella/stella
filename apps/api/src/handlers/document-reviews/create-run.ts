@@ -166,7 +166,7 @@ const createDocumentReviewRun = createSafeHandler(
           const latest = versions.at(0);
           return {
             definition,
-            latestApprovedVersion: latest === undefined ? null : latest,
+            latestApprovedVersion: latest ?? null,
           };
         }),
       );

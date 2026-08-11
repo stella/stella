@@ -22,10 +22,10 @@ import { and, eq, inArray } from "drizzle-orm";
 import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { DocumentReviewRunStatus } from "@/api/lib/document-review/run-contract";
 import type {
   DocumentReviewFindingPayload,
   DocumentReviewRunBasis,
+  DocumentReviewRunStatus,
 } from "@/api/lib/document-review/run-contract";
 import {
   getRlsFixture,
@@ -72,7 +72,65 @@ const referenceBasis: DocumentReviewRunBasis = {
   ],
 };
 
-const referencePayload = (text: string): DocumentReviewFindingPayload => ({
+/** Each fixture is pinned to its own member of the payload union rather than
+ *  to the union itself, so a shape that drifts from the engine's finding type
+ *  fails here instead of being widened away. */
+type ReferenceFindingPayload = Extract<
+  DocumentReviewFindingPayload,
+  { checkKind: "reference" }
+>;
+type PlaybookFindingPayload = Extract<
+  DocumentReviewFindingPayload,
+  { checkKind: "playbook" }
+>;
+
+/** bun-types declares `.rejects.toThrow` as void, so awaiting it trips
+ *  type-aware lint; capture the rejection explicitly instead. */
+const rejectionOf = async (operation: Promise<unknown>): Promise<unknown> =>
+  await operation.then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+/** The pg error fields that name the rule a statement broke. */
+const VIOLATION_FIELDS = ["message", "constraint", "detail"] as const;
+
+/**
+ * Everything a failure says about which rule it broke: the message chain plus
+ * the `constraint` field the driver exposes, walked through `cause` so it does
+ * not matter whether drizzle wraps the underlying error.
+ *
+ * Asserting on this rather than on "some error was thrown" is what stops a
+ * missing relation, a bad column, or a foreign-key failure from passing as
+ * proof that the constraint under test fired.
+ */
+const violationText = (error: unknown): string => {
+  const parts: string[] = [];
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+  while (isRecord(current) && !seen.has(current)) {
+    seen.add(current);
+    for (const field of VIOLATION_FIELDS) {
+      const value = current[field];
+      if (typeof value === "string") {
+        parts.push(value);
+      }
+    }
+    current = current["cause"];
+  }
+  return parts.join(" | ");
+};
+
+// The exact objects under test, named as `db/schema/document-reviews.ts`
+// declares them. A rename there fails these assertions rather than quietly
+// leaving the constraint untested.
+const ACTIVE_RUN_INDEX = "document_review_runs_active_document_uidx";
+const FINDING_OUTCOME_CHECK = "document_review_findings_outcome_check";
+
+const referencePayload = (text: string): ReferenceFindingPayload => ({
   checkKind: "reference",
   finding: {
     findingId: `reference-${TOPIC_ID}`,
@@ -87,7 +145,7 @@ const referencePayload = (text: string): DocumentReviewFindingPayload => ({
   },
 });
 
-const playbookPayload: DocumentReviewFindingPayload = {
+const playbookPayload: PlaybookFindingPayload = {
   checkKind: "playbook",
   finding: {
     positionId: POSITION_ID,
@@ -194,9 +252,11 @@ describe("document review run persistence", () => {
     await seedRun({ runId: first, status: "queued", target });
 
     const second = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
-    await expect(
-      seedRun({ runId: second, status: "queued", target }),
-    ).rejects.toThrow();
+    expect(
+      violationText(
+        await rejectionOf(seedRun({ runId: second, status: "queued", target })),
+      ),
+    ).toContain(ACTIVE_RUN_INDEX);
 
     // A claimed run still occupies the document: the guard covers the whole
     // active window, not just the queued moment.
@@ -205,9 +265,11 @@ describe("document review run persistence", () => {
       .set({ status: "running", startedAt: new Date() })
       .where(eq(documentReviewRuns.id, first));
     const third = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
-    await expect(
-      seedRun({ runId: third, status: "queued", target }),
-    ).rejects.toThrow();
+    expect(
+      violationText(
+        await rejectionOf(seedRun({ runId: third, status: "queued", target })),
+      ),
+    ).toContain(ACTIVE_RUN_INDEX);
   });
 
   test("allows a new run once the previous one is terminal", async () => {
@@ -274,7 +336,7 @@ describe("document review run persistence", () => {
       checkKind: "playbook" | "reference";
       outcome: string;
       positionId: string | null;
-    }) =>
+    }): Promise<void> => {
       await testDb.insert(documentReviewFindings).values({
         id: toSafeId<"documentReviewFinding">(Bun.randomUUIDv7()),
         organizationId: ids.orgA,
@@ -293,30 +355,43 @@ describe("document review run persistence", () => {
             ? playbookPayload
             : referencePayload("vocabulary probe"),
       });
+    };
 
     // A verdict tier is not a comparison assessment, and vice versa.
-    await expect(
-      insertOutcome({
-        checkKind: "reference",
-        outcome: "compliant",
-        positionId: null,
-      }),
-    ).rejects.toThrow();
-    await expect(
-      insertOutcome({
-        checkKind: "playbook",
-        outcome: "different",
-        positionId: POSITION_ID,
-      }),
-    ).rejects.toThrow();
+    expect(
+      violationText(
+        await rejectionOf(
+          insertOutcome({
+            checkKind: "reference",
+            outcome: "compliant",
+            positionId: null,
+          }),
+        ),
+      ),
+    ).toContain(FINDING_OUTCOME_CHECK);
+    expect(
+      violationText(
+        await rejectionOf(
+          insertOutcome({
+            checkKind: "playbook",
+            outcome: "different",
+            positionId: POSITION_ID,
+          }),
+        ),
+      ),
+    ).toContain(FINDING_OUTCOME_CHECK);
     // Only a playbook-kind row grades a position.
-    await expect(
-      insertOutcome({
-        checkKind: "reference",
-        outcome: "aligned",
-        positionId: POSITION_ID,
-      }),
-    ).rejects.toThrow();
+    expect(
+      violationText(
+        await rejectionOf(
+          insertOutcome({
+            checkKind: "reference",
+            outcome: "aligned",
+            positionId: POSITION_ID,
+          }),
+        ),
+      ),
+    ).toContain(FINDING_OUTCOME_CHECK);
 
     await insertOutcome({
       checkKind: "playbook",

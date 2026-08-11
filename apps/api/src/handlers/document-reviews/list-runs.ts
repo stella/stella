@@ -111,20 +111,20 @@ const listDocumentReviewRuns = createSafeHandler(
         runHistoryCursor.encode(item.createdAtCursor, item.id),
     });
 
+    // The cursor projection is a pagination mechanism, not part of the run, so
+    // the response object is listed out rather than spread from the row.
     return Result.ok({
       ...page,
-      items: page.items.map(
-        ({
-          createdAtCursor: _createdAtCursor,
-          createdAt,
-          finishedAt,
-          ...run
-        }) => ({
-          ...run,
-          createdAt: createdAt.toISOString(),
-          finishedAt: finishedAt === null ? null : finishedAt.toISOString(),
-        }),
-      ),
+      items: page.items.map((run) => ({
+        id: run.id,
+        status: run.status,
+        errorCode: run.errorCode,
+        entityVersionId: run.entityVersionId,
+        total: run.total,
+        completed: run.completed,
+        createdAt: run.createdAt.toISOString(),
+        finishedAt: run.finishedAt?.toISOString() ?? null,
+      })),
     });
   },
 );

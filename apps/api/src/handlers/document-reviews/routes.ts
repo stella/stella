@@ -28,11 +28,13 @@ export const documentReviewsRoute = new Elysia({
   })
   .post("/runs", createDocumentReviewRun.handler, {
     body: createDocumentReviewRun.config.body,
+    params: createDocumentReviewRun.config.params,
     permissions: createDocumentReviewRun.config.permissions,
   })
   .get("/runs", listDocumentReviewRuns.handler, {
-    query: listDocumentReviewRuns.config.query,
+    params: listDocumentReviewRuns.config.params,
     permissions: listDocumentReviewRuns.config.permissions,
+    query: listDocumentReviewRuns.config.query,
   })
   .get("/runs/:runId", readDocumentReviewRun.handler, {
     params: readDocumentReviewRun.config.params,

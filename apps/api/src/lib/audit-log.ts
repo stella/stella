@@ -270,6 +270,7 @@ const activityCategoryForEvent = (event: AuditEvent): AuditActivityCategory => {
       return "team";
     case "case_law_matter_link":
       return "court";
+    case "document_review_run":
     case "flow_run":
       return "automation";
     case "playbook":

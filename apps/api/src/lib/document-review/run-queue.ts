@@ -155,27 +155,27 @@ export const enqueueDocumentReviewRun = async ({
  * claim that set `started_at`, a `queued` row from its creation, because a
  * queued job survives a restart and may simply be backlogged.
  */
-export const reconcileStuckDocumentReviewRuns = async (
-  now: Date = new Date(),
-): Promise<number> => {
-  const runningCutoff = new Date(now.getTime() - STUCK_RUNNING_MS);
-  const queuedCutoff = new Date(now.getTime() - STUCK_QUEUED_MS);
+export const reconcileStuckDocumentReviewRuns = async (): Promise<number> => {
+  // Both cutoffs read the clock directly rather than deriving from an injected
+  // `now`: a moving staleness boundary does not care about sub-millisecond
+  // drift, and a literal clock read is what makes these comparisons provably
+  // free of a database round-trip instead of asserting it in a comment.
+  const runningCutoff = new Date(Date.now() - STUCK_RUNNING_MS);
+  const queuedCutoff = new Date(Date.now() - STUCK_QUEUED_MS);
   // audit: skip — janitor bookkeeping on already-audited run rows; flips
   // abandoned runs to failed so the read endpoint surfaces them instead of
   // polling a stuck row forever.
   const recovered = await rootDb
     .update(documentReviewRuns)
-    .set({ status: "failed", errorCode: "internal", finishedAt: now })
+    .set({ status: "failed", errorCode: "internal", finishedAt: new Date() })
     .where(
       or(
         and(
           eq(documentReviewRuns.status, "running"),
-          // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
           lt(documentReviewRuns.startedAt, runningCutoff),
         ),
         and(
           eq(documentReviewRuns.status, "queued"),
-          // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- cutoff read from the caller's clock, never round-tripped through the database
           lt(documentReviewRuns.createdAt, queuedCutoff),
         ),
       ),
@@ -225,18 +225,19 @@ export const initDocumentReviewRunWorker = () => {
 
   let closing = false;
   let activeReconcile: Promise<void> | null = null;
+  const runReconcile = async (): Promise<void> => {
+    const recovered = await reconcileStuckDocumentReviewRuns();
+    if (recovered > 0) {
+      logger.warn("document_review_run.recovered_stuck", {
+        count: String(recovered),
+      });
+    }
+  };
   const scheduleReconcile = (): void => {
     if (closing || activeReconcile !== null) {
       return;
     }
-    activeReconcile = reconcileStuckDocumentReviewRuns()
-      .then((recovered) => {
-        if (recovered > 0) {
-          logger.warn("document_review_run.recovered_stuck", {
-            count: String(recovered),
-          });
-        }
-      })
+    activeReconcile = runReconcile()
       .catch((error: unknown) => {
         captureError(error, { operation: "document_review_run.reconcile" });
       })
@@ -335,7 +336,7 @@ const claimRun = async (actor: RunActor): Promise<ClaimedRun | null> => {
       });
     return rows.at(0);
   });
-  return claimed === undefined ? null : claimed;
+  return claimed ?? null;
 };
 
 const processDocumentReviewRunJob = async (
@@ -420,7 +421,7 @@ const resolvePinnedFiles = async (
     const content = contentByPin.get(
       `${pin.fileFieldId}:${pin.entityVersionId}`,
     );
-    if (content === undefined || content.type !== "file") {
+    if (content?.type !== "file") {
       return { type: "failed", errorCode: "pin_unresolved" };
     }
     if (content.sha256Hex !== pin.contentSha256) {
@@ -583,8 +584,8 @@ const runPlaybookPass = async ({
   }
 
   const positions = plan.playbookChecks.map((check) => check.position);
-  const clauseSnapshots = await actor.scopedDb((tx) =>
-    loadClauseSnapshots(tx, actor.organizationId, positions),
+  const clauseSnapshots = await actor.scopedDb(
+    async (tx) => await loadClauseSnapshots(tx, actor.organizationId, positions),
   );
   const tiersBySourceId = new Map<string, ResolvedTiers>();
   const asks: ReviewAsk[] = [];
