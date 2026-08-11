@@ -32,32 +32,31 @@ const DIRECTIVE_KIND_MAP: Record<string, BlockDirectiveKind> = {
   "/each": "endeach",
 };
 
+const directiveCandidate = ({
+  tableRow,
+  text,
+}: ExtractedDocxParagraph): string => {
+  if (tableRow?.kind !== "cells") {
+    return text;
+  }
+
+  // Folio renders a source table row as `| cell | cell |`. Removing only the
+  // two outer delimiters lets a sole-cell directive retain its semantics;
+  // internal delimiters remain, so mixed-content rows cannot become blocks.
+  return text.startsWith("|") && text.endsWith("|")
+    ? text.slice(1, -1).trim()
+    : text;
+};
+
 // ── Public API ───────────────────────────────────────────
 
-const annotateDirective = ({
-  index,
-  text,
-  source,
-  style,
-  bold,
-  fontSize,
-  alignment,
-}: ExtractedDocxParagraph): ExtractedParagraph => {
-  const paragraph: ExtractedParagraph = { index, text, source };
-  if (style !== undefined) {
-    paragraph.style = style;
-  }
-  if (bold !== undefined) {
-    paragraph.bold = bold;
-  }
-  if (fontSize !== undefined) {
-    paragraph.fontSize = fontSize;
-  }
-  if (alignment !== undefined) {
-    paragraph.alignment = alignment;
-  }
-
-  const directiveMatch = DIRECTIVE_RE.exec(text);
+const annotateDirective = (
+  extractedParagraph: ExtractedDocxParagraph,
+): ExtractedParagraph => {
+  const paragraph: ExtractedParagraph = { ...extractedParagraph };
+  const directiveMatch = DIRECTIVE_RE.exec(
+    directiveCandidate(extractedParagraph),
+  );
   if (!directiveMatch) {
     return paragraph;
   }
@@ -81,6 +80,43 @@ export const extractText = async (
   return {
     paragraphs: result.paragraphs.map(annotateDirective),
     charCount: result.charCount,
+    view: result.view,
+  };
+};
+
+export const extractTextForPreview = async (
+  docxBytes: Uint8Array,
+): Promise<ExtractedDocument> => {
+  const result = await extractDocxText(docxBytes);
+  const extractedParagraphs: ExtractedDocxParagraph[] = [];
+  for (const paragraph of result.paragraphs) {
+    if (paragraph.tableRow === undefined) {
+      extractedParagraphs.push({
+        ...paragraph,
+        index: extractedParagraphs.length,
+      });
+      continue;
+    }
+    if (paragraph.tableRow.kind !== "cells") {
+      continue;
+    }
+    for (const cell of paragraph.tableRow.cells) {
+      for (const cellParagraph of cell.paragraphs) {
+        extractedParagraphs.push({
+          index: extractedParagraphs.length,
+          source: paragraph.source,
+          ...cellParagraph,
+        });
+      }
+    }
+  }
+  const paragraphs = extractedParagraphs.map(annotateDirective);
+  return {
+    paragraphs,
+    charCount: extractedParagraphs.reduce(
+      (count, paragraph) => count + paragraph.text.length,
+      0,
+    ),
     view: result.view,
   };
 };

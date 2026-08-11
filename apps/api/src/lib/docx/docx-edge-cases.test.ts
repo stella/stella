@@ -169,13 +169,30 @@ describe("extract-text: real OOXML patterns", () => {
         "<w:p><w:r><w:t>After table</w:t></w:r></w:p>",
     );
     const result = await extractText(buf);
-    // Table paragraphs must be included: legal documents keep
-    // signature blocks and party details in tables, and version
-    // diffs / discovery index paragraphs the same way.
-    expect(result.paragraphs.map((p) => p.text)).toEqual([
-      "Before table",
-      "Cell A1",
-      "After table",
+    // Legal documents keep signature blocks and party details in tables. Keep
+    // Folio's GFM rows and their positions so downstream consumers can retain
+    // the table or intentionally discard its synthetic rows.
+    expect(
+      result.paragraphs.map(({ tableRow, text }) => ({ tableRow, text })),
+    ).toEqual([
+      { text: "Before table", tableRow: undefined },
+      {
+        text: "|  |",
+        tableRow: { table: 0, kind: "syntheticHeader" },
+      },
+      {
+        text: "| --- |",
+        tableRow: { table: 0, kind: "delimiter" },
+      },
+      {
+        text: "| Cell A1 |",
+        tableRow: {
+          table: 0,
+          kind: "cells",
+          cells: [{ paragraphs: [{ text: "Cell A1" }] }],
+        },
+      },
+      { text: "After table", tableRow: undefined },
     ]);
   });
 

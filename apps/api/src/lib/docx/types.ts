@@ -2,6 +2,7 @@
 
 import * as v from "valibot";
 
+import type { ExtractedDocxParagraph } from "@stll/folio-core/server";
 import {
   type BlockDirectiveKind,
   type ConditionNode,
@@ -96,20 +97,11 @@ export type ParagraphRewrite = {
   newText: string;
 };
 
-export type ParagraphSource = "header" | "body" | "footer";
+export type ParagraphSource = ExtractedDocxParagraph["source"];
 
-export type ExtractedParagraph = {
-  index: number;
-  text: string;
-  style?: string | undefined;
+export type ExtractedParagraph = Omit<ExtractedDocxParagraph, "source"> & {
   /** Which part of the document this paragraph came from. */
   source?: ParagraphSource | undefined;
-  /** True when all (or majority of) text runs are bold. */
-  bold?: boolean | undefined;
-  /** Font size in half-points from the first run (24 = 12pt). */
-  fontSize?: number | undefined;
-  /** Paragraph alignment from `w:jc`. */
-  alignment?: "left" | "center" | "right" | "both" | undefined;
   /** True when the paragraph is a block directive. */
   isDirective?: boolean | undefined;
   /** Which directive this paragraph represents. */

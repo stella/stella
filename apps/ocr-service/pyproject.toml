@@ -2,7 +2,7 @@
 name = "stella-ocr-service"
 version = "0.0.0"
 description = "Pinned PaddleX serving image for Stella document OCR"
-requires-python = ">=3.11,<3.12"
+requires-python = ">=3.12,<3.13"
 dependencies = [
   "paddleocr==3.7.0",
   "paddlepaddle-gpu==3.2.0",
@@ -46,14 +46,14 @@ requires-dist = [
 
 [tool.ruff]
 line-length = 88
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["B", "E", "F", "I", "RUF", "SIM", "UP"]
 
 [tool.ty.environment]
 python-platform = "linux"
-python-version = "3.11"
+python-version = "3.12"
 
 [tool.ty.src]
 include = ["healthcheck.py"]

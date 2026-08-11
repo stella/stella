@@ -11,6 +11,7 @@ import { describe, expect, test } from "bun:test";
 const EXPECTED_REGISTRY_RESOLVED = [
   "@stll/anonymize-data",
   "@stll/anonymize-wasm",
+  "@stll/conditions",
   "@stll/docx-core",
   "@stll/folio-agents",
   "@stll/folio-core",
@@ -23,6 +24,7 @@ const EXPECTED_REGISTRY_RESOLVED = [
   "@stll/stdnum-linux-x64-gnu",
   "@stll/stdnum-wasm",
   "@stll/stdnum-win32-x64-msvc",
+  "@stll/template-conditions",
 ] as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

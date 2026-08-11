@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
-import { extractText } from "./extract-text";
+import { extractText, extractTextForPreview } from "./extract-text";
 
 /** Build a minimal DOCX buffer with the given document.xml. */
 const makeDocx = async (
@@ -181,6 +181,102 @@ describe("extractText", () => {
       directiveKind: "endeach",
       directiveExpression: "",
     });
+  });
+
+  test("annotates a block directive stored in a table cell", async () => {
+    const xml = WRAP(
+      `<w:tbl><w:tr><w:tc>
+        <w:p><w:r><w:t>{{#each fields}}</w:t></w:r></w:p>
+      </w:tc></w:tr></w:tbl>`,
+    );
+    const buf = await makeDocx(xml);
+    const result = await extractText(buf);
+
+    expect(result.paragraphs[2]).toEqual({
+      index: 2,
+      text: "| {{#each fields}} |",
+      source: "body",
+      tableRow: {
+        table: 0,
+        kind: "cells",
+        cells: [{ paragraphs: [{ text: "{{#each fields}}" }] }],
+      },
+      isDirective: true,
+      directiveKind: "each",
+      directiveExpression: "fields",
+    });
+  });
+
+  test("restores table-cell paragraphs for template preview", async () => {
+    const xml = WRAP(
+      `<w:tbl><w:tr>
+        <w:tc>
+          <w:p><w:r><w:t>{{#each fields}}</w:t></w:r></w:p>
+          <w:p><w:r><w:t>{{fields.label}}</w:t></w:r></w:p>
+        </w:tc>
+        <w:tc>
+          <w:p><w:r><w:t>{{fields.value}}</w:t></w:r></w:p>
+          <w:p><w:r><w:t>{{/each}}</w:t></w:r></w:p>
+        </w:tc>
+      </w:tr></w:tbl>`,
+    );
+    const buf = await makeDocx(xml);
+    const result = await extractTextForPreview(buf);
+
+    expect(result.paragraphs).toEqual([
+      {
+        index: 0,
+        text: "{{#each fields}}",
+        source: "body",
+        isDirective: true,
+        directiveKind: "each",
+        directiveExpression: "fields",
+      },
+      { index: 1, text: "{{fields.label}}", source: "body" },
+      { index: 2, text: "{{fields.value}}", source: "body" },
+      {
+        index: 3,
+        text: "{{/each}}",
+        source: "body",
+        isDirective: true,
+        directiveKind: "endeach",
+        directiveExpression: "",
+      },
+    ]);
+    expect(result.charCount).toBe(
+      "{{#each fields}}{{fields.label}}{{fields.value}}{{/each}}".length,
+    );
+  });
+
+  test("preserves table-cell formatting for template preview", async () => {
+    const xml = WRAP(
+      `<w:tbl><w:tr><w:tc>
+        <w:p>
+          <w:pPr>
+            <w:pStyle w:val="Heading1"/>
+            <w:jc w:val="center"/>
+          </w:pPr>
+          <w:r>
+            <w:rPr><w:b/><w:sz w:val="32"/></w:rPr>
+            <w:t>Styled cell</w:t>
+          </w:r>
+        </w:p>
+      </w:tc></w:tr></w:tbl>`,
+    );
+    const buf = await makeDocx(xml);
+    const result = await extractTextForPreview(buf);
+
+    expect(result.paragraphs).toEqual([
+      {
+        index: 0,
+        text: "Styled cell",
+        source: "body",
+        style: "Heading1",
+        alignment: "center",
+        bold: true,
+        fontSize: 32,
+      },
+    ]);
   });
 
   test("annotates #elseif and #else directives", async () => {

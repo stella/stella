@@ -3,68 +3,43 @@ linker = "hoisted"
 # 5-day quarantine: reject package versions published
 # less than 5 days ago to mitigate supply chain attacks.
 minimumReleaseAge = 432_000
-# First-party @stll packages are on public npm (open source).
-# They share a release cadence and would otherwise be blocked
-# by the quarantine on every publish cycle.
 minimumReleaseAgeExcludes = [
-  # Office-format text extraction for search indexing. Opted in ahead
-  # of the quarantine window; runs only inside the isolated extraction
-  # subprocess, never in the API process. Listed with its platform
-  # subpackages per the napi note below.
-  "@firecrawl/anydoc-darwin-arm64",
-  "@firecrawl/anydoc-darwin-x64",
-  "@firecrawl/anydoc-linux-arm64-gnu",
-  "@firecrawl/anydoc-linux-arm64-musl",
-  "@firecrawl/anydoc-linux-x64-gnu",
-  "@firecrawl/anydoc-linux-x64-musl",
-  "@firecrawl/anydoc-win32-x64-msvc",
-  "@stll/oxlint-config",
-  "@stll/typescript-config",
-  "@stll/aho-corasick-wasm",
-  "@stll/anonymize-data",
-  "@stll/anonymize-wasm",
-  "@stll/docx-core",
-  "@stll/folio-agents",
-  "@stll/folio-core",
-  "@stll/folio-react",
-  "@stll/fuzzy-search-wasm",
-  "@stll/regex-set-wasm",
+  # Temporary third-party exceptions must carry the exact instant at which
+  # the normal five-day quarantine admits the currently pinned release.
+  "@silurus/ooxml", # quarantine-expires: 2026-08-13T15:09:39.800Z
+  "@tanstack/ai", # quarantine-expires: 2026-08-12T06:35:00.848Z
+  "@tanstack/ai-bedrock", # quarantine-expires: 2026-08-12T06:34:57.780Z
+  "@tanstack/ai-client", # quarantine-expires: 2026-08-12T06:34:57.600Z
+  "@tanstack/ai-code-mode", # quarantine-expires: 2026-08-12T06:35:00.747Z
+  "@tanstack/ai-mcp", # quarantine-expires: 2026-08-12T06:35:03.430Z
+  "@tanstack/ai-react", # quarantine-expires: 2026-08-12T06:35:09.720Z
+  # First-party @stll packages are on public npm (open source). They share a
+  # release cadence and would otherwise be blocked on every publish cycle.
+  # Permanent exclusions record their original introduction for auditability.
+  "@stll/oxlint-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
+  "@stll/typescript-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
+  "@stll/aho-corasick-wasm", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
+  "@stll/anonymize-data", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
+  "@stll/anonymize-wasm", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
+  "@stll/conditions", # quarantine-excluded-since: 2026-08-11T09:34:37.000Z
+  "@stll/docx-core", # quarantine-excluded-since: 2026-07-13T12:21:46.000Z
+  "@stll/folio-agents", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
+  "@stll/folio-core", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
+  "@stll/folio-react", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
+  "@stll/fuzzy-search-wasm", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
+  "@stll/regex-set-wasm", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
+  "@stll/template-conditions", # quarantine-excluded-since: 2026-08-11T09:34:37.000Z
   # A napi package must be listed WITH its platform subpackages. They publish
   # in the same minute, but they are optionalDependencies: quarantine one and
   # bun skips it silently, leaving the parent installed with no native binding
   # and every call failing at runtime. Bun matches these names exactly — a
   # `@stll/*` glob is accepted and then ignored.
-  "@stll/stdnum",
-  "@stll/stdnum-darwin-arm64",
-  "@stll/stdnum-darwin-x64",
-  "@stll/stdnum-linux-arm64-gnu",
-  "@stll/stdnum-linux-x64-gnu",
-  "@stll/stdnum-wasm",
-  "@stll/stdnum-win32-x64-msvc",
-  "@stll/text-search-wasm",
-  # Transitive exact pin from @tanstack/ai-openrouter 0.15.10; it ships
-  # in lockstep with the quarantined-exempt TanStack AI provider batch.
-  "@openrouter/sdk",
-  # TanStack AI beta: opted in ahead of stable for the AI SDK migration.
-  "@tanstack/ai",
-  "@tanstack/ai-anthropic",
-  "@tanstack/ai-codex",
-  "@tanstack/ai-code-mode",
-  "@tanstack/ai-bedrock",
-  "@tanstack/ai-client",
-  "@tanstack/ai-event-client",
-  "@tanstack/ai-gemini",
-  "@tanstack/ai-mcp",
-  "@tanstack/ai-mistral",
-  "@tanstack/ai-openai",
-  "@tanstack/ai-openrouter",
-  "@tanstack/ai-react",
-  "@tanstack/ai-sandbox",
-  "@tanstack/ai-utils",
-  "@tanstack/react-ai-devtools",
-  # TanStack Table 9 stable was adopted before its release-age window. These
-  # exact times are publication time plus the five-day quarantine.
-  "@tanstack/openai-base",
-  # First patched nanoid 3.x release for GHSA-2v37-7h3g-55p8. Remove after
-  # the normal release-age quarantine admits it.
+  "@stll/stdnum", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
+  "@stll/stdnum-darwin-arm64", # quarantine-excluded-since: 2026-07-26T19:50:26.000Z
+  "@stll/stdnum-darwin-x64", # quarantine-excluded-since: 2026-07-26T19:50:26.000Z
+  "@stll/stdnum-linux-arm64-gnu", # quarantine-excluded-since: 2026-07-26T19:50:26.000Z
+  "@stll/stdnum-linux-x64-gnu", # quarantine-excluded-since: 2026-07-26T19:50:26.000Z
+  "@stll/stdnum-wasm", # quarantine-excluded-since: 2026-07-26T19:50:26.000Z
+  "@stll/stdnum-win32-x64-msvc", # quarantine-excluded-since: 2026-07-26T19:50:26.000Z
+  "@stll/text-search-wasm", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
 ]

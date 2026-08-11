@@ -2,7 +2,7 @@
  * Guard `bunfig.toml`'s `minimumReleaseAgeExcludes`:
  *
  * 1. Every first-party `@stll/*` package the lockfile resolves from npm must
- *    be excluded.
+ *    be excluded and record when that permanent exclusion began.
  * 2. A temporary third-party exclusion annotated with
  *    `# quarantine-expires: <timestamp>` must be removed once Bun's release-age
  *    gate can take over again.
@@ -38,28 +38,179 @@ const LOCKFILE = "bun.lock";
 const BUNFIG = "bunfig.toml";
 const SCRIPT_PATH = "scripts/check-stll-quarantine-excludes.ts";
 const EXPIRY_MARKER = "quarantine-expires:";
+const EXCLUDED_SINCE_MARKER = "quarantine-excluded-since:";
 const EXACT_UTC_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 
 /** Packages resolved from the workspace itself never hit the registry. */
 const WORKSPACE_PROTOCOL = "workspace:";
 
-const readExcludeBlock = (bunfig: string): string => {
-  const start = bunfig.indexOf("minimumReleaseAgeExcludes");
-  if (start === -1) {
-    return "";
+type ExcludeBlockRange = {
+  end: number;
+  start: number;
+};
+
+const findExcludeBlockRange = (
+  bunfig: string,
+): ExcludeBlockRange | undefined => {
+  const declaration = /^[\t ]*minimumReleaseAgeExcludes[\t ]*=/mu.exec(bunfig);
+  if (declaration === null) {
+    return undefined;
   }
-  const end = bunfig.indexOf("]", start);
-  return bunfig.slice(start, end === -1 ? undefined : end);
+
+  const start = declaration.index;
+  const arrayStart = bunfig.indexOf("[", start);
+  if (arrayStart === -1) {
+    return undefined;
+  }
+
+  let state: "basic" | "comment" | "literal" | "plain" = "plain";
+  let escaped = false;
+  for (let index = arrayStart; index < bunfig.length; index++) {
+    const character = bunfig[index];
+    if (state === "comment") {
+      if (character === "\n") {
+        state = "plain";
+      }
+      continue;
+    }
+    if (state === "basic") {
+      if (escaped) {
+        escaped = false;
+      } else if (character === "\\") {
+        escaped = true;
+      } else if (character === '"') {
+        state = "plain";
+      }
+      continue;
+    }
+    if (state === "literal") {
+      if (character === "'") {
+        state = "plain";
+      }
+      continue;
+    }
+    if (character === "#") {
+      state = "comment";
+    } else if (character === '"') {
+      state = "basic";
+    } else if (character === "'") {
+      state = "literal";
+    } else if (character === "]") {
+      return { end: index, start };
+    }
+  }
+  return undefined;
+};
+
+const readExcludeBlock = (bunfig: string): string => {
+  const range = findExcludeBlockRange(bunfig);
+  return range === undefined ? "" : bunfig.slice(range.start, range.end);
 };
 
 const readExcludes = (bunfig: string): Set<string> => {
-  const block = readExcludeBlock(bunfig);
-  return new Set(
-    [...block.matchAll(/"(?<name>@?[^"]+)"/gu)].flatMap((match) => {
-      const name = match.groups?.["name"];
+  const parsed = Bun.TOML.parse(bunfig);
+  if (!("install" in parsed)) {
+    return new Set();
+  }
+  const install = parsed.install;
+  if (typeof install !== "object" || install === null) {
+    return new Set();
+  }
+  if (!("minimumReleaseAgeExcludes" in install)) {
+    return new Set();
+  }
+  const excludes = install.minimumReleaseAgeExcludes;
+  if (!Array.isArray(excludes)) {
+    return new Set();
+  }
+  return new Set(excludes.filter((name) => typeof name === "string"));
+};
+
+const excludeDeclaration = (line: string): string | undefined =>
+  /^\s*"(?<name>[^"]+)",?\s*(?:#.*)?$/u.exec(line)?.groups?.["name"];
+
+const exactUtcTimestampError = ({
+  marker,
+  name,
+  timestamp,
+}: {
+  marker: string;
+  name: string;
+  timestamp: string;
+}): string | undefined => {
+  const timestampMs = Date.parse(timestamp);
+  if (
+    EXACT_UTC_TIMESTAMP.test(timestamp) &&
+    !Number.isNaN(timestampMs) &&
+    new Date(timestampMs).toISOString() === timestamp
+  ) {
+    return undefined;
+  }
+  return `${BUNFIG} minimum-release-age exclude "${name}" has an invalid ${marker} UTC timestamp: ${timestamp}`;
+};
+
+const readExcludeAnnotationErrors = (bunfig: string, now: Date): string[] => {
+  const lines = readExcludeBlock(bunfig).split("\n");
+  const declaredNames = new Set(
+    lines.flatMap((line) => {
+      const name = excludeDeclaration(line);
       return name === undefined ? [] : [name];
     }),
   );
+  const unrecognizedEntries = [...readExcludes(bunfig)].filter(
+    (name) => !declaredNames.has(name),
+  );
+  const errors =
+    unrecognizedEntries.length === 0
+      ? []
+      : [
+          `${BUNFIG} minimumReleaseAgeExcludes must declare one annotated package per line; unrecognized entries: ${unrecognizedEntries.join(", ")}`,
+        ];
+
+  errors.push(
+    ...lines.flatMap((line) => {
+      const name = excludeDeclaration(line);
+      if (name === undefined) {
+        return [];
+      }
+
+      if (!name.startsWith("@stll/")) {
+        if (!line.includes(EXPIRY_MARKER)) {
+          return [
+            `${BUNFIG} third-party quarantine exclude "${name}" is missing an exact UTC expiry`,
+          ];
+        }
+        return [];
+      }
+
+      if (!line.includes(EXCLUDED_SINCE_MARKER)) {
+        return [
+          `${BUNFIG} first-party quarantine exclude "${name}" is missing an exact UTC exclusion date`,
+        ];
+      }
+
+      const excludedSince = line
+        .slice(
+          line.indexOf(EXCLUDED_SINCE_MARKER) + EXCLUDED_SINCE_MARKER.length,
+        )
+        .trim();
+      const invalid = exactUtcTimestampError({
+        marker: "exclusion-date",
+        name,
+        timestamp: excludedSince,
+      });
+      if (invalid !== undefined) {
+        return [invalid];
+      }
+      if (Date.parse(excludedSince) > now.getTime()) {
+        return [
+          `${BUNFIG} first-party quarantine exclude "${name}" has a future exclusion date: ${excludedSince}`,
+        ];
+      }
+      return [];
+    }),
+  );
+  return errors;
 };
 
 type TemporaryExclude = {
@@ -100,11 +251,12 @@ const parseTemporaryExcludeLine = (line: string): ParsedTemporaryExclude => {
 
   const name = quotedName.slice(1, -1);
   const expiresAt = comment.slice(EXPIRY_MARKER.length).trim();
-  const expiresAtMs = Date.parse(expiresAt);
   if (
-    !EXACT_UTC_TIMESTAMP.test(expiresAt) ||
-    Number.isNaN(expiresAtMs) ||
-    new Date(expiresAtMs).toISOString() !== expiresAt
+    exactUtcTimestampError({
+      marker: "expiry",
+      name,
+      timestamp: expiresAt,
+    }) !== undefined
   ) {
     return {
       error: `${BUNFIG} temporary quarantine exclude "${name}" has an invalid UTC expiry: ${expiresAt}`,
@@ -142,27 +294,22 @@ const readTemporaryExcludes = (bunfig: string): TemporaryExcludesResult => {
  */
 const readRegistryStllPackages = (lockfile: string): Set<string> =>
   new Set(
-    // Scope plus exactly one segment. Bun also keys nested resolutions by
-    // path ("@stll/web/@babel/core"); those are not package names.
-    [...lockfile.matchAll(/"(?<name>@stll\/[^"/]+)":\s*\[/gu)].flatMap(
-      (match) => {
-        const name = match.groups?.["name"];
-        if (name === undefined) {
-          return [];
-        }
-        // The entry's own resolution follows the name; workspace members
-        // carry the workspace protocol instead of a registry tarball. Read to
-        // the end of that line and no further: a fixed-width window spills
-        // into the next entry, and one workspace neighbour then hides a
-        // registry-resolved package from the coverage check entirely.
-        const lineEnd = lockfile.indexOf("\n", match.index);
-        const entry = lockfile.slice(
-          match.index,
-          lineEnd === -1 ? undefined : lineEnd,
-        );
-        return entry.includes(WORKSPACE_PROTOCOL) ? [] : [name];
-      },
-    ),
+    // The key can be a nested resolution path such as
+    // "@stll/folio-core/@stll/template-conditions". The first array value is
+    // the resolved package identity, so derive the package name from it rather
+    // than from the path.
+    [
+      ...lockfile.matchAll(
+        /"[^"\n]+":\s*\["(?<name>@stll\/[^"@]+)@(?<source>[^"]+)"/gu,
+      ),
+    ].flatMap((match) => {
+      const name = match.groups?.["name"];
+      const source = match.groups?.["source"];
+      if (name === undefined || source === undefined) {
+        return [];
+      }
+      return source.startsWith(WORKSPACE_PROTOCOL) ? [] : [name];
+    }),
   );
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -192,7 +339,10 @@ export const checkQuarantineExcludes = ({
     .filter((name) => !excludes.has(name))
     .sort();
   const temporary = readTemporaryExcludes(bunfig);
-  const errors = [...temporary.errors];
+  const errors = [
+    ...temporary.errors,
+    ...readExcludeAnnotationErrors(bunfig, now),
+  ];
 
   if (missing.length > 0) {
     errors.push(
@@ -256,18 +406,17 @@ export const pruneExpiredExcludes = ({
   bunfig: string;
   now?: Date;
 }): PruneResult => {
-  const blockStart = bunfig.indexOf("minimumReleaseAgeExcludes");
-  if (blockStart === -1) {
+  const range = findExcludeBlockRange(bunfig);
+  if (range === undefined) {
     return { bunfig, pruned: [] };
   }
-  const blockEnd = bunfig.indexOf("]", blockStart);
   const pruned: string[] = [];
 
   // Each line is judged by its own annotation. Matching by name instead would
   // delete every entry sharing that name, including one whose expiry was
   // renewed and has not passed.
   const block = bunfig
-    .slice(blockStart, blockEnd)
+    .slice(range.start, range.end)
     .split("\n")
     .filter((line) => {
       if (!line.includes(EXPIRY_MARKER)) {
@@ -291,7 +440,7 @@ export const pruneExpiredExcludes = ({
   }
 
   return {
-    bunfig: bunfig.slice(0, blockStart) + block + bunfig.slice(blockEnd),
+    bunfig: bunfig.slice(0, range.start) + block + bunfig.slice(range.end),
     pruned,
   };
 };

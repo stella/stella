@@ -18,7 +18,7 @@ runs:
     - name: Attest
       id: attest
       continue-on-error: true
-      uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+      uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
       with:
         subject-name: ${{ inputs.subject-name }}
         subject-digest: ${{ inputs.subject-digest }}
@@ -31,7 +31,7 @@ runs:
 
     - name: Attest (retry)
       if: steps.attest.outcome == 'failure'
-      uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+      uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
       with:
         subject-name: ${{ inputs.subject-name }}
         subject-digest: ${{ inputs.subject-digest }}

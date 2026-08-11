@@ -55,7 +55,7 @@ services:
 
   valkey:
     profiles: [dev]
-    image: valkey/valkey:8-alpine
+    image: valkey/valkey:9.1.1-alpine@sha256:ee91f7a174ac4d6a6b0685b3a60e321f0a9dbbb691f9b0e285be2ba1d1be8328
     ports:
       - "${STELLA_VALKEY_HOST_PORT:-6379}:6379"
     healthcheck:
@@ -66,7 +66,7 @@ services:
 
   gotenberg:
     profiles: [dev]
-    image: gotenberg/gotenberg:8
+    image: gotenberg/gotenberg:8.34.0@sha256:67097317623a503ba2a6a7e9ae8db6929a1f7e1bbd88077bacf2d325fbdab923
     # If you see "context deadline exceeded" or multi-threading errors, add
     # command: ["gotenberg", "--libreoffice-restart-after=1"]. See
     # https://github.com/gotenberg/gotenberg/issues/1452.
@@ -80,12 +80,11 @@ services:
 
   # Quickwit search engine for the legal-corpus benchmark. Opt-in:
   #   docker compose --profile dev --profile quickwit up
-  # Stores its splits in the MinIO `stella-quickwit` bucket. Point the
-  # API at it with QUICKWIT_ENDPOINT=http://localhost:7280 (and, when
-  # benchmarking the cutover, LEGAL_SEARCH_PROVIDER=quickwit).
+  # Stores its splits in the MinIO `stella-quickwit` bucket. This is a
+  # standalone benchmark service; the API has no Quickwit provider adapter.
   quickwit:
     profiles: [quickwit]
-    image: quickwit/quickwit:0.8.2
+    image: quickwit/quickwit:0.9.0@sha256:1e6169bf4e98a489fca397105f1698c1d80a0f9779f3cf652973bac8a0c3b2bd
     command: run
     environment:
       QW_METASTORE_URI: s3://stella-quickwit/metastore
@@ -93,10 +92,9 @@ services:
       AWS_ACCESS_KEY_ID: minioadmin
       AWS_SECRET_ACCESS_KEY: minioadmin
       AWS_REGION: us-east-1
-      # S3-compatible endpoint for MinIO. If splits fail to read/write,
-      # MinIO needs path-style access — see Quickwit storage-config docs
-      # (flavor: minio).
-      AWS_ENDPOINT: http://minio:9000
+      # Quickwit's MinIO endpoint requires path-style S3 requests.
+      QW_S3_ENDPOINT: http://minio:9000
+      QW_S3_FORCE_PATH_STYLE_ACCESS: "true"
     ports:
       - "${STELLA_QUICKWIT_REST_PORT:-7280}:7280"
       - "${STELLA_QUICKWIT_GRPC_PORT:-7281}:7281"
