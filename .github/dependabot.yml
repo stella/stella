@@ -146,6 +146,8 @@ updates:
     cooldown:
       default-days: 5
     open-pull-requests-limit: 10
+    # Group related updates so they validate together; unmatched updates receive
+    # standalone PRs.
     groups:
       tanstack:
         patterns:
@@ -156,13 +158,19 @@ updates:
         patterns:
           - "astro"
           - "@astrojs/*"
+      expo:
+        patterns:
+          - "expo"
+          - "expo-*"
+          - "@expo/*"
       tailwind:
         patterns:
           - "tailwindcss"
           - "@tailwindcss/*"
       vite:
         patterns:
-          - "vite*"
+          - "vite"
+          - "@vitejs/*"
       react:
         patterns:
           - "react"
@@ -176,10 +184,11 @@ updates:
           - "oxfmt"
       ai:
         patterns:
-          - "ai*"
+          - "ai"
+          - "@ai-sdk/*"
       convex:
         patterns:
-          - "convex*"
+          - "convex"
           - "@convex-dev/*"
       posthog:
         patterns:
@@ -208,12 +217,6 @@ updates:
         patterns:
           - "streamdown*"
           - "@streamdown/*"
-      ultracite:
-        patterns:
-          - "ultracite"
-      misc:
-        patterns:
-          - "*"
     versioning-strategy: increase
     commit-message:
       prefix: "chore"
