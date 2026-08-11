@@ -267,7 +267,7 @@ jobs:
 
       - name: Enforce release intent
         # The repository owner publishes this versioned shared contract.
-        uses: stella/.github/.github/actions/changeset-policy@v1.6.0 # zizmor: ignore[unpinned-uses]
+        uses: stella/.github/.github/actions/changeset-policy@b8c0884053fb8d4fb6ba157692189e0f1aae1785 # v1.6.0
         with:
           release-paths: |
             packages/cli/README.md
@@ -1414,7 +1414,7 @@ jobs:
 
       - name: Download production web build
         if: steps.e2e-stack.outputs.status == 'ready'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: e2e-web-build
           path: apps/web/dist
@@ -1706,7 +1706,7 @@ jobs:
           (needs.e2e-production-shard.result == 'failure'
            || needs.e2e-vite-canary.result == 'failure')
           && needs.ci-plan.outputs.e2e_core_required == 'true'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: playwright-blob-*
           path: apps/web/all-blob-reports
