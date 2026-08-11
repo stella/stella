@@ -4,6 +4,8 @@
  * (`docxToMarkdown`), which owns the DOCX parser and its full fidelity.
  */
 
+import { panic } from "better-result";
+
 import {
   extractDocxText,
   type ExtractedDocxParagraph,
@@ -48,6 +50,50 @@ const directiveCandidate = ({
     : text;
 };
 
+const FOLIO_TABLE_ROW_PREFIX = "| ";
+const FOLIO_TABLE_ROW_SUFFIX = " |";
+const FOLIO_TABLE_CELL_SEPARATOR = " | ";
+const FOLIO_TABLE_PARAGRAPH_SEPARATOR = "<br>";
+const FOLIO_ESCAPED_TABLE_PIPE = "&#124;";
+
+const restoreTableCellParagraphs = (
+  paragraph: ExtractedDocxParagraph,
+): ExtractedDocxParagraph[] => {
+  const kind = paragraph.tableRow?.kind;
+  if (kind === undefined) {
+    return [paragraph];
+  }
+
+  switch (kind) {
+    case "syntheticHeader":
+    case "delimiter":
+      return [];
+    case "cells": {
+      if (
+        !paragraph.text.startsWith(FOLIO_TABLE_ROW_PREFIX) ||
+        !paragraph.text.endsWith(FOLIO_TABLE_ROW_SUFFIX)
+      ) {
+        return panic("Folio table row does not match its serialized contract");
+      }
+
+      const cells = paragraph.text
+        .slice(FOLIO_TABLE_ROW_PREFIX.length, -FOLIO_TABLE_ROW_SUFFIX.length)
+        .split(FOLIO_TABLE_CELL_SEPARATOR);
+      return cells.flatMap((cell) =>
+        cell.split(FOLIO_TABLE_PARAGRAPH_SEPARATOR).map((text) => ({
+          index: paragraph.index,
+          source: paragraph.source,
+          text: text.replaceAll(FOLIO_ESCAPED_TABLE_PIPE, "|"),
+        })),
+      );
+    }
+    default: {
+      const exhaustive: never = kind;
+      return exhaustive;
+    }
+  }
+};
+
 // ── Public API ───────────────────────────────────────────
 
 const annotateDirective = (
@@ -80,6 +126,23 @@ export const extractText = async (
   return {
     paragraphs: result.paragraphs.map(annotateDirective),
     charCount: result.charCount,
+    view: result.view,
+  };
+};
+
+export const extractTextForPreview = async (
+  docxBytes: Uint8Array,
+): Promise<ExtractedDocument> => {
+  const result = await extractDocxText(docxBytes);
+  const paragraphs = result.paragraphs
+    .flatMap(restoreTableCellParagraphs)
+    .map((paragraph, index) => annotateDirective({ ...paragraph, index }));
+  return {
+    paragraphs,
+    charCount: paragraphs.reduce(
+      (count, paragraph) => count + paragraph.text.length,
+      0,
+    ),
     view: result.view,
   };
 };

@@ -8,7 +8,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
-import { extractText } from "@/api/lib/docx/extract-text";
+import { extractTextForPreview } from "@/api/lib/docx/extract-text";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 
@@ -49,7 +49,7 @@ const previewTemplateHandler = async function* ({
 
   const [{ paragraphs, charCount }, { structureErrors }, clauseSlots] =
     await Promise.all([
-      extractText(buffer),
+      extractTextForPreview(buffer),
       discoverTemplate(buffer),
       discoverClauseSlots(buffer),
     ]);

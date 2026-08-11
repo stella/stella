@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
-import { extractText } from "./extract-text";
+import { extractText, extractTextForPreview } from "./extract-text";
 
 /** Build a minimal DOCX buffer with the given document.xml. */
 const makeDocx = async (
@@ -201,6 +201,47 @@ describe("extractText", () => {
       directiveKind: "each",
       directiveExpression: "fields",
     });
+  });
+
+  test("restores table-cell paragraphs for template preview", async () => {
+    const xml = WRAP(
+      `<w:tbl><w:tr>
+        <w:tc>
+          <w:p><w:r><w:t>{{#each fields}}</w:t></w:r></w:p>
+          <w:p><w:r><w:t>{{fields.label}}</w:t></w:r></w:p>
+        </w:tc>
+        <w:tc>
+          <w:p><w:r><w:t>{{fields.value}}</w:t></w:r></w:p>
+          <w:p><w:r><w:t>{{/each}}</w:t></w:r></w:p>
+        </w:tc>
+      </w:tr></w:tbl>`,
+    );
+    const buf = await makeDocx(xml);
+    const result = await extractTextForPreview(buf);
+
+    expect(result.paragraphs).toEqual([
+      {
+        index: 0,
+        text: "{{#each fields}}",
+        source: "body",
+        isDirective: true,
+        directiveKind: "each",
+        directiveExpression: "fields",
+      },
+      { index: 1, text: "{{fields.label}}", source: "body" },
+      { index: 2, text: "{{fields.value}}", source: "body" },
+      {
+        index: 3,
+        text: "{{/each}}",
+        source: "body",
+        isDirective: true,
+        directiveKind: "endeach",
+        directiveExpression: "",
+      },
+    ]);
+    expect(result.charCount).toBe(
+      "{{#each fields}}{{fields.label}}{{fields.value}}{{/each}}".length,
+    );
   });
 
   test("annotates #elseif and #else directives", async () => {
