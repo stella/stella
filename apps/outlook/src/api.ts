@@ -94,14 +94,14 @@ type DirectEmailUploadDependencies = {
     workspaceId: SafeId<"workspace">,
     uploadId: SafeId<"pendingUpload">,
   ) => Promise<void>;
-  put: typeof fetch;
+  put: (url: string, init: RequestInit) => Promise<Response>;
 };
 
 const directEmailUploadDependencies: DirectEmailUploadDependencies = {
   abortReservation: async (workspaceId, uploadId) => {
     const aborted = await api
       .uploads({ workspaceId })({ uploadId })
-      .delete({}, withTimeout());
+      .abort.post({}, withTimeout());
     if (aborted.error) {
       throw toAPIError(aborted.error);
     }
