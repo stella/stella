@@ -342,7 +342,7 @@ const ALLOWS_ARCHIVED_WORKSPACE: ReadonlySet<string> = new Set([
  * also rejects Response/binary values that slip past). Carried into the
  * catalog as `returnsFileResponse`. Sweep of catalog handlers:
  *  - `secureDocumentResponse(...)` (caught by the class-guard scan):
- *    clauses.export, entities.download-zip, templates.fill,
+ *    clauses.export, contacts.export, entities.download-zip, templates.fill,
  *    templates.fill-by-id, templates.manifest, views.table-export;
  *  - raw binary via a helper: `time-entries.export-pdf` returns a `Uint8Array`
  *    through `exportPdfHandler`/`buildMinimalPdf`, invisible to the inline
@@ -353,6 +353,7 @@ const ALLOWS_ARCHIVED_WORKSPACE: ReadonlySet<string> = new Set([
  */
 const RETURNS_FILE_RESPONSE: ReadonlySet<string> = new Set([
   "clauses.export",
+  "contacts.export",
   "entities.download-zip",
   "templates.fill",
   "templates.fill-by-id",

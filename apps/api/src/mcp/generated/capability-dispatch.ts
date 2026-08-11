@@ -148,6 +148,9 @@ export const CAPABILITY_DISPATCH = {
   "contacts.delete": {
     load: async () => await import("@/api/handlers/contacts/delete"),
   },
+  "contacts.export": {
+    load: async () => await import("@/api/handlers/contacts/export"),
+  },
   "contacts.get": {
     load: async () => await import("@/api/handlers/contacts/get"),
   },

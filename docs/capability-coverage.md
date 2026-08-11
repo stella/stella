@@ -82,15 +82,16 @@ here as its CLI form). Projected from the same handler enumeration that builds
 
 ## contacts
 
-| Capability                            | Access             | Scope                 | Feature | Reachable via                                        |
-| ------------------------------------- | ------------------ | --------------------- | ------- | ---------------------------------------------------- |
-| `contacts.business-registries-lookup` | read               | stella:read           | —       | curated tool `lookup_business_registry`              |
-| `contacts.create`                     | write              | stella:contacts_write | —       | curated tool `save_contact`                          |
-| `contacts.delete`                     | write, destructive | stella:contacts_write | —       | curated tool `delete_contact`                        |
-| `contacts.get`                        | read               | stella:read           | —       | curated tool `read_contact`                          |
-| `contacts.list`                       | read               | stella:read           | —       | curated tool `list_contacts`                         |
-| `contacts.search`                     | read               | stella:read           | —       | generic invoke → `stella capability contacts search` |
-| `contacts.update`                     | write              | stella:contacts_write | —       | covered by `save_contact`                            |
+| Capability                            | Access             | Scope                 | Feature | Reachable via                                                        |
+| ------------------------------------- | ------------------ | --------------------- | ------- | -------------------------------------------------------------------- |
+| `contacts.business-registries-lookup` | read               | stella:read           | —       | curated tool `lookup_business_registry`                              |
+| `contacts.create`                     | write              | stella:contacts_write | —       | curated tool `save_contact`                                          |
+| `contacts.delete`                     | write, destructive | stella:contacts_write | —       | curated tool `delete_contact`                                        |
+| `contacts.export`                     | read               | stella:read           | —       | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
+| `contacts.get`                        | read               | stella:read           | —       | curated tool `read_contact`                                          |
+| `contacts.list`                       | read               | stella:read           | —       | curated tool `list_contacts`                                         |
+| `contacts.search`                     | read               | stella:read           | —       | generic invoke → `stella capability contacts search`                 |
+| `contacts.update`                     | write              | stella:contacts_write | —       | covered by `save_contact`                                            |
 
 ## document-types
 
@@ -508,7 +509,7 @@ mechanics, and similar), not gaps in coverage.
 | search_ui              | 5     |
 | session_token_exchange | 13    |
 | ui_navigation_state    | 6     |
-| upload_mechanics       | 9     |
+| upload_mechanics       | 12    |
 | url_preview            | 2     |
 
-Total: 119
+Total: 122
