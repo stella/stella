@@ -1769,6 +1769,14 @@ const main = async () => {
     mainRoot: gitContext.mainRoot,
   });
 
+  const portOffset =
+    parsedArgs.portOffset ??
+    (process.env["STELLA_PORT_OFFSET"]
+      ? parseIntegerValue(
+          process.env["STELLA_PORT_OFFSET"],
+          "STELLA_PORT_OFFSET",
+        )
+      : undefined);
   const infraOffset =
     parsedArgs.infraOffset ??
     (process.env["STELLA_INFRA_OFFSET"]
@@ -1806,14 +1814,7 @@ const main = async () => {
     branchName: gitContext.branchName,
     devInstance: parsedArgs.devInstance ?? process.env["STELLA_DEV_INSTANCE"],
     isWorktree: gitContext.isWorktree,
-    portOffset:
-      parsedArgs.portOffset ??
-      (process.env["STELLA_PORT_OFFSET"]
-        ? parseIntegerValue(
-            process.env["STELLA_PORT_OFFSET"],
-            "STELLA_PORT_OFFSET",
-          )
-        : undefined),
+    portOffset,
     worktreeName: path.basename(gitContext.currentRoot),
   });
   const resolvedOffset = await findFirstAvailableOffset({
