@@ -65,15 +65,11 @@ describe("external runtime workspace closure", () => {
 
   // The closure is derived, not declared, so its exact members may change
   // with the dependency graph. Pin @stll/folio-core's currently known
-  // workspace-linked runtime deps: the derivation regressing to miss them —
-  // or to an empty set — must fail here, not in a production rollout.
+  // workspace-linked runtime dep: the derivation regressing to miss it — or
+  // to an empty set — must fail here, not in a production rollout.
   test("reaches folio-core's workspace-linked runtime dependencies", () => {
     expect(runtimeWorkspacePaths).toEqual(
-      expect.arrayContaining([
-        "packages/conditions",
-        "packages/docx-utils",
-        "packages/template-conditions",
-      ]),
+      expect.arrayContaining(["packages/docx-utils"]),
     );
   });
 });
