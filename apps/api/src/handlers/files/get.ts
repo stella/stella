@@ -354,16 +354,18 @@ const pdfResponse = (buffer: ArrayBuffer, fileName: string) =>
     fileName: sanitizeFilename(fileName),
   });
 
-const streamedPdfResponse = (response: Response, fileName: string) =>
-  secureDocumentResponse({
+const streamedPdfResponse = (response: Response, fileName: string) => {
+  const contentLength = parseContentLengthHeader(
+    response.headers.get("Content-Length"),
+  );
+  return secureDocumentResponse({
     body: response.body,
-    contentLength: parseContentLengthHeader(
-      response.headers.get("Content-Length"),
-    ),
+    ...(contentLength === undefined ? {} : { contentLength }),
     contentType: PDF_MIME_TYPE,
     disposition: "inline",
     fileName: sanitizeFilename(fileName),
   });
+};
 
 export const printPdfHandler = async ({
   scopedDb,
