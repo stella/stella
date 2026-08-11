@@ -17,6 +17,13 @@ describe("pending email finalize retry", () => {
         new APIError({ message: "temporary", status: 500 }),
       ),
     ).toBe(true);
+    for (const status of [502, 503, 504]) {
+      expect(
+        shouldRetainPendingEmailUpload(
+          new APIError({ message: "gateway response", status }),
+        ),
+      ).toBe(true);
+    }
   });
 
   test("releases the upload after a terminal finalize response", () => {

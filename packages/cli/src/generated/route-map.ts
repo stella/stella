@@ -35283,8 +35283,7 @@ export const generatedRouteMap: RouteNode = {
                               type: "string",
                             },
                             mimeType: {
-                              minLength: 1,
-                              maxLength: 255,
+                              const: "message/rfc822",
                               type: "string",
                             },
                             size: {

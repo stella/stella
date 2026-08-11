@@ -61,6 +61,7 @@ import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivativ
 import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
 import { createFileKey } from "@/api/lib/files/utils";
 import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
+import { mapWithConcurrency } from "@/api/lib/map-with-concurrency";
 import { deleteS3ObjectWithSignal, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
@@ -68,6 +69,7 @@ import {
   resolveStoredEmailFileName,
   validateEmailAttachmentCount,
   validateEmailAttachmentMimeType,
+  validateEmailIngestContainer,
 } from "@/api/lib/uploads/email-ingest-policy";
 import {
   checkEntityCreateCapacityForInsert,
@@ -95,6 +97,7 @@ const FALLBACK_ATTACHMENT_NAME = "attachment";
 const NO_SUBJECT_NAME = "(No subject)";
 
 const ATTACHMENT_ENTITY_KIND = "document" as const;
+const ATTACHMENT_PREPARATION_CONCURRENCY = 4;
 const FINAL_OBJECT_CLEANUP_TIMEOUT_MS = 15_000;
 
 type EmailIngestPurposeData = Extract<
@@ -205,7 +208,10 @@ const prepareAttachment = async ({
   const mimeType = attachmentMimeType(attachment);
   const buffer = attachment.bytes;
 
-  const attachmentTypeResult = validateEmailAttachmentMimeType(mimeType);
+  const attachmentTypeResult = validateEmailAttachmentMimeType(
+    buffer,
+    mimeType,
+  );
   if (Result.isError(attachmentTypeResult)) {
     return attachmentTypeResult;
   }
@@ -307,6 +313,13 @@ export const finalizeEmailIngest = async function* ({
   claimRequestId,
   promoteTmpObject,
 }: FinalizeEmailIngestProps) {
+  const containerResult = validateEmailIngestContainer(
+    new Uint8Array(fileBuffer),
+    declaredMime,
+  );
+  if (Result.isError(containerResult)) {
+    return containerResult;
+  }
   const parsedResult = await Result.tryPromise(
     async () => await parseEmail(fileBuffer, declaredMime),
   );
@@ -367,19 +380,19 @@ export const finalizeEmailIngest = async function* ({
   // Scan and inspect every attachment before storing the original MIME file.
   // Whole-ingest rejection prevents rejected bytes from remaining recoverable
   // through the stored message object.
-  const preparedResults = await Promise.all(
-    parsed.attachments.map(
-      async (attachment, attachmentIndex) =>
-        await prepareAttachment({
-          attachment,
-          attachmentIndex,
-          messageEntityId,
-          organizationId,
-          uploadId,
-          workspaceId,
-        }),
-    ),
-  );
+  const preparedResults = await mapWithConcurrency({
+    items: parsed.attachments,
+    limit: ATTACHMENT_PREPARATION_CONCURRENCY,
+    operation: async (attachment, attachmentIndex) =>
+      await prepareAttachment({
+        attachment,
+        attachmentIndex,
+        messageEntityId,
+        organizationId,
+        uploadId,
+        workspaceId,
+      }),
+  });
   const preparationFailure = preparedResults.find(Result.isError);
   if (preparationFailure) {
     return preparationFailure;
@@ -398,6 +411,35 @@ export const finalizeEmailIngest = async function* ({
     messageFinalKey,
     ...accepted.map((attachment) => attachment.finalKey),
   ];
+
+  const recoveryRows = yield* Result.await(
+    safeDb(
+      async (tx) =>
+        // audit: skip — durable storage-recovery metadata for this claim.
+        await tx
+          .update(pendingUploads)
+          .set({
+            purposeData: { ...purposeData, recoveryObjectKeys: writtenKeys },
+          })
+          .where(
+            and(
+              eq(pendingUploads.id, uploadId),
+              eq(pendingUploads.userId, userId),
+              eq(pendingUploads.workspaceId, workspaceId),
+              eq(pendingUploads.status, "scanning"),
+              eq(pendingUploads.claimedByRequestId, claimRequestId),
+            ),
+          )
+          .returning({ id: pendingUploads.id }),
+    ),
+  );
+  if (!recoveryRows.at(0)) {
+    return finalizeErr({
+      status: 409,
+      message: "Email ingest claim was lost before storage publication",
+      rejectReason: "email-ingest-claim-lost",
+    });
+  }
 
   const cleanupFinalObjects = async (stage: string) => {
     const renewal = await renewFinalizeClaim({

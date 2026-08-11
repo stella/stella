@@ -61,6 +61,13 @@ export const extractPotentialDates = (snapshot: MailSnapshot): string[] => {
   return unique(matches.map((match) => match.trim())).slice(0, 8);
 };
 
+const draftRecipients = (snapshot: MailSnapshot): MailAddress[] => {
+  if (snapshot.mode === "read") {
+    return snapshot.from ? [snapshot.from] : [];
+  }
+  return [...snapshot.to, ...snapshot.cc, ...snapshot.bcc];
+};
+
 export const runDraftChecks = ({
   selectedWorkspaceId,
   snapshot,
@@ -71,9 +78,8 @@ export const runDraftChecks = ({
   t: Translate;
 }): DraftCheck[] => {
   const checks: DraftCheck[] = [];
-  const recipients = [...snapshot.to, ...snapshot.cc, ...snapshot.bcc];
   const externalRecipients = getExternalRecipients({
-    recipients,
+    recipients: draftRecipients(snapshot),
     userEmail: snapshot.userEmail,
   });
 

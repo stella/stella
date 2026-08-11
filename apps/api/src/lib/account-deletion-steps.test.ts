@@ -54,6 +54,30 @@ describe("pendingUploadS3KeysForDeletion", () => {
     ).not.toContainEqual(expect.stringContaining(".zip"));
   });
 
+  test("includes every durable final key for an abandoned email ingest", () => {
+    const recoveryObjectKeys = [
+      `${organizationId}/${workspaceId}/message.eml`,
+      `${organizationId}/${workspaceId}/attachment.pdf`,
+    ];
+
+    expect(
+      pendingUploadS3KeysForDeletion({
+        declaredMime: "message/rfc822",
+        id,
+        organizationId,
+        purpose: "email_ingest",
+        purposeData: {
+          type: "email_ingest",
+          propertyId: toSafeId<"property">(
+            "0198fa3d-fc8d-7000-8000-000000000007",
+          ),
+          recoveryObjectKeys,
+        },
+        workspaceId,
+      }),
+    ).toEqual(expect.arrayContaining(recoveryObjectKeys));
+  });
+
   test("locks active intents before queuing their object keys", async () => {
     const lockStrengths: string[] = [];
     const deletedUserIds: unknown[] = [];

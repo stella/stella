@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Result } from "better-result";
 
+import { OutlookError } from "@/lib/outlook-error";
 import { loadMailSnapshot, subscribeMailboxItemChanges } from "@/outlook";
 import type { MailSnapshot } from "@/types";
 
@@ -11,6 +12,7 @@ export type MailSnapshotState =
   | { message: string; type: "error" };
 
 type UseMailSnapshot = {
+  isCurrent: (itemInstanceKey: string) => boolean;
   loadLatest: () => Promise<MailSnapshot>;
   refresh: () => void;
   state: MailSnapshotState;
@@ -63,9 +65,18 @@ export const useMailSnapshot = (errorFallback: string): UseMailSnapshot => {
   }, [load]);
 
   return {
+    isCurrent: (itemInstanceKey) =>
+      itemInstanceKey === `item-${String(itemInstanceSequence.current)}`,
     loadLatest: async () => {
       const itemInstanceKey = `item-${String(itemInstanceSequence.current)}`;
+      const sequence = ++loadSequence.current;
       const snapshot = await loadMailSnapshot(itemInstanceKey);
+      if (
+        sequence !== loadSequence.current ||
+        itemInstanceKey !== `item-${String(itemInstanceSequence.current)}`
+      ) {
+        throw new OutlookError({ message: errorFallback });
+      }
       setState({ snapshot, type: "ready" });
       return snapshot;
     },

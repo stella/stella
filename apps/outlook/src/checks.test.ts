@@ -132,6 +132,7 @@ describe("runDraftChecks", () => {
     const checks = runDraftChecks({
       selectedWorkspaceId: "ws-1",
       snapshot: snapshot({
+        mode: "compose",
         to: [
           { email: "outside@external.com", name: "" },
           { email: "us@ours.com", name: "" },
@@ -151,12 +152,30 @@ describe("runDraftChecks", () => {
       selectedWorkspaceId: "ws-1",
       snapshot: snapshot({
         bcc: [{ email: "blind@external.com", name: "" }],
+        mode: "compose",
         userEmail: "us@ours.com",
       }),
       t: translator,
     });
     const external = checks.find((check) =>
       check.description.includes("blind@external.com"),
+    );
+    expect(external?.type).toBe("risk");
+  });
+
+  test("checks the actual reply recipient in read mode", () => {
+    const checks = runDraftChecks({
+      selectedWorkspaceId: "ws-1",
+      snapshot: snapshot({
+        from: { email: "sender@external.com", name: "" },
+        to: [{ email: "us@ours.com", name: "" }],
+        userEmail: "us@ours.com",
+      }),
+      t: translator,
+    });
+
+    const external = checks.find((check) =>
+      check.description.includes("sender@external.com"),
     );
     expect(external?.type).toBe("risk");
   });
