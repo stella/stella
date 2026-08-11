@@ -1,6 +1,7 @@
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import { isDocumentAst } from "@/api/lib/case-law/document-ast";
+import { canonicalDecisionDate } from "@/api/lib/dates";
 import {
   DANGEROUS_CHARS,
   sanitizeMetadata,
@@ -38,6 +39,11 @@ export const partialObservationFromMetadata = (
  * Sanitize text fields before DB insertion. Postgres rejects null bytes in
  * text columns. Keeping this at the ingestion boundary means adapters and
  * backfill jobs produce the same canonical representation.
+ *
+ * This is also where `decisionDate` is bounded: adapters normalize dates
+ * differently or not at all, and the date column accepts an impossible year
+ * as readily as a real one, so a value that cannot be a decision date is
+ * dropped here rather than at each publisher boundary.
  */
 export const sanitizeResult = (result: IngestionResult): IngestionResult => {
   const strip = (value: string | undefined): string | undefined =>
@@ -55,6 +61,15 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
     return (
       raw.replace(DECISION_TYPE_NOISE, "").trim().toLowerCase() || undefined
     );
+  };
+
+  // A listed document must survive a bad date, so an unusable value is
+  // dropped to null instead of failing the row.
+  const boundDecisionDate = (raw: string | undefined): string | undefined => {
+    if (raw === undefined) {
+      return undefined;
+    }
+    return canonicalDecisionDate(raw) ?? undefined;
   };
 
   const deepSanitize = (value: unknown, key?: string): unknown => {
@@ -134,6 +149,7 @@ export const sanitizeResult = (result: IngestionResult): IngestionResult => {
       ? collapseSpacedLetters(strip(result.fulltext) ?? "")
       : undefined,
     ecli: strip(result.ecli),
+    decisionDate: boundDecisionDate(result.decisionDate),
     decisionType: normalizeDecisionType(strip(result.decisionType)),
     sourceUrl: strip(result.sourceUrl),
     documentUrl: strip(result.documentUrl),

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   addDays,
   addUtcDays,
+  canonicalDecisionDate,
   isIsoDateString,
   parseIsoDateLocal,
 } from "./dates";
@@ -73,6 +74,80 @@ describe("parseIsoDateLocal", () => {
     expect(parseIsoDateLocal("not-a-date")).toBeNull();
     expect(parseIsoDateLocal("2024-01-01T00:00:00Z")).toBeNull();
     expect(parseIsoDateLocal("")).toBeNull();
+  });
+});
+
+describe("canonicalDecisionDate", () => {
+  test("accepts a bare calendar date unchanged", () => {
+    expect(canonicalDecisionDate("2024-03-05")).toBe("2024-03-05");
+  });
+
+  test("takes the date prefix of an ISO datetime", () => {
+    expect(canonicalDecisionDate("2024-03-05T00:00:00Z")).toBe("2024-03-05");
+    expect(canonicalDecisionDate("2024-03-05 00:00:00")).toBe("2024-03-05");
+  });
+
+  test("rejects a year below the lower bound", () => {
+    expect(canonicalDecisionDate("0001-01-01")).toBeNull();
+    expect(canonicalDecisionDate("1799-12-31")).toBeNull();
+  });
+
+  test("accepts the lower bound itself", () => {
+    expect(canonicalDecisionDate("1800-01-01")).toBe("1800-01-01");
+  });
+
+  test("accepts next year but not the one after", () => {
+    const currentYear = new Date().getUTCFullYear();
+
+    expect(canonicalDecisionDate(`${currentYear + 1}-06-15`)).toBe(
+      `${currentYear + 1}-06-15`,
+    );
+    expect(canonicalDecisionDate(`${currentYear + 2}-06-15`)).toBeNull();
+  });
+
+  test("rejects a far-future year", () => {
+    expect(canonicalDecisionDate("2944-04-30")).toBeNull();
+  });
+
+  test("rejects a day that does not exist on the calendar", () => {
+    expect(canonicalDecisionDate("2024-02-30")).toBeNull();
+  });
+
+  test("rejects a value that is not a date at all", () => {
+    expect(canonicalDecisionDate("not-a-date")).toBeNull();
+    expect(canonicalDecisionDate("05.03.2024")).toBeNull();
+    expect(canonicalDecisionDate("2024-03-05X00:00:00")).toBeNull();
+    expect(canonicalDecisionDate("")).toBeNull();
+  });
+
+  test("rejects a malformed suffix instead of taking the prefix on faith", () => {
+    // A value whose tail is not a time is not a datetime, and its first ten
+    // characters are not a date the source stated.
+    expect(canonicalDecisionDate("2024-03-05T")).toBeNull();
+    expect(canonicalDecisionDate("2024-03-05Tgarbage")).toBeNull();
+    expect(canonicalDecisionDate("2024-03-05T25:99:99Z")).toBeNull();
+    expect(canonicalDecisionDate("2024-03-05-extra")).toBeNull();
+  });
+
+  test("accepts the datetime forms sources publish", () => {
+    expect(canonicalDecisionDate("2024-03-05T14:30")).toBe("2024-03-05");
+    expect(canonicalDecisionDate("2024-03-05T14:30:59.123Z")).toBe(
+      "2024-03-05",
+    );
+    expect(canonicalDecisionDate("2024-03-05T14:30:00+02:00")).toBe(
+      "2024-03-05",
+    );
+  });
+
+  test("does not depend on the host timezone's calendar", () => {
+    // Samoa crossed the date line at the end of 2011, so 2011-12-30 never
+    // happened there in local time. A decision dated that day is still a
+    // real record, and ingestion must not accept or reject it based on
+    // where the code runs.
+    process.env.TZ = "Pacific/Apia";
+    expect(parseIsoDateLocal("2011-12-30")).toBeNull();
+
+    expect(canonicalDecisionDate("2011-12-30")).toBe("2011-12-30");
   });
 });
 

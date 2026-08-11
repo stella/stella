@@ -116,6 +116,57 @@ describe("sanitizeResult — adapter-supplied sections", () => {
   });
 });
 
+describe("sanitizeResult — decision date bounds", () => {
+  // Adapters normalize dates differently or not at all, and the column
+  // takes an impossible year as readily as a real one. A document whose
+  // date is unusable is still worth storing, so the date drops and the
+  // row survives.
+  test("drops a year outside the range a decision can carry", () => {
+    expect(
+      sanitizeResult({
+        ...baseResult(EMPTY_AST),
+        decisionDate: "2944-04-30",
+      }).decisionDate,
+    ).toBeUndefined();
+
+    expect(
+      sanitizeResult({
+        ...baseResult(EMPTY_AST),
+        decisionDate: "0001-01-01",
+      }).decisionDate,
+    ).toBeUndefined();
+  });
+
+  test("drops a day that does not exist on the calendar", () => {
+    expect(
+      sanitizeResult({
+        ...baseResult(EMPTY_AST),
+        decisionDate: "2026-02-30",
+      }).decisionDate,
+    ).toBeUndefined();
+  });
+
+  test("keeps a date the sources actually publish", () => {
+    expect(
+      sanitizeResult({
+        ...baseResult(EMPTY_AST),
+        decisionDate: "2026-04-15",
+      }).decisionDate,
+    ).toBe("2026-04-15");
+
+    expect(
+      sanitizeResult({
+        ...baseResult(EMPTY_AST),
+        decisionDate: "2026-04-15T00:00:00Z",
+      }).decisionDate,
+    ).toBe("2026-04-15");
+  });
+
+  test("leaves an absent date absent", () => {
+    expect(sanitizeResult(baseResult(EMPTY_AST)).decisionDate).toBeUndefined();
+  });
+});
+
 describe("sanitizeResult — shared partial-observation quality", () => {
   test("persists adapter-neutral quality and removes it after detail recovery", () => {
     const partial = sanitizeResult({
@@ -624,6 +675,91 @@ describe("processDecision — corpus storage off", () => {
       astS3Key: null,
       contentHash: null,
     });
+  });
+});
+
+describe("processDecision — decision date on an existing row", () => {
+  // An update omits an undefined column, so a rejected date has to be
+  // distinguishable from an unstated one all the way to the write: the
+  // first must clear whatever the row holds, the second must not.
+  const refreshedDecisionDate = async (
+    decisionDate: string | undefined,
+  ): Promise<Record<string, unknown> | undefined> => {
+    const existing = {
+      id: createSafeId<"caseLawDecision">(),
+      metadata: {},
+      sourceHash: "old-hash",
+      sourceRawS3Key: null,
+      sourceRawContentType: null,
+    };
+
+    let updated: Record<string, unknown> | undefined;
+    const scopedDb: ScopedDb = async (callback) => {
+      const tx = {
+        query: {
+          caseLawDecisions: {
+            findFirst: async () => await Promise.resolve(existing),
+          },
+        },
+        update: (table: unknown) => ({
+          set: (values: Record<string, unknown>) => {
+            if (table === caseLawDecisions) {
+              updated = values;
+            }
+            return {
+              where: () => ({
+                returning: async () => [{ id: existing.id }],
+              }),
+            };
+          },
+        }),
+        delete: () => ({ where: async () => undefined }),
+        insert: () => ({ values: async () => undefined }),
+      };
+
+      // SAFETY: the refresh path walks only these chains; anything else
+      // would throw and fail the test loudly.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      return await callback(tx as unknown as Transaction);
+    };
+
+    await processDecision({
+      input: {
+        caseNumber: "X/1/2026",
+        court: "Test Court",
+        country: "SVK",
+        language: "sk",
+        decisionDate,
+        fulltext: "Rozhodnutie o veci samej.",
+        metadata: {},
+        rawHash: "new-hash",
+        documentAst: EMPTY_AST,
+      },
+      observationOrder: 1n,
+      sourceId: createSafeId<"caseLawSource">(),
+      scopedDb,
+      observedAt: new Date("2026-07-31T12:00:00.000Z"),
+    });
+
+    return updated;
+  };
+
+  test("clears the column when the source restates an unusable date", async () => {
+    const updated = await refreshedDecisionDate("2944-04-30");
+
+    expect(updated?.["decisionDate"]).toBeNull();
+  });
+
+  test("writes a usable date", async () => {
+    const updated = await refreshedDecisionDate("2026-04-15");
+
+    expect(updated?.["decisionDate"]).toBe("2026-04-15");
+  });
+
+  test("writes nothing when the source states no date", async () => {
+    const updated = await refreshedDecisionDate(undefined);
+
+    expect(updated?.["decisionDate"]).toBeUndefined();
   });
 });
 

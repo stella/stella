@@ -186,6 +186,19 @@ type DecisionRowWriteStatus =
 /** One canonical identity plus a small, explicit set of publisher aliases. */
 const MAX_SOURCE_IDENTITY_CANDIDATES = 8;
 
+/**
+ * Log event emitted when a source states a decision date the ingestion
+ * boundary cannot accept — a non-calendar day or a year outside the range a
+ * decision can carry. Reported at WARN: the document is still stored, with
+ * no date, and the raw value is carried so the publisher's shape is
+ * recoverable without re-fetching.
+ */
+export const DECISION_DATE_OUT_OF_BOUNDS =
+  "case_law.ingestion.decision_date_out_of_bounds";
+
+/** Enough of the rejected value to identify its shape, not a payload. */
+const MAX_LOGGED_DECISION_DATE_LENGTH = 64;
+
 export const DECISION_REFRESH = {
   /**
    * Skip a decision whose source hash and metadata are unchanged: a crawl
@@ -603,6 +616,24 @@ const processDecisionAttempt = async ({
   refresh,
 }: ProcessDecisionAttemptOptions): Promise<ProcessResult> => {
   const result = sanitizeResult(input);
+  const rejectedDecisionDate =
+    result.decisionDate === undefined ? input.decisionDate : undefined;
+  if (rejectedDecisionDate !== undefined) {
+    logger.warn(DECISION_DATE_OUT_OF_BOUNDS, {
+      sourceId,
+      caseNumber: result.caseNumber,
+      decisionDate: rejectedDecisionDate.slice(
+        0,
+        MAX_LOGGED_DECISION_DATE_LENGTH,
+      ),
+    });
+  }
+  // The column needs all three states an observation can carry, and an
+  // update omits an undefined field: a usable date is written, a stated but
+  // unusable one clears the column rather than leaving in place the value it
+  // was meant to replace, and an unstated one leaves the row as it is.
+  const persistedDecisionDate =
+    rejectedDecisionDate === undefined ? result.decisionDate : null;
   const proposedDecisionId = createSafeId<"caseLawDecision">();
   const exactSourceIdentityCandidates = (() => {
     if (!result.sourceDocumentId) {
@@ -1383,7 +1414,7 @@ const processDecisionAttempt = async ({
                   language: result.language,
                   sheetNumber: result.sheetNumber,
                   languageGroupKey,
-                  decisionDate: result.decisionDate,
+                  decisionDate: persistedDecisionDate,
                   decisionType: result.decisionType,
                   sourceUrl: result.sourceUrl,
                   documentUrl: result.documentUrl,
@@ -1521,7 +1552,7 @@ const processDecisionAttempt = async ({
           country: result.country,
           language: result.language,
           languageGroupKey,
-          decisionDate: result.decisionDate,
+          decisionDate: persistedDecisionDate,
           decisionType: result.decisionType,
           ...payloadColumns,
           sourceUrl: result.sourceUrl,

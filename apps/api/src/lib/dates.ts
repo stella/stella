@@ -26,18 +26,39 @@ export const isIsoDateString = (value: string): boolean =>
  * Returns `null` for a malformed string or a day/month that does not exist
  * on the calendar, instead of silently rolling over (e.g. "2024-02-30").
  */
-export const parseIsoDateLocal = (value: string): Date | null => {
-  const match = ISO_DATE_PATTERN.exec(value);
-  const yearStr = match?.groups?.["year"];
-  const monthStr = match?.groups?.["month"];
-  const dayStr = match?.groups?.["day"];
+type IsoDateParts = {
+  year: number;
+  month: number;
+  day: number;
+};
+
+/**
+ * Numeric parts of a `YYYY-MM-DD` string, or `null` when it does not have
+ * that shape. Says nothing about whether the parts name a real calendar day;
+ * the two callers below check that in the calendar each of them means.
+ */
+const isoDateParts = (value: string): IsoDateParts | null => {
+  const groups = ISO_DATE_PATTERN.exec(value)?.groups;
+  const yearStr = groups?.["year"];
+  const monthStr = groups?.["month"];
+  const dayStr = groups?.["day"];
   if (!yearStr || !monthStr || !dayStr) {
     return null;
   }
+  return {
+    year: Number(yearStr),
+    month: Number(monthStr),
+    day: Number(dayStr),
+  };
+};
 
-  const year = Number(yearStr);
-  const month = Number(monthStr);
-  const day = Number(dayStr);
+export const parseIsoDateLocal = (value: string): Date | null => {
+  const parts = isoDateParts(value);
+  if (parts === null) {
+    return null;
+  }
+
+  const { year, month, day } = parts;
   const date = new Date(year, month - 1, day);
 
   // `Date` rolls over out-of-range parts (e.g. Feb 30 -> Mar 2) instead of
@@ -50,6 +71,89 @@ export const parseIsoDateLocal = (value: string): Date | null => {
     return null;
   }
   return date;
+};
+
+/** Length of the `YYYY-MM-DD` prefix a decision date is canonicalized to. */
+const ISO_DATE_LENGTH = 10;
+
+/**
+ * Year range a decision date may fall in. The floor predates any court whose
+ * decisions are published as machine-readable records, so a lower year is a
+ * transcription or parsing artifact rather than a real date. The ceiling is
+ * relative to the current year because a publisher may date a decision
+ * slightly ahead; a fixed upper year would go stale.
+ */
+const DECISION_YEAR_BOUNDS = {
+  min: 1800,
+  yearsAhead: 1,
+} as const;
+
+/**
+ * An ISO time of day following a date: `T` or a space, then a bounded hour
+ * and minute, optionally seconds, a fractional part and a zone offset.
+ *
+ * The time itself is never read. Matching it is how a value that merely
+ * starts like a date ("2024-03-05Tgarbage", "2024-03-05T25:99:99Z") is told
+ * apart from a real datetime, rather than having its first ten characters
+ * taken on faith.
+ */
+const ISO_TIME_SUFFIX_PATTERN =
+  /^[T ](?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d{1,9})?)?(?:Z|[+-](?:[01]\d|2[0-3]):?[0-5]\d)?$/u;
+
+/**
+ * The `YYYY-MM-DD` prefix of a bare calendar date or of a full ISO datetime,
+ * or `null` when `raw` is neither shape.
+ */
+const isoDatePrefix = (raw: string): string | null => {
+  if (raw.length === ISO_DATE_LENGTH) {
+    return raw;
+  }
+  if (!ISO_TIME_SUFFIX_PATTERN.test(raw.slice(ISO_DATE_LENGTH))) {
+    return null;
+  }
+  return raw.slice(0, ISO_DATE_LENGTH);
+};
+
+/**
+ * True when the parts name a day that exists on the Gregorian calendar.
+ *
+ * Checked with UTC fields: a local-time `Date` also rejects a day the host's
+ * timezone skipped (Pacific/Apia has no 2011-12-30, having crossed the date
+ * line), which would make the same record acceptable or not depending on
+ * where the code runs. UTC skips no days.
+ */
+const isUtcCalendarDay = ({ year, month, day }: IsoDateParts): boolean => {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+};
+
+/**
+ * Canonical `YYYY-MM-DD` form of a published decision date, or `null` when
+ * the value cannot be one.
+ *
+ * Accepts a bare calendar date or an ISO datetime, and rejects anything that
+ * is not a real calendar day (e.g. "2024-02-30") or whose year falls outside
+ * `DECISION_YEAR_BOUNDS`. A date column takes a malformed year as readily as
+ * a correct one, so callers writing to one need this in front of the write.
+ */
+export const canonicalDecisionDate = (raw: string): string | null => {
+  const candidate = isoDatePrefix(raw);
+  if (candidate === null) {
+    return null;
+  }
+  const parts = isoDateParts(candidate);
+  if (parts === null || !isUtcCalendarDay(parts)) {
+    return null;
+  }
+  const maxYear = new Date().getUTCFullYear() + DECISION_YEAR_BOUNDS.yearsAhead;
+  if (parts.year < DECISION_YEAR_BOUNDS.min || parts.year > maxYear) {
+    return null;
+  }
+  return candidate;
 };
 
 /**
