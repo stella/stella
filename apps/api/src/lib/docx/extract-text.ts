@@ -10,8 +10,8 @@ import {
 } from "@stll/folio-core/server";
 import type { BlockDirectiveKind } from "@stll/template-conditions";
 
-import type { ExtractedDocument, ExtractedParagraph, FieldMeta } from "./types";
 import { extractPreviewText } from "./extract-preview-text";
+import type { ExtractedDocument, ExtractedParagraph, FieldMeta } from "./types";
 
 // ── Directive detection ─────────────────────────────────
 
