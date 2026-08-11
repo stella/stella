@@ -1,13 +1,7 @@
 import { useRef, useState } from "react";
 import type { RefObject } from "react";
 
-import { useQueryClient } from "@tanstack/react-query";
-import {
-  createFileRoute,
-  getRouteApi,
-  Link,
-  useNavigate,
-} from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
 import {
   AlertTriangleIcon,
@@ -73,8 +67,6 @@ export const Route = createFileRoute("/_protected/contacts/import")({
   }),
   component: ContactImportStudio,
 });
-
-const protectedRouteApi = getRouteApi("/_protected");
 
 type InspectionColumn = {
   name: string;
@@ -219,11 +211,13 @@ function ContactImportStudio() {
   const t = useTranslations();
   const format = useFormatter();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const importRequestScope = protectedRouteApi.useRouteContext({
-    select: ({ user }) => ({
-      organizationId: user.activeOrganizationId,
-      userId: user.id,
+  const routeContext = Route.useRouteContext({
+    select: ({ queryClient, user }) => ({
+      importRequestScope: {
+        organizationId: user.activeOrganizationId,
+        userId: user.id,
+      },
+      queryClient,
     }),
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -312,7 +306,7 @@ function ContactImportStudio() {
       const importRequest = await resolveContactImportRequest({
         file: state.file,
         mapping: state.mapping,
-        scope: importRequestScope,
+        scope: routeContext.importRequestScope,
       });
       return { importRequest, preview };
     });
@@ -377,7 +371,9 @@ function ContactImportStudio() {
       type: "success",
     });
     clearContactImportRequest({ storageKey: state.importRequest.storageKey });
-    await queryClient.invalidateQueries({ queryKey: contactsKeys.all });
+    await routeContext.queryClient.invalidateQueries({
+      queryKey: contactsKeys.all,
+    });
     await navigate({ to: "/contacts" });
   };
 

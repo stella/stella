@@ -1,4 +1,7 @@
 -- stella-migration-safety: reviewed destructive-change - the replaced policy denied every request-role insert; this transactional migration restores it on rollback
+SET lock_timeout = '1s';--> statement-breakpoint
+SET statement_timeout = '5s';--> statement-breakpoint
+
 GRANT INSERT ON TABLE "contact_search_document_preview_passages" TO stella;--> statement-breakpoint
 
 DROP POLICY "contact_search_document_preview_passages_no_insert"
