@@ -1,5 +1,5 @@
 /* eslint-disable typescript-eslint/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
-import { panic } from "better-result";
+import { Result, panic } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -620,6 +620,28 @@ describe("cz-us buildDecision", () => {
     expect(await reconciliation.buildDecision(payload)).toEqual({
       type: "unkeyable",
     });
+  });
+
+  test("the marker the crawl stores is what makes heldness require detail", async () => {
+    installSearchMock({ rows: [servedRow], reported: 1, textStatus: 404 });
+
+    const crawled = await czUsAdapter.fetchPage(null, {});
+    const item = onlyItem(await listSlice("2024"));
+
+    // Three halves of one decision, asserted together because each alone is
+    // silently wrong. The crawl keeps the row the reconciliation refuses and
+    // marks it `isListingOnly`; the capability declares that such a row is not
+    // held. Drop the marker and the declaration filters nothing; drop the
+    // declaration and the marked row reads as held, the slice reads
+    // reconciled, and NALUS is never asked for that text again.
+    expect(Result.isOk(crawled)).toBe(true);
+    expect(
+      Result.isOk(crawled) ? crawled.value.decisions.at(0) : null,
+    ).toMatchObject({ isListingOnly: true });
+    expect(await reconciliation.buildDecision(item.payload)).toEqual({
+      type: "detail-unavailable",
+    });
+    expect(reconciliation.heldRequiresDetail).toBe(true);
   });
 
   test("survives the JSON round-trip the ledger parks payloads through", async () => {

@@ -1612,6 +1612,12 @@ export const czUsAdapter = defineSourceAdapter({
     nextSlice: czUsNextSlice,
     previousSlice: czUsPreviousSlice,
     tipWindowDays: CZ_US_TIP_WINDOW_SLICES,
+    // The crawl keeps the row `listedOnlyDecision` builds when NALUS serves no
+    // readable text, and marks it `isListingOnly`; unset, that stub would count
+    // as held and its document would never be hunted again. This source stores
+    // whole decisions by design, so a detail-less row here is always a failed
+    // fetch rather than a legitimate metadata-only state.
+    heldRequiresDetail: true,
     listSlicePage: listCzUsSlicePage,
     buildDecision: buildCzUsFromPayload,
   },
