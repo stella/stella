@@ -3,7 +3,13 @@ import type { UiLocale } from "./languages.js";
 
 export type TextDirection = "ltr" | "rtl";
 
-export const UI_LOCALE_DIRECTIONS = {
+type RtlUiLocale = "ar";
+
+type UiLocaleDirections = {
+  readonly [Locale in UiLocale]: Locale extends RtlUiLocale ? "rtl" : "ltr";
+};
+
+export const UI_LOCALE_DIRECTIONS: UiLocaleDirections = {
   en: "ltr",
   ar: "rtl",
   cs: "ltr",
@@ -17,11 +23,11 @@ export const UI_LOCALE_DIRECTIONS = {
   pl: "ltr",
   "pt-BR": "ltr",
   sk: "ltr",
-} as const satisfies Record<UiLocale, TextDirection>;
+};
 
 export const getUiLocaleDirection = (locale: UiLocale): TextDirection =>
   UI_LOCALE_DIRECTIONS[locale];
 
-export const RTL_UI_LOCALES = UI_LOCALES.filter(
+export const RTL_UI_LOCALES: UiLocale[] = UI_LOCALES.filter(
   (locale) => UI_LOCALE_DIRECTIONS[locale] === "rtl",
 );

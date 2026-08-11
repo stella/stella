@@ -258,9 +258,37 @@ describe("detect-e2e-changes", () => {
       'if [[ "$EVENT_NAME" == "workflow_dispatch" ]]',
     );
     expect(codeQuality).toContain("bun run code-check\n");
+    expect(codeQuality).not.toContain("bun run typecheck\n");
     expect(codeQuality).toContain(
       'bun run code-check:affected -- --base "origin/$BASE_REF"',
     );
+  });
+
+  test("runs the full native compiler only at the release boundary", () => {
+    const plan = workflowJob("ci-plan");
+    expect(plan).toContain(
+      `release_typecheck_required: ${githubExpression("steps.changed-files.outputs.release_typecheck_required")}`,
+    );
+    expect(plan).toContain('if [[ "$file" == "VERSION" ]]');
+    expect(plan).toContain("release_typecheck_required=true");
+
+    const releaseTypecheck = workflowJob("release-typecheck");
+    expect(releaseTypecheck).toContain(
+      "needs.ci-plan.outputs.release_typecheck_required == 'true'",
+    );
+    expect(releaseTypecheck).toContain("github.event_name == 'pull_request'");
+    expect(releaseTypecheck).toContain(
+      "run: bun run typecheck && bun run typecheck:repo",
+    );
+    expect(releaseTypecheck).toContain('TURBO_FORCE: "true"');
+
+    const result = workflowJob("ci-result");
+    expect(result).toContain("release-typecheck");
+    expect(result).toContain(
+      `RELEASE_TYPECHECK_RESULT: ${githubExpression("needs.release-typecheck.result")}`,
+    );
+    expect(result).toContain('$RELEASE_TYPECHECK_RESULT" == "failure"');
+    expect(result).toContain('$RELEASE_TYPECHECK_RESULT" == "cancelled"');
   });
 
   test("builds the production web artifact once per workflow run", () => {
