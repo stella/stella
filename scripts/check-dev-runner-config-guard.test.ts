@@ -16,7 +16,9 @@ test("exercises every configured dev-runner environment name", () => {
     ...fixture.matchAll(/process\.env\["(?<name>STELLA_[A-Z_]+)"\]/gu),
   ].map((match) => match.groups?.["name"]);
 
-  expect([...new Set(exercisedNames)].sort()).toEqual(
-    [...DEV_RUNNER_CONFIG_ENV_NAMES].sort(),
+  const compareNames = (left: string, right: string) =>
+    left.localeCompare(right);
+  expect([...new Set(exercisedNames)].sort(compareNames)).toEqual(
+    [...DEV_RUNNER_CONFIG_ENV_NAMES].sort(compareNames),
   );
 });
