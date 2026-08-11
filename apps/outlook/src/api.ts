@@ -7,13 +7,6 @@ import {
 import type { SafeId } from "@stll/api/types";
 import { toSafeId } from "@stll/api/types";
 
-import { api, withTimeout } from "@/lib/api";
-import { APIError, toAPIError } from "@/lib/api-error";
-import { buildEmlFile } from "@/lib/eml";
-import {
-  diagnosticBase,
-  ingestionDiagnostic,
-} from "@/lib/ingestion-diagnostics";
 import type {
   AbortingEmailUpload,
   FinalizingEmailUpload,
@@ -22,6 +15,13 @@ import type {
   ReservedEmailUpload,
   UploadingEmailUpload,
 } from "@/ingestion-state";
+import { api, withTimeout } from "@/lib/api";
+import { APIError, toAPIError } from "@/lib/api-error";
+import { buildEmlFile } from "@/lib/eml";
+import {
+  diagnosticBase,
+  ingestionDiagnostic,
+} from "@/lib/ingestion-diagnostics";
 import type {
   AttachmentDownloadResult,
   MailSnapshot,

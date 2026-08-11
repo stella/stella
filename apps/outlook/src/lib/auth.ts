@@ -1,5 +1,5 @@
-import { OutlookError } from "@/lib/outlook-error";
 import { getOfficeRuntime } from "@/lib/office";
+import { OutlookError } from "@/lib/outlook-error";
 
 const HANDOFF_MESSAGE_TYPE = "stella:auth";
 const DIALOG_BOOTSTRAP_PATH = "/dialog.html";

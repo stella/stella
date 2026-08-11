@@ -155,7 +155,9 @@ export const getOfficeAttachmentCapabilities = (
       status: "available",
     };
   } else {
-    list = unavailable(mailbox18 ? "api-unavailable" : "requirement-unsupported");
+    list = unavailable(
+      mailbox18 ? "api-unavailable" : "requirement-unsupported",
+    );
   }
 
   const getAttachmentContentAsync = item.getAttachmentContentAsync;
@@ -177,12 +179,10 @@ export const getOfficeAttachmentCapabilities = (
   return { content, list };
 };
 
-export const attachmentCapabilityError = (
-  capability: {
-    reason: "api-unavailable" | "requirement-unsupported";
-    status: "unavailable";
-  },
-): OutlookError =>
+export const attachmentCapabilityError = (capability: {
+  reason: "api-unavailable" | "requirement-unsupported";
+  status: "unavailable";
+}): OutlookError =>
   new OutlookError({
     code: "attachment-read-unavailable",
     message:
