@@ -2,7 +2,6 @@ import { useMemo, useRef, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 
 import {
-  queryOptions,
   useInfiniteQuery,
   useMutation,
   useQuery,
@@ -45,12 +44,14 @@ import { useAIKeyGate } from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
 import { MatterContextMenu } from "@/components/workspaces/matter-context-menu";
+import { useChatDraftMeta } from "@/features/chat/hooks/use-chat-draft-meta";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
 import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import {
   acquireChatRuntime,
   applyChatModelChange,
+  chatKeys,
   chatThreadOptions,
   groupedChatThreadsOptions,
   invalidateGroupedChatThreads,
@@ -136,47 +137,10 @@ function ChatIndex() {
   const openInspectorChat = useInspectorTabsStore((s) => s.openChat);
   const [contextMatterIds, setContextMatterIds] = useState<string[]>([]);
   const getContextMatterIds = useLatestCallback(() => contextMatterIds);
-  // Standalone, non-suspense fetch of the draft thread metadata.
-  // We deliberately don't reuse `chatThreadOptions` here because that
-  // helper instantiates a stateful `Chat<>` inside its queryFn on
-  // every miss; doing so on the chat-home render path froze the
-  // tab. We only need `webSearchAvailable` + `webSearchEnabled` +
-  // `model`, so a plain GET against the messages endpoint is enough.
-  // Key shape mirrors `chatKeys.thread` up to position 4 so
-  // `invalidateChatThread({ queryClient, threadRef })` (fired by
-  // <ChatWebSearchToggle> on every PATCH) refetches us. Without
-  // that match the toggle would flip server-side but the local
-  // `webSearchEnabled` shown by this query would stay stale.
-  const draftMetaOptions = queryOptions({
-    queryKey: [
-      "chat",
-      activeOrganizationId,
-      "thread",
-      "global",
-      draftThreadId,
-      "draftMeta",
-    ] as const,
-    staleTime: Number.POSITIVE_INFINITY,
-    queryFn: async ({ signal }) => {
-      const response = await api.chat
-        .threads({ threadId: toSafeId<"chatThread">(draftThreadId) })
-        .messages.get({
-          query: { allowMissingThread: true },
-          fetch: { signal },
-        });
-      const data = unwrapEden(response);
-      return {
-        webSearchAvailable: data.webSearchAvailable,
-        webSearchEnabled: data.webSearchEnabled,
-        model: data.model,
-        reasoningEffort: data.reasoningEffort,
-        // The draft's cache-stable context floor (system prompt + tools), so
-        // the hero meter shows the honest baseline instead of 0% before send.
-        context: data.context,
-      };
-    },
+  const { draftMeta: chatDraftMeta, draftMetaQueryKey } = useChatDraftMeta({
+    activeOrganizationId,
+    threadRef,
   });
-  const { data: chatDraftMeta } = useQuery(draftMetaOptions);
 
   // Persists the composer's Models submenu selection and gates the
   // route-handoff send below on the outcome (see `onSubmit`) so a send can
@@ -188,7 +152,7 @@ function ChatIndex() {
         model,
         reasoningEffort,
         queryClient,
-        queryKey: draftMetaOptions.queryKey,
+        queryKey: draftMetaQueryKey,
         threadId: toSafeId<"chatThread">(draftThreadId),
       });
     },
@@ -223,6 +187,7 @@ function ChatIndex() {
   useExternalSyncEffect(() => {
     const threadId = threadIdRef.current;
     if (
+      threadId === null ||
       seededDraftRef.current === threadId ||
       seedingDraftRef.current === threadId
     ) {
@@ -242,14 +207,10 @@ function ChatIndex() {
           seededDraftRef.current = threadId;
           detached(
             queryClient.invalidateQueries({
-              queryKey: [
-                "chat",
-                activeOrganizationId,
-                "thread",
-                "global",
+              queryKey: chatKeys.draftMeta(activeOrganizationId, {
+                scope: "global",
                 threadId,
-                "draftMeta",
-              ] as const,
+              }),
             }),
             "onSuccess",
           );

@@ -1,4 +1,4 @@
-import type { MyWorkItem } from "@/routes/_protected.todos/-queries";
+import type { MyWorkItem } from "@/lib/workspaces/queries/my-work";
 
 type WorkItemDates = Pick<
   MyWorkItem,

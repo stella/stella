@@ -25,11 +25,13 @@ import {
   invalidateChatThreadLists,
   installChatRuntimeCleanup,
   listChatHistoryItems,
+  matchesChatThread,
   matchesChatThreadAcrossScopes,
   mergeGroupedChatThreadPages,
   sendThreadChatMessage,
   type ChatThreadFetched,
 } from "@/features/chat/queries";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { toSafeId, type SafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
@@ -148,6 +150,46 @@ describe("chatKeys", () => {
     });
 
     expect(draftOptions.queryKey).toEqual(routedOptions.queryKey);
+  });
+});
+
+describe("thread-scoped chat keys", () => {
+  const threadId = toChatThreadId("thread-A");
+  const threadRefs = [
+    { scope: "global", threadId },
+    { scope: "workspace", workspaceId: "ws-1", threadId },
+  ] as const satisfies readonly ChatThreadRef[];
+
+  test("INVARIANT: the thread predicates match every key built on the prefix", () => {
+    for (const threadRef of threadRefs) {
+      const keys = [
+        chatKeys.thread("org_test", threadRef),
+        chatKeys.draftMeta("org_test", threadRef),
+        chatKeys.recap("org_test", threadRef, "message-1"),
+        chatKeys.suggestedPrompts("org_test", threadRef, "message-1"),
+      ];
+
+      for (const key of keys) {
+        expect(matchesChatThread(key, threadRef)).toBe(true);
+        expect(matchesChatThreadAcrossScopes(key, threadId)).toBe(true);
+      }
+    }
+  });
+
+  test("keeps the two scopes' caches apart", () => {
+    const [globalRef, workspaceRef] = threadRefs;
+    expect(
+      matchesChatThread(
+        chatKeys.draftMeta("org_test", globalRef),
+        workspaceRef,
+      ),
+    ).toBe(false);
+    expect(
+      matchesChatThread(
+        chatKeys.draftMeta("org_test", workspaceRef),
+        globalRef,
+      ),
+    ).toBe(false);
   });
 });
 

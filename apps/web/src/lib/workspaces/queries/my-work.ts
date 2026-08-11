@@ -12,7 +12,10 @@ export const MY_WORK_QUEUES = [
 ] as const;
 export type MyWorkQueue = (typeof MY_WORK_QUEUES)[number];
 
-const myWorkKeys = {
+// Exported so the task surfaces that mutate a task (matter task panel, todos
+// list) invalidate the same root the queues are keyed on instead of retyping
+// it. The module lives outside the todos route slice for exactly that reason.
+export const myWorkKeys = {
   all: ["my-work"] as const,
   queue: (queue: MyWorkQueue, asOf: string) =>
     [...myWorkKeys.all, queue, asOf] as const,

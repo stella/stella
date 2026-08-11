@@ -42,6 +42,8 @@ type ClausesListKey = {
   limit?: number | undefined;
 };
 
+const FILL_DISCOVER_SEGMENT = "fill-discover";
+
 export const knowledgeKeys = {
   skills: {
     root: agentSkillsQueryRoot(),
@@ -111,7 +113,7 @@ export const knowledgeKeys = {
     // must not be part of the cache identity.
     fillDiscover: (organizationId: string, templateId: string) => [
       ...knowledgeKeys.templates.detail(organizationId, templateId),
-      "fill-discover",
+      FILL_DISCOVER_SEGMENT,
     ],
   },
   templateCategories: {
@@ -138,6 +140,15 @@ export const knowledgeKeys = {
   },
   clauseCategories: {
     all: (organizationId: string) => ["clause-categories", organizationId],
+  },
+  // The settings editor and the playbook editor's Type picker read the same
+  // taxonomy, so the editor's mutations invalidate `root` and refresh both.
+  documentTypes: {
+    root: ["document-types"],
+    all: (organizationId: string) => [
+      ...knowledgeKeys.documentTypes.root,
+      organizationId,
+    ],
   },
   playbooks: {
     all: (organizationId: string) => ["playbooks", organizationId],
@@ -189,6 +200,16 @@ export const knowledgeKeys = {
     ],
   },
 };
+
+/**
+ * Whether a key is a `templates.fillDiscover` entry. The template editor
+ * invalidates the templates subtree while excluding this one (it must refetch
+ * only after the new detail lands), and reads the marker the factory appends
+ * rather than restating it.
+ */
+export const isTemplateFillDiscoverKey = (
+  queryKey: readonly unknown[],
+): boolean => queryKey.at(-1) === FILL_DISCOVER_SEGMENT;
 
 // ── Template queries ────────────────────────────────
 
@@ -568,7 +589,7 @@ export const playbooksOptions = (
 // switch doesn't serve a stale taxonomy.
 export const documentTypesOptions = (organizationId: string) =>
   queryOptions({
-    queryKey: ["document-types", organizationId] as const,
+    queryKey: knowledgeKeys.documentTypes.all(organizationId),
     queryFn: async ({ signal }) => {
       const response = await api["document-types"].get({ fetch: { signal } });
 

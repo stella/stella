@@ -112,6 +112,9 @@ const fixtureRuleOverrides = [
     "security-guards/no-unscoped-user-query",
     "security-guards/require-secure-document-response",
   ]),
+  fixtureRuleOverride("require-query-key-factory.fixture.ts", [
+    "require-query-key-factory/require-query-key-factory",
+  ]),
   fixtureRuleOverride("stella-toast.fixture.ts", ["stella-toast/stella-toast"]),
   fixtureRuleOverride("suppression-hygiene.fixture.ts", [
     "suppression-hygiene/no-foreign-directive",
@@ -554,6 +557,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-pagination-cursor-schema.ts",
     "./.oxlint-plugins/no-truncated-timestamp-comparison.ts",
     "./.oxlint-plugins/no-spread-input-in-query-key.ts",
+    "./.oxlint-plugins/require-query-key-factory.ts",
     "./.oxlint-plugins/no-unsafe-inner-html.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
     "./.oxlint-plugins/no-static-devtools-import.ts",
@@ -1073,6 +1077,17 @@ export default defineConfig({
       files: ["apps/web/src/**/*.{ts,tsx}"],
       rules: {
         "no-legacy-entity-route/no-legacy-entity-route": "error",
+      },
+    },
+    {
+      // Cache invalidation must go through the per-feature key factories:
+      // a hand-typed key or an inline positional predicate keeps compiling
+      // after the factory's shape moves, and silently matches nothing.
+      // Tests may pin a key's wire shape, so they state literals directly.
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      excludeFiles: ["apps/web/src/**/*.{test,spec}.{ts,tsx}"],
+      rules: {
+        "require-query-key-factory/require-query-key-factory": "error",
       },
     },
     {

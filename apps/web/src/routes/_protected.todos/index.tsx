@@ -57,12 +57,9 @@ import {
   ensureRouteQueryData,
 } from "@/lib/react-query";
 import { workspacesRouteOptions } from "@/lib/workspaces/queries";
+import type { MyWorkItem, MyWorkQueue } from "@/lib/workspaces/queries/my-work";
+import { myWorkKeys, myWorkOptions } from "@/lib/workspaces/queries/my-work";
 import { LegacyTodosPage } from "@/routes/_protected.todos/-legacy-page";
-import type {
-  MyWorkItem,
-  MyWorkQueue,
-} from "@/routes/_protected.todos/-queries";
-import { myWorkOptions } from "@/routes/_protected.todos/-queries";
 import { getDisplayedWorkDate } from "@/routes/_protected.todos/-task-row.logic";
 
 const protectedRouteApi = getRouteApi("/_protected");
@@ -189,7 +186,7 @@ function MyWorkPage() {
     });
 
     const entityId = unwrapEden(response).entityId;
-    await queryClient.invalidateQueries({ queryKey: ["my-work"] });
+    await queryClient.invalidateQueries({ queryKey: myWorkKeys.all });
 
     await navigate({
       to: "/workspaces/$workspaceId",

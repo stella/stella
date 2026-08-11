@@ -28,7 +28,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
-import { documentTypesOptions } from "@/lib/knowledge/queries";
+import { documentTypesOptions, knowledgeKeys } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
 import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
@@ -42,10 +42,9 @@ type DocumentType = {
   sortOrder: number;
 };
 
-// Shared across the settings list and the playbook editor's Type picker (both
-// key their cache on `["document-types", ...]`), so a prefix invalidation
-// refreshes wherever the taxonomy is shown.
-const invalidateDocumentTypes = "document-types";
+// Shared across the settings list and the playbook editor's Type picker, so
+// invalidating the factory's root refreshes wherever the taxonomy is shown.
+const documentTypesInvalidationKey = knowledgeKeys.documentTypes.root;
 
 export const DocumentTypesCard = () => {
   const t = useTranslations();
@@ -62,7 +61,7 @@ export const DocumentTypesCard = () => {
   const createMutation = useSettingsMutation({
     mutationFn: async (label: string) =>
       unwrapEden(await api["document-types"].post({ label })),
-    invalidate: [invalidateDocumentTypes],
+    invalidate: documentTypesInvalidationKey,
     errorToast: {
       title: t("errors.actionFailed"),
       description: t("errors.actionFailed"),
@@ -73,7 +72,7 @@ export const DocumentTypesCard = () => {
   const reorderMutation = useSettingsMutation({
     mutationFn: async (orderedIds: SafeId<"documentType">[]) =>
       unwrapEden(await api["document-types"].reorder.post({ orderedIds })),
-    invalidate: [invalidateDocumentTypes],
+    invalidate: documentTypesInvalidationKey,
     invalidateOn: "settled",
     errorToast: { title: t("errors.actionFailed") },
   });
@@ -217,7 +216,7 @@ const DocumentTypeRow = ({ type, onReorder }: DocumentTypeRowProps) => {
           label,
         }),
       ),
-    invalidate: [invalidateDocumentTypes],
+    invalidate: documentTypesInvalidationKey,
     errorToast: {
       title: t("errors.actionFailed"),
       description: t("errors.actionFailed"),
@@ -230,7 +229,7 @@ const DocumentTypeRow = ({ type, onReorder }: DocumentTypeRowProps) => {
       unwrapEden(
         await api["document-types"]({ documentTypeId: type.id }).delete(),
       ),
-    invalidate: [invalidateDocumentTypes],
+    invalidate: documentTypesInvalidationKey,
     // Surfaces the API's "in use by N playbook(s)" guard message.
     errorToast: {
       title: t("settings.organization.documentTypes.deleteFailed"),
