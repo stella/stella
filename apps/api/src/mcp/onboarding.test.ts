@@ -8,12 +8,6 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 const captureErrorMock = mock();
-const analyticsCaptureMock = mock();
-const analyticsFlushMock = mock(async () => undefined);
-const getAnalyticsMock = mock(() => ({
-  capture: analyticsCaptureMock,
-  flush: analyticsFlushMock,
-}));
 const searchDecisionsHandlerMock = mock();
 const readDecisionHandlerMock = mock();
 const APP_BASE_URL = env.FRONTEND_URL.replace(/\/$/u, "");
@@ -21,7 +15,6 @@ const APP_BASE_URL = env.FRONTEND_URL.replace(/\/$/u, "");
 void mock.module("@/api/lib/analytics/capture", () => ({
   captureError: captureErrorMock,
   captureRequestError: captureErrorMock,
-  getAnalytics: getAnalyticsMock,
 }));
 
 void mock.module("@/api/handlers/case-law/decisions/search", () => ({

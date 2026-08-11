@@ -90,12 +90,6 @@ const anonymizeTextFieldsMock = mock();
 const loadAnonymizationGazetteerEntriesMock = mock();
 const decryptContentMock = mock();
 const captureErrorMock = mock();
-const analyticsCaptureMock = mock();
-const analyticsFlushMock = mock(async () => undefined);
-const getAnalyticsMock = mock(() => ({
-  capture: analyticsCaptureMock,
-  flush: analyticsFlushMock,
-}));
 const searchAcrossMattersExecute = mock();
 const readContentAcrossMattersExecute = mock();
 const readContactExecute = mock();
@@ -204,7 +198,6 @@ const normalizeAnonymizationBlacklistEntriesMock = (
 void mock.module("@/api/lib/analytics/capture", () => ({
   captureError: captureErrorMock,
   captureRequestError: captureErrorMock,
-  getAnalytics: getAnalyticsMock,
 }));
 
 void mock.module("@/api/lib/content-encryption", () => ({

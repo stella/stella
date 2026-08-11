@@ -19,7 +19,6 @@ const createTimeEntryHandlerMock = mock();
 void mock.module("@/api/lib/analytics/capture", () => ({
   captureError: captureErrorMock,
   captureRequestError: captureErrorMock,
-  getAnalytics: () => ({ capture: mock(), flush: mock(async () => undefined) }),
 }));
 
 // Stub the backing time-entry create handler so the tool site receives a chosen

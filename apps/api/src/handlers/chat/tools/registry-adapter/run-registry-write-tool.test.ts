@@ -14,7 +14,6 @@ const captureErrorMock = mock();
 void mock.module("@/api/lib/analytics/capture", () => ({
   captureError: captureErrorMock,
   captureRequestError: captureErrorMock,
-  getAnalytics: mock(() => ({ capture: mock(), flush: mock() })),
 }));
 
 // Gate FEATURE_TIME_BILLING off (every other feature stays enabled) so the

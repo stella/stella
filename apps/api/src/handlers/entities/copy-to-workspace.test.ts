@@ -50,8 +50,6 @@ const captureErrorMock = mock(() => undefined);
 void mock.module("@/api/lib/analytics/capture", () => ({
   captureError: captureErrorMock,
   captureRequestError: captureErrorMock,
-  getAnalytics: () => ({ capture: mock(() => undefined) }),
-  isLocalPostHogDebugEnabled: () => false,
 }));
 
 const syncWorkspaceSearchActivityMock = mock(async () => {});
