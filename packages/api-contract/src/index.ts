@@ -136,6 +136,21 @@ export {
   toFolioCollabRoomName,
 } from "./folio-collab";
 export {
+  OUTLOOK_HOST_VERSION_PATTERN,
+  OUTLOOK_INGESTION_HOSTS,
+  OUTLOOK_INGESTION_OUTCOMES,
+  OUTLOOK_INGESTION_PLATFORMS,
+  OUTLOOK_INGESTION_RETRY_STAGES,
+  OUTLOOK_MAILBOX_REQUIREMENT_SET,
+} from "./outlook-ingestion";
+export type {
+  OutlookIngestionDiagnostic,
+  OutlookIngestionHost,
+  OutlookIngestionOutcome,
+  OutlookIngestionPlatform,
+  OutlookIngestionRetryStage,
+} from "./outlook-ingestion";
+export {
   DESKTOP_EDIT_FILE_TYPES,
   DESKTOP_EDIT_FILE_TYPE_CONFIG,
   desktopEditFileTypeForMimeType,

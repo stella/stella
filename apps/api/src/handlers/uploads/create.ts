@@ -22,6 +22,10 @@ import {
   authorizeUploadPurpose,
   uploadRoutePermission,
 } from "@/api/handlers/uploads/permissions";
+import {
+  captureOutlookIngestion,
+  outlookIngestionDiagnosticSchema,
+} from "@/api/handlers/uploads/outlook-ingestion-diagnostics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
@@ -87,6 +91,7 @@ const emailIngestPresignBodySchema = t.Object({
   purpose: t.Literal("email_ingest"),
   propertyId: tSafeId("property"),
   parentId: t.Optional(t.Nullable(tSafeId("entity"))),
+  diagnostic: t.Optional(outlookIngestionDiagnosticSchema),
   ...baseFileMetadataSchema,
   mimeType: t.Literal(EML_MIME_TYPE),
 });
@@ -342,6 +347,19 @@ const presignUpload = createSafeHandler(
           message: entityCreateWriteErrorMessage(writeResult.status),
         }),
       );
+    }
+
+    if (purposeBody.purpose === "email_ingest") {
+      captureOutlookIngestion({
+        diagnostic: purposeBody.diagnostic,
+        durableState: "pending",
+        operation: "reserve",
+        organizationId: session.activeOrganizationId,
+        outcome: "in_progress",
+        retryStage: "upload",
+        userId: user.id,
+        workspaceId,
+      });
     }
 
     return Result.ok({

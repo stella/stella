@@ -31,6 +31,10 @@ import {
   authorizeUploadPurpose,
   uploadRoutePermission,
 } from "@/api/handlers/uploads/permissions";
+import {
+  captureOutlookIngestion,
+  outlookIngestionDiagnosticSchema,
+} from "@/api/handlers/uploads/outlook-ingestion-diagnostics";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -59,6 +63,18 @@ const finalizeParamsSchema = t.Object({
   uploadId: tSafeId("pendingUpload"),
 });
 
+const finalizeBodySchema = t.Optional(
+  t.Object(
+    {
+      diagnostic: t.Optional(outlookIngestionDiagnosticSchema),
+      queryKey: t.Optional(
+        t.Array(t.String({ maxLength: 128 }), { maxItems: 8 }),
+      ),
+    },
+    { additionalProperties: false },
+  ),
+);
+
 const config = {
   description:
     "Step 3 of 3 of the file-upload flow: finalize an upload whose bytes have " +
@@ -76,6 +92,7 @@ const config = {
   permissions: uploadRoutePermission,
   access: "write",
   mcp: { type: "capability", reason: "file_transport" },
+  body: finalizeBodySchema,
   params: finalizeParamsSchema,
 } satisfies HandlerConfig;
 
@@ -84,6 +101,7 @@ type ClaimedRow = typeof pendingUploads.$inferSelect;
 const finalizeUpload = createSafeHandler(
   config,
   async function* ({
+    body,
     safeDb,
     session,
     workspaceId,
@@ -118,6 +136,30 @@ const finalizeUpload = createSafeHandler(
     if (Result.isError(authorization)) {
       return Result.err(authorization.error);
     }
+
+    const capture = (
+      durableState: string,
+      outcome:
+        | "complete"
+        | "in_progress"
+        | "retryable_failure"
+        | "terminal_failure",
+      retryStage: "finalize" | "none",
+    ) => {
+      if (pending.purpose !== "email_ingest") {
+        return;
+      }
+      captureOutlookIngestion({
+        diagnostic: body?.diagnostic,
+        durableState,
+        operation: "finalize",
+        organizationId: session.activeOrganizationId,
+        outcome,
+        retryStage,
+        userId: user.id,
+        workspaceId,
+      });
+    };
 
     // 1. Claim — atomic transition into `scanning`. Re-claimable
     //    if a previous holder either died (status='scanning' AND
@@ -176,9 +218,11 @@ const finalizeUpload = createSafeHandler(
         );
       }
       if (existing.status === "finalized" && existing.finalizedResult) {
+        capture("finalized", "complete", "none");
         return Result.ok({ finalizedResult: existing.finalizedResult });
       }
       if (existing.status === "rejected") {
+        capture("rejected", "terminal_failure", "none");
         return Result.err(
           new HandlerError({
             status: 422,
@@ -239,10 +283,12 @@ const finalizeUpload = createSafeHandler(
         }),
       );
       if (expiredRows.at(0)) {
+        capture("rejected", "terminal_failure", "none");
         return Result.err(
           new HandlerError({ status: 422, message: "Upload URL expired" }),
         );
       }
+      capture("scanning", "in_progress", "finalize");
       return Result.err(
         new HandlerError({
           status: 409,
@@ -306,11 +352,19 @@ const finalizeUpload = createSafeHandler(
           stage: "tmp-cleanup-after-reject",
         });
       }
+      capture(
+        terminalStatus,
+        terminalStatus === "failed"
+          ? "retryable_failure"
+          : "terminal_failure",
+        terminalStatus === "failed" ? "finalize" : "none",
+      );
       return Result.err(
         new HandlerError({ status: error.status, message: error.message }),
       );
     }
 
+    capture("finalized", "complete", "none");
     return Result.ok({ finalizedResult: finalizeResult.value.finalizedResult });
   },
 );

@@ -6,6 +6,7 @@ import presignUpload from "@/api/handlers/uploads/create";
 import abortUpload from "@/api/handlers/uploads/delete";
 import entityCreateTree from "@/api/handlers/uploads/entity-create-tree";
 import preflightEntityCreate from "@/api/handlers/uploads/preflight-entity-create";
+import reconcileUpload from "@/api/handlers/uploads/reconcile";
 import finalizeUpload from "@/api/handlers/uploads/update";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
@@ -42,7 +43,10 @@ const entityUploadRealtimeUpdates = workspaceResourceSetUpdates([
  *   POST /uploads/:workspaceId/:uploadId/abort
  *        → { ok: true }
  *
- * All four share the legacy `upload` rate-limit budget — they
+ *   POST /uploads/:workspaceId/:uploadId/reconcile
+ *        → { state, ...stateData } // email_ingest only
+ *
+ * All routes share the legacy `upload` rate-limit budget: they
  * collectively represent one "upload" worth of API capacity.
  * Semantic resource updates run after entity tree creation and finalize so
  * entity and file projections refresh after durable writes.
@@ -80,11 +84,18 @@ export const uploadsRoute = new Elysia({
     permissions: entityCreateTree.config.permissions,
   })
   .post("/:uploadId/finalize", finalizeUpload.handler, {
+    body: finalizeUpload.config.body,
     params: finalizeUpload.config.params,
     resourceSetUpdated: entityUploadRealtimeUpdates,
     permissions: finalizeUpload.config.permissions,
   })
   .post("/:uploadId/abort", abortUpload.handler, {
+    body: abortUpload.config.body,
     params: abortUpload.config.params,
     permissions: abortUpload.config.permissions,
+  })
+  .post("/:uploadId/reconcile", reconcileUpload.handler, {
+    body: reconcileUpload.config.body,
+    params: reconcileUpload.config.params,
+    permissions: reconcileUpload.config.permissions,
   });

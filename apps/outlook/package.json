@@ -11,7 +11,9 @@
     "format": "oxfmt .",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware apps/outlook",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/outlook",
-    "test": "bun test src",
+    "probe:deployment": "bun scripts/probe-deployment.ts",
+    "serve": "bun scripts/serve.ts",
+    "test": "bun test src scripts",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit"
   },
   "dependencies": {
@@ -33,9 +35,10 @@
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
     "@tailwindcss/cli": "catalog:",
-    "@types/bun": "catalog:",
+    "@types/office-js": "^1.0.604",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
+    "bun-types": "catalog:",
     "libxml2-wasm": "^0.7.1",
     "tailwindcss": "catalog:"
   },

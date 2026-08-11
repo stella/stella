@@ -19,6 +19,10 @@ import {
   authorizeUploadPurpose,
   uploadRoutePermission,
 } from "@/api/handlers/uploads/permissions";
+import {
+  captureOutlookIngestion,
+  outlookIngestionDiagnosticSchema,
+} from "@/api/handlers/uploads/outlook-ingestion-diagnostics";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -32,6 +36,13 @@ const abortParamsSchema = t.Object({
   workspaceId: tSafeId("workspace"),
   uploadId: tSafeId("pendingUpload"),
 });
+
+const abortBodySchema = t.Optional(
+  t.Object(
+    { diagnostic: t.Optional(outlookIngestionDiagnosticSchema) },
+    { additionalProperties: false },
+  ),
+);
 
 const config = {
   description:
@@ -47,12 +58,21 @@ const config = {
   permissions: uploadRoutePermission,
   access: "write",
   mcp: { type: "capability", reason: "file_transport" },
+  body: abortBodySchema,
   params: abortParamsSchema,
 } satisfies HandlerConfig;
 
 const abortUpload = createSafeHandler(
   config,
-  async function* ({ safeDb, session, workspaceId, user, memberRole, params }) {
+  async function* ({
+    body,
+    safeDb,
+    session,
+    workspaceId,
+    user,
+    memberRole,
+    params,
+  }) {
     const uploadId = params.uploadId;
 
     const existing = yield* Result.await(
@@ -78,7 +98,27 @@ const abortUpload = createSafeHandler(
     if (Result.isError(authorization)) {
       return Result.err(authorization.error);
     }
+    const capture = (
+      durableState: string,
+      outcome: "complete" | "in_progress" | "terminal_failure",
+      retryStage: "abort" | "none",
+    ) => {
+      if (existing.purpose !== "email_ingest") {
+        return;
+      }
+      captureOutlookIngestion({
+        diagnostic: body?.diagnostic,
+        durableState,
+        operation: "abort",
+        organizationId: session.activeOrganizationId,
+        outcome,
+        retryStage,
+        userId: user.id,
+        workspaceId,
+      });
+    };
     if (existing.status === "finalized") {
+      capture("finalized", "complete", "none");
       return Result.err(
         new HandlerError({
           status: 409,
@@ -87,6 +127,7 @@ const abortUpload = createSafeHandler(
       );
     }
     if (existing.status === "rejected") {
+      capture("rejected", "terminal_failure", "none");
       return Result.ok({ ok: true as const });
     }
 
@@ -152,8 +193,10 @@ const abortUpload = createSafeHandler(
         );
       }
       if (latest.status === "rejected") {
+        capture("rejected", "terminal_failure", "none");
         return Result.ok({ ok: true as const });
       }
+      capture(latest.status, "in_progress", "abort");
       return Result.err(
         new HandlerError({
           status: 409,
@@ -185,6 +228,7 @@ const abortUpload = createSafeHandler(
         );
     }
 
+    capture("rejected", "terminal_failure", "none");
     return Result.ok({ ok: true as const });
   },
 );

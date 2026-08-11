@@ -13,6 +13,7 @@ const PROD_DEFAULTS = {
 declare global {
   var STELLA_API_ORIGIN: string | undefined;
   var STELLA_BUILD_ENV: string | undefined;
+  var STELLA_OUTLOOK_VERSION: string | undefined;
   var STELLA_TASKPANE_ORIGIN: string | undefined;
   var STELLA_WEB_ORIGIN: string | undefined;
 }
@@ -30,6 +31,10 @@ export const env = {
     defaults.apiBaseUrl,
   ),
   buildEnvironment: BUILD_ENV,
+  releaseVersion: readBuildString(
+    globalThis.STELLA_OUTLOOK_VERSION,
+    "0.0.0.0",
+  ),
   signInOrigin: readBuildString(
     globalThis.STELLA_WEB_ORIGIN,
     defaults.stellaWebUrl,

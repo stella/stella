@@ -1,5 +1,16 @@
 import { env } from "@/env";
 import { OutlookError } from "@/lib/outlook-error";
+import {
+  attachmentCapabilityError,
+  fromOfficeAsync,
+  getCurrentOfficeItem,
+  getOfficeAttachmentCapabilities,
+  getOfficeRuntime,
+  isOfficeAsyncValue,
+  subscribeMailboxItemChanges as subscribeOfficeMailboxItemChanges,
+  waitForOffice as waitForOfficeRuntime,
+} from "@/lib/office";
+import type { OfficeAsyncCallback, OfficeItem } from "@/lib/office";
 import type {
   AttachmentDownloadResult,
   MailAddress,
@@ -7,46 +18,19 @@ import type {
   OutlookAttachment,
 } from "@/types";
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
-
-const isAsyncValue = <T>(value: unknown): value is Office.AsyncValue<T> =>
-  isRecord(value) && typeof value["getAsync"] === "function";
-
-const isOfficeRuntime = (value: unknown): value is typeof Office =>
-  isRecord(value) &&
-  typeof value["onReady"] === "function" &&
-  isRecord(value["context"]);
-
-const getOffice = (): typeof Office | null => {
-  const value: unknown = Reflect.get(globalThis, "Office");
-  return isOfficeRuntime(value) ? value : null;
-};
-
-const fromAsync = async <T>(
-  invoke: (callback: Office.AsyncCallback<T>) => void,
-): Promise<T> =>
-  await new Promise((resolve, reject) => {
-    invoke((result) => {
-      if (result.status === "succeeded") {
-        resolve(result.value);
-        return;
-      }
-
-      reject(new Error(result.error?.message ?? "Office request failed"));
-    });
-  });
-
 const readMaybeAsync = async <T>(
-  value: Office.AsyncValue<T> | T | undefined,
+  value:
+    | T
+    | { getAsync: (callback: OfficeAsyncCallback<T>) => void }
+    | undefined,
   fallback: T,
 ): Promise<T> => {
   if (value === undefined) {
     return fallback;
   }
 
-  if (isAsyncValue<T>(value)) {
-    return await fromAsync((callback) => value.getAsync(callback));
+  if (isOfficeAsyncValue<T>(value)) {
+    return await fromOfficeAsync((callback) => value.getAsync(callback));
   }
 
   return value;
@@ -79,15 +63,14 @@ const normalizeAddresses = (
 };
 
 const readAddressList = async (
-  value:
-    | Office.AsyncValue<Office.EmailAddressDetails[]>
-    | Office.EmailAddressDetails[]
-    | undefined,
+  value: OfficeItem["to"] | OfficeItem["cc"] | OfficeItem["bcc"],
 ): Promise<MailAddress[]> =>
-  normalizeAddresses(await readMaybeAsync(value, []));
+  normalizeAddresses(
+    await readMaybeAsync<Office.EmailAddressDetails[]>(value, []),
+  );
 
 const readBody = async (
-  item: Office.MailboxItem,
+  item: OfficeItem,
 ): Promise<{ bodyHtml: string; bodyText: string }> => {
   if (!item.body) {
     return { bodyHtml: "", bodyText: "" };
@@ -95,8 +78,8 @@ const readBody = async (
   const body = item.body;
 
   const [bodyText, bodyHtml] = await Promise.all([
-    fromAsync<string>((callback) => body.getAsync("text", callback)),
-    fromAsync<string>((callback) => body.getAsync("html", callback)),
+    fromOfficeAsync<string>((callback) => body.getAsync("text", callback)),
+    fromOfficeAsync<string>((callback) => body.getAsync("html", callback)),
   ]);
 
   return {
@@ -105,9 +88,13 @@ const readBody = async (
   };
 };
 
-const normalizeAttachment = (
-  attachment: Office.AttachmentDetails,
-): OutlookAttachment => ({
+const normalizeAttachment = (attachment: {
+  contentType?: string;
+  id: string;
+  isInline: boolean;
+  name: string;
+  size?: number;
+}): OutlookAttachment => ({
   contentType: attachment.contentType ?? null,
   id: attachment.id,
   isInline: attachment.isInline ?? false,
@@ -116,34 +103,26 @@ const normalizeAttachment = (
 });
 
 const readAttachments = async (
-  item: Office.MailboxItem,
+  item: OfficeItem,
 ): Promise<OutlookAttachment[]> => {
-  if (Array.isArray(item.attachments)) {
-    return item.attachments.map(normalizeAttachment);
+  const capability = getOfficeAttachmentCapabilities(item).list;
+  if (capability.status === "unavailable") {
+    throw attachmentCapabilityError(capability);
   }
 
-  const getAttachmentsAsync = item.getAttachmentsAsync;
-  if (!getAttachmentsAsync) {
-    return [];
+  try {
+    return (await capability.read()).map(normalizeAttachment);
+  } catch (cause) {
+    throw new OutlookError({
+      cause,
+      code: "attachment-read-unavailable",
+      message: "Outlook could not read the message attachments.",
+    });
   }
-
-  const attachments = await fromAsync<Office.AttachmentDetails[]>((callback) =>
-    getAttachmentsAsync.call(item, callback),
-  );
-
-  return attachments.map(normalizeAttachment);
 };
 
-const getCurrentItem = (): Office.MailboxItem | null => {
-  const office = getOffice();
-  if (!office) {
-    return null;
-  }
-  return office.context.mailbox.item ?? null;
-};
-
-const getMode = (item: Office.MailboxItem): MailSnapshot["mode"] => {
-  if (isAsyncValue<string>(item.subject)) {
+const getMode = (item: OfficeItem): MailSnapshot["mode"] => {
+  if (isOfficeAsyncValue(item.subject)) {
     return "compose";
   }
   return "read";
@@ -157,34 +136,17 @@ const toIsoString = (value: Date | undefined): string | null => {
 };
 
 export const waitForOffice = async (): Promise<void> => {
-  const office = getOffice();
-  if (!office) {
-    return;
-  }
-  await office.onReady();
+  await waitForOfficeRuntime();
 };
 
 export const subscribeMailboxItemChanges = (
   subscriber: () => void,
-): (() => void) => {
-  const office = getOffice();
-  const mailbox = office?.context.mailbox;
-  if (!office || !mailbox?.addHandlerAsync) {
-    return () => undefined;
-  }
-
-  const handler = () => subscriber();
-  mailbox.addHandlerAsync(office.EventType.ItemChanged, handler);
-
-  return () => {
-    mailbox.removeHandlerAsync?.(office.EventType.ItemChanged, { handler });
-  };
-};
+): (() => void) => subscribeOfficeMailboxItemChanges(subscriber);
 
 export const loadMailSnapshot = async (
   itemInstanceKey: string,
 ): Promise<MailSnapshot> => {
-  const office = getOffice();
+  const office = getOfficeRuntime();
   if (!office) {
     if (env.buildEnvironment === "dev") {
       return createBrowserSampleSnapshot(itemInstanceKey);
@@ -195,7 +157,7 @@ export const loadMailSnapshot = async (
     });
   }
 
-  const item = office.context.mailbox.item ?? null;
+  const item = getCurrentOfficeItem();
   if (!item) {
     throw new OutlookError({
       message: "No Outlook message is selected.",
@@ -206,7 +168,12 @@ export const loadMailSnapshot = async (
     item.subject,
     item.normalizedSubject ?? "",
   );
-  const from = normalizeAddress(await readMaybeAsync(item.from, undefined));
+  const from = normalizeAddress(
+    await readMaybeAsync<Office.EmailAddressDetails | undefined>(
+      item.from,
+      undefined,
+    ),
+  );
   const [to, cc, bcc, body, attachments] = await Promise.all([
     readAddressList(item.to),
     readAddressList(item.cc),
@@ -230,7 +197,7 @@ export const loadMailSnapshot = async (
     sentAt: toIsoString(item.dateTimeCreated ?? item.dateTimeModified),
     subject: subject.trim() || "(No subject)",
     to,
-    userEmail: getOffice()?.context.mailbox.userProfile?.emailAddress ?? null,
+    userEmail: office.context.mailbox.userProfile?.emailAddress ?? null,
   };
 };
 
@@ -262,26 +229,35 @@ export const downloadAttachment = async (
     };
   }
 
-  const item = getCurrentItem();
-  const getAttachmentContentAsync = item?.getAttachmentContentAsync;
-  if (!item || !getAttachmentContentAsync) {
-    return {
-      attachmentId: attachment.id,
-      reason: `${attachment.name}: attachment download is not supported by this Outlook host`,
-      type: "skipped",
-    };
+  const item = getCurrentOfficeItem();
+  if (!item) {
+    throw new OutlookError({
+      code: "attachment-read-unavailable",
+      message: "No Outlook message is selected for attachment download.",
+    });
   }
 
-  const content = await fromAsync<Office.AttachmentContent>((callback) =>
-    getAttachmentContentAsync.call(item, attachment.id, callback),
-  );
+  const capability = getOfficeAttachmentCapabilities(item).content;
+  if (capability.status === "unavailable") {
+    throw attachmentCapabilityError(capability);
+  }
+
+  let content: { content: string; format: string };
+  try {
+    content = await capability.read(attachment.id);
+  } catch (cause) {
+    throw new OutlookError({
+      cause,
+      code: "attachment-read-unavailable",
+      message: `${attachment.name}: Outlook could not read this attachment.`,
+    });
+  }
 
   if (content.format !== "base64") {
-    return {
-      attachmentId: attachment.id,
-      reason: `${attachment.name}: ${content.format} attachments are not uploaded in V1`,
-      type: "skipped",
-    };
+    throw new OutlookError({
+      code: "attachment-read-unavailable",
+      message: `${attachment.name}: Outlook returned an unsupported attachment format.`,
+    });
   }
 
   return {
@@ -311,7 +287,7 @@ const textToHtml = (value: string): string =>
 export type DraftPlacement = "clipboard" | "composeBody" | "replyForm";
 
 export const placeDraft = async (draft: string): Promise<DraftPlacement> => {
-  const item = getCurrentItem();
+  const item = getCurrentOfficeItem();
   if (!item) {
     await navigator.clipboard.writeText(draft);
     return "clipboard";
@@ -319,7 +295,7 @@ export const placeDraft = async (draft: string): Promise<DraftPlacement> => {
 
   if (item.body && getMode(item) === "compose") {
     const body = item.body;
-    await fromAsync<undefined>((callback) =>
+    await fromOfficeAsync<void>((callback) =>
       body.prependAsync(draft, { coercionType: "text" }, callback),
     );
     return "composeBody";

@@ -99,7 +99,7 @@ describe("direct email upload reservation", () => {
       expect(result.error).toBeInstanceOf(PendingUploadCleanupError);
       if (result.error instanceof PendingUploadCleanupError) {
         expect(result.error.pendingUpload).toEqual({
-          type: "abort",
+          type: "aborting",
           uploadId: directUpload.uploadId,
           workspaceId: directUpload.workspaceId,
         });
