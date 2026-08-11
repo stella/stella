@@ -12,6 +12,7 @@ import { invalidateContactCaches } from "@/routes/_protected.contacts/-component
 import {
   buildNumericContactPayload,
   EDITABLE_FIELD_POLICY,
+  getEditableFieldInputAttributes,
   isNumericEditableField,
 } from "@/routes/_protected.contacts/-components/editable-row.logic";
 import type {
@@ -42,6 +43,7 @@ export const EditableRow = ({
   });
 
   const policy = EDITABLE_FIELD_POLICY[field];
+  const inputAttributes = getEditableFieldInputAttributes(field);
 
   const rename = useInlineRename({
     initial: value ?? "",
@@ -54,9 +56,9 @@ export const EditableRow = ({
     // optional rows such as prefix, tax ID, currency, default
     // hourly rate, or payment terms back to empty.
     validate: () => null,
-    onCommit: (trimmed) => {
+    onCommit: (trimmed, { setError }) => {
       if (
-        policy.inputType === "text" &&
+        policy.valueKind === "text" &&
         policy.maxLength !== null &&
         trimmed.length > policy.maxLength
       ) {
@@ -71,6 +73,9 @@ export const EditableRow = ({
       if (isNumericEditableField(field)) {
         const result = buildNumericContactPayload(field, trimmed);
         if (result.status === "invalid") {
+          const message = t("errors.actionFailed");
+          stellaToast.add({ title: message, type: "error" });
+          setError(message);
           return;
         }
         payload = result.payload;
@@ -118,11 +123,12 @@ export const EditableRow = ({
           <span className="text-muted-foreground w-32 shrink-0">{label}</span>
         )}
         <Input
+          {...inputAttributes}
           autoFocus
           className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-sm shadow-none outline-none focus-visible:ring-0"
-          dir={policy.inputType === "number" ? undefined : "auto"}
+          dir={policy.valueKind === "nonNegativeInteger" ? undefined : "auto"}
           maxLength={
-            policy.inputType === "text"
+            policy.valueKind === "text"
               ? (policy.maxLength ?? undefined)
               : undefined
           }
@@ -139,7 +145,6 @@ export const EditableRow = ({
               e.currentTarget.blur();
             }
           }}
-          type={policy.inputType}
           value={rename.state.draft}
         />
       </div>

@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildNumericContactPayload } from "@/routes/_protected.contacts/-components/editable-row.logic";
+import {
+  buildNumericContactPayload,
+  getEditableFieldInputAttributes,
+} from "@/routes/_protected.contacts/-components/editable-row.logic";
 
 describe("contact numeric editable fields", () => {
   test("builds exact payloads for valid integers and clearing", () => {
@@ -47,6 +50,17 @@ describe("contact numeric editable fields", () => {
 
     expect(buildNumericContactPayload("paymentTermDays", "366")).toEqual({
       status: "invalid",
+    });
+  });
+
+  test("preserves raw numeric tokens for validation", () => {
+    expect(getEditableFieldInputAttributes("defaultHourlyRate")).toEqual({
+      type: "text",
+      inputMode: "numeric",
+    });
+    expect(getEditableFieldInputAttributes("paymentTermDays")).toEqual({
+      type: "text",
+      inputMode: "numeric",
     });
   });
 });

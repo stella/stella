@@ -1,27 +1,27 @@
 import type { EditableField } from "@/routes/_protected.contacts/-components/types";
 
 type EditableFieldPolicy =
-  | { inputType: "text"; maxLength: number | null }
-  | { inputType: "number"; maximum: number | null };
+  | { valueKind: "text"; maxLength: number | null }
+  | { valueKind: "nonNegativeInteger"; maximum: number | null };
 
 export const EDITABLE_FIELD_POLICY = {
-  prefix: { inputType: "text", maxLength: 32 },
-  firstName: { inputType: "text", maxLength: 256 },
-  middleName: { inputType: "text", maxLength: 256 },
-  lastName: { inputType: "text", maxLength: 256 },
-  suffix: { inputType: "text", maxLength: 32 },
-  organizationName: { inputType: "text", maxLength: 512 },
-  displayName: { inputType: "text", maxLength: 512 },
-  notes: { inputType: "text", maxLength: null },
-  registrationNumber: { inputType: "text", maxLength: 64 },
-  taxId: { inputType: "text", maxLength: 64 },
-  defaultHourlyRate: { inputType: "number", maximum: null },
-  currency: { inputType: "text", maxLength: 3 },
-  paymentTermDays: { inputType: "number", maximum: 365 },
+  prefix: { valueKind: "text", maxLength: 32 },
+  firstName: { valueKind: "text", maxLength: 256 },
+  middleName: { valueKind: "text", maxLength: 256 },
+  lastName: { valueKind: "text", maxLength: 256 },
+  suffix: { valueKind: "text", maxLength: 32 },
+  organizationName: { valueKind: "text", maxLength: 512 },
+  displayName: { valueKind: "text", maxLength: 512 },
+  notes: { valueKind: "text", maxLength: null },
+  registrationNumber: { valueKind: "text", maxLength: 64 },
+  taxId: { valueKind: "text", maxLength: 64 },
+  defaultHourlyRate: { valueKind: "nonNegativeInteger", maximum: null },
+  currency: { valueKind: "text", maxLength: 3 },
+  paymentTermDays: { valueKind: "nonNegativeInteger", maximum: 365 },
 } as const satisfies Record<EditableField, EditableFieldPolicy>;
 
 type NumericEditableField = {
-  [Field in EditableField]: (typeof EDITABLE_FIELD_POLICY)[Field]["inputType"] extends "number"
+  [Field in EditableField]: (typeof EDITABLE_FIELD_POLICY)[Field]["valueKind"] extends "nonNegativeInteger"
     ? Field
     : never;
 }[EditableField];
@@ -29,7 +29,14 @@ type NumericEditableField = {
 export const isNumericEditableField = (
   field: EditableField,
 ): field is NumericEditableField =>
-  EDITABLE_FIELD_POLICY[field].inputType === "number";
+  EDITABLE_FIELD_POLICY[field].valueKind === "nonNegativeInteger";
+
+export const getEditableFieldInputAttributes = (field: EditableField) => {
+  if (EDITABLE_FIELD_POLICY[field].valueKind === "nonNegativeInteger") {
+    return { type: "text", inputMode: "numeric" } as const;
+  }
+  return { type: "text" } as const;
+};
 
 type NumericContactPayload =
   | { defaultHourlyRate: number | null }
