@@ -13,7 +13,10 @@ import {
 import type {
   EmptyAst,
   IngestionResult,
-  SliceCoverage,
+  ListingIdentity,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   INGESTION_USER_AGENT,
@@ -23,10 +26,11 @@ import {
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
-import { addUtcDays } from "@/api/lib/dates";
+import { addUtcDays, isoCalendarDay, toUtcDateString } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import { logger } from "@/api/lib/observability/logger";
+import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * Czech Supreme Administrative Court adapter.
@@ -44,45 +48,67 @@ import { logger } from "@/api/lib/observability/logger";
  *
  * Cursor format: "YYYY-MM-DD:page" where page is 0-indexed.
  * A null cursor starts 30 days ago at page 0.
+ *
+ * The search is addressed by decision date and answers with the court's own
+ * record count for it, which is what makes this source reconcilable: a day can
+ * be listed on its own, without the crawl cursor ever reaching it. See
+ * `reconciliation` at the bottom of this file.
  */
 
 const BASE_URL = "https://vyhledavac.nssoud.cz";
-const RESULTS_PER_PAGE = 20;
+
+/** The only language this source publishes; half of the stored identity. */
+const CZ_NSS_LANGUAGE = "cs";
 
 /**
- * How many records the court says its own search matched.
+ * The court every row is stored under.
  *
- * The count is grouped ("1 234"), so digit runs may be separated by
- * spaces. `(?:\s\d+)*` keeps the separator and the digits disjoint; a
- * `[\d\s]*` class would overlap the `\s+` that follows, letting the
- * engine re-split every trailing space and costing time quadratic in the
- * length of the page.
- *
- * Read from a date-filtered search this is the day's expected total, which
- * is what makes a partial crawl detectable rather than silent.
+ * Coarser than the portal, which also carries the regional and city
+ * administrative courts whose judgments the NSS reviews (a single day's
+ * listing mixes `1 Az 4/2026` of the Městský soud v Praze with `52 Af 4/2026`
+ * of the Krajský soud v Hradci Králové). Recording that distinction is a
+ * source-metadata migration, not something the listing walk may decide.
  */
-const RESULT_COUNT_PATTERNS = [
-  /Nalezeno\s+(?<count>\d+(?:\s\d+)*)\s+záznam/iu,
-  /Celkem\s+(?<count>\d+(?:\s\d+)*)\s+záznam/iu,
-  /(?<!\d)(?<count>\d+(?:\s\d+)*)\s+výsledk/iu,
-  /resCount[^>]*>(?<count>\d[\d\s]*)</iu,
-  /myResCount[^>]*>(?<count>\d[\d\s]*)</iu,
-  /pocetZaznamu[^>]*>(?<count>\d[\d\s]*)</iu,
-];
+const CZ_NSS_COURT = "Nejvyšší správní soud";
 
-const reportedResultCount = (html: string): number | null => {
-  for (const pattern of RESULT_COUNT_PATTERNS) {
-    const match = pattern.exec(html);
-    const raw = match?.groups?.["count"];
-    if (raw === undefined) {
-      continue;
-    }
-    const parsed = Number.parseInt(raw.replace(/\s/gu, ""), 10);
-    if (!Number.isNaN(parsed) && parsed > 0) {
-      return parsed;
-    }
+/**
+ * Results the portal renders per page, matching the page size its own
+ * infinite-scroll script requests. Read from the live search rather than
+ * assumed: a day-filtered search stating 50 records renders 40 rows inline and
+ * serves the remaining 10 as the next page.
+ */
+export const CZ_NSS_RESULTS_PER_PAGE = 40;
+
+/**
+ * How many records the court says its own search matched, as the results page
+ * states it: `<h6>Počet nalezených záznamů: 50</h6>`.
+ *
+ * Anchored on the label's ASCII-safe stem and the colon that precedes the
+ * number, because the page mixes literal Czech text with HTML entities and
+ * only the stem is stable under both. The `{0,20}` bound keeps the label span
+ * finite, and `[^:<]` stops it crossing into another tag or another colon.
+ *
+ * The count is grouped ("1 234"), so digit runs may be separated by spaces.
+ * `(?:\s\d+)*` keeps the separator and the digits disjoint; a `[\d\s]*` class
+ * would overlap the `\s+` that follows, letting the engine re-split every
+ * trailing space and costing time quadratic in the length of the page.
+ */
+const RESULT_COUNT_PATTERN = /nalezen[^:<]{0,20}:\s*(?<count>\d+(?:\s\d+)*)/iu;
+
+/**
+ * The count the page states, or `null` where it states none.
+ *
+ * Zero is an answer, not an absence: a day the court matched nothing for says
+ * so, and callers that must tell an empty slice from an unreadable page depend
+ * on the difference.
+ */
+const statedResultCount = (html: string): number | null => {
+  const raw = RESULT_COUNT_PATTERN.exec(html)?.groups?.["count"];
+  if (raw === undefined) {
+    return null;
   }
-  return null;
+  const parsed = Number.parseInt(raw.replace(/\s/gu, ""), 10);
+  return Number.isNaN(parsed) ? null : parsed;
 };
 
 /** Default lookback when no cursor is provided. */
@@ -147,24 +173,56 @@ const extractAntiforgeryToken = (html: string): string | undefined =>
   extractHiddenField(html, "__RequestVerificationToken");
 
 /**
- * Extract the currParams value from the search results page.
- * This is a URL-encoded string that the server needs for
- * pagination via MyResTRowsCont.
+ * Decode the `\uXXXX` escapes a JavaScript string literal carries.
+ *
+ * The results page hands its pagination state to `infiniteScroll.js` inside
+ * single-quoted literals in which every double quote is escaped. The browser
+ * posts the decoded value; anything else posts a query the server does not
+ * recognise and answers with an empty body, which reads as a finished day.
  */
-const extractCurrParams = (html: string): string | undefined => {
-  // currParams is passed to the JavaScript pagination function
-  const match = /currParams\s*[:=]\s*["'](?<value>[^"']+)["']/u.exec(html);
-  const value = match?.groups?.["value"];
-  if (value) {
-    try {
-      return decodeURIComponent(value);
-    } catch {
-      return value;
-    }
-  }
+const unescapeJsStringLiteral = (value: string): string =>
+  value.replace(/\\u(?<hex>[0-9a-fA-F]{4})/gu, (_match, hex: string) =>
+    String.fromCodePoint(Number.parseInt(hex, 16)),
+  );
 
-  // Fallback: look for it as a hidden field
-  return extractHiddenField(html, "currParams");
+/** Read a `var name = '...';` initializer out of the page's inline script. */
+const extractScriptString = (
+  html: string,
+  name: string,
+): string | undefined => {
+  const match = new RegExp(
+    `var\\s+${name}\\s*=\\s*'(?<value>[^']*)'`,
+    "u",
+  ).exec(html);
+  const value = match?.groups?.["value"];
+  return value === undefined ? undefined : unescapeJsStringLiteral(value);
+};
+
+/**
+ * Everything `/Home/MyResTRowsCont` needs to serve the next page of a search.
+ *
+ * The field names are the ones `infiniteScroll.js` posts, and the whole query
+ * travels in `conditions`: the endpoint reconstructs the search from the body
+ * rather than from session state, so a page can be asked for without replaying
+ * the search that first produced it.
+ */
+type ListingContinuation = {
+  /** `currParams`: the search conditions, including the date range. */
+  conditions: string;
+  /** `currViewId`: which result view the rows are rendered in. */
+  viewId: string;
+  /** `currSort`: the ORDER BY the first page was rendered with. */
+  order: string;
+};
+
+const extractContinuation = (html: string): ListingContinuation | undefined => {
+  const conditions = extractScriptString(html, "currParams");
+  const viewId = extractScriptString(html, "currViewId");
+  const order = extractScriptString(html, "currSort");
+  if (conditions === undefined || viewId === undefined || order === undefined) {
+    return undefined;
+  }
+  return { conditions, viewId, order };
 };
 
 /**
@@ -242,7 +300,14 @@ const todayIso = (): string => {
   return iso ?? "1970-01-01";
 };
 
-type ParsedRow = {
+/**
+ * One row of the portal's own results table.
+ *
+ * Flat and JSON-serializable on purpose: the reconciliation loop parks a
+ * listed item verbatim and replays it into `buildDecision` days later, so
+ * anything a row carries has to survive a round trip through JSONB.
+ */
+export type ParsedRow = {
   caseNumber: string;
   decisionDate: string | undefined;
   decisionType: string | undefined;
@@ -257,8 +322,12 @@ type ParsedRow = {
  *
  * The 2025 redesign renders results as <tbody> blocks
  * with citation <a title="Citace: ... čj. X"> elements.
+ *
+ * Exported so the crawl, the listing walk and their tests read one parser:
+ * a second copy of these patterns would certify itself rather than the
+ * adapter.
  */
-const parseResultRows = (html: string): ParsedRow[] => {
+export const parseResultRows = (html: string): ParsedRow[] => {
   const rows: ParsedRow[] = [];
 
   const tbodyPattern = /<tbody>(?<block>[\s\S]*?)<\/tbody>/giu;
@@ -374,7 +443,7 @@ const fetchDecisionContent = async (
         const parsed = parseNssDecisionHtml({
           caseNumber: row.caseNumber,
           ecli: detail.ecli,
-          court: "Nejvyšší správní soud",
+          court: CZ_NSS_COURT,
           decisionDate: (() => {
             if (detail.decisionDate) {
               return parseCeDate(detail.decisionDate);
@@ -561,9 +630,9 @@ const rowToResult = (
   return {
     caseNumber: row.caseNumber,
     ecli: detail.ecli,
-    court: "Nejvyšší správní soud",
+    court: CZ_NSS_COURT,
     country: "CZE",
-    language: "cs",
+    language: CZ_NSS_LANGUAGE,
     decisionDate: (() => {
       if (detail.decisionDate) {
         return parseCeDate(detail.decisionDate);
@@ -581,7 +650,7 @@ const rowToResult = (
     documentUrl: row.documentUrl,
     metadata: {
       caseNumber: row.caseNumber,
-      court: "Nejvyšší správní soud" as const,
+      court: CZ_NSS_COURT,
       ecli: detail.ecli,
       judge: detail.judge,
       senate: detail.senate,
@@ -682,12 +751,6 @@ const invalidateSession = () => {
   cachedSession = null;
 };
 
-/**
- * Execute a search for a specific date by submitting the
- * form to /Home/Index with the date range set to one day.
- *
- * Returns the results HTML and the currParams for pagination.
- */
 /** Date field paths in the vyhledavaciSekce form model. */
 const DATE_FROM_FIELD =
   "vyhledavaciSekce[1].vyhledavaciPodminka[0]" +
@@ -696,11 +759,29 @@ const DATE_TO_FIELD =
   "vyhledavaciSekce[1].vyhledavaciPodminka[0]" +
   ".vyhledavaciPodminkaHodnota[0].HodnotaDatumACasDo";
 
+/**
+ * What one day-filtered search answered with.
+ *
+ * `statedCount` is the court's own record count for the day and `null` where
+ * the page states none — the difference between a day that holds nothing and a
+ * page that is not a results page at all.
+ */
+type SearchResult = {
+  html: string;
+  continuation: ListingContinuation | undefined;
+  statedCount: number | null;
+};
+
+/**
+ * Execute a search for a specific date by submitting the form to /Home/Index
+ * with the date range set to one day. The response carries the first page of
+ * results inline, plus the state the remaining pages are requested with.
+ */
 const executeSearch = async (
   session: SessionState,
   date: string,
   signal: AbortSignal,
-): Promise<{ html: string; currParams: string | undefined }> => {
+): Promise<SearchResult> => {
   const czDate = formatCzDate(parseCursorDate(date));
 
   const formData = new URLSearchParams();
@@ -744,27 +825,42 @@ const executeSearch = async (
   }
 
   const html = await response.text();
-  const currParams = extractCurrParams(html);
 
-  return { html, currParams };
+  return {
+    html,
+    continuation: extractContinuation(html),
+    statedCount: statedResultCount(html),
+  };
+};
+
+type FetchResultPageOptions = {
+  session: SessionState;
+  continuation: ListingContinuation;
+  /** The date being searched; error context only. */
+  date: string;
+  /** 0-indexed page within the day. */
+  page: number;
+  signal: AbortSignal;
 };
 
 /**
- * Fetch a specific page of results using the currParams
- * obtained from the initial search.
- *
- * @param date - The date being searched (for error context)
+ * Fetch one page of results beyond the first, exactly as the portal's own
+ * infinite scroll does: the field names, and the whole search query in the
+ * body. The endpoint answers a body-only request, so a page is reachable
+ * without the session that first ran the search.
  */
-const fetchResultPage = async (
-  session: SessionState,
-  currParams: string,
-  date: string,
-  page: number,
-  signal: AbortSignal,
-): Promise<string> => {
+const fetchResultPage = async ({
+  continuation,
+  date,
+  page,
+  session,
+  signal,
+}: FetchResultPageOptions): Promise<string> => {
   const formData = new URLSearchParams();
-  formData.set("currParams", currParams);
-  formData.set("page", String(page));
+  formData.set("vyhledavaciPodminky", continuation.conditions);
+  formData.set("zobrazeniVysledkuId", continuation.viewId);
+  formData.set("pageNum", String(page));
+  formData.set("resultOrder", continuation.order);
 
   const response = await fetchWithTimeout(`${BASE_URL}/Home/MyResTRowsCont`, {
     method: "POST",
@@ -791,6 +887,333 @@ const fetchResultPage = async (
   }
 
   return await response.text();
+};
+
+// ── Shared build path ────────────────────────────────────
+
+const EMPTY_CONTENT: DecisionContent = {
+  fulltext: undefined,
+  documentAst: undefined,
+  sourceRaw: undefined,
+};
+
+/**
+ * What building one listed row produced.
+ *
+ * `detail-unavailable` still carries the decision the listing alone describes,
+ * because the two callers dispose of it differently: the crawl's cursor moves
+ * past this document either way, so a listing-only row is worth more to it
+ * than nothing, while the reconciliation must refuse it — a detail-less row
+ * would make the identity held and take the document out of every later
+ * reconciliation.
+ */
+export type CzNssBuildResult =
+  | { type: "built"; decision: IngestionResult }
+  | { type: "detail-unavailable"; decision: IngestionResult };
+
+type BuildCzNssDecisionOptions = {
+  row: ParsedRow;
+  session: SessionState;
+  signal: AbortSignal;
+};
+
+/**
+ * Build one decision from a result row, reading the court's detail page and
+ * document for it. Shared by the crawl and the reconciliation walk so neither
+ * can parse or enrich a row differently from the other.
+ */
+export const buildCzNssDecision = async ({
+  row,
+  session,
+  signal,
+}: BuildCzNssDecisionOptions): Promise<CzNssBuildResult> => {
+  const { documentId } = row;
+  if (documentId === undefined || documentId.length === 0) {
+    // The row names no document, so nothing can be read for it — now or on
+    // any later attempt. Not `unkeyable`: the docket is there and the ingest
+    // would store it, which is exactly why the reconciliation must not.
+    return {
+      type: "detail-unavailable",
+      decision: rowToResult(row, EMPTY_CONTENT, EMPTY_DETAIL),
+    };
+  }
+
+  const detail = await fetchDetailMetadata(documentId, session, signal);
+  const content = await fetchDecisionContent(
+    documentId,
+    row,
+    detail,
+    session,
+    signal,
+  );
+  const decision = rowToResult(row, content, detail);
+
+  // Both document endpoints answered with nothing usable. The metadata row is
+  // still a decision to the crawl; to the reconciliation it is a document that
+  // has not been read yet.
+  return content.sourceRaw === undefined && content.fulltext === undefined
+    ? { type: "detail-unavailable", decision }
+    : { type: "built", decision };
+};
+
+// ── Reconciliation ───────────────────────────────────────
+
+/**
+ * Earliest decision date the portal publishes, and so the oldest slice the
+ * historical sweep walks back to.
+ *
+ * Determined from the source itself rather than from the court's founding
+ * date: the NSS took up its work on 1 January 2003, but the portal states no
+ * records at all for any range ending 3 February 2003, and four for this day.
+ */
+export const CZ_NSS_FIRST_SLICE = "2003-02-04";
+
+/**
+ * Days near the tip that the reconciliation re-walks on a fast cadence.
+ *
+ * A slice is the decision date, not the date the portal published it, and the
+ * portal posts a decision some time after it is handed down. So the tip window
+ * is where the newest dates fill in, and a fortnight keeps the fast lane a
+ * fixed, small amount of work.
+ *
+ * What that does NOT cover, stated plainly rather than assumed away: a
+ * decision published more than this window after its decision date lands in a
+ * slice the loop has already walked and recorded complete. The ledger's
+ * standing re-check only revisits rows recorded short, and the historical
+ * sweep only reaches slices never surveyed, so neither returns to it; the
+ * crawl cannot either, since its date cursor is forward-only. Closing that
+ * needs a bounded periodic resurvey of settled slices in
+ * `reconciliation-plan.ts`, which is engine-level and applies to every
+ * date-sliced source, not something this adapter can decide for itself.
+ * Widening the window here would only move the boundary, not remove it.
+ */
+const CZ_NSS_TIP_WINDOW_DAYS = 14;
+
+/**
+ * Ceiling for one listing request when the loop supplies no signal. The engine
+ * always does; this only keeps a direct caller from hanging on the court.
+ */
+const CZ_NSS_LISTING_TIMEOUT_MS = 60_000;
+
+/**
+ * The identity the ingest would store for this listing row.
+ *
+ * The docket and the language, never the portal's `documentId`: this adapter
+ * emits no `sourceDocumentId`, so every row it has ever written is keyed on
+ * `(caseNumber, language)` with a null document id. Keying the listing on the
+ * id the portal does supply would match no held row at all, and the loop would
+ * read the entire archive as missing.
+ *
+ * The cost of that is real. The portal carries the regional and city
+ * administrative courts alongside the NSS, and their dockets are numbered per
+ * court, so one `(caseNumber, "cs")` can name decisions of different courts;
+ * the sheet number that would separate two rulings in the same file is also
+ * dropped from the docket, since a citation names the docket alone. Both
+ * collapse several published documents onto one stored row. Recovering them is
+ * an identity migration of the source (adopt the portal's document id as
+ * `sourceDocumentId`, with the deterministic `/DokumentDetail/Index/{id}` URL
+ * as the `legacySourceUrls` hint that attaches it to the right null-id row),
+ * not something a reconciliation pass may decide on its own: until the stored
+ * rows carry that id, this is what "held" means.
+ */
+export const czNssListingIdentity = (row: ParsedRow): ListingIdentity =>
+  row.caseNumber.length === 0
+    ? { type: "unidentifiable" }
+    : {
+        type: "case-number",
+        caseNumber: row.caseNumber,
+        language: CZ_NSS_LANGUAGE,
+      };
+
+/**
+ * A reconciliation slice for this source is one UTC decision day, which is
+ * exactly what the portal's search is addressed by — the crawl already queries
+ * it a day at a time. `YYYY-MM-DD` sorts lexicographically in chronological
+ * order, which is the ordering the ledger relies on.
+ */
+const czNssDayStart = (slice: string): Date => {
+  const day = isoCalendarDay(slice);
+  if (day === null || day !== slice) {
+    panic(`cz-nss slice is not a UTC calendar day: ${slice}`);
+  }
+  return new Date(`${day}T00:00:00.000Z`);
+};
+
+const czNssStepSlice = (slice: string, days: number): string =>
+  toUtcDateString(addUtcDays(czNssDayStart(slice), days));
+
+const czNssNextSlice = (slice: string): string | null => {
+  const next = czNssStepSlice(slice, 1);
+  return next > todayIso() ? null : next;
+};
+
+const czNssPreviousSlice = (slice: string): string | null => {
+  const previous = czNssStepSlice(slice, -1);
+  return previous < CZ_NSS_FIRST_SLICE ? null : previous;
+};
+
+/**
+ * One page of the portal's own listing for a decision day, with no detail or
+ * document fetches.
+ *
+ * Self-sufficient by construction: it establishes or reuses the session and
+ * replays the day's search itself, because the loop calls it one page at a
+ * time and carries nothing between the calls.
+ *
+ * A failed request is thrown, never flattened into an empty page. The crawl
+ * can afford to read an unreadable page as "nothing here" because a cursor
+ * that moves on can be walked again; a ledger row cannot, since an outage
+ * recorded as an empty day makes that day settled and it is never revisited.
+ * So only the court's own count answers what a day holds: `Počet nalezených
+ * záznamů: 0` is an empty slice, and everything else — a non-2xx, a session
+ * page served instead of results, a results page stating no count — is an
+ * error the engine retries on a later pass.
+ */
+const listCzNssSlicePage = async ({
+  page,
+  signal,
+  slice,
+}: ReconciliationSlicePageOptions): Promise<ReconciliationSlicePage> => {
+  // Refuse a slice this adapter cannot have produced before it reaches the
+  // date formatter, which would silently query some other day for it.
+  czNssDayStart(slice);
+  const effectiveSignal =
+    signal ?? AbortSignal.timeout(CZ_NSS_LISTING_TIMEOUT_MS);
+
+  const session = await getSession(effectiveSignal);
+  const search = await executeSearch(session, slice, effectiveSignal);
+
+  if (search.statedCount === null) {
+    // A 200 that is not a results page is what an expired ASP.NET session
+    // looks like: the portal re-renders the unsubmitted form. Dropping the
+    // session turns one expiry into one failed request instead of ten minutes
+    // of them.
+    invalidateSession();
+    throw new AdapterFetchError({
+      message: `NSS stated no result count for ${slice}`,
+      adapterKey: ADAPTER_KEYS.CZ_NSS,
+      cursor: slice,
+    });
+  }
+
+  const firstPageRows = parseResultRows(search.html);
+  if (search.statedCount === 0) {
+    if (firstPageRows.length > 0) {
+      // The page contradicts itself, so neither number can be trusted for a
+      // ledger row. Refused rather than resolved in either direction.
+      throw new AdapterFetchError({
+        message: `NSS stated no records for ${slice} while rendering ${firstPageRows.length}`,
+        adapterKey: ADAPTER_KEYS.CZ_NSS,
+        cursor: slice,
+      });
+    }
+    return { items: [], totalPages: 0 };
+  }
+
+  const { continuation } = search;
+  if (continuation === undefined) {
+    // Same reasoning as the missing count: a results page always carries the
+    // state its own infinite scroll pages with, so a page without it is not
+    // one the current session produced.
+    invalidateSession();
+    throw new AdapterFetchError({
+      message: `NSS results for ${slice} carried no pagination state`,
+      adapterKey: ADAPTER_KEYS.CZ_NSS,
+      cursor: slice,
+    });
+  }
+
+  const rows =
+    page === 0
+      ? firstPageRows
+      : parseResultRows(
+          await fetchResultPage({
+            continuation,
+            date: slice,
+            page,
+            session,
+            signal: effectiveSignal,
+          }),
+        );
+
+  // How many rows this page must carry, from the count the portal stated for
+  // the whole day. A short page is refused rather than returned, because the
+  // engine measures a slice by the identities the walk produced: a page that
+  // quietly came back empty (the continuation endpoint answers 200 with no
+  // body when it does not recognise the query) or that a changed table markup
+  // parsed only part of would undercount `reported`, and an undercounted
+  // `reported` reads as a fully collected day and settles it forever. Left
+  // unwritten, the day keeps its previous row and the failure surfaces in the
+  // loop's tally.
+  const expectedRows = Math.min(
+    CZ_NSS_RESULTS_PER_PAGE,
+    search.statedCount - page * CZ_NSS_RESULTS_PER_PAGE,
+  );
+  if (rows.length < expectedRows) {
+    throw new AdapterFetchError({
+      message: `NSS page ${page} of ${slice} carried ${rows.length} of the ${expectedRows} rows its stated count of ${search.statedCount} requires`,
+      adapterKey: ADAPTER_KEYS.CZ_NSS,
+      cursor: slice,
+    });
+  }
+
+  return {
+    items: rows.map((row) => ({
+      identity: czNssListingIdentity(row),
+      payload: row,
+    })),
+    totalPages: Math.ceil(search.statedCount / CZ_NSS_RESULTS_PER_PAGE),
+  };
+};
+
+const isOptionalString = (value: unknown): value is string | undefined =>
+  value === undefined || typeof value === "string";
+
+/**
+ * Validate a payload the loop stored verbatim.
+ *
+ * Every field is checked, because the row is this adapter's whole listing
+ * observation: a parked payload that no longer matches what the parser
+ * produces has to be reported as unbuildable instead of parsed on faith. The
+ * optional fields are absent rather than `undefined` after a JSONB round trip,
+ * which is what {@link isOptionalString} accepts.
+ */
+const isCzNssListingRow = (value: unknown): value is ParsedRow =>
+  isRecord(value) &&
+  typeof value["caseNumber"] === "string" &&
+  isOptionalString(value["decisionDate"]) &&
+  isOptionalString(value["decisionType"]) &&
+  isOptionalString(value["outcome"]) &&
+  isOptionalString(value["documentUrl"]) &&
+  isOptionalString(value["documentId"]);
+
+const buildCzNssFromPayload = async (
+  payload: unknown,
+  signal?: AbortSignal,
+): Promise<ReconciliationBuildOutcome> => {
+  if (!isCzNssListingRow(payload)) {
+    return { type: "unkeyable" };
+  }
+  const effectiveSignal =
+    signal ?? AbortSignal.timeout(CZ_NSS_LISTING_TIMEOUT_MS);
+  const session = await getSession(effectiveSignal);
+  const built = await buildCzNssDecision({
+    row: payload,
+    session,
+    signal: effectiveSignal,
+  });
+  switch (built.type) {
+    case "built":
+      return { type: "built", decision: built.decision };
+    case "detail-unavailable":
+      // The decision the listing describes is deliberately dropped: storing it
+      // would make the identity held while its document stayed unread.
+      return { type: "detail-unavailable" };
+    default: {
+      const exhaustive: never = built;
+      return panic(`Unhandled NSS build result: ${JSON.stringify(exhaustive)}`);
+    }
+  }
 };
 
 /** Parse cursor string "YYYY-MM-DD:page" or null. */
@@ -872,17 +1295,30 @@ export const czNssAdapter = defineSourceAdapter({
         return null;
       }
 
-      const html = await response.text();
+      const count = statedResultCount(await response.text());
 
-      // The count is grouped ("1 234"), so digit runs may be separated
-      // by spaces. `(?:\s\d+)*` keeps the separator and the digits
-      // disjoint; a `[\d\s]*` class would overlap the `\s+` that
-      // follows, letting the engine re-split every trailing space and
-      // costing time quadratic in the length of the page.
-      return reportedResultCount(html);
+      // A zero here is not a corpus of nothing; it is a search that did not
+      // run. The benchmark reports nothing rather than a false floor.
+      return count === null || count === 0 ? null : count;
     } catch {
       return null;
     }
+  },
+
+  /**
+   * The portal lists each decision day independently of the crawl cursor, so
+   * what a day contains is answerable without re-crawling it: enumerate the
+   * day, key each row the way the ingest would, and compare against what is
+   * held.
+   */
+  reconciliation: {
+    firstSlice: CZ_NSS_FIRST_SLICE,
+    sliceOf: toUtcDateString,
+    nextSlice: czNssNextSlice,
+    previousSlice: czNssPreviousSlice,
+    tipWindowDays: CZ_NSS_TIP_WINDOW_DAYS,
+    listSlicePage: listCzNssSlicePage,
+    buildDecision: buildCzNssFromPayload,
   },
 
   async fetchPage(cursor, _config, signal) {
@@ -916,8 +1352,9 @@ export const czNssAdapter = defineSourceAdapter({
           effectiveSignal,
         );
 
-        if (!searchResult.currParams || searchResult.currParams === "[]") {
-          // No results for this date; advance to next day
+        const { continuation } = searchResult;
+        if (continuation === undefined || continuation.conditions === "[]") {
+          // Not a results page; advance to next day
           const next = nextDay(date);
           return {
             decisions: [],
@@ -925,59 +1362,36 @@ export const czNssAdapter = defineSourceAdapter({
           };
         }
 
-        let html: string;
-
-        if (page === 0) {
-          // Page 0 results are inline in the search response
-          html = searchResult.html;
-        } else {
-          html = await fetchResultPage(
-            session,
-            searchResult.currParams,
-            date,
-            page,
-            effectiveSignal,
-          );
-        }
+        // Page 0 results are inline in the search response.
+        const html =
+          page === 0
+            ? searchResult.html
+            : await fetchResultPage({
+                continuation,
+                date,
+                page,
+                session,
+                signal: effectiveSignal,
+              });
 
         const rows = parseResultRows(html);
         const decisions: IngestionResult[] = [];
 
         for (const row of rows) {
-          let detail: DetailMetadata = EMPTY_DETAIL;
-
-          if (row.documentId) {
-            // Fetch detail metadata first (needed by parser)
-            // oxlint-disable-next-line no-await-in-loop -- sequential per-row crawl against one court session; content fetch below depends on this detail
-            detail = await fetchDetailMetadata(
-              row.documentId,
-              session,
-              effectiveSignal,
-            );
-          }
-
-          let content: DecisionContent = {
-            fulltext: undefined,
-            documentAst: undefined,
-            sourceRaw: undefined,
-          };
-
-          if (row.documentId) {
-            // oxlint-disable-next-line no-await-in-loop -- sequential per-row crawl; consumes detail fetched above and shares one court session
-            content = await fetchDecisionContent(
-              row.documentId,
-              row,
-              detail,
-              session,
-              effectiveSignal,
-            );
-          }
-
-          decisions.push(rowToResult(row, content, detail));
+          // oxlint-disable-next-line no-await-in-loop -- sequential per-row crawl against one court session, paced by minRequestIntervalMs
+          const built = await buildCzNssDecision({
+            row,
+            session,
+            signal: effectiveSignal,
+          });
+          // The cursor moves past this document either way, so the crawl keeps
+          // the listing-only row an unreadable document still describes; only
+          // the reconciliation refuses it.
+          decisions.push(built.decision);
         }
 
         // Determine next cursor
-        if (rows.length >= RESULTS_PER_PAGE && searchResult.currParams) {
+        if (rows.length >= CZ_NSS_RESULTS_PER_PAGE) {
           // More pages for this date
           return {
             decisions,
@@ -985,39 +1399,17 @@ export const czNssAdapter = defineSourceAdapter({
           };
         }
 
-        // Day-completeness: the court states how many records its own
-        // search matched, so a partial crawl is measurable rather than
-        // inferred. Reported on the page that finishes the day, where the
-        // running total is known (see CLAUDE.md rule 15).
-        const reported = reportedResultCount(searchResult.html);
-        const dayCoverage: SliceCoverage | undefined =
-          reported === null
-            ? undefined
-            : {
-                slice: date,
-                reported,
-                collected: page * RESULTS_PER_PAGE + rows.length,
-              };
-
-        // A full page with no continuation token is not the end of the day
-        // — it is a day whose remainder is unreachable. Advancing here
-        // drops it permanently, because the date cursor only moves forward
-        // and nothing revisits a day once passed. Fail instead: the cursor
-        // is held and the day is retried.
-        if (rows.length >= RESULTS_PER_PAGE) {
-          throw new AdapterFetchError({
-            message: `NSS returned a full page for ${date} (page ${page}) without a continuation token; the rest of the day is unreachable`,
-            adapterKey: ADAPTER_KEYS.CZ_NSS,
-            cursor,
-          });
-        }
+        // No coverage row here: the reconciliation loop owns this source's
+        // ledger. It keys the same `(source, YYYY-MM-DD)` rows but counts
+        // something else — keyable identities listed against identities held,
+        // not items one crawl page walked — so a crawl-side write would
+        // overwrite the loop's answer with a different question's.
 
         // No more pages; advance to next day
         const next = nextDay(date);
         return {
           decisions,
           nextCursor: next <= today ? `${next}:0` : `${today}:0`,
-          ...(dayCoverage === undefined ? {} : { coverage: dayCoverage }),
         };
       },
       catch: adapterCatch(ADAPTER_KEYS.CZ_NSS, cursor),
