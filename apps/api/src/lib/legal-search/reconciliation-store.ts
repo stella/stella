@@ -12,7 +12,7 @@
  * publisher; the payload is stored verbatim so a retry needs no listing walk.
  */
 
-import { and, count, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, count, eq, gt, inArray, lte, sql } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
 
@@ -594,11 +594,24 @@ export type ListReconciliationItemsInput = {
   sourceId: SafeId<"caseLawSource">;
   /** Rows returned per call. Bounds the read on a source with many items. */
   limit: number;
+  /** Narrow to one slice, the same way a reset does. */
+  slice?: string | undefined;
+  /** Resume after this identity key; see the ordering note below. */
+  after?: string | undefined;
 };
 
 /**
- * What one source is still carrying, oldest first, for an operator deciding
- * whether a terminal reset is warranted.
+ * What one source is still carrying, for an operator deciding whether a
+ * terminal reset is warranted.
+ *
+ * Ordered by identity key, and paged on it. That is not a presentation
+ * choice: `(source_id, identity_key)` is the table's unique index, so the key
+ * is the one column that totally orders a source's rows and never repeats,
+ * which makes it the only cursor that can page a backlog without skipping or
+ * repeating a row. `first_seen_at` would read better as "oldest first" and
+ * cannot page — it is not unique, and comparing a truncated timestamp against
+ * a boundary is the bug class this repo has a lint rule for. It is returned on
+ * every row instead, so age stays visible.
  *
  * No payload: the listing item is the publisher's own record, and an operator
  * asking which identities are stuck does not need its contents. Bounded like
@@ -606,7 +619,7 @@ export type ListReconciliationItemsInput = {
  */
 export const listReconciliationItems = async (
   scopedDb: ScopedDb,
-  { sourceId, limit }: ListReconciliationItemsInput,
+  { sourceId, limit, slice, after }: ListReconciliationItemsInput,
 ): Promise<ReconciliationItemListing[]> =>
   await scopedDb(
     async (tx) =>
@@ -622,8 +635,18 @@ export const listReconciliationItems = async (
           lastAttemptAt: caseLawReconciliationItems.lastAttemptAt,
         })
         .from(caseLawReconciliationItems)
-        .where(eq(caseLawReconciliationItems.sourceId, sourceId))
-        .orderBy(caseLawReconciliationItems.firstSeenAt)
+        .where(
+          and(
+            eq(caseLawReconciliationItems.sourceId, sourceId),
+            ...(slice === undefined
+              ? []
+              : [eq(caseLawReconciliationItems.slice, slice)]),
+            ...(after === undefined
+              ? []
+              : [gt(caseLawReconciliationItems.identityKey, after)]),
+          ),
+        )
+        .orderBy(caseLawReconciliationItems.identityKey)
         .limit(limit),
   );
 

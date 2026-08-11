@@ -18,8 +18,14 @@ import { caseLawSources } from "@/api/db/schema";
  * error tag. `--reset-terminal` puts them back into the hunt as parked, due
  * immediately, so the next work unit re-attempts them.
  *
- *   # what one source is carrying, oldest first
+ *   # what one source is carrying
  *   bun run src/scripts/case-law-reconciliation-items.ts --list --adapter cz-ns
+ *
+ *   # the next page, and one slice on its own
+ *   bun run src/scripts/case-law-reconciliation-items.ts --list --adapter cz-ns \
+ *     --after 'document:2f0a1d6c-9c7f-4a58-bd4a-6c1e0f7a1b23'
+ *   bun run src/scripts/case-law-reconciliation-items.ts --list --adapter cz-ns \
+ *     --slice 2026-06-10
  *
  *   # re-hunt everything this source retired
  *   bun run src/scripts/case-law-reconciliation-items.ts \
@@ -49,13 +55,15 @@ const USAGE = `Usage: bun run src/scripts/case-law-reconciliation-items.ts <mode
 
 Modes (exactly one):
   --list                 Print the parked and terminal items this source
-                         carries, oldest first.
+                         carries, in identity-key order.
   --reset-terminal       Return terminal items to parked, due now, so the
                          loop re-hunts them.
 
 Options:
   --adapter <key>        Required. The source to act on.
-  --slice <slice>        With --reset-terminal, reset only this slice.
+  --slice <slice>        Narrow to one slice, in either mode.
+  --after <identityKey>  With --list, resume after this key. The last key a
+                         page printed is the next page's --after.
   --limit <n>            Rows read or reset (default ${DEFAULT_LIMIT}, max ${MAX_LIMIT}).
 
 Adapter keys: ${listAdapterKeys().join(", ")}`;
@@ -82,6 +90,7 @@ const list = hasFlag("list");
 const resetTerminal = hasFlag("reset-terminal");
 const adapterFlag = flagValue("adapter");
 const sliceFlag = flagValue("slice");
+const afterFlag = flagValue("after");
 const limitFlag = flagValue("limit");
 
 if ([list, resetTerminal].filter(Boolean).length !== 1) {
@@ -103,10 +112,11 @@ if (!listAdapterKeys().some((candidate) => candidate === adapterKey)) {
   process.exit(1);
 }
 
-// A slice narrows a reset; on a listing it would silently do nothing, which
-// reads as "this slice carries no items" rather than as a refused argument.
-if (sliceFlag !== undefined && !resetTerminal) {
-  console.error("--slice applies to --reset-terminal only.");
+// A cursor only means something against an ordering, and the reset selects
+// its own rows. Refused rather than ignored: an operator who paged a listing
+// and then reset would otherwise believe the reset resumed where they were.
+if (afterFlag !== undefined && !list) {
+  console.error("--after applies to --list only.");
   console.error(USAGE);
   process.exit(1);
 }
@@ -153,16 +163,27 @@ if (list) {
   const items = await listReconciliationItems(ingestionDb, {
     sourceId: source.id,
     limit,
+    ...(sliceFlag === undefined ? {} : { slice: sliceFlag }),
+    ...(afterFlag === undefined ? {} : { after: afterFlag }),
   });
+  const scope = sliceFlag === undefined ? "all slices" : `slice ${sliceFlag}`;
   console.log(
-    `--- oldest ${items.length} of ${counts.parked + counts.terminal} ---`,
+    `--- ${items.length} item(s), ${scope}, of ${counts.parked + counts.terminal} total ---`,
   );
   for (const item of items) {
     const attempts = String(item.attempts).padStart(2);
     const next = item.nextAttemptAt?.toISOString() ?? "-";
+    const seen = item.firstSeenAt.toISOString();
     console.log(
-      `${item.status.padEnd(8)} ${item.slice.padEnd(12)} attempts=${attempts} next=${next} lastError=${item.lastError ?? "-"} ${item.identityKey}`,
+      `${item.status.padEnd(8)} ${item.slice.padEnd(12)} attempts=${attempts} firstSeen=${seen} next=${next} lastError=${item.lastError ?? "-"} ${item.identityKey}`,
     );
+  }
+  // The whole backlog is reachable by walking this cursor, so a page that
+  // filled its limit says how to ask for the next one rather than leaving the
+  // operator to assume they have seen everything.
+  const lastKey = items.at(-1)?.identityKey;
+  if (items.length === limit && lastKey !== undefined) {
+    console.log(`next page: --after '${lastKey}'`);
   }
   process.exit(0);
 }

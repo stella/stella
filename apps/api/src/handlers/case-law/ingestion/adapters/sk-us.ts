@@ -755,11 +755,10 @@ export const skUsAdapter = defineSourceAdapter({
    * when replayed with browser-identical headers and session state, so the
    * total it shows in a browser cannot be read from here. Coverage for this
    * source is benchmarked only by what the crawl itself reports.
-   */
-  /**
-   * The DMS exposes no count: its search answers a page of hits without ever
-   * stating how many the query matched. Stated statically rather than probed,
-   * because there is no request that could answer differently.
+   *
+   * Answered statically rather than probed: no request this adapter can make
+   * would answer differently, so there is no failure to distinguish from the
+   * absence.
    */
   async getTotalCount(_signal) {
     return await Promise.resolve({ type: "no-count-endpoint" });
