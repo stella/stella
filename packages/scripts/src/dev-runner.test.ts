@@ -765,13 +765,28 @@ describe("legacy shared Docker service detection", () => {
   test("detects only the former object-store service", () => {
     expect(
       hasLegacyObjectStoreService([
-        { health: "healthy", service: "postgres", state: "running" },
-        { health: "healthy", service: "minio", state: "running" },
+        {
+          exitCode: undefined,
+          health: "healthy",
+          service: "postgres",
+          state: "running",
+        },
+        {
+          exitCode: undefined,
+          health: "healthy",
+          service: "minio",
+          state: "running",
+        },
       ]),
     ).toBe(true);
     expect(
       hasLegacyObjectStoreService([
-        { health: "healthy", service: "rustfs", state: "running" },
+        {
+          exitCode: undefined,
+          health: "healthy",
+          service: "rustfs",
+          state: "running",
+        },
       ]),
     ).toBe(false);
   });
