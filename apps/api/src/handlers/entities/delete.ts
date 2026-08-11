@@ -21,6 +21,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
+import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -73,12 +74,18 @@ export const deleteEntitiesHandler = async function* ({
       await tx.execute(
         sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
       );
+
+      // Serialize with entity-creating transactions before locking message
+      // children. Email ingest publishes its attachment entities under this
+      // workspace lock; taking it first prevents a delete from racing that
+      // publication and leaving a late child orphaned.
+      await lockWorkspacesForEntityCap(tx, [workspaceId]);
+
       const workspaceRows = await tx
         .select({ status: workspaces.status })
         .from(workspaces)
         .where(eq(workspaces.id, workspaceId))
-        .limit(1)
-        .for("update");
+        .limit(1);
       if (workspaceRows.at(0)?.status !== "active") {
         return {
           status: "rejected" as const,
@@ -116,7 +123,11 @@ export const deleteEntitiesHandler = async function* ({
       // fence; storage cleanup happens later from a durable request, never
       // while this transaction owns locks.
       const lockedEntities = await tx
-        .select({ id: entities.id, readOnly: entities.readOnly })
+        .select({
+          id: entities.id,
+          kind: entities.kind,
+          readOnly: entities.readOnly,
+        })
         .from(entities)
         .where(
           and(
@@ -127,7 +138,36 @@ export const deleteEntitiesHandler = async function* ({
         .orderBy(asc(entities.id))
         .limit(LIMITS.entitiesPageSizeMax)
         .for("update");
-      if (lockedEntities.some(({ readOnly }) => readOnly)) {
+
+      const messageIds = lockedEntities
+        .filter(({ kind }) => kind === "message")
+        .map(({ id }) => id);
+      const lockedAttachmentEntities =
+        messageIds.length === 0
+          ? []
+          : await tx
+              .select({ id: entities.id, readOnly: entities.readOnly })
+              .from(entities)
+              .where(
+                and(
+                  eq(entities.workspaceId, workspaceId),
+                  inArray(entities.parentId, messageIds),
+                ),
+              )
+              .orderBy(asc(entities.id))
+              .limit(LIMITS.entitiesPageSizeMax)
+              .for("update");
+      const entityIdsToDelete = [
+        ...new Set([
+          ...body.entityIds,
+          ...lockedAttachmentEntities.map(({ id }) => id),
+        ]),
+      ];
+
+      if (
+        lockedEntities.some(({ readOnly }) => readOnly) ||
+        lockedAttachmentEntities.some(({ readOnly }) => readOnly)
+      ) {
         return {
           status: "rejected" as const,
           error: new HandlerError({
@@ -143,7 +183,7 @@ export const deleteEntitiesHandler = async function* ({
         .where(
           and(
             eq(documentProcessingRuns.workspaceId, workspaceId),
-            inArray(documentProcessingRuns.entityId, body.entityIds),
+            inArray(documentProcessingRuns.entityId, entityIdsToDelete),
             eq(documentProcessingRuns.status, "running"),
           ),
         )
@@ -165,7 +205,7 @@ export const deleteEntitiesHandler = async function* ({
         .where(
           and(
             eq(entities.workspaceId, workspaceId),
-            inArray(entities.id, body.entityIds),
+            inArray(entities.id, entityIdsToDelete),
           ),
         );
 
@@ -181,7 +221,7 @@ export const deleteEntitiesHandler = async function* ({
         tx,
         workspaceId,
         fileRows: fileRefs,
-        excludedEntityIds: body.entityIds,
+        excludedEntityIds: entityIdsToDelete,
       });
 
       // A long-lived document accumulates one OCR run per version and field,
@@ -229,7 +269,7 @@ export const deleteEntitiesHandler = async function* ({
             .where(
               and(
                 eq(documentProcessingRuns.workspaceId, workspaceId),
-                inArray(documentProcessingRuns.entityId, body.entityIds),
+                inArray(documentProcessingRuns.entityId, entityIdsToDelete),
                 ocrDerivativeCursorFilter(cursor),
               ),
             )
@@ -254,7 +294,7 @@ export const deleteEntitiesHandler = async function* ({
         .where(
           and(
             eq(entities.workspaceId, workspaceId),
-            inArray(entities.id, body.entityIds),
+            inArray(entities.id, entityIdsToDelete),
           ),
         )
         .returning({

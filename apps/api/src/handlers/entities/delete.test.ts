@@ -47,3 +47,23 @@ test("routes cleanup dispatch through the bounded hand-off", () => {
   expect(source).toContain("handoffCommittedEntityDeletionCleanupBatch(");
   expect(source).not.toContain("Promise.all(");
 });
+
+test("deletes ingested message children and collects their files and derivatives", () => {
+  expect(source).toContain("lockWorkspacesForEntityCap(tx, [workspaceId])");
+  expect(source).toContain("inArray(entities.parentId, messageIds)");
+  expect(source).toContain("...lockedAttachmentEntities.map(({ id }) => id)");
+  expect(source).toContain("excludedEntityIds: entityIdsToDelete");
+  expect(source).toContain(
+    "inArray(documentProcessingRuns.entityId, entityIdsToDelete)",
+  );
+  expect(source).toContain("inArray(entities.id, entityIdsToDelete)");
+
+  // The delete mutation's RETURNING rows feed both the per-entity audit events
+  // and the non-Postgres search cleanup, so attachment children follow the same
+  // state-change and file-cleanup paths as the ingested message itself.
+  const deleteMutation = source.indexOf(".delete(entities)");
+  const auditEvents = source.indexOf("deleted.map((entity) => ({");
+  const searchCleanup = source.indexOf("for (const entity of deletedEntities)");
+  expect(auditEvents).toBeGreaterThan(deleteMutation);
+  expect(searchCleanup).toBeGreaterThan(deleteMutation);
+});
