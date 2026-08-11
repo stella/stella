@@ -633,8 +633,6 @@ const DISABLED_ADAPTER_KEYS = new Set(
   }),
 );
 
-// AT_COURTS excluded: adapter exists but has not been
-// validated in production yet.
 const ALL_SOURCES: SourceDef[] = [
   {
     adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
@@ -663,6 +661,10 @@ const ALL_SOURCES: SourceDef[] = [
   {
     adapterKey: ADAPTER_KEYS.PL_COURTS,
     name: "Polish Courts (SAOS)",
+  },
+  {
+    adapterKey: ADAPTER_KEYS.AT_COURTS,
+    name: "Austrian Courts (RIS Justiz)",
   },
   {
     adapterKey: ADAPTER_KEYS.EU_ECJ,

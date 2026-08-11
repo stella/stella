@@ -214,23 +214,18 @@ const ADAPTER_CONFORMANCE = {
   },
   [ADAPTER_KEYS.AT_COURTS]: {
     disposition: "exercised",
-    exhaustedSource: ({ url }) => {
-      const page = Number(new URL(url).searchParams.get("Seitennummer"));
-      const pageSize = 20;
-      const archiveEntries = 101;
-      const count = Math.max(
-        0,
-        Math.min(pageSize, archiveEntries - (page - 1) * pageSize),
-      );
-      return jsonResponse({
+    exhaustedSource: () =>
+      jsonResponse({
         OgdSearchResult: {
           OgdDocumentResults: {
-            Hits: { "#text": String(archiveEntries) },
-            OgdDocumentReference: Array.from({ length: count }, () => ({})),
+            Hits: {
+              "@pageNumber": "1",
+              "@pageSize": "100",
+              "#text": "0",
+            },
           },
         },
-      });
-    },
+      }),
     maxSteadyStateCursors: 4,
     maxSteadyStatePositions: 1,
   },
