@@ -207,15 +207,16 @@ type Loaded = {
 };
 
 const loadMirrors = async (): Promise<Loaded> => {
-  const mirrors: { path: string; undescribed: string[]; ids: string[] }[] = [];
-  for (const relativePath of CATALOG_PATHS) {
-    const entries = await readCatalog(relativePath);
-    mirrors.push({
-      path: relativePath,
-      undescribed: findUndescribedIds(entries),
-      ids: entries.map(({ id }) => id).sort(),
-    });
-  }
+  const mirrors = await Promise.all(
+    CATALOG_PATHS.map(async (relativePath) => {
+      const entries = await readCatalog(relativePath);
+      return {
+        path: relativePath,
+        undescribed: findUndescribedIds(entries),
+        ids: entries.map(({ id }) => id).sort(),
+      };
+    }),
+  );
   const reference = mirrors.at(0);
   if (reference === undefined) {
     return panic("capability-description-guard: no catalog mirrors declared.");

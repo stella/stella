@@ -15,12 +15,12 @@ const readEntries = (
 ): { id: string; description?: string }[] =>
   (Array.isArray(catalog) ? catalog : []).map((entry: unknown) => {
     if (!isRecord(entry)) {
-      throw new Error("capability catalog entry is not an object");
+      throw new TypeError("capability catalog entry is not an object");
     }
     const id = entry["id"];
     const description = entry["description"];
     if (typeof id !== "string") {
-      throw new Error("capability catalog entry has no string id");
+      throw new TypeError("capability catalog entry has no string id");
     }
     return typeof description === "string" ? { id, description } : { id };
   });
@@ -28,6 +28,17 @@ const readEntries = (
 const apiEntries = readEntries(apiCatalog);
 const cliEntries = readEntries(cliCatalog);
 const ledgerIds: string[] = Array.isArray(ledger) ? ledger : [];
+
+/** Every subset of `items`, so a property can be driven over the whole
+ *  input class rather than a sampled one. */
+const subsetsOf = <T>(items: readonly T[]): T[][] => {
+  const subsets: T[][] = [[]];
+  for (const item of items) {
+    const extended = subsets.map((subset) => [...subset, item]);
+    subsets.push(...extended);
+  }
+  return subsets;
+};
 
 describe("committed ledger", () => {
   // The ledger is only useful if it is exactly the missing set: a superset
@@ -69,29 +80,23 @@ describe("computeLedgerDiff", () => {
   // outcome, so no discrepancy can fall between the categories and pass silently.
   test("classifies every discrepancy into exactly one category", () => {
     const catalogIds = ["a", "b", "c", "d", "e"];
-    for (let mask = 0; mask < 1 << (catalogIds.length * 2); mask += 1) {
-      const undescribed = catalogIds.filter(
-        (_, index) => (mask & (1 << index)) !== 0,
-      );
-      const ledgered = catalogIds.filter(
-        (_, index) => (mask & (1 << (index + catalogIds.length))) !== 0,
-      );
-      const { unledgered, described, unknown, malformed } = computeLedgerDiff({
-        undescribed,
-        ledger: ledgered,
-        catalogIds,
-      });
-      expect(malformed).toEqual([]);
-      expect(unknown).toEqual([]);
-      // Symmetric difference of the two sets, and nothing else.
-      const flagged = [...unledgered, ...described].sort();
-      const undescribedSet = new Set(undescribed);
-      const ledgeredSet = new Set(ledgered);
-      const expected = catalogIds
-        .filter((id) => undescribedSet.has(id) !== ledgeredSet.has(id))
-        .sort();
-      expect(flagged).toEqual(expected);
-      expect(new Set(flagged).size).toBe(flagged.length);
+    for (const undescribed of subsetsOf(catalogIds)) {
+      for (const ledgered of subsetsOf(catalogIds)) {
+        const { unledgered, described, unknown, malformed } = computeLedgerDiff(
+          { undescribed, ledger: ledgered, catalogIds },
+        );
+        expect(malformed).toEqual([]);
+        expect(unknown).toEqual([]);
+        // Symmetric difference of the two sets, and nothing else.
+        const flagged = [...unledgered, ...described].sort();
+        const undescribedSet = new Set(undescribed);
+        const ledgeredSet = new Set(ledgered);
+        const expected = catalogIds
+          .filter((id) => undescribedSet.has(id) !== ledgeredSet.has(id))
+          .sort();
+        expect(flagged).toEqual(expected);
+        expect(new Set(flagged).size).toBe(flagged.length);
+      }
     }
   });
 
