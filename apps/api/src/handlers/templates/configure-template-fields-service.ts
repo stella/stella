@@ -29,6 +29,9 @@ import {
 } from "@/api/lib/docx/template-manifest";
 import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { errorTag } from "@/api/lib/errors/utils";
+import { deleteS3Keys } from "@/api/lib/files/utils";
+import { logger } from "@/api/lib/observability/logger";
 import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import { buildTemplateRevisionS3Key } from "@/api/lib/templates/storage-keys";
 
@@ -203,7 +206,15 @@ export const configureTemplateFields = async function* ({
         },
       });
 
-      return { ok: true as const, manifest };
+      return {
+        ok: true as const,
+        manifest,
+        // Reclaimed after the commit, not here: only a committed transaction
+        // proves no row still names it. Identical bytes resolve to the same
+        // key, in which case there is nothing to reclaim.
+        supersededS3Key:
+          locked.s3Key === revisionS3Key ? undefined : locked.s3Key,
+      };
     }),
   );
 
@@ -222,6 +233,22 @@ export const configureTemplateFields = async function* ({
           "describe_template to list them).",
       }),
     );
+  }
+
+  // The superseded object is referenced by no row once the transaction has
+  // committed: template deletion discovers keys from templates.s3Key and the
+  // template_versions rows only (handlers/templates/delete.ts), so leaving it
+  // in place would strand it beyond the reach of every cleanup path. A failed
+  // delete is not a failed configuration: the rows are already consistent, so
+  // it is reported and the request still succeeds.
+  if (txResult.supersededS3Key !== undefined) {
+    const reclaimed = await deleteS3Keys([txResult.supersededS3Key]);
+    if (Result.isError(reclaimed)) {
+      logger.warn("templates.superseded_object_reclaim_failed", {
+        "error.type": errorTag(reclaimed.error),
+        templateId,
+      });
+    }
   }
 
   return Result.ok({ manifest: txResult.manifest });
