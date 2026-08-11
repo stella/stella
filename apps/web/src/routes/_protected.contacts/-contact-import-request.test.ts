@@ -119,18 +119,19 @@ describe("contact import request identity", () => {
   test("rejects a new request when its retry identity cannot be stored", async () => {
     const file = new Blob(["Name\nJane Doe"]);
 
-    const result = await Result.tryPromise(() =>
-      resolveContactImportRequest({
-        file,
-        mapping: MAPPING,
-        scope: SCOPE,
-        storage: {
-          ...createStorage(),
-          setItem: () => {
-            throw new DOMException("Quota exceeded", "QuotaExceededError");
+    const result = await Result.tryPromise(
+      async () =>
+        await resolveContactImportRequest({
+          file,
+          mapping: MAPPING,
+          scope: SCOPE,
+          storage: {
+            ...createStorage(),
+            setItem: () => {
+              throw new DOMException("Quota exceeded", "QuotaExceededError");
+            },
           },
-        },
-      }),
+        }),
     );
 
     expect(result).toMatchObject({
