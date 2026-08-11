@@ -34,8 +34,7 @@ export const OUTLOOK_INGESTION_PLATFORMS = [
 export type OutlookIngestionPlatform =
   (typeof OUTLOOK_INGESTION_PLATFORMS)[number];
 
-export const OUTLOOK_HOST_VERSION_PATTERN =
-  /^\d{1,4}(?:\.\d{1,6}){1,3}$/u;
+export const OUTLOOK_HOST_VERSION_PATTERN = /^\d{1,4}(?:\.\d{1,6}){1,3}$/u;
 
 export const OUTLOOK_MAILBOX_REQUIREMENT_SET = {
   name: "Mailbox",

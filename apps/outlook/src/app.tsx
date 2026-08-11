@@ -84,7 +84,10 @@ const AuthedApp = ({ t }: { t: Translate }) => {
     loadLatest,
     refresh,
     state: loadState,
-  } = useMailSnapshot(t("loadError"), t("attachmentReadError"));
+  } = useMailSnapshot({
+    attachmentErrorFallback: t("attachmentReadError"),
+    errorFallback: t("loadError"),
+  });
   const { error: workspaceError, workspaces } = useWorkspaces(
     t("matterLoadError"),
   );

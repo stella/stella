@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { createHash } from "node:crypto";
 
 export type OutlookReleaseOrigins = {
@@ -39,14 +40,14 @@ const normalizeHttpsOrigin = (value: string, label: string): string => {
     url.search ||
     url.hash
   ) {
-    throw new Error(`${label} must be an HTTPS origin without a path.`);
+    panic(`${label} must be an HTTPS origin without a path.`);
   }
   return url.origin;
 };
 
 export const assertOutlookReleaseVersion = (version: string): void => {
   if (!OUTLOOK_RELEASE_VERSION_PATTERN.test(version)) {
-    throw new Error(
+    panic(
       `Outlook release version must have four numeric parts, received ${JSON.stringify(version)}.`,
     );
   }
@@ -59,13 +60,15 @@ const normalizeFrameAncestors = (
     return undefined;
   }
   if (frameAncestors.length === 0) {
-    throw new Error("STELLA_OUTLOOK_FRAME_ANCESTORS cannot be empty.");
+    panic("STELLA_OUTLOOK_FRAME_ANCESTORS cannot be empty.");
   }
-  return [...new Set(
-    frameAncestors.map((origin) =>
-      normalizeHttpsOrigin(origin, "STELLA_OUTLOOK_FRAME_ANCESTORS"),
+  return [
+    ...new Set(
+      frameAncestors.map((origin) =>
+        normalizeHttpsOrigin(origin, "STELLA_OUTLOOK_FRAME_ANCESTORS"),
+      ),
     ),
-  )];
+  ];
 };
 
 export const resolveOutlookFrameAncestors = (
@@ -226,10 +229,11 @@ export const createContentHashedAssetName = ({
   return `${name}.${digest}${extension}`;
 };
 
+const HTML_RELEASE_VERSION_PATTERN =
+  /<meta name="stella-outlook-version" content="([^"]+)"\s*\/>/u;
+
 export const getHtmlReleaseVersion = (html: string): string | null =>
-  html.match(/<meta name="stella-outlook-version" content="([^"]+)"\s*\/>/u)?.at(
-    1,
-  ) ?? null;
+  HTML_RELEASE_VERSION_PATTERN.exec(html)?.at(1) ?? null;
 
 export const getHtmlAssetPaths = (html: string): string[] => [
   ...html.matchAll(/(?:href|src)="(\/assets\/[^"?#]+)"/gu),
@@ -254,7 +258,7 @@ export const assertOfficeRuntimeEntryIsIsolated = (source: string): void => {
     source.includes(value),
   );
   if (forbiddenImport) {
-    throw new Error(
+    panic(
       `Office command/event runtime must stay isolated from the React task pane (${forbiddenImport}).`,
     );
   }
