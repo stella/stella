@@ -23,7 +23,8 @@ services:
 
   rustfs:
     profiles: [dev]
-    image: rustfs/rustfs:1.0.0-beta.11@sha256:84ce557a0245a06a9aae5516f55ee0f007fca78d41df356f419306fdc0cb168c
+    # release-age-quarantine-exception: 2026-08-13T09:51:27.645Z
+    image: rustfs/rustfs:1.0.0-rc.1@sha256:f53d700fc16809070326f6ab3fb565d48e722364a7bd5a12e47d0a5abe079ce6
     command: /data
     environment:
       RUSTFS_ACCESS_KEY: stella-rustfs-dev

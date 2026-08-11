@@ -39,6 +39,7 @@ const BUNFIG = "bunfig.toml";
 const SCRIPT_PATH = "scripts/check-stll-quarantine-excludes.ts";
 const EXPIRY_MARKER = "quarantine-expires:";
 const EXCLUDED_SINCE_MARKER = "quarantine-excluded-since:";
+const RELEASE_AGE_EXCEPTION_MARKER = "release-age-quarantine-exception:";
 const EXACT_UTC_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 
 /** Packages resolved from the workspace itself never hit the registry. */
@@ -213,6 +214,34 @@ const readExcludeAnnotationErrors = (bunfig: string, now: Date): string[] => {
   return errors;
 };
 
+const readReleaseAgeExceptionErrors = (
+  sources: Readonly<Record<string, string>>,
+): string[] =>
+  Object.entries(sources).flatMap(([source, contents]) =>
+    contents.split("\n").flatMap((line, index) => {
+      const markerIndex = line.indexOf(RELEASE_AGE_EXCEPTION_MARKER);
+      if (markerIndex === -1) {
+        return [];
+      }
+
+      const expiresAt = line
+        .slice(markerIndex + RELEASE_AGE_EXCEPTION_MARKER.length)
+        .trim();
+      const timestampMs = Date.parse(expiresAt);
+      if (
+        EXACT_UTC_TIMESTAMP.test(expiresAt) &&
+        !Number.isNaN(timestampMs) &&
+        new Date(timestampMs).toISOString() === expiresAt
+      ) {
+        return [];
+      }
+
+      return [
+        `${source}:${String(index + 1)} release-age quarantine exception is missing an exact UTC expiry`,
+      ];
+    }),
+  );
+
 type TemporaryExclude = {
   name: string;
   expiresAt: string;
@@ -328,10 +357,12 @@ export const checkQuarantineExcludes = ({
   bunfig,
   lockfile,
   now = new Date(),
+  releaseAgeExceptionSources = {},
 }: {
   bunfig: string;
   lockfile: string;
   now?: Date;
+  releaseAgeExceptionSources?: Readonly<Record<string, string>>;
 }): QuarantineExcludeCheckResult => {
   const excludes = readExcludes(bunfig);
   const firstPartyPackages = readRegistryStllPackages(lockfile);
@@ -342,6 +373,7 @@ export const checkQuarantineExcludes = ({
   const errors = [
     ...temporary.errors,
     ...readExcludeAnnotationErrors(bunfig, now),
+    ...readReleaseAgeExceptionErrors(releaseAgeExceptionSources),
   ];
 
   if (missing.length > 0) {
@@ -471,6 +503,12 @@ const main = () => {
   const result = checkQuarantineExcludes({
     bunfig: readFileSync(path.join(REPO_ROOT, BUNFIG), "utf-8"),
     lockfile: readFileSync(path.join(REPO_ROOT, LOCKFILE), "utf-8"),
+    releaseAgeExceptionSources: {
+      "docker-compose.yml": readFileSync(
+        path.join(REPO_ROOT, "docker-compose.yml"),
+        "utf-8",
+      ),
+    },
   });
 
   if (result.warnings.length > 0) {
