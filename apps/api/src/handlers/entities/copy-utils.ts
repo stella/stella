@@ -424,7 +424,7 @@ export const resolveEntityName = async ({
   return `${base}_${maxN + 1}${ext}`;
 };
 
-export const getFolderSubtree = (
+export const getEntitySubtree = (
   allEntities: EntitySnapshot[],
   rootId: SafeId<"entity">,
 ): EntitySnapshot[] | null => {

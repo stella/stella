@@ -94,6 +94,7 @@ const snapshot = ({
 }): MailSnapshot => ({
   attachments: [],
   bcc: [],
+  bodyHtml: "",
   bodyText,
   cc: [],
   conversationId: null,
