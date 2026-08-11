@@ -1,5 +1,12 @@
 /* eslint-disable typescript-eslint/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
-import { afterEach, describe, expect, mock, test } from "bun:test";
+import {
+  afterEach,
+  describe,
+  expect,
+  mock,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 
 import type {
   IngestionResult,
@@ -44,6 +51,15 @@ const originalFetch = globalThis.fetch;
 afterEach(() => {
   globalThis.fetch = originalFetch;
 });
+
+/**
+ * Every test here crawls the fixture judgment and the replay tests parse it
+ * twice, which runs for seconds — close enough to the 5s default that these
+ * fail on a loaded machine rather than on a defect. Stated once for the file
+ * because the cost is the file's, not one test's; a real hang still ends the
+ * run well inside the runner's own deadline.
+ */
+setDefaultTimeout(30_000);
 
 const crawlDecision = async (): Promise<IngestionResult> => {
   globalThis.fetch = asFetchMock(

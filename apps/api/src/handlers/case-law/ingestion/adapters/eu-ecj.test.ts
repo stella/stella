@@ -105,6 +105,14 @@ describe("celexToCaseNumber", () => {
 
 // -- fetchPage snapshot --
 
+/**
+ * Budget for a test that parses the fixture judgment. One parse runs for
+ * seconds, close enough to the 5s default that such a test fails on load
+ * rather than on a defect when the runner schedules another parse-heavy file
+ * beside this one. A real hang still ends the run.
+ */
+const PARSE_TEST_TIMEOUT = { timeout: 30_000 } as const;
+
 describe("euEcjAdapter.fetchPage", () => {
   const originalFetch = globalThis.fetch;
 
@@ -236,7 +244,7 @@ describe("euEcjAdapter.fetchPage", () => {
       expect(hasUsableAst(first.documentAst)).toBe(true);
       expect(first.sections?.length).toBeGreaterThan(1);
     },
-    { timeout: 30_000 },
+    PARSE_TEST_TIMEOUT,
   );
 
   test("handles SPARQL error", async () => {
@@ -284,56 +292,60 @@ describe("euEcjAdapter.fetchPage", () => {
     expect(page.nextCursor).toBe("2024-01-19");
   });
 
-  test("skips languages without fulltext", async () => {
-    globalThis.fetch = asFetchMock(
-      mock((url: string) => {
-        const urlStr = url;
+  test(
+    "skips languages without fulltext",
+    async () => {
+      globalThis.fetch = asFetchMock(
+        mock((url: string) => {
+          const urlStr = url;
 
-        if (urlStr.includes("sparql")) {
-          const fixture = {
-            results: {
-              bindings: [enBinding, frBinding, deBinding],
-            },
-          };
-          return Promise.resolve(
-            new Response(JSON.stringify(fixture), {
-              status: 200,
-            }),
-          );
-        }
+          if (urlStr.includes("sparql")) {
+            const fixture = {
+              results: {
+                bindings: [enBinding, frBinding, deBinding],
+              },
+            };
+            return Promise.resolve(
+              new Response(JSON.stringify(fixture), {
+                status: 200,
+              }),
+            );
+          }
 
-        // Only the EN and FR Cellar manifestations return fulltext.
-        if (
-          urlStr.includes(EN_MANIFESTATION_ID) ||
-          urlStr.includes(FR_MANIFESTATION_ID)
-        ) {
-          return Promise.resolve(
-            new Response(fulltextHtml, {
-              status: 200,
-              headers: { "Content-Type": "text/html" },
-            }),
-          );
-        }
+          // Only the EN and FR Cellar manifestations return fulltext.
+          if (
+            urlStr.includes(EN_MANIFESTATION_ID) ||
+            urlStr.includes(FR_MANIFESTATION_ID)
+          ) {
+            return Promise.resolve(
+              new Response(fulltextHtml, {
+                status: 200,
+                headers: { "Content-Type": "text/html" },
+              }),
+            );
+          }
 
-        return Promise.resolve(new Response("Not found", { status: 404 }));
-      }),
-    );
+          return Promise.resolve(new Response("Not found", { status: 404 }));
+        }),
+      );
 
-    const { euEcjAdapter } =
-      await import("@/api/handlers/case-law/ingestion/adapters/eu-ecj");
+      const { euEcjAdapter } =
+        await import("@/api/handlers/case-law/ingestion/adapters/eu-ecj");
 
-    const result = await euEcjAdapter.fetchPage("2024-01-18", {});
+      const result = await euEcjAdapter.fetchPage("2024-01-18", {});
 
-    if (!Result.isOk(result)) {
-      throw new TypeError("Expected Ok result");
-    }
-    const page = result.value;
+      if (!Result.isOk(result)) {
+        throw new TypeError("Expected Ok result");
+      }
+      const page = result.value;
 
-    // Only EN and FR variants
-    expect(page.decisions).toHaveLength(2);
-    const langs = page.decisions.map((d) => d.language).sort();
-    expect(langs).toEqual(["en", "fr"]);
-  });
+      // Only EN and FR variants
+      expect(page.decisions).toHaveLength(2);
+      const langs = page.decisions.map((d) => d.language).sort();
+      expect(langs).toEqual(["en", "fr"]);
+    },
+    PARSE_TEST_TIMEOUT,
+  );
 
   test("no decisions when all languages 404", async () => {
     globalThis.fetch = asFetchMock(
@@ -735,6 +747,25 @@ describe("euEcjAdapter.reconciliation.listSlicePage", () => {
 
     expect(rejection).toBeInstanceOf(Error);
     expect(rejectionMessage(rejection)).toContain("truncated");
+  });
+
+  test("a request that gives up throws rather than shortening the page", async () => {
+    // The other half of the truncation rule: an aborted or failed listing
+    // must reach the caller as a failure. Answering with the items that did
+    // arrive would bank a partial slice as the whole of it.
+    globalThis.fetch = asFetchMock(
+      mock(() =>
+        Promise.reject(
+          new DOMException("The operation timed out", "TimeoutError"),
+        ),
+      ),
+    );
+
+    const rejection = await rejectionOf(
+      reconciliation.listSlicePage({ slice: "2024", page: 0 }),
+    );
+
+    expect(rejection).toBeInstanceOf(DOMException);
   });
 
   test("refuses a page the slice does not have", async () => {

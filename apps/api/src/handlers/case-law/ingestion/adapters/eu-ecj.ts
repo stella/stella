@@ -241,10 +241,33 @@ const SPARQL_TRUNCATION = {
 type SparqlTruncation =
   (typeof SPARQL_TRUNCATION)[keyof typeof SPARQL_TRUNCATION];
 
+/**
+ * Budget for one bulk listing query: a census chunk, a re-fetch's pre-flight,
+ * a reconciliation slice page.
+ *
+ * Stated here so the callers that need it cannot state it separately and be
+ * overruled: a caller's `AbortSignal` and this budget both bound the request,
+ * so the shorter one wins, and a caller passing a 60s signal to a query
+ * hardcoded at 10s gets 10s while its own constant says otherwise.
+ *
+ * Generous next to the measured cost — a month-wide listing answers in around
+ * two seconds — because the callers are bulk operations without retries, where
+ * one slow response ends a run that has to start over. The live crawl keeps
+ * the tighter per-request default: its per-day pages are small, and a crawl
+ * that stalls should fail and move its cursor on.
+ */
+export const ECJ_LISTING_TIMEOUT_MS = 60_000;
+
 type QueryDecisionsOptions = {
   dateFrom: string;
   dateTo: string;
   signal: AbortSignal;
+  /**
+   * Budget for this request. Bounds it together with `signal`, so a caller
+   * gets the shorter of the two rather than whichever the query happens to
+   * hardcode.
+   */
+  timeoutMs: number;
   /** How a response that reached the binding cap is treated. */
   truncation: SparqlTruncation;
   /**
@@ -265,6 +288,7 @@ const queryDecisions = async ({
   dateFrom,
   dateTo,
   signal,
+  timeoutMs,
   truncation,
   celexFilter,
 }: QueryDecisionsOptions): Promise<SparqlResult[]> => {
@@ -319,7 +343,7 @@ LIMIT ${SPARQL_LIMIT}`.trim();
   const response = await fetchWithTimeout(SPARQL_URL, {
     method: "POST",
     signal,
-    timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+    timeoutMs,
     headers: {
       Accept: "application/sparql-results+json",
       "Content-Type": "application/x-www-form-urlencoded",
@@ -612,6 +636,7 @@ export const fetchDecisionsByCelex = async ({
     dateFrom: COURT_EPOCH,
     dateTo: toIsoDate(new Date()),
     celexFilter: celexNumbers,
+    timeoutMs: ECJ_LISTING_TIMEOUT_MS,
     truncation: SPARQL_TRUNCATION.REFUSE,
     signal,
   });
@@ -665,6 +690,7 @@ export const listCelexVariants = async ({
       dateFrom: COURT_EPOCH,
       dateTo: toIsoDate(new Date()),
       celexFilter: celexNumbers,
+      timeoutMs: ECJ_LISTING_TIMEOUT_MS,
       truncation: SPARQL_TRUNCATION.REFUSE,
       signal,
     }),
@@ -1046,11 +1072,15 @@ const listEcjSlicePage = async ({
   signal,
 }: ReconciliationSlicePageOptions): Promise<ReconciliationSlicePage> => {
   const { dateFrom, dateTo } = ecjSlicePageRange(slice, page);
+  // A request that times out throws out of here, which halts the unit and
+  // leaves the slice's previous ledger row standing. Never a short page: a
+  // partial listing banked as the whole slice reads as reconciled.
   const bindings = await queryDecisions({
     dateFrom,
     dateTo,
+    timeoutMs: ECJ_LISTING_TIMEOUT_MS,
     truncation: SPARQL_TRUNCATION.REFUSE,
-    signal: signal ?? AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+    signal: signal ?? AbortSignal.timeout(ECJ_LISTING_TIMEOUT_MS),
   });
   return {
     items: distinctVariants(bindings).map((variant) => ({
@@ -1097,7 +1127,7 @@ const buildEcjVariant = async (
   const decisions = await fetchDecisionsByCelex({
     celexNumbers: [payload.celex],
     languages: [payload.language],
-    signal: signal ?? AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+    signal: signal ?? AbortSignal.timeout(ECJ_LISTING_TIMEOUT_MS),
   });
   const decision = decisions.at(0);
   return decision === undefined
@@ -1221,6 +1251,9 @@ WHERE {
         const bindings = await queryDecisions({
           dateFrom,
           dateTo,
+          // A live crawl fails fast and moves on; only the bulk listings buy
+          // headroom, because they have no cursor to come back to.
+          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
           truncation: SPARQL_TRUNCATION.WARN,
           signal: abortSignal,
         });

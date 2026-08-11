@@ -4,7 +4,10 @@ import { rlsDb } from "@/api/db/root";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { createIngestionDb } from "@/api/db/scoped";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import { listCelexVariants } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
+import {
+  ECJ_LISTING_TIMEOUT_MS,
+  listCelexVariants,
+} from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import type { SafeId } from "@/api/lib/branded-types";
 
 /**
@@ -33,7 +36,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 
 const DEFAULT_PAGE_SIZE = 500;
 const DEFAULT_SPARQL_CHUNK = 100;
-const SPARQL_TIMEOUT_MS = 60_000;
 /** Politeness pause between SPARQL queries; this is a bulk read. */
 const SPARQL_DELAY_MS = 1000;
 
@@ -177,7 +179,7 @@ for (let index = 0; index < distinctCelex.length; index += sparqlChunk) {
   // oxlint-disable-next-line no-await-in-loop -- rate-limited external queries stay sequential
   const variants = await listCelexVariants({
     celexNumbers: chunk,
-    signal: AbortSignal.timeout(SPARQL_TIMEOUT_MS),
+    signal: AbortSignal.timeout(ECJ_LISTING_TIMEOUT_MS),
   });
   for (const variant of variants) {
     listedVariants.add(`${variant.celex}:${variant.language}`);
