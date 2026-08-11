@@ -13,10 +13,12 @@ import {
   ensureWorktreeEnvLinks,
   findFirstAvailableOffset,
   getSharedDockerServicesWaitFailure,
+  hasLegacyObjectStoreService,
   infraPortsForOffset,
   isWorktreeCheckout,
   parseDockerComposePsJson,
   loadEnvFile,
+  migrateLegacyS3DevCredentials,
   expandEnvMap,
   parseForeignPortOwners,
   portsForOffset,
@@ -660,6 +662,34 @@ describe("worktree helpers", () => {
     ).toBeGreaterThan(0);
   });
 
+  test("migrates generated credentials before sharing the main env file", async () => {
+    const mainRoot = createTempDir();
+    const worktreeRoot = createTempDir();
+
+    mkdirSync(path.resolve(mainRoot, "apps/api"), { recursive: true });
+    mkdirSync(path.resolve(mainRoot, "apps/web"), { recursive: true });
+    mkdirSync(path.resolve(worktreeRoot, "apps/api"), { recursive: true });
+    mkdirSync(path.resolve(worktreeRoot, "apps/web"), { recursive: true });
+
+    writeFileSync(
+      path.resolve(mainRoot, "apps/api/.env"),
+      'S3_ACCESS_KEY_ID="minioadmin"\nS3_SECRET_ACCESS_KEY="minioadmin"\n',
+    );
+    writeFileSync(path.resolve(mainRoot, "apps/web/.env"), "WEB=1\n");
+
+    ensureWorktreeEnvLinks({
+      currentRoot: worktreeRoot,
+      isWorktree: true,
+      mainRoot,
+    });
+
+    expect(
+      await Bun.file(path.resolve(worktreeRoot, "apps/api/.env")).text(),
+    ).toBe(
+      'S3_ACCESS_KEY_ID="stella-rustfs-dev"\nS3_SECRET_ACCESS_KEY="stella-rustfs-dev-secret"\n',
+    );
+  });
+
   test("bootstraps missing env files from .env.example in the main checkout", () => {
     const mainRoot = createTempDir();
 
@@ -684,7 +714,7 @@ describe("worktree helpers", () => {
     );
   });
 
-  test("leaves pre-existing env files untouched", () => {
+  test("leaves custom pre-existing env files untouched", () => {
     const mainRoot = createTempDir();
     const worktreeRoot = createTempDir();
 
@@ -707,6 +737,43 @@ describe("worktree helpers", () => {
     expect(Bun.file(path.resolve(worktreeRoot, "apps/api/.env")).size).toBe(
       "LOCAL=1\n".length,
     );
+  });
+
+  test("migrates only the former generated S3 development credentials", () => {
+    const generated = [
+      'S3_ACCESS_KEY_ID="minioadmin"',
+      'S3_SECRET_ACCESS_KEY="minioadmin"',
+      'S3_BUCKET="stella"',
+    ].join("\n");
+    const custom = generated.replace(
+      'S3_SECRET_ACCESS_KEY="minioadmin"',
+      'S3_SECRET_ACCESS_KEY="custom"',
+    );
+
+    expect(migrateLegacyS3DevCredentials(generated)).toBe(
+      [
+        'S3_ACCESS_KEY_ID="stella-rustfs-dev"',
+        'S3_SECRET_ACCESS_KEY="stella-rustfs-dev-secret"',
+        'S3_BUCKET="stella"',
+      ].join("\n"),
+    );
+    expect(migrateLegacyS3DevCredentials(custom)).toBe(custom);
+  });
+});
+
+describe("legacy shared Docker service detection", () => {
+  test("detects only the former object-store service", () => {
+    expect(
+      hasLegacyObjectStoreService([
+        { health: "healthy", service: "postgres", state: "running" },
+        { health: "healthy", service: "minio", state: "running" },
+      ]),
+    ).toBe(true);
+    expect(
+      hasLegacyObjectStoreService([
+        { health: "healthy", service: "rustfs", state: "running" },
+      ]),
+    ).toBe(false);
   });
 });
 

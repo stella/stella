@@ -7,6 +7,7 @@ import {
   mkdirSync,
   readFileSync,
   symlinkSync,
+  writeFileSync,
 } from "node:fs";
 import { createServer, Socket } from "node:net";
 import path from "node:path";
@@ -41,6 +42,9 @@ const SHARED_DOCKER_HEALTHY_SERVICES = [
   "gotenberg",
 ] as const;
 const SHARED_DOCKER_COMPLETED_SERVICES = ["rustfs-setup"] as const;
+const LEGACY_OBJECT_STORE_SERVICE = "minio";
+const RUSTFS_S3_DEV_ACCESS_KEY = "stella-rustfs-dev";
+const RUSTFS_S3_DEV_SECRET_KEY = "stella-rustfs-dev-secret";
 const MAX_HASH_OFFSET = 400;
 const PORT_SEARCH_LIMIT = 2000;
 // The web app renders via TanStack Start SSR (root document from __root.tsx),
@@ -530,6 +534,10 @@ const normalizeComposeServiceStatus = (
   };
 };
 
+export const hasLegacyObjectStoreService = (
+  statuses: readonly DockerComposeServiceStatus[],
+) => statuses.some(({ service }) => service === LEGACY_OBJECT_STORE_SERVICE);
+
 export const parseDockerComposePsJson = (output: string) => {
   const trimmed = output.trim();
   if (!trimmed) {
@@ -675,6 +683,19 @@ const ensureDockerServices = async ({
   infraPorts: InfraPorts;
   rootDir: string;
 }) => {
+  if (
+    hasLegacyObjectStoreService(
+      readSharedDockerServiceStatuses({ infraOffset, infraPorts, rootDir }),
+    )
+  ) {
+    runStep({
+      cmd: dockerComposeCommand(infraOffset, ["down", "--remove-orphans"]),
+      cwd: rootDir,
+      env: dockerComposeEnv(infraPorts),
+      label: "Replacing the legacy object-store service",
+    });
+  }
+
   const foreignOwners = findForeignContainersOnSharedPorts({
     infraOffset,
     infraPorts,
@@ -784,6 +805,32 @@ export const isWorktreeCheckout = (rootDir: string) => {
 export const resolveMainRootFromCommonDir = (commonGitDir: string) =>
   path.resolve(commonGitDir, "..");
 
+export const migrateLegacyS3DevCredentials = (contents: string) => {
+  const accessKey = /^S3_ACCESS_KEY_ID=(?:"minioadmin"|minioadmin)$/mu;
+  const secretKey = /^S3_SECRET_ACCESS_KEY=(?:"minioadmin"|minioadmin)$/mu;
+  if (!accessKey.test(contents) || !secretKey.test(contents)) {
+    return contents;
+  }
+
+  return contents
+    .replace(accessKey, () => `S3_ACCESS_KEY_ID="${RUSTFS_S3_DEV_ACCESS_KEY}"`)
+    .replace(
+      secretKey,
+      () => `S3_SECRET_ACCESS_KEY="${RUSTFS_S3_DEV_SECRET_KEY}"`,
+    );
+};
+
+const migrateEnvFileIfNeeded = (filePath: string, specPath: string) => {
+  if (specPath !== "apps/api/.env") {
+    return;
+  }
+  const contents = readFileSync(filePath, "utf-8");
+  const migrated = migrateLegacyS3DevCredentials(contents);
+  if (migrated !== contents) {
+    writeFileSync(filePath, migrated);
+  }
+};
+
 export const ensureWorktreeEnvLinks = ({
   currentRoot,
   isWorktree,
@@ -798,11 +845,13 @@ export const ensureWorktreeEnvLinks = ({
   for (const spec of ENV_FILE_SPECS) {
     const targetPath = path.resolve(currentRoot, spec.path);
     if (existsSync(targetPath)) {
+      migrateEnvFileIfNeeded(targetPath, spec.path);
       continue;
     }
 
     const mainEnvPath = path.resolve(mainRoot, spec.path);
     if (isWorktree && existsSync(mainEnvPath)) {
+      migrateEnvFileIfNeeded(mainEnvPath, spec.path);
       mkdirSync(path.dirname(targetPath), { recursive: true });
       try {
         symlinkSync(mainEnvPath, targetPath);
