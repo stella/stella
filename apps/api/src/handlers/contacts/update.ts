@@ -26,9 +26,9 @@ import { cents } from "@/api/lib/money";
 import { pickDefined } from "@/api/lib/pick-defined";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import {
-  reindexWorkspacesForContact,
-  upsertContactSearchDocument,
-} from "@/api/lib/search/index-global";
+  enqueueContactSearchRepairs,
+  flushContactSearchRepairs,
+} from "@/api/lib/search/projection-repair-queue";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 
 const updateContactBodySchema = t.Object({
@@ -238,6 +238,7 @@ export const updateContactHandler = async function* ({
           workspaceId: null,
           changes: { fields: { old: null, new: Object.keys(updates) } },
         });
+        await enqueueContactSearchRepairs(tx, [contactId]);
       }
 
       return rows;
@@ -251,10 +252,7 @@ export const updateContactHandler = async function* ({
     );
   }
 
-  Promise.all([
-    upsertContactSearchDocument(contactId),
-    reindexWorkspacesForContact(contactId),
-  ]).catch(captureError);
+  flushContactSearchRepairs([contactId]).catch(captureError);
 
   return Result.ok(updated);
 };

@@ -17,7 +17,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { acquireCellLock } from "@/api/lib/cell-lock";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { getSearchProvider } from "@/api/lib/search/provider";
+import {
+  enqueueEntitySearchRepairs,
+  flushEntitySearchRepairs,
+} from "@/api/lib/search/projection-repair-queue";
 
 const config = {
   description:
@@ -229,7 +232,7 @@ export const upsertFieldHandler = async function* ({
     (Array.isArray(body.content.value) && body.content.value.length === 0);
 
   const reindex = () => {
-    getSearchProvider().indexEntity(body.entityId).catch(captureError);
+    flushEntitySearchRepairs([body.entityId]).catch(captureError);
   };
 
   const writeResult = yield* Result.await(
@@ -334,6 +337,8 @@ export const upsertFieldHandler = async function* ({
           entityVersionId,
         },
       });
+
+      await enqueueEntitySearchRepairs(tx, [body.entityId]);
 
       return { status: "ok" as const };
     }),

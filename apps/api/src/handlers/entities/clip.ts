@@ -13,7 +13,10 @@ import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { getSearchProvider } from "@/api/lib/search/provider";
+import {
+  enqueueEntitySearchRepairs,
+  flushEntitySearchRepairs,
+} from "@/api/lib/search/projection-repair-queue";
 
 const clipBodySchema = t.Object({
   title: tDefaultVarchar,
@@ -144,6 +147,8 @@ export default createSafeHandler(
           },
         ]);
 
+        await enqueueEntitySearchRepairs(tx, [entityId]);
+
         return { ok: true as const };
       }),
     );
@@ -154,7 +159,7 @@ export default createSafeHandler(
       );
     }
 
-    getSearchProvider().indexEntity(entityId).catch(captureError);
+    flushEntitySearchRepairs([entityId]).catch(captureError);
 
     return Result.ok({ entityId });
   },

@@ -13,7 +13,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_ENTITY_REF_PREFIX } from "@/api/lib/chat/ref-registry";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
-import { getSearchProvider } from "@/api/lib/search/provider";
+import {
+  enqueueEntitySearchRepairs,
+  flushEntitySearchRepairs,
+} from "@/api/lib/search/projection-repair-queue";
 import { isRecord } from "@/api/lib/type-guards";
 
 const refSchema = (description: string) =>
@@ -398,9 +401,11 @@ export const createWorkspaceTools = ({
           .update(entities)
           .set({ updatedAt: new Date() })
           .where(eq(entities.id, entityId));
+
+        await enqueueEntitySearchRepairs(tx, [entityId]);
       });
 
-      getSearchProvider().indexEntity(entityId).catch(captureError);
+      flushEntitySearchRepairs([entityId]).catch(captureError);
 
       return {
         success: true,

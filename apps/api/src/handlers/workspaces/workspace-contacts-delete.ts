@@ -11,7 +11,10 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { upsertWorkspaceSearchDocument } from "@/api/lib/search/index-global";
+import {
+  enqueueWorkspaceSearchRepairs,
+  flushWorkspaceSearchRepairs,
+} from "@/api/lib/search/projection-repair-queue";
 
 const config = {
   description:
@@ -71,6 +74,10 @@ export const deleteWorkspaceContactHandler = async function* ({
             },
           },
         });
+        // Removing a party leaves its name in the matter's searchable text.
+        // No surviving row's timestamp moves, so nothing but this mark
+        // records that the matter has to be reprojected.
+        await enqueueWorkspaceSearchRepairs(tx, [workspaceId]);
       }
 
       return rows;
@@ -84,7 +91,7 @@ export const deleteWorkspaceContactHandler = async function* ({
     );
   }
 
-  upsertWorkspaceSearchDocument(workspaceId).catch(captureError);
+  flushWorkspaceSearchRepairs([workspaceId]).catch(captureError);
 
   return Result.ok({ id: deleted.id });
 };

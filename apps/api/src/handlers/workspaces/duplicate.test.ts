@@ -51,11 +51,19 @@ void mock.module("@/api/lib/search/process-extraction", () => ({
   processExtraction: processExtractionMock,
 }));
 
-const upsertWorkspaceSearchDocumentMock = mock(async () => undefined);
 const syncWorkspaceSearchActivityMock = mock(async () => undefined);
 void mock.module("@/api/lib/search/index-global", () => ({
   syncWorkspaceSearchActivity: syncWorkspaceSearchActivityMock,
-  upsertWorkspaceSearchDocument: upsertWorkspaceSearchDocumentMock,
+}));
+
+const enqueueWorkspaceSearchRepairsMock = mock(async () => undefined);
+const flushWorkspaceSearchRepairsMock = mock(async () => ({
+  failed: 0,
+  repaired: 0,
+}));
+void mock.module("@/api/lib/search/projection-repair-queue", () => ({
+  enqueueWorkspaceSearchRepairs: enqueueWorkspaceSearchRepairsMock,
+  flushWorkspaceSearchRepairs: flushWorkspaceSearchRepairsMock,
 }));
 
 const { default: duplicateWorkspace } = await import("./duplicate");
@@ -354,7 +362,8 @@ describe("duplicateWorkspace", () => {
     s3DeleteMock.mockClear();
     processExtractionMock.mockClear();
     syncWorkspaceSearchActivityMock.mockClear();
-    upsertWorkspaceSearchDocumentMock.mockClear();
+    enqueueWorkspaceSearchRepairsMock.mockClear();
+    flushWorkspaceSearchRepairsMock.mockClear();
 
     const insertedFields: InsertedWorkspaceField[] = [];
 

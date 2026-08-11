@@ -36,7 +36,10 @@ import {
   toScopeKey,
 } from "@/api/lib/matter-reference";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
-import { upsertWorkspaceSearchDocument } from "@/api/lib/search/index-global";
+import {
+  enqueueWorkspaceSearchRepairs,
+  flushWorkspaceSearchRepairs,
+} from "@/api/lib/search/projection-repair-queue";
 import { buildDefaultViewRows } from "@/api/lib/views";
 import { parseViewLayoutSafe } from "@/api/lib/views-schema";
 
@@ -329,6 +332,8 @@ export const createWorkspaceHandler = async function* ({
         },
       });
 
+      await enqueueWorkspaceSearchRepairs(tx, [workspaceId]);
+
       return {
         ok: true as const,
         id: body.id,
@@ -345,7 +350,7 @@ export const createWorkspaceHandler = async function* ({
     );
   }
 
-  upsertWorkspaceSearchDocument(txResult.id).catch(captureError);
+  flushWorkspaceSearchRepairs([txResult.id]).catch(captureError);
 
   return Result.ok({ id: txResult.id });
 };

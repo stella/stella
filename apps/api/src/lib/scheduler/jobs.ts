@@ -196,10 +196,10 @@ export const DECLARED_SCHEDULER_JOBS = [
   },
   {
     description:
-      "Repair missing and stale entity, contact, and matter search projections",
-    id: "search.repairProjections.fiveMinute",
+      "Drain the entity, contact, and matter search projection repair queue",
+    id: "search.repairProjections.oneMinute",
     mode: "recurring",
-    schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
+    schedule: { type: "interval", everyMs: 60 * 1000 },
     task: REPAIR_SEARCH_PROJECTIONS_TASK,
   },
   {

@@ -44,7 +44,10 @@ import {
   propertyDependencyReadLimit,
 } from "@/api/lib/properties/dependency-limits";
 import { getS3 } from "@/api/lib/s3";
-import { upsertWorkspaceSearchDocument } from "@/api/lib/search/index-global";
+import {
+  enqueueWorkspaceSearchRepairs,
+  flushWorkspaceSearchRepairs,
+} from "@/api/lib/search/projection-repair-queue";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import { parseViewLayout } from "@/api/lib/views-schema";
@@ -839,6 +842,8 @@ const duplicateWorkspace = createSafeHandler(
         },
       });
 
+      await enqueueWorkspaceSearchRepairs(tx, [targetWorkspaceId]);
+
       return {
         ok: true as const,
         workspaceId: targetWorkspaceId,
@@ -867,7 +872,7 @@ const duplicateWorkspace = createSafeHandler(
       );
     }
 
-    upsertWorkspaceSearchDocument(txResult.value.workspaceId).catch(
+    flushWorkspaceSearchRepairs([txResult.value.workspaceId]).catch(
       captureError,
     );
 
