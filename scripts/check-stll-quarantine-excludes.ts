@@ -212,27 +212,22 @@ const readTemporaryExcludes = (bunfig: string): TemporaryExcludesResult => {
  */
 const readRegistryStllPackages = (lockfile: string): Set<string> =>
   new Set(
-    // Scope plus exactly one segment. Bun also keys nested resolutions by
-    // path ("@stll/web/@babel/core"); those are not package names.
-    [...lockfile.matchAll(/"(?<name>@stll\/[^"/]+)":\s*\[/gu)].flatMap(
-      (match) => {
-        const name = match.groups?.["name"];
-        if (name === undefined) {
-          return [];
-        }
-        // The entry's own resolution follows the name; workspace members
-        // carry the workspace protocol instead of a registry tarball. Read to
-        // the end of that line and no further: a fixed-width window spills
-        // into the next entry, and one workspace neighbour then hides a
-        // registry-resolved package from the coverage check entirely.
-        const lineEnd = lockfile.indexOf("\n", match.index);
-        const entry = lockfile.slice(
-          match.index,
-          lineEnd === -1 ? undefined : lineEnd,
-        );
-        return entry.includes(WORKSPACE_PROTOCOL) ? [] : [name];
-      },
-    ),
+    // The key can be a nested resolution path such as
+    // "@stll/folio-core/@stll/template-conditions". The first array value is
+    // the resolved package identity, so derive the package name from it rather
+    // than from the path.
+    [
+      ...lockfile.matchAll(
+        /"[^"\n]+":\s*\["(?<name>@stll\/[^"@]+)@(?<source>[^"]+)"/gu,
+      ),
+    ].flatMap((match) => {
+      const name = match.groups?.["name"];
+      const source = match.groups?.["source"];
+      if (name === undefined || source === undefined) {
+        return [];
+      }
+      return source.startsWith(WORKSPACE_PROTOCOL) ? [] : [name];
+    }),
   );
 
 const HOUR_MS = 60 * 60 * 1000;

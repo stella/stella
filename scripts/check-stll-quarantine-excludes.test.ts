@@ -162,6 +162,25 @@ describe("quarantine exclude guard", () => {
     expect(result.errors.at(0)).toContain('"@stll/shipped",');
   });
 
+  test("counts first-party packages resolved under nested lock paths", () => {
+    const result = checkQuarantineExcludes({
+      bunfig: createBunfig(
+        '"better-result", # quarantine-expires: 2099-01-01T00:00:00.000Z',
+      ),
+      lockfile: `
+"packages": {
+  "@stll/folio-core/@stll/template-conditions": ["@stll/template-conditions@0.1.0", "", { "dependencies": { "@stll/conditions": "^0.1.0" } }, "sha512-test"],
+  "@stll/folio-core/@stll/template-conditions/@stll/conditions": ["@stll/conditions@0.1.0", "", { "dependencies": { "valibot": "1.4.1" } }, "sha512-test"],
+  "@stll/folio-core/better-result": ["better-result@2.10.0", "", {}, "sha512-test"],
+}
+`,
+    });
+
+    expect(result.firstPartyCount).toBe(2);
+    expect(result.errors.at(0)).toContain('"@stll/conditions",');
+    expect(result.errors.at(0)).toContain('"@stll/template-conditions",');
+  });
+
   test("prunes only the expired entries", () => {
     const bunfig = `
 [install]
