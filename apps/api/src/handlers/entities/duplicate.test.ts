@@ -509,7 +509,9 @@ describe("duplicate entity", () => {
     expect(insertedVersions).toHaveLength(2);
     expect(insertedAuditLogs).toHaveLength(1);
     expect(insertedEntities.at(0)?.kind).toBe("message");
+    expect(insertedEntities.at(0)?.docSequence).toBe(1);
     expect(insertedEntities.at(1)?.kind).toBe("document");
+    expect(insertedEntities.at(1)?.docSequence).toBe(2);
     expect(insertedEntities.at(1)?.parentId).toBe(insertedEntities.at(0)?.id);
   });
 });

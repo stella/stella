@@ -1,6 +1,21 @@
 import { describe, expect, test } from "bun:test";
 
-import { APIError, shouldRetainPendingEmailUpload } from "@/api";
+import {
+  APIError,
+  EMAIL_UPLOAD_POLICY,
+  shouldRetainPendingEmailUpload,
+} from "@/api";
+
+test("upload timeout covers a maximum-size email at the supported slow rate", () => {
+  const minimumTransferMs = Math.ceil(
+    (EMAIL_UPLOAD_POLICY.maxBytes / EMAIL_UPLOAD_POLICY.minimumBytesPerSecond) *
+      1000,
+  );
+
+  expect(EMAIL_UPLOAD_POLICY.putTimeoutMs).toBeGreaterThanOrEqual(
+    minimumTransferMs,
+  );
+});
 
 describe("pending email finalize retry", () => {
   test("retains the upload after uncertain and retryable failures", () => {
