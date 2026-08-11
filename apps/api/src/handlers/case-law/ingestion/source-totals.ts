@@ -22,6 +22,14 @@ import type { SourceTotalOrigin } from "@/api/db/schema";
  */
 const SOURCE_READ_LIMIT = 100;
 
+/**
+ * `reportedTotal` is a PostgreSQL `integer`. A larger value is rejected here
+ * so the caller gets the same boundary `TypeError` as any other unusable
+ * number, instead of a numeric-overflow raised mid-transaction by the
+ * database, which a batched caller cannot attribute to one source.
+ */
+const POSTGRES_INTEGER_MAX = 2_147_483_647;
+
 type SetSourceReportedTotalOptions = {
   scopedDb: ScopedDb;
   adapterKey: string;
@@ -40,10 +48,12 @@ export type SourceReportedTotal = {
 /**
  * Record what a publisher reports holding for one source.
  *
- * A total of zero or below is rejected rather than stored: no publisher this
- * runs against reports holding nothing, so such a value is a caller bug (a
- * parse that yielded NaN, a failed poll coerced to a number) and storing it
- * would read downstream as complete coverage of an empty corpus.
+ * This is the only place the number is judged, so it rejects everything the
+ * column cannot hold or the domain cannot mean: zero and below (no publisher
+ * reports holding nothing, and storing it would read downstream as complete
+ * coverage of an empty corpus), anything not a whole number (a parse that
+ * yielded NaN or infinity, a fraction), and anything past the column's
+ * range. Callers report the `TypeError` rather than restating these rules.
  *
  * Returns false when no source carries `adapterKey`.
  */
@@ -54,9 +64,13 @@ export const setSourceReportedTotal = async ({
   asOf,
   origin,
 }: SetSourceReportedTotalOptions): Promise<boolean> => {
-  if (!Number.isSafeInteger(total) || total <= 0) {
+  if (
+    !Number.isSafeInteger(total) ||
+    total <= 0 ||
+    total > POSTGRES_INTEGER_MAX
+  ) {
     throw new TypeError(
-      `reported total must be a positive safe integer, got: ${total}`,
+      `reported total must be a positive integer no greater than ${POSTGRES_INTEGER_MAX}, got: ${total}`,
     );
   }
   if (Number.isNaN(asOf.getTime())) {

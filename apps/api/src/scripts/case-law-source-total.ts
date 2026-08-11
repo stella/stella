@@ -151,14 +151,25 @@ if (totalFlag !== undefined) {
     console.error(`--total must be a positive integer, got: ${totalFlag}`);
     process.exit(1);
   }
-  const applied = await setSourceReportedTotal({
+  // The remaining bound on the number is the writer's, so it is reported
+  // rather than restated: a value the column cannot hold should read as a
+  // refused argument, not an unhandled rejection.
+  const write = await setSourceReportedTotal({
     scopedDb: ingestionDb,
     adapterKey: adapterFlag,
     total: parsed,
     asOf,
     origin: SOURCE_TOTAL_ORIGIN.OPERATOR,
-  });
-  if (!applied) {
+  })
+    .then((applied) => ({ ok: true, applied }) as const)
+    .catch((error: unknown) => ({ ok: false, error }) as const);
+  if (!write.ok) {
+    console.error(
+      `not recorded: ${write.error instanceof Error ? write.error.message : "the write failed"}`,
+    );
+    process.exit(1);
+  }
+  if (!write.applied) {
     console.error(`No case-law source configured for adapter ${adapterFlag}`);
     process.exit(1);
   }
@@ -227,25 +238,28 @@ const pollOne = async (adapterKey: string): Promise<PollResult> => {
       line: `${adapterKey}: exposes no count, nothing recorded`,
     };
   }
-  if (probe.total <= 0) {
-    // A publisher that answers with a count it cannot hold: refuse it here
-    // rather than let the writer's own validation throw mid-sweep.
-    return {
-      adapterKey,
-      outcome: POLL_OUTCOME.FAILED,
-      line: `${adapterKey}: poll returned an unusable total (${probe.total}), nothing recorded`,
-    };
-  }
+  // The writer owns what counts as a usable number, so its rules are not
+  // restated here — but its rejection must not escape. The probes run
+  // together, so a throw would reject the whole batch and lose the result of
+  // every other adapter, including the ones that succeeded.
   const { total } = probe;
-
-  const applied = await setSourceReportedTotal({
+  const write = await setSourceReportedTotal({
     scopedDb: ingestionDb,
     adapterKey,
     total,
     asOf,
     origin: SOURCE_TOTAL_ORIGIN.ADAPTER_POLL,
-  });
-  return applied
+  })
+    .then((applied) => ({ ok: true, applied }) as const)
+    .catch((error: unknown) => ({ ok: false, error }) as const);
+  if (!write.ok) {
+    return {
+      adapterKey,
+      outcome: POLL_OUTCOME.FAILED,
+      line: `${adapterKey}: ${write.error instanceof Error ? write.error.message : "poll write failed"}, nothing recorded`,
+    };
+  }
+  return write.applied
     ? {
         adapterKey,
         outcome: POLL_OUTCOME.RECORDED,

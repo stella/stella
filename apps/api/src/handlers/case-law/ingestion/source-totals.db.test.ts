@@ -115,28 +115,53 @@ test("a later set replaces every member, origin included", async () => {
   });
 });
 
-test.each([0, -1, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 2])(
-  "a total of %p is refused and writes nothing",
-  async (total) => {
-    const adapterKey = await seedSource();
+// 2_147_483_648 is one past the `integer` column's range: without the
+// writer's own bound it satisfies every "positive whole number" check and is
+// refused by PostgreSQL instead, mid-transaction.
+test.each([
+  0,
+  -1,
+  1.5,
+  Number.NaN,
+  Number.POSITIVE_INFINITY,
+  Number.MAX_SAFE_INTEGER + 2,
+  2_147_483_648,
+])("a total of %p is refused and writes nothing", async (total) => {
+  const adapterKey = await seedSource();
 
-    const rejection = await setSourceReportedTotal({
-      scopedDb,
-      adapterKey,
-      total,
-      asOf: new Date("2026-08-11T09:00:00.000Z"),
-      origin: SOURCE_TOTAL_ORIGIN.ADAPTER_POLL,
-    }).catch((error: unknown) => error);
+  const rejection = await setSourceReportedTotal({
+    scopedDb,
+    adapterKey,
+    total,
+    asOf: new Date("2026-08-11T09:00:00.000Z"),
+    origin: SOURCE_TOTAL_ORIGIN.ADAPTER_POLL,
+  }).catch((error: unknown) => error);
 
-    expect(rejection).toBeInstanceOf(TypeError);
+  expect(rejection).toBeInstanceOf(TypeError);
 
-    expect(await readTrio(adapterKey)).toEqual({
-      reportedTotal: null,
-      reportedTotalAsOf: null,
-      reportedTotalOrigin: null,
-    });
-  },
-);
+  expect(await readTrio(adapterKey)).toEqual({
+    reportedTotal: null,
+    reportedTotalAsOf: null,
+    reportedTotalOrigin: null,
+  });
+});
+
+// The other side of the bound: the largest value the column can hold must
+// still go through, so the guard cannot drift into rejecting valid totals.
+test("the column's largest value is accepted", async () => {
+  const adapterKey = await seedSource();
+
+  const applied = await setSourceReportedTotal({
+    scopedDb,
+    adapterKey,
+    total: 2_147_483_647,
+    asOf: new Date("2026-08-11T09:00:00.000Z"),
+    origin: SOURCE_TOTAL_ORIGIN.ADAPTER_POLL,
+  });
+
+  expect(applied).toBe(true);
+  expect((await readTrio(adapterKey))?.reportedTotal).toBe(2_147_483_647);
+});
 
 test("an adapter key no source carries reports back, and writes nothing", async () => {
   const present = await seedSource();
