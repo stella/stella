@@ -44,6 +44,8 @@ export type ReconciliationCounts = {
   unidentifiable: number;
   /** Identities already held when the unit started. */
   heldBefore: number;
+  /** Misses the store already tracks, left to the due-retry path. */
+  scheduled: number;
   written: number;
   parked: number;
   terminal: number;
@@ -51,6 +53,8 @@ export type ReconciliationCounts = {
   failed: number;
   /** Misses left for the next visit because the unit's budget ran out. */
   deferred: number;
+  /** Retired rows dropped because the slice no longer lists their identity. */
+  pruned: number;
 };
 
 export type ReconciliationTurnResult = {
@@ -93,12 +97,14 @@ const emptySummary = (): ReconciliationSweepSummary => ({
   keyable: 0,
   unidentifiable: 0,
   heldBefore: 0,
+  scheduled: 0,
   written: 0,
   parked: 0,
   terminal: 0,
   resolved: 0,
   failed: 0,
   deferred: 0,
+  pruned: 0,
 });
 
 /**
@@ -118,12 +124,14 @@ const addCounts = (
   summary.keyable += counts.keyable;
   summary.unidentifiable += counts.unidentifiable;
   summary.heldBefore += counts.heldBefore;
+  summary.scheduled += counts.scheduled;
   summary.written += counts.written;
   summary.parked += counts.parked;
   summary.terminal += counts.terminal;
   summary.resolved += counts.resolved;
   summary.failed += counts.failed;
   summary.deferred += counts.deferred;
+  summary.pruned += counts.pruned;
 };
 
 export type ReconciliationLoopTiming = {
@@ -199,8 +207,13 @@ export const runCaseLawReconciliationLoop = async ({
   let summary = emptySummary();
   let summaryDueAt = now() + timing.summaryIntervalMs;
   let idleMs = timing.idleSleepMs;
-  let consecutiveFailures = 0;
   let cursor = 0;
+  // Failure streaks are per source, not shared. A source whose publisher or
+  // rows are broken must reach the backoff ceiling on its own; with one shared
+  // counter a healthy source taking its turn in between would reset it every
+  // rotation, so the broken one would never get past its first doubled delay
+  // and would keep hitting a failing dependency at nearly full cadence.
+  const failureStreaks = new Map<number, number>();
 
   const flushSummary = (): void => {
     if (!summaryIsEmpty(summary)) {
@@ -216,8 +229,9 @@ export const runCaseLawReconciliationLoop = async ({
   let workedThisRotation = 0;
 
   while (!isDraining()) {
-    const source = sources[cursor % sources.length];
-    const rotationEnds = cursor % sources.length === sources.length - 1;
+    const sourceIndex = cursor % sources.length;
+    const source = sources[sourceIndex];
+    const rotationEnds = sourceIndex === sources.length - 1;
     cursor += 1;
 
     let delayMs = timing.unitDelayMs;
@@ -244,14 +258,15 @@ export const runCaseLawReconciliationLoop = async ({
         default:
           break;
       }
-      consecutiveFailures = 0;
+      failureStreaks.delete(sourceIndex);
     } catch (error) {
-      consecutiveFailures += 1;
+      const streak = (failureStreaks.get(sourceIndex) ?? 0) + 1;
+      failureStreaks.set(sourceIndex, streak);
       summary.errored += 1;
       summary.lastError = error;
       worked = true;
       delayMs = Math.min(
-        timing.unitDelayMs * 2 ** consecutiveFailures,
+        timing.unitDelayMs * 2 ** streak,
         timing.failureBackoffMaxMs,
       );
     }

@@ -108,7 +108,7 @@ export const getIngestionStatus = async (
       // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential per-source aggregation reads on a single scoped connection
       const [hourRow] = await db
         .select({
-          inserted: sql<number>`coalesce(sum(${caseLawIngestionEvents.inserted}), 0)`,
+          inserted: sql<number>`coalesce(sum(${caseLawIngestionEvents.inserted}), 0)::int`,
         })
         .from(caseLawIngestionEvents)
         .where(
@@ -119,7 +119,7 @@ export const getIngestionStatus = async (
       // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential per-source aggregation reads on a single scoped connection
       const [dayRow] = await db
         .select({
-          inserted: sql<number>`coalesce(sum(${caseLawIngestionEvents.inserted}), 0)`,
+          inserted: sql<number>`coalesce(sum(${caseLawIngestionEvents.inserted}), 0)::int`,
         })
         .from(caseLawIngestionEvents)
         .where(
@@ -170,7 +170,7 @@ export const getIngestionStatus = async (
       const [sliceRow] = await db
         .select({
           slices: count(),
-          shortSlices: sql<number>`coalesce(sum(case when ${caseLawCoverageSlices.collected} < ${caseLawCoverageSlices.reported} then 1 else 0 end), 0)`,
+          shortSlices: sql<number>`coalesce(sum(case when ${caseLawCoverageSlices.collected} < ${caseLawCoverageSlices.reported} then 1 else 0 end), 0)::int`,
           lastCheckedAt: sql<Date | null>`max(${caseLawCoverageSlices.checkedAt})`,
         })
         .from(caseLawCoverageSlices)
@@ -179,8 +179,8 @@ export const getIngestionStatus = async (
       // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential per-source aggregation reads on a single scoped connection
       const [itemRow] = await db
         .select({
-          parked: sql<number>`coalesce(sum(case when ${caseLawReconciliationItems.status} = ${RECONCILIATION_ITEM_STATUS.PARKED} then 1 else 0 end), 0)`,
-          terminal: sql<number>`coalesce(sum(case when ${caseLawReconciliationItems.status} = ${RECONCILIATION_ITEM_STATUS.TERMINAL} then 1 else 0 end), 0)`,
+          parked: sql<number>`coalesce(sum(case when ${caseLawReconciliationItems.status} = ${RECONCILIATION_ITEM_STATUS.PARKED} then 1 else 0 end), 0)::int`,
+          terminal: sql<number>`coalesce(sum(case when ${caseLawReconciliationItems.status} = ${RECONCILIATION_ITEM_STATUS.TERMINAL} then 1 else 0 end), 0)::int`,
         })
         .from(caseLawReconciliationItems)
         .where(sql`${caseLawReconciliationItems.sourceId} = ${source.id}`);

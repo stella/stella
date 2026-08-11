@@ -1509,11 +1509,13 @@ export const runCaseLawIngest = async (
             `keyable=${summary.keyable} ` +
             `unidentifiable=${summary.unidentifiable} ` +
             `held=${summary.heldBefore} ` +
+            `scheduled=${summary.scheduled} ` +
             `written=${summary.written} ` +
             `parked=${summary.parked} ` +
             `terminal=${summary.terminal} ` +
             `resolved=${summary.resolved} ` +
             `deferred=${summary.deferred} ` +
+            `pruned=${summary.pruned} ` +
             `failed=${summary.failed} ` +
             `errored=${summary.errored} ` +
             `lastErrorType=${summary.errored === 0 ? "none" : errorTag(summary.lastError)}`,

@@ -232,9 +232,17 @@ const unboundedListingIdentityKey = (
 ): string | null => {
   switch (identity.type) {
     case "document":
-      return `${IDENTITY_KEY_PREFIX.DOCUMENT}${identity.sourceDocumentId}`;
+      return identity.sourceDocumentId.length === 0
+        ? null
+        : `${IDENTITY_KEY_PREFIX.DOCUMENT}${identity.sourceDocumentId}`;
     case "case-number":
-      return `${IDENTITY_KEY_PREFIX.CASE_NUMBER}${identity.language}:${identity.caseNumber}`;
+      // Both halves, because either one empty produces a key the parser
+      // below rejects, and the round-trip is the property this pair exists
+      // to guarantee. An adapter that trims a docket to nothing gets an
+      // unkeyable identity rather than a key nothing can read back.
+      return identity.caseNumber.length === 0 || identity.language.length === 0
+        ? null
+        : `${IDENTITY_KEY_PREFIX.CASE_NUMBER}${identity.language}:${identity.caseNumber}`;
     case "unidentifiable":
       return null;
     default: {

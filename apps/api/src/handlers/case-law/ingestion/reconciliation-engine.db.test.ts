@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -17,6 +17,7 @@ import { SLICE_WALK_REASON } from "@/api/handlers/case-law/ingestion/reconciliat
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { addUtcDays, toUtcDateString } from "@/api/lib/dates";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
 import type {
   ReconciliationSlicePage,
@@ -80,6 +81,14 @@ const SETTLED_SLICES = Array.from({ length: WINDOW }, (_, index) =>
 
 const listed: ReconciliationSlicePageOptions[] = [];
 
+const DOCUMENT_KEYS = [
+  "2f0a1d6c-9c7f-4a58-bd4a-6c1e0f7a1b23",
+  "6b1c4e57-2d38-4f19-9a02-71f5c8d3e004",
+].map(
+  (sourceDocumentId) =>
+    listingIdentityKey({ type: "document", sourceDocumentId }) ?? "",
+);
+
 const LISTING_ITEMS = [
   {
     jednaciCislo: "11 C 153/2025-38",
@@ -100,6 +109,21 @@ const LISTING_ITEMS = [
  * drive a real walk without a pipeline write: what is under test is which
  * slice the engine chose, not what it stored.
  */
+/** Page count the stub claims; overridden per test to drive the page cap. */
+const listing = { totalPages: 1 };
+
+/** Every payload the engine asked to build, so a test can assert none was. */
+const builds: unknown[] = [];
+
+// Both arrays are module state the stub writes to, and tests assert their
+// exact contents. Reset per test so the order tests run in cannot decide
+// whether they pass.
+beforeEach(() => {
+  listed.length = 0;
+  builds.length = 0;
+  listing.totalPages = 1;
+});
+
 const stubReconciliation: SourceReconciliation = {
   firstSlice: OWED_SLICE,
   sliceOf: toUtcDateString,
@@ -122,11 +146,13 @@ const stubReconciliation: SourceReconciliation = {
         },
         payload: item,
       })),
-      totalPages: 1,
+      totalPages: listing.totalPages,
     });
   },
-  buildDecision: async () =>
-    await Promise.resolve({ type: "detail-unavailable" }),
+  buildDecision: async (payload) => {
+    builds.push(payload);
+    return await Promise.resolve({ type: "detail-unavailable" });
+  },
 };
 
 const seedSource = async (): Promise<SafeId<"caseLawSource">> => {
@@ -365,4 +391,204 @@ test("a slice the publisher will not serve parks its items rather than storing t
     { status: RECONCILIATION_ITEM_STATUS.PARKED },
     { status: RECONCILIATION_ITEM_STATUS.PARKED },
   ]);
+});
+
+/** A fresh tip, so priority 2 never fires and the short arm is exercised. */
+const seedFreshTip = async (
+  sourceId: SafeId<"caseLawSource">,
+): Promise<void> => {
+  for (const offset of [0, -1]) {
+    // oxlint-disable-next-line no-await-in-loop -- fixture seeding, sequential on one pglite handle
+    await seedSlice({
+      sourceId,
+      slice: day(offset),
+      reported: 0,
+      collected: 0,
+      checkedAt: NOW,
+    });
+  }
+};
+
+const seedItem = async (
+  sourceId: SafeId<"caseLawSource">,
+  identityKey: string,
+  row: {
+    status: (typeof RECONCILIATION_ITEM_STATUS)[keyof typeof RECONCILIATION_ITEM_STATUS];
+    attempts: number;
+    nextAttemptAt: Date | null;
+  },
+): Promise<void> => {
+  await db.insert(caseLawReconciliationItems).values({
+    id: createSafeId<"caseLawReconciliationItem">(),
+    sourceId,
+    slice: OWED_SLICE,
+    identityKey,
+    payload: {},
+    ...row,
+  });
+};
+
+test("a walk leaves already-tracked identities to the retry path", async () => {
+  // The widening backoff is the whole reason a park exists. A tip slice is
+  // re-walked daily, so a walk that re-fetched everything it found missing
+  // would serve none of that schedule — and would drag terminal items back
+  // into the hunt they have already left, which is the unbounded loop the
+  // disposition exists to end.
+  const sourceId = await seedSource();
+  await seedFreshTip(sourceId);
+  await seedSlice({
+    sourceId,
+    slice: OWED_SLICE,
+    reported: 2,
+    collected: 0,
+    checkedAt: addUtcDays(NOW, -2),
+  });
+
+  const parkedKey = DOCUMENT_KEYS[0] ?? "";
+  const terminalKey = DOCUMENT_KEYS[1] ?? "";
+  // One item mid-schedule and not yet due; one already retired.
+  await seedItem(sourceId, parkedKey, {
+    status: RECONCILIATION_ITEM_STATUS.PARKED,
+    attempts: 2,
+    nextAttemptAt: new Date(NOW.getTime() + 60 * 60 * 1000),
+  });
+  await seedItem(sourceId, terminalKey, {
+    status: RECONCILIATION_ITEM_STATUS.TERMINAL,
+    attempts: 6,
+    nextAttemptAt: null,
+  });
+
+  const outcome = await runUnit(sourceId);
+
+  // Both listed identities are missing and both are tracked, so the walk
+  // fetched neither.
+  expect(outcome).toMatchObject({
+    type: "worked",
+    summary: { slice: OWED_SLICE, keyable: 2, scheduled: 2, deferred: 0 },
+  });
+  expect(builds).toEqual([]);
+
+  // The parked item's schedule is untouched: no extra attempt was charged.
+  const [stillParked] = await db
+    .select({
+      attempts: caseLawReconciliationItems.attempts,
+      status: caseLawReconciliationItems.status,
+    })
+    .from(caseLawReconciliationItems)
+    .where(
+      and(
+        eq(caseLawReconciliationItems.sourceId, sourceId),
+        eq(caseLawReconciliationItems.identityKey, parkedKey),
+      ),
+    )
+    .limit(1);
+  expect(stillParked).toEqual({
+    attempts: 2,
+    status: RECONCILIATION_ITEM_STATUS.PARKED,
+  });
+});
+
+test("a completed walk drops retired rows the slice no longer lists", async () => {
+  // Settledness weighs the terminal count against `reported`/`collected`,
+  // which describe the listing as it is now. A retired row for an identity the
+  // publisher has since dropped would otherwise keep vouching for a shortfall
+  // it has nothing to do with, and could mark a slice settled while a
+  // genuinely missing decision sits behind the ingest budget.
+  const sourceId = await seedSource();
+  await seedFreshTip(sourceId);
+  await seedSlice({
+    sourceId,
+    slice: OWED_SLICE,
+    reported: 3,
+    collected: 0,
+    checkedAt: addUtcDays(NOW, -2),
+  });
+
+  const staleTerminalKey =
+    listingIdentityKey({
+      type: "document",
+      sourceDocumentId: "0d9e3a11-7c52-4c88-b6f4-9a1b2c3d4e5f",
+    }) ?? "";
+  // Retired under this slice, but nowhere in the listing it now returns.
+  await seedItem(sourceId, staleTerminalKey, {
+    status: RECONCILIATION_ITEM_STATUS.TERMINAL,
+    attempts: 6,
+    nextAttemptAt: null,
+  });
+
+  const outcome = await runUnit(sourceId);
+
+  expect(outcome).toMatchObject({
+    type: "worked",
+    summary: { slice: OWED_SLICE, pruned: 1 },
+  });
+  expect(
+    await db
+      .select({ identityKey: caseLawReconciliationItems.identityKey })
+      .from(caseLawReconciliationItems)
+      .where(
+        and(
+          eq(caseLawReconciliationItems.sourceId, sourceId),
+          eq(caseLawReconciliationItems.identityKey, staleTerminalKey),
+        ),
+      )
+      .limit(1),
+  ).toEqual([]);
+
+  // The two identities the slice does list were parked by this walk and are
+  // deliberately kept: they still describe the listing.
+  expect(
+    await db
+      .select({ identityKey: caseLawReconciliationItems.identityKey })
+      .from(caseLawReconciliationItems)
+      .where(eq(caseLawReconciliationItems.sourceId, sourceId))
+      .limit(10),
+  ).toHaveLength(2);
+});
+
+test("a publisher claiming an absurd page count is refused, not walked", async () => {
+  // `totalPages` is the publisher's own number and the response validators
+  // only require it to be a number. Unbounded, one wrong value turns a single
+  // unit into an endless request sequence that only the runner's hard deadline
+  // ends — by killing the process, after which the replacement starts the same
+  // walk again.
+  const sourceId = await seedSource();
+  await seedFreshTip(sourceId);
+  await seedSlice({
+    sourceId,
+    slice: OWED_SLICE,
+    reported: 2,
+    collected: 0,
+    checkedAt: addUtcDays(NOW, -2),
+  });
+
+  listing.totalPages = Number.MAX_SAFE_INTEGER;
+  // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
+  // type-aware lint; capture the rejection explicitly instead.
+  const rejection = await runUnit(sourceId).then(
+    () => null,
+    (error: unknown) => error,
+  );
+  expect(rejection).toBeInstanceOf(AdapterFetchError);
+
+  // It stopped at the ceiling instead of running to the hard deadline.
+  expect(listed.length).toBeLessThan(1000);
+  expect(listed.length).toBeGreaterThan(1);
+
+  // Nothing was recorded for a listing that was never fully read: the slice
+  // keeps its previous row rather than banking a truncated one as complete.
+  const [ledger] = await db
+    .select({
+      reported: caseLawCoverageSlices.reported,
+      collected: caseLawCoverageSlices.collected,
+    })
+    .from(caseLawCoverageSlices)
+    .where(
+      and(
+        eq(caseLawCoverageSlices.sourceId, sourceId),
+        eq(caseLawCoverageSlices.slice, OWED_SLICE),
+      ),
+    )
+    .limit(1);
+  expect(ledger).toEqual({ reported: 2, collected: 0 });
 });

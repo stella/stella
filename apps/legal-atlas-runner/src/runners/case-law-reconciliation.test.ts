@@ -38,12 +38,14 @@ const counts = (
   keyable: 0,
   unidentifiable: 0,
   heldBefore: 0,
+  scheduled: 0,
   written: 0,
   parked: 0,
   terminal: 0,
   resolved: 0,
   failed: 0,
   deferred: 0,
+  pruned: 0,
   ...overrides,
 });
 
@@ -242,6 +244,59 @@ describe("case law reconciliation loop", () => {
     expect(decreasing).toEqual([]);
     expect(gaps.at(0)).toBe(TIMING.unitDelayMs * 2);
     expect(gaps.at(-1)).toBe(TIMING.failureBackoffMaxMs);
+  });
+
+  test("a failing source backs off even while another source keeps succeeding", async () => {
+    // With one shared streak counter the healthy source resets it every
+    // rotation, so the broken one never gets past its first doubled delay and
+    // keeps hitting a failing publisher at nearly full cadence.
+    const run = await runLoop({
+      responders: [
+        [
+          "cz-regional",
+          () => {
+            throw new Error("publisher down");
+          },
+        ],
+        ["cz-ns", () => WORKED],
+      ],
+      turns: 8,
+    });
+
+    // Gaps alternate: the one after each failing turn is that source's own
+    // backoff, and it has to keep growing.
+    const afterFailures = gapsBetweenTurns(run).filter(
+      (_, index) => index % 2 === 0,
+    );
+    expect(afterFailures.at(0)).toBe(TIMING.unitDelayMs * 2);
+    expect(afterFailures.at(-1)).toBeGreaterThan(TIMING.unitDelayMs * 2);
+    const decreasing = afterFailures.filter(
+      (ms, index) => index > 0 && ms < (afterFailures[index - 1] ?? 0),
+    );
+    expect(decreasing).toEqual([]);
+  });
+
+  test("a recovered source starts its next streak from scratch", async () => {
+    let turn = 0;
+    const respond = (): ReconciliationTurnResult => {
+      turn += 1;
+      // Fails, fails, succeeds, then fails again: the streak must restart.
+      if (turn === 3) {
+        return WORKED;
+      }
+      throw new Error("intermittent");
+    };
+
+    const run = await runLoop({
+      responders: [["cz-regional", respond]],
+      turns: 4,
+    });
+
+    const gaps = gapsBetweenTurns(run);
+    expect(gaps.at(0)).toBe(TIMING.unitDelayMs * 2);
+    expect(gaps.at(1)).toBe(TIMING.unitDelayMs * 4);
+    // The successful turn pays the plain gap...
+    expect(gaps.at(2)).toBe(TIMING.unitDelayMs);
   });
 
   test("every pacing wait stays interruptible: no sleep exceeds one slice", async () => {

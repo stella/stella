@@ -50,6 +50,7 @@ import {
   tipWindowSlices,
 } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
@@ -65,10 +66,12 @@ import {
 import {
   countTerminalReconciliationItemsBySlice,
   parkReconciliationItem,
+  pruneUnlistedTerminalItems,
   resolveReconciliationItem,
   resolveReconciliationItems,
   retireReconciliationItem,
   selectDueReconciliationItems,
+  selectTrackedIdentityKeys,
 } from "@/api/lib/legal-search/reconciliation-store";
 import { logger } from "@/api/lib/observability/logger";
 
@@ -91,6 +94,19 @@ const SHORT_SLICE_CANDIDATES = 25;
  */
 const LIST_DELAY_MS = 200;
 const LIST_TIMEOUT_MS = 60_000;
+/**
+ * Pages requested for one slice before the walk gives up on it.
+ *
+ * `totalPages` is the publisher's number and the response validators only
+ * require it to be a number at all. Without a ceiling one wrong value turns a
+ * single work unit into an unbounded request sequence against that publisher,
+ * which the runner's hard deadline only ends by killing the process — and the
+ * replacement starts the same walk again. Far above any real slice, so
+ * reaching it means the listing is not walkable rather than merely large.
+ */
+const MAX_SLICE_PAGES = 200;
+/** Terminal rows examined when pruning a walked slice. */
+const PRUNE_ROW_LIMIT = 1000;
 /** One document; nothing in an item's build should take longer. */
 const ITEM_FETCH_TIMEOUT_MS = 2 * 60_000;
 
@@ -105,6 +121,11 @@ export type ReconciliationUnitSummary = {
   unidentifiable: number;
   duplicate: number;
   heldBefore: number;
+  /**
+   * Listed identities that are missing but already tracked, so this walk left
+   * them to the due-retry path instead of re-fetching them.
+   */
+  scheduled: number;
   written: number;
   parked: number;
   terminal: number;
@@ -112,6 +133,8 @@ export type ReconciliationUnitSummary = {
   failed: number;
   /** Misses left for the next visit because this unit's budget ran out. */
   deferred: number;
+  /** Retired rows dropped because the slice no longer lists their identity. */
+  pruned: number;
 };
 
 const emptySummary = (
@@ -125,12 +148,14 @@ const emptySummary = (
   unidentifiable: 0,
   duplicate: 0,
   heldBefore: 0,
+  scheduled: 0,
   written: 0,
   parked: 0,
   terminal: 0,
   resolved: 0,
   failed: 0,
   deferred: 0,
+  pruned: 0,
 });
 
 /**
@@ -172,7 +197,7 @@ const forEachChunk = async <T>(
   visit: (chunk: T[]) => Promise<void>,
 ): Promise<void> => {
   for (let index = 0; index < values.length; index += HELD_LOOKUP_CHUNK) {
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- bounded lookups stay sequential rather than fanning out across the connection pool
+    // oxlint-disable-next-line no-await-in-loop -- bounded lookups stay sequential rather than fanning out across the connection pool
     await visit(values.slice(index, index + HELD_LOOKUP_CHUNK));
   }
 };
@@ -577,6 +602,17 @@ const walkSlice = async ({
     if (page + 1 >= listed.totalPages) {
       break;
     }
+    if (page + 1 >= MAX_SLICE_PAGES) {
+      // Refused rather than truncated: a partial listing would be written to
+      // the ledger as if it were the whole slice, and an undercounted
+      // `reported` can read as fully collected. Left unwritten, the slice
+      // keeps its previous row and the failure surfaces in the loop's tally.
+      throw new AdapterFetchError({
+        message: `Slice listing exceeded ${MAX_SLICE_PAGES} pages`,
+        adapterKey,
+        cursor: slice,
+      });
+    }
   }
 
   const items = [...keyed.values()];
@@ -589,8 +625,23 @@ const walkSlice = async ({
   const missing = items.filter(({ identityKey }) => !held.has(identityKey));
   summary.heldBefore = items.length - missing.length;
 
-  const fillable = missing.slice(0, SLICE_INGEST_BUDGET);
-  summary.deferred = missing.length - fillable.length;
+  // A missing identity the store already tracks belongs to the due-retry path,
+  // not to this walk. Re-fetching it here would serve none of its backoff —
+  // a tip slice is re-walked daily, so every parked item would be asked for
+  // daily whatever its schedule said — and a terminal item would be pulled
+  // back into the hunt it has already left. They would also spend the unit's
+  // budget ahead of misses nothing is tracking yet.
+  const tracked = await selectTrackedIdentityKeys(scopedDb, {
+    sourceId,
+    identityKeys: missing.map(({ identityKey }) => identityKey),
+  });
+  const untracked = missing.filter(
+    ({ identityKey }) => !tracked.has(identityKey),
+  );
+  summary.scheduled = missing.length - untracked.length;
+
+  const fillable = untracked.slice(0, SLICE_INGEST_BUDGET);
+  summary.deferred = untracked.length - fillable.length;
   for (const [index, item] of fillable.entries()) {
     if (index > 0) {
       // oxlint-disable-next-line no-await-in-loop -- politeness pause between decisions, matching the crawl
@@ -609,6 +660,19 @@ const walkSlice = async ({
       summary,
     });
   }
+
+  // This walk saw every page, so it is authoritative about what the slice
+  // lists. Retired rows naming anything else no longer describe this slice and
+  // must stop vouching for its shortfall: settledness weighs the terminal count
+  // against `reported`/`collected`, and those two describe the listing as it is
+  // now. Only reachable on a complete walk — a listing that failed part way
+  // through throws above and never gets here.
+  summary.pruned = await pruneUnlistedTerminalItems(scopedDb, {
+    sourceId,
+    slice,
+    listedIdentityKeys: items.map(({ identityKey }) => identityKey),
+    limit: PRUNE_ROW_LIMIT,
+  });
 
   await recordSliceCoverage(scopedDb, {
     sourceId,
@@ -771,7 +835,7 @@ export const runReconciliationWorkUnit = async ({
   // whatever is genuinely owed in the same iteration. Outside the lease, like
   // the crawl's own ledger writes.
   for (const { collected, reported, slice } of settled) {
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- bounded by the candidate window; sequential upserts on one scoped connection rather than a fan-out
+    // oxlint-disable-next-line no-await-in-loop -- bounded by the candidate window; sequential upserts on one scoped connection rather than a fan-out
     await recordSliceCoverage(scopedDb, {
       sourceId,
       coverage: { slice, reported, collected },

@@ -325,6 +325,46 @@ describe("listing identity keys", () => {
     ).toBeNull();
   });
 
+  test("an identity with an empty component has no key at all", () => {
+    // Formatting one would produce a key this module's own parser rejects,
+    // so the row would be written and then read back as unreadable. The
+    // formatter refuses instead, and the caller treats it exactly like an
+    // identity there was never anything to key on.
+    const empties = [
+      { type: "document", sourceDocumentId: "" },
+      { type: "case-number", caseNumber: "", language: "cs" },
+      { type: "case-number", caseNumber: "11 C 153/2025", language: "" },
+    ] as const;
+
+    for (const identity of empties) {
+      expect({ identity, key: listingIdentityKey(identity) }).toEqual({
+        identity,
+        key: null,
+      });
+    }
+  });
+
+  test("a formatted key always reads back; the two never disagree", () => {
+    // The invariant that binds the pair: whenever a key exists, parsing it
+    // returns something. Any identity the formatter accepts but the parser
+    // rejects would be stored and then silently unreadable.
+    const identities = [
+      { type: "document", sourceDocumentId: "2f0a1d6c-9c7f" },
+      { type: "case-number", caseNumber: "11 C 153/2025", language: "cs" },
+      { type: "document", sourceDocumentId: "" },
+      { type: "case-number", caseNumber: "", language: "cs" },
+      { type: "case-number", caseNumber: "x", language: "" },
+      { type: "unidentifiable" },
+      { type: "document", sourceDocumentId: "y".repeat(400) },
+    ] as const;
+
+    for (const identity of identities) {
+      const key = listingIdentityKey(identity);
+      const readable = key === null || parseListingIdentityKey(key) !== null;
+      expect({ identity, readable }).toEqual({ identity, readable: true });
+    }
+  });
+
   test("a key no current rule produces reads as nothing", () => {
     for (const key of ["", "document:", "case-number:", "case-number:cs:"]) {
       expect(parseListingIdentityKey(key)).toBeNull();

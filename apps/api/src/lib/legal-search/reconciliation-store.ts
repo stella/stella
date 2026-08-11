@@ -430,6 +430,114 @@ export const countReconciliationItems = async (
   return counts;
 };
 
+export type SelectTrackedIdentityKeysInput = {
+  sourceId: SafeId<"caseLawSource">;
+  identityKeys: readonly string[];
+};
+
+/**
+ * Which of these identities the store already tracks, whatever their state.
+ *
+ * A slice walk must not re-fetch them. A parked item has a schedule and a
+ * walk that fetched it anyway would serve none of it — the widening backoff
+ * exists precisely so a document the publisher will not serve is asked for
+ * less often, and a daily tip walk asking every time defeats it. A terminal
+ * item is worse: it has left the hunt, and re-fetching it is the unbounded
+ * loop the whole disposition exists to end. Both belong to the due-retry
+ * path alone.
+ */
+export const selectTrackedIdentityKeys = async (
+  scopedDb: ScopedDb,
+  { sourceId, identityKeys }: SelectTrackedIdentityKeysInput,
+): Promise<Set<string>> => {
+  if (identityKeys.length === 0) {
+    return new Set();
+  }
+  const rows = await scopedDb(
+    async (tx) =>
+      await tx
+        .select({ identityKey: caseLawReconciliationItems.identityKey })
+        .from(caseLawReconciliationItems)
+        .where(
+          and(
+            eq(caseLawReconciliationItems.sourceId, sourceId),
+            inArray(caseLawReconciliationItems.identityKey, [...identityKeys]),
+          ),
+        )
+        .limit(identityKeys.length),
+  );
+  return new Set(rows.map(({ identityKey }) => identityKey));
+};
+
+export type PruneUnlistedTerminalItemsInput = {
+  sourceId: SafeId<"caseLawSource">;
+  slice: string;
+  /** Every identity the completed walk saw for the slice. */
+  listedIdentityKeys: readonly string[];
+  /** Rows examined per prune; bounds the read on a pathological slice. */
+  limit: number;
+};
+
+/**
+ * Forget retired items the slice no longer lists.
+ *
+ * Settledness compares two populations: `reported`/`collected`, which describe
+ * the listing as it is now, and the terminal count, which describes rows
+ * written whenever they were written. A publisher that drops an identity and
+ * lists another in its place leaves the old terminal row behind, and that row
+ * then vouches for a shortfall it has nothing to do with — a genuinely missing
+ * decision can be marked accounted for by an identity that is no longer even
+ * listed. Pruning on a completed walk keeps the terminal term an intersection
+ * with the listing it is compared against.
+ *
+ * Only terminal rows, because only they carry settledness. A parked row keeps
+ * its slice short either way, so removing it would buy nothing and would throw
+ * away an attempt history.
+ */
+export const pruneUnlistedTerminalItems = async (
+  scopedDb: ScopedDb,
+  {
+    sourceId,
+    slice,
+    listedIdentityKeys,
+    limit,
+  }: PruneUnlistedTerminalItemsInput,
+): Promise<number> =>
+  await scopedDb(async (tx) => {
+    const listed = new Set(listedIdentityKeys);
+    const rows = await tx
+      .select({ identityKey: caseLawReconciliationItems.identityKey })
+      .from(caseLawReconciliationItems)
+      .where(
+        and(
+          eq(caseLawReconciliationItems.sourceId, sourceId),
+          eq(caseLawReconciliationItems.slice, slice),
+          eq(
+            caseLawReconciliationItems.status,
+            RECONCILIATION_ITEM_STATUS.TERMINAL,
+          ),
+        ),
+      )
+      .limit(limit);
+    const unlisted = rows.flatMap(({ identityKey }) =>
+      listed.has(identityKey) ? [] : [identityKey],
+    );
+    if (unlisted.length === 0) {
+      return 0;
+    }
+    // audit: skip — ingestion bookkeeping for public source data
+    const removed = await tx
+      .delete(caseLawReconciliationItems)
+      .where(
+        and(
+          eq(caseLawReconciliationItems.sourceId, sourceId),
+          inArray(caseLawReconciliationItems.identityKey, unlisted),
+        ),
+      )
+      .returning({ id: caseLawReconciliationItems.id });
+    return removed.length;
+  });
+
 export type CountTerminalBySliceInput = {
   sourceId: SafeId<"caseLawSource">;
   slices: readonly string[];
