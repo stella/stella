@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import {
   ADAPTER_KEYS,
@@ -14,6 +14,10 @@ import {
 import type {
   EmptyAst,
   IngestionResult,
+  ListingIdentity,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
   StoredRawReparseInput,
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
@@ -190,7 +194,13 @@ const isSparqlResponse = (value: unknown): value is SparqlResponse =>
   Array.isArray(value["results"]["bindings"]) &&
   value["results"]["bindings"].every(isSparqlResult);
 
-const SPARQL_LIMIT = 10_000;
+/**
+ * Bindings one response may carry. Exported because it is part of this
+ * adapter's listing contract rather than an internal detail: every caller that
+ * chunks a query sizes its chunk to stay under it, and a test that proves a
+ * capped response is refused has to reach exactly this many bindings.
+ */
+export const SPARQL_LIMIT = 10_000;
 
 const CDM_TYPE_MAP: Record<string, string> = {
   "http://publications.europa.eu/ontology/cdm#judgement": "judgment",
@@ -208,10 +218,35 @@ const CDM_TYPE_MAP: Record<string, string> = {
  */
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
 
+/**
+ * What a query does when Cellar answers with exactly `SPARQL_LIMIT` bindings,
+ * which is indistinguishable from a listing cut off at the cap.
+ */
+const SPARQL_TRUNCATION = {
+  /**
+   * Refuse the page. Every caller that treats the listing as the statement of
+   * what exists — the census, a re-fetch, a slice walk — would otherwise read
+   * the bindings the cap left out as never published, and a partial listing
+   * banked as complete reads as settled.
+   */
+  REFUSE: "refuse",
+  /**
+   * Record it and continue. The crawl's per-day window sits orders of
+   * magnitude below the cap, so reaching it means the source changed shape
+   * rather than that this page is short.
+   */
+  WARN: "warn",
+} as const;
+
+type SparqlTruncation =
+  (typeof SPARQL_TRUNCATION)[keyof typeof SPARQL_TRUNCATION];
+
 type QueryDecisionsOptions = {
   dateFrom: string;
   dateTo: string;
   signal: AbortSignal;
+  /** How a response that reached the binding cap is treated. */
+  truncation: SparqlTruncation;
   /**
    * Restrict the page to these CELEX numbers. Used to record fixtures
    * for named decisions through the same query the crawl runs, instead
@@ -230,6 +265,7 @@ const queryDecisions = async ({
   dateFrom,
   dateTo,
   signal,
+  truncation,
   celexFilter,
 }: QueryDecisionsOptions): Promise<SparqlResult[]> => {
   if (!ISO_DATE.test(dateFrom) || !ISO_DATE.test(dateTo)) {
@@ -313,13 +349,9 @@ LIMIT ${SPARQL_LIMIT}`.trim();
   const bindings = json.results.bindings;
 
   if (bindings.length === SPARQL_LIMIT) {
-    // A truncated targeted listing is never acceptable: a census or
-    // re-fetch keyed on it would classify the missing variants as never
-    // published. The date-window crawl keeps the warning shape it has
-    // always had; its per-day pages sit far below the cap.
-    if (celexFilter && celexFilter.length > 0) {
+    if (truncation === SPARQL_TRUNCATION.REFUSE) {
       throw new AdapterFetchError({
-        message: `CJEU SPARQL listing truncated at ${SPARQL_LIMIT} bindings; use fewer CELEX numbers per query`,
+        message: `CJEU SPARQL listing truncated at ${SPARQL_LIMIT} bindings for ${dateFrom}..${dateTo}; narrow the date range or the CELEX chunk`,
         adapterKey: ADAPTER_KEYS.EU_ECJ,
         cursor: dateFrom,
       });
@@ -368,6 +400,70 @@ export const celexToCaseNumber = (celex: string): string => {
   const prefix = CELEX_PREFIX[typeStr] ?? "C";
 
   return `${prefix}-${caseNum}/${year}`;
+};
+
+/** One language variant of one decision, as Cellar lists it. */
+export type EcjCelexVariant = {
+  celex: string;
+  language: EcjLanguage;
+};
+
+/**
+ * The language tag a stored row carries, from the Cellar language this
+ * publisher lists. Cellar states languages in upper case and the schema stores
+ * them lower; the fallback identity index is keyed on the stored form, so the
+ * conversion lives here rather than at each call site.
+ */
+const ecjRowLanguage = (language: EcjLanguage): string =>
+  language.toLowerCase();
+
+/**
+ * The identity the ingest would store for one listed variant.
+ *
+ * This source publishes no document id of its own, so its rows are keyed on
+ * the docket and the language — the same pair `ecjDecisionFromHtml` writes,
+ * derived here by the same two rules. Stated once so the crawl's writes and
+ * the reconciliation's held-lookup cannot key the same variant differently:
+ * a second copy would let the loop read stored decisions as missing and
+ * re-fetch them forever.
+ *
+ * Always keyable: both halves come off the listing row itself, so there is no
+ * listed variant an ingest could not key.
+ */
+export const ecjListingIdentity = ({
+  celex,
+  language,
+}: EcjCelexVariant): ListingIdentity => ({
+  type: "case-number",
+  caseNumber: celexToCaseNumber(celex),
+  language: ecjRowLanguage(language),
+});
+
+/**
+ * The distinct (CELEX, language) variants a set of bindings names.
+ *
+ * A work can expose several XHTML manifestations of one language
+ * (re-publications), and bindings for a language this adapter does not
+ * publish are dropped exactly as the crawl drops them.
+ */
+const distinctVariants = (
+  bindings: readonly SparqlResult[],
+): EcjCelexVariant[] => {
+  const variants: EcjCelexVariant[] = [];
+  const seen = new Set<string>();
+  for (const binding of bindings) {
+    const language = toEcjLanguage(binding.language.value);
+    if (language === undefined) {
+      continue;
+    }
+    const key = `${binding.celex.value}:${language}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    variants.push({ celex: binding.celex.value, language });
+  }
+  return variants;
 };
 
 // -- Fulltext --
@@ -479,8 +575,11 @@ const parseManifestation = (
 /** Crawl delay between decisions (not between language variants). */
 const CRAWL_DELAY_MS = 500;
 
+/** First year the Court sat; the oldest decisions Cellar can list. */
+const COURT_EPOCH_YEAR = "1952";
+
 /** First day the Court sat; the widest range a CELEX lookup can need. */
-const COURT_EPOCH = "1952-01-01";
+const COURT_EPOCH = `${COURT_EPOCH_YEAR}-01-01`;
 
 type FetchDecisionsByCelexOptions = {
   celexNumbers: readonly string[];
@@ -513,6 +612,7 @@ export const fetchDecisionsByCelex = async ({
     dateFrom: COURT_EPOCH,
     dateTo: toIsoDate(new Date()),
     celexFilter: celexNumbers,
+    truncation: SPARQL_TRUNCATION.REFUSE,
     signal,
   });
 
@@ -539,11 +639,6 @@ export const fetchDecisionsByCelex = async ({
   return decisions;
 };
 
-export type EcjCelexVariant = {
-  celex: string;
-  language: EcjLanguage;
-};
-
 type ListCelexVariantsOptions = {
   celexNumbers: readonly string[];
   signal: AbortSignal;
@@ -565,27 +660,15 @@ export const listCelexVariants = async ({
   if (celexNumbers.length === 0) {
     return [];
   }
-  const bindings = await queryDecisions({
-    dateFrom: COURT_EPOCH,
-    dateTo: toIsoDate(new Date()),
-    celexFilter: celexNumbers,
-    signal,
-  });
-  const variants: EcjCelexVariant[] = [];
-  const seen = new Set<string>();
-  for (const binding of bindings) {
-    const language = toEcjLanguage(binding.language.value);
-    if (language === undefined) {
-      continue;
-    }
-    const key = `${binding.celex.value}:${language}`;
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    variants.push({ celex: binding.celex.value, language });
-  }
-  return variants;
+  return distinctVariants(
+    await queryDecisions({
+      dateFrom: COURT_EPOCH,
+      dateTo: toIsoDate(new Date()),
+      celexFilter: celexNumbers,
+      truncation: SPARQL_TRUNCATION.REFUSE,
+      signal,
+    }),
+  );
 };
 
 /** Historical media type whose string payload passed through normalization. */
@@ -842,7 +925,7 @@ export const buildDecision = async (
     court,
     decisionDate: date,
     decisionType,
-    language: lang.toLowerCase(),
+    language: ecjRowLanguage(lang),
     sourceUrl: eurLexSourceUrl(lang, celex),
     documentUrl,
     html,
@@ -865,6 +948,163 @@ const addDays = (date: string, days: number): string => {
   return toIsoDate(d);
 };
 
+// -- Reconciliation --
+//
+// A slice for this source is one decision year. The listing surface is
+// addressed by decision date, so a year is a range the publisher can be asked
+// about directly, and `YYYY` sorts lexicographically in chronological order —
+// the ordering the ledger relies on. A day would be the finer unit, as it is
+// for the crawl, but the Court sits on a few hundred days a year: a day-sliced
+// sweep would spend most of its units proving that nothing was decided, and
+// would need about twenty-five thousand of them to reach the Court's first
+// decisions.
+
+const ECJ_SLICE_YEAR = /^\d{4}$/u;
+
+/**
+ * A year is listed one calendar month at a time.
+ *
+ * The cap on a SPARQL response is `SPARQL_LIMIT` bindings and a busy month
+ * measures around 1,500 of them, so a whole year in one query would sit close
+ * to the cap and a truncated listing is refused rather than banked. Twelve
+ * fixed pages also make the page number an offset nothing has to remember:
+ * every page is derived from the slice alone, so a re-walk asks the same
+ * questions in the same order.
+ */
+const ECJ_SLICE_PAGES = 12;
+
+/**
+ * Tip slices re-walked on the loop's fast cadence. `tipWindowDays` counts
+ * slices, not days, so with year slices this is the current year and the one
+ * before it.
+ *
+ * The window is what catches a slice the publisher adds to after it was first
+ * walked, and this publisher adds translations to a decision for a long time
+ * after the judgment date that files it under a year. Two slices give a
+ * decision between twelve and twenty-four months of tip coverage, depending on
+ * where in its year it was decided; anything later is left to the ledger's
+ * short-slice backlog.
+ */
+const ECJ_TIP_WINDOW_SLICES = 2;
+
+const ecjYearOf = (date: Date): string =>
+  toIsoDate(date).slice(0, COURT_EPOCH_YEAR.length);
+
+const ecjSliceYear = (slice: string): number => {
+  if (!ECJ_SLICE_YEAR.test(slice)) {
+    panic(`eu-ecj slice is not a four-digit year: ${slice}`);
+  }
+  return Number.parseInt(slice, 10);
+};
+
+/** Fixed width keeps the lexicographic ordering the ledger walks by. */
+const ecjSlice = (year: number): string =>
+  String(year).padStart(COURT_EPOCH_YEAR.length, "0");
+
+const ecjNextSlice = (slice: string): string | null => {
+  const next = ecjSlice(ecjSliceYear(slice) + 1);
+  return next > ecjYearOf(new Date()) ? null : next;
+};
+
+const ecjPreviousSlice = (slice: string): string | null => {
+  const previous = ecjSlice(ecjSliceYear(slice) - 1);
+  return previous < COURT_EPOCH_YEAR ? null : previous;
+};
+
+type EcjSliceRange = {
+  dateFrom: string;
+  dateTo: string;
+};
+
+/** The calendar month one page of a year slice covers, inclusive. */
+const ecjSlicePageRange = (slice: string, page: number): EcjSliceRange => {
+  if (!Number.isInteger(page) || page < 0 || page >= ECJ_SLICE_PAGES) {
+    panic(`eu-ecj slice page out of range: ${page}`);
+  }
+  const year = ecjSliceYear(slice);
+  const monthIndex = page;
+  return {
+    dateFrom: toIsoDate(new Date(Date.UTC(year, monthIndex, 1))),
+    // Day 0 of the following month is the last day of this one.
+    dateTo: toIsoDate(new Date(Date.UTC(year, monthIndex + 1, 0))),
+  };
+};
+
+/**
+ * One page of what the publisher lists for a slice, with no manifestation
+ * fetched.
+ *
+ * The crawl reaches a decision by walking its cursor to the publication date
+ * and downloads every language variant it finds there, which is the wrong
+ * shape for asking what a year contains. This is the same query, filters and
+ * language mapping as the crawl, stopping at the listing, so what it says the
+ * year holds cannot disagree with what a crawl of that year would store.
+ */
+const listEcjSlicePage = async ({
+  slice,
+  page,
+  signal,
+}: ReconciliationSlicePageOptions): Promise<ReconciliationSlicePage> => {
+  const { dateFrom, dateTo } = ecjSlicePageRange(slice, page);
+  const bindings = await queryDecisions({
+    dateFrom,
+    dateTo,
+    truncation: SPARQL_TRUNCATION.REFUSE,
+    signal: signal ?? AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+  });
+  return {
+    items: distinctVariants(bindings).map((variant) => ({
+      identity: ecjListingIdentity(variant),
+      payload: variant,
+    })),
+    // Structural, not reported: the publisher answers a date range, so the
+    // months of the year are the pages whether or not it decided anything in
+    // them.
+    totalPages: ECJ_SLICE_PAGES,
+  };
+};
+
+const isEcjCelexVariant = (value: unknown): value is EcjCelexVariant =>
+  isRecord(value) &&
+  typeof value["celex"] === "string" &&
+  isValidCelex(value["celex"]) &&
+  ECJ_LANGUAGES.some((language) => language === value["language"]);
+
+/**
+ * Rebuild one listed variant, through the adapter's own query and build path.
+ *
+ * The payload is the variant, not the binding that named it: a parked item is
+ * replayed days later, and a manifestation URI recorded at listing time may
+ * by then point at a superseded version. Listing the CELEX again resolves the
+ * current manifestation, which is what a crawl reaching that decision today
+ * would fetch.
+ *
+ * A variant Cellar lists but does not serve — no manifestation for the
+ * language, or nothing behind the one it names — is reported as unavailable
+ * rather than written. It is an ordinary outcome, not a failure: the loop
+ * parks such an item, widens its schedule and eventually retires it, and a
+ * retired item is what lets its slice settle. Writing a detail-less row
+ * instead would make the identity held and take the document out of every
+ * later reconciliation.
+ */
+const buildEcjVariant = async (
+  payload: unknown,
+  signal?: AbortSignal,
+): Promise<ReconciliationBuildOutcome> => {
+  if (!isEcjCelexVariant(payload)) {
+    return { type: "unkeyable" };
+  }
+  const decisions = await fetchDecisionsByCelex({
+    celexNumbers: [payload.celex],
+    languages: [payload.language],
+    signal: signal ?? AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+  });
+  const decision = decisions.at(0);
+  return decision === undefined
+    ? { type: "detail-unavailable" }
+    : { type: "built", decision };
+};
+
 // -- Adapter --
 
 /**
@@ -884,6 +1124,22 @@ export const euEcjAdapter = defineSourceAdapter({
   // One stored payload is one language variant of one decision, so a stored
   // manifestation maps back to exactly the row it was stored for.
   reparseStoredRaw,
+
+  /**
+   * The publisher lists a date range independently of the crawl cursor, so
+   * what a year contains is answerable without re-crawling it: enumerate the
+   * year, key each variant the way the ingest would, and compare against what
+   * is held.
+   */
+  reconciliation: {
+    firstSlice: COURT_EPOCH_YEAR,
+    sliceOf: ecjYearOf,
+    nextSlice: ecjNextSlice,
+    previousSlice: ecjPreviousSlice,
+    tipWindowDays: ECJ_TIP_WINDOW_SLICES,
+    listSlicePage: listEcjSlicePage,
+    buildDecision: buildEcjVariant,
+  },
 
   /**
    * Counts (work, language) pairs under the same type and manifestation
@@ -965,6 +1221,7 @@ WHERE {
         const bindings = await queryDecisions({
           dateFrom,
           dateTo,
+          truncation: SPARQL_TRUNCATION.WARN,
           signal: abortSignal,
         });
 
