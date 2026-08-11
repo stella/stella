@@ -13,6 +13,7 @@ import type { SearchProjectionKind } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import {
   reindexWorkspacesForContact,
@@ -323,7 +324,7 @@ const repairClaim = async ({
       searchProjectionSourceId: claim.sourceId,
     });
     logger.error("search.projection_repair_failed", {
-      error: attempt.error,
+      "error.type": errorTag(attempt.error),
       searchProjectionKind: claim.kind,
       searchProjectionSourceId: claim.sourceId,
     });
