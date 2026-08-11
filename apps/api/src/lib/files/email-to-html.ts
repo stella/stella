@@ -48,14 +48,32 @@ const EMAIL_EXTENSION_MIME_TYPES: Record<string, string> = {
   msg: MSG_MIME_TYPE,
 };
 
-const EMAIL_ATTACHMENT_PREVIEW_EXTENSION_MIME_TYPES: Record<string, string> = {
+const EMAIL_ATTACHMENT_EXTENSION_MIME_TYPES: Record<string, string> = {
+  csv: "text/csv",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  eml: EML_MIME_TYPE,
   gif: "image/gif",
+  htm: "text/html",
+  html: "text/html",
   jpeg: "image/jpeg",
   jpg: "image/jpeg",
+  json: "application/json",
+  msg: MSG_MIME_TYPE,
+  odt: "application/vnd.oasis.opendocument.text",
   pdf: "application/pdf",
   png: "image/png",
+  ppt: "application/vnd.ms-powerpoint",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  rtf: "application/rtf",
+  tif: "image/tiff",
+  tiff: "image/tiff",
   txt: "text/plain",
   webp: "image/webp",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  xml: "application/xml",
+  zip: "application/zip",
 };
 
 const GENERIC_PREVIEW_ATTACHMENT_MIME_TYPES = {
@@ -298,7 +316,7 @@ export const resolveEmailAttachmentMimeType = ({
     return mimeType;
   }
   const extension = fileName.slice(dotIndex + 1).toLowerCase();
-  return EMAIL_ATTACHMENT_PREVIEW_EXTENSION_MIME_TYPES[extension] ?? mimeType;
+  return EMAIL_ATTACHMENT_EXTENSION_MIME_TYPES[extension] ?? mimeType;
 };
 
 export const parseEmail = async (

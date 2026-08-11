@@ -93,11 +93,13 @@ const snapshot = ({
   subject: string;
 }): MailSnapshot => ({
   attachments: [],
+  bcc: [],
   bodyText,
   cc: [],
   conversationId: null,
   from: { email: "client@example.com", name: "Client" },
   internetMessageId: null,
+  itemInstanceKey: "test-item",
   itemId: "item",
   mode: "read",
   sentAt: null,

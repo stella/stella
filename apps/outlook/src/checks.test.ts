@@ -6,15 +6,18 @@ import {
   hasAttachmentMention,
   runDraftChecks,
 } from "@/checks";
+import { translator } from "@/i18n";
 import type { MailSnapshot } from "@/types";
 
 const snapshot = (overrides: Partial<MailSnapshot> = {}): MailSnapshot => ({
   attachments: [],
+  bcc: [],
   bodyText: "",
   cc: [],
   conversationId: null,
   from: null,
   internetMessageId: null,
+  itemInstanceKey: "test-item",
   itemId: null,
   mode: "read",
   sentAt: null,
@@ -135,11 +138,27 @@ describe("runDraftChecks", () => {
         ],
         userEmail: "us@ours.com",
       }),
+      t: translator,
     });
     const external = checks.find((c) => c.title === "External recipients");
     expect(external?.type).toBe("risk");
     expect(external?.description).toContain("outside@external.com");
     expect(external?.description).not.toContain("us@ours.com");
+  });
+
+  test("includes BCC recipients in external-recipient checks", () => {
+    const checks = runDraftChecks({
+      selectedWorkspaceId: "ws-1",
+      snapshot: snapshot({
+        bcc: [{ email: "blind@external.com", name: "" }],
+        userEmail: "us@ours.com",
+      }),
+      t: translator,
+    });
+    const external = checks.find((check) =>
+      check.description.includes("blind@external.com"),
+    );
+    expect(external?.type).toBe("risk");
   });
 
   test("skips external-recipient check when userEmail is missing", () => {
@@ -149,6 +168,7 @@ describe("runDraftChecks", () => {
         to: [{ email: "x@external.com", name: "" }],
         userEmail: null,
       }),
+      t: translator,
     });
     expect(checks.some((c) => c.title === "External recipients")).toBe(false);
   });
@@ -157,6 +177,7 @@ describe("runDraftChecks", () => {
     const mentioned = runDraftChecks({
       selectedWorkspaceId: "ws-1",
       snapshot: snapshot({ bodyText: "See attached." }),
+      t: translator,
     });
     expect(
       mentioned.some((c) => c.title === "Possible missing attachment"),
@@ -176,6 +197,7 @@ describe("runDraftChecks", () => {
         ],
         bodyText: "See attached.",
       }),
+      t: translator,
     });
     expect(
       withFile.some((c) => c.title === "Possible missing attachment"),
@@ -186,6 +208,7 @@ describe("runDraftChecks", () => {
     const checks = runDraftChecks({
       selectedWorkspaceId: null,
       snapshot: snapshot(),
+      t: translator,
     });
     expect(checks.some((c) => c.title === "No matter selected")).toBe(true);
   });
@@ -198,6 +221,7 @@ describe("runDraftChecks", () => {
         to: [{ email: "x@ours.com", name: "" }],
         userEmail: "y@ours.com",
       }),
+      t: translator,
     });
     expect(checks).toHaveLength(1);
     expect(checks[0]?.title).toBe("No issues found");
@@ -217,6 +241,7 @@ describe("runDraftChecks", () => {
           },
         ],
       }),
+      t: translator,
     });
     const inline = checks.find((c) => c.title === "Inline attachment skipped");
     expect(inline?.type).toBe("info");

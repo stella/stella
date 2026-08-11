@@ -125,6 +125,12 @@ not exposed on Outlook mobile because Microsoft does not support mobile
 compose task panes. Browser sample data is restricted to development builds;
 a production build fails closed if the Office runtime is unavailable.
 
+V1 declares `en-US` as its only Marketplace locale. Runtime locale selection
+prefers Office's display language, then the browser language, and falls back to
+the declared English catalog. Adding another language requires both a complete
+Outlook message catalog and matching localized manifest resources; do not
+advertise a locale in Partner Center until both are present and client-tested.
+
 ## AppSource submission checklist
 
 - Partner Center publisher name matches `<ProviderName>` in the prod

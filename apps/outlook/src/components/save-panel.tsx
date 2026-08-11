@@ -8,6 +8,7 @@ import { Panel, PanelTitle } from "@/components/panel";
 import type { Translate } from "@/components/panel";
 import { env } from "@/env";
 import type { IngestState } from "@/hooks/use-ingest-email";
+import { buildSavedEmailUrl } from "@/lib/saved-email-url";
 import type { OutlookAttachment, WorkspaceSummary } from "@/types";
 
 type SavePanelProps = {
@@ -37,7 +38,12 @@ export const SavePanel = ({
     : t("chooseMatter");
   const savedEmailUrl =
     saveState.type === "saved"
-      ? buildEntityUrl(saveState.workspaceId, saveState.entityId)
+      ? buildSavedEmailUrl({
+          baseUrl: env.stellaWebUrl,
+          entityId: saveState.entityId,
+          fieldId: saveState.fieldId,
+          workspaceId: saveState.workspaceId,
+        })
       : null;
 
   return (
@@ -127,12 +133,6 @@ const AttachmentRow = ({
     </span>
   </label>
 );
-
-const buildEntityUrl = (workspaceId: string, entityId: string): string =>
-  new URL(
-    `/workspaces/${encodeURIComponent(workspaceId)}/entities/${encodeURIComponent(entityId)}`,
-    env.stellaWebUrl,
-  ).toString();
 
 const formatBytes = (value: number | null): string => {
   if (value === null) {

@@ -48,6 +48,7 @@ import {
 import { scanFile } from "@/api/lib/file-scan/scan";
 import {
   parseEmail,
+  resolveEmailAttachmentMimeType,
   type EmailAttachment,
 } from "@/api/lib/files/email-to-html";
 import {
@@ -141,7 +142,10 @@ type DerivativeKickoff = {
 };
 
 const attachmentMimeType = (attachment: EmailAttachment): string =>
-  attachment.mimeType ?? FALLBACK_ATTACHMENT_MIME;
+  resolveEmailAttachmentMimeType({
+    fileName: attachment.fileName,
+    mimeType: attachment.mimeType,
+  }) ?? FALLBACK_ATTACHMENT_MIME;
 
 const attachmentFileName = (attachment: EmailAttachment): string =>
   sanitizeFilename(attachment.fileName ?? FALLBACK_ATTACHMENT_NAME);
@@ -667,6 +671,7 @@ export const finalizeEmailIngest = async function* ({
     > = {
       type: "email_ingest",
       entityId: messageEntityId,
+      fieldId: messageFieldId,
       fileId: messageFileId,
       fileName: renamed.value,
       renamed: renamed.renamed,

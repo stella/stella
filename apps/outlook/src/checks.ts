@@ -1,3 +1,4 @@
+import type { Translate } from "@/components/panel";
 import type { DraftCheck, MailAddress, MailSnapshot } from "@/types";
 
 const ATTACHMENT_WORDS = [
@@ -63,12 +64,14 @@ export const extractPotentialDates = (snapshot: MailSnapshot): string[] => {
 export const runDraftChecks = ({
   selectedWorkspaceId,
   snapshot,
+  t,
 }: {
   selectedWorkspaceId: string | null;
   snapshot: MailSnapshot;
+  t: Translate;
 }): DraftCheck[] => {
   const checks: DraftCheck[] = [];
-  const recipients = [...snapshot.to, ...snapshot.cc];
+  const recipients = [...snapshot.to, ...snapshot.cc, ...snapshot.bcc];
   const externalRecipients = getExternalRecipients({
     recipients,
     userEmail: snapshot.userEmail,
@@ -76,9 +79,8 @@ export const runDraftChecks = ({
 
   if (!selectedWorkspaceId) {
     checks.push({
-      description:
-        "Choose the matter before saving or relying on matter context.",
-      title: "No matter selected",
+      description: t("noMatterSelectedDescription"),
+      title: t("noMatterSelected"),
       type: "warning",
     });
   }
@@ -88,16 +90,15 @@ export const runDraftChecks = ({
       description: externalRecipients
         .map((recipient) => recipient.email)
         .join(", "),
-      title: "External recipients",
+      title: t("externalRecipients"),
       type: "risk",
     });
   }
 
   if (hasAttachmentMention(snapshot) && snapshot.attachments.length === 0) {
     checks.push({
-      description:
-        "The email mentions an attachment, but Outlook reports none.",
-      title: "Possible missing attachment",
+      description: t("possibleMissingAttachmentDescription"),
+      title: t("possibleMissingAttachment"),
       type: "risk",
     });
   }
@@ -106,7 +107,7 @@ export const runDraftChecks = ({
   if (dates.length > 0) {
     checks.push({
       description: dates.join(", "),
-      title: "Date or deadline language",
+      title: t("dateOrDeadlineLanguage"),
       type: "info",
     });
   }
@@ -116,16 +117,18 @@ export const runDraftChecks = ({
   );
   if (inlineAttachments.length > 0) {
     checks.push({
-      description: `${inlineAttachments.length} inline attachment(s) will not be saved as matter files.`,
-      title: "Inline attachment skipped",
+      description: t("inlineAttachmentSkippedDescription", {
+        count: inlineAttachments.length,
+      }),
+      title: t("inlineAttachmentSkipped"),
       type: "info",
     });
   }
 
   if (checks.length === 0) {
     checks.push({
-      description: "No obvious pre-send issues were detected by V1 checks.",
-      title: "No issues found",
+      description: t("noIssuesDescription"),
+      title: t("noIssuesFound"),
       type: "info",
     });
   }

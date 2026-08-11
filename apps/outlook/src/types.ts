@@ -15,11 +15,13 @@ export type OutlookAttachment = {
 
 export type MailSnapshot = {
   attachments: OutlookAttachment[];
+  bcc: MailAddress[];
   bodyText: string;
   cc: MailAddress[];
   conversationId: string | null;
   from: MailAddress | null;
   internetMessageId: string | null;
+  itemInstanceKey: string;
   itemId: string | null;
   mode: "browser" | "compose" | "read";
   sentAt: string | null;
