@@ -9,7 +9,9 @@ import {
   isS3KeyInSigningScope,
   presignDownloadUrl,
   presignUploadUrl,
+  readScopedS3ArrayBuffer,
   resetAwsS3ClientForTesting,
+  writeScopedS3Object,
 } from "@/api/lib/s3-presign";
 
 const sha256Base64 = (data: string): string =>
@@ -214,6 +216,39 @@ describe("hasScopedSessionTimeForPresign", () => {
         now: 0,
       }),
     ).toBe(false);
+  });
+});
+
+describe("scoped object operations", () => {
+  const scope = {
+    organizationId: "org_1",
+    workspaceId: "ws_1",
+  } as const;
+
+  test("rejects a cross-workspace read before resolving credentials", async () => {
+    await expect(
+      readScopedS3ArrayBuffer({
+        key: "org_1/ws_2/file.pdf",
+        scope,
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({
+      message: "S3 key is outside the requested signing scope",
+    });
+  });
+
+  test("rejects a cross-workspace write before resolving credentials", async () => {
+    await expect(
+      writeScopedS3Object({
+        contentType: "application/pdf",
+        data: new Uint8Array(),
+        key: "org_2/ws_1/derivative.pdf",
+        scope,
+        signal: new AbortController().signal,
+      }),
+    ).rejects.toMatchObject({
+      message: "S3 key is outside the requested signing scope",
+    });
   });
 });
 

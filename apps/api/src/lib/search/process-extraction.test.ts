@@ -359,6 +359,31 @@ describe("processExtraction", () => {
     expect(restoreManualOcrRunAfterProjectionLossMock).not.toHaveBeenCalled();
   });
 
+  test("reads native extraction input through the caller-provided storage scope", async () => {
+    const readSource = mock(async () => new ArrayBuffer(8));
+
+    await executeNativeExtraction({
+      fileField: fileContent,
+      lifecycleSignal: new AbortController().signal,
+      readSource,
+      run: {
+        entityId,
+        entityVersionId,
+        fieldId,
+        organizationId,
+        sourceFileId: fileContent.id,
+        sourceSha256Hex: fileContent.sha256Hex,
+        workspaceId,
+      },
+    });
+
+    expect(readSource).toHaveBeenCalledWith(
+      `${organizationId}/${workspaceId}/${fileContent.id}.pdf`,
+      expect.any(AbortSignal),
+    );
+    expect(getS3ObjectWithSignalMock).not.toHaveBeenCalled();
+  });
+
   test("restores manual OCR after native PDF extraction without automatic eligibility", async () => {
     const outcome = await executeNativeExtraction({
       fileField: fileContent,

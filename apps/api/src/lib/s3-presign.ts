@@ -371,6 +371,94 @@ const getScopedAwsS3Client = async (
   return built.client;
 };
 
+const getRequiredScopedAwsS3Client = async ({
+  actions,
+  key,
+  scope,
+}: {
+  actions: readonly S3SigningAction[];
+  key: string;
+  scope: S3SigningScope;
+}): Promise<AwsS3Client> => {
+  if (!isS3KeyInSigningScope(key, scope)) {
+    throw new S3PresignError({
+      message: "S3 key is outside the requested signing scope",
+    });
+  }
+  if (!shouldUseScopedSigning()) {
+    throw new S3PresignError({
+      message: "Scoped S3 access is not configured for this runtime",
+    });
+  }
+  return await getScopedAwsS3Client(scope, actions, 0);
+};
+
+/** Read an object through a required organization/workspace-scoped STS session. */
+export const readScopedS3ArrayBuffer = async ({
+  key,
+  scope,
+  signal,
+}: {
+  key: string;
+  scope: S3SigningScope;
+  signal: AbortSignal;
+}): Promise<ArrayBuffer> => {
+  const client = await getRequiredScopedAwsS3Client({
+    actions: ["s3:GetObject"],
+    key,
+    scope,
+  });
+  const response = await client.send(
+    new GetObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
+    { abortSignal: signal },
+  );
+  if (!response.Body) {
+    throw new S3PresignError({
+      message: "S3 returned an object without a response body",
+    });
+  }
+  const bytes = await response.Body.transformToByteArray();
+  if (bytes.buffer instanceof ArrayBuffer) {
+    return bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset + bytes.byteLength,
+    );
+  }
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+};
+
+/** Write an object through a required organization/workspace-scoped STS session. */
+export const writeScopedS3Object = async ({
+  contentType,
+  data,
+  key,
+  scope,
+  signal,
+}: {
+  contentType: string;
+  data: Uint8Array;
+  key: string;
+  scope: S3SigningScope;
+  signal: AbortSignal;
+}): Promise<void> => {
+  const client = await getRequiredScopedAwsS3Client({
+    actions: ["s3:PutObject"],
+    key,
+    scope,
+  });
+  await client.send(
+    new PutObjectCommand({
+      Body: data,
+      Bucket: envBase.S3_BUCKET,
+      ContentType: contentType,
+      Key: key,
+    }),
+    { abortSignal: signal },
+  );
+};
+
 const getPresignClient = async ({
   actions,
   expiresIn,

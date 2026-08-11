@@ -65,8 +65,11 @@ import {
   createRedisClient,
 } from "@/api/lib/redis-client";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
-import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
-import { presignDownloadUrl } from "@/api/lib/s3-presign";
+import {
+  presignDownloadUrl,
+  readScopedS3ArrayBuffer,
+  writeScopedS3Object,
+} from "@/api/lib/s3-presign";
 import {
   executeNativeExtraction,
   requiresDurableNativeExtraction,
@@ -196,7 +199,15 @@ const writeOcrSearchablePdfDerivative = async ({
 }): Promise<void> => {
   const written = await Result.tryPromise({
     try: async () => {
-      const sourceBuffer = await readS3ArrayBuffer(sourceKey, lifecycleSignal);
+      const scope = {
+        organizationId: run.organizationId,
+        workspaceId: run.workspaceId,
+      };
+      const sourceBuffer = await readScopedS3ArrayBuffer({
+        key: sourceKey,
+        scope,
+        signal: lifecycleSignal,
+      });
       lifecycleSignal.throwIfAborted();
       const searchablePdf = await createOcrSearchablePdf(sourceBuffer, payload);
       if (Result.isError(searchablePdf)) {
@@ -204,15 +215,17 @@ const writeOcrSearchablePdfDerivative = async ({
       }
       lifecycleSignal.throwIfAborted();
 
-      await getS3().write(
-        createOcrSearchablePdfKey({
+      await writeScopedS3Object({
+        contentType: PDF_MIME_TYPE,
+        data: searchablePdf.value,
+        key: createOcrSearchablePdfKey({
           organizationId: run.organizationId,
           workspaceId: run.workspaceId,
           runId: run.id,
         }),
-        searchablePdf.value,
-        { type: PDF_MIME_TYPE },
-      );
+        scope,
+        signal: lifecycleSignal,
+      });
     },
     catch: (cause) => cause,
   });
@@ -1109,6 +1122,15 @@ export const processDocumentProcessingRun = async (
           const extractionOutcome = await executeNativeExtraction({
             fileField: source.content,
             lifecycleSignal,
+            readSource: async (key, signal) =>
+              await readScopedS3ArrayBuffer({
+                key,
+                scope: {
+                  organizationId: run.organizationId,
+                  workspaceId: run.workspaceId,
+                },
+                signal,
+              }),
             run,
           });
           switch (extractionOutcome) {
