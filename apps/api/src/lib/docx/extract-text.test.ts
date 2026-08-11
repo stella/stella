@@ -244,6 +244,37 @@ describe("extractText", () => {
     );
   });
 
+  test("preserves table-cell formatting for template preview", async () => {
+    const xml = WRAP(
+      `<w:tbl><w:tr><w:tc>
+        <w:p>
+          <w:pPr>
+            <w:pStyle w:val="Heading1"/>
+            <w:jc w:val="center"/>
+          </w:pPr>
+          <w:r>
+            <w:rPr><w:b/><w:sz w:val="32"/></w:rPr>
+            <w:t>Styled cell</w:t>
+          </w:r>
+        </w:p>
+      </w:tc></w:tr></w:tbl>`,
+    );
+    const buf = await makeDocx(xml);
+    const result = await extractTextForPreview(buf);
+
+    expect(result.paragraphs).toEqual([
+      {
+        index: 0,
+        text: "Styled cell",
+        source: "body",
+        style: "Heading1",
+        alignment: "center",
+        bold: true,
+        fontSize: 32,
+      },
+    ]);
+  });
+
   test("annotates #elseif and #else directives", async () => {
     const xml = WRAP(
       `<w:p><w:r><w:t>{{#if a}}</w:t></w:r></w:p>
