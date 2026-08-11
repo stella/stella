@@ -85,28 +85,33 @@ const apiRoot = path.resolve(import.meta.dir, "..");
 
 // A `mock.module(...)` call runs at import time and, because bun's module-mock
 // registry is process-wide, leaks to every other file sharing that process,
-// even with `--isolate`. The batcher therefore keeps tests that mock the same
-// target apart. It only sees `mock.module` when written in the test's OWN
-// source, though. A helper module (e.g. tests/helpers/mock-root-db)
-// that calls `mock.module` at import hides the call from that text scan, so a
-// test importing it would otherwise land in the shared-process batch and clobber
-// a module (e.g. rootDb) that concurrent tests depend on. Detect those helpers
-// by their import path so any importer is isolated too. Keyed by the path
-// suffix as it appears in an import specifier (`@/api/<suffix>` or a relative
-// path ending in `<suffix>`).
+// even with `--isolate`. The batcher therefore keeps a mocked module away from
+// both the other files that mock it and the other files that merely import it
+// (see src/tests/module-mock-batching.ts). It only sees `mock.module` when
+// written in the test's OWN source, though. A helper module (e.g.
+// tests/helpers/mock-root-db) that calls `mock.module` at import hides the call
+// from that text scan, so a test importing it would otherwise land in the
+// shared-process batch and clobber a module (e.g. rootDb) that concurrent tests
+// depend on. Detect those helpers by their import path so any importer is
+// isolated too, and fold the helper's own mock targets and imports into every
+// importing test. Keyed by the path suffix as it appears in an import specifier
+// (`@/api/<suffix>` or a relative path ending in `<suffix>`).
 const moduleMockHelpers = [
   ...new Bun.Glob(TEST_HELPER_GLOB).scanSync({ cwd: apiRoot, onlyFiles: true }),
 ]
   .filter((helperPath) => !/\.test\.tsx?$/u.test(helperPath))
   .map((helperPath) => ({
+    helperPath,
     source: readFileSync(path.join(apiRoot, helperPath), "utf-8"),
     suffix: helperPath.replace(/^src\//u, "").replace(/\.tsx?$/u, ""),
   }))
   .filter(({ source }) => MODULE_MOCK_PATTERN.test(source))
-  .map(({ source, suffix }) => {
-    const metadata = readModuleMockMetadata(source);
+  .map(({ helperPath, source, suffix }) => {
+    const metadata = readModuleMockMetadata(source, helperPath);
     return {
+      hasUnknownImport: metadata.hasUnknownImport,
       hasUnknownMock: metadata.hasUnknownMock,
+      importedModules: metadata.importedModules,
       mockedModules: metadata.mockedModules,
       suffix,
     };
@@ -115,17 +120,25 @@ const moduleMockHelpers = [
 const installsModuleMock = (source: string): boolean =>
   MODULE_MOCK_PATTERN.test(source) ||
   moduleMockHelpers.some(({ suffix }) => source.includes(suffix));
-const readTestModuleMockMetadata = (source: string) => {
-  const directMetadata = readModuleMockMetadata(source);
+const readTestModuleMockMetadata = (source: string, testPath: string) => {
+  const directMetadata = readModuleMockMetadata(source, testPath);
   const metadata = {
+    hasUnknownImport: directMetadata.hasUnknownImport,
     hasUnknownMock: directMetadata.hasUnknownMock,
+    importedModules: new Set(directMetadata.importedModules),
     mockedModules: new Set(directMetadata.mockedModules),
   };
   for (const helper of moduleMockHelpers) {
     if (!source.includes(helper.suffix)) {
       continue;
     }
+    metadata.hasUnknownImport ||= helper.hasUnknownImport;
     metadata.hasUnknownMock ||= helper.hasUnknownMock;
+    // The helper's own imports arrive in the process along with it, so they
+    // are exposed to the batch's mocks exactly like the test file's imports.
+    for (const importedModule of helper.importedModules) {
+      metadata.importedModules.add(importedModule);
+    }
     for (const mockedModule of helper.mockedModules) {
       metadata.mockedModules.add(mockedModule);
     }
@@ -172,7 +185,7 @@ for (const { source, testPath } of classifiedTests) {
 
   if (installsModuleMock(source)) {
     moduleMockTests.push({
-      ...readTestModuleMockMetadata(source),
+      ...readTestModuleMockMetadata(source, testPath),
       testPath,
     });
     continue;

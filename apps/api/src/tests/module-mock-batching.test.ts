@@ -4,21 +4,28 @@ import path from "node:path";
 import {
   batchModuleMockTests,
   readModuleMockMetadata,
+  resolveModuleSpecifier,
   type ModuleMockTest,
 } from "./module-mock-batching";
 
 type ModuleMockTestOptions = {
+  hasUnknownImport?: boolean;
   hasUnknownMock?: boolean;
+  importedModules?: readonly string[];
   mockedModules: readonly string[];
   testPath: string;
 };
 
 const moduleMockTest = ({
+  hasUnknownImport = false,
   hasUnknownMock = false,
+  importedModules = [],
   mockedModules,
   testPath,
 }: ModuleMockTestOptions): ModuleMockTest => ({
+  hasUnknownImport,
   hasUnknownMock,
+  importedModules: new Set(importedModules),
   mockedModules: new Set(mockedModules),
   testPath,
 });
@@ -69,13 +76,129 @@ describe("batchModuleMockTests", () => {
 
   test("extracts literal targets and fails closed for dynamic module mocks", () => {
     const literalMock = `${S3_MODULE_MOCK_CALL}, () => ({}));`;
-    const metadata = readModuleMockMetadata(`
+    const metadata = readModuleMockMetadata(
+      `
       ${literalMock}
       void mock.module(moduleName, () => ({}));
-    `);
+    `,
+      "src/lib/example.test.ts",
+    );
 
-    expect([...metadata.mockedModules]).toEqual(["@/api/lib/s3"]);
+    expect([...metadata.mockedModules]).toEqual(["src/lib/s3"]);
     expect(metadata.hasUnknownMock).toBe(true);
+  });
+
+  test("collects the modules a test imports, in every literal specifier form", () => {
+    const metadata = readModuleMockMetadata(
+      `
+      import { captureError } from "@/api/lib/analytics/capture";
+      import type { Never } from "@/api/lib/analytics/erased-by-the-scanner";
+      import { helper } from "./sibling";
+      export { reexported } from "../analytics/capture";
+      const loaded = await import("bullmq");
+    `,
+      "src/lib/chat/example.test.ts",
+    );
+
+    expect([...metadata.importedModules].toSorted()).toEqual([
+      "bullmq",
+      "src/lib/analytics/capture",
+      "src/lib/chat/sibling",
+    ]);
+    expect(metadata.hasUnknownImport).toBe(false);
+  });
+
+  test("fails closed for a dynamic import with a computed specifier", () => {
+    const metadata = readModuleMockMetadata(
+      `const loaded = await import(moduleName);`,
+      "src/lib/example.test.ts",
+    );
+
+    expect(metadata.hasUnknownImport).toBe(true);
+  });
+
+  test("canonicalizes alias, relative, and bare specifiers", () => {
+    expect(
+      resolveModuleSpecifier("@/api/lib/analytics/capture", "src/x.test.ts"),
+    ).toBe("src/lib/analytics/capture");
+    expect(
+      resolveModuleSpecifier("../analytics/capture", "src/lib/chat/x.test.ts"),
+    ).toBe("src/lib/analytics/capture");
+    expect(
+      resolveModuleSpecifier("./capture.ts", "src/lib/analytics/x.test.ts"),
+    ).toBe("src/lib/analytics/capture");
+    expect(resolveModuleSpecifier("bullmq", "src/x.test.ts")).toBe("bullmq");
+  });
+
+  test("never co-batches a module's mocker with a file that imports it", () => {
+    // The failure this prevents: a partial mock of a shared module drops the
+    // exports it does not declare, so a co-located file that imports one of
+    // those exports for real sees `undefined` instead of the function.
+    const tests = [
+      moduleMockTest({
+        mockedModules: ["src/lib/analytics/capture"],
+        testPath: "model-ingress-guard.test.ts",
+      }),
+      moduleMockTest({
+        importedModules: ["src/lib/analytics/capture"],
+        mockedModules: ["src/lib/posthog-client"],
+        testPath: "capture.test.ts",
+      }),
+      moduleMockTest({
+        importedModules: ["src/lib/audit-log"],
+        mockedModules: ["src/lib/s3"],
+        testPath: "audit.test.ts",
+      }),
+    ];
+
+    const batches = batchModuleMockTests(tests, 3);
+    const mockerBatch = batches.find((batch) =>
+      batch.includes("model-ingress-guard.test.ts"),
+    );
+
+    expect(mockerBatch).toBeDefined();
+    expect(mockerBatch).not.toContain("capture.test.ts");
+    expect(batches.flat().toSorted()).toEqual(
+      tests.map(({ testPath }) => testPath).toSorted(),
+    );
+  });
+
+  test("separates mocker from importer in either declaration order", () => {
+    const importerFirst = batchModuleMockTests(
+      [
+        moduleMockTest({
+          importedModules: ["src/lib/analytics/capture"],
+          mockedModules: ["src/lib/posthog-client"],
+          testPath: "importer.test.ts",
+        }),
+        moduleMockTest({
+          mockedModules: ["src/lib/analytics/capture"],
+          testPath: "mocker.test.ts",
+        }),
+      ],
+      3,
+    );
+
+    expect(importerFirst).toEqual([["importer.test.ts"], ["mocker.test.ts"]]);
+  });
+
+  test("gives a file with an unresolvable dynamic import its own batch", () => {
+    const batches = batchModuleMockTests(
+      [
+        moduleMockTest({
+          hasUnknownImport: true,
+          mockedModules: ["src/lib/s3"],
+          testPath: "unknown-import.test.ts",
+        }),
+        moduleMockTest({
+          mockedModules: ["src/lib/audit-log"],
+          testPath: "audit.test.ts",
+        }),
+      ],
+      3,
+    );
+
+    expect(batches).toEqual([["unknown-import.test.ts"], ["audit.test.ts"]]);
   });
 
   test("never co-batches tests that can overwrite the same module mock", () => {
@@ -121,6 +244,36 @@ describe("batchModuleMockTests", () => {
     expect(dynamicBatch).toEqual(["dynamic.test.ts"]);
     expect(batches.flat().toSorted()).toEqual(
       tests.map(({ testPath }) => testPath).toSorted(),
+    );
+  });
+
+  test("splits the real capture mocker/importer pairing", async () => {
+    // Read from source rather than restating the metadata: the pairing is only
+    // a regression pin while it reflects what those two files actually do.
+    const testPaths = [
+      "src/lib/chat/model-ingress-guard.test.ts",
+      "src/lib/analytics/capture.test.ts",
+    ];
+    const tests = await Promise.all(
+      testPaths.map(async (testPath) => ({
+        ...readModuleMockMetadata(
+          await Bun.file(path.join(API_ROOT, testPath)).text(),
+          testPath,
+        ),
+        testPath,
+      })),
+    );
+
+    const [mocker, importer] = tests;
+    if (mocker === undefined || importer === undefined) {
+      throw new TypeError("missing pairing fixture");
+    }
+    expect([...mocker.mockedModules]).toContain("src/lib/analytics/capture");
+    expect([...importer.importedModules]).toContain(
+      "src/lib/analytics/capture",
+    );
+    expect(batchModuleMockTests(tests, 3)).toEqual(
+      testPaths.map((testPath) => [testPath]),
     );
   });
 
