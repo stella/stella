@@ -18,7 +18,6 @@ import {
   parseDockerComposePsJson,
   loadEnvFile,
   expandEnvMap,
-  parseArgs,
   parseForeignPortOwners,
   portsForOffset,
   requiredPortsForMode,
@@ -26,6 +25,7 @@ import {
   resolveOffset,
   shouldAutoOpenBrowser,
 } from "./dev-runner";
+import { parseDevRunnerConfig } from "./dev-runner-config";
 
 const tempDirs: string[] = [];
 
@@ -41,57 +41,116 @@ afterEach(() => {
   }
 });
 
-describe("parseArgs", () => {
-  test("uses dev mode by default", () => {
-    expect(parseArgs([])).toEqual({
-      devInstance: undefined,
-      dryRun: false,
-      infraOffset: undefined,
-      mode: "dev",
-      noBrowser: false,
-      portOffset: undefined,
-      skipDbPush: false,
-      skipInstall: false,
+describe("parseDevRunnerConfig", () => {
+  test("uses dev mode and zero infrastructure offset by default", () => {
+    expect(parseDevRunnerConfig({ args: [], environment: {} })).toMatchObject({
+      status: "ok",
+      value: {
+        infraOffset: 0,
+        mode: "dev",
+      },
     });
   });
 
-  test("parses mode and flags", () => {
+  test("gives CLI offsets and instance precedence over environment values", () => {
     expect(
-      parseArgs([
-        "dev:desktop",
-        "--skip-install",
-        "--skip-db-push",
-        "--port-offset",
-        "8",
-        "--dev-instance",
-        "worktree-a",
-        "--dry-run",
-        "--no-browser",
-        "--infra-offset",
-        "10",
-      ]),
-    ).toEqual({
-      devInstance: "worktree-a",
-      dryRun: true,
-      infraOffset: 10,
-      mode: "dev:desktop",
-      noBrowser: true,
-      portOffset: 8,
-      skipDbPush: true,
-      skipInstall: true,
+      parseDevRunnerConfig({
+        args: [
+          "--port-offset",
+          "8",
+          "--infra-offset",
+          "10",
+          "--dev-instance",
+          "cli-instance",
+        ],
+        environment: {
+          STELLA_DEV_INSTANCE: "environment-instance",
+          STELLA_INFRA_OFFSET: "12",
+          STELLA_PORT_OFFSET: "14",
+        },
+      }),
+    ).toMatchObject({
+      status: "ok",
+      value: {
+        devInstance: "cli-instance",
+        infraOffset: 10,
+        portOffset: 8,
+      },
+    });
+  });
+
+  test("parses mode and control flags at the same boundary", () => {
+    expect(
+      parseDevRunnerConfig({
+        args: [
+          "dev:desktop",
+          "--skip-install",
+          "--skip-db-push",
+          "--dry-run",
+          "--no-browser",
+        ],
+        environment: {},
+      }),
+    ).toMatchObject({
+      status: "ok",
+      value: {
+        dryRun: true,
+        mode: "dev:desktop",
+        noBrowser: true,
+        skipDbPush: true,
+        skipInstall: true,
+      },
     });
   });
 
   test.each(["8oops", "1.5", "1e2", "9007199254740992"])(
-    "rejects invalid offset value %s for both offset flags",
+    "rejects malformed or unsafe values from both offset environment variables: %s",
     (value) => {
-      for (const flag of ["--port-offset", "--infra-offset"]) {
-        expect(() => parseArgs([flag, value])).toThrow(
-          `${flag} must be an integer`,
-        );
+      for (const variable of ["STELLA_PORT_OFFSET", "STELLA_INFRA_OFFSET"]) {
+        const result = parseDevRunnerConfig({
+          args: [],
+          environment: { [variable]: value },
+        });
+
+        expect(result.status).toBe("error");
+        if (result.status === "error") {
+          expect(result.error.code).toBe("invalid-integer");
+          expect(result.error.source).toBe(variable);
+        }
       }
     },
   );
+
+  test.each(["8oops", "1.5", "1e2", "9007199254740992"])(
+    "rejects malformed or unsafe values from both offset CLI flags: %s",
+    (value) => {
+      for (const flag of ["--port-offset", "--infra-offset"]) {
+        const result = parseDevRunnerConfig({
+          args: [flag, value],
+          environment: {},
+        });
+
+        expect(result.status).toBe("error");
+        if (result.status === "error") {
+          expect(result.error.code).toBe("invalid-integer");
+          expect(result.error.source).toBe(flag);
+        }
+      }
+    },
+  );
+
+  test("rejects an unsafe numeric dev instance before side effects", () => {
+    const result = parseDevRunnerConfig({
+      args: [],
+      environment: { STELLA_DEV_INSTANCE: "9007199254740992" },
+    });
+
+    expect(result.status).toBe("error");
+    if (result.status === "error") {
+      expect(result.error.code).toBe("invalid-integer");
+      expect(result.error.source).toBe("numeric STELLA_DEV_INSTANCE");
+    }
+  });
 });
 
 describe("resolveOffset", () => {
