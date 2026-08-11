@@ -422,10 +422,6 @@ export default defineConfig(({ mode }) => {
         "diff",
         "y-prosemirror",
         "yjs",
-        // pdfjs-dist/build/pdf.worker.mjs is deliberately left out: it is a
-        // worker entrypoint, and pre-bundling those rewrites the worker URL
-        // into .vite/deps (the same failure the exclude list below guards
-        // against). It costs one reload the first time a PDF opens.
       ],
       // @stll/*-wasm packages and @silurus/ooxml load their .wasm binaries via
       // `new URL("./foo.wasm32-wasi.wasm", import.meta.url)`. Vite's dep
@@ -438,6 +434,9 @@ export default defineConfig(({ mode }) => {
       // above), which does the same thing for its napi-rs wasm32-wasip1-threads
       // binding + glue.
       exclude: [
+        // Keep this worker entrypoint at its source URL. Leaving it out of
+        // `include` is insufficient because Vite discovers it on first use.
+        "pdfjs-dist/build/pdf.worker.mjs",
         "@silurus/ooxml",
         "@stll/text-search-wasm",
         "@stll/aho-corasick-wasm",

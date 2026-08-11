@@ -79,6 +79,12 @@ describe("vite config", () => {
       "@silurus/ooxml",
     );
   });
+
+  test("serves the PDF.js worker outside the dependency optimizer", () => {
+    expect(resolveConfig("test").optimizeDeps?.exclude).toContain(
+      "pdfjs-dist/build/pdf.worker.mjs",
+    );
+  });
 });
 
 const resolveConfig = (mode: string): UserConfig => {
