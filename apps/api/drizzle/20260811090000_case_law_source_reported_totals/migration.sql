@@ -16,52 +16,32 @@ ALTER TABLE "case_law_sources"
 -- validates the number before it is stored, and these checks keep any other
 -- path (a correction, a later query) from leaving the fact half-written,
 -- half-dated, or attributed to an origin the code cannot read back.
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint
-    WHERE conname = 'case_law_sources_reported_total_trio'
-      AND conrelid = 'case_law_sources'::regclass
-  ) THEN
-    ALTER TABLE "case_law_sources"
-      ADD CONSTRAINT "case_law_sources_reported_total_trio"
-      CHECK (
-        ("reported_total" IS NULL) = ("reported_total_as_of" IS NULL)
-        AND ("reported_total" IS NULL) = ("reported_total_origin" IS NULL)
-      ) NOT VALID;
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint
-    WHERE conname = 'case_law_sources_reported_total_positive'
-      AND conrelid = 'case_law_sources'::regclass
-  ) THEN
-    ALTER TABLE "case_law_sources"
-      ADD CONSTRAINT "case_law_sources_reported_total_positive"
-      CHECK ("reported_total" IS NULL OR "reported_total" > 0) NOT VALID;
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint
-    WHERE conname = 'case_law_sources_reported_total_origin_allowed'
-      AND conrelid = 'case_law_sources'::regclass
-  ) THEN
-    ALTER TABLE "case_law_sources"
-      ADD CONSTRAINT "case_law_sources_reported_total_origin_allowed"
-      CHECK (
-        "reported_total_origin" IS NULL
-        OR "reported_total_origin" IN ('adapter-poll', 'operator')
-      ) NOT VALID;
-  END IF;
-END
-$$;--> statement-breakpoint
+--
+-- Added validating, not NOT VALID + VALIDATE. This table holds one row per
+-- adapter key in the code-defined registry, so the scan is bounded by that
+-- registry rather than by corpus size. The two-step form would not help
+-- here in any case: the migrator wraps a migration in one transaction, so
+-- the locks a split is meant to release are held to commit regardless.
+ALTER TABLE "case_law_sources"
+  -- squawk-ignore constraint-missing-not-valid
+  ADD CONSTRAINT "case_law_sources_reported_total_trio"
+  CHECK (
+    ("reported_total" IS NULL) = ("reported_total_as_of" IS NULL)
+    AND ("reported_total" IS NULL) = ("reported_total_origin" IS NULL)
+  );--> statement-breakpoint
 
 ALTER TABLE "case_law_sources"
-  VALIDATE CONSTRAINT "case_law_sources_reported_total_trio";--> statement-breakpoint
+  -- squawk-ignore constraint-missing-not-valid
+  ADD CONSTRAINT "case_law_sources_reported_total_positive"
+  CHECK ("reported_total" IS NULL OR "reported_total" > 0);--> statement-breakpoint
+
 ALTER TABLE "case_law_sources"
-  VALIDATE CONSTRAINT "case_law_sources_reported_total_positive";--> statement-breakpoint
-ALTER TABLE "case_law_sources"
-  VALIDATE CONSTRAINT "case_law_sources_reported_total_origin_allowed";--> statement-breakpoint
+  -- squawk-ignore constraint-missing-not-valid
+  ADD CONSTRAINT "case_law_sources_reported_total_origin_allowed"
+  CHECK (
+    "reported_total_origin" IS NULL
+    OR "reported_total_origin" IN ('adapter-poll', 'operator')
+  );--> statement-breakpoint
 
 -- The ingestion role's UPDATE on this table is column-scoped, so the poll and
 -- the operator set both write through it only if these three columns are

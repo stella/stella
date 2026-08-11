@@ -9,6 +9,7 @@ import {
   readSourceReportedTotals,
   setSourceReportedTotal,
 } from "@/api/handlers/case-law/ingestion/source-totals";
+import { isoCalendarDay } from "@/api/lib/dates";
 
 /**
  * Read and set the total each case-law publisher reports holding.
@@ -52,7 +53,7 @@ Modes (exactly one):
 
 Options:
   --adapter <key>        Required with --total; narrows --poll to one source.
-  --as-of <ISO date>     When the figure was stated (default: now).
+  --as-of <YYYY-MM-DD>   The day the figure was stated (default: now).
 
 Adapter keys: ${listAdapterKeys().join(", ")}`;
 
@@ -73,14 +74,6 @@ const flagValue = (name: string): string | undefined => {
 const hasFlag = (name: string): boolean => process.argv.includes(`--${name}`);
 
 const DECIMAL_INTEGER = /^\d+$/u;
-
-/**
- * ISO 8601 calendar date, optionally with a time that must carry its own
- * zone. A zoneless time would be read as the operator's local time and
- * stored as a different instant depending on where it was typed.
- */
-const ISO_DATE =
-  /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2}))?$/u;
 
 const list = hasFlag("list");
 const poll = hasFlag("poll");
@@ -109,40 +102,24 @@ const asOf = (() => {
   if (asOfFlag === undefined) {
     return new Date();
   }
-  // `new Date(string)` also accepts locale-ambiguous forms: "01/02/2026" is
-  // 2 January to its parser and 1 February to much of the world. Requiring
-  // the ISO grammar first means an operator cannot silently date a figure
-  // eleven months wrong by writing it the way their locale does. A time,
-  // when given, must carry its zone for the same reason.
-  const match = ISO_DATE.exec(asOfFlag);
-  if (!match?.groups) {
+  // `new Date(string)` accepts locale-ambiguous forms: "01/02/2026" is
+  // 2 January to its parser and 1 February to much of the world. It also
+  // rolls a day that does not exist ("2026-02-31") forward into the next
+  // month rather than rejecting it. `isoCalendarDay` is the shared guard
+  // against both, used here rather than restated.
+  const day = isoCalendarDay(asOfFlag);
+  // A datetime canonicalizes to its date part, so requiring the round-trip
+  // is what keeps an operator's time-of-day from being dropped in silence:
+  // a figure is stated on a day, and only a bare day is accepted.
+  if (day === null || day !== asOfFlag) {
     console.error(
-      `--as-of must be an ISO date (YYYY-MM-DD, or YYYY-MM-DDThh:mm:ssZ with a zone), got: ${asOfFlag}`,
+      `--as-of must be a bare ISO calendar date (YYYY-MM-DD), got: ${asOfFlag}`,
     );
     process.exit(1);
   }
-  // The grammar admits days that do not exist ("2026-02-31"), which the
-  // parser silently rolls forward into March. Check the calendar fields
-  // themselves: the parsed instant's UTC day is not usable here, because a
-  // legitimate zone offset moves it either way.
-  const year = Number(match.groups["year"]);
-  const month = Number(match.groups["month"]);
-  const day = Number(match.groups["day"]);
-  const calendar = new Date(Date.UTC(year, month - 1, day));
-  if (
-    calendar.getUTCFullYear() !== year ||
-    calendar.getUTCMonth() !== month - 1 ||
-    calendar.getUTCDate() !== day
-  ) {
-    console.error(`--as-of is not a real calendar date: ${asOfFlag}`);
-    process.exit(1);
-  }
-  const parsed = new Date(asOfFlag);
-  if (Number.isNaN(parsed.getTime())) {
-    console.error(`--as-of is not a valid date: ${asOfFlag}`);
-    process.exit(1);
-  }
-  return parsed;
+  // No zone to interpret, so the day is anchored at UTC midnight rather
+  // than at whatever local midnight the operator's machine is in.
+  return new Date(`${day}T00:00:00.000Z`);
 })();
 
 const ingestionDb = createIngestionDb(rlsDb);
