@@ -55,7 +55,7 @@ service SDKs (AI providers, email, analytics, storage).
    releases that are quickly retracted.
 
 6. **Automated updates.** Dependabot checks Bun packages, GitHub
-   Actions, Docker images, and Cargo crates weekly.
+   Actions, Docker images, and Cargo crates daily.
    Updates pass through the same CI gate as any other PR.
 
 ### Inventory and transparency
