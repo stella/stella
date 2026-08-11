@@ -1,7 +1,7 @@
+import { CHAT_THREAD_PLACEHOLDER_TITLE } from "@stll/api-contract";
+
 import { CHAT_TITLE_SOURCE } from "@/api/db/schema";
 import type { ChatTitleSource } from "@/api/db/schema";
-
-export const CHAT_THREAD_PLACEHOLDER_TITLE = "New chat";
 
 /**
  * Whether background AI title generation may replace a thread's current title.

@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PlayIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { FLOW_RUN_INPUT_ENTITIES_MAX } from "@stll/api-contract";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import { Input } from "@stll/ui/components/input";
@@ -31,12 +32,6 @@ type RunLauncherProps = {
   organizationId: string;
   onStarted: (runId: string) => void;
 };
-
-// Mirrors `flowRunInputEntitiesMax` in apps/api/src/lib/limits.ts. apps/api
-// types are not importable from apps/web, so this is kept as a local
-// constant; the backend rejects a run start past this count regardless of
-// what the client enforces.
-const FLOW_RUN_INPUT_ENTITIES_MAX = 50;
 
 export const RunLauncher = ({
   workspaceId,
