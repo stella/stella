@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import { t } from "elysia";
 
+import { ENTITY_KINDS } from "@stll/api-contract";
+
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -37,8 +39,8 @@ const readEntitiesBodySchema = t.Object({
     }),
   ),
   excludedKinds: t.Optional(
-    t.Array(t.UnionEnum(["document", "folder", "task", "message", "link"]), {
-      maxItems: 5,
+    t.Array(t.UnionEnum([...ENTITY_KINDS]), {
+      maxItems: ENTITY_KINDS.length,
     }),
   ),
   previewableForAi: t.Optional(t.Boolean()),
