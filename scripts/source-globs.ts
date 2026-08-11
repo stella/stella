@@ -15,7 +15,6 @@
 export const ALL_SOURCE_GLOBS = [
   "apps/*/src/**/*.{ts,tsx}",
   "apps/*/scripts/**/*.{ts,tsx}",
-  "apps/*/e2e/**/*.{ts,tsx}",
   "packages/*/src/**/*.{ts,tsx}",
   "packages/*/scripts/**/*.{ts,tsx}",
   "scripts/**/*.ts",

@@ -55,6 +55,21 @@ const SEED_HINT = "bun scripts/suppression-waivers.ts --seed";
 const WAIVER_ID = /^SW-\d{4}$/u;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
 
+// Expiry is the whole enforcement mechanism for a temporary waiver, and the
+// comparison against it is lexical. A well-shaped impossible date such as
+// 2026-13-01 would therefore never be reached, holding the waiver open
+// indefinitely, so the value has to be a real day as well as the right shape.
+const isCalendarDate = (value: string): boolean => {
+  if (!ISO_DATE.test(value)) {
+    return false;
+  }
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return (
+    !Number.isNaN(parsed.getTime()) &&
+    parsed.toISOString().slice(0, 10) === value
+  );
+};
+
 // `permanent` is a structural exception: the code cannot satisfy the rule and
 // never will, so an owner or expiry field would be theatre that rots. A
 // `temporary` waiver is a promise with a date attached, and this guard fails
@@ -144,7 +159,7 @@ const parseWaiver = (raw: unknown, index: number): Waiver | string => {
     return `${id}: a permanent structural exception must not carry an expiry; mark it temporary or drop the field`;
   }
   if (kind === "temporary") {
-    if (typeof expires !== "string" || !ISO_DATE.test(expires)) {
+    if (typeof expires !== "string" || !isCalendarDate(expires)) {
       return `${id}: a temporary waiver needs an expires date (YYYY-MM-DD)`;
     }
     return { id, rule, file, symbol, count, reason, evidence, kind, expires };
@@ -153,7 +168,7 @@ const parseWaiver = (raw: unknown, index: number): Waiver | string => {
 };
 
 const parseLedger = (raw: unknown): ParseResult => {
-  const rawWaivers = isRecord(raw) ? raw.waivers : undefined;
+  const rawWaivers = isRecord(raw) ? raw["waivers"] : undefined;
   if (!Array.isArray(rawWaivers)) {
     return {
       status: "invalid",
@@ -241,16 +256,71 @@ export const observeSecurityDirectives = (
 type InspectionInput = {
   readonly ledger: Ledger;
   readonly observation: Observation;
-  readonly evidenceExists: (locator: string) => boolean;
+  readonly evidenceExists: (file: string) => boolean;
+  readonly evidenceContains: (file: string, symbol: string) => boolean;
   readonly today: string;
 };
 
-const evidencePath = (locator: string): string =>
-  locator.split("#").at(0) ?? locator;
+/** `path/to/file.ts#symbol` split into its two halves. */
+const splitLocator = (
+  locator: string,
+): { file: string; symbol: string | undefined } => {
+  const hash = locator.indexOf("#");
+  if (hash === -1) {
+    return { file: locator, symbol: undefined };
+  }
+  const symbol = locator.slice(hash + 1);
+  return { file: locator.slice(0, hash), symbol: symbol || undefined };
+};
+
+/** A locator naming something a reviewer cannot open from a checkout is not
+ *  evidence, whatever it points at. */
+const isInsideRepo = (relative: string): boolean => {
+  if (path.isAbsolute(relative)) {
+    return false;
+  }
+  const inside = path.relative(REPO_ROOT, path.resolve(REPO_ROOT, relative));
+  return inside.length > 0 && !inside.startsWith("..");
+};
+
+/**
+ * Why `waiver.evidence` fails to locate the invariant that makes the exception
+ * safe, or `undefined` when it does.
+ *
+ * The field is the whole point of the ledger: without it a waiver asserts its
+ * own safety, which is the bare suppression comment the ledger replaced. So a
+ * locator has to name a readable file inside the repo, a fragment has to name
+ * something that file actually contains, and it cannot resolve to the very
+ * symbol carrying the suppression.
+ */
+const inspectEvidence = (
+  waiver: Waiver,
+  evidenceExists: (file: string) => boolean,
+  evidenceContains: (file: string, symbol: string) => boolean,
+): string | undefined => {
+  const { file, symbol } = splitLocator(waiver.evidence);
+  if (file.length === 0) {
+    return `${waiver.id}: evidence ${waiver.evidence} names no file; a bare fragment resolves to the repository root`;
+  }
+  if (!isInsideRepo(file)) {
+    return `${waiver.id}: evidence ${waiver.evidence} resolves outside the repository`;
+  }
+  if (!evidenceExists(file)) {
+    return `${waiver.id}: evidence ${waiver.evidence} does not exist; point at a test or a source symbol that does`;
+  }
+  if (symbol !== undefined && !evidenceContains(file, symbol)) {
+    return `${waiver.id}: evidence ${waiver.evidence} names a symbol ${file} does not contain; the locator has gone stale`;
+  }
+  if (file === waiver.file && symbol === waiver.symbol) {
+    return `${waiver.id}: evidence points at the suppressed symbol itself, which asserts nothing; name the test or the symbol whose scoping makes the exception safe`;
+  }
+  return undefined;
+};
 
 const inspectShape = (
   waivers: readonly Waiver[],
-  evidenceExists: (locator: string) => boolean,
+  evidenceExists: (file: string) => boolean,
+  evidenceContains: (file: string, symbol: string) => boolean,
   today: string,
 ): string[] => {
   const errors: string[] = [];
@@ -276,10 +346,13 @@ const inspectShape = (
         `${waiver.id}: ${waiver.rule} is not a security-tier rule; the ledger governs ${SECURITY_TIER_RULES.length} rules listed in scripts/lint-suppressions.ts`,
       );
     }
-    if (!evidenceExists(evidencePath(waiver.evidence))) {
-      errors.push(
-        `${waiver.id}: evidence ${waiver.evidence} does not exist; point at a test or a source symbol that does`,
-      );
+    const evidenceProblem = inspectEvidence(
+      waiver,
+      evidenceExists,
+      evidenceContains,
+    );
+    if (evidenceProblem !== undefined) {
+      errors.push(evidenceProblem);
     }
     if (waiver.kind === "temporary" && waiver.expires < today) {
       errors.push(
@@ -295,9 +368,15 @@ export const inspectLedger = ({
   ledger,
   observation,
   evidenceExists,
+  evidenceContains,
   today,
 }: InspectionInput): readonly string[] => {
-  const errors = inspectShape(ledger.waivers, evidenceExists, today);
+  const errors = inspectShape(
+    ledger.waivers,
+    evidenceExists,
+    evidenceContains,
+    today,
+  );
 
   for (const file of observation.bare) {
     errors.push(
@@ -373,7 +452,9 @@ const runCheck = (): number => {
   const errors = inspectLedger({
     ledger,
     observation: observeRepo(REPO_ROOT),
-    evidenceExists: (locator) => existsSync(path.join(REPO_ROOT, locator)),
+    evidenceExists: (file) => existsSync(path.join(REPO_ROOT, file)),
+    evidenceContains: (file, symbol) =>
+      readFileSync(path.join(REPO_ROOT, file), "utf-8").includes(symbol),
     today: today(),
   });
 
@@ -447,11 +528,11 @@ const runSeed = (): number => {
       : `${entry.file}#${entry.symbol}`;
   };
 
-  let next =
-    ledger.waivers.reduce(
-      (highest, { id }) => Math.max(highest, Number(id.slice(3))),
-      0,
-    ) + 1;
+  let highest = 0;
+  for (const { id } of ledger.waivers) {
+    highest = Math.max(highest, Number(id.slice(3)));
+  }
+  let next = highest + 1;
 
   const drafted: Waiver[] = [];
   for (const entry of observed) {
@@ -536,13 +617,14 @@ const fixtureObserved = (
 const inspect = (
   ledger: readonly Waiver[],
   observation: Observation,
-  today = "2026-01-01",
+  asOf = "2026-01-01",
 ): readonly string[] =>
   inspectLedger({
     ledger: { waivers: ledger },
     observation,
     evidenceExists: () => true,
-    today,
+    evidenceContains: () => true,
+    today: asOf,
   });
 
 const SOURCE_FIXTURE_LINES = [

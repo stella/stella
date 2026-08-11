@@ -660,10 +660,7 @@ const countTrackedRuleSuppressions =
 // The residual budget: directives naming only rules with no dedicated budget.
 // A bare directive is excluded here because it silences every tracked rule and
 // is already charged to each of their budgets.
-const countResidualLintSuppressions = (
-  content: string,
-  file: string,
-): number =>
+const countResidualLintSuppressions = (content: string, file: string): number =>
   collectLintDirectives(content, file).filter(isResidualDirective).length;
 
 // A compiler-suppression directive. Fidelity limit: a prose comment that
@@ -1193,8 +1190,8 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
   {
     id: "lint-suppression-directives",
     description:
-      "eslint-/oxlint-disable directives in app source naming only rules with no dedicated budget (residual suppression pressure; the per-rule budgets above are subtracted, so no rule's burn-down can fund another rule's new waiver)",
-    include: APP_SOURCE_GLOBS,
+      "eslint-/oxlint-disable directives naming only rules with no dedicated budget, repo-wide (residual suppression pressure; the per-rule budgets above are subtracted, so no rule's burn-down can fund another rule's new waiver). Same scope as those budgets, so every directive in the tree is charged to exactly one of them",
+    include: ALL_SOURCE_GLOBS,
     exclude: isExcludedSource,
     count: countResidualLintSuppressions,
   },

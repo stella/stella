@@ -285,7 +285,7 @@ export const collectLintDirectives = (
     return [];
   }
   const cached = directiveCache.get(file);
-  if (cached && cached.content === content) {
+  if (cached?.content === content) {
     return cached.directives;
   }
   const directives = scanDirectives(content, file);
@@ -309,7 +309,7 @@ export const isResidualDirective = (directive: LintDirective): boolean =>
 // above instead (both forms satisfy suppression-hygiene/require-description).
 export const directiveReason = (directive: LintDirective): string => {
   const trailer = directive.text.indexOf("--");
-  if (trailer < 0) {
+  if (trailer === -1) {
     return "";
   }
   return directive.text

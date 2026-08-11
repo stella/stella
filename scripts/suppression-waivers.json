@@ -48,7 +48,7 @@
       "symbol": "toAuditLogConditions",
       "count": 1,
       "reason": "org-scoped compliance filter, not an ownership source",
-      "evidence": "apps/api/src/handlers/audit-logs/query.ts#toAuditLogConditions"
+      "evidence": "apps/api/src/handlers/audit-logs/query.ts#queryAuditLogPage"
     },
     {
       "id": "SW-0006",
