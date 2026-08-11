@@ -9,6 +9,12 @@ import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useUpdateContact } from "@/lib/contacts/mutations";
 import { detached } from "@/lib/detached";
 import { invalidateContactCaches } from "@/routes/_protected.contacts/-components/contact-caches";
+import {
+  buildNumericContactPayload,
+  EDITABLE_FIELD_POLICY,
+  getEditableFieldInputAttributes,
+  isNumericEditableField,
+} from "@/routes/_protected.contacts/-components/editable-row.logic";
 import type {
   ContactData,
   EditableField,
@@ -16,25 +22,11 @@ import type {
 
 const protectedRouteApi = getRouteApi("/_protected");
 
-const FIELD_MAX_LENGTH: Partial<Record<EditableField, number>> = {
-  prefix: 32,
-  firstName: 256,
-  middleName: 256,
-  lastName: 256,
-  suffix: 32,
-  organizationName: 512,
-  displayName: 512,
-  registrationNumber: 64,
-  taxId: 64,
-  currency: 3,
-};
-
 type EditableRowProps = {
   label: string;
   value: string | null | undefined;
   field: EditableField;
   contact: ContactData;
-  type?: "text" | "number";
 };
 
 export const EditableRow = ({
@@ -42,7 +34,6 @@ export const EditableRow = ({
   value,
   field,
   contact,
-  type = "text",
 }: EditableRowProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -51,7 +42,8 @@ export const EditableRow = ({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
 
-  const maxLength = FIELD_MAX_LENGTH[field];
+  const policy = EDITABLE_FIELD_POLICY[field];
+  const inputAttributes = getEditableFieldInputAttributes(field);
 
   const rename = useInlineRename({
     initial: value ?? "",
@@ -64,8 +56,12 @@ export const EditableRow = ({
     // optional rows such as prefix, tax ID, currency, default
     // hourly rate, or payment terms back to empty.
     validate: () => null,
-    onCommit: (trimmed) => {
-      if (maxLength !== undefined && trimmed.length > maxLength) {
+    onCommit: (trimmed, { setError }) => {
+      if (
+        policy.valueKind === "text" &&
+        policy.maxLength !== null &&
+        trimmed.length > policy.maxLength
+      ) {
         stellaToast.add({
           title: t("errors.actionFailed"),
           type: "error",
@@ -74,15 +70,15 @@ export const EditableRow = ({
       }
 
       let payload: Record<string, unknown>;
-      if (field === "defaultHourlyRate" || field === "paymentTermDays") {
-        const parsed = trimmed ? Number.parseInt(trimmed, 10) : null;
-        if (parsed !== null && (Number.isNaN(parsed) || parsed < 0)) {
+      if (isNumericEditableField(field)) {
+        const result = buildNumericContactPayload(field, trimmed);
+        if (result.status === "invalid") {
+          const message = t("errors.actionFailed");
+          stellaToast.add({ title: message, type: "error" });
+          setError(message);
           return;
         }
-        if (field === "paymentTermDays" && parsed !== null && parsed > 365) {
-          return;
-        }
-        payload = { [field]: parsed };
+        payload = result.payload;
       } else if (field === "displayName") {
         if (!trimmed) {
           stellaToast.add({
@@ -127,10 +123,15 @@ export const EditableRow = ({
           <span className="text-muted-foreground w-32 shrink-0">{label}</span>
         )}
         <Input
+          {...inputAttributes}
           autoFocus
           className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-sm shadow-none outline-none focus-visible:ring-0"
-          dir={type === "number" ? undefined : "auto"}
-          maxLength={maxLength}
+          dir={policy.valueKind === "nonNegativeInteger" ? undefined : "auto"}
+          maxLength={
+            policy.valueKind === "text"
+              ? (policy.maxLength ?? undefined)
+              : undefined
+          }
           onBlur={() => {
             detached(rename.commit(), "EditableRow");
           }}
@@ -144,7 +145,6 @@ export const EditableRow = ({
               e.currentTarget.blur();
             }
           }}
-          type={type}
           value={rename.state.draft}
         />
       </div>
