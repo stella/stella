@@ -6,7 +6,7 @@ export const buildAISummaryRequest = ({
   language,
   text,
 }: {
-  language?: string;
+  language?: string | undefined;
   text: string;
 }) => ({
   text: truncateOutlookAIInput(text),
@@ -19,7 +19,7 @@ export const buildAIDraftRequest = ({
   snapshot,
 }: {
   intent: string;
-  language?: string;
+  language?: string | undefined;
   snapshot: MailSnapshot;
 }) => {
   const originalFrom = snapshot.from?.email;
