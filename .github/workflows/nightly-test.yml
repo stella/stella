@@ -171,8 +171,8 @@ jobs:
       - name: Start docker stack
         run: |
           for attempt in 1 2 3; do
-            if docker compose --profile dev up -d --wait postgres minio valkey gotenberg \
-              && docker compose --profile dev run --rm --no-deps minio-setup; then
+            if docker compose --profile dev up -d --wait postgres rustfs valkey gotenberg \
+              && docker compose --profile dev run --rm --no-deps rustfs-setup; then
               exit 0
             fi
             echo "::warning::docker stack start failed (attempt ${attempt}/3); tearing down and retrying"

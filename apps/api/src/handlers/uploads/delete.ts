@@ -144,7 +144,7 @@ const abortUpload = createSafeHandler(
 
     // Best-effort tmp cleanup. The client may have never actually
     // PUT (so the object never existed) — `delete` on a missing key
-    // is a no-op on S3 / MinIO.
+    // is a no-op on S3 / RustFS.
     for (const key of tmpUploadKeys({
       organizationId: session.activeOrganizationId,
       uploadId,

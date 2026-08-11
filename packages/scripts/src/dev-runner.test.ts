@@ -13,10 +13,12 @@ import {
   ensureWorktreeEnvLinks,
   findFirstAvailableOffset,
   getSharedDockerServicesWaitFailure,
+  hasLegacyObjectStoreService,
   infraPortsForOffset,
   isWorktreeCheckout,
   parseDockerComposePsJson,
   loadEnvFile,
+  migrateLegacyS3DevCredentials,
   expandEnvMap,
   parseForeignPortOwners,
   portsForOffset,
@@ -273,9 +275,9 @@ describe("infraPortsForOffset", () => {
   test("returns default ports at offset 0", () => {
     expect(infraPortsForOffset(0)).toEqual({
       gotenberg: 3003,
-      minio: 9000,
-      minioConsole: 9001,
       postgres: 5432,
+      rustfs: 9000,
+      rustfsConsole: 9001,
       valkey: 6379,
     });
   });
@@ -283,9 +285,9 @@ describe("infraPortsForOffset", () => {
   test("shifts all infra ports by the offset", () => {
     expect(infraPortsForOffset(10)).toEqual({
       gotenberg: 3013,
-      minio: 9010,
-      minioConsole: 9011,
       postgres: 5442,
+      rustfs: 9010,
+      rustfsConsole: 9011,
       valkey: 6389,
     });
   });
@@ -308,7 +310,7 @@ describe("shared Docker service readiness", () => {
     {
       exitCode: undefined,
       health: "healthy",
-      service: "minio",
+      service: "rustfs",
       state: "running",
     },
     {
@@ -320,7 +322,7 @@ describe("shared Docker service readiness", () => {
     {
       exitCode: 0,
       health: undefined,
-      service: "minio-setup",
+      service: "rustfs-setup",
       state: "exited",
     },
   ];
@@ -332,7 +334,7 @@ describe("shared Docker service readiness", () => {
           {
             ExitCode: 0,
             Health: "",
-            Service: "minio-setup",
+            Service: "rustfs-setup",
             State: "exited",
           },
         ]),
@@ -341,7 +343,7 @@ describe("shared Docker service readiness", () => {
       {
         exitCode: 0,
         health: "",
-        service: "minio-setup",
+        service: "rustfs-setup",
         state: "exited",
       },
     ]);
@@ -358,7 +360,7 @@ describe("shared Docker service readiness", () => {
           }),
           JSON.stringify({
             ExitCode: "0",
-            Service: "minio-setup",
+            Service: "rustfs-setup",
             State: "exited",
           }),
         ].join("\n"),
@@ -373,7 +375,7 @@ describe("shared Docker service readiness", () => {
       {
         exitCode: 0,
         health: undefined,
-        service: "minio-setup",
+        service: "rustfs-setup",
         state: "exited",
       },
     ]);
@@ -392,18 +394,18 @@ describe("shared Docker service readiness", () => {
     ).toBe("postgres is health=starting");
   });
 
-  test("requires the Minio setup init container to finish successfully", () => {
+  test("requires the RustFS setup init container to finish successfully", () => {
     expect(
       getSharedDockerServicesWaitFailure([
         ...readyStatuses.slice(0, -1),
         {
           exitCode: undefined,
           health: undefined,
-          service: "minio-setup",
+          service: "rustfs-setup",
           state: "running",
         },
       ]),
-    ).toBe("minio-setup has not completed yet (state=running)");
+    ).toBe("rustfs-setup has not completed yet (state=running)");
 
     expect(getSharedDockerServicesWaitFailure(readyStatuses)).toBeUndefined();
   });
@@ -660,6 +662,34 @@ describe("worktree helpers", () => {
     ).toBeGreaterThan(0);
   });
 
+  test("migrates generated credentials before sharing the main env file", async () => {
+    const mainRoot = createTempDir();
+    const worktreeRoot = createTempDir();
+
+    mkdirSync(path.resolve(mainRoot, "apps/api"), { recursive: true });
+    mkdirSync(path.resolve(mainRoot, "apps/web"), { recursive: true });
+    mkdirSync(path.resolve(worktreeRoot, "apps/api"), { recursive: true });
+    mkdirSync(path.resolve(worktreeRoot, "apps/web"), { recursive: true });
+
+    writeFileSync(
+      path.resolve(mainRoot, "apps/api/.env"),
+      'S3_ACCESS_KEY_ID="minioadmin"\nS3_SECRET_ACCESS_KEY="minioadmin"\n',
+    );
+    writeFileSync(path.resolve(mainRoot, "apps/web/.env"), "WEB=1\n");
+
+    ensureWorktreeEnvLinks({
+      currentRoot: worktreeRoot,
+      isWorktree: true,
+      mainRoot,
+    });
+
+    expect(
+      await Bun.file(path.resolve(worktreeRoot, "apps/api/.env")).text(),
+    ).toBe(
+      'S3_ACCESS_KEY_ID="stella-rustfs-dev"\nS3_SECRET_ACCESS_KEY="stella-rustfs-dev-secret"\n',
+    );
+  });
+
   test("bootstraps missing env files from .env.example in the main checkout", () => {
     const mainRoot = createTempDir();
 
@@ -684,7 +714,7 @@ describe("worktree helpers", () => {
     );
   });
 
-  test("leaves pre-existing env files untouched", () => {
+  test("leaves custom pre-existing env files untouched", () => {
     const mainRoot = createTempDir();
     const worktreeRoot = createTempDir();
 
@@ -707,6 +737,58 @@ describe("worktree helpers", () => {
     expect(Bun.file(path.resolve(worktreeRoot, "apps/api/.env")).size).toBe(
       "LOCAL=1\n".length,
     );
+  });
+
+  test("migrates only the former generated S3 development credentials", () => {
+    const generated = [
+      'S3_ACCESS_KEY_ID="minioadmin"',
+      'S3_SECRET_ACCESS_KEY="minioadmin"',
+      'S3_BUCKET="stella"',
+    ].join("\n");
+    const custom = generated.replace(
+      'S3_SECRET_ACCESS_KEY="minioadmin"',
+      'S3_SECRET_ACCESS_KEY="custom"',
+    );
+
+    expect(migrateLegacyS3DevCredentials(generated)).toBe(
+      [
+        'S3_ACCESS_KEY_ID="stella-rustfs-dev"',
+        'S3_SECRET_ACCESS_KEY="stella-rustfs-dev-secret"',
+        'S3_BUCKET="stella"',
+      ].join("\n"),
+    );
+    expect(migrateLegacyS3DevCredentials(custom)).toBe(custom);
+  });
+});
+
+describe("legacy shared Docker service detection", () => {
+  test("detects only the former object-store service", () => {
+    expect(
+      hasLegacyObjectStoreService([
+        {
+          exitCode: undefined,
+          health: "healthy",
+          service: "postgres",
+          state: "running",
+        },
+        {
+          exitCode: undefined,
+          health: "healthy",
+          service: "minio",
+          state: "running",
+        },
+      ]),
+    ).toBe(true);
+    expect(
+      hasLegacyObjectStoreService([
+        {
+          exitCode: undefined,
+          health: "healthy",
+          service: "rustfs",
+          state: "running",
+        },
+      ]),
+    ).toBe(false);
   });
 });
 

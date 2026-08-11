@@ -50,7 +50,7 @@ only the non-obvious caveats for this environment.
   docker-in-docker.
 - **Run everything with `bun run dev --no-browser`.** The dev-runner
   (`packages/scripts/src/dev-runner.ts`) brings up the Docker infra (Postgres 5432,
-  Valkey 6379, MinIO 9000/9001, Gotenberg 3003), copies `apps/{api,web}/.env` from
+  Valkey 6379, RustFS 9000/9001, Gotenberg 3003), copies `apps/{api,web}/.env` from
   `.env.example`, applies DB migrations, and starts the API (3001) and web (3000). It
   exits if any child dies, so a single background process covers the whole stack. Use
   `bun run dev:api` or `bun run dev:web` for a focused loop.

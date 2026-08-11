@@ -7,6 +7,7 @@ import {
   mkdirSync,
   readFileSync,
   symlinkSync,
+  writeFileSync,
 } from "node:fs";
 import { createServer, Socket } from "node:net";
 import path from "node:path";
@@ -37,10 +38,13 @@ const SHARED_DOCKER_PROJECT_BASE = "stella-dev";
 const SHARED_DOCKER_HEALTHY_SERVICES = [
   "postgres",
   "valkey",
-  "minio",
+  "rustfs",
   "gotenberg",
 ] as const;
-const SHARED_DOCKER_COMPLETED_SERVICES = ["minio-setup"] as const;
+const SHARED_DOCKER_COMPLETED_SERVICES = ["rustfs-setup"] as const;
+const LEGACY_OBJECT_STORE_SERVICE = "minio";
+const RUSTFS_S3_DEV_ACCESS_KEY = "stella-rustfs-dev";
+const RUSTFS_S3_DEV_SECRET_KEY = "stella-rustfs-dev-secret";
 const MAX_HASH_OFFSET = 400;
 const PORT_SEARCH_LIMIT = 2000;
 // The web app renders via TanStack Start SSR (root document from __root.tsx),
@@ -51,9 +55,9 @@ const WEB_HTML_MARKER = 'src="/prepaint-init.js"';
 
 export type InfraPorts = {
   gotenberg: number;
-  minio: number;
-  minioConsole: number;
   postgres: number;
+  rustfs: number;
+  rustfsConsole: number;
   valkey: number;
 };
 
@@ -226,9 +230,9 @@ export const resolveOffset = ({
 
 export const infraPortsForOffset = (offset: number): InfraPorts => ({
   gotenberg: DEFAULT_INFRA_PORTS.gotenberg + offset,
-  minio: DEFAULT_INFRA_PORTS.minio + offset,
-  minioConsole: DEFAULT_INFRA_PORTS.minioConsole + offset,
   postgres: DEFAULT_INFRA_PORTS.postgres + offset,
+  rustfs: DEFAULT_INFRA_PORTS.rustfs + offset,
+  rustfsConsole: DEFAULT_INFRA_PORTS.rustfsConsole + offset,
   valkey: DEFAULT_INFRA_PORTS.valkey + offset,
 });
 
@@ -366,9 +370,7 @@ const areSharedDockerServicesHealthy = async (infraPorts: InfraPorts) => {
   const healthChecks = await Promise.all([
     connectToPort({ port: infraPorts.postgres }),
     connectToPort({ port: infraPorts.valkey }),
-    checkHttpOk(
-      `http://127.0.0.1:${String(infraPorts.minio)}/minio/health/live`,
-    ),
+    checkHttpOk(`http://127.0.0.1:${String(infraPorts.rustfs)}/health`),
     checkHttpOk(`http://127.0.0.1:${String(infraPorts.gotenberg)}/health`),
   ]);
 
@@ -391,8 +393,8 @@ const isHealthyApiPort = async (port: number) => {
 const sharedInfraPortList = (infraPorts: InfraPorts) => [
   infraPorts.postgres,
   infraPorts.valkey,
-  infraPorts.minio,
-  infraPorts.minioConsole,
+  infraPorts.rustfs,
+  infraPorts.rustfsConsole,
   infraPorts.gotenberg,
 ];
 
@@ -481,9 +483,9 @@ const findForeignContainersOnSharedPorts = ({
 const dockerComposeEnv = (infraPorts: InfraPorts) => ({
   ...process.env,
   STELLA_GOTENBERG_HOST_PORT: String(infraPorts.gotenberg),
-  STELLA_MINIO_CONSOLE_PORT: String(infraPorts.minioConsole),
-  STELLA_MINIO_HOST_PORT: String(infraPorts.minio),
   STELLA_PG_HOST_PORT: String(infraPorts.postgres),
+  STELLA_RUSTFS_CONSOLE_PORT: String(infraPorts.rustfsConsole),
+  STELLA_RUSTFS_HOST_PORT: String(infraPorts.rustfs),
   STELLA_VALKEY_HOST_PORT: String(infraPorts.valkey),
 });
 
@@ -531,6 +533,10 @@ const normalizeComposeServiceStatus = (
     state: stringField(value, "State") ?? "",
   };
 };
+
+export const hasLegacyObjectStoreService = (
+  statuses: readonly DockerComposeServiceStatus[],
+) => statuses.some(({ service }) => service === LEGACY_OBJECT_STORE_SERVICE);
 
 export const parseDockerComposePsJson = (output: string) => {
   const trimmed = output.trim();
@@ -677,6 +683,19 @@ const ensureDockerServices = async ({
   infraPorts: InfraPorts;
   rootDir: string;
 }) => {
+  if (
+    hasLegacyObjectStoreService(
+      readSharedDockerServiceStatuses({ infraOffset, infraPorts, rootDir }),
+    )
+  ) {
+    runStep({
+      cmd: dockerComposeCommand(infraOffset, ["down", "--remove-orphans"]),
+      cwd: rootDir,
+      env: dockerComposeEnv(infraPorts),
+      label: "Replacing the legacy object-store service",
+    });
+  }
+
   const foreignOwners = findForeignContainersOnSharedPorts({
     infraOffset,
     infraPorts,
@@ -717,7 +736,7 @@ const ensureDockerServices = async ({
   }
 
   // We deliberately omit `--wait` here: the `dev` profile includes the
-  // `minio-setup` one-shot init container, which exits 0 after creating the
+  // `rustfs-setup` one-shot init container, which exits 0 after creating the
   // bucket. Compose's `--wait` treats that exit as a failure even on success,
   // so we run detached and poll the four core services ourselves. The
   // one-shot setup container is polled separately and must exit successfully.
@@ -786,6 +805,32 @@ export const isWorktreeCheckout = (rootDir: string) => {
 export const resolveMainRootFromCommonDir = (commonGitDir: string) =>
   path.resolve(commonGitDir, "..");
 
+export const migrateLegacyS3DevCredentials = (contents: string) => {
+  const accessKey = /^S3_ACCESS_KEY_ID=(?:"minioadmin"|minioadmin)$/mu;
+  const secretKey = /^S3_SECRET_ACCESS_KEY=(?:"minioadmin"|minioadmin)$/mu;
+  if (!accessKey.test(contents) || !secretKey.test(contents)) {
+    return contents;
+  }
+
+  return contents
+    .replace(accessKey, () => `S3_ACCESS_KEY_ID="${RUSTFS_S3_DEV_ACCESS_KEY}"`)
+    .replace(
+      secretKey,
+      () => `S3_SECRET_ACCESS_KEY="${RUSTFS_S3_DEV_SECRET_KEY}"`,
+    );
+};
+
+const migrateEnvFileIfNeeded = (filePath: string, specPath: string) => {
+  if (specPath !== "apps/api/.env") {
+    return;
+  }
+  const contents = readFileSync(filePath, "utf-8");
+  const migrated = migrateLegacyS3DevCredentials(contents);
+  if (migrated !== contents) {
+    writeFileSync(filePath, migrated);
+  }
+};
+
 export const ensureWorktreeEnvLinks = ({
   currentRoot,
   isWorktree,
@@ -800,11 +845,13 @@ export const ensureWorktreeEnvLinks = ({
   for (const spec of ENV_FILE_SPECS) {
     const targetPath = path.resolve(currentRoot, spec.path);
     if (existsSync(targetPath)) {
+      migrateEnvFileIfNeeded(targetPath, spec.path);
       continue;
     }
 
     const mainEnvPath = path.resolve(mainRoot, spec.path);
     if (isWorktree && existsSync(mainEnvPath)) {
+      migrateEnvFileIfNeeded(mainEnvPath, spec.path);
       mkdirSync(path.dirname(targetPath), { recursive: true });
       try {
         symlinkSync(mainEnvPath, targetPath);
@@ -857,7 +904,7 @@ export const createApiEnv = ({
     DATABASE_URL: `postgres://postgres:postgres@localhost:${String(infraPorts.postgres)}/stella`,
     GOTENBERG_URL: `http://localhost:${String(infraPorts.gotenberg)}`,
     REDIS_URL: `redis://localhost:${String(infraPorts.valkey)}`,
-    S3_ENDPOINT: `http://localhost:${String(infraPorts.minio)}`,
+    S3_ENDPOINT: `http://localhost:${String(infraPorts.rustfs)}`,
   }),
 });
 
@@ -1575,7 +1622,7 @@ const printSummary = ({
     console.log(`  api: ${apiUrlForPort(ports.api)}`);
     console.log(`  postgres: localhost:${String(infraPorts.postgres)}`);
     console.log(`  valkey: localhost:${String(infraPorts.valkey)}`);
-    console.log(`  minio: localhost:${String(infraPorts.minio)}`);
+    console.log(`  rustfs: localhost:${String(infraPorts.rustfs)}`);
     console.log(`  gotenberg: localhost:${String(infraPorts.gotenberg)}`);
   }
   if (modeIncludesDesktop(mode)) {

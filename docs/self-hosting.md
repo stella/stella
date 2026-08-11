@@ -9,14 +9,14 @@ The repository includes a production-oriented Compose file for the stella API,
 its document-processing worker, and
 [Gotenberg](https://gotenberg.dev/), which stella uses for document conversion.
 Supporting services are intentionally not bundled into that file: bring your
-own Postgres, Redis-compatible cache, and S3-compatible object storage, then
+own Postgres, Redis-compatible cache, and RustFS object storage, then
 point stella at them with environment variables.
 
-This keeps the application container simple while letting operators use managed
-services, existing self-hosted services, or a platform such as
-[Dokploy](https://docs.dokploy.com/docs/core). Dokploy's
-[template catalog](https://docs.dokploy.com/docs/templates) is a practical way
-to deploy common dependencies such as Postgres, Valkey or Redis, and MinIO.
+This keeps the application container simple while letting operators use
+existing services or a platform such as
+[Dokploy](https://docs.dokploy.com/docs/core). Deploy RustFS separately using
+its [production checklist](https://docs.rustfs.com/en/installation/requirement/checklists)
+and connect stella through the S3 environment variables below.
 For Railway, see the dedicated [Railway deployment guide](./railway.md).
 
 Deploy the API, document-processing worker, and Gotenberg with
@@ -107,15 +107,23 @@ docker run --detach \
 - PostgreSQL 18 or newer.
 - Redis-compatible storage for queues, rate limits, and cross-instance events.
   Valkey works.
-- S3-compatible object storage for files. AWS S3, Cloudflare R2, and MinIO work.
+- RustFS object storage for files.
 - Gotenberg for document conversion. The Compose file runs this next to the API
   on the private Docker Compose network.
 - An HTTPS PaddleOCR-compatible service is optional. Configure it only when
   organizations should be able to turn scanned PDFs into searchable text.
 
-For Postgres, Redis/Valkey, and object storage, any self-hosted instance works
-as long as the API container can reach it. Put the service URLs and credentials
-in `deploy/selfhost/.env`.
+RustFS is the supported self-hosted object store. Run it with TLS, persistent
+local storage, and a tested backup-and-restore plan. Never use RustFS's default
+`rustfsadmin` credentials. Give stella a dedicated, non-default IAM identity
+restricted to its configured buckets and the object read, write, delete, and
+bucket-list actions it needs. Single-node, single-disk mode has no storage
+redundancy. For production data that must survive a host or disk failure, follow
+RustFS's [production checklist](https://docs.rustfs.com/en/installation/requirement/checklists)
+and place erasure-set drives across independent node and disk failure domains.
+Set `RUSTFS_CORS_ALLOWED_ORIGINS` to the exact stella web origins so browsers
+can use presigned upload and download URLs; do not use a wildcard in production.
+Put the service URLs and credentials in `deploy/selfhost/.env`.
 
 ## Configure The API
 
@@ -297,7 +305,7 @@ healthcheck does not claim to execute a synthetic document job.
 
 - PostgreSQL 18+
 - Redis-compatible service (Redis or Valkey)
-- S3-compatible object storage (AWS S3, MinIO, Cloudflare R2)
+- RustFS object storage
 - 2 GB RAM minimum
 
 ## Operator observability

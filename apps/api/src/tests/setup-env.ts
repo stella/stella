@@ -13,16 +13,16 @@ setDefaultTimeout(30_000);
 
 configureTestDatabaseEnvironment();
 process.env["S3_ENDPOINT"] ??= "http://localhost:9000";
-process.env["S3_BUCKET"] ??= "stella-test";
+process.env["S3_BUCKET"] ??= "stella";
 process.env["S3_REGION"] ??= "us-east-1";
-// MinIO root credentials from docker-compose.yml. Tests that build
+// RustFS development credentials from docker-compose.yml. Tests that build
 // an S3 client (Bun or SDK v3) need these even when they only sign
 // URLs in memory and never hit S3. `S3_CREDENTIALS_PROVIDER` is left
 // at its default `auto` so the credential-resolution tests in
 // `s3.test.ts` (which mock ECS/IMDS responses) still exercise the
 // real resolver path.
-process.env["S3_ACCESS_KEY_ID"] ??= "minioadmin";
-process.env["S3_SECRET_ACCESS_KEY"] ??= "minioadmin";
+process.env["S3_ACCESS_KEY_ID"] ??= "stella-rustfs-dev";
+process.env["S3_SECRET_ACCESS_KEY"] ??= "stella-rustfs-dev-secret";
 
 // Bun auto-loads the developer-local (gitignored) apps/api/.env into
 // `bun test`. Real social-provider credentials there flip the auth

@@ -47,12 +47,12 @@ runs:
 
     - name: Start docker stack
       id: stack
-      # `--wait` only on long-running services; `minio-setup` is a one-shot
+      # `--wait` only on long-running services; `rustfs-setup` is a one-shot
       # bucket-creator container that exits 0, which `--wait` treats as
       # "not running" and fails the whole command. Run it separately in
       # the foreground so we still block on its success. `compose run`
       # propagates the one-shot command's exit code without stopping the
-      # already-running MinIO dependency. The whole bring-up is retried:
+      # already-running RustFS dependency. The whole bring-up is retried:
       # image pulls and `--wait` health checks occasionally fail transiently
       # on CI runners. Tear the stack down between attempts so a half-started
       # stack does not poison the retry.
@@ -63,9 +63,9 @@ runs:
 
         for attempt in 1 2 3; do
           : > "$stack_log"
-          if docker compose --profile dev up -d --wait postgres minio valkey 2>&1 \
+          if docker compose --profile dev up -d --wait postgres rustfs valkey 2>&1 \
             | tee "$stack_log" \
-            && docker compose --profile dev run --rm --no-deps minio-setup 2>&1 \
+            && docker compose --profile dev run --rm --no-deps rustfs-setup 2>&1 \
               | tee -a "$stack_log"; then
             echo "status=ready" >> "$GITHUB_OUTPUT"
             exit 0

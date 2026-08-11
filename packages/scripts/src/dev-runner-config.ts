@@ -11,9 +11,9 @@ export const DEFAULT_PORTS = {
 } as const;
 export const DEFAULT_INFRA_PORTS = {
   gotenberg: 3003,
-  minio: 9000,
-  minioConsole: 9001,
   postgres: 5432,
+  rustfs: 9000,
+  rustfsConsole: 9001,
   valkey: 6379,
 } as const;
 const MAX_PORT = 65_535;
