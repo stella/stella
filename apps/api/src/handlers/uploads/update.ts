@@ -36,6 +36,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { preserveBufferObjectCleanupIntents } from "@/api/lib/buffer-intent-reconciliation";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanFile } from "@/api/lib/file-scan/scan";
@@ -186,8 +187,32 @@ const finalizeUpload = createSafeHandler(
         );
       }
       const expiredRows = yield* Result.await(
-        // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-        safeDb((tx) => {
+        safeDb(async (tx) => {
+          const expirableRows = await tx
+            .select()
+            .from(pendingUploads)
+            .where(
+              sql`${pendingUploads.id} = ${uploadId}
+                AND ${pendingUploads.workspaceId} = ${workspaceId}
+                AND ${pendingUploads.userId} = ${user.id}
+                AND ${pendingUploads.expiresAt} <= NOW()
+                AND (
+                  ${pendingUploads.status} IN ('pending', 'failed')
+                  OR (
+                    ${pendingUploads.status} = 'scanning'
+                    AND ${pendingUploads.claimedAt} < NOW() - ${timeoutSec} * interval '1 second'
+                  )
+                )`,
+            )
+            .limit(1)
+            .for("update");
+          const expirable = expirableRows.at(0);
+          if (!expirable) {
+            return [];
+          }
+
+          await preserveBufferObjectCleanupIntents(tx, [expirable]);
+
           // audit: skip — expiry transition on pending_uploads;
           // the upload never became a durable entity.
           return tx

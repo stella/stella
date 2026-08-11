@@ -14,7 +14,10 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, withDescription } from "@/api/lib/custom-schema";
-import { allocateEntityStamp } from "@/api/lib/document-counter";
+import {
+  allocateEntityStamp,
+  entityKindHasDocumentReference,
+} from "@/api/lib/document-counter";
 import { validateParentId } from "@/api/lib/entities/validate-parent-id";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -92,10 +95,9 @@ export const createEntitiesHandler = async function* ({
       const entityId = createSafeId<"entity">();
       const effectiveKind = kind ?? "document";
 
-      const entityStamp =
-        effectiveKind === "document"
-          ? await allocateEntityStamp(tx, workspaceId)
-          : null;
+      const entityStamp = entityKindHasDocumentReference(effectiveKind)
+        ? await allocateEntityStamp(tx, workspaceId)
+        : null;
 
       await tx.insert(entities).values({
         id: entityId,
