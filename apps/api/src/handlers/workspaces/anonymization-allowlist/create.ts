@@ -1,8 +1,9 @@
 import { Result } from "better-result";
-import { count, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { anonymizationAllowlistEntries, entities } from "@/api/db/schema";
+import { countWorkspaceAnonymizationAllowlistForWrite } from "@/api/lib/anonymization-write-cap";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -70,14 +71,14 @@ const createWorkspaceAnonymizationAllowlistEntry = createSafeHandler(
 
         // Cap the per-workspace set (workspace + doc-scoped rows) so the
         // allowlist read stays bounded; org-wide rows are managed elsewhere.
-        const existing = await tx
-          .select({ value: count() })
-          .from(anonymizationAllowlistEntries)
-          .where(eq(anonymizationAllowlistEntries.workspaceId, workspaceId));
-        if (
-          (existing[0]?.value ?? 0) >=
-          LIMITS.anonymizationAllowlistEntriesPerWorkspace
-        ) {
+        // The count locks the workspace's set for the rest of this
+        // transaction, so two concurrent creates cannot both find room
+        // for the last slot.
+        const existing = await countWorkspaceAnonymizationAllowlistForWrite(
+          tx,
+          workspaceId,
+        );
+        if (existing >= LIMITS.anonymizationAllowlistEntriesPerWorkspace) {
           return { type: "limit-exceeded" as const };
         }
 

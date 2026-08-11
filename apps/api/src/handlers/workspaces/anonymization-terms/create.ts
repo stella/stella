@@ -1,9 +1,9 @@
 import { Result } from "better-result";
-import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { anonymizationBlacklistEntries } from "@/api/db/schema";
 import { normalizeAnonymizationBlacklistEntries } from "@/api/lib/anonymization-blacklist";
+import { loadWorkspaceAnonymizationTermsForWrite } from "@/api/lib/anonymization-write-cap";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -52,13 +52,13 @@ const createWorkspaceAnonymizationTerms = createSafeHandler(
 
     const result = yield* Result.await(
       safeDb(async (tx) => {
-        const existing = await tx
-          .select({
-            id: anonymizationBlacklistEntries.id,
-            canonical: anonymizationBlacklistEntries.canonical,
-          })
-          .from(anonymizationBlacklistEntries)
-          .where(eq(anonymizationBlacklistEntries.workspaceId, workspaceId));
+        // Locks the workspace's term set for the rest of this
+        // transaction, so the cap decision below sees every committed
+        // sibling insert instead of racing one.
+        const existing = await loadWorkspaceAnonymizationTermsForWrite(
+          tx,
+          workspaceId,
+        );
 
         const existingByCanonical = new Map(
           existing.map((row) => [row.canonical.toLocaleLowerCase(), row]),

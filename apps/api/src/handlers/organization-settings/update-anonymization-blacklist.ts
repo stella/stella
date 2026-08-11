@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { anonymizationBlacklistEntries } from "@/api/db/schema";
 import { normalizeAnonymizationBlacklistEntries } from "@/api/lib/anonymization-blacklist";
+import { loadOrganizationAnonymizationTermsForWrite } from "@/api/lib/anonymization-write-cap";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -47,21 +48,14 @@ const updateAnonymizationBlacklist = createSafeRootHandler(
     // to — or deletable by — the firm-wide settings page.
     yield* Result.await(
       safeDb(async (tx) => {
-        const existingRows = await tx
-          .select({
-            canonical: anonymizationBlacklistEntries.canonical,
-            id: anonymizationBlacklistEntries.id,
-          })
-          .from(anonymizationBlacklistEntries)
-          .where(
-            and(
-              eq(
-                anonymizationBlacklistEntries.organizationId,
-                session.activeOrganizationId,
-              ),
-              isNull(anonymizationBlacklistEntries.workspaceId),
-            ),
-          );
+        // Locks the org-wide set for the rest of this transaction. The
+        // replace deletes only the rows its own read saw, so two
+        // concurrent replacements would otherwise each keep their own
+        // set and leave the union of both behind: twice the cap.
+        const existingRows = await loadOrganizationAnonymizationTermsForWrite(
+          tx,
+          session.activeOrganizationId,
+        );
 
         const existingByCanonical = new Map(
           existingRows.map((row) => [row.canonical.toLocaleLowerCase(), row]),
