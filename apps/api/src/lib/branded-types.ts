@@ -56,6 +56,8 @@ export type SafeIdType =
   | "documentCounter"
   | "entityDeletionCleanupRequest"
   | "documentProcessingRun"
+  | "documentReviewFinding"
+  | "documentReviewRun"
   | "documentType"
   | "entity"
   | "entityVersionAiSummary"

@@ -8,7 +8,15 @@ import {
   type AIUsageMetering,
 } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { DocumentReviewTopic } from "@/api/lib/document-review/contract";
+import {
+  REFERENCE_ASSESSMENTS,
+  REFERENCE_CONSENSUS_VALUES,
+} from "@/api/lib/document-review/contract";
+import type {
+  DocumentReviewTopic,
+  ReferenceAssessment,
+  ReferenceConsensus,
+} from "@/api/lib/document-review/contract";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import {
   buildGroundedReviewFix,
@@ -22,17 +30,6 @@ const REFERENCE_REVIEW_TIMEOUT_MS = 120_000;
 const REFERENCE_REVIEW_ROLE = "pdf" as const;
 const MAX_VERIFIED_CITATIONS_PER_FINDING = 8;
 
-const assessmentValues = [
-  "aligned",
-  "different",
-  "missing-from-target",
-  "additional-in-target",
-  "deal-specific",
-  "not-comparable",
-] as const;
-
-const consensusValues = ["single", "consistent", "mixed"] as const;
-
 const rawCitationSchema = v.strictObject({
   sourceKey: v.string(),
   blockId: v.string(),
@@ -40,8 +37,8 @@ const rawCitationSchema = v.strictObject({
 
 const rawFindingSchema = v.strictObject({
   topicId: v.string(),
-  assessment: v.picklist(assessmentValues),
-  consensus: v.picklist(consensusValues),
+  assessment: v.picklist(REFERENCE_ASSESSMENTS),
+  consensus: v.picklist(REFERENCE_CONSENSUS_VALUES),
   rationale: v.string(),
   // Model-owned arrays are normalized below. A provider may ignore JSON Schema
   // cardinality constraints; rejecting the whole run would discard valid output.
@@ -56,8 +53,10 @@ export const referenceReviewSchema = v.strictObject({
 
 type RawReferenceFinding = v.InferOutput<typeof rawFindingSchema>;
 
-export type ReferenceAssessment = (typeof assessmentValues)[number];
-export type ReferenceConsensus = (typeof consensusValues)[number];
+// Re-exported from the plain contract module so existing importers keep the
+// `reference-compare` path while the persisted-run schema derives its CHECK
+// constraint from the same source.
+export type { ReferenceAssessment, ReferenceConsensus };
 
 export type ReferenceCitation = {
   blockId: string;

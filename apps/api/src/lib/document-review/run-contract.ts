@@ -1,0 +1,173 @@
+// Durable document-review run vocabulary and pinned-basis shapes.
+//
+// This module is deliberately dependency-light: the database schema
+// (`db/schema/document-reviews.ts`) derives its CHECK constraint enums from the
+// consts here, and only the type-level shapes reach in from the AI engine
+// modules (erased at build time). Nothing here imports a handler slice, so the
+// background worker and the endpoints share one definition of what a run is.
+
+import type { SafeId } from "@/api/lib/branded-types";
+import type { ConstantMap } from "@/api/lib/constant-map";
+import { REFERENCE_ASSESSMENTS } from "@/api/lib/document-review/contract";
+import type { ReferenceReviewFinding } from "@/api/lib/document-review/reference-compare";
+import type { ReviewFinding } from "@/api/lib/document-review/review-grade";
+import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
+import { VERDICT_TIERS } from "@/api/lib/workflow/verdict-tiers";
+
+/** Lifecycle of one review execution. `queued` on insert, `running` once the
+ *  worker claims it, then a terminal `completed` / `failed` / `cancelled`. */
+export const DOCUMENT_REVIEW_RUN_STATUSES = [
+  "queued",
+  "running",
+  "completed",
+  "failed",
+  "cancelled",
+] as const;
+export type DocumentReviewRunStatus =
+  (typeof DOCUMENT_REVIEW_RUN_STATUSES)[number];
+
+/** The statuses that still occupy a document: exactly one run may hold them
+ *  per `(entityId, fileFieldId)`, enforced by a partial unique index. */
+export const DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES = [
+  "queued",
+  "running",
+] as const satisfies readonly DocumentReviewRunStatus[];
+
+/** Why a run ended in `failed`. A closed set so the surface can explain the
+ *  failure without parsing a message, and so no free-form model or provider
+ *  text ever lands on the row. */
+export const DOCUMENT_REVIEW_RUN_ERROR_CODES = [
+  /** A pinned document version or file field no longer resolves. */
+  "pin_unresolved",
+  /** The pinned file's content hash no longer matches the pin. */
+  "pin_content_changed",
+  /** A pinned document is not in a format the review engine reads. */
+  "unsupported_format",
+  /** No model is configured or usage is unavailable for this organization. */
+  "ai_unavailable",
+  /** The extraction or grading pass failed. */
+  "playbook_check_failed",
+  /** The reference comparison pass failed. */
+  "reference_check_failed",
+  /** The job could not be handed to the queue. */
+  "enqueue_failed",
+  /** Anything the worker could not attribute more precisely. */
+  "internal",
+] as const;
+export type DocumentReviewRunErrorCode =
+  (typeof DOCUMENT_REVIEW_RUN_ERROR_CODES)[number];
+
+/** Which executor produced a finding. Kept separate from the outcome so the
+ *  two vocabularies are never merged into one. */
+export const DOCUMENT_REVIEW_CHECK_KINDS = ["playbook", "reference"] as const;
+export type DocumentReviewCheckKind =
+  (typeof DOCUMENT_REVIEW_CHECK_KINDS)[number];
+export const DOCUMENT_REVIEW_CHECK_KIND = {
+  PLAYBOOK: "playbook",
+  REFERENCE: "reference",
+} as const satisfies ConstantMap<DocumentReviewCheckKind>;
+
+/** Outcome vocabulary per check kind. Total over the kind union by
+ *  construction, so a new kind cannot land without a decided vocabulary. */
+export const DOCUMENT_REVIEW_OUTCOMES = {
+  playbook: VERDICT_TIERS,
+  reference: REFERENCE_ASSESSMENTS,
+} as const satisfies Record<DocumentReviewCheckKind, readonly string[]>;
+
+/** Whether the pinned playbook came from an approved snapshot or from the
+ *  live (draft) definition an author chose to run. */
+export type PlaybookPinProvenance = "approved" | "draft";
+
+/**
+ * The playbook a run was executed against, embedded whole. The snapshot is
+ * carried even when `versionId` is set so a run stays intelligible after the
+ * definition (and its versions) are deleted; there is deliberately no foreign
+ * key from a run to a playbook.
+ */
+export type PinnedPlaybook = {
+  definitionId: SafeId<"playbookDefinition">;
+  versionId: SafeId<"playbookDefinitionVersion"> | null;
+  provenance: PlaybookPinProvenance;
+  definitionSnapshot: { name: string; positions: PlaybookPositions };
+};
+
+/** One reference document pinned to the exact version that was compared. */
+export type PinnedReference = {
+  entityId: SafeId<"entity">;
+  fileFieldId: SafeId<"field">;
+  entityVersionId: SafeId<"entityVersion">;
+  contentSha256: string;
+  name: string;
+};
+
+/** What the run was measured against, discriminated exactly like the review
+ *  basis the client confirms. */
+export type DocumentReviewRunBasis =
+  | { type: "playbook"; playbook: PinnedPlaybook }
+  | { type: "references"; references: PinnedReference[] }
+  | {
+      type: "combined";
+      playbook: PinnedPlaybook;
+      references: PinnedReference[];
+    };
+
+/** The basis discriminators the run row's CHECK constraint accepts, derived
+ *  from the union so a new basis shape cannot land without the constraint. */
+export const DOCUMENT_REVIEW_BASIS_TYPES = [
+  "playbook",
+  "references",
+  "combined",
+] as const satisfies readonly DocumentReviewRunBasis["type"][];
+
+/** The engine result a finding row carries, reused verbatim per check kind. */
+export type DocumentReviewFindingPayload =
+  | { checkKind: "playbook"; finding: ReviewFinding }
+  | { checkKind: "reference"; finding: ReferenceReviewFinding };
+
+export const basisPlaybook = (
+  basis: DocumentReviewRunBasis,
+): PinnedPlaybook | null => {
+  switch (basis.type) {
+    case "playbook":
+    case "combined":
+      return basis.playbook;
+    case "references":
+      return null;
+    default:
+      return basis satisfies never;
+  }
+};
+
+/** Shared empty result for a basis that pins no references. A fresh literal
+ *  per call would allocate on a hot read path and reads as "not yet known";
+ *  this constant means "this basis has none". */
+const NO_PINNED_REFERENCES: readonly PinnedReference[] = [];
+
+export const basisReferences = (
+  basis: DocumentReviewRunBasis,
+): readonly PinnedReference[] => {
+  switch (basis.type) {
+    case "references":
+    case "combined":
+      return basis.references;
+    case "playbook":
+      return NO_PINNED_REFERENCES;
+    default:
+      return basis satisfies never;
+  }
+};
+
+/** The stored outcome for a finding. `null` only for an extract-only playbook
+ *  position, which yields a value with no verdict. */
+export const findingOutcome = (
+  payload: DocumentReviewFindingPayload,
+): string | null => {
+  switch (payload.checkKind) {
+    case "playbook":
+      return payload.finding.verdict;
+    case "reference":
+      return payload.finding.assessment;
+    default:
+      return payload satisfies never;
+  }
+};

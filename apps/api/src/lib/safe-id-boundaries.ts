@@ -56,6 +56,11 @@ export const brandPersistedEntityVersionId = (
 export const brandPersistedDocxSuggestionId = (
   docxSuggestionId: string,
 ): SafeId<"docxSuggestion"> => toSafeId<"docxSuggestion">(docxSuggestionId);
+
+export const brandPersistedDocumentReviewRunId = (
+  runId: string,
+): SafeId<"documentReviewRun"> => toSafeId<"documentReviewRun">(runId);
+
 export const brandPersistedLegalListId = (
   listId: string,
 ): SafeId<"legalList"> => toSafeId<"legalList">(listId);
