@@ -9,6 +9,7 @@ import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   defineSourceAdapter,
   EMPTY_AST,
+  isPersistableSourceDocumentId,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
@@ -57,7 +58,7 @@ import { isRecord } from "@/api/lib/type-guards";
 
 const BASE_URL = "https://vyhledavac.nssoud.cz";
 
-/** The only language this source publishes; half of the stored identity. */
+/** The only language this source publishes. */
 const CZ_NSS_LANGUAGE = "cs";
 
 /**
@@ -66,8 +67,12 @@ const CZ_NSS_LANGUAGE = "cs";
  * Coarser than the portal, which also carries the regional and city
  * administrative courts whose judgments the NSS reviews (a single day's
  * listing mixes `1 Az 4/2026` of the Městský soud v Praze with `52 Af 4/2026`
- * of the Krajský soud v Hradci Králové). Recording that distinction is a
- * source-metadata migration, not something the listing walk may decide.
+ * of the Krajský soud v Hradci Králové). Their decisions no longer share a row
+ * — the identity is the portal's document id, see `czNssListingIdentity` — but
+ * they are still all labelled with this court. Recording the deciding court is
+ * a separate metadata migration: the row and the detail fields this adapter
+ * reads state no court, so it would have to come from another field (the ECLI
+ * carries a court code) and be rewritten across the rows already stored.
  */
 const CZ_NSS_COURT = "Nejvyšší správní soud";
 
@@ -318,6 +323,26 @@ export type ParsedRow = {
 };
 
 /**
+ * The publisher's own document id for a row, or undefined where the row states
+ * none this store can hold.
+ *
+ * Stated once, because the crawl, the identity rule and the listing walk must
+ * agree exactly on which documents exist. The bound is not decoration: an id
+ * past the column's limit is refused by the pipeline's own normalization, so
+ * keying a row on it would hunt a row nothing can ever write.
+ */
+const czNssSourceDocumentId = ({
+  documentId,
+}: ParsedRow): string | undefined =>
+  documentId !== undefined && isPersistableSourceDocumentId(documentId)
+    ? documentId
+    : undefined;
+
+/** The detail page of one document, which is also the row's stored URL. */
+const detailUrl = (documentId: string): string =>
+  `${BASE_URL}/DokumentDetail/Index/${documentId}`;
+
+/**
  * Parse result rows from the search response HTML.
  *
  * The 2025 redesign renders results as <tbody> blocks
@@ -362,9 +387,7 @@ export const parseResultRows = (html: string): ParsedRow[] => {
     const detailMatch =
       /href="\/DokumentDetail\/Index\/(?<documentId>\d+)"/u.exec(block);
     const documentId = detailMatch?.groups?.["documentId"];
-    const documentUrl = documentId
-      ? `${BASE_URL}/DokumentDetail/Index/${documentId}`
-      : undefined;
+    const documentUrl = documentId ? detailUrl(documentId) : undefined;
 
     const cells: string[] = [];
     const cellPattern = /<td[^>]*>(?<cell>[\s\S]*?)<\/td>/giu;
@@ -626,9 +649,22 @@ const rowToResult = (
   // Hash must be stable across runs regardless of transient
   // network failures — never include fulltext in the hash.
   const raw = `${row.caseNumber}|${row.decisionDate ?? ""}|${row.decisionType ?? ""}`;
+  const sourceDocumentId = czNssSourceDocumentId(row);
 
   return {
     caseNumber: row.caseNumber,
+    sourceDocumentId,
+    // What every row this adapter wrote before it stated an id was stored
+    // under: one row per docket, carrying the detail URL of whichever document
+    // was written last. The URL names one document exactly, so it re-keys that
+    // row to the document it was built from rather than inserting a second one
+    // beside it; the other documents the portal files under that docket — a
+    // regional court's decision numbered the same, or a further ruling in the
+    // same file — find no null-id row and are inserted, which is the collapse
+    // being undone.
+    ...(sourceDocumentId === undefined
+      ? {}
+      : { legacySourceUrls: [detailUrl(sourceDocumentId)] }),
     ecli: detail.ecli,
     court: CZ_NSS_COURT,
     country: "CZE",
@@ -927,11 +963,13 @@ export const buildCzNssDecision = async ({
   session,
   signal,
 }: BuildCzNssDecisionOptions): Promise<CzNssBuildResult> => {
-  const { documentId } = row;
-  if (documentId === undefined || documentId.length === 0) {
-    // The row names no document, so nothing can be read for it — now or on
-    // any later attempt. Not `unkeyable`: the docket is there and the ingest
-    // would store it, which is exactly why the reconciliation must not.
+  const documentId = czNssSourceDocumentId(row);
+  if (documentId === undefined) {
+    // The row names no document this adapter can address, so nothing can be
+    // read for it — now or on any later attempt. The crawl still stores what
+    // the listing states, under the docket alone; the walk counts such a row
+    // neither held nor missing, since `czNssListingIdentity` has nothing to
+    // key it on.
     return {
       type: "detail-unavailable",
       decision: rowToResult(row, EMPTY_CONTENT, EMPTY_DETAIL),
@@ -998,32 +1036,34 @@ const CZ_NSS_LISTING_TIMEOUT_MS = 60_000;
 /**
  * The identity the ingest would store for this listing row.
  *
- * The docket and the language, never the portal's `documentId`: this adapter
- * emits no `sourceDocumentId`, so every row it has ever written is keyed on
- * `(caseNumber, language)` with a null document id. Keying the listing on the
- * id the portal does supply would match no held row at all, and the loop would
- * read the entire archive as missing.
+ * The portal's own `documentId`, taken from the `/DokumentDetail/Index/{id}`
+ * link the results table puts on every row — the same id every detail and
+ * document request is addressed by, so a row that has one is a document the
+ * adapter can both key and read.
  *
- * The cost of that is real. The portal carries the regional and city
+ * The docket is not that identity. The portal carries the regional and city
  * administrative courts alongside the NSS, and their dockets are numbered per
  * court, so one `(caseNumber, "cs")` can name decisions of different courts;
  * the sheet number that would separate two rulings in the same file is also
  * dropped from the docket, since a citation names the docket alone. Both
- * collapse several published documents onto one stored row. Recovering them is
- * an identity migration of the source (adopt the portal's document id as
- * `sourceDocumentId`, with the deterministic `/DokumentDetail/Index/{id}` URL
- * as the `legacySourceUrls` hint that attaches it to the right null-id row),
- * not something a reconciliation pass may decide on its own: until the stored
- * rows carry that id, this is what "held" means.
+ * collapse several published documents onto one stored row.
+ *
+ * Rows written before the adapter stated an id are re-keyed by the
+ * deterministic `/DokumentDetail/Index/{id}` URL they carry — see
+ * `legacySourceUrls` in {@link rowToResult}. The two must state one rule: a
+ * walk that keyed rows differently from the ingest would read stored decisions
+ * as missing and re-fetch them forever.
+ *
+ * A row the portal lists without that link is unidentifiable rather than keyed
+ * on the docket alone: the ingest cannot read a document for it either, so a
+ * slice that counted it would stay short forever.
  */
-export const czNssListingIdentity = (row: ParsedRow): ListingIdentity =>
-  row.caseNumber.length === 0
+export const czNssListingIdentity = (row: ParsedRow): ListingIdentity => {
+  const sourceDocumentId = czNssSourceDocumentId(row);
+  return sourceDocumentId === undefined
     ? { type: "unidentifiable" }
-    : {
-        type: "case-number",
-        caseNumber: row.caseNumber,
-        language: CZ_NSS_LANGUAGE,
-      };
+    : { type: "document", sourceDocumentId };
+};
 
 /**
  * A reconciliation slice for this source is one UTC decision day, which is

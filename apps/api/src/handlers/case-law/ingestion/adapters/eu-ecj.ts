@@ -9,7 +9,7 @@ import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   defineSourceAdapter,
   EMPTY_AST,
-  listingIdentityKey,
+  isPersistableSourceDocumentId,
   STORED_RAW_REPARSE_REJECTION,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
@@ -443,26 +443,44 @@ const ecjRowLanguage = (language: EcjLanguage): string =>
   language.toLowerCase();
 
 /**
- * The identity the ingest would store for one listed variant.
+ * The identity a stored row carries: the publisher's CELEX number and the
+ * language of the manifestation the row holds.
  *
- * This source publishes no document id of its own, so its rows are keyed on
- * the docket and the language — the same pair `ecjDecisionFromHtml` writes,
- * derived here by the same two rules. Stated once so the crawl's writes and
- * the reconciliation's held-lookup cannot key the same variant differently:
- * a second copy would let the loop read stored decisions as missing and
- * re-fetch them forever.
+ * The CELEX alone would not do, because this source stores one row per
+ * language variant of a document — the same judgment in 24 languages is 24
+ * rows, and a single identity for all of them would let each translation
+ * overwrite the last. The docket alone would not either, and that is the
+ * defect this replaces: several documents settle one docket (an opinion, a
+ * judgment and an order all numbered C-100/23), so `(caseNumber, language)`
+ * named a docket rather than a document and collapsed them onto one row.
  *
- * Always keyable: both halves come off the listing row itself, so there is no
- * listed variant an ingest could not key.
+ * Stated once so the crawl's writes and the reconciliation's held-lookup
+ * cannot key the same variant differently: a second copy would let the loop
+ * read stored decisions as missing and re-fetch them forever. `undefined` is
+ * the CELEX no store can hold, which is keyed on the docket instead and is
+ * therefore not an identity a walk may hunt.
  */
+export const ecjSourceDocumentId = (
+  celex: string,
+  language: string,
+): string | undefined => {
+  if (!isValidCelex(celex)) {
+    return undefined;
+  }
+  const identity = `${celex}:${language}`;
+  return isPersistableSourceDocumentId(identity) ? identity : undefined;
+};
+
+/** The identity the ingest would store for one listed variant. */
 export const ecjListingIdentity = ({
   celex,
   language,
-}: EcjCelexVariant): ListingIdentity => ({
-  type: "case-number",
-  caseNumber: celexToCaseNumber(celex),
-  language: ecjRowLanguage(language),
-});
+}: EcjCelexVariant): ListingIdentity => {
+  const sourceDocumentId = ecjSourceDocumentId(celex, ecjRowLanguage(language));
+  return sourceDocumentId === undefined
+    ? { type: "unidentifiable" }
+    : { type: "document", sourceDocumentId };
+};
 
 /**
  * The distinct (CELEX, language) variants a set of bindings names.
@@ -777,6 +795,15 @@ const ecjDecisionFromHtml = ({
 
   return {
     caseNumber,
+    sourceDocumentId: ecjSourceDocumentId(celex, language),
+    // What every row this adapter wrote before it stated an id was stored
+    // under: one row per docket and language, carrying the EUR-Lex URL of
+    // whichever of the docket's documents was written last. That URL names one
+    // CELEX in one language exactly, so it re-keys that row to the document it
+    // was built from rather than inserting a second one beside it; the
+    // docket's other documents find no null-id row and are inserted, which is
+    // the collapse being undone.
+    ...(sourceUrl === undefined ? {} : { legacySourceUrls: [sourceUrl] }),
     ecli,
     court,
     country: "EU",
@@ -1069,66 +1096,6 @@ const ecjSlicePageRange = (slice: string, page: number): EcjSliceRange => {
   };
 };
 
-/** Shared identities named in the log line; enough to act on, bounded. */
-const SHARED_IDENTITY_SAMPLE = 3;
-
-/**
- * Record listed variants that would be stored under one identity.
- *
- * Several document kinds settle one docket — an opinion, a judgment and an
- * order all numbered C-100/23 — and this source keys its rows on the docket
- * and the language, so those become one identity and one row. A slice's
- * counts are computed over identities and stay self-consistent, but they
- * cannot then speak for the documents behind a shared key: the slice settles
- * while only one of them is held.
- *
- * The reconciliation must key items exactly as the ingest keys rows or it
- * never reaches a fixed point, so this is not something the listing may fix
- * on its own — the granularity is the persisted identity's. Counting it here
- * is what keeps the gap measurable rather than silent, and gives a re-key the
- * measurement it would need.
- */
-const reportSharedIdentities = (
-  slice: string,
-  page: number,
-  variants: readonly EcjCelexVariant[],
-): void => {
-  const celexByIdentity = new Map<string, Set<string>>();
-  for (const variant of variants) {
-    const key = listingIdentityKey(ecjListingIdentity(variant));
-    if (key === null) {
-      continue;
-    }
-    const celexNumbers = celexByIdentity.get(key) ?? new Set<string>();
-    celexNumbers.add(variant.celex);
-    celexByIdentity.set(key, celexNumbers);
-  }
-  const shared = [...celexByIdentity].filter(
-    ([, celexNumbers]) => celexNumbers.size > 1,
-  );
-  if (shared.length === 0) {
-    return;
-  }
-  logger.warn("case_law.reconciliation.shared_identity", {
-    adapterKey: ADAPTER_KEYS.EU_ECJ,
-    slice,
-    page,
-    identities: shared.length,
-    documents: shared.reduce(
-      (total, [, celexNumbers]) => total + celexNumbers.size,
-      0,
-    ),
-    // One string, because a log attribute is a scalar: an array here is
-    // rejected at the type boundary rather than silently flattened.
-    sample: shared
-      .slice(0, SHARED_IDENTITY_SAMPLE)
-      .map(
-        ([key, celexNumbers]) => `${key}=${[...celexNumbers].sort().join(",")}`,
-      )
-      .join("; "),
-  });
-};
-
 /**
  * One page of what the publisher lists for a slice, with no manifestation
  * fetched.
@@ -1156,7 +1123,6 @@ const listEcjSlicePage = async ({
     signal: signal ?? AbortSignal.timeout(ECJ_LISTING_TIMEOUT_MS),
   });
   const variants = distinctVariants(bindings);
-  reportSharedIdentities(slice, page, variants);
   return {
     items: variants.map((variant) => ({
       identity: ecjListingIdentity(variant),

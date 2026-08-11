@@ -1,14 +1,6 @@
 import { Result } from "better-result";
 /* eslint-disable typescript-eslint/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  mock,
-  spyOn,
-  test,
-} from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import {
@@ -19,8 +11,10 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import type { SourceReconciliation } from "@/api/lib/legal-search/ingestion-types";
-import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
-import { logger } from "@/api/lib/observability/logger";
+import {
+  listingIdentityKey,
+  parseListingIdentityKey,
+} from "@/api/lib/legal-search/ingestion-types";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import sparqlFixture from "./__fixtures__/eu-ecj-sparql.json";
@@ -233,6 +227,10 @@ describe("euEcjAdapter.fetchPage", () => {
       expect(first.sourceUrl).toBe(
         "https://eur-lex.europa.eu/legal-content/EN/ALL/?uri=CELEX:62021CJ0128",
       );
+      expect(first.sourceDocumentId).toBe("62021CJ0128:en");
+      // The hint the pipeline re-keys an existing null-id row by: it must be
+      // the URL that row carries, which is this result's own `sourceUrl`.
+      expect(first.legacySourceUrls).toEqual([first.sourceUrl ?? ""]);
       expect(first.metadata).toMatchObject({
         celex: "62021CJ0128",
         ecli: "ECLI:EU:C:2024:49",
@@ -512,17 +510,15 @@ const rejectionMessage = (rejection: unknown): string =>
 const LANGUAGE_PREFIX =
   "http://publications.europa.eu/resource/authority/language/";
 
-/** The key the engine's held-lookup builds for a row stored without a
- * publisher document id: the docket and the language, exactly the pair the
- * decision identity index is keyed on. */
+/** The key the engine's held-lookup builds for a stored row: the publisher
+ * identity the ingest wrote, exactly the column the decision identity index
+ * is keyed on. */
 const storedIdentityKey = (decision: {
-  caseNumber: string;
-  language: string;
+  sourceDocumentId?: string | undefined;
 }): string | null =>
   listingIdentityKey({
-    type: "case-number",
-    caseNumber: decision.caseNumber,
-    language: decision.language,
+    type: "document",
+    sourceDocumentId: decision.sourceDocumentId ?? "",
   });
 
 /**
@@ -582,15 +578,13 @@ const installSparqlMock = ({
 };
 
 describe("ecjListingIdentity", () => {
-  test("keys a variant on the docket and the stored language tag", () => {
-    // This source publishes no document id of its own, so the fallback half
-    // of the identity index is the whole rule.
+  test("keys a variant on its CELEX and the stored language tag", () => {
     expect(
       ecjListingIdentity({ celex: "62021CJ0128", language: "EN" }),
-    ).toEqual({ type: "case-number", caseNumber: "C-128/21", language: "en" });
+    ).toEqual({ type: "document", sourceDocumentId: "62021CJ0128:en" });
     expect(
       ecjListingIdentity({ celex: "62023TJ0201", language: "MT" }),
-    ).toEqual({ type: "case-number", caseNumber: "T-201/23", language: "mt" });
+    ).toEqual({ type: "document", sourceDocumentId: "62023TJ0201:mt" });
   });
 
   test("the key it produces fits the ledger and reads back", () => {
@@ -598,20 +592,57 @@ describe("ecjListingIdentity", () => {
       celex: "62009FJ0100",
       language: "SV",
     });
-    expect(listingIdentityKey(identity)).toBe("case-number:sv:F-100/09");
+    expect(listingIdentityKey(identity)).toBe("document:62009FJ0100:sv");
+    expect(parseListingIdentityKey(listingIdentityKey(identity) ?? "")).toEqual(
+      identity,
+    );
+  });
+
+  test("the documents that settle one docket are separate identities", () => {
+    // A judgment and an order both numbered C-128/21, in one language: keyed
+    // on the docket they were one row and the second replaced the first.
+    const judgment = ecjListingIdentity({
+      celex: "62021CJ0128",
+      language: "EN",
+    });
+    const order = ecjListingIdentity({ celex: "62021CO0128", language: "EN" });
+    expect(celexToCaseNumber("62021CO0128")).toBe(
+      celexToCaseNumber("62021CJ0128"),
+    );
+    expect(listingIdentityKey(order)).not.toBe(listingIdentityKey(judgment));
+  });
+
+  test("one document's language variants are separate identities", () => {
+    // This source stores a row per language, so a single identity for the
+    // work would have each translation overwrite the last.
+    expect(
+      listingIdentityKey(
+        ecjListingIdentity({ celex: "62021CJ0128", language: "FR" }),
+      ),
+    ).not.toBe(
+      listingIdentityKey(
+        ecjListingIdentity({ celex: "62021CJ0128", language: "EN" }),
+      ),
+    );
   });
 
   test("a CELEX in a format the adapter cannot parse still keys", () => {
-    // The crawl stores such a row under the raw CELEX as its docket, so the
-    // listing has to ask about it under the same key or the row reads as
-    // missing on every pass.
+    // Only the docket is derived by pattern; the identity is the CELEX the
+    // publisher stated, so a sector or type this adapter has no rule for is
+    // still one document.
     expect(
       ecjListingIdentity({ celex: "62021XX0128", language: "EN" }),
-    ).toEqual({
-      type: "case-number",
-      caseNumber: "62021XX0128",
-      language: "en",
-    });
+    ).toEqual({ type: "document", sourceDocumentId: "62021XX0128:en" });
+  });
+
+  test("a CELEX no store can hold keys nothing", () => {
+    // Reserving it is impossible, so hunting a row under it would keep the
+    // slice short for a document nothing can ever write.
+    for (const celex of ["", "not a celex", "6".repeat(300)]) {
+      expect(ecjListingIdentity({ celex, language: "EN" })).toEqual({
+        type: "unidentifiable",
+      });
+    }
   });
 });
 
@@ -721,7 +752,7 @@ describe("euEcjAdapter.reconciliation.listSlicePage", () => {
     // this adapter does not publish is one the crawl would never store.
     expect(
       page.items.map(({ identity }) => listingIdentityKey(identity)),
-    ).toEqual(["case-number:en:C-128/21", "case-number:fr:C-128/21"]);
+    ).toEqual(["document:62021CJ0128:en", "document:62021CJ0128:fr"]);
     expect(page.items.map(({ payload }) => payload)).toEqual([
       { celex: "62021CJ0128", language: "EN" },
       { celex: "62021CJ0128", language: "FR" },
@@ -777,13 +808,11 @@ describe("euEcjAdapter.reconciliation.listSlicePage", () => {
     expect(rejection).toBeInstanceOf(DOMException);
   });
 
-  test("records listed variants that share one stored identity", async () => {
-    // An opinion, a judgment and an order can settle one docket, and this
-    // source keys rows on the docket: those are one identity and one row, so
-    // the slice settles with one of the three held. The listing cannot key
-    // them apart without the persisted identity changing too — it must ask
-    // the question the ingest answers — so the collapse is counted instead of
-    // being left to look like completeness.
+  test("keys the documents that settle one docket as separate rows", async () => {
+    // An opinion, a judgment and an order can settle one docket. Keyed on the
+    // docket they were one identity and one row, so the slice settled with
+    // one of them held and the others were never hunted again; keyed on the
+    // CELEX the publisher states, each is asked about on its own.
     const orderBinding = {
       ...withManifestation(firstFixtureBinding, {
         cellarLanguage: "ENG",
@@ -792,53 +821,19 @@ describe("euEcjAdapter.reconciliation.listSlicePage", () => {
       celex: { type: "literal", value: "62021CO0128" },
     };
     installSparqlMock({ bindings: [enBinding, orderBinding] });
-    const warn = spyOn(logger, "warn");
 
-    try {
-      const page = await reconciliation.listSlicePage({
-        slice: "2024",
-        page: 0,
-      });
+    const page = await reconciliation.listSlicePage({
+      slice: "2024",
+      page: 0,
+    });
 
-      // Both are listed; the engine is what collapses them, on the key the
-      // ingest would store.
-      expect(page.items.map(({ payload }) => payload)).toEqual([
-        { celex: "62021CJ0128", language: "EN" },
-        { celex: "62021CO0128", language: "EN" },
-      ]);
-      expect(
-        page.items.map(({ identity }) => listingIdentityKey(identity)),
-      ).toEqual(["case-number:en:C-128/21", "case-number:en:C-128/21"]);
-
-      const reported = warn.mock.calls.find(
-        ([message]) => message === "case_law.reconciliation.shared_identity",
-      );
-      expect(reported).toBeDefined();
-      expect(reported?.[1]?.["identities"]).toBe(1);
-      expect(reported?.[1]?.["documents"]).toBe(2);
-      expect(reported?.[1]?.["sample"]).toBe(
-        "case-number:en:C-128/21=62021CJ0128,62021CO0128",
-      );
-    } finally {
-      warn.mockRestore();
-    }
-  });
-
-  test("says nothing when every listed variant keys to its own row", async () => {
-    installSparqlMock({ bindings: [enBinding, frBinding] });
-    const warn = spyOn(logger, "warn");
-
-    try {
-      await reconciliation.listSlicePage({ slice: "2024", page: 0 });
-
-      expect(
-        warn.mock.calls.filter(
-          ([message]) => message === "case_law.reconciliation.shared_identity",
-        ),
-      ).toEqual([]);
-    } finally {
-      warn.mockRestore();
-    }
+    expect(page.items.map(({ payload }) => payload)).toEqual([
+      { celex: "62021CJ0128", language: "EN" },
+      { celex: "62021CO0128", language: "EN" },
+    ]);
+    expect(
+      page.items.map(({ identity }) => listingIdentityKey(identity)),
+    ).toEqual(["document:62021CJ0128:en", "document:62021CO0128:en"]);
   });
 
   test("refuses a page the slice does not have", async () => {
@@ -869,13 +864,11 @@ describe("euEcjAdapter.reconciliation.listSlicePage", () => {
       page: 0,
     });
 
-    // The premise of the case-number identity: this adapter states no
-    // publisher document id, so its rows fall to the fallback index.
+    // The premise of the document identity: every row this adapter writes
+    // states the publisher identity the walk hunts it by.
     expect(
-      crawled.value.decisions.every(
-        ({ sourceDocumentId }) => sourceDocumentId === undefined,
-      ),
-    ).toBe(true);
+      crawled.value.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
+    ).toEqual(["62021CJ0128:en", "62021CJ0128:fr"]);
     expect(
       listed.items.map(({ identity }) => listingIdentityKey(identity)),
     ).toEqual(crawled.value.decisions.map(storedIdentityKey));

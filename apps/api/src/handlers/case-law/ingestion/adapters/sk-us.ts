@@ -43,6 +43,7 @@ import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   defineSourceAdapter,
   EMPTY_AST,
+  isPersistableSourceDocumentId,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
@@ -268,7 +269,10 @@ const skUsIdentityFields = (
     typeof caseNumber !== "string" ||
     caseNumber.length === 0 ||
     typeof documentId !== "string" ||
-    documentId.length === 0
+    // The id is now the stored identity, so one the column cannot hold is not
+    // a document this adapter can key: keeping it would hunt a row nothing can
+    // ever write.
+    !isPersistableSourceDocumentId(documentId)
   ) {
     return null;
   }
@@ -278,30 +282,23 @@ const skUsIdentityFields = (
 /**
  * The identity the ingest would store for this listing item.
  *
- * The docket and the language, never the DMS `documentId`: this adapter emits
- * no `sourceDocumentId`, so every row it has ever written is keyed on
- * `(caseNumber, language)` with a null document id. Keying the listing on the
- * id the publisher does supply would match no held row at all, and the loop
- * would read the entire archive as missing.
+ * The DMS `documentId`, which is what the publisher itself keys a document on:
+ * the court publishes each opinion of a plenary decision as its own document
+ * under one docket (19 documents under `PL. ÚS 4/2020` in March 2020 alone),
+ * so a `(caseNumber, language)` key names a docket rather than a document and
+ * collapses all of them onto one row.
  *
- * The cost of that is real and measurable — the court publishes each opinion
- * of a plenary decision as its own document under one docket (19 documents
- * under `PL. ÚS 4/2020` in March 2020 alone), and the crawl collapses them
- * into a single row. Recovering them is an identity migration of the source
- * (adopt `documentId` as `sourceDocumentId`, with the deterministic
- * `docDownload/{id}` URL as the `legacySourceUrls` hint that attaches it to
- * the right null-id row), not something a reconciliation pass may decide on
- * its own: until the stored rows carry that id, this is what "held" means.
+ * {@link buildSkUsDecision} stores that same id as `sourceDocumentId`, and
+ * rows written before it did are re-keyed by the deterministic
+ * `docDownload/{id}` URL they carry — see `legacySourceUrls` there. The two
+ * must state one rule: a walk that keyed items differently from the ingest
+ * would read stored decisions as missing and re-fetch them forever.
  */
 export const skUsListingIdentity = (doc: SearchDocument): ListingIdentity => {
   const fields = skUsIdentityFields(doc);
   return fields === null
     ? { type: "unidentifiable" }
-    : {
-        type: "case-number",
-        caseNumber: fields.caseNumber,
-        language: SK_US_LANGUAGE,
-      };
+    : { type: "document", sourceDocumentId: fields.documentId };
 };
 
 /**
@@ -375,9 +372,18 @@ export const buildSkUsDecision = async (
   }
 
   const rawHash = hashContent(JSON.stringify(doc));
+  const documentUrl = `${DOC_DOWNLOAD_URL}/${documentId}`;
 
   const decision: IngestionResult = {
     caseNumber,
+    sourceDocumentId: documentId,
+    // What every row this adapter wrote before it stated an id was stored
+    // under: one row per docket, carrying the download URL of whichever of the
+    // docket's documents was written last. The URL names one document exactly,
+    // so it re-keys that row to the document it was built from instead of
+    // inserting a second one beside it; the docket's other documents find no
+    // null-id row and are inserted, which is the collapse being undone.
+    legacySourceUrls: [documentUrl],
     ecli,
     court,
     country: "SVK",
@@ -388,8 +394,8 @@ export const buildSkUsDecision = async (
     // The listing proves the document exists; without its PDF this row carries
     // metadata only, and must never overwrite detail a later fetch recovered.
     ...(pdfBytes === undefined ? { isListingOnly: true } : {}),
-    sourceUrl: `${DOC_DOWNLOAD_URL}/${documentId}`,
-    documentUrl: `${DOC_DOWNLOAD_URL}/${documentId}`,
+    sourceUrl: documentUrl,
+    documentUrl,
     metadata: {
       caseNumber,
       ecli,
@@ -769,15 +775,10 @@ export const skUsAdapter = defineSourceAdapter({
     // `buildSkUsDecision` marks it `isListingOnly`; unset, that row would count
     // as held and its document would never be hunted again.
     //
-    // Heldness stays a statement about the docket rather than the document,
-    // because this source stores one row per `(caseNumber, language)` and emits
-    // no `sourceDocumentId` at all — see `skUsListingIdentity`. A docket whose
-    // row carries detail is therefore held even where a sibling document
-    // failed, and a walk hunts one representative per docket, not all of them.
-    // That bound belongs to the identity model, not to this flag: without the
-    // flag the docket is held whatever its row carries, and fetching siblings
-    // before the stored rows carry `documentId` would only have them overwrite
-    // one another in the single row that exists for the docket.
+    // Heldness is now a statement about the document, since the rows carry the
+    // DMS id — see `skUsListingIdentity`. A docket's documents are hunted one
+    // by one rather than through a representative, and a sibling whose PDF
+    // failed no longer hides behind one that succeeded.
     heldRequiresDetail: true,
     listSlicePage: listSkUsSlicePage,
     buildDecision: buildSkUsFromPayload,

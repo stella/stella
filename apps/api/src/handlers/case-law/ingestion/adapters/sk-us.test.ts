@@ -17,7 +17,10 @@ import {
   SK_US_FIRST_SLICE,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
-import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
+import {
+  listingIdentityKey,
+  SOURCE_DOCUMENT_ID_MAX_LENGTH,
+} from "@/api/lib/legal-search/ingestion-types";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const { reconciliation } = skUsAdapter;
@@ -276,15 +279,35 @@ describe("sk-us reconciliation slices", () => {
 });
 
 describe("sk-us listing identity", () => {
-  test("keys an item on its docket and language, as the crawl stores it", () => {
+  test("keys an item on the DMS document id, as the crawl stores it", () => {
     expect(skUsListingIdentity(PLENARY_OPINION)).toEqual({
-      type: "case-number",
-      caseNumber: "PL. ÚS 4/2020",
-      language: "sk",
+      type: "document",
+      sourceDocumentId: PLENARY_OPINION.documentId,
     });
     expect(listingIdentityKey(skUsListingIdentity(PLENARY_OPINION))).toBe(
-      "case-number:sk:PL. ÚS 4/2020",
+      `document:${PLENARY_OPINION.documentId}`,
     );
+  });
+
+  test("a docket's documents are separate identities, as the store now is", () => {
+    // The court publishes each opinion of a plenary decision as its own
+    // document under one docket; keyed on the docket they were one row.
+    const sibling = {
+      ...PLENARY_OPINION,
+      documentId: "9c2f0f01-6a2f-4a53-9a4e-2b6cf9a5f4d2",
+    };
+    expect(listingIdentityKey(skUsListingIdentity(sibling))).not.toBe(
+      listingIdentityKey(skUsListingIdentity(PLENARY_OPINION)),
+    );
+  });
+
+  test("an id the decision column cannot hold keys nothing", () => {
+    expect(
+      skUsListingIdentity({
+        ...PLENARY_OPINION,
+        documentId: "d".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
+      }),
+    ).toEqual({ type: "unidentifiable" });
   });
 
   test("an item the crawl would drop is unidentifiable, not keyed on nothing", () => {
@@ -358,9 +381,8 @@ describe("sk-us listSlicePage", () => {
     expect(last.totalPages).toBe(4);
     expect(first.items).toHaveLength(1);
     expect(first.items.at(0)?.identity).toEqual({
-      type: "case-number",
-      caseNumber: "PL. ÚS 4/2020",
-      language: "sk",
+      type: "document",
+      sourceDocumentId: PLENARY_OPINION.documentId,
     });
   });
 
@@ -474,11 +496,28 @@ describe("sk-us buildDecision", () => {
     // short and re-fetches the same document forever.
     expect(
       listingIdentityKey({
-        type: "case-number",
-        caseNumber: outcome.decision.caseNumber,
-        language: outcome.decision.language,
+        type: "document",
+        sourceDocumentId: outcome.decision.sourceDocumentId ?? "",
       }),
     ).toBe(listingIdentityKey(skUsListingIdentity(PLENARY_OPINION)));
+  });
+
+  test("the built decision carries the URL its docket-keyed row was stored under", async () => {
+    mockFetch({ search: [] });
+
+    const outcome = await reconciliation.buildDecision(PLENARY_OPINION);
+    expect(outcome.type).toBe("built");
+    if (outcome.type !== "built") {
+      return;
+    }
+    // The hint the pipeline re-keys an existing null-id row by: it must be the
+    // URL that row carries, which is the one this build stores as `sourceUrl`.
+    expect(outcome.decision.legacySourceUrls).toEqual([
+      outcome.decision.sourceUrl ?? "",
+    ]);
+    expect(outcome.decision.sourceUrl).toBe(
+      `https://www.ustavnysud.sk/docDownload/${PLENARY_OPINION.documentId}`,
+    );
   });
 
   test("a document the court does not serve is never written", async () => {
