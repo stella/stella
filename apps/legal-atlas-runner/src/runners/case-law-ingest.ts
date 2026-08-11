@@ -19,6 +19,8 @@
 
 import { panic } from "better-result";
 
+import { DAY_IN_MS } from "@stll/time";
+
 import { SOURCE_TOTAL_ORIGIN, caseLawIngestionEvents } from "@/api/db/schema";
 import { corpusStorageMode, envBase } from "@/api/env-base";
 import {
@@ -657,7 +659,7 @@ const ensureSource = async (
 };
 
 const daysAgoCursor = (n: number): string => {
-  const d = new Date(Date.now() - n * 24 * 60 * 60 * 1000);
+  const d = new Date(Date.now() - n * DAY_IN_MS);
   const date = d.toISOString().split("T")[0];
   if (!date) {
     panic("Invalid date format");

@@ -36,6 +36,7 @@
   "dependencies": {
     "@stll/api": "workspace:*",
     "@stll/legal-atlas": "workspace:*",
+    "@stll/time": "workspace:*",
     "better-result": "catalog:"
   },
   "devDependencies": {
