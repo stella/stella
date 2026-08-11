@@ -14,6 +14,7 @@
  *   bun apps/api/src/scripts/adapter-health.ts --since 24h
  */
 
+import { panic } from "better-result";
 import { count, eq, gt, sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
@@ -27,6 +28,7 @@ import {
   listAdapterKeys,
   loadAdapterByKey,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
+import type { SourceTotalCount } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 
 // ── Types ───────────────────────────────────────────────
@@ -185,10 +187,33 @@ type SourceTotal = {
 };
 
 /**
+ * The denominator this report prints beside a held count, or null where there
+ * is none.
+ *
+ * Both non-count answers collapse here, and deliberately: a coverage
+ * percentage needs a denominator, and neither a publisher that states no total
+ * nor a probe that broke supplies one. The distinction is kept by the standing
+ * totals sweep, which acts on it; this report only renders what it has.
+ */
+const remoteTotalOf = (answer: SourceTotalCount): number | null => {
+  switch (answer.type) {
+    case "count":
+      return answer.total;
+    case "no-count-endpoint":
+    case "probe-failed":
+      return null;
+    default: {
+      const exhaustive: never = answer;
+      return panic(`Unhandled source total: ${JSON.stringify(exhaustive)}`);
+    }
+  }
+};
+
+/**
  * Fetch the total available decisions from each court
  * website via the adapter's `getTotalCount` method.
  * Each fetch is independent and has its own timeout.
- * Adapters without `getTotalCount` return null.
+ * A key with no registered adapter returns null.
  */
 const getSourceTotals = async (): Promise<SourceTotal[]> => {
   const keys = listAdapterKeys();
@@ -197,12 +222,14 @@ const getSourceTotals = async (): Promise<SourceTotal[]> => {
     keys.map(async (adapterKey: string) => {
       try {
         const adapter = await loadAdapterByKey(adapterKey);
-        if (!adapter?.getTotalCount) {
+        if (!adapter) {
           return { adapterKey, remoteTotal: null };
         }
         const signal = AbortSignal.timeout(SOURCE_TOTAL_TIMEOUT);
-        const remoteTotal = await adapter.getTotalCount(signal);
-        return { adapterKey, remoteTotal };
+        return {
+          adapterKey,
+          remoteTotal: remoteTotalOf(await adapter.getTotalCount(signal)),
+        };
       } catch {
         return { adapterKey, remoteTotal: null };
       }

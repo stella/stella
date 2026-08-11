@@ -11,6 +11,9 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   isPersistableSourceDocumentId,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
@@ -28,6 +31,7 @@ import {
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
+import { errorTag } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
@@ -1532,7 +1536,7 @@ export const czUsAdapter = defineSourceAdapter({
         timeoutMs: ADAPTER_TIMEOUT.REQUEST,
       });
       if (!first.ok) {
-        return null;
+        return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
       }
       const cookies = first.headers
         .getSetCookie()
@@ -1549,7 +1553,9 @@ export const czUsAdapter = defineSourceAdapter({
       const generator = hidden("__VIEWSTATEGENERATOR");
       const validation = hidden("__EVENTVALIDATION");
       if (viewState === null || validation === null) {
-        return null;
+        return sourceTotalProbeFailed(
+          SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
+        );
       }
       const form = new URLSearchParams({
         __VIEWSTATE: viewState,
@@ -1574,7 +1580,7 @@ export const czUsAdapter = defineSourceAdapter({
         body: form.toString(),
       });
       if (submit.status !== 302 && !submit.ok) {
-        return null;
+        return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
       }
       const results = await fetchWithTimeout(
         "https://nalus.usoud.cz/Search/Results.aspx",
@@ -1586,16 +1592,16 @@ export const czUsAdapter = defineSourceAdapter({
         },
       );
       if (!results.ok) {
-        return null;
+        return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
       }
       const total = /z celkem (?<n>\d+)/u.exec(await results.text())?.groups?.[
         "n"
       ];
-      const parsed =
-        total === undefined ? Number.NaN : Number.parseInt(total, 10);
-      return Number.isNaN(parsed) || parsed <= 0 ? null : parsed;
-    } catch {
-      return null;
+      return total === undefined
+        ? sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD)
+        : sourceTotalRead(Number.parseInt(total, 10));
+    } catch (error) {
+      return { type: "probe-failed", errorTag: errorTag(error) };
     }
   },
 
@@ -1603,8 +1609,7 @@ export const czUsAdapter = defineSourceAdapter({
    * The search form answers a decision-date range on its own, so what a year
    * holds is answerable without the crawl cursor ever reaching it: list the
    * year, key each record the way the ingest would, and compare against what
-   * is held. This loop is the only writer of coverage for this source; the
-   * crawl states no `SliceCoverage`.
+   * is held. This loop is the only writer of coverage for this source.
    */
   reconciliation: {
     firstSlice: CZ_US_FIRST_SLICE,

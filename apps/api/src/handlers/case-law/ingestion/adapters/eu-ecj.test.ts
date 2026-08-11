@@ -9,8 +9,8 @@ import {
   euEcjAdapter as ecjAdapter,
   SPARQL_LIMIT,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
+import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
-import type { SourceReconciliation } from "@/api/lib/legal-search/ingestion-types";
 import {
   listingIdentityKey,
   parseListingIdentityKey,
@@ -486,13 +486,7 @@ describe("euEcjAdapter.fetchPage", () => {
  * here so every test below exercises the capability the adapter actually
  * publishes, not a copy of it.
  */
-const reconciliation = ((): SourceReconciliation => {
-  const capability = ecjAdapter.reconciliation;
-  if (capability === undefined) {
-    throw new TypeError("eu-ecj must declare the reconciliation capability");
-  }
-  return capability;
-})();
+const reconciliation = requireReconciliation(ecjAdapter);
 
 /**
  * bun-types declares `.rejects.toThrow` as void, so awaiting it trips

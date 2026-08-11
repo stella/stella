@@ -113,24 +113,27 @@ export type IngestionResult = {
 };
 
 /**
- * What a source says it holds for the slice just crawled, against what the
- * crawl actually produced.
+ * What a source says it holds for a slice, against what is held for it.
  *
- * Coverage is otherwise unknowable: a crawl that silently stops early looks
- * exactly like a slice with fewer decisions in it. Reporting the source's
- * own count next to the collected count turns that into a number the
- * reconciliation pass can act on. Adapters whose source publishes no count
- * omit it, and their slices are simply not tracked.
+ * Coverage is otherwise unknowable: a walk that silently stops early looks
+ * exactly like a slice with fewer decisions in it. Recording the source's own
+ * count next to the collected count turns that into a number the ledger can
+ * select on.
+ *
+ * Written by the reconciliation loop alone. A crawl cannot state it honestly:
+ * a forward-only cursor does not know which slice it has finished, so a count
+ * taken mid-slice reads as a shortfall and a count taken at the end reads as
+ * complete whatever the crawl skipped.
  */
 export type SliceCoverage = {
   /**
-   * The crawl slice these counts describe — a calendar day for date-cursor
-   * adapters. Stable across re-crawls, since it keys the ledger row.
+   * The slice these counts describe — a calendar day for date-cursor
+   * adapters. Stable across re-walks, since it keys the ledger row.
    */
   slice: string;
   /** How many records the source says the slice contains. */
   reported: number;
-  /** How many this crawl produced for it. */
+  /** How many of them are held. */
   collected: number;
 };
 
@@ -138,8 +141,6 @@ export type SliceCoverage = {
 export type SyncPage = {
   decisions: IngestionResult[];
   nextCursor: string | null;
-  /** Present on the page that completes a slice; see `SliceCoverage`. */
-  coverage?: SliceCoverage | undefined;
 };
 
 /**
@@ -333,6 +334,12 @@ export type ReconciliationBuildOutcome =
  * compared without the loop knowing what a slice means to the adapter.
  */
 export type SourceReconciliation = {
+  /**
+   * The discriminant against `ReconciliationUnsupported`, absent here so an
+   * implemented capability is written plainly rather than wrapped. Declared so
+   * every reader narrows on one field instead of probing for another.
+   */
+  type?: undefined;
   /** First slice the publisher can list (e.g. the feed's first day). */
   firstSlice: string;
   /** Slice for a UTC instant (the tip). */
@@ -378,6 +385,73 @@ export type SourceReconciliation = {
     payload: unknown,
     signal?: AbortSignal,
   ) => Promise<ReconciliationBuildOutcome>;
+};
+
+/**
+ * What asking a source how much it holds produced.
+ *
+ * Three answers rather than a nullable number. "The publisher exposes no
+ * count" is a permanent property of the source; "the probe did not complete"
+ * is a statement about one request and nothing about the source. A caller
+ * given only null has to guess which it got, and every caller guessed the
+ * same way: it reported both as "no count" and alarmed on neither.
+ *
+ * `errorTag` is a structural, non-PII identifier — an `errorTag(...)` result
+ * where the adapter caught a throw, and an adapter-authored tag naming the
+ * step where it did not (a refused status, an unreadable payload). Never a
+ * message: these tags reach logs and dashboards.
+ */
+export type SourceTotalCount =
+  | { type: "count"; total: number }
+  | { type: "no-count-endpoint" }
+  | { type: "probe-failed"; errorTag: string };
+
+/**
+ * Tags for the count probe failures an adapter detects without a throw.
+ * Alongside `errorTag(...)`, which names the ones it catches.
+ */
+export const SOURCE_TOTAL_PROBE_FAILURE = {
+  /** The count endpoint answered with a status the adapter refuses. */
+  HTTP_STATUS: "http-status",
+  /** The answer carried no count this adapter can read. */
+  UNREADABLE_PAYLOAD: "unreadable-payload",
+} as const;
+
+export type SourceTotalProbeFailure =
+  (typeof SOURCE_TOTAL_PROBE_FAILURE)[keyof typeof SOURCE_TOTAL_PROBE_FAILURE];
+
+/** A failure the adapter detected without a throw. */
+export const sourceTotalProbeFailed = (
+  failure: SourceTotalProbeFailure,
+): SourceTotalCount => ({ type: "probe-failed", errorTag: failure });
+
+/**
+ * The count answer for a number an adapter read out of a publisher's payload.
+ *
+ * One rule for every source: a total is a positive, finite integer, and
+ * anything else is a payload the adapter could not read rather than a corpus
+ * of nothing. Zero especially — no publisher here holds no decisions, so a
+ * zero is a query that did not run, and recording it would state a false floor
+ * that every coverage figure is then measured against.
+ */
+export const sourceTotalRead = (value: number): SourceTotalCount =>
+  Number.isSafeInteger(value) && value > 0
+    ? { type: "count", total: value }
+    : sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD);
+
+/**
+ * An adapter that declares reconciliation and cannot do it.
+ *
+ * The capability is required rather than optional so that a new adapter has to
+ * answer for it: an omitted field is a decision nobody made, while this one is
+ * a decision written down with its reason. Discriminated against
+ * `SourceReconciliation`, which carries no `type`, so an implemented
+ * capability pays no wrapper and every reader narrows on the same field.
+ */
+export type ReconciliationUnsupported = {
+  type: "unsupported";
+  /** Why this source cannot be reconciled. Printed to operators. */
+  reason: string;
 };
 
 /**
@@ -434,22 +508,27 @@ export type SourceAdapter = {
     stored: StoredRawReparseInput,
   ) => StoredRawReparseOutcome | Promise<StoredRawReparseOutcome>;
   /**
-   * Fetch the total number of decisions available from
-   * the source. Returns null if the source doesn't expose
-   * a count endpoint or if the request fails.
+   * Ask the source how many decisions it holds, so held-vs-total coverage has
+   * a denominator the publisher itself states.
+   *
+   * Required: a source nobody can count is a source whose coverage nobody can
+   * report, and that has to be a stated property of the adapter rather than a
+   * field somebody forgot. An adapter classifies its own answer, because only
+   * it knows whether its publisher states no total or its probe broke.
    */
-  getTotalCount?: (signal: AbortSignal) => Promise<number | null>;
+  getTotalCount: (signal: AbortSignal) => Promise<SourceTotalCount>;
   /**
    * Ask the publisher what it lists for a slice, so the standing
    * reconciliation loop can compare that against what is held and ingest the
    * difference.
    *
-   * Optional. It exists only for sources that publish a listing addressable
-   * independently of the crawl cursor; where the only way to reach a decision
-   * is to walk the cursor forward, there is nothing to reconcile against and
-   * the adapter omits this rather than re-crawling under another name.
+   * Required, and answerable with `ReconciliationUnsupported`: it exists only
+   * for sources that publish a listing addressable independently of the crawl
+   * cursor, and where the only way to reach a decision is to walk the cursor
+   * forward there is nothing to reconcile against. Declaring that explicitly
+   * is what keeps "cannot" apart from "nobody looked".
    */
-  reconciliation?: SourceReconciliation | undefined;
+  reconciliation: SourceReconciliation | ReconciliationUnsupported;
 };
 
 /** Preserve an adapter's literal registry key while contextualizing its API. */

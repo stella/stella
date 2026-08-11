@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { rlsDb } from "@/api/db/root";
 import { SOURCE_TOTAL_ORIGIN } from "@/api/db/schema";
 import { createIngestionDb } from "@/api/db/scoped";
@@ -20,11 +22,12 @@ import { isoCalendarDay } from "@/api/lib/dates";
  * and records it, with the origin kept alongside so a reader can tell a
  * measured number from a transcribed one.
  *
- * A poll that returns null or throws records NOTHING and says so. The
- * stored total is the last number the publisher actually stated, and a
- * failed probe is not evidence that it changed. Only a broken probe moves
- * the exit code: an adapter whose publisher simply states no total is
- * reported and passed over, so a full sweep is not permanently red.
+ * A poll that yields no count records NOTHING and says so. The stored total
+ * is the last number the publisher actually stated, and a failed probe is not
+ * evidence that it changed. Only a broken probe moves the exit code: an
+ * adapter whose publisher simply states no total is reported and passed over,
+ * so a full sweep is not permanently red. The adapter states which of the two
+ * it is, so the report names the failing step instead of guessing.
  *
  *   # what is recorded today
  *   bun run src/scripts/case-law-source-total.ts --list
@@ -182,11 +185,10 @@ if (totalFlag !== undefined) {
 const POLL_OUTCOME = {
   RECORDED: "recorded",
   /**
-   * The adapter states no total. Covers both an adapter that implements no
-   * `getTotalCount` and one whose implementation answers null because its
-   * publisher exposes no readable count — `SourceAdapter.getTotalCount`
-   * defines null as exactly that. Not a failure: a sweep over every adapter
-   * would otherwise always end in one, whatever the count-capable sources did.
+   * The adapter's implementation answers null because its publisher exposes
+   * no readable count — `SourceAdapter.getTotalCount` defines null as exactly
+   * that. Not a failure: a sweep over every adapter would otherwise always end
+   * in one, whatever the count-capable sources did.
    */
   NO_COUNT: "no-count",
   FAILED: "failed",
@@ -207,21 +209,20 @@ type PollResult = {
  */
 const pollOne = async (adapterKey: string): Promise<PollResult> => {
   const adapter = getAdapter(adapterKey);
-  if (!adapter?.getTotalCount) {
+  if (!adapter) {
     return {
       adapterKey,
-      outcome: POLL_OUTCOME.NO_COUNT,
-      line: `${adapterKey}: exposes no count, nothing recorded`,
+      outcome: POLL_OUTCOME.FAILED,
+      line: `${adapterKey}: no adapter registered, nothing recorded`,
     };
   }
 
-  // A throw is a failure of this probe; a null is the adapter's own answer
-  // that its publisher states no total. The two are kept apart so a broken
-  // probe still moves the exit code and a permanently countless source
-  // never does.
+  // The adapter classifies its own answer, so this reads a disposition rather
+  // than inferring one: a broken probe moves the exit code and a permanently
+  // countless source never does. A throw is this probe's own failure.
   const probe = await adapter
     .getTotalCount(AbortSignal.timeout(POLL_TIMEOUT_MS))
-    .then((total) => ({ ok: true, total }) as const)
+    .then((count) => ({ ok: true, count }) as const)
     .catch((error: unknown) => ({ ok: false, error }) as const);
   if (!probe.ok) {
     console.error(`${adapterKey}: poll failed —`, probe.error);
@@ -231,18 +232,32 @@ const pollOne = async (adapterKey: string): Promise<PollResult> => {
       line: `${adapterKey}: poll failed, nothing recorded`,
     };
   }
-  if (probe.total === null) {
-    return {
-      adapterKey,
-      outcome: POLL_OUTCOME.NO_COUNT,
-      line: `${adapterKey}: exposes no count, nothing recorded`,
-    };
+  const { count } = probe;
+  switch (count.type) {
+    case "no-count-endpoint":
+      return {
+        adapterKey,
+        outcome: POLL_OUTCOME.NO_COUNT,
+        line: `${adapterKey}: exposes no count, nothing recorded`,
+      };
+    case "probe-failed":
+      return {
+        adapterKey,
+        outcome: POLL_OUTCOME.FAILED,
+        line: `${adapterKey}: probe failed (${count.errorTag}), nothing recorded`,
+      };
+    case "count":
+      break;
+    default: {
+      const exhaustive: never = count;
+      return panic(`Unhandled source total: ${JSON.stringify(exhaustive)}`);
+    }
   }
   // The writer owns what counts as a usable number, so its rules are not
   // restated here — but its rejection must not escape. The probes run
   // together, so a throw would reject the whole batch and lose the result of
   // every other adapter, including the ones that succeeded.
-  const { total } = probe;
+  const { total } = count;
   const write = await setSourceReportedTotal({
     scopedDb: ingestionDb,
     adapterKey,

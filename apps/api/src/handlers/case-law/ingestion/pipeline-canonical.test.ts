@@ -8,7 +8,6 @@ import {
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
@@ -18,6 +17,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type { WriteCorpusResult } from "@/api/lib/legal-search/corpus-storage";
+import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 
 /**
  * `canonical` storage mode moves the payload out of Postgres, so what a
@@ -507,25 +507,7 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
       async () => await Promise.reject(new Error("bucket unreachable")),
     );
 
-    const source = {
-      id: createSafeId<"caseLawSource">(),
-      adapterKey: ADAPTER_KEYS.CZ_NS,
-      name: "Canonical source",
-      enabled: true,
-      syncCursor: "cursor-1",
-      lastSyncAt: null,
-      observationOrder: 0n,
-      checkpointObservationOrder: 0n,
-      ingestionLeaseToken: null,
-      ingestionLeaseExpiresAt: null,
-      config: {},
-      descriptor: null,
-      reportedTotal: null,
-      reportedTotalAsOf: null,
-      reportedTotalOrigin: null,
-      createdAt: new Date("2026-01-01T00:00:00.000Z"),
-      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
-    } satisfies typeof caseLawSources.$inferSelect;
+    const source = caseLawSourceRow({ name: "Canonical source" });
 
     czNsAdapter.fetchPage = async () =>
       await Promise.resolve(
@@ -562,25 +544,7 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
     };
     mirrorSettlementApplied = false;
 
-    const source = {
-      id: createSafeId<"caseLawSource">(),
-      adapterKey: ADAPTER_KEYS.CZ_NS,
-      name: "Canonical source",
-      enabled: true,
-      syncCursor: "cursor-1",
-      lastSyncAt: null,
-      observationOrder: 0n,
-      checkpointObservationOrder: 0n,
-      ingestionLeaseToken: null,
-      ingestionLeaseExpiresAt: null,
-      config: {},
-      descriptor: null,
-      reportedTotal: null,
-      reportedTotalAsOf: null,
-      reportedTotalOrigin: null,
-      createdAt: new Date("2026-01-01T00:00:00.000Z"),
-      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
-    } satisfies typeof caseLawSources.$inferSelect;
+    const source = caseLawSourceRow({ name: "Canonical source" });
 
     czNsAdapter.fetchPage = async () =>
       await Promise.resolve(

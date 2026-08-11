@@ -2,10 +2,11 @@
  * The standing sweep over the totals publishers report holding.
  *
  * Held-vs-total coverage needs a denominator, and only some publishers
- * expose a cheap count. Those adapters implement `getTotalCount` and are
- * asked here; for the rest an operator records the publisher's own figure,
- * with the origin kept alongside so a reader can tell a measured number
- * from a transcribed one.
+ * expose a cheap count. Every adapter is asked, and answers with the count,
+ * with "my publisher exposes none", or with the probe that failed; where a
+ * publisher exposes none, an operator records its own stated figure, with the
+ * origin kept alongside so a reader can tell a measured number from a
+ * transcribed one.
  *
  * What decides a sweep is when each source was last recorded or asked, not
  * an interval this process has been awake for. The wake is frequent and
@@ -20,14 +21,19 @@
  * pacing can be exercised on their own.
  */
 
+import { panic } from "better-result";
+
 import type { SourceReportedTotal } from "@/api/handlers/case-law/ingestion/source-totals";
-import type { SourceAdapter } from "@/api/lib/legal-search/ingestion-types";
+import { errorTag } from "@/api/lib/errors/error-tag";
+import type {
+  SourceAdapter,
+  SourceTotalCount,
+} from "@/api/lib/legal-search/ingestion-types";
 
 import { DRAIN_CHECK_SLICE_MS } from "./sk-document-drain";
 import {
   SOURCE_TOTAL_POLL_OUTCOME,
   SOURCE_TOTAL_STALE_AFTER_MS,
-  type CountingSourceAdapter,
   type SourceTotalPollOutcome,
   type SourceTotalPollTally,
   selectDueCountingAdapters,
@@ -36,11 +42,12 @@ import {
 
 export type SourceTotalPollSummary = SourceTotalPollTally & {
   /**
-   * The most recent throw, so an error rate has a cause beside it. Left
-   * raw: the caller renders it, and it renders a tag rather than a message,
-   * because a message can carry more than an operator asked to see.
+   * The most recent failure's structural tag, so an error rate has a cause
+   * beside it. A tag rather than the error, reduced here rather than at the
+   * sink: a message can carry more than an operator asked to see, and a
+   * summary that never holds one cannot leak one.
    */
-  lastError: unknown;
+  lastErrorTag: string | undefined;
 };
 
 export type SourceTotalPollTiming = {
@@ -81,45 +88,42 @@ export type SourceTotalPollOptions = {
   timing: SourceTotalPollTiming;
 };
 
-type SourceTotalProbe =
-  | { status: "counted"; total: number }
-  | { status: "no-count" }
-  | { status: "failed"; error: unknown };
-
 type ProbedSourceTotal = {
-  adapter: CountingSourceAdapter;
-  probe: SourceTotalProbe;
+  adapter: SourceAdapter;
+  count: SourceTotalCount;
 };
 
 type SettledSourceTotal = {
   outcome: SourceTotalPollOutcome;
-  error: unknown;
+  errorTag: string | undefined;
 };
 
 type ProbeSourceTotalOptions = {
-  adapter: CountingSourceAdapter;
+  adapter: SourceAdapter;
   timeoutMs: number;
 };
 
 /**
- * One probe against one publisher. A throw is a failure of this probe; a
- * null is the adapter's own answer that its publisher states no total, so
- * the two are kept apart rather than collapsed into "no number".
+ * One probe against one publisher.
+ *
+ * The adapter classifies its own answer, so a publisher that states no total
+ * and a request that broke arrive here already apart; a throw is this probe's
+ * own failure and joins the second.
  */
 const probeSourceTotal = async ({
   adapter,
   timeoutMs,
 }: ProbeSourceTotalOptions): Promise<ProbedSourceTotal> => {
   try {
-    const total = await adapter.getTotalCount(AbortSignal.timeout(timeoutMs));
-
     return {
       adapter,
-      probe:
-        total === null ? { status: "no-count" } : { status: "counted", total },
+      count: await adapter.getTotalCount(AbortSignal.timeout(timeoutMs)),
     };
   } catch (error) {
-    return { adapter, probe: { status: "failed", error } };
+    return {
+      adapter,
+      count: { type: "probe-failed", errorTag: errorTag(error) },
+    };
   }
 };
 
@@ -137,22 +141,28 @@ type RecordProbedTotalOptions = {
  */
 const recordProbedTotal = async ({
   asOf,
-  probed: { adapter, probe },
+  probed: { adapter, count },
   recordTotal,
 }: RecordProbedTotalOptions): Promise<SettledSourceTotal> => {
-  switch (probe.status) {
-    case "no-count": {
-      return { outcome: SOURCE_TOTAL_POLL_OUTCOME.NO_COUNT, error: undefined };
+  switch (count.type) {
+    case "no-count-endpoint": {
+      return {
+        outcome: SOURCE_TOTAL_POLL_OUTCOME.NO_COUNT,
+        errorTag: undefined,
+      };
     }
-    case "failed": {
-      return { outcome: SOURCE_TOTAL_POLL_OUTCOME.FAILED, error: probe.error };
+    case "probe-failed": {
+      return {
+        outcome: SOURCE_TOTAL_POLL_OUTCOME.FAILED,
+        errorTag: count.errorTag,
+      };
     }
-    case "counted": {
+    case "count": {
       try {
         const applied = await recordTotal({
           adapterKey: adapter.key,
           asOf,
-          total: probe.total,
+          total: count.total,
         });
 
         // An adapter the sources table does not carry is registry drift: the
@@ -162,20 +172,20 @@ const recordProbedTotal = async ({
           outcome: applied
             ? SOURCE_TOTAL_POLL_OUTCOME.RECORDED
             : SOURCE_TOTAL_POLL_OUTCOME.UNKNOWN_SOURCE,
-          error: undefined,
+          errorTag: undefined,
         };
       } catch (error) {
-        return { outcome: SOURCE_TOTAL_POLL_OUTCOME.FAILED, error };
+        return {
+          outcome: SOURCE_TOTAL_POLL_OUTCOME.FAILED,
+          errorTag: errorTag(error),
+        };
       }
     }
     default: {
-      const exhaustive: never = probe;
-      return {
-        outcome: SOURCE_TOTAL_POLL_OUTCOME.FAILED,
-        error: new Error(
-          `unhandled source-total probe: ${JSON.stringify(exhaustive)}`,
-        ),
-      };
+      const exhaustive: never = count;
+      return panic(
+        `unhandled source-total answer: ${JSON.stringify(exhaustive)}`,
+      );
     }
   }
 };
@@ -204,7 +214,10 @@ const sweepSourceTotals = async ({
   } catch (error) {
     // A read that failed is not "everything is fresh", so it is reported
     // rather than passed over in silence.
-    return { ...tallySourceTotalPollOutcomes([]), lastError: error };
+    return {
+      ...tallySourceTotalPollOutcomes([]),
+      lastErrorTag: errorTag(error),
+    };
   }
 
   const askedAtSweepStart = now();
@@ -248,16 +261,16 @@ const sweepSourceTotals = async ({
     ),
   );
 
-  let lastError: unknown;
-  for (const { error } of settled) {
-    if (error !== undefined) {
-      lastError = error;
+  let lastErrorTag: string | undefined;
+  for (const settledTotal of settled) {
+    if (settledTotal.errorTag !== undefined) {
+      lastErrorTag = settledTotal.errorTag;
     }
   }
 
   return {
     ...tallySourceTotalPollOutcomes(settled.map(({ outcome }) => outcome)),
-    lastError,
+    lastErrorTag,
   };
 };
 

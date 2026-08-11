@@ -755,9 +755,13 @@ export const skUsAdapter = defineSourceAdapter({
    * when replayed with browser-identical headers and session state, so the
    * total it shows in a browser cannot be read from here. Coverage for this
    * source is benchmarked only by what the crawl itself reports.
+   *
+   * Answered statically rather than probed: no request this adapter can make
+   * would answer differently, so there is no failure to distinguish from the
+   * absence.
    */
   async getTotalCount(_signal) {
-    return await Promise.resolve(null);
+    return await Promise.resolve({ type: "no-count-endpoint" });
   },
 
   /**

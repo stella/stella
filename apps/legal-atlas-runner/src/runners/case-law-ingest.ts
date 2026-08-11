@@ -1453,7 +1453,14 @@ export const runCaseLawIngest = async (
     const reconcilable: ReconciliationSource[] = [];
     for (const { adapterKey, name } of SOURCES) {
       const reconciliation = getAdapter(adapterKey)?.reconciliation;
-      if (!reconciliation) {
+      // Every adapter declares the capability, so the gate reads the
+      // declaration rather than the field's presence: a source that states it
+      // cannot be reconciled is skipped, and one that forgot to state anything
+      // no longer compiles.
+      if (
+        reconciliation === undefined ||
+        reconciliation.type === "unsupported"
+      ) {
         continue;
       }
       // oxlint-disable-next-line no-await-in-loop -- one bounded source lookup per configured source, at startup
@@ -1589,7 +1596,7 @@ export const runCaseLawIngest = async (
             `noCount=${summary.noCount} ` +
             `failed=${summary.failed} ` +
             `unknownSource=${summary.unknownSource} ` +
-            `lastErrorType=${summary.lastError === undefined ? "none" : errorTag(summary.lastError)}`,
+            `lastErrorType=${summary.lastErrorTag ?? "none"}`,
         );
       },
       sleep: async (ms) => {

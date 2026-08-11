@@ -10,6 +10,9 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   isPersistableSourceDocumentId,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   EmptyAst,
@@ -29,6 +32,7 @@ import {
 import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import { addUtcDays, isoCalendarDay, toUtcDateString } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { errorTag } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
@@ -1332,16 +1336,18 @@ export const czNssAdapter = defineSourceAdapter({
       });
 
       if (!response.ok) {
-        return null;
+        return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
       }
 
-      const count = statedResultCount(await response.text());
-
       // A zero here is not a corpus of nothing; it is a search that did not
-      // run. The benchmark reports nothing rather than a false floor.
-      return count === null || count === 0 ? null : count;
-    } catch {
-      return null;
+      // run, which `sourceTotalRead` refuses along with every other value a
+      // total cannot be.
+      const count = statedResultCount(await response.text());
+      return count === null
+        ? sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD)
+        : sourceTotalRead(count);
+    } catch (error) {
+      return { type: "probe-failed", errorTag: errorTag(error) };
     }
   },
 
@@ -1438,12 +1444,6 @@ export const czNssAdapter = defineSourceAdapter({
             nextCursor: `${date}:${page + 1}`,
           };
         }
-
-        // No coverage row here: the reconciliation loop owns this source's
-        // ledger. It keys the same `(source, YYYY-MM-DD)` rows but counts
-        // something else — keyable identities listed against identities held,
-        // not items one crawl page walked — so a crawl-side write would
-        // overwrite the loop's answer with a different question's.
 
         // No more pages; advance to next day
         const next = nextDay(date);

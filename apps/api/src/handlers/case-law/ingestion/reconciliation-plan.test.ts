@@ -18,6 +18,7 @@ import { describe, expect, test } from "bun:test";
 import { DAY_IN_MS } from "@stll/time";
 
 import { czRegionalAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
+import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import type {
   LedgerSlice,
   ShortSliceCandidate,
@@ -34,7 +35,6 @@ import {
   tipWindowSlices,
 } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { toUtcDateString } from "@/api/lib/dates";
-import type { SourceReconciliation } from "@/api/lib/legal-search/ingestion-types";
 import {
   listingIdentityKey,
   parseListingIdentityKey,
@@ -44,13 +44,7 @@ const NOW = new Date("2026-08-11T09:30:00.000Z");
 const FRESH = new Date("2026-08-11T06:00:00.000Z");
 const STALE = new Date("2026-08-08T06:00:00.000Z");
 
-const reconciliation = ((): SourceReconciliation => {
-  const capability = czRegionalAdapter.reconciliation;
-  if (capability === undefined) {
-    throw new Error("cz-regional must declare the reconciliation capability");
-  }
-  return capability;
-})();
+const reconciliation = requireReconciliation(czRegionalAdapter);
 
 const baseInput = (
   overrides: Partial<SelectReconciliationWorkUnitInput> = {},

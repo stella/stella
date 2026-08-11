@@ -31,10 +31,9 @@ export const SOURCE_TOTAL_POLL_OUTCOME = {
   /** The publisher stated a number and it is now the recorded total. */
   RECORDED: "recorded",
   /**
-   * The adapter yielded no number. `SourceAdapter.getTotalCount` returns null
-   * both for a publisher that exposes no readable count and for a request
-   * that failed, and the contract keeps no way to tell them apart, so this
-   * cannot mean "the publisher states no total" — only that none was read.
+   * The publisher exposes no readable count, as the adapter itself states.
+   * Exact rather than inferred: a probe that broke is a failure, and only the
+   * adapter can tell the two apart.
    *
    * Not tallied as a failure: several publishers permanently expose no count,
    * and a sweep over them would otherwise always end in one. What keeps a
@@ -59,25 +58,6 @@ export type SourceTotalPollTally = {
   unknownSource: number;
 };
 
-/** An adapter whose publisher exposes a count it can read. */
-export type CountingSourceAdapter = SourceAdapter & {
-  getTotalCount: NonNullable<SourceAdapter["getTotalCount"]>;
-};
-
-/**
- * The adapters worth asking at all, by capability rather than by name. An
- * adapter that starts implementing `getTotalCount` joins the sweep on its
- * own; a hand-kept list would leave it out and report nothing about the
- * omission.
- */
-export const selectCountingAdapters = (
-  adapters: readonly SourceAdapter[],
-): CountingSourceAdapter[] =>
-  adapters.filter(
-    (adapter): adapter is CountingSourceAdapter =>
-      adapter.getTotalCount !== undefined,
-  );
-
 type SelectDueCountingAdaptersOptions = {
   adapters: readonly SourceAdapter[];
   /** When this process last asked each adapter, whatever it answered. */
@@ -89,8 +69,9 @@ type SelectDueCountingAdaptersOptions = {
 };
 
 /**
- * The adapters to ask on this wake: those that can answer, and that have
- * neither been recorded nor asked inside the window.
+ * The adapters to ask on this wake: those that have neither been recorded nor
+ * asked inside the window. Every adapter can be asked — the capability is
+ * required — so the only gate left is the cadence.
  *
  * The gate is the last ask, not the last success. A publisher that exposes
  * no count and one whose request failed both come back as null and persist
@@ -109,7 +90,7 @@ export const selectDueCountingAdapters = ({
   now,
   staleAfterMs,
   totals,
-}: SelectDueCountingAdaptersOptions): CountingSourceAdapter[] => {
+}: SelectDueCountingAdaptersOptions): SourceAdapter[] => {
   const recordedAt = new Map(
     totals.map(({ adapterKey, reportedTotalAsOf }) => [
       adapterKey,
@@ -117,7 +98,7 @@ export const selectDueCountingAdapters = ({
     ]),
   );
 
-  return selectCountingAdapters(adapters).filter((adapter) => {
+  return adapters.filter((adapter) => {
     const recorded = recordedAt.get(adapter.key)?.getTime();
     const asked = askedAt.get(adapter.key);
     // The later of the two is what the window runs from: a recorded total

@@ -9,6 +9,9 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   isPersistableSourceDocumentId,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   IngestionResult,
@@ -798,14 +801,18 @@ export const skCourtsAdapter = defineSourceAdapter({
       },
     );
     if (!response.ok) {
-      return null;
+      return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
     }
     const json: unknown = await response.json();
     if (!isRecord(json)) {
-      return null;
+      return sourceTotalProbeFailed(
+        SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,
+      );
     }
     const total = json["numFound"];
-    return typeof total === "number" && total > 0 ? total : null;
+    return typeof total === "number"
+      ? sourceTotalRead(total)
+      : sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD);
   },
 
   /**

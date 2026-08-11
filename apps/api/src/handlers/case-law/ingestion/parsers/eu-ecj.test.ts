@@ -20,7 +20,7 @@
  */
 
 import { Glob } from "bun";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
 import type { Block, Inline } from "@/api/handlers/case-law/document-ast";
 import {
@@ -41,6 +41,16 @@ import {
   manifestationStem,
   portalStem,
 } from "./__fixtures__/eu-ecj/corpus";
+
+/**
+ * Every test here gunzips and parses one of the largest fixtures in the repo,
+ * twice — once as XHTML and once as Formex — which runs for seconds, close
+ * enough to the 5s default that these fail on a loaded machine rather than on
+ * a defect. Stated once for the file because the cost is the file's, not one
+ * test's; a real hang still ends the run well inside the runner's own
+ * deadline.
+ */
+setDefaultTimeout(30_000);
 
 const FIXTURES_DIR = new URL("__fixtures__/eu-ecj/", import.meta.url);
 

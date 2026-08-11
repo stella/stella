@@ -14,7 +14,6 @@ import {
   parseListingIdentityKey,
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
 } from "@/api/handlers/case-law/ingestion/adapter";
-import type { SourceReconciliation } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   CZ_NS_FIRST_SLICE,
   buildCzNsDecision,
@@ -22,16 +21,11 @@ import {
   czNsListingIdentity,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import type { CzNsListingRow } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
+import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
-const reconciliation = ((): SourceReconciliation => {
-  const capability = czNsAdapter.reconciliation;
-  if (capability === undefined) {
-    throw new TypeError("cz-ns must declare the reconciliation capability");
-  }
-  return capability;
-})();
+const reconciliation = requireReconciliation(czNsAdapter);
 
 // ── Production-shaped fixtures ──────────────────────────────
 //

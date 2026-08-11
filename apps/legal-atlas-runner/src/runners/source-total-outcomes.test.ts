@@ -14,7 +14,6 @@ import type { SourceAdapter } from "@/api/lib/legal-search/ingestion-types";
 import {
   SOURCE_TOTAL_POLL_OUTCOME,
   SOURCE_TOTAL_STALE_AFTER_MS,
-  selectCountingAdapters,
   selectDueCountingAdapters,
   tallySourceTotalPollOutcomes,
   type SourceTotalPollOutcome,
@@ -22,7 +21,9 @@ import {
 
 const adapter = (
   key: SourceAdapter["key"],
-  getTotalCount?: SourceAdapter["getTotalCount"],
+  getTotalCount: SourceAdapter["getTotalCount"] = async () => ({
+    type: "no-count-endpoint",
+  }),
 ): SourceAdapter => ({
   key,
   name: `${key} fixture`,
@@ -32,7 +33,11 @@ const adapter = (
   fetchPage: () => {
     throw new Error("fetchPage is not exercised by outcome selection");
   },
-  ...(getTotalCount && { getTotalCount }),
+  getTotalCount,
+  reconciliation: {
+    type: "unsupported",
+    reason: "fixture: outcome selection never reconciles",
+  },
 });
 
 const NOW = Date.UTC(2026, 7, 11, 12, 0, 0);
@@ -50,26 +55,38 @@ const recorded = (
     reportedTotalAsOf === null ? null : SOURCE_TOTAL_ORIGIN.ADAPTER_POLL,
 });
 
-describe("selectCountingAdapters", () => {
-  test("asks by capability, so a new implementer joins on its own", () => {
-    const counting = adapter(ADAPTER_KEYS.CZ_US, async () => 42);
-    const alsoCounting = adapter(ADAPTER_KEYS.PL_COURTS, async () => null);
-    const silent = adapter(ADAPTER_KEYS.CZ_NS);
+describe("selectDueCountingAdapters", () => {
+  test("asks every adapter, because every adapter can be asked", () => {
+    // The capability is required, so the sweep no longer selects on it: an
+    // adapter is either due or fresh, never exempt.
+    const adapters = [
+      adapter(ADAPTER_KEYS.CZ_US, async () => ({ type: "count", total: 42 })),
+      adapter(ADAPTER_KEYS.CZ_NS),
+      adapter(ADAPTER_KEYS.PL_COURTS, async () => ({
+        type: "no-count-endpoint",
+      })),
+    ];
 
     expect(
-      selectCountingAdapters([counting, silent, alsoCounting]).map(
-        ({ key }) => key,
-      ),
-    ).toEqual([ADAPTER_KEYS.CZ_US, ADAPTER_KEYS.PL_COURTS]);
-  });
-
-  test("an adapter stating no count is never probed", () => {
-    expect(selectCountingAdapters([adapter(ADAPTER_KEYS.CZ_NS)])).toEqual([]);
+      selectDueCountingAdapters({
+        adapters,
+        askedAt: NEVER_ASKED,
+        now: NOW,
+        staleAfterMs: SOURCE_TOTAL_STALE_AFTER_MS,
+        totals: [],
+      }).map(({ key }) => key),
+    ).toEqual([ADAPTER_KEYS.CZ_US, ADAPTER_KEYS.CZ_NS, ADAPTER_KEYS.PL_COURTS]);
   });
 });
 
-const czUs = adapter(ADAPTER_KEYS.CZ_US, async () => 1);
-const czRegional = adapter(ADAPTER_KEYS.CZ_REGIONAL, async () => 2);
+const czUs = adapter(ADAPTER_KEYS.CZ_US, async () => ({
+  type: "count",
+  total: 1,
+}));
+const czRegional = adapter(ADAPTER_KEYS.CZ_REGIONAL, async () => ({
+  type: "count",
+  total: 2,
+}));
 
 describe("selectDueCountingAdapters", () => {
   const capable = [czUs, czRegional];
@@ -124,7 +141,9 @@ describe("selectDueCountingAdapters", () => {
     ).toEqual([ADAPTER_KEYS.CZ_US, ADAPTER_KEYS.CZ_REGIONAL]);
   });
 
-  test("a stale total on an adapter that cannot count is not asked", () => {
+  test("a source carrying a row but no measurement is asked", () => {
+    // A row with a null date and a source with no row are the same case: the
+    // publisher has never stated a total, so the sweep has to ask.
     expect(
       selectDueCountingAdapters({
         adapters: [adapter(ADAPTER_KEYS.CZ_NS)],
@@ -132,15 +151,14 @@ describe("selectDueCountingAdapters", () => {
         now: NOW,
         staleAfterMs: SOURCE_TOTAL_STALE_AFTER_MS,
         totals: [recorded(ADAPTER_KEYS.CZ_NS, null)],
-      }),
-    ).toEqual([]);
+      }).map(({ key }) => key),
+    ).toEqual([ADAPTER_KEYS.CZ_NS]);
   });
 
   test("a source asked recently is not asked again, whatever it answered", () => {
-    // `getTotalCount` returns null both for a publisher exposing no count
-    // and for a request that failed, and neither persists a date. Gating on
-    // the recorded date alone would re-ask those sources every wake, hours
-    // apart, which no failure surfaces.
+    // Neither a publisher that exposes no count nor a request that failed
+    // persists a date. Gating on the recorded date alone would re-ask those
+    // sources every wake, hours apart, which no failure surfaces.
     expect(
       selectDueCountingAdapters({
         adapters: capable,

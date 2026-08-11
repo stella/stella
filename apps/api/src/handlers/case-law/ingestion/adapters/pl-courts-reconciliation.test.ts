@@ -20,6 +20,7 @@ import {
   plCourtsAdapter,
   plCourtsListingIdentity,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
+import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { toUtcDateString } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
@@ -28,10 +29,7 @@ import {
   parseListingIdentityKey,
 } from "@/api/lib/legal-search/ingestion-types";
 
-const reconciliation = plCourtsAdapter.reconciliation;
-if (reconciliation === undefined) {
-  throw new Error("pl-courts must declare the reconciliation capability");
-}
+const reconciliation = requireReconciliation(plCourtsAdapter);
 
 const SEARCH_PATTERN = "/api/search/judgments";
 const DETAIL_PATTERN = "/api/judgments/";

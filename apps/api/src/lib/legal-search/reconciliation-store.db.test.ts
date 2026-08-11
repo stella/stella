@@ -19,6 +19,7 @@ import {
   RECONCILIATION_TERMINAL_ATTEMPTS,
   countReconciliationItems,
   countTerminalReconciliationItemsBySlice,
+  listReconciliationItems,
   parkReconciliationItem,
   resetTerminalReconciliationItems,
   resolveReconciliationItem,
@@ -297,6 +298,174 @@ test("a reset puts retired items back into the hunt, due immediately", async () 
         sourceId,
         now,
         limit: 10,
+      })
+    ).map(({ identityKey }) => identityKey),
+  ).toEqual([DOCUMENT_KEY]);
+});
+
+test("a sliced reset leaves the other slices retired", async () => {
+  const sourceId = await seedSource();
+  const now = new Date("2026-08-11T09:00:00.000Z");
+  const otherSlice = "2026-08-05";
+  await retireReconciliationItem(scopedDb, {
+    sourceId,
+    slice: SLICE,
+    identityKey: DOCUMENT_KEY,
+    payload: PAYLOAD,
+    errorTag: "unkeyable",
+    now,
+  });
+  await retireReconciliationItem(scopedDb, {
+    sourceId,
+    slice: otherSlice,
+    identityKey: DOCKET_KEY,
+    payload: PAYLOAD,
+    errorTag: "unkeyable",
+    now,
+  });
+
+  // The point of the narrowing: an operator who fixed one bad day re-hunts
+  // that day, not every identity the adapter has ever retired.
+  expect(
+    await resetTerminalReconciliationItems(scopedDb, {
+      sourceId,
+      now,
+      limit: 10,
+      slice: SLICE,
+    }),
+  ).toBe(1);
+
+  expect((await readRow(sourceId, DOCUMENT_KEY))?.status).toBe(
+    RECONCILIATION_ITEM_STATUS.PARKED,
+  );
+  expect((await readRow(sourceId, DOCKET_KEY))?.status).toBe(
+    RECONCILIATION_ITEM_STATUS.TERMINAL,
+  );
+});
+
+test("the listing names what a source carries, in both states", async () => {
+  const sourceId = await seedSource();
+  const now = new Date("2026-08-11T09:00:00.000Z");
+  await parkReconciliationItem(scopedDb, {
+    sourceId,
+    slice: SLICE,
+    identityKey: DOCUMENT_KEY,
+    payload: PAYLOAD,
+    errorTag: "detail-unavailable",
+    now,
+  });
+  await retireReconciliationItem(scopedDb, {
+    sourceId,
+    slice: SLICE,
+    identityKey: DOCKET_KEY,
+    payload: PAYLOAD,
+    errorTag: "unkeyable",
+    now,
+  });
+
+  const listed = await listReconciliationItems(scopedDb, {
+    sourceId,
+    limit: 10,
+  });
+
+  // Identity-key order, which is what the cursor pages on: the docket key
+  // sorts before the document key.
+  expect(
+    listed.map(({ identityKey, status, slice, lastError }) => ({
+      identityKey,
+      status,
+      slice,
+      lastError,
+    })),
+  ).toEqual([
+    {
+      identityKey: DOCKET_KEY,
+      status: RECONCILIATION_ITEM_STATUS.TERMINAL,
+      slice: SLICE,
+      lastError: "unkeyable",
+    },
+    {
+      identityKey: DOCUMENT_KEY,
+      status: RECONCILIATION_ITEM_STATUS.PARKED,
+      slice: SLICE,
+      lastError: "detail-unavailable",
+    },
+  ]);
+});
+
+test("paging the listing reaches every item exactly once", async () => {
+  const sourceId = await seedSource();
+  const now = new Date("2026-08-11T09:00:00.000Z");
+  for (const identityKey of [DOCKET_KEY, DOCUMENT_KEY]) {
+    // oxlint-disable-next-line no-await-in-loop -- fixture rows, written in sequence so the paging walk below has a fixed population
+    await parkReconciliationItem(scopedDb, {
+      sourceId,
+      slice: SLICE,
+      identityKey,
+      payload: PAYLOAD,
+      errorTag: "detail-unavailable",
+      now,
+    });
+  }
+
+  // The expectation comes from one unpaged read, not from sorting the keys
+  // here: the database orders by the column's collation and this process would
+  // order by UTF-16 code unit, and pinning the paged walk to the JS answer
+  // would make the test assert a collation rather than the paging.
+  const unpaged = (
+    await listReconciliationItems(scopedDb, { sourceId, limit: 10 })
+  ).map(({ identityKey }) => identityKey);
+  expect(unpaged).toHaveLength(2);
+
+  // One row per page, walked with the cursor the script prints. The property
+  // that matters is the one a limit-only listing cannot give: every row is
+  // reached, none twice, and the walk terminates.
+  const walked: string[] = [];
+  let after: string | undefined;
+  for (let page = 0; page < unpaged.length + 2; page += 1) {
+    // oxlint-disable-next-line no-await-in-loop -- a cursor walk is sequential by definition; each page's cursor comes from the last
+    const items = await listReconciliationItems(scopedDb, {
+      sourceId,
+      limit: 1,
+      ...(after === undefined ? {} : { after }),
+    });
+    if (items.length === 0) {
+      break;
+    }
+    expect(items).toHaveLength(1);
+    walked.push(...items.map(({ identityKey }) => identityKey));
+    after = items.at(-1)?.identityKey;
+  }
+
+  expect(walked).toEqual(unpaged);
+});
+
+test("the listing narrows to one slice", async () => {
+  const sourceId = await seedSource();
+  const now = new Date("2026-08-11T09:00:00.000Z");
+  await parkReconciliationItem(scopedDb, {
+    sourceId,
+    slice: SLICE,
+    identityKey: DOCUMENT_KEY,
+    payload: PAYLOAD,
+    errorTag: "detail-unavailable",
+    now,
+  });
+  await parkReconciliationItem(scopedDb, {
+    sourceId,
+    slice: "2026-08-05",
+    identityKey: DOCKET_KEY,
+    payload: PAYLOAD,
+    errorTag: "detail-unavailable",
+    now,
+  });
+
+  expect(
+    (
+      await listReconciliationItems(scopedDb, {
+        sourceId,
+        limit: 10,
+        slice: SLICE,
       })
     ).map(({ identityKey }) => identityKey),
   ).toEqual([DOCUMENT_KEY]);
