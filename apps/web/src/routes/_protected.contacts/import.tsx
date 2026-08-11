@@ -2,7 +2,12 @@ import { useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  getRouteApi,
+  Link,
+  useNavigate,
+} from "@tanstack/react-router";
 import { Result } from "better-result";
 import {
   AlertTriangleIcon,
@@ -68,6 +73,8 @@ export const Route = createFileRoute("/_protected/contacts/import")({
   }),
   component: ContactImportStudio,
 });
+
+const protectedRouteApi = getRouteApi("/_protected");
 
 type InspectionColumn = {
   name: string;
@@ -213,6 +220,12 @@ function ContactImportStudio() {
   const format = useFormatter();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const importRequestScope = protectedRouteApi.useRouteContext({
+    select: ({ user }) => ({
+      organizationId: user.activeOrganizationId,
+      userId: user.id,
+    }),
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const stepHeadingRef = useRef<HTMLHeadingElement>(null);
   const [state, setState] = useState<StudioState>({ status: "upload" });
@@ -299,6 +312,7 @@ function ContactImportStudio() {
       const importRequest = await resolveContactImportRequest({
         file: state.file,
         mapping: state.mapping,
+        scope: importRequestScope,
       });
       return { importRequest, preview };
     });

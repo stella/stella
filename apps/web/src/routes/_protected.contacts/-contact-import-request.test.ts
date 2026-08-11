@@ -17,6 +17,8 @@ const MAPPING = {
   columns: [{ sourceIndex: 0, targetField: "display_name" }],
 } as const satisfies ContactImportMapping;
 
+const SCOPE = { organizationId: "org-a", userId: "user-a" };
+
 const createStorage = () => {
   const values = new Map<string, string>();
   return {
@@ -38,11 +40,13 @@ describe("contact import request identity", () => {
     const first = await resolveContactImportRequest({
       file,
       mapping: MAPPING,
+      scope: SCOPE,
       storage,
     });
     const afterReload = await resolveContactImportRequest({
       file,
       mapping: MAPPING,
+      scope: SCOPE,
       storage,
     });
 
@@ -55,6 +59,7 @@ describe("contact import request identity", () => {
     const first = await resolveContactImportRequest({
       file,
       mapping: MAPPING,
+      scope: SCOPE,
       storage,
     });
 
@@ -62,9 +67,38 @@ describe("contact import request identity", () => {
     const later = await resolveContactImportRequest({
       file,
       mapping: MAPPING,
+      scope: SCOPE,
       storage,
     });
 
     expect(later.id).not.toBe(first.id);
+  });
+
+  test("isolates pending requests by organization and user", async () => {
+    const storage = createStorage();
+    const file = new Blob(["Name\nJane Doe"]);
+    const originalScope = await resolveContactImportRequest({
+      file,
+      mapping: MAPPING,
+      scope: SCOPE,
+      storage,
+    });
+    const otherScope = await resolveContactImportRequest({
+      file,
+      mapping: MAPPING,
+      scope: { organizationId: "org-b", userId: "user-b" },
+      storage,
+    });
+
+    clearContactImportRequest({ storageKey: otherScope.storageKey, storage });
+    const originalScopeRetry = await resolveContactImportRequest({
+      file,
+      mapping: MAPPING,
+      scope: SCOPE,
+      storage,
+    });
+
+    expect(otherScope.id).not.toBe(originalScope.id);
+    expect(originalScopeRetry).toEqual(originalScope);
   });
 });

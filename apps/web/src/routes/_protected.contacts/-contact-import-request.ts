@@ -19,6 +19,11 @@ export type PendingContactImportRequest = {
   storageKey: string;
 };
 
+export type ContactImportRequestScope = {
+  organizationId: string;
+  userId: string;
+};
+
 const sessionStorageOrUndefined = (): ContactImportRequestStorage | undefined =>
   Result.try(() =>
     typeof window === "undefined" ? undefined : window.sessionStorage,
@@ -34,24 +39,28 @@ const sha256Hex = async (input: BufferSource): Promise<string> => {
 const operationStorageKey = async (
   file: Blob,
   mapping: ContactImportMapping,
+  scope: ContactImportRequestScope,
 ): Promise<string> => {
-  const [fileHash, mappingHash] = await Promise.all([
+  const [fileHash, mappingHash, scopeHash] = await Promise.all([
     sha256Hex(await file.arrayBuffer()),
     sha256Hex(new TextEncoder().encode(JSON.stringify(mapping))),
+    sha256Hex(new TextEncoder().encode(JSON.stringify(scope))),
   ]);
-  return `${CONTACT_IMPORT_REQUEST_STORAGE_PREFIX}${fileHash}:${mappingHash}`;
+  return `${CONTACT_IMPORT_REQUEST_STORAGE_PREFIX}${scopeHash}:${fileHash}:${mappingHash}`;
 };
 
 export const resolveContactImportRequest = async ({
   file,
   mapping,
+  scope,
   storage = sessionStorageOrUndefined(),
 }: {
   file: Blob;
   mapping: ContactImportMapping;
+  scope: ContactImportRequestScope;
   storage?: ContactImportRequestStorage | undefined;
 }): Promise<PendingContactImportRequest> => {
-  const storageKey = await operationStorageKey(file, mapping);
+  const storageKey = await operationStorageKey(file, mapping, scope);
   const storedId = storage
     ? Result.try(() => storage.getItem(storageKey)).unwrapOr(null)
     : null;
