@@ -8,11 +8,7 @@ import {
 
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 
-import {
-  isElement,
-  templateContentPartPaths,
-  W_NS,
-} from "./ooxml";
+import { isElement, templateContentPartPaths, W_NS } from "./ooxml";
 
 const DOCUMENT_RELATIONSHIPS_PATH = "word/_rels/document.xml.rels";
 
