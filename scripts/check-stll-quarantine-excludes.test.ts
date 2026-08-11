@@ -58,9 +58,28 @@ describe("quarantine exclude guard", () => {
         "docker-compose.yml":
           "# release-age-quarantine-exception: 2026-08-13T09:51:27.645Z",
       },
+      now: new Date("2026-08-11T00:00:00.000Z"),
     });
 
     expect(result.errors).toEqual([]);
+  });
+
+  test("rejects an expired container quarantine exception", () => {
+    const result = checkQuarantineExcludes({
+      bunfig: createBunfig(
+        '"better-result", # quarantine-expires: 2099-01-01T00:00:00.000Z',
+      ),
+      lockfile,
+      releaseAgeExceptionSources: {
+        "docker-compose.yml":
+          "# release-age-quarantine-exception: 2026-08-13T09:51:27.645Z",
+      },
+      now: new Date("2026-08-13T09:51:27.645Z"),
+    });
+
+    expect(result.errors).toContain(
+      "docker-compose.yml:1 release-age quarantine exception expired at 2026-08-13T09:51:27.645Z",
+    );
   });
 
   test("rejects every undated first-party exclusion", () => {

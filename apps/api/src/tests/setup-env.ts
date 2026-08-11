@@ -13,7 +13,7 @@ setDefaultTimeout(30_000);
 
 configureTestDatabaseEnvironment();
 process.env["S3_ENDPOINT"] ??= "http://localhost:9000";
-process.env["S3_BUCKET"] ??= "stella-test";
+process.env["S3_BUCKET"] ??= "stella";
 process.env["S3_REGION"] ??= "us-east-1";
 // RustFS development credentials from docker-compose.yml. Tests that build
 // an S3 client (Bun or SDK v3) need these even when they only sign

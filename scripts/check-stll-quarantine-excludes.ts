@@ -216,6 +216,7 @@ const readExcludeAnnotationErrors = (bunfig: string, now: Date): string[] => {
 
 const readReleaseAgeExceptionErrors = (
   sources: Readonly<Record<string, string>>,
+  now: Date,
 ): string[] =>
   Object.entries(sources).flatMap(([source, contents]) =>
     contents.split("\n").flatMap((line, index) => {
@@ -233,6 +234,11 @@ const readReleaseAgeExceptionErrors = (
         !Number.isNaN(timestampMs) &&
         new Date(timestampMs).toISOString() === expiresAt
       ) {
+        if (timestampMs <= now.getTime()) {
+          return [
+            `${source}:${String(index + 1)} release-age quarantine exception expired at ${expiresAt}`,
+          ];
+        }
         return [];
       }
 
@@ -373,7 +379,7 @@ export const checkQuarantineExcludes = ({
   const errors = [
     ...temporary.errors,
     ...readExcludeAnnotationErrors(bunfig, now),
-    ...readReleaseAgeExceptionErrors(releaseAgeExceptionSources),
+    ...readReleaseAgeExceptionErrors(releaseAgeExceptionSources, now),
   ];
 
   if (missing.length > 0) {
