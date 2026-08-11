@@ -9,6 +9,7 @@ import { env } from "@/env";
 import { useMountEffect } from "@/hooks/use-effect";
 import { authClient } from "@/lib/auth";
 import { detached } from "@/lib/detached";
+import { buildOutlookSocialCallbackUrl } from "@/lib/outlook-auth";
 
 const OFFICE_JS_URL =
   "https://appsforoffice.microsoft.com/lib/1.1/hosted/office.js";
@@ -118,10 +119,11 @@ const SignInOutlook = () => {
 
   const handleSignIn = async () => {
     setState({ type: "signing-in" });
-    const callbackURL = new URL(window.location.href);
-    callbackURL.hash = "";
     const { error } = await authClient.signIn.social({
-      callbackURL: callbackURL.toString(),
+      callbackURL: buildOutlookSocialCallbackUrl({
+        frontendOrigin: window.location.origin,
+        parentOrigin: ALLOWED_PARENT_ORIGIN,
+      }),
       provider: "microsoft",
     });
     if (error) {

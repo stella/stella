@@ -21,6 +21,7 @@ const messages = {
     copyOrInsertDraft: "Insert or copy draft",
     draftIntentPlaceholder:
       "e.g. Acknowledge receipt and say we will review by Friday.",
+    draftPlacementError: "Could not insert or copy the draft",
     draftReply: "Draft reply",
     handoffDescription: "Sign in to continue using stella in Outlook.",
     handoffMissingDialog: "Open this page from the stella Outlook task pane.",

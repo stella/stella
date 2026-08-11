@@ -10,11 +10,11 @@
  *
  *   - The message file went through the normal tmp/scan path, so it is
  *     promoted from `tmp/` like any other purpose.
- *   - Each attachment is server-extracted (no tmp object). Every
- *     attachment is individually security-scanned exactly like a direct
- *     upload; a rejected or unscannable attachment is skipped (recorded
- *     with a reason) and never aborts the whole ingest. Accepted
- *     attachment bytes are written straight to their final S3 key.
+ *   - Each attachment is server-extracted (no tmp object). Every attachment
+ *     is security-scanned before any final object is written. A rejected or
+ *     unscannable attachment rejects the whole ingest, because the original
+ *     MIME message would otherwise retain bytes that were omitted from the
+ *     entity tree.
  *
  * On transaction failure every materialized S3 object (the message file
  * plus every accepted attachment) is deleted so no orphaned final
@@ -51,7 +51,7 @@ import {
   type EmailAttachment,
 } from "@/api/lib/files/email-to-html";
 import {
-  allocateFileObject,
+  deriveFileObject,
   fileContentWithMintedObject,
   type MintedFileId,
 } from "@/api/lib/files/file-object-ids";
@@ -59,9 +59,11 @@ import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivative";
 import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
 import { createFileKey } from "@/api/lib/files/utils";
-import { getS3 } from "@/api/lib/s3";
+import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
+import { getS3, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
+import { validateEmailAttachmentCount } from "@/api/lib/uploads/email-ingest-policy";
 import {
   checkEntityCreateCapacityForInsert,
   checkEntityCreateTargetForInsert,
@@ -75,10 +77,6 @@ import {
   UploadFinalizeError,
 } from "@/api/lib/uploads/runtime";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
-
-/** Upper bound on attachments materialized per email; protects against
- * pathological messages and bounds the work done in the finalize tx. */
-const MAX_EMAIL_ATTACHMENTS = 50;
 
 /** Default MIME for attachments the parser could not classify. */
 const FALLBACK_ATTACHMENT_MIME = "application/octet-stream";
@@ -117,8 +115,9 @@ export type FinalizeEmailIngestProps = {
   ) => Promise<Result<void, UploadFinalizeError>>;
 };
 
-/** One attachment that passed scanning and has had its bytes written to S3. */
+/** One attachment that passed scanning and is ready to be written to S3. */
 type AcceptedAttachment = {
+  buffer: Uint8Array;
   entityId: SafeId<"entity">;
   entityVersionId: SafeId<"entityVersion">;
   fieldId: SafeId<"field">;
@@ -132,22 +131,11 @@ type AcceptedAttachment = {
   scanWarnings: string[] | undefined;
 };
 
-type SkippedAttachment = { name: string; reason: string };
-
-type MaterializedAttachment =
-  | { attachment: AcceptedAttachment; type: "accepted" }
-  | { skipped: SkippedAttachment; type: "skipped" }
-  | {
-      error: unknown;
-      finalKey: string;
-      mimeType: string;
-      type: "write-failed";
-    };
-
 /** One derivative/extraction kickoff issued after the ingest commits. */
 type DerivativeKickoff = {
   entityId: SafeId<"entity">;
   fieldId: SafeId<"field">;
+  fileName: string;
   mimeType: string;
   encrypted: boolean;
 };
@@ -183,19 +171,25 @@ const toArrayBuffer = (view: Uint8Array): ArrayBuffer => {
   return copy;
 };
 
-type MaterializeAttachmentOptions = {
+type PrepareAttachmentOptions = {
   attachment: EmailAttachment;
+  attachmentIndex: number;
   messageEntityId: SafeId<"entity">;
   organizationId: SafeId<"organization">;
+  uploadId: SafeId<"pendingUpload">;
   workspaceId: SafeId<"workspace">;
 };
 
-const materializeAttachment = async ({
+const prepareAttachment = async ({
   attachment,
+  attachmentIndex,
   messageEntityId,
   organizationId,
+  uploadId,
   workspaceId,
-}: MaterializeAttachmentOptions): Promise<MaterializedAttachment> => {
+}: PrepareAttachmentOptions): Promise<
+  Result<AcceptedAttachment, UploadFinalizeError>
+> => {
   const fileName = attachmentFileName(attachment);
   const mimeType = attachmentMimeType(attachment);
   const buffer = attachment.bytes;
@@ -207,20 +201,22 @@ const materializeAttachment = async ({
   });
   if (Result.isError(scanResult)) {
     captureError(scanResult.error, { messageEntityId, mimeType });
-    return {
-      skipped: { name: fileName, reason: "scan-error" },
-      type: "skipped",
-    };
+    return finalizeErr({
+      status: 500,
+      message: `Security scan failed for attachment: ${fileName}`,
+      rejectReason: "attachment-scan-error",
+    });
   }
   if (scanResult.value.verdict === "reject") {
     const reason = scanResult.value.findings
       .filter((finding) => finding.severity === "reject")
       .map((finding) => finding.message)
       .join("; ");
-    return {
-      skipped: { name: fileName, reason: reason || "scan-rejected" },
-      type: "skipped",
-    };
+    return finalizeErr({
+      status: 422,
+      message: `Attachment rejected: ${fileName}`,
+      rejectReason: reason || "attachment-scan-rejected",
+    });
   }
   const scanWarnings =
     scanResult.value.verdict === "warn"
@@ -234,15 +230,19 @@ const materializeAttachment = async ({
     const encryptedResult = await isEncryptedPdf(toArrayBuffer(buffer));
     if (Result.isError(encryptedResult)) {
       captureError(encryptedResult.error, { messageEntityId, mimeType });
-      return {
-        skipped: { name: fileName, reason: "pdf-open-failed" },
-        type: "skipped",
-      };
+      return finalizeErr({
+        status: 422,
+        message: `Could not open PDF attachment: ${fileName}`,
+        rejectReason: "attachment-pdf-open-failed",
+      });
     }
     encrypted = encryptedResult.value;
   }
 
-  const fileId = allocateFileObject();
+  const fileId = deriveFileObject({
+    namespace: uploadId,
+    slot: `attachment:${attachmentIndex}`,
+  });
   const finalKey = createFileKey({
     organizationId,
     workspaceId,
@@ -250,34 +250,20 @@ const materializeAttachment = async ({
     mimeType,
   });
   const sha256Hex = new Bun.CryptoHasher("sha256").update(buffer).digest("hex");
-  const writeResult = await Result.tryPromise(
-    async () => await getS3().write(finalKey, buffer),
-  );
-  if (Result.isError(writeResult)) {
-    return {
-      error: writeResult.error,
-      finalKey,
-      mimeType,
-      type: "write-failed",
-    };
-  }
-
-  return {
-    attachment: {
-      entityId: createSafeId<"entity">(),
-      entityVersionId: createSafeId<"entityVersion">(),
-      fieldId: createSafeId<"field">(),
-      fileId,
-      finalKey,
-      fileName,
-      mimeType,
-      sizeBytes: buffer.byteLength,
-      sha256Hex,
-      encrypted,
-      scanWarnings,
-    },
-    type: "accepted",
-  };
+  return Result.ok({
+    buffer,
+    entityId: createSafeId<"entity">(),
+    entityVersionId: createSafeId<"entityVersion">(),
+    fieldId: createSafeId<"field">(),
+    fileId,
+    finalKey,
+    fileName,
+    mimeType,
+    sizeBytes: buffer.byteLength,
+    sha256Hex,
+    encrypted,
+    scanWarnings,
+  });
 };
 
 /**
@@ -318,6 +304,13 @@ export const finalizeEmailIngest = async function* ({
   }
   const parsed = parsedResult.value;
 
+  const attachmentCountResult = validateEmailAttachmentCount(
+    parsed.attachments.length,
+  );
+  if (Result.isError(attachmentCountResult)) {
+    return attachmentCountResult;
+  }
+
   const messageName = sanitizeFilename(
     resolveMessageName(parsed.subject?.trim(), declaredName),
   );
@@ -341,7 +334,10 @@ export const finalizeEmailIngest = async function* ({
     messageEncrypted = encryptedResult.value;
   }
 
-  const messageFileId = allocateFileObject();
+  const messageFileId = deriveFileObject({
+    namespace: uploadId,
+    slot: "message",
+  });
   const messageEntityId = createSafeId<"entity">();
   const messageEntityVersionId = createSafeId<"entityVersion">();
   const messageFieldId = createSafeId<"field">();
@@ -352,9 +348,40 @@ export const finalizeEmailIngest = async function* ({
     mimeType: declaredMime,
   });
 
-  // Track every final object we materialize so a tx failure can clean
-  // them all up (message file + each accepted attachment).
-  const writtenKeys: string[] = [messageFinalKey];
+  // Scan and inspect every attachment before storing the original MIME file.
+  // Whole-ingest rejection prevents rejected bytes from remaining recoverable
+  // through the stored message object.
+  const preparedResults = await Promise.all(
+    parsed.attachments.map(
+      async (attachment, attachmentIndex) =>
+        await prepareAttachment({
+          attachment,
+          attachmentIndex,
+          messageEntityId,
+          organizationId,
+          uploadId,
+          workspaceId,
+        }),
+    ),
+  );
+  const preparationFailure = preparedResults.find(Result.isError);
+  if (preparationFailure) {
+    return preparationFailure;
+  }
+  const accepted = preparedResults.map((result) => {
+    if (Result.isError(result)) {
+      panic("Email attachment preparation was not exhaustive");
+    }
+    return result.value;
+  });
+
+  // Track every retry-stable final key so a tx or write failure can clean it.
+  // The keys derive from uploadId + slot, allowing a retry or repair pass to
+  // locate an object even if this process dies immediately after its write.
+  const writtenKeys = [
+    messageFinalKey,
+    ...accepted.map((attachment) => attachment.finalKey),
+  ];
 
   const cleanupFinalObjects = async (stage: string) => {
     await Promise.all(
@@ -374,41 +401,27 @@ export const finalizeEmailIngest = async function* ({
     return promoteResult;
   }
 
-  // Materialize attachments BEFORE the DB tx: each is scanned exactly
-  // like a direct upload; rejected / unscannable ones are skipped (with
-  // a reason) and never abort the ingest. Accepted bytes are written to
-  // their final key here because server-extracted attachments have no
-  // tmp object to promote.
-  const materialized = await Promise.all(
-    parsed.attachments.slice(0, MAX_EMAIL_ATTACHMENTS).map(
+  // Server-extracted attachments have no tmp object to promote. Bounded
+  // retry uses the deterministic final keys above, so repeated writes are
+  // idempotent after a timeout or finalize retry.
+  const writeResults = await Promise.all(
+    accepted.map(
       async (attachment) =>
-        await materializeAttachment({
-          attachment,
-          messageEntityId,
-          organizationId,
-          workspaceId,
+        await Result.tryPromise(async () => {
+          await writeS3ObjectWithRetry({
+            contentType: attachment.mimeType,
+            data: attachment.buffer,
+            key: attachment.finalKey,
+          });
         }),
     ),
   );
-  const accepted = materialized
-    .filter((result) => result.type === "accepted")
-    .map(({ attachment }) => attachment);
-  const skipped = materialized
-    .filter((result) => result.type === "skipped")
-    .map(({ skipped: skippedAttachment }) => skippedAttachment);
-  const writeFailures = materialized.filter(
-    (result) => result.type === "write-failed",
-  );
-  writtenKeys.push(
-    ...accepted.map((attachment) => attachment.finalKey),
-    ...writeFailures.map((failure) => failure.finalKey),
-  );
-
+  const writeFailures = writeResults.filter(Result.isError);
   if (writeFailures.length > 0) {
     for (const failure of writeFailures) {
       captureError(failure.error, {
         messageEntityId,
-        mimeType: failure.mimeType,
+        stage: "attachment-write",
       });
     }
     await cleanupFinalObjects("attachment-write-failed");
@@ -417,20 +430,6 @@ export const finalizeEmailIngest = async function* ({
       message: "Failed to store an email attachment",
       rejectReason: "attachment-write-failed",
     });
-  }
-
-  if (skipped.length > 0) {
-    captureError(
-      new UploadFinalizeError({
-        status: 422,
-        message: "Some email attachments were skipped during ingest",
-        rejectReason: "attachments-skipped",
-      }),
-      {
-        messageEntityId,
-        skipped: skipped.map((entry) => entry.reason).join("; "),
-      },
-    );
   }
 
   const parentId = purposeData.parentId ?? null;
@@ -635,26 +634,24 @@ export const finalizeEmailIngest = async function* ({
       );
 
       auditEvents.push(
-        ...attachmentRows.map(
-          ({ attachment }): AuditEvent => ({
-            action: AUDIT_ACTION.CREATE,
-            resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-            resourceId: attachment.entityId,
-            changes: {
-              created: {
-                old: null,
-                new: {
-                  kind: "document",
-                  fileName: attachment.fileName,
-                  mimeType: attachment.mimeType,
-                  sizeBytes: attachment.sizeBytes,
-                  propertyId,
-                  parentId: messageEntityId,
-                },
+        ...attachmentRows.map(({ attachment }): AuditEvent => ({
+          action: AUDIT_ACTION.CREATE,
+          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+          resourceId: attachment.entityId,
+          changes: {
+            created: {
+              old: null,
+              new: {
+                kind: "document",
+                fileName: attachment.fileName,
+                mimeType: attachment.mimeType,
+                sizeBytes: attachment.sizeBytes,
+                propertyId,
+                parentId: messageEntityId,
               },
             },
-          }),
-        ),
+          },
+        })),
       );
     }
     await recordAuditEvent(tx, auditEvents);
@@ -721,6 +718,7 @@ export const finalizeEmailIngest = async function* ({
         entityId: messageEntityId,
         mimeType: declaredMime,
         fieldId: messageFieldId,
+        fileName: finalized.fileName,
         encrypted: messageEncrypted,
       },
     ];
@@ -729,6 +727,7 @@ export const finalizeEmailIngest = async function* ({
         entityId: attachment.entityId,
         mimeType: attachment.mimeType,
         fieldId: attachment.fieldId,
+        fileName: attachment.fileName,
         encrypted: attachment.encrypted,
       });
     }
@@ -738,6 +737,17 @@ export const finalizeEmailIngest = async function* ({
         captureError(error, {
           entityId: kickoff.entityId,
           mimeType: kickoff.mimeType,
+        });
+      });
+      maybeStartUploadTriggeredFlows({
+        entityId: kickoff.entityId,
+        workspaceId,
+        organizationId,
+        fileName: kickoff.fileName,
+      }).catch((error: unknown) => {
+        captureError(error, {
+          entityId: kickoff.entityId,
+          workspaceId,
         });
       });
       enqueuePdfDerivativeOrMarkFailed({

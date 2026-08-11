@@ -59,6 +59,29 @@ export const resolveQueuedFileObject = (
 ): MintedFileId =>
   fileId === undefined ? allocateFileObject() : brandMintedFileId(fileId);
 
+type DeriveFileObjectOptions = {
+  namespace: string;
+  slot: string;
+};
+
+/**
+ * Derive a retry-stable RFC 9562 UUIDv8 for a file object.
+ *
+ * A finalize retry must target the same key after a process dies between the
+ * S3 write and the database commit. The pending upload ID is the durable
+ * namespace; a purpose-owned slot distinguishes each object within it.
+ */
+export const deriveFileObject = ({
+  namespace,
+  slot,
+}: DeriveFileObjectOptions): MintedFileId => {
+  const hex = new Bun.CryptoHasher("sha256")
+    .update(`${namespace}\0${slot}`)
+    .digest("hex");
+  const uuid = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-8${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+  return brandMintedFileId(uuid);
+};
+
 export const fileContentWithMintedObject = (
   content: MintedFileFieldContent,
 ): WritableFileFieldContent => {

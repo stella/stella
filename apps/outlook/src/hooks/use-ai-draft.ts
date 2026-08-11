@@ -60,5 +60,12 @@ export const useAIDraft = (errorFallback: string): UseAIDraft => {
     setState({ draft: data.draft, type: "ready" });
   };
 
-  return { draftReply: (args) => void draftReply(args), state };
+  return {
+    draftReply: (args) => {
+      draftReply(args).catch(() =>
+        setState({ message: errorFallback, type: "error" }),
+      );
+    },
+    state,
+  };
 };

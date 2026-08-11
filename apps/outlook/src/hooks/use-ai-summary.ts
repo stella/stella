@@ -55,5 +55,12 @@ export const useAISummary = (errorFallback: string): UseAISummary => {
     setState({ summary: data.summary, type: "ready" });
   };
 
-  return { state, summarize: (args) => void summarize(args) };
+  return {
+    state,
+    summarize: (args) => {
+      summarize(args).catch(() =>
+        setState({ message: errorFallback, type: "error" }),
+      );
+    },
+  };
 };

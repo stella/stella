@@ -19,7 +19,17 @@
  *   + extraction enqueues.
  */
 import { Result, panic } from "better-result";
-import { and, count, eq, isNull, like, ne, or, sql } from "drizzle-orm";
+import {
+  and,
+  count,
+  eq,
+  inArray,
+  isNull,
+  like,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import { jsonField } from "@/api/db/json-utils";
 import type { Transaction } from "@/api/db/root";
@@ -166,7 +176,7 @@ const activeEntityCreateReservationFilter = ({
   const timeoutSec = Math.floor(FINALIZE_CLAIM_TIMEOUT_MS / 1000);
   const baseFilter = and(
     eq(pendingUploads.workspaceId, workspaceId),
-    eq(pendingUploads.purpose, "entity_create"),
+    inArray(pendingUploads.purpose, ["entity_create", "email_ingest"]),
     or(
       and(
         or(

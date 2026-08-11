@@ -25,6 +25,7 @@ type ActionPanelProps = {
   draft: string;
   draftIntent: string;
   draftPlacement: DraftPlacement | null;
+  draftPlacementError: string | null;
   draftState: AIDraftState;
   onDraftChange: (value: string) => void;
   onDraftReply: () => void;
@@ -41,6 +42,7 @@ export const ActionPanel = ({
   draft,
   draftIntent,
   draftPlacement,
+  draftPlacementError,
   draftState,
   onDraftChange,
   onDraftReply,
@@ -66,6 +68,7 @@ export const ActionPanel = ({
       draft={draft}
       draftIntent={draftIntent}
       draftPlacement={draftPlacement}
+      draftPlacementError={draftPlacementError}
       onDraftChange={onDraftChange}
       onDraftReply={onDraftReply}
       onIntentChange={onIntentChange}
@@ -146,6 +149,7 @@ const DraftSection = ({
   draft,
   draftIntent,
   draftPlacement,
+  draftPlacementError,
   onDraftChange,
   onDraftReply,
   onIntentChange,
@@ -156,6 +160,7 @@ const DraftSection = ({
   draft: string;
   draftIntent: string;
   draftPlacement: DraftPlacement | null;
+  draftPlacementError: string | null;
   onDraftChange: (value: string) => void;
   onDraftReply: () => void;
   onIntentChange: (value: string) => void;
@@ -202,6 +207,11 @@ const DraftSection = ({
         </span>
       ) : null}
     </div>
+    {draftPlacementError ? (
+      <Notice title={t("draftPlacementError")} tone="risk">
+        {draftPlacementError}
+      </Notice>
+    ) : null}
   </div>
 );
 

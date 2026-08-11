@@ -76,7 +76,11 @@ export const useIngestEmail = (errorFallback: string): UseIngestEmail => {
 
   return {
     reset: () => setState({ type: "idle" }),
-    save: (args) => void save(args),
+    save: (args) => {
+      save(args).catch(() =>
+        setState({ message: errorFallback, type: "error" }),
+      );
+    },
     state,
   };
 };

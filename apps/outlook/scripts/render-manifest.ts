@@ -7,13 +7,19 @@ const TEMPLATE_PATH = path.resolve(APP_ROOT, "manifest.template.xml");
 
 export type ManifestEnv = "dev" | "prod";
 
-type ManifestPlaceholders = {
+export type ManifestPlaceholders = {
   API_ORIGIN: string;
   PROVIDER_NAME: string;
   SUPPORT_URL: string;
   TASKPANE_ORIGIN: string;
   VERSION: string;
   WEB_ORIGIN: string;
+};
+
+export type OutlookRuntimeConfig = {
+  apiBaseUrl: string;
+  taskpaneOrigin: string;
+  webOrigin: string;
 };
 
 const PLACEHOLDER_DEFAULTS: Record<ManifestEnv, ManifestPlaceholders> = {
@@ -53,11 +59,14 @@ const PLACEHOLDER_KEYS = [
   "WEB_ORIGIN",
 ] as const satisfies readonly (keyof ManifestPlaceholders)[];
 
-const resolvePlaceholders = (env: ManifestEnv): ManifestPlaceholders => {
+export const resolveManifestPlaceholders = (
+  env: ManifestEnv,
+  runtimeEnv: Record<string, string | undefined> = process.env,
+): ManifestPlaceholders => {
   const defaults = PLACEHOLDER_DEFAULTS[env];
   const result = { ...defaults };
   for (const key of PLACEHOLDER_KEYS) {
-    const override = process.env[PLACEHOLDER_ENV_VARS[key]];
+    const override = runtimeEnv[PLACEHOLDER_ENV_VARS[key]];
     if (override) {
       result[key] = override;
     }
@@ -65,11 +74,30 @@ const resolvePlaceholders = (env: ManifestEnv): ManifestPlaceholders => {
   return result;
 };
 
+type ResolveOutlookRuntimeConfigOptions = {
+  env: ManifestEnv;
+  placeholders?: ManifestPlaceholders;
+  runtimeEnv?: Record<string, string | undefined>;
+};
+
+export const resolveOutlookRuntimeConfig = ({
+  env,
+  runtimeEnv = process.env,
+  placeholders = resolveManifestPlaceholders(env, runtimeEnv),
+}: ResolveOutlookRuntimeConfigOptions): OutlookRuntimeConfig => ({
+  apiBaseUrl:
+    env === "dev" && !runtimeEnv["STELLA_API_ORIGIN"]
+      ? "/api"
+      : placeholders.API_ORIGIN,
+  taskpaneOrigin: placeholders.TASKPANE_ORIGIN,
+  webOrigin: placeholders.WEB_ORIGIN,
+});
+
 const UNRESOLVED_PATTERN = /\{\{[A-Z_]+\}\}/u;
 
 export const renderManifest = (env: ManifestEnv): string => {
   const template = readFileSync(TEMPLATE_PATH, "utf-8");
-  const placeholders = resolvePlaceholders(env);
+  const placeholders = resolveManifestPlaceholders(env);
   let output = template;
   for (const [key, value] of Object.entries(placeholders)) {
     output = output.replaceAll(`{{${key}}}`, () => value);

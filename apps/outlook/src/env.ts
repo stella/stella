@@ -15,14 +15,22 @@ const readBuildEnv = (): "dev" | "prod" => {
   return value === "prod" ? "prod" : "dev";
 };
 
+const readBuildString = (key: string, fallback: string): string => {
+  const value: unknown = Reflect.get(globalThis, key);
+  return typeof value === "string" && value.length > 0 ? value : fallback;
+};
+
 const STELLA_BUILD_ENV = readBuildEnv();
 
 const defaults = STELLA_BUILD_ENV === "prod" ? PROD_DEFAULTS : DEV_DEFAULTS;
 
 export const env = {
-  apiBaseUrl: defaults.apiBaseUrl,
+  apiBaseUrl: readBuildString("STELLA_API_ORIGIN", defaults.apiBaseUrl),
   buildEnvironment: STELLA_BUILD_ENV,
-  signInOrigin: defaults.stellaWebUrl,
-  stellaWebUrl: defaults.stellaWebUrl,
-  taskpaneOrigin: defaults.taskpaneOrigin,
+  signInOrigin: readBuildString("STELLA_WEB_ORIGIN", defaults.stellaWebUrl),
+  stellaWebUrl: readBuildString("STELLA_WEB_ORIGIN", defaults.stellaWebUrl),
+  taskpaneOrigin: readBuildString(
+    "STELLA_TASKPANE_ORIGIN",
+    defaults.taskpaneOrigin,
+  ),
 };
