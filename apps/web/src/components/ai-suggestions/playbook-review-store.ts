@@ -279,8 +279,11 @@ const requestRun = async ({
   playbookId,
   references,
   topics,
-}: Omit<StartRunArgs, "unexpectedErrorMessage">) =>
-  await api
+}: Omit<StartRunArgs, "unexpectedErrorMessage">) => {
+  // Both channels are read here rather than handed on as one response: the
+  // caller decides between attaching to an already active run and surfacing
+  // the failure, and neither decision may depend on an unexamined `.data`.
+  const { data, error } = await api
     .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
     ["document-reviews"].runs.post(
       {
@@ -301,6 +304,8 @@ const requestRun = async ({
       },
       { fetch: { signal: AbortSignal.timeout(RUN_CREATE_TIMEOUT_MS) } },
     );
+  return { data, error };
+};
 
 export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
   sessions: {},
@@ -462,7 +467,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
         sessions: {
           ...state.sessions,
           [key]: {
-            ...(current === undefined ? blankSession() : current),
+            ...(current ?? blankSession()),
             status: "starting",
             error: null,
             runId: null,

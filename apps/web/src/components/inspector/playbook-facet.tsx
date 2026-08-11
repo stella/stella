@@ -179,15 +179,14 @@ export const PlaybookFacet = ({
     sessionRunId === null && restoreAllowed ? restoredRun : sessionRunId;
 
   const editorAvailable = registration !== undefined;
+  const pendingBasis = session?.basis ?? null;
   const pendingPlaybookId =
-    session === undefined || session.basis === null
-      ? null
-      : playbookIdFromBasis(session.basis);
+    pendingBasis === null ? null : playbookIdFromBasis(pendingBasis);
   const pendingPlaybookName =
     pendingPlaybookId === null
       ? ""
-      : (playbooks.find((playbook) => playbook.id === pendingPlaybookId)?.name ??
-        "");
+      : (playbooks.find((playbook) => playbook.id === pendingPlaybookId)
+          ?.name ?? "");
 
   const reportStartFailure = (result: StartReviewResult) => {
     if (result.ok) {
@@ -456,7 +455,9 @@ export const PlaybookFacet = ({
   if (trackedRunId !== null) {
     return (
       <ReviewRunPanel
-        commentStateByFinding={session === undefined ? {} : session.commentState}
+        commentStateByFinding={
+          session === undefined ? {} : session.commentState
+        }
         editorAvailable={editorAvailable}
         fixStateByFinding={session === undefined ? {} : session.fixState}
         onAcceptFix={acceptFix}

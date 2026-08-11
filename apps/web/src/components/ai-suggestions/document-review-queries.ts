@@ -20,16 +20,36 @@ export const documentReviewSourceKeys = {
     [...documentReviewSourceKeys.all(workspaceId), { q }] as const,
 };
 
+/** One document's review history: the target the runs belong to. */
+export type DocumentReviewRunTarget = {
+  workspaceId: string;
+  entityId: string;
+  fileFieldId: string;
+};
+
+/** One durable run, by id. */
+type DocumentReviewRunRef = {
+  workspaceId: string;
+  runId: string;
+};
+
+// Both members take the whole key object the query function reads, so the key
+// expression names exactly the value the fetch closes over rather than a
+// hand-listed subset of its fields.
 export const documentReviewRunKeys = {
   all: (workspaceId: string) => ["document-review-runs", workspaceId] as const,
-  history: (workspaceId: string, entityId: string, fileFieldId: string) =>
+  history: (target: DocumentReviewRunTarget) =>
     [
-      ...documentReviewRunKeys.all(workspaceId),
+      ...documentReviewRunKeys.all(target.workspaceId),
       "history",
-      { entityId, fileFieldId },
+      { entityId: target.entityId, fileFieldId: target.fileFieldId },
     ] as const,
-  detail: (workspaceId: string, runId: string) =>
-    [...documentReviewRunKeys.all(workspaceId), "detail", runId] as const,
+  detail: (ref: DocumentReviewRunRef) =>
+    [
+      ...documentReviewRunKeys.all(ref.workspaceId),
+      "detail",
+      ref.runId,
+    ] as const,
 };
 
 export const documentReviewSourcesOptions = ({
@@ -57,12 +77,6 @@ export const documentReviewSourcesOptions = ({
     initialPageParam: stringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
   });
-
-export type DocumentReviewRunTarget = {
-  workspaceId: string;
-  entityId: string;
-  fileFieldId: string;
-};
 
 /**
  * A document's review history, newest first. Exported as a plain call as well
@@ -94,21 +108,13 @@ export type DocumentReviewRunStatus = DocumentReviewRunSummary["status"];
 
 export const documentReviewRunsOptions = (target: DocumentReviewRunTarget) =>
   queryOptions({
-    queryKey: documentReviewRunKeys.history(
-      target.workspaceId,
-      target.entityId,
-      target.fileFieldId,
-    ),
-    queryFn: async ({ signal }) => await fetchDocumentReviewRuns(target, signal),
+    queryKey: documentReviewRunKeys.history(target),
+    queryFn: async ({ signal }) =>
+      await fetchDocumentReviewRuns(target, signal),
     // The facet reads this once per open to decide what to restore; a stale
     // answer would resurrect a run the user has already moved past.
     staleTime: 0,
   });
-
-type DocumentReviewRunRef = {
-  workspaceId: string;
-  runId: string;
-};
 
 const fetchDocumentReviewRun = async (
   { workspaceId, runId }: DocumentReviewRunRef,
@@ -132,7 +138,7 @@ export type DocumentReviewFindingRow =
 
 export const documentReviewRunOptions = (ref: DocumentReviewRunRef) =>
   queryOptions({
-    queryKey: documentReviewRunKeys.detail(ref.workspaceId, ref.runId),
+    queryKey: documentReviewRunKeys.detail(ref),
     queryFn: async ({ signal }) => await fetchDocumentReviewRun(ref, signal),
     staleTime: 0,
     // Progress and findings arrive while the worker executes; polling stops on
