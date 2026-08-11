@@ -281,12 +281,18 @@ const WEB_BUILD_COMMAND = "bun --filter @stll/web build";
 const WEB_CLIENT_PREFIX = "VITE_";
 
 const DOCKER_NAME_PATTERN = /^[A-Z][A-Z0-9_]*$/u;
-const DOCKER_ASSIGNMENT_PATTERN = /([A-Z][A-Z0-9_]*)="([^"]*)"/gu;
+const DOCKER_ARG_PATTERN = /^ARG\s+(\S.*)$/iu;
+const DOCKER_ASSIGNMENT_PATTERN = /\b([A-Z][A-Z0-9_]*)="([^"]*)"/gu;
 const DOCKER_REFERENCE_PATTERN = /\$\{([A-Z][A-Z0-9_]*)\}/gu;
 
 type WebBuildContract = {
-  /** Build variables the builder stage declares before the build runs. */
-  declared: Set<string>;
+  /**
+   * Build arguments the builder stage declares before the build runs. Only
+   * `ARG` counts: `ENV` also puts a name in scope for the build, but
+   * `docker build --build-arg` cannot override it, so an `ENV`-only key is
+   * exactly the frozen default this guard exists to catch.
+   */
+  args: Set<string>;
   /** Variables the build command exports, mapped to their exported value. */
   exported: Map<string, string>;
 };
@@ -299,18 +305,18 @@ const dockerInstructions = (dockerfile: string) =>
     .filter((line) => line.length > 0 && !line.startsWith("#"));
 
 export const parseWebBuildContract = (dockerfile: string): WebBuildContract => {
-  const declared = new Set<string>();
+  const args = new Set<string>();
   for (const instruction of dockerInstructions(dockerfile)) {
     if (/^FROM\s/iu.test(instruction)) {
-      declared.clear();
+      args.clear();
       continue;
     }
-    const declaration = /^(?:ARG|ENV)\s+(.+)$/iu.exec(instruction)?.at(1);
+    const declaration = DOCKER_ARG_PATTERN.exec(instruction)?.at(1);
     if (declaration !== undefined) {
       for (const token of declaration.split(/\s+/u)) {
         const name = token.split("=").at(0) ?? "";
         if (DOCKER_NAME_PATTERN.test(name)) {
-          declared.add(name);
+          args.add(name);
         }
       }
       continue;
@@ -330,7 +336,7 @@ export const parseWebBuildContract = (dockerfile: string): WebBuildContract => {
         exported.set(name, value);
       }
     }
-    return { declared, exported };
+    return { args, exported };
   }
   return panic(
     `${WEB_DOCKERFILE_LABEL} no longer runs \`${WEB_BUILD_COMMAND}\`; update the build-argument guard in scripts/env-tool.ts.`,
@@ -351,7 +357,7 @@ export const findWebBuildArgGaps = ({
   clientKeys,
   dockerfile,
 }: FindWebBuildArgGapsOptions): WebBuildArgGap[] => {
-  const { declared, exported } = parseWebBuildContract(dockerfile);
+  const { args, exported } = parseWebBuildContract(dockerfile);
   const schemaKeys = new Set(clientKeys);
   const gaps: WebBuildArgGap[] = [];
   for (const name of clientKeys) {
@@ -366,7 +372,7 @@ export const findWebBuildArgGaps = ({
     }
     for (const match of value.matchAll(DOCKER_REFERENCE_PATTERN)) {
       const reference = match.at(1);
-      if (reference !== undefined && !declared.has(reference)) {
+      if (reference !== undefined && !args.has(reference)) {
         gaps.push({ name, reference, type: "undeclared" });
       }
     }

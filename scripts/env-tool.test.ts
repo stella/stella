@@ -706,6 +706,27 @@ describe("web container build arguments", () => {
     ).toEqual([]);
   });
 
+  test("reject an export backed only by ENV", () => {
+    expect(
+      findWebBuildArgGaps({
+        clientKeys: ["VITE_WORKFLOWS_ENABLED"],
+        dockerfile: [
+          "FROM oven/bun AS builder",
+          "ENV VITE_WORKFLOWS_ENABLED=false",
+          "RUN \\",
+          `    VITE_WORKFLOWS_ENABLED="${reference("VITE_WORKFLOWS_ENABLED")}" \\`,
+          "    bun --filter @stll/web build",
+        ].join("\n"),
+      }),
+    ).toEqual([
+      {
+        name: "VITE_WORKFLOWS_ENABLED",
+        reference: "VITE_WORKFLOWS_ENABLED",
+        type: "undeclared",
+      },
+    ]);
+  });
+
   test("report an export the client schema does not declare", () => {
     expect(
       findWebBuildArgGaps({
