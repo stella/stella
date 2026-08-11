@@ -16,10 +16,6 @@ import { createContactHandler } from "@/api/handlers/contacts/create";
 import { deleteContactHandler } from "@/api/handlers/contacts/delete";
 import { listContactsPage } from "@/api/handlers/contacts/list-query";
 import { updateContactHandler } from "@/api/handlers/contacts/update";
-import {
-  entityListCursorCondition,
-  entityListTimestampCursorExpr,
-} from "@/api/handlers/entities/list-cursor";
 import { addAssigneeHandler } from "@/api/handlers/tasks/assignees-add";
 import { removeAssigneeHandler } from "@/api/handlers/tasks/assignees-remove";
 import { createEntityLinkHandler } from "@/api/handlers/tasks/entity-links-create";
@@ -47,6 +43,10 @@ import type {
   SAVE_MATTER_PROJECTION,
   SAVE_TASK_PROJECTION,
 } from "@/api/lib/chat/projections";
+import {
+  entityListCursorCondition,
+  entityListTimestampCursorExpr,
+} from "@/api/lib/entities/list-cursor";
 import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,

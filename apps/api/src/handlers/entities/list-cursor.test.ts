@@ -1,14 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { toSafeId } from "@/api/lib/branded-types";
 import {
   decodeEntityFileListCursor,
   decodeEntityListCursor,
   encodeEntityFileListCursor,
   encodeEntityListCursor,
   entityFileListCursorCondition,
-} from "@/api/handlers/entities/list-cursor";
-import { toSafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/entities/list-cursor";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 describe("entity list cursor", () => {

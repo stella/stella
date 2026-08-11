@@ -1270,7 +1270,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     exclude: (file) =>
       isExcludedSource(file) ||
       file === "apps/api/src/lib/db-pagination.ts" ||
-      file === "apps/api/src/handlers/entities/list-cursor.ts" ||
+      file === "apps/api/src/lib/entities/list-cursor.ts" ||
       file === "apps/api/src/lib/workflow-target-queries.ts",
     count: countRepeatedTimestampCursorBoundaries,
   },

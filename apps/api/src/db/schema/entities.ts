@@ -937,6 +937,15 @@ export const fields = p.pgTable(
       .index("fields_pending_workspace_idx")
       .on(table.workspaceId)
       .where(sql`${table.content}->>'type' = 'pending'`),
+    p
+      .index("fields_workspace_file_mime_entity_version_id_idx")
+      .on(
+        table.workspaceId,
+        sql`(${table.content}->>'mimeType')`,
+        table.entityVersionId,
+        table.id,
+      )
+      .where(sql`${table.content}->>'type' = 'file'`),
     // Bounded document-processing recovery has a global ID cursor, so its
     // partial candidate index must start with that cursor column.
     p

@@ -153,9 +153,9 @@ describe("createScopedDb", () => {
       return { entities: e, props: p, fields: f };
     });
     expect(result.entities).toBe(1);
-    // properties has 2 in wsA1 (propertyA1 + propertyA1dep)
-    expect(result.props).toBe(2);
-    expect(result.fields).toBe(1);
+    // properties has 3 in wsA1 (text, file, and dependency fixtures)
+    expect(result.props).toBe(3);
+    expect(result.fields).toBe(2);
   });
 });
 

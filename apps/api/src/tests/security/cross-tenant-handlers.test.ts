@@ -17,6 +17,7 @@ import {
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import readBillingCodes from "@/api/handlers/billing-codes/list";
 import readContactById from "@/api/handlers/contacts/get";
+import listDocumentReviewSources from "@/api/handlers/document-reviews/list-sources";
 import listDocxSuggestions from "@/api/handlers/docx-suggestions/read";
 import readEntityById from "@/api/handlers/entities/get";
 import readVersionById from "@/api/handlers/entities/read-version-by-id";
@@ -250,6 +251,21 @@ const isolationCases: IsolationCase[] = [
     expectDenied: expectEmptyPage,
     expectPositive: (result, { ids: testIds }) =>
       expectPageContainsId(result, testIds.docxSuggestionB1),
+  },
+  {
+    name: "document review source list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listDocumentReviewSources, workspaceA, {
+        query: { limit: 50 },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listDocumentReviewSources, workspaceB, {
+        query: { limit: 50 },
+      }),
+    expectDenied: (result, { ids: testIds }) =>
+      expectSourcePageExcludesEntityId(result, testIds.entityB1),
+    expectPositive: (result, { ids: testIds }) =>
+      expectSourcePageContainsEntityId(result, testIds.entityB1),
   },
   {
     name: "invoice read by id",
@@ -645,6 +661,26 @@ function expectPageExcludesField(
   expect(getStatusCode(result)).toBeNull();
   expect(
     getPageItems(result).some((item) => item[field] === excludedValue),
+  ).toBe(false);
+}
+
+function expectSourcePageContainsEntityId(
+  result: unknown,
+  expectedId: string,
+): void {
+  expect(getStatusCode(result)).toBeNull();
+  expect(
+    getPageItems(result).some((item) => item["entityId"] === expectedId),
+  ).toBe(true);
+}
+
+function expectSourcePageExcludesEntityId(
+  result: unknown,
+  excludedId: string,
+): void {
+  expect(getStatusCode(result)).toBeNull();
+  expect(
+    getPageItems(result).some((item) => item["entityId"] === excludedId),
   ).toBe(false);
 }
 

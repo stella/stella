@@ -42,6 +42,9 @@ const config = {
   body: t.Object({
     entityId: tSafeId("entity"),
     fileFieldId: tSafeId("field"),
+    positionIds: t.Optional(
+      t.Array(t.String({ format: "uuid" }), { maxItems: 200 }),
+    ),
   }),
 } satisfies HandlerConfig;
 
@@ -178,7 +181,17 @@ const reviewPlaybook = createSafeHandler(
         }
 
         // Skip disabled positions, matching the materialized run's semantics.
-        const positions = selectEnabledPositions(playbook.positions.items);
+        const enabledPositions = selectEnabledPositions(
+          playbook.positions.items,
+        );
+        const selectedPositionIds = body.positionIds
+          ? new Set(body.positionIds)
+          : null;
+        const positions = selectedPositionIds
+          ? enabledPositions.filter((position) =>
+              selectedPositionIds.has(position.sourceId),
+            )
+          : enabledPositions;
         const clauseSnapshots = await loadClauseSnapshots(
           tx,
           organizationId,
@@ -306,7 +319,6 @@ const reviewPlaybook = createSafeHandler(
       ),
       contentBySourceId: extractionResult.value.contentBySourceId,
       tiersBySourceId,
-      lastBlockId: extractionResult.value.lastBlockId,
       abortSignal,
       organizationId,
       workspaceId,

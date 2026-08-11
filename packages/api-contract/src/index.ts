@@ -589,6 +589,10 @@ export const MCP_APP_SANDBOX_PATH = "/mcp-app-sandbox" as const;
 export const MCP_APP_FRAME_TITLE_HASH_PARAM = "frame-title" as const;
 export const MCP_APP_FRAME_TITLE_MAX_CHARS = 200;
 export const MCP_APP_RESOURCE_MIME_TYPE = "text/html;profile=mcp-app" as const;
+export const DOCUMENT_REVIEW_LIMITS = {
+  referencesMax: 3,
+  topicsMax: 200,
+} as const;
 export const CHAT_RICH_PART_LIMITS = {
   identifierMaxChars: 512,
   inlineMediaMaxChars: 4 * 1024 * 1024,

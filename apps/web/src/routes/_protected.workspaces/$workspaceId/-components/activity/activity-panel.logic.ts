@@ -2,6 +2,26 @@ import type { MatterActivityItem } from "@/lib/workspaces/queries";
 
 const DOCUMENT_BATCH_WINDOW_MS = 60_000;
 
+type ActivityTriggerType = MatterActivityItem["trigger"]["type"];
+type VisibleActivityTriggerType = Exclude<ActivityTriggerType, "direct">;
+
+const VISIBLE_ACTIVITY_TRIGGER_TYPES = {
+  agent_delegation: "agent_delegation",
+  credential: "credential",
+  direct: null,
+  schedule: "schedule",
+  system: "system",
+  user_dispatch: "user_dispatch",
+  webhook: "webhook",
+} as const satisfies Record<
+  ActivityTriggerType,
+  VisibleActivityTriggerType | null
+>;
+
+export const resolveVisibleActivityTriggerType = (
+  type: ActivityTriggerType,
+): VisibleActivityTriggerType | null => VISIBLE_ACTIVITY_TRIGGER_TYPES[type];
+
 export const activityDayKey = (activityAt: string): string => {
   const date = new Date(activityAt);
   return Number.isNaN(date.getTime())
