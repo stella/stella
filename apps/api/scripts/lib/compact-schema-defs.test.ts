@@ -164,6 +164,36 @@ describe("compactSchemaDefs", () => {
     expect(result.inputSchema.$defs).toBeUndefined();
   });
 
+  test("sizes a non-ASCII fragment by its UTF-8 bytes, not code units", () => {
+    // The export cap is bytes. A fragment under the hoist threshold in UTF-16
+    // code units but over it in UTF-8 was skipped, so a schema of repeated
+    // non-ASCII prose could fail the cap that $defs hoisting would have cleared.
+    const described = {
+      type: "string",
+      description: "Смотрите документацию по условиям фильтра матери".repeat(3),
+    };
+    const source = {
+      body: {
+        type: "object",
+        properties: { first: described, second: described },
+      },
+    };
+    expect(JSON.stringify(described).length).toBeLessThan(
+      Buffer.byteLength(JSON.stringify(described), "utf8"),
+    );
+
+    const result = compactSchemaDefs(source);
+    expect(result.status).toBe("compacted");
+    if (result.status !== "compacted") {
+      return;
+    }
+    expect(Object.keys(result.inputSchema.$defs ?? {})).toHaveLength(1);
+    expect(inputSchemaByteSize(result.inputSchema)).toBeLessThan(
+      inputSchemaByteSize(source),
+    );
+    expect(expandSchemaDefs(result.inputSchema)).toEqual(source);
+  });
+
   test("does not hoist a repeated fragment too small to pay for its ref", () => {
     const source = {
       body: {

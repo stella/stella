@@ -15,6 +15,7 @@ import type {
 } from "@stricli/core";
 
 import type { Context } from "./context.js";
+import { expandSchemaDefs } from "./expand-schema-defs.js";
 import {
   buildInputContractHelp,
   formatInputExample,
@@ -322,7 +323,12 @@ const buildCapabilityLeafCommand = (
   const brief = capabilityLeafBrief(spec);
   const description = fullDescription({
     brief,
-    inputSchema: spec.inputSchema,
+    // Help must read the same shape `--input` validates against. The baked
+    // schema is `$defs`-compacted, and the contract renderer does not resolve
+    // refs, so documenting the stored form would describe a referenced object
+    // as an opaque JSON value and could advertise an example the executor then
+    // rejects. Expansion is per-command, on the help path only.
+    inputSchema: expandSchemaDefs(spec.inputSchema) ?? spec.inputSchema,
     inputOnly: spec.inputOnly,
     requiredPaths: spec.flags
       .filter((flag) => flag.required)

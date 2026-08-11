@@ -236,9 +236,18 @@ const findReservedKeyword = (node: unknown): string | null => {
   return null;
 };
 
+/**
+ * UTF-8 bytes of `value`. The 64 KiB export cap this compactor exists to stay
+ * under is measured in bytes, so every size decision here must be too: a
+ * `String#length` is UTF-16 code units, and a schema carrying non-ASCII
+ * descriptions or enum values would be measured short.
+ */
+const byteLengthOf = (value: string): number =>
+  Buffer.byteLength(value, "utf8");
+
 /** Net bytes saved by keeping `name` as a def rather than inlining it back. */
 const savingOf = (body: unknown, refCount: number): number =>
-  (refCount - 1) * (JSON.stringify(body).length - REF_NODE_BYTES) -
+  (refCount - 1) * (byteLengthOf(JSON.stringify(body)) - REF_NODE_BYTES) -
   DEF_ENTRY_OVERHEAD_BYTES;
 
 /**
@@ -286,7 +295,7 @@ export const compactSchemaDefs = (
   const candidates = [...occurrences.entries()]
     .filter(
       ([serialized, { count }]) =>
-        count > 1 && serialized.length >= MIN_HOISTABLE_BYTES,
+        count > 1 && byteLengthOf(serialized) >= MIN_HOISTABLE_BYTES,
     )
     .sort(([left], [right]) => (left < right ? -1 : 1));
   if (candidates.length === 0) {
