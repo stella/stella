@@ -10,6 +10,7 @@ import {
   caseLawIngestionFailures,
   caseLawSources,
 } from "@/api/db/schema";
+import type { SourceTotalOrigin } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
@@ -19,6 +20,14 @@ type SourceStatus = {
   enabled: boolean;
   syncCursor: string | null;
   totalDecisions: number;
+  /**
+   * What the publisher reports holding, when that was observed, and where
+   * the number came from. Null until the source has been measured; the three
+   * always move together (see `ingestion/source-totals.ts`).
+   */
+  reportedTotal: number | null;
+  reportedTotalAsOf: string | null;
+  reportedTotalOrigin: SourceTotalOrigin | null;
   insertedLastHour: number;
   inserted24h: number;
   failures24h: number;
@@ -54,6 +63,9 @@ export const getIngestionStatus = async (
         name: caseLawSources.name,
         syncCursor: caseLawSources.syncCursor,
         enabled: caseLawSources.enabled,
+        reportedTotal: caseLawSources.reportedTotal,
+        reportedTotalAsOf: caseLawSources.reportedTotalAsOf,
+        reportedTotalOrigin: caseLawSources.reportedTotalOrigin,
       })
       .from(caseLawSources)
       // SAFETY: one row per ADAPTER_KEYS entry, enforced by the unique case_law_sources_adapter_key_idx
@@ -136,6 +148,9 @@ export const getIngestionStatus = async (
         enabled: source.enabled,
         syncCursor: source.syncCursor,
         totalDecisions: totalRow?.total ?? 0,
+        reportedTotal: source.reportedTotal,
+        reportedTotalAsOf: source.reportedTotalAsOf?.toISOString() ?? null,
+        reportedTotalOrigin: source.reportedTotalOrigin,
         insertedLastHour: hourRow?.inserted ?? 0,
         inserted24h: dayRow?.inserted ?? 0,
         failures24h: failRow?.total ?? 0,

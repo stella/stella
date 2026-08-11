@@ -40,6 +40,19 @@ export const CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS = {
   CLEANUP: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUSES[1],
 } as const;
 
+/**
+ * How a source's reported total was obtained. Not a boolean: a third
+ * provenance (an operator-approved import, say) must be able to land as a
+ * new member rather than as a second flag.
+ */
+export const SOURCE_TOTAL_ORIGIN = {
+  ADAPTER_POLL: "adapter-poll",
+  OPERATOR: "operator",
+} as const;
+
+export type SourceTotalOrigin =
+  (typeof SOURCE_TOTAL_ORIGIN)[keyof typeof SOURCE_TOTAL_ORIGIN];
+
 export const caseLawSources = p.pgTable(
   "case_law_sources",
   {
@@ -65,6 +78,21 @@ export const caseLawSources = p.pgTable(
     // migration-owned trigger validates inserts and descriptor changes while
     // permitting unrelated checkpoint updates on legacy malformed rows.
     descriptor: jsonb().$type<CorpusSourceDescriptor>(),
+    /**
+     * How many decisions the publisher itself reports holding, with when it
+     * was observed and where the number came from. Held-vs-total coverage is
+     * otherwise uncomputable for a publisher that exposes no cheap count.
+     *
+     * The three are one fact and move together — all set or all null. The
+     * writer (`ingestion/source-totals.ts`) validates the number at the
+     * boundary so a caller gets a usable error; the check constraints below
+     * make the half-written states unrepresentable for every other path.
+     */
+    reportedTotal: p.integer("reported_total"),
+    reportedTotalAsOf: timestamptz("reported_total_as_of"),
+    reportedTotalOrigin: p
+      .varchar("reported_total_origin", { length: 16 })
+      .$type<SourceTotalOrigin>(),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at")
       .defaultNow()
@@ -79,6 +107,25 @@ export const caseLawSources = p.pgTable(
     p.check(
       "case_law_sources_ingestion_lease_pair",
       sql`(${t.ingestionLeaseToken} IS NULL) = (${t.ingestionLeaseExpiresAt} IS NULL)`,
+    ),
+    p.check(
+      "case_law_sources_reported_total_trio",
+      sql`(${t.reportedTotal} IS NULL) = (${t.reportedTotalAsOf} IS NULL)
+        AND (${t.reportedTotal} IS NULL) = (${t.reportedTotalOrigin} IS NULL)`,
+    ),
+    p.check(
+      "case_law_sources_reported_total_positive",
+      sql`${t.reportedTotal} IS NULL OR ${t.reportedTotal} > 0`,
+    ),
+    // The accepted values are read off SOURCE_TOTAL_ORIGIN rather than
+    // re-listed, so a new origin cannot reach the database without also
+    // reaching this constraint.
+    p.check(
+      "case_law_sources_reported_total_origin_allowed",
+      sql`${t.reportedTotalOrigin} IS NULL OR ${t.reportedTotalOrigin} IN (${sql.join(
+        Object.values(SOURCE_TOTAL_ORIGIN).map((origin) => sql`${origin}`),
+        sql`, `,
+      )})`,
     ),
     p.uniqueIndex("case_law_sources_adapter_key_idx").on(t.adapterKey),
     ...globalCaseLawPolicies(),

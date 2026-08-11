@@ -132,6 +132,27 @@ const isUtcCalendarDay = ({ year, month, day }: IsoDateParts): boolean => {
 };
 
 /**
+ * The `YYYY-MM-DD` form of a bare calendar date or of an ISO datetime whose
+ * date part names a real Gregorian day, or `null` when it is neither.
+ *
+ * The grammar and calendar check on their own, without the publication-year
+ * bounds `canonicalDecisionDate` adds: `"2024-02-30"` and `"01/02/2024"` are
+ * rejected here, a year of 1200 is not. For callers that need a real day but
+ * carry no decision semantics.
+ */
+export const isoCalendarDay = (raw: string): string | null => {
+  const candidate = isoDatePrefix(raw);
+  if (candidate === null) {
+    return null;
+  }
+  const parts = isoDateParts(candidate);
+  if (parts === null || !isUtcCalendarDay(parts)) {
+    return null;
+  }
+  return candidate;
+};
+
+/**
  * Canonical `YYYY-MM-DD` form of a published decision date, or `null` when
  * the value cannot be one.
  *
@@ -141,16 +162,13 @@ const isUtcCalendarDay = ({ year, month, day }: IsoDateParts): boolean => {
  * a correct one, so callers writing to one need this in front of the write.
  */
 export const canonicalDecisionDate = (raw: string): string | null => {
-  const candidate = isoDatePrefix(raw);
+  const candidate = isoCalendarDay(raw);
   if (candidate === null) {
     return null;
   }
-  const parts = isoDateParts(candidate);
-  if (parts === null || !isUtcCalendarDay(parts)) {
-    return null;
-  }
+  const year = Number(candidate.slice(0, 4));
   const maxYear = new Date().getUTCFullYear() + DECISION_YEAR_BOUNDS.yearsAhead;
-  if (parts.year < DECISION_YEAR_BOUNDS.min || parts.year > maxYear) {
+  if (year < DECISION_YEAR_BOUNDS.min || year > maxYear) {
     return null;
   }
   return candidate;
