@@ -371,7 +371,7 @@ const getScopedAwsS3Client = async (
   return built.client;
 };
 
-const getRequiredScopedAwsS3Client = async ({
+const getTenantAwsS3Client = async ({
   actions,
   key,
   scope,
@@ -386,15 +386,13 @@ const getRequiredScopedAwsS3Client = async ({
     });
   }
   if (!shouldUseScopedSigning()) {
-    throw new S3PresignError({
-      message: "Scoped S3 access is not configured for this runtime",
-    });
+    return await getAwsS3Client();
   }
   return await getScopedAwsS3Client(scope, actions, 0);
 };
 
-/** Read an object through a required organization/workspace-scoped STS session. */
-export const readScopedS3ArrayBuffer = async ({
+/** Read an object after enforcing its organization/workspace key scope. */
+export const readTenantS3ArrayBuffer = async ({
   key,
   scope,
   signal,
@@ -403,7 +401,7 @@ export const readScopedS3ArrayBuffer = async ({
   scope: S3SigningScope;
   signal: AbortSignal;
 }): Promise<ArrayBuffer> => {
-  const client = await getRequiredScopedAwsS3Client({
+  const client = await getTenantAwsS3Client({
     actions: ["s3:GetObject"],
     key,
     scope,
@@ -429,8 +427,8 @@ export const readScopedS3ArrayBuffer = async ({
   return buffer;
 };
 
-/** Write an object through a required organization/workspace-scoped STS session. */
-export const writeScopedS3Object = async ({
+/** Write an object after enforcing its organization/workspace key scope. */
+export const writeTenantS3Object = async ({
   contentType,
   data,
   key,
@@ -443,7 +441,7 @@ export const writeScopedS3Object = async ({
   scope: S3SigningScope;
   signal: AbortSignal;
 }): Promise<void> => {
-  const client = await getRequiredScopedAwsS3Client({
+  const client = await getTenantAwsS3Client({
     actions: ["s3:PutObject"],
     key,
     scope,

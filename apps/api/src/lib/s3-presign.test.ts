@@ -9,9 +9,9 @@ import {
   isS3KeyInSigningScope,
   presignDownloadUrl,
   presignUploadUrl,
-  readScopedS3ArrayBuffer,
+  readTenantS3ArrayBuffer,
   resetAwsS3ClientForTesting,
-  writeScopedS3Object,
+  writeTenantS3Object,
 } from "@/api/lib/s3-presign";
 
 const sha256Base64 = (data: string): string =>
@@ -227,7 +227,7 @@ describe("scoped object operations", () => {
 
   test("rejects a cross-workspace read before resolving credentials", async () => {
     await expect(
-      readScopedS3ArrayBuffer({
+      readTenantS3ArrayBuffer({
         key: "org_1/ws_2/file.pdf",
         scope,
         signal: new AbortController().signal,
@@ -239,7 +239,7 @@ describe("scoped object operations", () => {
 
   test("rejects a cross-workspace write before resolving credentials", async () => {
     await expect(
-      writeScopedS3Object({
+      writeTenantS3Object({
         contentType: "application/pdf",
         data: new Uint8Array(),
         key: "org_2/ws_1/derivative.pdf",

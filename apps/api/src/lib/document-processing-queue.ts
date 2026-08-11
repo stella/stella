@@ -67,8 +67,8 @@ import {
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import {
   presignDownloadUrl,
-  readScopedS3ArrayBuffer,
-  writeScopedS3Object,
+  readTenantS3ArrayBuffer,
+  writeTenantS3Object,
 } from "@/api/lib/s3-presign";
 import {
   executeNativeExtraction,
@@ -203,7 +203,7 @@ const writeOcrSearchablePdfDerivative = async ({
         organizationId: run.organizationId,
         workspaceId: run.workspaceId,
       };
-      const sourceBuffer = await readScopedS3ArrayBuffer({
+      const sourceBuffer = await readTenantS3ArrayBuffer({
         key: sourceKey,
         scope,
         signal: lifecycleSignal,
@@ -215,7 +215,7 @@ const writeOcrSearchablePdfDerivative = async ({
       }
       lifecycleSignal.throwIfAborted();
 
-      await writeScopedS3Object({
+      await writeTenantS3Object({
         contentType: PDF_MIME_TYPE,
         data: searchablePdf.value,
         key: createOcrSearchablePdfKey({
@@ -1123,7 +1123,7 @@ export const processDocumentProcessingRun = async (
             fileField: source.content,
             lifecycleSignal,
             readSource: async (key, signal) =>
-              await readScopedS3ArrayBuffer({
+              await readTenantS3ArrayBuffer({
                 key,
                 scope: {
                   organizationId: run.organizationId,
