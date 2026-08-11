@@ -204,7 +204,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 776,
+    "count": 773,
     "files": {
       "apps/api/scripts/ai-provider-canary-config.ts": 1,
       "apps/api/scripts/ai-provider-canary.ts": 4,
@@ -236,8 +236,8 @@
       "apps/api/src/handlers/case-law/decisions/search.ts": 1,
       "apps/api/src/handlers/case-law/decisions/slug-backfill.ts": 1,
       "apps/api/src/handlers/case-law/erasure.ts": 6,
-      "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns.ts": 5,
-      "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts": 2,
+      "apps/api/src/handlers/case-law/ingestion/adapters/cz-ns.ts": 3,
+      "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-regional.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts": 3,
@@ -287,7 +287,6 @@
       "apps/api/src/handlers/playbooks/auto-run.ts": 1,
       "apps/api/src/handlers/playbooks/derive-ask.ts": 1,
       "apps/api/src/handlers/playbooks/list-starters.ts": 1,
-      "apps/api/src/handlers/playbooks/review-grade.ts": 1,
       "apps/api/src/handlers/properties/create-batch.ts": 1,
       "apps/api/src/handlers/properties/delete.ts": 1,
       "apps/api/src/handlers/properties/suggest-prompt.ts": 1,
@@ -318,6 +317,7 @@
       "apps/api/src/lib/document-processing-provider.ts": 1,
       "apps/api/src/lib/document-processing-queue.ts": 1,
       "apps/api/src/lib/document-reference.ts": 2,
+      "apps/api/src/lib/document-review/review-grade.ts": 1,
       "apps/api/src/lib/docx-stamp.ts": 2,
       "apps/api/src/lib/docx/adapt-ai-fields.ts": 1,
       "apps/api/src/lib/docx/discover-clause-slots.ts": 1,
@@ -570,13 +570,6 @@
     "files": {
       "apps/api/src/mcp/generated/capability-catalog.json": 3,
       "packages/cli/src/generated/capability-catalog.json": 3
-    }
-  },
-  "capabilities-without-description": {
-    "count": 538,
-    "files": {
-      "apps/api/src/mcp/generated/capability-catalog.json": 269,
-      "packages/cli/src/generated/capability-catalog.json": 269
     }
   },
   "capability-file-transport-suppressed": {
