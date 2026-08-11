@@ -34,7 +34,6 @@ const realAnonymizationBlacklist =
 void mock.module("@/api/lib/analytics/capture", () => ({
   captureError: captureErrorMock,
   captureRequestError: captureErrorMock,
-  getAnalytics: () => ({ capture: mock(), flush: mock(async () => undefined) }),
 }));
 
 void mock.module("@/api/mcp/anonymization", () => ({

@@ -129,8 +129,17 @@ void mock.module("@/api/lib/s3", () => ({
     throw new Error("Unexpected corpus object read in this suite");
   },
 }));
-void mock.module("@/api/lib/search/extract-content", () => ({
+// `canExtractMimeType` is exported by extractable-mime-types, and that is the
+// module `process-extraction` imports it from, so the override has to land
+// there. Spread the real module: the rest of it is shared with every other
+// extraction consumer.
+const realExtractableMimeTypes =
+  await import("@/api/lib/search/extractable-mime-types");
+void mock.module("@/api/lib/search/extractable-mime-types", () => ({
+  ...realExtractableMimeTypes,
   canExtractMimeType: () => true,
+}));
+void mock.module("@/api/lib/search/extract-content", () => ({
   extractFileTextResult: extractFileTextResultMock,
   resolveExtractionMimeType: ({
     fileName,

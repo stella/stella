@@ -69,7 +69,6 @@ void mock.module("@/api/lib/sse", () => ({
 void mock.module("@/api/lib/analytics/capture", () => ({
   captureError: mock(),
   captureRequestError: mock(),
-  getAnalytics: () => ({ capture: mock(), flush: mock() }),
 }));
 
 const { createEntityVersionFromBuffer } =

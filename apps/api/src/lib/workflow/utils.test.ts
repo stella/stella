@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, mock, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import type { ConditionNode } from "@stll/conditions";
 
@@ -10,17 +10,9 @@ import type {
   PropertyBatch,
 } from "@/api/lib/workflow/get-execution-plan";
 
-// Stub registry-only side effects. Avoid mocking `@/api/db`: this test never
-// loads `root.ts`, and Bun's `mock.module` leaks process-wide across files.
-void mock.module("@/api/handlers/registry/utils", () => ({
-  broadcastEvent: () => {},
-  resetActorState: () => {},
-}));
-
-afterAll(() => {
-  mock.restore();
-});
-
+// `@/api/lib/workflow/utils` is loaded dynamically so it resolves after this
+// module's own bindings; it reaches no registry or database module, so nothing
+// here needs stubbing.
 const { evaluateGatingCondition, prepareBatch } =
   await import("@/api/lib/workflow/utils");
 

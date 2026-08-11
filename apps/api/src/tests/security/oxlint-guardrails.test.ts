@@ -2,6 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import {
+  readModuleExports,
+  readModuleMockFactories,
+  resolveModuleFile,
+} from "@/api/tests/module-mock-factories";
+
 const readRootFixture = (relativePath: string) =>
   readFileSync(
     path.join(import.meta.dir, "../../../../..", relativePath),
@@ -546,47 +552,86 @@ describe("custom oxlint guardrails", () => {
     );
   });
 
-  test("mock.module of leaky shared modules spreads the real module", () => {
-    // bun's `mock.module` is process-global and cannot be restored, so a
-    // PARTIAL mock of a shared module (overriding one export, dropping the
-    // rest) deletes the other exports for every LATER test file in the run —
-    // any file that imports a dropped export then crashes with
-    // "Export ... not found", an order-dependent failure. For modules other
-    // test files import for real, the mock MUST spread the real module first
-    // (`...realX`) so nothing is dropped. Add modules here as leaks surface.
-    const leakyModules = ["@/api/lib/s3", "@/api/lib/redis-client", "bullmq"];
+  test("module mocks do not start dropping more of the real module's exports", () => {
+    // A PARTIAL module mock (one export overridden, the rest dropped) removes
+    // the other exports for every file sharing the process, so a file that
+    // imports a dropped export gets `undefined` back instead of the function.
+    //
+    // The api test runner now prevents the direct form of that on its own: the
+    // batcher (src/tests/module-mock-batching.ts) refuses to co-locate a
+    // module's mocker with a file that imports it, and the shared-process
+    // batches hold no mock-installing file at all. What neither can see is the
+    // TRANSITIVE importer, a co-batched file reaching the mocked module through
+    // a handler it imports. Walking the whole import graph instead would put
+    // nearly every mock file in a batch of one (src/lib/analytics/capture alone
+    // has ~130 non-test importers inside apps/api), so not dropping exports in
+    // the first place stays the defence there and this guard stays.
+    //
+    // It no longer carries a hand-kept module list. The property is read off
+    // each target module's own source: a factory is clean when it spreads the
+    // real module, or when it declares every export the module has. The
+    // opposite direction (a factory declaring keys the real module does NOT
+    // export) is guarded in src/tests/module-mock-factories.test.ts.
+    //
+    // Committed baseline, may only DECREASE: fix mocks and lower it. Raising it
+    // means a new mock started dropping exports, and needs the same
+    // justification as the other committed baselines in this repo.
+    const EXPORT_DROPPING_MOCK_BASELINE = 86;
     const root = path.join(import.meta.dir, "../../../../..");
-    const offenders: string[] = [];
-
-    for (const relative of new Bun.Glob("apps/api/src/**/*.test.ts").scanSync(
-      root,
-    )) {
-      const source = readFileSync(path.join(root, relative), "utf-8");
-      for (const moduleId of leakyModules) {
-        const marker = `mock.module("${moduleId}"`;
-        const hasRealImport = source.includes(`await import("${moduleId}")`);
-        let index = source.indexOf(marker);
-        while (index !== -1) {
-          // Skip quoted mentions (assertions referencing the pattern as a
-          // string, e.g. in this guardrail itself) — only real calls count.
-          const precedingChar = source[index - 1];
-          const isQuotedMention =
-            precedingChar === '"' ||
-            precedingChar === "'" ||
-            precedingChar === "`";
-          if (!isQuotedMention) {
-            const factoryStart = source.slice(index, index + 200);
-            const spreadsReal = /[=]>\s*\(\{\s*\.\.\.\w+/u.test(factoryStart);
-            if (!hasRealImport || !spreadsReal) {
-              offenders.push(`${relative} → ${moduleId}`);
-            }
-          }
-          index = source.indexOf(marker, index + marker.length);
-        }
+    const apiRoot = path.join(root, "apps/api");
+    const exportsByModuleFile = new Map<string, Set<string>>();
+    const realExportsOf = (moduleFile: string): Set<string> => {
+      const cached = exportsByModuleFile.get(moduleFile);
+      if (cached !== undefined) {
+        return cached;
       }
-    }
+      const moduleExports = readModuleExports(moduleFile, apiRoot);
+      exportsByModuleFile.set(moduleFile, moduleExports);
+      return moduleExports;
+    };
 
-    expect(offenders).toEqual([]);
+    const offenders = [
+      ...new Bun.Glob("src/**/*.test.{ts,tsx}").scanSync({
+        cwd: apiRoot,
+        onlyFiles: true,
+      }),
+    ]
+      .toSorted()
+      .flatMap((relative) => {
+        const source = readFileSync(path.join(apiRoot, relative), "utf-8");
+        return readModuleMockFactories(source, relative).flatMap((factory) => {
+          const moduleFile = resolveModuleFile(factory.moduleId, apiRoot);
+          // Only this package's modules can be read from source; an npm or
+          // workspace target has no statically readable export list.
+          if (moduleFile === undefined) {
+            return [];
+          }
+          if (
+            factory.spreadsAnother &&
+            source.includes(`await import("${factory.specifier}")`)
+          ) {
+            return [];
+          }
+          const declaredKeys = new Set(factory.declaredKeys);
+          const dropped = [...realExportsOf(moduleFile)].filter(
+            (name) => !declaredKeys.has(name),
+          );
+          if (dropped.length === 0) {
+            return [];
+          }
+          return [
+            `${factory.filePath}:${factory.line} → ${factory.moduleId} ` +
+              `drops ${dropped.join(", ")}`,
+          ];
+        });
+      });
+
+    // Listed rather than counted once over the baseline, so a regression names
+    // the mock that caused it.
+    expect(
+      offenders.length > EXPORT_DROPPING_MOCK_BASELINE ? offenders : [],
+    ).toEqual([]);
+    expect(offenders.length).toBeLessThanOrEqual(EXPORT_DROPPING_MOCK_BASELINE);
   });
 
   test("devtools shell lazy-loads TanStack panels", () => {

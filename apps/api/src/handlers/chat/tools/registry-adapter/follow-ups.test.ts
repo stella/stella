@@ -14,7 +14,6 @@ import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 void mock.module("@/api/lib/analytics/capture", () => ({
   captureError: mock(),
   captureRequestError: mock(),
-  getAnalytics: mock(() => ({ capture: mock(), flush: mock() })),
 }));
 
 const { buildMcpContextFromChat } = await import("./mcp-chat-context");
