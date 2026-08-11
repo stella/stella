@@ -143,15 +143,18 @@ export const getOfficeAttachmentCapabilities = (
   let list: OfficeAttachmentListCapability;
   if (Array.isArray(attachmentList)) {
     list = {
-      read: () => Promise.resolve(attachmentList.map(attachmentMetadata)),
+      read: async () =>
+        await Promise.resolve(attachmentList.map(attachmentMetadata)),
       status: "available",
     };
   } else if (mailbox18 && typeof getAttachmentsAsync === "function") {
     list = {
-      read: () =>
-        fromOfficeAsync<Office.AttachmentDetailsCompose[]>((callback) =>
-          getAttachmentsAsync.call(item, callback),
-        ).then((attachments) => attachments.map(attachmentMetadata)),
+      read: async () =>
+        (
+          await fromOfficeAsync<Office.AttachmentDetailsCompose[]>((callback) =>
+            getAttachmentsAsync.call(item, callback),
+          )
+        ).map((attachment) => attachmentMetadata(attachment)),
       status: "available",
     };
   } else {
@@ -164,8 +167,8 @@ export const getOfficeAttachmentCapabilities = (
   let content: OfficeAttachmentContentCapability;
   if (mailbox18 && typeof getAttachmentContentAsync === "function") {
     content = {
-      read: (attachmentId) =>
-        fromOfficeAsync<Office.AttachmentContent>((callback) =>
+      read: async (attachmentId) =>
+        await fromOfficeAsync<Office.AttachmentContent>((callback) =>
           getAttachmentContentAsync.call(item, attachmentId, callback),
         ),
       status: "available",
