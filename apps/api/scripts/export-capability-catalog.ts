@@ -341,10 +341,9 @@ const ALLOWS_ARCHIVED_WORKSPACE: ReadonlySet<string> = new Set([
  * these are refused pre-execution (a runtime backstop in `mapHandlerResult`
  * also rejects Response/binary values that slip past). Carried into the
  * catalog as `returnsFileResponse`. Sweep of catalog handlers:
- *  - `Result.ok(new Response(...))` inline (also caught by the class-guard
- *    scan): clauses.export, entities.download-zip, templates.fill-by-id,
- *    views.table-export;
- *  - Response via a helper: `templates.fill` (through `fillHandler`);
+ *  - `secureDocumentResponse(...)` (caught by the class-guard scan):
+ *    clauses.export, entities.download-zip, templates.fill,
+ *    templates.fill-by-id, templates.manifest, views.table-export;
  *  - raw binary via a helper: `time-entries.export-pdf` returns a `Uint8Array`
  *    through `exportPdfHandler`/`buildMinimalPdf`, invisible to the inline
  *    scan, so it is seeded explicitly (its siblings export-csv/export-ledes
@@ -357,6 +356,7 @@ const RETURNS_FILE_RESPONSE: ReadonlySet<string> = new Set([
   "entities.download-zip",
   "templates.fill",
   "templates.fill-by-id",
+  "templates.manifest",
   "time-entries.export-pdf",
   "views.table-export",
 ]);

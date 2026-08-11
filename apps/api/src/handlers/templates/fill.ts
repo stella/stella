@@ -14,7 +14,6 @@ import {
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { contentDisposition } from "@/api/lib/content-disposition";
 import { adaptAiFields } from "@/api/lib/docx/adapt-ai-fields";
 import {
   buildAiConditionDecider,
@@ -34,7 +33,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
-import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
+import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { containsNull } from "@/api/lib/templates/template-data";
 import { isRecord } from "@/api/lib/type-guards";
@@ -377,29 +376,19 @@ export const fillHandler = async ({
     const pdfName = DOCX_EXT_RE.test(sanitized)
       ? sanitized.replace(DOCX_EXT_RE, ".pdf")
       : `${sanitized}.pdf`;
-    return new Response(new Uint8Array(pdfResult.value.buffer), {
-      status: 200,
-      headers: {
-        ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
-        // Octet-stream, not application/pdf: see OCTET_STREAM_MIME_TYPE.
-        "Content-Type": OCTET_STREAM_MIME_TYPE,
-        "Content-Disposition": contentDisposition(pdfName),
-      },
+    return secureDocumentResponse({
+      body: new Uint8Array(pdfResult.value.buffer),
+      // Octet-stream, not application/pdf: see OCTET_STREAM_MIME_TYPE.
+      contentType: OCTET_STREAM_MIME_TYPE,
+      disposition: "attachment",
+      fileName: sanitizeFilename(pdfName),
     });
   }
 
-  const headers = new Headers({
-    ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
-    // Octet-stream, not the DOCX mime type: the Eden treaty client
-    // text-decodes unrecognized content types, which corrupts the ZIP
-    // container (Word then reports unreadable content). See
-    // OCTET_STREAM_MIME_TYPE in mime-types.ts.
-    "Content-Type": OCTET_STREAM_MIME_TYPE,
-    "Content-Disposition": 'attachment; filename="filled.docx"',
-  });
+  const additionalHeaders = new Headers();
 
   if (result.unmatchedPlaceholders.length > 0) {
-    headers.set(
+    additionalHeaders.set(
       "X-Unmatched-Placeholders",
       // Headers are ISO-8859-1; field paths carry diacritics (Polish/Czech),
       // so the diagnostic lists travel URI-encoded.
@@ -407,15 +396,27 @@ export const fillHandler = async ({
     );
   }
   if (unusedValues.length > 0) {
-    headers.set("X-Unused-Values", encodeURIComponent(unusedValues.join(",")));
+    additionalHeaders.set(
+      "X-Unused-Values",
+      encodeURIComponent(unusedValues.join(",")),
+    );
   }
   if (result.structureErrors.length > 0) {
-    headers.set("X-Structure-Errors", JSON.stringify(result.structureErrors));
+    additionalHeaders.set(
+      "X-Structure-Errors",
+      JSON.stringify(result.structureErrors),
+    );
   }
 
-  return new Response(new Uint8Array(result.buffer), {
-    status: 200,
-    headers,
+  return secureDocumentResponse({
+    additionalHeaders,
+    body: new Uint8Array(result.buffer),
+    // Octet-stream, not the DOCX mime type: the Eden treaty client
+    // text-decodes unrecognized content types, which corrupts the ZIP
+    // container (Word then reports unreadable content).
+    contentType: OCTET_STREAM_MIME_TYPE,
+    disposition: "attachment",
+    fileName: sanitizeFilename("filled.docx"),
   });
 };
 

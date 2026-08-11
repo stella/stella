@@ -107,7 +107,7 @@ const fixtureRuleOverrides = [
     "security-guards/no-raw-filename-write",
     "security-guards/no-unsanitized-href",
     "security-guards/no-unscoped-user-query",
-    "security-guards/require-raw-document-security-headers",
+    "security-guards/require-secure-document-response",
   ]),
   fixtureRuleOverride("stella-toast.fixture.ts", ["stella-toast/stella-toast"]),
   fixtureRuleOverride("suppression-hygiene.fixture.ts", [
@@ -1938,7 +1938,7 @@ export default defineConfig({
       files: ["apps/api/src/handlers/**/*.ts"],
       excludeFiles: ["apps/api/src/handlers/**/*.test.ts"],
       rules: {
-        "security-guards/require-raw-document-security-headers": "error",
+        "security-guards/require-secure-document-response": "error",
       },
     },
     {

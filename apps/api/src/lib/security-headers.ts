@@ -30,10 +30,10 @@ export const setSecurityHeaders = (set: Context["set"]) => {
  * bytes, PDF/DOCX downloads). Those responses bypass Elysia's `set.headers`,
  * so the global `setSecurityHeaders` never reaches them: a stored document
  * would otherwise be served without nosniff/frame/CSP protection and could be
- * MIME-sniffed (e.g. a `text/html` upload rendered inline) or framed. Every
- * raw document `Response` must spread these into its headers so that class of
- * gap cannot recur per-endpoint. Sensitive document bytes must also remain out
- * of browser and intermediary caches.
+ * MIME-sniffed (e.g. a `text/html` upload rendered inline) or framed. Raw
+ * document responses must use `secureDocumentResponse`, which applies this
+ * policy by construction. Sensitive document bytes must also remain out of
+ * browser and intermediary caches.
  */
 export const RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS = {
   "Cache-Control": "private, no-store",

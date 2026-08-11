@@ -10,7 +10,6 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 // eslint-disable-next-line no-restricted-imports -- export boundary: brands field ids returned by queryEntities (server-validated, workspace-scoped) to re-hydrate their justifications from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { contentDisposition } from "@/api/lib/content-disposition";
 import { escapeCSV } from "@/api/lib/csv";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { queryEntities } from "@/api/lib/entities/query-entities";
@@ -19,7 +18,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { extractFormattingLocale } from "@/api/lib/locale";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
-import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
+import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import { excludedEntityKindsForView } from "@/api/lib/views";
 import { parseViewLayout } from "@/api/lib/views-schema";
 import {
@@ -767,12 +766,11 @@ const exportTableView = createSafeHandler(
     );
 
     return Result.ok(
-      new Response(body, {
-        headers: {
-          ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
-          "Content-Disposition": contentDisposition(filename),
-          "Content-Type": contentType,
-        },
+      secureDocumentResponse({
+        body,
+        contentType,
+        disposition: "attachment",
+        fileName: filename,
       }),
     );
   },

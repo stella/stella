@@ -14,7 +14,6 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
 import { clauseBodyToRichPatch } from "@/api/lib/clauses/clause-to-patch";
 import type { ClauseBody } from "@/api/lib/clauses/types";
-import { contentDisposition } from "@/api/lib/content-disposition";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { adaptAiFields } from "@/api/lib/docx/adapt-ai-fields";
 import {
@@ -37,8 +36,8 @@ import type { RichPatchValue } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { convertToPdf } from "@/api/lib/files/gotenberg";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
-import { DOCX_EXT_RE } from "@/api/lib/sanitize-filename";
-import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
+import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import { recordTemplateUse } from "@/api/lib/templates/record-use";
 import { containsNull } from "@/api/lib/templates/template-data";
 import { isRecord } from "@/api/lib/type-guards";
@@ -400,30 +399,20 @@ const fillByIdHandler = async function* ({
       ? baseName.replace(DOCX_EXT_RE, ".pdf")
       : `${baseName}.pdf`;
     return Result.ok(
-      new Response(new Uint8Array(pdfResult.value.buffer), {
-        status: 200,
-        headers: {
-          ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
-          // Octet-stream, not application/pdf: see OCTET_STREAM_MIME_TYPE.
-          "Content-Type": OCTET_STREAM_MIME_TYPE,
-          "Content-Disposition": contentDisposition(pdfName),
-        },
+      secureDocumentResponse({
+        body: new Uint8Array(pdfResult.value.buffer),
+        // Octet-stream, not application/pdf: see OCTET_STREAM_MIME_TYPE.
+        contentType: OCTET_STREAM_MIME_TYPE,
+        disposition: "attachment",
+        fileName: sanitizeFilename(pdfName),
       }),
     );
   }
 
-  const headers = new Headers({
-    ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
-    // Octet-stream, not the DOCX mime type: the Eden treaty client
-    // text-decodes unrecognized content types, which corrupts the ZIP
-    // container (Word then reports unreadable content). See
-    // OCTET_STREAM_MIME_TYPE in mime-types.ts.
-    "Content-Type": OCTET_STREAM_MIME_TYPE,
-    "Content-Disposition": contentDisposition(baseName),
-  });
+  const additionalHeaders = new Headers();
 
   if (result.unmatchedPlaceholders.length > 0) {
-    headers.set(
+    additionalHeaders.set(
       "X-Unmatched-Placeholders",
       // Headers are ISO-8859-1; field paths carry diacritics (Polish/Czech),
       // so the diagnostic lists travel URI-encoded.
@@ -431,16 +420,28 @@ const fillByIdHandler = async function* ({
     );
   }
   if (unusedValues.length > 0) {
-    headers.set("X-Unused-Values", encodeURIComponent(unusedValues.join(",")));
+    additionalHeaders.set(
+      "X-Unused-Values",
+      encodeURIComponent(unusedValues.join(",")),
+    );
   }
   if (result.structureErrors.length > 0) {
-    headers.set("X-Structure-Errors", JSON.stringify(result.structureErrors));
+    additionalHeaders.set(
+      "X-Structure-Errors",
+      JSON.stringify(result.structureErrors),
+    );
   }
 
   return Result.ok(
-    new Response(new Uint8Array(result.buffer), {
-      status: 200,
-      headers,
+    secureDocumentResponse({
+      additionalHeaders,
+      body: new Uint8Array(result.buffer),
+      // Octet-stream, not the DOCX mime type: the Eden treaty client
+      // text-decodes unrecognized content types, which corrupts the ZIP
+      // container (Word then reports unreadable content).
+      contentType: OCTET_STREAM_MIME_TYPE,
+      disposition: "attachment",
+      fileName: sanitizeFilename(baseName),
     }),
   );
 };

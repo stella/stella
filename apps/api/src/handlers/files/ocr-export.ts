@@ -12,12 +12,11 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import type { SafeId } from "@/api/lib/branded-types";
-import { contentDisposition } from "@/api/lib/content-disposition";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { createOcrSearchablePdfKey } from "@/api/lib/file-key";
 import { getS3 } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
-import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
+import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 const OCR_EXPORT_STORAGE_READ_TIMEOUT_MS = 30 * 1000;
@@ -34,7 +33,7 @@ type ReadOcrExportOptions = {
   workspaceId: SafeId<"workspace">;
 };
 
-const replaceExtension = (fileName: string, suffix: string): string => {
+const replaceExtension = (fileName: string, suffix: string) => {
   const dotIndex = fileName.lastIndexOf(".");
   const baseName = dotIndex <= 0 ? fileName : fileName.slice(0, dotIndex);
   return sanitizeFilenamePreservingExtension(`${baseName}${suffix}`);
@@ -141,12 +140,11 @@ export const readOcrExport = async ({
         metadata: { fieldId, format },
       }),
   );
-  return new Response(bytes, {
-    headers: {
-      ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
-      "Content-Disposition": contentDisposition(fileName),
-      "Content-Length": String(bytes.byteLength),
-      "Content-Type": "text/plain; charset=utf-8",
-    },
+  return secureDocumentResponse({
+    body: bytes,
+    contentLength: bytes.byteLength,
+    contentType: "text/plain; charset=utf-8",
+    disposition: "attachment",
+    fileName,
   });
 };

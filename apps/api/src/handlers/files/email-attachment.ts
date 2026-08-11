@@ -8,14 +8,13 @@ import type {
   SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { contentDisposition } from "@/api/lib/content-disposition";
 import { tSafeId } from "@/api/lib/custom-schema";
 import {
   isEmailAttachmentPreviewable,
   resolveEmailAttachmentMimeType,
 } from "@/api/lib/files/email-to-html";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
-import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
+import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 
 import {
   EMAIL_ATTACHMENT_LOAD_STATUS,
@@ -105,10 +104,6 @@ export default createSafeHandler(
       mimeType: attachmentMimeType,
     });
     const fileName = sanitizeFilename(attachment.fileName);
-    const safeDisposition = contentDisposition(
-      fileName,
-      disposition === "download" ? "attachment" : "inline",
-    );
     if (disposition === "download") {
       yield* Result.await(
         Result.tryPromise(
@@ -131,13 +126,12 @@ export default createSafeHandler(
       );
     }
     return Result.ok(
-      new Response(new Uint8Array(responseBytes), {
-        headers: {
-          ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
-          "Content-Disposition": safeDisposition,
-          "Content-Length": String(responseBytes.byteLength),
-          "Content-Type": mimeType,
-        },
+      secureDocumentResponse({
+        body: new Uint8Array(responseBytes),
+        contentLength: responseBytes.byteLength,
+        contentType: mimeType,
+        disposition: disposition === "download" ? "attachment" : "inline",
+        fileName,
       }),
     );
   },

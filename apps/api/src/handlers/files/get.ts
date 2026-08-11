@@ -10,7 +10,6 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import type { SafeId } from "@/api/lib/branded-types";
-import { contentDisposition } from "@/api/lib/content-disposition";
 import { injectStamp, isStampableDocx } from "@/api/lib/docx-stamp";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import { createEmailAttachmentDescriptor } from "@/api/lib/files/email-attachment-token";
@@ -26,7 +25,11 @@ import {
 import { createFileKey } from "@/api/lib/files/utils";
 import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import { presignDownloadUrl } from "@/api/lib/s3-presign";
-import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import {
+  parseContentLengthHeader,
+  secureDocumentResponse,
+} from "@/api/lib/secure-document-response";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const FILE_READ_URL_EXPIRY_SECONDS = 15 * 60;
@@ -315,9 +318,6 @@ const pdfFileName = (fileName: string): string => {
   return `${fileName.slice(0, dotIndex)}.pdf`;
 };
 
-const inlineContentDisposition = (fileName: string): string =>
-  contentDisposition(fileName, "inline");
-
 const fetchStoredFileResponse = async (
   key: string,
 ): Promise<Response | null> => {
@@ -346,26 +346,26 @@ const fetchStoredFile = async (key: string): Promise<ArrayBuffer | null> => {
 };
 
 const pdfResponse = (buffer: ArrayBuffer, fileName: string) =>
-  new Response(buffer, {
-    headers: {
-      ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
-      "Content-Type": PDF_MIME_TYPE,
-      "Content-Disposition": inlineContentDisposition(fileName),
-      "Content-Length": String(buffer.byteLength),
-    },
+  secureDocumentResponse({
+    body: buffer,
+    contentLength: buffer.byteLength,
+    contentType: PDF_MIME_TYPE,
+    disposition: "inline",
+    fileName: sanitizeFilename(fileName),
   });
 
-const streamedPdfResponse = (response: Response, fileName: string) =>
-  new Response(response.body, {
-    headers: {
-      ...(response.headers.has("Content-Length")
-        ? { "Content-Length": response.headers.get("Content-Length") ?? "" }
-        : {}),
-      ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
-      "Content-Type": PDF_MIME_TYPE,
-      "Content-Disposition": inlineContentDisposition(fileName),
-    },
+const streamedPdfResponse = (response: Response, fileName: string) => {
+  const contentLength = parseContentLengthHeader(
+    response.headers.get("Content-Length"),
+  );
+  return secureDocumentResponse({
+    body: response.body,
+    ...(contentLength === undefined ? {} : { contentLength }),
+    contentType: PDF_MIME_TYPE,
+    disposition: "inline",
+    fileName: sanitizeFilename(fileName),
   });
+};
 
 export const printPdfHandler = async ({
   scopedDb,
@@ -533,12 +533,11 @@ export const stampedDownloadHandler = async ({
       }),
   );
 
-  return new Response(stamped, {
-    headers: {
-      ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
-      "Content-Type": content.mimeType,
-      "Content-Disposition": contentDisposition(content.fileName),
-      "Content-Length": String(stamped.byteLength),
-    },
+  return secureDocumentResponse({
+    body: stamped,
+    contentLength: stamped.byteLength,
+    contentType: content.mimeType,
+    disposition: "attachment",
+    fileName: sanitizeFilename(content.fileName),
   });
 };

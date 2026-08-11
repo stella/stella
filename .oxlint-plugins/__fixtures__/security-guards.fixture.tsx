@@ -2,6 +2,9 @@
 
 // oxlint-disable-next-line security-guards/no-unscoped-user-query -- fixture: user import lacks organization membership scope
 import { user } from "@/api/db/auth-schema";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { secureDocumentResponse } from "@/api/lib/secure-document-response";
+// oxlint-disable-next-line security-guards/require-secure-document-response -- fixture: handlers must not assemble the document security policy manually
 import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
 
 declare const file: { name: string };
@@ -20,24 +23,18 @@ export const UnsafeLink = () => (
 );
 export const SafeLink = () => <a href={safeUrl}>Open</a>;
 
-// oxlint-disable-next-line security-guards/require-raw-document-security-headers -- fixture: privileged bytes omit the shared response policy
-export const unsafeDocumentResponse = new Response(bytes, {
-  headers: { "Content-Disposition": 'attachment; filename="unsafe.pdf"' },
-});
-export const safeDocumentResponse = new Response(bytes, {
-  headers: {
-    ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
-    "Content-Disposition": 'attachment; filename="safe.pdf"',
-  },
-});
-// oxlint-disable-next-line security-guards/require-raw-document-security-headers -- fixture: a later protected override defeats the shared response policy
-export const overriddenDocumentResponse = new Response(bytes, {
-  headers: {
-    ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
-    "Cache-Control": "public",
-    "Content-Disposition": 'attachment; filename="unsafe.pdf"',
-  },
+export const unsafeDocumentResponse =
+  // oxlint-disable-next-line security-guards/require-secure-document-response -- fixture: direct attachment Response bypasses the typed security boundary
+  new Response(bytes, {
+    headers: { "Content-Disposition": 'attachment; filename="unsafe.pdf"' },
+  });
+export const safeDocumentResponse = secureDocumentResponse({
+  body: bytes,
+  contentType: "application/pdf",
+  disposition: "attachment",
+  fileName: sanitizeFilename("safe.pdf"),
 });
 export const emptyResponse = new Response(null, { status: 404 });
 
 void user;
+void RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS;

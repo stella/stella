@@ -1034,6 +1034,17 @@ describe("returnsInlineFileResponse", () => {
     ).toBe(true);
   });
 
+  test("detects the canonical secure document response constructor", () => {
+    expect(
+      returnsInlineFileResponse(
+        "return Result.ok(secureDocumentResponse({ body }));",
+      ),
+    ).toBe(true);
+    expect(
+      returnsInlineFileResponse("return secureDocumentResponse({ body });"),
+    ).toBe(true);
+  });
+
   test("does not match a Response returned via an intermediate variable", () => {
     expect(returnsInlineFileResponse("return Result.ok(result);")).toBe(false);
   });
@@ -1071,17 +1082,31 @@ describe("scanFileResponseReturns", () => {
     expect(scan.staleFlags).toEqual([]);
   });
 
-  test("keeps a flagged variable-returned Response honest via the stale signal", () => {
-    // templates.fill-shaped: returns a Response via a helper, so the inline
-    // detector misses it, but it still constructs a Response, so not stale.
+  test("keeps a flagged secure constructor response non-stale", () => {
     const scan = scanFileResponseReturns({
       entries: [
         {
-          id: "templates.fill",
+          id: "templates.manifest",
+          source: "return secureDocumentResponse({ body });",
+        },
+      ],
+      flaggedIds: new Set(["templates.manifest"]),
+    });
+    expect(scan.violations).toEqual([]);
+    expect(scan.staleFlags).toEqual([]);
+  });
+
+  test("keeps a flagged variable-returned Response honest via the stale signal", () => {
+    // A legacy helper can return an intermediate Response that the inline
+    // detector misses; constructing that Response still keeps the flag honest.
+    const scan = scanFileResponseReturns({
+      entries: [
+        {
+          id: "legacy.export",
           source: "const r = new Response(pdf);\nreturn Result.ok(result);",
         },
       ],
-      flaggedIds: new Set(["templates.fill"]),
+      flaggedIds: new Set(["legacy.export"]),
     });
     expect(scan.violations).toEqual([]);
     expect(scan.staleFlags).toEqual([]);
