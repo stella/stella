@@ -114,6 +114,8 @@ describe("Austrian RIS adapter", () => {
     expect(adapter.language).toBe("de");
     expect(adapter.minRequestIntervalMs).toBe(5000);
     expect(adapter.maxSyncPages).toBe(1);
+    expect(adapter.reconciliation?.firstSlice).toBe("1925-04");
+    expect(adapter.reconciliation?.tipWindowDays).toBe(3);
   });
 
   it("uses inverse, lexicographically ordered UTC month slices", () => {
@@ -359,5 +361,96 @@ describe("Austrian RIS adapter", () => {
     });
     expect((await adapter.fetchPage("abc", {})).isErr()).toBe(true);
     expect((await adapter.fetchPage("0", {})).isErr()).toBe(true);
+  });
+
+  it("lists reconciliation pages with the crawl's exact identity rule", async () => {
+    const unkeyable = listingItem(null);
+    const foreign = listingItem(SECOND_SOURCE_ID, "AUSL EKMR");
+    const { request, urls } = queuedRequest([
+      listingResponse([listingItem(), unkeyable, foreign], 3),
+    ]);
+    const delays: number[] = [];
+    const adapter = createAtCourtsAdapter({
+      now: () => new Date("2026-02-01T00:00:00Z"),
+      request,
+      sleep: async (delay) => {
+        delays.push(delay);
+      },
+    });
+    const reconciliation = adapter.reconciliation;
+    if (reconciliation === undefined) {
+      throw new Error("at-courts must declare reconciliation");
+    }
+
+    const listed = await reconciliation.listSlicePage({
+      slice: "2026-01",
+      page: 0,
+    });
+
+    expect(listed.totalPages).toBe(1);
+    expect(listed.items).toHaveLength(2);
+    expect(listed.items[0]?.identity).toEqual({
+      type: "document",
+      sourceDocumentId: SOURCE_ID,
+    });
+    expect(listed.items[1]?.identity).toEqual({
+      type: "document",
+      sourceDocumentId: expect.stringMatching(/^ris-quarantine:[a-f0-9]+$/u),
+    });
+    expect(delays).toEqual([5000]);
+    expect(new URL(urls[0] ?? "").searchParams.get("Seitennummer")).toBe("1");
+    expect(
+      new URL(urls[0] ?? "").searchParams.get("EntscheidungsdatumVon"),
+    ).toBe("2026-01-01");
+  });
+
+  it("builds reconciliation detail but never stores a hollow listing", async () => {
+    const xml = await fixtureXml();
+    const { request } = queuedRequest([
+      new Response(xml),
+      new Response(null, { status: 404 }),
+    ]);
+    const adapter = createAtCourtsAdapter({
+      request,
+      sleep: async () => {},
+    });
+    const reconciliation = adapter.reconciliation;
+    if (reconciliation === undefined) {
+      throw new Error("at-courts must declare reconciliation");
+    }
+
+    const built = await reconciliation.buildDecision(listingItem());
+    expect(built.type).toBe("built");
+    if (built.type === "built") {
+      expect(built.decision.sourceDocumentId).toBe(SOURCE_ID);
+      expect(built.decision.isListingOnly).not.toBe(true);
+    }
+    expect(
+      await reconciliation.buildDecision(listingItem(SECOND_SOURCE_ID)),
+    ).toEqual({ type: "detail-unavailable" });
+    expect(await reconciliation.buildDecision(listingItem(null))).toEqual({
+      type: "detail-unavailable",
+    });
+    expect(await reconciliation.buildDecision({ status: "stale" })).toEqual({
+      type: "unkeyable",
+    });
+  });
+
+  it("walks reconciliation months within the immutable tip", () => {
+    const adapter = createAtCourtsAdapter({
+      now: () => new Date("2026-02-15T12:00:00Z"),
+    });
+    const reconciliation = adapter.reconciliation;
+    if (reconciliation === undefined) {
+      throw new Error("at-courts must declare reconciliation");
+    }
+
+    expect(reconciliation.sliceOf(new Date("2026-02-15T12:00:00Z"))).toBe(
+      "2026-01",
+    );
+    expect(reconciliation.nextSlice("2025-12")).toBe("2026-01");
+    expect(reconciliation.nextSlice("2026-01")).toBeNull();
+    expect(reconciliation.previousSlice("2026-01")).toBe("2025-12");
+    expect(reconciliation.previousSlice(reconciliation.firstSlice)).toBeNull();
   });
 });

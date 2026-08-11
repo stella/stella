@@ -15,6 +15,9 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   IngestionResult,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
   SourceAdapter,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
@@ -39,6 +42,7 @@ const REQUEST_INTERVAL_MS = 5000;
 const MIN_DOCUMENT_LENGTH = 100;
 const START_DIGEST = "start";
 const FOREIGN_ORGAN_PREFIX = "AUSL";
+const TIP_WINDOW_MONTHS = 3;
 
 const CURSOR_PHASE = {
   COLLECT: "collect",
@@ -359,7 +363,8 @@ const parseListingPage = (value: unknown): RisListingPage | undefined => {
     pageNumber < 1 ||
     pageSize === undefined ||
     pageSize < 1 ||
-    items === undefined
+    items === undefined ||
+    items.some((item) => nestedRecord(item, "Data", "Metadaten") === undefined)
   ) {
     return undefined;
   }
@@ -785,6 +790,84 @@ const restartSliceCursor = (slice: string): CrawlCursor => ({
   ...cursorForSlice(slice),
 });
 
+const listReconciliationSlicePage = async (
+  dependencies: RisDependencies,
+  { slice, page, signal }: ReconciliationSlicePageOptions,
+): Promise<ReconciliationSlicePage> => {
+  if (
+    monthParts(slice) === undefined ||
+    slice < FIRST_SLICE ||
+    slice > atRisLastCompleteMonth(dependencies.now()) ||
+    !Number.isSafeInteger(page) ||
+    page < 0
+  ) {
+    throw new AdapterFetchError({
+      message: `Invalid RIS reconciliation page: ${slice}/${page}`,
+      adapterKey: ADAPTER_KEYS.AT_COURTS,
+      cursor: slice,
+    });
+  }
+  await dependencies.sleep(REQUEST_INTERVAL_MS);
+  const listing = await fetchListing({
+    cursor: `reconciliation:${slice}:${page}`,
+    dependencies,
+    page: page + 1,
+    signal,
+    slice,
+  });
+  return {
+    items: listing.items
+      .filter((item) => !isForeignItem(item))
+      .map((item) => ({
+        identity: {
+          type: "document",
+          sourceDocumentId: identityOf(item).sourceDocumentId,
+        },
+        payload: item,
+      })),
+    totalPages: listing.total === 0 ? 0 : Math.ceil(listing.total / PAGE_SIZE),
+  };
+};
+
+const buildReconciliationDecision = async (
+  dependencies: RisDependencies,
+  payload: unknown,
+  signal?: AbortSignal,
+): Promise<ReconciliationBuildOutcome> => {
+  if (
+    !isRecord(payload) ||
+    nestedRecord(payload, "Data", "Metadaten") === undefined
+  ) {
+    return { type: "unkeyable" };
+  }
+  const identity = identityOf(payload);
+  if (identity.type === "quarantine") {
+    return { type: "detail-unavailable" };
+  }
+  const decision = await buildDecision({
+    cursor: null,
+    dependencies,
+    item: payload,
+    signal,
+  });
+  if (decision.isListingOnly !== true) {
+    return { type: "built", decision };
+  }
+  const detailStatus = decision.metadata["detailStatus"];
+  if (
+    detailStatus === "xml-not-listed" ||
+    detailStatus === "detail-http-404" ||
+    detailStatus === "detail-http-410"
+  ) {
+    return { type: "detail-unavailable" };
+  }
+  throw new AdapterFetchError({
+    message: `RIS reconciliation could not build detail: ${String(detailStatus)}`,
+    adapterKey: ADAPTER_KEYS.AT_COURTS,
+    cursor: null,
+  });
+};
+
 const createAdapter = (dependencies: RisDependencies): SourceAdapter =>
   defineSourceAdapter({
     key: ADAPTER_KEYS.AT_COURTS,
@@ -795,6 +878,25 @@ const createAdapter = (dependencies: RisDependencies): SourceAdapter =>
     pageTimeoutMs: 15 * 60_000,
     maxCycleMs: 20 * 60_000,
     maxSyncPages: 1,
+
+    reconciliation: {
+      firstSlice: FIRST_SLICE,
+      sliceOf: (now) => atRisLastCompleteMonth(now),
+      nextSlice: (slice) => {
+        const next = atRisNextMonth(slice);
+        return next !== null &&
+          next <= atRisLastCompleteMonth(dependencies.now())
+          ? next
+          : null;
+      },
+      previousSlice: atRisPreviousMonth,
+      // The engine's legacy field counts opaque slices; RIS slices are months.
+      tipWindowDays: TIP_WINDOW_MONTHS,
+      listSlicePage: async (options) =>
+        await listReconciliationSlicePage(dependencies, options),
+      buildDecision: async (payload, signal) =>
+        await buildReconciliationDecision(dependencies, payload, signal),
+    },
 
     async getTotalCount(signal) {
       try {
