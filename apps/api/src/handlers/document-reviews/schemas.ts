@@ -68,3 +68,19 @@ export const compareReferencesBodySchema = t.Object({
     maxItems: DOCUMENT_REVIEW_LIMITS.topicsMax,
   }),
 });
+
+// A run's basis is a playbook, a set of references, or both, so `references`
+// may be empty here where the synchronous comparison endpoint requires one.
+// The handler rejects the empty basis with the reason, rather than the schema
+// rejecting it as a shape error.
+export const createDocumentReviewRunBodySchema = t.Object({
+  target: documentReviewRefSchema,
+  playbookId: t.Optional(tSafeId("playbookDefinition")),
+  references: t.Array(documentReviewRefSchema, {
+    maxItems: DOCUMENT_REVIEW_LIMITS.referencesMax,
+  }),
+  topics: t.Array(documentReviewTopicSchema, {
+    minItems: 1,
+    maxItems: DOCUMENT_REVIEW_LIMITS.topicsMax,
+  }),
+});

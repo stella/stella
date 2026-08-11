@@ -105,6 +105,7 @@ import {
 import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied";
 import { detached } from "@/api/lib/detached";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
+import { initDocumentReviewRunWorker } from "@/api/lib/document-review/run-queue";
 import { initEntityDeletionCleanupWorker } from "@/api/lib/entity-deletion-cleanup-queue";
 import { httpError } from "@/api/lib/errors/http-error";
 import { errorFingerprint, errorTag } from "@/api/lib/errors/utils";
@@ -671,6 +672,9 @@ const startServer = async (): Promise<void> => {
   // BullMQ worker for queued view→report exports.
   const reportExportWorker = initReportExportWorker();
 
+  // BullMQ worker for durable document review runs.
+  const documentReviewRunWorker = initDocumentReviewRunWorker();
+
   api.listen({
     port: getApiPort(),
     // Longer than the load balancer's 60 s idle timeout (Bun defaults to
@@ -724,6 +728,7 @@ const startServer = async (): Promise<void> => {
         entityDeletionCleanupWorker.close(),
         styleSetPackageCleanupWorker.close(),
         reportExportWorker.close(),
+        documentReviewRunWorker.close(),
       ]),
       Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),
     ]);

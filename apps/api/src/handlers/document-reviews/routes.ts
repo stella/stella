@@ -1,8 +1,11 @@
 import Elysia from "elysia";
 
 import compareReferences from "@/api/handlers/document-reviews/compare-references";
+import createDocumentReviewRun from "@/api/handlers/document-reviews/create-run";
+import listDocumentReviewRuns from "@/api/handlers/document-reviews/list-runs";
 import listDocumentReviewSources from "@/api/handlers/document-reviews/list-sources";
 import proposeTopics from "@/api/handlers/document-reviews/propose-topics";
+import readDocumentReviewRun from "@/api/handlers/document-reviews/read-run";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 
 export const documentReviewsRoute = new Elysia({
@@ -22,4 +25,18 @@ export const documentReviewsRoute = new Elysia({
   .post("/topics", proposeTopics.handler, {
     body: proposeTopics.config.body,
     permissions: proposeTopics.config.permissions,
+  })
+  .post("/runs", createDocumentReviewRun.handler, {
+    body: createDocumentReviewRun.config.body,
+    params: createDocumentReviewRun.config.params,
+    permissions: createDocumentReviewRun.config.permissions,
+  })
+  .get("/runs", listDocumentReviewRuns.handler, {
+    params: listDocumentReviewRuns.config.params,
+    permissions: listDocumentReviewRuns.config.permissions,
+    query: listDocumentReviewRuns.config.query,
+  })
+  .get("/runs/:runId", readDocumentReviewRun.handler, {
+    params: readDocumentReviewRun.config.params,
+    permissions: readDocumentReviewRun.config.permissions,
   });

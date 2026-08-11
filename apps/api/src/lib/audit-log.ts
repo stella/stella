@@ -49,6 +49,7 @@ export const AUDIT_RESOURCE_TYPE = {
   USAGE_ENTITLEMENT: "usage_entitlement",
   USAGE_EVENT: "usage_event",
   DESKTOP_EDIT_SESSION: "desktop_edit_session",
+  DOCUMENT_REVIEW_RUN: "document_review_run",
   ENTITY: "entity",
   ENTITY_VERSION: "entity_version",
   EXPENSE: "expense",
@@ -269,6 +270,7 @@ const activityCategoryForEvent = (event: AuditEvent): AuditActivityCategory => {
       return "team";
     case "case_law_matter_link":
       return "court";
+    case "document_review_run":
     case "flow_run":
       return "automation";
     case "playbook":
