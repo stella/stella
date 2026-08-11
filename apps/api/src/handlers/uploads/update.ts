@@ -28,13 +28,13 @@ import type { PendingUploadFinalizedResult } from "@/api/db/schema";
 import { finalizeAgentSkill } from "@/api/handlers/uploads/agent-skill";
 import { finalizeEntityVersion } from "@/api/handlers/uploads/entity-version";
 import {
-  authorizeUploadPurpose,
-  uploadRoutePermission,
-} from "@/api/handlers/uploads/permissions";
-import {
   captureOutlookIngestion,
   outlookIngestionDiagnosticSchema,
 } from "@/api/handlers/uploads/outlook-ingestion-diagnostics";
+import {
+  authorizeUploadPurpose,
+  uploadRoutePermission,
+} from "@/api/handlers/uploads/permissions";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -354,9 +354,7 @@ const finalizeUpload = createSafeHandler(
       }
       capture(
         terminalStatus,
-        terminalStatus === "failed"
-          ? "retryable_failure"
-          : "terminal_failure",
+        terminalStatus === "failed" ? "retryable_failure" : "terminal_failure",
         terminalStatus === "failed" ? "finalize" : "none",
       );
       return Result.err(

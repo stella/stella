@@ -16,13 +16,13 @@ import { t } from "elysia";
 
 import { pendingUploads } from "@/api/db/schema";
 import {
-  authorizeUploadPurpose,
-  uploadRoutePermission,
-} from "@/api/handlers/uploads/permissions";
-import {
   captureOutlookIngestion,
   outlookIngestionDiagnosticSchema,
 } from "@/api/handlers/uploads/outlook-ingestion-diagnostics";
+import {
+  authorizeUploadPurpose,
+  uploadRoutePermission,
+} from "@/api/handlers/uploads/permissions";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
