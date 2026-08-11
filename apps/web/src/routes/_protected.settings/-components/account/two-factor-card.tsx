@@ -35,7 +35,7 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { SecretInput } from "@/components/secret-input";
-import { useAnalytics } from "@/lib/analytics/provider";
+import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import {
   authClient,
@@ -236,7 +236,8 @@ const BackupCodesList = ({ codes }: { codes: readonly string[] }) => {
     try {
       await navigator.clipboard.writeText(codes.join("\n"));
       stellaToast.add({ title: t("common.copied"), type: "success" });
-    } catch {
+    } catch (error) {
+      getAnalytics().captureError(error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
     }
   };

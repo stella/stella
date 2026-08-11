@@ -589,6 +589,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-detached-void.ts",
     "./.oxlint-plugins/no-broad-translation-callable.ts",
     "./.oxlint-plugins/no-partial-record-satisfies.ts",
+    "./.oxlint-plugins/require-toast-error-capture.ts",
   ],
 
   overrides: [
@@ -1040,6 +1041,19 @@ export default defineConfig({
       ],
       rules: {
         "no-detached-void/no-detached-void": "off",
+      },
+    },
+    {
+      // Error toasts: scoped to apps/web, the only surface that raises
+      // `stellaToast`. A handler that shows an error toast without binding
+      // and capturing the caught error surfaces the failure to one user and
+      // to nobody else.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/require-toast-error-capture.fixture.ts",
+      ],
+      rules: {
+        "require-toast-error-capture/require-toast-error-capture": "error",
       },
     },
     {

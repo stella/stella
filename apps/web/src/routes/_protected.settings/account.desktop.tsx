@@ -11,6 +11,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { env } from "@/env";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { connectSelfHostedDesktop } from "@/lib/desktop-bridge";
 import {
   detectDesktopPlatform,
@@ -56,7 +57,8 @@ function DesktopPage() {
         title: t("common.done"),
         type: "success",
       });
-    } catch {
+    } catch (error) {
+      getAnalytics().captureError(error);
       setSelfHostConnectStatus("error");
       stellaToast.add({
         title: t("errors.actionFailed"),

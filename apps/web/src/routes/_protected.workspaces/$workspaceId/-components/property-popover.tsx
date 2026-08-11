@@ -24,6 +24,7 @@ import { PropertyPopoverTrigger } from "@/components/workspaces/properties/share
 import { SortProperty } from "@/components/workspaces/properties/sort-property";
 import { toSortHint } from "@/components/workspaces/property-utils";
 import type { TableHeader } from "@/components/workspaces/table/types";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
@@ -231,7 +232,8 @@ export const PropertyPopover = ({
           tool: { ...tool, dependencies: nextDependencies },
         });
         detached(startWorkflow(), "replaceDependency");
-      } catch {
+      } catch (error) {
+        getAnalytics().captureError(error);
         stellaToast.add({
           title: t("errors.actionFailed"),
           type: "error",

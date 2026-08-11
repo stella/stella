@@ -18,6 +18,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import {
   formatShortcutBinding,
@@ -159,7 +160,7 @@ const RebindableBinding = ({
 }: RebindableBindingProps) => {
   const t = useTranslations();
   const [pending, setPending] = useState<Hotkey | null>(null);
-  const [error, setError] = useState<RebindError | null>(null);
+  const [rebindError, setRebindError] = useState<RebindError | null>(null);
   const [isBusy, setIsBusy] = useState(false);
 
   const recorder = useHotkeyRecorder({
@@ -172,7 +173,7 @@ const RebindableBinding = ({
   const preview = pending ?? recorder.recordedHotkey;
 
   const startEdit = () => {
-    setError(null);
+    setRebindError(null);
     setPending(null);
     recorder.startRecording();
   };
@@ -180,7 +181,7 @@ const RebindableBinding = ({
   const cancelEdit = () => {
     recorder.cancelRecording();
     setPending(null);
-    setError(null);
+    setRebindError(null);
   };
 
   const save = async () => {
@@ -188,15 +189,16 @@ const RebindableBinding = ({
       return;
     }
     setIsBusy(true);
-    setError(null);
+    setRebindError(null);
     try {
       const rejection = await onRebind(id, pending);
       if (rejection) {
-        setError(rejection);
+        setRebindError(rejection);
         return;
       }
       setPending(null);
-    } catch {
+    } catch (error) {
+      getAnalytics().captureError(error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
     } finally {
       setIsBusy(false);
@@ -207,7 +209,8 @@ const RebindableBinding = ({
     setIsBusy(true);
     try {
       await onReset(id);
-    } catch {
+    } catch (error) {
+      getAnalytics().captureError(error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
     } finally {
       setIsBusy(false);
@@ -215,20 +218,20 @@ const RebindableBinding = ({
   };
 
   const errorText = (() => {
-    if (!error) {
+    if (!rebindError) {
       return null;
     }
-    switch (error.type) {
+    switch (rebindError.type) {
       case "collision":
         return t("navigation.shortcutsDialog.collision", {
-          label: t(error.conflictLabelKey),
+          label: t(rebindError.conflictLabelKey),
         });
       case "invalidBinding":
         return t("navigation.shortcutsDialog.invalidBinding");
       case "notRebindable":
         return t("navigation.shortcutsDialog.notRebindable");
       default: {
-        const _exhaustive: never = error;
+        const _exhaustive: never = rebindError;
         return _exhaustive;
       }
     }

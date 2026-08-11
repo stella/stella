@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { getAnalytics } from "@/lib/analytics/provider";
 import type { OpenFileInDesktopResult } from "@/lib/desktop-bridge";
 import { DesktopBridgeIncompatibleError } from "@/lib/desktop-bridge";
 
@@ -46,6 +47,7 @@ export const showDesktopEditOpenResultToast = async ({
       type: "success",
     });
   } catch (error) {
+    getAnalytics().captureError(error);
     if (error instanceof DesktopBridgeIncompatibleError) {
       stellaToast.update(toastId, {
         description: messages.updateRequiredDescription,

@@ -38,6 +38,7 @@ import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header"
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -719,7 +720,8 @@ export const ExternalReferencePanel = ({
     try {
       await navigator.clipboard.writeText(confirmHref);
       stellaToast.success(t("common.copied"));
-    } catch {
+    } catch (error) {
+      getAnalytics().captureError(error);
       stellaToast.error(t("common.error"));
     }
   }, [confirmHref, t]);

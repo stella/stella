@@ -13,6 +13,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useLocale } from "@/i18n/formatting-context";
 import { getFirstWeekday, getWeekendDays } from "@/i18n/week";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
@@ -441,7 +442,8 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
             if (response.error) {
               throw toAPIError(response.error);
             }
-          } catch {
+          } catch (error) {
+            getAnalytics().captureError(error);
             stellaToast.add({
               title: t("errors.actionFailed"),
               type: "error",
@@ -466,7 +468,8 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
             if (response.error) {
               throw toAPIError(response.error);
             }
-          } catch {
+          } catch (error) {
+            getAnalytics().captureError(error);
             stellaToast.add({
               title: t("errors.actionFailed"),
               type: "error",

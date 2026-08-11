@@ -382,6 +382,7 @@ export const AnonymizationFacet = ({
         type: "success",
       });
     } catch (error) {
+      analytics.captureError(error);
       stellaToast.add({
         title: userErrorFromThrown(error, t("errors.actionFailed")),
         type: "error",

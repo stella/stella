@@ -72,6 +72,7 @@ import { EmptyScreen } from "@/components/empty-screen";
 import { TableSkeletonRows } from "@/components/table-skeleton-rows";
 import Tooltip from "@/components/tooltip";
 import { usePermissions } from "@/hooks/use-permissions";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useCreateContact, useDeleteContact } from "@/lib/contacts/mutations";
 import { contactsKeys, contactsOptions } from "@/lib/contacts/queries";
@@ -768,6 +769,7 @@ const CreateContactDialog = ({
         type: "success",
       });
     } catch (error) {
+      getAnalytics().captureError(error);
       stellaToast.add({
         title: userErrorFromThrown(error, t("errors.actionFailed")),
         type: "error",

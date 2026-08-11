@@ -214,7 +214,7 @@ const focusHeading = (heading: HTMLHeadingElement | null) => {
 
 const UnexpectedRouteError = ({
   className,
-  error,
+  error: routeError,
   isPending,
   retry,
 }: UnexpectedRouteErrorProps) => {
@@ -243,17 +243,18 @@ const UnexpectedRouteError = ({
   }
 
   useExternalSyncEffect(() => {
-    analytics.captureError(error, {
+    analytics.captureError(routeError, {
       type: "recovery",
       reference: errorReference,
     });
-  }, [analytics, error, errorReference]);
+  }, [analytics, routeError, errorReference]);
 
   const handleCopyReference = async () => {
     try {
       await navigator.clipboard.writeText(errorReference);
       stellaToast.add({ title: t("common.copied"), type: "success" });
-    } catch {
+    } catch (error) {
+      analytics.captureError(error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
     }
   };
@@ -269,7 +270,7 @@ const UnexpectedRouteError = ({
 
   const handleRecovery = () => {
     recoverRouteError({
-      error,
+      error: routeError,
       reloadPage: () => window.location.reload(),
       retryRoute: retry,
     });

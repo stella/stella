@@ -452,6 +452,7 @@ export const RowActions = ({
       const openResult = await openFileInDesktop(desktopInput);
       await showDesktopOpenResult(openResult);
     } catch (error) {
+      analytics.captureError(error);
       if (error instanceof Error && isUnauthorizedError(error)) {
         stellaToast.add({
           description: t(
@@ -507,6 +508,7 @@ export const RowActions = ({
     try {
       await doForceTakeover();
     } catch (forceError) {
+      analytics.captureError(forceError);
       if (forceError instanceof Error && isUnauthorizedError(forceError)) {
         stellaToast.add({
           description: t(
@@ -560,6 +562,7 @@ export const RowActions = ({
         });
         return;
       } catch (error) {
+        analytics.captureError(error);
         stellaToast.add({
           description: userErrorFromThrown(error, t("common.unexpectedError")),
           title: t("errors.actionFailed"),

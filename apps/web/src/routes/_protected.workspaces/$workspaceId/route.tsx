@@ -117,6 +117,9 @@ const loadWorkspaceOrRedirect = async (
     );
   } catch (error) {
     if (APIError.is(error) && error.status === 404) {
+      // The redirect swallows this branch, so capture here; the rethrow
+      // below reaches the route error boundary, which captures already.
+      getAnalytics().captureError(error);
       const t = getTranslator();
       stellaToast.add({
         title: t("errors.matterNotFound"),

@@ -31,6 +31,7 @@ import {
   styleSetsKeys,
   stellaStyleEditorOptions,
 } from "@/features/style-sets/style-set-queries";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
@@ -220,6 +221,7 @@ const LoadedStyleSetEditor = ({
   const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     save().catch((error: unknown) => {
+      getAnalytics().captureError(error);
       setSaving(false);
       stellaToast.add({
         type: "error",

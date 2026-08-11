@@ -12,6 +12,7 @@ import {
 } from "@/hooks/external-file-drop.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { ClientOperationError } from "@/lib/errors/client";
 
 type ExternalFileDropOptions = {
@@ -110,6 +111,7 @@ export const useExternalFileDrop = ({
             return undefined;
           })
           .catch((error: unknown) => {
+            getAnalytics().captureError(error);
             const normalized =
               error instanceof Error
                 ? error

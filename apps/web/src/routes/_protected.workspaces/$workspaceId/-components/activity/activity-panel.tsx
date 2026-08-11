@@ -46,6 +46,7 @@ import Tooltip from "@/components/tooltip";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -234,6 +235,7 @@ const ActivityTimeline = ({
         return result;
       })
       .catch((error: unknown) => {
+        getAnalytics().captureError(error);
         stellaToast.add({
           description: userErrorFromThrown(error, t("common.unexpectedError")),
           title: t("errors.actionFailed"),
