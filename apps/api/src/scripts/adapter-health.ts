@@ -28,6 +28,11 @@ import {
   listAdapterKeys,
   loadAdapterByKey,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
+import { boundedAll } from "@/api/lib/db/bounded-all";
+import {
+  CASE_LAW_SOURCE_ROWS_BOUND,
+  CASE_LAW_SOURCE_ROWS_INVARIANT,
+} from "@/api/lib/legal-search/ingestion-constants";
 import type { SourceTotalCount } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -239,20 +244,25 @@ const getSourceTotals = async (): Promise<SourceTotal[]> => {
 
 // ── Queries ─────────────────────────────────────────────
 
-const getSources = () =>
-  rootDb
-    .select({
-      id: caseLawSources.id,
-      adapterKey: caseLawSources.adapterKey,
-      name: caseLawSources.name,
-      enabled: caseLawSources.enabled,
-      syncCursor: caseLawSources.syncCursor,
-      lastSyncAt: caseLawSources.lastSyncAt,
-    })
-    .from(caseLawSources)
-    // SAFETY: all configured case-law sources — a finite, code-defined adapter set; root-scoped maintenance script.
-    // eslint-disable-next-line require-query-limit/require-query-limit
-    .orderBy(caseLawSources.adapterKey);
+const getSources = async () =>
+  await boundedAll({
+    invariant: CASE_LAW_SOURCE_ROWS_INVARIANT,
+    max: CASE_LAW_SOURCE_ROWS_BOUND,
+    table: "case_law_sources",
+    query: (limit) =>
+      rootDb
+        .select({
+          id: caseLawSources.id,
+          adapterKey: caseLawSources.adapterKey,
+          name: caseLawSources.name,
+          enabled: caseLawSources.enabled,
+          syncCursor: caseLawSources.syncCursor,
+          lastSyncAt: caseLawSources.lastSyncAt,
+        })
+        .from(caseLawSources)
+        .orderBy(caseLawSources.adapterKey)
+        .limit(limit),
+  });
 
 const getDecisionCounts = () =>
   rootDb

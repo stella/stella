@@ -6,6 +6,8 @@ import { anonymizationAllowlistEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { boundedAll } from "@/api/lib/db/bounded-all";
+import { LIMITS } from "@/api/lib/limits";
 
 /**
  * Anonymization allowlist endpoints.
@@ -37,48 +39,66 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
+/**
+ * Every row this read can return carries the requested workspace id
+ * (workspace- and document-scoped rows alike), so the per-workspace
+ * create cap bounds the whole result. Org-wide rows have no write path
+ * yet; the endpoint that adds one must bring its own cap and widen
+ * this bound by it.
+ */
+const ALLOWLIST_READ_INVARIANT =
+  "LIMITS.anonymizationAllowlistEntriesPerWorkspace, enforced by the create endpoint; org-wide rows have no writer";
+
 const readWorkspaceAnonymizationAllowlist = createSafeHandler(
   config,
   async function* ({ query, safeDb, workspaceId }) {
     const entityId = query.entityId ?? null;
     const rows = yield* Result.await(
       safeDb((tx) =>
-        tx
-          .select({
-            id: anonymizationAllowlistEntries.id,
-            scope: anonymizationAllowlistEntries.workspaceId,
-            workspaceId: anonymizationAllowlistEntries.workspaceId,
-            entityId: anonymizationAllowlistEntries.entityId,
-            label: anonymizationAllowlistEntries.label,
-            canonical: anonymizationAllowlistEntries.canonical,
-            createdBy: anonymizationAllowlistEntries.createdBy,
-            createdAt: anonymizationAllowlistEntries.createdAt,
-          })
-          .from(anonymizationAllowlistEntries)
-          .where(
-            or(
-              // Org-wide
-              and(
-                isNull(anonymizationAllowlistEntries.workspaceId),
-                isNull(anonymizationAllowlistEntries.entityId),
-              ),
-              // Workspace-wide for the current workspace
-              and(
-                eq(anonymizationAllowlistEntries.workspaceId, workspaceId),
-                isNull(anonymizationAllowlistEntries.entityId),
-              ),
-              // Doc-scoped for the requested entity (only when entityId given)
-              entityId === null
-                ? undefined
-                : and(
-                    eq(anonymizationAllowlistEntries.workspaceId, workspaceId),
-                    eq(anonymizationAllowlistEntries.entityId, entityId),
+        boundedAll({
+          invariant: ALLOWLIST_READ_INVARIANT,
+          max: LIMITS.anonymizationAllowlistEntriesPerWorkspace,
+          table: "anonymization_allowlist_entries",
+          query: (limit) =>
+            tx
+              .select({
+                id: anonymizationAllowlistEntries.id,
+                scope: anonymizationAllowlistEntries.workspaceId,
+                workspaceId: anonymizationAllowlistEntries.workspaceId,
+                entityId: anonymizationAllowlistEntries.entityId,
+                label: anonymizationAllowlistEntries.label,
+                canonical: anonymizationAllowlistEntries.canonical,
+                createdBy: anonymizationAllowlistEntries.createdBy,
+                createdAt: anonymizationAllowlistEntries.createdAt,
+              })
+              .from(anonymizationAllowlistEntries)
+              .where(
+                or(
+                  // Org-wide
+                  and(
+                    isNull(anonymizationAllowlistEntries.workspaceId),
+                    isNull(anonymizationAllowlistEntries.entityId),
                   ),
-            ),
-          )
-          // SAFETY: anonymization allowlist (never-mask overrides) must load fully to avoid over-masking; the workspace + doc-scoped set is bounded by the per-workspace write cap (LIMITS.anonymizationAllowlistEntriesPerWorkspace) enforced in the create endpoint, and org-wide entries are not writable from this endpoint.
-          // eslint-disable-next-line require-query-limit/require-query-limit
-          .orderBy(asc(anonymizationAllowlistEntries.canonical)),
+                  // Workspace-wide for the current workspace
+                  and(
+                    eq(anonymizationAllowlistEntries.workspaceId, workspaceId),
+                    isNull(anonymizationAllowlistEntries.entityId),
+                  ),
+                  // Doc-scoped for the requested entity (only when entityId given)
+                  entityId === null
+                    ? undefined
+                    : and(
+                        eq(
+                          anonymizationAllowlistEntries.workspaceId,
+                          workspaceId,
+                        ),
+                        eq(anonymizationAllowlistEntries.entityId, entityId),
+                      ),
+                ),
+              )
+              .orderBy(asc(anonymizationAllowlistEntries.canonical))
+              .limit(limit),
+        }),
       ),
     );
     return Result.ok({ entries: rows });

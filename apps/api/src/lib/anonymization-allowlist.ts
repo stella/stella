@@ -3,6 +3,8 @@ import { and, eq, isNull, or } from "drizzle-orm";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { anonymizationAllowlistEntries } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { boundedAll } from "@/api/lib/db/bounded-all";
+import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 
 /**
@@ -61,15 +63,23 @@ export const loadAnonymizationAllowlistCanonicals = async ({
       );
 
   const rows = await scopedDb((tx) =>
-    tx
-      .select({ canonical: anonymizationAllowlistEntries.canonical })
-      .from(anonymizationAllowlistEntries)
-      .where(
-        and(
-          eq(anonymizationAllowlistEntries.organizationId, organizationId),
-          scopeMatch,
-        ),
-      ),
+    boundedAll({
+      invariant:
+        "LIMITS.anonymizationAllowlistEntriesPerWorkspace, enforced by the create endpoint; org-wide rows have no writer",
+      max: LIMITS.anonymizationAllowlistEntriesPerWorkspace,
+      table: "anonymization_allowlist_entries",
+      query: (limit) =>
+        tx
+          .select({ canonical: anonymizationAllowlistEntries.canonical })
+          .from(anonymizationAllowlistEntries)
+          .where(
+            and(
+              eq(anonymizationAllowlistEntries.organizationId, organizationId),
+              scopeMatch,
+            ),
+          )
+          .limit(limit),
+    }),
   );
 
   return rows.map((row) => row.canonical);

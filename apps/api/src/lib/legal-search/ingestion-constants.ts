@@ -14,6 +14,17 @@ export const ADAPTER_KEYS = {
 export type AdapterKey = (typeof ADAPTER_KEYS)[keyof typeof ADAPTER_KEYS];
 
 /**
+ * Bound for a complete `case_law_sources` read. Every source row names
+ * an adapter key and `case_law_sources_adapter_key_idx` makes that key
+ * unique, so the catalogue holds at most one row per registered
+ * adapter. Registering an adapter widens the bound on its own.
+ */
+export const CASE_LAW_SOURCE_ROWS_BOUND = Object.keys(ADAPTER_KEYS).length;
+
+export const CASE_LAW_SOURCE_ROWS_INVARIANT =
+  "one row per ADAPTER_KEYS entry, enforced by case_law_sources_adapter_key_idx";
+
+/**
  * Global parser version. Bump when ANY parser's AST output
  * changes. Stale decisions (parserVersion < PARSER_VERSION)
  * are re-parsed lazily from sourceRaw on next user access.
