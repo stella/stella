@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -118,7 +119,7 @@ describe("contact import request identity", () => {
   test("rejects a new request when its retry identity cannot be stored", async () => {
     const file = new Blob(["Name\nJane Doe"]);
 
-    await expect(
+    const result = await Result.tryPromise(() =>
       resolveContactImportRequest({
         file,
         mapping: MAPPING,
@@ -130,8 +131,11 @@ describe("contact import request identity", () => {
           },
         },
       }),
-    ).rejects.toMatchObject({
-      _tag: "ContactImportRequestPersistenceError",
+    );
+
+    expect(result).toMatchObject({
+      error: { _tag: "ContactImportRequestPersistenceError" },
+      status: "error",
     });
   });
 });
