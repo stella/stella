@@ -13,6 +13,13 @@ const { argv: destructuredArguments } = process;
 // oxlint-disable-next-line forbid-dev-runner-config-reads/forbid-dev-runner-config-reads, typescript/dot-notation -- fixture: raw config environment reads must stay in the parser module
 export const rawPortOffset = process.env["STELLA_PORT_OFFSET"];
 
+// MUST flag: every configured runner environment name stays behind the parser.
+// oxlint-disable-next-line forbid-dev-runner-config-reads/forbid-dev-runner-config-reads, typescript/dot-notation -- fixture: raw config environment reads must stay in the parser module
+export const rawInfraOffset = process.env["STELLA_INFRA_OFFSET"];
+
+// oxlint-disable-next-line forbid-dev-runner-config-reads/forbid-dev-runner-config-reads, typescript/dot-notation -- fixture: raw config environment reads must stay in the parser module
+export const rawDevInstance = process.env["STELLA_DEV_INSTANCE"];
+
 // MUST flag: destructured runner-specific environment values are also reads.
 // oxlint-disable-next-line forbid-dev-runner-config-reads/forbid-dev-runner-config-reads -- fixture: destructured config environment reads must stay in the parser module
 const { STELLA_PORT_OFFSET: destructuredPortOffset } = process.env;

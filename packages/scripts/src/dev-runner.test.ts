@@ -25,7 +25,11 @@ import {
   resolveOffset,
   shouldAutoOpenBrowser,
 } from "./dev-runner";
-import { parseDevRunnerConfig } from "./dev-runner-config";
+import {
+  MAX_INFRA_OFFSET,
+  MAX_PORT_OFFSET,
+  parseDevRunnerConfig,
+} from "./dev-runner-config";
 
 const tempDirs: string[] = [];
 
@@ -151,6 +155,30 @@ describe("parseDevRunnerConfig", () => {
       expect(result.error.source).toBe("numeric STELLA_DEV_INSTANCE");
     }
   });
+
+  test.each([
+    ["STELLA_PORT_OFFSET", "--port-offset", MAX_PORT_OFFSET],
+    ["STELLA_INFRA_OFFSET", "--infra-offset", MAX_INFRA_OFFSET],
+  ] as const)(
+    "rejects values above the %s maximum from both sources",
+    (environmentName, flag, maximum) => {
+      const value = String(maximum + 1);
+      for (const input of [
+        { args: [], environment: { [environmentName]: value } },
+        { args: [flag, value], environment: {} },
+      ]) {
+        const result = parseDevRunnerConfig(input);
+
+        expect(result.status).toBe("error");
+        if (result.status === "error") {
+          expect(result.error.code).toBe("out-of-range");
+          expect(result.error.source).toBe(
+            input.args.length === 0 ? environmentName : flag,
+          );
+        }
+      }
+    },
+  );
 });
 
 describe("resolveOffset", () => {
