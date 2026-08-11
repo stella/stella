@@ -1,4 +1,4 @@
-import { getOfficeRuntime } from "@/lib/office";
+import { getOfficeDialogApi, getOfficeRuntime } from "@/lib/office";
 import { OutlookError } from "@/lib/outlook-error";
 
 const HANDOFF_MESSAGE_TYPE = "stella:auth";
@@ -84,16 +84,11 @@ export const signInViaDialog = async ({
   taskpaneOrigin,
 }: SignInViaDialogOptions): Promise<string> => {
   const office = getOfficeRuntime();
-  if (!office) {
+  const ui = getOfficeDialogApi();
+  if (!office || !ui) {
     throw new OutlookError({
-      message: "Office dialog API is not available in this Outlook host.",
-    });
-  }
-
-  const ui = office.context.ui;
-  if (typeof Reflect.get(ui, "displayDialogAsync") !== "function") {
-    throw new OutlookError({
-      message: "Office dialog API is not available in this Outlook host.",
+      message:
+        "Sign-in dialogs are available only when the add-in is opened inside Outlook.",
     });
   }
 

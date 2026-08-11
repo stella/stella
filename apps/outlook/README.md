@@ -2,9 +2,8 @@
 
 Outlook task pane for the current message or compose draft. Standalone Bun
 package: no Vite layer, no React Router. The task pane authenticates against
-the stella API via a bearer token issued by better-auth's Microsoft OAuth
-provider; the token arrives through an Office Dialog handoff served by
-`apps/web`.
+the stella API via a bearer token issued by the existing stella sign-in flow;
+the token arrives through an Office Dialog handoff served by `apps/web`.
 
 ## Build flow
 
@@ -45,10 +44,9 @@ production build.
    bun run dev:web
    ```
 
-2. Sign in at `http://localhost:3000`. The Microsoft OAuth provider must
-   already be configured in better-auth (it is in production; locally you
-   may need `MICROSOFT_AUTH_CLIENT_ID` /
-   `MICROSOFT_AUTH_CLIENT_SECRET` env vars on the API).
+2. Sign in at `http://localhost:3000` with any method enabled by the local
+   stella deployment. Email OTP is the default development path; the API
+   prints the OTP to its log when no local SMTP service is running.
 
 3. Generate the localhost HTTPS cert (one-time):
 
@@ -75,13 +73,15 @@ production build.
    `apps/outlook/dist`, and proxies `/api` to `http://localhost:3001`.
 
 5. **Browser smoke test:** open `https://localhost:3002/taskpane.html`.
-   You should see a "Sign in with Microsoft" panel on first visit. The
-   panel opens the task-pane-origin `/dialog.html` bootstrap, which redirects
-   to `/sign-in-outlook` on the web app. The web app runs the OAuth round-trip,
-   including organization selection and two-factor authentication, then
-   delivers a bearer token back via `Office.context.ui.messageParent`. Both
-   sides validate the configured origin. The task pane keeps the token in
-   memory only, so a reload requires a new handoff.
+   You should see the signed-out task-pane surface. Office's Dialog API isn't
+   present in a standalone browser tab, so complete the sign-in handoff from
+   the sideloaded add-in in Outlook. The task pane opens its same-origin
+   `/dialog.html` bootstrap, which redirects signed-out users to stella's
+   normal sign-in screen. After sign-in, organization selection, and any
+   required two-factor challenge, `/sign-in-outlook` delivers a bearer token
+   through `Office.context.ui.messageParent`. Both sides validate the
+   configured origin. The task pane keeps the token in memory only, so a
+   reload requires a new handoff.
 
 6. **Outlook sideload:**
    - Open <https://aka.ms/olksideload>. Microsoft opens the current
@@ -98,7 +98,7 @@ production build.
 ┌────────────────┐       ┌─────────────────┐       ┌─────────────────────────┐
 │ Outlook iframe │       │ apps/outlook    │       │ apps/web                │
 │  (taskpane)    │       │  /dialog.html   │       │  /sign-in-outlook       │
-│                │ dialog│  same-origin    │redirect│  Microsoft OAuth        │
+│                │ dialog│  same-origin    │redirect│  configured sign-in     │
 │  ──────────────┼──────►│  bootstrap      ├──────►│  organization + 2FA     │
 │                │       └─────────────────┘       │  reads session.token    │
 │                │              messageParent     │                         │
@@ -108,10 +108,10 @@ production build.
 └────────────────┘
 ```
 
-No third-party cookies or separate Azure AD app are required. The Office Dialog
-starts on the task pane's origin, as required by Office, then navigates to the
-web origin where better-auth's existing Microsoft provider works as it does for
-any browser sign-in.
+No third-party cookies or Outlook-specific identity provider are required. The
+Office Dialog starts on the task pane's origin, as required by Office, then
+navigates to the web origin where the deployment's configured stella sign-in
+methods work as they do for browser sign-in.
 
 ## Production hosting
 

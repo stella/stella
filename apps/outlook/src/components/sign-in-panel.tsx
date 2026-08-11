@@ -27,7 +27,7 @@ export const SignInPanel = ({ onSignIn, signInState, t }: SignInPanelProps) => (
         {t("handoffSignInCta")}
       </Button>
       {signInState.type === "error" && (
-        <Notice title={t("saveFailed")} tone="risk">
+        <Notice title={t("signInFailed")} tone="risk">
           {signInState.message}
         </Notice>
       )}
