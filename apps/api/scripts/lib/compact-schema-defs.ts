@@ -243,7 +243,7 @@ const findReservedKeyword = (node: unknown): string | null => {
  * descriptions or enum values would be measured short.
  */
 const byteLengthOf = (value: string): number =>
-  Buffer.byteLength(value, "utf8");
+  Buffer.byteLength(value, "utf-8");
 
 /**
  * Net bytes saved by keeping `name` as a def rather than inlining it back.

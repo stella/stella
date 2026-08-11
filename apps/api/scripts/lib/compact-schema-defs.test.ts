@@ -193,7 +193,7 @@ describe("compactSchemaDefs", () => {
       },
     };
     expect(JSON.stringify(described).length).toBeLessThan(
-      Buffer.byteLength(JSON.stringify(described), "utf8"),
+      Buffer.byteLength(JSON.stringify(described), "utf-8"),
     );
 
     const result = compactSchemaDefs(source);
