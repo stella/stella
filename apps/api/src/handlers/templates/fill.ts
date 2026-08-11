@@ -430,6 +430,19 @@ const config = {
   permissions: { template: ["use"] },
   access: "write",
   mcp: { type: "tool", name: "fill_template" },
+  transport: {
+    type: "file-both",
+    input: { field: "file", required: true, mediaTypes: [DOCX_MIME_TYPE] },
+    // Octet-stream on the wire regardless of the rendered format; see
+    // OCTET_STREAM_MIME_TYPE.
+    response: { mediaTypes: [OCTET_STREAM_MIME_TYPE] },
+    alternative: {
+      type: "partial",
+      via: ["templates.fill-to-workspace"],
+      limitation:
+        "the template must already be stored, and the filled document lands in a matter instead of coming back as bytes",
+    },
+  },
   body: fillBodySchema,
   query: fillQuerySchema,
 } satisfies HandlerConfig;

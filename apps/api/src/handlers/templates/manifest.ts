@@ -116,6 +116,16 @@ const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   access: "read",
+  transport: {
+    type: "file-both",
+    input: { field: "file", required: true, mediaTypes: [DOCX_MIME_TYPE] },
+    response: { mediaTypes: [DOCX_MIME_TYPE] },
+    alternative: {
+      type: "none",
+      reason:
+        "it embeds a manifest into the supplied DOCX and returns the rewritten DOCX; both legs are bytes",
+    },
+  },
   body: manifestBodySchema,
 } satisfies HandlerConfig;
 

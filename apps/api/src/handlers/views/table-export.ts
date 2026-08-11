@@ -181,6 +181,17 @@ const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   access: "read",
+  transport: {
+    type: "file-response",
+    response: {
+      mediaTypes: ["text/csv; charset=utf-8", XLSX_MIME_TYPE, DOCX_MIME_TYPE],
+    },
+    alternative: {
+      type: "none",
+      reason:
+        "no capability returns a view's rendered row set; views.list describes the view, not its rows",
+    },
+  },
   params: workspaceParams({ viewId: tSafeId("workspaceView") }),
   query: t.Object({
     format: t.Union([t.Literal("csv"), t.Literal("xlsx"), t.Literal("docx")]),

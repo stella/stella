@@ -5,9 +5,11 @@
 //
 // Every non-suppressed catalog entry becomes a
 // `stella capability <domain> <action>` leaf
-// whose executor calls the generic `invoke_capability` tool. Entries with
-// `requiresFileInput`/`returnsFileResponse` are suppressed (they can never
-// succeed through the JSON generic path) but stay reachable via
+// whose executor calls the generic `invoke_capability` tool. Suppression is
+// decided by the entry's `transport` disposition, not by a pair of booleans: a
+// file response or a REQUIRED file input can never succeed over the JSON generic
+// path, while an OPTIONAL file input leaves a fileless mode that is generated
+// with the file field withheld. Suppressed entries stay reachable via
 // `stella capability describe` for discovery. Keeping every generic capability
 // below one namespace makes it impossible for a future catalog domain to
 // recreate a parallel root command group beside the curated CLI.
@@ -36,6 +38,21 @@ import {
   type ToolScope,
 } from "./route-types.js";
 
+/**
+ * The catalog's transport disposition, mirrored here because `@stll/cli` never
+ * imports `apps/api`. The API-side definition
+ * (`apps/api/src/lib/capability-transport.ts`) is the source of truth; this copy
+ * cannot drift silently because the exporter validates its generated catalog
+ * through `parseCapabilityCatalog` (below) and then asserts, in both directions,
+ * that the leaves `insertCapabilities` emits are exactly the entries the
+ * API-side predicate calls invocable.
+ */
+export type CapabilityTransport =
+  | { type: "json" }
+  | { type: "file-input"; input: { field: string; required: boolean } }
+  | { type: "file-response" }
+  | { type: "file-both"; input: { field: string; required: boolean } };
+
 /** The catalog entry fields the CLI codegen consumes (a subset of the export). */
 export type CapabilityCatalogEntry = {
   id: string;
@@ -46,8 +63,7 @@ export type CapabilityCatalogEntry = {
   destructive: boolean;
   scope: string;
   additionalScopes?: readonly string[];
-  requiresFileInput?: boolean;
-  returnsFileResponse?: boolean;
+  transport: CapabilityTransport;
   /**
    * The handler's input schema as the catalog carries it: `$defs`-compacted.
    * Flag derivation works on the expanded form; the emitted leaf keeps the
@@ -68,10 +84,49 @@ type ExpandedInputSchema = {
   query?: JsonSchema;
 };
 
+/**
+ * Whether the generic JSON transport can run this capability at all. Mirrors
+ * `isTransportInvocable` in `apps/api/src/lib/capability-transport.ts`; the
+ * exporter fails if the two ever disagree.
+ */
+export const isTransportInvocable = (
+  transport: CapabilityTransport,
+): boolean => {
+  switch (transport.type) {
+    case "json":
+      return true;
+    case "file-input":
+      return !transport.input.required;
+    case "file-response":
+    case "file-both":
+      return false;
+    default: {
+      const exhaustive: never = transport;
+      return exhaustive;
+    }
+  }
+};
+
+/**
+ * The file field a JSON caller must omit on an invocable capability, or
+ * `undefined` when there is none. Withheld from the generated flags and from the
+ * `--input` wrapper schema: a `format: "binary"` prop would otherwise become a
+ * plain `--file <string>` flag that passes validation and reaches a handler
+ * expecting a `File`.
+ */
+export const filelessOnlyField = (
+  transport: CapabilityTransport,
+): string | undefined => {
+  if (transport.type !== "file-input" || transport.input.required) {
+    return undefined;
+  }
+  return transport.input.field;
+};
+
 /** Stats surfaced by the codegen log line (spec 049 deliverable 2). */
 export type CapabilityTreeStats = {
   generated: number;
-  /** Entries suppressed for file input/output (unreachable through generic invoke). */
+  /** Entries whose transport suppresses them (unreachable through generic invoke). */
   suppressed: number;
   suppressedIds: readonly string[];
   /** Per-flag cross-part/reserved collisions resolved by part-prefixing. */
@@ -375,6 +430,26 @@ const resolveFlags = ({
 };
 
 /**
+ * The body schema with the fileless-mode file property removed. The property is
+ * optional by construction (that is what makes the capability invocable), so
+ * dropping it leaves a schema the server still accepts, and `--input` can no
+ * longer advertise a field the JSON transport cannot carry.
+ */
+const withoutFilelessField = (body: JsonSchema, field: string): JsonSchema => {
+  const properties = body["properties"];
+  if (!isRecord(properties) || !(field in properties)) {
+    return body;
+  }
+  const kept: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(properties)) {
+    if (key !== field) {
+      kept[key] = value;
+    }
+  }
+  return { ...body, properties: kept };
+};
+
+/**
  * The synthesized `{ body?, params?, query? }` wrapper schema `--input` is
  * validated against. `workspaceId` is injected into `params` when the
  * capability gets a synthetic `--workspace` flag, so `--input` accepts the same
@@ -391,15 +466,23 @@ const resolveFlags = ({
 const buildWrapperSchema = ({
   compacted,
   expanded,
+  filelessField,
   injectWorkspace,
 }: {
   compacted: CapabilityCatalogEntry["inputSchema"];
   expanded: ExpandedInputSchema;
+  filelessField: string | undefined;
   injectWorkspace: boolean;
 }): JsonSchema => {
   const properties: Record<string, JsonSchema> = {};
   if (compacted.body !== undefined) {
-    properties["body"] = compacted.body;
+    // The withheld file field is dropped from the compacted body directly: a
+    // ref can only stand where a schema stood, so removing a property leaves
+    // the surrounding `$defs` references intact.
+    properties["body"] =
+      filelessField === undefined
+        ? compacted.body
+        : withoutFilelessField(compacted.body, filelessField);
   }
   const params = injectWorkspace ? expanded.params : compacted.params;
   if (injectWorkspace) {
@@ -455,11 +538,18 @@ export const deriveCapabilityLeaf = (
   const paramsProps = propertyMap(expandedInputSchema.params);
   const injectWorkspace =
     entry.handlerKind === "workspace" && !("workspaceId" in paramsProps);
+  const filelessField = filelessOnlyField(entry.transport);
   for (const part of CAPABILITY_PARTS) {
     const skip = new Set<string>();
     if (part === paginationPart) {
       skip.add("cursor");
       skip.add("limit");
+    }
+    // The fileless-mode file field is withheld entirely: it is neither a flag
+    // nor reachable through `--input`, because no JSON value can stand in for
+    // the bytes.
+    if (part === "body" && filelessField !== undefined) {
+      skip.add(filelessField);
     }
     candidates.push(
       ...candidatesForPart({
@@ -512,8 +602,10 @@ export const deriveCapabilityLeaf = (
       inputSchema: buildWrapperSchema({
         compacted: entry.inputSchema,
         expanded: expandedInputSchema,
+        filelessField,
         injectWorkspace,
       }),
+      ...(filelessField === undefined ? {} : { filelessField }),
     },
     flagCollisions,
   };
@@ -602,10 +694,7 @@ export const insertCapabilities = ({
 
   const sorted = entries.toSorted((a, b) => a.id.localeCompare(b.id));
   for (const entry of sorted) {
-    if (
-      entry.requiresFileInput === true ||
-      entry.returnsFileResponse === true
-    ) {
+    if (!isTransportInvocable(entry.transport)) {
       suppressedIds.push(entry.id);
       continue;
     }

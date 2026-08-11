@@ -217,7 +217,7 @@ const { tree: routeMap, stats: capabilityStats } = buildCliRouteTree({
   entries: catalogEntries,
 });
 process.stderr.write(
-  `Capability tree: ${capabilityStats.generated} namespaced leaves generated, ${capabilityStats.suppressed} suppressed (file input/output), ${capabilityStats.flagCollisions.length} flag collision(s)\n`,
+  `Capability tree: ${capabilityStats.generated} namespaced leaves generated, ${capabilityStats.suppressed} suppressed (file transport), ${capabilityStats.flagCollisions.length} flag collision(s)\n`,
 );
 if (capabilityStats.flagCollisions.length > 0) {
   process.stderr.write(

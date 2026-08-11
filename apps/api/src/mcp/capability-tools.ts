@@ -9,6 +9,15 @@ import type { PermissionInput } from "@stll/permissions";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { CapabilityTransport } from "@/api/lib/capability-transport";
+import {
+  describeTransportAlternative,
+  filelessOnlyField,
+  isTransportInvocable,
+  transportAlternative,
+  transportFileInput,
+  transportFileResponse,
+} from "@/api/lib/capability-transport";
 import { getCurrentRequestId } from "@/api/lib/observability/request-context";
 import {
   decodePaginationCursor,
@@ -93,20 +102,14 @@ type CatalogEntry = {
    */
   allowsArchivedWorkspace?: boolean;
   /**
-   * When true, this capability's handler returns a file on success (a web
-   * `Response` or raw binary bytes). The generic invoke path cannot serialize
-   * either, so it refuses these pre-execution; the REST route remains the way
-   * to fetch them.
+   * How this capability's payload crosses the generic JSON transport: `json`, or
+   * a file leg naming the field carrying the bytes, whether that field is
+   * optional, and where the same work can be done instead. The invoke gate
+   * refuses a capability the transport says JSON cannot run, and refuses the
+   * file field on one that has a fileless mode; both refusals quote the
+   * alternative rather than stopping at "not available".
    */
-  returnsFileResponse?: boolean;
-  /**
-   * When true, this capability's config schema contains a `t.File()`/`t.Files()`
-   * field (`format: "binary"`). JSON input cannot carry a `File` — a plain
-   * string would pass schema validation and reach the handler where it expects
-   * a `File` — so the invoke gate refuses these pre-execution and points at the
-   * presigned-upload flow. Derived mechanically by the export script.
-   */
-  requiresFileInput?: boolean;
+  transport: CapabilityTransport;
   /**
    * Deployment feature flag (`FEATURE_*` env key) gating this capability,
    * mirroring the `feature` field on static tools: inherited from the covering
@@ -147,6 +150,63 @@ const isMcpDisposition = (
   return false;
 };
 
+const isFileInputShape = (value: unknown): boolean =>
+  isRecord(value) &&
+  typeof value["field"] === "string" &&
+  typeof value["required"] === "boolean";
+
+const isFileResponseShape = (value: unknown): boolean =>
+  isRecord(value) && Array.isArray(value["mediaTypes"]);
+
+const isAlternativeShape = (value: unknown): boolean => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  if (value["type"] === "none") {
+    return typeof value["reason"] === "string";
+  }
+  if (value["type"] === "complete") {
+    return Array.isArray(value["via"]) && typeof value["note"] === "string";
+  }
+  if (value["type"] === "partial") {
+    return (
+      Array.isArray(value["via"]) && typeof value["limitation"] === "string"
+    );
+  }
+  return false;
+};
+
+/**
+ * Shape check for the generated `transport`. Total by construction: an unknown
+ * discriminant fails, so a catalog built by a newer exporter cannot be read as
+ * "JSON, apparently" and quietly open a file capability to the generic path.
+ */
+const isCapabilityTransport = (
+  value: unknown,
+): value is CapabilityTransport => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  if (value["type"] === "json") {
+    return true;
+  }
+  if (!isAlternativeShape(value["alternative"])) {
+    return false;
+  }
+  if (value["type"] === "file-input") {
+    return isFileInputShape(value["input"]);
+  }
+  if (value["type"] === "file-response") {
+    return isFileResponseShape(value["response"]);
+  }
+  if (value["type"] === "file-both") {
+    return (
+      isFileInputShape(value["input"]) && isFileResponseShape(value["response"])
+    );
+  }
+  return false;
+};
+
 const isCatalogEntry = (value: unknown): value is CatalogEntry =>
   isRecord(value) &&
   typeof value["id"] === "string" &&
@@ -162,6 +222,7 @@ const isCatalogEntry = (value: unknown): value is CatalogEntry =>
         (scope): scope is string => typeof scope === "string",
       ))) &&
   (value["feature"] === undefined || typeof value["feature"] === "string") &&
+  isCapabilityTransport(value["transport"]) &&
   isMcpDisposition(value["mcp"]);
 
 /**
@@ -201,6 +262,47 @@ const requiredScopesOf = (entry: CatalogEntry): readonly string[] => [
   entry.scope,
   ...additionalScopesOf(entry),
 ];
+
+type RenderedTransport = {
+  type: CapabilityTransport["type"];
+  /** Whether invoke_capability can run this at all. */
+  invocable: boolean;
+  /** Body field carrying bytes, and whether it is required. */
+  fileField: string | null;
+  fileFieldRequired: boolean | null;
+  fileMediaTypes: readonly string[];
+  /** Media types the success payload would be, for a file-returning capability. */
+  responseMediaTypes: readonly string[];
+  /** Where the work can be done instead, as one sentence. */
+  alternative: string | null;
+};
+
+/**
+ * The transport an agent sees on `list_capabilities` and
+ * `describe_capability`. Says which field carries bytes and whether the
+ * capability has a fileless mode, so an agent can tell "cannot be called" from
+ * "can be called without the file" before spending a round trip.
+ */
+const NO_MEDIA_TYPES: readonly string[] = [];
+
+const renderTransport = (transport: CapabilityTransport): RenderedTransport => {
+  const input = transportFileInput(transport);
+  const response = transportFileResponse(transport);
+  const alternative = transportAlternative(transport);
+  return {
+    type: transport.type,
+    invocable: isTransportInvocable(transport),
+    fileField: input === undefined ? null : input.field,
+    fileFieldRequired: input === undefined ? null : input.required,
+    fileMediaTypes: input === undefined ? NO_MEDIA_TYPES : input.mediaTypes,
+    responseMediaTypes:
+      response === undefined ? NO_MEDIA_TYPES : response.mediaTypes,
+    alternative:
+      alternative === undefined
+        ? null
+        : describeTransportAlternative(alternative),
+  };
+};
 
 // --- Live handler resolution -------------------------------------------------
 
@@ -405,6 +507,32 @@ type PartValidation =
  * part name so an agent sees `body.matterId`, not a bare `matterId` it cannot
  * place.
  */
+/**
+ * The part's schema with one property removed, for a fileless-mode call. Returns
+ * the schema untouched when there is nothing to remove or it is not an object
+ * schema. The property is always OPTIONAL (that is what makes the capability
+ * invocable), so dropping it leaves a schema the handler still accepts.
+ */
+const schemaWithoutField = (
+  schema: TSchema | undefined,
+  field: string | undefined,
+): TSchema | undefined => {
+  if (
+    schema === undefined ||
+    field === undefined ||
+    !KindGuard.IsObject(schema)
+  ) {
+    return schema;
+  }
+  const properties: Record<string, TSchema> = {};
+  for (const [key, value] of Object.entries(schema.properties)) {
+    if (key !== field) {
+      properties[key] = value;
+    }
+  }
+  return { ...schema, properties };
+};
+
 const validatePart = (
   part: "body" | "params" | "query",
   schema: TSchema | undefined,
@@ -617,8 +745,7 @@ const listCapabilitiesHandler = ({
         access: entry.access,
         destructive: entry.destructive,
         handlerKind: entry.handlerKind,
-        requiresFileInput: entry.requiresFileInput === true,
-        returnsFileResponse: entry.returnsFileResponse === true,
+        transport: renderTransport(entry.transport),
         scope: entry.scope,
         additionalScopes: additionalScopesOf(entry),
       })),
@@ -754,12 +881,11 @@ const describeCapabilityHandler = async ({
       handlerKind: entry.handlerKind,
       scope: entry.scope,
       additionalScopes: additionalScopesOf(entry),
-      // Surfacing these lets an agent learn, before invoking, that the
-      // capability returns a file (invoke refuses it), takes a file upload
-      // (invoke refuses it; use the presigned flow), or tolerates an archived
-      // workspace (e.g. unarchive).
-      returnsFileResponse: entry.returnsFileResponse === true,
-      requiresFileInput: entry.requiresFileInput === true,
+      // Surfacing these lets an agent learn, before invoking, whether the
+      // generic path can run the capability at all, which field (if any) it
+      // must omit, where the work can be done instead, and whether the
+      // capability tolerates an archived workspace (e.g. unarchive).
+      transport: renderTransport(entry.transport),
       allowsArchivedWorkspace: entry.allowsArchivedWorkspace === true,
       feature: entry.feature ?? null,
       permissions: entry.permissions ?? null,
@@ -773,6 +899,69 @@ const describeCapabilityHandler = async ({
 // --- invoke_capability -------------------------------------------------------
 
 type InvokeInput = { body: unknown; params: unknown; query: unknown };
+
+/** What a file transport prevents, phrased for the agent that just called it. */
+const transportBlockReason = (transport: CapabilityTransport): string => {
+  switch (transport.type) {
+    case "json":
+      return "";
+    case "file-input":
+      return `requires a file in \`${transport.input.field}\`, which JSON cannot carry`;
+    case "file-response":
+      return "returns a file or stream, which invoke_capability cannot serialize";
+    case "file-both":
+      return `requires a file in \`${transport.input.field}\` and returns a file or stream`;
+    default: {
+      const exhaustive: never = transport;
+      return exhaustive;
+    }
+  }
+};
+
+/**
+ * Refusal for a capability the generic transport cannot run, or `null` when it
+ * can. The hint carries the alternative transport verbatim from the catalog, so
+ * an agent gets a next call rather than a dead end.
+ */
+const transportRefusal = (
+  id: string,
+  transport: CapabilityTransport,
+): CallToolResult | null => {
+  if (isTransportInvocable(transport)) {
+    return null;
+  }
+  const alternative = transportAlternative(transport);
+  return structuredErrorResult({
+    code: "feature_disabled",
+    message: `Capability "${id}" ${transportBlockReason(transport)}, so it is not available through invoke_capability`,
+    hint:
+      alternative === undefined
+        ? "Use its REST route or the stella app."
+        : `${describeTransportAlternative(alternative)} Otherwise use its REST route or the stella app.`,
+  });
+};
+
+/**
+ * Refusal for a JSON call that carries the one field a fileless-mode capability
+ * cannot accept, or `null` when it does not. Refusing beats ignoring: the field
+ * would otherwise pass `format: "binary"` validation as a plain string and reach
+ * a handler that expects a `File`.
+ */
+const filelessFieldRefusal = (
+  id: string,
+  transport: CapabilityTransport,
+  input: InvokeInput,
+): CallToolResult | null => {
+  const field = filelessOnlyField(transport);
+  if (field === undefined || !isRecord(input.body) || !(field in input.body)) {
+    return null;
+  }
+  return structuredErrorResult({
+    code: "validation_error",
+    message: `Capability "${id}" cannot take \`${field}\` through invoke_capability: that field carries file bytes, which JSON cannot express`,
+    hint: `Omit \`${field}\` and call again using this capability's other input modes; the file mode is only available through its REST route or the stella app.`,
+  });
+};
 
 const INVOKE_BOOLEAN_ARGS = ["validateOnly", "confirm"] as const;
 const INVOKE_INPUT_PARTS = ["body", "params", "query"] as const;
@@ -953,26 +1142,16 @@ const invokeCapabilityHandler = async ({
       hint: "Perform this operation in the stella app, which has the required request context.",
     });
   }
-  // File/stream capabilities return a web Response or raw binary bytes the
-  // generic path cannot serialize; refuse them before execution (a runtime
-  // backstop in mapHandlerResult also catches any that slip past this flag).
-  if (entry.returnsFileResponse === true) {
-    return structuredErrorResult({
-      code: "feature_disabled",
-      message: `Capability "${id}" returns a file or stream and is not available through invoke_capability`,
-      hint: "Fetch the file through its REST route or the stella app; invoke_capability only returns structured JSON.",
-    });
-  }
-  // File-input capabilities take a `t.File()` body field; JSON input cannot
-  // carry a File (a plain string would pass validation and reach the handler
-  // where it expects a File), so refuse pre-execution — before validateOnly
-  // too, which would otherwise report `valid: true` for an un-runnable input.
-  if (entry.requiresFileInput === true) {
-    return structuredErrorResult({
-      code: "feature_disabled",
-      message: `Capability "${id}" takes a file upload and is not available through invoke_capability`,
-      hint: "Upload the file via the presigned-upload flow (request an upload URL, PUT the bytes to S3, then create the record), or use the stella app.",
-    });
+  // File transport. A file response cannot be serialized, and a REQUIRED file
+  // input cannot be supplied (a plain string passes `format: "binary"`
+  // validation and reaches a handler expecting a `File`), so refuse
+  // pre-execution — before validateOnly too, which would otherwise report
+  // `valid: true` for an un-runnable input. A runtime backstop in
+  // mapHandlerResult still catches any file value that slips past. The refusal
+  // names the alternative transport instead of stopping at "not available".
+  const transportBlock = transportRefusal(id, entry.transport);
+  if (transportBlock !== null) {
+    return transportBlock;
   }
 
   // 4. Scopes: the session must hold every scope in the capability catalog. Read
@@ -1007,6 +1186,15 @@ const invokeCapabilityHandler = async ({
   // validateOnly/confirm are real booleans (or absent), input parts are objects.
   const input = readInvokeInput(args["input"]);
   const validateOnly = args["validateOnly"] === true;
+
+  // 6. Fileless mode. This capability reached here because its file field is
+  // OPTIONAL, so the JSON modes run; the field itself still cannot cross. It is
+  // refused rather than dropped, because a caller who sent bytes-as-a-string
+  // must not get a silent success computed from the other sources.
+  const filelessBlock = filelessFieldRefusal(id, entry.transport, input);
+  if (filelessBlock !== null) {
+    return filelessBlock;
+  }
 
   try {
     return await executeInvoke({
@@ -1094,8 +1282,18 @@ const executeInvoke = async ({
   // below (Clean would strip it from configs that do not declare it) and
   // re-merged into the params the handler receives, exactly like the macro's
   // merged schema.
+  // In fileless mode the withheld file field does not exist for this call, so
+  // it is removed from the schema before validation rather than merely left
+  // unset. `t.File()` carries `default: "File"`, and the Default step would
+  // otherwise inject that placeholder string into the absent optional field and
+  // then fail Check on it — a capability that is reachable in principle,
+  // un-callable in practice.
+  const bodySchema = schemaWithoutField(
+    endpoint.config.body,
+    filelessOnlyField(entry.transport),
+  );
   const validations = [
-    validatePart("body", endpoint.config.body, input.body),
+    validatePart("body", bodySchema, input.body),
     validatePart("params", endpoint.config.params, input.params),
     validatePart("query", endpoint.config.query, input.query),
   ] as const;
@@ -1274,8 +1472,9 @@ const CAPABILITY_TOOL_DEFINITIONS = [
       "backend operation (CRUD, exports, processing triggers) reachable through " +
       "invoke_capability. Paginated; filter by domain (the id prefix, e.g. " +
       '"time-entries") or access (read/write). Each item gives the capability ' +
-      "id, description, access/destructive and file-transport flags, handlerKind " +
-      "(workspace or root), and every OAuth scope it needs. Use " +
+      "id, description, access/destructive, its transport (whether this path " +
+      "can run it, which field takes a file, and what to use instead), " +
+      "handlerKind (workspace or root), and every OAuth scope it needs. Use " +
       "describe_capability for the full input schema.",
     inputSchema: {
       type: "object",
@@ -1304,8 +1503,10 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     description:
       "Describe one capability in full: its live input JSON Schema " +
       "(body/params/query), required OAuth scopes, member permissions, whether it " +
-      "is destructive, its handler kind (workspace/root), and its disposition. " +
-      "Call this before invoke_capability to learn exactly what input to pass.",
+      "is destructive, its handler kind (workspace/root), its disposition, and " +
+      "its transport (whether this path can run it, which field takes a file, " +
+      "and what to use instead). Call this before invoke_capability to learn " +
+      "exactly what input to pass.",
     inputSchema: {
       type: "object",
       properties: {

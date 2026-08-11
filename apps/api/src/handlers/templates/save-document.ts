@@ -100,6 +100,15 @@ const saveDocumentParamsSchema = t.Object({
 const config = {
   permissions: { template: ["update"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
+  transport: {
+    type: "file-input",
+    input: { field: "file", required: true, mediaTypes: [DOCX_MIME_TYPE] },
+    alternative: {
+      type: "none",
+      reason:
+        "the new template version IS the edited DOCX body; no capability accepts that body as JSON",
+    },
+  },
   params: saveDocumentParamsSchema,
   body: saveDocumentBodySchema,
 } satisfies HandlerConfig;

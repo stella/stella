@@ -19,6 +19,22 @@ const bodySchema = t.Object({
 const config = {
   permissions: { styleSet: ["update"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
+  transport: {
+    type: "file-input",
+    input: {
+      field: "styleSource",
+      required: true,
+      // Empty because the handler enforces no media type: `validateStyleSource`
+      // accepts any type whose filename ends in `.docx`.
+      mediaTypes: [],
+    },
+    alternative: {
+      type: "partial",
+      via: ["style-sets.update-from-editor"],
+      limitation:
+        "replaces the styles from explicit settings in the body; styles cannot be extracted from an existing DOCX",
+    },
+  },
   params: paramsSchema,
   body: bodySchema,
 } satisfies HandlerConfig;

@@ -1239,6 +1239,15 @@ const uploadEntityHandler = async function* ({
 const config = {
   permissions: { entity: ["create"] },
   mcp: { type: "capability", reason: "document_processing" },
+  transport: {
+    type: "file-input",
+    input: { field: "file", required: true, mediaTypes: [] },
+    alternative: {
+      type: "complete",
+      via: ["uploads.create", "uploads.update"],
+      note: "presign with purpose entity_create, PUT the bytes to the returned URL, then finalize",
+    },
+  },
   body: uploadEntityBodySchema,
 } satisfies HandlerConfig;
 

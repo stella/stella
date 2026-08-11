@@ -326,6 +326,15 @@ const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "document_processing" },
   access: "read",
+  transport: {
+    type: "file-response",
+    response: { mediaTypes: ["application/zip"] },
+    alternative: {
+      type: "none",
+      reason:
+        "no capability hands out stored file bytes or a download URL; the folder listing is reachable via entities.list-files, the contents are not",
+    },
+  },
   params: downloadZipParamsSchema,
 } satisfies HandlerConfig;
 

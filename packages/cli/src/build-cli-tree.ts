@@ -253,10 +253,17 @@ const buildLeafCommand = (spec: LeafCommandSpec): RoutingTarget => {
 };
 
 const capabilityInputHint = (spec: CapabilityLeafSpec): string => {
+  // Stated first and unconditionally: the command covers only this
+  // capability's JSON modes, and a user who came looking for the file mode has
+  // to learn that here rather than from a confusing server refusal.
+  const filelessHint =
+    spec.filelessField === undefined
+      ? ""
+      : ` (JSON modes only: ${spec.filelessField} takes a file, which this command cannot send)`;
   if (spec.inputOnly.length > 0) {
-    return ` (via --input only: ${spec.inputOnly.join(", ")})`;
+    return `${filelessHint} (via --input only: ${spec.inputOnly.join(", ")})`;
   }
-  return "";
+  return filelessHint;
 };
 
 /**

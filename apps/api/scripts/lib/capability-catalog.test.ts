@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  checkTransportAgainstDerived,
   classifyVerbs,
   compareScopeStrictness,
   countCapabilityDispositions,
@@ -16,10 +17,12 @@ import {
   isDestructiveName,
   isWellFormedCapabilityId,
   MAX_CAPABILITY_SCHEMA_BYTES,
+  parseCapabilityTransport,
   resolveAccess,
   resolveHandlerKind,
   resolveScope,
   returnsInlineFileResponse,
+  scanBinarySchemaFields,
   scanContextFidelity,
   scanFileResponseReturns,
   scanRouteHookGuards,
@@ -1005,6 +1008,261 @@ describe("schemaContainsBinaryFormat", () => {
   });
 });
 
+// The derived truth every declared `transport` is checked against. `t.File()`
+// serializes as `{ type: "string", format: "binary" }`; `t.Optional(t.File())`
+// differs only by absence from the part's `required` list, which is exactly the
+// distinction between a suppressed capability and a fileless-exposed one.
+const FILE_SCHEMA = {
+  default: "File",
+  maxSize: "50m",
+  type: "string",
+  format: "binary",
+};
+
+describe("scanBinarySchemaFields", () => {
+  test("names a required file field with its part", () => {
+    expect(
+      scanBinarySchemaFields({
+        body: {
+          type: "object",
+          required: ["file", "name"],
+          properties: { file: FILE_SCHEMA, name: { type: "string" } },
+        },
+      }),
+    ).toEqual({
+      fields: [{ part: "body", field: "file", required: true }],
+      unnameableParts: [],
+    });
+  });
+
+  test("reports an optional file field as optional", () => {
+    expect(
+      scanBinarySchemaFields({
+        body: { type: "object", properties: { file: FILE_SCHEMA } },
+      }).fields,
+    ).toEqual([{ part: "body", field: "file", required: false }]);
+  });
+
+  test("reports a part whose binary field is not a top-level property", () => {
+    // A disposition names ONE field, so bytes nested inside an array item have
+    // no truthful representation; the caller must fail rather than describe it.
+    expect(
+      scanBinarySchemaFields({
+        body: {
+          type: "object",
+          properties: {
+            attachments: { type: "array", items: { type: "object" } },
+          },
+          patternProperties: { "^x-": FILE_SCHEMA },
+        },
+      }),
+    ).toEqual({ fields: [], unnameableParts: ["body"] });
+  });
+
+  test("reports a part whose binary field is nested inside an object property", () => {
+    // `body.payload` CONTAINS a file but is not one, so naming it in a
+    // disposition would give a caller a field they cannot put bytes in. The
+    // ordinary nested shape has to be unnameable for the same reason the
+    // array-item shape is.
+    expect(
+      scanBinarySchemaFields({
+        body: {
+          type: "object",
+          properties: {
+            payload: {
+              type: "object",
+              properties: { file: FILE_SCHEMA, note: { type: "string" } },
+            },
+          },
+        },
+      }),
+    ).toEqual({ fields: [], unnameableParts: ["body"] });
+  });
+
+  test("names a file array, which a caller can still supply by that field", () => {
+    expect(
+      scanBinarySchemaFields({
+        body: {
+          type: "object",
+          required: ["files"],
+          properties: { files: { type: "array", items: FILE_SCHEMA } },
+        },
+      }),
+    ).toEqual({
+      fields: [{ part: "body", field: "files", required: true }],
+      unnameableParts: [],
+    });
+  });
+
+  test("is empty for a schema with no binary field", () => {
+    expect(
+      scanBinarySchemaFields({
+        body: { type: "object", properties: { name: { type: "string" } } },
+        query: { type: "object", properties: { limit: { type: "integer" } } },
+      }),
+    ).toEqual({ fields: [], unnameableParts: [] });
+  });
+});
+
+describe("parseCapabilityTransport", () => {
+  const alternative = { type: "none", reason: "bytes are bytes" };
+
+  test("an absent declaration is the ordinary JSON transport", () => {
+    expect(parseCapabilityTransport(undefined)).toEqual({
+      status: "parsed",
+      transport: { type: "json" },
+    });
+  });
+
+  test("parses each file variant with its alternative", () => {
+    expect(
+      parseCapabilityTransport({
+        type: "file-both",
+        input: { field: "file", required: true, mediaTypes: ["text/csv"] },
+        response: { mediaTypes: ["application/pdf"] },
+        alternative,
+      }),
+    ).toEqual({
+      status: "parsed",
+      transport: {
+        type: "file-both",
+        input: { field: "file", required: true, mediaTypes: ["text/csv"] },
+        response: { mediaTypes: ["application/pdf"] },
+        alternative: { type: "none", reason: "bytes are bytes" },
+      },
+    });
+  });
+
+  test("rejects a file variant missing its leg, its alternative, or its prose", () => {
+    // Each of these would otherwise ship a catalog entry that says less than it
+    // claims to, which is the failure this field exists to prevent.
+    expect(
+      parseCapabilityTransport({ type: "file-input", alternative }).status,
+    ).toBe("malformed");
+    expect(
+      parseCapabilityTransport({
+        type: "file-input",
+        input: { field: "file", required: true, mediaTypes: [] },
+      }).status,
+    ).toBe("malformed");
+    expect(
+      parseCapabilityTransport({
+        type: "file-response",
+        response: { mediaTypes: ["application/pdf"] },
+        alternative: { type: "complete", via: ["x.y"] },
+      }).status,
+    ).toBe("malformed");
+    expect(
+      parseCapabilityTransport({
+        type: "file-response",
+        response: { mediaTypes: ["application/pdf"] },
+        alternative: { type: "none", reason: "" },
+      }).status,
+    ).toBe("malformed");
+    expect(parseCapabilityTransport({ type: "presigned" }).status).toBe(
+      "malformed",
+    );
+  });
+});
+
+describe("checkTransportAgainstDerived", () => {
+  const requiredFileScan = {
+    fields: [{ part: "body" as const, field: "file", required: true }],
+    unnameableParts: [],
+  };
+  const jsonTransport = { type: "json" as const };
+  const alternative = { type: "none" as const, reason: "bytes are bytes" };
+  const fileInput = (field: string, required: boolean) => ({
+    type: "file-input" as const,
+    input: { field, required, mediaTypes: [] },
+    alternative,
+  });
+
+  test("accepts a declaration that matches the schema", () => {
+    expect(
+      checkTransportAgainstDerived({
+        id: "x.upload",
+        transport: fileInput("file", true),
+        binaryScan: requiredFileScan,
+      }),
+    ).toEqual([]);
+  });
+
+  test("fails a file schema with no declaration, quoting the fix", () => {
+    const [error] = checkTransportAgainstDerived({
+      id: "x.upload",
+      transport: jsonTransport,
+      binaryScan: requiredFileScan,
+    });
+    expect(error).toContain("declares no file-input transport");
+    expect(error).toContain('field: "file"');
+    expect(error).toContain("required: true");
+  });
+
+  test("fails a declaration naming a field that is not binary", () => {
+    expect(
+      checkTransportAgainstDerived({
+        id: "x.upload",
+        transport: fileInput("attachment", true),
+        binaryScan: requiredFileScan,
+      }).join(" "),
+    ).toContain('declares file-input field "attachment"');
+  });
+
+  test("fails a declaration whose required-ness has gone stale", () => {
+    // The optionality flip is the decision point: an optional file means the
+    // capability becomes reachable over JSON, so it must never happen silently.
+    expect(
+      checkTransportAgainstDerived({
+        id: "x.prefill",
+        transport: fileInput("file", true),
+        binaryScan: {
+          fields: [{ part: "body", field: "file", required: false }],
+          unnameableParts: [],
+        },
+      }).join(" "),
+    ).toContain(
+      "declares its file input as required but the schema says optional",
+    );
+  });
+
+  test("fails a file-input declaration on a schema with no binary field", () => {
+    expect(
+      checkTransportAgainstDerived({
+        id: "x.create",
+        transport: fileInput("file", true),
+        binaryScan: { fields: [], unnameableParts: [] },
+      }).join(" "),
+    ).toContain("has no binary field");
+  });
+
+  test("fails a schema with more than one binary field", () => {
+    expect(
+      checkTransportAgainstDerived({
+        id: "x.upload",
+        transport: fileInput("file", true),
+        binaryScan: {
+          fields: [
+            { part: "body", field: "file", required: true },
+            { part: "body", field: "cover", required: true },
+          ],
+          unnameableParts: [],
+        },
+      }).join(" "),
+    ).toContain("declares 2 binary fields");
+  });
+
+  test("fails a part whose binary field cannot be named", () => {
+    expect(
+      checkTransportAgainstDerived({
+        id: "x.upload",
+        transport: jsonTransport,
+        binaryScan: { fields: [], unnameableParts: ["body"] },
+      }).join(" "),
+    ).toContain("nested below a top-level `body` property");
+  });
+});
+
 describe("returnsInlineFileResponse", () => {
   test("detects an inline Result.ok(new Response(...)) success return", () => {
     expect(
@@ -1223,6 +1481,7 @@ const r = new Elysia()
 });
 
 describe("serializeCoverageDoc", () => {
+  const JSON_TRANSPORT = { type: "json" as const };
   const entries = [
     {
       id: "time-entries.create",
@@ -1230,6 +1489,7 @@ describe("serializeCoverageDoc", () => {
       destructive: false,
       scope: "stella:billing_write",
       feature: "FEATURE_TIME_BILLING",
+      transport: JSON_TRANSPORT,
       mcp: { type: "tool" as const, name: "save_time_entry" },
     },
     {
@@ -1238,6 +1498,7 @@ describe("serializeCoverageDoc", () => {
       destructive: true,
       scope: "stella:billing_write",
       feature: "FEATURE_TIME_BILLING",
+      transport: JSON_TRANSPORT,
       mcp: { type: "covered" as const, by: "save_time_entry" },
     },
     {
@@ -1246,7 +1507,15 @@ describe("serializeCoverageDoc", () => {
       destructive: false,
       scope: "stella:billing_write",
       feature: "FEATURE_TIME_BILLING",
-      returnsFileResponse: true as const,
+      transport: {
+        type: "file-response" as const,
+        response: { mediaTypes: ["application/pdf"] },
+        alternative: {
+          type: "partial" as const,
+          via: ["time-entries.export-csv"],
+          limitation: "the rendered PDF is not produced",
+        },
+      },
       mcp: { type: "capability" as const, reason: "billing_admin" },
     },
     {
@@ -1254,7 +1523,23 @@ describe("serializeCoverageDoc", () => {
       access: "read" as const,
       destructive: false,
       scope: "stella:matters_write",
+      transport: JSON_TRANSPORT,
       mcp: { type: "capability" as const, reason: "workflow_orchestration" },
+    },
+    {
+      id: "templates.prefill",
+      access: "write" as const,
+      destructive: false,
+      scope: "stella:templates",
+      transport: {
+        type: "file-input" as const,
+        input: { field: "file", required: false, mediaTypes: [] },
+        alternative: {
+          type: "none" as const,
+          reason: "the bytes have no JSON form",
+        },
+      },
+      mcp: { type: "capability" as const, reason: "template_authoring_ui" },
     },
     {
       id: "templates.fill-to-workspace",
@@ -1262,6 +1547,7 @@ describe("serializeCoverageDoc", () => {
       destructive: false,
       scope: "stella:documents_write",
       additionalScopes: ["stella:templates"],
+      transport: JSON_TRANSPORT,
       mcp: { type: "covered" as const, by: "save_filled_template" },
     },
   ];
@@ -1280,6 +1566,7 @@ describe("serializeCoverageDoc", () => {
       "entities.read-summaries-count",
       ["capability", "entities", "read-summaries-count"],
     ],
+    ["templates.prefill", ["capability", "templates", "prefill"]],
   ]);
 
   const render = (input?: {
@@ -1339,10 +1626,19 @@ describe("serializeCoverageDoc", () => {
     ).toThrow(/no generated CLI command path/u);
   });
 
-  test("flags file-input/file-response capability entries as describe-only instead of a CLI path", () => {
+  test("a suppressed file capability states why it is excluded and names the alternative", () => {
     const doc = render();
     expect(doc).toContain(
-      "| `time-entries.export-pdf` | read | stella:billing_write | FEATURE_TIME_BILLING | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |",
+      "| `time-entries.export-pdf` | read | stella:billing_write | FEATURE_TIME_BILLING | not runnable over the generic transport: returns bytes, which the generic transport cannot serialize. time-entries.export-csv covers part of this: the rendered PDF is not produced |",
+    );
+  });
+
+  test("a fileless-mode capability renders its command plus the field it cannot take", () => {
+    // The optional-file case: exposed, with the limitation stated rather than
+    // left for the caller to discover from a server refusal.
+    const doc = render();
+    expect(doc).toContain(
+      "| `templates.prefill` | write | stella:templates | — | generic invoke → `stella capability templates prefill` (JSON mode only: `file` cannot be supplied) |",
     );
   });
 

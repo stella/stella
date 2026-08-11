@@ -19,6 +19,24 @@ const bodySchema = t.Object({
 const config = {
   permissions: { styleSet: ["create"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
+  transport: {
+    type: "file-input",
+    input: {
+      field: "styleSource",
+      required: true,
+      // Empty because the handler enforces no media type: `validateStyleSource`
+      // accepts any type whose filename ends in `.docx`, which is what a browser
+      // upload of a DOCX commonly looks like. Listing DOCX_MIME_TYPE here would
+      // tell `describe_capability` that everything else is rejected.
+      mediaTypes: [],
+    },
+    alternative: {
+      type: "partial",
+      via: ["style-sets.create-from-editor"],
+      limitation:
+        "builds the style set from explicit settings in the body; styles cannot be extracted from an existing DOCX",
+    },
+  },
   body: bodySchema,
 } satisfies HandlerConfig;
 

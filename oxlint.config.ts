@@ -100,6 +100,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-fetch-timeout.fixture.ts", [
     "require-fetch-timeout/require-fetch-timeout",
   ]),
+  fixtureRuleOverride("require-file-transport-disposition.fixture.ts", [
+    "require-file-transport-disposition/require-file-transport-disposition",
+  ]),
   fixtureRuleOverride("require-router-select.fixture.ts", [
     "require-router-select/require-router-select",
   ]),
@@ -534,6 +537,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-eden-error-check.ts",
     "./.oxlint-plugins/require-function-replacer.ts",
     "./.oxlint-plugins/require-fetch-timeout.ts",
+    "./.oxlint-plugins/require-file-transport-disposition.ts",
     "./.oxlint-plugins/require-escape-like.ts",
     "./.oxlint-plugins/no-bare-error.ts",
     "./.oxlint-plugins/ai-output-strict-schema.ts",
@@ -2271,6 +2275,17 @@ export default defineConfig({
       rules: {
         "require-safe-route-handlers/require-safe-route-handlers": "error",
         "no-inline-endpoint-in-routes/no-inline-endpoint-in-routes": "error",
+      },
+    },
+    {
+      // Handler endpoint modules: a file-shaped schema must carry a transport
+      // disposition on its config. Scoped to the handler tree because that is
+      // where `satisfies HandlerConfig` lives; the capability exporter is the
+      // total guard, including the schemas defined in a sibling module.
+      files: ["apps/api/src/handlers/**/*.ts"],
+      rules: {
+        "require-file-transport-disposition/require-file-transport-disposition":
+          "error",
       },
     },
     {

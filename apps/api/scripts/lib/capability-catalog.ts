@@ -13,6 +13,19 @@ import { panic } from "better-result";
 
 import { MCP_WRITE_ONLY_RESOURCE_SCOPES } from "@stll/api-contract";
 
+import type {
+  CapabilityFileInput,
+  CapabilityFileResponse,
+  CapabilityTransport,
+  CapabilityTransportAlternative,
+} from "../../src/lib/capability-transport";
+import {
+  describeTransportAlternative,
+  filelessOnlyField,
+  isTransportInvocable,
+  transportAlternative,
+  transportFileInput,
+} from "../../src/lib/capability-transport";
 import type { HandlerKind } from "./enumerate-safe-handlers";
 
 /** Handler-tree prefix stripped to turn a file path into a capability id. */
@@ -847,13 +860,12 @@ export const scanContextFidelity = ({
  * binary/file field anywhere. `t.File()` serializes as
  * `{ type: "string", format: "binary" }` (and `t.Files()` as an array of the
  * same), so a recursive walk for `format: "binary"` mechanically identifies
- * every file-input field, however deeply nested. Used to derive the catalog's
- * `requiresFileInput` flag: the generic invoke path validates JSON, where a
- * plain string passes `Value.Check` for a `format: "binary"` string schema but
- * the handler expects a `File`; flagged capabilities are refused at invoke and
- * routed to the presigned-upload flow. Derived, never hand-listed, so it is
- * stale-proof by construction. Walks enumerable properties only (TypeBox symbol
- * metadata never carries schema structure).
+ * every file-input field, however deeply nested. This is the derived truth the
+ * handler's declared `transport` is checked against: the generic invoke path
+ * validates JSON, where a plain string passes `Value.Check` for a
+ * `format: "binary"` string schema but the handler expects a `File`. Walks
+ * enumerable properties only (TypeBox symbol metadata never carries schema
+ * structure).
  */
 export const schemaContainsBinaryFormat = (schema: unknown): boolean => {
   if (Array.isArray(schema)) {
@@ -869,6 +881,294 @@ export const schemaContainsBinaryFormat = (schema: unknown): boolean => {
   return Object.values(record).some(schemaContainsBinaryFormat);
 };
 
+/**
+ * Whether a top-level property IS the file, rather than merely containing one
+ * somewhere beneath it. `transport.input.field` names a property a caller
+ * supplies directly, so `body.payload` is not a usable name for a file that
+ * actually sits at `body.payload.file`: no client can put bytes there through
+ * that name. A part whose only binary lives nested is reported unnameable
+ * instead, which fails the export rather than shipping a name nobody can use.
+ *
+ * A direct file is `format: "binary"` on the property itself, or an array whose
+ * items are; `anyOf`/`oneOf`/`allOf` branches count when a branch is direct.
+ */
+const isDirectBinaryProp = (schema: unknown): boolean => {
+  if (Array.isArray(schema)) {
+    return schema.some(isDirectBinaryProp);
+  }
+  if (typeof schema !== "object" || schema === null) {
+    return false;
+  }
+  const record: Record<string, unknown> = { ...schema };
+  if (record["format"] === "binary") {
+    return true;
+  }
+  if (isDirectBinaryProp(record["items"])) {
+    return true;
+  }
+  return ["anyOf", "oneOf", "allOf"].some((keyword) =>
+    isDirectBinaryProp(record[keyword]),
+  );
+};
+
+/** One top-level input property whose schema carries binary bytes. */
+export type BinarySchemaField = {
+  part: "body" | "params" | "query";
+  field: string;
+  /** Whether the part's `required` list names it (`t.Optional(...)` -> false). */
+  required: boolean;
+};
+
+const INPUT_PARTS = ["body", "params", "query"] as const;
+
+const schemaProperties = (schema: unknown): Record<string, unknown> => {
+  if (typeof schema !== "object" || schema === null) {
+    return {};
+  }
+  const properties: unknown = Reflect.get(schema, "properties");
+  if (typeof properties !== "object" || properties === null) {
+    return {};
+  }
+  return { ...properties };
+};
+
+const schemaRequired = (schema: unknown): ReadonlySet<string> => {
+  if (typeof schema !== "object" || schema === null) {
+    return new Set();
+  }
+  const required: unknown = Reflect.get(schema, "required");
+  if (!Array.isArray(required)) {
+    return new Set();
+  }
+  return new Set(
+    required.filter((name): name is string => typeof name === "string"),
+  );
+};
+
+export type BinarySchemaScan = {
+  fields: BinarySchemaField[];
+  /**
+   * Parts that carry binary bytes somewhere below a top-level property (inside
+   * an array item, a nested object). A transport disposition names ONE field,
+   * so a nested file has no truthful representation and must fail the export
+   * rather than be described as something it is not.
+   */
+  unnameableParts: string[];
+};
+
+/**
+ * Every top-level input property carrying binary bytes, with the part it lives
+ * in and whether it is required. This is what a `file-input` transport
+ * declaration is checked against, so the declaration can never name a field
+ * that is not binary, miss one that is, or go stale after an optionality flip.
+ */
+export const scanBinarySchemaFields = (
+  inputSchema: CapabilityInputSchema,
+): BinarySchemaScan => {
+  const fields: BinarySchemaField[] = [];
+  const unnameableParts: string[] = [];
+  for (const part of INPUT_PARTS) {
+    const schema = inputSchema[part];
+    if (!schemaContainsBinaryFormat(schema)) {
+      continue;
+    }
+    const required = schemaRequired(schema);
+    let named = 0;
+    for (const [field, propSchema] of Object.entries(
+      schemaProperties(schema),
+    )) {
+      if (!isDirectBinaryProp(propSchema)) {
+        continue;
+      }
+      named += 1;
+      fields.push({ part, field, required: required.has(field) });
+    }
+    if (named === 0) {
+      unnameableParts.push(part);
+    }
+  }
+  fields.sort(
+    (a, b) => a.part.localeCompare(b.part) || a.field.localeCompare(b.field),
+  );
+  return { fields, unnameableParts };
+};
+
+// --- Transport disposition ---------------------------------------------------
+
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === "string");
+
+const parseAlternative = (
+  raw: unknown,
+): CapabilityTransportAlternative | undefined => {
+  if (typeof raw !== "object" || raw === null) {
+    return undefined;
+  }
+  const type: unknown = Reflect.get(raw, "type");
+  const via: unknown = Reflect.get(raw, "via");
+  if (type === "none") {
+    const reason: unknown = Reflect.get(raw, "reason");
+    return typeof reason === "string" && reason.length > 0
+      ? { type: "none", reason }
+      : undefined;
+  }
+  if (type === "complete") {
+    const note: unknown = Reflect.get(raw, "note");
+    return isStringArray(via) &&
+      via.length > 0 &&
+      typeof note === "string" &&
+      note.length > 0
+      ? { type: "complete", via, note }
+      : undefined;
+  }
+  if (type === "partial") {
+    const limitation: unknown = Reflect.get(raw, "limitation");
+    return isStringArray(via) &&
+      via.length > 0 &&
+      typeof limitation === "string" &&
+      limitation.length > 0
+      ? { type: "partial", via, limitation }
+      : undefined;
+  }
+  return undefined;
+};
+
+const parseFileInput = (raw: unknown): CapabilityFileInput | undefined => {
+  if (typeof raw !== "object" || raw === null) {
+    return undefined;
+  }
+  const field: unknown = Reflect.get(raw, "field");
+  const required: unknown = Reflect.get(raw, "required");
+  const mediaTypes: unknown = Reflect.get(raw, "mediaTypes");
+  return typeof field === "string" &&
+    field.length > 0 &&
+    typeof required === "boolean" &&
+    isStringArray(mediaTypes)
+    ? { field, required, mediaTypes }
+    : undefined;
+};
+
+const parseFileResponse = (
+  raw: unknown,
+): CapabilityFileResponse | undefined => {
+  if (typeof raw !== "object" || raw === null) {
+    return undefined;
+  }
+  const mediaTypes: unknown = Reflect.get(raw, "mediaTypes");
+  return isStringArray(mediaTypes) && mediaTypes.length > 0
+    ? { mediaTypes }
+    : undefined;
+};
+
+export type TransportParse =
+  | { status: "parsed"; transport: CapabilityTransport }
+  | { status: "malformed" };
+
+/**
+ * The handler config's declared `transport`, validated at the script boundary.
+ * The config is imported as `Record<string, unknown>`, so the declaration is
+ * untrusted here even though it is typechecked at its definition site; a
+ * malformed value fails the export instead of flowing into the catalog. An
+ * ABSENT declaration parses to `{ type: "json" }` — the ordinary case — and the
+ * caller's cross-check against the live schema and handler source is what makes
+ * that default safe.
+ */
+export const parseCapabilityTransport = (raw: unknown): TransportParse => {
+  if (raw === undefined) {
+    return { status: "parsed", transport: { type: "json" } };
+  }
+  if (typeof raw !== "object" || raw === null) {
+    return { status: "malformed" };
+  }
+  const type: unknown = Reflect.get(raw, "type");
+  if (type === "json") {
+    return { status: "parsed", transport: { type: "json" } };
+  }
+  const alternative = parseAlternative(Reflect.get(raw, "alternative"));
+  if (alternative === undefined) {
+    return { status: "malformed" };
+  }
+  const input = parseFileInput(Reflect.get(raw, "input"));
+  const response = parseFileResponse(Reflect.get(raw, "response"));
+  if (type === "file-input" && input !== undefined) {
+    return {
+      status: "parsed",
+      transport: { type: "file-input", input, alternative },
+    };
+  }
+  if (type === "file-response" && response !== undefined) {
+    return {
+      status: "parsed",
+      transport: { type: "file-response", response, alternative },
+    };
+  }
+  if (type === "file-both" && input !== undefined && response !== undefined) {
+    return {
+      status: "parsed",
+      transport: { type: "file-both", input, response, alternative },
+    };
+  }
+  return { status: "malformed" };
+};
+
+/**
+ * Bind the declared transport to the two things it describes: the live input
+ * schema and whether the handler's success path constructs bytes. Every
+ * disagreement is a reviewer-actionable error, so the declaration cannot be
+ * absent, aspirational, or stale — the class of drift that made the two booleans
+ * it replaces untrustworthy.
+ */
+export const checkTransportAgainstDerived = ({
+  id,
+  transport,
+  binaryScan,
+}: {
+  id: string;
+  transport: CapabilityTransport;
+  binaryScan: BinarySchemaScan;
+}): string[] => {
+  const errors: string[] = [];
+  for (const part of binaryScan.unnameableParts) {
+    errors.push(
+      `capability "${id}" carries binary bytes nested below a top-level \`${part}\` property. A transport disposition names one field, so restructure the schema to put the file at the top level of the part`,
+    );
+  }
+
+  const declaredInput = transportFileInput(transport);
+  const schemaFields = binaryScan.fields;
+  const firstField = schemaFields.at(0);
+  if (schemaFields.length > 1) {
+    errors.push(
+      `capability "${id}" declares ${String(schemaFields.length)} binary fields (${schemaFields.map(({ field }) => field).join(", ")}); a transport disposition names one, so split the endpoint or fold the files into a single field`,
+    );
+  } else if (firstField === undefined && declaredInput !== undefined) {
+    errors.push(
+      `capability "${id}" declares a file-input transport on field "${declaredInput.field}", but its schema has no binary field (remove the file leg of the transport)`,
+    );
+  } else if (firstField !== undefined && declaredInput === undefined) {
+    errors.push(
+      `capability "${id}" takes a file in \`${firstField.part}.${firstField.field}\` but declares no file-input transport. Add \`transport: { type: "file-input", input: { field: "${firstField.field}", required: ${String(firstField.required)}, mediaTypes: [...] }, alternative: ... }\` to its handler config so the catalog states what the generic transport can and cannot carry`,
+    );
+  } else if (firstField !== undefined && declaredInput !== undefined) {
+    if (declaredInput.field !== firstField.field) {
+      errors.push(
+        `capability "${id}" declares file-input field "${declaredInput.field}" but the binary field is "${firstField.field}"`,
+      );
+    }
+    if (declaredInput.required !== firstField.required) {
+      errors.push(
+        `capability "${id}" declares its file input as ${declaredInput.required ? "required" : "optional"} but the schema says ${firstField.required ? "required" : "optional"}. An optional file means the capability has a fileless JSON mode and stays exposed, so this is a reviewed decision, not a typo: fix whichever side is wrong`,
+      );
+    }
+  }
+
+  // The response leg is bound to the handler source by `scanFileResponseReturns`
+  // in both directions (undeclared inline file return -> violation; declared
+  // response with no file-like value anywhere -> stale), so it is not repeated
+  // here.
+  return errors;
+};
+
 // --- File-response scan (fix-6) ---------------------------------------------
 
 /**
@@ -877,8 +1177,8 @@ export const schemaContainsBinaryFormat = (schema: unknown): boolean => {
  * `Result.ok(new Response(...))`, or a raw binary value such as
  * `Result.ok(new Uint8Array(...))`. This catches the common export shapes as a
  * hard class guard. A handler that returns raw bytes through an intermediate
- * variable is seeded manually into the flag table and kept honest by the stale
- * check below (`constructsBinaryLike`).
+ * variable is caught by its declared `file-response`/`file-both` transport
+ * instead, kept honest by the stale check below (`constructsBinaryLike`).
  */
 export const returnsInlineFileResponse = (source: string): boolean =>
   /Result\.ok\(\s*new (?:Response|Uint8Array|Blob)\b|(?:Result\.ok\(\s*|return\s+)secureDocumentResponse\s*\(/su.test(
@@ -897,25 +1197,26 @@ export const constructsBinaryLike = (source: string): boolean =>
   );
 
 export type FileResponseScan = {
-  /** Catalog ids whose success path inline-returns a file-like value but are not flagged. */
+  /** Catalog ids whose success path inline-returns a file-like value but declare no file response. */
   violations: string[];
-  /** Flagged ids whose handler no longer constructs any file-like value (remove them). */
+  /** Ids declaring a file response whose handler no longer constructs any file-like value. */
   staleFlags: string[];
 };
 
 /**
  * Class guard for capabilities whose success payload is a file: a web
  * `Response` or raw binary bytes. The generic invoke path cannot serialize
- * either, so each must be flagged (carried into the catalog as
- * `returnsFileResponse` and refused at invoke). Any catalog handler whose
- * success path inline-returns one but is unflagged is a violation; a flagged id
- * whose handler no longer constructs any file-like value is stale.
+ * either, so each must declare a `file-response`/`file-both` transport (carried
+ * into the catalog and refused at invoke). Any catalog handler whose success
+ * path inline-returns one without that declaration is a violation; a
+ * declaration whose handler no longer constructs any file-like value is stale.
  */
 export const scanFileResponseReturns = ({
   entries,
   flaggedIds,
 }: {
   entries: readonly { id: string; source: string }[];
+  /** Ids whose declared transport carries a file response. */
   flaggedIds: ReadonlySet<string>;
 }): FileResponseScan => {
   const violations: string[] = [];
@@ -1218,8 +1519,7 @@ export type CoverageDocEntry = {
   scope: string;
   additionalScopes?: readonly string[];
   feature?: string;
-  requiresFileInput?: true;
-  returnsFileResponse?: true;
+  transport: CapabilityTransport;
   mcp: CoverageDocMcp;
 };
 
@@ -1244,6 +1544,24 @@ const renderAccessCell = (entry: CoverageDocEntry): string =>
 const renderScopeCell = (entry: CoverageDocEntry): string =>
   [...new Set([entry.scope, ...(entry.additionalScopes ?? [])])].join(", ");
 
+/** Why a file-shaped capability is out of the generic transport, in one clause. */
+const renderTransportExclusion = (transport: CapabilityTransport): string => {
+  switch (transport.type) {
+    case "json":
+      return "";
+    case "file-input":
+      return `requires a file in \`${transport.input.field}\`, which JSON cannot carry`;
+    case "file-response":
+      return "returns bytes, which the generic transport cannot serialize";
+    case "file-both":
+      return `requires a file in \`${transport.input.field}\` and returns bytes`;
+    default: {
+      const exhaustive: never = transport;
+      return exhaustive;
+    }
+  }
+};
+
 /**
  * "Reachable via" column text for one entry. `cliCommandPathById` carries the
  * REAL generated command path per capability id, computed by the exporter
@@ -1253,6 +1571,9 @@ const renderScopeCell = (entry: CoverageDocEntry): string =>
  * instead of an id-derived guess. A capability-disposition entry missing from
  * the map is an exporter invariant violation (the map is built from the same
  * entries), so it panics rather than printing a wrong path.
+ *
+ * An excluded file capability states WHY it is excluded and where the work can
+ * be done instead, so the row is a route forward rather than a dead end.
  */
 const renderReachableViaCell = (
   entry: CoverageDocEntry,
@@ -1264,15 +1585,20 @@ const renderReachableViaCell = (
   if (entry.mcp.type === "covered") {
     return `covered by \`${entry.mcp.by}\``;
   }
-  if (entry.requiresFileInput || entry.returnsFileResponse) {
-    return "generic invoke: file I/O — not runnable via CLI/JSON (describe only)";
+  const alternative = transportAlternative(entry.transport);
+  if (!isTransportInvocable(entry.transport) && alternative !== undefined) {
+    return `not runnable over the generic transport: ${renderTransportExclusion(entry.transport)}. ${describeTransportAlternative(alternative)}`;
   }
   const commandPath =
     cliCommandPathById.get(entry.id) ??
     panic(
       `coverage doc: no generated CLI command path for capability "${entry.id}"`,
     );
-  return `generic invoke → \`stella ${commandPath.join(" ")}\``;
+  const filelessField = filelessOnlyField(entry.transport);
+  const command = `generic invoke → \`stella ${commandPath.join(" ")}\``;
+  return filelessField === undefined
+    ? command
+    : `${command} (JSON mode only: \`${filelessField}\` cannot be supplied)`;
 };
 
 /** Render one domain's capability table (header row through the last entry). */

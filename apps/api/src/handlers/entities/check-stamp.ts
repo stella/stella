@@ -140,6 +140,15 @@ const config = {
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "document_processing" },
   access: "read",
+  transport: {
+    type: "file-input",
+    input: { field: "file", required: true, mediaTypes: [] },
+    alternative: {
+      type: "none",
+      reason:
+        "the lookup reads a stamp out of the supplied document's bytes; no capability accepts the stamp on its own",
+    },
+  },
   body: checkStampBodySchema,
 } satisfies HandlerConfig;
 

@@ -54,6 +54,24 @@ const uploadSkillResourceBodySchema = t.Object({
 const config = {
   permissions: { agentSkill: ["update"] },
   mcp: { type: "capability", reason: "agent_tool_authoring" },
+  transport: {
+    type: "file-input",
+    input: {
+      field: "file",
+      required: true,
+      // Empty because the handler enforces no media type: DOCX and PDF go
+      // through extraction, and anything else is decoded as UTF-8 text. Listing
+      // the two extracted types would make a client reject the text uploads
+      // this endpoint accepts.
+      mediaTypes: [],
+    },
+    alternative: {
+      type: "partial",
+      via: ["skills.resources.create"],
+      limitation:
+        "creates a resource from text `content`; a binary DOCX/PDF resource has no JSON form",
+    },
+  },
   params: uploadSkillResourceParamsSchema,
   body: uploadSkillResourceBodySchema,
 } satisfies HandlerConfig;

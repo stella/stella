@@ -12,6 +12,15 @@ import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 const config = {
   permissions: { entity: ["update"] },
   mcp: { type: "capability", reason: "document_processing" },
+  transport: {
+    type: "file-input",
+    input: { field: "file", required: true, mediaTypes: [] },
+    alternative: {
+      type: "complete",
+      via: ["uploads.create", "uploads.update"],
+      note: "presign with purpose entity_version, PUT the bytes to the returned URL, then finalize",
+    },
+  },
   body: uploadVersionBodySchema,
 } satisfies HandlerConfig;
 

@@ -8,7 +8,10 @@ import { Result } from "better-result";
 import { readFile } from "node:fs/promises";
 import * as v from "valibot";
 
-import type { CapabilityCatalogEntry } from "./generate-capability-tree.js";
+import type {
+  CapabilityCatalogEntry,
+  CapabilityTransport,
+} from "./generate-capability-tree.js";
 
 const CATALOG_URL = new URL(
   "generated/capability-catalog.json",
@@ -16,6 +19,22 @@ const CATALOG_URL = new URL(
 );
 
 const jsonSchemaSchema = v.record(v.string(), v.unknown());
+
+// Strict on the discriminant and on the file legs' shape: a catalog written by
+// an exporter whose transport union has moved on fails validation here (and the
+// exporter runs this parser over its own output), so the mirrored union in
+// generate-capability-tree.ts cannot silently fall behind the API-side one.
+const fileInputSchema = v.looseObject({
+  field: v.string(),
+  required: v.boolean(),
+});
+const transportSchema = v.variant("type", [
+  v.looseObject({ type: v.literal("json") }),
+  v.looseObject({ type: v.literal("file-input"), input: fileInputSchema }),
+  v.looseObject({ type: v.literal("file-response") }),
+  v.looseObject({ type: v.literal("file-both"), input: fileInputSchema }),
+]);
+
 const catalogEntrySchema = v.looseObject({
   id: v.string(),
   description: v.optional(v.string()),
@@ -24,8 +43,7 @@ const catalogEntrySchema = v.looseObject({
   destructive: v.boolean(),
   scope: v.string(),
   additionalScopes: v.optional(v.array(v.string())),
-  requiresFileInput: v.optional(v.boolean()),
-  returnsFileResponse: v.optional(v.boolean()),
+  transport: transportSchema,
   inputSchema: v.looseObject({
     $defs: v.optional(jsonSchemaSchema),
     body: v.optional(jsonSchemaSchema),
@@ -33,6 +51,43 @@ const catalogEntrySchema = v.looseObject({
     query: v.optional(jsonSchemaSchema),
   }),
 });
+
+/**
+ * Narrow the validated transport to the discriminant plus the file-input shape
+ * the CLI actually reads. The catalog's media types and alternative-transport
+ * prose are for the MCP/describe surface and the coverage doc; carrying them
+ * into the route tree would make the generated CLI churn on wording changes.
+ */
+const projectTransport = (
+  transport: v.InferOutput<typeof transportSchema>,
+): CapabilityTransport => {
+  switch (transport.type) {
+    case "json":
+      return { type: "json" };
+    case "file-response":
+      return { type: "file-response" };
+    case "file-input":
+      return {
+        type: "file-input",
+        input: {
+          field: transport.input.field,
+          required: transport.input.required,
+        },
+      };
+    case "file-both":
+      return {
+        type: "file-both",
+        input: {
+          field: transport.input.field,
+          required: transport.input.required,
+        },
+      };
+    default: {
+      const exhaustive: never = transport;
+      return exhaustive;
+    }
+  }
+};
 
 /**
  * Validate a parsed catalog JSON value down to the fields the CLI consumes,
@@ -72,18 +127,13 @@ export const parseCapabilityCatalog = (
       destructive: entry.destructive,
       scope: entry.scope,
       inputSchema: parts,
+      transport: projectTransport(entry.transport),
     };
     if (entry.additionalScopes !== undefined) {
       projected.additionalScopes = entry.additionalScopes;
     }
     if (entry.description !== undefined) {
       projected.description = entry.description;
-    }
-    if (entry.requiresFileInput !== undefined) {
-      projected.requiresFileInput = entry.requiresFileInput;
-    }
-    if (entry.returnsFileResponse !== undefined) {
-      projected.returnsFileResponse = entry.returnsFileResponse;
     }
     return projected;
   });

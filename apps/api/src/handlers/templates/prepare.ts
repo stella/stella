@@ -20,6 +20,15 @@ const config = {
   // read; this also keeps a read-only role from spending org AI here.
   permissions: { template: ["create"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
+  transport: {
+    type: "file-input",
+    input: { field: "file", required: true, mediaTypes: [DOCX_MIME_TYPE] },
+    alternative: {
+      type: "none",
+      reason:
+        "the model marks fields in the supplied document's own bytes; there is no stored-document equivalent",
+    },
+  },
   body: prepareBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;

@@ -162,6 +162,23 @@ const config = {
   permissions: { template: ["use"] },
   access: "write",
   mcp: { type: "capability", reason: "template_authoring_ui" },
+  // The only OPTIONAL file field in the catalog: `file` is one of three source
+  // modes, so the capability stays invokable over JSON with `text` and/or
+  // `entityIds`. Clients hide `file` from the JSON surface and refuse it when
+  // supplied rather than passing a string to a handler expecting a `File`.
+  transport: {
+    type: "file-input",
+    input: {
+      field: "file",
+      required: false,
+      mediaTypes: [DOCX_MIME_TYPE, PDF_MIME_TYPE],
+    },
+    alternative: {
+      type: "none",
+      reason:
+        "extracting from an uploaded document needs its bytes; the same call reads `text` or `entityIds` instead, which is why it stays invokable",
+    },
+  },
   params: prefillParamsSchema,
   body: prefillBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },

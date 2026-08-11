@@ -31550,6 +31550,93 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            prefill: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "templates", "prefill"],
+                capabilityId: "templates.prefill",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--template-id",
+                    prop: "templateId",
+                    required: true,
+                    part: "params",
+                    partPath: "templateId",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--text",
+                    prop: "text",
+                    required: false,
+                    part: "body",
+                    partPath: "text",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--entity-ids",
+                    prop: "entityIds",
+                    required: false,
+                    part: "body",
+                    partPath: "entityIds",
+                  },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--timezone",
+                    prop: "timezone",
+                    required: false,
+                    part: "body",
+                    partPath: "timezone",
+                  },
+                ],
+                inputOnly: [],
+                paginated: false,
+                destructive: false,
+                scope: "templates",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      properties: {
+                        text: {
+                          maxLength: 100000,
+                          type: "string",
+                        },
+                        entityIds: {
+                          maxLength: 2000,
+                          type: "string",
+                        },
+                        timezone: {
+                          maxLength: 64,
+                          type: "string",
+                        },
+                      },
+                    },
+                    params: {
+                      type: "object",
+                      required: ["templateId"],
+                      properties: {
+                        templateId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+                filelessField: "file",
+              },
+            },
             preview: {
               kind: "capability-leaf",
               spec: {

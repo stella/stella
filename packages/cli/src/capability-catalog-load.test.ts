@@ -19,6 +19,7 @@ const validEntry = (
   destructive: false,
   scope: "stella:read",
   inputSchema: {},
+  transport: { type: "json" },
   ...overrides,
 });
 
@@ -39,6 +40,27 @@ describe("parseCapabilityCatalog fail-closed parsing", () => {
     const missingScope = validEntry();
     delete missingScope["scope"];
     expect(parseCapabilityCatalog([missingScope])).toBeNull();
+
+    // `transport` is total on the wire: an entry without it cannot be read as
+    // "JSON, apparently", which would open a file capability to the CLI.
+    const missingTransport = validEntry();
+    delete missingTransport["transport"];
+    expect(parseCapabilityCatalog([missingTransport])).toBeNull();
+  });
+
+  test("returns null for an unknown or malformed transport disposition", () => {
+    expect(
+      parseCapabilityCatalog([
+        validEntry({ transport: { type: "presigned" } }),
+      ]),
+    ).toBeNull();
+    // A file-input leg without its field/required pair cannot say whether the
+    // capability keeps a fileless mode, so it must fail closed.
+    expect(
+      parseCapabilityCatalog([
+        validEntry({ transport: { type: "file-input", input: {} } }),
+      ]),
+    ).toBeNull();
   });
 
   test("returns null when an enum field carries an out-of-set value", () => {
@@ -83,6 +105,7 @@ describe("parseCapabilityCatalog fail-closed parsing", () => {
       "id",
       "inputSchema",
       "scope",
+      "transport",
     ]);
   });
 
@@ -128,19 +151,53 @@ describe("parseCapabilityCatalog fail-closed parsing", () => {
   test("absent optional fields are dropped, not defaulted", () => {
     const entry = parseCapabilityCatalog([validEntry()])?.at(0);
     expect(entry).toBeDefined();
-    expect("requiresFileInput" in (entry ?? {})).toBe(false);
-    expect("returnsFileResponse" in (entry ?? {})).toBe(false);
     expect("description" in (entry ?? {})).toBe(false);
+  });
+
+  test("narrows the transport to the discriminant and the file-input pair", () => {
+    // The catalog's media types and alternative-transport prose belong to the
+    // MCP/describe surface; carrying them into the route tree would make the
+    // generated CLI churn on wording changes.
+    const entry = parseCapabilityCatalog([
+      validEntry({
+        transport: {
+          type: "file-input",
+          input: { field: "file", required: false, mediaTypes: ["text/csv"] },
+          alternative: { type: "none", reason: "bytes are bytes" },
+        },
+      }),
+    ])?.at(0);
+    expect(entry?.transport).toEqual({
+      type: "file-input",
+      input: { field: "file", required: false },
+    });
+  });
+
+  test("keeps an optional file-both transport distinct from a file-input one", () => {
+    // Optionality is what makes a file-input capability invokable, so a
+    // `file-both` whose input is optional is the shape most likely to be
+    // mistaken for one: its RESPONSE still cannot cross the JSON transport.
+    // The projection must carry the discriminant through unchanged.
+    const entry = parseCapabilityCatalog([
+      validEntry({
+        transport: {
+          type: "file-both",
+          input: { field: "file", required: false, mediaTypes: ["text/csv"] },
+          response: { mediaTypes: ["application/pdf"] },
+          alternative: { type: "none", reason: "bytes are bytes" },
+        },
+      }),
+    ])?.at(0);
+    expect(entry?.transport).toEqual({
+      type: "file-both",
+      input: { field: "file", required: false },
+    });
   });
 
   test("projects inputSchema sub-parts, keeping only the present ones", () => {
     const entry = parseCapabilityCatalog([
-      validEntry({
-        inputSchema: { body: { type: "object" } },
-        requiresFileInput: true,
-      }),
+      validEntry({ inputSchema: { body: { type: "object" } } }),
     ])?.at(0);
-    expect(entry?.requiresFileInput).toBe(true);
     expect(entry?.inputSchema).toEqual({ body: { type: "object" } });
     expect("params" in (entry?.inputSchema ?? {})).toBe(false);
     expect("query" in (entry?.inputSchema ?? {})).toBe(false);

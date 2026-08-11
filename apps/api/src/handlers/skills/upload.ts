@@ -19,6 +19,17 @@ const uploadSkillBodySchema = t.Object({
 const config = {
   permissions: { agentSkill: ["create"] },
   mcp: { type: "capability", reason: "agent_tool_authoring" },
+  transport: {
+    type: "file-input",
+    // Any declared type: the package parser sniffs the bytes (zip pack or a
+    // bare markdown skill) rather than trusting `file.type`.
+    input: { field: "file", required: true, mediaTypes: [] },
+    alternative: {
+      type: "complete",
+      via: ["uploads.create", "uploads.update"],
+      note: "presign with purpose agent_skill, PUT the skill pack to the returned URL, then finalize",
+    },
+  },
   body: uploadSkillBodySchema,
 } satisfies HandlerConfig;
 

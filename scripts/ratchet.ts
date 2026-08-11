@@ -908,17 +908,19 @@ const countTruncatedCapabilitySchemas = (content: string): number => {
 // size satisfies a count, so it could not name the gap an author had just
 // closed, nor force that entry to be deleted in the same change as the prose.
 
-// A capability suppressed from the generic transport because its input carries
-// a `t.File()` field (`requiresFileInput`) or its success value is a web
-// `Response`/raw bytes (`returnsFileResponse`). Suppressed entries are dropped
-// from the CLI tree (`insertCapabilities`) and refused pre-execution by
-// `invoke_capability`, so each one is a capability an agent surface simply
-// cannot reach. This metric freezes that count: a newly file-shaped capability
-// cannot silently disappear from both clients, and the burn-down is a reviewed
-// baseline bump rather than a side effect. An entry flagged BOTH ways counts
-// once — the unit is a suppressed capability, not a suppression flag. Counting
-// the committed artifacts keeps the scan cheap and deterministic; both mirrors
-// are included so drift between them also shows up.
+// A capability suppressed from the generic transport by its `transport`
+// disposition: it returns bytes (`file-response`/`file-both`), or it REQUIRES a
+// file input. Suppressed entries are dropped from the CLI tree
+// (`insertCapabilities`) and refused pre-execution by `invoke_capability`, so
+// each one is a capability an agent surface simply cannot reach. This metric
+// freezes that count: a newly file-shaped capability cannot silently disappear
+// from both clients, and the burn-down is a reviewed baseline bump rather than a
+// side effect. A capability with an OPTIONAL file input is NOT counted — its
+// JSON modes stay invokable (the file field is withheld), which is the shape of
+// a real burn-down rather than a relabelling. The unit is a suppressed
+// capability, so an entry blocked on both legs counts once. Counting the
+// committed artifacts keeps the scan cheap and deterministic; both mirrors are
+// included so drift between them also shows up.
 const countFileTransportSuppressed = (content: string): number => {
   const parsed: unknown = JSON.parse(content);
   if (!Array.isArray(parsed)) {
@@ -928,13 +930,30 @@ const countFileTransportSuppressed = (content: string): number => {
     if (typeof entry !== "object" || entry === null) {
       return false;
     }
-    const read = (key: string): unknown =>
-      Object.hasOwn(entry, key)
-        ? Object.getOwnPropertyDescriptor(entry, key)?.value
-        : undefined;
-    return (
-      read("requiresFileInput") === true || read("returnsFileResponse") === true
-    );
+    const transport: unknown = Object.hasOwn(entry, "transport")
+      ? Object.getOwnPropertyDescriptor(entry, "transport")?.value
+      : undefined;
+    if (typeof transport !== "object" || transport === null) {
+      return false;
+    }
+    const type: unknown = Object.getOwnPropertyDescriptor(
+      transport,
+      "type",
+    )?.value;
+    if (type === "file-response" || type === "file-both") {
+      return true;
+    }
+    if (type !== "file-input") {
+      return false;
+    }
+    const input: unknown = Object.getOwnPropertyDescriptor(
+      transport,
+      "input",
+    )?.value;
+    if (typeof input !== "object" || input === null) {
+      return false;
+    }
+    return Object.getOwnPropertyDescriptor(input, "required")?.value === true;
   }).length;
 };
 
@@ -1252,7 +1271,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
   {
     id: "capability-file-transport-suppressed",
     description:
-      "capabilities suppressed from the generic transport for file input/output (requiresFileInput or returnsFileResponse): dropped from the CLI tree and refused by invoke_capability, so no agent surface can reach them (counted across both committed catalog mirrors)",
+      "capabilities whose transport disposition suppresses them from the generic transport (a file response, or a REQUIRED file input): dropped from the CLI tree and refused by invoke_capability, so no agent surface can reach them. An OPTIONAL file input is not counted — its JSON modes stay invokable (counted across both committed catalog mirrors)",
     include: [
       "packages/cli/src/generated/capability-catalog.json",
       "apps/api/src/mcp/generated/capability-catalog.json",
@@ -2113,12 +2132,43 @@ const SELF_TEST_CAPABILITY_CATALOG = `${JSON.stringify([
   { id: "beta.read", inputSchemaTruncated: false },
   { id: "gamma.update" },
   { id: "delta.delete", inputSchemaTruncated: true },
-  // File-transport suppression shapes: input-only, output-only, BOTH (must
-  // count once, not twice), and `false` (must not count at all).
-  { id: "eta.create", requiresFileInput: true },
-  { id: "theta.get", returnsFileResponse: true },
-  { id: "iota.update", requiresFileInput: true, returnsFileResponse: true },
-  { id: "kappa.delete", requiresFileInput: false, returnsFileResponse: false },
+  // Transport shapes: required file input, file response, BOTH legs (must count
+  // once, not twice), a plain JSON transport, and an OPTIONAL file input (the
+  // fileless-exposed shape, which must NOT count — it stays invokable).
+  {
+    id: "eta.create",
+    transport: {
+      type: "file-input",
+      input: { field: "file", required: true, mediaTypes: [] },
+      alternative: { type: "none", reason: "fixture" },
+    },
+  },
+  {
+    id: "theta.get",
+    transport: {
+      type: "file-response",
+      response: { mediaTypes: ["application/pdf"] },
+      alternative: { type: "none", reason: "fixture" },
+    },
+  },
+  {
+    id: "iota.update",
+    transport: {
+      type: "file-both",
+      input: { field: "file", required: true, mediaTypes: [] },
+      response: { mediaTypes: ["application/pdf"] },
+      alternative: { type: "none", reason: "fixture" },
+    },
+  },
+  { id: "kappa.delete", transport: { type: "json" } },
+  {
+    id: "kappa.prefill",
+    transport: {
+      type: "file-input",
+      input: { field: "file", required: false, mediaTypes: [] },
+      alternative: { type: "none", reason: "fixture" },
+    },
+  },
   // Read-scope shapes: two reads on a write-only scope MUST count, a read on a
   // read scope and a write on a write scope must NOT.
   { id: "lambda.list", access: "read", scope: "stella:matters_write" },
@@ -2128,9 +2178,9 @@ const SELF_TEST_CAPABILITY_CATALOG = `${JSON.stringify([
 ])}\n`;
 // Two truncated entries in each of the two mirror fixtures.
 const EXPECTED_TRUNCATED_CAPABILITY_SCHEMAS = 4;
-// Three suppressed entries (input-only, output-only, and the both-flags entry
-// counted ONCE) in each of the two mirror fixtures; the `false`/`false` entry
-// is excluded.
+// Three suppressed entries (required file input, file response, and the
+// both-legs entry counted ONCE) in each of the two mirror fixtures; the plain
+// JSON entry and the OPTIONAL-file-input entry are excluded.
 const EXPECTED_FILE_TRANSPORT_SUPPRESSED = 6;
 // Two read-on-write-scope entries (`lambda.list`, `mu.get`) in each of the two
 // mirror fixtures; the read-on-read-scope and write-on-write-scope entries, and

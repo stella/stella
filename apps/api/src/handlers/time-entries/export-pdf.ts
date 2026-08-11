@@ -14,6 +14,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
+import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 export const exportPdfQuerySchema = t.Object({
   dateFrom: t.Optional(t.String({ format: "date" })),
@@ -281,6 +282,20 @@ const config = {
   permissions: { timeEntry: ["approve"] },
   mcp: { type: "capability", reason: "billing_admin" },
   access: "read",
+  transport: {
+    type: "file-response",
+    response: { mediaTypes: [PDF_MIME_TYPE] },
+    alternative: {
+      type: "partial",
+      // One sufficient call, not a sequence: `via` is an ordered list of calls
+      // to make, and naming both exports here would tell a client to run the
+      // second one for nothing. LEDES is named in the limitation as the other
+      // single-call option.
+      via: ["time-entries.export-csv"],
+      limitation:
+        "returns the same entries as CSV text (time-entries.export-ledes returns LEDES instead); the rendered PDF is not produced",
+    },
+  },
   query: exportPdfQuerySchema,
 } satisfies HandlerConfig;
 

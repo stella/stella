@@ -213,8 +213,7 @@ describe("list_capabilities", () => {
         access: string;
         destructive: boolean;
         handlerKind: string;
-        requiresFileInput: boolean;
-        returnsFileResponse: boolean;
+        transport: { type: string; invocable: boolean };
       }[];
       nextCursor: string | null;
       limit: number;
@@ -229,8 +228,10 @@ describe("list_capabilities", () => {
       expect(["read", "write"]).toContain(item.access);
       expect(typeof item.destructive).toBe("boolean");
       expect(["workspace", "root"]).toContain(item.handlerKind);
-      expect(typeof item.requiresFileInput).toBe("boolean");
-      expect(typeof item.returnsFileResponse).toBe("boolean");
+      expect(["json", "file-input", "file-response", "file-both"]).toContain(
+        item.transport.type,
+      );
+      expect(typeof item.transport.invocable).toBe("boolean");
     }
 
     const second = await call("list_capabilities", {
@@ -997,7 +998,7 @@ describe("invoke_capability validateOnly ordering (fix-5)", () => {
 // --- fix-6: file/stream capabilities refused --------------------------------
 
 describe("invoke_capability file-response gate (fix-6)", () => {
-  test("(layer a) a returnsFileResponse capability is refused pre-execution", async () => {
+  test("(layer a) a file-returning capability is refused pre-execution", async () => {
     const result = await handleMcpToolCall({
       args: { capability: "clauses.export" },
       context: createContext(),
@@ -1102,9 +1103,11 @@ describe("invoke_capability file-response gate (fix-6)", () => {
 // --- file-input capabilities refused (t.File over JSON) ----------------------
 
 describe("invoke_capability file-input gate", () => {
-  test("a requiresFileInput capability is refused pre-execution on invoke", async () => {
-    // entities.upload's body carries t.File(); JSON cannot deliver a File, so
-    // the gate refuses before validation/dispatch with a presigned-flow hint.
+  test("a required-file capability is refused pre-execution, naming its alternative", async () => {
+    // entities.upload's body carries a required t.File(); JSON cannot deliver a
+    // File, so the gate refuses before validation/dispatch — and the hint
+    // carries the presigned flow's real capability ids from the catalog, so the
+    // agent gets a next call instead of a dead end.
     const result = await handleMcpToolCall({
       args: {
         capability: "entities.upload",
@@ -1118,8 +1121,9 @@ describe("invoke_capability file-input gate", () => {
     });
     const error = errorEnvelope(result);
     expect(error.code).toBe("feature_disabled");
-    expect(error.message).toContain("file upload");
-    expect(error.hint).toContain("presigned");
+    expect(error.message).toContain("requires a file in `file`");
+    expect(error.hint).toContain("uploads.create");
+    expect(error.hint).toContain("uploads.update");
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
   });
 
@@ -1139,40 +1143,122 @@ describe("invoke_capability file-input gate", () => {
     expect(errorEnvelope(result).code).toBe("feature_disabled");
   });
 
-  test("describe_capability exposes requiresFileInput", async () => {
+  test("an OPTIONAL file field leaves the capability invocable in its JSON modes", async () => {
+    // templates.prefill takes `file`, `text`, and `entityIds` as alternative
+    // sources; only the first needs bytes. The old boolean dropped the whole
+    // capability from every client — this asserts the JSON modes now reach
+    // dispatch (the handler runs; whatever it returns is beyond this gate).
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "templates.prefill",
+        input: {
+          params: { templateId: "01234567-89ab-cdef-0123-456789abcdef" },
+          body: { text: "Tenant: ACME" },
+        },
+        validateOnly: true,
+      },
+      context: createContext({ grantedScopes: ["stella:templates"] }),
+      toolName: "invoke_capability",
+    });
+    // Reached validation: the input is accepted, not refused by a transport
+    // gate. The old boolean returned `feature_disabled` here.
+    expect(parseToolPayload<{ valid: boolean }>(result).valid).toBe(true);
+  });
+
+  test("the withheld file field is refused, not silently dropped", async () => {
+    // A caller who sent bytes-as-a-string must not get a success computed from
+    // the other sources: the string would pass `format: "binary"` validation
+    // and reach a handler expecting a `File`.
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "templates.prefill",
+        input: {
+          params: { templateId: "01234567-89ab-cdef-0123-456789abcdef" },
+          body: { file: "not-a-file", text: "Tenant: ACME" },
+        },
+      },
+      context: createContext({ grantedScopes: ["stella:templates"] }),
+      toolName: "invoke_capability",
+    });
+    const error = errorEnvelope(result);
+    expect(error.code).toBe("validation_error");
+    expect(error.message).toContain("cannot take `file`");
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+  });
+
+  test("describe_capability exposes the transport disposition", async () => {
     const flagged = await call("describe_capability", {
       capability: "entities.upload",
     });
     expect(
-      parseToolPayload<{ requiresFileInput: boolean }>(flagged)
-        .requiresFileInput,
-    ).toBe(true);
+      parseToolPayload<{
+        transport: { type: string; invocable: boolean; fileField: string };
+      }>(flagged).transport,
+    ).toMatchObject({
+      type: "file-input",
+      invocable: false,
+      fileField: "file",
+    });
+
+    const fileless = await call("describe_capability", {
+      capability: "templates.prefill",
+    });
+    expect(
+      parseToolPayload<{
+        transport: {
+          invocable: boolean;
+          fileField: string;
+          fileFieldRequired: boolean;
+        };
+      }>(fileless).transport,
+    ).toMatchObject({
+      invocable: true,
+      fileField: "file",
+      fileFieldRequired: false,
+    });
 
     const plain = await call("describe_capability", {
       capability: "time-entries.create",
     });
     expect(
-      parseToolPayload<{ requiresFileInput: boolean }>(plain).requiresFileInput,
-    ).toBe(false);
+      parseToolPayload<{ transport: { type: string; fileField: null } }>(plain)
+        .transport,
+    ).toMatchObject({ type: "json", fileField: null });
   });
 
-  test("the catalog flag matches the live schema (mechanical derivation)", () => {
-    // Every t.File-bearing catalog capability carries the flag; three known
-    // seeds spot-check the derivation. `in` narrowing because the JSON module
-    // type only carries the field on flagged entries.
-    const flagged = new Set(
+  test("every catalog entry's transport matches the live schema's binary field", () => {
+    // Declared set equals derived set, in both directions: the exporter proves
+    // this at build time, and this asserts it on the artifact that actually
+    // ships. Spot-checked ids keep a wiring mistake from making the sets
+    // trivially equal (e.g. both empty).
+    const declaredFileInput = new Set(
       capabilityCatalog
-        .filter((e) => "requiresFileInput" in e && e.requiresFileInput)
+        .filter(
+          (e) =>
+            e.transport.type === "file-input" ||
+            e.transport.type === "file-both",
+        )
         .map((e) => e.id),
     );
+    // The snapshot is compact JSON, so a `t.File()` field is literally
+    // `"format":"binary"`. Entries whose schema exceeded the byte cap carry no
+    // schema here; the exporter checks those against the LIVE schema, which is
+    // why that check cannot live only in this test.
+    const schemaBinary = new Set(
+      capabilityCatalog
+        .filter((e) => JSON.stringify(e).includes('"format":"binary"'))
+        .map((e) => e.id),
+    );
+    expect([...declaredFileInput].sort()).toEqual([...schemaBinary].sort());
     for (const id of [
       "entities.upload",
       "clauses.import",
       "templates.create",
+      "templates.prefill",
     ]) {
-      expect(flagged.has(id), id).toBe(true);
+      expect(declaredFileInput.has(id), id).toBe(true);
     }
-    expect(flagged.has("time-entries.export-csv")).toBe(false);
+    expect(declaredFileInput.has("time-entries.export-csv")).toBe(false);
   });
 });
 

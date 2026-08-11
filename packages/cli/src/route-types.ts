@@ -170,6 +170,14 @@ export type CapabilityLeafSpec = {
    * carries it; `--input` validation expands it (`expand-schema-defs.ts`).
    */
   inputSchema: JsonSchema;
+  /**
+   * Body field carrying an OPTIONAL file. The capability is generated (its other
+   * modes are plain JSON) but this field is withheld from the flags and from the
+   * `--input` schema, because no JSON value can stand in for the bytes. Named
+   * here so `--help` can say so instead of leaving a silent gap between the
+   * command and the REST endpoint.
+   */
+  filelessField?: string;
 };
 
 /** stricli assembly: `LeafCommandSpec[]` folds into a nested route tree. */

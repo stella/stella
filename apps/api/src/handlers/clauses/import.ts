@@ -431,6 +431,18 @@ export const importHandler = async function* ({
 const config = {
   permissions: { clause: ["create"] },
   mcp: { type: "capability", reason: "knowledge_library_admin" },
+  transport: {
+    type: "file-input",
+    // Any declared type: the handler reads the file as text and picks the
+    // parser from the content (a clauses.export JSON payload, else CSV).
+    input: { field: "file", required: true, mediaTypes: [] },
+    alternative: {
+      type: "partial",
+      via: ["clauses.create"],
+      limitation:
+        "creates one clause per call from a JSON body; there is no bulk CSV import over JSON",
+    },
+  },
   body: importBodySchema,
 } satisfies HandlerConfig;
 
