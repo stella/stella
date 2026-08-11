@@ -96,7 +96,7 @@ const mapDecisionType = (type: string | undefined): string | undefined => {
 };
 
 /** Shape of a single item in the paginated day response. */
-type CzRegionalApiItem = {
+export type CzRegionalApiItem = {
   jednaciCislo?: string | null;
   ecli?: string | null;
   soud?: string | null;
@@ -233,7 +233,9 @@ const isCzRegionalFinaldoc = (value: unknown): value is CzRegionalFinaldoc =>
   isNullishArrayOf(value["styles"], isFinaldocStyle) &&
   isNullishValue(value["metadata"], isCzRegionalMetadata);
 
-const isCzRegionalApiItem = (value: unknown): value is CzRegionalApiItem =>
+export const isCzRegionalApiItem = (
+  value: unknown,
+): value is CzRegionalApiItem =>
   isRecord(value) &&
   isNullishString(value["jednaciCislo"]) &&
   isNullishString(value["ecli"]) &&
@@ -403,12 +405,42 @@ const fetchFinaldoc = async (
 };
 
 /**
+ * Merge a finaldoc fetch into the decision parsed from the listing item.
+ * Mutates in place, which is what the page enrichment already did; kept as
+ * one function so the listing walk and the crawl cannot enrich differently.
+ */
+const applyFinaldoc = (
+  decision: IngestionResult,
+  result: FinaldocResult,
+): void => {
+  if (result.fulltext) {
+    decision.fulltext = result.fulltext;
+  }
+  if (result.decisionType) {
+    decision.decisionType = result.decisionType;
+  }
+  decision.documentAst = result.documentAst;
+  decision.sourceRaw = result.sourceRaw;
+  decision.sourceRawContentType = "application/json";
+
+  const rm = result.richMetadata;
+  if (Object.keys(rm).length > 0) {
+    decision.metadata = {
+      ...decision.metadata,
+      ...rm,
+    };
+  }
+};
+
+/**
  * The publisher's document id, which this source states only as the last
  * segment of the item's link (`/api/finaldoc/<id>`). Returns undefined for a
  * link that carries no segment, so identity falls back to the case number
  * rather than keying every such row on the same empty string.
  */
-const documentIdFromLink = (link: string | undefined): string | undefined => {
+export const documentIdFromLink = (
+  link: string | undefined,
+): string | undefined => {
   if (link === undefined) {
     return undefined;
   }
@@ -657,6 +689,108 @@ const fetchListPage = async ({ cursor, signal, state }: FetchListPageOptions) =>
     },
   );
 
+type ListCzRegionalDayPageOptions = {
+  /** Publication day, `YYYY-MM-DD`. */
+  date: string;
+  /** 0-indexed page within the day. */
+  page: number;
+  signal?: AbortSignal | undefined;
+};
+
+export type CzRegionalDayPage = {
+  items: CzRegionalApiItem[];
+  /** 0 for a day the publisher lists nothing for (the API answers 404). */
+  totalPages: number;
+};
+
+/**
+ * One page of the publisher's own day listing, with no finaldoc enrichment.
+ *
+ * The crawl reaches a day by walking its cursor forward and pays a finaldoc
+ * fetch for every item on the page, which is the wrong shape for asking what
+ * a day contains. This is the same request, the same retries and the same
+ * payload validation as `fetchPage`, stopping at the listing.
+ */
+export const listCzRegionalDayPage = async ({
+  date,
+  page,
+  signal,
+}: ListCzRegionalDayPageOptions): Promise<CzRegionalDayPage> => {
+  const state: CursorState = { date, page, emptyDays: 0 };
+  const cursor = makeCursor(state);
+  const responseResult = await fetchListPage({ cursor, signal, state });
+  if (Result.isError(responseResult)) {
+    throw responseResult.error;
+  }
+  const response = responseResult.value;
+
+  // 404 is how this API says "nothing published that day".
+  if (response.status === 404) {
+    return { items: [], totalPages: 0 };
+  }
+  if (!response.ok) {
+    throw new AdapterFetchError({
+      message: `CZ Regional API error: ${response.status}`,
+      adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+      cursor,
+      httpStatus: response.status,
+    });
+  }
+
+  const json = await response.json();
+  if (!isCzRegionalPageResponse(json)) {
+    throw new AdapterFetchError({
+      message: "CZ Regional API returned an invalid payload",
+      adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+      cursor,
+    });
+  }
+  return {
+    items: arrayOrEmpty(json.items),
+    totalPages: json.totalPages ?? 1,
+  };
+};
+
+export type CzRegionalBuildResult =
+  | { type: "built"; decision: IngestionResult }
+  /** No docket and court to key on; the crawl drops these too. */
+  | { type: "unkeyable" }
+  /** The item links a document, but nothing came back for it. */
+  | { type: "detail-unavailable" };
+
+/**
+ * Build one decision from a listing item, through the adapter's own parse and
+ * enrichment path.
+ *
+ * `fetchFinaldoc` degrades to empty enrichment when the document cannot be
+ * read, which is right for the crawl: the page keeps moving and the listing
+ * observation is still worth storing. A caller filling gaps needs the
+ * opposite, so the failure is reported instead of folded into the decision —
+ * storing a detail-less row would make the identity held and take the
+ * document out of every later reconciliation. The signal is `sourceRaw`,
+ * which is set whenever a response body was read at all (even one the
+ * validator then rejected), so its absence is exactly "nothing came back".
+ */
+export const buildCzRegionalDecision = async (
+  item: CzRegionalApiItem,
+  signal?: AbortSignal,
+): Promise<CzRegionalBuildResult> => {
+  const decision = parseItem(item);
+  if (decision === null) {
+    return { type: "unkeyable" };
+  }
+  // The publisher linked no document; the listing metadata is all there is.
+  if (!decision.documentUrl) {
+    return { type: "built", decision };
+  }
+  const finaldoc = await fetchFinaldoc(decision.documentUrl, decision, signal);
+  if (finaldoc.sourceRaw === undefined) {
+    return { type: "detail-unavailable" };
+  }
+  applyFinaldoc(decision, finaldoc);
+  return { type: "built", decision };
+};
+
 export const czRegionalAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.CZ_REGIONAL,
   name: "Czech Regional Courts",
@@ -800,29 +934,10 @@ export const czRegionalAdapter = defineSourceAdapter({
             return;
           }
 
-          const result = await fetchFinaldoc(
-            decision.documentUrl,
+          applyFinaldoc(
             decision,
-            signal,
+            await fetchFinaldoc(decision.documentUrl, decision, signal),
           );
-
-          if (result.fulltext) {
-            decision.fulltext = result.fulltext;
-          }
-          if (result.decisionType) {
-            decision.decisionType = result.decisionType;
-          }
-          decision.documentAst = result.documentAst;
-          decision.sourceRaw = result.sourceRaw;
-          decision.sourceRawContentType = "application/json";
-
-          const rm = result.richMetadata;
-          if (Object.keys(rm).length > 0) {
-            decision.metadata = {
-              ...decision.metadata,
-              ...rm,
-            };
-          }
         };
 
         for (let i = 0; i < decisions.length; i += FINALDOC_CONCURRENCY) {
