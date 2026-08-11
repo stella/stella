@@ -76,7 +76,7 @@ export type PresignUploadResult = {
 };
 
 /**
- * S3 endpoints that aren't `*.amazonaws.com` (MinIO, R2, etc.)
+ * S3 endpoints that aren't `*.amazonaws.com` (RustFS, R2, etc.)
  * almost always need path-style addressing — the bucket lives
  * under the path, not as a subdomain. AWS itself supports both
  * but virtual-hosted-style is the default and faster.

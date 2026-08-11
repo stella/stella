@@ -9,7 +9,7 @@
  * directly would skip the derivative/extraction fan-out, leaving every
  * non-DOCX file without a `pdfFileId` and so unopenable and uncitable.
  *
- * Needs the API, Valkey, MinIO and Gotenberg. Text extraction also needs
+ * Needs the API, Valkey, RustFS and Gotenberg. Text extraction also needs
  * `bun run document-processing-worker`, which `bun run dev` does not start —
  * without it runs stay `queued` and only filenames are searchable.
  *

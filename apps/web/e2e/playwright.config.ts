@@ -68,7 +68,7 @@ export default defineConfig({
   ],
 
   // We do NOT start the dev server from Playwright. Spinning up dev inside
-  // Playwright fights the docker stack (Postgres/MinIO/Valkey/Gotenberg) and
+  // Playwright fights the docker stack (Postgres/RustFS/Valkey/Gotenberg) and
   // hides "is dev broken" vs. "is the test broken". CI starts the stack via
   // explicit steps; locally, run `bun run dev` first.
   metadata: {

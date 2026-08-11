@@ -192,7 +192,7 @@ describe("detect-e2e-changes", () => {
       .filter((line) => line.includes("docker compose --profile dev up"))
       .map((line) => line.trim());
     expect(composeStartLines).toEqual([
-      "if docker compose --profile dev up -d --wait postgres minio valkey 2>&1 \\",
+      "if docker compose --profile dev up -d --wait postgres rustfs valkey 2>&1 \\",
     ]);
     expect(e2eStackSetup).not.toContain("gotenberg");
   });

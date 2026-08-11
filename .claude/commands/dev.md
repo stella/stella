@@ -36,7 +36,7 @@ checks.
    worktree path. For a new assignment, select from the full valid
    infrastructure range, reserve the candidate with a race-safe
    lock, and validate all five shifted ports (Postgres, Valkey,
-   MinIO API, MinIO console, and Gotenberg). Reject the candidate if
+   RustFS API, RustFS console, and Gotenberg). Reject the candidate if
    any of those ports intersects the dry-run web or API ports, or if
    any container or Docker volume already uses the corresponding
    `stella-dev-<offset>` project unless its Compose working-directory
@@ -46,7 +46,7 @@ checks.
    The runner hashes application offsets into only 400 buckets and
    checks application ports separately. That hash is not an
    infrastructure ownership mechanism, and adjacent infrastructure
-   offsets can overlap because MinIO uses consecutive ports.
+   offsets can overlap because RustFS uses consecutive ports.
 
 3. **Start the dev runner**:
 

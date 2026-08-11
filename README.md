@@ -81,7 +81,7 @@ in one click; no email provider or AI key is needed for the first login.
 Run stella on your own infrastructure: see the
 [self-hosting guide](docs/self-hosting.md). The
 self-host Compose file runs the API, document-processing worker, and Gotenberg;
-the guide covers Postgres, S3-compatible storage, Gotenberg, and the supported
+the guide covers Postgres, RustFS object storage, Gotenberg, and the supported
 Redis-compatible services. The frontend is a TanStack Start SSR app: build and
 run `apps/web/Dockerfile`, or run
 `bun --filter @stll/web build` followed by

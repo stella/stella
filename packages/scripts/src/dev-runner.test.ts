@@ -273,9 +273,9 @@ describe("infraPortsForOffset", () => {
   test("returns default ports at offset 0", () => {
     expect(infraPortsForOffset(0)).toEqual({
       gotenberg: 3003,
-      minio: 9000,
-      minioConsole: 9001,
       postgres: 5432,
+      rustfs: 9000,
+      rustfsConsole: 9001,
       valkey: 6379,
     });
   });
@@ -283,9 +283,9 @@ describe("infraPortsForOffset", () => {
   test("shifts all infra ports by the offset", () => {
     expect(infraPortsForOffset(10)).toEqual({
       gotenberg: 3013,
-      minio: 9010,
-      minioConsole: 9011,
       postgres: 5442,
+      rustfs: 9010,
+      rustfsConsole: 9011,
       valkey: 6389,
     });
   });
@@ -308,7 +308,7 @@ describe("shared Docker service readiness", () => {
     {
       exitCode: undefined,
       health: "healthy",
-      service: "minio",
+      service: "rustfs",
       state: "running",
     },
     {
@@ -320,7 +320,7 @@ describe("shared Docker service readiness", () => {
     {
       exitCode: 0,
       health: undefined,
-      service: "minio-setup",
+      service: "rustfs-setup",
       state: "exited",
     },
   ];
@@ -332,7 +332,7 @@ describe("shared Docker service readiness", () => {
           {
             ExitCode: 0,
             Health: "",
-            Service: "minio-setup",
+            Service: "rustfs-setup",
             State: "exited",
           },
         ]),
@@ -341,7 +341,7 @@ describe("shared Docker service readiness", () => {
       {
         exitCode: 0,
         health: "",
-        service: "minio-setup",
+        service: "rustfs-setup",
         state: "exited",
       },
     ]);
@@ -358,7 +358,7 @@ describe("shared Docker service readiness", () => {
           }),
           JSON.stringify({
             ExitCode: "0",
-            Service: "minio-setup",
+            Service: "rustfs-setup",
             State: "exited",
           }),
         ].join("\n"),
@@ -373,7 +373,7 @@ describe("shared Docker service readiness", () => {
       {
         exitCode: 0,
         health: undefined,
-        service: "minio-setup",
+        service: "rustfs-setup",
         state: "exited",
       },
     ]);
@@ -392,18 +392,18 @@ describe("shared Docker service readiness", () => {
     ).toBe("postgres is health=starting");
   });
 
-  test("requires the Minio setup init container to finish successfully", () => {
+  test("requires the RustFS setup init container to finish successfully", () => {
     expect(
       getSharedDockerServicesWaitFailure([
         ...readyStatuses.slice(0, -1),
         {
           exitCode: undefined,
           health: undefined,
-          service: "minio-setup",
+          service: "rustfs-setup",
           state: "running",
         },
       ]),
-    ).toBe("minio-setup has not completed yet (state=running)");
+    ).toBe("rustfs-setup has not completed yet (state=running)");
 
     expect(getSharedDockerServicesWaitFailure(readyStatuses)).toBeUndefined();
   });

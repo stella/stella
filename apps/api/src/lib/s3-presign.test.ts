@@ -360,7 +360,7 @@ describe("scoped object operations", () => {
 });
 
 // -----------------------------------------------------------------
-// Smoke test against the real S3 endpoint (MinIO in dev/CI).
+// Smoke test against the real S3 endpoint (RustFS in dev/CI).
 //
 // This is the security gate of the presigned-upload migration:
 // the API trusts S3 to enforce the SHA-256 it baked into the URL.
@@ -375,18 +375,18 @@ describe("scoped object operations", () => {
 //   3. presigns again and PUTs "hello" — expects 200
 //   4. HEADs the object and verifies the stored checksum matches
 //
-// Run with the local docker stack up (postgres+minio+...). The
-// suite skips when MinIO is not reachable so unit-only test runs
+// Run with the local docker stack up (postgres+rustfs+...). The
+// suite skips when RustFS is not reachable so unit-only test runs
 // don't fail; CI's e2e job has the stack running.
 // -----------------------------------------------------------------
 
-const isMinioReachable = async (): Promise<boolean> => {
+const isRustfsReachable = async (): Promise<boolean> => {
   const endpoint = Bun.env["S3_ENDPOINT"];
   if (!endpoint) {
     return false;
   }
   try {
-    const probe = await fetch(`${endpoint}/minio/health/live`, {
+    const probe = await fetch(`${endpoint}/health`, {
       signal: AbortSignal.timeout(500),
     });
     return probe.ok;
@@ -395,9 +395,9 @@ const isMinioReachable = async (): Promise<boolean> => {
   }
 };
 
-const minioReachable = await isMinioReachable();
+const rustfsReachable = await isRustfsReachable();
 
-describe.skipIf(!minioReachable)(
+describe.skipIf(!rustfsReachable)(
   "presignUploadUrl smoke test (real S3)",
   () => {
     const probeKey = `tmp/checksum-smoke-${Date.now()}`;

@@ -90,9 +90,9 @@ and external service SDKs (AI providers, email, analytics, storage).
     The provider is selectable via configuration, enabling
     failover or migration without rewriting business logic.
 
-13. **Storage abstraction.** File storage uses the S3 API,
-    compatible with multiple providers (AWS S3,
-    Cloudflare R2, MinIO for self-hosting).
+13. **Storage abstraction.** File storage uses the S3 API. Hosted
+    deployments use AWS S3; RustFS is the supported self-hosted
+    object store.
 
 ## Enforcement
 
