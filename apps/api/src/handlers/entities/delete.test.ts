@@ -51,6 +51,12 @@ test("routes cleanup dispatch through the bounded hand-off", () => {
 test("deletes ingested message children and collects their files and derivatives", () => {
   expect(source).toContain("lockWorkspacesForEntityCap(tx, [workspaceId])");
   expect(source).toContain("inArray(entities.parentId, messageIds)");
+  expect(source).toContain(
+    ".limit(MAX_MESSAGE_ATTACHMENT_CHILDREN_PER_DELETE + 1)",
+  );
+  expect(source).toContain(
+    "lockedAttachmentEntities.length >\n        MAX_MESSAGE_ATTACHMENT_CHILDREN_PER_DELETE",
+  );
   expect(source).toContain("...lockedAttachmentEntities.map(({ id }) => id)");
   expect(source).toContain("excludedEntityIds: entityIdsToDelete");
   expect(source).toContain(

@@ -6,7 +6,7 @@ import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename
 import { finalizeErr, UploadFinalizeError } from "@/api/lib/uploads/runtime";
 
 /** Upper bound on attachments materialized per email. */
-const MAX_EMAIL_ATTACHMENTS = 50;
+export const MAX_EMAIL_ATTACHMENTS = 50;
 
 export const validateEmailAttachmentCount = (
   attachmentCount: number,
