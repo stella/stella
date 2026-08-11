@@ -26,11 +26,7 @@ export const POLARITY = {
 } as const satisfies ConstantMap<Polarity>;
 
 /** Rule source types, declared as the list the CHECK constraint derives from. */
-export const RULE_SOURCES = [
-  "manual",
-  "llm-proposed",
-  "llm-promoted",
-] as const;
+export const RULE_SOURCES = ["manual", "llm-proposed", "llm-promoted"] as const;
 
 export type RuleSource = (typeof RULE_SOURCES)[number];
 

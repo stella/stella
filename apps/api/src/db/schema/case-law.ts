@@ -48,7 +48,8 @@ import type {
 /** The declaration the column's `enum` and the CHECK both derive from. */
 const CASE_LAW_CORPUS_MIRROR_STATUSES = ["settled", "pending"] as const;
 
-type CaseLawCorpusMirrorStatus = (typeof CASE_LAW_CORPUS_MIRROR_STATUSES)[number];
+type CaseLawCorpusMirrorStatus =
+  (typeof CASE_LAW_CORPUS_MIRROR_STATUSES)[number];
 
 export const CASE_LAW_CORPUS_MIRROR_STATUS = {
   PENDING: "pending",
