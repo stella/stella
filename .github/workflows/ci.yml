@@ -636,6 +636,22 @@ jobs:
           bun scripts/ratchet.ts --self-test
           bun scripts/ratchet.ts --check
 
+      - name: Suppression waiver ledger
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # The ratchet budgets cap how many suppressions each lint rule carries.
+        # For the security tier — tenancy, authorization, credential and audit
+        # rules — a count is not enough, because two waivers of the same rule
+        # are not interchangeable. scripts/suppression-waivers.json names each
+        # one (rule, file, anchoring symbol, reason, evidence) and this guard
+        # mirrors it against the tree in both directions, so adding a
+        # suppression is a reviewable ledger edit and a stale entry cannot rot
+        # in place. Temporary waivers fail once their expiry passes. The
+        # --self-test run first proves the guard still detects each kind of
+        # drift. Draft entries: `bun scripts/suppression-waivers.ts --seed`.
+        run: |
+          bun scripts/suppression-waivers.ts --self-test
+          bun scripts/suppression-waivers.ts --check
+
       - name: Crawl posture guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # Every app under apps/ declares a `crawlPosture` in package.json:

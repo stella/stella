@@ -88,6 +88,59 @@ predecessor when relevant.
 | `no-unsanitized-href`    | `javascript:` XSS via `<a href={data.url}>` where `data.url` comes from external JSON.                                                                                                                                                                                                   | Wrap with `sanitizeHref()` from `apps/web/src/lib/sanitize-href.ts` (returns `string \| undefined` — `undefined` when unsafe). For backend code that needs structural enforcement, see `sanitizeUrl()` in `apps/api/src/lib/sanitize-url.ts`, which returns the branded `SafeHref` type. |
 | `no-unscoped-user-query` | Imports of the `user` table from `auth-schema` without also importing `member` — a heuristic that the query may not be organization-scoped. The rule does not verify the actual join, so reviewers must still confirm that `user` is filtered through a `member` join in the query body. | Import `member` alongside `user`, then join on `organizationId` in the query.                                                                                                                                                                                                            |
 
+## Suppression policy
+
+A disable directive is a standing exception to a rule, so it is governed, not
+just linted. Three layers, each with a different job:
+
+1. **Hygiene** — `suppression-hygiene` (above) requires every directive to name
+   its rule and carry a reason, and oxlint's
+   `--report-unused-disable-directives-severity=error` deletes dead ones.
+2. **Budgets** — `scripts/ratchet.ts` carries a decrease-only budget per
+   tracked rule, plus one residual budget for every rule without a dedicated
+   one. The budgets are a **partition**: a directive naming a tracked rule is
+   charged only to that rule, so no rule's burn-down can fund another rule's
+   new waiver. A rule-less directive silences everything, so it is charged to
+   every tracked budget at once.
+3. **Ledger** — `scripts/suppression-waivers.json` names each individual
+   security-tier suppression. `scripts/suppression-waivers.ts` mirrors it
+   against the tree in both directions: every security-tier directive needs an
+   entry, and every entry needs a directive. It also rejects rule-less
+   directives outright — a bare `eslint-disable` cannot be ledgered, because it
+   does not say what it is standing down.
+
+The tracked rules and their tiers live in `scripts/lint-suppressions.ts`, which
+both guards import — the budget and the ledger cannot disagree about what
+counts as a suppression.
+
+### Adding a suppression
+
+Removing one is free: delete the directive (and, in the security tier, its
+ledger entry) in the same change. Adding one takes, in a single PR:
+
+- the directive, with its rule named and a `-- <reason>` trailer;
+- a per-rule baseline reseed — `bun scripts/ratchet.ts --write`;
+- for a security-tier rule, a ledger entry — draft it with
+  `bun scripts/suppression-waivers.ts --seed`, then replace the placeholder
+  evidence locator;
+- the justification in the PR description. Reseeding a baseline is a product
+  decision, not a way to make CI green.
+
+Ledger entries are keyed by rule + file + nearest enclosing top-level symbol,
+never by line number, so an edit above a waiver does not churn the ledger.
+Structural exceptions are `"kind": "permanent"` and carry no owner or expiry
+field — a permanent waiver's owner rots faster than the waiver does. A waiver
+that really is provisional uses `"kind": "temporary"` with an `expires` date,
+and the guard fails the build once that date passes.
+
+### Adding a rule to the tracked set
+
+Append it to `TRACKED_SUPPRESSION_RULES` in `scripts/lint-suppressions.ts` with
+its tier, then run `bun scripts/ratchet.ts --write`. Metric IDs are derived
+from the rule name, so the budget cannot be forgotten. A rule at zero
+suppressions is the cheapest time to add one: the baseline can only shrink, so
+zero becomes permanent.
+
 ## Adding a new rule
 
 1. Drop a new `*.ts` file in this directory exporting `{ meta, rules }` shaped
