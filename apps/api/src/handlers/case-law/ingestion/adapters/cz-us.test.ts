@@ -334,11 +334,7 @@ describe("czUsAdapter.fetchPage", () => {
 
     const verified = unwrap(await czUsAdapter.fetchPage(page.nextCursor, {}));
     expect(verified.nextCursor).toBe(historicalCursor(1994));
-    expect(verified.coverage).toEqual({
-      slice: "decision-year:1993",
-      reported: 3,
-      collected: 3,
-    });
+    expect(verified.coverage).toBeUndefined();
   });
 
   test("keeps multiple published decisions under one docket distinct", async () => {
@@ -457,7 +453,7 @@ describe("czUsAdapter.fetchPage", () => {
     ).toBe(true);
   });
 
-  test("uses the result banner for pagination and slice coverage", async () => {
+  test("uses the result banner for pagination and slice completion", async () => {
     const firstRows = Array.from({ length: 40 }, (_, index) => ({
       id: String(3000 + index),
       sz: `1-${index + 1}-24_1`,
@@ -522,11 +518,8 @@ describe("czUsAdapter.fetchPage", () => {
     const verified = unwrap(
       await czUsAdapter.fetchPage(verifyFirst.nextCursor, {}),
     );
-    expect(verified.coverage).toEqual({
-      slice: "decision-year:2024",
-      reported: 42,
-      collected: 42,
-    });
+    expect(verified.nextCursor).toBe(historicalCursor(2025));
+    expect(verified.coverage).toBeUndefined();
   });
 
   test("restarts a traversal when a saved result page disappears", async () => {
@@ -559,7 +552,7 @@ describe("czUsAdapter.fetchPage", () => {
     }
   });
 
-  test("verifies a single-page slice before advancing coverage", async () => {
+  test("verifies a single-page slice before advancing", async () => {
     const firstRow = {
       id: "3100",
       sz: "1-1-24_1",
@@ -605,11 +598,7 @@ describe("czUsAdapter.fetchPage", () => {
 
     expect(submitted?.get("ctl00$MainContent$decidedFrom")).toBe("1.1.1993");
     expect(page.nextCursor).toBe(historicalCursor(1994));
-    expect(page.coverage).toEqual({
-      slice: "decision-year:1993",
-      reported: 0,
-      collected: 0,
-    });
+    expect(page.coverage).toBeUndefined();
   });
 
   test("finishing the current decision year hands over to availability polling", async () => {
@@ -664,11 +653,7 @@ describe("czUsAdapter.fetchPage", () => {
     expect(submitted?.get("ctl00$MainContent$availableFrom")).toBe("24.6.2026");
     expect(submitted?.get("ctl00$MainContent$availableTo")).toBe("7.8.2026");
     expect(submitted?.get("ctl00$MainContent$decidedFrom")).toBeNull();
-    expect(page.coverage).toEqual({
-      slice: "availability:2026-06-24:2026-08-07",
-      reported: 0,
-      collected: 0,
-    });
+    expect(page.coverage).toBeUndefined();
   });
 
   test("abstract failure does not drop a listed decision", async () => {
@@ -864,7 +849,7 @@ describe("czUsAdapter.fetchPage", () => {
     expect(page.decisions[0]?.sourceRaw).toContain("ResultDetail.aspx?id=7201");
     expect(page.decisions[0]?.sourceRawContentType).toBe("text/html");
     const verified = unwrap(await czUsAdapter.fetchPage(page.nextCursor, {}));
-    expect(verified.coverage?.collected).toBe(1);
+    expect(verified.nextCursor).toBe(historicalCursor(2025));
   });
 
   test("uses an exact text identity when ResultDetail id is malformed", async () => {
@@ -1039,11 +1024,7 @@ describe("czUsAdapter.fetchPage", () => {
       renderPositionOffset: 1,
     });
     const verified = unwrap(await czUsAdapter.fetchPage(page.nextCursor, {}));
-    expect(verified.coverage).toEqual({
-      slice: "decision-year:2024",
-      reported: 1,
-      collected: 1,
-    });
+    expect(verified.nextCursor).toBe(historicalCursor(2025));
 
     installSearchMock({
       rows: [
@@ -1275,7 +1256,7 @@ describe("czUsAdapter.fetchPage", () => {
       textHtml: expect.stringContaining("detail unavailable"),
     });
     const verified = unwrap(await czUsAdapter.fetchPage(page.nextCursor, {}));
-    expect(verified.coverage?.collected).toBe(1);
+    expect(verified.nextCursor).toBe(historicalCursor(2025));
   });
 
   test("catches up recent availability in contiguous bounded windows", async () => {

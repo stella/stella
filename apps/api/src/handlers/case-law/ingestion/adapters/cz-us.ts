@@ -15,6 +15,10 @@ import {
 import type {
   EmptyAst,
   IngestionResult,
+  ListingIdentity,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   INGESTION_USER_AGENT,
@@ -25,6 +29,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 const COMMON_HEADERS = {
   "User-Agent": INGESTION_USER_AGENT,
@@ -52,6 +57,11 @@ const COMMON_HEADERS = {
  * A null or legacy probe cursor starts the search-based historical repair at
  * FIRST_YEAR. This intentionally re-enumerates history once: it migrates the
  * incomplete probe crawl onto publisher-stated document identities.
+ *
+ * The same search form takes an arbitrary decision-date range, which is what
+ * makes this source reconcilable: a decision year can be listed on its own,
+ * without the crawl cursor ever reaching it. See `reconciliation` at the
+ * bottom of this file.
  */
 
 const ABSTRACT_URL = "https://nalus.usoud.cz/Search/GetAbstract.aspx";
@@ -103,6 +113,15 @@ const nalusIdentities = ({
 
 /** Largest result size that keeps one page's text fetches reasonably bounded. */
 const RESULTS_PAGE_SIZE = 40;
+
+/**
+ * Result size for a listing walk, the largest the search form offers. The
+ * crawl takes forty at a time because every row it keeps costs a text and an
+ * abstract fetch; a listing walk fetches no documents, so it asks for the whole
+ * eighty. NALUS honours it: a 2013 query answers `Výsledky 1 - 80 z celkem
+ * 4345`, and `?page=1` answers `81 - 160`.
+ */
+const LISTING_PAGE_SIZE = 80;
 
 /** Detail/abstract pairs fetched concurrently from the court. */
 const DOCUMENT_CONCURRENCY = 5;
@@ -493,7 +512,13 @@ type RecentCursor = {
 
 type CursorState = HistoricalCursor | RecentCursor;
 
-type ListedDecision = {
+/**
+ * One row of a NALUS result page, as {@link parseResultPage} reads it. This is
+ * also the reconciliation payload: the loop parks it verbatim as JSON and
+ * replays it through {@link buildCzUsFromPayload}, so every field the fetch
+ * and the identity depend on has to live here rather than in the walk.
+ */
+export type ListedDecision = {
   caseNumber: string;
   counter?: number | undefined;
   identityQuarantined?: true | undefined;
@@ -507,6 +532,26 @@ type ListedDecision = {
   sz?: string | undefined;
   ecli?: string | undefined;
 };
+
+/**
+ * The identity the ingest would store for this listed record.
+ *
+ * `sourceDocumentId` is the whole rule, and it is minted once, in
+ * {@link parseResultPage}: the exact publisher identity where the row exposes
+ * one, the content-addressed quarantine identity where it exposes none. Every
+ * decision this adapter writes — a parsed one, a listing-only one — carries
+ * that same string, so reading it back here is what keeps the crawl, the
+ * reconciliation loop and the ledger agreeing about which rows exist.
+ *
+ * `unidentifiable` is unreachable from a row {@link parseResultPage} built,
+ * since both branches produce a persistable id. It is stated anyway because
+ * the alternative is silence: an id the decision table would reject can never
+ * be held, so counting it as missing would keep the slice short forever.
+ */
+export const czUsListingIdentity = (listed: ListedDecision): ListingIdentity =>
+  isPersistableSourceDocumentId(listed.sourceDocumentId)
+    ? { type: "document", sourceDocumentId: listed.sourceDocumentId }
+    : { type: "unidentifiable" };
 
 type SearchPage = {
   listed: ListedDecision[];
@@ -723,19 +768,6 @@ const rollingPageDigest = (digest: string, page: SearchPage): string =>
       .join("|")}`,
   );
 
-const coverageSlice = (state: CursorState): string => {
-  switch (state.phase) {
-    case SWEEP_PHASE.HISTORICAL:
-      return `decision-year:${state.year}`;
-    case SWEEP_PHASE.RECENT:
-      return `availability:${state.availableFrom}:${state.availableTo}`;
-    default: {
-      const unhandled: never = state;
-      return panic(`Unhandled cz-us cursor: ${String(unhandled)}`);
-    }
-  }
-};
-
 const hiddenField = (html: string, name: string): string | undefined =>
   cheerio.load(html)(`#${name}`).attr("value");
 
@@ -811,7 +843,19 @@ const searchFields = (state: CursorState): Record<string, string> => {
   }
 };
 
-const parseResultPage = (html: string, expectedPage: number): SearchPage => {
+type ParseResultPageOptions = {
+  html: string;
+  /** 0-indexed page the request asked for. */
+  expectedPage: number;
+  /** Rows per page the request asked for; the banner is read against it. */
+  pageSize: number;
+};
+
+const parseResultPage = ({
+  html,
+  expectedPage,
+  pageSize,
+}: ParseResultPageOptions): SearchPage => {
   const banners = [
     ...html.matchAll(
       /Výsledky\s+(?<from>\d+)\s*-\s*(?<to>\d+)\s+z\s+celkem\s+(?<total>\d+)/gu,
@@ -836,7 +880,7 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
     throw new TypeError("NALUS result count banners disagree");
   }
 
-  const expectedFrom = expectedPage * RESULTS_PAGE_SIZE + 1;
+  const expectedFrom = expectedPage * pageSize + 1;
   if (banner.rangeFrom !== expectedFrom) {
     throw new SearchPageDriftError("NALUS result page moved during traversal");
   }
@@ -979,10 +1023,17 @@ const parseResultPage = (html: string, expectedPage: number): SearchPage => {
   return { listed, ...banner };
 };
 
-const fetchSearchPage = async (
-  state: CursorState,
-  signal: AbortSignal | undefined,
-): Promise<SearchPage | null> => {
+type FetchSearchPageOptions = {
+  state: CursorState;
+  pageSize: number;
+  signal?: AbortSignal | undefined;
+};
+
+const fetchSearchPage = async ({
+  state,
+  pageSize,
+  signal,
+}: FetchSearchPageOptions): Promise<SearchPage | null> => {
   const first = await fetchWithTimeout(SEARCH_URL, {
     headers: COMMON_HEADERS,
     redirect: "manual",
@@ -1013,7 +1064,7 @@ const fetchSearchPage = async (
     ctl00$MainContent$nalezy: "on",
     ctl00$MainContent$usneseni: "on",
     ctl00$MainContent$stanoviska_plena: "on",
-    ctl00$MainContent$resultsPageSize: String(RESULTS_PAGE_SIZE),
+    ctl00$MainContent$resultsPageSize: String(pageSize),
     ctl00$MainContent$resultsFontSize: "10",
     ctl00$MainContent$but_search: "Vyhledat",
     ...searchFields(state),
@@ -1058,18 +1109,43 @@ const fetchSearchPage = async (
   if (!results.ok) {
     throw new TypeError(`NALUS results returned HTTP ${results.status}`);
   }
-  return parseResultPage(await results.text(), state.page);
+  return parseResultPage({
+    html: await results.text(),
+    expectedPage: state.page,
+    pageSize,
+  });
 };
+
+/**
+ * What building one listed record produced.
+ *
+ * `detail-unavailable` still carries the decision the listing alone describes,
+ * because the two callers dispose of it differently: the crawl's cursor moves
+ * past this record either way, so a listing-only row is worth more to it than
+ * nothing, while the reconciliation must refuse it — a detail-less row would
+ * make the identity held and take the document out of every later
+ * reconciliation.
+ */
+export type CzUsBuildResult =
+  | { type: "built"; decision: IngestionResult }
+  /** NALUS lists the record but serves no readable text for it. */
+  | { type: "detail-unavailable"; decision: IngestionResult };
 
 const fetchListedDecision = async (
   listed: ListedDecision,
   signal: AbortSignal | undefined,
-): Promise<IngestionResult> => {
+): Promise<CzUsBuildResult> => {
   if (listed.identityQuarantined) {
-    return listedOnlyDecision(listed, "missing-record-identity");
+    return {
+      type: "detail-unavailable",
+      decision: listedOnlyDecision(listed, "missing-record-identity"),
+    };
   }
   if (listed.sz === undefined) {
-    return listedOnlyDecision(listed, "missing-text-action");
+    return {
+      type: "detail-unavailable",
+      decision: listedOnlyDecision(listed, "missing-text-action"),
+    };
   }
   const response = await fetchWithTimeout(listed.sourceUrl, {
     headers: COMMON_HEADERS,
@@ -1079,7 +1155,10 @@ const fetchListedDecision = async (
   });
   if (!response.ok) {
     if (response.status === 404 || response.status === 410) {
-      return listedOnlyDecision(listed, `http-${response.status}`);
+      return {
+        type: "detail-unavailable",
+        decision: listedOnlyDecision(listed, `http-${response.status}`),
+      };
     }
     throw new TypeError(
       `NALUS decision ${listed.sourceDocumentId} returned HTTP ${response.status}`,
@@ -1097,14 +1176,17 @@ const fetchListedDecision = async (
     nalusQuarantineIds: listed.quarantineRepairIds,
   });
   if (!decision) {
-    return listedOnlyDecision(
-      listed,
-      "unparseable-detail",
-      multiResponseSourceRaw({
-        listingHtml: listed.listingHtml,
-        textHtml: responseHtml,
-      }),
-    );
+    return {
+      type: "detail-unavailable",
+      decision: listedOnlyDecision(
+        listed,
+        "unparseable-detail",
+        multiResponseSourceRaw({
+          listingHtml: listed.listingHtml,
+          textHtml: responseHtml,
+        }),
+      ),
+    };
   }
   if (listed.listingDocketMissing) {
     decision.metadata["listingDocketMissing"] = true;
@@ -1147,7 +1229,7 @@ const fetchListedDecision = async (
       abstractHtml,
     }),
   );
-  return decision;
+  return { type: "built", decision };
 };
 
 const multiResponseSourceRaw = ({
@@ -1231,9 +1313,14 @@ const fetchListedDecisions = async (
   for (let start = 0; start < listed.length; start += DOCUMENT_CONCURRENCY) {
     const batch = listed.slice(start, start + DOCUMENT_CONCURRENCY);
     decisions.push(
+      // The crawl keeps a listing-only row for a record NALUS serves no text
+      // for: its cursor moves past that record either way, so the observation
+      // is worth more than nothing. Only the reconciliation refuses it.
       // oxlint-disable-next-line no-await-in-loop -- bounded batches pace the court while preserving result order
       ...(await Promise.all(
-        batch.map(async (item) => await fetchListedDecision(item, signal)),
+        batch.map(
+          async (item) => (await fetchListedDecision(item, signal)).decision,
+        ),
       )),
     );
     if (start + DOCUMENT_CONCURRENCY < listed.length) {
@@ -1243,6 +1330,176 @@ const fetchListedDecisions = async (
   }
   return decisions;
 };
+
+// ── Reconciliation ───────────────────────────────────────
+
+/**
+ * A reconciliation slice is one decision year, `YYYY`, which is exactly what
+ * the search form's `decidedFrom`/`decidedTo` pair addresses and what the
+ * crawl's historical phase already walks. Four digits sort lexicographically
+ * in chronological order, which is the ordering the ledger relies on.
+ *
+ * The year rather than a finer unit because NALUS states a total for whatever
+ * range it is asked about, and a year is comfortably walkable: the court's
+ * busiest years are around four thousand decisions (4,345 decided in 2013), so
+ * a slice is roughly 55 pages of {@link LISTING_PAGE_SIZE} against the engine's
+ * 200-page ceiling. A month would triple the request count to prove the same
+ * thing, and the court sits few enough days that most days would be empty.
+ */
+const CZ_US_FIRST_SLICE = String(FIRST_YEAR);
+
+const SLICE_PATTERN = /^\d{4}$/u;
+
+const parseSlice = (slice: string): number => {
+  if (!SLICE_PATTERN.test(slice)) {
+    panic(`cz-us slice is not a decision year: ${slice}`);
+  }
+  return Number.parseInt(slice, 10);
+};
+
+const czUsSliceOf = (now: Date): string => String(now.getUTCFullYear());
+
+const czUsNextSlice = (slice: string): string | null => {
+  const next = parseSlice(slice) + 1;
+  return next > new Date().getUTCFullYear() ? null : String(next);
+};
+
+const czUsPreviousSlice = (slice: string): string | null => {
+  const previous = parseSlice(slice) - 1;
+  return previous < FIRST_YEAR ? null : String(previous);
+};
+
+/**
+ * Slices near the tip that get re-walked on a fast cadence. The contract
+ * counts slices, not days, so for this adapter the window is two years: the
+ * current one and the one before it.
+ *
+ * Two rather than one because a decision made in December is often released
+ * the following spring, so on any January day the year that still gains
+ * documents is last year's. A slice outside the window is re-walked only when
+ * the ledger already recorded it short, which is exactly what a completed
+ * older year is not.
+ */
+const CZ_US_TIP_WINDOW_SLICES = 2;
+
+/**
+ * One page of the publisher's own listing for a decision year, with no text or
+ * abstract fetches.
+ *
+ * The availability filter is pinned to the latest closed publication day, the
+ * same bound the crawl uses: NALUS keeps the current day's result set live, so
+ * a walk that included it would list rows that move underneath it.
+ *
+ * A failed request is thrown, never flattened into an empty page. The crawl
+ * can afford to read a dead search as "nothing here" because a cursor that
+ * moves on can be walked again; a ledger row cannot, since an outage recorded
+ * as an empty year makes that year settled and it is never revisited. So only
+ * the publisher's own stated-empty answer — the no-records message with the
+ * results button disabled, which {@link fetchSearchPage} alone returns `null`
+ * for — is an empty slice. A missing count banner, a 5xx, a page that moved
+ * underneath the request: all throw, and the engine retries on a later pass.
+ */
+const listCzUsSlicePage = async ({
+  slice,
+  page,
+  signal,
+}: ReconciliationSlicePageOptions): Promise<ReconciliationSlicePage> => {
+  const listing = await fetchSearchPage({
+    state: {
+      phase: SWEEP_PHASE.HISTORICAL,
+      availableTo: latestClosedAvailabilityDay(new Date()),
+      year: parseSlice(slice),
+      pass: CRAWL_PASS.COLLECT,
+      page,
+      digest: DIGEST_SEED,
+    },
+    pageSize: LISTING_PAGE_SIZE,
+    signal,
+  });
+  if (listing === null) {
+    return { items: [], totalPages: 0 };
+  }
+  return {
+    items: listing.listed.map((listed) => ({
+      identity: czUsListingIdentity(listed),
+      payload: listed,
+    })),
+    totalPages: Math.ceil(listing.reported / LISTING_PAGE_SIZE),
+  };
+};
+
+/**
+ * Validate a payload the loop stored verbatim.
+ *
+ * Revalidated rather than trusted: it may have been parked for days, and a
+ * shape this adapter no longer produces has to be reported as unbuildable
+ * instead of replayed on faith. Every field {@link fetchListedDecision} reads
+ * is checked, because a payload missing one of them would otherwise fetch the
+ * wrong document or mint a different identity than the walk keyed it under.
+ */
+const isListedDecision = (value: unknown): value is ListedDecision => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  // Field names are typed against `ListedDecision`, so renaming one here is a
+  // typecheck failure rather than a guard that silently stops checking it.
+  const isString = (field: keyof ListedDecision): boolean =>
+    typeof value[field] === "string";
+  const isOptionalString = (field: keyof ListedDecision): boolean =>
+    value[field] === undefined || isString(field);
+  const isOptionalTrue = (field: keyof ListedDecision): boolean =>
+    value[field] === undefined || value[field] === true;
+  return (
+    isString("caseNumber") &&
+    isString("sourceDocumentId") &&
+    isString("quarantineId") &&
+    isString("listingHtml") &&
+    isString("sourceUrl") &&
+    isUnknownArray(value["quarantineRepairIds"]) &&
+    value["quarantineRepairIds"].every((id) => typeof id === "string") &&
+    (value["counter"] === undefined || typeof value["counter"] === "number") &&
+    isOptionalString("nalusRecordId") &&
+    isOptionalString("sz") &&
+    isOptionalString("ecli") &&
+    isOptionalTrue("identityQuarantined") &&
+    isOptionalTrue("listingDocketMissing")
+  );
+};
+
+/**
+ * Replay one listed record through the adapter's own fetch and parse path.
+ *
+ * A record the listing names but whose text NALUS does not serve is reported,
+ * not stored: the listing-only row {@link fetchListedDecision} still builds is
+ * right for the crawl and wrong here, because writing it would make the
+ * identity held and take the document out of every later reconciliation.
+ */
+const buildCzUsFromPayload = async (
+  payload: unknown,
+  signal?: AbortSignal,
+): Promise<ReconciliationBuildOutcome> => {
+  if (
+    !isListedDecision(payload) ||
+    czUsListingIdentity(payload).type === "unidentifiable"
+  ) {
+    return { type: "unkeyable" };
+  }
+  const built = await fetchListedDecision(payload, signal);
+  switch (built.type) {
+    case "built":
+      return { type: "built", decision: built.decision };
+    case "detail-unavailable":
+      return { type: "detail-unavailable" };
+    default: {
+      const exhaustive: never = built;
+      return panic(
+        `Unhandled cz-us build result: ${JSON.stringify(exhaustive)}`,
+      );
+    }
+  }
+};
+
+// ── Adapter ──────────────────────────────────────────────
 
 export const czUsAdapter = defineSourceAdapter({
   key: ADAPTER_KEYS.CZ_US,
@@ -1342,6 +1599,29 @@ export const czUsAdapter = defineSourceAdapter({
     }
   },
 
+  /**
+   * The search form answers a decision-date range on its own, so what a year
+   * holds is answerable without the crawl cursor ever reaching it: list the
+   * year, key each record the way the ingest would, and compare against what
+   * is held. This loop is the only writer of coverage for this source; the
+   * crawl states no `SliceCoverage`.
+   */
+  reconciliation: {
+    firstSlice: CZ_US_FIRST_SLICE,
+    sliceOf: czUsSliceOf,
+    nextSlice: czUsNextSlice,
+    previousSlice: czUsPreviousSlice,
+    tipWindowDays: CZ_US_TIP_WINDOW_SLICES,
+    // The crawl keeps the row `listedOnlyDecision` builds when NALUS serves no
+    // readable text, and marks it `isListingOnly`; unset, that stub would count
+    // as held and its document would never be hunted again. This source stores
+    // whole decisions by design, so a detail-less row here is always a failed
+    // fetch rather than a legitimate metadata-only state.
+    heldRequiresDetail: true,
+    listSlicePage: listCzUsSlicePage,
+    buildDecision: buildCzUsFromPayload,
+  },
+
   async fetchPage(cursor, _config, signal) {
     return await Result.tryPromise({
       try: async () => {
@@ -1349,7 +1629,11 @@ export const czUsAdapter = defineSourceAdapter({
         const state = cursor ? parseCursor(cursor, now) : historicalStart(now);
         let page: SearchPage | null;
         try {
-          page = await fetchSearchPage(state, signal);
+          page = await fetchSearchPage({
+            state,
+            pageSize: RESULTS_PAGE_SIZE,
+            signal,
+          });
         } catch (error) {
           if (state.page > 0 && error instanceof SearchPageDriftError) {
             return {
@@ -1369,11 +1653,6 @@ export const czUsAdapter = defineSourceAdapter({
           return {
             decisions: [],
             nextCursor: makeCursor(nextSlice(state, now)),
-            coverage: {
-              slice: coverageSlice(state),
-              reported: 0,
-              collected: 0,
-            },
           };
         }
 
@@ -1399,11 +1678,6 @@ export const czUsAdapter = defineSourceAdapter({
           return {
             decisions: [],
             nextCursor: makeCursor(nextSlice(state, now)),
-            coverage: {
-              slice: coverageSlice(state),
-              reported: page.reported,
-              collected: page.reported,
-            },
           };
         }
 
