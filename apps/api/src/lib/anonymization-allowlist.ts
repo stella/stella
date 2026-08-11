@@ -62,24 +62,28 @@ export const loadAnonymizationAllowlistCanonicals = async ({
         isNull(anonymizationAllowlistEntries.entityId),
       );
 
-  const rows = await scopedDb((tx) =>
-    boundedAll({
-      invariant:
-        "LIMITS.anonymizationAllowlistEntriesPerWorkspace, enforced by the create endpoint; org-wide rows have no writer",
-      max: LIMITS.anonymizationAllowlistEntriesPerWorkspace,
-      table: "anonymization_allowlist_entries",
-      query: (limit) =>
-        tx
-          .select({ canonical: anonymizationAllowlistEntries.canonical })
-          .from(anonymizationAllowlistEntries)
-          .where(
-            and(
-              eq(anonymizationAllowlistEntries.organizationId, organizationId),
-              scopeMatch,
-            ),
-          )
-          .limit(limit),
-    }),
+  const rows = await scopedDb(
+    async (tx) =>
+      await boundedAll({
+        invariant:
+          "LIMITS.anonymizationAllowlistEntriesPerWorkspace, enforced by the create endpoint; org-wide rows have no writer",
+        max: LIMITS.anonymizationAllowlistEntriesPerWorkspace,
+        table: "anonymization_allowlist_entries",
+        query: (limit) =>
+          tx
+            .select({ canonical: anonymizationAllowlistEntries.canonical })
+            .from(anonymizationAllowlistEntries)
+            .where(
+              and(
+                eq(
+                  anonymizationAllowlistEntries.organizationId,
+                  organizationId,
+                ),
+                scopeMatch,
+              ),
+            )
+            .limit(limit),
+      }),
   );
 
   return rows.map((row) => row.canonical);

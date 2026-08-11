@@ -113,33 +113,37 @@ export const loadAnonymizationGazetteerEntries = async ({
       )
     : isNull(anonymizationBlacklistEntries.workspaceId);
 
-  const rows = await scopedDb((tx) =>
-    boundedAll({
-      invariant:
-        "LIMITS.anonymizationBlacklistEntriesPerOrganization + LIMITS.anonymizationBlacklistEntriesPerWorkspace, enforced by the anonymization write-cap helpers",
-      max: GAZETTEER_ENTRY_BOUND,
-      table: "anonymization_blacklist_entries",
-      query: (limit) =>
-        tx
-          .select({
-            canonical: anonymizationBlacklistEntries.canonical,
-            id: anonymizationBlacklistEntries.id,
-            label: anonymizationBlacklistEntries.label,
-            variants: anonymizationBlacklistEntries.variants,
-            createdAt: anonymizationBlacklistEntries.createdAt,
-            workspaceId: anonymizationBlacklistEntries.workspaceId,
-          })
-          .from(anonymizationBlacklistEntries)
-          .where(
-            and(
-              eq(anonymizationBlacklistEntries.organizationId, organizationId),
-              eq(anonymizationBlacklistEntries.enabled, true),
-              workspaceMatch,
-            ),
-          )
-          .orderBy(asc(anonymizationBlacklistEntries.canonical))
-          .limit(limit),
-    }),
+  const rows = await scopedDb(
+    async (tx) =>
+      await boundedAll({
+        invariant:
+          "LIMITS.anonymizationBlacklistEntriesPerOrganization + LIMITS.anonymizationBlacklistEntriesPerWorkspace, enforced by the anonymization write-cap helpers",
+        max: GAZETTEER_ENTRY_BOUND,
+        table: "anonymization_blacklist_entries",
+        query: (limit) =>
+          tx
+            .select({
+              canonical: anonymizationBlacklistEntries.canonical,
+              id: anonymizationBlacklistEntries.id,
+              label: anonymizationBlacklistEntries.label,
+              variants: anonymizationBlacklistEntries.variants,
+              createdAt: anonymizationBlacklistEntries.createdAt,
+              workspaceId: anonymizationBlacklistEntries.workspaceId,
+            })
+            .from(anonymizationBlacklistEntries)
+            .where(
+              and(
+                eq(
+                  anonymizationBlacklistEntries.organizationId,
+                  organizationId,
+                ),
+                eq(anonymizationBlacklistEntries.enabled, true),
+                workspaceMatch,
+              ),
+            )
+            .orderBy(asc(anonymizationBlacklistEntries.canonical))
+            .limit(limit),
+      }),
   );
 
   return rows.map((row): GazetteerEntry => ({

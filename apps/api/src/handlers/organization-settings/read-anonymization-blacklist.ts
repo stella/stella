@@ -20,34 +20,35 @@ const readAnonymizationBlacklist = createSafeRootHandler(
   config,
   async function* ({ safeDb, session }) {
     const rows = yield* Result.await(
-      safeDb((tx) =>
-        boundedAll({
-          invariant:
-            "LIMITS.anonymizationBlacklistEntriesPerOrganization, enforced by update-anonymization-blacklist.ts",
-          max: LIMITS.anonymizationBlacklistEntriesPerOrganization,
-          table: "anonymization_blacklist_entries",
-          query: (limit) =>
-            tx
-              .select({
-                canonical: anonymizationBlacklistEntries.canonical,
-                enabled: anonymizationBlacklistEntries.enabled,
-                id: anonymizationBlacklistEntries.id,
-                label: anonymizationBlacklistEntries.label,
-                variants: anonymizationBlacklistEntries.variants,
-              })
-              .from(anonymizationBlacklistEntries)
-              .where(
-                and(
-                  eq(
-                    anonymizationBlacklistEntries.organizationId,
-                    session.activeOrganizationId,
+      safeDb(
+        async (tx) =>
+          await boundedAll({
+            invariant:
+              "LIMITS.anonymizationBlacklistEntriesPerOrganization, enforced by update-anonymization-blacklist.ts",
+            max: LIMITS.anonymizationBlacklistEntriesPerOrganization,
+            table: "anonymization_blacklist_entries",
+            query: (limit) =>
+              tx
+                .select({
+                  canonical: anonymizationBlacklistEntries.canonical,
+                  enabled: anonymizationBlacklistEntries.enabled,
+                  id: anonymizationBlacklistEntries.id,
+                  label: anonymizationBlacklistEntries.label,
+                  variants: anonymizationBlacklistEntries.variants,
+                })
+                .from(anonymizationBlacklistEntries)
+                .where(
+                  and(
+                    eq(
+                      anonymizationBlacklistEntries.organizationId,
+                      session.activeOrganizationId,
+                    ),
+                    isNull(anonymizationBlacklistEntries.workspaceId),
                   ),
-                  isNull(anonymizationBlacklistEntries.workspaceId),
-                ),
-              )
-              .orderBy(asc(anonymizationBlacklistEntries.canonical))
-              .limit(limit),
-        }),
+                )
+                .orderBy(asc(anonymizationBlacklistEntries.canonical))
+                .limit(limit),
+          }),
       ),
     );
 

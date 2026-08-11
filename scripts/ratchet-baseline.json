@@ -159,15 +159,10 @@
     "files": {}
   },
   "require-query-limit-suppressions": {
-    "count": 11,
+    "count": 6,
     "files": {
-      "apps/api/src/handlers/case-law/ingestion/status.ts": 1,
       "apps/api/src/handlers/chat/history-window.ts": 5,
-      "apps/api/src/handlers/workspaces/anonymization-allowlist/list.ts": 1,
-      "apps/api/src/handlers/workspaces/anonymization-terms/list.ts": 1,
-      "apps/api/src/handlers/workspaces/list.ts": 1,
-      "apps/api/src/lib/anonymization-blacklist.ts": 1,
-      "apps/api/src/scripts/adapter-health.ts": 1
+      "apps/api/src/handlers/workspaces/list.ts": 1
     }
   },
   "no-db-await-in-loop-suppressions": {

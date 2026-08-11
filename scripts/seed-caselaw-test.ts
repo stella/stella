@@ -6,6 +6,7 @@
  */
 
 import { parseNsDecisionHtml } from "../apps/api/src/handlers/case-law/ingestion/parsers/cz-ns";
+import { ADAPTER_KEYS } from "../apps/api/src/lib/legal-search/ingestion-constants";
 
 const db = new Bun.SQL({
   hostname: "localhost",
@@ -16,6 +17,11 @@ const db = new Bun.SQL({
 });
 
 const BASE = "https://rozhodnuti.nsoud.cz/Judikatura/judikatura_ns.nsf";
+
+// `case_law_sources.id` is a uuid column, so the previous `'test_cz_ns'` could
+// never have inserted. Fixed rather than generated so re-running the seed
+// converges on one row instead of accumulating them.
+const SOURCE_ID = "00000000-0000-4000-8000-0000000c2f51";
 
 // A set of diverse decisions to test rendering
 const UNIDS = [
@@ -52,10 +58,13 @@ const fetchHtml = async (url: string): Promise<string | null> => {
 };
 
 const main = async () => {
-  // Ensure the source row exists
+  // Ensure the source row exists. The adapter key comes from the registry
+  // rather than a literal: `case_law_sources_adapter_key_registered` rejects
+  // anything outside it, and a complete read of this table is bounded by the
+  // registry's size, so an invented key here would break both.
   await db`
     INSERT INTO case_law_sources (id, adapter_key, name)
-    VALUES ('test_cz_ns', 'cz_ns', 'Czech Supreme Court (test)')
+    VALUES (${SOURCE_ID}, ${ADAPTER_KEYS.CZ_NS}, 'Czech Supreme Court (test)')
     ON CONFLICT (adapter_key) DO NOTHING
   `;
 
@@ -99,7 +108,7 @@ const main = async () => {
         country, language, decision_date, decision_type,
         fulltext, source_url
       ) VALUES (
-        ${id}, 'test_cz_ns', ${caseNumber}, ${slug},
+        ${id}, ${SOURCE_ID}, ${caseNumber}, ${slug},
         ${meta.ecli}, ${meta.court ?? "Nejvyšší soud"},
         'CZE', 'cs', ${meta.decisionDate},
         ${meta.decisionType?.toLowerCase() ?? null},

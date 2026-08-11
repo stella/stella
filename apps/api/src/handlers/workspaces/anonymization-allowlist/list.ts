@@ -54,51 +54,55 @@ const readWorkspaceAnonymizationAllowlist = createSafeHandler(
   async function* ({ query, safeDb, workspaceId }) {
     const entityId = query.entityId ?? null;
     const rows = yield* Result.await(
-      safeDb((tx) =>
-        boundedAll({
-          invariant: ALLOWLIST_READ_INVARIANT,
-          max: LIMITS.anonymizationAllowlistEntriesPerWorkspace,
-          table: "anonymization_allowlist_entries",
-          query: (limit) =>
-            tx
-              .select({
-                id: anonymizationAllowlistEntries.id,
-                scope: anonymizationAllowlistEntries.workspaceId,
-                workspaceId: anonymizationAllowlistEntries.workspaceId,
-                entityId: anonymizationAllowlistEntries.entityId,
-                label: anonymizationAllowlistEntries.label,
-                canonical: anonymizationAllowlistEntries.canonical,
-                createdBy: anonymizationAllowlistEntries.createdBy,
-                createdAt: anonymizationAllowlistEntries.createdAt,
-              })
-              .from(anonymizationAllowlistEntries)
-              .where(
-                or(
-                  // Org-wide
-                  and(
-                    isNull(anonymizationAllowlistEntries.workspaceId),
-                    isNull(anonymizationAllowlistEntries.entityId),
-                  ),
-                  // Workspace-wide for the current workspace
-                  and(
-                    eq(anonymizationAllowlistEntries.workspaceId, workspaceId),
-                    isNull(anonymizationAllowlistEntries.entityId),
-                  ),
-                  // Doc-scoped for the requested entity (only when entityId given)
-                  entityId === null
-                    ? undefined
-                    : and(
-                        eq(
-                          anonymizationAllowlistEntries.workspaceId,
-                          workspaceId,
-                        ),
-                        eq(anonymizationAllowlistEntries.entityId, entityId),
+      safeDb(
+        async (tx) =>
+          await boundedAll({
+            invariant: ALLOWLIST_READ_INVARIANT,
+            max: LIMITS.anonymizationAllowlistEntriesPerWorkspace,
+            table: "anonymization_allowlist_entries",
+            query: (limit) =>
+              tx
+                .select({
+                  id: anonymizationAllowlistEntries.id,
+                  scope: anonymizationAllowlistEntries.workspaceId,
+                  workspaceId: anonymizationAllowlistEntries.workspaceId,
+                  entityId: anonymizationAllowlistEntries.entityId,
+                  label: anonymizationAllowlistEntries.label,
+                  canonical: anonymizationAllowlistEntries.canonical,
+                  createdBy: anonymizationAllowlistEntries.createdBy,
+                  createdAt: anonymizationAllowlistEntries.createdAt,
+                })
+                .from(anonymizationAllowlistEntries)
+                .where(
+                  or(
+                    // Org-wide
+                    and(
+                      isNull(anonymizationAllowlistEntries.workspaceId),
+                      isNull(anonymizationAllowlistEntries.entityId),
+                    ),
+                    // Workspace-wide for the current workspace
+                    and(
+                      eq(
+                        anonymizationAllowlistEntries.workspaceId,
+                        workspaceId,
                       ),
-                ),
-              )
-              .orderBy(asc(anonymizationAllowlistEntries.canonical))
-              .limit(limit),
-        }),
+                      isNull(anonymizationAllowlistEntries.entityId),
+                    ),
+                    // Doc-scoped for the requested entity (only when entityId given)
+                    entityId === null
+                      ? undefined
+                      : and(
+                          eq(
+                            anonymizationAllowlistEntries.workspaceId,
+                            workspaceId,
+                          ),
+                          eq(anonymizationAllowlistEntries.entityId, entityId),
+                        ),
+                  ),
+                )
+                .orderBy(asc(anonymizationAllowlistEntries.canonical))
+                .limit(limit),
+          }),
       ),
     );
     return Result.ok({ entries: rows });

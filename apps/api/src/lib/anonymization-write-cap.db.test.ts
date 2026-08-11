@@ -1,5 +1,5 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { Panic } from "better-result";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, sql, TransactionRollbackError } from "drizzle-orm";
 import { integer, pgTable, text } from "drizzle-orm/pg-core";
 
@@ -211,13 +211,34 @@ describe("anonymization write-cap helpers", () => {
     expect(canonicals).toEqual(["Firm Term 0000", "Firm Term 0001"]);
   });
 
-  test("workspace term load fails closed on a set that already broke its cap", async () => {
-    const thrown = await runRolledBack(async (tx) => {
+  test("a set left over its cap is still readable, so the replace can converge it", async () => {
+    // The replacement handler is the only API path that deletes these rows,
+    // and it has to see a row to delete it. Panicking at the cap would make
+    // the one set that needs repairing the one set nobody can repair.
+    const rows = await runRolledBack(async (tx) => {
       const { organizationId, workspaceId } = await seedScope(tx);
       await insertTerms(tx, {
         organizationId,
         workspaceId,
         count: LIMITS.anonymizationBlacklistEntriesPerWorkspace + 1,
+        prefix: "Workspace Term",
+      });
+
+      return await loadWorkspaceAnonymizationTermsForWrite(tx, workspaceId);
+    });
+
+    expect(rows).toHaveLength(
+      LIMITS.anonymizationBlacklistEntriesPerWorkspace + 1,
+    );
+  });
+
+  test("workspace term load fails closed past the recovery headroom", async () => {
+    const thrown = await runRolledBack(async (tx) => {
+      const { organizationId, workspaceId } = await seedScope(tx);
+      await insertTerms(tx, {
+        organizationId,
+        workspaceId,
+        count: LIMITS.anonymizationBlacklistEntriesPerWorkspace * 2 + 1,
         prefix: "Workspace Term",
       });
 
@@ -229,18 +250,20 @@ describe("anonymization write-cap helpers", () => {
       return null;
     });
 
-    // A truncated read here would let the next create see room that is
-    // not there and push the set further past its cap.
+    // Twice the cap is the union of two capped sets, the worst the pre-lock
+    // race could commit. Past that no sequence of serialized replacements
+    // explains the set, so a truncated read would be the greater danger: it
+    // would let the next create see room that is not there.
     expect(Panic.is(thrown)).toBe(true);
     if (!Panic.is(thrown)) {
       return;
     }
     expect(thrown.cause).toEqual({
       invariant:
-        "LIMITS.anonymizationBlacklistEntriesPerWorkspace, enforced by this read's callers",
+        "LIMITS.anonymizationBlacklistEntriesPerWorkspace, enforced by this read's callers, doubled so a set left over the cap by the pre-lock replacement race stays repairable",
       table: "anonymization_blacklist_entries",
-      max: LIMITS.anonymizationBlacklistEntriesPerWorkspace,
-      observed: LIMITS.anonymizationBlacklistEntriesPerWorkspace + 1,
+      max: LIMITS.anonymizationBlacklistEntriesPerWorkspace * 2,
+      observed: LIMITS.anonymizationBlacklistEntriesPerWorkspace * 2 + 1,
     });
   });
 
@@ -284,11 +307,11 @@ describe("anonymization write-cap helpers", () => {
     const { beforeRead, afterRead } = await runRolledBack(async (tx) => {
       const { workspaceId } = await seedScope(tx);
 
-      const beforeRead = await heldAdvisoryLockKeys(tx);
+      const held = await heldAdvisoryLockKeys(tx);
       await loadWorkspaceAnonymizationTermsForWrite(tx, workspaceId);
-      const afterRead = await heldAdvisoryLockKeys(tx);
+      const heldAfter = await heldAdvisoryLockKeys(tx);
 
-      return { beforeRead, afterRead };
+      return { beforeRead: held, afterRead: heldAfter };
     });
 
     expect(beforeRead).toEqual([]);

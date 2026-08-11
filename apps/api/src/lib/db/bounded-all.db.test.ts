@@ -1,5 +1,5 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { Panic } from "better-result";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { asc, eq, TransactionRollbackError } from "drizzle-orm";
 
 import { organization } from "@/api/db/auth-schema";

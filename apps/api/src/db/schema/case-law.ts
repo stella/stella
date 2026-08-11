@@ -11,6 +11,7 @@ import type {
   RuleSource,
 } from "@/api/handlers/case-law/polarity/consts";
 import type { ConstantMap } from "@/api/lib/constant-map";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 
 import {
   caseLawIngestionOnlyPolicies,
@@ -78,6 +79,10 @@ export const SOURCE_TOTAL_ORIGIN = {
 
 export type SourceTotalOrigin =
   (typeof SOURCE_TOTAL_ORIGIN)[keyof typeof SOURCE_TOTAL_ORIGIN];
+
+const CASE_LAW_ADAPTER_KEY_SQL_VALUES = Object.values(ADAPTER_KEYS).map((key) =>
+  sql.raw(`'${key}'`),
+);
 
 const CASE_LAW_CORPUS_MIRROR_STATUS_SQL_VALUES =
   CASE_LAW_CORPUS_MIRROR_STATUSES.map((status) => sql.raw(`'${status}'`));
@@ -172,6 +177,21 @@ export const caseLawSources = p.pgTable(
         Object.values(SOURCE_TOTAL_ORIGIN).map((origin) => sql`${origin}`),
         sql`, `,
       )})`,
+    ),
+    // The catalogue holds at most one row per registered adapter, which is what
+    // makes a complete read of this table bounded by
+    // CASE_LAW_SOURCE_ROWS_BOUND. The unique index alone does not give that:
+    // `adapter_key` is an unconstrained varchar, so a retired source or a
+    // mistyped seed key adds a row the registry never knew about, and the
+    // bounded read panics on a table nobody can repair through the API.
+    //
+    // Values are read off ADAPTER_KEYS rather than re-listed, so registering an
+    // adapter widens the constraint and the bound together. That does couple a
+    // new adapter to a migration, which is the intended direction: the registry
+    // is the source of truth and the database follows it.
+    p.check(
+      "case_law_sources_adapter_key_registered",
+      sql`${t.adapterKey} IN (${sql.join(CASE_LAW_ADAPTER_KEY_SQL_VALUES, sql`, `)})`,
     ),
     p.uniqueIndex("case_law_sources_adapter_key_idx").on(t.adapterKey),
     ...globalCaseLawPolicies(),

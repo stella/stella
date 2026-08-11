@@ -52,6 +52,28 @@ const lockAnonymizationScope = async (
 };
 
 /**
+ * Headroom over the cap for the write path's own reads.
+ *
+ * The cap bounds what a replacement may WRITE. It does not bound what a
+ * replacement may FIND: before the advisory lock above, two replacements of the
+ * same scope could interleave and commit the union of two capped sets, so a set
+ * persisted by an older deployment can sit above the cap today.
+ *
+ * Reading those at exactly the cap would make the panic unrecoverable in the
+ * one place that can fix it. The replacement handler is the only API path that
+ * deletes these rows, and it has to see every row to delete it, so a bound of
+ * `max` would panic on read and leave the set stuck above the cap with no way
+ * down short of editing the database by hand.
+ *
+ * Two capped sets is the worst case that race could leave, so the write path
+ * reads at twice the cap: an over-cap set is visible, one successful
+ * replacement converges it to at most the cap, and every read after that is
+ * inside the steady-state bound. Beyond twice the cap the panic still fires,
+ * because no sequence of serialized replacements can produce it.
+ */
+const WRITE_PATH_RECOVERY_FACTOR = 2;
+
+/**
  * Workspace-scoped blacklist terms, serialized against concurrent
  * writers of the same workspace's set. The caller needs the canonicals
  * to deduplicate and the row count to check the cap, so the whole set
@@ -66,8 +88,10 @@ export const loadWorkspaceAnonymizationTermsForWrite = async (
 
   return await boundedAll({
     invariant:
-      "LIMITS.anonymizationBlacklistEntriesPerWorkspace, enforced by this read's callers",
-    max: LIMITS.anonymizationBlacklistEntriesPerWorkspace,
+      "LIMITS.anonymizationBlacklistEntriesPerWorkspace, enforced by this read's callers, doubled so a set left over the cap by the pre-lock replacement race stays repairable",
+    max:
+      LIMITS.anonymizationBlacklistEntriesPerWorkspace *
+      WRITE_PATH_RECOVERY_FACTOR,
     table: "anonymization_blacklist_entries",
     query: (limit) =>
       tx
@@ -95,8 +119,10 @@ export const loadOrganizationAnonymizationTermsForWrite = async (
 
   return await boundedAll({
     invariant:
-      "LIMITS.anonymizationBlacklistEntriesPerOrganization, enforced by the org-wide replace body schema",
-    max: LIMITS.anonymizationBlacklistEntriesPerOrganization,
+      "LIMITS.anonymizationBlacklistEntriesPerOrganization, enforced by the org-wide replace body schema, doubled so a set left over the cap by the pre-lock replacement race stays repairable",
+    max:
+      LIMITS.anonymizationBlacklistEntriesPerOrganization *
+      WRITE_PATH_RECOVERY_FACTOR,
     table: "anonymization_blacklist_entries",
     query: (limit) =>
       tx
