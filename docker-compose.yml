@@ -32,6 +32,9 @@ services:
       RUSTFS_CONSOLE_ENABLE: "true"
       RUSTFS_ADDRESS: ":9000"
       RUSTFS_CONSOLE_ADDRESS: ":9001"
+      # Presigned browser requests carry authorization in the URL, not cookies.
+      # This service is loopback-only; production must allow exact web origins.
+      RUSTFS_CORS_ALLOWED_ORIGINS: "*"
       RUSTFS_OBS_LOGGER_LEVEL: error
     ports:
       - "127.0.0.1:${STELLA_RUSTFS_HOST_PORT:-9000}:9000"
