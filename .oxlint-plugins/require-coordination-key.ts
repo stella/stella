@@ -13,7 +13,8 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { filenameForContext, isStringLiteral } from "./utils.ts";
+import type { AstNode } from "./utils.ts";
+import { filenameForContext, isAstNode, isStringLiteral } from "./utils.ts";
 
 // Commands whose first argument is a key, and nothing after it is.
 const SINGLE_KEY_COMMANDS = new Set([
@@ -71,10 +72,10 @@ const KEY_BUILDER_MODULE = "apps/api/src/lib/redis-keys.ts";
 const commandName = (node: unknown): string | null =>
   isStringLiteral(node) ? node.value.toUpperCase() : null;
 
-const isTemplateLiteral = (node: unknown): boolean =>
-  typeof node === "object" &&
-  node !== null &&
-  Reflect.get(node, "type") === "TemplateLiteral";
+const isTemplateLiteral = (
+  node: unknown,
+): node is AstNode & { type: "TemplateLiteral" } =>
+  isAstNode(node) && node.type === "TemplateLiteral";
 
 // How many leading elements of the argument array are keys. Returns 0 for a
 // command this rule does not police.
