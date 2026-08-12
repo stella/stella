@@ -18,6 +18,12 @@ const searchContactsQuerySchema = t.Object({
 
 const searchContacts = createSafeRootHandler(
   {
+    description:
+      "Look up contacts by name, for a picker: q matches a substring of the " +
+      "display name, first name, last name, or organization name, normalized " +
+      "so Arabic spellings match, optionally narrowed by type. Returns at " +
+      "most 20 contacts ordered by display name with no cursor; use " +
+      "contacts.list to page the whole address book.",
     permissions: { workspace: ["read"] },
     mcp: { type: "capability", reason: "contact_directory" },
     access: "read",

@@ -20,6 +20,11 @@ const querySchema = t.Object({
 });
 
 const config = {
+  description:
+    "List the organization's style sets, most recently updated first, with " +
+    "cursor pagination; deleted ones are left out. Each item carries the " +
+    "name, file name, size in bytes, and timestamps, and the response also " +
+    "reports the maximum number of style sets the organization may hold.",
   permissions: { styleSet: ["use"] },
   access: "read",
   mcp: { type: "capability", reason: "template_authoring_ui" },

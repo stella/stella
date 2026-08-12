@@ -14,6 +14,11 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const config = {
+  description:
+    "Add one document type to the organization's classification list. Its " +
+    "key is slugified from the label and de-duplicated automatically, and " +
+    "the type is appended at the end of the display order. Refused once the " +
+    "organization holds the maximum number of document types.",
   permissions: { organizationSettings: ["update"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   body: createDocumentTypeBodySchema,

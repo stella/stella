@@ -18,6 +18,11 @@ import {
 
 const paramsSchema = t.Object({ styleSetId: tSafeId("styleSet") });
 const config = {
+  description:
+    "Rewrite one style set's package from explicit editor settings, using " +
+    "its current package as the base, and set its name at the same time. " +
+    "Pass expectedUpdatedAt from style-sets.read-editor so an edit made in " +
+    "the meantime is rejected instead of overwritten.",
   permissions: { styleSet: ["update"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   params: paramsSchema,

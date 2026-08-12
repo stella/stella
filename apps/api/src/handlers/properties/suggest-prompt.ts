@@ -43,6 +43,11 @@ const suggestPromptBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Draft or refine a column's extraction prompt with the model, from the " +
+    "column name, value type, select options, a free-text instruction, and " +
+    "optionally the prompt as it stands. Returns one single-line prompt of " +
+    "at most 280 characters and stores nothing. Consumes AI usage.",
   permissions: { property: ["create"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   body: suggestPromptBodySchema,

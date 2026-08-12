@@ -10,6 +10,11 @@ import { readStyleSetPackage } from "@/api/lib/style-sets";
 
 const paramsSchema = t.Object({ styleSetId: tSafeId("styleSet") });
 const config = {
+  description:
+    "Read one organization style set as editor settings: its name, " +
+    "updatedAt, and the style settings parsed out of the stored DOCX " +
+    "package. Pass that updatedAt back to style-sets.update-from-editor as " +
+    "expectedUpdatedAt so a concurrent edit is not silently overwritten.",
   permissions: { styleSet: ["use"] },
   access: "read",
   mcp: { type: "capability", reason: "template_authoring_ui" },

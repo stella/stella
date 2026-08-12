@@ -259,6 +259,12 @@ export const updateContactHandler = async function* ({
 
 const updateContactById = createSafeRootHandler(
   {
+    description:
+      "Change a contact in the organization address book, writing only the " +
+      "fields you pass and clearing a nullable one when you pass null. " +
+      "metadata is merged into the stored object rather than replacing it. " +
+      "An attorney id that is not a member of the organization is refused, " +
+      "and an unknown contact is a 404.",
     permissions: { contact: ["update"] },
     mcp: { type: "covered", by: "save_contact" },
     params: updateContactParamsSchema,

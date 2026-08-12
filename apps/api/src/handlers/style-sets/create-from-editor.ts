@@ -12,6 +12,10 @@ import { createStyleSetFromEditorSchema } from "@/api/lib/style-set-editor-contr
 import { normalizeStyleSetName } from "@/api/lib/style-sets";
 
 const config = {
+  description:
+    "Create an organization style set from explicit editor settings applied " +
+    "to the built-in stella preset, with no DOCX involved. Returns the new " +
+    "style set's id, name, and updatedAt.",
   permissions: { styleSet: ["create"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   body: createStyleSetFromEditorSchema,

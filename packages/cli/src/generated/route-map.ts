@@ -7677,6 +7677,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "contacts", "create"],
                 capabilityId: "contacts.create",
+                description:
+                  "Create a contact in the organization address book. type (person or organization), displayName, and the contact id are supplied in the body; names, emails, phones, addresses, tags, registration and tax numbers, bank and billing details, default hourly rate, payment terms, and originating or responsible attorneys are optional. Refused once the organization holds its maximum number of contacts, or when an attorney id is not a member of the organization.",
                 access: "write",
                 flags: [
                   {
@@ -8342,6 +8344,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "contacts", "list"],
                 capabilityId: "contacts.list",
+                description:
+                  "List the organization address book alphabetically by display name, with cursor pagination. Filter by type (person or organization) and by q, which matches a substring of the display name only. Each item carries the names, emails, phones, tags, and the number of matters the contact is the client of. Use contacts.search for a short unpaginated lookup that also matches first, last, and organization names.",
                 access: "read",
                 flags: [
                   {
@@ -8415,6 +8419,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "contacts", "search"],
                 capabilityId: "contacts.search",
+                description:
+                  "Look up contacts by name, for a picker: q matches a substring of the display name, first name, last name, or organization name, normalized so Arabic spellings match, optionally narrowed by type. Returns at most 20 contacts ordered by display name with no cursor; use contacts.list to page the whole address book.",
                 access: "read",
                 flags: [
                   {
@@ -8466,6 +8472,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "contacts", "update"],
                 capabilityId: "contacts.update",
+                description:
+                  "Change a contact in the organization address book, writing only the fields you pass and clearing a nullable one when you pass null. metadata is merged into the stored object rather than replacing it. An attorney id that is not a member of the organization is refused, and an unknown contact is a 404.",
                 access: "write",
                 flags: [
                   {
@@ -9057,6 +9065,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "document-types", "create"],
                 capabilityId: "document-types.create",
+                description:
+                  "Add one document type to the organization's classification list. Its key is slugified from the label and de-duplicated automatically, and the type is appended at the end of the display order. Refused once the organization holds the maximum number of document types.",
                 access: "write",
                 flags: [
                   {
@@ -9141,6 +9151,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "document-types", "list"],
                 capabilityId: "document-types.list",
+                description:
+                  "List the organization's document types in display order, each with its id, immutable key, label, and sort order. The starter taxonomy is seeded when the organization is created, so this only ever reads. The list is bounded and returned whole rather than paginated.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -9159,6 +9171,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "document-types", "reorder"],
                 capabilityId: "document-types.reorder",
+                description:
+                  "Set the display order of the organization's document types: each id's position in orderedIds becomes its sort order. Ids that do not belong to the organization are ignored, and any type you leave out of the list keeps the sort order it already had. Ordering is cosmetic, so no audit event is recorded.",
                 access: "write",
                 flags: [
                   {
@@ -9205,6 +9219,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "document-types", "update"],
                 capabilityId: "document-types.update",
+                description:
+                  "Rename one document type. Only the label changes: the key is immutable, and the display order is set through document-types.reorder.",
                 access: "write",
                 flags: [
                   {
@@ -22612,6 +22628,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "properties", "create"],
                 capabilityId: "properties.create",
+                description:
+                  "Add one property (a column) to a matter: its name, value type, and either an AI prompt tool, optionally depending on other columns, or a manual-input tool. An AI column is created stale, so its values are produced by the next run rather than immediately. Refused when the matter is at its property limit, when a dependency is not a property of this matter, or when the matter already has a document-type classifier column.",
                 access: "write",
                 flags: [
                   {
@@ -23243,6 +23261,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "properties", "create-batch"],
                 capabilityId: "properties.create-batch",
+                description:
+                  "Add up to ten properties (columns) to a matter in a single transaction, under the same rules as properties.create: all of them land or none do, the resulting count must stay within the matter's property limit, every dependency must be a property of this matter, and at most one document-type classifier may exist. Returns the new property ids.",
                 access: "write",
                 flags: [
                   {
@@ -23967,6 +23987,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "properties", "preview"],
                 capabilityId: "properties.preview",
+                description:
+                  "Run a column prompt against one document without creating the column or storing anything, so a prompt can be tried before it is saved. Pass the prompt, the value type, the entityId to run it against, any select options, and the columns it depends on. Returns status ready with the generated value, skipped when the dependency values are missing or unusable on that document, unsupported when the document cannot be processed, or empty when the model returned nothing.",
                 access: "read",
                 flags: [
                   {
@@ -24105,6 +24127,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "properties", "suggest-prompt"],
                 capabilityId: "properties.suggest-prompt",
+                description:
+                  "Draft or refine a column's extraction prompt with the model, from the column name, value type, select options, a free-text instruction, and optionally the prompt as it stands. Returns one single-line prompt of at most 280 characters and stores nothing. Consumes AI usage.",
                 access: "write",
                 flags: [
                   {
@@ -24228,6 +24252,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "properties", "update"],
                 capabilityId: "properties.update",
+                description:
+                  "Replace one property's name, value type, and tool (an AI prompt with its dependencies, or manual input) in a matter. A change that affects extraction marks the column, and every column that transitively depends on it, stale so the next run recomputes them. Refused on a circular dependency, on a second document-type classifier, on a file property without a manual-input tool, and on a select fallback that is not one of the supplied options. The dependency rows of a playbook-materialized manual column are preserved rather than rewritten.",
                 access: "write",
                 flags: [
                   {
@@ -27367,6 +27393,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "style-sets", "create-from-editor"],
                 capabilityId: "style-sets.create-from-editor",
+                description:
+                  "Create an organization style set from explicit editor settings applied to the built-in stella preset, with no DOCX involved. Returns the new style set's id, name, and updatedAt.",
                 access: "write",
                 flags: [
                   {
@@ -27694,6 +27722,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "style-sets", "download"],
                 capabilityId: "style-sets.download",
+                description:
+                  "Mint a short-lived download URL for one organization style set's stored DOCX package, recording the download in the audit trail. A style set that is unknown or already deleted is a 404.",
                 access: "read",
                 flags: [
                   {
@@ -27736,6 +27766,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "style-sets", "list"],
                 capabilityId: "style-sets.list",
+                description:
+                  "List the organization's style sets, most recently updated first, with cursor pagination; deleted ones are left out. Each item carries the name, file name, size in bytes, and timestamps, and the response also reports the maximum number of style sets the organization may hold.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -27782,6 +27814,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "style-sets", "read-editor"],
                 capabilityId: "style-sets.read-editor",
+                description:
+                  "Read one organization style set as editor settings: its name, updatedAt, and the style settings parsed out of the stored DOCX package. Pass that updatedAt back to style-sets.update-from-editor as expectedUpdatedAt so a concurrent edit is not silently overwritten.",
                 access: "read",
                 flags: [
                   {
@@ -27824,6 +27858,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "style-sets", "read-stella-editor"],
                 capabilityId: "style-sets.read-stella-editor",
+                description:
+                  "Read the built-in stella style preset as editor settings, the starting point for a new style set. Takes no arguments and reads no stored data.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -27842,6 +27878,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "style-sets", "update"],
                 capabilityId: "style-sets.update",
+                description:
+                  "Rename one organization style set; its export file name follows the new name. The stored style package is untouched, so use style-sets.replace or style-sets.update-from-editor to change the styles themselves.",
                 access: "write",
                 flags: [
                   {
@@ -27904,6 +27942,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "style-sets", "update-from-editor"],
                 capabilityId: "style-sets.update-from-editor",
+                description:
+                  "Rewrite one style set's package from explicit editor settings, using its current package as the base, and set its name at the same time. Pass expectedUpdatedAt from style-sets.read-editor so an edit made in the meantime is rejected instead of overwritten.",
                 access: "write",
                 flags: [
                   {

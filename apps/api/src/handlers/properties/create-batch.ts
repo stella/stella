@@ -19,6 +19,12 @@ import {
 import { lockWorkspacePropertyWrites } from "@/api/lib/properties/property-lock";
 
 const config = {
+  description:
+    "Add up to ten properties (columns) to a matter in a single transaction, " +
+    "under the same rules as properties.create: all of them land or none do, " +
+    "the resulting count must stay within the matter's property limit, every " +
+    "dependency must be a property of this matter, and at most one " +
+    "document-type classifier may exist. Returns the new property ids.",
   permissions: { property: ["create"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   body: t.Object({

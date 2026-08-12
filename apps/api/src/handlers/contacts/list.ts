@@ -19,6 +19,14 @@ const readContactsQuerySchema = t.Object({
 
 const readContacts = createSafeRootHandler(
   {
+    description:
+      "List the organization address book alphabetically by display name, " +
+      "with cursor pagination. Filter by type (person or organization) and " +
+      "by q, which matches a substring of the display name only. Each item " +
+      "carries the names, emails, phones, tags, and the number of matters " +
+      "the contact is the client of. Use contacts.search for a short " +
+      "unpaginated lookup that also matches first, last, and organization " +
+      "names.",
     permissions: { workspace: ["read"] },
     mcp: { type: "tool", name: "list_contacts" },
     access: "read",

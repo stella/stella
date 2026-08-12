@@ -12,6 +12,9 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  description:
+    "Rename one document type. Only the label changes: the key is immutable, " +
+    "and the display order is set through document-types.reorder.",
   permissions: { organizationSettings: ["update"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   params: documentTypeParamsSchema,

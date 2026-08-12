@@ -51,6 +51,14 @@ const previewBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Run a column prompt against one document without creating the column or " +
+    "storing anything, so a prompt can be tried before it is saved. Pass the " +
+    "prompt, the value type, the entityId to run it against, any select " +
+    "options, and the columns it depends on. Returns status ready with the " +
+    "generated value, skipped when the dependency values are missing or " +
+    "unusable on that document, unsupported when the document cannot be " +
+    "processed, or empty when the model returned nothing.",
   permissions: { property: ["create"] },
   access: "read",
   mcp: { type: "capability", reason: "workspace_schema" },

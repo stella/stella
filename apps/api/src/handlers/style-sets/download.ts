@@ -13,6 +13,10 @@ import { STYLE_SET_DOWNLOAD_TTL_SECONDS } from "@/api/lib/style-sets";
 
 const paramsSchema = t.Object({ styleSetId: tSafeId("styleSet") });
 const config = {
+  description:
+    "Mint a short-lived download URL for one organization style set's stored " +
+    "DOCX package, recording the download in the audit trail. A style set " +
+    "that is unknown or already deleted is a 404.",
   permissions: { styleSet: ["use"] },
   access: "read",
   mcp: { type: "capability", reason: "template_authoring_ui" },
