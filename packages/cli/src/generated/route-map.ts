@@ -19891,6 +19891,15 @@ export const generatedRouteMap: RouteNode = {
                     part: "params",
                     partPath: "playbookId",
                   },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--expected-updated-at",
+                    prop: "expectedUpdatedAt",
+                    required: true,
+                    part: "body",
+                    partPath: "expectedUpdatedAt",
+                  },
                 ],
                 inputOnly: [],
                 paginated: false,
@@ -19900,6 +19909,16 @@ export const generatedRouteMap: RouteNode = {
                   type: "object",
                   additionalProperties: false,
                   properties: {
+                    body: {
+                      type: "object",
+                      required: ["expectedUpdatedAt"],
+                      properties: {
+                        expectedUpdatedAt: {
+                          format: "date-time",
+                          type: "string",
+                        },
+                      },
+                    },
                     params: {
                       type: "object",
                       required: ["playbookId"],
@@ -21429,6 +21448,15 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "description",
                   },
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--expected-updated-at",
+                    prop: "expectedUpdatedAt",
+                    required: false,
+                    part: "body",
+                    partPath: "expectedUpdatedAt",
+                  },
                 ],
                 inputOnly: ["body.scope", "body.positions"],
                 paginated: false,
@@ -22165,6 +22193,10 @@ export const generatedRouteMap: RouteNode = {
                               },
                             },
                           },
+                        },
+                        expectedUpdatedAt: {
+                          format: "date-time",
+                          type: "string",
                         },
                       },
                     },
