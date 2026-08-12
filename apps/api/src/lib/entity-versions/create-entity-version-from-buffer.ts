@@ -273,8 +273,6 @@ export const createEntityVersionFromBuffer = async ({
           }
         },
       });
-      transactionState.durableReferencePrepared =
-        versionWriteResult.status === "ok";
       if (versionWriteResult.status === "ok") {
         // Durable extraction request, committed with the version that owns the
         // file. The post-commit call below only accelerates the queue handoff,
@@ -285,6 +283,12 @@ export const createEntityVersionFromBuffer = async ({
           tx,
         });
       }
+      // Set last, after every fallible write in this transaction: the flag
+      // means a committed row may reference the object, so cleanup must be
+      // skipped. A throw before this point rolls the transaction back, leaving
+      // nothing to reference the object, and the caller's cleanup should run.
+      transactionState.durableReferencePrepared =
+        versionWriteResult.status === "ok";
       return versionWriteResult;
     });
     if (Result.isError(writeResult)) {

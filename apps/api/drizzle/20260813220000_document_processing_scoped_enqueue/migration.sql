@@ -17,6 +17,16 @@ SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 --
 --   kind = 'native-extraction' AND request_source = 'upload'
 --   AND status = 'queued' AND requested_by IS NULL AND attempt_count = 0
+--   AND processor_version = 1
+--
+-- `processor_version` is pinned because it participates in
+-- document_processing_runs_source_uidx, the conflict identity that makes
+-- re-requesting the same source a no-op. Left free (its only constraint is
+-- `> 0`), a scoped session could walk it and mint unlimited distinct,
+-- dispatchable runs for one file. The cost is that bumping the native
+-- extraction contract's version needs a migration; a schema test fails when
+-- the constant and this policy disagree, so that lands as a red test rather
+-- than as inserts denied in production.
 --
 -- so the scoped role can create only a fresh, unattributed, upload-sourced
 -- native-extraction request for a workspace it already holds. OCR runs (which
@@ -67,4 +77,5 @@ CREATE POLICY "document_processing_runs_native_extraction_insert"
     AND status = 'queued'
     AND requested_by IS NULL
     AND attempt_count = 0
+    AND processor_version = 1
   )));

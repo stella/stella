@@ -1,5 +1,7 @@
 import { sql } from "drizzle-orm";
 
+import { DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
+
 import {
   organization,
   p,
@@ -71,23 +73,34 @@ const DOCUMENT_PROCESSING_REQUEST_SOURCE_SQL_VALUES =
 export const SCOPED_NATIVE_EXTRACTION_ENQUEUE = {
   attemptCount: 0,
   kind: "native-extraction",
+  processorVersion: DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION,
   requestedBy: null,
   requestSource: "upload",
   status: "queued",
 } as const satisfies {
   attemptCount: number;
   kind: DocumentProcessingKind;
+  processorVersion: number;
   requestedBy: null;
   requestSource: DocumentProcessingRequestSource;
   status: DocumentProcessingStatus;
 };
 
+// `processor_version` is pinned for a reason that is not obvious: it is part
+// of `document_processing_runs_source_uidx`, the conflict identity that makes
+// re-requesting the same source a no-op. Left free, a scoped inserter could
+// walk it (the column's only constraint is `> 0`) and mint an unlimited number
+// of distinct, dispatchable runs for one file, each of which the worker would
+// extract. Pinning it costs a migration whenever the processing contract's
+// version changes, which `scopedEnqueueVersionMatchesContract` turns into a
+// failing test rather than a silent insert denial in production.
 const scopedEnqueueShapeCheck = sql`(
   kind = ${sql.raw(`'${SCOPED_NATIVE_EXTRACTION_ENQUEUE.kind}'`)}
   AND request_source = ${sql.raw(`'${SCOPED_NATIVE_EXTRACTION_ENQUEUE.requestSource}'`)}
   AND status = ${sql.raw(`'${SCOPED_NATIVE_EXTRACTION_ENQUEUE.status}'`)}
   AND requested_by IS NULL
   AND attempt_count = ${sql.raw(String(SCOPED_NATIVE_EXTRACTION_ENQUEUE.attemptCount))}
+  AND processor_version = ${sql.raw(String(SCOPED_NATIVE_EXTRACTION_ENQUEUE.processorVersion))}
 )`;
 
 /**
