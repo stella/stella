@@ -41,6 +41,34 @@ const MEASUREMENT_FLAGS = [
   "--extendedDiagnostics",
   "--singleThreaded",
 ] as const;
+const CLI_MODES = [
+  { flag: "--check", mode: "check" },
+  { flag: "--self-test", mode: "self-test" },
+  { flag: "--write-baseline", mode: "write-baseline" },
+] as const;
+const CLI_MODE_FLAGS = CLI_MODES.map(({ flag }) => flag);
+
+type CliMode = "report" | (typeof CLI_MODES)[number]["mode"];
+type CliParseResult =
+  | { ok: true; mode: CliMode }
+  | { ok: false; error: string };
+
+const parseCliMode = (args: readonly string[]): CliParseResult => {
+  if (args.length === 0) {
+    return { ok: true, mode: "report" };
+  }
+  const argument = args.at(0);
+  const selected = CLI_MODES.find(({ flag }) => flag === argument);
+  if (args.length === 1 && selected !== undefined) {
+    return { ok: true, mode: selected.mode };
+  }
+  return {
+    ok: false,
+    error:
+      "typecheck-baseline: expected no arguments or exactly one of " +
+      `${CLI_MODE_FLAGS.join(", ")}; received ${args.map((arg) => JSON.stringify(arg)).join(" ")}`,
+  };
+};
 
 // One entry per tsconfig project the repo typechecks in CI. Fixed schema
 // (like bundle-baseline's GROUP_KEYS): a new project must be added here
@@ -414,6 +442,27 @@ const SELF_TEST_DIAGNOSTICS = [
 const runSelfTest = (): number => {
   const failures: string[] = [];
 
+  const reportMode = parseCliMode([]);
+  if (!reportMode.ok || reportMode.mode !== "report") {
+    failures.push("CLI parser did not select report mode for no arguments");
+  }
+  for (const { flag, mode } of CLI_MODES) {
+    const parsedMode = parseCliMode([flag]);
+    if (!parsedMode.ok || parsedMode.mode !== mode) {
+      failures.push(`CLI parser did not select ${mode}`);
+    }
+    for (const secondFlag of CLI_MODE_FLAGS) {
+      if (parseCliMode([flag, secondFlag]).ok) {
+        failures.push(
+          `CLI parser accepted conflicting modes: ${flag} ${secondFlag}`,
+        );
+      }
+    }
+  }
+  if (parseCliMode(["--not-a-real-option"]).ok) {
+    failures.push("CLI parser accepted an unknown option");
+  }
+
   if (!MEASUREMENT_FLAGS.includes("--singleThreaded")) {
     failures.push("measurement flags allow checker-pool partition noise");
   }
@@ -522,19 +571,28 @@ const runSelfTest = (): number => {
 
 // --- Entry --------------------------------------------------------------------
 
-const main = (): number => {
-  if (process.argv.includes("--self-test")) {
-    return runSelfTest();
+const main = (args: readonly string[]): number => {
+  const parsed = parseCliMode(args);
+  if (!parsed.ok) {
+    console.error(parsed.error);
+    return 2;
   }
-  if (process.argv.includes("--write-baseline")) {
-    return runWrite();
+  switch (parsed.mode) {
+    case "report":
+      return runReport();
+    case "self-test":
+      return runSelfTest();
+    case "write-baseline":
+      return runWrite();
+    case "check":
+      return runCheck();
+    default: {
+      const exhaustiveMode: never = parsed.mode;
+      return exhaustiveMode;
+    }
   }
-  if (process.argv.includes("--check")) {
-    return runCheck();
-  }
-  return runReport();
 };
 
 if (import.meta.main) {
-  process.exit(main());
+  process.exit(main(process.argv.slice(2)));
 }
