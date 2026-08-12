@@ -1,29 +1,19 @@
 import { Result } from "better-result";
-import { and, desc, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { PLAYBOOK_RUN_PROJECTIONS } from "@stll/api-contract";
 
-import { playbookDefinitionVersions } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
-import { resolvePlaybookPin } from "@/api/lib/document-review/resolve-playbook-pin";
-import type { PinnedPlaybook } from "@/api/lib/document-review/run-contract";
+import { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
+import { openPlaybookRun } from "@/api/lib/document-review/open-playbook-run";
 import { enqueueDocumentReviewRuns } from "@/api/lib/document-review/run-queue";
-import {
-  createPlaybookTableRuns,
-  PLAYBOOK_RUN_DOCUMENTS_MAX,
-} from "@/api/lib/document-review/table-run-create";
+import { PLAYBOOK_RUN_DOCUMENTS_MAX } from "@/api/lib/document-review/table-run-create";
 import type { CreatePlaybookTableRunsResult } from "@/api/lib/document-review/table-run-create";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { startWorkflow } from "@/api/lib/workflow-queue";
-import {
-  materializePlaybookRun,
-  resolveScopedGate,
-} from "@/api/lib/workflow/materialize-playbook-run";
 import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
 
 const runPlaybookBodySchema = t.Object({
@@ -92,86 +82,29 @@ const runPlaybook = createSafeHandler(
           return { ok: false, status: 404, message: "Playbook not found" };
         }
 
-        // Findings are pinned to the version they were measured against, so a
-        // table run resolves the same approved snapshot a single-document
-        // review does rather than reading the live definition twice.
-        const versions = await tx
-          .select({
-            id: playbookDefinitionVersions.id,
-            name: playbookDefinitionVersions.name,
-            positions: playbookDefinitionVersions.positions,
-          })
-          .from(playbookDefinitionVersions)
-          .where(
-            and(
-              eq(
-                playbookDefinitionVersions.playbookDefinitionId,
-                params.playbookId,
-              ),
-              eq(playbookDefinitionVersions.organizationId, organizationId),
-            ),
-          )
-          .orderBy(desc(playbookDefinitionVersions.version))
-          .limit(1);
-        const playbook: PinnedPlaybook = resolvePlaybookPin({
-          definition,
-          latestApprovedVersion: versions.at(0) ?? null,
-        });
-
-        const gateResult = await resolveScopedGate({
-          tx,
-          workspaceId,
-          organizationId,
-          scope: definition.scope,
-        });
-        if (!gateResult.ok) {
-          return gateResult;
-        }
-
-        const materializedPropertyIds: SafeId<"property">[] = [];
-        if (projection === PLAYBOOK_RUN_PROJECTION.COLUMNS) {
-          const materialized = await materializePlaybookRun({
-            tx,
-            workspaceId,
-            organizationId,
-            playbookId: params.playbookId,
-            positions: playbook.definitionSnapshot.positions.items,
-            scope: definition.scope,
-            recordAuditEvent,
-            auditMetadata: { projection },
-          });
-          if (!materialized.ok) {
-            return materialized;
-          }
-          materializedPropertyIds.push(...materialized.materializedPropertyIds);
-        }
-
-        const tableRuns = await createPlaybookTableRuns({
+        const opened = await openPlaybookRun({
           tx,
           workspaceId,
           organizationId,
           userId: user.id,
-          playbook,
-          docTypeGate: gateResult.gate,
+          definition,
+          latestApprovedVersion: await loadLatestApprovedVersion({
+            tx,
+            organizationId,
+            playbookDefinitionId: params.playbookId,
+          }),
           projection,
+          recordAuditEvent,
         });
-
-        // A projected run is audited by the materializer; an unprojected one
-        // writes no column, so its execution is recorded here.
-        if (projection === PLAYBOOK_RUN_PROJECTION.NONE) {
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.EXECUTE,
-            resourceType: AUDIT_RESOURCE_TYPE.PLAYBOOK,
-            resourceId: params.playbookId,
-            metadata: {
-              documentRunCount: tableRuns.runs.length,
-              playbookProvenance: playbook.provenance,
-              projection,
-            },
-          });
+        if (!opened.ok) {
+          return opened;
         }
 
-        return { ok: true, materializedPropertyIds, tableRuns };
+        return {
+          ok: true,
+          materializedPropertyIds: opened.materializedPropertyIds,
+          tableRuns: opened.tableRuns,
+        };
       }),
     );
 
