@@ -102,6 +102,7 @@ import {
   WORKFLOW_ENTITY_JOB_BACKOFF_DELAY_MS,
 } from "@/api/lib/workflow/run-logic";
 import { requireWorkflowFinalizationManifest } from "@/api/lib/workflow/run-state-store";
+import { startStragglerCatchUp } from "@/api/lib/workflow/straggler-catchup";
 import type { PartialAnswerUpdate } from "@/api/lib/workflow/streaming-answer";
 import { prepareBatch } from "@/api/lib/workflow/utils";
 import { computeVerdictBatch } from "@/api/lib/workflow/verdict-engine";
@@ -2007,6 +2008,11 @@ const finishWorkflow = async (
   }
 
   const manifest = manifestResult.value;
+  // Scope gates freshening and nothing else. A cell-scoped run computed one
+  // column for a few entities, so declaring that column workspace-wide fresh
+  // would hide every cell it did not touch from the next sweep. What the
+  // workspace still owes is read from durable state below, which a scoped run
+  // narrows no more than any other.
   const wasScopedRun = manifest.freshnessScope === "cells";
   const { propertyIds: planPropertyIds, serviceTier } = manifest;
 
@@ -2060,43 +2066,18 @@ const finishWorkflow = async (
     planPropertyIds,
   }).catch((error: unknown) => captureError(error, { workspaceId }));
 
-  if (wasScopedRun) {
-    return;
-  }
-
-  // Catch up on any AI-model properties created mid-workflow. They
-  // were left stale by the partial freshen above; kick off a follow-up
-  // run so their cells get populated without the user having to nudge.
-  // The filter on `tool.type === 'ai-model'` is critical: manual
-  // properties may legitimately sit at status "stale" (e.g. after a
-  // type edit) and the planner intentionally skips them, so an
-  // unfiltered query would loop forever firing no-op workflows.
-  try {
-    const stragglers = await scopedDb((tx) =>
-      tx
-        .select({ id: properties.id })
-        .from(properties)
-        .where(
-          and(
-            eq(properties.workspaceId, workspaceId),
-            eq(properties.status, "stale"),
-            sql`${properties.tool}->>'type' = 'ai-model'`,
-          ),
-        )
-        .limit(1),
-    );
-    if (stragglers.length > 0) {
-      startWorkflow({
-        workspaceId,
-        organizationId,
-        userId,
-        scopedDb,
-        serviceTier,
-      }).catch((error: unknown) => captureError(error, { workspaceId }));
-    }
-  } catch (error: unknown) {
-    captureError(error, { workspaceId });
-  }
+  // Grade whatever the workspace still owes: columns created mid-run, and the
+  // columns of any start this run answered `already-running`. Unconditional by
+  // design: a start deferred by a cell-scoped run has nothing else coming for
+  // it (see `startStragglerCatchUp`).
+  await startStragglerCatchUp({
+    workspaceId,
+    organizationId,
+    userId,
+    scopedDb,
+    serviceTier,
+    startWorkflow,
+  });
 };
 
 // ── Helpers ────────────────────────────────────────────

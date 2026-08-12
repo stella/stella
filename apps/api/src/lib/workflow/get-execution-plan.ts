@@ -68,6 +68,18 @@ export type VerdictBatchProperty = BatchPropertyBase & {
 
 export type BatchProperty = AIBatchProperty | VerdictBatchProperty;
 
+/**
+ * The tool types a run computes. `needsComputation` answers whether a column is
+ * owed work; this answers which kinds can be owed it, and the straggler
+ * catch-up reads the same list to decide whether a finished run left the
+ * workspace owing anything. Bound to the plan's own union, so a tool type the
+ * planner never schedules cannot be listed here.
+ */
+export const COMPUTED_PROPERTY_TOOL_TYPES = [
+  "ai-model",
+  "playbook-verdict",
+] as const satisfies readonly BatchProperty["tool"]["type"][];
+
 export type PropertyBatch = {
   id: string;
   inputs: SafeId<"property">[];
