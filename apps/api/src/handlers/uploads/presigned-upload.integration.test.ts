@@ -334,6 +334,16 @@ describe("presigned upload mutation flow", () => {
       purposeData: {
         type: "email_ingest",
         propertyId: ids.propertyA1,
+        postCommitKickoffs: [
+          {
+            encrypted: false,
+            entityId: ids.entityA1,
+            fieldId: ids.fieldA1,
+            sourceUploadId: uploadId,
+            fileName: "message.eml",
+            mimeType: "message/rfc822",
+          },
+        ],
       },
       declaredName: "message.eml",
       declaredMime: "message/rfc822",
@@ -355,6 +365,16 @@ describe("presigned upload mutation flow", () => {
         userId: ids.userA1,
       }),
     );
+    const finalizedReplay = await finalizeUpload.handler(
+      asTestRaw<FinalizeCtx>(
+        createContext({
+          params: { workspaceId: ids.wsA1, uploadId },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
 
     const first = await reconcileUpload.handler(context);
     const replay = await reconcileUpload.handler(context);
@@ -364,6 +384,11 @@ describe("presigned upload mutation flow", () => {
       state: "complete",
     });
     expect(replay).toEqual(first);
+    expect(finalizedReplay).toEqual({ finalizedResult });
+    expect(extractionMock).toHaveBeenCalledTimes(3);
+    expect(uploadFlowMock).toHaveBeenCalledTimes(3);
+    expect(pdfDerivativeMock).toHaveBeenCalledTimes(3);
+    expect(thumbnailDerivativeMock).toHaveBeenCalledTimes(3);
   });
 
   test("does not let workspace A abort workspace B upload IDs", async () => {

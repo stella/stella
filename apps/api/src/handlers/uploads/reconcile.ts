@@ -17,6 +17,7 @@ import type {
 } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { replayEmailIngestPostCommitWork } from "@/api/lib/uploads/email-ingest";
 
 const reconcileParamsSchema = t.Object({
   workspaceId: tSafeId("workspace"),
@@ -34,11 +35,11 @@ const config = {
   description:
     "Read the durable state of a presigned upload after an uncertain client " +
     "outcome. The lookup is scoped to the authenticated user and workspace, " +
-    "re-checks the upload purpose permission, performs no storage I/O, and is " +
-    "safe to replay. Returns an explicit reserved, finalizing, retryable, " +
-    "complete, or rejected state.",
+    "re-checks the upload purpose permission, and idempotently repairs durable " +
+    "post-commit work for completed email ingests. Returns an explicit " +
+    "reserved, finalizing, retryable, complete, or rejected state.",
   permissions: uploadRoutePermission,
-  access: "read",
+  access: "write",
   mcp: { type: "internal", reason: "upload_mechanics" },
   body: reconcileBodySchema,
   params: reconcileParamsSchema,
@@ -77,6 +78,7 @@ const reconcileUpload = createSafeHandler(
             claimedAt: true,
             expiresAt: true,
             finalizedResult: true,
+            purposeData: true,
             purpose: true,
             rejectReason: true,
             status: true,
@@ -152,6 +154,18 @@ const reconcileUpload = createSafeHandler(
         if (!upload.finalizedResult) {
           return panic("Finalized pending upload has no finalized result");
         }
+        if (
+          upload.finalizedResult.type !== "email_ingest" ||
+          upload.purposeData.type !== "email_ingest"
+        ) {
+          return panic("Finalized email ingest has inconsistent durable data");
+        }
+        replayEmailIngestPostCommitWork({
+          organizationId: session.activeOrganizationId,
+          purposeData: upload.purposeData,
+          userId: user.id,
+          workspaceId,
+        });
         capture("finalized", "complete", "none");
         return Result.ok({
           finalizedResult: upload.finalizedResult,
