@@ -378,10 +378,6 @@ export const failAccountDeletionEffectChunk = async (
 export const listRecoverableAccountDeletionEffectRequestIds = async (
   db: AccountDeletionEffectDb = rootDb,
 ): Promise<SafeId<"accountDeletionRequest">[]> => {
-  const legacyNow = new Date();
-  const legacyStaleBefore = new Date(
-    legacyNow.getTime() - DESTRUCTIVE_EFFECT_LEGACY_STALE_PROCESSING_MS,
-  );
   const legacyRows = await db
     .select({ id: accountDeletionRequests.id })
     .from(accountDeletionRequests)
@@ -396,7 +392,7 @@ export const listRecoverableAccountDeletionEffectRequestIds = async (
           eq(accountDeletionRequests.status, "failed"),
           and(
             eq(accountDeletionRequests.status, "processing"),
-            lt(accountDeletionRequests.updatedAt, legacyStaleBefore),
+            sql`${accountDeletionRequests.updatedAt} < CURRENT_TIMESTAMP - (${DESTRUCTIVE_EFFECT_LEGACY_STALE_PROCESSING_MS} * INTERVAL '1 millisecond')`,
           ),
         ),
         notExists(

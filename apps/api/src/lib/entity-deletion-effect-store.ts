@@ -1,4 +1,4 @@
-import { and, asc, eq, lt, lte, notExists, or, sql } from "drizzle-orm";
+import { and, asc, eq, notExists, or, sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
@@ -332,10 +332,6 @@ export const failEntityDeletionEffectChunk = async (
 export const listRecoverableEntityDeletionEffectRequestIds = async (
   db: EntityDeletionEffectDb = rootDb,
 ): Promise<SafeId<"entityDeletionCleanupRequest">[]> => {
-  const legacyNow = new Date();
-  const legacyStaleBefore = new Date(
-    legacyNow.getTime() - DESTRUCTIVE_EFFECT_LEGACY_STALE_PROCESSING_MS,
-  );
   const legacyRows = await db
     .select({ id: entityDeletionCleanupRequests.id })
     .from(entityDeletionCleanupRequests)
@@ -345,11 +341,11 @@ export const listRecoverableEntityDeletionEffectRequestIds = async (
           eq(entityDeletionCleanupRequests.status, "pending"),
           and(
             eq(entityDeletionCleanupRequests.status, "failed"),
-            lte(entityDeletionCleanupRequests.nextAttemptAt, legacyNow),
+            sql`${entityDeletionCleanupRequests.nextAttemptAt} <= CURRENT_TIMESTAMP`,
           ),
           and(
             eq(entityDeletionCleanupRequests.status, "processing"),
-            lt(entityDeletionCleanupRequests.updatedAt, legacyStaleBefore),
+            sql`${entityDeletionCleanupRequests.updatedAt} < CURRENT_TIMESTAMP - (${DESTRUCTIVE_EFFECT_LEGACY_STALE_PROCESSING_MS} * INTERVAL '1 millisecond')`,
           ),
         ),
         notExists(
