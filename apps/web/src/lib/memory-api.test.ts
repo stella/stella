@@ -64,7 +64,6 @@ describe("memory API boundary", () => {
         limit: 100,
         nextCursor: null,
         workspaces: [workspaceNavigationItem],
-        workspacesCountLimit: 1000,
       }),
     );
 

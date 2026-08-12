@@ -4,6 +4,7 @@ import {
   ENTITIES_PER_WORKSPACE_MAX,
   FLOW_RUN_INPUT_ENTITIES_MAX,
   PROPERTIES_PER_WORKSPACE_MAX,
+  WORKSPACES_PER_ORGANIZATION_MAX,
 } from "@stll/api-contract";
 import {
   CHAT_CONTEXT_FILE_MAX_BYTES,
@@ -28,7 +29,7 @@ export const LIMITS = {
   legalListGenerationRunsPageSizeMax: 100,
   legalListActivityPageSizeDefault: 50,
   legalListActivityPageSizeMax: 200,
-  workspacesCount: 1000,
+  workspacesCount: WORKSPACES_PER_ORGANIZATION_MAX,
   workspaceNavigationPageSizeDefault: 100,
   workspaceNavigationPageSizeMax: 1000,
   propertiesCount: PROPERTIES_PER_WORKSPACE_MAX,

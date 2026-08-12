@@ -167,6 +167,7 @@ export {
   ENTITIES_PER_WORKSPACE_MAX,
   FLOW_RUN_INPUT_ENTITIES_MAX,
   PROPERTIES_PER_WORKSPACE_MAX,
+  WORKSPACES_PER_ORGANIZATION_MAX,
 } from "./limits";
 export { GLOBAL_SEARCH_RESULT_TYPES } from "./search";
 export type { GlobalSearchResultType } from "./search";

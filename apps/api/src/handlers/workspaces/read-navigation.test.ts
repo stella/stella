@@ -112,7 +112,6 @@ describe("workspace navigation pagination", () => {
         expect.objectContaining({ name: "Appeal", status: "archived" }),
         expect.objectContaining({ name: "Merger", status: "active" }),
       ],
-      workspacesCountLimit: 1000,
     });
   });
 

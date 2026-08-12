@@ -15,6 +15,7 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 import { useShallow } from "zustand/shallow";
 
+import { WORKSPACES_PER_ORGANIZATION_MAX } from "@stll/api-contract";
 import { Button } from "@stll/ui/components/button";
 import { Frame } from "@stll/ui/components/frame";
 import { Input } from "@stll/ui/components/input";
@@ -171,7 +172,7 @@ const MattersContent = ({
 
   const workspaces = data.workspaces;
   const canOpenCreateMatter =
-    canCreateMatter && workspaces.length < data.workspacesCountLimit;
+    canCreateMatter && workspaces.length < WORKSPACES_PER_ORGANIZATION_MAX;
 
   const searched = workspaces.filter((w) => {
     if (!search.trim()) {
