@@ -142,14 +142,14 @@ const synchronizeParentProjection = async (
   await tx
     .update(accountDeletionRequests)
     .set({
-      completedAt: status === "completed" ? sql`CURRENT_TIMESTAMP` : null,
+      completedAt: status === "completed" ? sql`statement_timestamp()` : null,
       errorMessage: failed?.errorMessage ?? null,
       status,
       storageCleanup:
         status === "completed"
           ? { s3Keys: [] }
           : sql`${accountDeletionRequests.storageCleanup}`,
-      updatedAt: sql`CURRENT_TIMESTAMP`,
+      updatedAt: sql`statement_timestamp()`,
     })
     .where(eq(accountDeletionRequests.id, requestId));
 };
@@ -339,14 +339,14 @@ export const completeAccountDeletionEffectChunk = async (
       await tx
         .update(accountDeletionEffectChunks)
         .set({
-          completedAt: sql`CURRENT_TIMESTAMP`,
+          completedAt: sql`statement_timestamp()`,
           errorMessage: null,
           leaseExpiresAt: null,
           leaseToken: null,
           nextAttemptAt: null,
           s3Keys: [],
           status: "completed",
-          updatedAt: sql`CURRENT_TIMESTAMP`,
+          updatedAt: sql`statement_timestamp()`,
         })
         .where(
           and(
