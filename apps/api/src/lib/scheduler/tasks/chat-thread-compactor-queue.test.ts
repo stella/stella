@@ -6,9 +6,12 @@ import { toSafeId } from "@/api/lib/branded-types";
 import {
   buildClaimChatCompactionQueueQuery,
   buildSettleChatCompactionQueueQuery,
+  CHAT_COMPACTION_SETTLEMENT,
+  CHAT_COMPACTION_SETTLEMENTS,
   CHAT_COMPACTION_THREAD_BATCH_SIZE,
   parseChatCompactionQueueRows,
 } from "./chat-thread-compactor-queue";
+import type { ChatCompactionSettlement } from "./chat-thread-compactor-queue";
 
 const dialect = new PgDialect();
 
@@ -61,100 +64,148 @@ describe("chat compaction queue claim", () => {
 describe("chat compaction queue settlement", () => {
   const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
 
-  test("compare-and-sets on the lease so a concurrent wakeup survives", () => {
-    const query = dialect.sqlToQuery(
+  const settle = (settlement: ChatCompactionSettlement) =>
+    dialect.sqlToQuery(
       buildSettleChatCompactionQueueQuery({
-        hasMoreWork: false,
         leaseExpiresAt,
         now,
+        settlement,
         threadId,
       }),
     );
 
+  test("compare-and-sets on the lease so a concurrent wakeup survives", () => {
     // A send that marks the thread due mid-run overwrites the lease token.
     // This guard is what makes the stale settlement match no rows instead of
     // clearing that wakeup.
-    expect(query.sql).toContain("thread.compaction_scheduled_at = $");
-    expect(query.params).toContain(leaseExpiresAt);
+    for (const settlement of CHAT_COMPACTION_SETTLEMENTS) {
+      const query = settle(settlement);
+      expect(query.sql).toContain("thread.compaction_scheduled_at = $");
+      expect(query.params).toContain(leaseExpiresAt);
+    }
   });
 
-  test("drains a finished thread and requeues one that is still behind", () => {
-    const drained = dialect.sqlToQuery(
-      buildSettleChatCompactionQueueQuery({
-        hasMoreWork: false,
-        leaseExpiresAt,
-        now,
-        threadId,
-      }),
-    );
-    const requeued = dialect.sqlToQuery(
-      buildSettleChatCompactionQueueQuery({
-        hasMoreWork: true,
-        leaseExpiresAt,
-        now,
-        threadId,
-      }),
-    );
+  test("only a drained thread clears its queue address", () => {
+    // Asserted in both directions: `now` is bound for the attempt stamp by
+    // every settlement, so containment alone would hold for all three and
+    // prove nothing about the schedule each one writes.
+    const drained = settle(CHAT_COMPACTION_SETTLEMENT.DRAINED);
+    const requeued = settle(CHAT_COMPACTION_SETTLEMENT.REQUEUED);
+    const failed = settle(CHAT_COMPACTION_SETTLEMENT.FAILED);
 
-    expect(drained.params).toContain(null);
-    expect(requeued.params).toContain(now);
-    // Both stamp the attempt, so a repeatedly failing thread rotates behind
-    // untouched work rather than holding the head of the queue.
-    expect(drained.sql).toContain("compaction_attempted_at = $");
-    expect(requeued.sql).toContain("compaction_attempted_at = $");
+    expect(drained.sql).toContain("compaction_scheduled_at = null");
+    expect(requeued.sql).not.toContain("compaction_scheduled_at = null");
+    expect(failed.sql).not.toContain("compaction_scheduled_at = null");
+  });
+
+  test("a requeued thread comes due immediately and a failed one backs off", () => {
+    const requeued = settle(CHAT_COMPACTION_SETTLEMENT.REQUEUED);
+    const failed = settle(CHAT_COMPACTION_SETTLEMENT.FAILED);
+
+    // Progress goes straight back on the queue.
+    expect(requeued.sql).not.toContain("make_interval");
+    // A failure is delayed by a capped doubling of the stored attempt count,
+    // so a thread that fails every run cannot be re-claimed every tick.
+    expect(failed.sql).toContain("make_interval");
+    expect(failed.sql).toContain("power(2, thread.compaction_attempts)");
+    expect(failed.sql).toContain("LEAST");
+  });
+
+  test("only a failure advances the attempt count; progress resets it", () => {
+    // The counter is what the backoff compounds on, so a run that made
+    // progress has to clear it or the next failure would start pre-delayed.
+    expect(settle(CHAT_COMPACTION_SETTLEMENT.FAILED).sql).toContain(
+      "compaction_attempts = thread.compaction_attempts + 1",
+    );
+    expect(settle(CHAT_COMPACTION_SETTLEMENT.DRAINED).sql).toContain(
+      "compaction_attempts = 0",
+    );
+    expect(settle(CHAT_COMPACTION_SETTLEMENT.REQUEUED).sql).toContain(
+      "compaction_attempts = 0",
+    );
+  });
+
+  test("every settlement stamps the attempt time", () => {
+    // Declared set equals exercised set: a new settlement value cannot land
+    // without deciding what it writes.
+    for (const settlement of CHAT_COMPACTION_SETTLEMENTS) {
+      expect(settle(settlement).sql).toContain("compaction_attempted_at = $");
+    }
   });
 });
 
 describe("chat compaction queue row parsing", () => {
-  test("carries the thread's own tenant, owner and matter scope", () => {
-    const threadId = Bun.randomUUIDv7();
-    const workspaceId = Bun.randomUUIDv7();
+  const claimedRow = () => ({
+    chatModel: "anthropic::claude-sonnet-4",
+    dataWorkspaceIds: [Bun.randomUUIDv7()],
+    organizationId: Bun.randomUUIDv7(),
+    threadId: Bun.randomUUIDv7(),
+    userId: Bun.randomUUIDv7(),
+  });
 
-    const [parsed] = parseChatCompactionQueueRows([
+  test("carries the thread's own tenant, owner and matter scope", () => {
+    const row = claimedRow();
+
+    const { malformedRowCount, threads } = parseChatCompactionQueueRows([row]);
+
+    expect(malformedRowCount).toBe(0);
+    expect(threads).toEqual([
       {
-        chatModel: "anthropic::claude-sonnet-4",
-        dataWorkspaceIds: [workspaceId],
-        organizationId: "org_abc",
-        threadId,
-        userId: "user_abc",
+        chatModel: row.chatModel,
+        dataWorkspaceIds: row.dataWorkspaceIds.map((id) =>
+          toSafeId<"workspace">(id),
+        ),
+        organizationId: toSafeId<"organization">(row.organizationId),
+        threadId: toSafeId<"chatThread">(row.threadId),
+        userId: toSafeId<"user">(row.userId),
       },
     ]);
-
-    expect(parsed).toEqual({
-      chatModel: "anthropic::claude-sonnet-4",
-      dataWorkspaceIds: [toSafeId<"workspace">(workspaceId)],
-      organizationId: toSafeId<"organization">("org_abc"),
-      threadId: toSafeId<"chatThread">(threadId),
-      userId: toSafeId<"user">("user_abc"),
-    });
   });
 
-  test("panics rather than compacting a thread whose owner is unknown", () => {
-    // A missing owner would otherwise silently widen the scoped read the
-    // compactor runs under.
-    expect(() =>
-      parseChatCompactionQueueRows([
-        {
-          chatModel: null,
-          dataWorkspaceIds: [],
-          organizationId: "org_abc",
-          threadId: Bun.randomUUIDv7(),
-        },
-      ]),
-    ).toThrow();
+  test("accepts a thread with no model override", () => {
+    const { malformedRowCount, threads } = parseChatCompactionQueueRows([
+      { ...claimedRow(), chatModel: null },
+    ]);
+
+    expect(malformedRowCount).toBe(0);
+    expect(threads.at(0)?.chatModel).toBeNull();
   });
 
-  test("panics on a non-array matter scope", () => {
-    expect(() =>
-      parseChatCompactionQueueRows([
-        {
-          chatModel: null,
-          dataWorkspaceIds: "not-an-array",
-          organizationId: "org_abc",
-          threadId: Bun.randomUUIDv7(),
-          userId: "user_abc",
-        },
-      ]),
-    ).toThrow();
+  test("skips a row whose owner is unknown rather than dropping the batch", () => {
+    // A missing owner would otherwise widen the scoped read the compactor runs
+    // under. Skipping rather than throwing matters because the claim has
+    // already written the lease: aborting here would strand every valid thread
+    // in the same batch until that lease expired.
+    const { userId: _omitted, ...withoutOwner } = claimedRow();
+    const valid = claimedRow();
+
+    const { malformedRowCount, threads } = parseChatCompactionQueueRows([
+      withoutOwner,
+      valid,
+    ]);
+
+    expect(malformedRowCount).toBe(1);
+    expect(threads.map(({ threadId }) => threadId)).toEqual([
+      toSafeId<"chatThread">(valid.threadId),
+    ]);
+  });
+
+  test("skips a row with a non-array matter scope", () => {
+    const { malformedRowCount, threads } = parseChatCompactionQueueRows([
+      { ...claimedRow(), dataWorkspaceIds: "not-an-array" },
+    ]);
+
+    expect(malformedRowCount).toBe(1);
+    expect(threads).toEqual([]);
+  });
+
+  test("skips a row that is not an object at all", () => {
+    const { malformedRowCount, threads } = parseChatCompactionQueueRows([
+      null,
+      "nonsense",
+    ]);
+
+    expect(malformedRowCount).toBe(2);
+    expect(threads).toEqual([]);
   });
 });

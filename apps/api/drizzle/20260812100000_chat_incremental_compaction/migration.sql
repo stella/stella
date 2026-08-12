@@ -12,6 +12,11 @@ ALTER TABLE "chat_threads" ADD COLUMN IF NOT EXISTS "compaction_attempted_at" ti
 -- The compactor compares it under the thread lock before writing, which is the
 -- only guard that works on a thread with no active checkpoint to mark stale.
 ALTER TABLE "chat_threads" ADD COLUMN IF NOT EXISTS "compaction_epoch" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+-- Consecutive failed compaction attempts, reset by any run that makes progress.
+-- Drives the capped exponential backoff the failed settlement writes into
+-- compaction_scheduled_at, so a thread that cannot be compacted stops costing a
+-- claim slot and a provider call on every tick.
+ALTER TABLE "chat_threads" ADD COLUMN IF NOT EXISTS "compaction_attempts" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
 -- delta_cursor is the encoded (created_at, id) keyset cursor of the last
 -- message this checkpoint chain summarized. Every run reads only the bounded
 -- delta after it, so no run rereads lifetime history. Backfilled below for

@@ -29,9 +29,13 @@ import {
   buildClaimChatCompactionQueueQuery,
   buildSettleChatCompactionQueueQuery,
   CHAT_COMPACTION_QUEUE_LEASE_MS,
+  CHAT_COMPACTION_SETTLEMENT,
   parseChatCompactionQueueRows,
 } from "@/api/lib/scheduler/tasks/chat-thread-compactor-queue";
-import type { QueuedCompactionThread } from "@/api/lib/scheduler/tasks/chat-thread-compactor-queue";
+import type {
+  ChatCompactionSettlement,
+  QueuedCompactionThread,
+} from "@/api/lib/scheduler/tasks/chat-thread-compactor-queue";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const CHAT_THREAD_COMPACTOR_TASK = "chat.compactThreads" as const;
@@ -44,6 +48,7 @@ export const compactChatThreads: SchedulerTask = async ({ logger, signal }) => {
   let advanced = 0;
   let upToDate = 0;
   let superseded = 0;
+  let noSummary = 0;
   let failed = 0;
 
   // Sequential recursion rather than a loop: one thread in flight at a time
@@ -66,9 +71,14 @@ export const compactChatThreads: SchedulerTask = async ({ logger, signal }) => {
         "thread.id": thread.threadId,
       });
       // A failed run leaves the checkpoint untouched, so the same delta is
-      // still pending. Settle it back as due; the attempt stamp rotates it
-      // behind untouched work so it cannot monopolize the next batch.
-      await settleThread({ claim, hasMoreWork: true, thread });
+      // still pending. Settling it as failed keeps it queued while backing the
+      // retry off, so a thread that fails every time cannot spend a claim slot
+      // and a provider call on every tick.
+      await settleThread({
+        claim,
+        settlement: CHAT_COMPACTION_SETTLEMENT.FAILED,
+        thread,
+      });
       await processThreadAt(index + 1);
       return;
     }
@@ -80,6 +90,13 @@ export const compactChatThreads: SchedulerTask = async ({ logger, signal }) => {
       }
       case "up-to-date": {
         upToDate += 1;
+        break;
+      }
+      case "no-summary": {
+        noSummary += 1;
+        logger.warn("scheduler.chat_compactor_no_summary", {
+          "thread.id": thread.threadId,
+        });
         break;
       }
       case "superseded": {
@@ -94,7 +111,7 @@ export const compactChatThreads: SchedulerTask = async ({ logger, signal }) => {
 
     await settleThread({
       claim,
-      hasMoreWork: hasMoreWorkAfter(outcome.value),
+      settlement: settlementForOutcome(outcome.value),
       thread,
     });
     await processThreadAt(index + 1);
@@ -102,10 +119,20 @@ export const compactChatThreads: SchedulerTask = async ({ logger, signal }) => {
 
   await processThreadAt(0);
 
+  if (claim.malformedRowCount > 0) {
+    // A shape the schema forbids. Skipped rather than aborting the batch, since
+    // the lease is already written and the other claims would otherwise sit
+    // unsettled until it expired.
+    logger.warn("scheduler.chat_compactor_malformed_rows", {
+      "thread.malformed": claim.malformedRowCount,
+    });
+  }
+
   logger.info("scheduler.chat_compactor", {
     "thread.advanced": advanced,
     "thread.claimed": claim.threads.length,
     "thread.failed": failed,
+    "thread.no_summary": noSummary,
     "thread.superseded": superseded,
     "thread.up_to_date": upToDate,
   });
@@ -116,15 +143,45 @@ export const compactChatThreads: SchedulerTask = async ({ logger, signal }) => {
 };
 
 /**
- * Whether the thread goes back on the queue immediately.
+ * How each outcome leaves the queue.
  *
- * Only a run that made progress and knows more delta remains reschedules
- * itself. `up-to-date` deliberately does not: a delta the planner declines to
- * summarize would otherwise respawn the same no-op run forever. The next send
- * over the trigger marks the thread due again.
+ *  - `advanced` reschedules only while delta remains; otherwise it drains.
+ *  - `up-to-date` drains. It must not reschedule: a delta the planner declines
+ *    to summarize would respawn the same no-op run forever. The next send over
+ *    the trigger marks the thread due again.
+ *  - `no-summary` is a failed attempt, not a completion. The delta is still
+ *    unsummarized, so the thread stays queued, behind a backoff so a model that
+ *    keeps returning nothing cannot be retried at full rate.
+ *  - `superseded` drains, because whatever superseded the run owns the
+ *    follow-up: a competing compaction settles itself, and an edit or replay
+ *    invalidates the chain from inside a send that re-marks the thread due in
+ *    the same request. Requeueing instead would spend a provider call per tick
+ *    for as long as a user kept editing, to reach the same state.
  */
-const hasMoreWorkAfter = (outcome: ChatCompactionOutcome): boolean =>
-  outcome.type === "advanced" && outcome.hasMoreDelta;
+export const settlementForOutcome = (
+  outcome: ChatCompactionOutcome,
+): ChatCompactionSettlement => {
+  switch (outcome.type) {
+    case "advanced": {
+      return outcome.hasMoreDelta
+        ? CHAT_COMPACTION_SETTLEMENT.REQUEUED
+        : CHAT_COMPACTION_SETTLEMENT.DRAINED;
+    }
+    case "up-to-date": {
+      return CHAT_COMPACTION_SETTLEMENT.DRAINED;
+    }
+    case "no-summary": {
+      return CHAT_COMPACTION_SETTLEMENT.FAILED;
+    }
+    case "superseded": {
+      return CHAT_COMPACTION_SETTLEMENT.DRAINED;
+    }
+    default: {
+      const exhaustive: never = outcome;
+      return exhaustive;
+    }
+  }
+};
 
 type CompactThreadOptions = {
   signal: AbortSignal;
@@ -200,6 +257,7 @@ const compactThread = async ({
 
 type ClaimedCompactionBatch = {
   leaseExpiresAt: Date;
+  malformedRowCount: number;
   threads: QueuedCompactionThread[];
 };
 
@@ -211,23 +269,24 @@ const claimCompactionBatch = async (): Promise<ClaimedCompactionBatch> => {
   const rows = await rootDb.execute(
     buildClaimChatCompactionQueueQuery({ leaseExpiresAt, now }),
   );
-  return { leaseExpiresAt, threads: parseChatCompactionQueueRows(rows) };
+  const { malformedRowCount, threads } = parseChatCompactionQueueRows(rows);
+  return { leaseExpiresAt, malformedRowCount, threads };
 };
 
 const settleThread = async ({
   claim,
-  hasMoreWork,
+  settlement,
   thread,
 }: {
   claim: ClaimedCompactionBatch;
-  hasMoreWork: boolean;
+  settlement: ChatCompactionSettlement;
   thread: QueuedCompactionThread;
 }): Promise<void> => {
   await rootDb.execute(
     buildSettleChatCompactionQueueQuery({
-      hasMoreWork,
       leaseExpiresAt: claim.leaseExpiresAt,
       now: new Date(),
+      settlement,
       threadId: thread.threadId,
     }),
   );

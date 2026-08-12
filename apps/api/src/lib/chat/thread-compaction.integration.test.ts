@@ -34,6 +34,10 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 import { parseChatCompactionSummary } from "./compaction-summary";
 import type { IncrementalSummaryPrompt } from "./compaction-summary";
+import {
+  estimateTextTokens,
+  MESSAGE_OVERHEAD_TOKENS,
+} from "./compaction-tokens";
 import { chatMessageCursorCodec } from "./message-cursor";
 import {
   CHAT_COMPACTION_DELTA_BATCH_MAX,
@@ -90,13 +94,24 @@ const countedSafeDb = (): SafeDb => {
   );
 };
 
+type SeededRole = "assistant" | "user";
+
 type SeedThreadOptions = {
   messageCount: number;
   /** Zero-based offsets within this batch that carry a memory opt-out. */
   optedOutOffsets?: readonly number[];
+  /**
+   * Role for each message by thread index. Defaults to alternating turns;
+   * override to build a run of one role, which is what the preserved-tail
+   * budget has to cope with.
+   */
+  roleFor?: (index: number) => SeededRole;
   /** Append to an existing thread instead of creating one. */
   threadId?: SafeId<"chatThread">;
 };
+
+const alternatingRole = (index: number): SeededRole =>
+  index % 2 === 0 ? "user" : "assistant";
 
 /**
  * Seed a thread, or append a further batch to one. Later batches start after
@@ -106,6 +121,7 @@ type SeedThreadOptions = {
 const seedThread = async ({
   messageCount,
   optedOutOffsets = [],
+  roleFor = alternatingRole,
   threadId: existingThreadId,
 }: SeedThreadOptions): Promise<SafeId<"chatThread">> => {
   const threadId =
@@ -132,7 +148,7 @@ const seedThread = async ({
         threadId,
         userId: ids.userA1,
         workspaceId: ids.wsA1,
-        role: index % 2 === 0 ? ("user" as const) : ("assistant" as const),
+        role: roleFor(index),
         // Version-1 payloads, matching the sibling history-window fixture: the
         // compactor reads persisted content directly, so the legacy `text` key
         // is the shape most worth covering.
@@ -148,6 +164,14 @@ const seedThread = async ({
 
   return threadId;
 };
+
+/**
+ * One seeded message's token estimate, computed with the production estimator
+ * rather than pinned as a literal, so a preserve budget expressed in whole
+ * messages stays meaningful if the estimator changes.
+ */
+const MESSAGE_TOKENS_ESTIMATE =
+  MESSAGE_OVERHEAD_TOKENS + estimateTextTokens("message 10");
 
 const countThreadMessages = async (
   threadId: SafeId<"chatThread">,
@@ -222,6 +246,7 @@ const runCompaction = async ({
   preserveTokens = 1,
   extractionFeatureEnabled = true,
   onSummarize,
+  summary = SUMMARY_MARKDOWN,
 }: {
   threadId: SafeId<"chatThread">;
   extractionFeatureEnabled?: boolean;
@@ -231,6 +256,8 @@ const runCompaction = async ({
    */
   onSummarize?: () => Promise<void>;
   preserveTokens?: number;
+  /** What the model returns. Whitespace stands in for an unusable response. */
+  summary?: string;
   triggerTokens?: number;
 }): Promise<RecordedRun> => {
   const prompts: IncrementalSummaryPrompt[] = [];
@@ -247,7 +274,7 @@ const runCompaction = async ({
     summarize: async (prompt) => {
       prompts.push(prompt);
       await onSummarize?.();
-      return SUMMARY_MARKDOWN;
+      return summary;
     },
     threadId,
     triggerTokens,
@@ -668,21 +695,148 @@ describe("chat thread compaction cursor backfill", () => {
   });
 
   test("recovers extractability only where the previous writer recorded it", async () => {
-    const threadId = await seedThread({ messageCount: 8 });
-    const messages = await readThreadMessages(threadId);
+    // Both branches of the backfill's CASE, in one run of the statement. The
+    // stamped row must stay unknown, but asserting only that would pass even
+    // if the statement never touched a row: the promotion of the unstamped row
+    // is what proves it ran and that the two are distinguished.
+    const unstampedThreadId = await seedThread({ messageCount: 8 });
+    const stampedThreadId = await seedThread({ messageCount: 8 });
+
+    await seedLegacyCheckpoint({
+      // A null stamp IS a recorded decision: the previous writer stamped the
+      // column whenever the deployment flag was off or any summarized message
+      // was opted out, so its absence means every one of them was eligible.
+      memoryExtractedAt: null,
+      messageIds: (await readThreadMessages(unstampedThreadId))
+        .slice(0, 5)
+        .map(({ id }) => id),
+      threadId: unstampedThreadId,
+    });
     await seedLegacyCheckpoint({
       // A stamped row is ambiguous: excluded, or already mined. Provenance is
       // not recoverable, so it must not be promoted.
       memoryExtractedAt: new Date(),
-      messageIds: messages.slice(0, 5).map(({ id }) => id),
-      threadId,
+      messageIds: (await readThreadMessages(stampedThreadId))
+        .slice(0, 5)
+        .map(({ id }) => id),
+      threadId: stampedThreadId,
     });
 
     await testDb.execute(sql.raw(await readCursorBackfillStatement()));
 
-    expect((await readChain(threadId)).at(-1)?.memoryEligibility).toBe(
+    expect((await readChain(unstampedThreadId)).at(-1)?.memoryEligibility).toBe(
+      CHAT_COMPACTION_MEMORY_ELIGIBILITY.ELIGIBLE,
+    );
+    expect((await readChain(stampedThreadId)).at(-1)?.memoryEligibility).toBe(
       CHAT_COMPACTION_MEMORY_ELIGIBILITY.UNKNOWN,
     );
+  });
+});
+
+describe("chat thread compaction retry semantics", () => {
+  test("an empty model response is reported as a failed attempt, not completion", async () => {
+    const threadId = await seedThread({ messageCount: 6 });
+
+    const run = await runCompaction({ threadId, summary: "   \n  " });
+
+    // `up-to-date` would settle the thread and leave the delta unsummarized
+    // until some later send happened to re-enqueue it. The delta is still
+    // pending, so the outcome has to say so.
+    expect(run.outcome.type).toBe("no-summary");
+    expect(await readChain(threadId)).toEqual([]);
+  });
+
+  test("a retried run summarizes the same delta once the model answers", async () => {
+    const threadId = await seedThread({ messageCount: 6 });
+
+    const empty = await runCompaction({ threadId, summary: "" });
+    const retried = await runCompaction({ threadId });
+
+    expect(empty.outcome.type).toBe("no-summary");
+    expect(retried.outcome.type).toBe("advanced");
+    // Nothing was consumed by the failed attempt: the retry sees the same
+    // messages, so no delta was lost to it.
+    expect(
+      transcriptMessageIds(retried.prompts.at(0)?.newMessages ?? ""),
+    ).toEqual(transcriptMessageIds(empty.prompts.at(0)?.newMessages ?? ""));
+    expect(await readChain(threadId)).toHaveLength(1);
+  });
+});
+
+describe("chat thread compaction preserve budget", () => {
+  const MESSAGE_COUNT = 12;
+
+  test("stops the preserved tail at the budget across a run of assistant turns", async () => {
+    // The regression, and why the roles matter: the walk used to continue past
+    // the budget until the preserved window happened to begin on a user turn.
+    // With alternating turns it stops within a message either way, so only an
+    // unbroken run of assistant messages shows the difference. Under the old
+    // rule this consumed all twelve, left nothing to summarize, and reported
+    // up-to-date on a thread that was over its trigger.
+    const threadId = await seedThread({
+      messageCount: MESSAGE_COUNT,
+      roleFor: () => "assistant",
+    });
+
+    // Every seeded message is the same size, so a budget of two of them bounds
+    // the tail at two regardless of role.
+    const run = await runCompaction({
+      threadId,
+      preserveTokens: 2 * MESSAGE_TOKENS_ESTIMATE,
+      triggerTokens: 1,
+    });
+
+    expect(run.outcome.type).toBe("advanced");
+    const summarized = transcriptMessageIds(
+      run.prompts.at(0)?.newMessages ?? "",
+    );
+    expect(MESSAGE_COUNT - summarized.length).toBe(2);
+  });
+
+  test("prefers a user turn by shortening the tail, never by extending it", async () => {
+    // The user-turn boundary survives as a preference. It is applied by
+    // trimming, so the preserved window can only get smaller: the messages it
+    // gives up move into the summary rather than over the budget.
+    const threadId = await seedThread({
+      messageCount: MESSAGE_COUNT,
+      // A single user turn sits two messages before the end, so a two-message
+      // budget starts mid-exchange and has to trim back to it.
+      roleFor: (index) => (index === MESSAGE_COUNT - 2 ? "user" : "assistant"),
+    });
+
+    const run = await runCompaction({
+      threadId,
+      preserveTokens: 2 * MESSAGE_TOKENS_ESTIMATE,
+      triggerTokens: 1,
+    });
+
+    expect(run.outcome.type).toBe("advanced");
+    const preserved =
+      MESSAGE_COUNT -
+      transcriptMessageIds(run.prompts.at(0)?.newMessages ?? "").length;
+    expect(preserved).toBeLessThanOrEqual(2);
+  });
+
+  test("always leaves something to summarize, so the thread cannot stall", async () => {
+    // A budget larger than the whole batch would otherwise preserve every
+    // message, leave nothing to summarize, and report up-to-date forever on a
+    // thread that is over its trigger.
+    const threadId = await seedThread({
+      messageCount: 4,
+      roleFor: () => "assistant",
+    });
+
+    const run = await runCompaction({
+      threadId,
+      preserveTokens: 10_000_000,
+      triggerTokens: 1,
+    });
+
+    expect(run.outcome.type).toBe("advanced");
+    expect(
+      transcriptMessageIds(run.prompts.at(0)?.newMessages ?? "").length,
+    ).toBeGreaterThan(0);
+    expect(await readChain(threadId)).toHaveLength(1);
   });
 });
 

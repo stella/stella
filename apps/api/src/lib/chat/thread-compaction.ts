@@ -24,7 +24,7 @@
  * checkpoint id, so a rerun of the same claim compares unequal and declines to
  * write — the summary can never be applied twice, and the delta is never lost.
  */
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
@@ -123,6 +123,14 @@ export type ChatCompactionOutcome =
   | { type: "advanced"; hasMoreDelta: boolean; summarizedMessageCount: number }
   /** Nothing to do: the thread is under its trigger, or the delta is empty. */
   | { type: "up-to-date" }
+  /**
+   * The model returned nothing usable, so the delta is still unsummarized and
+   * the same step has to run again. Distinct from `up-to-date` on purpose: an
+   * empty summary is a failed attempt, and reporting it as completion would
+   * settle the thread and leave the delta unsummarized until some later send
+   * happened to re-enqueue it.
+   */
+  | { type: "no-summary" }
   /** Another run advanced the chain first, or a truncation invalidated it. */
   | { type: "superseded" };
 
@@ -200,7 +208,7 @@ export const runChatThreadCompaction = async (
       summarizeDelta({ options, plan, priorSummary: checkpoint }),
     );
     if (summaryMarkdown === null) {
-      return Result.ok<ChatCompactionOutcome>({ type: "up-to-date" });
+      return Result.ok<ChatCompactionOutcome>({ type: "no-summary" });
     }
 
     const advanced = yield* Result.await(
@@ -518,24 +526,50 @@ const resolveCompactionBoundary = ({
 const encodeDeltaCursor = (message: DeltaMessage): string =>
   chatMessageCursorCodec.encode(message.cursorValue, message.id);
 
+/**
+ * The newest messages to keep verbatim, walking back from the end of the batch.
+ *
+ * Two bounds, and both have to hold:
+ *
+ *  - the token budget, which stops the walk. It is the only stopping condition:
+ *    an earlier version also required the preserved window to begin on a user
+ *    turn before it would stop, which is not a budget property at all. A run of
+ *    assistant messages at the boundary kept the walk going past the budget by
+ *    an unbounded amount, and in the worst case consumed the whole batch, which
+ *    left nothing to summarize and stalled a thread that was over its trigger.
+ *  - at most `messages.length - 1` messages, so the plan always has something
+ *    to summarize and the cursor can always advance.
+ *
+ * The user-turn boundary survives as a preference, applied by trimming rather
+ * than extending: a preserved window that starts mid-exchange is shortened to
+ * the next user turn, which moves those messages into the summary instead. A
+ * tail with no user turn at all is left alone, since it still has to anchor the
+ * checkpoint.
+ */
 const selectPreservedTail = (
   messages: readonly DeltaMessage[],
   preserveTokens: number,
 ): DeltaMessage[] => {
+  const maxPreserved = Math.max(messages.length - 1, 0);
   const preserved: DeltaMessage[] = [];
   let preservedTokens = 0;
 
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
+  for (
+    let index = messages.length - 1;
+    index >= 0 && preserved.length < maxPreserved;
+    index -= 1
+  ) {
     const message = messages.at(index);
     if (!message) {
       continue;
     }
 
     const messageTokens = estimateDeltaMessageTokens(message);
+    // The first message is admitted regardless, so the checkpoint always has a
+    // row to anchor `firstKept` on even when one message exceeds the budget.
     if (
       preserved.length > 0 &&
-      preservedTokens + messageTokens > preserveTokens &&
-      preserved.at(0)?.role === "user"
+      preservedTokens + messageTokens > preserveTokens
     ) {
       break;
     }
@@ -544,7 +578,18 @@ const selectPreservedTail = (
     preserved.unshift(message);
   }
 
-  return preserved;
+  return trimToUserTurn(preserved);
+};
+
+/**
+ * Shorten a preserved window so it begins on a user turn. Returns it unchanged
+ * when it already does, or when it contains no user turn to trim to.
+ */
+const trimToUserTurn = (preserved: readonly DeltaMessage[]): DeltaMessage[] => {
+  const firstUserIndex = preserved.findIndex(
+    (message) => message.role === "user",
+  );
+  return firstUserIndex <= 0 ? [...preserved] : preserved.slice(firstUserIndex);
 };
 
 type SummarizeDeltaOptions = {
@@ -554,9 +599,10 @@ type SummarizeDeltaOptions = {
 };
 
 /**
- * Returns `null` rather than an error when the model declines or fails: the
- * stored checkpoint stays put and the delta stays intact, so the next run
- * simply retries the same step.
+ * Returns `null` rather than an error when the model produces nothing usable.
+ * The stored checkpoint stays put and the delta stays intact; the caller turns
+ * that into a `no-summary` outcome so the thread is retried rather than settled
+ * as complete.
  */
 const summarizeDelta = async ({
   options,
@@ -664,7 +710,13 @@ const advanceCheckpointOnTx = async ({
   const lastSummarized = plan.messagesToSummarize.at(-1);
   const firstSummarized = plan.messagesToSummarize.at(0);
   if (!lastSummarized || !firstSummarized) {
-    return false;
+    // Unreachable: the planner returns `none` for an empty summary set, so a
+    // "compact" plan always has messages. Returning false here would have the
+    // scheduler read a programmer error as ordinary concurrent progress and
+    // settle the thread as if another run had won.
+    return panic(
+      "compaction plan of type 'compact' has no messages to summarize",
+    );
   }
 
   const memoryEligibility = resolveCheckpointMemoryEligibility({

@@ -191,6 +191,13 @@ export const chatThreads = p.pgTable(
      */
     compactionAttemptedAt: timestamptz("compaction_attempted_at"),
     /**
+     * Consecutive failed compaction attempts, reset by any run that makes
+     * progress. Drives the capped exponential backoff the failed settlement
+     * writes into `compactionScheduledAt`, so a thread that cannot be compacted
+     * at all stops costing a claim slot and a provider call every tick.
+     */
+    compactionAttempts: p.integer("compaction_attempts").notNull().default(0),
+    /**
      * Bumped whenever an edit, replay, or delete invalidates the checkpoint
      * chain. The compactor reads it with the delta and compares it again under
      * the thread lock, so a message change that commits mid-run is detected
