@@ -1,5 +1,4 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/components/toast";
@@ -11,12 +10,11 @@ import {
 } from "@/features/chat/queries";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
-
-const protectedRoute = getRouteApi("/_protected");
 
 /**
  * The one web-side writer for a chat thread's title: PATCHes
@@ -29,9 +27,7 @@ const protectedRoute = getRouteApi("/_protected");
 export const useRenameChatThread = (threadRef: ChatThreadRef) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const activeOrganizationId = protectedRoute.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const workspaceId =
     threadRef.scope === "workspace" ? threadRef.workspaceId : undefined;
   const threadId = threadRef.threadId;
