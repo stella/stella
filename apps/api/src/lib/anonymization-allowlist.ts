@@ -8,6 +8,18 @@ import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 
 /**
+ * Org-wide allowlist rows a read may also return.
+ *
+ * Deliberately not in `LIMITS`: that table is serialized to the client on every
+ * workspace read, and this is a server-side read capacity allowance the client
+ * has no use for. There is no writer for org-wide rows today —
+ * `anonymization-allowlist/create` always stamps a workspace — so this is an
+ * allowance rather than an enforced cap, and the endpoint that first writes one
+ * is the one that must enforce it.
+ */
+const ALLOWLIST_ORG_WIDE_ALLOWANCE = 1000;
+
+/**
  * Bound for a complete allowlist read, wherever one happens.
  *
  * Both readers union three scopes: org-wide rows, a workspace's own rows, and
@@ -19,10 +31,10 @@ import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
  */
 export const ALLOWLIST_READ_BOUND =
   LIMITS.anonymizationAllowlistEntriesPerWorkspace +
-  LIMITS.anonymizationAllowlistEntriesOrgWide;
+  ALLOWLIST_ORG_WIDE_ALLOWANCE;
 
 export const ALLOWLIST_READ_INVARIANT =
-  "LIMITS.anonymizationAllowlistEntriesPerWorkspace (enforced by the create endpoint) plus LIMITS.anonymizationAllowlistEntriesOrgWide (capacity allowance; org-wide rows have no writer yet)";
+  "LIMITS.anonymizationAllowlistEntriesPerWorkspace (enforced by the create endpoint) plus ALLOWLIST_ORG_WIDE_ALLOWANCE (capacity allowance; org-wide rows have no writer yet)";
 
 /**
  * Server-side helper that returns the canonicals the user (or

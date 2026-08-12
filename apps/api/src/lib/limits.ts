@@ -369,16 +369,6 @@ export const LIMITS = {
   anonymizationBlacklistVariantsPerEntry: 20,
   /** Max workspace-scoped anonymization allowlist (never-mask) entries. */
   anonymizationAllowlistEntriesPerWorkspace: 1000,
-  /**
-   * Org-wide allowlist rows a workspace read may also return.
-   *
-   * There is no writer for those rows today — `anonymization-allowlist/create`
-   * always stamps a workspace — but both reads include them, so the bound has
-   * to cover them or a single org-wide row would panic a workspace already at
-   * its own cap. Capacity allowance rather than an enforced cap: the endpoint
-   * that first writes an org-wide row is the one that must enforce it.
-   */
-  anonymizationAllowlistEntriesOrgWide: 1000,
   /** Recent sessions scanned to detect a new-device/new-IP login. */
   newDeviceLoginSessionScanLimit: 10,
 } as const;
