@@ -14,6 +14,7 @@ const BASE_ROW = {
   priceAmountCents: null,
   priceCurrency: null,
   billingInterval: null,
+  priceBasis: "flat",
   sortOrder: 0,
   hostedPolicyRef: null,
 } as const satisfies Parameters<typeof buildUsagePolicyCatalogEntry>[0];
@@ -33,6 +34,7 @@ describe("usage policy catalog entry", () => {
           priceAmountCents: 2500,
           priceCurrency: "EUR",
           billingInterval: "month",
+          priceBasis: "per_seat",
         },
         true,
       ),
@@ -41,6 +43,7 @@ describe("usage policy catalog entry", () => {
         amountCents: 2500,
         currency: "EUR",
         billingInterval: "month",
+        basis: "per_seat",
       },
     });
   });
