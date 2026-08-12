@@ -1017,6 +1017,7 @@
     "reference": "Referenz",
     "refresh": "Aktualisieren",
     "regenerate": "Neu generieren",
+    "reload": "Neu laden",
     "remove": "Entfernen",
     "removeMember": "Mitglied entfernen",
     "rename": "Umbenennen",
@@ -1315,7 +1316,8 @@
       "providerKeyRejected": "Der Anbieter hat den API-Schlüssel abgelehnt.",
       "providerRateLimited": "Das Anfragelimit des Anbieters wurde erreicht. Versuchen Sie es in Kürze erneut.",
       "thirdPartyBoundaryRefusal": "Die Anfrage hat versucht, Inhalte außerhalb des erlaubten Arbeitsbereichs-Kontexts zu verwenden.",
-      "usageLimitExceeded": "Nutzungslimit erreicht."
+      "usageLimitExceeded": "Nutzungslimit erreicht.",
+      "versionConflict": "Jemand anderes hat dies während Ihrer Bearbeitung geändert. Laden Sie die aktuelle Version neu."
     },
     "failedToAcceptInvitation": "Einladung konnte nicht angenommen werden",
     "failedToAddParty": "Partei konnte nicht hinzugefügt werden",

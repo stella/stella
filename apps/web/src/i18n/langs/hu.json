@@ -1017,6 +1017,7 @@
     "reference": "Hivatkozás",
     "refresh": "Frissítés",
     "regenerate": "Újragenerálás",
+    "reload": "Újratöltés",
     "remove": "Eltávolítás",
     "removeMember": "Tag eltávolítása",
     "rename": "Átnevezés",
@@ -1315,7 +1316,8 @@
       "providerKeyRejected": "A szolgáltató elutasította az API-kulcsot.",
       "providerRateLimited": "Elérte a szolgáltató kérési korlátját. Próbálja újra rövidesen.",
       "thirdPartyBoundaryRefusal": "A kérés a megengedett munkaterület-környezeten kívüli tartalmat próbált használni.",
-      "usageLimitExceeded": "Elérte a használati korlátot."
+      "usageLimitExceeded": "Elérte a használati korlátot.",
+      "versionConflict": "Valaki más módosította, miközben szerkesztette. Töltse újra az aktuális verzióért."
     },
     "failedToAcceptInvitation": "Nem sikerült elfogadni a meghívót",
     "failedToAddParty": "Nem sikerült hozzáadni a felet",

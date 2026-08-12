@@ -1017,6 +1017,7 @@
     "reference": "Nuoroda",
     "refresh": "Atnaujinti",
     "regenerate": "Generuoti iš naujo",
+    "reload": "Įkelti iš naujo",
     "remove": "Pašalinti",
     "removeMember": "Pašalinti narį",
     "rename": "Pervadinti",
@@ -1315,7 +1316,8 @@
       "providerKeyRejected": "Teikėjas atmetė API raktą.",
       "providerRateLimited": "Pasiektas teikėjo užklausų limitas. Netrukus bandykite dar kartą.",
       "thirdPartyBoundaryRefusal": "Užklausa bandė naudoti turinį už leidžiamo darbo srities konteksto ribų.",
-      "usageLimitExceeded": "Pasiektas naudojimo limitas."
+      "usageLimitExceeded": "Pasiektas naudojimo limitas.",
+      "versionConflict": "Kažkas kitas tai pakeitė, kol redagavote. Įkelkite iš naujo, kad gautumėte dabartinę versiją."
     },
     "failedToAcceptInvitation": "Nepavyko priimti kvietimo",
     "failedToAddParty": "Nepavyko pridėti šalies",

@@ -13,6 +13,11 @@ import {
 import { useTranslations } from "use-intl";
 
 import {
+  API_VERSION_CONFLICT_ERROR_CODE,
+  normalizeApiError,
+} from "@stll/api-contract";
+import type { ApiErrorInput } from "@stll/api-contract";
+import {
   AlertDialog,
   AlertDialogClose,
   AlertDialogDescription,
@@ -47,7 +52,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { APIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import {
   duplicatePosition,
@@ -57,9 +62,9 @@ import {
   moveAdjacent,
   newExtractPosition,
   newGradedPosition,
-  normalizePosition,
   type PlaybookApprovalStatus,
-  type PlaybookPositionsValue,
+  type PlaybookPerspective,
+  type PlaybookTrigger,
   type Position,
   type PositionErrors,
   type PositionSeverity,
@@ -72,7 +77,10 @@ import {
 } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { LeaveConfirmDialog } from "@/routes/_protected.knowledge/-components/leave-confirm-dialog";
+import type { PlaybookDraft } from "@/routes/_protected.knowledge/-components/playbook-editor.logic";
 import {
+  buildPlaybookSavePayload,
+  createPlaybookBaseline,
   hasPlaybookDraftChanges,
   resolvePlaybookScrollTop,
 } from "@/routes/_protected.knowledge/-components/playbook-editor.logic";
@@ -81,6 +89,21 @@ import { PositionEditor } from "@/routes/_protected.knowledge/-components/positi
 import { usePlaybookNavStore } from "@/stores/knowledge/playbook-nav-store";
 
 const PLAYBOOK_JUMP_TOP_OFFSET_PX = 24;
+// Longer than a default error toast: the conflict toast carries the reload
+// affordance, so it has to outlive a glance.
+const VERSION_CONFLICT_TOAST_TIMEOUT_MS = 10_000;
+
+// A 409 the optimistic-concurrency guard raised, off either channel the
+// editor uses: Eden's error field on a direct call, or the `APIError`
+// `unwrapEden` throws inside a mutation.
+const isEdenVersionConflict = (error: ApiErrorInput): boolean =>
+  normalizeApiError(error).code === API_VERSION_CONFLICT_ERROR_CODE;
+
+const isThrownVersionConflict = (error: unknown): boolean =>
+  APIError.is(error) && error.code === API_VERSION_CONFLICT_ERROR_CODE;
+
+/** Title plus localized detail, shared by the toast and conflict paths. */
+type ToastFailure = { title: string; description: string };
 
 // ── Root component ────────────────────────────────────
 
@@ -107,12 +130,12 @@ export const PlaybookEditor = ({
         initialPerspective={null}
         initialStatus="draft"
         initialTrigger={null}
-        initialUpdatedAt={null}
         initialPositions={[]}
         onBack={onBack}
         onSaved={onSaved}
         organizationId={organizationId}
         playbookId={null}
+        updatedAt={null}
       />
     );
   }
@@ -177,14 +200,17 @@ const PlaybookEditorLoader = ({
       initialPerspective={detail.scope?.perspective ?? null}
       initialStatus={detail.status}
       initialTrigger={detail.scope?.trigger ?? null}
-      initialUpdatedAt={detail.updatedAt}
       initialPositions={detail.positions.items}
       key={reloadKey}
       onBack={onBack}
-      onRestored={() => setReloadKey((current) => current + 1)}
+      onReload={() => setReloadKey((current) => current + 1)}
       onSaved={onSaved}
       organizationId={organizationId}
       playbookId={playbookId}
+      // Live, unlike the `initial*` seeds: this is the optimistic-concurrency
+      // token, so it has to track the cache (a save, an approve, or a
+      // post-conflict refetch all move it) rather than freeze at mount.
+      updatedAt={detail.updatedAt}
     />
   );
 };
@@ -195,9 +221,6 @@ const PlaybookEditorLoader = ({
 // can't be null, so it stands in and maps back to null.
 const SCOPE_ALL_VALUE = "__all__";
 
-type PlaybookPerspective = "buyer" | "seller" | "neutral";
-type PlaybookTrigger = "manual" | "onClassified";
-
 type PlaybookEditorFormProps = {
   organizationId: string;
   playbookId: string | null;
@@ -206,16 +229,17 @@ type PlaybookEditorFormProps = {
   initialDocumentTypeKey: string | null;
   initialPerspective: PlaybookPerspective | null;
   initialTrigger: PlaybookTrigger | null;
-  initialUpdatedAt: string | null;
   initialPositions: Position[];
   initialStatus: PlaybookApprovalStatus;
   initialApprovedAt: string | null;
+  /** Concurrency token; tracks the cached detail, null for a new playbook. */
+  updatedAt: string | null;
   onBack: () => void;
   onSaved: () => void;
   // Only supplied when editing an existing playbook (see
-  // `PlaybookEditorLoader`): forces a remount with the freshly restored
-  // draft after a version restore.
-  onRestored?: () => void;
+  // `PlaybookEditorLoader`): forces a remount on the freshly refetched
+  // definition, after a version restore or a rejected stale save.
+  onReload?: () => void;
 };
 
 const PlaybookEditorForm = ({
@@ -226,13 +250,13 @@ const PlaybookEditorForm = ({
   initialDocumentTypeKey,
   initialPerspective,
   initialTrigger,
-  initialUpdatedAt,
   initialPositions,
   initialStatus,
   initialApprovedAt,
+  updatedAt,
   onBack,
   onSaved,
-  onRestored,
+  onReload,
 }: PlaybookEditorFormProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -251,7 +275,6 @@ const PlaybookEditorForm = ({
   const [approvedAt, setApprovedAt] = useState<string | null>(
     initialApprovedAt,
   );
-  const [expectedUpdatedAt, setExpectedUpdatedAt] = useState(initialUpdatedAt);
   const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
   const [positions, setPositions] = useState<Position[]>(() =>
     playbookId === null && initialPositions.length === 0
@@ -274,6 +297,21 @@ const PlaybookEditorForm = ({
   const [documentTypeKey, setDocumentTypeKey] = useState<string | null>(
     initialDocumentTypeKey,
   );
+  // The clean state every later draft is measured against. Seeded from the
+  // state above rather than from the props, so a New Playbook form — whose
+  // positions are seeded with one empty card the props never carried — starts
+  // clean instead of permanently dirty. Reseeded after every successful save;
+  // the fingerprint is computed once per baseline, not per render.
+  const [baseline, setBaseline] = useState(() =>
+    createPlaybookBaseline({
+      name,
+      description,
+      documentTypeKey,
+      perspective: initialPerspective,
+      trigger: initialTrigger,
+      positions,
+    }),
+  );
   const { data: documentTypesData } = useQuery(
     documentTypesOptions(organizationId),
   );
@@ -284,17 +322,15 @@ const PlaybookEditorForm = ({
 
   const displayName = name.trim() || t("knowledge.playbooks.createPlaybook");
 
-  const isDirty =
-    playbookId === null ||
-    hasPlaybookDraftChanges({
-      initial: {
-        name: initialName,
-        description: initialDescription,
-        documentTypeKey: initialDocumentTypeKey,
-        positions: initialPositions,
-      },
-      current: { name, description, documentTypeKey, positions },
-    });
+  const draft: PlaybookDraft = {
+    name,
+    description,
+    documentTypeKey,
+    perspective: initialPerspective,
+    trigger: initialTrigger,
+    positions,
+  };
+  const isDirty = hasPlaybookDraftChanges({ baseline, current: draft });
 
   const navigationBlocker = useBlocker({
     shouldBlockFn: () => isDirty,
@@ -446,6 +482,56 @@ const PlaybookEditorForm = ({
     });
   };
 
+  /**
+   * Write a freshly-returned `updatedAt` straight into the cached detail, so
+   * the concurrency token this form reads is current before the invalidation
+   * round-trip lands. Without it a second save inside that window would be
+   * rejected as stale against a value the client already knows is superseded.
+   */
+  const syncUpdatedAt = (id: string, next: string) => {
+    queryClient.setQueryData(
+      playbookDetailOptions(organizationId, id).queryKey,
+      (previous) =>
+        previous && "updatedAt" in previous
+          ? { ...previous, updatedAt: next }
+          : previous,
+    );
+  };
+
+  /**
+   * A 409 means someone else moved the definition. Refetch so the token
+   * catches up — the user's next save is then a deliberate overwrite rather
+   * than the same rejection again — and offer a reload that swaps in the
+   * server's copy instead of leaving a toast the user can only re-trigger.
+   */
+  const reportVersionConflict = (failure: ToastFailure) => {
+    if (playbookId !== null) {
+      detached(
+        queryClient.invalidateQueries({
+          queryKey: knowledgeKeys.playbooks.detail(organizationId, playbookId),
+        }),
+        "reportVersionConflict",
+      );
+    }
+    stellaToast.add({
+      type: "error",
+      ...failure,
+      ...(onReload
+        ? {
+            action: {
+              // Reloading swaps in the server's copy, so name it for what it
+              // costs while the draft still holds unsaved edits.
+              label: isDirty
+                ? t("knowledge.playbooks.discardChanges")
+                : t("common.reload"),
+              onClick: onReload,
+            },
+          }
+        : {}),
+      timeout: VERSION_CONFLICT_TOAST_TIMEOUT_MS,
+    });
+  };
+
   const handleSave = async (): Promise<boolean> => {
     const trimmedName = name.trim();
     if (trimmedName === "") {
@@ -483,64 +569,57 @@ const PlaybookEditorForm = ({
       return false;
     }
 
-    const items = positions.map(normalizePosition);
-    const positionsPayload: PlaybookPositionsValue = { version: 2, items };
-    const trimmedDescription = description.trim();
-    // Rebuild the scope from the document-type picker, preserving any existing
-    // perspective and trigger. "When to run" is no longer a playbook setting
-    // (it belongs to a future Workflows layer), so the editor never mutates the
-    // trigger; it just carries the stored value through the routing seam.
-    // Omitted entirely in the all-defaults case so the handler clears it;
-    // whenever a scope is sent, `trigger` rides along explicitly (absent
-    // optional fields must not be left to server defaults).
-    const trigger = initialTrigger ?? "manual";
-    const scope =
-      documentTypeKey === null &&
-      initialPerspective === null &&
-      trigger === "manual"
-        ? undefined
-        : {
-            ...(documentTypeKey !== null ? { documentTypeKey } : {}),
-            ...(initialPerspective !== null
-              ? { perspective: initialPerspective }
-              : {}),
-            trigger,
-          };
+    // The one place the save body is built — the same builder the dirty check
+    // fingerprints, so a field can never be saved without being tracked.
+    const savedDraft = draft;
+    const payload = buildPlaybookSavePayload(savedDraft);
 
-    setSaving(true);
-    const response =
-      playbookId === null
-        ? await api.playbooks.post({
-            name: trimmedName,
-            ...(trimmedDescription ? { description: trimmedDescription } : {}),
-            ...(scope ? { scope } : {}),
-            positions: positionsPayload,
-          })
-        : await api
-            .playbooks({
-              playbookId: toSafeId<"playbookDefinition">(playbookId),
-            })
-            .put({
-              name: trimmedName,
-              ...(trimmedDescription
-                ? { description: trimmedDescription }
-                : {}),
-              ...(scope ? { scope } : {}),
-              positions: positionsPayload,
-            });
-    setSaving(false);
-
-    if (response.error) {
-      stellaToast.add({
-        type: "error",
+    // Shared by both endpoints: a 409 takes the conflict path (refetch plus a
+    // reload affordance), anything else is a plain error toast.
+    const reportSaveFailure = (error: ApiErrorInput) => {
+      const failure = {
         title: t("knowledge.playbooks.saveFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
-      return false;
+        description: userErrorMessage(error, t("common.unexpectedError")),
+      };
+      if (isEdenVersionConflict(error)) {
+        reportVersionConflict(failure);
+        return;
+      }
+      stellaToast.add({ type: "error", ...failure });
+    };
+
+    // Each branch awaits its own Eden call and inspects `.error` before
+    // touching `.data`: Eden resolves rather than throwing, so a failed
+    // request reads as success anywhere the response is not checked.
+    setSaving(true);
+    if (playbookId === null) {
+      const response = await api.playbooks.post(payload);
+      setSaving(false);
+      if (response.error) {
+        reportSaveFailure(response.error);
+        return false;
+      }
+    } else {
+      const response = await api
+        .playbooks({ playbookId: toSafeId<"playbookDefinition">(playbookId) })
+        // Sent whenever the editor has a token: a save that would clobber
+        // someone else's is refused rather than silently winning.
+        .put({
+          ...payload,
+          ...(updatedAt === null ? {} : { expectedUpdatedAt: updatedAt }),
+        });
+      setSaving(false);
+      if (response.error) {
+        reportSaveFailure(response.error);
+        return false;
+      }
+      syncUpdatedAt(playbookId, response.data.updatedAt);
     }
+
+    // What was just persisted is the new clean state; the draft may have moved
+    // on during the request, and comparing against this snapshot keeps those
+    // later keystrokes dirty.
+    setBaseline(createPlaybookBaseline(savedDraft));
 
     stellaToast.add({
       type: "success",
@@ -555,6 +634,21 @@ const PlaybookEditorForm = ({
       "handleSave",
     );
     return true;
+  };
+
+  /**
+   * Runs the save from a synchronous click handler and hands the outcome to
+   * `after`. The three "save now" affordances (toolbar, in-page leave, and
+   * navigation block) each follow up differently but must not each re-derive
+   * the detach-and-await dance.
+   */
+  const saveThen = (label: string, after: (saved: boolean) => void) => {
+    detached(
+      (async () => {
+        after(await handleSave());
+      })(),
+      label,
+    );
   };
 
   const handleDelete = async () => {
@@ -596,20 +690,23 @@ const PlaybookEditorForm = ({
   const approveMutation = useMutation({
     mutationFn: async ({
       id,
-      updatedAt,
+      expectedUpdatedAt,
     }: {
       id: string;
-      updatedAt: string;
+      expectedUpdatedAt: string;
     }) => {
       const response = await api
         .playbooks({ playbookId: toSafeId<"playbookDefinition">(id) })
-        .approve.post({ expectedUpdatedAt: updatedAt });
+        .approve.post({ expectedUpdatedAt });
       return unwrapEden(response);
     },
-    onSuccess: (data) => {
+    onSuccess: (data, { id }) => {
       setStatus("approved");
       setApprovedAt(data.approvedAt);
-      setExpectedUpdatedAt(data.approvedAt);
+      // The approval's own `updatedAt`, not `approvedAt` standing in for it:
+      // the two happen to coincide today, and a client that leans on that
+      // breaks the moment the handler stops writing them together.
+      syncUpdatedAt(id, data.updatedAt);
       detached(
         queryClient.invalidateQueries({
           queryKey: knowledgeKeys.playbooks.all(organizationId),
@@ -622,19 +719,25 @@ const PlaybookEditorForm = ({
       });
     },
     onError: (error) => {
-      stellaToast.add({
-        type: "error",
+      const failure = {
         title: t("knowledge.playbooks.approval.approveFailed"),
         description: userErrorFromThrown(error, t("common.unexpectedError")),
-      });
+      };
+      if (isThrownVersionConflict(error)) {
+        reportVersionConflict(failure);
+        return;
+      }
+      stellaToast.add({ type: "error", ...failure });
     },
   });
 
   const handleApprove = () => {
-    if (playbookId === null || expectedUpdatedAt === null) {
+    // `isDirty` is also what disables the button; re-checked here because the
+    // trigger stays interactive (see the aria-disabled tooltip below).
+    if (playbookId === null || updatedAt === null || isDirty) {
       return;
     }
-    approveMutation.mutate({ id: playbookId, updatedAt: expectedUpdatedAt });
+    approveMutation.mutate({ id: playbookId, expectedUpdatedAt: updatedAt });
   };
 
   return (
@@ -674,24 +777,37 @@ const PlaybookEditorForm = ({
                   {t("knowledge.playbooks.versions.versionHistory")}
                 </Button>
               )}
-              {isEdit && canApprove && (
-                <Button
-                  disabled={isDirty || approveMutation.isPending}
-                  loading={approveMutation.isPending}
-                  onClick={handleApprove}
-                  size="sm"
-                  title={
-                    isDirty
-                      ? t("knowledge.playbooks.approval.saveBeforeApprove")
-                      : undefined
-                  }
-                  type="button"
-                  variant="outline"
-                >
-                  <ShieldCheckIcon />
-                  {t("knowledge.playbooks.approval.approve")}
-                </Button>
-              )}
+              {isEdit &&
+                canApprove && (
+                  // `aria-disabled` rather than `disabled` while the draft is
+                  // dirty: a `disabled` button gets `pointer-events-none`, so
+                  // the tooltip explaining *why* approval is unavailable could
+                  // never be hovered or focused. `handleApprove` re-checks.
+                  <Tooltip
+                    content={
+                      isDirty
+                        ? t("knowledge.playbooks.approval.saveBeforeApprove")
+                        : undefined
+                    }
+                    render={
+                      <Button
+                        aria-disabled={isDirty || undefined}
+                        className={cn(
+                          isDirty && "cursor-not-allowed opacity-64",
+                        )}
+                        disabled={approveMutation.isPending}
+                        loading={approveMutation.isPending}
+                        onClick={handleApprove}
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                      />
+                    }
+                  >
+                    <ShieldCheckIcon />
+                    {t("knowledge.playbooks.approval.approve")}
+                  </Tooltip>
+                )}
               {isEdit && canDelete && (
                 <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>
                   <Button
@@ -733,15 +849,11 @@ const PlaybookEditorForm = ({
                 disabled={!canSave || !isDirty || saving}
                 loading={saving}
                 onClick={() => {
-                  detached(
-                    handleSave().then((saved) => {
-                      if (saved) {
-                        onSaved();
-                      }
-                      return saved;
-                    }),
-                    "PlaybookEditorForm",
-                  );
+                  saveThen("PlaybookEditorForm", (saved) => {
+                    if (saved) {
+                      onSaved();
+                    }
+                  });
                 }}
                 type="button"
               >
@@ -890,7 +1002,7 @@ const PlaybookEditorForm = ({
       {playbookId !== null && (
         <PlaybookVersionHistorySheet
           onOpenChange={setVersionHistoryOpen}
-          onRestored={() => onRestored?.()}
+          onRestored={() => onReload?.()}
           open={versionHistoryOpen}
           organizationId={organizationId}
           playbookId={playbookId}
@@ -905,15 +1017,11 @@ const PlaybookEditorForm = ({
         primary={{
           label: t("common.saveAndLeave"),
           onClick: () => {
-            detached(
-              handleSave().then((saved) => {
-                if (saved) {
-                  onSaved();
-                }
-                return saved;
-              }),
-              "PlaybookEditorForm.leave",
-            );
+            saveThen("PlaybookEditorForm.leave", (saved) => {
+              if (saved) {
+                onSaved();
+              }
+            });
           },
         }}
         secondary={{
@@ -930,6 +1038,9 @@ const PlaybookEditorForm = ({
           if (open || navigationBlocker.status !== "blocked") {
             return;
           }
+          // "Save and leave" closes the dialog before the save resolves; hold
+          // the block until it does, instead of cancelling the navigation the
+          // user asked to complete.
           if (navigationLeaveRequestedRef.current) {
             navigationLeaveRequestedRef.current = false;
             return;
@@ -941,15 +1052,20 @@ const PlaybookEditorForm = ({
           label: t("common.saveAndLeave"),
           onClick: () => {
             navigationLeaveRequestedRef.current = true;
-            detached(
-              handleSave().then((saved) => {
-                if (saved && navigationBlocker.status === "blocked") {
-                  navigationBlocker.proceed();
-                }
-                return saved;
-              }),
-              "PlaybookEditorForm.navigate",
-            );
+            saveThen("PlaybookEditorForm.navigate", (saved) => {
+              if (navigationBlocker.status !== "blocked") {
+                return;
+              }
+              // A rejected save must not leave the dialog open over a latch
+              // nothing will release. Cancel the navigation and close: the
+              // draft is intact and `handleSave` has already said why.
+              if (saved) {
+                navigationBlocker.proceed();
+              } else {
+                navigationLeaveRequestedRef.current = false;
+                navigationBlocker.reset();
+              }
+            });
           },
         }}
         secondary={{

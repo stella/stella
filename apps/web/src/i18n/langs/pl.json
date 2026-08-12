@@ -1017,6 +1017,7 @@
     "reference": "Numer referencyjny",
     "refresh": "Odśwież",
     "regenerate": "Wygeneruj ponownie",
+    "reload": "Wczytaj ponownie",
     "remove": "Usuń",
     "removeMember": "Usuń członka",
     "rename": "Zmień nazwę",
@@ -1315,7 +1316,8 @@
       "providerKeyRejected": "Dostawca odrzucił klucz API.",
       "providerRateLimited": "Osiągnięto limit żądań dostawcy. Spróbuj ponownie za chwilę.",
       "thirdPartyBoundaryRefusal": "Żądanie próbowało użyć treści spoza dozwolonego kontekstu obszaru roboczego.",
-      "usageLimitExceeded": "Osiągnięto limit użycia."
+      "usageLimitExceeded": "Osiągnięto limit użycia.",
+      "versionConflict": "Ktoś inny zmienił to podczas Twojej edycji. Wczytaj ponownie, aby pobrać aktualną wersję."
     },
     "failedToAcceptInvitation": "Nie udało się przyjąć zaproszenia",
     "failedToAddParty": "Nie udało się dodać strony",

@@ -1017,6 +1017,7 @@
     "reference": "Reference",
     "refresh": "Obnovit",
     "regenerate": "Vygenerovat znovu",
+    "reload": "Načíst znovu",
     "remove": "Odebrat",
     "removeMember": "Odebrat člena",
     "rename": "Přejmenovat",
@@ -1315,7 +1316,8 @@
       "providerKeyRejected": "Poskytovatel odmítl klíč API.",
       "providerRateLimited": "Byl dosažen limit požadavků poskytovatele. Zkuste to brzy znovu.",
       "thirdPartyBoundaryRefusal": "Požadavek se pokusil použít obsah mimo povolený kontext pracovního prostoru.",
-      "usageLimitExceeded": "Byl dosažen limit využití."
+      "usageLimitExceeded": "Byl dosažen limit využití.",
+      "versionConflict": "Někdo jiný to během vaší úpravy změnil. Načtěte znovu aktuální verzi."
     },
     "failedToAcceptInvitation": "Nepodařilo se přijmout pozvánku",
     "failedToAddParty": "Nepodařilo se přidat stranu",

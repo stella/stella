@@ -1017,6 +1017,7 @@
     "reference": "Atsauce",
     "refresh": "Atsvaidzināt",
     "regenerate": "Ģenerēt vēlreiz",
+    "reload": "Pārlādēt",
     "remove": "Noņemt",
     "removeMember": "Noņemt dalībnieku",
     "rename": "Pārdēvēt",
@@ -1315,7 +1316,8 @@
       "providerKeyRejected": "Pakalpojuma sniedzējs noraidīja API atslēgu.",
       "providerRateLimited": "Sasniegts pakalpojuma sniedzēja pieprasījumu limits. Drīzumā mēģiniet vēlreiz.",
       "thirdPartyBoundaryRefusal": "Pieprasījums mēģināja izmantot saturu ārpus atļautā darbvietas konteksta.",
-      "usageLimitExceeded": "Sasniegts lietošanas limits."
+      "usageLimitExceeded": "Sasniegts lietošanas limits.",
+      "versionConflict": "Kāds cits to mainīja, kamēr rediģējāt. Pārlādējiet, lai iegūtu pašreizējo versiju."
     },
     "failedToAcceptInvitation": "Neizdevās pieņemt uzaicinājumu",
     "failedToAddParty": "Neizdevās pievienot pusi",

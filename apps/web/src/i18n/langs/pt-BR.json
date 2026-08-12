@@ -1017,6 +1017,7 @@
     "reference": "Referência",
     "refresh": "Atualizar",
     "regenerate": "Regenerar",
+    "reload": "Recarregar",
     "remove": "Remover",
     "removeMember": "Remover membro",
     "rename": "Renomear",
@@ -1315,7 +1316,8 @@
       "providerKeyRejected": "O provedor rejeitou a chave de API.",
       "providerRateLimited": "O limite de solicitações do provedor foi atingido. Tente novamente em instantes.",
       "thirdPartyBoundaryRefusal": "A solicitação tentou usar conteúdo fora do contexto permitido do espaço de trabalho.",
-      "usageLimitExceeded": "Limite de uso atingido."
+      "usageLimitExceeded": "Limite de uso atingido.",
+      "versionConflict": "Outra pessoa alterou isto enquanto você editava. Recarregue para obter a versão atual."
     },
     "failedToAcceptInvitation": "Falha ao aceitar o convite",
     "failedToAddParty": "Falha ao adicionar parte",

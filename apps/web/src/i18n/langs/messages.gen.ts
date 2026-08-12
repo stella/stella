@@ -1020,6 +1020,7 @@ type Messages = {
     "reference": "Reference";
     "refresh": "Refresh";
     "regenerate": "Regenerate";
+    "reload": "Reload";
     "remove": "Remove";
     "removeMember": "Remove member";
     "rename": "Rename";
@@ -1319,6 +1320,7 @@ type Messages = {
       "providerRateLimited": "The provider rate limit was reached. Try again shortly.";
       "thirdPartyBoundaryRefusal": "The request tried to use content outside the allowed workspace context.";
       "usageLimitExceeded": "Usage limit reached.";
+      "versionConflict": "Someone else changed this while you were editing. Reload to get the current version.";
     };
     "failedToAcceptInvitation": "Failed to accept invitation";
     "failedToAddParty": "Failed to add party";

@@ -1017,6 +1017,7 @@
     "reference": "Viide",
     "refresh": "Värskenda",
     "regenerate": "Genereeri uuesti",
+    "reload": "Laadi uuesti",
     "remove": "Eemalda",
     "removeMember": "Eemalda liige",
     "rename": "Nimeta ümber",
@@ -1315,7 +1316,8 @@
       "providerKeyRejected": "Teenusepakkuja lükkas API-võtme tagasi.",
       "providerRateLimited": "Teenusepakkuja päringulimiit on täis. Proovige varsti uuesti.",
       "thirdPartyBoundaryRefusal": "Päring üritas kasutada sisu väljaspool lubatud tööruumi konteksti.",
-      "usageLimitExceeded": "Kasutuslimiit on täis."
+      "usageLimitExceeded": "Kasutuslimiit on täis.",
+      "versionConflict": "Keegi teine muutis seda teie muutmise ajal. Laadige praeguse versiooni saamiseks uuesti."
     },
     "failedToAcceptInvitation": "Kutse vastuvõtmine ebaõnnestus",
     "failedToAddParty": "Osapoole lisamine ebaõnnestus",

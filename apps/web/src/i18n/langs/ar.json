@@ -1017,6 +1017,7 @@
     "reference": "المرجع",
     "refresh": "تحديث",
     "regenerate": "إعادة الإنشاء",
+    "reload": "إعادة التحميل",
     "remove": "إزالة",
     "removeMember": "إزالة العضو",
     "rename": "إعادة تسمية",
@@ -1315,7 +1316,8 @@
       "providerKeyRejected": "رفض مزود الخدمة مفتاح API.",
       "providerRateLimited": "تم بلوغ حد طلبات مزود الخدمة. حاول مرة أخرى بعد قليل.",
       "thirdPartyBoundaryRefusal": "حاول الطلب استخدام محتوى خارج سياق مساحة العمل المسموح به.",
-      "usageLimitExceeded": "تم بلوغ حد الاستخدام."
+      "usageLimitExceeded": "تم بلوغ حد الاستخدام.",
+      "versionConflict": "غيّر شخص آخر هذا أثناء تحريرك له. أعد التحميل للحصول على النسخة الحالية."
     },
     "failedToAcceptInvitation": "تعذّر قبول الدعوة",
     "failedToAddParty": "تعذّرت إضافة الطرف",
