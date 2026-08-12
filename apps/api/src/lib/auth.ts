@@ -60,6 +60,8 @@ import {
   sendOrganizationInvitation,
   sendOTPEmail,
 } from "@/api/lib/email/email";
+import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
+import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
 import {
   AUTH_RATE_LIMIT_MAX_WINDOW,
   AUTH_RATE_LIMITS,
@@ -81,6 +83,10 @@ import {
   enrichRequestContext,
   getRequestContext,
 } from "@/api/lib/observability/request-context";
+import {
+  completeOrganizationDeletion,
+  OrganizationStorageTeardownBoundError,
+} from "@/api/lib/organization-storage-teardown";
 import { parseUserAgent } from "@/api/lib/parse-user-agent";
 import {
   hasMemberPermission,
@@ -1010,6 +1016,65 @@ const createAuth = () => {
               brandPersistedOrganizationId(org.id),
               rootDb,
             );
+          },
+          async beforeDeleteOrganization({ organization: org }) {
+            // Complete the deletion here, before the plugin's adapter runs.
+            // Everything that names the organization cascades away with it, and
+            // those rows are the only description of the objects it owns:
+            // object erasure is key-driven from database rows, nothing lists a
+            // storage prefix, and the bucket expires only staging and export
+            // keys. So the erasure instructions and the cascade have to reach
+            // durable storage together, which is what this single transaction
+            // gives — it records the instructions into the reference-free
+            // tombstone tables, clears the chat rows that own storage, and
+            // deletes the organization row itself. The adapter's own delete
+            // then finds nothing left and returns the organization it read
+            // before this hook, so the endpoint's response is unchanged.
+            //
+            // Deleting the row here, rather than letting it commit separately,
+            // is the point: instructions committed ahead of a cascade that then
+            // failed would name a live organization's documents.
+            //
+            // `org.id` is read off the row the plugin already loaded, so this is
+            // where it becomes the ownership id. `rootDb` bypasses row-level
+            // security exactly as the plugin's own adapter does.
+            const organizationId = brandPersistedOrganizationId(org.id);
+            const teardown = await Result.tryPromise({
+              try: async () =>
+                await rootDb.transaction(
+                  async (tx) =>
+                    await completeOrganizationDeletion({
+                      organizationId,
+                      tx,
+                    }),
+                ),
+              catch: (cause) => cause,
+            });
+            if (Result.isError(teardown)) {
+              captureError(teardown.error, { organizationId });
+              if (
+                teardown.error instanceof OrganizationStorageTeardownBoundError
+              ) {
+                throw new APIError("BAD_REQUEST", {
+                  error: "organization_storage_too_large",
+                  message: teardown.error.message,
+                });
+              }
+              throw new APIError("INTERNAL_SERVER_ERROR", {
+                message: "Failed to delete the organization's stored files",
+              });
+            }
+
+            // Redis is not part of the durability contract: the request rows
+            // are committed and the cleanup reconciler claims every pending one
+            // on its own schedule. Accelerating a bounded prefix keeps a large
+            // organization from fanning out an unbounded number of queue calls
+            // or holding the response open behind the slowest of them.
+            await handoffCommittedEntityDeletionCleanupBatch({
+              captureDeliveryError: captureError,
+              enqueueCleanup: enqueueEntityDeletionCleanup,
+              requestIds: teardown.value.requestIds,
+            });
           },
           async afterRemoveMember({
             member: removedMember,

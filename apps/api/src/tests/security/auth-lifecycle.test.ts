@@ -40,6 +40,42 @@ describe("organization member auth lifecycle", () => {
     expect(helperSource).toContain("update(apikey)");
   });
 
+  test("organization deletion routes through the storage teardown helper", () => {
+    const authSource = readSecurityFixture("../../lib/auth.ts");
+
+    // The hook has to be the plugin's own pre-delete extension point, and the
+    // teardown has to run inside it: an organization's stored objects are only
+    // nameable while the rows that describe them still exist.
+    const hookIndex = authSource.indexOf("beforeDeleteOrganization");
+    const teardownIndex = authSource.indexOf(
+      "completeOrganizationDeletion",
+      hookIndex,
+    );
+    const handoffIndex = authSource.indexOf(
+      "handoffCommittedEntityDeletionCleanupBatch",
+      hookIndex,
+    );
+
+    expect(hookIndex).toBeGreaterThanOrEqual(0);
+    expect(teardownIndex).toBeGreaterThan(hookIndex);
+    expect(handoffIndex).toBeGreaterThan(teardownIndex);
+  });
+
+  test("the teardown records erasure instructions and the deletion together", () => {
+    const teardownSource = readSecurityFixture(
+      "../../lib/organization-storage-teardown.ts",
+    );
+
+    // One transaction covers recording the instructions and removing the
+    // organization. Recording them in an earlier transaction would leave keys
+    // naming a live organization's documents if the cascade then failed.
+    expect(teardownSource).toContain("insert(entityDeletionCleanupRequests)");
+    expect(teardownSource).toContain("preserveBufferObjectCleanupIntents");
+    expect(teardownSource).toContain("delete(userFiles)");
+    expect(teardownSource).toContain("delete(chatThreads)");
+    expect(teardownSource).toContain("delete(organization)");
+  });
+
   test("lint rule catches auth artifact deletes through schema member access", () => {
     const pluginSource = readRootFixture(".oxlint-plugins/auth-lifecycle.ts");
 

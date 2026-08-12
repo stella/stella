@@ -70,6 +70,18 @@ describe("storage-erasure outboxes", () => {
     });
   }
 
+  test("a cleanup request may name the organization instead of a matter", () => {
+    // Organization deletion records templates, style-set packages, and chat
+    // attachments, none of which sit under a matter. A NOT NULL here would
+    // force a matter onto keys that never had one, and there is no honest
+    // value to force.
+    const workspaceColumn = getTableConfig(
+      entityDeletionCleanupRequests,
+    ).columns.find((column) => column.name === "workspace_id");
+
+    expect(workspaceColumn?.notNull).toBe(false);
+  });
+
   test("buffer object cleanup tombstones have a bounded scheduler index", () => {
     const scheduleIndex = getTableConfig(
       bufferObjectCleanupIntents,

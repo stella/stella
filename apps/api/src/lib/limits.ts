@@ -261,6 +261,12 @@ export const LIMITS = {
   /** Cursor page size for document- and matter-deletion OCR derivative
    *  cleanup. Also caps the storage keys recorded per cleanup request. */
   ocrDerivativeCleanupBatchSize: 1000,
+  /** Cleanup-request pages one organization deletion may record. Each page
+   *  holds up to `ocrDerivativeCleanupBatchSize` storage keys, so this bounds
+   *  the enumeration that runs inside the transaction removing the
+   *  organization. Reaching it rejects the deletion rather than dropping the
+   *  remainder: an unrecorded page is an object nothing can name again. */
+  organizationStorageTeardownPagesMax: 1000,
   /** Hard timeout for adding a searchable text layer to one PDF. */
   ocrPdfGenerationTimeoutMs: 2 * 60_000,
   /** Hard timeout (ms) for the sandboxed extraction subprocess. */
