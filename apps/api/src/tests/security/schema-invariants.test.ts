@@ -212,7 +212,17 @@ describe("identifier length", () => {
   });
 
   test("drizzle-derived names over the limit are exactly the known set", () => {
-    const byCodepoint = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+    const byCodepoint = (a: string | undefined, b: string | undefined) => {
+      const left = a ?? "";
+      const right = b ?? "";
+      if (left < right) {
+        return -1;
+      }
+      if (left > right) {
+        return 1;
+      }
+      return 0;
+    };
     expect(
       overLimit(names)
         .map(({ name }) => name)
