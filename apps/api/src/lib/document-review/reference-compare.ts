@@ -217,11 +217,28 @@ export const normalizeReferenceReview = ({
   );
   const findings: ReferenceReviewFinding[] = [];
   const topicById = new Map(topics.map((topic) => [topic.topicId, topic]));
-  const seenTopicIds = new Set<string>();
-
+  const rawFindingByTopicId = new Map<string, RawReferenceFinding>();
   for (const raw of rawFindings) {
-    const topic = topicById.get(raw.topicId);
-    if (!topic || seenTopicIds.has(topic.topicId)) {
+    if (!topicById.has(raw.topicId) || rawFindingByTopicId.has(raw.topicId)) {
+      continue;
+    }
+    rawFindingByTopicId.set(raw.topicId, raw);
+  }
+
+  for (const topic of topics) {
+    const raw = rawFindingByTopicId.get(topic.topicId);
+    if (!raw) {
+      findings.push({
+        findingId: `reference-${topic.topicId}`,
+        topicId: topic.topicId,
+        issue: topic.title,
+        assessment: "not-comparable",
+        consensus: references.length === 1 ? "single" : "consistent",
+        explanation: { type: "insufficient-evidence" },
+        targetCitations: [],
+        referenceCitations: [],
+        fix: null,
+      });
       continue;
     }
     const targetCitations = collectVerifiedCitations(
@@ -301,24 +318,6 @@ export const normalizeReferenceReview = ({
             targetCitations,
           })
         : null,
-    });
-    seenTopicIds.add(topic.topicId);
-  }
-
-  for (const topic of topics) {
-    if (seenTopicIds.has(topic.topicId)) {
-      continue;
-    }
-    findings.push({
-      findingId: `reference-${topic.topicId}`,
-      topicId: topic.topicId,
-      issue: topic.title,
-      assessment: "not-comparable",
-      consensus: references.length === 1 ? "single" : "consistent",
-      explanation: { type: "insufficient-evidence" },
-      targetCitations: [],
-      referenceCitations: [],
-      fix: null,
     });
   }
 

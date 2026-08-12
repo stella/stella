@@ -299,22 +299,32 @@ describe("reference review normalization", () => {
     ]);
   });
 
-  test("returns exactly one result for every confirmed topic", () => {
+  test("returns exactly one result per confirmed topic in confirmed order", () => {
     const secondTopicId = "22222222-2222-4222-8222-222222222222";
+    const confirmedTopics = [
+      ...topics,
+      {
+        type: "custom" as const,
+        topicId: secondTopicId,
+        title: "Notices",
+        context: "",
+        included: true,
+      },
+    ];
     const findings = normalizeReferenceReview({
       target,
       references: [reference],
-      topics: [
-        ...topics,
-        {
-          type: "custom",
-          topicId: secondTopicId,
-          title: "Notices",
-          context: "",
-          included: true,
-        },
-      ],
+      topics: confirmedTopics,
       rawFindings: [
+        {
+          topicId: secondTopicId,
+          assessment: "aligned",
+          consensus: "single",
+          rationale: "Comparable.",
+          targetCitations: [{ sourceKey: "F0", blockId: "target-2" }],
+          referenceCitations: [{ sourceKey: "F1", blockId: "reference-1" }],
+          proposedText: null,
+        },
         {
           topicId,
           assessment: "aligned",
@@ -336,9 +346,8 @@ describe("reference review normalization", () => {
       ],
     });
 
-    expect(findings.map((finding) => finding.topicId)).toEqual([
-      topicId,
-      secondTopicId,
-    ]);
+    expect(findings.map(({ topicId: id }) => id)).toEqual(
+      confirmedTopics.map(({ topicId: id }) => id),
+    );
   });
 });
