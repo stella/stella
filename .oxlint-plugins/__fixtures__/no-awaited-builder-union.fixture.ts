@@ -101,3 +101,41 @@ export const pickQuery = () => {
   const picked = lock ? query.for("update") : query;
   return picked;
 };
+
+// MUST flag: a builder held on an instance is the same union. A class-based
+// query wrapper is exactly where this pattern hides.
+class Repository {
+  private readonly query!: Builder;
+
+  async rows() {
+    // oxlint-disable-next-line no-awaited-builder-union/no-awaited-builder-union
+    return await (lock ? this.query.for("update") : this.query);
+  }
+}
+export const repository = new Repository();
+
+// MUST flag: a statically known computed key chains exactly like its dotted
+// form, so these are two chain states and not one opaque `[]` step.
+export const computedRows = async () => {
+  // oxlint-disable-next-line no-awaited-builder-union/no-awaited-builder-union
+  const rows = await (lock ? query["for"]("update") : query);
+  return rows;
+};
+
+// Allowed — sibling paths off one object. Same root, different steps, but
+// neither extends the other: ordinary code with two return types and no
+// builder. Flagging these would block correct awaited ternaries.
+declare const response: {
+  json: () => Promise<Rows>;
+  text: () => Promise<Rows>;
+};
+export const siblingCalls = async () => {
+  const rows = await (lock ? response.json() : response.text());
+  return rows;
+};
+
+declare const jobs: { primary: Promise<Rows>; secondary: Promise<Rows> };
+export const siblingProperties = async () => {
+  const rows = await (lock ? jobs.primary : jobs.secondary);
+  return rows;
+};
