@@ -31,7 +31,6 @@ type Messages = {
     "title": "Connect your agent";
   };
   "ai": {
-    "analyzeWithAI": "Analyze with AI";
     "chooseRewriteInstruction": "Rewrite options";
     "editWithAI": "Edit with AI";
     "keyRequired": {

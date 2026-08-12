@@ -5,7 +5,6 @@ import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
-import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import { OutlineRail } from "@stll/ui/components/outline-rail";
 import type { OutlineItem } from "@stll/ui/components/outline-rail";
@@ -42,8 +41,6 @@ type DecisionWorkspaceBaseProps = {
 
 type LockedDecisionWorkspaceProps = DecisionWorkspaceBaseProps & {
   aiMode: "locked";
-  publicPath: string;
-  requestAuth: (redirectTo: string) => void;
 };
 
 type EnabledDecisionWorkspaceProps = DecisionWorkspaceBaseProps & {
@@ -69,8 +66,6 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   const aiEnabled = props.aiMode === "enabled";
   const ensureAIAvailable =
     props.aiMode === "enabled" ? props.ensureAIAvailable : null;
-  const publicPath = props.aiMode === "locked" ? props.publicPath : undefined;
-  const requestAuth = props.aiMode === "locked" ? props.requestAuth : undefined;
   const ast = parseDocumentAst(decision.documentAst);
 
   const mainRef = useRef<HTMLDivElement>(null);
@@ -211,34 +206,6 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <header className="flex items-start justify-between gap-4 border-b px-6 py-4">
-        <div>
-          <p className="text-muted-foreground text-xs">{decision.court}</p>
-          <h1 className="text-xl font-semibold">
-            <BidiText>{decision.caseNumber}</BidiText>
-          </h1>
-        </div>
-        {aiEnabled ? (
-          <Button
-            onClick={() => {
-              detached(generate(), "decision-workspace.generate");
-            }}
-            size="sm"
-            variant="outline"
-          >
-            <SparklesIcon className="size-4" />
-            {t("ai.analyzeWithAI")}
-          </Button>
-        ) : (
-          <Button
-            onClick={() => requestAuth?.(publicPath ?? "/law/cases")}
-            size="sm"
-          >
-            <SparklesIcon className="size-4" />
-            {t("ai.analyzeWithAI")}
-          </Button>
-        )}
-      </header>
       <div className="relative min-h-0 flex-1">
         {hasAnalysis && analysisTree.length > 0 && (
           <OutlineRail

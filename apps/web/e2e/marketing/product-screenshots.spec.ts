@@ -200,10 +200,9 @@ test("capture landing product screenshots", async ({
         await expect(page.locator("article").first()).toBeVisible({
           timeout: COLD_COMPILE_TIMEOUT,
         });
-        // The reader briefly renders a logged-out "locked" AI button while
-        // the client-side session query settles (useClientAuthStatus), then
-        // swaps in the authenticated workspace. Wait for that swap so the
-        // click below hits the real analyze button, not the sign-in prompt.
+        // The reader briefly renders the logged-out workspace while the
+        // client-side session query settles, then swaps in the authenticated
+        // workspace. Wait for that swap before checking its generated outline.
         // eslint-disable-next-line no-await-in-loop -- see above
         await page.waitForLoadState("networkidle");
         // The authenticated inspector is mounted beside this public route.
@@ -211,18 +210,8 @@ test("capture landing product screenshots", async ({
         // later on whichever product control the error screen replaced.
         // eslint-disable-next-line no-await-in-loop -- see above
         await expect(page.locator("#route-error-title")).toHaveCount(0);
-        // The structure/AI margin is generated on demand. These decisions
-        // already have their analysis cached server-side, but the client
-        // still needs one round trip to fetch it; trigger it explicitly and
-        // wait for the outline rail so the capture never lands on the
-        // empty/loading margin state.
-        const analyzeButton = page.getByRole("button", {
-          name: "Analyze with AI",
-        });
-        // eslint-disable-next-line no-await-in-loop -- see above
-        await expect(analyzeButton).toBeVisible();
-        // eslint-disable-next-line no-await-in-loop -- see above
-        await analyzeButton.click();
+        // These decisions have analysis cached server-side. Wait for the
+        // automatic fetch so the capture never lands on the loading margin.
         // eslint-disable-next-line no-await-in-loop -- see above
         await expect(
           page.getByRole("group", { name: "Outline" }),

@@ -28,7 +28,6 @@
     "title": "Ühenda oma agent"
   },
   "ai": {
-    "analyzeWithAI": "Analüüsi AI-ga",
     "chooseRewriteInstruction": "Ümberkirjutamise valikud",
     "editWithAI": "Muuda AI-ga",
     "keyRequired": {

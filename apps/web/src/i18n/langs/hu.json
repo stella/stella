@@ -28,7 +28,6 @@
     "title": "Csatlakoztassa ügynökét"
   },
   "ai": {
-    "analyzeWithAI": "Elemzés AI-val",
     "chooseRewriteInstruction": "Átírási lehetőségek",
     "editWithAI": "Szerkesztés AI-val",
     "keyRequired": {
