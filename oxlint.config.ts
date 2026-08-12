@@ -597,6 +597,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-partial-record-satisfies.ts",
     "./.oxlint-plugins/require-toast-error-capture.ts",
     "./.oxlint-plugins/no-swallowed-rejection.ts",
+    "./.oxlint-plugins/require-detached-label-shape.ts",
     "./.oxlint-plugins/no-awaited-builder-union.ts",
     "./.oxlint-plugins/confine-redis-client.ts",
     "./.oxlint-plugins/require-coordination-key.ts",
@@ -1062,6 +1063,23 @@ export default defineConfig({
       ],
       rules: {
         "no-swallowed-rejection/no-swallowed-rejection": "error",
+      },
+    },
+    {
+      // The third part of the detached-promise guard: the label is the only
+      // thing identifying a captured rejection, so it must be a dotted
+      // `feature.action` literal rather than the enclosing component or
+      // handler name. Scoped to the two apps that can import the helper
+      // (`apps/web/src/lib/detached.ts`, `apps/api/src/lib/detached.ts`);
+      // no package ships one. Tests are in scope: a detached label there is
+      // a telemetry tag like any other, and no test detaches today.
+      files: [
+        "apps/api/src/**/*.{ts,tsx}",
+        "apps/web/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/require-detached-label-shape.fixture.ts",
+      ],
+      rules: {
+        "require-detached-label-shape/require-detached-label-shape": "error",
       },
     },
     {
