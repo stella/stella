@@ -106,7 +106,7 @@
     "domhandler": "^6.0.1",
     "drizzle-orm": "catalog:",
     "elysia": "catalog:",
-    "elysia-rate-limit": "^4.6.2",
+    "elysia-rate-limit": "^5.1.0",
     "ip-address": "^10.3.1",
     "jose": "^6.2.8",
     "jszip": "catalog:",
