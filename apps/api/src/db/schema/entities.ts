@@ -275,11 +275,7 @@ export const entityDeletionEffectChunks = p.pgTable.withRLS(
   "entity_deletion_effect_chunks",
   {
     id: pUuid<"entityDeletionEffectChunk">().primaryKey(),
-    requestId: safeUuid<"entityDeletionCleanupRequest">("request_id")
-      .notNull()
-      .references(() => entityDeletionCleanupRequests.id, {
-        onDelete: "cascade",
-      }),
+    requestId: safeUuid<"entityDeletionCleanupRequest">("request_id").notNull(),
     chunkIndex: p.integer("chunk_index").notNull(),
     effectType: p
       .text("effect_type", { enum: ["s3_delete"] })
@@ -305,6 +301,13 @@ export const entityDeletionEffectChunks = p.pgTable.withRLS(
     completedAt: timestamptz("completed_at"),
   },
   (table) => [
+    p
+      .foreignKey({
+        columns: [table.requestId],
+        foreignColumns: [entityDeletionCleanupRequests.id],
+        name: "entity_deletion_effect_chunks_request_fk",
+      })
+      .onDelete("cascade"),
     p
       .uniqueIndex("entity_deletion_effect_chunks_request_index_uidx")
       .on(table.requestId, table.chunkIndex),

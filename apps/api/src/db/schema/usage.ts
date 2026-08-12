@@ -394,9 +394,7 @@ export const accountDeletionEffectChunks = p.pgTable.withRLS(
   "account_deletion_effect_chunks",
   {
     id: pUuid<"accountDeletionEffectChunk">().primaryKey(),
-    requestId: safeUuid<"accountDeletionRequest">("request_id")
-      .notNull()
-      .references(() => accountDeletionRequests.id, { onDelete: "cascade" }),
+    requestId: safeUuid<"accountDeletionRequest">("request_id").notNull(),
     chunkIndex: p.integer("chunk_index").notNull(),
     effectType: p
       .text("effect_type", { enum: ["s3_delete"] })
@@ -422,6 +420,13 @@ export const accountDeletionEffectChunks = p.pgTable.withRLS(
     completedAt: timestamptz("completed_at"),
   },
   (table) => [
+    p
+      .foreignKey({
+        columns: [table.requestId],
+        foreignColumns: [accountDeletionRequests.id],
+        name: "account_deletion_effect_chunks_request_fk",
+      })
+      .onDelete("cascade"),
     p
       .uniqueIndex("account_deletion_effect_chunks_request_index_uidx")
       .on(table.requestId, table.chunkIndex),

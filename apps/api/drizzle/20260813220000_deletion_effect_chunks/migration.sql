@@ -19,7 +19,7 @@ CREATE TABLE "account_deletion_effect_chunks" (
   "created_at" timestamptz DEFAULT now() NOT NULL,
   "updated_at" timestamptz DEFAULT now() NOT NULL,
   "completed_at" timestamptz,
-  CONSTRAINT "account_deletion_effect_chunks_request_id_account_deletion_requ"
+  CONSTRAINT "account_deletion_effect_chunks_request_fk"
     FOREIGN KEY ("request_id") REFERENCES "account_deletion_requests"("id")
     ON DELETE CASCADE,
   CONSTRAINT "account_deletion_effect_chunks_effect_type_check"
@@ -80,7 +80,7 @@ CREATE TABLE "entity_deletion_effect_chunks" (
   "created_at" timestamptz DEFAULT now() NOT NULL,
   "updated_at" timestamptz DEFAULT now() NOT NULL,
   "completed_at" timestamptz,
-  CONSTRAINT "entity_deletion_effect_chunks_request_id_entity_deletion_cleanu"
+  CONSTRAINT "entity_deletion_effect_chunks_request_fk"
     FOREIGN KEY ("request_id") REFERENCES "entity_deletion_cleanup_requests"("id")
     ON DELETE CASCADE,
   CONSTRAINT "entity_deletion_effect_chunks_effect_type_check"
