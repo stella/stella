@@ -121,6 +121,7 @@ export {
 export type { EntityPriority, TaskStatus } from "./entity-options";
 export {
   API_VALIDATION_ERROR_CODE,
+  API_VERSION_CONFLICT_ERROR_CODE,
   normalizeApiError,
   parseApiErrorValue,
 } from "./error";

@@ -14,6 +14,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { assertUnchangedSince } from "@/api/lib/optimistic-concurrency";
 
 const config = {
   permissions: { playbook: ["approve"] },
@@ -68,11 +69,13 @@ const approvePlaybookDefinition = createSafeRootHandler(
           return { type: "not-found" as const };
         }
 
-        if (
-          locked.updatedAt.getTime() !==
-          new Date(body.expectedUpdatedAt).getTime()
-        ) {
-          return { type: "version-conflict" as const };
+        const conflict = assertUnchangedSince({
+          storedUpdatedAt: locked.updatedAt,
+          expectedUpdatedAt: body.expectedUpdatedAt,
+          resource: "Playbook",
+        });
+        if (conflict) {
+          return { type: "version-conflict" as const, error: conflict };
         }
 
         const [latestVersion] = await tx
@@ -137,6 +140,10 @@ const approvePlaybookDefinition = createSafeRootHandler(
         return Result.ok({
           status: "approved" as const,
           approvedAt: approved.approvedAt.toISOString(),
+          // The approval also bumps `updatedAt`, so hand the new value back
+          // for the caller's next concurrency token instead of leaving it to
+          // infer one from `approvedAt`.
+          updatedAt: approved.approvedAt.toISOString(),
           version: approved.version,
         });
       case "not-found":
@@ -144,12 +151,7 @@ const approvePlaybookDefinition = createSafeRootHandler(
           new HandlerError({ status: 404, message: "Playbook not found" }),
         );
       case "version-conflict":
-        return Result.err(
-          new HandlerError({
-            status: 409,
-            message: "Playbook changed concurrently; refresh and try again",
-          }),
-        );
+        return Result.err(approved.error);
       default: {
         const exhaustive: never = approved;
         return exhaustive;

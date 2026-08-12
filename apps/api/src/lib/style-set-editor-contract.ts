@@ -1,6 +1,8 @@
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { expectedUpdatedAtSchema } from "@/api/lib/optimistic-concurrency";
+
 const fontFamilySchema = t.String({ minLength: 1, maxLength: 128 });
 const fontSizeSchema = t.Number({
   minimum: 1,
@@ -82,6 +84,6 @@ export const createStyleSetFromEditorSchema = t.Object({
 
 export const updateStyleSetFromEditorSchema = t.Object({
   name: t.String({ minLength: 1, maxLength: 256 }),
-  expectedUpdatedAt: t.String({ format: "date-time" }),
+  expectedUpdatedAt: expectedUpdatedAtSchema,
   settings: styleSetEditorSettingsSchema,
 });

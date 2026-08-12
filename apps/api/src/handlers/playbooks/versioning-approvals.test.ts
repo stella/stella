@@ -18,6 +18,7 @@ import updatePlaybookDefinition from "@/api/handlers/playbooks/update";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { VERSION_CONFLICT_ERROR_CODE } from "@/api/lib/optimistic-concurrency";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -97,6 +98,19 @@ const getStatusCode = (result: unknown): number | null => {
   return null;
 };
 
+// The error branch is an Elysia status response: the numeric HTTP status on
+// `code`, the `SafeErrorBody` (whose own `code` is the machine-readable
+// identifier clients branch on) on `response`.
+const getErrorCode = (result: unknown): string | null => {
+  if (!isRecord(result)) {
+    return null;
+  }
+  const body = result["response"];
+  return isRecord(body) && typeof body["code"] === "string"
+    ? body["code"]
+    : null;
+};
+
 const createPlaybook = async (
   context: OrgContext,
   name: string,
@@ -135,14 +149,29 @@ const readPlaybook = async (
       .where(eq(playbookDefinitions.id, playbookId))
   ).at(0);
 
+const readStoredPlaybook = async (
+  playbookId: SafeId<"playbookDefinition">,
+): Promise<PlaybookRow> => {
+  const playbook = await readPlaybook(playbookId);
+  if (!playbook) {
+    throw new Error("Expected a stored playbook");
+  }
+  return playbook;
+};
+
+/** The concurrency token a payload hands back for the caller's next write. */
+const expectUpdatedAt = (result: unknown): string => {
+  if (!isRecord(result) || typeof result["updatedAt"] !== "string") {
+    throw new Error("Expected a payload carrying { updatedAt }");
+  }
+  return result["updatedAt"];
+};
+
 const approvePlaybook = async (
   context: OrgContext,
   playbookId: SafeId<"playbookDefinition">,
 ): Promise<unknown> => {
-  const playbook = await readPlaybook(playbookId);
-  if (!playbook) {
-    throw new Error("Expected an existing playbook before approval");
-  }
+  const playbook = await readStoredPlaybook(playbookId);
   return runHandler(approvePlaybookDefinition, context, {
     params: { playbookId },
     body: { expectedUpdatedAt: playbook.updatedAt.toISOString() },
@@ -163,10 +192,7 @@ describe("POST /playbooks/:playbookId/approve", () => {
   test("rejects approval when the definition changed after the editor loaded", async () => {
     const context = createOrgContext(ids.orgA, ids.userA1);
     const playbookId = await createPlaybook(context, "Stale approval target");
-    const loaded = await readPlaybook(playbookId);
-    if (!loaded) {
-      throw new Error("Expected the created playbook");
-    }
+    const loaded = await readStoredPlaybook(playbookId);
 
     const updateResult = await runHandler(updatePlaybookDefinition, context, {
       params: { playbookId },
@@ -183,6 +209,7 @@ describe("POST /playbooks/:playbookId/approve", () => {
     });
 
     expect(getStatusCode(staleApproval)).toBe(409);
+    expect(getErrorCode(staleApproval)).toBe(VERSION_CONFLICT_ERROR_CODE);
     expect((await readPlaybook(playbookId))?.status).toBe("draft");
   });
 
@@ -199,10 +226,15 @@ describe("POST /playbooks/:playbookId/approve", () => {
     expect(firstApproval["version"]).toBe(1);
     expect(typeof firstApproval["approvedAt"]).toBe("string");
 
-    const afterFirst = await readPlaybook(playbookId);
-    expect(afterFirst?.status).toBe("approved");
-    expect(afterFirst?.approvedAt).not.toBeNull();
-    expect(afterFirst?.approvedBy).toBe(ids.userA1);
+    const afterFirst = await readStoredPlaybook(playbookId);
+    expect(afterFirst.status).toBe("approved");
+    expect(afterFirst.approvedAt).not.toBeNull();
+    expect(afterFirst.approvedBy).toBe(ids.userA1);
+    // The response's `updatedAt` is the caller's next concurrency token, so it
+    // has to match the row rather than merely echo `approvedAt`.
+    expect(expectUpdatedAt(firstApproval)).toBe(
+      afterFirst.updatedAt.toISOString(),
+    );
 
     const secondApproval = await approvePlaybook(context, playbookId);
     expect(getStatusCode(secondApproval)).toBeNull();
@@ -221,6 +253,89 @@ describe("POST /playbooks/:playbookId/approve", () => {
       body: { expectedUpdatedAt: new Date(0).toISOString() },
     });
     expect(getStatusCode(result)).toBe(404);
+  });
+});
+
+describe("PUT /playbooks/:playbookId concurrency", () => {
+  test("rejects a save whose expectedUpdatedAt is behind the stored row", async () => {
+    const context = createOrgContext(ids.orgA, ids.userA1);
+    const playbookId = await createPlaybook(context, "Stale overwrite target");
+    const loaded = await readStoredPlaybook(playbookId);
+
+    const winner = await runHandler(updatePlaybookDefinition, context, {
+      params: { playbookId },
+      body: {
+        name: "Saved by the other editor",
+        positions: { version: 2, items: [] },
+        expectedUpdatedAt: loaded.updatedAt.toISOString(),
+      },
+    });
+    expect(getStatusCode(winner)).toBeNull();
+
+    const loser = await runHandler(updatePlaybookDefinition, context, {
+      params: { playbookId },
+      body: {
+        name: "Stale overwrite",
+        positions: { version: 2, items: [] },
+        expectedUpdatedAt: loaded.updatedAt.toISOString(),
+      },
+    });
+
+    expect(getStatusCode(loser)).toBe(409);
+    expect(getErrorCode(loser)).toBe(VERSION_CONFLICT_ERROR_CODE);
+    // The rejected save left no trace: the winner's name still stands.
+    expect((await readPlaybook(playbookId))?.name).toBe(
+      "Saved by the other editor",
+    );
+  });
+
+  test("returns the fresh updatedAt so the next save still guards", async () => {
+    const context = createOrgContext(ids.orgA, ids.userA1);
+    const playbookId = await createPlaybook(context, "Resync target");
+    const loaded = await readStoredPlaybook(playbookId);
+
+    const first = await runHandler(updatePlaybookDefinition, context, {
+      params: { playbookId },
+      body: {
+        name: "First save",
+        positions: { version: 2, items: [] },
+        expectedUpdatedAt: loaded.updatedAt.toISOString(),
+      },
+    });
+    expect(getStatusCode(first)).toBeNull();
+    const firstUpdatedAt = expectUpdatedAt(first);
+    expect(firstUpdatedAt).toBe(
+      (await readStoredPlaybook(playbookId)).updatedAt.toISOString(),
+    );
+
+    const second = await runHandler(updatePlaybookDefinition, context, {
+      params: { playbookId },
+      body: {
+        name: "Second save",
+        positions: { version: 2, items: [] },
+        expectedUpdatedAt: firstUpdatedAt,
+      },
+    });
+    expect(getStatusCode(second)).toBeNull();
+    expect((await readStoredPlaybook(playbookId)).name).toBe("Second save");
+  });
+
+  test("a caller that sends no expectedUpdatedAt still saves", async () => {
+    const context = createOrgContext(ids.orgA, ids.userA1);
+    const playbookId = await createPlaybook(context, "Unguarded caller");
+
+    const result = await runHandler(updatePlaybookDefinition, context, {
+      params: { playbookId },
+      body: {
+        name: "Written without a token",
+        positions: { version: 2, items: [] },
+      },
+    });
+
+    expect(getStatusCode(result)).toBeNull();
+    expect((await readPlaybook(playbookId))?.name).toBe(
+      "Written without a token",
+    );
   });
 });
 
