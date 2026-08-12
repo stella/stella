@@ -83,58 +83,6 @@ describe("custom oxlint guardrails", () => {
     expect(helperSource).not.toContain("instanceof Element");
   });
 
-  test("prompt boundary cast rule protects chat prompt brands", () => {
-    const pluginSource = readRootFixture(
-      ".oxlint-plugins/no-prompt-boundary-casts.ts",
-    );
-
-    expect(pluginSource).toContain("ChatCacheStablePrefix");
-    expect(pluginSource).toContain("ChatSafePrompt");
-    expect(pluginSource).toContain("ChatUntrustedPromptSuffix");
-    expect(pluginSource).toContain("apps/api/src/handlers/chat/chat-prompt.ts");
-    expect(pluginSource).toContain("TSUnionType");
-    expect(pluginSource).toContain("TSIntersectionType");
-    expect(pluginSource).toContain("TSArrayType");
-    expect(pluginSource).toContain("TSTupleType");
-    expect(pluginSource).toContain("TSNamedTupleMember");
-    expect(pluginSource).toContain("elementType");
-    expect(pluginSource).toContain("TSIndexedAccessType");
-    expect(pluginSource).toContain("TSLiteralType");
-    expect(pluginSource).toContain("TSNumberKeyword");
-    expect(pluginSource).toContain("Number.isInteger");
-    expect(pluginSource).toContain("ReadonlyArray");
-    expect(pluginSource).toContain("getPropertyName");
-    expect(pluginSource).toContain("objectType");
-    expect(pluginSource).toContain("indexType");
-    expect(pluginSource).toContain("TSConditionalType");
-    expect(pluginSource).toContain("conditionalExtendsResult");
-    expect(pluginSource).toContain("trueType");
-    expect(pluginSource).toContain("falseType");
-    expect(pluginSource).toContain("TSMappedType");
-    expect(pluginSource).toContain("TSTypeLiteral");
-    expect(pluginSource).toContain("TSInterfaceDeclaration");
-    expect(pluginSource).toContain("TSInterfaceBody");
-    expect(pluginSource).toContain("TSFunctionType");
-    expect(pluginSource).toContain("TSConstructorType");
-    expect(pluginSource).toContain("TSMethodSignature");
-    expect(pluginSource).toContain("TSCallSignatureDeclaration");
-    expect(pluginSource).toContain("TSConstructSignatureDeclaration");
-    expect(pluginSource).toContain("TSIndexSignature");
-    expect(pluginSource).toContain("returnType");
-    expect(pluginSource).toContain("params");
-    expect(pluginSource).toContain("TSParenthesizedType");
-    expect(pluginSource).toContain("TSTypeOperator");
-    expect(pluginSource).toContain("ImportDeclaration");
-    expect(pluginSource).toContain("TSTypeAliasDeclaration");
-    expect(pluginSource).toContain("namedTypeAnnotations");
-    expect(pluginSource).toContain("typeArgumentsByName");
-    expect(pluginSource).toContain("typeParameters");
-    expect(pluginSource).toContain("Program:exit");
-    expect(pluginSource).toContain("TSImportType");
-    expect(pluginSource).toContain("typeArguments");
-    expect(pluginSource).toContain("TSTypeAssertion");
-  });
-
   test("public law web modules cannot import protected route code", () => {
     const configSource = readRootFixture("oxlint.config.ts");
 

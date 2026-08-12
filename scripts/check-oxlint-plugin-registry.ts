@@ -20,7 +20,7 @@ const productionConfig = config.slice(
 const enabledRuleIds = new Set(
   Array.from(
     productionConfig.matchAll(
-      /"(?<ruleId>[a-z0-9-]+\/[a-z0-9-]+)"\s*:\s*"error"/gu,
+      /"(?<ruleId>[a-z0-9-]+\/[a-z0-9-]+)"\s*:\s*(?:"error"|\[\s*"error")/gu,
     ),
     (match) => match.groups?.["ruleId"],
   ).filter((ruleId): ruleId is string => ruleId !== undefined),
