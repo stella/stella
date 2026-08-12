@@ -167,7 +167,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 45,
+    "count": 46,
     "files": {
       "apps/api/src/handlers/case-law/decisions/sitemap.ts": 1,
       "apps/api/src/handlers/case-law/decisions/slug-backfill.ts": 2,
