@@ -24,11 +24,13 @@ import type { GradedPosition } from "@/api/lib/workflow/position-runtime";
 import {
   askPresence,
   askText,
+  extractedFromContent,
   gradePresence,
   gradePropertyConstraint,
   gradeTierMatch,
   POSITION_MATCH_CONCURRENCY,
 } from "@/api/lib/workflow/verdict-engine";
+import type { ExtractedAskValue } from "@/api/lib/workflow/verdict-engine";
 import type { VerdictTier } from "@/api/lib/workflow/verdict-tiers";
 
 // Ephemeral grading for the single-doc review: grade each position from the
@@ -47,7 +49,7 @@ export type ReviewFinding = {
   severity: PositionSeverity;
   // null for extract-only positions (a value column with no verdict).
   verdict: VerdictTier | null;
-  extracted: { value: string; text: string } | null;
+  extracted: ExtractedAskValue | null;
   rationale: string | null;
   // The resolved tier reference a tier-match verdict cited (which fallback
   // matched, or which red line was violated). Absent for deterministic or
@@ -78,44 +80,6 @@ type GradedVerdict = {
   verdict: VerdictTier | null;
   rationale: string | null;
   matchedRef?: VerdictMatchedRef;
-};
-
-const extractedFromContent = (
-  content: FieldContent | undefined,
-): { value: string; text: string } | null => {
-  if (!content) {
-    return null;
-  }
-  switch (content.type) {
-    case "text":
-      return { value: content.value, text: content.value };
-    case "single-select":
-    case "date": {
-      const value = content.value ?? "";
-      return { value, text: value };
-    }
-    case "multi-select": {
-      const value = content.value.join(", ");
-      return { value, text: value };
-    }
-    case "int": {
-      const value = String(content.value);
-      const text = content.currency
-        ? `${content.value} ${content.currency}`
-        : value;
-      return { value, text };
-    }
-    case "file":
-    case "clip":
-    case "error":
-    case "pending":
-    case "unsupported":
-      return null;
-    default: {
-      content satisfies never;
-      return null;
-    }
-  }
 };
 
 // A replacement is safe only for a located deviation. A missing clause has no

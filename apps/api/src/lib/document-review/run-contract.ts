@@ -35,6 +35,26 @@ export const DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES = [
   "running",
 ] as const satisfies readonly DocumentReviewRunStatus[];
 
+/**
+ * What drives a run to completion.
+ *
+ * `worker` is the document-review queue: it claims the run, executes both
+ * passes, and finalizes it. `table` is the files-table property DAG: the run is
+ * created already claimed, and the verdict batches that grade the document
+ * commit its findings as they go.
+ *
+ * The two must never write into each other's runs — a document holds at most
+ * one active run, so without this discriminator the table path could commit
+ * into a review a person started from the inspector, and vice versa.
+ */
+export const DOCUMENT_REVIEW_RUN_EXECUTORS = ["worker", "table"] as const;
+export type DocumentReviewRunExecutor =
+  (typeof DOCUMENT_REVIEW_RUN_EXECUTORS)[number];
+export const DOCUMENT_REVIEW_RUN_EXECUTOR = {
+  WORKER: "worker",
+  TABLE: "table",
+} as const satisfies ConstantMap<DocumentReviewRunExecutor>;
+
 /** Why a run ended in `failed`. A closed set so the surface can explain the
  *  failure without parsing a message, and so no free-form model or provider
  *  text ever lands on the row. */

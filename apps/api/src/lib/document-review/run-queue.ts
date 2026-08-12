@@ -19,17 +19,13 @@
 
 import { Result } from "better-result";
 import { Queue, Worker } from "bullmq";
-import { and, count, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { and, eq, inArray, lt, or } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
 
 import { rootDb } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import {
-  documentReviewFindings,
-  documentReviewRuns,
-  fields,
-} from "@/api/db/schema";
+import { documentReviewRuns, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import {
@@ -38,11 +34,14 @@ import {
 } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
-import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import type { DocumentReviewTopic } from "@/api/lib/document-review/contract";
-import { carryOverDecisions } from "@/api/lib/document-review/decision-carry-over";
+import {
+  buildDocumentReviewFindingRow,
+  upsertDocumentReviewFindings,
+} from "@/api/lib/document-review/finding-write";
+import type { DocumentReviewFindingRow } from "@/api/lib/document-review/finding-write";
 import { compareReferenceDocuments } from "@/api/lib/document-review/reference-compare";
 import { extractAskContents } from "@/api/lib/document-review/review-extract";
 import type { ReviewAsk } from "@/api/lib/document-review/review-extract";
@@ -51,13 +50,14 @@ import type { ReviewFinding } from "@/api/lib/document-review/review-grade";
 import {
   basisPlaybook,
   basisReferences,
-  findingOutcome,
+  DOCUMENT_REVIEW_RUN_EXECUTOR,
 } from "@/api/lib/document-review/run-contract";
 import type {
   DocumentReviewFindingPayload,
   DocumentReviewRunBasis,
   DocumentReviewRunErrorCode,
 } from "@/api/lib/document-review/run-contract";
+import { finalizeReviewRun } from "@/api/lib/document-review/run-finalize";
 import { planReviewRun } from "@/api/lib/document-review/run-plan";
 import type { ReviewRunPlan } from "@/api/lib/document-review/run-plan";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
@@ -89,8 +89,13 @@ const JOB_ATTEMPTS = 1;
 const REVIEW_TIMEOUT_MS = 120_000;
 const SERVICE_TIER = "standard" as const;
 const ORPHAN_RECONCILE_INTERVAL_MS = 5 * 60 * 1000;
-/** A `running` row this old lost its worker to a hard death. */
+/** A worker-executed `running` row this old lost its worker to a hard death. */
 const STUCK_RUNNING_MS = 30 * 60 * 1000;
+/** A table-executed `running` row is paced by the files-table property DAG, not
+ *  by an owned job: a workspace-wide run walks every document, so it may
+ *  legitimately stay open far longer than one review. This cutoff only has to
+ *  outlast the workflow's own job timeouts. */
+const STUCK_TABLE_RUNNING_MS = 6 * 60 * 60 * 1000;
 /** A `queued` row this old lost its job to queue data loss; anything younger
  *  may simply be backlogged and must be left for the worker. */
 const STUCK_QUEUED_MS = DAY_IN_MS;
@@ -162,6 +167,7 @@ export const reconcileStuckDocumentReviewRuns = async (): Promise<number> => {
   // drift, and a literal clock read is what makes these comparisons provably
   // free of a database round-trip instead of asserting it in a comment.
   const runningCutoff = new Date(Date.now() - STUCK_RUNNING_MS);
+  const tableRunningCutoff = new Date(Date.now() - STUCK_TABLE_RUNNING_MS);
   const queuedCutoff = new Date(Date.now() - STUCK_QUEUED_MS);
   // audit: skip — janitor bookkeeping on already-audited run rows; flips
   // abandoned runs to failed so the read endpoint surfaces them instead of
@@ -173,7 +179,13 @@ export const reconcileStuckDocumentReviewRuns = async (): Promise<number> => {
       or(
         and(
           eq(documentReviewRuns.status, "running"),
+          eq(documentReviewRuns.executor, DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER),
           lt(documentReviewRuns.startedAt, runningCutoff),
+        ),
+        and(
+          eq(documentReviewRuns.status, "running"),
+          eq(documentReviewRuns.executor, DOCUMENT_REVIEW_RUN_EXECUTOR.TABLE),
+          lt(documentReviewRuns.startedAt, tableRunningCutoff),
         ),
         and(
           eq(documentReviewRuns.status, "queued"),
@@ -715,7 +727,7 @@ const runReferencePass = async ({
   return null;
 };
 
-type FindingRow = typeof documentReviewFindings.$inferInsert;
+type FindingRow = DocumentReviewFindingRow;
 
 const buildFindingRow = ({
   actor,
@@ -731,124 +743,61 @@ const buildFindingRow = ({
   topicTitle: string;
   positionId: string | null;
   payload: DocumentReviewFindingPayload;
-}): FindingRow => ({
-  id: createSafeId<"documentReviewFinding">(),
-  organizationId: actor.organizationId,
-  workspaceId: actor.workspaceId,
-  runId: actor.runId,
-  entityId: run.entityId,
-  fileFieldId: run.fileFieldId,
-  entityVersionId: run.entityVersionId,
-  topicId,
-  topicTitle,
-  checkKind: payload.checkKind,
-  positionId,
-  outcome: findingOutcome(payload),
-  payload,
-});
+}): FindingRow =>
+  buildDocumentReviewFindingRow({
+    organizationId: actor.organizationId,
+    workspaceId: actor.workspaceId,
+    runId: actor.runId,
+    entityId: run.entityId,
+    fileFieldId: run.fileFieldId,
+    entityVersionId: run.entityVersionId,
+    topicId,
+    topicTitle,
+    positionId,
+    payload,
+  });
 
-/**
- * Commit one pass's findings on the `(runId, topicId, checkKind)` key. A
- * replayed job overwrites the row it wrote before rather than adding a second
- * judgment for the same topic, so duplicate delivery converges instead of
- * doubling the review.
- */
 const upsertFindings = async (
   actor: RunActor,
   rows: readonly FindingRow[],
 ): Promise<void> => {
-  if (rows.length === 0) {
-    return;
-  }
-  await actor.scopedDb(async (tx) => {
-    // audit: skip — review output attached to the run row audited at create.
-    await tx
-      .insert(documentReviewFindings)
-      .values([...rows])
-      .onConflictDoUpdate({
-        target: [
-          documentReviewFindings.runId,
-          documentReviewFindings.topicId,
-          documentReviewFindings.checkKind,
-        ],
-        set: {
-          entityVersionId: sql`excluded.entity_version_id`,
-          topicTitle: sql`excluded.topic_title`,
-          positionId: sql`excluded.position_id`,
-          outcome: sql`excluded.outcome`,
-          payload: sql`excluded.payload`,
-          updatedAt: new Date(),
-        },
-      });
-  });
+  await actor.scopedDb(
+    async (tx) => await upsertDocumentReviewFindings(tx, rows),
+  );
 };
 
 /**
- * Complete the run only when the committed finding set is exactly the planned
- * one. Counting the rows, rather than trusting what the passes returned, makes
- * the terminal state a fact about the database instead of about this process.
- *
- * Completion is also where decisions cross over from the document's previous
- * review, in the same transaction as the status flip: a run is never readable
- * as completed with its inherited decisions still missing.
+ * Complete the run once the committed finding set is exactly the planned one.
+ * A shortfall means a pass silently produced less than it promised, which is an
+ * internal failure rather than a completed review.
  */
 const finalizeRun = async (
   actor: RunActor,
   run: ClaimedRun,
   plan: ReviewRunPlan,
 ): Promise<DocumentReviewRunErrorCode | null> => {
-  const committed = await actor.scopedDb(async (tx) => {
-    const rows = await tx
-      .select({ value: count() })
-      .from(documentReviewFindings)
-      .where(
-        and(
-          eq(documentReviewFindings.runId, actor.runId),
-          eq(documentReviewFindings.workspaceId, actor.workspaceId),
-        ),
-      );
-    const first = rows.at(0);
-    return first === undefined ? 0 : first.value;
-  });
-
-  if (committed !== plan.expectedFindingCount) {
+  const finalized = await actor.scopedDb(
+    async (tx) =>
+      await finalizeReviewRun({
+        tx,
+        workspaceId: actor.workspaceId,
+        runId: actor.runId,
+        entityId: run.entityId,
+        fileFieldId: run.fileFieldId,
+        basisType: run.basis.type,
+        expectedFindingCount: plan.expectedFindingCount,
+      }),
+  );
+  if (finalized.type === "incomplete") {
     return "internal";
   }
-
-  await actor.scopedDb(async (tx) => {
-    const carried = await carryOverDecisions({
-      tx,
-      workspaceId: actor.workspaceId,
+  if (finalized.carried > 0) {
+    logger.info("document_review_run.decisions_carried", {
+      count: String(finalized.carried),
       runId: actor.runId,
-      entityId: run.entityId,
-      fileFieldId: run.fileFieldId,
-      basisType: run.basis.type,
+      workspaceId: actor.workspaceId,
     });
-    if (carried > 0) {
-      logger.info("document_review_run.decisions_carried", {
-        count: String(carried),
-        runId: actor.runId,
-        workspaceId: actor.workspaceId,
-      });
-    }
-
-    // audit: skip — terminal bookkeeping on the run row audited at create.
-    await tx
-      .update(documentReviewRuns)
-      .set({
-        status: "completed",
-        errorCode: null,
-        completed: committed,
-        finishedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(documentReviewRuns.id, actor.runId),
-          eq(documentReviewRuns.workspaceId, actor.workspaceId),
-          eq(documentReviewRuns.status, "running"),
-        ),
-      );
-  });
+  }
   return null;
 };
 
