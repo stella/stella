@@ -3,6 +3,7 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import { transactionAbortError } from "@/api/db/safe-db";
 import {
   collectFileCopySources,
   copyEntities,
@@ -175,19 +176,14 @@ const duplicateEntityHandler = async function* ({
       }),
   );
 
+  // An aborted copy leaves no rows, so every object copied for it is an
+  // orphan and the whole set goes back.
   if (Result.isError(txResultResult)) {
     await rollbackS3Copies(copiedS3Keys);
-    return Result.err(txResultResult.error);
+    return Result.err(transactionAbortError(txResultResult.error));
   }
 
   const txResult = txResultResult.value;
-
-  if (!txResult.ok) {
-    await rollbackS3Copies(copiedS3Keys);
-    return Result.err(
-      new HandlerError({ status: txResult.status, message: txResult.message }),
-    );
-  }
 
   // Acceleration only: the marks are already committed, and the standing
   // drain repairs whatever a lost flush leaves behind.

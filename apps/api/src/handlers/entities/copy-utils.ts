@@ -11,6 +11,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import {
   allocateFileObject,
@@ -456,14 +457,7 @@ export const getFolderSubtree = (
   return subtree;
 };
 
-type CopyEntitiesErrorResult = {
-  ok: false;
-  status: 400 | 404 | 500;
-  message: string;
-};
-
-type CopyEntitiesSuccessResult = {
-  ok: true;
+export type CopyEntitiesResult = {
   entityId: SafeId<"entity">;
   /**
    * The copies grouped by which mechanism writes their search projection.
@@ -476,10 +470,6 @@ type CopyEntitiesSuccessResult = {
   /** File fields that may need PDF derivative generation. */
   fileFields: CopiedFileField[];
 };
-
-export type CopyEntitiesResult =
-  | CopyEntitiesErrorResult
-  | CopyEntitiesSuccessResult;
 
 type CopyEntitiesProps = {
   tx: Transaction;
@@ -510,6 +500,15 @@ type CopyEntitiesProps = {
 /**
  * Copy entities to a target workspace. Used by both duplicate
  * (same workspace) and copy-to-workspace (cross-workspace).
+ *
+ * Every rejection throws a `HandlerError` rather than returning one. This runs
+ * inside the caller's transaction, and returning from a transaction callback
+ * commits whatever it has already written: a rejection raised part-way through
+ * the loop would persist a partially copied subtree, and the caller would then
+ * delete the copied objects those committed rows point at. Throwing aborts the
+ * transaction, so no copy survives and every copied object is an orphan the
+ * caller cleans up. Callers recover the thrown error with
+ * `transactionAbortError` and answer with it unchanged.
  */
 export const copyEntities = async ({
   tx,
@@ -546,11 +545,10 @@ export const copyEntities = async ({
   );
 
   if (entityCount + sourceEntities.length > LIMITS.entitiesCount) {
-    return {
-      ok: false,
+    throw new HandlerError({
       status: 400,
       message: "Entities limit reached",
-    };
+    });
   }
 
   // Validate target parent for cross-workspace copy only.
@@ -565,19 +563,17 @@ export const copyEntities = async ({
     });
 
     if (!parent) {
-      return {
-        ok: false,
+      throw new HandlerError({
         status: 400,
         message: "Target parent folder not found",
-      };
+      });
     }
 
     if (parent.kind !== "folder") {
-      return {
-        ok: false,
+      throw new HandlerError({
         status: 400,
         message: "Target parent must be a folder",
-      };
+      });
     }
   }
 
@@ -595,11 +591,10 @@ export const copyEntities = async ({
 
   for (const source of sourceEntities) {
     if (!source.currentVersion) {
-      return {
-        ok: false,
+      throw new HandlerError({
         status: 400,
         message: "Entity has no current version",
-      };
+      });
     }
 
     const newEntityId = createSafeId<"entity">();
@@ -614,11 +609,10 @@ export const copyEntities = async ({
       source.id === sourceEntityId ? targetParentId : mappedParentId;
 
     if (source.id !== sourceEntityId && newParentId === undefined) {
-      return {
-        ok: false,
+      throw new HandlerError({
         status: 500,
         message: "Copy parent was not created",
-      };
+      });
     }
 
     const copyName =
@@ -733,11 +727,10 @@ export const copyEntities = async ({
 
   const rootEntityId = idMap.get(sourceEntityId);
   if (!rootEntityId) {
-    return {
-      ok: false,
+    throw new HandlerError({
       status: 500,
       message: "Copy root was not created",
-    };
+    });
   }
 
   // Written here, inside the copy transaction: the mark commits or rolls back
@@ -748,7 +741,6 @@ export const copyEntities = async ({
   );
 
   return {
-    ok: true,
     entityId: rootEntityId,
     entityIdsBySearchIndexOwner: copiedEntityIds,
     copiedEntities,
