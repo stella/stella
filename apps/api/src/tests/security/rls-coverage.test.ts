@@ -60,8 +60,6 @@ afterAll(async () => {
 describe("policy coverage", () => {
   // Tables exempt from RLS
   const EXEMPT = new Set([
-    "search_documents", // search index table, scoped by explicit org/workspace predicates
-    "extracted_content", // encrypted derivative table, scoped by explicit org/workspace predicates
     "invitation", // auth table, no RLS
     "member", // auth table, no RLS
     // The anonymization catalog tables carry a nullable workspace_id
@@ -235,6 +233,55 @@ describe("policy coverage", () => {
         expect(expr).not.toContain("stella_workspace_is_authorized");
       }
     }
+  });
+
+  // A table that persists an organization discriminator alongside its
+  // workspace must pin both in every permissive policy, whichever helper it
+  // uses. Pinning the workspace alone would let a row whose organization_id
+  // came from another tenant be reached through a legitimate workspace
+  // authorization. The schema side of this invariant is guarded by the
+  // workspace-only-rls-on-org-tables ratchet metric; this asserts the live
+  // catalog agrees, which is what actually enforces it. Deliberately without
+  // an exemption set: a dual-column table that cannot pin both is a design
+  // question, not a waiver.
+  test("every table with workspace_id and organization_id pins both scopes", async () => {
+    const scoped = await fetchScopedTables(testDb);
+    const policies = await fetchStellaPolicies(testDb);
+
+    const byScope = new Map<string, Set<string>>();
+    for (const { table_name, scope } of scoped) {
+      const scopes = byScope.get(table_name) ?? new Set<string>();
+      scopes.add(scope);
+      byScope.set(table_name, scopes);
+    }
+
+    const dualScopeTables = [...byScope.entries()]
+      .filter(
+        ([, scopes]) => scopes.has("workspace") && scopes.has("organization"),
+      )
+      .map(([table]) => table);
+
+    // The class exists: an empty list would make every assertion below vacuous.
+    expect(dualScopeTables.length).toBeGreaterThan(0);
+
+    const unpinned: string[] = [];
+    for (const table of dualScopeTables) {
+      for (const pol of policies.filter((p) => p.table_name === table)) {
+        if (!pol.permissive) {
+          continue;
+        }
+        const expr = pol.command === "a" ? pol.check_expr : pol.using_expr;
+        if (
+          expr === null ||
+          !expr.includes("organization_id") ||
+          !expr.includes(SETTING_ORGANIZATION_ID)
+        ) {
+          unpinned.push(`${table}.${pol.policy_name}`);
+        }
+      }
+    }
+
+    expect(unpinned).toEqual([]);
   });
 
   test("every table with organization_id (org-only) has org policies", async () => {

@@ -1431,11 +1431,11 @@ describe("cross-org isolation", () => {
     const c = await scopedQuery([ids.wsA1, ids.wsA2], ids.orgB, (tx) =>
       tx.$count(entities),
     );
-    // workspace_select checks workspace_id = ANY(wsIds).
     // The wsIds are from org A but the session is org B.
-    // The rows are still visible because workspace
-    // policies only check workspace_id, not org_id.
-    // This is safe because workspace IDs are server-set.
+    // `entities` carries no organization_id, so its policies pin the
+    // workspace alone and the rows stay visible. This is safe because
+    // workspace IDs are server-set. Tables that do carry an
+    // organization_id pin both scopes; see the dual-scope block below.
     expect(c).toBeGreaterThan(0);
   });
 
@@ -1463,6 +1463,8 @@ describe("cross-org isolation", () => {
 // Dual-scope: correct ws but wrong org on dual-column tables
 // ════════════════════════════════════════════════════════
 
+// A row whose organization_id names another tenant is unreachable on every
+// table that carries the column, however its workspace was authorized.
 describe("dual-scope integrity (ws + org columns)", () => {
   test("INSERT timeEntry with correct ws but wrong org → policy violation", async () => {
     const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
@@ -1486,34 +1488,40 @@ describe("dual-scope integrity (ws + org columns)", () => {
     expect(isPgError(error, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
   });
 
-  test("INSERT expense with correct ws but wrong org → succeeds (ws policy only)", async () => {
-    await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      await tx.insert(expenses).values({
-        id: testId(),
-        organizationId: ids.orgB,
-        workspaceId: ids.wsA1,
-        userId: ids.userA1,
-        matterId: ids.entityA1,
-        dateIncurred: "2025-06-01",
-        amount: cents(50),
-        currency: "USD",
-        category: "filing_fee" as const,
-        description: "dual-scope test",
-      });
-    });
+  test("INSERT expense with correct ws but wrong org → policy violation", async () => {
+    const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
+      tryCatch(async () =>
+        tx.insert(expenses).values({
+          id: testId(),
+          organizationId: ids.orgB,
+          workspaceId: ids.wsA1,
+          userId: ids.userA1,
+          matterId: ids.entityA1,
+          dateIncurred: "2025-06-01",
+          amount: cents(50),
+          currency: "USD",
+          category: "filing_fee" as const,
+          description: "dual-scope test",
+        }),
+      ),
+    );
+    expect(isPgError(error, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
   });
 
-  test("INSERT invoice with correct ws but wrong org → succeeds (ws policy only)", async () => {
-    await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
-      await tx.insert(invoices).values({
-        id: testId(),
-        organizationId: ids.orgB,
-        workspaceId: ids.wsA1,
-        invoiceNumber: "DUAL-001",
-        invoiceDate: "2025-06-01",
-        currency: "USD",
-      });
-    });
+  test("INSERT invoice with correct ws but wrong org → policy violation", async () => {
+    const error = await scopedQuery([ids.wsA1], ids.orgA, async (tx) =>
+      tryCatch(async () =>
+        tx.insert(invoices).values({
+          id: testId(),
+          organizationId: ids.orgB,
+          workspaceId: ids.wsA1,
+          invoiceNumber: "DUAL-001",
+          invoiceDate: "2025-06-01",
+          currency: "USD",
+        }),
+      ),
+    );
+    expect(isPgError(error, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
   });
 });
 
