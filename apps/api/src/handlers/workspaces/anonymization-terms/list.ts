@@ -4,6 +4,8 @@ import { asc, eq } from "drizzle-orm";
 import { anonymizationBlacklistEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { boundedAll } from "@/api/lib/db/bounded-all";
+import { LIMITS } from "@/api/lib/limits";
 
 const config = {
   permissions: { workspace: ["read"] },
@@ -20,22 +22,31 @@ const readWorkspaceAnonymizationTerms = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId }) {
     const rows = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select({
-            id: anonymizationBlacklistEntries.id,
-            label: anonymizationBlacklistEntries.label,
-            canonical: anonymizationBlacklistEntries.canonical,
-            variants: anonymizationBlacklistEntries.variants,
-            enabled: anonymizationBlacklistEntries.enabled,
-            createdBy: anonymizationBlacklistEntries.createdBy,
-            createdAt: anonymizationBlacklistEntries.createdAt,
-          })
-          .from(anonymizationBlacklistEntries)
-          .where(eq(anonymizationBlacklistEntries.workspaceId, workspaceId))
-          // SAFETY: one workspace's blacklist terms, loaded fully for masking/management correctness; the set is bounded by the per-workspace write cap (LIMITS.anonymizationBlacklistEntriesPerWorkspace) enforced in the create endpoint.
-          // eslint-disable-next-line require-query-limit/require-query-limit
-          .orderBy(asc(anonymizationBlacklistEntries.canonical)),
+      safeDb(
+        async (tx) =>
+          await boundedAll({
+            invariant:
+              "LIMITS.anonymizationBlacklistEntriesPerWorkspace, enforced by the create endpoint",
+            max: LIMITS.anonymizationBlacklistEntriesPerWorkspace,
+            table: "anonymization_blacklist_entries",
+            query: (limit) =>
+              tx
+                .select({
+                  id: anonymizationBlacklistEntries.id,
+                  label: anonymizationBlacklistEntries.label,
+                  canonical: anonymizationBlacklistEntries.canonical,
+                  variants: anonymizationBlacklistEntries.variants,
+                  enabled: anonymizationBlacklistEntries.enabled,
+                  createdBy: anonymizationBlacklistEntries.createdBy,
+                  createdAt: anonymizationBlacklistEntries.createdAt,
+                })
+                .from(anonymizationBlacklistEntries)
+                .where(
+                  eq(anonymizationBlacklistEntries.workspaceId, workspaceId),
+                )
+                .orderBy(asc(anonymizationBlacklistEntries.canonical))
+                .limit(limit),
+          }),
       ),
     );
 

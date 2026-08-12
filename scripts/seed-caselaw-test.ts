@@ -5,7 +5,10 @@
  * Usage: bun run scripts/seed-caselaw-test.ts
  */
 
+import { panic } from "better-result";
+
 import { parseNsDecisionHtml } from "../apps/api/src/handlers/case-law/ingestion/parsers/cz-ns";
+import { ADAPTER_KEYS } from "../apps/api/src/lib/legal-search/ingestion-constants";
 
 const db = new Bun.SQL({
   hostname: "localhost",
@@ -16,6 +19,11 @@ const db = new Bun.SQL({
 });
 
 const BASE = "https://rozhodnuti.nsoud.cz/Judikatura/judikatura_ns.nsf";
+
+// `case_law_sources.id` is a uuid column, so the previous `'test_cz_ns'` could
+// never have inserted. Fixed rather than generated so re-running the seed
+// converges on one row instead of accumulating them.
+const SOURCE_ID = "00000000-0000-4000-8000-0000000c2f51";
 
 // A set of diverse decisions to test rendering
 const UNIDS = [
@@ -52,12 +60,24 @@ const fetchHtml = async (url: string): Promise<string | null> => {
 };
 
 const main = async () => {
-  // Ensure the source row exists
-  await db`
+  // Ensure the source row exists. The adapter key comes from the registry
+  // rather than a literal because this row stands for a real adapter and
+  // should say so: the operational views resolve each source's key against the
+  // registry, and an invented one would be reported as unrecognized.
+  //
+  // The id comes back from the upsert rather than being assumed: `adapter_key`
+  // is unique, so if this key already exists under a different id (an earlier
+  // seed, a real ingestion run) the insert is skipped and SOURCE_ID identifies
+  // nothing. Decisions inserted against it would fail their source FK. The
+  // no-op `DO UPDATE` is what makes the row return its id either way.
+  const [source] = await db`
     INSERT INTO case_law_sources (id, adapter_key, name)
-    VALUES ('test_cz_ns', 'cz_ns', 'Czech Supreme Court (test)')
-    ON CONFLICT (adapter_key) DO NOTHING
+    VALUES (${SOURCE_ID}, ${ADAPTER_KEYS.CZ_NS}, 'Czech Supreme Court (test)')
+    ON CONFLICT (adapter_key) DO UPDATE SET adapter_key = EXCLUDED.adapter_key
+    RETURNING id
   `;
+  const sourceId: string =
+    source?.id ?? panic("case_law_sources upsert returned no id");
 
   let success = 0;
 
@@ -99,7 +119,7 @@ const main = async () => {
         country, language, decision_date, decision_type,
         fulltext, source_url
       ) VALUES (
-        ${id}, 'test_cz_ns', ${caseNumber}, ${slug},
+        ${id}, ${sourceId}, ${caseNumber}, ${slug},
         ${meta.ecli}, ${meta.court ?? "Nejvyšší soud"},
         'CZE', 'cs', ${meta.decisionDate},
         ${meta.decisionType?.toLowerCase() ?? null},

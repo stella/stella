@@ -4,6 +4,7 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 import { anonymizationBlacklistEntries } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { boundedAll } from "@/api/lib/db/bounded-all";
 import { LIMITS } from "@/api/lib/limits";
 
 const config = {
@@ -19,30 +20,35 @@ const readAnonymizationBlacklist = createSafeRootHandler(
   config,
   async function* ({ safeDb, session }) {
     const rows = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select({
-            canonical: anonymizationBlacklistEntries.canonical,
-            enabled: anonymizationBlacklistEntries.enabled,
-            id: anonymizationBlacklistEntries.id,
-            label: anonymizationBlacklistEntries.label,
-            variants: anonymizationBlacklistEntries.variants,
-          })
-          .from(anonymizationBlacklistEntries)
-          .where(
-            and(
-              eq(
-                anonymizationBlacklistEntries.organizationId,
-                session.activeOrganizationId,
-              ),
-              isNull(anonymizationBlacklistEntries.workspaceId),
-            ),
-          )
-          .orderBy(asc(anonymizationBlacklistEntries.canonical))
-          // Safe bound: org-wide blacklist writes are capped at this
-          // value in update-anonymization-blacklist.ts, so the read
-          // cannot truncate real data.
-          .limit(LIMITS.anonymizationBlacklistEntriesPerOrganization),
+      safeDb(
+        async (tx) =>
+          await boundedAll({
+            invariant:
+              "LIMITS.anonymizationBlacklistEntriesPerOrganization, enforced by update-anonymization-blacklist.ts",
+            max: LIMITS.anonymizationBlacklistEntriesPerOrganization,
+            table: "anonymization_blacklist_entries",
+            query: (limit) =>
+              tx
+                .select({
+                  canonical: anonymizationBlacklistEntries.canonical,
+                  enabled: anonymizationBlacklistEntries.enabled,
+                  id: anonymizationBlacklistEntries.id,
+                  label: anonymizationBlacklistEntries.label,
+                  variants: anonymizationBlacklistEntries.variants,
+                })
+                .from(anonymizationBlacklistEntries)
+                .where(
+                  and(
+                    eq(
+                      anonymizationBlacklistEntries.organizationId,
+                      session.activeOrganizationId,
+                    ),
+                    isNull(anonymizationBlacklistEntries.workspaceId),
+                  ),
+                )
+                .orderBy(asc(anonymizationBlacklistEntries.canonical))
+                .limit(limit),
+          }),
       ),
     );
 

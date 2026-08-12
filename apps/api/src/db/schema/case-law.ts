@@ -173,6 +173,12 @@ export const caseLawSources = p.pgTable(
         sql`, `,
       )})`,
     ),
+    // Deliberately no CHECK tying `adapter_key` to the adapter registry. The
+    // registry is deployment state and the rows are history: a retired adapter
+    // leaves a legitimate row behind, and a constraint would either block the
+    // retirement or freeze one deployment's registry into the schema. Registry
+    // membership is decided at read time instead, where a key with no adapter
+    // is reported as unrecognized rather than silently ignored.
     p.uniqueIndex("case_law_sources_adapter_key_idx").on(t.adapterKey),
     ...globalCaseLawPolicies(),
   ],

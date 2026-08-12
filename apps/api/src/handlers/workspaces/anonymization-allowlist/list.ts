@@ -3,9 +3,14 @@ import { and, asc, eq, isNull, or } from "drizzle-orm";
 import { t } from "elysia";
 
 import { anonymizationAllowlistEntries } from "@/api/db/schema";
+import {
+  ALLOWLIST_READ_BOUND,
+  ALLOWLIST_READ_INVARIANT,
+} from "@/api/lib/anonymization-allowlist";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { boundedAll } from "@/api/lib/db/bounded-all";
 
 /**
  * Anonymization allowlist endpoints.
@@ -42,43 +47,55 @@ const readWorkspaceAnonymizationAllowlist = createSafeHandler(
   async function* ({ query, safeDb, workspaceId }) {
     const entityId = query.entityId ?? null;
     const rows = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select({
-            id: anonymizationAllowlistEntries.id,
-            scope: anonymizationAllowlistEntries.workspaceId,
-            workspaceId: anonymizationAllowlistEntries.workspaceId,
-            entityId: anonymizationAllowlistEntries.entityId,
-            label: anonymizationAllowlistEntries.label,
-            canonical: anonymizationAllowlistEntries.canonical,
-            createdBy: anonymizationAllowlistEntries.createdBy,
-            createdAt: anonymizationAllowlistEntries.createdAt,
-          })
-          .from(anonymizationAllowlistEntries)
-          .where(
-            or(
-              // Org-wide
-              and(
-                isNull(anonymizationAllowlistEntries.workspaceId),
-                isNull(anonymizationAllowlistEntries.entityId),
-              ),
-              // Workspace-wide for the current workspace
-              and(
-                eq(anonymizationAllowlistEntries.workspaceId, workspaceId),
-                isNull(anonymizationAllowlistEntries.entityId),
-              ),
-              // Doc-scoped for the requested entity (only when entityId given)
-              entityId === null
-                ? undefined
-                : and(
-                    eq(anonymizationAllowlistEntries.workspaceId, workspaceId),
-                    eq(anonymizationAllowlistEntries.entityId, entityId),
+      safeDb(
+        async (tx) =>
+          await boundedAll({
+            invariant: ALLOWLIST_READ_INVARIANT,
+            max: ALLOWLIST_READ_BOUND,
+            table: "anonymization_allowlist_entries",
+            query: (limit) =>
+              tx
+                .select({
+                  id: anonymizationAllowlistEntries.id,
+                  scope: anonymizationAllowlistEntries.workspaceId,
+                  workspaceId: anonymizationAllowlistEntries.workspaceId,
+                  entityId: anonymizationAllowlistEntries.entityId,
+                  label: anonymizationAllowlistEntries.label,
+                  canonical: anonymizationAllowlistEntries.canonical,
+                  createdBy: anonymizationAllowlistEntries.createdBy,
+                  createdAt: anonymizationAllowlistEntries.createdAt,
+                })
+                .from(anonymizationAllowlistEntries)
+                .where(
+                  or(
+                    // Org-wide
+                    and(
+                      isNull(anonymizationAllowlistEntries.workspaceId),
+                      isNull(anonymizationAllowlistEntries.entityId),
+                    ),
+                    // Workspace-wide for the current workspace
+                    and(
+                      eq(
+                        anonymizationAllowlistEntries.workspaceId,
+                        workspaceId,
+                      ),
+                      isNull(anonymizationAllowlistEntries.entityId),
+                    ),
+                    // Doc-scoped for the requested entity (only when entityId given)
+                    entityId === null
+                      ? undefined
+                      : and(
+                          eq(
+                            anonymizationAllowlistEntries.workspaceId,
+                            workspaceId,
+                          ),
+                          eq(anonymizationAllowlistEntries.entityId, entityId),
+                        ),
                   ),
-            ),
-          )
-          // SAFETY: anonymization allowlist (never-mask overrides) must load fully to avoid over-masking; the workspace + doc-scoped set is bounded by the per-workspace write cap (LIMITS.anonymizationAllowlistEntriesPerWorkspace) enforced in the create endpoint, and org-wide entries are not writable from this endpoint.
-          // eslint-disable-next-line require-query-limit/require-query-limit
-          .orderBy(asc(anonymizationAllowlistEntries.canonical)),
+                )
+                .orderBy(asc(anonymizationAllowlistEntries.canonical))
+                .limit(limit),
+          }),
       ),
     );
     return Result.ok({ entries: rows });

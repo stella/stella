@@ -3,7 +3,38 @@ import { and, eq, isNull, or } from "drizzle-orm";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { anonymizationAllowlistEntries } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { boundedAll } from "@/api/lib/db/bounded-all";
+import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
+
+/**
+ * Org-wide allowlist rows a read may also return.
+ *
+ * Deliberately not in `LIMITS`: that table is serialized to the client on every
+ * workspace read, and this is a server-side read capacity allowance the client
+ * has no use for. There is no writer for org-wide rows today —
+ * `anonymization-allowlist/create` always stamps a workspace — so this is an
+ * allowance rather than an enforced cap, and the endpoint that first writes one
+ * is the one that must enforce it.
+ */
+const ALLOWLIST_ORG_WIDE_ALLOWANCE = 1000;
+
+/**
+ * Bound for a complete allowlist read, wherever one happens.
+ *
+ * Both readers union three scopes: org-wide rows, a workspace's own rows, and
+ * a requested entity's. Only the workspace cap has a writer enforcing it, so
+ * the bound is that cap plus the org-wide allowance. Bounding by the workspace
+ * cap alone would panic a workspace at its cap the moment a single org-wide
+ * row exists — on the list endpoint and, worse, on the masking loader, where
+ * a failed read is a document that goes out unmasked.
+ */
+export const ALLOWLIST_READ_BOUND =
+  LIMITS.anonymizationAllowlistEntriesPerWorkspace +
+  ALLOWLIST_ORG_WIDE_ALLOWANCE;
+
+export const ALLOWLIST_READ_INVARIANT =
+  "LIMITS.anonymizationAllowlistEntriesPerWorkspace (enforced by the create endpoint) plus ALLOWLIST_ORG_WIDE_ALLOWANCE (capacity allowance; org-wide rows have no writer yet)";
 
 /**
  * Server-side helper that returns the canonicals the user (or
@@ -60,16 +91,30 @@ export const loadAnonymizationAllowlistCanonicals = async ({
         isNull(anonymizationAllowlistEntries.entityId),
       );
 
-  const rows = await scopedDb((tx) =>
-    tx
-      .select({ canonical: anonymizationAllowlistEntries.canonical })
-      .from(anonymizationAllowlistEntries)
-      .where(
-        and(
-          eq(anonymizationAllowlistEntries.organizationId, organizationId),
-          scopeMatch,
-        ),
-      ),
+  const rows = await scopedDb(
+    async (tx) =>
+      await boundedAll({
+        // Same three scopes as the list endpoint, so the same bound: the
+        // org-wide branch is read whether or not a workspace scope is given,
+        // and a masking loader that panics leaves a document unmasked.
+        invariant: ALLOWLIST_READ_INVARIANT,
+        max: ALLOWLIST_READ_BOUND,
+        table: "anonymization_allowlist_entries",
+        query: (limit) =>
+          tx
+            .select({ canonical: anonymizationAllowlistEntries.canonical })
+            .from(anonymizationAllowlistEntries)
+            .where(
+              and(
+                eq(
+                  anonymizationAllowlistEntries.organizationId,
+                  organizationId,
+                ),
+                scopeMatch,
+              ),
+            )
+            .limit(limit),
+      }),
   );
 
   return rows.map((row) => row.canonical);

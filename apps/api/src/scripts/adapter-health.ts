@@ -28,7 +28,16 @@ import {
   listAdapterKeys,
   loadAdapterByKey,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
+import { boundedAll } from "@/api/lib/db/bounded-all";
+import {
+  CASE_LAW_SOURCE_ROWS_BOUND,
+  CASE_LAW_SOURCE_ROWS_INVARIANT,
+} from "@/api/lib/legal-search/ingestion-constants";
 import type { SourceTotalCount } from "@/api/lib/legal-search/ingestion-types";
+import {
+  createUnrecognizedSourceReporter,
+  sourceRegistryMembership,
+} from "@/api/lib/legal-search/source-registry-membership";
 import { isRecord } from "@/api/lib/type-guards";
 
 // ── Types ───────────────────────────────────────────────
@@ -52,6 +61,12 @@ type GrowthWindow = {
 
 type AdapterReport = {
   adapterKey: string;
+  /**
+   * False when no adapter is registered for `adapterKey`. Kept apart from a
+   * null `remoteTotal`, which a registered adapter also reports when its probe
+   * fails or its publisher states no total.
+   */
+  adapterRegistered: boolean;
   name: string;
   enabled: boolean;
   sourceId: string;
@@ -239,20 +254,25 @@ const getSourceTotals = async (): Promise<SourceTotal[]> => {
 
 // ── Queries ─────────────────────────────────────────────
 
-const getSources = () =>
-  rootDb
-    .select({
-      id: caseLawSources.id,
-      adapterKey: caseLawSources.adapterKey,
-      name: caseLawSources.name,
-      enabled: caseLawSources.enabled,
-      syncCursor: caseLawSources.syncCursor,
-      lastSyncAt: caseLawSources.lastSyncAt,
-    })
-    .from(caseLawSources)
-    // SAFETY: all configured case-law sources — a finite, code-defined adapter set; root-scoped maintenance script.
-    // eslint-disable-next-line require-query-limit/require-query-limit
-    .orderBy(caseLawSources.adapterKey);
+const getSources = async () =>
+  await boundedAll({
+    invariant: CASE_LAW_SOURCE_ROWS_INVARIANT,
+    max: CASE_LAW_SOURCE_ROWS_BOUND,
+    table: "case_law_sources",
+    query: (limit) =>
+      rootDb
+        .select({
+          id: caseLawSources.id,
+          adapterKey: caseLawSources.adapterKey,
+          name: caseLawSources.name,
+          enabled: caseLawSources.enabled,
+          syncCursor: caseLawSources.syncCursor,
+          lastSyncAt: caseLawSources.lastSyncAt,
+        })
+        .from(caseLawSources)
+        .orderBy(caseLawSources.adapterKey)
+        .limit(limit),
+  });
 
 const getDecisionCounts = () =>
   rootDb
@@ -433,6 +453,9 @@ const buildReport = async (windowHours: number): Promise<HealthReport> => {
 
   // Build per-adapter reports
   const adapters: AdapterReport[] = [];
+  const reportUnrecognizedSource = createUnrecognizedSourceReporter(
+    "case_law.adapter_health",
+  );
 
   for (const source of sources) {
     const total = countMap.get(source.id) ?? 0;
@@ -458,6 +481,18 @@ const buildReport = async (windowHours: number): Promise<HealthReport> => {
     const fulltextField = fields.find((f) => f.field === "fulltext");
     const withFulltext = fulltextField?.present ?? 0;
     const withoutFulltext = total - withFulltext;
+
+    // Registry membership, decided per row. `sourceTotalMap` is keyed off the
+    // registry, so without this an unregistered key and a registered adapter
+    // whose probe returned nothing both read as `remoteTotal: null` — the
+    // first is a source nothing will ever ingest into, the second is a
+    // transient. Reported as an issue and stamped on the row rather than left
+    // to be inferred from a hole in the table.
+    const membership = sourceRegistryMembership(source.adapterKey);
+    const adapterRegistered = membership.type === "registered";
+    if (!adapterRegistered) {
+      reportUnrecognizedSource(source.adapterKey);
+    }
 
     // Remote source total
     const remoteTotal = sourceTotalMap.get(source.adapterKey) ?? null;
@@ -501,6 +536,12 @@ const buildReport = async (windowHours: number): Promise<HealthReport> => {
       issues.push("Adapter disabled but has decisions");
     }
 
+    if (!adapterRegistered) {
+      issues.push(
+        `No adapter registered for "${source.adapterKey}": retired source, or a seeded/test row. Nothing will ingest into it.`,
+      );
+    }
+
     if (
       remoteTotal !== null &&
       coveragePct !== null &&
@@ -516,6 +557,7 @@ const buildReport = async (windowHours: number): Promise<HealthReport> => {
 
     adapters.push({
       adapterKey: source.adapterKey,
+      adapterRegistered,
       name: source.name,
       enabled: source.enabled,
       sourceId: source.id,

@@ -7,7 +7,9 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { anonymizationBlacklistEntries } from "@/api/db/schema";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
+import { boundedAll } from "@/api/lib/db/bounded-all";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 
 export type AnonymizationBlacklistEntryInput = {
   canonical: string;
@@ -78,6 +80,16 @@ export const normalizeAnonymizationBlacklistEntries = (
   return Result.ok(normalized);
 };
 
+/**
+ * The gazetteer is the union of the firm-wide catalog and one
+ * workspace's terms, each capped on its own write path, so the two
+ * caps add up. A workspace-less load reads only the org-wide half and
+ * stays well under this bound.
+ */
+const GAZETTEER_ENTRY_BOUND =
+  LIMITS.anonymizationBlacklistEntriesPerOrganization +
+  LIMITS.anonymizationBlacklistEntriesPerWorkspace;
+
 export const loadAnonymizationGazetteerEntries = async ({
   organizationId,
   workspaceId,
@@ -101,27 +113,37 @@ export const loadAnonymizationGazetteerEntries = async ({
       )
     : isNull(anonymizationBlacklistEntries.workspaceId);
 
-  const rows = await scopedDb((tx) =>
-    tx
-      .select({
-        canonical: anonymizationBlacklistEntries.canonical,
-        id: anonymizationBlacklistEntries.id,
-        label: anonymizationBlacklistEntries.label,
-        variants: anonymizationBlacklistEntries.variants,
-        createdAt: anonymizationBlacklistEntries.createdAt,
-        workspaceId: anonymizationBlacklistEntries.workspaceId,
-      })
-      .from(anonymizationBlacklistEntries)
-      .where(
-        and(
-          eq(anonymizationBlacklistEntries.organizationId, organizationId),
-          eq(anonymizationBlacklistEntries.enabled, true),
-          workspaceMatch,
-        ),
-      )
-      // SAFETY: anonymization detection gazetteer must load every term to avoid under-masking; org-wide entries are capped at LIMITS.anonymizationBlacklistEntriesPerOrganization and workspace terms at LIMITS.anonymizationBlacklistEntriesPerWorkspace, both enforced on the write paths, so the union is bounded.
-      // eslint-disable-next-line require-query-limit/require-query-limit
-      .orderBy(asc(anonymizationBlacklistEntries.canonical)),
+  const rows = await scopedDb(
+    async (tx) =>
+      await boundedAll({
+        invariant:
+          "LIMITS.anonymizationBlacklistEntriesPerOrganization + LIMITS.anonymizationBlacklistEntriesPerWorkspace, enforced by the anonymization write-cap helpers",
+        max: GAZETTEER_ENTRY_BOUND,
+        table: "anonymization_blacklist_entries",
+        query: (limit) =>
+          tx
+            .select({
+              canonical: anonymizationBlacklistEntries.canonical,
+              id: anonymizationBlacklistEntries.id,
+              label: anonymizationBlacklistEntries.label,
+              variants: anonymizationBlacklistEntries.variants,
+              createdAt: anonymizationBlacklistEntries.createdAt,
+              workspaceId: anonymizationBlacklistEntries.workspaceId,
+            })
+            .from(anonymizationBlacklistEntries)
+            .where(
+              and(
+                eq(
+                  anonymizationBlacklistEntries.organizationId,
+                  organizationId,
+                ),
+                eq(anonymizationBlacklistEntries.enabled, true),
+                workspaceMatch,
+              ),
+            )
+            .orderBy(asc(anonymizationBlacklistEntries.canonical))
+            .limit(limit),
+      }),
   );
 
   return rows.map((row): GazetteerEntry => ({
