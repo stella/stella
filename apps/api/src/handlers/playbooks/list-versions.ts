@@ -10,6 +10,11 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const config = {
+  description:
+    "List one playbook's approval history, newest version first: the version " +
+    "number, the name it carried at that version, when it was created, and " +
+    "by whom. A version is only written when a playbook is approved, so the " +
+    "list is capped rather than cursor-paginated.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "knowledge_library_admin" },
   access: "read",

@@ -7,6 +7,10 @@ import {
 } from "./read";
 
 const config = {
+  description:
+    "List the organization's playbook definitions with cursor pagination, " +
+    "each with its scope, status, and approval metadata. Read one playbook's " +
+    "positions in full with playbooks.get.",
   permissions: { workspace: ["read"] },
   mcp: { type: "tool", name: "list_playbooks" },
   access: "read",

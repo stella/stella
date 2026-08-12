@@ -15,6 +15,12 @@ const restorePlaybookVersionParamsSchema = t.Object({
 });
 
 const config = {
+  description:
+    "Restore a stored playbook version by copying its name, description, " +
+    "scope, and positions back onto the definition. A restore counts as an " +
+    "edit: the playbook returns to draft with its approval metadata cleared, " +
+    "so it must be approved again before runs pick it up, and the stored " +
+    "version itself is left untouched.",
   permissions: { playbook: ["update"] },
   mcp: { type: "capability", reason: "knowledge_library_admin" },
   params: restorePlaybookVersionParamsSchema,

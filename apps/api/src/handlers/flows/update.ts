@@ -14,6 +14,12 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { syncFlowScheduleTrigger } from "@/api/lib/flows/sync-flow-schedule-trigger";
 
 const config = {
+  description:
+    "Replace one flow definition's name, description, steps, trigger, and " +
+    "enabled flag. The whole definition is revalidated and written, so this " +
+    "is not a partial update. The scheduler row is reconciled afterwards, so " +
+    "changing or removing a schedule trigger, or disabling the flow, also " +
+    "stops it from firing.",
   permissions: { flow: ["update"] },
   mcp: { type: "capability", reason: "workflow_orchestration" },
   params: flowDefinitionParamsSchema,

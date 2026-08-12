@@ -14946,6 +14946,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "flows", "create"],
                 capabilityId: "flows.create",
+                description:
+                  "Create an automation flow definition in the organization: name, description, ordered steps, a trigger, and whether it is enabled. The definition is validated before it is stored, and a schedule trigger is registered with the scheduler afterwards. Refused once the organization holds its maximum number of flows.",
                 access: "write",
                 flags: [
                   {
@@ -15271,6 +15273,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "flows", "get"],
                 capabilityId: "flows.get",
+                description:
+                  "Read one flow definition: its name, description, steps, trigger, and enabled flag. Use flows.list to browse the organization's flows and flows.run-detail to read a run of one.",
                 access: "read",
                 flags: [
                   {
@@ -15361,6 +15365,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "flows", "run-cancel"],
                 capabilityId: "flows.run-cancel",
+                description:
+                  "Cancel a flow run that is still in progress in a matter, returning the run id and the status it settled on. Work already committed by steps that finished is not undone.",
                 access: "write",
                 flags: [
                   {
@@ -15578,6 +15584,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "flows", "run-review"],
                 capabilityId: "flows.run-review",
+                description:
+                  "Resolve a flow run waiting at a review gate: pass decision approved or rejected, with an optional note. The run continues or stops accordingly, and its id and new status come back.",
                 access: "write",
                 flags: [
                   {
@@ -15754,6 +15762,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "flows", "update"],
                 capabilityId: "flows.update",
+                description:
+                  "Replace one flow definition's name, description, steps, trigger, and enabled flag. The whole definition is revalidated and written, so this is not a partial update. The scheduler row is reconciled afterwards, so changing or removing a schedule trigger, or disabling the flow, also stops it from firing.",
                 access: "write",
                 flags: [
                   {
@@ -20042,6 +20052,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "playbooks", "approve"],
                 capabilityId: "playbooks.approve",
+                description:
+                  "Approve a playbook definition: snapshot its current name, description, scope, and positions as a new immutable version, then mark the definition approved. Runs pin the latest approved version, so this is what publishes edits to reviews. Pass expectedUpdatedAt as a concurrency token; a definition that changed since you read it is a conflict. Approving an already-approved playbook is allowed and simply appends another version.",
                 access: "write",
                 flags: [
                   {
@@ -20103,6 +20115,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "playbooks", "auto-run"],
                 capabilityId: "playbooks.auto-run",
+                description:
+                  "Run every applicable playbook over a matter in one pass and materialize their columns onto its table: a playbook with no document-type scope always applies, one scoped to a document type only when that type is present among the matter's classified documents. Each playbook pins its own latest approved version and opens its own per-document runs; a playbook that hits a limit is skipped while the rest continue. Returns how many playbooks ran, how many columns were materialized, and how many document runs opened. Use playbooks.run for a single playbook.",
                 access: "write",
                 flags: [
                   {
@@ -20145,6 +20159,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "playbooks", "create"],
                 capabilityId: "playbooks.create",
+                description:
+                  "Create a playbook definition in the organization from a name, an optional description, an optional document-type scope, and its positions. The positions are validated and the automatic questions derived from their tier rules before storage. It starts as a draft: approve it with playbooks.approve before runs will use it.",
                 access: "write",
                 flags: [
                   {
@@ -21249,6 +21265,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "playbooks", "from-starter"],
                 capabilityId: "playbooks.from-starter",
+                description:
+                  "Create a playbook from one of the bundled starter playbooks, cloning its positions with fresh ids and otherwise taking exactly the path playbooks.create takes, including validation, the per-organization limit, and the draft status. Browse the available starters with playbooks.list-starters.",
                 access: "write",
                 flags: [
                   {
@@ -21290,6 +21308,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "playbooks", "get"],
                 capabilityId: "playbooks.get",
+                description:
+                  "Read one playbook definition in full: its name, description, document-type scope, positions, status, and approval metadata. Use playbooks.list for the paginated overview.",
                 access: "read",
                 flags: [
                   {
@@ -21332,6 +21352,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "playbooks", "list"],
                 capabilityId: "playbooks.list",
+                description:
+                  "List the organization's playbook definitions with cursor pagination, each with its scope, status, and approval metadata. Read one playbook's positions in full with playbooks.get.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -21382,6 +21404,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "playbooks", "list-starters"],
                 capabilityId: "playbooks.list-starters",
+                description:
+                  "List the bundled starter playbooks available to instantiate: each starter's id, name, description, target document type, and how many positions it holds. Metadata only, enough to render a picker; create one with playbooks.from-starter.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -21400,6 +21424,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "playbooks", "list-versions"],
                 capabilityId: "playbooks.list-versions",
+                description:
+                  "List one playbook's approval history, newest version first: the version number, the name it carried at that version, when it was created, and by whom. A version is only written when a playbook is approved, so the list is capped rather than cursor-paginated.",
                 access: "read",
                 flags: [
                   {
@@ -21463,6 +21489,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "playbooks", "restore-version"],
                 capabilityId: "playbooks.restore-version",
+                description:
+                  "Restore a stored playbook version by copying its name, description, scope, and positions back onto the definition. A restore counts as an edit: the playbook returns to draft with its approval metadata cleared, so it must be approved again before runs pick it up, and the stored version itself is left untouched.",
                 access: "write",
                 flags: [
                   {
@@ -21606,6 +21634,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "playbooks", "update"],
                 capabilityId: "playbooks.update",
+                description:
+                  "Replace a playbook definition's name, description, scope, and positions; the positions are validated and their automatic questions re-derived. Any edit invalidates a prior approval, so the playbook drops back to draft with its approval metadata cleared and runs keep using the last approved version until it is approved again. Pass expectedUpdatedAt as a concurrency token; a definition changed since you read it is a conflict, and the new updatedAt comes back for the next save.",
                 access: "write",
                 flags: [
                   {
@@ -34246,6 +34276,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "view-templates", "create"],
                 capabilityId: "view-templates.create",
+                description:
+                  "Save a view layout as a personal view template, the blueprint used to create views in other matters. Duplicate sorts and multiple kind filters are refused, references to columns that do not exist are dropped, and the columns the layout needs are captured so they can be recreated wherever the template is applied. Names are unique per user, so a repeat name is a 409, and the per-user template limit applies.",
                 access: "write",
                 flags: [
                   {
@@ -35183,6 +35215,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "view-templates", "list"],
                 capabilityId: "view-templates.list",
+                description:
+                  "List your own saved view templates, newest first, each with its name, layout, layout type, and the columns that layout needs. Personal: templates saved by other members are never returned.",
                 access: "read",
                 flags: [
                   {
@@ -35226,6 +35260,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "views", "convert"],
                 capabilityId: "views.convert",
+                description:
+                  "Convert one view of a matter to another layout type (table, filesystem, kanban, calendar, or timeline), carrying over as much of its filters and sorts as the target layout supports. Converting to overview, or to the layout the view already has, is refused. Use views.update to change a view's name or the details of its current layout.",
                 access: "write",
                 flags: [
                   {
@@ -35319,6 +35355,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "views", "create"],
                 capabilityId: "views.create",
+                description:
+                  "Add a view (a tab) to a matter with a name and a layout. Duplicate sorts and multiple kind filters are refused, the columns the layout needs are created when your role may create columns, and references to columns that do not exist are dropped. A matter may hold only one overview view, and a fixed maximum of views in total.",
                 access: "write",
                 flags: [
                   {
@@ -36518,6 +36556,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "views", "list"],
                 capabilityId: "views.list",
+                description:
+                  "List a matter's views in tab order, each with its layout, position, and creation time. Default view names come back localized for the request's language, and references to deleted columns are stripped out of the layouts. A pure read: default views are seeded when the matter is created, so listing never mints one.",
                 access: "read",
                 flags: [
                   {
@@ -36556,6 +36596,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "views", "reorder"],
                 capabilityId: "views.reorder",
+                description:
+                  "Set the tab order of a matter's views. viewIds must name every view of the matter exactly once in the order you want; a partial list, an unknown id, or a duplicate is refused. Only positions change.",
                 access: "write",
                 flags: [
                   {
@@ -36621,6 +36663,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "views", "update"],
                 capabilityId: "views.update",
+                description:
+                  "Rename one view of a matter or replace its layout. The layout type cannot change here, use views.convert for that; duplicate sorts and multiple kind filters are refused, columns the new layout needs are created when your role may create columns, and references to deleted columns are dropped.",
                 access: "write",
                 flags: [
                   {
