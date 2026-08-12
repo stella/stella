@@ -193,6 +193,13 @@ export const templatePersistenceRequests = p.pgTable(
       "template_persistence_requests_state_check",
       sql`(${table.status} = ${TEMPLATE_PERSISTENCE_REQUEST_STATUS.PENDING} AND ${table.result} IS NULL AND ${table.completedAt} IS NULL) OR (${table.status} = ${TEMPLATE_PERSISTENCE_REQUEST_STATUS.COMPLETED} AND ${table.result} IS NOT NULL AND ${table.completedAt} IS NOT NULL)`,
     ),
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "template_persistence_requests_workspace_organization_fk",
+      })
+      .onDelete("cascade"),
     ...wsOrganizationPolicies("template_persistence_requests"),
   ],
 );
@@ -320,6 +327,13 @@ export const searchDocuments = p.pgTable(
       .index("search_documents_org_updated_id_idx")
       .on(table.organizationId, table.updatedAt.desc(), table.entityId.desc()),
     p.index("search_documents_tsv_idx").using("gin", table.tsv),
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "search_documents_workspace_organization_fk",
+      })
+      .onDelete("cascade"),
     ...wsOrganizationPolicies("search_documents"),
   ],
 );
@@ -359,6 +373,13 @@ export const searchDocumentPreviewPassages = p.pgTable(
         name: "search_document_preview_passages_organization_fk",
         columns: [table.organizationId],
         foreignColumns: [organization.id],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        name: "search_document_preview_passages_workspace_organization_fk",
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
       })
       .onDelete("cascade"),
     ...wsOrganizationReadOnlyPolicies("search_document_preview_passages"),
@@ -462,6 +483,13 @@ export const workspaceSearchDocuments = p.pgTable(
         table.workspaceId.desc(),
       ),
     p.index("workspace_search_docs_tsv_idx").using("gin", table.tsv),
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "workspace_search_documents_workspace_organization_fk",
+      })
+      .onDelete("cascade"),
     ...wsOrganizationPolicies("workspace_search_documents"),
   ],
 );
@@ -499,6 +527,16 @@ export const workspaceSearchDocumentPreviewPassages = p.pgTable(
         name: "workspace_search_document_preview_passages_organization_fk",
         columns: [table.organizationId],
         foreignColumns: [organization.id],
+      })
+      .onDelete("cascade"),
+    // `organization` is abbreviated to `org` here and nowhere else in this
+    // family: the table's own name leaves only 21 bytes before PostgreSQL's
+    // 63-byte identifier limit truncates the constraint.
+    p
+      .foreignKey({
+        name: "workspace_search_document_preview_passages_workspace_org_fk",
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
       })
       .onDelete("cascade"),
     ...wsOrganizationReadOnlyPolicies(
@@ -619,6 +657,13 @@ export const extractedContent = p.pgTable(
       .foreignKey({
         columns: [table.entityId, table.workspaceId],
         foreignColumns: [entities.id, entities.workspaceId],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "extracted_content_workspace_organization_fk",
       })
       .onDelete("cascade"),
     p.index("extracted_content_workspace_id_idx").on(table.workspaceId),

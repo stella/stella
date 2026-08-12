@@ -171,6 +171,13 @@ export const documentReviewRuns = p.pgTable(
       "document_review_runs_pipeline_version_check",
       sql`${table.pipelineVersion} > 0`,
     ),
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "document_review_runs_workspace_organization_fk",
+      })
+      .onDelete("cascade"),
     // Both scopes in every command: the run row carries an organization
     // discriminator, so a valid workspace pin must not authorize a row whose
     // organization_id came from anywhere else.
@@ -275,6 +282,13 @@ export const documentReviewFindings = p.pgTable(
       "document_review_findings_decision_timing_check",
       sql`(${table.decision} = ${OPEN_DECISION_SQL}) = (${table.decidedAt} IS NULL)`,
     ),
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "document_review_findings_workspace_organization_fk",
+      })
+      .onDelete("cascade"),
     ...wsOrganizationPolicies("document_review_findings"),
   ],
 );

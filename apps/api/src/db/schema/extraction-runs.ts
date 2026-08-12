@@ -102,6 +102,13 @@ export const extractionRuns = p.pgTable(
       "extraction_runs_completed_within_total_check",
       sql`${table.completed} <= ${table.total}`,
     ),
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "extraction_runs_workspace_organization_fk",
+      })
+      .onDelete("cascade"),
     ...wsOrganizationReadOnlyPolicies("extraction_runs"),
   ],
 );

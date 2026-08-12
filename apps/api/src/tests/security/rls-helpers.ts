@@ -141,10 +141,15 @@ export const createTestIds = () => ({
   chatThreadGlobalA1: id<"chatThread">(),
   chatThreadWorkspaceA1: id<"chatThread">(),
   chatThreadWorkspaceA2: id<"chatThread">(),
+  // Same organization and same matter as chatThreadWorkspaceA1, different
+  // owner. The user boundary is the only thing that can hide it from user A1,
+  // which is what the "different user in the same workspace" tests assert.
+  chatThreadWorkspaceA1UserA2: id<"chatThread">(),
   chatThreadWorkspaceB1: id<"chatThread">(),
   chatMessageGlobalA1: id<"chatMessage">(),
   chatMessageWorkspaceA1: id<"chatMessage">(),
   chatMessageWorkspaceA2: id<"chatMessage">(),
+  chatMessageWorkspaceA1UserA2: id<"chatMessage">(),
   chatMessageWorkspaceB1: id<"chatMessage">(),
   fileChatThreadA1: id<"fileChatThread">(),
   templateChatThreadA1: id<"templateChatThread">(),
@@ -1005,11 +1010,18 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       workspaceId: ids.wsA2,
     },
     {
+      id: ids.chatThreadWorkspaceA1UserA2,
+      organizationId: ids.orgA,
+      userId: ids.userA2,
+      title: "Workspace thread A1 (user A2)",
+      workspaceId: ids.wsA1,
+    },
+    {
       id: ids.chatThreadWorkspaceB1,
       organizationId: ids.orgB,
       userId: ids.userB1,
       title: "Workspace thread B1",
-      workspaceId: ids.wsA1,
+      workspaceId: ids.wsB1,
     },
   ]);
 
@@ -1095,10 +1107,18 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       content: chatContent("workspace-a2"),
     },
     {
+      id: ids.chatMessageWorkspaceA1UserA2,
+      threadId: ids.chatThreadWorkspaceA1UserA2,
+      userId: ids.userA2,
+      workspaceId: ids.wsA1,
+      role: "user",
+      content: chatContent("workspace-a1-user-a2"),
+    },
+    {
       id: ids.chatMessageWorkspaceB1,
       threadId: ids.chatThreadWorkspaceB1,
       userId: ids.userB1,
-      workspaceId: ids.wsA1,
+      workspaceId: ids.wsB1,
       role: "user",
       content: chatContent("workspace-b1"),
     },
@@ -1519,6 +1539,54 @@ export const fetchStellaIngestionColumnPrivileges = async (
         'UPDATE'
       )
     ORDER BY c.relname, a.attname
+  `);
+  return rows.rows;
+};
+
+type WorkspaceTenantPairForeignKey = {
+  table_name: string;
+  constraint_name: string;
+  /** `false` while a constraint is still NOT VALID: existing rows unchecked. */
+  validated: boolean;
+};
+
+/**
+ * Fetch every foreign key whose referencing columns are exactly
+ * (workspace_id, organization_id) and whose target is `workspaces`: the
+ * reference that makes a workspace/organization mismatch unrepresentable.
+ */
+export const fetchWorkspaceTenantPairForeignKeys = async (
+  db: TestDatabase,
+): Promise<WorkspaceTenantPairForeignKey[]> => {
+  const workspaceColumn = entities.workspaceId.name;
+  const organizationColumn = workspaces.organizationId.name;
+
+  // Both sides are aggregated in the same column order, so the comparison is a
+  // set comparison and neither the declared column order nor the alphabetical
+  // order of the two names can decide the result.
+  const rows = await db.execute<WorkspaceTenantPairForeignKey>(sql`
+    SELECT rel.relname AS table_name,
+           con.conname AS constraint_name,
+           con.convalidated AS validated
+    FROM pg_catalog.pg_constraint con
+    JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+    JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+    WHERE con.contype = 'f'
+      AND nsp.nspname = 'public'
+      AND con.confrelid = 'public.workspaces'::regclass
+      AND (
+        SELECT array_agg(att.attname ORDER BY att.attname)
+        FROM unnest(con.conkey) AS referencing(attnum)
+        JOIN pg_catalog.pg_attribute att
+          ON att.attrelid = con.conrelid
+         AND att.attnum = referencing.attnum
+      ) = (
+        SELECT array_agg(expected ORDER BY expected)
+        FROM unnest(
+          ARRAY[${workspaceColumn}, ${organizationColumn}]::name[]
+        ) AS pair(expected)
+      )
+    ORDER BY rel.relname
   `);
   return rows.rows;
 };

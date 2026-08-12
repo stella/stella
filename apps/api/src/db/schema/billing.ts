@@ -133,6 +133,13 @@ export const billingCodes = p.pgTable(
   },
   (table) => [
     p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "billing_codes_workspace_organization_fk",
+      })
+      .onDelete("cascade"),
+    p
       .index("billing_codes_ws_type_active_idx")
       .on(table.workspaceId, table.type, table.active),
     p
@@ -160,6 +167,13 @@ export const rateTables = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "rate_tables_workspace_organization_fk",
+      })
+      .onDelete("cascade"),
     p
       .index("rate_tables_ws_default_idx")
       .on(table.workspaceId, table.isDefault),
@@ -232,6 +246,13 @@ export const expenses = p.pgTable(
   },
   (table) => [
     p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "expenses_workspace_organization_fk",
+      })
+      .onDelete("cascade"),
+    p
       .index("expenses_ws_matter_status_idx")
       .on(table.workspaceId, table.matterId, table.status),
     p
@@ -273,6 +294,13 @@ export const invoices = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "invoices_workspace_organization_fk",
+      })
+      .onDelete("cascade"),
     p.index("invoices_ws_status_idx").on(table.workspaceId, table.status),
     p
       .uniqueIndex("invoices_ws_number_uidx")

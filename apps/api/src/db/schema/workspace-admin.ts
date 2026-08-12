@@ -217,9 +217,7 @@ export const anonymizationAllowlistEntries = p.pgTable(
   "anonymization_allowlist_entries",
   {
     id: pUuid<"anonymizationAllowlistEntry">().primaryKey(),
-    organizationId: safeOrganizationId("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+    organizationId: safeOrganizationId("organization_id").notNull(),
     workspaceId: safeWorkspaceId("workspace_id").references(
       () => workspaces.id,
       { onDelete: "cascade" },
@@ -235,6 +233,25 @@ export const anonymizationAllowlistEntries = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    // Named explicitly: drizzle's generated name exceeds PostgreSQL's 63-byte
+    // identifier limit and was silently truncated in the catalog until
+    // 20260813110000 renamed it.
+    p
+      .foreignKey({
+        columns: [table.organizationId],
+        foreignColumns: [organization.id],
+        name: "anonymization_allowlist_entries_organization_fk",
+      })
+      .onDelete("cascade"),
+    // MATCH SIMPLE: an org-wide entry (workspace_id NULL) is exempt, a
+    // workspace-scoped one must name a workspace of its own organization.
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "anonymization_allowlist_entries_workspace_organization_fk",
+      })
+      .onDelete("cascade"),
     p.index("anonymization_allowlist_entries_org_idx").on(table.organizationId),
     p
       .index("anonymization_allowlist_entries_workspace_idx")
@@ -266,9 +283,7 @@ export const anonymizationBlacklistEntries = p.pgTable(
   "anonymization_blacklist_entries",
   {
     id: pUuid<"anonymizationBlacklistEntry">().primaryKey(),
-    organizationId: safeOrganizationId("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+    organizationId: safeOrganizationId("organization_id").notNull(),
     /**
      * When set, the entry is scoped to a single workspace
      * and is only consulted by detection runs for that
@@ -296,6 +311,20 @@ export const anonymizationBlacklistEntries = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    p
+      .foreignKey({
+        columns: [table.organizationId],
+        foreignColumns: [organization.id],
+        name: "anonymization_blacklist_entries_organization_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "anonymization_blacklist_entries_workspace_organization_fk",
+      })
+      .onDelete("cascade"),
     p
       .index("anonymization_blacklist_entries_org_enabled_idx")
       .on(table.organizationId, table.enabled),
