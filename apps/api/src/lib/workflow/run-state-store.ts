@@ -131,6 +131,20 @@ type WorkflowRunStateField = (typeof WORKFLOW_RUN_STATE_FIELDS)[number];
 // a cluster rejects a multi-key command whose keys span slots. Hashtagging the
 // workspace id keeps every field of one run on one node while distinct
 // workspaces still spread across the ring.
+//
+// Deploying this rename moves every lookup off `workflow:<workspaceId>:<field>`
+// with no transitional read, which is safe for run state but not free during a
+// rolling deploy. A run in flight across the deploy is recovered, not lost:
+// its jobs stop matching the request id, its cells stay pending, and the boot
+// pass of `reconcileOrphanedWorkflows` (`scanPendingCells: true`, which every
+// replica runs as it starts) rebuilds the workspace from PostgreSQL rather
+// than from the lock. What the rename does drop for the length of the rollout
+// is mutual exclusion between the two releases: a replica on the old code
+// holds the old `running` key while a replica on the new code claims the new
+// one, so a workspace with a pre-deploy run in flight can accept a second run
+// started in that window. The result is duplicated extraction work over the
+// same cells, not corrupted state, and the old keys expire on their own TTL.
+// Deploy while workflow runs are idle to avoid it entirely.
 const workflowKey = (
   workspaceId: SafeId<"workspace">,
   field: WorkflowRunStateField,
