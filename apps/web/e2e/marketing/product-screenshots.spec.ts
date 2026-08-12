@@ -206,6 +206,11 @@ test("capture landing product screenshots", async ({
         // click below hits the real analyze button, not the sign-in prompt.
         // eslint-disable-next-line no-await-in-loop -- see above
         await page.waitForLoadState("networkidle");
+        // The authenticated inspector is mounted beside this public route.
+        // Catch route-context crashes at their boundary instead of timing out
+        // later on whichever product control the error screen replaced.
+        // eslint-disable-next-line no-await-in-loop -- see above
+        await expect(page.locator("#route-error-title")).toHaveCount(0);
         // The structure/AI margin is generated on demand. These decisions
         // already have their analysis cached server-side, but the client
         // still needs one round trip to fetch it; trigger it explicitly and
