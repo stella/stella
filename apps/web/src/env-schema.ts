@@ -10,6 +10,15 @@ const linkUrlSchema = v.union([
   v.pipe(v.string(), v.regex(/^\/(?!\/)/u)),
 ]);
 
+const desktopReleaseBaseUrlSchema = v.pipe(
+  v.string(),
+  v.url(),
+  v.regex(
+    /^https?:\/\//iu,
+    "Desktop release base URL must use HTTP or HTTPS",
+  ),
+);
+
 export const envWebClientSchema = {
   VITE_POSTHOG_KEY: v.optional(v.string()),
   VITE_POSTHOG_HOST: v.optional(v.string()),
@@ -79,7 +88,7 @@ export const envWebClientSchema = {
   // binaries can point this at their own host (filenames are
   // kept identical).
   VITE_DESKTOP_RELEASES_BASE_URL: v.optional(
-    v.pipe(v.string(), v.url()),
+    desktopReleaseBaseUrlSchema,
     "https://github.com/stella/stella/releases/latest/download",
   ),
 };

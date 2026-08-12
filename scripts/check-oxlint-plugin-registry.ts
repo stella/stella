@@ -58,8 +58,12 @@ const commentBodyFromLine = (line: string): string | undefined => {
   if (trimmedLine.startsWith("{/*")) {
     return trimmedLine.slice(3).trimStart();
   }
-  if (trimmedLine.startsWith("/*") || trimmedLine.startsWith("//")) {
+  if (trimmedLine.startsWith("/*")) {
     return trimmedLine.slice(2).trimStart();
+  }
+  const lineCommentStart = line.lastIndexOf("//");
+  if (lineCommentStart !== -1) {
+    return line.slice(lineCommentStart + 2).trimStart();
   }
   return undefined;
 };

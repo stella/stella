@@ -19,8 +19,7 @@ const _newForm = (): never => {
 };
 
 const _bareForm = (): never => {
-  // oxlint-disable-next-line no-bare-error/no-bare-error
-  throw Error(ERROR_MESSAGE);
+  throw Error(ERROR_MESSAGE); // oxlint-disable-line no-bare-error/no-bare-error
 };
 
 // Reference the helpers so unused-variable rules don't kick in.
