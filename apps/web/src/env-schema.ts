@@ -13,10 +13,7 @@ const linkUrlSchema = v.union([
 const desktopReleaseBaseUrlSchema = v.pipe(
   v.string(),
   v.url(),
-  v.regex(
-    /^https?:\/\//iu,
-    "Desktop release base URL must use HTTP or HTTPS",
-  ),
+  v.regex(/^https?:\/\//iu, "Desktop release base URL must use HTTP or HTTPS"),
 );
 
 export const envWebClientSchema = {
