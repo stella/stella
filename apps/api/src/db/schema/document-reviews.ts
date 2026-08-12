@@ -5,6 +5,8 @@ import {
   DOCUMENT_REVIEW_BASIS_TYPES,
   DOCUMENT_REVIEW_CHECK_KIND,
   DOCUMENT_REVIEW_CHECK_KINDS,
+  DOCUMENT_REVIEW_DECISION,
+  DOCUMENT_REVIEW_DECISIONS,
   DOCUMENT_REVIEW_OUTCOMES,
   DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES,
   DOCUMENT_REVIEW_RUN_ERROR_CODES,
@@ -46,12 +48,15 @@ const CHECK_KIND_SQL_VALUES = quoted(DOCUMENT_REVIEW_CHECK_KINDS);
 const PLAYBOOK_OUTCOME_SQL_VALUES = quoted(DOCUMENT_REVIEW_OUTCOMES.playbook);
 const REFERENCE_OUTCOME_SQL_VALUES = quoted(DOCUMENT_REVIEW_OUTCOMES.reference);
 
+const DECISION_SQL_VALUES = quoted(DOCUMENT_REVIEW_DECISIONS);
+
 const PLAYBOOK_CHECK_KIND_SQL = sql.raw(
   `'${DOCUMENT_REVIEW_CHECK_KIND.PLAYBOOK}'`,
 );
 const REFERENCE_CHECK_KIND_SQL = sql.raw(
   `'${DOCUMENT_REVIEW_CHECK_KIND.REFERENCE}'`,
 );
+const OPEN_DECISION_SQL = sql.raw(`'${DOCUMENT_REVIEW_DECISION.OPEN}'`);
 
 /**
  * One immutable execution of a document review: a confirmed basis (a playbook,
@@ -197,6 +202,20 @@ export const documentReviewFindings = p.pgTable(
     // position, which produces a value with no verdict.
     outcome: p.varchar("outcome", { length: 64 }),
     payload: jsonb().$type<DocumentReviewFindingPayload>().notNull(),
+    // Reviewer disposition. Findings are born `open`; a decision names who
+    // took it and when, and survives a re-run whose finding says the same
+    // thing about the same evidence (see `decision-carry-over.ts`).
+    decision: p
+      .text("decision", { enum: DOCUMENT_REVIEW_DECISIONS })
+      .notNull()
+      .default(DOCUMENT_REVIEW_DECISION.OPEN),
+    // Nulled when the decider's account is removed; the decision itself and
+    // its timestamp stay, so an audited disposition never disappears with a
+    // person.
+    decidedBy: p
+      .text("decided_by")
+      .references(() => user.id, { onDelete: "set null" }),
+    decidedAt: timestamptz("decided_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
       .notNull()
@@ -229,6 +248,18 @@ export const documentReviewFindings = p.pgTable(
         AND ${table.outcome} IN (${REFERENCE_OUTCOME_SQL_VALUES})
         AND ${table.positionId} IS NULL
       )`,
+    ),
+    p.check(
+      "document_review_findings_decision_values_check",
+      sql`${table.decision} IN (${DECISION_SQL_VALUES})`,
+    ),
+    // "Open" and "undecided" are the same fact stated twice, so the schema
+    // keeps them identical: a decided finding always names its moment, and an
+    // open one never does. `decided_by` is deliberately outside this rule —
+    // deleting the decider's account nulls it without reopening the finding.
+    p.check(
+      "document_review_findings_decision_timing_check",
+      sql`(${table.decision} = ${OPEN_DECISION_SQL}) = (${table.decidedAt} IS NULL)`,
     ),
     ...wsOrganizationPolicies("document_review_findings"),
   ],
