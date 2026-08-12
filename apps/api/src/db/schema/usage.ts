@@ -1,4 +1,5 @@
 import {
+  DESTRUCTIVE_EFFECT_CHUNK_STATUSES,
   jsonb,
   organization,
   organizationCheck,
@@ -16,6 +17,7 @@ import {
 import type {
   AccountDeletionRequestStatus,
   AccountDeletionStorageCleanup,
+  DestructiveEffectChunkStatus,
 } from "./common";
 import { workspaces } from "./contacts";
 import {
@@ -58,6 +60,8 @@ const USAGE_POLICY_BILLING_INTERVAL_SQL_VALUES =
 const USAGE_POLICY_VISIBILITY_SQL_VALUES = USAGE_POLICY_VISIBILITIES.map(
   (visibility) => sql.raw(`'${visibility}'`),
 );
+const DESTRUCTIVE_EFFECT_CHUNK_STATUS_SQL_VALUES =
+  DESTRUCTIVE_EFFECT_CHUNK_STATUSES.map((status) => sql.raw(`'${status}'`));
 
 const USAGE_POLICY_PRICE_BASIS_SQL_VALUES = USAGE_POLICY_PRICE_BASES.map(
   (basis) => sql.raw(`'${basis}'`),
@@ -377,6 +381,99 @@ export const accountDeletionRequests = p.pgTable(
       .index("account_deletion_requests_status_created_idx")
       .on(table.status, table.createdAt, table.id),
     ...userPolicies(),
+  ],
+);
+
+/**
+ * Bounded, independently claimable external effects for account erasure.
+ * `storageCleanup` on the parent is a rolling-deploy bridge for API tasks that
+ * predate this ledger; remove it after those tasks cannot run and every legacy
+ * request has been materialized here.
+ */
+export const accountDeletionEffectChunks = p.pgTable.withRLS(
+  "account_deletion_effect_chunks",
+  {
+    id: pUuid<"accountDeletionEffectChunk">().primaryKey(),
+    requestId: safeUuid<"accountDeletionRequest">("request_id").notNull(),
+    chunkIndex: p.integer("chunk_index").notNull(),
+    effectType: p
+      .text("effect_type", { enum: ["s3_delete"] })
+      .notNull()
+      .default("s3_delete"),
+    payloadHash: p.varchar("payload_hash", { length: 64 }).notNull(),
+    s3Keys: p.text("s3_keys").array().notNull(),
+    status: p
+      .text("status", { enum: DESTRUCTIVE_EFFECT_CHUNK_STATUSES })
+      .$type<DestructiveEffectChunkStatus>()
+      .notNull()
+      .default("pending"),
+    attemptCount: p.integer("attempt_count").notNull().default(0),
+    leaseToken: safeUuid<"effectLease">("lease_token"),
+    leaseExpiresAt: timestamptz("lease_expires_at"),
+    nextAttemptAt: timestamptz("next_attempt_at"),
+    errorMessage: p.text("error_message"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    completedAt: timestamptz("completed_at"),
+  },
+  (table) => [
+    p
+      .foreignKey({
+        columns: [table.requestId],
+        foreignColumns: [accountDeletionRequests.id],
+        name: "account_deletion_effect_chunks_request_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .uniqueIndex("account_deletion_effect_chunks_request_index_uidx")
+      .on(table.requestId, table.chunkIndex),
+    p
+      .index("account_deletion_effect_chunks_pending_claim_idx")
+      .on(table.requestId, table.chunkIndex)
+      .where(sql`${table.status} = 'pending'`),
+    p
+      .index("account_deletion_effect_chunks_failed_claim_idx")
+      .on(table.nextAttemptAt, table.requestId, table.chunkIndex)
+      .where(sql`${table.status} = 'failed'`),
+    p
+      .index("account_deletion_effect_chunks_lease_expiry_idx")
+      .on(table.leaseExpiresAt, table.requestId, table.chunkIndex)
+      .where(sql`${table.status} = 'processing'`),
+    p.check(
+      "account_deletion_effect_chunks_status_check",
+      sql`${table.status} IN (${sql.join(DESTRUCTIVE_EFFECT_CHUNK_STATUS_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "account_deletion_effect_chunks_effect_type_check",
+      sql`${table.effectType} = 's3_delete'`,
+    ),
+    p.check(
+      "account_deletion_effect_chunks_attempt_nonnegative_check",
+      sql`${table.attemptCount} >= 0`,
+    ),
+    p.check(
+      "account_deletion_effect_chunks_index_nonnegative_check",
+      sql`${table.chunkIndex} >= 0`,
+    ),
+    p.check(
+      "account_deletion_effect_chunks_payload_hash_check",
+      sql`${table.payloadHash} ~ '^[0-9a-f]{64}$'`,
+    ),
+    p.check(
+      "account_deletion_effect_chunks_payload_bound_check",
+      sql`(${table.status} = 'completed' AND cardinality(${table.s3Keys}) = 0) OR (${table.status} <> 'completed' AND cardinality(${table.s3Keys}) BETWEEN 1 AND 50)`,
+    ),
+    p.check(
+      "account_deletion_effect_chunks_lease_state_check",
+      sql`(${table.status} = 'processing') = (${table.leaseToken} IS NOT NULL AND ${table.leaseExpiresAt} IS NOT NULL)`,
+    ),
+    p.check(
+      "account_deletion_effect_chunks_retry_state_check",
+      sql`(${table.status} = 'failed') = (${table.nextAttemptAt} IS NOT NULL)`,
+    ),
   ],
 );
 

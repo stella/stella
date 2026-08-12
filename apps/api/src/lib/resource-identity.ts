@@ -102,6 +102,9 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   document: { type: "alias", resourceType: RESOURCE_TYPE.ENTITY },
   documentCounter: { type: "non_resource", reason: "projection" },
   entityDeletionCleanupRequest: { type: "non_resource", reason: "job" },
+  accountDeletionEffectChunk: { type: "non_resource", reason: "job" },
+  entityDeletionEffectChunk: { type: "non_resource", reason: "job" },
+  effectLease: { type: "non_resource", reason: "job" },
   documentProcessingRun: { type: "non_resource", reason: "job" },
   // A review run is background execution provenance, like `extractionRun` and
   // `documentProcessingRun`; a finding is only ever addressed through the run

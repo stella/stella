@@ -28,6 +28,7 @@ export * from "./schema/workflow";
 export * from "./schema/relations";
 export {
   ACCOUNT_DELETION_REQUEST_STATUSES,
+  DESTRUCTIVE_EFFECT_CHUNK_STATUSES,
   ENTITY_DELETION_CLEANUP_STATUSES,
   BILLING_STATUS,
   CHAT_COMPACTION_MEMORY_ELIGIBILITIES,
@@ -49,6 +50,7 @@ export {
 export type {
   AccountDeletionRequestStatus,
   AccountDeletionStorageCleanup,
+  DestructiveEffectChunkStatus,
   AgendaAttendee,
   AgendaAvailability,
   AgendaExternalData,

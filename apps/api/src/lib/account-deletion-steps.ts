@@ -27,6 +27,7 @@ import {
 } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
+  accountDeletionEffectChunks,
   accountDeletionRequests,
   agentSkills,
   chatThreads,
@@ -65,6 +66,11 @@ import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { preserveBufferObjectCleanupIntents } from "@/api/lib/buffer-intent-reconciliation";
 import { desktopEditMimeTypeForFileType } from "@/api/lib/desktop-edit-file-types";
+import {
+  DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE,
+  consumeInBatches,
+  createS3DeletionEffectChunks,
+} from "@/api/lib/destructive-effect-chunks";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey, createUserFileKey } from "@/api/lib/files/utils";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-sessions";
@@ -1038,6 +1044,7 @@ export const recordAccountDeletionRequest = async ({
   taskReassignmentCount,
   s3KeysToDelete,
 }: RecordAccountDeletionRequestParams): Promise<void> => {
+  const effectChunks = createS3DeletionEffectChunks(s3KeysToDelete);
   await tx.insert(accountDeletionRequests).values({
     id: deletionRequestId,
     userId: currentUserId,
@@ -1048,6 +1055,28 @@ export const recordAccountDeletionRequest = async ({
     storageCleanup: { s3Keys: s3KeysToDelete },
     completedAt: s3KeysToDelete.length > 0 ? null : new Date(),
   });
+
+  if (effectChunks.length > 0) {
+    await consumeInBatches({
+      batchSize: DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE,
+      consume: async (batch) => {
+        // audit: skip — durable chunks execute the storage portion of the
+        // parent account-deletion audit record; they carry no independent
+        // user action.
+        await tx.insert(accountDeletionEffectChunks).values(
+          batch.map((chunk) => ({
+            chunkIndex: chunk.chunkIndex,
+            effectType: chunk.effectType,
+            id: createSafeId<"accountDeletionEffectChunk">(),
+            payloadHash: chunk.payloadHash,
+            requestId: deletionRequestId,
+            s3Keys: chunk.s3Keys,
+          })),
+        );
+      },
+      items: effectChunks,
+    });
+  }
 };
 
 /**

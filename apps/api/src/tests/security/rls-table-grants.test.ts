@@ -90,6 +90,8 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // Internal ingestion coordination: publisher aliases are reserved before
   // decision writes and must never be queried through the request role.
   "case_law_decision_source_identities",
+  "account_deletion_effect_chunks",
+  "entity_deletion_effect_chunks",
 ]);
 
 const SQL_IDENTIFIER_PATTERN =
