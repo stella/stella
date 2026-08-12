@@ -343,6 +343,47 @@ describe("workflow finalization state reads", () => {
     expect(await store.isCurrentRequest({ requestId, workspaceId })).toBe(true);
   });
 
+  test("releases a claim by comparing the request id, not by deleting the key", async () => {
+    const commands: { command: string; args: string[] }[] = [];
+    const store = createWorkflowRunStateStore({
+      send: async (command, args) => {
+        commands.push({ command, args });
+        return await Promise.resolve(1);
+      },
+    });
+
+    expect(await store.releaseClaim({ requestId, workspaceId })).toBe(true);
+
+    // One single-key script naming the running key and the id it may delete
+    // for. A bare DEL would drop whatever holds the workspace when it lands,
+    // which after a Valkey failure can be a replacement run's claim.
+    expect(commands).toEqual([
+      {
+        command: "EVAL",
+        args: [
+          expect.any(String),
+          "1",
+          `workflow-run:{${workspaceId}}:running`,
+          requestId,
+        ],
+      },
+    ]);
+    const script = commands.at(0)?.args.at(0) ?? "";
+    expect(script).toContain('redis.call("GET", KEYS[1])');
+    expect(script).toContain("ARGV[1]");
+    expect(script).toContain('redis.call("DEL", KEYS[1])');
+  });
+
+  test("reports a claim that had already moved on as not released", async () => {
+    const store = createWorkflowRunStateStore({
+      send: async () => await Promise.resolve(0),
+    });
+
+    // The compare failed: the lock's TTL lapsed and someone else owns the
+    // workspace now. Nothing was deleted, which is the point.
+    expect(await store.releaseClaim({ requestId, workspaceId })).toBe(false);
+  });
+
   test("returns stored missing and corrupt states without throwing", async () => {
     await Promise.all(
       (

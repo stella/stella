@@ -454,10 +454,14 @@ export const startWorkflow = async ({
     catch: (cause) => cause,
   });
   if (Result.isError(requestIdSet)) {
+    // Compare-and-delete on this request's own id: the release runs after a
+    // Valkey failure, so by the time it lands the claim's TTL may have lapsed
+    // and a replacement run may hold the workspace. Releasing that one would
+    // hand a third caller a workspace two runs believe they own.
     await runStateStore
-      .clear(workspaceId)
-      .catch((clearError: unknown) =>
-        captureError(clearError, { workspaceId }),
+      .releaseClaim({ requestId, workspaceId })
+      .catch((releaseError: unknown) =>
+        captureError(releaseError, { workspaceId }),
       );
     captureError(requestIdSet.error, { workspaceId });
     return { status: "failed" };

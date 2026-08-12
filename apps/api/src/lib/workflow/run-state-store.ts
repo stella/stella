@@ -32,6 +32,18 @@ const RUNNING_LOCK_SCAN_PATTERN = coordinationKey({
   suffix: "running",
 });
 const RUNNING_LOCK_SCAN_COUNT = "200";
+// Compare-and-delete on one key: the claim is released only while it still
+// holds the releasing request's id. An unconditional DEL would be correct only
+// if no time passed between claiming and releasing, and this path runs after a
+// Valkey failure — long enough for the lock's TTL to lapse and a replacement
+// run to claim the workspace, whose claim the DEL would then drop.
+const RELEASE_CLAIM_SCRIPT = `
+local current = redis.call("GET", KEYS[1])
+if current == ARGV[1] then
+  return redis.call("DEL", KEYS[1])
+end
+return 0
+`;
 const RESERVE_RECOVERY_LOCK_SCRIPT = `
 local current = redis.call("GET", KEYS[1])
 if current == ARGV[1] then
@@ -552,6 +564,31 @@ export const createWorkflowRunStateStore = (redis: WorkflowRunStateRedis) => {
       ]);
       return Number(reply) === 1;
     },
+
+    /**
+     * Give up a claim this request made and never got to use. Answers whether
+     * the claim was still ours: `false` means the lock had already moved on
+     * (its TTL lapsed, or a reconciler reserved it), which is why the delete
+     * is conditional rather than a `clear`.
+     *
+     * Only the `running` key: a request that never started wrote nothing else,
+     * and the request-id write it was attempting carries the same TTL.
+     */
+    releaseClaim: async ({
+      requestId,
+      workspaceId,
+    }: {
+      requestId: string;
+      workspaceId: SafeId<"workspace">;
+    }): Promise<boolean> =>
+      Number(
+        await redis.send("EVAL", [
+          RELEASE_CLAIM_SCRIPT,
+          "1",
+          workflowKey(workspaceId, "running"),
+          requestId,
+        ]),
+      ) === 1,
 
     refreshActiveLease: async ({
       runLockTtlSec,
