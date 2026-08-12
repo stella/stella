@@ -4,9 +4,10 @@ import {
   parseResourceRef,
   resourceRef,
   RESOURCE_TYPE,
-  toSafeId,
   type ResourceRef,
 } from "@stll/api-contract";
+
+import { toSafeId } from "@/lib/safe-id";
 
 export type EntityLinkResourceInput = {
   id: string;

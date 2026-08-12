@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { resourceRef, RESOURCE_TYPE, toSafeId } from "@stll/api-contract";
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
 import { parseStellaMentionHref } from "@/components/chat/chat-mention-href";
+import { toSafeId } from "@/lib/safe-id";
 
 describe("chat mention hrefs", () => {
   test("recognizes stable entity hrefs used by clickable document mentions", () => {

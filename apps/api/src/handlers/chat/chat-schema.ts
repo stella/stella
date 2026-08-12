@@ -18,7 +18,6 @@ import {
   RESOURCE_TYPE,
   type ChatEditApplyMode,
   type ChatRunMode,
-  toSafeId,
   type DocxEditRepresentation,
 } from "@stll/api-contract";
 
@@ -52,6 +51,10 @@ import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { normalizeChatMessageHtml } from "@/api/lib/markdown/chat-message";
+import {
+  brandPersistedEntityId,
+  brandPersistedWorkspaceId,
+} from "@/api/lib/safe-id-boundaries";
 
 export {
   CHAT_EDIT_APPLY_MODE,
@@ -1070,7 +1073,7 @@ const parseMentionsMetadata = (
           parsedResource ??
           resourceRef({
             type: RESOURCE_TYPE.WORKSPACE,
-            id: toSafeId<"workspace">(id),
+            id: brandPersistedWorkspaceId(id),
           }),
       });
       continue;
@@ -1097,7 +1100,7 @@ const parseMentionsMetadata = (
         parsedResource ??
         resourceRef({
           type: RESOURCE_TYPE.ENTITY,
-          id: toSafeId<"entity">(id),
+          id: brandPersistedEntityId(id),
         }),
       workspaceId,
     });

@@ -210,7 +210,10 @@ export {
   resourcesChangedRealtimeEvent,
 } from "./realtime-events";
 export { encodeRfc3986Component } from "./rfc3986";
-export { isSafeIdValue, toSafeId } from "./safe-id";
+// `toSafeId` is deliberately absent from this barrel: it stamps the SafeId
+// brand without any ownership check, so it stays behind the explicit
+// '@stll/api-contract/safe-id' entry point that each app re-exports once.
+export { isSafeIdValue } from "./safe-id";
 export type { SafeId } from "./safe-id";
 export { CONTACT_TYPES, WORKSPACE_CONTACT_ROLES } from "./workspace-contacts";
 export type { ContactType, WorkspaceContactRole } from "./workspace-contacts";

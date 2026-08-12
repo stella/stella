@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { resourceRef, RESOURCE_TYPE, toSafeId } from "@stll/api-contract";
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { propertyConfig } from "@stll/property-testing";
 
+import { toSafeId } from "@/api/lib/branded-types";
 import { normalizeChatMessageHtml } from "@/api/lib/markdown/chat-message";
 
 describe("chat message markdown serializer", () => {

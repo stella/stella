@@ -46,6 +46,7 @@ import type {
 } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
 import { getCorpusS3, refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
+import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { withTimeout } from "@/api/lib/with-timeout";
 import type { CorpusObjectState } from "@/api/scripts/corpus-column-trim-plan";
 import {
@@ -54,7 +55,6 @@ import {
   parseColumnTrimArgs,
   planColumnTrim,
 } from "@/api/scripts/corpus-column-trim-plan";
-import { toSafeId } from "@/api/types";
 
 const BATCH_SIZE = 50;
 const CONCURRENCY = 4;
@@ -102,7 +102,7 @@ console.log(`=== CORPUS COLUMN TRIM (${runLabel}) ===`);
 // statement timeout once enough rows are trimmed. The cursor rides on every
 // progress line, so a supervisor can pass the last one back in.
 let lastId: SafeId<"caseLawDecision"> | null =
-  after === null ? null : toSafeId<"caseLawDecision">(after);
+  after === null ? null : brandPersistedCaseLawDecisionId(after);
 let trimmed = 0;
 let skipped = 0;
 let failed = 0;

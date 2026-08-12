@@ -1,6 +1,6 @@
 import type { Editor } from "@tiptap/core";
 
-import { resourceRef, RESOURCE_TYPE, toSafeId } from "@stll/api-contract";
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
 import { toChatMentionNodeAttrs } from "@/components/chat-mention-node-attrs";
@@ -8,6 +8,7 @@ import {
   getEntityName,
   getFirstFile,
 } from "@/components/workspaces/entity-utils";
+import { toSafeId } from "@/lib/safe-id";
 import type { ConditionNode, WorkspaceEntity } from "@/lib/types";
 
 export const CHAT_MENTION_ENTITY_RESULT_LIMIT = 50;

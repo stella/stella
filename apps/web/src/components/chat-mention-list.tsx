@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { resourceRef, RESOURCE_TYPE, toSafeId } from "@stll/api-contract";
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { Button } from "@stll/ui/components/button";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Popover, PopoverPopup } from "@stll/ui/components/popover";
@@ -28,6 +28,7 @@ import { MatterIcon } from "@/components/matter-icon";
 import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
+import { toSafeId } from "@/lib/safe-id";
 
 export const ChatMentionList = ({
   items,

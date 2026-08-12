@@ -48,7 +48,7 @@ const DELIBERATE_NARROWINGS = [
   {
     rule: "no-restricted-imports",
     scope:
-      "apps/api/src/lib/auth.ts, apps/api/src/lib/search/**, apps/api/src/lib/safe-id-boundaries.ts, apps/api/src/types.ts",
+      "apps/api/src/lib/auth.ts, apps/api/src/lib/search/**, apps/api/src/lib/safe-id-boundaries.ts",
     drops: ["path:@/api/lib/branded-types#toSafeId"],
     reason:
       "These are the sanctioned branding boundaries: they validate a raw id and hand back a SafeId, so they are the modules toSafeId exists for.",
@@ -64,6 +64,7 @@ const DELIBERATE_NARROWINGS = [
       "path:@/api/db/root#rlsDb,rootDb",
       "path:@/api/lib/api-handlers#createHandler,createRootHandler",
       "path:@/api/lib/branded-types#toSafeId",
+      "path:@stll/api-contract/safe-id#toSafeId",
     ],
     reason:
       "Tests build handler context and owner-level DB handles directly; that is the fixture surface the production restrictions exist to keep out of handlers.",

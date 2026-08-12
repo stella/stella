@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { resourceRef, RESOURCE_TYPE, toSafeId } from "@stll/api-contract";
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
 import { selectChatSuggestionItems } from "@/components/chat-mention-extension";
 import { toChatMentionNodeAttrs } from "@/components/chat-mention-node-attrs";
+import { toSafeId } from "@/lib/safe-id";
 
 const option = ({
   category = "entity",

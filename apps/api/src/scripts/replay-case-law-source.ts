@@ -44,7 +44,7 @@ import {
   refreshCorpusS3,
   refreshS3,
 } from "@/api/lib/s3";
-import { toSafeId } from "@/api/types";
+import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
 const DEFAULT_LIMIT = 100;
 const DEFAULT_PAGE_SIZE = 25;
@@ -111,7 +111,7 @@ const afterArgument = flagValue("after");
 const after =
   afterArgument === undefined
     ? null
-    : toSafeId<"caseLawDecision">(afterArgument);
+    : brandPersistedCaseLawDecisionId(afterArgument);
 
 const adapter = getAdapter(adapterKey);
 if (!adapter) {

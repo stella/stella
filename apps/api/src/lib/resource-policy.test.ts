@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import { resourceRef, RESOURCE_TYPE, toSafeId } from "@stll/api-contract";
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
+import { toSafeId } from "@/api/lib/branded-types";
 import { getResourceAuthorizationDisposition } from "@/api/lib/resource-authorization";
 import { getResourceBacklinkDisposition } from "@/api/lib/resource-backlinks";
 import {
