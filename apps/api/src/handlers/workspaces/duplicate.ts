@@ -496,6 +496,16 @@ const duplicateWorkspace = createSafeHandler(
       );
     }
 
+    // Checked before anything is written. The write transaction commits what
+    // it has already inserted when it returns a failure, so rejecting the
+    // source size from inside it would answer 400 and still leave the target
+    // matter, its properties, and its views behind.
+    if (snapshot.entities.length > LIMITS.entitiesCount) {
+      return Result.err(
+        new HandlerError({ status: 400, message: "Entities limit reached" }),
+      );
+    }
+
     const fileCopies = collectUniqueFileCopies(snapshot.entities);
     const fileIdMap = new Map(
       fileCopies.map((copy) => [copy.sourceFileId, copy.targetFileId]),
@@ -745,14 +755,6 @@ const duplicateWorkspace = createSafeHandler(
       const entitiesToDuplicate = orderEntitiesForDuplicate(snapshot.entities);
 
       if (includeContent && entitiesToDuplicate.length > 0) {
-        if (entitiesToDuplicate.length > LIMITS.entitiesCount) {
-          return {
-            ok: false as const,
-            status: 400 as const,
-            message: "Entities limit reached",
-          };
-        }
-
         for (const source of entitiesToDuplicate) {
           if (!source.currentVersion) {
             return {

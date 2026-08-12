@@ -16,6 +16,7 @@ import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -768,5 +769,61 @@ describe("duplicateWorkspace", () => {
       copiedTaskId,
     ]);
     expect(processExtractionMock.mock.calls).toEqual([[copiedDocumentId]]);
+  });
+
+  test("rejects an oversized source before the duplicate writes anything", async () => {
+    s3WriteMock.mockClear();
+
+    const { safeDb, scopedDb } = createScopedDbMock({
+      query: {
+        workspaces: {
+          findFirst: async () => ({
+            id: "ws_source123",
+            name: "Smith v Jones",
+            clientId: null,
+            billingReference: null,
+            color: null,
+            leadUserId: null,
+          }),
+        },
+        properties: { findMany: async () => [] },
+        propertyDependencies: { findMany: async () => [] },
+        workspaceViews: { findMany: async () => [] },
+        workspaceMembers: { findMany: async () => [] },
+        workspaceContacts: { findMany: async () => [] },
+        organizationSettings: { findFirst: async () => null },
+        entities: {
+          // One past the cap the source read allows through.
+          findMany: async () =>
+            Array.from(
+              { length: LIMITS.entitiesCount + 1 },
+              (_unused, index) => ({
+                id: `entity_${index}`,
+                kind: "task",
+                name: `Task ${index}`,
+                parentId: null,
+                currentVersion: { id: `version_${index}`, fields: [] },
+              }),
+            ),
+        },
+      },
+      select: () => {
+        throw new Error("Duplicate read the target matter before validating");
+      },
+      insert: () => {
+        throw new Error("Duplicate wrote before validating the source size");
+      },
+      execute: async () => undefined,
+    });
+
+    const result = await duplicateWorkspace.handler(
+      createContext({ includeContent: true, safeDb, scopedDb }),
+    );
+
+    expect(result).toEqual({
+      code: 400,
+      response: { message: "Entities limit reached" },
+    });
+    expect(s3WriteMock).not.toHaveBeenCalled();
   });
 });
