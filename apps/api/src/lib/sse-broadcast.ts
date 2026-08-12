@@ -139,8 +139,26 @@ export const parseRedisPayload = (raw: string): RedisPayload | null => {
 
 let publisher: ReturnType<typeof createRedisClient> | null = null;
 
+/**
+ * Bound the publisher the way every other coordination facade is bounded. On
+ * the client's defaults an unreachable Valkey buffers the PUBLISH in the
+ * offline queue and the promise never settles, which turns a best-effort
+ * broadcast into an unbounded wait: the desktop-edit-session expiry task
+ * awaits its publishes, so it would hold its lease forever instead of failing
+ * and rescheduling, and `sse.ts` would accumulate one pending promise per
+ * event for the length of the outage.
+ *
+ * Refusing to buffer is the right trade here: pub/sub delivery is already
+ * best-effort, and `broadcast`/`broadcastToOrganization` deliver to this
+ * instance's own clients regardless of the publish outcome.
+ */
+const PUBLISH_CONNECT_TIMEOUT_MS = 2000;
+
 const getPublisher = (): ReturnType<typeof createRedisClient> => {
-  publisher ??= createRedisClient();
+  publisher ??= createRedisClient({
+    connectionTimeout: PUBLISH_CONNECT_TIMEOUT_MS,
+    enableOfflineQueue: false,
+  });
   return publisher;
 };
 
