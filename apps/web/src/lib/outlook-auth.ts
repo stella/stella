@@ -38,6 +38,27 @@ type OutlookSession = {
   token?: string | null | undefined;
 };
 
+type ResolveOutlookSessionLookupOptions<TError> = {
+  mapError: (error: TError) => Error;
+  result: {
+    data?: { session?: OutlookSession | null | undefined } | null | undefined;
+    error?: TError | null | undefined;
+  };
+};
+
+export const resolveOutlookSessionLookup = <TError>({
+  mapError,
+  result,
+}: ResolveOutlookSessionLookupOptions<TError>):
+  | OutlookSession
+  | null
+  | undefined => {
+  if (result.error !== null && result.error !== undefined) {
+    throw mapError(result.error);
+  }
+  return result.data?.session;
+};
+
 export const outlookSessionHandoff = (
   session: OutlookSession | null | undefined,
 ): "deliver" | "select-organization" | "signed-out" => {
