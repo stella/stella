@@ -9,9 +9,11 @@
  * invisible because nothing connected the call sites.
  *
  * So the connection is asserted here: `openPlaybookRun` is the only caller of
- * the materializer and of the run creator, and every surface goes through it.
- * A fifth surface, or a regression in an existing one, fails this file rather
- * than quietly reviewing a matter against a different playbook.
+ * the materializer and of the run creator, every surface goes through it, and
+ * every surface classifies the workflow start it asks for afterwards. A fifth
+ * surface, or a regression in an existing one, fails this file rather than
+ * quietly reviewing a matter against a different playbook, or reporting a
+ * review whose extraction never started.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -85,6 +87,19 @@ describe("starting a playbook run", () => {
         'from "@/api/lib/document-review/open-playbook-run"',
       );
       expect(source).toContain("openPlaybookRun({");
+    },
+  );
+
+  test.each(Object.entries(RUN_SURFACES))(
+    "%s (%s) classifies the workflow start it asks for",
+    (file) => {
+      // The other half of starting a review: the queue call each surface makes
+      // once its transaction commits. The queue reports an enqueue failure as
+      // a status rather than a throw, so a surface that reads the result
+      // without classifying it answers success for a review nothing grades.
+      const source = sourceOf(file);
+      expect(source).toContain("startWorkflow({");
+      expect(source).toContain("playbookRunStartOutcome(");
     },
   );
 

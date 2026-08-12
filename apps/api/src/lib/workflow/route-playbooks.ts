@@ -8,7 +8,12 @@ import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { loadLatestApprovedVersions } from "@/api/lib/document-review/approved-playbook-versions";
 import { openPlaybookRun } from "@/api/lib/document-review/open-playbook-run";
+import {
+  PLAYBOOK_RUN_START_OUTCOME,
+  playbookRunStartOutcome,
+} from "@/api/lib/document-review/playbook-run-start";
 import { LIMITS } from "@/api/lib/limits";
+import type { WorkflowStartStatus } from "@/api/lib/workflow-queue";
 import type { DocTypeClassifier } from "@/api/lib/workflow/materialize-playbook-run";
 import { resolveDocTypeClassifier } from "@/api/lib/workflow/materialize-playbook-run";
 import type {
@@ -190,14 +195,16 @@ const ROUTED_AUDIT_METADATA = {
 
 // Injected rather than imported to avoid a static import cycle with
 // workflow-queue (which imports this module). Structurally matches
-// `startWorkflow`.
+// `startWorkflow`; the status union is imported as a type (erased, so no
+// cycle) rather than restated, since a hand-written copy could not tell this
+// path that a new status exists.
 type StartWorkflowFn = (args: {
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   scopedDb: ScopedDb;
   propertyIds: SafeId<"property">[];
-}) => Promise<{ status: string }>;
+}) => Promise<{ status: WorkflowStartStatus }>;
 
 type RouteClassifiedDocumentsArgs = {
   workspaceId: SafeId<"workspace">;
@@ -331,10 +338,14 @@ export const routeClassifiedDocuments = async ({
     scopedDb,
     propertyIds: materializedPropertyIds,
   });
-  // A concurrent run may already hold the workspace lock; the materialized ASK
-  // columns are stale ai-model columns, so the in-flight run's straggler
-  // catch-up (or the next run) still grades them. Record the skip for context.
-  if (started.status !== "started") {
+  // Fire-and-forget: there is no caller to answer, so both a deferred start (a
+  // concurrent run holds the workspace; its straggler catch-up, or the next
+  // run, still grades these stale ASK columns) and a failed enqueue are
+  // recorded rather than surfaced.
+  if (
+    playbookRunStartOutcome(started.status) !==
+    PLAYBOOK_RUN_START_OUTCOME.QUEUED
+  ) {
     captureError(new Error("routeClassifiedDocuments.workflow_not_started"), {
       workspaceId,
       status: started.status,

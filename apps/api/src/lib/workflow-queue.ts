@@ -252,8 +252,23 @@ type StartWorkflowArgs = {
   serviceTier?: AIRequestServiceTier;
 };
 
+/**
+ * Every way a start attempt ends. Exported as a list so a caller can classify
+ * the whole set exhaustively instead of testing one status and treating the
+ * rest as success: `failed` in particular is an enqueue failure reported in
+ * band, not an exception, and reads as success to anyone who ignores it.
+ */
+export const WORKFLOW_START_STATUSES = [
+  "started",
+  "already-running",
+  "skipped",
+  "failed",
+] as const;
+
+export type WorkflowStartStatus = (typeof WORKFLOW_START_STATUSES)[number];
+
 type StartWorkflowResult = {
-  status: "started" | "already-running" | "skipped" | "failed";
+  status: WorkflowStartStatus;
 };
 
 const extractionRunScope = ({

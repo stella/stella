@@ -300,7 +300,7 @@ describe("MCP knowledge tools", () => {
       uncoveredCount: 0,
       expectedFindingCount: 1,
     });
-    startWorkflowMock.mockResolvedValue(undefined);
+    startWorkflowMock.mockResolvedValue({ status: "started" });
 
     const result = await handleMcpToolCall({
       args: { matter_id: "ws_1", playbook_id: "pb_1" },
@@ -350,6 +350,46 @@ describe("MCP knowledge tools", () => {
     expect(startWorkflowMock.mock.calls.at(0)?.[0]).toMatchObject({
       propertyIds: [toSafeId<"property">("p1"), toSafeId<"property">("p2")],
       workspaceId: "ws_1",
+    });
+  });
+
+  test("run_playbook reports a workflow that never started instead of a run count", async () => {
+    loadLatestApprovedVersionMock.mockResolvedValue(null);
+    materializePlaybookRunMock.mockResolvedValue({
+      ok: true,
+      materializedPropertyIds: [toSafeId<"property">("p1")],
+    });
+    createPlaybookTableRunsMock.mockResolvedValue({
+      runs: [{ runId: toSafeId<"documentReviewRun">("run_1"), entityId: "e1" }],
+      skippedActiveCount: 0,
+      uncoveredCount: 0,
+      expectedFindingCount: 1,
+    });
+    // The queue reports an enqueue failure in-band rather than throwing.
+    startWorkflowMock.mockResolvedValue({ status: "failed" });
+
+    const result = await handleMcpToolCall({
+      args: { matter_id: "ws_1", playbook_id: "pb_1" },
+      context: createContext({
+        scopedDb: createPlaybookScopedDb({
+          id: PLAYBOOK_ID,
+          name: "Live draft name",
+          positions: positionsSaying("Never approved"),
+          scope: null,
+        }),
+      }),
+      toolName: "run_playbook",
+    });
+
+    expect(result.isError).toBe(true);
+    // Retryable by construction: the materialized columns survive, so calling
+    // the tool again maps back to them instead of materializing a second set.
+    expect(parseToolPayload(result)).toMatchObject({
+      error: {
+        code: "internal_error",
+        message: "Failed to start the review",
+        retryable: true,
+      },
     });
   });
 });

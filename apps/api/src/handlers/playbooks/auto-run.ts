@@ -6,6 +6,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { workspaceParams } from "@/api/lib/custom-schema";
 import { loadLatestApprovedVersions } from "@/api/lib/document-review/approved-playbook-versions";
 import { openPlaybookRun } from "@/api/lib/document-review/open-playbook-run";
+import {
+  PLAYBOOK_RUN_START_OUTCOME,
+  playbookRunStartOutcome,
+} from "@/api/lib/document-review/playbook-run-start";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { startWorkflow } from "@/api/lib/workflow-queue";
@@ -109,7 +113,7 @@ const autoRunPlaybooks = createSafeHandler(
       });
     }
 
-    yield* Result.await(
+    const started = yield* Result.await(
       Result.tryPromise({
         try: async () =>
           await startWorkflow({
@@ -127,6 +131,21 @@ const autoRunPlaybooks = createSafeHandler(
           }),
       }),
     );
+    // Answering 200 on a start that never happened would leave the whole
+    // batch's columns with nothing to grade them. Nothing is unwound: the
+    // columns are upserted by playbook source id and left stale, so a retry
+    // maps back to the same ones instead of materializing a second set.
+    if (
+      playbookRunStartOutcome(started.status) ===
+      PLAYBOOK_RUN_START_OUTCOME.NOT_STARTED
+    ) {
+      return Result.err(
+        new HandlerError({
+          status: 500,
+          message: "Failed to start the review.",
+        }),
+      );
+    }
 
     return Result.ok({
       playbooksRun: txResult.playbooksRun,
