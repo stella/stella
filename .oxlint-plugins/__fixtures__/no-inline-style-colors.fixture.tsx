@@ -32,6 +32,28 @@ export const TokenStyles = () => (
   />
 );
 
+export const AssertedUnsafeStyles = () => (
+  <div
+    style={
+      {
+        // oxlint-disable-next-line no-inline-style-colors/no-inline-style-colors -- fixture: an assertion must not hide a style object
+        color: "red",
+      } as const
+    }
+  />
+);
+
+export const SatisfiesUnsafeStyles = () => (
+  <div
+    style={
+      {
+        // oxlint-disable-next-line no-inline-style-colors/no-inline-style-colors -- fixture: satisfies must not hide a style object
+        color: "black",
+      } satisfies Record<string, string>
+    }
+  />
+);
+
 // Domain/config objects are not style sinks. Color-like labels here must not
 // trigger the detector.
 export const unrelatedData = {

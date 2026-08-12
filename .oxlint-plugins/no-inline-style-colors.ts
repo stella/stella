@@ -7,7 +7,7 @@
 
 import { eslintCompatPlugin, type ESTree } from "@oxlint/plugins";
 
-import { getPropertyName } from "./utils.ts";
+import { getPropertyName, isAstNode, unwrapExpression } from "./utils.ts";
 
 // Hex color pattern anywhere in a string
 const HEX_IN_STRING = /#[0-9a-f]{3,8}\b/i;
@@ -110,6 +110,9 @@ function getStaticStyleValue(value: ESTree.Expression): string | undefined {
   return quasi?.value.cooked ?? quasi?.value.raw;
 }
 
+const isObjectExpression = (node: unknown): node is ESTree.ObjectExpression =>
+  isAstNode(node) && node.type === "ObjectExpression";
+
 export default eslintCompatPlugin({
   meta: { name: "no-inline-style-colors" },
   rules: {
@@ -161,8 +164,8 @@ export default eslintCompatPlugin({
               return;
             }
 
-            const expression = node.value.expression;
-            if (expression.type === "ObjectExpression") {
+            const expression = unwrapExpression(node.value.expression);
+            if (isObjectExpression(expression)) {
               checkStyleObject(expression);
             }
           },

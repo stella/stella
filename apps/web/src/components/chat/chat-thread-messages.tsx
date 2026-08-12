@@ -43,6 +43,8 @@ import {
   assistantMessageFallbackText,
   buildMessageTurns,
   collectAnonRestorations,
+  DATA_URL_PREFIX,
+  decodeBase64DataUrl,
   EMPTY_RESTORATION_PAIRS,
   getFollowingAssistantRestorations,
   getMentionTagAttr,
@@ -726,32 +728,27 @@ const getAttachmentPlaceholder = (
   part: ChatAttachmentPart,
 ): string | undefined => part.metadata?.placeholder;
 
-const DATA_URL_PREFIX = "data:";
-const BASE64_DATA_MARKER = ";base64,";
-
 type DownloadDataAttachmentOptions = {
+  errorTitle: string;
   fileName: string;
   mimeType: string;
   url: string;
 };
 
 const downloadDataAttachment = ({
+  errorTitle,
   fileName,
   mimeType,
   url,
 }: DownloadDataAttachmentOptions): void => {
-  const payloadStart = url.indexOf(BASE64_DATA_MARKER);
-  if (!url.startsWith(DATA_URL_PREFIX) || payloadStart === -1) {
+  const decoded = decodeBase64DataUrl(url);
+  if (decoded.isErr()) {
+    getAnalytics().captureError(decoded.error);
+    stellaToast.add({ title: errorTitle, type: "error" });
     return;
   }
 
-  const encoded = url.slice(payloadStart + BASE64_DATA_MARKER.length);
-  const binary = atob(encoded);
-  const bytes = Uint8Array.from(
-    binary,
-    (character) => character.codePointAt(0) ?? 0,
-  );
-  downloadFile(new Blob([bytes], { type: mimeType }), fileName);
+  downloadFile(new Blob([decoded.value], { type: mimeType }), fileName);
 };
 
 const UserAttachments = ({
@@ -820,6 +817,7 @@ const UserAttachments = ({
               key={key}
               onClick={() =>
                 downloadDataAttachment({
+                  errorTitle: t("errors.actionFailed"),
                   fileName: filename ?? fallbackLabel,
                   mimeType,
                   url: contentUrl,
