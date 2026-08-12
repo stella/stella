@@ -10,6 +10,11 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isWorkflowRunning, startWorkflow } from "@/api/lib/workflow-queue";
 
 const config = {
+  description:
+    "Re-run the AI extraction for one cell, meaning one document's value for " +
+    "one AI column, in a matter. Refused when the property is not " +
+    "AI-extracted, when the document is read-only, when the cell is locked, " +
+    "and while another workflow is already running in the matter.",
   permissions: { workspace: ["update"] },
   mcp: { type: "capability", reason: "workflow_orchestration" },
   body: t.Object({

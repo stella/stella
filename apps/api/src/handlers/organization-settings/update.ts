@@ -35,6 +35,14 @@ const updateOrganizationSettingsBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Change the organization's general settings: document processing mode, " +
+    "matter-number pattern and padding, prompt caching, and memory " +
+    "extraction. Only the fields you pass are written and the matter-number " +
+    "pattern is validated against its padding first. Turning document " +
+    "processing off is refused while an automatic run is still going. " +
+    "Practice jurisdictions are set through " +
+    "organization-settings.update-practice-jurisdictions.",
   permissions: { organizationSettings: ["update"] },
   mcp: { type: "covered", by: "manage_organization" },
   body: updateOrganizationSettingsBodySchema,

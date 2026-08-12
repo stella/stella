@@ -33,6 +33,12 @@ const calendarTasksBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Read a matter's tasks that fall inside a date-time window, shaped for a " +
+    "calendar. datePropertyIds chooses which date fields place an item, " +
+    "including the built-in created, updated, due, and start dates; " +
+    "endDatePropertyId supplies the end of a range. Filters and sorts follow " +
+    "the same contract as the table views.",
   permissions: { workspace: ["read"] },
   mcp: { type: "covered", by: "list_tasks" },
   access: "read",

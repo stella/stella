@@ -63,6 +63,14 @@ import { parseViewLayout } from "@/api/lib/views-schema";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
+  description:
+    "Copy a matter into a new one: its columns with their dependencies, " +
+    "views, members, party contacts, client, billing reference, colour, and " +
+    "lead. With includeContent true its documents, folders, tasks, and their " +
+    "stored files are copied as well; with false the new matter starts " +
+    "empty. The copy takes the organization's next matter number and its " +
+    "name gains a numeric suffix when earlier copies exist. Refused once the " +
+    "organization is at its matter limit.",
   permissions: { workspace: ["create"] },
   mcp: { type: "capability", reason: "workflow_orchestration" },
   body: t.Object({

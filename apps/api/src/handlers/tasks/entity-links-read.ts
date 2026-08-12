@@ -13,6 +13,10 @@ const listEntityLinksParamsSchema = workspaceParams({
 
 const listEntityLinks = createSafeHandler(
   {
+    description:
+      "List every link one task has, in both directions, each with the " +
+      "entity at the other end and its kind. Change them with " +
+      "tasks.entity-links-create and tasks.entity-links-delete.",
     permissions: { workspace: ["read"] },
     mcp: { type: "covered", by: "list_tasks" },
     access: "read",

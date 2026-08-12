@@ -10,6 +10,10 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 
 const config = {
+  description:
+    "Return an archived matter to active so it is writable again. The " +
+    "counterpart of workspaces.archive: a matter that is not archived is " +
+    "left exactly as it is.",
   permissions: { workspace: ["update"] },
   mcp: { type: "covered", by: "save_matter" },
 } satisfies HandlerConfig;

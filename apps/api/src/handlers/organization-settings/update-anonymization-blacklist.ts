@@ -29,6 +29,12 @@ const updateAnonymizationBlacklistBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Replace the organization-wide always-mask list with the entries you " +
+    "pass: terms not in the list are deleted, terms already present are " +
+    "updated, and the rest are inserted, so this is a whole-list replacement " +
+    "rather than a merge, and an empty list clears every organization-wide " +
+    "term. Matter-scoped terms in the same table are left untouched.",
   permissions: { organizationSettings: ["update"] },
   mcp: { type: "capability", reason: "anonymization_admin" },
   body: updateAnonymizationBlacklistBodySchema,

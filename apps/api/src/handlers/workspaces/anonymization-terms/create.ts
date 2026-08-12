@@ -22,6 +22,13 @@ const termSchema = t.Object({
 });
 
 const config = {
+  description:
+    "Add always-mask terms to a matter's anonymization gazetteer, each with " +
+    "a canonical form, a label, and optional spelling variants. Idempotent " +
+    "per canonical form: a term the matter already holds is left as it is " +
+    "and not counted as inserted. Refused when the batch would push the " +
+    "matter past its term limit. Organization-wide terms are managed " +
+    "separately.",
   permissions: { workspace: ["update"] },
   mcp: { type: "capability", reason: "anonymization_admin" },
   body: t.Object({

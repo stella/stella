@@ -19734,6 +19734,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "organization-settings", "get"],
                 capabilityId: "organization-settings.get",
+                description:
+                  "Read the organization's general settings: document processing mode, matter-number pattern and padding, practice jurisdictions, prompt caching, and memory extraction. An organization that has never saved settings gets the defaults rather than an error.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -19752,6 +19754,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "organization-settings", "preview"],
                 capabilityId: "organization-settings.preview",
+                description:
+                  "Preview the matter number a pattern would produce next: the pattern and padding are validated, the counter for the scope that pattern falls in is read, and the rendered reference is returned with the sequence value it would take. Nothing is stored and no counter is advanced.",
                 access: "read",
                 flags: [
                   {
@@ -19812,6 +19816,8 @@ export const generatedRouteMap: RouteNode = {
                   "read-ai-availability",
                 ],
                 capabilityId: "organization-settings.read-ai-availability",
+                description:
+                  "Report whether AI is usable in this organization: whether the deployment provides a model, whether the organization has configured its own provider, whether either of those makes AI available at all, and whether the reduced-cost deferred service tier can be used. Booleans only, so any member may read it.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -19835,6 +19841,8 @@ export const generatedRouteMap: RouteNode = {
                 ],
                 capabilityId:
                   "organization-settings.read-anonymization-blacklist",
+                description:
+                  "Read the organization-wide always-mask terms: each entry's canonical form, label, spelling variants, and enabled flag. Matter-scoped terms live in the same table but are never returned here; read those with workspaces.anonymization-terms.list.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -19857,6 +19865,8 @@ export const generatedRouteMap: RouteNode = {
                   "read-deepl-availability",
                 ],
                 capabilityId: "organization-settings.read-deepl-availability",
+                description:
+                  "Report whether the organization has a translation provider key configured, as a single boolean. Nothing about the key itself, not even a masked preview, is returned here.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -19875,6 +19885,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "organization-settings", "update"],
                 capabilityId: "organization-settings.update",
+                description:
+                  "Change the organization's general settings: document processing mode, matter-number pattern and padding, prompt caching, and memory extraction. Only the fields you pass are written and the matter-number pattern is validated against its padding first. Turning document processing off is refused while an automatic run is still going. Practice jurisdictions are set through organization-settings.update-practice-jurisdictions.",
                 access: "write",
                 flags: [
                   {
@@ -19974,6 +19986,8 @@ export const generatedRouteMap: RouteNode = {
                 ],
                 capabilityId:
                   "organization-settings.update-anonymization-blacklist",
+                description:
+                  "Replace the organization-wide always-mask list with the entries you pass: terms not in the list are deleted, terms already present are updated, and the rest are inserted, so this is a whole-list replacement rather than a merge, and an empty list clears every organization-wide term. Matter-scoped terms in the same table are left untouched.",
                 access: "write",
                 flags: [],
                 inputOnly: ["body.entries"],
@@ -28415,6 +28429,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "tasks", "assignees-add"],
                 capabilityId: "tasks.assignees-add",
+                description:
+                  "Assign one member of the matter to a task, in a role that defaults to assignee. Repeating an assignment updates that user's role instead of duplicating it. Refused when the user is not a member of this matter and when the task is read-only. Remove an assignment with tasks.assignees-remove.",
                 access: "write",
                 flags: [
                   {
@@ -28579,6 +28595,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "tasks", "calendar"],
                 capabilityId: "tasks.calendar",
+                description:
+                  "Read a matter's tasks that fall inside a date-time window, shaped for a calendar. datePropertyIds chooses which date fields place an item, including the built-in created, updated, due, and start dates; endDatePropertyId supplies the end of a range. Filters and sorts follow the same contract as the table views.",
                 access: "read",
                 flags: [
                   {
@@ -29142,6 +29160,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "tasks", "create"],
                 capabilityId: "tasks.create",
+                description:
+                  "Create a task in the current matter: name plus optional parent, status, priority, due date, assignees, calendar fields for an agenda item (kind, start, end, occurrence, reminder, all-day, time zone, location, meeting URL, attendees, recurrence), list placement, and, where the deployment enables governed work, its owner and target and deadline dates. Change one afterwards with tasks.update.",
                 access: "write",
                 flags: [
                   {
@@ -29709,6 +29729,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "tasks", "entity-links-create"],
                 capabilityId: "tasks.entity-links-create",
+                description:
+                  "Link a task to another document, folder, or task, with a link type that defaults to related. Both ends must be in this matter, an entity cannot be linked to itself, and a read-only entity is refused. Remove the link with tasks.entity-links-delete.",
                 access: "write",
                 flags: [
                   {
@@ -29861,6 +29883,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "tasks", "entity-links-read"],
                 capabilityId: "tasks.entity-links-read",
+                description:
+                  "List every link one task has, in both directions, each with the entity at the other end and its kind. Change them with tasks.entity-links-create and tasks.entity-links-delete.",
                 access: "read",
                 flags: [
                   {
@@ -29919,6 +29943,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "tasks", "get"],
                 capabilityId: "tasks.get",
+                description:
+                  "Read one task in full: its own fields, its assignees with their users, its governed-work ownership with the most recent lifecycle events, its child tasks with their assignees, its links in both directions, and who created it.",
                 access: "read",
                 flags: [
                   {
@@ -29977,6 +30003,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "tasks", "update"],
                 capabilityId: "tasks.update",
+                description:
+                  "Change one task in a matter: name, status, priority, due date, list item type, sort order, or the calendar fields of an agenda item (kind, start, end, occurrence, reminder, all-day, time zone, location, meeting URL, availability, sensitivity, organizer, attendees, recurrence). Only the fields you pass are written and a read-only task is refused. Where governed work is enabled a status change also records a lifecycle event, and workflowReason carries the explanation stored with it.",
                 access: "write",
                 flags: [
                   {
@@ -38295,6 +38323,8 @@ export const generatedRouteMap: RouteNode = {
                   "anonymization-allowlist-create",
                 ],
                 capabilityId: "workspaces.anonymization-allowlist.create",
+                description:
+                  "Add a never-mask entry to a matter's anonymization allowlist, so a term that detection finds is left in the clear. scope workspace covers the whole matter; scope document covers one document and needs an entityId belonging to this matter. Only matter-scoped entries can be created here, never organization-wide ones. A term already listed is a no-op, and the call is refused once the matter is at its allowlist limit.",
                 access: "write",
                 flags: [
                   {
@@ -38466,6 +38496,8 @@ export const generatedRouteMap: RouteNode = {
                   "anonymization-allowlist-list",
                 ],
                 capabilityId: "workspaces.anonymization-allowlist.list",
+                description:
+                  "Read the never-mask entries that apply in a matter: the organization-wide ones plus the matter's own and, when entityId is given, that document's own, merged into one list so a detection run can be filtered in a single pass.",
                 access: "read",
                 flags: [
                   {
@@ -38529,6 +38561,8 @@ export const generatedRouteMap: RouteNode = {
                   "anonymization-terms-create",
                 ],
                 capabilityId: "workspaces.anonymization-terms.create",
+                description:
+                  "Add always-mask terms to a matter's anonymization gazetteer, each with a canonical form, a label, and optional spelling variants. Idempotent per canonical form: a term the matter already holds is left as it is and not counted as inserted. Refused when the batch would push the matter past its term limit. Organization-wide terms are managed separately.",
                 access: "write",
                 flags: [
                   {
@@ -38671,6 +38705,8 @@ export const generatedRouteMap: RouteNode = {
                   "anonymization-terms-list",
                 ],
                 capabilityId: "workspaces.anonymization-terms.list",
+                description:
+                  "Read a matter's own always-mask terms with their canonical form, label, variants, and enabled flag. Organization-wide terms are not included; read those with organization-settings.read-anonymization-blacklist.",
                 access: "read",
                 flags: [
                   {
@@ -38709,6 +38745,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "workspaces", "archive"],
                 capabilityId: "workspaces.archive",
+                description:
+                  "Archive a matter: it stops being writable and is cleared from members' last-visited matter. Reversible with workspaces.unarchive, and nothing is deleted. Refused while document processing is running in the matter or any timer is still running there.",
                 access: "write",
                 flags: [
                   {
@@ -38747,6 +38785,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "workspaces", "cell-retry"],
                 capabilityId: "workspaces.cell-retry",
+                description:
+                  "Re-run the AI extraction for one cell, meaning one document's value for one AI column, in a matter. Refused when the property is not AI-extracted, when the document is read-only, when the cell is locked, and while another workflow is already running in the matter.",
                 access: "write",
                 flags: [
                   {
@@ -38973,6 +39013,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "workspaces", "duplicate"],
                 capabilityId: "workspaces.duplicate",
+                description:
+                  "Copy a matter into a new one: its columns with their dependencies, views, members, party contacts, client, billing reference, colour, and lead. With includeContent true its documents, folders, tasks, and their stored files are copied as well; with false the new matter starts empty. The copy takes the organization's next matter number and its name gains a numeric suffix when earlier copies exist. Refused once the organization is at its matter limit.",
                 access: "write",
                 flags: [
                   {
@@ -39052,6 +39094,8 @@ export const generatedRouteMap: RouteNode = {
                   "read-justifications",
                 ],
                 capabilityId: "workspaces.read-justifications",
+                description:
+                  "Read the stored justifications for the current versions of up to one page of documents in a matter: per extracted cell, the explanation the model gave, the bounding boxes on the source file, and the file fields those boxes belong to.",
                 access: "read",
                 flags: [
                   {
@@ -39121,6 +39165,8 @@ export const generatedRouteMap: RouteNode = {
                   "read-workflow-status",
                 ],
                 capabilityId: "workspaces.read-workflow-status",
+                description:
+                  "Report whether an extraction workflow is running in a matter and describe its most recent run: scope, status, how many targets it covers and how many are done, error code, and start and finish times.",
                 access: "read",
                 flags: [
                   {
@@ -39163,6 +39209,8 @@ export const generatedRouteMap: RouteNode = {
                   "read-workflow-target-count",
                 ],
                 capabilityId: "workspaces.read-workflow-target-count",
+                description:
+                  "Count the documents an extraction workflow would process in a matter, optionally narrowed to a set of entity ids. Use it before workspaces.workflow-start to size the run.",
                 access: "read",
                 flags: [
                   {
@@ -39225,6 +39273,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "workspaces", "unarchive"],
                 capabilityId: "workspaces.unarchive",
+                description:
+                  "Return an archived matter to active so it is writable again. The counterpart of workspaces.archive: a matter that is not archived is left exactly as it is.",
                 access: "write",
                 flags: [
                   {
@@ -39263,6 +39313,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "workspaces", "update"],
                 capabilityId: "workspaces.update",
+                description:
+                  "Change a matter: its name, reference, billing reference, colour, or lead (who must already be a member of it). Only the fields you pass are written. Attaching a client to a personal matter is a one-way promotion and must go through promote, which takes the client contact and optionally the members to share it with at the same time; a bare clientId on a personal matter, and any attempt to re-promote a matter that already has a client, are refused.",
                 access: "write",
                 flags: [
                   {
@@ -39412,6 +39464,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "workspaces", "workflow-start"],
                 capabilityId: "workspaces.workflow-start",
+                description:
+                  "Start an extraction workflow in a matter, filling the AI columns of the documents that need it. Narrow it with entityIds and propertyIds, set the processing order with entityIdsOrder, and choose serviceTier standard or flex, where flex is the cheaper deferred tier and is refused when the configured provider does not offer it. Returns the run's status, including already-running when one is in flight.",
                 access: "write",
                 flags: [
                   {
@@ -39723,6 +39777,8 @@ export const generatedRouteMap: RouteNode = {
                   "workspace-members-add",
                 ],
                 capabilityId: "workspaces.workspace-members-add",
+                description:
+                  "Add one member of the organization to a matter, granting them access to it. A user who is already a member is a 409, and the call is refused once the matter holds its maximum number of members. Revoke access with workspaces.workspace-members-remove.",
                 access: "write",
                 flags: [
                   {

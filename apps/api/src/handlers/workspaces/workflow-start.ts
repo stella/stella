@@ -11,6 +11,13 @@ import { startWorkflow } from "@/api/lib/workflow-queue";
 import { isReportedWorkflowStartStatus } from "@/api/lib/workflow/workflow-start-disposition";
 
 const config = {
+  description:
+    "Start an extraction workflow in a matter, filling the AI columns of the " +
+    "documents that need it. Narrow it with entityIds and propertyIds, set " +
+    "the processing order with entityIdsOrder, and choose serviceTier " +
+    "standard or flex, where flex is the cheaper deferred tier and is " +
+    "refused when the configured provider does not offer it. Returns the " +
+    "run's status, including already-running when one is in flight.",
   permissions: { workspace: ["update"] },
   mcp: { type: "capability", reason: "workflow_orchestration" },
   body: t.Object({

@@ -8,6 +8,10 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { countWorkflowTargetEntities } from "@/api/lib/workflow-target-queries";
 
 const config = {
+  description:
+    "Count the documents an extraction workflow would process in a matter, " +
+    "optionally narrowed to a set of entity ids. Use it before " +
+    "workspaces.workflow-start to size the run.",
   permissions: { workspace: ["update"] },
   access: "read",
   mcp: { type: "capability", reason: "workflow_orchestration" },

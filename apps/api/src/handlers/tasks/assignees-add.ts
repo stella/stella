@@ -121,6 +121,12 @@ export const addAssigneeHandler = async function* ({
 
 const addAssignee = createSafeHandler(
   {
+    description:
+      "Assign one member of the matter to a task, in a role that defaults to " +
+      "assignee. Repeating an assignment updates that user's role instead of " +
+      "duplicating it. Refused when the user is not a member of this matter " +
+      "and when the task is read-only. Remove an assignment with " +
+      "tasks.assignees-remove.",
     permissions: { entity: ["update"] },
     mcp: { type: "covered", by: "save_task" },
     body: addAssigneeBodySchema,

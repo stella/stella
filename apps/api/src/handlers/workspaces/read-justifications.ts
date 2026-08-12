@@ -67,6 +67,11 @@ export const readJustificationsHandler = async ({
 };
 
 const config = {
+  description:
+    "Read the stored justifications for the current versions of up to one " +
+    "page of documents in a matter: per extracted cell, the explanation the " +
+    "model gave, the bounding boxes on the source file, and the file fields " +
+    "those boxes belong to.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "workflow_orchestration" },
   access: "read",
