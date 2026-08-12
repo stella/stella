@@ -606,6 +606,18 @@ export const DOCUMENT_REVIEW_LIMITS = {
   referencesMax: 3,
   topicsMax: 200,
 } as const;
+/**
+ * Where a playbook run's results land. Shared so the request body's accepted
+ * values and the control that sends them are one declaration.
+ *
+ * `columns` materializes the playbook's extraction and verdict columns onto the
+ * matter's table, at two columns per graded position. `none` materializes none:
+ * the same review runs per document and its findings are read through the
+ * review surface. Named rather than a boolean, because the next answer
+ * ("project only these positions") is a third projection, not a negation.
+ */
+export const PLAYBOOK_RUN_PROJECTIONS = ["columns", "none"] as const;
+export type PlaybookRunProjection = (typeof PLAYBOOK_RUN_PROJECTIONS)[number];
 export const CHAT_RICH_PART_LIMITS = {
   identifierMaxChars: 512,
   inlineMediaMaxChars: 4 * 1024 * 1024,

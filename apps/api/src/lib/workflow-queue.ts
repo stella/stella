@@ -26,6 +26,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { acquireCellLocks } from "@/api/lib/cell-lock";
+import { recordTableRunVerdicts } from "@/api/lib/document-review/table-run-findings";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import {
   connectionErrorFields,
@@ -1621,6 +1622,42 @@ const processOneBatch = async ({
         if (erroredVerdictIds.has(property.id)) {
           erroredProperties.push(property);
         }
+      }
+
+      // Commit the same verdicts as durable findings on this document's review
+      // run, if the playbook that started them created one. The cells above are
+      // the table's projection; the findings are the record that outlives the
+      // columns, so a failure here must not fail the extraction that produced
+      // them — it is reported and the batch continues.
+      const recorded = await Result.tryPromise({
+        try: async () =>
+          await recordTableRunVerdicts({
+            scopedDb,
+            organizationId,
+            workspaceId,
+            entityId,
+            entityVersionId,
+            graded: verdictOutput.gradedVerdicts,
+            unresolvedPropertyIds: [
+              ...verdictOutput.skippedPropertyIds,
+              ...verdictOutput.erroredPropertyIds,
+            ],
+          }),
+        catch: (cause) => cause,
+      });
+      if (Result.isError(recorded)) {
+        captureError(recorded.error, {
+          workspaceId,
+          entityId,
+          batchId: batch.id,
+          operation: "document_review_run.table_findings",
+        });
+      } else if (recorded.value.type === "failed") {
+        logger.warn("document_review_run.table_run_failed", {
+          entityId,
+          "error.code": recorded.value.errorCode,
+          workspaceId,
+        });
       }
     }
 

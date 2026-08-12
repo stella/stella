@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import type { DocumentReviewFindingRow } from "@/components/ai-suggestions/document-review-queries";
 import type { ReviewFindingDecisionRow } from "@/components/ai-suggestions/document-review-run.logic";
 import type {
   PlaybookFinding,
@@ -13,6 +14,14 @@ import {
   reviewItemDecision,
 } from "@/components/inspector/playbook-review-results.logic";
 import { toSafeId } from "@/lib/safe-id";
+
+/** The playbook finding exactly as a run persists it, taken from the run read
+ *  rather than restated. `PlaybookFinding` is hand-written, so this is what
+ *  binds the two together. */
+type PersistedPlaybookFinding = Extract<
+  DocumentReviewFindingRow["payload"],
+  { checkKind: "playbook" }
+>["finding"];
 
 const playbookTopic: ReviewTopic = {
   type: "playbook",
@@ -99,6 +108,43 @@ describe("review result composition", () => {
     });
 
     expect(results.map((result) => result.id)).toEqual([playbookTopic.topicId]);
+  });
+
+  test("renders a finding persisted by the files-table run path", () => {
+    // What the table path writes: a graded verdict with its rationale and the
+    // extracted value, and no citations — the workflow's batch extraction does
+    // not verify folio anchors, so there is nothing to cite and nothing to
+    // ground a fix on. Pinned with `satisfies` against the persisted payload,
+    // so a producer-side shape change fails here instead of rendering as
+    // `undefined` in the results list.
+    const persisted = {
+      positionId: playbookTopic.positionId,
+      issue: "Notice period",
+      severity: "high",
+      verdict: "deviation",
+      extracted: { value: "14 days", text: "14 days" },
+      rationale: "The period is shorter than the preferred position.",
+      citations: [],
+      fix: null,
+    } satisfies PersistedPlaybookFinding;
+
+    const results = buildReviewResultItems({
+      topics: [playbookTopic],
+      playbookFindings: [persisted],
+      referenceFindings: null,
+      decisions: [playbookRow],
+    });
+
+    expect(results).toEqual([
+      {
+        id: playbookTopic.topicId,
+        title: "Notice period",
+        playbook: persisted,
+        reference: null,
+        decisions: [playbookRow],
+      },
+    ]);
+    expect(results.every(isReviewResultActionable)).toBe(true);
   });
 
   test("fails when an engine returns a result outside confirmed topics", () => {

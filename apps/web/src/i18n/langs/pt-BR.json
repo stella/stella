@@ -4100,6 +4100,10 @@
       "autoRun": "Execução automática",
       "autoRunHint": "Detecta e executa automaticamente cada playbook que corresponde aos tipos dos documentos",
       "autoRunStarted": "Executando {count, plural, one {# playbook} other {# playbooks}}",
+      "projection": "Show results as",
+      "projectionColumns": "Table columns",
+      "projectionNone": "Review only",
+      "reviewStarted": "Reviewing {count, plural, one {# document} other {# documents}}",
       "run": "Executar playbook",
       "runFailed": "Falha ao executar o playbook",
       "runStarted": "Executando playbook ({count, plural, one {# coluna} other {# colunas}})"

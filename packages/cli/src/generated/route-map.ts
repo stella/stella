@@ -21044,7 +21044,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "playbooks", "delete"],
                 capabilityId: "playbooks.delete",
                 description:
-                  "Permanently delete a playbook definition from the organization, including every approved version and every matter column it materialized, with the answers and verdicts stored in those columns. There is no in-use check: a playbook that has been run across many matters is deleted along with its results.",
+                  "Permanently delete a playbook definition and every approved version of it from the organization. Columns the playbook materialized into matters are kept: they keep their extracted answers and verdicts and continue to work as ordinary columns, no longer owned by any playbook. Recorded review findings are kept as well. There is no in-use check.",
                 access: "write",
                 flags: [
                   {
@@ -21358,7 +21358,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "playbooks", "run"],
                 capabilityId: "playbooks.run",
                 description:
-                  "Run a review playbook over a matter's documents. Materializes the playbook's extraction and verdict columns onto the matter's table and starts the AI review; findings populate asynchronously. Pass workspaceId and playbookId. Returns the number of columns queued for review.",
+                  "Run a review playbook over a matter's documents. Every DOCX document is reviewed against the playbook's latest approved version, and each document's findings are recorded against its own pinned version. Pass workspaceId, playbookId, and the projection: \"columns\" also materializes the playbook's extraction and verdict columns onto the table, \"none\" materializes none. Findings populate asynchronously.",
                 access: "write",
                 flags: [
                   {
@@ -21380,6 +21380,18 @@ export const generatedRouteMap: RouteNode = {
                     part: "params",
                     partPath: "playbookId",
                   },
+                  {
+                    kind: "enum",
+                    enum: ["columns", "none"],
+                    repeatable: false,
+                    description:
+                      'Where the run shows up. "columns" materializes the playbook\'s extraction and verdict columns onto the matter\'s table, which costs two columns per graded position. "none" materializes no columns; the same review runs per document and its findings are read through the review surface.',
+                    flag: "--projection",
+                    prop: "projection",
+                    required: true,
+                    part: "body",
+                    partPath: "projection",
+                  },
                 ],
                 inputOnly: [],
                 paginated: false,
@@ -21389,6 +21401,19 @@ export const generatedRouteMap: RouteNode = {
                   type: "object",
                   additionalProperties: false,
                   properties: {
+                    body: {
+                      type: "object",
+                      required: ["projection"],
+                      properties: {
+                        projection: {
+                          default: "columns",
+                          description:
+                            'Where the run shows up. "columns" materializes the playbook\'s extraction and verdict columns onto the matter\'s table, which costs two columns per graded position. "none" materializes no columns; the same review runs per document and its findings are read through the review surface.',
+                          type: "string",
+                          enum: ["columns", "none"],
+                        },
+                      },
+                    },
                     params: {
                       type: "object",
                       required: ["workspaceId", "playbookId"],

@@ -10,6 +10,8 @@ import {
   DOCUMENT_REVIEW_OUTCOMES,
   DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES,
   DOCUMENT_REVIEW_RUN_ERROR_CODES,
+  DOCUMENT_REVIEW_RUN_EXECUTOR,
+  DOCUMENT_REVIEW_RUN_EXECUTORS,
   DOCUMENT_REVIEW_RUN_STATUSES,
 } from "@/api/lib/document-review/run-contract";
 import type {
@@ -43,6 +45,7 @@ const RUN_ACTIVE_STATUS_SQL_VALUES = quoted(
   DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES,
 );
 const RUN_ERROR_CODE_SQL_VALUES = quoted(DOCUMENT_REVIEW_RUN_ERROR_CODES);
+const RUN_EXECUTOR_SQL_VALUES = quoted(DOCUMENT_REVIEW_RUN_EXECUTORS);
 const BASIS_TYPE_SQL_VALUES = quoted(DOCUMENT_REVIEW_BASIS_TYPES);
 const CHECK_KIND_SQL_VALUES = quoted(DOCUMENT_REVIEW_CHECK_KINDS);
 const PLAYBOOK_OUTCOME_SQL_VALUES = quoted(DOCUMENT_REVIEW_OUTCOMES.playbook);
@@ -96,6 +99,13 @@ export const documentReviewRuns = p.pgTable(
     errorCode: p
       .varchar("error_code", { length: 64 })
       .$type<DocumentReviewRunErrorCode>(),
+    // Who carries this run to a terminal state. A document holds at most one
+    // active run, so the two producers must be told apart by name: neither may
+    // commit findings into a run the other owns.
+    executor: p
+      .text("executor", { enum: DOCUMENT_REVIEW_RUN_EXECUTORS })
+      .notNull()
+      .default(DOCUMENT_REVIEW_RUN_EXECUTOR.WORKER),
     // Coarse progress over the expected finding set (see `expectedFindings`).
     total: p.integer().notNull().default(0),
     completed: p.integer().notNull().default(0),
@@ -136,6 +146,10 @@ export const documentReviewRuns = p.pgTable(
     p.check(
       "document_review_runs_error_code_values_check",
       sql`${table.errorCode} IS NULL OR ${table.errorCode} IN (${RUN_ERROR_CODE_SQL_VALUES})`,
+    ),
+    p.check(
+      "document_review_runs_executor_values_check",
+      sql`${table.executor} IN (${RUN_EXECUTOR_SQL_VALUES})`,
     ),
     p.check(
       "document_review_runs_basis_type_check",

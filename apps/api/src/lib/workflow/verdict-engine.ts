@@ -75,6 +75,51 @@ export const askPresence = (
   }
 };
 
+/** The ASK value a finding records: the raw value and the prose rendering of
+ *  it. Null when the cell holds no answer (or a placeholder). */
+export type ExtractedAskValue = { value: string; text: string };
+
+// Flatten the ASK field into the value a finding carries. Exported so the
+// files-table path and the single-doc review record the same extracted value
+// for the same cell content.
+export const extractedFromContent = (
+  content: FieldContent | undefined,
+): ExtractedAskValue | null => {
+  if (!content) {
+    return null;
+  }
+  switch (content.type) {
+    case "text":
+      return { value: content.value, text: content.value };
+    case "single-select":
+    case "date": {
+      const value = content.value ?? "";
+      return { value, text: value };
+    }
+    case "multi-select": {
+      const value = content.value.join(", ");
+      return { value, text: value };
+    }
+    case "int": {
+      const value = String(content.value);
+      const text = content.currency
+        ? `${content.value} ${content.currency}`
+        : value;
+      return { value, text };
+    }
+    case "file":
+    case "clip":
+    case "error":
+    case "pending":
+    case "unsupported":
+      return null;
+    default: {
+      content satisfies never;
+      return null;
+    }
+  }
+};
+
 // Flatten the ASK field to the prose the positionMatch model compares against.
 export const askText = (content: FieldContent | undefined): string | null => {
   if (!content) {
@@ -381,9 +426,29 @@ const buildVerdictResult = (
   content: { type: "single-select", version: 1, value: tier },
 });
 
+/**
+ * One graded position, as the durable finding row needs it.
+ *
+ * The verdict cell keeps only the tier; a finding keeps the reasoning and the
+ * value it was reached from. Returning both from one grading pass is what lets
+ * the files-table path record a finding without grading anything twice.
+ */
+export type GradedVerdict = {
+  propertyId: SafeId<"property">;
+  verdict: VerdictTier;
+  /** Present only for a tier-match verdict; deterministic rules explain
+   *  themselves from the rule and the value. */
+  rationale: string | null;
+  matchedRef?: VerdictMatchedRef;
+  extracted: ExtractedAskValue | null;
+};
+
 export type VerdictBatchOutput = {
   aiResults: AIResult[];
   aiJustifications: AIJustification[];
+  /** Every verdict this batch actually decided, in grading order. Excludes the
+   *  skipped and errored ids below, which decided nothing. */
+  gradedVerdicts: GradedVerdict[];
   // Verdicts gated out by an unmet dependency condition: their field is left
   // untouched, matching the extraction path's skip semantics.
   skippedPropertyIds: SafeId<"property">[];
@@ -447,8 +512,26 @@ export const computeVerdictBatch = async ({
 
   const aiResults: AIResult[] = [];
   const aiJustifications: AIJustification[] = [];
+  const gradedVerdicts: GradedVerdict[] = [];
   const skippedPropertyIds: SafeId<"property">[] = [];
   const erroredPropertyIds: SafeId<"property">[] = [];
+
+  // Every decided verdict lands in both places at once: the cell the table
+  // renders, and the record a finding is written from.
+  const recordDeterministic = (
+    property: VerdictBatchProperty,
+    verdict: VerdictTier,
+  ): void => {
+    aiResults.push(buildVerdictResult(property.id, verdict));
+    gradedVerdicts.push({
+      propertyId: property.id,
+      verdict,
+      rationale: null,
+      extracted: extractedFromContent(
+        fieldContentByPropertyId.get(property.tool.askPropertyId),
+      ),
+    });
+  };
 
   type PositionMatchTask = {
     property: VerdictBatchProperty;
@@ -475,29 +558,25 @@ export const computeVerdictBatch = async ({
         skippedPropertyIds.push(property.id);
         break;
       case "presence":
-        aiResults.push(
-          buildVerdictResult(
-            property.id,
-            gradePresence(rule.expectation, askPresence(askContent)),
-          ),
+        recordDeterministic(
+          property,
+          gradePresence(rule.expectation, askPresence(askContent)),
         );
         break;
       case "propertyConstraint":
-        aiResults.push(
-          buildVerdictResult(
-            property.id,
-            gradePropertyConstraint(
-              rule.condition,
-              askContent,
-              fieldContentByPropertyId,
-            ),
+        recordDeterministic(
+          property,
+          gradePropertyConstraint(
+            rule.condition,
+            askContent,
+            fieldContentByPropertyId,
           ),
         );
         break;
       case "positionMatch": {
         const askValue = askText(askContent);
         if (askValue === null || askValue.trim().length === 0) {
-          aiResults.push(buildVerdictResult(property.id, "missing"));
+          recordDeterministic(property, "missing");
           break;
         }
         positionMatchTasks.push({ property, askValue });
@@ -548,6 +627,15 @@ export const computeVerdictBatch = async ({
           propertyId: property.id,
           content: { type: "single-select", version: 1, value: tier },
         });
+        gradedVerdicts.push({
+          propertyId: property.id,
+          verdict: tier,
+          rationale,
+          ...(matchedRef === undefined ? {} : { matchedRef }),
+          extracted: extractedFromContent(
+            fieldContentByPropertyId.get(property.tool.askPropertyId),
+          ),
+        });
         const content: JustificationContent = {
           version: 1,
           blocks: [
@@ -571,6 +659,7 @@ export const computeVerdictBatch = async ({
   return {
     aiResults,
     aiJustifications,
+    gradedVerdicts,
     skippedPropertyIds,
     erroredPropertyIds,
   };

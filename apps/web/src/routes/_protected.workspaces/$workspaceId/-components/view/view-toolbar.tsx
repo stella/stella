@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import type { PlaybookRunProjection } from "@stll/api-contract";
 import { Button } from "@stll/ui/components/button";
 import {
   Menu,
@@ -28,6 +29,8 @@ import {
   MenuGroupLabel,
   MenuItem,
   MenuPopup,
+  MenuRadioGroup,
+  MenuRadioItem,
   MenuSeparator,
   MenuTrigger,
 } from "@stll/ui/components/menu";
@@ -591,6 +594,11 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
     null,
   );
   const [isAutoRunning, setIsAutoRunning] = useState(false);
+  // Where a run's results land. Sent explicitly on every request: the endpoint
+  // takes a named projection, and the client never leaves the choice to a
+  // server-side default.
+  const [projection, setProjection] =
+    useState<PlaybookRunProjection>("columns");
 
   // Deferred until the menu opens: the org playbook list isn't needed to render
   // the toolbar, and useQuery (not useSuspenseQuery) keeps a cache miss from
@@ -666,7 +674,7 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
       const { data, error } = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .playbooks({ playbookId: toSafeId<"playbookDefinition">(playbookId) })
-        .run.post({});
+        .run.post({ projection });
       return { data, error };
     });
     setRunningPlaybookId(null);
@@ -709,9 +717,14 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
     });
     stellaToast.add({
       type: "success",
-      title: t("workspaces.playbooks.runStarted", {
-        count: response.data.runPropertyCount,
-      }),
+      title:
+        projection === "none"
+          ? t("workspaces.playbooks.reviewStarted", {
+              count: response.data.documentRunCount,
+            })
+          : t("workspaces.playbooks.runStarted", {
+              count: response.data.runPropertyCount,
+            }),
     });
   };
 
@@ -752,6 +765,27 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
             </span>
           </span>
         </MenuItem>
+        <MenuSeparator />
+        {/* Applies to the individual playbooks below; auto-run always
+            materializes columns. */}
+        <MenuGroup>
+          <MenuGroupLabel>
+            {t("workspaces.playbooks.projection")}
+          </MenuGroupLabel>
+          <MenuRadioGroup
+            onValueChange={(value) => {
+              setProjection(value === "none" ? "none" : "columns");
+            }}
+            value={projection}
+          >
+            <MenuRadioItem closeOnClick={false} value="columns">
+              {t("workspaces.playbooks.projectionColumns")}
+            </MenuRadioItem>
+            <MenuRadioItem closeOnClick={false} value="none">
+              {t("workspaces.playbooks.projectionNone")}
+            </MenuRadioItem>
+          </MenuRadioGroup>
+        </MenuGroup>
         <MenuSeparator />
         {isLoading && (
           <MenuItem disabled>{t("knowledge.playbooks.loading")}</MenuItem>

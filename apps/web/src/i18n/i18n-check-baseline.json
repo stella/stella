@@ -1020,6 +1020,62 @@
     "workspaces.parties.personalLabel": [
       "es"
     ],
+    "workspaces.playbooks.projection": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "workspaces.playbooks.projectionColumns": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "workspaces.playbooks.projectionNone": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "workspaces.playbooks.reviewStarted": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
     "workspaces.properties.chipSingle": [
       "pl"
     ],

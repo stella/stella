@@ -4849,8 +4849,10 @@ export const seedPlaybooks = async (
 
   // onConflictDoNothing would keep a stale definition, so reruns must delete the
   // prior seed playbook first to pick up position/scope changes. The
-  // properties.playbook_definition_id FK cascades, clearing any columns it
-  // materialized into workspaces.
+  // properties.playbook_definition_id FK nulls rather than cascades, so columns
+  // the previous seed materialized are orphaned, not dropped; the position
+  // sourceIds are deterministic, so the next run re-adopts them by
+  // playbook_source_id.
   await rootDb
     .delete(playbookDefinitions)
     .where(eq(playbookDefinitions.id, definitionId));
