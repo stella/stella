@@ -16,6 +16,12 @@ type PlaybookDetailData = Exclude<
 export type PlaybookPositionsValue = PlaybookDetailData["positions"];
 export type Position = PlaybookPositionsValue["items"][number];
 
+// Scope facets, also inferred rather than hand-listed: a new perspective or
+// trigger added to the backend schema must not need a matching edit here.
+export type PlaybookScope = NonNullable<PlaybookDetailData["scope"]>;
+export type PlaybookPerspective = NonNullable<PlaybookScope["perspective"]>;
+export type PlaybookTrigger = NonNullable<PlaybookScope["trigger"]>;
+
 // Advisory approval status (v1) — draft while unreviewed, approved once
 // snapshotted by `POST /playbooks/:playbookId/approve`.
 export type PlaybookApprovalStatus = PlaybookDetailData["status"];

@@ -1,6 +1,9 @@
 import { TaggedError } from "better-result";
 
-import { normalizeApiError } from "@stll/api-contract";
+import {
+  API_VERSION_CONFLICT_ERROR_CODE,
+  normalizeApiError,
+} from "@stll/api-contract";
 import type { ApiErrorInput } from "@stll/api-contract";
 
 import type { TranslationKey } from "@/i18n/types";
@@ -93,6 +96,7 @@ const CODE_ERROR_KEYS = {
   third_party_boundary_refusal: "errors.apiCodes.thirdPartyBoundaryRefusal",
   usage_limit_exceeded: "errors.apiCodes.usageLimitExceeded",
   validation: STATUS_ERROR_KEYS.validation,
+  [API_VERSION_CONFLICT_ERROR_CODE]: "errors.apiCodes.versionConflict",
 } as const satisfies Record<string, TranslationKey>;
 
 const USAGE_REJECTION_REASON_KEYS = {

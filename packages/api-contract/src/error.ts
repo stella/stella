@@ -1,5 +1,12 @@
 export const API_VALIDATION_ERROR_CODE = "validation" as const;
 
+/**
+ * Machine-readable `code` on the 409 an optimistic-concurrency check returns
+ * when the record moved under the caller. Shared so the handler that emits it
+ * and the client that branches on it cannot drift apart.
+ */
+export const API_VERSION_CONFLICT_ERROR_CODE = "version_conflict" as const;
+
 export type ApiValidationErrorValue = {
   expected?: string | undefined;
   found?: unknown;

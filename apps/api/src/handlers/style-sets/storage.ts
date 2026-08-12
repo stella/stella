@@ -10,6 +10,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { assertUnchangedSince } from "@/api/lib/optimistic-concurrency";
 import { getS3 } from "@/api/lib/s3";
 import { enqueueStyleSetPackageCleanup } from "@/api/lib/style-set-package-cleanup-queue";
 import {
@@ -261,11 +262,13 @@ export const replaceStoredStyleSet = async ({
           if (locked.cleanupS3Key) {
             return { type: "cleanup-pending" as const };
           }
-          if (
-            expectedUpdatedAt &&
-            locked.updatedAt.getTime() !== new Date(expectedUpdatedAt).getTime()
-          ) {
-            return { type: "version-conflict" as const };
+          const conflict = assertUnchangedSince({
+            storedUpdatedAt: locked.updatedAt,
+            expectedUpdatedAt,
+            resource: "Style set",
+          });
+          if (conflict) {
+            return { type: "version-conflict" as const, error: conflict };
           }
 
           const replacementValues =
@@ -329,12 +332,7 @@ export const replaceStoredStyleSet = async ({
         );
       }
       if (replaced.type === "version-conflict") {
-        return Result.err(
-          new HandlerError({
-            status: 409,
-            message: "Style set changed while it was being edited",
-          }),
-        );
+        return Result.err(replaced.error);
       }
 
       persisted = true;

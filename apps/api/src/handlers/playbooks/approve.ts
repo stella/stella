@@ -5,18 +5,23 @@ import {
   playbookDefinitions,
   playbookDefinitionVersions,
 } from "@/api/db/schema";
-import { playbookDefinitionParamsSchema } from "@/api/handlers/playbooks/schema";
+import {
+  approvePlaybookDefinitionBodySchema,
+  playbookDefinitionParamsSchema,
+} from "@/api/handlers/playbooks/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { assertUnchangedSince } from "@/api/lib/optimistic-concurrency";
 
 const config = {
   permissions: { playbook: ["approve"] },
   access: "write",
   mcp: { type: "capability", reason: "knowledge_library_admin" },
   params: playbookDefinitionParamsSchema,
+  body: approvePlaybookDefinitionBodySchema,
 } satisfies HandlerConfig;
 
 /**
@@ -25,12 +30,14 @@ const config = {
  * CURRENT name/description/scope/positions into an immutable
  * `playbook_definition_versions` row at `max(version) + 1`, then flip the
  * definition to `status: "approved"` with `approvedAt`/`approvedBy` set.
+ * The editor's expected update timestamp is checked under the same row lock,
+ * so approval can never snapshot a definition that changed after it loaded.
  * Re-approving an already-approved playbook is allowed and simply appends
  * another snapshot (the version number always advances).
  */
 const approvePlaybookDefinition = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, user, params, recordAuditEvent }) {
+  async function* ({ safeDb, session, user, params, body, recordAuditEvent }) {
     const organizationId = session.activeOrganizationId;
     const playbookId = params.playbookId;
 
@@ -47,6 +54,7 @@ const approvePlaybookDefinition = createSafeRootHandler(
             scope: playbookDefinitions.scope,
             positions: playbookDefinitions.positions,
             status: playbookDefinitions.status,
+            updatedAt: playbookDefinitions.updatedAt,
           })
           .from(playbookDefinitions)
           .where(
@@ -58,7 +66,16 @@ const approvePlaybookDefinition = createSafeRootHandler(
           .for("update");
 
         if (!locked) {
-          return { ok: false as const };
+          return { type: "not-found" as const };
+        }
+
+        const conflict = assertUnchangedSince({
+          storedUpdatedAt: locked.updatedAt,
+          expectedUpdatedAt: body.expectedUpdatedAt,
+          resource: "Playbook",
+        });
+        if (conflict) {
+          return { type: "version-conflict" as const, error: conflict };
         }
 
         const [latestVersion] = await tx
@@ -110,21 +127,36 @@ const approvePlaybookDefinition = createSafeRootHandler(
           },
         });
 
-        return { ok: true as const, version: nextVersion, approvedAt };
+        return {
+          type: "approved" as const,
+          version: nextVersion,
+          approvedAt,
+        };
       }),
     );
 
-    if (!approved.ok) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Playbook not found" }),
-      );
+    switch (approved.type) {
+      case "approved":
+        return Result.ok({
+          status: "approved" as const,
+          approvedAt: approved.approvedAt.toISOString(),
+          // The approval also bumps `updatedAt`, so hand the new value back
+          // for the caller's next concurrency token instead of leaving it to
+          // infer one from `approvedAt`.
+          updatedAt: approved.approvedAt.toISOString(),
+          version: approved.version,
+        });
+      case "not-found":
+        return Result.err(
+          new HandlerError({ status: 404, message: "Playbook not found" }),
+        );
+      case "version-conflict":
+        return Result.err(approved.error);
+      default: {
+        const exhaustive: never = approved;
+        return exhaustive;
+      }
     }
-
-    return Result.ok({
-      status: "approved" as const,
-      approvedAt: approved.approvedAt.toISOString(),
-      version: approved.version,
-    });
   },
 );
 

@@ -248,12 +248,12 @@ function RouteComponent() {
           template={view.template}
         />
         <LeaveConfirmDialog
-          cancelLabel={t("templates.goBackToEditing")}
-          description={t("templates.unsavedLeaveConfirm")}
+          cancelLabel={t("common.goBackToEditing")}
+          description={t("common.unsavedLeaveConfirm")}
           onOpenChange={setConfirmLeave}
           open={confirmLeave}
           primary={{
-            label: t("templates.saveAndLeave"),
+            label: t("common.saveAndLeave"),
             onClick: () => {
               // Await the save before exiting: exitDetail() unmounts the Studio
               // page, whose cleanup resets the shared store. Leaving only after

@@ -21,6 +21,7 @@ import type {
   ApplyActiveDocxEditsInput,
   ApplyActiveDocxEditsOutput,
 } from "@/features/chat/queries";
+import { stableStringify } from "@/lib/stable-stringify";
 
 /** Chars of surrounding text recorded so suggestions survive document edits
  *  (the host re-anchors stale ranges via contextBefore/After). */
@@ -382,25 +383,6 @@ const isStreamedOperation = (value: unknown): value is DocxEditOperation => {
  */
 export const operationFingerprint = (operation: DocxEditOperation): string =>
   stableStringify(operation);
-
-const stableStringify = (value: unknown): string => {
-  if (value === undefined) {
-    return "undefined";
-  }
-  if (Array.isArray(value)) {
-    return `[${value.map((item) => stableStringify(item)).join(",")}]`;
-  }
-  if (typeof value === "object" && value !== null) {
-    const entries = Object.keys(value)
-      .toSorted()
-      .map(
-        (key) =>
-          `${JSON.stringify(key)}:${stableStringify(Reflect.get(value, key))}`,
-      );
-    return `{${entries.join(",")}}`;
-  }
-  return JSON.stringify(value);
-};
 
 /**
  * Field metadata recovered for a replacement whose `replace` text is a

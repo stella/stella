@@ -18,6 +18,7 @@ import updatePlaybookDefinition from "@/api/handlers/playbooks/update";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { VERSION_CONFLICT_ERROR_CODE } from "@/api/lib/optimistic-concurrency";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -97,6 +98,19 @@ const getStatusCode = (result: unknown): number | null => {
   return null;
 };
 
+// The error branch is an Elysia status response: the numeric HTTP status on
+// `code`, the `SafeErrorBody` (whose own `code` is the machine-readable
+// identifier clients branch on) on `response`.
+const getErrorCode = (result: unknown): string | null => {
+  if (!isRecord(result)) {
+    return null;
+  }
+  const body = result["response"];
+  return isRecord(body) && typeof body["code"] === "string"
+    ? body["code"]
+    : null;
+};
+
 const createPlaybook = async (
   context: OrgContext,
   name: string,
@@ -116,6 +130,7 @@ type PlaybookRow = {
   approvedAt: Date | null;
   approvedBy: string | null;
   name: string;
+  updatedAt: Date;
 };
 
 const readPlaybook = async (
@@ -128,10 +143,40 @@ const readPlaybook = async (
         approvedAt: playbookDefinitions.approvedAt,
         approvedBy: playbookDefinitions.approvedBy,
         name: playbookDefinitions.name,
+        updatedAt: playbookDefinitions.updatedAt,
       })
       .from(playbookDefinitions)
       .where(eq(playbookDefinitions.id, playbookId))
   ).at(0);
+
+const readStoredPlaybook = async (
+  playbookId: SafeId<"playbookDefinition">,
+): Promise<PlaybookRow> => {
+  const playbook = await readPlaybook(playbookId);
+  if (!playbook) {
+    throw new Error("Expected a stored playbook");
+  }
+  return playbook;
+};
+
+/** The concurrency token a payload hands back for the caller's next write. */
+const expectUpdatedAt = (result: unknown): string => {
+  if (!isRecord(result) || typeof result["updatedAt"] !== "string") {
+    throw new Error("Expected a payload carrying { updatedAt }");
+  }
+  return result["updatedAt"];
+};
+
+const approvePlaybook = async (
+  context: OrgContext,
+  playbookId: SafeId<"playbookDefinition">,
+): Promise<unknown> => {
+  const playbook = await readStoredPlaybook(playbookId);
+  return runHandler(approvePlaybookDefinition, context, {
+    params: { playbookId },
+    body: { expectedUpdatedAt: playbook.updatedAt.toISOString() },
+  });
+};
 
 beforeAll(async () => {
   testDb = await getTestDb();
@@ -144,13 +189,35 @@ afterAll(async () => {
 });
 
 describe("POST /playbooks/:playbookId/approve", () => {
+  test("rejects approval when the definition changed after the editor loaded", async () => {
+    const context = createOrgContext(ids.orgA, ids.userA1);
+    const playbookId = await createPlaybook(context, "Stale approval target");
+    const loaded = await readStoredPlaybook(playbookId);
+
+    const updateResult = await runHandler(updatePlaybookDefinition, context, {
+      params: { playbookId },
+      body: {
+        name: "Changed in another editor",
+        positions: { version: 2, items: [] },
+      },
+    });
+    expect(getStatusCode(updateResult)).toBeNull();
+
+    const staleApproval = await runHandler(approvePlaybookDefinition, context, {
+      params: { playbookId },
+      body: { expectedUpdatedAt: loaded.updatedAt.toISOString() },
+    });
+
+    expect(getStatusCode(staleApproval)).toBe(409);
+    expect(getErrorCode(staleApproval)).toBe(VERSION_CONFLICT_ERROR_CODE);
+    expect((await readPlaybook(playbookId))?.status).toBe("draft");
+  });
+
   test("snapshots version 1, then version 2 on re-approve; flips status to approved", async () => {
     const context = createOrgContext(ids.orgA, ids.userA1);
     const playbookId = await createPlaybook(context, "Approve me");
 
-    const firstApproval = await runHandler(approvePlaybookDefinition, context, {
-      params: { playbookId },
-    });
+    const firstApproval = await approvePlaybook(context, playbookId);
     expect(getStatusCode(firstApproval)).toBeNull();
     if (!isRecord(firstApproval)) {
       throw new Error("Expected an approve payload");
@@ -159,16 +226,17 @@ describe("POST /playbooks/:playbookId/approve", () => {
     expect(firstApproval["version"]).toBe(1);
     expect(typeof firstApproval["approvedAt"]).toBe("string");
 
-    const afterFirst = await readPlaybook(playbookId);
-    expect(afterFirst?.status).toBe("approved");
-    expect(afterFirst?.approvedAt).not.toBeNull();
-    expect(afterFirst?.approvedBy).toBe(ids.userA1);
-
-    const secondApproval = await runHandler(
-      approvePlaybookDefinition,
-      context,
-      { params: { playbookId } },
+    const afterFirst = await readStoredPlaybook(playbookId);
+    expect(afterFirst.status).toBe("approved");
+    expect(afterFirst.approvedAt).not.toBeNull();
+    expect(afterFirst.approvedBy).toBe(ids.userA1);
+    // The response's `updatedAt` is the caller's next concurrency token, so it
+    // has to match the row rather than merely echo `approvedAt`.
+    expect(expectUpdatedAt(firstApproval)).toBe(
+      afterFirst.updatedAt.toISOString(),
     );
+
+    const secondApproval = await approvePlaybook(context, playbookId);
     expect(getStatusCode(secondApproval)).toBeNull();
     if (!isRecord(secondApproval)) {
       throw new Error("Expected a second approve payload");
@@ -182,8 +250,92 @@ describe("POST /playbooks/:playbookId/approve", () => {
       params: {
         playbookId: toSafeId<"playbookDefinition">(Bun.randomUUIDv7()),
       },
+      body: { expectedUpdatedAt: new Date(0).toISOString() },
     });
     expect(getStatusCode(result)).toBe(404);
+  });
+});
+
+describe("PUT /playbooks/:playbookId concurrency", () => {
+  test("rejects a save whose expectedUpdatedAt is behind the stored row", async () => {
+    const context = createOrgContext(ids.orgA, ids.userA1);
+    const playbookId = await createPlaybook(context, "Stale overwrite target");
+    const loaded = await readStoredPlaybook(playbookId);
+
+    const winner = await runHandler(updatePlaybookDefinition, context, {
+      params: { playbookId },
+      body: {
+        name: "Saved by the other editor",
+        positions: { version: 2, items: [] },
+        expectedUpdatedAt: loaded.updatedAt.toISOString(),
+      },
+    });
+    expect(getStatusCode(winner)).toBeNull();
+
+    const loser = await runHandler(updatePlaybookDefinition, context, {
+      params: { playbookId },
+      body: {
+        name: "Stale overwrite",
+        positions: { version: 2, items: [] },
+        expectedUpdatedAt: loaded.updatedAt.toISOString(),
+      },
+    });
+
+    expect(getStatusCode(loser)).toBe(409);
+    expect(getErrorCode(loser)).toBe(VERSION_CONFLICT_ERROR_CODE);
+    // The rejected save left no trace: the winner's name still stands.
+    expect((await readPlaybook(playbookId))?.name).toBe(
+      "Saved by the other editor",
+    );
+  });
+
+  test("returns the fresh updatedAt so the next save still guards", async () => {
+    const context = createOrgContext(ids.orgA, ids.userA1);
+    const playbookId = await createPlaybook(context, "Resync target");
+    const loaded = await readStoredPlaybook(playbookId);
+
+    const first = await runHandler(updatePlaybookDefinition, context, {
+      params: { playbookId },
+      body: {
+        name: "First save",
+        positions: { version: 2, items: [] },
+        expectedUpdatedAt: loaded.updatedAt.toISOString(),
+      },
+    });
+    expect(getStatusCode(first)).toBeNull();
+    const firstUpdatedAt = expectUpdatedAt(first);
+    expect(firstUpdatedAt).toBe(
+      (await readStoredPlaybook(playbookId)).updatedAt.toISOString(),
+    );
+
+    const second = await runHandler(updatePlaybookDefinition, context, {
+      params: { playbookId },
+      body: {
+        name: "Second save",
+        positions: { version: 2, items: [] },
+        expectedUpdatedAt: firstUpdatedAt,
+      },
+    });
+    expect(getStatusCode(second)).toBeNull();
+    expect((await readStoredPlaybook(playbookId)).name).toBe("Second save");
+  });
+
+  test("a caller that sends no expectedUpdatedAt still saves", async () => {
+    const context = createOrgContext(ids.orgA, ids.userA1);
+    const playbookId = await createPlaybook(context, "Unguarded caller");
+
+    const result = await runHandler(updatePlaybookDefinition, context, {
+      params: { playbookId },
+      body: {
+        name: "Written without a token",
+        positions: { version: 2, items: [] },
+      },
+    });
+
+    expect(getStatusCode(result)).toBeNull();
+    expect((await readPlaybook(playbookId))?.name).toBe(
+      "Written without a token",
+    );
   });
 });
 
@@ -192,9 +344,7 @@ describe("update after approval", () => {
     const context = createOrgContext(ids.orgA, ids.userA1);
     const playbookId = await createPlaybook(context, "Revert on edit");
 
-    await runHandler(approvePlaybookDefinition, context, {
-      params: { playbookId },
-    });
+    await approvePlaybook(context, playbookId);
     expect((await readPlaybook(playbookId))?.status).toBe("approved");
 
     const updateResult = await runHandler(updatePlaybookDefinition, context, {
@@ -217,9 +367,7 @@ describe("POST /playbooks/:playbookId/versions/:version/restore", () => {
     const context = createOrgContext(ids.orgA, ids.userA1);
     const playbookId = await createPlaybook(context, "Restore original");
 
-    await runHandler(approvePlaybookDefinition, context, {
-      params: { playbookId },
-    }); // version 1, snapshot name = "Restore original"
+    await approvePlaybook(context, playbookId); // version 1, snapshot name = "Restore original"
 
     await runHandler(updatePlaybookDefinition, context, {
       params: { playbookId },
@@ -233,9 +381,7 @@ describe("POST /playbooks/:playbookId/versions/:version/restore", () => {
     );
     expect((await readPlaybook(playbookId))?.status).toBe("draft");
 
-    await runHandler(approvePlaybookDefinition, context, {
-      params: { playbookId },
-    }); // version 2, snapshot name = "Mutated after approval"
+    await approvePlaybook(context, playbookId); // version 2, snapshot name = "Mutated after approval"
     expect((await readPlaybook(playbookId))?.status).toBe("approved");
 
     const restoreResult = await runHandler(restorePlaybookVersion, context, {
@@ -268,15 +414,9 @@ describe("GET /playbooks/:playbookId/versions", () => {
     const context = createOrgContext(ids.orgA, ids.userA1);
     const playbookId = await createPlaybook(context, "List versions");
 
-    await runHandler(approvePlaybookDefinition, context, {
-      params: { playbookId },
-    });
-    await runHandler(approvePlaybookDefinition, context, {
-      params: { playbookId },
-    });
-    await runHandler(approvePlaybookDefinition, context, {
-      params: { playbookId },
-    });
+    await approvePlaybook(context, playbookId);
+    await approvePlaybook(context, playbookId);
+    await approvePlaybook(context, playbookId);
 
     const result = await runHandler(listPlaybookVersions, context, {
       params: { playbookId },
@@ -302,9 +442,7 @@ describe("cross-org isolation", () => {
     const orgB = createOrgContext(ids.orgB, ids.userB1);
     const playbookId = await createPlaybook(orgA, "Isolation approve target");
 
-    const result = await runHandler(approvePlaybookDefinition, orgB, {
-      params: { playbookId },
-    });
+    const result = await approvePlaybook(orgB, playbookId);
     expect(getStatusCode(result)).toBe(404);
     expect((await readPlaybook(playbookId))?.status).toBe("draft");
   });
@@ -313,9 +451,7 @@ describe("cross-org isolation", () => {
     const orgA = createOrgContext(ids.orgA, ids.userA1);
     const orgB = createOrgContext(ids.orgB, ids.userB1);
     const playbookId = await createPlaybook(orgA, "Isolation list target");
-    await runHandler(approvePlaybookDefinition, orgA, {
-      params: { playbookId },
-    });
+    await approvePlaybook(orgA, playbookId);
 
     const result = await runHandler(listPlaybookVersions, orgB, {
       params: { playbookId },
@@ -328,9 +464,7 @@ describe("cross-org isolation", () => {
     const orgA = createOrgContext(ids.orgA, ids.userA1);
     const orgB = createOrgContext(ids.orgB, ids.userB1);
     const playbookId = await createPlaybook(orgA, "Isolation restore target");
-    await runHandler(approvePlaybookDefinition, orgA, {
-      params: { playbookId },
-    });
+    await approvePlaybook(orgA, playbookId);
 
     const result = await runHandler(restorePlaybookVersion, orgB, {
       params: { playbookId, version: 1 },

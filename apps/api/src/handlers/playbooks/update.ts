@@ -4,20 +4,21 @@ import { and, eq } from "drizzle-orm";
 import { playbookDefinitions } from "@/api/db/schema";
 import { deriveAutoAsks } from "@/api/handlers/playbooks/derive-ask";
 import {
-  playbookDefinitionBodySchema,
   playbookDefinitionParamsSchema,
+  updatePlaybookDefinitionBodySchema,
 } from "@/api/handlers/playbooks/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { assertUnchangedSince } from "@/api/lib/optimistic-concurrency";
 import { assertPositionsValid } from "@/api/lib/workflow/playbook-positions-validation";
 
 const config = {
   permissions: { playbook: ["update"] },
   mcp: { type: "capability", reason: "knowledge_library_admin" },
   params: playbookDefinitionParamsSchema,
-  body: playbookDefinitionBodySchema,
+  body: updatePlaybookDefinitionBodySchema,
 } satisfies HandlerConfig;
 
 const updatePlaybookDefinition = createSafeRootHandler(
@@ -76,6 +77,33 @@ const updatePlaybookDefinition = createSafeRootHandler(
 
     const updated = yield* Result.await(
       safeDb(async (tx) => {
+        // Lock before comparing `updatedAt`: a check outside the row lock
+        // races the very overwrite it is meant to reject.
+        const [locked] = await tx
+          .select({ updatedAt: playbookDefinitions.updatedAt })
+          .from(playbookDefinitions)
+          .where(
+            and(
+              eq(playbookDefinitions.id, params.playbookId),
+              eq(playbookDefinitions.organizationId, organizationId),
+            ),
+          )
+          .for("update");
+
+        if (!locked) {
+          return { type: "not-found" as const };
+        }
+
+        const conflict = assertUnchangedSince({
+          storedUpdatedAt: locked.updatedAt,
+          expectedUpdatedAt: body.expectedUpdatedAt,
+          resource: "Playbook",
+        });
+        if (conflict) {
+          return { type: "version-conflict" as const, error: conflict };
+        }
+
+        const updatedAt = new Date();
         const [row] = await tx
           .update(playbookDefinitions)
           .set({
@@ -89,7 +117,7 @@ const updatePlaybookDefinition = createSafeRootHandler(
             status: "draft",
             approvedAt: null,
             approvedBy: null,
-            updatedAt: new Date(),
+            updatedAt,
           })
           .where(
             and(
@@ -97,10 +125,10 @@ const updatePlaybookDefinition = createSafeRootHandler(
               eq(playbookDefinitions.organizationId, organizationId),
             ),
           )
-          .returning({ id: playbookDefinitions.id });
+          .returning({ updatedAt: playbookDefinitions.updatedAt });
 
         if (!row) {
-          return null;
+          return { type: "not-found" as const };
         }
 
         await recordAuditEvent(tx, {
@@ -115,17 +143,26 @@ const updatePlaybookDefinition = createSafeRootHandler(
           },
         });
 
-        return row;
+        return { type: "updated" as const, updatedAt: row.updatedAt };
       }),
     );
 
-    if (!updated) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Playbook not found" }),
-      );
+    switch (updated.type) {
+      case "updated":
+        // Handed back so the editor reseeds its concurrency token in place,
+        // without a refetch, and the next save still guards.
+        return Result.ok({ updatedAt: updated.updatedAt.toISOString() });
+      case "not-found":
+        return Result.err(
+          new HandlerError({ status: 404, message: "Playbook not found" }),
+        );
+      case "version-conflict":
+        return Result.err(updated.error);
+      default: {
+        const exhaustive: never = updated;
+        return exhaustive;
+      }
     }
-
-    return Result.ok({});
   },
 );
 

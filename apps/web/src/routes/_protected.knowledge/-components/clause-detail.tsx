@@ -621,7 +621,7 @@ const ClauseHeader = ({
       )}
 
       <LeaveConfirmDialog
-        cancelLabel={t("templates.goBackToEditing")}
+        cancelLabel={t("common.goBackToEditing")}
         description={t("clauses.unsavedVersionLeaveConfirm")}
         onOpenChange={setConfirmLeave}
         open={confirmLeave}
