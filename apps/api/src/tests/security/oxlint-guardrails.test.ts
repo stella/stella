@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import * as v from "valibot";
 
 import {
   readModuleExports,
@@ -573,12 +574,34 @@ describe("custom oxlint guardrails", () => {
     // opposite direction (a factory declaring keys the real module does NOT
     // export) is guarded in src/tests/module-mock-factories.test.ts.
     //
-    // Committed baseline, may only DECREASE: fix mocks and lower it. Raising it
-    // means a new mock started dropping exports, and needs the same
-    // justification as the other committed baselines in this repo.
-    const EXPORT_DROPPING_MOCK_BASELINE = 55;
+    // Keyed on offender IDENTITY, not on a count: the committed ledger
+    // (src/tests/export-dropping-mock-ledger.json) holds one
+    // "<test file>::<mocked module>" line per mock that drops exports today.
+    //
+    //   1. a dropping mock with no ledger line fails — new partial mocks are
+    //      forbidden, which is the whole property;
+    //   2. a ledger line whose mock no longer drops anything (or whose test
+    //      file or mock call is gone) fails as stale, so a fix deletes its line
+    //      in the same change and the list can only shrink;
+    //   3. a listed mock that starts dropping MORE names does not fail. That
+    //      happens when the mocked module grows an export, which the mock's
+    //      author did not do; a count fails whoever adds the export, which is
+    //      the wrong change to block.
+    //
+    // Clear a line by spreading the real module and overriding only what the
+    // test needs — but only where the module is import-safe. `@/api/db/root`
+    // instantiates the client at import time, so a factory that imports it
+    // would connect; its lines are permanent residents.
+    //
+    // The ledger was seeded from this scan and is hand-edited from here on:
+    // there is deliberately no regeneration switch, because the only sanctioned
+    // edit is deleting a line the guard has already named.
+    const LEDGER_FILE = "apps/api/src/tests/export-dropping-mock-ledger.json";
+    const SPREAD_IDIOM =
+      "mock.module(SPEC, async () => ({ ...(await import(SPEC)), overridden: ... })) — spreading requires an import-safe module";
     const root = path.join(import.meta.dir, "../../../../..");
     const apiRoot = path.join(root, "apps/api");
+    const ledgerPath = path.join(root, LEDGER_FILE);
     const exportsByModuleFile = new Map<string, Set<string>>();
     const realExportsOf = (moduleFile: string): Set<string> => {
       const cached = exportsByModuleFile.get(moduleFile);
@@ -590,48 +613,104 @@ describe("custom oxlint guardrails", () => {
       return moduleExports;
     };
 
-    const offenders = [
+    // Dropped names are unioned per (test file, module) pair rather than kept
+    // per call site: the pair is the identity the ledger is keyed on, and a
+    // line number would churn on every edit above the mock.
+    const droppedByPair = new Map<string, Set<string>>();
+    let readableFactories = 0;
+    for (const relative of [
       ...new Bun.Glob("src/**/*.test.{ts,tsx}").scanSync({
         cwd: apiRoot,
         onlyFiles: true,
       }),
-    ]
-      .toSorted()
-      .flatMap((relative) => {
-        const source = readFileSync(path.join(apiRoot, relative), "utf-8");
-        return readModuleMockFactories(source, relative).flatMap((factory) => {
-          const moduleFile = resolveModuleFile(factory.moduleId, apiRoot);
-          // Only this package's modules can be read from source; an npm or
-          // workspace target has no statically readable export list.
-          if (moduleFile === undefined) {
-            return [];
-          }
-          if (
-            factory.spreadsAnother &&
-            source.includes(`await import("${factory.specifier}")`)
-          ) {
-            return [];
-          }
-          const declaredKeys = new Set(factory.declaredKeys);
-          const dropped = [...realExportsOf(moduleFile)].filter(
-            (name) => !declaredKeys.has(name),
-          );
-          if (dropped.length === 0) {
-            return [];
-          }
-          return [
-            `${factory.filePath}:${factory.line} → ${factory.moduleId} ` +
-              `drops ${dropped.join(", ")}`,
-          ];
-        });
-      });
+    ].toSorted()) {
+      const source = readFileSync(path.join(apiRoot, relative), "utf-8");
+      for (const factory of readModuleMockFactories(source, relative)) {
+        const moduleFile = resolveModuleFile(factory.moduleId, apiRoot);
+        // Only this package's modules can be read from source; an npm or
+        // workspace target has no statically readable export list.
+        if (moduleFile === undefined) {
+          continue;
+        }
+        readableFactories += 1;
+        if (
+          factory.spreadsAnother &&
+          source.includes(`await import("${factory.specifier}")`)
+        ) {
+          continue;
+        }
+        const declaredKeys = new Set(factory.declaredKeys);
+        const dropped = [...realExportsOf(moduleFile)].filter(
+          (name) => !declaredKeys.has(name),
+        );
+        if (dropped.length === 0) {
+          continue;
+        }
+        const pair = `${factory.filePath}::${factory.moduleId}`;
+        const known = droppedByPair.get(pair);
+        if (known === undefined) {
+          droppedByPair.set(pair, new Set(dropped));
+          continue;
+        }
+        for (const name of dropped) {
+          known.add(name);
+        }
+      }
+    }
 
-    // Listed rather than counted once over the baseline, so a regression names
-    // the mock that caused it.
+    // A scan that matched no readable factory would satisfy every check below
+    // without exercising anything.
+    expect(readableFactories).toBeGreaterThan(0);
+
+    const offenders = [...droppedByPair]
+      .map(([pair, dropped]) => ({
+        dropped: [...dropped].toSorted().join(", "),
+        pair,
+      }))
+      // Pairs are unique map keys and are file paths, not prose, so they sort
+      // by code unit like the ledger file itself rather than by locale.
+      .toSorted((left, right) => (left.pair < right.pair ? -1 : 1));
+    const offendingPairs = new Set(droppedByPair.keys());
+
+    const rawLedger: unknown = JSON.parse(readFileSync(ledgerPath, "utf-8"));
+    const ledger = v.parse(v.array(v.string()), rawLedger);
+    const ledgeredPairs = new Set(ledger);
+
+    // 1. New debt: a mock that drops exports and is not on the list.
+    const unledgered = offenders.filter(({ pair }) => !ledgeredPairs.has(pair));
     expect(
-      offenders.length > EXPORT_DROPPING_MOCK_BASELINE ? offenders : [],
+      unledgered.length === 0
+        ? []
+        : [
+            `these module mocks drop exports and are not in ${LEDGER_FILE}. The list may only shrink, so declare every export the module has, or ${SPREAD_IDIOM}:`,
+            ...unledgered.map(
+              ({ dropped, pair }) => `${pair} drops ${dropped}`,
+            ),
+          ],
     ).toEqual([]);
-    expect(offenders.length).toBeLessThanOrEqual(EXPORT_DROPPING_MOCK_BASELINE);
+
+    // 2. Stale debt: a line whose mock stopped dropping exports, or whose test
+    // file or mock call is gone.
+    const stale = ledger.filter((pair) => !offendingPairs.has(pair));
+    expect(
+      stale.length === 0
+        ? []
+        : [
+            `these ${LEDGER_FILE} lines no longer name an export-dropping mock. Delete them in the same change that fixed or removed the mock:`,
+            ...stale,
+          ],
+    ).toEqual([]);
+
+    // 3. The file's own shape, so a line cannot hide in an unsorted list.
+    const sortedLedger = [...ledger].toSorted();
+    expect(
+      ledger.length === new Set(ledger).size &&
+        ledger.every((pair, index) => pair === sortedLedger[index])
+        ? []
+        : [
+            `${LEDGER_FILE} must be a sorted, duplicate-free list of "<test file>::<mocked module>" pairs.`,
+          ],
+    ).toEqual([]);
   });
 
   test("devtools shell lazy-loads TanStack panels", () => {
