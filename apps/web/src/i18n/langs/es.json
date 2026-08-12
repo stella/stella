@@ -2146,7 +2146,7 @@
       "whatIsAnMcpServer": "¿Qué es un servidor MCP?"
     },
     "playbooks": {
-      "addCheck": "Añadir una verificación",
+      "addCheck": "Añadir una regla exacta",
       "addExtractPosition": "Solo extracción",
       "addExtractPositionHint": "Captura un valor, sin evaluación",
       "addGradedPosition": "Posición evaluada",
@@ -2154,7 +2154,7 @@
       "addOption": "Añadir opción",
       "addPosition": "Añadir posición",
       "addRule": "Regla",
-      "advanced": "Avanzado",
+      "advanced": "Cambiar cómo funciona",
       "approval": {
         "approve": "Aprobar",
         "approveFailed": "No se pudo aprobar el playbook",
@@ -2167,11 +2167,11 @@
       "askContentLabel": "Tipo de respuesta",
       "askQuestionLabel": "Pregunta",
       "askQuestionPlaceholder": "¿Qué debemos leer de cada documento? Déjalo vacío para introducirlo manualmente.",
-      "check": "Verificación",
-      "checkHint": "Evalúa con una regla determinista en lugar de la IA.",
+      "check": "Usar una regla exacta en lugar de IA",
+      "checkHint": "Para condiciones medibles, como: plazo de pago ≤ 30 días.",
       "checkKind": {
-        "constraint": "Restricción de valor",
-        "presence": "Presencia"
+        "constraint": "Comprobar la respuesta con una condición",
+        "presence": "Exigir o prohibir una respuesta"
       },
       "clausePlaceholder": "Buscar cláusulas…",
       "clauseSearchEmpty": "No se encontraron cláusulas",
@@ -2182,19 +2182,21 @@
         "singleSelect": "Selección única",
         "text": "Texto"
       },
-      "convertToExtract": "Convertir a solo extracción",
+      "convertToExtract": "Extraer solo una respuesta",
       "convertToExtractDescription": "Esto elimina la escala de niveles y la evaluación de esta posición. Esta acción no se puede deshacer.",
       "convertToExtractTitle": "¿Convertir a solo extracción?",
-      "convertToGraded": "Convertir en posición evaluada",
+      "convertToGraded": "Añadir reglas de evaluación",
       "createPlaybook": "Nuevo playbook",
       "created": "Playbook creado",
+      "customizeAnswer": "Cambiar la respuesta extraída",
+      "customizeAnswerHint": "Editar la pregunta o el formato de respuesta.",
       "deleteFailed": "No se pudo eliminar el playbook",
       "deletePlaybook": "Eliminar playbook",
       "deletePosition": "Eliminar posición",
       "deleted": "Playbook eliminado",
-      "derivedAutomatically": "La pregunta y el tipo de respuesta se derivan automáticamente al guardar.",
-      "derivedQuestion": "Pregunta derivada",
-      "derivedType": "Tipo derivado",
+      "derivedAutomatically": "La pregunta de extracción y el formato de respuesta se generan a partir de esta posición. No hace falta configurar nada.",
+      "derivedQuestion": "Pregunta de extracción",
+      "derivedType": "Formato de respuesta",
       "descriptionPlaceholder": "¿Qué revisa este playbook?",
       "disabledBadge": "Desactivado — se omite en las revisiones",
       "discardChanges": "Descartar cambios",
@@ -2207,7 +2209,8 @@
       "entryRank": "#{index}",
       "expandPosition": "Expandir posición",
       "expectation": {
-        "restricted": "Prohibido"
+        "required": "La respuesta debe estar presente",
+        "restricted": "La respuesta debe estar ausente"
       },
       "extractOnlyBadge": "Solo extracción",
       "extractOnlyDescription": "Sin evaluación — captura el valor en la tabla.",
@@ -2216,8 +2219,8 @@
       "extractionManual": "Manual",
       "fixErrorsBeforeSaving": "Corrige los campos resaltados antes de guardar.",
       "gradedNeedsContent": "Añade al menos una regla, una entrada alternativa o un lenguaje ideal.",
-      "guidanceLabel": "Orientación",
-      "guidancePlaceholder": "Notas para los revisores (opcional)",
+      "guidanceLabel": "Añadir instrucciones de revisión",
+      "guidancePlaceholder": "Añade una excepción o instrucción que no cubran las reglas anteriores.",
       "idealFromClause": "Desde la biblioteca de cláusulas",
       "idealInline": "Texto libre",
       "idealInlinePlaceholder": "Pega la redacción ideal…",
@@ -2303,8 +2306,8 @@
         "subtitle": "Playbooks listos para añadir y adaptar a tus estándares.",
         "title": "Playbooks de inicio"
       },
-      "switchToAuto": "Volver a automático",
-      "switchToManual": "Cambiar a manual",
+      "switchToAuto": "Generar automáticamente la pregunta y el formato",
+      "switchToManual": "Personalizar la pregunta y el formato de respuesta",
       "tier": {
         "acceptable": "Aceptable",
         "fallback": "Alternativa",

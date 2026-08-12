@@ -1,4 +1,5 @@
 import type {
+  DeterministicCheck,
   PlaybookPositions,
   PositionSeverity,
 } from "@/api/lib/workflow/playbook-positions";
@@ -11,10 +12,10 @@ import type {
 // `sourceId` and every tier-rule/fallback-entry `id` below are FIXED
 // placeholders (distinct only within their own playbook): `from-starter.ts`
 // clones this constant and replaces every one of them with a fresh
-// `crypto.randomUUID()` before the playbook is created, so no instantiated
+// a new UUID before the playbook is created, so no instantiated
 // org ever ends up with two playbooks (or two positions) sharing an id.
 
-export const STARTER_PLAYBOOK_IDS = ["nda", "dpa", "msa"] as const;
+export const STARTER_PLAYBOOK_IDS = ["nda", "dpa", "msa", "saas"] as const;
 export type StarterPlaybookId = (typeof STARTER_PLAYBOOK_IDS)[number];
 
 export type StarterPlaybook = {
@@ -27,7 +28,7 @@ export type StarterPlaybook = {
 
 // ── Placeholder id helper ────────────────────────────
 // A valid-shaped (8-4-4-4-12 hex) but obviously-fake uuid, scoped per playbook
-// by `prefix` so a placeholder can never collide across the three starters
+// by `prefix` so a placeholder can never collide across starters
 // even before regeneration. Decimal digits are valid hex, so a zero-padded
 // counter is enough.
 const placeholderId = (prefix: number, sequence: number): string =>
@@ -51,9 +52,37 @@ type StarterNegotiationInput = {
 type StarterPositionInput = {
   issue: string;
   severity: PositionSeverity;
+  ask?: {
+    question: string;
+    content: { version: 1; type: "int" | "text" };
+  };
+  evaluation?: { type: "maximum"; value: number };
+  guidance?: string;
   tiers: StarterTierInput;
   negotiation: StarterNegotiationInput;
 };
+
+type StarterExtractPositionInput = {
+  issue: string;
+  ask: {
+    question: string;
+    content: { version: 1; type: "int" | "text" };
+  };
+  guidance?: string;
+};
+
+const buildMaximumCheck = (
+  sourceId: string,
+  value: number,
+): DeterministicCheck => ({
+  kind: "constraint",
+  condition: {
+    type: "compare",
+    left: { type: "property", propertyId: sourceId },
+    op: "lte",
+    right: { type: "literal", value },
+  },
+});
 
 // Builds one GRADED position, threading a per-playbook id counter through the
 // sourceId and every tier-rule/fallback-entry id so they stay distinct within
@@ -70,13 +99,21 @@ const buildGradedPosition = (
     return id;
   };
 
+  const sourceId = nextId();
+  const check =
+    input.evaluation?.type === "maximum"
+      ? buildMaximumCheck(sourceId, input.evaluation.value)
+      : undefined;
+
   return {
     mode: "graded",
-    sourceId: nextId(),
+    sourceId,
     issue: input.issue,
     severity: input.severity,
     enabled: true,
-    ask: { mode: "auto" },
+    ask: input.ask ? { mode: "manual", ...input.ask } : { mode: "auto" },
+    ...(check ? { check } : {}),
+    ...(input.guidance ? { guidance: input.guidance } : {}),
     tiers: {
       acceptable: {
         rules: input.tiers.acceptable.map((text) => ({ id: nextId(), text })),
@@ -104,6 +141,22 @@ const buildGradedPosition = (
       escalation: input.negotiation.escalation,
     },
   };
+};
+
+const buildExtractPosition = (
+  prefix: number,
+  counter: { next: number },
+  input: StarterExtractPositionInput,
+): PlaybookPositions["items"][number] => {
+  const position = {
+    sourceId: placeholderId(prefix, counter.next++),
+    issue: input.issue,
+    ask: input.ask,
+    enabled: true,
+  };
+  return input.guidance
+    ? { mode: "extract", ...position, guidance: input.guidance }
+    : { mode: "extract", ...position };
 };
 
 const buildStarterPositions = (
@@ -830,6 +883,214 @@ const MSA_POSITIONS: StarterPositionInput[] = [
   },
 ];
 
+// ── SaaS Agreement ───────────────────────────────────
+
+const SAAS_GRADED_POSITIONS: StarterPositionInput[] = [
+  {
+    issue: "Liability cap and carve-outs",
+    severity: "blocker",
+    tiers: {
+      acceptable: [
+        "Each party's aggregate liability is capped at fees paid or payable in the preceding 12 months",
+        "Higher or uncapped liability is limited to deliberate misconduct, confidentiality breaches, data-protection breaches, and indemnified claims",
+      ],
+      ideal:
+        "Except for liability that cannot lawfully be limited, each party's aggregate liability arising out of or relating to this Agreement will not exceed the fees paid or payable under this Agreement during the twelve (12) months preceding the event giving rise to the claim. Liability for breach of confidentiality, data-protection obligations, and indemnified claims is capped at two (2) times that amount.",
+      fallback: [
+        {
+          label: "Six-month general cap",
+          text: "A six-month fee cap is acceptable for ordinary claims if data-protection, confidentiality, and indemnified claims receive a separate cap of at least twelve months' fees.",
+        },
+      ],
+      notAcceptable: [
+        "The provider has no meaningful liability for service failure, data loss, or security incidents",
+        "Customer payment obligations are included in a one-sided cap while the provider's core risks are broadly excluded",
+      ],
+    },
+    negotiation: {
+      rationale:
+        "The cap should reflect the value and risk of the service while preserving meaningful recourse for the provider-controlled failures most likely to cause serious loss.",
+      talkingPoints: [
+        "Use the contract's recurring fees as an objective baseline rather than a nominal fixed amount.",
+        "A separate elevated cap is a practical compromise for confidentiality, security, and indemnified claims.",
+      ],
+      escalation:
+        "Escalate if the provider excludes data loss or security incidents from both meaningful remedies and the elevated cap.",
+    },
+  },
+  {
+    issue: "Security incident notification deadline",
+    severity: "blocker",
+    ask: {
+      question:
+        "What is the maximum number of hours the provider may take to notify the customer after confirming a security incident affecting customer data? Return only the number of hours. If no numeric deadline is stated, leave the answer empty.",
+      content: { version: 1, type: "int" },
+    },
+    evaluation: { type: "maximum", value: 72 },
+    guidance:
+      "Use the contractual outer limit, not an aspirational phrase. Treat “without undue delay” without a numeric deadline as missing.",
+    tiers: {
+      acceptable: [
+        "The provider must notify the customer without undue delay and no later than 72 hours after confirming an incident",
+        "The notice must describe the nature, likely impact, affected data, and mitigation already taken",
+      ],
+      ideal:
+        "Provider will notify Customer without undue delay, and in any event within twenty-four (24) hours after confirming a Security Incident affecting Customer Data. Provider will provide available details about the incident, affected data, likely consequences, and mitigation, and will keep Customer informed as the investigation progresses.",
+      fallback: [
+        {
+          label: "72-hour outer limit",
+          text: "Notice within 72 hours after confirmation is acceptable if the provider supplies updates as material information becomes available.",
+        },
+      ],
+      notAcceptable: [
+        "Notification may be delayed beyond 72 hours after confirmation",
+        "The provider alone decides whether an incident is material enough to notify",
+      ],
+    },
+    negotiation: {
+      rationale:
+        "A fixed outer limit gives the customer time to meet regulatory, contractual, and operational response duties.",
+      talkingPoints: [
+        "The first notice can be preliminary; complete facts rarely exist at the start of an investigation.",
+        "A 24-hour target with a 72-hour outer limit balances speed and accuracy.",
+      ],
+      escalation:
+        "Escalate if notification depends solely on the provider's materiality assessment or has no measurable deadline.",
+    },
+  },
+  {
+    issue: "Service availability commitment and credits",
+    severity: "high",
+    tiers: {
+      acceptable: [
+        "Monthly service availability is at least 99.9%, excluding narrowly defined scheduled maintenance",
+        "Service credits increase with the duration or severity of an outage",
+        "Repeated material failures create a termination right",
+      ],
+      ideal:
+        "Provider will make the Service available at least 99.9% of each calendar month, excluding scheduled maintenance notified at least five business days in advance. Credits apply automatically when availability falls below the commitment, and Customer may terminate without penalty after three failures in any rolling six-month period.",
+      fallback: [
+        {
+          label: "Credits on request",
+          text: "Credits may require a customer request if the claim window is at least 30 days and the provider supplies the availability report needed to verify the claim.",
+        },
+      ],
+      notAcceptable: [
+        "Availability is described only as a target with no contractual remedy",
+        "All downtime caused by the provider's suppliers or infrastructure is excluded",
+      ],
+    },
+    negotiation: {
+      rationale:
+        "Availability language is useful only when the measurement, exclusions, remedy, and repeated-failure exit are workable together.",
+      talkingPoints: [
+        "Keep exclusions objective and within the customer's ability to verify.",
+        "Credits address isolated outages; termination addresses a service that persistently misses its promise.",
+      ],
+      escalation:
+        "Escalate if a business-critical service has no repeated-failure termination right.",
+    },
+  },
+  {
+    issue: "Subprocessors and international data transfers",
+    severity: "high",
+    tiers: {
+      acceptable: [
+        "The provider maintains a current subprocessor list and gives advance notice of material changes",
+        "The customer may object on reasonable data-protection grounds",
+        "The provider remains responsible for subprocessor performance and uses a valid transfer mechanism",
+      ],
+      ideal:
+        "Provider will maintain a current list of Subprocessors, give Customer at least thirty (30) days' notice before appointing a new Subprocessor, and provide a reasonable opportunity to object on data-protection grounds. Provider remains responsible for each Subprocessor's compliance and will implement a valid transfer mechanism for restricted transfers.",
+      fallback: [
+        {
+          label: "General authorization with an exit right",
+          text: "General authorization is acceptable if the customer receives advance notice and may terminate the affected service without penalty when a reasonable objection cannot be resolved.",
+        },
+      ],
+      notAcceptable: [
+        "The provider may appoint subprocessors without notice",
+        "The provider disclaims responsibility for subprocessor acts or omissions",
+      ],
+    },
+    negotiation: {
+      rationale:
+        "The provider should not be able to change who handles customer data, or where it is transferred, without transparency and a practical remedy.",
+      talkingPoints: [
+        "A general authorization model works when notice, objection, and unresolved-objection remedies are meaningful.",
+        "Responsibility should follow the provider's choice of subprocessor.",
+      ],
+      escalation:
+        "Escalate if the customer cannot learn about or respond to a new subprocessor before data is transferred.",
+    },
+  },
+  {
+    issue: "Customer data return, export, and deletion",
+    severity: "high",
+    tiers: {
+      acceptable: [
+        "The customer may export its data in a commonly used, machine-readable format during the term and for at least 30 days after termination",
+        "The provider deletes remaining customer data after the retrieval period, subject only to documented legal retention duties and ordinary backup cycles",
+      ],
+      ideal:
+        "Customer may export Customer Data at any time in a commonly used, machine-readable format. For thirty (30) days after termination, Provider will keep Customer Data available for export and reasonable transition assistance. Provider will then delete Customer Data from active systems and backups in accordance with its documented retention cycle, except to the extent retention is required by law.",
+      fallback: [
+        {
+          label: "Shorter assisted transition",
+          text: "A 15-day retrieval period is acceptable if self-service export remains available and the format preserves the data's practical usability.",
+        },
+      ],
+      notAcceptable: [
+        "Customer data becomes inaccessible immediately on termination",
+        "The provider may retain customer data indefinitely for unspecified business purposes",
+      ],
+    },
+    negotiation: {
+      rationale:
+        "A usable export and a defined retrieval window prevent termination from becoming accidental data loss or commercial lock-in.",
+      talkingPoints: [
+        "Specify the format and retrieval window before a termination occurs.",
+        "Legal retention and backups can be handled as narrow exceptions without permitting operational reuse.",
+      ],
+      escalation:
+        "Escalate if the contract provides no practical way to retrieve production data after termination.",
+    },
+  },
+];
+
+const buildSaaSPositions = (): PlaybookPositions => {
+  const prefix = 4;
+  const counter = { next: 1 };
+  return {
+    version: 2,
+    items: [
+      ...SAAS_GRADED_POSITIONS.map((input) =>
+        buildGradedPosition(prefix, counter, input),
+      ),
+      buildExtractPosition(prefix, counter, {
+        issue: "Renewal notice period",
+        ask: {
+          question:
+            "How much advance notice is required to prevent automatic renewal? Return the period exactly as written, including its unit.",
+          content: { version: 1, type: "text" },
+        },
+        guidance:
+          "Capture the customer deadline and note whether the notice must use a particular channel or form.",
+      }),
+      buildExtractPosition(prefix, counter, {
+        issue: "Price increase mechanism",
+        ask: {
+          question:
+            "What price increases are permitted at renewal or during the term? Return the cap, index, notice period, and frequency stated in the agreement.",
+          content: { version: 1, type: "text" },
+        },
+        guidance:
+          "Record each component of the mechanism; do not convert an index-linked increase into a fixed percentage.",
+      }),
+    ],
+  };
+};
+
 export const STARTER_PLAYBOOKS: readonly StarterPlaybook[] = [
   {
     starterId: "nda",
@@ -854,6 +1115,14 @@ export const STARTER_PLAYBOOKS: readonly StarterPlaybook[] = [
       "Reviews an MSA for a meaningful liability cap, fault-based indemnification, clear IP ownership, workable termination rights, standard payment terms, service warranties, and confidentiality.",
     documentTypeKey: "msa",
     positions: buildStarterPositions(3, MSA_POSITIONS),
+  },
+  {
+    starterId: "saas",
+    name: "SaaS Agreement",
+    description:
+      "Reviews a SaaS agreement for liability, incident response, service levels, subprocessors, and data portability, then extracts renewal and pricing terms for follow-up.",
+    documentTypeKey: "saas",
+    positions: buildSaaSPositions(),
   },
 ];
 

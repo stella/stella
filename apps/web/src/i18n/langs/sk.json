@@ -2146,7 +2146,7 @@
       "whatIsAnMcpServer": "Čo je MCP server?"
     },
     "playbooks": {
-      "addCheck": "Pridať kontrolu",
+      "addCheck": "Pridať presné pravidlo",
       "addExtractPosition": "Iba extrakcia",
       "addExtractPositionHint": "Zachytí hodnotu, bez hodnotenia",
       "addGradedPosition": "Hodnotená pozícia",
@@ -2154,7 +2154,7 @@
       "addOption": "Pridať možnosť",
       "addPosition": "Pridať pozíciu",
       "addRule": "Pravidlo",
-      "advanced": "Pokročilé",
+      "advanced": "Zmeniť, ako to funguje",
       "approval": {
         "approve": "Schváliť",
         "approveFailed": "Playbook sa nepodarilo schváliť",
@@ -2167,11 +2167,11 @@
       "askContentLabel": "Typ odpovede",
       "askQuestionLabel": "Znenie otázky",
       "askQuestionPlaceholder": "Čo sa má z každého dokumentu vyčítať? Ponechajte prázdne pre ručné zadanie.",
-      "check": "Kontrola",
-      "checkHint": "Ohodnoťte pomocou deterministického pravidla namiesto AI.",
+      "check": "Použiť presné pravidlo namiesto AI",
+      "checkHint": "Pre merateľné podmienky, napríklad: splatnosť ≤ 30 dní.",
       "checkKind": {
-        "constraint": "Obmedzenie hodnoty",
-        "presence": "Prítomnosť"
+        "constraint": "Overiť odpoveď podľa podmienky",
+        "presence": "Vyžadovať alebo zakázať odpoveď"
       },
       "clausePlaceholder": "Hľadať ustanovenia...",
       "clauseSearchEmpty": "Nenašli sa žiadne ustanovenia",
@@ -2182,19 +2182,21 @@
         "singleSelect": "Jednoduchý výber",
         "text": "Voľný text"
       },
-      "convertToExtract": "Previesť iba na extrakciu",
+      "convertToExtract": "Iba získavať odpoveď",
       "convertToExtractDescription": "Týmto sa odstránia úrovne hodnotenia aj samotné hodnotenie tejto pozície. Túto akciu nemožno vrátiť späť.",
       "convertToExtractTitle": "Previesť iba na extrakciu?",
-      "convertToGraded": "Previesť na hodnotenú pozíciu",
+      "convertToGraded": "Pridať pravidlá hodnotenia",
       "createPlaybook": "Nový playbook",
       "created": "Playbook vytvorený",
+      "customizeAnswer": "Zmeniť získavanú odpoveď",
+      "customizeAnswerHint": "Upraviť otázku alebo formát odpovede.",
       "deleteFailed": "Playbook sa nepodarilo odstrániť",
       "deletePlaybook": "Odstrániť playbook",
       "deletePosition": "Odstrániť pozíciu",
       "deleted": "Playbook odstránený",
-      "derivedAutomatically": "Otázka a typ odpovede sa pri uložení odvodia automaticky.",
-      "derivedQuestion": "Odvodená otázka",
-      "derivedType": "Odvodený typ",
+      "derivedAutomatically": "Otázka a formát odpovede sa vygenerujú z tejto pozície. Netreba nič nastavovať.",
+      "derivedQuestion": "Otázka na získanie odpovede",
+      "derivedType": "Formát odpovede",
       "descriptionPlaceholder": "Čo tento playbook kontroluje?",
       "disabledBadge": "Vypnuté — pri spustení sa preskočí",
       "discardChanges": "Zahodiť zmeny",
@@ -2207,7 +2209,8 @@
       "entryRank": "#{index}",
       "expandPosition": "Rozbaliť pozíciu",
       "expectation": {
-        "restricted": "Zakázané"
+        "required": "Odpoveď musí byť uvedená",
+        "restricted": "Odpoveď nesmie byť uvedená"
       },
       "extractOnlyBadge": "Iba extrakcia",
       "extractOnlyDescription": "Bez hodnotenia — hodnota sa zapíše do tabuľky.",
@@ -2216,8 +2219,8 @@
       "extractionManual": "Ručná",
       "fixErrorsBeforeSaving": "Pred uložením opravte zvýraznené polia.",
       "gradedNeedsContent": "Pridajte aspoň jedno pravidlo, náhradný záznam alebo ideálne znenie.",
-      "guidanceLabel": "Pokyny",
-      "guidancePlaceholder": "Poznámky pre posudzovateľov (voliteľné)",
+      "guidanceLabel": "Pridať pokyny ku kontrole",
+      "guidancePlaceholder": "Pridajte výnimku alebo pokyn, ktorý pravidlá vyššie nepokrývajú.",
       "idealFromClause": "Z knižnice ustanovení",
       "idealInline": "Vlastný text",
       "idealInlinePlaceholder": "Vložte ideálne znenie…",
@@ -2303,8 +2306,8 @@
         "subtitle": "Hotové playbooky, ktoré môžete pridať a upraviť podľa svojich štandardov.",
         "title": "Úvodné playbooky"
       },
-      "switchToAuto": "Späť na automatický režim",
-      "switchToManual": "Prepnúť na ručné zadanie",
+      "switchToAuto": "Generovať otázku a formát automaticky",
+      "switchToManual": "Upraviť otázku a formát odpovede",
       "tier": {
         "acceptable": "Prijateľné",
         "fallback": "Náhradné",

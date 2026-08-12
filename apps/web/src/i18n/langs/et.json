@@ -2146,7 +2146,7 @@
       "whatIsAnMcpServer": "Mis on MCP server?"
     },
     "playbooks": {
-      "addCheck": "Lisa kontroll",
+      "addCheck": "Lisa täpne reegel",
       "addExtractPosition": "Ainult väljavõte",
       "addExtractPositionHint": "Salvestab väärtuse, ilma hindamiseta",
       "addGradedPosition": "Hinnatud seisukoht",
@@ -2154,7 +2154,7 @@
       "addOption": "Lisa valik",
       "addPosition": "Lisa seisukoht",
       "addRule": "Reegel",
-      "advanced": "Täpsem",
+      "advanced": "Muuda toimimist",
       "approval": {
         "approve": "Kiida heaks",
         "approveFailed": "Playbooki heakskiitmine nurjus",
@@ -2167,11 +2167,11 @@
       "askContentLabel": "Vastuse tüüp",
       "askQuestionLabel": "Küsimus",
       "askQuestionPlaceholder": "Mida peaksime igast dokumendist välja lugema? Käsitsi sisestamiseks jätke tühjaks.",
-      "check": "Kontroll",
-      "checkHint": "Hinda deterministliku reegliga, mitte AI-ga.",
+      "check": "Kasuta tehisintellekti asemel täpset reeglit",
+      "checkHint": "Mõõdetavate tingimuste jaoks, näiteks: maksetähtaeg ≤ 30 päeva.",
       "checkKind": {
-        "constraint": "Väärtuse piirang",
-        "presence": "Olemasolu"
+        "constraint": "Kontrolli vastust tingimuse järgi",
+        "presence": "Nõua või keela vastus"
       },
       "clausePlaceholder": "Otsi klausleid…",
       "clauseSearchEmpty": "Klausleid ei leitud",
@@ -2182,19 +2182,21 @@
         "singleSelect": "Ühekordne valik",
         "text": "Tekst"
       },
-      "convertToExtract": "Teisenda ainult väljavõtteks",
+      "convertToExtract": "Eralda ainult vastus",
       "convertToExtractDescription": "See eemaldab selle seisukoha tasemeredeli ja hindamise. Seda ei saa tagasi võtta.",
       "convertToExtractTitle": "Teisendada ainult väljavõtteks?",
-      "convertToGraded": "Teisenda hinnatuks",
+      "convertToGraded": "Lisa hindamisreeglid",
       "createPlaybook": "Uus playbook",
       "created": "Playbook loodud",
+      "customizeAnswer": "Muuda eraldatavat vastust",
+      "customizeAnswerHint": "Muuda küsimust või vastuse vormingut.",
       "deleteFailed": "Playbooki kustutamine ebaõnnestus",
       "deletePlaybook": "Kustuta playbook",
       "deletePosition": "Kustuta seisukoht",
       "deleted": "Playbook kustutatud",
-      "derivedAutomatically": "Küsimus ja vastuse tüüp tuletatakse automaatselt salvestamisel.",
-      "derivedQuestion": "Tuletatud küsimus",
-      "derivedType": "Tuletatud tüüp",
+      "derivedAutomatically": "Eraldusküsimus ja vastuse vorming luuakse selle positsiooni põhjal. Midagi pole vaja seadistada.",
+      "derivedQuestion": "Eraldusküsimus",
+      "derivedType": "Vastuse vorming",
       "descriptionPlaceholder": "Mida see playbook kontrollib?",
       "disabledBadge": "Väljas — jäetakse ülevaatustel vahele",
       "discardChanges": "Loobu muudatustest",
@@ -2207,7 +2209,8 @@
       "entryRank": "#{index}",
       "expandPosition": "Laienda seisukoht",
       "expectation": {
-        "restricted": "Keelatud"
+        "required": "Vastus peab olema olemas",
+        "restricted": "Vastus peab puuduma"
       },
       "extractOnlyBadge": "Ainult väljavõte",
       "extractOnlyDescription": "Hindamiseta — salvestab väärtuse tabelisse.",
@@ -2216,8 +2219,8 @@
       "extractionManual": "Käsitsi",
       "fixErrorsBeforeSaving": "Parandage esiletõstetud väljad enne salvestamist.",
       "gradedNeedsContent": "Lisage vähemalt üks reegel, alternatiivne kirje või ideaalne sõnastus.",
-      "guidanceLabel": "Juhised",
-      "guidancePlaceholder": "Märkused üle vaatajatele (valikuline)",
+      "guidanceLabel": "Lisa läbivaatamise juhised",
+      "guidancePlaceholder": "Lisa erand või juhis, mida ülaltoodud reeglid ei kata.",
       "idealFromClause": "Klauslite teegist",
       "idealInline": "Sisestatud tekst",
       "idealInlinePlaceholder": "Kleepige ideaalne sõnastus…",
@@ -2303,8 +2306,8 @@
         "subtitle": "Valmis playbookid, mille saate lisada ja seejärel oma standarditele kohandada.",
         "title": "Valmis playbookid"
       },
-      "switchToAuto": "Tagasi automaatsele",
-      "switchToManual": "Lülitu käsitsile",
+      "switchToAuto": "Loo küsimus ja vorming automaatselt",
+      "switchToManual": "Kohanda küsimust ja vastuse vormingut",
       "tier": {
         "acceptable": "Vastuvõetav",
         "fallback": "Alternatiiv",

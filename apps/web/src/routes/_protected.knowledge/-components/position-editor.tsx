@@ -11,7 +11,6 @@ import { useQuery } from "@tanstack/react-query";
 import {
   ChevronDownIcon,
   ChevronUpIcon,
-  CogIcon,
   CopyIcon,
   FlagIcon,
   GripVerticalIcon,
@@ -20,7 +19,6 @@ import {
   PlusIcon,
   RepeatIcon,
   SearchIcon,
-  SparklesIcon,
   Trash2Icon,
   XIcon,
 } from "lucide-react";
@@ -45,9 +43,11 @@ import { Input } from "@stll/ui/components/input";
 import { Label } from "@stll/ui/components/label";
 import {
   Menu,
+  MenuItem,
   MenuPopup,
   MenuRadioGroup,
   MenuRadioItem,
+  MenuSeparator,
   MenuTrigger,
 } from "@stll/ui/components/menu";
 import {
@@ -158,7 +158,7 @@ const CHECK_KIND_LABEL_KEYS = {
 const EXPECTATIONS = ["required", "restricted"] as const;
 
 const EXPECTATION_LABEL_KEYS = {
-  required: "common.required",
+  required: "knowledge.playbooks.expectation.required",
   restricted: "knowledge.playbooks.expectation.restricted",
 } as const satisfies Record<(typeof EXPECTATIONS)[number], TranslationKey>;
 
@@ -190,8 +190,8 @@ const contentForType = (
 };
 
 // ── Inline action (muted text-only ghost button) ──────
-// Tier "+ add" affordances and the advanced-panel toggles read as plain muted
-// text until hover, not filled controls. A ghost xs Button with a muted text
+// Tier "+ add" affordances read as plain muted text until hover, not filled
+// controls. A ghost xs Button with a muted text
 // override keeps focus rings, sizing, and keyboard behaviour consistent.
 const InlineAction = ({
   className,
@@ -1219,7 +1219,24 @@ const NegotiationSection = ({
   );
 };
 
-// ── Graded footer: extraction + advanced ──────────────
+// ── Graded footer: optional setup changes ─────────────
+
+type GradedSettingsView = "extraction" | "guidance" | "check" | null;
+
+const initialGradedSettingsView = (
+  position: GradedPosition,
+): GradedSettingsView => {
+  if (position.check !== undefined) {
+    return "check";
+  }
+  if ((position.guidance?.trim() ?? "") !== "") {
+    return "guidance";
+  }
+  if (position.ask.mode === "manual") {
+    return "extraction";
+  }
+  return null;
+};
 
 const GradedFooter = ({
   position,
@@ -1231,46 +1248,86 @@ const GradedFooter = ({
   onConvertMode: () => void;
 }) => {
   const t = useTranslations();
-  const [advancedOpen, setAdvancedOpen] = useState(false);
-  const isAuto = position.ask.mode === "auto";
+  const [settingsView, setSettingsView] = useState<GradedSettingsView>(() =>
+    initialGradedSettingsView(position),
+  );
+
+  const openExactRule = () => {
+    if (position.check === undefined) {
+      onChange({
+        ...position,
+        check: { kind: "presence", expectation: "required" },
+      });
+    }
+    setSettingsView("check");
+  };
 
   return (
     <div className="border-border/70 border-t border-dashed pt-3">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <span className="text-muted-foreground inline-flex items-center gap-1.5 text-xs">
-          <SparklesIcon className="size-3.5" />
-          {t("knowledge.playbooks.extraction")}
-          <span
-            className={cn(
-              "rounded-full px-1.5 py-px text-[11px] font-semibold",
-              isAuto
-                ? "bg-primary/12 text-primary"
-                : "bg-muted text-muted-foreground",
-            )}
-          >
-            {isAuto
-              ? t("knowledge.playbooks.extractionAuto")
-              : t("knowledge.playbooks.extractionManual")}
-          </span>
-        </span>
-        <InlineAction
-          aria-expanded={advancedOpen}
-          onClick={() => setAdvancedOpen((prev) => !prev)}
+      <Menu>
+        <MenuTrigger
+          render={<Button size="xs" type="button" variant="ghost" />}
         >
-          <CogIcon className="size-3" />
           {t("knowledge.playbooks.advanced")}
-        </InlineAction>
-      </div>
+        </MenuTrigger>
+        <MenuPopup align="start" className="w-72">
+          <MenuItem onClick={() => setSettingsView("extraction")}>
+            <div className="flex flex-col">
+              <span>{t("knowledge.playbooks.customizeAnswer")}</span>
+              <span className="text-muted-foreground text-xs">
+                {t("knowledge.playbooks.customizeAnswerHint")}
+              </span>
+            </div>
+          </MenuItem>
+          <MenuItem onClick={() => setSettingsView("guidance")}>
+            <div className="flex flex-col">
+              <span>{t("knowledge.playbooks.guidanceLabel")}</span>
+              <span className="text-muted-foreground text-xs text-pretty">
+                {t("knowledge.playbooks.guidancePlaceholder")}
+              </span>
+            </div>
+          </MenuItem>
+          <MenuItem onClick={openExactRule}>
+            <div className="flex flex-col">
+              <span>{t("knowledge.playbooks.check")}</span>
+              <span className="text-muted-foreground text-xs text-pretty">
+                {t("knowledge.playbooks.checkHint")}
+              </span>
+            </div>
+          </MenuItem>
+          <MenuSeparator />
+          <MenuItem onClick={onConvertMode}>
+            <div className="flex flex-col">
+              <span>{t("knowledge.playbooks.convertToExtract")}</span>
+              <span className="text-muted-foreground text-xs">
+                {t("knowledge.playbooks.addExtractPositionHint")}
+              </span>
+            </div>
+          </MenuItem>
+        </MenuPopup>
+      </Menu>
 
-      {advancedOpen && (
-        <div className="bg-muted/50 mt-3 space-y-4 rounded-md p-3">
-          <ExtractionAdvanced onChange={onChange} position={position} />
-          <CheckEditor onChange={onChange} position={position} />
-          <GuidanceField onChange={onChange} position={position} />
-          <ConvertModeButton
-            label={t("knowledge.playbooks.convertToExtract")}
-            onConvertMode={onConvertMode}
-          />
+      {settingsView !== null && (
+        <div className="bg-muted/50 relative mt-3 rounded-md p-3 pe-10">
+          <Button
+            aria-label={t("common.close")}
+            className="absolute end-2 top-2"
+            onClick={() => setSettingsView(null)}
+            size="icon-xs"
+            type="button"
+            variant="ghost"
+          >
+            <XIcon />
+          </Button>
+          {settingsView === "extraction" && (
+            <ExtractionAdvanced onChange={onChange} position={position} />
+          )}
+          {settingsView === "check" && (
+            <CheckEditor onChange={onChange} position={position} />
+          )}
+          {settingsView === "guidance" && (
+            <GuidanceField onChange={onChange} position={position} />
+          )}
         </div>
       )}
     </div>
@@ -1289,27 +1346,32 @@ const ExtractionAdvanced = ({
 
   if (ask.mode === "auto") {
     return (
-      <div className="space-y-2">
+      <div className="space-y-3">
+        <p className="text-muted-foreground text-xs text-pretty">
+          {t("knowledge.playbooks.derivedAutomatically")}
+        </p>
         {ask.derived ? (
-          <div className="space-y-1 text-xs">
-            <p>
-              <span className="text-muted-foreground">
+          <dl className="border-border/60 divide-border/60 divide-y rounded-md border">
+            <div className="space-y-1 p-2.5">
+              <dt className="text-foreground-label text-[11px] font-medium">
                 {t("knowledge.playbooks.derivedQuestion")}
-              </span>{" "}
-              <span className="text-foreground italic">
-                “{ask.derived.question}”
-              </span>
-            </p>
-            <p className="text-muted-foreground">
-              {t("knowledge.playbooks.derivedType")}{" "}
-              {t(ASK_CONTENT_LABEL_KEYS[toAskContentType(ask.derived.content)])}
-            </p>
-          </div>
-        ) : (
-          <p className="text-muted-foreground text-xs">
-            {t("knowledge.playbooks.derivedAutomatically")}
-          </p>
-        )}
+              </dt>
+              <dd className="text-foreground text-sm leading-5 text-pretty">
+                <bdi>{ask.derived.question}</bdi>
+              </dd>
+            </div>
+            <div className="flex items-center justify-between gap-3 p-2.5 text-xs">
+              <dt className="text-foreground-label">
+                {t("knowledge.playbooks.derivedType")}
+              </dt>
+              <dd className="text-foreground font-medium">
+                {t(
+                  ASK_CONTENT_LABEL_KEYS[toAskContentType(ask.derived.content)],
+                )}
+              </dd>
+            </div>
+          </dl>
+        ) : null}
         <Button
           onClick={() =>
             onChange({
@@ -1388,7 +1450,15 @@ const CheckEditor = ({
 
   if (check === undefined) {
     return (
-      <div className="space-y-1">
+      <div className="border-border/60 space-y-2 border-t pt-4">
+        <div className="space-y-0.5">
+          <p className="text-foreground text-xs font-medium">
+            {t("knowledge.playbooks.check")}
+          </p>
+          <p className="text-muted-foreground text-[11px] text-pretty">
+            {t("knowledge.playbooks.checkHint")}
+          </p>
+        </div>
         <Button
           onClick={() =>
             setCheck({ kind: "presence", expectation: "required" })
@@ -1400,9 +1470,6 @@ const CheckEditor = ({
           <PlusIcon />
           {t("knowledge.playbooks.addCheck")}
         </Button>
-        <p className="text-muted-foreground text-[11px]">
-          {t("knowledge.playbooks.checkHint")}
-        </p>
       </div>
     );
   }
@@ -1562,7 +1629,9 @@ const ExtractBody = ({
   onConvertMode: () => void;
 }) => {
   const t = useTranslations();
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [settingsView, setSettingsView] = useState<
+    "extraction" | "guidance" | null
+  >(() => ((position.guidance?.trim() ?? "") !== "" ? "guidance" : null));
 
   return (
     <div className="space-y-3">
@@ -1570,33 +1639,70 @@ const ExtractBody = ({
         <span className="text-muted-foreground text-xs">
           {t("knowledge.playbooks.extractOnlyDescription")}
         </span>
-        <InlineAction
-          aria-expanded={advancedOpen}
-          onClick={() => setAdvancedOpen((prev) => !prev)}
-        >
-          <CogIcon className="size-3" />
-          {t("knowledge.playbooks.advanced")}
-        </InlineAction>
+        <Menu>
+          <MenuTrigger
+            render={<Button size="xs" type="button" variant="ghost" />}
+          >
+            {t("knowledge.playbooks.advanced")}
+          </MenuTrigger>
+          <MenuPopup align="start" className="w-72">
+            <MenuItem onClick={() => setSettingsView("extraction")}>
+              <div className="flex flex-col">
+                <span>{t("knowledge.playbooks.customizeAnswer")}</span>
+                <span className="text-muted-foreground text-xs">
+                  {t("knowledge.playbooks.customizeAnswerHint")}
+                </span>
+              </div>
+            </MenuItem>
+            <MenuItem onClick={() => setSettingsView("guidance")}>
+              <div className="flex flex-col">
+                <span>{t("knowledge.playbooks.guidanceLabel")}</span>
+                <span className="text-muted-foreground text-xs text-pretty">
+                  {t("knowledge.playbooks.guidancePlaceholder")}
+                </span>
+              </div>
+            </MenuItem>
+            <MenuSeparator />
+            <MenuItem onClick={onConvertMode}>
+              <div className="flex flex-col">
+                <span>{t("knowledge.playbooks.convertToGraded")}</span>
+                <span className="text-muted-foreground text-xs">
+                  {t("knowledge.playbooks.addGradedPositionHint")}
+                </span>
+              </div>
+            </MenuItem>
+          </MenuPopup>
+        </Menu>
       </div>
 
-      {advancedOpen && (
-        <div className="bg-muted/50 space-y-4 rounded-md p-3">
-          <AskContentEditor
-            content={position.ask.content}
-            onChangeContent={(content) =>
-              onChange({ ...position, ask: { ...position.ask, content } })
-            }
-            onChangeQuestion={(question) =>
-              onChange({ ...position, ask: { ...position.ask, question } })
-            }
-            question={position.ask.question}
-            sourceId={position.sourceId}
-          />
-          <GuidanceField onChange={onChange} position={position} />
-          <ConvertModeButton
-            label={t("knowledge.playbooks.convertToGraded")}
-            onConvertMode={onConvertMode}
-          />
+      {settingsView !== null && (
+        <div className="bg-muted/50 relative rounded-md p-3 pe-10">
+          <Button
+            aria-label={t("common.close")}
+            className="absolute end-2 top-2"
+            onClick={() => setSettingsView(null)}
+            size="icon-xs"
+            type="button"
+            variant="ghost"
+          >
+            <XIcon />
+          </Button>
+          {settingsView === "extraction" && (
+            <AskContentEditor
+              content={position.ask.content}
+              onChangeContent={(content) =>
+                onChange({ ...position, ask: { ...position.ask, content } })
+              }
+              onChangeQuestion={(question) =>
+                onChange({ ...position, ask: { ...position.ask, question } })
+              }
+              question={position.ask.question}
+              sourceId={position.sourceId}
+            />
+          )}
+          {settingsView === "guidance" && (
+            <GuidanceField onChange={onChange} position={position} />
+          )}
         </div>
       )}
     </div>
@@ -1753,6 +1859,7 @@ const GuidanceField = ({
   onChange: (position: Position) => void;
 }) => {
   const t = useTranslations();
+
   return (
     <div className="grid gap-1.5">
       <Label
@@ -1771,21 +1878,3 @@ const GuidanceField = ({
     </div>
   );
 };
-
-const ConvertModeButton = ({
-  label,
-  onConvertMode,
-}: {
-  label: string;
-  onConvertMode: () => void;
-}) => (
-  <Button
-    className="text-muted-foreground"
-    onClick={onConvertMode}
-    size="xs"
-    type="button"
-    variant="ghost"
-  >
-    {label}
-  </Button>
-);

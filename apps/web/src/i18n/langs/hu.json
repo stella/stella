@@ -2146,7 +2146,7 @@
       "whatIsAnMcpServer": "Mi az az MCP-szerver?"
     },
     "playbooks": {
-      "addCheck": "Ellenőrzés hozzáadása",
+      "addCheck": "Pontos szabály hozzáadása",
       "addExtractPosition": "Csak kinyerés",
       "addExtractPositionHint": "Egy érték rögzítése, értékelés nélkül",
       "addGradedPosition": "Értékelt álláspont",
@@ -2154,7 +2154,7 @@
       "addOption": "Lehetőség hozzáadása",
       "addPosition": "Álláspont hozzáadása",
       "addRule": "Szabály",
-      "advanced": "Speciális",
+      "advanced": "Működés módosítása",
       "approval": {
         "approve": "Jóváhagyás",
         "approveFailed": "Nem sikerült jóváhagyni a playbookot",
@@ -2167,11 +2167,11 @@
       "askContentLabel": "Válasz típusa",
       "askQuestionLabel": "A kérdés szövege",
       "askQuestionPlaceholder": "Mit olvassunk ki minden dokumentumból? Hagyja üresen a kézi bevitelhez.",
-      "check": "Ellenőrzés",
-      "checkHint": "Determinisztikus szabállyal értékeljen az AI helyett.",
+      "check": "Pontos szabály használata AI helyett",
+      "checkHint": "Mérhető feltételekhez, például: fizetési határidő ≤ 30 nap.",
       "checkKind": {
-        "constraint": "Értékkorlátozás",
-        "presence": "Jelenlét"
+        "constraint": "A válasz ellenőrzése feltétellel",
+        "presence": "Válasz megkövetelése vagy tiltása"
       },
       "clausePlaceholder": "Záradékok keresése...",
       "clauseSearchEmpty": "Nem található záradék",
@@ -2182,19 +2182,21 @@
         "singleSelect": "Egyszeres választás",
         "text": "Szöveg"
       },
-      "convertToExtract": "Átalakítás csak kinyerésre",
+      "convertToExtract": "Csak a válasz kinyerése",
       "convertToExtractDescription": "Ezzel eltávolítja a szintlétrát és az értékelést ennél az álláspontnál. Ez nem vonható vissza.",
       "convertToExtractTitle": "Átalakítja csak kinyerésre?",
-      "convertToGraded": "Átalakítás értékelt álláspontra",
+      "convertToGraded": "Értékelési szabályok hozzáadása",
       "createPlaybook": "Új playbook",
       "created": "Playbook létrehozva",
+      "customizeAnswer": "A kinyert válasz módosítása",
+      "customizeAnswerHint": "A kérdés vagy a válaszformátum szerkesztése.",
       "deleteFailed": "A playbook törlése nem sikerült",
       "deletePlaybook": "Playbook törlése",
       "deletePosition": "Álláspont törlése",
       "deleted": "Playbook törölve",
-      "derivedAutomatically": "A kérdés és a válasz típusa mentéskor automatikusan meghatározásra kerül.",
-      "derivedQuestion": "Meghatározott kérdés",
-      "derivedType": "Meghatározott típus",
+      "derivedAutomatically": "A kinyerési kérdés és a válaszformátum ebből a pozícióból készül. Nincs szükség beállításra.",
+      "derivedQuestion": "Kinyerési kérdés",
+      "derivedType": "Válaszformátum",
       "descriptionPlaceholder": "Mit ellenőriz ez a playbook?",
       "disabledBadge": "Kikapcsolva — a futtatások kihagyják",
       "discardChanges": "Módosítások elvetése",
@@ -2207,7 +2209,8 @@
       "entryRank": "#{index}",
       "expandPosition": "Álláspont kibontása",
       "expectation": {
-        "restricted": "Tiltott"
+        "required": "A válasznak jelen kell lennie",
+        "restricted": "A válasznak hiányoznia kell"
       },
       "extractOnlyBadge": "Csak kinyerés",
       "extractOnlyDescription": "Nincs értékelés — az érték bekerül a táblázatba.",
@@ -2216,8 +2219,8 @@
       "extractionManual": "Kézi",
       "fixErrorsBeforeSaving": "Mentés előtt javítsa ki a kiemelt mezőket.",
       "gradedNeedsContent": "Adjon hozzá legalább egy szabályt, alternatív bejegyzést vagy ideális megfogalmazást.",
-      "guidanceLabel": "Útmutató",
-      "guidancePlaceholder": "Megjegyzések az ellenőrök számára (opcionális)",
+      "guidanceLabel": "Ellenőrzési utasítások hozzáadása",
+      "guidancePlaceholder": "Adjon meg egy kivételt vagy utasítást, amelyet a fenti szabályok nem fednek le.",
       "idealFromClause": "Záradékkönyvtárból",
       "idealInline": "Egyéni szöveg",
       "idealInlinePlaceholder": "Illessze be az ideális megfogalmazást…",
@@ -2303,8 +2306,8 @@
         "subtitle": "Előre elkészített playbookok, amelyeket hozzáadhat, majd saját normáihoz igazíthat.",
         "title": "Kezdő playbookok"
       },
-      "switchToAuto": "Vissza az automatikus módra",
-      "switchToManual": "Váltás kézi bevitelre",
+      "switchToAuto": "Kérdés és formátum automatikus létrehozása",
+      "switchToManual": "A kérdés és a válaszformátum testreszabása",
       "tier": {
         "acceptable": "Elfogadható",
         "fallback": "Alternatíva",

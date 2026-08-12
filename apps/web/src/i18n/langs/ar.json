@@ -2146,7 +2146,7 @@
       "whatIsAnMcpServer": "ما هو خادم MCP؟"
     },
     "playbooks": {
-      "addCheck": "إضافة فحص",
+      "addCheck": "إضافة قاعدة دقيقة",
       "addExtractPosition": "استخراج فقط",
       "addExtractPositionHint": "تسجيل قيمة دون تقييم",
       "addGradedPosition": "موقف مُقيَّم",
@@ -2154,7 +2154,7 @@
       "addOption": "إضافة خيار",
       "addPosition": "إضافة موقف",
       "addRule": "القاعدة",
-      "advanced": "متقدم",
+      "advanced": "تغيير طريقة العمل",
       "approval": {
         "approve": "موافقة",
         "approveFailed": "تعذرت الموافقة على دليل المراجعة",
@@ -2167,11 +2167,11 @@
       "askContentLabel": "نوع الإجابة",
       "askQuestionLabel": "السؤال",
       "askQuestionPlaceholder": "ما الذي ينبغي قراءته من كل مستند؟ اتركه فارغًا للإدخال اليدوي.",
-      "check": "فحص",
-      "checkHint": "قيّم باستخدام قاعدة محدّدة بدلًا من الذكاء الاصطناعي.",
+      "check": "استخدام قاعدة دقيقة بدلًا من الذكاء الاصطناعي",
+      "checkHint": "للشروط القابلة للقياس، مثل: مهلة السداد ≤ 30 يومًا.",
       "checkKind": {
-        "constraint": "قيد القيمة",
-        "presence": "الوجود"
+        "constraint": "اختبار الإجابة وفق شرط",
+        "presence": "اشتراط وجود إجابة أو منعها"
       },
       "clausePlaceholder": "ابحث في البنود…",
       "clauseSearchEmpty": "لا توجد بنود",
@@ -2182,19 +2182,21 @@
         "singleSelect": "اختيار مفرد",
         "text": "نص"
       },
-      "convertToExtract": "التحويل إلى استخراج فقط",
+      "convertToExtract": "استخراج إجابة فقط",
       "convertToExtractDescription": "سيؤدي هذا إلى إزالة سلّم المستويات والتقييم لهذا الموقف. لا يمكن التراجع عن هذا الإجراء.",
       "convertToExtractTitle": "تحويل إلى استخراج فقط؟",
-      "convertToGraded": "التحويل إلى مُقيَّم",
+      "convertToGraded": "إضافة قواعد للتقييم",
       "createPlaybook": "دليل مراجعة جديد",
       "created": "تم إنشاء دليل المراجعة",
+      "customizeAnswer": "تغيير الإجابة المستخرجة",
+      "customizeAnswerHint": "تعديل السؤال أو تنسيق الإجابة.",
       "deleteFailed": "فشل حذف دليل المراجعة",
       "deletePlaybook": "حذف دليل المراجعة",
       "deletePosition": "حذف الموقف",
       "deleted": "تم حذف دليل المراجعة",
-      "derivedAutomatically": "يُشتقّ السؤال ونوع الإجابة تلقائيًا عند الحفظ.",
-      "derivedQuestion": "سؤال مُشتقّ",
-      "derivedType": "نوع مُشتقّ",
+      "derivedAutomatically": "يتم إنشاء سؤال الاستخراج وتنسيق الإجابة من هذا الموقف. لا يلزم أي إعداد.",
+      "derivedQuestion": "سؤال الاستخراج",
+      "derivedType": "تنسيق الإجابة",
       "descriptionPlaceholder": "ما الذي يتحقّق منه دليل المراجعة هذا؟",
       "disabledBadge": "معطّل — يُتخطّى أثناء المراجعات",
       "discardChanges": "تجاهل التغييرات",
@@ -2207,7 +2209,8 @@
       "entryRank": "#{index}",
       "expandPosition": "توسيع الموقف",
       "expectation": {
-        "restricted": "محظور"
+        "required": "يجب أن تكون الإجابة موجودة",
+        "restricted": "يجب ألا تكون الإجابة موجودة"
       },
       "extractOnlyBadge": "استخراج فقط",
       "extractOnlyDescription": "دون تقييم — يتم تسجيل القيمة في الجدول.",
@@ -2216,8 +2219,8 @@
       "extractionManual": "يدوي",
       "fixErrorsBeforeSaving": "صحّح الحقول المُبرزة قبل الحفظ.",
       "gradedNeedsContent": "أضِف قاعدة واحدة على الأقل، أو إدخالًا بديلًا، أو صياغة مثالية.",
-      "guidanceLabel": "الإرشادات",
-      "guidancePlaceholder": "ملاحظات للمراجعين (اختياري)",
+      "guidanceLabel": "إضافة تعليمات للمراجعة",
+      "guidancePlaceholder": "أضف استثناءً أو تعليمات لا تغطيها القواعد أعلاه.",
       "idealFromClause": "من مكتبة البنود",
       "idealInline": "نص مباشر",
       "idealInlinePlaceholder": "الصق الصياغة المثالية…",
@@ -2303,8 +2306,8 @@
         "subtitle": "أدلّة مراجعة جاهزة يمكنك إضافتها ثم تكييفها مع معاييرك.",
         "title": "أدلّة مراجعة جاهزة"
       },
-      "switchToAuto": "العودة إلى التلقائي",
-      "switchToManual": "التحويل إلى اليدوي",
+      "switchToAuto": "إنشاء السؤال والتنسيق تلقائيًا",
+      "switchToManual": "تخصيص السؤال وتنسيق الإجابة",
       "tier": {
         "acceptable": "مقبول",
         "fallback": "بديل",

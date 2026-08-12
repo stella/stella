@@ -2146,7 +2146,7 @@
       "whatIsAnMcpServer": "Was ist ein MCP-Server?"
     },
     "playbooks": {
-      "addCheck": "Prüfung hinzufügen",
+      "addCheck": "Exakte Regel hinzufügen",
       "addExtractPosition": "Nur Extraktion",
       "addExtractPositionHint": "Erfasst einen Wert, keine Bewertung",
       "addGradedPosition": "Bewerteter Standpunkt",
@@ -2154,7 +2154,7 @@
       "addOption": "Option hinzufügen",
       "addPosition": "Standpunkt hinzufügen",
       "addRule": "Regel",
-      "advanced": "Erweitert",
+      "advanced": "Funktionsweise ändern",
       "approval": {
         "approve": "Genehmigen",
         "approveFailed": "Playbook konnte nicht genehmigt werden",
@@ -2167,11 +2167,11 @@
       "askContentLabel": "Antworttyp",
       "askQuestionLabel": "Frage",
       "askQuestionPlaceholder": "Was sollen wir aus jedem Dokument lesen? Für manuelle Eingabe leer lassen.",
-      "check": "Prüfung",
-      "checkHint": "Bewertet mit einer deterministischen Regel statt mit der KI.",
+      "check": "Exakte Regel statt KI verwenden",
+      "checkHint": "Für messbare Bedingungen, etwa: Zahlungsziel ≤ 30 Tage.",
       "checkKind": {
-        "constraint": "Wertbeschränkung",
-        "presence": "Vorhandensein"
+        "constraint": "Antwort anhand einer Bedingung prüfen",
+        "presence": "Antwort verlangen oder ausschließen"
       },
       "clausePlaceholder": "Klauseln durchsuchen…",
       "clauseSearchEmpty": "Keine Klauseln gefunden",
@@ -2182,19 +2182,21 @@
         "singleSelect": "Einfachauswahl",
         "text": "Text"
       },
-      "convertToExtract": "In „Nur Extraktion“ umwandeln",
+      "convertToExtract": "Nur eine Antwort extrahieren",
       "convertToExtractDescription": "Dies entfernt die Stufenleiter und die Bewertung für diesen Standpunkt. Diese Aktion kann nicht rückgängig gemacht werden.",
       "convertToExtractTitle": "In „Nur Extraktion“ umwandeln?",
-      "convertToGraded": "In bewerteten Standpunkt umwandeln",
+      "convertToGraded": "Bewertungsregeln hinzufügen",
       "createPlaybook": "Neues Playbook",
       "created": "Playbook erstellt",
+      "customizeAnswer": "Extrahierte Antwort ändern",
+      "customizeAnswerHint": "Frage oder Antwortformat bearbeiten.",
       "deleteFailed": "Playbook konnte nicht gelöscht werden",
       "deletePlaybook": "Playbook löschen",
       "deletePosition": "Standpunkt löschen",
       "deleted": "Playbook gelöscht",
-      "derivedAutomatically": "Frage und Antworttyp werden beim Speichern automatisch abgeleitet.",
-      "derivedQuestion": "Abgeleitete Frage",
-      "derivedType": "Abgeleiteter Typ",
+      "derivedAutomatically": "Die Extraktionsfrage und das Antwortformat werden aus dieser Position erzeugt. Es ist keine Einrichtung erforderlich.",
+      "derivedQuestion": "Extraktionsfrage",
+      "derivedType": "Antwortformat",
       "descriptionPlaceholder": "Was prüft dieses Playbook?",
       "disabledBadge": "Aus — wird bei der Prüfung übersprungen",
       "discardChanges": "Änderungen verwerfen",
@@ -2207,7 +2209,8 @@
       "entryRank": "#{index}",
       "expandPosition": "Standpunkt erweitern",
       "expectation": {
-        "restricted": "Unzulässig"
+        "required": "Antwort muss vorhanden sein",
+        "restricted": "Antwort darf nicht vorhanden sein"
       },
       "extractOnlyBadge": "Nur Extraktion",
       "extractOnlyDescription": "Keine Bewertung — erfasst den Wert in der Tabelle.",
@@ -2216,8 +2219,8 @@
       "extractionManual": "Manuell",
       "fixErrorsBeforeSaving": "Beheben Sie die hervorgehobenen Felder, bevor Sie speichern.",
       "gradedNeedsContent": "Fügen Sie mindestens eine Regel, einen Alternativeintrag oder eine ideale Formulierung hinzu.",
-      "guidanceLabel": "Hinweise",
-      "guidancePlaceholder": "Hinweise für Prüfer (optional)",
+      "guidanceLabel": "Prüfanweisungen hinzufügen",
+      "guidancePlaceholder": "Eine Ausnahme oder Anweisung ergänzen, die von den Regeln oben nicht abgedeckt ist.",
       "idealFromClause": "Aus der Klauselbibliothek",
       "idealInline": "Freitext",
       "idealInlinePlaceholder": "Ideale Formulierung einfügen…",
@@ -2303,8 +2306,8 @@
         "subtitle": "Vorgefertigte Playbooks, die Sie hinzufügen und an Ihre Standards anpassen können.",
         "title": "Playbook-Vorlagen"
       },
-      "switchToAuto": "Zurück zu automatisch",
-      "switchToManual": "Zu manuell wechseln",
+      "switchToAuto": "Frage und Format automatisch erzeugen",
+      "switchToManual": "Frage und Antwortformat anpassen",
       "tier": {
         "acceptable": "Akzeptabel",
         "fallback": "Alternative",
