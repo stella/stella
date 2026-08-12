@@ -39,6 +39,16 @@ export const USAGE_POLICY_BILLING_INTERVALS = [
 
 export const USAGE_POLICY_VISIBILITIES = ["public", "hidden"] as const;
 
+/**
+ * How the catalog price applies: `flat` = one price for the whole
+ * organisation, `per_seat` = the price multiplies by purchased seats.
+ * A named discriminator rather than a boolean: pricing shapes grow
+ * (tiered, banded), and each addition must force a decision at every
+ * read site.
+ */
+export const USAGE_POLICY_PRICE_BASES = ["flat", "per_seat"] as const;
+export type UsagePolicyPriceBasis = (typeof USAGE_POLICY_PRICE_BASES)[number];
+
 const USAGE_POLICY_KIND_SQL_VALUES = USAGE_POLICY_KINDS.map((kind) =>
   sql.raw(`'${kind}'`),
 );
@@ -48,6 +58,10 @@ const USAGE_POLICY_BILLING_INTERVAL_SQL_VALUES =
 
 const USAGE_POLICY_VISIBILITY_SQL_VALUES = USAGE_POLICY_VISIBILITIES.map(
   (visibility) => sql.raw(`'${visibility}'`),
+);
+
+const USAGE_POLICY_PRICE_BASIS_SQL_VALUES = USAGE_POLICY_PRICE_BASES.map(
+  (basis) => sql.raw(`'${basis}'`),
 );
 
 export const usagePolicies = p.pgTable(
@@ -70,6 +84,10 @@ export const usagePolicies = p.pgTable(
     billingInterval: p.text("billing_interval", {
       enum: USAGE_POLICY_BILLING_INTERVALS,
     }),
+    priceBasis: p
+      .text("price_basis", { enum: USAGE_POLICY_PRICE_BASES })
+      .notNull()
+      .default("flat"),
     // Hidden by default: a seeded policy only appears in the catalog
     // endpoint once the operator explicitly marks it public.
     visibility: p
@@ -109,6 +127,10 @@ export const usagePolicies = p.pgTable(
       "usage_policies_visibility_domain",
       sql`visibility IN (${sql.join(USAGE_POLICY_VISIBILITY_SQL_VALUES, sql`, `)})`,
     ),
+    p.check(
+      "usage_policies_price_basis_domain",
+      sql`price_basis IN (${sql.join(USAGE_POLICY_PRICE_BASIS_SQL_VALUES, sql`, `)})`,
+    ),
     p
       .uniqueIndex("usage_policies_hosted_policy_ref_uidx")
       .on(table.hostedPolicyRef)
@@ -144,6 +166,15 @@ export const usageEntitlements = p.pgTable(
       .references(() => usagePolicies.id, { onDelete: "restrict" }),
     status: p.text({ enum: USAGE_ENTITLEMENT_STATUSES }).notNull(),
     seats: p.integer().notNull(),
+    /**
+     * Highest seat count applied inside the current period, maintained
+     * by the hosted webhook dispatcher and reset on period rollover.
+     * Pro-rata unit deltas are granted only when seats exceed this
+     * peak, so cycling seats down and back up inside one period cannot
+     * mint capacity twice. Null on rows written before the column
+     * existed; readers treat null as "peak = seats".
+     */
+    hostedPeakSeats: p.integer("hosted_peak_seats"),
     currentPeriodStart: timestamptz("current_period_start").notNull(),
     currentPeriodEnd: timestamptz("current_period_end").notNull(),
     hostedAccountRef: p.text("hosted_account_ref"),
@@ -193,6 +224,10 @@ export const usageEntitlements = p.pgTable(
       .on(table.hostedAccountRef)
       .where(sql`hosted_account_ref IS NOT NULL`),
     p.check("usage_entitlements_seats_positive", sql`seats > 0`),
+    p.check(
+      "usage_entitlements_hosted_peak_seats_positive",
+      sql`hosted_peak_seats IS NULL OR hosted_peak_seats > 0`,
+    ),
     p.check(
       "usage_entitlements_period_order",
       sql`current_period_end > current_period_start`,

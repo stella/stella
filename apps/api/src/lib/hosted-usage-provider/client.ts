@@ -32,6 +32,8 @@ type CreateHostedSetupInput = {
   returnUrl?: string | undefined;
   successUrl: string;
   metadata: HostedSetupMetadata;
+  /** Seat count for seat-based subscription policies; omit for flat. */
+  seats?: number | undefined;
 };
 
 type CreateHostedSetupResult = {
@@ -77,6 +79,7 @@ const createNeutralSetupSession = async ({
   returnUrl,
   successUrl,
   metadata,
+  seats,
 }: CreateHostedSetupInput): Promise<
   Result<CreateHostedSetupResult, HostedUsageProviderApiError>
 > =>
@@ -96,6 +99,7 @@ const createNeutralSetupSession = async ({
             return_url: returnUrl,
             account_ref: accountRef,
             external_account_ref: externalAccountRef,
+            quantity: seats,
             metadata,
           }),
           timeoutMs: REQUEST_TIMEOUT_MS,
@@ -131,6 +135,7 @@ export const createPolarSetupSession = async ({
   returnUrl,
   successUrl,
   metadata,
+  seats,
 }: CreateHostedSetupInput): Promise<
   Result<CreateHostedSetupResult, HostedUsageProviderApiError>
 > =>
@@ -151,6 +156,9 @@ export const createPolarSetupSession = async ({
             external_customer_id: externalAccountRef,
             success_url: successUrl,
             return_url: returnUrl,
+            // Seat-based products take the seat count at checkout; the
+            // resulting subscription reports it back on webhook events.
+            seats,
             metadata,
           }),
           timeoutMs: REQUEST_TIMEOUT_MS,

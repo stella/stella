@@ -67,7 +67,33 @@ type ExistingEntitlement = {
   source: "hosted" | "manual";
   usagePolicyId: SafeId<"usagePolicy">;
   hostedLastEventAt: Date | null;
+  seats: number;
+  hostedPeakSeats: number | null;
+  currentPeriodStart: Date;
 };
+
+/**
+ * Highest seat count already granted capacity inside the row's current
+ * period. Null `hostedPeakSeats` (pre-column rows) reads as the row's
+ * seat count: those seats were granted by the period's periodic
+ * allocation.
+ */
+const peakSeatsOf = (existing: ExistingEntitlement): number =>
+  Math.max(existing.seats, existing.hostedPeakSeats ?? existing.seats);
+
+/**
+ * Peak to store on the row after applying an event: within the same
+ * period the peak only rises; a new period resets it to the event's
+ * seat count.
+ */
+const nextPeakSeats = (
+  existing: ExistingEntitlement,
+  seats: number,
+  periodStart: Date,
+): number =>
+  existing.currentPeriodStart.getTime() === periodStart.getTime()
+    ? Math.max(peakSeatsOf(existing), seats)
+    : seats;
 
 /**
  * Provider-reported occurrence time, or null when absent/unparseable.
@@ -121,6 +147,9 @@ const findEntitlementByHostedExternalId = async (
       source: usageEntitlements.source,
       usagePolicyId: usageEntitlements.usagePolicyId,
       hostedLastEventAt: usageEntitlements.hostedLastEventAt,
+      seats: usageEntitlements.seats,
+      hostedPeakSeats: usageEntitlements.hostedPeakSeats,
+      currentPeriodStart: usageEntitlements.currentPeriodStart,
     })
     .from(usageEntitlements)
     .where(
@@ -165,6 +194,9 @@ const findEntitlementByHostedAccountRef = async (
       source: usageEntitlements.source,
       usagePolicyId: usageEntitlements.usagePolicyId,
       hostedLastEventAt: usageEntitlements.hostedLastEventAt,
+      seats: usageEntitlements.seats,
+      hostedPeakSeats: usageEntitlements.hostedPeakSeats,
+      currentPeriodStart: usageEntitlements.currentPeriodStart,
     })
     .from(usageEntitlements)
     .where(eq(usageEntitlements.hostedAccountRef, hostedAccountRef))
@@ -244,6 +276,10 @@ export const handleHostedEntitlementUpsert = async ({
   // insert path is allowed to trust metadata, because that's the
   // only signal we have before a local mapping exists.
   let ownerOrganizationId: SafeId<"organization">;
+  // Pre-update row state, kept for the seat-increase delta below.
+  // Null on the fresh-insert path: the periodic allocation already
+  // covers every seat there.
+  let previousRow: ExistingEntitlement | null = null;
 
   if (existingByProvider) {
     if (existingByProvider.source !== "hosted") {
@@ -286,12 +322,14 @@ export const handleHostedEntitlementUpsert = async ({
         reason: "hosted account reference already maps to another entitlement",
       };
     }
+    previousRow = existingByProvider;
     await tx
       .update(usageEntitlements)
       .set({
         usagePolicyId: policy.id,
         status,
         seats,
+        hostedPeakSeats: nextPeakSeats(existingByProvider, seats, periodStart),
         currentPeriodStart: periodStart,
         currentPeriodEnd: periodEnd,
         hostedAccountRef: payload.account_ref,
@@ -340,12 +378,18 @@ export const handleHostedEntitlementUpsert = async ({
         };
       }
       ownerOrganizationId = existingByAccountRef.organizationId;
+      previousRow = existingByAccountRef;
       await tx
         .update(usageEntitlements)
         .set({
           usagePolicyId: policy.id,
           status,
           seats,
+          hostedPeakSeats: nextPeakSeats(
+            existingByAccountRef,
+            seats,
+            periodStart,
+          ),
           currentPeriodStart: periodStart,
           currentPeriodEnd: periodEnd,
           hostedAccountRef: payload.account_ref,
@@ -384,6 +428,7 @@ export const handleHostedEntitlementUpsert = async ({
           usagePolicyId: policy.id,
           status,
           seats,
+          hostedPeakSeats: seats,
           currentPeriodStart: periodStart,
           currentPeriodEnd: periodEnd,
           hostedAccountRef: payload.account_ref,
@@ -441,6 +486,56 @@ export const handleHostedEntitlementUpsert = async ({
         reason: { old: null, new: "periodic" },
       },
     });
+  }
+
+  // A mid-period seat increase grants its unit delta immediately,
+  // pro-rated by the remaining period fraction — the periodic
+  // allocation above is idempotent per period and will not re-fire.
+  // The delta keys on the new seat count, so a re-delivered event
+  // dedupes, and because it is measured against the period's PEAK,
+  // cycling seats down and back up cannot mint the same capacity
+  // twice. Seat decreases grant nothing and never claw back units;
+  // the lower count simply shapes the next renewal's allocation.
+  if (previousRow !== null) {
+    const samePeriod =
+      previousRow.currentPeriodStart.getTime() === periodStart.getTime();
+    const previousPeak = peakSeatsOf(previousRow);
+    if (samePeriod && seats > previousPeak) {
+      const asOf = occurredAt ?? new Date();
+      const periodMs = periodEnd.getTime() - periodStart.getTime();
+      const remainingMs = periodEnd.getTime() - asOf.getTime();
+      const remainingFraction = Math.min(
+        Math.max(remainingMs / periodMs, 0),
+        1,
+      );
+      const deltaUnits = Math.floor(
+        policy.monthlyUsageUnits * (seats - previousPeak) * remainingFraction,
+      );
+      const deltaAllocation = await allocateUsage({
+        tx,
+        organizationId: ownerOrganizationId,
+        units: deltaUnits,
+        reason: "periodic",
+        sourceType: "hosted_entitlement",
+        sourceRef: `${periodicAllocationSourceRef}:seats:${seats}`,
+        period: { start: periodStart, end: periodEnd },
+      });
+      if (deltaAllocation.status === "allocated") {
+        await recordWebhookAuditEvent({
+          tx,
+          organizationId: ownerOrganizationId,
+          action: AUDIT_ACTION.CREATE,
+          resourceType: AUDIT_RESOURCE_TYPE.USAGE_ALLOCATION,
+          resourceId: deltaAllocation.id,
+          eventId,
+          changes: {
+            units: { old: null, new: deltaUnits },
+            reason: { old: null, new: "periodic" },
+            seats: { old: previousPeak, new: seats },
+          },
+        });
+      }
+    }
   }
 
   return { kind: "applied", entitlementId };
