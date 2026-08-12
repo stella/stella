@@ -20,13 +20,12 @@ const { testDb, ids } = await getRlsFixture();
 void mock.module("@/api/db/root", () => ({ rootDb: testDb, rlsDb: testDb }));
 
 const deletedKeys: string[] = [];
-const s3Module = await import("@/api/lib/s3");
+const realS3 = await import("@/api/lib/s3");
 void mock.module("@/api/lib/s3", () => ({
-  ...s3Module,
+  ...realS3,
   getS3: () => ({
-    delete: (key: string) => {
+    delete: async (key: string) => {
       deletedKeys.push(key);
-      return Promise.resolve();
     },
   }),
 }));

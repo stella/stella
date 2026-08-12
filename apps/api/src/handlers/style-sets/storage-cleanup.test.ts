@@ -27,27 +27,24 @@ const cleanupQueueModule =
   await import("@/api/lib/style-set-package-cleanup-queue");
 void mock.module("@/api/lib/style-set-package-cleanup-queue", () => ({
   ...cleanupQueueModule,
-  enqueueStyleSetPackageCleanup: (claim: CleanupClaim) => {
+  enqueueStyleSetPackageCleanup: async (claim: CleanupClaim) => {
     claims.push(claim);
-    return Promise.resolve();
   },
 }));
 
-const s3Module = await import("@/api/lib/s3");
+const realS3 = await import("@/api/lib/s3");
 void mock.module("@/api/lib/s3", () => ({
-  ...s3Module,
+  ...realS3,
   getS3: () => ({
-    delete: (key: string) => {
+    delete: async (key: string) => {
       if (deleteFails) {
-        return Promise.reject(new Error("storage unavailable"));
+        throw new Error("storage unavailable");
       }
       deletedKeys.push(key);
-      return Promise.resolve();
     },
   }),
-  writeS3ObjectWithRetry: ({ key }: { key: string }) => {
+  writeS3ObjectWithRetry: async ({ key }: { key: string }) => {
     writtenKeys.push(key);
-    return Promise.resolve();
   },
 }));
 
@@ -55,13 +52,14 @@ const { createStoredStyleSet } =
   await import("@/api/handlers/style-sets/storage");
 
 /** The row never commits: the shape a crash between the two writes leaves. */
-const failingSafeDb = asTestRaw<SafeDb>(() =>
-  Promise.resolve(
-    Result.err(new DatabaseError({ message: "connection lost" })),
-  ),
+const failingSafeDb = asTestRaw<SafeDb>(
+  async () =>
+    await Promise.resolve(
+      Result.err(new DatabaseError({ message: "connection lost" })),
+    ),
 );
 
-const recordAuditEvent: AuditRecorder = () => Promise.resolve(undefined);
+const recordAuditEvent: AuditRecorder = async () => undefined;
 
 const createRejectedStyleSet = async () =>
   await createStoredStyleSet({

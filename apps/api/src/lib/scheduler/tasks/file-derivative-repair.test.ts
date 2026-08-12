@@ -53,23 +53,21 @@ const priorJobs = new Map<
 const removedJobIds: string[] = [];
 
 class StubQueue {
-  add(name: string, data: QueuedJob["data"], opts: QueuedJob["opts"]) {
+  async add(name: string, data: QueuedJob["data"], opts: QueuedJob["opts"]) {
     queued.push({ data, name, opts });
-    return Promise.resolve();
   }
 
-  getJob(jobId: string) {
+  async getJob(jobId: string) {
     const job = priorJobs.get(jobId);
     if (!job) {
-      return Promise.resolve(undefined);
+      return undefined;
     }
-    return Promise.resolve({
+    return await Promise.resolve({
       data: job.data,
-      getState: () => Promise.resolve(job.state),
-      remove: () => {
+      getState: async () => await Promise.resolve(job.state),
+      remove: async () => {
         priorJobs.delete(jobId);
         removedJobIds.push(jobId);
-        return Promise.resolve();
       },
     });
   }
