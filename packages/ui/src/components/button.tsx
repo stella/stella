@@ -7,8 +7,18 @@ import { useRender } from "@base-ui/react/use-render";
 import type { VariantProps } from "class-variance-authority";
 import { LoaderIcon } from "lucide-react";
 
-import { buttonVariants } from "@stll/ui/components/button-variants";
+import {
+  buttonAccessibleDisabledClass,
+  buttonVariants,
+} from "@stll/ui/components/button-variants";
 import { renderTooltipTrigger } from "@stll/ui/components/tooltip-trigger-helper";
+import {
+  BUTTON_DISPOSITION,
+  blockDisabledActivation,
+  blockDisabledKeyActivation,
+  resolveButtonDisposition,
+} from "@stll/ui/lib/button-disposition";
+import type { OverlayLayer } from "@stll/ui/lib/overlay-layer";
 import { cn } from "@stll/ui/lib/utils";
 
 type ButtonProps = {
@@ -16,6 +26,11 @@ type ButtonProps = {
   size?: VariantProps<typeof buttonVariants>["size"];
   loading?: boolean;
   tooltip?: React.ReactNode;
+  /**
+   * Overlay band for the tooltip popup. Needed when the button sits in floating
+   * chrome whose own band would otherwise paint over the popup.
+   */
+  tooltipLayer?: OverlayLayer | undefined;
 } & useRender.ComponentProps<"button">;
 
 function Button({
@@ -27,10 +42,22 @@ function Button({
   children,
   disabled,
   tooltip,
+  tooltipLayer,
   ...props
 }: ButtonProps) {
   const typeValue: React.ButtonHTMLAttributes<HTMLButtonElement>["type"] =
     render ? undefined : "button";
+
+  // Same value `renderTooltipTrigger` mounts below, so the disposition and the
+  // popup cannot disagree about whether this button has a tooltip.
+  const tooltipContent = tooltip ?? props["aria-label"] ?? props.title;
+  const disposition = resolveButtonDisposition({
+    disabled,
+    loading,
+    tooltip: tooltipContent,
+  });
+  const isAccessibleDisabled =
+    disposition === BUTTON_DISPOSITION.accessibleDisabled;
 
   const defaultProps = {
     children: loading ? (
@@ -41,21 +68,38 @@ function Button({
     ) : (
       children
     ),
-    className: cn(buttonVariants({ className, size, variant })),
+    className: cn(
+      buttonVariants({ className, size, variant }),
+      isAccessibleDisabled && buttonAccessibleDisabledClass,
+    ),
     "data-slot": "button",
-    disabled: loading || disabled,
+    ...(isAccessibleDisabled
+      ? { "aria-disabled": true, "data-disabled": "", tabIndex: 0 }
+      : { disabled: disposition === BUTTON_DISPOSITION.nativeDisabled }),
     type: typeValue,
   };
 
+  // The blockers are merged last so they run first and can stop the caller's
+  // own handlers via `preventBaseUIHandler`; without them an `aria-disabled`
+  // button would still click, still submit its form, and still fire onKeyDown.
   const button = useRender({
     defaultTagName: "button",
-    props: mergeProps<"button">(defaultProps, props),
+    props: isAccessibleDisabled
+      ? mergeProps<"button">(defaultProps, props, {
+          onClick: blockDisabledActivation,
+          onKeyDown: blockDisabledKeyActivation,
+          onKeyUp: blockDisabledKeyActivation,
+          onMouseDown: blockDisabledActivation,
+          onPointerDown: blockDisabledActivation,
+        })
+      : mergeProps<"button">(defaultProps, props),
     render,
   });
 
   return renderTooltipTrigger({
-    tooltip: tooltip ?? props["aria-label"] ?? props.title,
+    tooltip: tooltipContent,
     trigger: button,
+    ...(tooltipLayer === undefined ? {} : { layer: tooltipLayer }),
   });
 }
 

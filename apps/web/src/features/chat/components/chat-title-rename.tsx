@@ -60,32 +60,28 @@ export const ChatTitleSuggestButton = ({
   }
 
   return (
-    <Tooltip
-      content={label}
-      render={
-        <Button
-          aria-label={label}
-          className={cn(
-            "text-muted-foreground hover:text-foreground shrink-0",
-            className,
-          )}
-          disabled={usedAnonymization || !hasMessages || isPending}
-          onClick={onTrigger}
-          onMouseDown={(event) => {
-            event.preventDefault();
-          }}
-          size="icon-xs"
-          type="button"
-          variant="ghost"
-        >
-          {isPending ? (
-            <Loader2Icon aria-hidden="true" className="size-3.5 animate-spin" />
-          ) : (
-            <WandSparklesIcon aria-hidden="true" className="size-3.5" />
-          )}
-        </Button>
-      }
-    />
+    <Button
+      aria-label={label}
+      className={cn(
+        "text-muted-foreground hover:text-foreground shrink-0",
+        className,
+      )}
+      disabled={usedAnonymization || !hasMessages || isPending}
+      onClick={onTrigger}
+      onMouseDown={(event) => {
+        event.preventDefault();
+      }}
+      size="icon-xs"
+      tooltip={label}
+      type="button"
+      variant="ghost"
+    >
+      {isPending ? (
+        <Loader2Icon aria-hidden="true" className="size-3.5 animate-spin" />
+      ) : (
+        <WandSparklesIcon aria-hidden="true" className="size-3.5" />
+      )}
+    </Button>
   );
 };
 

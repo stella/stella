@@ -29,7 +29,13 @@ describe("SecretInput", () => {
       />,
     );
 
+    // The toggle names itself with `aria-label`, which `Button` also renders as
+    // a tooltip, so disabling it takes the accessible-disabled path: reachable
+    // for hover and focus, with every activation blocked.
     expect(markup).toContain(
+      'data-slot="secret-input-visibility-toggle" aria-disabled="true"',
+    );
+    expect(markup).not.toContain(
       'data-slot="secret-input-visibility-toggle" disabled=""',
     );
   });

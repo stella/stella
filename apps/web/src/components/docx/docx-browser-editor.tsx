@@ -74,7 +74,6 @@ import {
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { StatusMessage } from "@/components/route-components";
-import Tooltip from "@/components/tooltip";
 import { env } from "@/env";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -1451,26 +1450,22 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
           {actionBarControls}
           {showActionBar && isUnlocked && (
             <>
-              <Tooltip
-                content={finishEditingLabel}
-                render={
-                  <Button
-                    aria-label={finishEditingLabel}
-                    className="px-2"
-                    disabled={
-                      state.status === "opening" ||
-                      state.status === "saving" ||
-                      collaborationState.status === "opening"
-                    }
-                    onClick={handleToggleLock}
-                    size="sm"
-                    variant="ghost"
-                  >
-                    <LockOpenIcon />
-                    <span>{finishEditingLabel}</span>
-                  </Button>
+              <Button
+                aria-label={finishEditingLabel}
+                className="px-2"
+                disabled={
+                  state.status === "opening" ||
+                  state.status === "saving" ||
+                  collaborationState.status === "opening"
                 }
-              />
+                onClick={handleToggleLock}
+                size="sm"
+                tooltip={finishEditingLabel}
+                variant="ghost"
+              >
+                <LockOpenIcon />
+                <span>{finishEditingLabel}</span>
+              </Button>
               <AutosaveIndicator status={autosaveStatus} />
             </>
           )}
