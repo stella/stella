@@ -50,7 +50,9 @@ test("chat thread page renders for an entitlement-less owner", async ({
   await expect(composer.or(aiKeyGate)).toBeVisible();
 });
 
-test("server-rendered public law pages hydrate cleanly", async ({ page }) => {
+test("server-rendered public law decisions stay stable after hydration", async ({
+  page,
+}) => {
   // A persisted non-English locale is the harder hydration case: the
   // client holds translated messages before hydrating against the
   // server's English markup. The bug class this guards against only
@@ -68,8 +70,14 @@ test("server-rendered public law pages hydrate cleanly", async ({ page }) => {
   // invariant) and end in the error boundary; collect them explicitly
   // so the failure names the real exception instead of a timeout.
   const pageErrors: string[] = [];
+  const failedAssets: string[] = [];
   page.on("pageerror", (error) => {
     pageErrors.push(error.message);
+  });
+  page.on("response", (response) => {
+    if (response.status() >= 400 && response.url().includes("/assets/")) {
+      failedAssets.push(response.url());
+    }
   });
 
   await page.goto("/law/cases", { waitUntil: "commit" });
@@ -91,5 +99,17 @@ test("server-rendered public law pages hydrate cleanly", async ({ page }) => {
   // Case numbers look like "6 Tdo 647/2017"; anchoring on the slash-year
   // tail keeps the regex linear.
   await expect(page.getByRole("heading", { name: /\/\d{4}/u })).toBeVisible();
+  const routeErrorTitle = page.locator("#route-error-title");
+  const inspector = page.locator('[data-side="right"]');
+  await expect(routeErrorTitle).toHaveCount(0);
+  await expect(inspector).toHaveAttribute("data-state", "expanded");
+
+  // Authentication resolution and the lazy inspector graph settle after the
+  // decision heading appears. Keep observing long enough to catch a delayed
+  // remount, stale-chunk retry, or cross-tab store reconciliation.
+  await page.waitForTimeout(5000);
+  await expect(routeErrorTitle).toHaveCount(0);
+  await expect(inspector).toHaveAttribute("data-state", "expanded");
   expect(pageErrors).toEqual([]);
+  expect(failedAssets).toEqual([]);
 });
