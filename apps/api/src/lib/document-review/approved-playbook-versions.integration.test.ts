@@ -247,7 +247,10 @@ describe("resolving the pin a run is measured against", () => {
       playbookDefinitionIds: [edited.id, other.id],
     });
 
-    expect(single?.id).toBe(latestId);
+    if (single === null) {
+      throw new Error("The edited playbook must resolve an approved version");
+    }
+    expect(single.id).toBe(latestId);
     expect(batch.get(edited.id)).toEqual(single);
 
     const singlePin = resolvePlaybookPin({
