@@ -591,6 +591,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-partial-record-satisfies.ts",
     "./.oxlint-plugins/require-toast-error-capture.ts",
     "./.oxlint-plugins/no-swallowed-rejection.ts",
+    "./.oxlint-plugins/no-awaited-builder-union.ts",
   ],
 
   overrides: [
@@ -1093,6 +1094,21 @@ export default defineConfig({
       ],
       rules: {
         "require-toast-error-capture/require-toast-error-capture": "error",
+      },
+    },
+    {
+      // The other half of the type-cost guard: awaiting a ternary whose
+      // branches are two chain states of one query builder instantiates both
+      // builder types and their union before `Awaited<>` resolves. Scoped to
+      // the backend and shared packages, where the Drizzle handles and other
+      // fluent generic builders live; apps/web has no query builder.
+      files: [
+        "apps/api/src/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-awaited-builder-union.fixture.ts",
+      ],
+      rules: {
+        "no-awaited-builder-union/no-awaited-builder-union": "error",
       },
     },
     {
