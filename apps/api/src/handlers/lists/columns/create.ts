@@ -18,6 +18,13 @@ const bodySchema = t.Object({
   required: t.Optional(t.Boolean()),
 });
 const config = {
+  description:
+    "Add a column to a list by binding one of the matter's properties to it, " +
+    "with an optional position and a required flag. The list must be active " +
+    "and the property must belong to the same matter. A property can be " +
+    "bound only once per list: binding it again returns the existing column " +
+    "rather than creating a second one. Refused once the list holds its " +
+    "maximum number of columns.",
   permissions: { view: ["update"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   body: bodySchema,

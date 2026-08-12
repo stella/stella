@@ -16,6 +16,11 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Create a list in a matter from a name and an optional description; it " +
+    "starts active and empty. Refused once the matter holds its maximum " +
+    "number of lists. Add structure afterwards with lists.sections.create " +
+    "and lists.columns.create.",
   permissions: { view: ["create"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   body: bodySchema,

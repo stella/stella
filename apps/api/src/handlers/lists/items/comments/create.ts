@@ -15,6 +15,9 @@ const bodySchema = t.Object({
   body: t.String({ minLength: 1, maxLength: 10_000 }),
 });
 const config = {
+  description:
+    "Add a comment to one list item. The comment is stored against the item " +
+    "and shows up in its activity trail.",
   permissions: { entity: ["update"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   body: bodySchema,

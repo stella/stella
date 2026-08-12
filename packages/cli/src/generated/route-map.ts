@@ -17555,6 +17555,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "columns-create"],
                 capabilityId: "lists.columns.create",
+                description:
+                  "Add a column to a list by binding one of the matter's properties to it, with an optional position and a required flag. The list must be active and the property must belong to the same matter. A property can be bound only once per list: binding it again returns the existing column rather than creating a second one. Refused once the list holds its maximum number of columns.",
                 access: "write",
                 flags: [
                   {
@@ -17657,6 +17659,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "create"],
                 capabilityId: "lists.create",
+                description:
+                  "Create a list in a matter from a name and an optional description; it starts active and empty. Refused once the matter holds its maximum number of lists. Add structure afterwards with lists.sections.create and lists.columns.create.",
                 access: "write",
                 flags: [
                   {
@@ -17731,6 +17735,8 @@ export const generatedRouteMap: RouteNode = {
                   "generation-candidates-acceptance-create",
                 ],
                 capabilityId: "lists.generation-candidates.acceptance.create",
+                description:
+                  "Accept one candidate from a generation run: create the item it proposes as a task in the matter, optionally in a named section, and copy the candidate's sources onto the new item with their locators and quotes. The candidate is claimed before the item is created, so two concurrent accepts cannot both produce one, and the run flips to committed once no candidate is left pending. A candidate whose sources have disappeared is refused and the reserved item is cleaned up.",
                 access: "write",
                 flags: [
                   {
@@ -17843,6 +17849,8 @@ export const generatedRouteMap: RouteNode = {
                   "generation-candidates-create",
                 ],
                 capabilityId: "lists.generation-candidates.create",
+                description:
+                  "Submit the candidates a generation run produced: per candidate a name, description, item type, status, priority, due date, suggested assignees, and the sources it was drawn from, each naming a document version with a locator and optional quote. Every source must be one of the run's own source versions. The run moves from running to review; candidates stay proposals until they are accepted or rejected.",
                 access: "write",
                 flags: [
                   {
@@ -18097,6 +18105,8 @@ export const generatedRouteMap: RouteNode = {
                   "generation-candidates-list",
                 ],
                 capabilityId: "lists.generation-candidates.list",
+                description:
+                  "List one generation run's candidates in proposal order with cursor pagination: the proposed item fields, the candidate's status, the item it was accepted as when it has one, and the sources it cites. The run's own status is returned alongside the page.",
                 access: "read",
                 flags: [
                   {
@@ -18198,6 +18208,8 @@ export const generatedRouteMap: RouteNode = {
                   "generation-candidates-rejection-create",
                 ],
                 capabilityId: "lists.generation-candidates.rejection.create",
+                description:
+                  "Reject one pending candidate of a generation run so it is never turned into a list item. Only a pending candidate can be rejected; the run flips to committed once nothing is left pending. Nothing is deleted: the candidate stays in the run with status rejected.",
                 access: "write",
                 flags: [
                   {
@@ -18290,6 +18302,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "generations-create"],
                 capabilityId: "lists.generations.create",
+                description:
+                  "Start a generation run over a list: an instruction plus the document versions to read, each named by its entity and version id and each appearing once. Every source must be a live document version in this matter. Returns the run id with status running; the candidates it produces are submitted separately and leave the run in review.",
                 access: "write",
                 flags: [
                   {
@@ -18389,6 +18403,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "generations-list"],
                 capabilityId: "lists.generations.list",
+                description:
+                  "List one list's generation runs, newest first, with cursor pagination: each run's status, its instruction, and its created, updated, and completed timestamps.",
                 access: "read",
                 flags: [
                   {
@@ -18470,6 +18486,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "get"],
                 capabilityId: "lists.get",
+                description:
+                  "Read one list with its sections in order, its columns (each bound property with its position and required flag), and how many items it holds. The items themselves come from lists.items.list.",
                 access: "read",
                 flags: [
                   {
@@ -18524,6 +18542,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "items-activity-list"],
                 capabilityId: "lists.items.activity.list",
+                description:
+                  "Read one list item's activity trail, newest first with cursor pagination: the audit entries recorded against the item and against the task behind it, each with its action, the actor's name, the recorded changes, and the operation label.",
                 access: "read",
                 flags: [
                   {
@@ -18621,6 +18641,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "items-comments-create"],
                 capabilityId: "lists.items.comments.create",
+                description:
+                  "Add a comment to one list item. The comment is stored against the item and shows up in its activity trail.",
                 access: "write",
                 flags: [
                   {
@@ -18711,6 +18733,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "items-list"],
                 capabilityId: "lists.items.list",
+                description:
+                  "List one list's items in list order with cursor pagination. Each item carries its name, item type, task status, priority, due date, section, position, description, and review status, plus the values it holds for the properties the list binds as columns.",
                 access: "read",
                 flags: [
                   {
@@ -18792,6 +18816,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "items-reviews-update"],
                 capabilityId: "lists.items.reviews.update",
+                description:
+                  "Record a review decision on one list item, with an optional note. The item's review status becomes that decision and the decision is appended to the item's review history; an unrecognized decision is refused.",
                 access: "write",
                 flags: [
                   {
@@ -18894,6 +18920,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "items-sources-create"],
                 capabilityId: "lists.items.sources.create",
+                description:
+                  "Attach a source to one list item: the document version it comes from plus a locator (the whole document, a DOCX block, or a PDF page) and an optional quote. The source must be a live document version in this matter. A new source starts unverified; change that with lists.items.sources.verification.update.",
                 access: "write",
                 flags: [
                   {
@@ -19073,6 +19101,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "items-sources-list"],
                 capabilityId: "lists.items.sources.list",
+                description:
+                  "List the sources attached to one list item with cursor pagination, each with the document version it points at, its locator, its quote, and its verification status with who verified it and when.",
                 access: "read",
                 flags: [
                   {
@@ -19174,6 +19204,8 @@ export const generatedRouteMap: RouteNode = {
                   "items-sources-verification-update",
                 ],
                 capabilityId: "lists.items.sources.verification.update",
+                description:
+                  "Set the verification status of one source attached to a list item. Any status other than unverified records who set it and when; setting it back to unverified clears both.",
                 access: "write",
                 flags: [
                   {
@@ -19280,6 +19312,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "items-update"],
                 capabilityId: "lists.items.update",
+                description:
+                  "Change one list item's section, its ordering position within the list, or its description; only the fields you pass are written, and a section that does not belong to this list is refused. The item's name, status, priority, and due date live on the task behind it, so change those with tasks.update.",
                 access: "write",
                 flags: [
                   {
@@ -19397,6 +19431,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "list"],
                 capabilityId: "lists.list",
+                description:
+                  "List a matter's lists, newest first, with cursor pagination, filtered by status (active by default, archived on request). Each entry carries the name, description, status, and timestamps.",
                 access: "read",
                 flags: [
                   {
@@ -19476,6 +19512,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "sections-create"],
                 capabilityId: "lists.sections.create",
+                description:
+                  "Add a section to an active list, with a name and an optional ordering position. Refused when the list is not active or already holds its maximum number of sections.",
                 access: "write",
                 flags: [
                   {
@@ -19564,6 +19602,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "update"],
                 capabilityId: "lists.update",
+                description:
+                  "Rename a list, change its description, or move it between active and archived. Only the fields you pass are written, an unrecognized status is refused, and a call that changes nothing is a no-op rather than an error.",
                 access: "write",
                 flags: [
                   {

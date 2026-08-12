@@ -27,6 +27,10 @@ const querySchema = t.Object({
   cursor: t.Optional(t.String({ maxLength: 512 })),
 });
 const config = {
+  description:
+    "List the sources attached to one list item with cursor pagination, each " +
+    "with the document version it points at, its locator, its quote, and its " +
+    "verification status with who verified it and when.",
   permissions: { workspace: ["read"] },
   access: "read",
   mcp: { type: "capability", reason: "workspace_schema" },

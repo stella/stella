@@ -25,6 +25,11 @@ const querySchema = t.Object({
   cursor: t.Optional(t.String({ maxLength: 512 })),
 });
 const config = {
+  description:
+    "Read one list item's activity trail, newest first with cursor " +
+    "pagination: the audit entries recorded against the item and against the " +
+    "task behind it, each with its action, the actor's name, the recorded " +
+    "changes, and the operation label.",
   permissions: { workspace: ["read"] },
   access: "read",
   mcp: { type: "capability", reason: "workspace_schema" },

@@ -19,6 +19,11 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Rename a list, change its description, or move it between active and " +
+    "archived. Only the fields you pass are written, an unrecognized status " +
+    "is refused, and a call that changes nothing is a no-op rather than an " +
+    "error.",
   permissions: { view: ["update"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   body: bodySchema,

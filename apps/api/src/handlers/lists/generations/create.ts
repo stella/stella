@@ -29,6 +29,12 @@ const bodySchema = t.Object({
   }),
 });
 const config = {
+  description:
+    "Start a generation run over a list: an instruction plus the document " +
+    "versions to read, each named by its entity and version id and each " +
+    "appearing once. Every source must be a live document version in this " +
+    "matter. Returns the run id with status running; the candidates it " +
+    "produces are submitted separately and leave the run in review.",
   permissions: { entity: ["create"] },
   mcp: { type: "capability", reason: "workflow_orchestration" },
   body: bodySchema,

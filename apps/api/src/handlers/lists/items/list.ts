@@ -31,6 +31,11 @@ const querySchema = t.Object({
 });
 
 const config = {
+  description:
+    "List one list's items in list order with cursor pagination. Each item " +
+    "carries its name, item type, task status, priority, due date, section, " +
+    "position, description, and review status, plus the values it holds for " +
+    "the properties the list binds as columns.",
   permissions: { workspace: ["read"] },
   access: "read",
   mcp: { type: "capability", reason: "workspace_schema" },

@@ -62,6 +62,13 @@ const bodySchema = t.Object({
   }),
 });
 const config = {
+  description:
+    "Submit the candidates a generation run produced: per candidate a name, " +
+    "description, item type, status, priority, due date, suggested " +
+    "assignees, and the sources it was drawn from, each naming a document " +
+    "version with a locator and optional quote. Every source must be one of " +
+    "the run's own source versions. The run moves from running to review; " +
+    "candidates stay proposals until they are accepted or rejected.",
   permissions: { entity: ["create"] },
   mcp: { type: "capability", reason: "workflow_orchestration" },
   body: bodySchema,

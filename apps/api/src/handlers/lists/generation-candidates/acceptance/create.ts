@@ -25,6 +25,14 @@ const bodySchema = t.Object({
   sectionId: t.Optional(tSafeId("legalListSection")),
 });
 const config = {
+  description:
+    "Accept one candidate from a generation run: create the item it proposes " +
+    "as a task in the matter, optionally in a named section, and copy the " +
+    "candidate's sources onto the new item with their locators and quotes. " +
+    "The candidate is claimed before the item is created, so two concurrent " +
+    "accepts cannot both produce one, and the run flips to committed once no " +
+    "candidate is left pending. A candidate whose sources have disappeared " +
+    "is refused and the reserved item is cleaned up.",
   permissions: { entity: ["create"] },
   mcp: { type: "capability", reason: "workflow_orchestration" },
   body: bodySchema,
