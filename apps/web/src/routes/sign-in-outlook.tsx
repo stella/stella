@@ -7,10 +7,12 @@ import { env } from "@/env";
 import { useMountEffect } from "@/hooks/use-effect";
 import { authClient } from "@/lib/auth";
 import { detached } from "@/lib/detached";
+import { toAuthClientError } from "@/lib/errors/auth";
 import {
   buildOutlookOrganizationSelectionUrl,
   buildOutlookSignInPath,
   outlookSessionHandoff,
+  resolveOutlookSessionLookup,
   surfaceOutlookHandoffFailure,
 } from "@/lib/outlook-auth";
 
@@ -93,8 +95,12 @@ const SignInOutlook = () => {
 
       const office = await loadOfficeJs();
 
-      const session = await authClient.getSession();
-      const handoff = outlookSessionHandoff(session.data?.session);
+      const sessionLookup = await authClient.getSession();
+      const session = resolveOutlookSessionLookup({
+        mapError: toAuthClientError,
+        result: sessionLookup,
+      });
+      const handoff = outlookSessionHandoff(session);
       switch (handoff) {
         case "signed-out":
           window.location.replace(
@@ -112,7 +118,7 @@ const SignInOutlook = () => {
         case "deliver":
           break;
       }
-      const token = session.data?.session.token;
+      const token = session?.token;
       if (!token) {
         return;
       }
