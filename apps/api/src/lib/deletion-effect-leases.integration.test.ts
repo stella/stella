@@ -12,6 +12,7 @@ import {
   ACCOUNT_DELETION_EFFECT_MAX_ATTEMPTS,
   claimNextAccountDeletionEffectChunk,
   completeAccountDeletionEffectChunk,
+  ensureAccountDeletionEffectChunks,
   failAccountDeletionEffectChunk,
   listRecoverableAccountDeletionEffectRequestIds,
 } from "@/api/lib/account-deletion-effect-store";
@@ -21,6 +22,7 @@ import { createS3DeletionEffectChunks } from "@/api/lib/destructive-effect-chunk
 import {
   claimNextEntityDeletionEffectChunk,
   completeEntityDeletionEffectChunk,
+  ensureEntityDeletionEffectChunks,
   failEntityDeletionEffectChunk,
   listRecoverableEntityDeletionEffectRequestIds,
 } from "@/api/lib/entity-deletion-effect-store";
@@ -328,6 +330,18 @@ describe("destructive-effect lease fencing", () => {
 
     expect(recoverable).not.toContain(exhaustedRequestId);
     expect(recoverable).not.toContain(activeRequestId);
+    expect(
+      await ensureAccountDeletionEffectChunks(
+        exhaustedRequestId,
+        accountEffectDb(),
+      ),
+    ).toBe(0);
+    expect(
+      await ensureAccountDeletionEffectChunks(
+        activeRequestId,
+        accountEffectDb(),
+      ),
+    ).toBe(0);
   });
 
   test("the account-deletion producer atomically writes bounded effects", async () => {
@@ -500,6 +514,12 @@ describe("destructive-effect lease fencing", () => {
 
     expect(recoverable).not.toContain(deferredRequestId);
     expect(recoverable).not.toContain(activeRequestId);
+    expect(
+      await ensureEntityDeletionEffectChunks(deferredRequestId, effectDb()),
+    ).toBe(0);
+    expect(
+      await ensureEntityDeletionEffectChunks(activeRequestId, effectDb()),
+    ).toBe(0);
   });
 
   test("one failed chunk does not poison later chunks", async () => {

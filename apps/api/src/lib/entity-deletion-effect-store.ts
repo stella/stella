@@ -49,6 +49,19 @@ const eligibleChunkPredicate = () =>
     ),
   );
 
+const legacyParentEligiblePredicate = () =>
+  or(
+    eq(entityDeletionCleanupRequests.status, "pending"),
+    and(
+      eq(entityDeletionCleanupRequests.status, "failed"),
+      sql`${entityDeletionCleanupRequests.nextAttemptAt} <= CURRENT_TIMESTAMP`,
+    ),
+    and(
+      eq(entityDeletionCleanupRequests.status, "processing"),
+      sql`${entityDeletionCleanupRequests.updatedAt} < CURRENT_TIMESTAMP - (${DESTRUCTIVE_EFFECT_LEGACY_STALE_PROCESSING_MS} * INTERVAL '1 millisecond')`,
+    ),
+  );
+
 const deriveParentStatus = (
   states: ReadonlySet<
     (typeof entityDeletionEffectChunks.$inferSelect)["status"]
@@ -132,17 +145,6 @@ export const ensureEntityDeletionEffectChunks = async (
   db: EntityDeletionEffectDb = rootDb,
 ): Promise<number> =>
   await db.transaction(async (tx) => {
-    const request = (
-      await tx
-        .select({ s3Keys: entityDeletionCleanupRequests.s3Keys })
-        .from(entityDeletionCleanupRequests)
-        .where(eq(entityDeletionCleanupRequests.id, requestId))
-        .limit(1)
-        .for("update")
-    ).at(0);
-    if (!request) {
-      return 0;
-    }
     const existing = (
       await tx
         .select({ id: entityDeletionEffectChunks.id })
@@ -151,6 +153,32 @@ export const ensureEntityDeletionEffectChunks = async (
         .limit(1)
     ).at(0);
     if (existing) {
+      return 0;
+    }
+    const request = (
+      await tx
+        .select({ s3Keys: entityDeletionCleanupRequests.s3Keys })
+        .from(entityDeletionCleanupRequests)
+        .where(
+          and(
+            eq(entityDeletionCleanupRequests.id, requestId),
+            legacyParentEligiblePredicate(),
+          ),
+        )
+        .limit(1)
+        .for("update")
+    ).at(0);
+    if (!request) {
+      return 0;
+    }
+    const raced = (
+      await tx
+        .select({ id: entityDeletionEffectChunks.id })
+        .from(entityDeletionEffectChunks)
+        .where(eq(entityDeletionEffectChunks.requestId, requestId))
+        .limit(1)
+    ).at(0);
+    if (raced) {
       return 0;
     }
     const chunks = createS3DeletionEffectChunks(request.s3Keys);
@@ -337,17 +365,7 @@ export const listRecoverableEntityDeletionEffectRequestIds = async (
     .from(entityDeletionCleanupRequests)
     .where(
       and(
-        or(
-          eq(entityDeletionCleanupRequests.status, "pending"),
-          and(
-            eq(entityDeletionCleanupRequests.status, "failed"),
-            sql`${entityDeletionCleanupRequests.nextAttemptAt} <= CURRENT_TIMESTAMP`,
-          ),
-          and(
-            eq(entityDeletionCleanupRequests.status, "processing"),
-            sql`${entityDeletionCleanupRequests.updatedAt} < CURRENT_TIMESTAMP - (${DESTRUCTIVE_EFFECT_LEGACY_STALE_PROCESSING_MS} * INTERVAL '1 millisecond')`,
-          ),
-        ),
+        legacyParentEligiblePredicate(),
         notExists(
           db
             .select({ id: entityDeletionEffectChunks.id })

@@ -67,6 +67,22 @@ const expiredLeasePredicate = () =>
 const recoverableChunkPredicate = () =>
   or(eligibleChunkPredicate(), expiredLeasePredicate());
 
+const legacyParentEligiblePredicate = () =>
+  and(
+    lt(
+      accountDeletionRequests.attemptCount,
+      ACCOUNT_DELETION_EFFECT_MAX_ATTEMPTS,
+    ),
+    or(
+      eq(accountDeletionRequests.status, "pending"),
+      eq(accountDeletionRequests.status, "failed"),
+      and(
+        eq(accountDeletionRequests.status, "processing"),
+        sql`${accountDeletionRequests.updatedAt} < CURRENT_TIMESTAMP - (${DESTRUCTIVE_EFFECT_LEGACY_STALE_PROCESSING_MS} * INTERVAL '1 millisecond')`,
+      ),
+    ),
+  );
+
 const deriveParentStatus = (
   states: ReadonlySet<
     (typeof accountDeletionEffectChunks.$inferSelect)["status"]
@@ -143,17 +159,6 @@ export const ensureAccountDeletionEffectChunks = async (
   db: AccountDeletionEffectDb = rootDb,
 ): Promise<number> =>
   await db.transaction(async (tx) => {
-    const request = (
-      await tx
-        .select({ storageCleanup: accountDeletionRequests.storageCleanup })
-        .from(accountDeletionRequests)
-        .where(eq(accountDeletionRequests.id, requestId))
-        .limit(1)
-        .for("update")
-    ).at(0);
-    if (!request) {
-      return 0;
-    }
     const existing = (
       await tx
         .select({ id: accountDeletionEffectChunks.id })
@@ -162,6 +167,32 @@ export const ensureAccountDeletionEffectChunks = async (
         .limit(1)
     ).at(0);
     if (existing) {
+      return 0;
+    }
+    const request = (
+      await tx
+        .select({ storageCleanup: accountDeletionRequests.storageCleanup })
+        .from(accountDeletionRequests)
+        .where(
+          and(
+            eq(accountDeletionRequests.id, requestId),
+            legacyParentEligiblePredicate(),
+          ),
+        )
+        .limit(1)
+        .for("update")
+    ).at(0);
+    if (!request) {
+      return 0;
+    }
+    const raced = (
+      await tx
+        .select({ id: accountDeletionEffectChunks.id })
+        .from(accountDeletionEffectChunks)
+        .where(eq(accountDeletionEffectChunks.requestId, requestId))
+        .limit(1)
+    ).at(0);
+    if (raced) {
       return 0;
     }
     const chunks = createS3DeletionEffectChunks(request.storageCleanup.s3Keys);
@@ -383,18 +414,7 @@ export const listRecoverableAccountDeletionEffectRequestIds = async (
     .from(accountDeletionRequests)
     .where(
       and(
-        lt(
-          accountDeletionRequests.attemptCount,
-          ACCOUNT_DELETION_EFFECT_MAX_ATTEMPTS,
-        ),
-        or(
-          eq(accountDeletionRequests.status, "pending"),
-          eq(accountDeletionRequests.status, "failed"),
-          and(
-            eq(accountDeletionRequests.status, "processing"),
-            sql`${accountDeletionRequests.updatedAt} < CURRENT_TIMESTAMP - (${DESTRUCTIVE_EFFECT_LEGACY_STALE_PROCESSING_MS} * INTERVAL '1 millisecond')`,
-          ),
-        ),
+        legacyParentEligiblePredicate(),
         notExists(
           db
             .select({ id: accountDeletionEffectChunks.id })
