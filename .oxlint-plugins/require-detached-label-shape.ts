@@ -40,7 +40,12 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import { isStringLiteral } from "./utils.ts";
 
-const LABEL_SHAPE = /^[a-z0-9-]+\.[a-z0-9-]+$/u;
+// `feature.action`, each side kebab-case: alphanumeric words joined by single
+// hyphens. Spelling the word structure out rather than accepting `[a-z0-9-]+`
+// keeps degenerate labels (`-.--`, `chat-.save-`) from satisfying a shape
+// whose whole purpose is to make a captured rejection attributable.
+const KEBAB_WORD = String.raw`[a-z0-9]+(?:-[a-z0-9]+)*`;
+const LABEL_SHAPE = new RegExp(`^${KEBAB_WORD}\\.${KEBAB_WORD}$`, "u");
 
 export default eslintCompatPlugin({
   meta: { name: "require-detached-label-shape" },

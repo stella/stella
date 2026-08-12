@@ -78,6 +78,26 @@ const missingLabel = () => {
   detached(save());
 };
 
+// MUST flag: a hyphen with no word on one side. `[a-z0-9-]+` per segment
+// would accept these, and a label like `-.--` carries no attribution at all,
+// which is the one thing the shape exists to guarantee.
+const emptyKebabWords = () => {
+  // oxlint-disable-next-line require-detached-label-shape/require-detached-label-shape
+  detached(save(), "-.--");
+};
+
+// MUST flag: trailing hyphens on otherwise plausible segments.
+const danglingHyphens = () => {
+  // oxlint-disable-next-line require-detached-label-shape/require-detached-label-shape
+  detached(save(), "chat-.save-");
+};
+
+// MUST flag: a doubled hyphen is not a word separator.
+const doubledHyphen = () => {
+  // oxlint-disable-next-line require-detached-label-shape/require-detached-label-shape
+  detached(save(), "chat--thread.save");
+};
+
 // --- Cases the rule MUST NOT flag ---
 
 // The documented shape: module or route slice, then the detached work.
@@ -114,6 +134,9 @@ export const __requireDetachedLabelShapeFixture = {
   forwardedParameter,
   interpolatedLabel,
   missingLabel,
+  emptyKebabWords,
+  danglingHyphens,
+  doubledHyphen,
   dottedLabel,
   multiWordSegments,
   digitsInSegments,
