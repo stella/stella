@@ -1,5 +1,8 @@
 import { Queue, Worker } from "bullmq";
+import { eq, or } from "drizzle-orm";
 
+import { rootDb } from "@/api/db/root";
+import { styleSets } from "@/api/db/schema";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
@@ -10,6 +13,14 @@ import { STYLE_SET_DOWNLOAD_TTL_SECONDS } from "@/api/lib/style-sets";
 const QUEUE_NAME = "style-set-package-cleanup";
 const CLEANUP_JOB_NAME = "delete-style-set-package";
 const DEFAULT_JOB_ATTEMPTS = 3;
+
+/**
+ * How long a package written ahead of its row may stay unclaimed. The write
+ * and the row that names it cannot commit together, so the cleanup job is
+ * enqueued first and this delay is the window the request has to make the row
+ * reference the key. It only has to outlast one upload request.
+ */
+export const STYLE_SET_PACKAGE_ABANDON_DELAY_MS = 15 * 60 * 1000;
 
 type StyleSetPackageCleanupJobData = {
   s3Key: string;
@@ -110,12 +121,38 @@ export const deleteQueuedStyleSetPackages = async (
   await Promise.all(s3Keys.map(async (s3Key) => await getS3().delete(s3Key)));
 };
 
+/**
+ * Delete a package object unless a style set still names it.
+ *
+ * The check is what makes a cleanup job safe to enqueue *before* the object
+ * exists: an abandoned write is deleted, while a write whose row committed is
+ * left alone, and no ordering between the two decides the outcome. It also
+ * keeps a stale job from deleting a package the row still points at when the
+ * outbox column could not be cleared.
+ */
+export const deleteUnreferencedStyleSetPackage = async (
+  s3Key: string,
+): Promise<void> => {
+  const [referencing] = await rootDb
+    .select({ id: styleSets.id })
+    .from(styleSets)
+    .where(or(eq(styleSets.s3Key, s3Key), eq(styleSets.cleanupS3Key, s3Key)))
+    .limit(1);
+  if (referencing) {
+    logger.debug("style_set_package_cleanup.still_referenced", {
+      styleSetId: referencing.id,
+    });
+    return;
+  }
+  await getS3().delete(s3Key);
+};
+
 export const initStyleSetPackageCleanupWorker = () => {
   const workerConnection = createBullMqConnection();
   const worker = new Worker<StyleSetPackageCleanupJobData>(
     QUEUE_NAME,
     async (job) => {
-      await getS3().delete(job.data.s3Key);
+      await deleteUnreferencedStyleSetPackage(job.data.s3Key);
     },
     { connection: workerConnection },
   );
