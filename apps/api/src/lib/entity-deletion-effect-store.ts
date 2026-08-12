@@ -239,7 +239,6 @@ export const claimNextEntityDeletionEffectChunk = async (
     await tx
       .update(entityDeletionCleanupRequests)
       .set({
-        attemptCount: sql`${entityDeletionCleanupRequests.attemptCount} + 1`,
         completedAt: null,
         errorMessage: null,
         nextAttemptAt: null,
@@ -354,10 +353,23 @@ export const listRecoverableEntityDeletionEffectRequestIds = async (
     .orderBy(asc(entityDeletionCleanupRequests.createdAt))
     .limit(RECOVERY_STATE_LIMIT);
   const chunkRows = await db
-    .selectDistinct({ requestId: entityDeletionEffectChunks.requestId })
+    .selectDistinct({
+      recoveryUpdatedAt: entityDeletionCleanupRequests.updatedAt,
+      requestId: entityDeletionEffectChunks.requestId,
+    })
     .from(entityDeletionEffectChunks)
+    .innerJoin(
+      entityDeletionCleanupRequests,
+      eq(
+        entityDeletionCleanupRequests.id,
+        entityDeletionEffectChunks.requestId,
+      ),
+    )
     .where(eligibleChunkPredicate())
-    .orderBy(asc(entityDeletionEffectChunks.requestId))
+    .orderBy(
+      asc(entityDeletionCleanupRequests.updatedAt),
+      asc(entityDeletionEffectChunks.requestId),
+    )
     .limit(RECOVERY_STATE_LIMIT);
   return [
     ...new Set([

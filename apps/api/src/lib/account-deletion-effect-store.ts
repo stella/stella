@@ -1,4 +1,4 @@
-import { and, asc, eq, lt, ne, notExists, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, lt, ne, notExists, or, sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
@@ -22,6 +22,8 @@ export const ACCOUNT_DELETION_EFFECT_KIND = "account-deletion-s3" as const;
 export const ACCOUNT_DELETION_EFFECT_LEASE_MS = 15 * 60_000;
 export const ACCOUNT_DELETION_EFFECT_MAX_ATTEMPTS = 20;
 const RECOVERY_STATE_LIMIT = 50;
+const EXHAUSTED_LEASE_ERROR =
+  "Deletion effect lease expired after final attempt";
 
 export type AccountDeletionEffectClaim = {
   attemptCount: number;
@@ -54,6 +56,15 @@ const eligibleChunkPredicate = () =>
       ),
     ),
   );
+
+const expiredLeasePredicate = () =>
+  and(
+    eq(accountDeletionEffectChunks.status, "processing"),
+    sql`${accountDeletionEffectChunks.leaseExpiresAt} <= CURRENT_TIMESTAMP`,
+  );
+
+const recoverableChunkPredicate = () =>
+  or(eligibleChunkPredicate(), expiredLeasePredicate());
 
 const deriveParentStatus = (
   states: ReadonlySet<
@@ -187,12 +198,16 @@ export const claimNextAccountDeletionEffectChunk = async (
     const now = new Date();
     const candidate = (
       await tx
-        .select({ id: accountDeletionEffectChunks.id })
+        .select({
+          attemptCount: accountDeletionEffectChunks.attemptCount,
+          id: accountDeletionEffectChunks.id,
+          status: accountDeletionEffectChunks.status,
+        })
         .from(accountDeletionEffectChunks)
         .where(
           and(
             eq(accountDeletionEffectChunks.requestId, requestId),
-            eligibleChunkPredicate(),
+            recoverableChunkPredicate(),
           ),
         )
         .orderBy(asc(accountDeletionEffectChunks.chunkIndex))
@@ -200,6 +215,38 @@ export const claimNextAccountDeletionEffectChunk = async (
         .for("update", { skipLocked: true })
     ).at(0);
     if (!candidate) {
+      return null;
+    }
+    if (
+      candidate.status === "processing" &&
+      candidate.attemptCount >= ACCOUNT_DELETION_EFFECT_MAX_ATTEMPTS
+    ) {
+      const exhausted = (
+        await tx
+          .update(accountDeletionEffectChunks)
+          .set({
+            errorMessage: EXHAUSTED_LEASE_ERROR,
+            leaseExpiresAt: null,
+            leaseToken: null,
+            nextAttemptAt: now,
+            status: "failed",
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(accountDeletionEffectChunks.id, candidate.id),
+              gte(
+                accountDeletionEffectChunks.attemptCount,
+                ACCOUNT_DELETION_EFFECT_MAX_ATTEMPTS,
+              ),
+              expiredLeasePredicate(),
+            ),
+          )
+          .returning({ id: accountDeletionEffectChunks.id })
+      ).at(0);
+      if (exhausted) {
+        await synchronizeParentProjection(tx, requestId);
+      }
       return null;
     }
     const lease = createEffectLease(ACCOUNT_DELETION_EFFECT_KIND);
@@ -361,7 +408,7 @@ export const listRecoverableAccountDeletionEffectRequestIds = async (
       accountDeletionRequests,
       eq(accountDeletionRequests.id, accountDeletionEffectChunks.requestId),
     )
-    .where(eligibleChunkPredicate())
+    .where(recoverableChunkPredicate())
     .orderBy(
       asc(accountDeletionRequests.updatedAt),
       asc(accountDeletionEffectChunks.requestId),

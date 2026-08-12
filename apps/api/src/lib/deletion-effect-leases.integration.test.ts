@@ -9,6 +9,7 @@ import {
   entityDeletionEffectChunks,
 } from "@/api/db/schema";
 import {
+  ACCOUNT_DELETION_EFFECT_MAX_ATTEMPTS,
   claimNextAccountDeletionEffectChunk,
   completeAccountDeletionEffectChunk,
   failAccountDeletionEffectChunk,
@@ -21,6 +22,7 @@ import {
   claimNextEntityDeletionEffectChunk,
   completeEntityDeletionEffectChunk,
   failEntityDeletionEffectChunk,
+  listRecoverableEntityDeletionEffectRequestIds,
 } from "@/api/lib/entity-deletion-effect-store";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -229,6 +231,71 @@ describe("destructive-effect lease fencing", () => {
     );
   });
 
+  test("an expired final account lease becomes terminally failed", async () => {
+    const exhaustedRequestId = toSafeId<"accountDeletionRequest">(
+      "00000000-0000-4000-8000-000000000113",
+    );
+    const exhaustedChunkId = toSafeId<"accountDeletionEffectChunk">(
+      "00000000-0000-4000-8000-000000000114",
+    );
+    const exhaustedLeaseToken = toSafeId<"effectLease">(
+      "00000000-0000-4000-8000-000000000115",
+    );
+    const chunk = createS3DeletionEffectChunks(["user/exhausted-object"]).at(0);
+    if (!chunk) {
+      throw new Error("Expected exhausted account effect chunk");
+    }
+    await testDb.insert(accountDeletionRequests).values({
+      id: exhaustedRequestId,
+      organizationIds: [],
+      status: "processing",
+      storageCleanup: { s3Keys: chunk.s3Keys },
+      userId,
+      workspaceIds: [],
+    });
+    await testDb.insert(accountDeletionEffectChunks).values({
+      chunkIndex: chunk.chunkIndex,
+      effectType: chunk.effectType,
+      attemptCount: ACCOUNT_DELETION_EFFECT_MAX_ATTEMPTS,
+      id: exhaustedChunkId,
+      leaseExpiresAt: new Date("2000-01-01T00:00:00.000Z"),
+      leaseToken: exhaustedLeaseToken,
+      payloadHash: chunk.payloadHash,
+      requestId: exhaustedRequestId,
+      s3Keys: chunk.s3Keys,
+      status: "processing",
+    });
+
+    expect(
+      await listRecoverableAccountDeletionEffectRequestIds(accountEffectDb()),
+    ).toContain(exhaustedRequestId);
+    expect(
+      await claimNextAccountDeletionEffectChunk(
+        exhaustedRequestId,
+        accountEffectDb(),
+      ),
+    ).toBeNull();
+
+    const exhausted = (
+      await testDb
+        .select({
+          errorMessage: accountDeletionEffectChunks.errorMessage,
+          leaseToken: accountDeletionEffectChunks.leaseToken,
+          nextAttemptAt: accountDeletionEffectChunks.nextAttemptAt,
+          status: accountDeletionEffectChunks.status,
+        })
+        .from(accountDeletionEffectChunks)
+        .where(eq(accountDeletionEffectChunks.id, exhaustedChunkId))
+        .limit(1)
+    ).at(0);
+    expect(exhausted).toEqual({
+      errorMessage: "Deletion effect lease expired after final attempt",
+      leaseToken: null,
+      nextAttemptAt: expect.any(Date),
+      status: "failed",
+    });
+  });
+
   test("the account-deletion producer atomically writes bounded effects", async () => {
     const producerRequestId = toSafeId<"accountDeletionRequest">(
       "00000000-0000-4000-8000-000000000107",
@@ -325,12 +392,47 @@ describe("destructive-effect lease fencing", () => {
     );
     const parent = (
       await testDb
-        .select({ status: entityDeletionCleanupRequests.status })
+        .select({
+          attemptCount: entityDeletionCleanupRequests.attemptCount,
+          status: entityDeletionCleanupRequests.status,
+        })
         .from(entityDeletionCleanupRequests)
         .where(eq(entityDeletionCleanupRequests.id, requestId))
         .limit(1)
     ).at(0);
-    expect(parent?.status).toBe("completed");
+    expect(parent).toEqual({ attemptCount: 0, status: "completed" });
+  });
+
+  test("entity recovery rotates requests by their last progress", async () => {
+    const olderRequestId = toSafeId<"entityDeletionCleanupRequest">(
+      "00000000-0000-4000-8000-000000000116",
+    );
+    const newerRequestId = toSafeId<"entityDeletionCleanupRequest">(
+      "00000000-0000-4000-8000-000000000117",
+    );
+    await insertRequestWithChunks({
+      keys: ["tenant/older-recovery-object"],
+      targetRequestId: olderRequestId,
+    });
+    await insertRequestWithChunks({
+      keys: ["tenant/newer-recovery-object"],
+      targetRequestId: newerRequestId,
+    });
+    await testDb
+      .update(entityDeletionCleanupRequests)
+      .set({ updatedAt: new Date("2000-01-01T00:00:00.000Z") })
+      .where(eq(entityDeletionCleanupRequests.id, olderRequestId));
+    await testDb
+      .update(entityDeletionCleanupRequests)
+      .set({ updatedAt: new Date("2001-01-01T00:00:00.000Z") })
+      .where(eq(entityDeletionCleanupRequests.id, newerRequestId));
+
+    const recoverable =
+      await listRecoverableEntityDeletionEffectRequestIds(effectDb());
+
+    expect(recoverable.indexOf(olderRequestId)).toBeLessThan(
+      recoverable.indexOf(newerRequestId),
+    );
   });
 
   test("one failed chunk does not poison later chunks", async () => {
