@@ -48,6 +48,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-inline-style-colors.fixture.ts", [
     "no-inline-style-colors/no-inline-style-colors",
   ]),
+  fixtureRuleOverride("no-ambient-hotkey-format.fixture.ts", [
+    "no-ambient-hotkey-format/no-ambient-hotkey-format",
+  ]),
   fixtureRuleOverride("no-offset-pagination.fixture.ts", [
     "no-offset-pagination/no-offset-pagination",
   ]),
@@ -548,6 +551,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-unformatted-number.ts",
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
+    "./.oxlint-plugins/no-ambient-hotkey-format.ts",
     "./.oxlint-plugins/no-physical-properties.ts",
     "./.oxlint-plugins/no-body-ownership-ids.ts",
     "./.oxlint-plugins/no-raw-error-logging.ts",
@@ -1340,6 +1344,12 @@ export default defineConfig({
       ],
       rules: {
         "no-disabled-tooltip-trigger/no-disabled-tooltip-trigger": "error",
+      },
+    },
+    {
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      rules: {
+        "no-ambient-hotkey-format/no-ambient-hotkey-format": "error",
       },
     },
     {

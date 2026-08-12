@@ -38,8 +38,8 @@ import {
 import { StellaWordmark } from "@/components/stella-wordmark";
 import Tooltip from "@/components/tooltip";
 import { getWorkspacePrimaryNavItems } from "@/components/workspace-primary-nav";
-import { useHasMounted } from "@/hooks/use-chrome-query";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
+import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import {
@@ -48,7 +48,7 @@ import {
   SIDE_RAIL_WIDTH,
   TOOLBAR_ROW_HEIGHT,
 } from "@/lib/consts";
-import { formatHydrationSafeHotkey, HOTKEYS } from "@/lib/hotkeys";
+import { formatHotkeyForPlatform, HOTKEYS } from "@/lib/hotkeys";
 import { isPublicLawSsrRouteEnabled } from "@/lib/public-law-launch";
 import { isPublicToolsRouteEnabled } from "@/lib/public-tools-launch";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
@@ -170,11 +170,11 @@ const PublicSidebar = ({
   });
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
-  const mounted = useHasMounted();
-  const searchHotkeyLabel = formatHydrationSafeHotkey({
-    hotkey: HOTKEYS.SEARCH,
-    mounted,
-  });
+  const hotkeyPlatform = useHydrationSafeHotkeyPlatform();
+  const searchHotkeyLabel = formatHotkeyForPlatform(
+    HOTKEYS.SEARCH,
+    hotkeyPlatform,
+  );
   const [searchOpen, setSearchOpen] = useState(false);
   // This shell is server-rendered; the localStorage-backed preview
   // toggle is browser-only and would mismatch hydration. The host/env

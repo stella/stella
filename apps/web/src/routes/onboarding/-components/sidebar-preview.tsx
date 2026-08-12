@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 
-import { formatForDisplay } from "@tanstack/react-hotkeys";
 import {
   BookOpenIcon,
   MessageSquareIcon,
@@ -19,7 +18,8 @@ import { getProviderIcon } from "@/components/ai-provider-icons";
 import { MatterIcon, MattersNavIcon } from "@/components/matter-icon";
 import { StellaWordmark } from "@/components/stella-wordmark";
 import { useMountEffect } from "@/hooks/use-effect";
-import { HOTKEYS } from "@/lib/hotkeys";
+import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
+import { formatHotkeyForPlatform, HOTKEYS } from "@/lib/hotkeys";
 
 type SidebarPreviewProps = {
   organizationName: string;
@@ -92,6 +92,7 @@ export const SidebarPreview = ({
 }: SidebarPreviewProps) => {
   const t = useTranslations();
   const tOrganization = useTranslations("organization");
+  const hotkeyPlatform = useHydrationSafeHotkeyPlatform();
   const showChatActive = chatActive || aiProviders.length > 0;
   // Single shared pulse state so every dot blinks in lockstep,
   // regardless of when each row mounted.
@@ -130,7 +131,7 @@ export const SidebarPreview = ({
           label={t("navigation.search")}
           trailing={
             <kbd className="text-foreground-strong-muted text-[0.625rem]">
-              {formatForDisplay(HOTKEYS.SEARCH)}
+              {formatHotkeyForPlatform(HOTKEYS.SEARCH, hotkeyPlatform)}
             </kbd>
           }
         />

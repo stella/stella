@@ -2,6 +2,7 @@ import { useTranslations } from "use-intl";
 
 import { cn } from "@stll/ui/lib/utils";
 
+import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { formatShortcutBinding } from "@/lib/hotkeys";
 import { useEffectiveShortcutGroups } from "@/lib/use-effective-shortcuts";
 import {
@@ -19,6 +20,7 @@ import type { EchoCandidate } from "@/lib/use-shortcut-echo";
  */
 export const ShortcutEchoHud = () => {
   const t = useTranslations();
+  const hotkeyPlatform = useHydrationSafeHotkeyPlatform();
   const groups = useEffectiveShortcutGroups();
 
   const candidates: EchoCandidate[] = groups.flatMap((group) =>
@@ -55,7 +57,7 @@ export const ShortcutEchoHud = () => {
         key={echo.at}
       >
         <kbd className="border-border bg-muted text-muted-foreground rounded border px-1.5 py-0.5 text-xs">
-          {formatShortcutBinding(active.binding)}
+          {formatShortcutBinding(active.binding, hotkeyPlatform)}
         </kbd>
         <span className="text-foreground text-sm">·</span>
         <span className="text-foreground text-sm">{t(active.labelKey)}</span>
