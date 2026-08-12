@@ -122,8 +122,10 @@ import {
   getRequestContext,
   getRequestId,
   initRequestContext,
+  isAiRequest,
   REQUEST_ID_HEADER,
 } from "@/api/lib/observability/request-context";
+import { emitRequestDurationMetric } from "@/api/lib/observability/request-metrics";
 import { runWithRequestScope } from "@/api/lib/observability/request-scope";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 import {
@@ -338,8 +340,9 @@ const api = new Elysia()
     const statusCode = STATUS_BY_ELYSIA_CODE[code] ?? 500;
 
     if (shouldLogRequest(path)) {
+      const durationMs = reqCtx ? performance.now() - reqCtx.startTime : 0;
       const details = buildRequestLogDetails({
-        durationMs: reqCtx ? performance.now() - reqCtx.startTime : 0,
+        durationMs,
         errorType: errorTag(error),
         request,
         route,
@@ -362,6 +365,13 @@ const api = new Elysia()
           severity: "WARN",
         });
       }
+
+      emitRequestDurationMetric({
+        durationMs,
+        requestClass: isAiRequest() ? "ai" : "crud",
+        statusCode,
+        route: getRouteName(route),
+      });
     }
 
     captureRequestError(error, {
@@ -396,9 +406,10 @@ const api = new Elysia()
     const reqCtx = getRequestContext(request);
 
     if (shouldLogRequest(path) && reqCtx) {
+      const durationMs = performance.now() - reqCtx.startTime;
       const statusCode = typeof set.status === "number" ? set.status : 200;
       const details = buildRequestLogDetails({
-        durationMs: performance.now() - reqCtx.startTime,
+        durationMs,
         request,
         route,
         statusCode,
@@ -424,6 +435,17 @@ const api = new Elysia()
           severity: "INFO",
         });
       }
+
+      // Streaming responses (e.g. POST /v1/chat) settle this hook when the
+      // stream object is returned, not when generation ends, so their
+      // duration here understates the wall-clock. That is acceptable: the
+      // class is `ai` either way, which is excluded from the CRUD p95 SLO.
+      emitRequestDurationMetric({
+        durationMs,
+        requestClass: isAiRequest() ? "ai" : "crud",
+        statusCode,
+        route: getRouteName(route),
+      });
     }
 
     if (!env.isDev && shouldLogRequest(path)) {
