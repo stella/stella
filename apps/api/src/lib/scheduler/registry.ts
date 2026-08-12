@@ -24,6 +24,10 @@ import {
   dispatchDocumentOcr,
 } from "@/api/lib/scheduler/tasks/document-processing-ocr";
 import {
+  REPAIR_FILE_DERIVATIVES_TASK,
+  repairFileDerivatives,
+} from "@/api/lib/scheduler/tasks/file-derivative-repair";
+import {
   FLOW_RUN_TASK,
   runScheduledFlow,
 } from "@/api/lib/scheduler/tasks/flow-run";
@@ -88,6 +92,7 @@ const SCHEDULER_TASKS = {
   [MEMORY_CURATOR_TASK]: curateAiMemories,
   [MEMORY_EXTRACTOR_TASK]: extractMemoriesFromCompactions,
   [CLEAN_TEMPLATE_DELETION_OBJECTS_TASK]: cleanTemplateDeletionObjects,
+  [REPAIR_FILE_DERIVATIVES_TASK]: repairFileDerivatives,
 } as const satisfies Record<string, SchedulerTask>;
 
 export type RegisteredSchedulerTaskName = keyof typeof SCHEDULER_TASKS;

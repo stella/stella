@@ -1,11 +1,16 @@
 import { Result } from "better-result";
 import { Queue, Worker } from "bullmq";
 import { and, eq, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
 import { fields } from "@/api/db/schema";
-import type { FieldContent } from "@/api/db/schema-validators";
+import { DERIVATIVE_FAILURE_REASON } from "@/api/db/schema-validators";
+import type {
+  DerivativeFailureReason,
+  FieldContent,
+} from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
@@ -44,6 +49,15 @@ const GENERATE_PDF_JOB_NAME = "generate-pdf";
 const GENERATE_THUMBNAIL_JOB_NAME = "generate-thumbnail";
 const WORKER_CONCURRENCY = 3;
 const DEFAULT_JOB_ATTEMPTS = 3;
+
+/** Which derivative a job produces; also the job id's discriminating part. */
+export const FILE_DERIVATIVE_KIND = {
+  PDF: "pdf",
+  THUMBNAIL: "thumbnail",
+} as const;
+
+export type FileDerivativeKind =
+  (typeof FILE_DERIVATIVE_KIND)[keyof typeof FILE_DERIVATIVE_KIND];
 
 // PDF and thumbnail jobs carry the same identifiers; the job name on the
 // BullMQ job distinguishes which derivative to produce.
@@ -115,7 +129,7 @@ export const enqueuePdfDerivative = async ({
       workspaceId,
     },
     {
-      jobId: createBullMqJobId(workspaceId, fieldId, "pdf"),
+      jobId: createBullMqJobId(workspaceId, fieldId, FILE_DERIVATIVE_KIND.PDF),
     },
   );
 };
@@ -135,7 +149,10 @@ export const enqueuePdfDerivativeOrMarkFailed = async (
   try {
     await enqueuePdfDerivative(args);
   } catch (error) {
-    await markPdfDerivativeFailed(args).catch((markError: unknown) => {
+    await markPdfDerivativeFailed(
+      args,
+      DERIVATIVE_FAILURE_REASON.ENQUEUE,
+    ).catch((markError: unknown) => {
       captureError(markError, {
         entityId: args.entityId,
         fieldId: args.fieldId,
@@ -171,7 +188,11 @@ export const enqueueImageThumbnail = async ({
       workspaceId,
     },
     {
-      jobId: createBullMqJobId(workspaceId, fieldId, "thumbnail"),
+      jobId: createBullMqJobId(
+        workspaceId,
+        fieldId,
+        FILE_DERIVATIVE_KIND.THUMBNAIL,
+      ),
     },
   );
 };
@@ -191,7 +212,10 @@ export const enqueueImageThumbnailOrMarkFailed = async (
   try {
     await enqueueImageThumbnail(args);
   } catch (error) {
-    await markImageThumbnailFailed(args).catch((markError: unknown) => {
+    await markImageThumbnailFailed(
+      args,
+      DERIVATIVE_FAILURE_REASON.ENQUEUE,
+    ).catch((markError: unknown) => {
       captureError(markError, {
         entityId: args.entityId,
         fieldId: args.fieldId,
@@ -227,7 +251,10 @@ export const initFileDerivativeWorker = () => {
     const exhausted =
       job && job.attemptsMade >= (job.opts.attempts ?? DEFAULT_JOB_ATTEMPTS);
     if (exhausted && job.name === GENERATE_THUMBNAIL_JOB_NAME) {
-      markImageThumbnailFailed(job.data).catch((markError: unknown) => {
+      markImageThumbnailFailed(
+        job.data,
+        DERIVATIVE_FAILURE_REASON.PROCESSING,
+      ).catch((markError: unknown) => {
         captureError(markError, {
           entityId: job.data.entityId,
           fieldId: job.data.fieldId,
@@ -235,7 +262,10 @@ export const initFileDerivativeWorker = () => {
         });
       });
     } else if (exhausted) {
-      markPdfDerivativeFailed(job.data).catch((markError: unknown) => {
+      markPdfDerivativeFailed(
+        job.data,
+        DERIVATIVE_FAILURE_REASON.PROCESSING,
+      ).catch((markError: unknown) => {
         captureError(markError, {
           entityId: job.data.entityId,
           fieldId: job.data.fieldId,
@@ -412,20 +442,18 @@ const readyPdfDerivativeContent = (pdfFileId: string) =>
     true
   )`;
 
-const failedPdfDerivativeContent = () =>
+const failedPdfDerivativeContent = (reason: DerivativeFailureReason) =>
   sql<FieldContent>`jsonb_set(
     ${fields.content},
     '{pdfDerivative}',
-    ${JSON.stringify({ status: "failed" })}::text::jsonb,
+    ${JSON.stringify({ status: "failed", reason })}::text::jsonb,
     true
   )`;
 
-const markPdfDerivativeFailed = async ({
-  fieldId,
-  organizationId,
-  userId,
-  workspaceId,
-}: FileDerivativeJobData): Promise<void> => {
+const markPdfDerivativeFailed = async (
+  { fieldId, organizationId, userId, workspaceId }: FileDerivativeJobData,
+  reason: DerivativeFailureReason,
+): Promise<void> => {
   const branded = brandValidatedWorkflowActorKey({
     organizationId,
     workspaceId,
@@ -440,7 +468,7 @@ const markPdfDerivativeFailed = async ({
     tx
       .update(fields)
       .set({
-        content: failedPdfDerivativeContent(),
+        content: failedPdfDerivativeContent(reason),
       })
       .where(
         and(
@@ -596,20 +624,18 @@ const readyThumbnailContent = (thumbnailFileId: string, placeholder: string) =>
     true
   )`;
 
-const failedThumbnailContent = () =>
+const failedThumbnailContent = (reason: DerivativeFailureReason) =>
   sql<FieldContent>`jsonb_set(
     ${fields.content},
     '{thumbnailDerivative}',
-    ${JSON.stringify({ status: "failed" })}::text::jsonb,
+    ${JSON.stringify({ status: "failed", reason })}::text::jsonb,
     true
   )`;
 
-const markImageThumbnailFailed = async ({
-  fieldId,
-  organizationId,
-  userId,
-  workspaceId,
-}: FileDerivativeJobData): Promise<void> => {
+const markImageThumbnailFailed = async (
+  { fieldId, organizationId, userId, workspaceId }: FileDerivativeJobData,
+  reason: DerivativeFailureReason,
+): Promise<void> => {
   const branded = brandValidatedWorkflowActorKey({
     organizationId,
     workspaceId,
@@ -624,7 +650,7 @@ const markImageThumbnailFailed = async ({
     tx
       .update(fields)
       .set({
-        content: failedThumbnailContent(),
+        content: failedThumbnailContent(reason),
       })
       .where(
         and(
@@ -636,4 +662,179 @@ const markImageThumbnailFailed = async ({
         ),
       ),
   );
+};
+
+// ── Reconciler-driven retry ─────────────────────────────
+//
+// A derivative whose job never reached the queue, or whose job was lost
+// before it wrote a terminal state, has nothing left to drive it: the row
+// stays `pending` (or `failed` with an `enqueue` reason) and the preview is
+// gone for good. `requeueFileDerivative` is the recovery entry point the
+// scheduled reconciler calls; a derivative that failed in *processing* is not
+// reachable through it, because that failure is the worker's terminal verdict
+// after it exhausted its attempts.
+
+const pendingDerivativeState = JSON.stringify({ status: "pending" });
+
+type DerivativeRequeueSpec = {
+  /** Matches only a derivative a reconciler is allowed to retry. */
+  claim: SQL | undefined;
+  jobName: string;
+  markFailed: (
+    data: FileDerivativeJobData,
+    reason: DerivativeFailureReason,
+  ) => Promise<void>;
+  pendingContent: SQL<FieldContent>;
+};
+
+const DERIVATIVE_REQUEUE = {
+  [FILE_DERIVATIVE_KIND.PDF]: {
+    claim: and(
+      sql`${fields.content}->>'pdfFileId' is null`,
+      sql`(
+        coalesce(${fields.content}->'pdfDerivative'->>'status', 'pending') = 'pending'
+        or (
+          ${fields.content}->'pdfDerivative'->>'status' = 'failed'
+          and ${fields.content}->'pdfDerivative'->>'reason' = ${DERIVATIVE_FAILURE_REASON.ENQUEUE}
+        )
+      )`,
+    ),
+    jobName: GENERATE_PDF_JOB_NAME,
+    markFailed: markPdfDerivativeFailed,
+    pendingContent: sql<FieldContent>`jsonb_set(
+      ${fields.content},
+      '{pdfDerivative}',
+      ${pendingDerivativeState}::text::jsonb,
+      true
+    )`,
+  },
+  [FILE_DERIVATIVE_KIND.THUMBNAIL]: {
+    claim: and(
+      sql`${fields.content}->>'thumbnailFileId' is null`,
+      sql`(
+        coalesce(${fields.content}->'thumbnailDerivative'->>'status', 'pending') = 'pending'
+        or (
+          ${fields.content}->'thumbnailDerivative'->>'status' = 'failed'
+          and ${fields.content}->'thumbnailDerivative'->>'reason' = ${DERIVATIVE_FAILURE_REASON.ENQUEUE}
+        )
+      )`,
+    ),
+    jobName: GENERATE_THUMBNAIL_JOB_NAME,
+    markFailed: markImageThumbnailFailed,
+    pendingContent: sql<FieldContent>`jsonb_set(
+      ${fields.content},
+      '{thumbnailDerivative}',
+      ${pendingDerivativeState}::text::jsonb,
+      true
+    )`,
+  },
+} as const satisfies Record<FileDerivativeKind, DerivativeRequeueSpec>;
+
+/**
+ * What one retry did, so the reconciler can count outcomes rather than infer
+ * them: `queue-owned` and `not-stuck` are both healthy, and neither is a
+ * retry that has to be repeated.
+ */
+export const FILE_DERIVATIVE_REQUEUE_OUTCOME = {
+  NOT_STUCK: "not-stuck",
+  QUEUE_OWNED: "queue-owned",
+  REQUEUED: "requeued",
+} as const;
+
+export type FileDerivativeRequeueOutcome =
+  (typeof FILE_DERIVATIVE_REQUEUE_OUTCOME)[keyof typeof FILE_DERIVATIVE_REQUEUE_OUTCOME];
+
+type RequeueFileDerivativeArgs = {
+  entityId: SafeId<"entity">;
+  fieldId: SafeId<"field">;
+  kind: FileDerivativeKind;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace">;
+};
+
+/**
+ * Retry one stuck derivative. The row is claimed first: the update only
+ * matches a derivative that is still `pending` or failed on enqueue, so a
+ * derivative that reached `ready`, `not-required`, or a processing failure
+ * between the reconciler's read and this call is left exactly as it is.
+ */
+export const requeueFileDerivative = async ({
+  entityId,
+  fieldId,
+  kind,
+  organizationId,
+  userId,
+  workspaceId,
+}: RequeueFileDerivativeArgs): Promise<FileDerivativeRequeueOutcome> => {
+  const { claim, jobName, markFailed, pendingContent } =
+    DERIVATIVE_REQUEUE[kind];
+  const branded = brandValidatedWorkflowActorKey({
+    organizationId,
+    workspaceId,
+  });
+  const scopedDb = createRootScopedDb({
+    organizationId: branded.organizationId,
+    userId: brandPersistedUserId(userId),
+    workspaceIds: [branded.workspaceId],
+  });
+
+  const claimed = await scopedDb((tx) =>
+    tx
+      .update(fields)
+      .set({ content: pendingContent })
+      .where(
+        and(
+          eq(fields.id, brandPersistedFieldId(fieldId)),
+          eq(fields.workspaceId, branded.workspaceId),
+          sql`${fields.content}->>'type' = 'file'`,
+          claim,
+        ),
+      )
+      .returning({ id: fields.id }),
+  );
+
+  if (claimed.length === 0) {
+    return FILE_DERIVATIVE_REQUEUE_OUTCOME.NOT_STUCK;
+  }
+
+  // The job id is deterministic, and BullMQ ignores an `add` whose id is
+  // already known: a retained completed/failed job would silently swallow
+  // every retry. Reclaim that id, but keep the dead job's derivative object
+  // id so the retry writes over what the previous attempt left in storage
+  // instead of orphaning it.
+  const jobId = createBullMqJobId(workspaceId, fieldId, kind);
+  const derivativeQueue = getQueue();
+  const priorJob = await derivativeQueue.getJob(jobId);
+  let derivativeFileId = allocateFileObject();
+  if (priorJob) {
+    const state = await priorJob.getState();
+    if (state !== "completed" && state !== "failed") {
+      return FILE_DERIVATIVE_REQUEUE_OUTCOME.QUEUE_OWNED;
+    }
+    derivativeFileId = resolveQueuedFileObject(priorJob.data.derivativeFileId);
+    await priorJob.remove();
+  }
+
+  const jobData = {
+    derivativeFileId,
+    entityId,
+    fieldId,
+    organizationId,
+    userId,
+    workspaceId,
+  };
+
+  try {
+    await derivativeQueue.add(jobName, jobData, { jobId });
+  } catch (error) {
+    await markFailed(jobData, DERIVATIVE_FAILURE_REASON.ENQUEUE).catch(
+      (markError: unknown) => {
+        captureError(markError, { entityId, fieldId, workspaceId });
+      },
+    );
+    throw error;
+  }
+
+  return FILE_DERIVATIVE_REQUEUE_OUTCOME.REQUEUED;
 };

@@ -1018,6 +1018,21 @@ export const fields = p.pgTable(
         sql`${table.content}->>'type' = 'file'
           AND ${table.content}->>'encrypted' = 'false'`,
       ),
+    // The `files.repairDerivatives` sweep pages by a global id cursor too, and
+    // its steady state is an empty candidate set: without a partial index
+    // matching its predicate, every tick would scan the table to find nothing.
+    p
+      .index("fields_derivative_repair_candidate_idx")
+      .on(table.id)
+      .where(
+        sql`${table.content}->>'type' = 'file'
+          AND (
+            coalesce(${table.content}->'pdfDerivative'->>'status', 'pending')
+              NOT IN ('ready', 'not-required')
+            OR coalesce(${table.content}->'thumbnailDerivative'->>'status', 'pending')
+              NOT IN ('ready', 'not-required')
+          )`,
+      ),
     p
       .foreignKey({
         columns: [table.propertyId, table.workspaceId],

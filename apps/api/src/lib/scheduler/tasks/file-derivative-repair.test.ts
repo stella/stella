@@ -1,0 +1,358 @@
+/**
+ * A derivative whose job never reached the queue has nothing left to drive
+ * it. What is asserted here is the part no type can hold: that such a field
+ * is handed back to the queue, that a derivative the worker already ruled out
+ * is never resurrected, and that one tick cannot re-add an unbounded number
+ * of jobs. Driven against a real (PGlite) database with a stubbed queue.
+ */
+
+import { panic } from "better-result";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from "bun:test";
+import { eq, inArray } from "drizzle-orm";
+
+import {
+  entities,
+  entityVersions,
+  fields,
+  schedulerJobs,
+} from "@/api/db/schema";
+import type { FieldContent } from "@/api/db/schema-validators";
+import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
+import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
+import { allocateFileObject } from "@/api/lib/files/file-object-ids";
+import { logger } from "@/api/lib/observability/logger";
+import {
+  getRlsFixture,
+  releaseRlsFixture,
+} from "@/api/tests/security/rls-fixture";
+
+const { testDb, ids } = await getRlsFixture();
+
+void mock.module("@/api/db/root", () => ({ rootDb: testDb, rlsDb: testDb }));
+
+type QueuedJob = {
+  data: { derivativeFileId?: string; fieldId: string };
+  name: string;
+  opts: { jobId: string };
+};
+
+const queued: QueuedJob[] = [];
+const priorJobs = new Map<
+  string,
+  { data: { derivativeFileId?: string; fieldId: string }; state: string }
+>();
+const removedJobIds: string[] = [];
+
+class StubQueue {
+  add(name: string, data: QueuedJob["data"], opts: QueuedJob["opts"]) {
+    queued.push({ data, name, opts });
+    return Promise.resolve();
+  }
+
+  getJob(jobId: string) {
+    const job = priorJobs.get(jobId);
+    if (!job) {
+      return Promise.resolve(undefined);
+    }
+    return Promise.resolve({
+      data: job.data,
+      getState: () => Promise.resolve(job.state),
+      remove: () => {
+        priorJobs.delete(jobId);
+        removedJobIds.push(jobId);
+        return Promise.resolve();
+      },
+    });
+  }
+}
+
+// Only the queue class and the connection factory are stubbed; the rest of
+// both modules stays real, because Bun's module mocks are process-global and
+// a partial replacement would break every other importer.
+const bullmqModule = await import("bullmq");
+void mock.module("bullmq", () => ({ ...bullmqModule, Queue: StubQueue }));
+const redisClientModule = await import("@/api/lib/redis-client");
+void mock.module("@/api/lib/redis-client", () => ({
+  ...redisClientModule,
+  createBullMqConnection: () => ({}),
+}));
+
+const { REPAIR_FILE_DERIVATIVES_TASK, repairFileDerivatives } =
+  await import("@/api/lib/scheduler/tasks/file-derivative-repair");
+const { FILE_DERIVATIVE_KIND } =
+  await import("@/api/lib/file-derivative-queue");
+
+const SCHEDULER_JOB_ID = "test.files.repairDerivatives";
+const LEASE_TOKEN = "test-lease";
+const REQUEUE_LIMIT = 50;
+const SETTLED_AT = new Date(Date.now() - 60 * 60 * 1000);
+const RTF_MIME_TYPE = "application/rtf";
+const PNG_MIME_TYPE = "image/png";
+
+type SeedFieldOptions = {
+  createdAt?: Date;
+  mimeType?: string;
+  pdfDerivative?: Extract<FieldContent, { type: "file" }>["pdfDerivative"];
+  pdfFileId?: string | null;
+  thumbnailDerivative?: Extract<
+    FieldContent,
+    { type: "file" }
+  >["thumbnailDerivative"];
+};
+
+const seededFieldIds: SafeId<"field">[] = [];
+const seededEntityIds: SafeId<"entity">[] = [];
+
+/**
+ * One document with its own current version, because a field is unique per
+ * (property, version) and the sweep only looks at current versions.
+ */
+const seedFileField = async ({
+  createdAt = SETTLED_AT,
+  mimeType = RTF_MIME_TYPE,
+  pdfDerivative = { status: "pending" },
+  pdfFileId = null,
+  thumbnailDerivative = { status: "not-required" },
+}: SeedFieldOptions = {}): Promise<SafeId<"field">> => {
+  const entityId = createSafeId<"entity">();
+  const entityVersionId = createSafeId<"entityVersion">();
+  const fieldId = createSafeId<"field">();
+  seededEntityIds.push(entityId);
+  seededFieldIds.push(fieldId);
+
+  await testDb.insert(entities).values({
+    id: entityId,
+    workspaceId: ids.wsA1,
+    kind: "document",
+    name: "Derivative repair document",
+    createdBy: ids.userA1,
+  });
+  await testDb.insert(entityVersions).values({
+    id: entityVersionId,
+    workspaceId: ids.wsA1,
+    entityId,
+    createdAt,
+  });
+  await testDb
+    .update(entities)
+    .set({ currentVersionId: entityVersionId })
+    .where(eq(entities.id, entityId));
+  await testDb.insert(fields).values({
+    id: fieldId,
+    workspaceId: ids.wsA1,
+    propertyId: ids.propertyA1,
+    entityVersionId,
+    content: {
+      version: 1,
+      type: "file",
+      id: allocateFileObject(),
+      fileName: "podani.rtf",
+      mimeType,
+      sizeBytes: 12,
+      encrypted: false,
+      sha256Hex: "a".repeat(64),
+      pdfFileId,
+      pdfDerivative,
+      thumbnailFileId: null,
+      thumbnailDerivative,
+    },
+  });
+  return fieldId;
+};
+
+const readDerivativeStatus = async (fieldId: SafeId<"field">) => {
+  const row = await testDb.query.fields.findFirst({
+    columns: { content: true },
+    where: { id: { eq: fieldId } },
+  });
+  return row?.content.type === "file" ? row.content.pdfDerivative : undefined;
+};
+
+const runRepair = async () => {
+  const job = await testDb.query.schedulerJobs.findFirst({
+    where: { id: { eq: SCHEDULER_JOB_ID } },
+  });
+  if (!job) {
+    panic("expected the repair scheduler job row");
+  }
+  await repairFileDerivatives({
+    job,
+    payload: job.payload,
+    runId: createSafeId<"schedulerJobRun">(),
+    scheduleContinuation: () => undefined,
+    signal: new AbortController().signal,
+    logger,
+  });
+};
+
+const jobIdsFor = (kind: string) =>
+  queued.filter(({ opts }) => opts.jobId.endsWith(`-${kind}`));
+
+describe("file derivative repair", () => {
+  beforeEach(async () => {
+    queued.length = 0;
+    removedJobIds.length = 0;
+    priorJobs.clear();
+    await testDb
+      .insert(schedulerJobs)
+      .values({
+        id: SCHEDULER_JOB_ID,
+        task: REPAIR_FILE_DERIVATIVES_TASK,
+        schedule: { type: "interval", everyMs: 300_000 },
+        nextRunAt: new Date(),
+        lockedBy: LEASE_TOKEN,
+        payload: { cursor: null },
+      })
+      .onConflictDoUpdate({
+        target: schedulerJobs.id,
+        set: { lockedBy: LEASE_TOKEN, payload: { cursor: null } },
+      });
+  });
+
+  // Each test owns its rows: a field left behind is still stuck, and the
+  // next test's sweep would pick it up along with its own.
+  afterEach(async () => {
+    if (seededFieldIds.length > 0) {
+      await testDb.delete(fields).where(inArray(fields.id, seededFieldIds));
+      await testDb
+        .delete(entities)
+        .where(inArray(entities.id, seededEntityIds));
+    }
+    seededFieldIds.length = 0;
+    seededEntityIds.length = 0;
+  });
+
+  afterAll(async () => {
+    try {
+      await testDb
+        .delete(schedulerJobs)
+        .where(eq(schedulerJobs.id, SCHEDULER_JOB_ID));
+    } finally {
+      await releaseRlsFixture();
+    }
+  });
+
+  test("requeues what is stuck and leaves terminal verdicts alone", async () => {
+    const stuckPending = await seedFileField();
+    const enqueueFailed = await seedFileField({
+      pdfDerivative: { status: "failed", reason: "enqueue" },
+    });
+    const processingFailed = await seedFileField({
+      pdfDerivative: { status: "failed", reason: "processing" },
+    });
+    // Written before the reason existed: read as terminal, because
+    // replaying a real processing failure is the costlier mistake.
+    const legacyFailed = await seedFileField({
+      pdfDerivative: { status: "failed" },
+    });
+    const ready = await seedFileField({
+      pdfDerivative: { status: "ready" },
+      pdfFileId: allocateFileObject(),
+    });
+    const stuckThumbnail = await seedFileField({
+      mimeType: PNG_MIME_TYPE,
+      pdfDerivative: { status: "not-required" },
+      thumbnailDerivative: { status: "pending" },
+    });
+    // Still inside the settle window: the queue may well be working on it.
+    const freshUpload = await seedFileField({ createdAt: new Date() });
+
+    await runRepair();
+
+    expect(queued.map(({ data }) => data.fieldId).toSorted()).toEqual(
+      [stuckPending, enqueueFailed, stuckThumbnail].toSorted(),
+    );
+    expect(jobIdsFor(FILE_DERIVATIVE_KIND.THUMBNAIL)).toHaveLength(1);
+    // The retried enqueue failure is back in the pending state its job reads.
+    expect(await readDerivativeStatus(enqueueFailed)).toEqual({
+      status: "pending",
+    });
+    expect(await readDerivativeStatus(processingFailed)).toEqual({
+      status: "failed",
+      reason: "processing",
+    });
+    expect(await readDerivativeStatus(legacyFailed)).toEqual({
+      status: "failed",
+    });
+    expect(await readDerivativeStatus(ready)).toEqual({ status: "ready" });
+    expect(await readDerivativeStatus(freshUpload)).toEqual({
+      status: "pending",
+    });
+  });
+
+  test("reclaims a retained job id so the retry is not swallowed", async () => {
+    const fieldId = await seedFileField();
+    const jobId = createBullMqJobId(
+      ids.wsA1,
+      fieldId,
+      FILE_DERIVATIVE_KIND.PDF,
+    );
+    const derivativeFileId = allocateFileObject();
+    priorJobs.set(jobId, {
+      data: { derivativeFileId, fieldId },
+      state: "completed",
+    });
+
+    await runRepair();
+
+    expect(removedJobIds).toContain(jobId);
+    // The dead job's derivative object id is replayed, so the retry writes
+    // over what the previous attempt left in storage instead of orphaning it.
+    expect(
+      queued.find((job) => job.opts.jobId === jobId)?.data.derivativeFileId,
+    ).toBe(derivativeFileId);
+  });
+
+  test("leaves a live job alone", async () => {
+    const fieldId = await seedFileField();
+    const jobId = createBullMqJobId(
+      ids.wsA1,
+      fieldId,
+      FILE_DERIVATIVE_KIND.PDF,
+    );
+    priorJobs.set(jobId, { data: { fieldId }, state: "active" });
+
+    await runRepair();
+
+    expect(queued).toHaveLength(0);
+    expect(removedJobIds).toHaveLength(0);
+  });
+
+  test("bounds one tick and resumes from its cursor", async () => {
+    // Sequential seeding: each row's id must sort after the previous one, so
+    // the cursor's resume point is checkable.
+    const seeded: SafeId<"field">[] = [];
+    const seedNext = async (remaining: number): Promise<void> => {
+      if (remaining === 0) {
+        return;
+      }
+      seeded.push(await seedFileField());
+      await seedNext(remaining - 1);
+    };
+    await seedNext(REQUEUE_LIMIT + 2);
+
+    await runRepair();
+    expect(queued).toHaveLength(REQUEUE_LIMIT);
+
+    const [job] = await testDb
+      .select({ payload: schedulerJobs.payload })
+      .from(schedulerJobs)
+      .where(eq(schedulerJobs.id, SCHEDULER_JOB_ID));
+    expect(job?.payload).toEqual({ cursor: seeded[REQUEUE_LIMIT - 1] });
+
+    queued.length = 0;
+    await runRepair();
+    expect(queued.map(({ data }) => data.fieldId)).toEqual(
+      seeded.slice(REQUEUE_LIMIT),
+    );
+  });
+});
