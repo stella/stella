@@ -83,11 +83,11 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { detached } from "@/lib/detached";
 import { sanitizeHref } from "@/lib/sanitize-href";
-import { downloadFile } from "@/lib/utils";
 import {
   getUserFileContentUrl,
   getUserFileThumbnailUrl,
 } from "@/lib/user-files";
+import { downloadFile } from "@/lib/utils";
 
 export const ChatThreadMessages = ({
   activeFileName,
@@ -747,9 +747,7 @@ const downloadDataAttachment = ({
 
   const encoded = url.slice(payloadStart + BASE64_DATA_MARKER.length);
   const binary = atob(encoded);
-  const bytes = Uint8Array.from(binary, (character) =>
-    character.charCodeAt(0),
-  );
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
   downloadFile(new Blob([bytes], { type: mimeType }), fileName);
 };
 
