@@ -33,6 +33,9 @@ const fixtureRuleOverrides = [
     "mcp-security/no-direct-oauth-client-join",
     "mcp-security/redact-oauth-registration-response",
   ]),
+  fixtureRuleOverride("no-async-context-enter-with.fixture.ts", [
+    "no-async-context-enter-with/no-async-context-enter-with",
+  ]),
   fixtureRuleOverride("no-body-ownership-ids.fixture.ts", [
     "no-body-ownership-ids/no-body-ownership-ids",
   ]),
@@ -654,6 +657,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-awaited-builder-union.ts",
     "./.oxlint-plugins/confine-redis-client.ts",
     "./.oxlint-plugins/require-coordination-key.ts",
+    "./.oxlint-plugins/no-async-context-enter-with.ts",
   ],
 
   overrides: [
@@ -1183,6 +1187,22 @@ export default defineConfig({
       ],
       rules: {
         "require-toast-error-capture/require-toast-error-capture": "error",
+      },
+    },
+    {
+      // An ambient async-context store is per-request state, and `enterWith`
+      // is the one way to bind it that outlives the work it was opened for:
+      // the frame it mutates stays current for whatever the runtime dispatches
+      // next, so a background loop resuming there adopts the store and keeps
+      // it. Scoped to every runtime that serves requests alongside long-lived
+      // background work.
+      files: [
+        "apps/*/src/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-async-context-enter-with.fixture.ts",
+      ],
+      rules: {
+        "no-async-context-enter-with/no-async-context-enter-with": "error",
       },
     },
     {
