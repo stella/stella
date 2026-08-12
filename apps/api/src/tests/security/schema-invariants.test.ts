@@ -212,11 +212,12 @@ describe("identifier length", () => {
   });
 
   test("drizzle-derived names over the limit are exactly the known set", () => {
+    const byCodepoint = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
     expect(
       overLimit(names)
         .map(({ name }) => name)
-        .toSorted(),
-    ).toEqual(LEGACY_DERIVED_NAMES_OVER_LIMIT.toSorted());
+        .toSorted(byCodepoint),
+    ).toEqual(LEGACY_DERIVED_NAMES_OVER_LIMIT.toSorted(byCodepoint));
   });
 });
 
