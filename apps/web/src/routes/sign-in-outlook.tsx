@@ -11,6 +11,7 @@ import {
   buildOutlookOrganizationSelectionUrl,
   buildOutlookSignInPath,
   outlookSessionHandoff,
+  surfaceOutlookHandoffFailure,
 } from "@/lib/outlook-auth";
 
 const OFFICE_JS_URL =
@@ -131,7 +132,12 @@ const SignInOutlook = () => {
       setState({ type: "delivered" });
     };
 
-    detached(tryDeliverToken(), "SignInOutlook.tryDeliverToken");
+    detached(
+      surfaceOutlookHandoffFailure(tryDeliverToken(), () => {
+        setState({ message: t("error.generic"), type: "error" });
+      }),
+      "SignInOutlook.tryDeliverToken",
+    );
   });
 
   return (

@@ -49,3 +49,13 @@ export const outlookSessionHandoff = (
   }
   return "deliver";
 };
+
+export const surfaceOutlookHandoffFailure = async (
+  operation: Promise<void>,
+  showError: () => void,
+): Promise<void> => {
+  await operation.catch((error: unknown) => {
+    showError();
+    throw error;
+  });
+};
