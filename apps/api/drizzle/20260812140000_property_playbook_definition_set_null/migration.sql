@@ -17,13 +17,25 @@ SET statement_timeout = '5s';--> statement-breakpoint
 ALTER TABLE "properties"
   DROP CONSTRAINT IF EXISTS "properties_playbook_definition_id_playbook_definitions_id_fk";--> statement-breakpoint
 
--- NOT VALID + VALIDATE: `properties` is an existing table with rows, so the
--- constraint is added without the up-front full scan and validated after,
--- taking only a SHARE UPDATE EXCLUSIVE lock for the scan.
+-- `properties` is an existing table with rows, so the constraint lands without
+-- the up-front full scan. It enforces every new write from here; the scan that
+-- proves the existing rows below runs outside this transaction so it never
+-- holds a lock alongside anything else.
 ALTER TABLE "properties"
   ADD CONSTRAINT "properties_playbook_definition_id_playbook_definitions_id_fk"
   FOREIGN KEY ("playbook_definition_id") REFERENCES "public"."playbook_definitions"("id")
   ON DELETE SET NULL ON UPDATE NO ACTION NOT VALID;--> statement-breakpoint
 
+SET statement_timeout = 0;--> statement-breakpoint
+-- squawk-ignore transaction-nesting
+COMMIT;
+--> statement-breakpoint
+-- Validating takes only SHARE UPDATE EXCLUSIVE, and on its own transaction it
+-- blocks nothing else while it scans.
 ALTER TABLE "properties"
   VALIDATE CONSTRAINT "properties_playbook_definition_id_playbook_definitions_id_fk";
+--> statement-breakpoint
+-- squawk-ignore transaction-nesting, ban-uncommitted-transaction
+BEGIN;
+--> statement-breakpoint
+SET statement_timeout = '5s';
