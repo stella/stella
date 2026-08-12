@@ -159,9 +159,9 @@
     "files": {}
   },
   "require-query-limit-suppressions": {
-    "count": 6,
+    "count": 3,
     "files": {
-      "apps/api/src/handlers/chat/history-window.ts": 5,
+      "apps/api/src/handlers/chat/history-window.ts": 2,
       "apps/api/src/handlers/workspaces/list.ts": 1
     }
   },
