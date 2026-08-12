@@ -23,17 +23,21 @@ const INSERTED = [0, 1, 250] as const;
 /** Decisions the dedup short-circuit dropped; 550 is a whole stored corpus. */
 const SKIPPED = [0, 1, 550] as const;
 const PAGES = [0, 1] as const;
+const CURSOR_ADVANCED = [false, true] as const;
 
 /** Every shape a returned cycle can take. */
 const CYCLES = OUTCOMES.flatMap((outcome) =>
   INSERTED.flatMap((inserted) =>
     SKIPPED.flatMap((skipped) =>
-      PAGES.map((pagesProcessed) => ({
-        outcome,
-        inserted,
-        skipped,
-        pagesProcessed,
-      })),
+      PAGES.flatMap((pagesProcessed) =>
+        CURSOR_ADVANCED.map((cursorAdvanced) => ({
+          outcome,
+          inserted,
+          skipped,
+          pagesProcessed,
+          cursorAdvanced,
+        })),
+      ),
     ),
   ),
 ) satisfies readonly CycleResult[];
@@ -48,6 +52,10 @@ const RESCAN_CYCLE = {
   inserted: 0,
   skipped: 550,
   pagesProcessed: 12,
+  // A re-scan walks forward through stored ground, so it moves the cursor too.
+  // The backoff must still hold: this is the case the hourly cadence is priced
+  // for, not one the cursor can talk its way out of.
+  cursorAdvanced: true,
 } satisfies CycleResult;
 
 /** The same adapter while it is genuinely writing rows, still too slow to finish. */
@@ -56,13 +64,31 @@ const SLOW_PRODUCTIVE_CYCLE = {
   inserted: 40,
   skipped: 510,
   pagesProcessed: 12,
+  cursorAdvanced: true,
 } satisfies CycleResult;
 
+/** A caught-up adapter re-returning its own cursor: a page walked, nowhere new. */
 const QUIET_CYCLE = {
   outcome: CYCLE_OUTCOME.COMPLETED,
   inserted: 0,
   skipped: 0,
   pagesProcessed: 1,
+  cursorAdvanced: false,
+} satisfies CycleResult;
+
+/**
+ * An enumeration crossing listing pages that hold no decisions for it.
+ *
+ * The shape a search-based historical walk takes while it re-lists a year to
+ * check the identities it collected: pages fetched, nothing to write, and a
+ * cursor that keeps moving because there is more of the source to cover.
+ */
+const ENUMERATION_CYCLE = {
+  outcome: CYCLE_OUTCOME.COMPLETED,
+  inserted: 0,
+  skipped: 0,
+  pagesProcessed: 10,
+  cursorAdvanced: true,
 } satisfies CycleResult;
 
 const INCONCLUSIVE_CYCLE = {
@@ -70,6 +96,7 @@ const INCONCLUSIVE_CYCLE = {
   inserted: 0,
   skipped: 0,
   pagesProcessed: 0,
+  cursorAdvanced: false,
 } satisfies CycleResult;
 
 const repeat = (cycle: CycleResult, times: number): CycleResult[] =>
@@ -126,6 +153,7 @@ describe("cycleMadeProgress", () => {
         inserted: 0,
         skipped: 0,
         pagesProcessed: 0,
+        cursorAdvanced: false,
       }),
     ).toBe(false);
     expect(cycleMadeProgress(INCONCLUSIVE_CYCLE)).toBe(false);
@@ -138,6 +166,7 @@ describe("cycleMadeProgress", () => {
         inserted: 0,
         skipped: 0,
         pagesProcessed: 0,
+        cursorAdvanced: false,
       }),
     ).toBe(true);
   });
@@ -198,9 +227,28 @@ describe("classifyCycleProductivity", () => {
         (cycle) =>
           cycle.outcome === CYCLE_OUTCOME.COMPLETED &&
           cycle.inserted === 0 &&
-          cycle.skipped === 0,
+          cycle.skipped === 0 &&
+          !cycle.cursorAdvanced,
       ),
     ).toBe(true);
+  });
+
+  test("crossing empty listings is progress, not quiet", () => {
+    // Nothing to write does not mean nothing to do: the cursor moved, so the
+    // walk covered source it does not hold and has more ahead of it.
+    expect(classifyCycleProductivity(ENUMERATION_CYCLE)).toBe(
+      CYCLE_PRODUCTIVITY.PRODUCTIVE,
+    );
+
+    const misread = CYCLES.filter(
+      (cycle) =>
+        cycle.inserted === 0 && cycle.skipped === 0 && cycle.cursorAdvanced,
+    ).filter(
+      (cycle) =>
+        classifyCycleProductivity(cycle) !== CYCLE_PRODUCTIVITY.PRODUCTIVE,
+    );
+
+    expect(misread).toEqual([]);
   });
 });
 
@@ -292,6 +340,42 @@ describe("stepCadence", () => {
       CYCLE_CADENCE.CAUGHT_UP,
     ]);
     expect(steps.at(-1)?.unproductiveRescan).toBeNull();
+  });
+
+  test("an enumeration crossing empty listings is never parked as caught up", () => {
+    // The production defect: a historical walk re-listing a year fetches no
+    // decisions per cycle, so three cycles in it took the caught-up cadence
+    // and dropped to one page budget a day, with most of the source still
+    // ahead of it. No run length may reach that cadence while the cursor
+    // keeps moving.
+    const steps = runCycles(repeat(ENUMERATION_CYCLE, 50));
+
+    expect(steps.filter((step) => step.cadence !== CYCLE_CADENCE.FAST)).toEqual(
+      [],
+    );
+
+    const parked = CYCLES.filter(
+      (cycle) =>
+        cycle.inserted === 0 && cycle.skipped === 0 && cycle.cursorAdvanced,
+    ).filter((cycle) =>
+      runCycles(repeat(cycle, QUIET_THRESHOLD + 2)).some(
+        (step) => step.cadence === CYCLE_CADENCE.CAUGHT_UP,
+      ),
+    );
+
+    expect(parked).toEqual([]);
+  });
+
+  test("an enumeration cycle ends a quiet streak", () => {
+    // A walk that reaches new ground after a lull has answered the question
+    // the quiet streak was accumulating: the source is not exhausted.
+    const step = lastStep([
+      ...repeat(QUIET_CYCLE, QUIET_THRESHOLD - 1),
+      ENUMERATION_CYCLE,
+    ]);
+
+    expect(step.cadence).toBe(CYCLE_CADENCE.FAST);
+    expect(step.streaks).toEqual({ quietCycles: 0, unproductiveCycles: 0 });
   });
 
   test("a quiet cycle ends a re-scan streak", () => {

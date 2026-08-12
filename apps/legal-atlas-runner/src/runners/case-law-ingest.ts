@@ -697,6 +697,7 @@ const runOneCycle = async (
       inserted: 0,
       skipped: 0,
       pagesProcessed: 0,
+      cursorAdvanced: false,
     };
   }
   const { source } = sourceLease;
@@ -756,6 +757,7 @@ const runOneCycle = async (
   }
 
   const durationMs = Math.round(performance.now() - t0);
+  const cursorAfter = result !== null ? result.nextCursor : cursorBefore;
 
   // DB status column only supports "completed" | "failed";
   // timeouts are recorded as "completed" (progress was made).
@@ -771,7 +773,7 @@ const runOneCycle = async (
         searchVectorFailures: result?.searchVectorFailures ?? 0,
         pagesProcessed: result?.pagesProcessed ?? 0,
         cursorBefore,
-        cursorAfter: result !== null ? result.nextCursor : cursorBefore,
+        cursorAfter,
         durationMs,
         errorMessage,
         startedAt,
@@ -802,6 +804,7 @@ const runOneCycle = async (
     inserted: result?.inserted ?? 0,
     skipped: result?.skipped ?? 0,
     pagesProcessed: result?.pagesProcessed ?? 0,
+    cursorAdvanced: cursorAfter !== cursorBefore,
   };
 };
 
