@@ -2,7 +2,7 @@ SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
 -- Additive rolling-deploy bridge: parent payload columns remain readable by
--- old tasks while new tasks dual-write and drain these bounded chunk ledgers.
+-- old tasks while new tasks materialize and drain these bounded chunk ledgers.
 CREATE TABLE "account_deletion_effect_chunks" (
   "id" uuid PRIMARY KEY NOT NULL,
   "request_id" uuid NOT NULL,
@@ -67,8 +67,6 @@ REVOKE ALL PRIVILEGES ON TABLE "account_deletion_effect_chunks" FROM stella;--> 
 CREATE TABLE "entity_deletion_effect_chunks" (
   "id" uuid PRIMARY KEY NOT NULL,
   "request_id" uuid NOT NULL,
-  "organization_id" varchar(128) NOT NULL,
-  "workspace_id" uuid NOT NULL,
   "chunk_index" integer NOT NULL,
   "effect_type" text DEFAULT 's3_delete' NOT NULL,
   "payload_hash" varchar(64) NOT NULL,
@@ -126,25 +124,3 @@ CREATE INDEX "entity_deletion_effect_chunks_lease_expiry_idx"
 
 ALTER TABLE "entity_deletion_effect_chunks" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 REVOKE ALL PRIVILEGES ON TABLE "entity_deletion_effect_chunks" FROM stella;--> statement-breakpoint
-GRANT INSERT ON TABLE "entity_deletion_effect_chunks" TO stella;--> statement-breakpoint
-CREATE POLICY "entity_deletion_effect_chunks_insert"
-  ON "entity_deletion_effect_chunks"
-  AS PERMISSIVE FOR INSERT TO stella
-  WITH CHECK (
-    organization_id = (SELECT current_setting('app.organization_id', true))
-    AND (
-      workspace_id = ANY(
-        COALESCE(
-          NULLIF(
-            (SELECT current_setting('app.workspace_ids', true)),
-            ''
-          )::uuid[],
-          ARRAY[]::uuid[]
-        )
-      )
-      OR workspace_id IN (
-        SELECT authorized_workspace_id
-        FROM public.stella_authorized_workspaces
-      )
-    )
-  );

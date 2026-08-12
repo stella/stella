@@ -97,7 +97,6 @@ describe("policy coverage", () => {
   const INSERT_ONLY = new Set([
     "entity_deletion_cleanup_requests",
     "template_deletion_cleanup_requests",
-    "entity_deletion_effect_chunks",
   ]);
   const INSERT_DELETE_ONLY = new Set(["buffer_object_cleanup_intents"]);
   const GLOBAL_CASE_LAW_TABLES = [

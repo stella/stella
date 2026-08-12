@@ -92,7 +92,10 @@ const synchronizeParentProjection = async (
     status === "failed"
       ? (
           await tx
-            .select({ errorMessage: entityDeletionEffectChunks.errorMessage })
+            .select({
+              errorMessage: entityDeletionEffectChunks.errorMessage,
+              nextAttemptAt: entityDeletionEffectChunks.nextAttemptAt,
+            })
             .from(entityDeletionEffectChunks)
             .where(
               and(
@@ -100,7 +103,10 @@ const synchronizeParentProjection = async (
                 eq(entityDeletionEffectChunks.status, "failed"),
               ),
             )
-            .orderBy(asc(entityDeletionEffectChunks.chunkIndex))
+            .orderBy(
+              asc(entityDeletionEffectChunks.nextAttemptAt),
+              asc(entityDeletionEffectChunks.chunkIndex),
+            )
             .limit(1)
         ).at(0)
       : undefined;
@@ -109,7 +115,7 @@ const synchronizeParentProjection = async (
     .set({
       completedAt: status === "completed" ? new Date() : null,
       errorMessage: failed?.errorMessage ?? null,
-      nextAttemptAt: null,
+      nextAttemptAt: failed?.nextAttemptAt ?? null,
       s3Keys:
         status === "completed"
           ? []
@@ -127,11 +133,7 @@ export const ensureEntityDeletionEffectChunks = async (
   await db.transaction(async (tx) => {
     const request = (
       await tx
-        .select({
-          organizationId: entityDeletionCleanupRequests.organizationId,
-          s3Keys: entityDeletionCleanupRequests.s3Keys,
-          workspaceId: entityDeletionCleanupRequests.workspaceId,
-        })
+        .select({ s3Keys: entityDeletionCleanupRequests.s3Keys })
         .from(entityDeletionCleanupRequests)
         .where(eq(entityDeletionCleanupRequests.id, requestId))
         .limit(1)
@@ -162,11 +164,9 @@ export const ensureEntityDeletionEffectChunks = async (
               chunkIndex: chunk.chunkIndex,
               effectType: chunk.effectType,
               id: createSafeId<"entityDeletionEffectChunk">(),
-              organizationId: request.organizationId,
               payloadHash: chunk.payloadHash,
               requestId,
               s3Keys: chunk.s3Keys,
-              workspaceId: request.workspaceId,
             })),
           );
         },

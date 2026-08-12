@@ -267,7 +267,10 @@ export const entityDeletionCleanupRequests = p.pgTable(
   ],
 );
 
-/** Bounded S3 deletion effects owned by one durable entity-cleanup request. */
+/**
+ * Root-worker-only, bounded S3 deletion effects materialized from one durable
+ * entity-cleanup request.
+ */
 export const entityDeletionEffectChunks = p.pgTable.withRLS(
   "entity_deletion_effect_chunks",
   {
@@ -277,8 +280,6 @@ export const entityDeletionEffectChunks = p.pgTable.withRLS(
       .references(() => entityDeletionCleanupRequests.id, {
         onDelete: "cascade",
       }),
-    organizationId: safeOrganizationId("organization_id").notNull(),
-    workspaceId: safeWorkspaceId("workspace_id").notNull(),
     chunkIndex: p.integer("chunk_index").notNull(),
     effectType: p
       .text("effect_type", { enum: ["s3_delete"] })
@@ -351,11 +352,6 @@ export const entityDeletionEffectChunks = p.pgTable.withRLS(
       "entity_deletion_effect_chunks_retry_state_check",
       sql`(${table.status} = 'failed') = (${table.nextAttemptAt} IS NOT NULL)`,
     ),
-    p.pgPolicy("entity_deletion_effect_chunks_insert", {
-      for: "insert",
-      to: stella,
-      withCheck: sql`${workspaceCheck} AND ${organizationCheck}`,
-    }),
   ],
 );
 

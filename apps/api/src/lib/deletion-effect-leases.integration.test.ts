@@ -65,11 +65,9 @@ const insertRequestWithChunks = async ({
       id: toSafeId<"entityDeletionEffectChunk">(
         `00000000-0000-4000-8000-${requestSuffix}${index.toString().padStart(9, "0")}`,
       ),
-      organizationId,
       payloadHash: chunk.payloadHash,
       requestId: targetRequestId,
       s3Keys: chunk.s3Keys,
-      workspaceId,
     })),
   );
 };
@@ -298,6 +296,29 @@ describe("destructive-effect lease fencing", () => {
       new Error("provider rejected chunk"),
       effectDb(),
     );
+
+    const failedParent = (
+      await testDb
+        .select({
+          nextAttemptAt: entityDeletionCleanupRequests.nextAttemptAt,
+          status: entityDeletionCleanupRequests.status,
+        })
+        .from(entityDeletionCleanupRequests)
+        .where(eq(entityDeletionCleanupRequests.id, poisonRequestId))
+        .limit(1)
+    ).at(0);
+    const failedChunk = (
+      await testDb
+        .select({ nextAttemptAt: entityDeletionEffectChunks.nextAttemptAt })
+        .from(entityDeletionEffectChunks)
+        .where(eq(entityDeletionEffectChunks.id, poison.chunkId))
+        .limit(1)
+    ).at(0);
+    expect(failedParent).toEqual({
+      nextAttemptAt: failedChunk?.nextAttemptAt,
+      status: "failed",
+    });
+    expect(failedParent?.nextAttemptAt).toBeInstanceOf(Date);
 
     const later = await claimNextEntityDeletionEffectChunk(
       poisonRequestId,

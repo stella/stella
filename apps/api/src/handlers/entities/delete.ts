@@ -7,7 +7,6 @@ import type { SafeDb } from "@/api/db/safe-db";
 import {
   documentProcessingRuns,
   entityDeletionCleanupRequests,
-  entityDeletionEffectChunks,
   entities,
   entityVersions,
   fields,
@@ -20,11 +19,6 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
-import {
-  DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE,
-  consumeInBatches,
-  createS3DeletionEffectChunks,
-} from "@/api/lib/destructive-effect-chunks";
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -156,7 +150,6 @@ export const deleteEntitiesHandler = async function* ({
           return;
         }
         const cleanupRequestId = createSafeId<"entityDeletionCleanupRequest">();
-        const chunks = createS3DeletionEffectChunks(s3Keys);
         // audit: skip — outbox bookkeeping for the deletion this transaction
         // already audits; the request rows carry no user-visible state.
         await tx.insert(entityDeletionCleanupRequests).values({
@@ -164,27 +157,6 @@ export const deleteEntitiesHandler = async function* ({
           organizationId,
           workspaceId,
           s3Keys,
-        });
-        await consumeInBatches({
-          batchSize: DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE,
-          consume: async (batch) => {
-            // audit: skip — bounded external-effect intents owned by the
-            // parent deletion request; the entity deletion itself is audited
-            // below.
-            await tx.insert(entityDeletionEffectChunks).values(
-              batch.map((chunk) => ({
-                chunkIndex: chunk.chunkIndex,
-                effectType: chunk.effectType,
-                id: createSafeId<"entityDeletionEffectChunk">(),
-                organizationId,
-                payloadHash: chunk.payloadHash,
-                requestId: cleanupRequestId,
-                s3Keys: chunk.s3Keys,
-                workspaceId,
-              })),
-            );
-          },
-          items: chunks,
         });
         cleanupRequestIds.push(cleanupRequestId);
       };
