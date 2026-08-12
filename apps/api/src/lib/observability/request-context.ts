@@ -31,9 +31,20 @@ const requestContextStore = new WeakMap<Request, RequestContext>();
  * adopts that request's id and stamps it on unrelated work from then on. `run`
  * at the boundary confines the scope to the request's own callback tree.
  */
-type AmbientRequestId = { current: string | null };
+type AmbientRequestState = {
+  current: string | null;
+  /**
+   * Whether this request committed to synchronous AI inference. Read at
+   * request completion to tag the latency metric `class=ai`, so inherently
+   * multi-second model calls stay out of the CRUD p95 SLO. Ambient rather
+   * than a `RequestContext` field so the dynamic AI paths (usage preflight
+   * deep inside fill/suggest helpers, MCP tools) can set it without
+   * threading a `Request` handle through every layer.
+   */
+  isAiRequest: boolean;
+};
 
-const requestIdStore = new AsyncLocalStorage<AmbientRequestId>();
+const requestIdStore = new AsyncLocalStorage<AmbientRequestState>();
 
 /**
  * Open an empty request-id scope for `fn` and its continuations. The HTTP layer
@@ -41,7 +52,25 @@ const requestIdStore = new AsyncLocalStorage<AmbientRequestId>();
  * fills in the id once it has generated one.
  */
 export const runWithRequestIdScope = <TResult>(fn: () => TResult): TResult =>
-  requestIdStore.run({ current: null }, fn);
+  requestIdStore.run({ current: null, isAiRequest: false }, fn);
+
+/**
+ * Tag the active request as AI-classed for the split latency SLO. Called
+ * wherever AI work is committed to: the safe-handler factory (static
+ * `requiresUsage` config) and the dynamic usage preflight
+ * (`assertUsageAvailableForHandler`). No-op outside a request scope
+ * (background workers), whose durations never reach the completion hooks.
+ */
+export const markAiRequest = (): void => {
+  const ambient = requestIdStore.getStore();
+  if (ambient) {
+    ambient.isAiRequest = true;
+  }
+};
+
+/** Whether the active request was tagged AI-classed; `false` outside a scope. */
+export const isAiRequest = (): boolean =>
+  requestIdStore.getStore()?.isAiRequest ?? false;
 
 /**
  * A per-request correlation id: `req_` + 128 bits of Bun-native randomness
@@ -110,4 +139,4 @@ export const getCurrentRequestId = (): string | undefined =>
 export const runWithRequestId = <TResult>(
   requestId: string,
   fn: () => TResult,
-): TResult => requestIdStore.run({ current: requestId }, fn);
+): TResult => requestIdStore.run({ current: requestId, isAiRequest: false }, fn);

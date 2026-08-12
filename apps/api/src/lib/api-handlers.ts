@@ -37,7 +37,10 @@ import {
   unredactedErrorFields,
 } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
-import { getRequestContext } from "@/api/lib/observability/request-context";
+import {
+  getRequestContext,
+  markAiRequest,
+} from "@/api/lib/observability/request-context";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AnyPermissiveRouteSchema } from "@/api/lib/permissive-route-schema";
 import {
@@ -633,6 +636,14 @@ const createSafeScopedHandler = <
 ): SafeHandlerDefinition<TConfig, TContext, TResult> => ({
   config,
   handler: async (ctx): Promise<SafeHandlerResult<TResult>> => {
+    // Classify the request for the split latency SLO. Keyed purely off
+    // the static `requiresUsage` marker (not `USAGE_ENFORCEMENT_ENABLED`)
+    // so AI endpoints are tagged `class=ai` regardless of enforcement
+    // mode. Read back in the request-completion hooks (see server.ts).
+    if (config.requiresUsage) {
+      markAiRequest();
+    }
+
     if (!hasMemberPermission(ctx.memberRole, config.permissions)) {
       return toSafeStatusResponse(403, {
         code: API_ERROR_CODE.forbidden,
@@ -794,6 +805,11 @@ export const assertUsageAvailableForHandler = async ({
   userId,
   safeDb,
 }: UsagePreflightInput): Promise<HandlerError<402 | 500> | null> => {
+  // A call here means model work will actually run, so flip the latency
+  // class before the enforcement gate: the tag must apply whenever AI
+  // work runs, not only when metering is enforced.
+  markAiRequest();
+
   if (!env.USAGE_ENFORCEMENT_ENABLED) {
     return null;
   }
