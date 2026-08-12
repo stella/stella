@@ -139,6 +139,59 @@ const browserSurfaceFiles = [
   "packages/ui/src/**/*.{ts,tsx}",
 ] as const;
 
+// Shared `no-restricted-imports` entries.
+//
+// Oxlint resolves overrides by replacement, not by merge: for a given file the
+// last override that mentions a rule supplies that rule's entire
+// configuration. A scope that adds one import restriction therefore has to
+// restate every restriction it inherits from the base rule and from the
+// broader overrides that also match its files, or those bans silently stop
+// being reported. Compose each scope from the groups below instead of
+// retyping them; `scripts/oxlint-override-union.test.ts` fails when a scope
+// drops an inherited entry without a declared reason.
+const noZodImport = {
+  name: "zod",
+  message: "Use 'valibot' instead of 'zod'.",
+};
+
+const webLocalApiImportGroup = ["@/api/*", "@/api/**/*"];
+
+const webProtectedRouteImportGroup = [
+  "@/routes/_protected",
+  "@/routes/_protected/**",
+  "@/routes/_protected.*",
+  "@/routes/_protected.*/**",
+];
+
+const webCrossWorkspaceImports = [
+  {
+    group: ["@stll/api", "@stll/api/**", "!@stll/api/types"],
+    message: "apps/web may only import the public '@stll/api/types' surface.",
+  },
+  {
+    group: [
+      "@stll/desktop",
+      "@stll/desktop/**",
+      "@stll/landing",
+      "@stll/landing/**",
+    ],
+    message: "apps/web must not import other app workspaces directly.",
+  },
+];
+
+const webDatePickerImport = {
+  group: ["@stll/ui/components/date-picker-popover"],
+  message:
+    "Use '@/components/date-picker-popover' so locale labels are injected.",
+};
+
+const apiSafeIdBrandingImport = {
+  name: "@/api/lib/branded-types",
+  importNames: ["toSafeId"],
+  message:
+    "Only approved boundary modules and tests may brand raw IDs with toSafeId.",
+};
+
 export default defineConfig({
   extends: [core, react],
   rules: {
@@ -233,17 +286,7 @@ export default defineConfig({
     // get/set pairs are essentially absent — so the rule fires on
     // nothing while taking ~10% of lint time.
     "eslint/grouped-accessor-pairs": "off",
-    "no-restricted-imports": [
-      "error",
-      {
-        paths: [
-          {
-            name: "zod",
-            message: "Use 'valibot' instead of 'zod'.",
-          },
-        ],
-      },
-    ],
+    "no-restricted-imports": ["error", { paths: [noZodImport] }],
     "no-bare-error/no-bare-error": "error",
     "ai-output-strict-schema/ai-output-strict-schema": "error",
     "no-coerced-optional-union-enum/no-coerced-optional-union-enum": "error",
@@ -1338,12 +1381,7 @@ export default defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [
-              {
-                name: "zod",
-                message: "Use 'valibot' instead of 'zod'.",
-              },
-            ],
+            paths: [noZodImport],
             patterns: [
               {
                 group: ["@stll/*", "@stll/*/**", "!@stll/ui", "!@stll/ui/**"],
@@ -1444,37 +1482,14 @@ export default defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [
-              {
-                name: "zod",
-                message: "Use 'valibot' instead of 'zod'.",
-              },
-            ],
+            paths: [noZodImport],
             patterns: [
               {
-                group: ["@/api/*", "@/api/**/*"],
+                group: webLocalApiImportGroup,
                 message: "Use '@stll/api/types' instead of '@/api/'.",
               },
-              {
-                group: ["@stll/api", "@stll/api/**", "!@stll/api/types"],
-                message:
-                  "apps/web may only import the public '@stll/api/types' surface.",
-              },
-              {
-                group: [
-                  "@stll/desktop",
-                  "@stll/desktop/**",
-                  "@stll/landing",
-                  "@stll/landing/**",
-                ],
-                message:
-                  "apps/web must not import other app workspaces directly.",
-              },
-              {
-                group: ["@stll/ui/components/date-picker-popover"],
-                message:
-                  "Use '@/components/date-picker-popover' so locale labels are injected.",
-              },
+              ...webCrossWorkspaceImports,
+              webDatePickerImport,
             ],
           },
         ],
@@ -1554,16 +1569,21 @@ export default defineConfig({
       },
     },
     {
+      // The locale-injecting wrapper around the UI date picker: the one web
+      // module that has to import the primitive it wraps. Every other
+      // apps/web import restriction still applies, so they are restated here.
       files: ["apps/web/src/components/date-picker-popover.tsx"],
       rules: {
         "no-restricted-imports": [
           "error",
           {
-            paths: [
+            paths: [noZodImport],
+            patterns: [
               {
-                name: "zod",
-                message: "Use 'valibot' instead of 'zod'.",
+                group: webLocalApiImportGroup,
+                message: "Use '@stll/api/types' instead of '@/api/'.",
               },
+              ...webCrossWorkspaceImports,
             ],
           },
         ],
@@ -1579,10 +1599,7 @@ export default defineConfig({
           "error",
           {
             paths: [
-              {
-                name: "zod",
-                message: "Use 'valibot' instead of 'zod'.",
-              },
+              noZodImport,
               {
                 name: "@tanstack/react-router",
                 importNames: ["getRouteApi", "useRouteContext"],
@@ -1592,29 +1609,11 @@ export default defineConfig({
             ],
             patterns: [
               {
-                group: ["@/api/*", "@/api/**/*"],
+                group: webLocalApiImportGroup,
                 message: "Use '@stll/api/types' instead of '@/api/'.",
               },
-              {
-                group: ["@stll/api", "@stll/api/**", "!@stll/api/types"],
-                message:
-                  "apps/web may only import the public '@stll/api/types' surface.",
-              },
-              {
-                group: [
-                  "@stll/desktop",
-                  "@stll/desktop/**",
-                  "@stll/landing",
-                  "@stll/landing/**",
-                ],
-                message:
-                  "apps/web must not import other app workspaces directly.",
-              },
-              {
-                group: ["@stll/ui/components/date-picker-popover"],
-                message:
-                  "Use '@/components/date-picker-popover' so locale labels are injected.",
-              },
+              ...webCrossWorkspaceImports,
+              webDatePickerImport,
             ],
           },
         ],
@@ -1630,27 +1629,19 @@ export default defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [
-              {
-                name: "zod",
-                message: "Use 'valibot' instead of 'zod'.",
-              },
-            ],
+            paths: [noZodImport],
             patterns: [
               {
-                group: [
-                  "@/routes/_protected",
-                  "@/routes/_protected/**",
-                  "@/routes/_protected.*",
-                  "@/routes/_protected.*/**",
-                ],
+                group: webProtectedRouteImportGroup,
                 message:
                   "Public law routes and shared case-law modules must not import protected route code. Move public-safe code to '@/features/case-law' instead.",
               },
               {
-                group: ["@/api/*", "@/api/**/*"],
+                group: webLocalApiImportGroup,
                 message: "Use '@stll/api/types' instead of '@/api/'.",
               },
+              ...webCrossWorkspaceImports,
+              webDatePickerImport,
             ],
           },
         ],
@@ -1664,10 +1655,7 @@ export default defineConfig({
           "error",
           {
             paths: [
-              {
-                name: "zod",
-                message: "Use 'valibot' instead of 'zod'.",
-              },
+              noZodImport,
               {
                 name: "@/lib/api",
                 importNames: ["api"],
@@ -1677,19 +1665,16 @@ export default defineConfig({
             ],
             patterns: [
               {
-                group: [
-                  "@/routes/_protected",
-                  "@/routes/_protected/**",
-                  "@/routes/_protected.*",
-                  "@/routes/_protected.*/**",
-                ],
+                group: webProtectedRouteImportGroup,
                 message:
                   "Public law routes and shared case-law modules must not import protected route code. Move public-safe code to '@/features/case-law' instead.",
               },
               {
-                group: ["@/api/*", "@/api/**/*"],
+                group: webLocalApiImportGroup,
                 message: "Use '@stll/api/types' instead of '@/api/'.",
               },
+              ...webCrossWorkspaceImports,
+              webDatePickerImport,
             ],
           },
         ],
@@ -1707,10 +1692,7 @@ export default defineConfig({
           "error",
           {
             paths: [
-              {
-                name: "zod",
-                message: "Use 'valibot' instead of 'zod'.",
-              },
+              noZodImport,
               {
                 name: "@/routes/-auth-context",
                 message:
@@ -1729,20 +1711,17 @@ export default defineConfig({
             ],
             patterns: [
               {
-                group: [
-                  "@/routes/_protected",
-                  "@/routes/_protected/**",
-                  "@/routes/_protected.*",
-                  "@/routes/_protected.*/**",
-                ],
+                group: webProtectedRouteImportGroup,
                 message:
                   "Public SEO endpoints must not import protected route code.",
               },
               {
-                group: ["@/api/*", "@/api/**/*"],
+                group: webLocalApiImportGroup,
                 message:
                   "Public SEO endpoints must use the public case-law API response, not web-local API internals.",
               },
+              ...webCrossWorkspaceImports,
+              webDatePickerImport,
             ],
           },
         ],
@@ -2164,16 +2143,7 @@ export default defineConfig({
       rules: {
         "no-restricted-imports": [
           "error",
-          {
-            paths: [
-              {
-                name: "@/api/lib/branded-types",
-                importNames: ["toSafeId"],
-                message:
-                  "Only approved boundary modules and tests may brand raw IDs with toSafeId.",
-              },
-            ],
-          },
+          { paths: [noZodImport, apiSafeIdBrandingImport] },
         ],
       },
     },
@@ -2194,10 +2164,7 @@ export default defineConfig({
           "error",
           {
             paths: [
-              {
-                name: "zod",
-                message: "Use 'valibot' instead of 'zod'.",
-              },
+              noZodImport,
               {
                 name: "@/api/db/root",
                 message:
@@ -2215,13 +2182,18 @@ export default defineConfig({
       },
     },
     {
+      // The sanctioned branding boundaries: each validates a raw id and hands
+      // back a SafeId, so these are the modules `toSafeId` exists for. Only
+      // that restriction is lifted; the rest of the base set still applies.
       files: [
         "apps/api/src/lib/auth.ts",
         "apps/api/src/lib/search/**",
         "apps/api/src/lib/safe-id-boundaries.ts",
         "apps/api/src/types.ts",
       ],
-      rules: { "no-restricted-imports": "off" },
+      rules: {
+        "no-restricted-imports": ["error", { paths: [noZodImport] }],
+      },
     },
     {
       // YARA's compile/scan returns loosely-typed RuleMatch; the local
@@ -2404,10 +2376,7 @@ export default defineConfig({
           "error",
           {
             paths: [
-              {
-                name: "zod",
-                message: "Use 'valibot' instead of 'zod'.",
-              },
+              noZodImport,
               {
                 name: "@/api/lib/api-handlers",
                 importNames: ["createHandler", "createRootHandler"],
@@ -2450,12 +2419,17 @@ export default defineConfig({
       },
     },
     {
+      // Tests build handler context and owner-level DB handles directly: that
+      // fixture surface is exactly what the handler restrictions keep out of
+      // production code, so it is lifted here. The base set still applies.
       files: [
         "apps/api/src/tests/**",
         "apps/api/**/*.{test,spec}.{ts,tsx,js,jsx}",
         "apps/api/**/__tests__/**/*.{ts,tsx,js,jsx}",
       ],
-      rules: { "no-restricted-imports": "off" },
+      rules: {
+        "no-restricted-imports": ["error", { paths: [noZodImport] }],
+      },
     },
     {
       files: [
@@ -2501,9 +2475,13 @@ export default defineConfig({
           "error",
           {
             paths: [
+              noZodImport,
+              apiSafeIdBrandingImport,
               {
-                name: "zod",
-                message: "Use 'valibot' instead of 'zod'.",
+                name: "@/api/lib/api-handlers",
+                importNames: ["createHandler", "createRootHandler"],
+                message:
+                  "Use 'createSafeHandler' or 'createSafeRootHandler' instead.",
               },
               {
                 name: "@/api/lib/api-handlers",
