@@ -1,4 +1,8 @@
 import type { ProviderRowStatus } from "@/components/ai-config-providers-editor";
+import {
+  createDefaultRoleModels,
+  serializeOverrideModels,
+} from "@/components/ai-config-role-models.logic";
 import type {
   ProviderCredentialDraft,
   ProviderPreview,
@@ -17,6 +21,22 @@ export type RowState =
     };
 
 export type RowStateMap = Record<ProviderValue, RowState>;
+
+export const canContinueWithProviderConfiguration = ({
+  providers,
+  hasAnyConfirmed,
+  allProvidersConfirmed,
+}: {
+  providers: readonly ProviderValue[];
+  hasAnyConfirmed: boolean;
+  allProvidersConfirmed: boolean;
+}): boolean =>
+  hasAnyConfirmed &&
+  allProvidersConfirmed &&
+  serializeOverrideModels({
+    providers,
+    roleModels: createDefaultRoleModels(providers),
+  }) !== null;
 
 export const createProviderPreview = (
   providers: readonly ProviderCredentialDraft[],

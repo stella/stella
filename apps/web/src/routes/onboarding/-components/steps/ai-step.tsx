@@ -8,36 +8,28 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { AIConfigProvidersEditor } from "@/components/ai-config-providers-editor";
 import type { ProviderRowStatus } from "@/components/ai-config-providers-editor";
-import { AIConfigRoleModelPicker } from "@/components/ai-config-role-model-picker";
 import {
-  ensureRoleModelsForProviders,
+  createDefaultRoleModels,
   getProviderValues,
   PROVIDER_LABELS,
-  serializeOverrideModels,
 } from "@/components/ai-config-role-models.logic";
 import type {
-  ModelSelection,
   ProviderCredentialDraft,
   ProviderPreview,
   RoleModelSelections,
-  RoleValue,
 } from "@/components/ai-config-role-models.logic";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import {
+  canContinueWithProviderConfiguration,
   createProviderPreview,
   type RowStateMap,
 } from "@/routes/onboarding/-components/steps/ai-step.logic";
 
-export type AIStepPhase = "providers" | "models";
-
 type AIStepProps = {
   providers: ProviderCredentialDraft[];
-  roleModels: RoleModelSelections;
-  phase: AIStepPhase;
   onProvidersChange: (providers: ProviderCredentialDraft[]) => void;
   onRoleModelsChange: (roleModels: RoleModelSelections) => void;
-  onPhaseChange: (phase: AIStepPhase) => void;
   onPreviewChange?: (preview: readonly ProviderPreview[]) => void;
   onNext: () => void;
   onSkip: () => void;
@@ -68,19 +60,15 @@ const INITIAL_ROW_STATES: RowStateMap = {
 
 export const AIStep = ({
   providers,
-  roleModels,
-  phase,
   onProvidersChange,
   onRoleModelsChange,
   onPreviewChange,
-  onPhaseChange,
   onNext,
   onSkip,
 }: AIStepProps) => {
   const t = useTranslations();
   const tOrganization = useTranslations("organization");
 
-  const providerValues = getProviderValues(providers);
   const [rowStates, setRowStates] = useState<RowStateMap>(INITIAL_ROW_STATES);
   const rowStatesRef = useRef(rowStates);
   const commitRowStates = (next: RowStateMap) => {
@@ -108,12 +96,11 @@ export const AIStep = ({
     const state = rowStates[draft.provider];
     return state.status === "valid" || draft.apiKeyMasked !== undefined;
   });
-  const canEnterModelsPhase = hasAnyConfirmed && allProvidersConfirmed;
-  const showModels = phase === "models";
-  const canContinue =
-    showModels &&
-    canEnterModelsPhase &&
-    serializeOverrideModels({ providers: providerValues, roleModels }) !== null;
+  const canContinue = canContinueWithProviderConfiguration({
+    providers: getProviderValues(providers),
+    hasAnyConfirmed,
+    allProvidersConfirmed,
+  });
 
   // Created once and mutated in place (never reassigned), so a stable
   // useState value works without the rebuild-every-render cost of
@@ -195,16 +182,8 @@ export const AIStep = ({
   };
 
   const updateProviders = (next: ProviderCredentialDraft[]) => {
-    if (phase === "models") {
-      onPhaseChange("providers");
-    }
     onProvidersChange(next);
-    onRoleModelsChange(
-      ensureRoleModelsForProviders({
-        providers: getProviderValues(next),
-        roleModels,
-      }),
-    );
+    onRoleModelsChange(createDefaultRoleModels(getProviderValues(next)));
     // Drop validation entries for providers no longer in the draft list.
     const stillPresent = new Set(getProviderValues(next));
     const current = rowStatesRef.current;
@@ -240,13 +219,6 @@ export const AIStep = ({
     commitRowStates(nextRowStates);
   };
 
-  const setRoleModel = (role: RoleValue, model: ModelSelection | null) => {
-    onRoleModelsChange({
-      ...roleModels,
-      [role]: model,
-    });
-  };
-
   const rowStatusList: ProviderRowStatus[] = providers.map(
     (draft) => rowStates[draft.provider].status,
   );
@@ -261,78 +233,37 @@ export const AIStep = ({
       </p>
 
       {/* display:contents keeps the existing flex layout; the form only
-          exists so Enter advances the active phase when it is valid.
+          exists so Enter advances when the provider configuration is valid.
           The provider editor's own buttons are type="button", so a
           key/save keypress never triggers this submit. */}
       <Form
         className="contents"
         onSubmit={(e) => {
           e.preventDefault();
-          if (phase === "providers") {
-            if (canEnterModelsPhase) {
-              onPhaseChange("models");
-            }
-            return;
-          }
           if (canContinue) {
             onNext();
           }
         }}
       >
         <div className="mt-8 flex flex-col gap-3">
-          {phase === "providers" ? (
-            <AIConfigProvidersEditor
-              compact
-              onProvidersChange={updateProviders}
-              onSaveRow={(index) => {
-                detached(saveRow(index), "ai-step.save-row");
-              }}
-              providers={providers}
-              rowStatuses={rowStatusList}
-            />
-          ) : (
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex flex-col gap-0.5">
-                  <h2 className="text-foreground text-sm font-semibold">
-                    {tOrganization("aiConfig.chooseModelsTitle")}
-                  </h2>
-                  <p className="text-muted-foreground text-xs">
-                    {tOrganization("aiConfig.chooseModelsSubtitle")}
-                  </p>
-                </div>
-                <Button
-                  onClick={() => onPhaseChange("providers")}
-                  size="sm"
-                  type="button"
-                  variant="ghost"
-                >
-                  {tOrganization("aiConfig.editProviders")}
-                </Button>
-              </div>
-              <AIConfigRoleModelPicker
-                compact
-                onModelChange={setRoleModel}
-                providers={providerValues}
-                roleModels={roleModels}
-              />
-            </div>
-          )}
+          <AIConfigProvidersEditor
+            compact
+            onProvidersChange={updateProviders}
+            onSaveRow={(index) => {
+              detached(saveRow(index), "ai-step.save-row");
+            }}
+            providers={providers}
+            rowStatuses={rowStatusList}
+          />
         </div>
 
         <div className="mt-auto flex items-center justify-between gap-3 pt-6">
           <Button onClick={onSkip} type="button" variant="ghost">
             {t("onboarding.skipStep")}
           </Button>
-          {phase === "providers" ? (
-            <Button disabled={!canEnterModelsPhase} type="submit">
-              {t("common.next")}
-            </Button>
-          ) : (
-            <Button disabled={!canContinue} type="submit">
-              {t("common.next")}
-            </Button>
-          )}
+          <Button disabled={!canContinue} type="submit">
+            {t("common.next")}
+          </Button>
         </div>
       </Form>
     </>
