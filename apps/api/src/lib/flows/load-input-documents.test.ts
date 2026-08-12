@@ -35,7 +35,9 @@ void mock.module("@/api/lib/flows/flow-run-queue", () => ({
   FLOW_RUN_QUEUE_NAME: "flow-run",
   enqueueFlowStep: mock(async () => {}),
 }));
+const realFlowRunEvents = await import("@/api/lib/flows/flow-run-events");
 void mock.module("@/api/lib/flows/flow-run-events", () => ({
+  ...realFlowRunEvents,
   broadcastFlowRunUpdate: mock(() => undefined),
 }));
 void mock.module("@/api/lib/tanstack-ai-generate", () => ({

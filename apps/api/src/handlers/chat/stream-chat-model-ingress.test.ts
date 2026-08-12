@@ -4,7 +4,9 @@ import { describe, expect, mock, test } from "bun:test";
 import { toSafeId } from "@/api/lib/branded-types";
 
 const captureErrorMock = mock();
+const realCapture = await import("@/api/lib/analytics/capture");
 void mock.module("@/api/lib/analytics/capture", () => ({
+  ...realCapture,
   captureError: captureErrorMock,
   captureRequestError: captureErrorMock,
 }));

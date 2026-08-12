@@ -79,7 +79,9 @@ void mock.module("@/api/lib/safe-outbound-fetch", () => ({
     Result.ok({ url: new URL(url) }),
 }));
 
+const realCapture = await import("@/api/lib/analytics/capture");
 void mock.module("@/api/lib/analytics/capture", () => ({
+  ...realCapture,
   captureError: (error: unknown) => {
     state.captured.push(error);
   },

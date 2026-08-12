@@ -84,7 +84,9 @@ void mock.module("@/api/lib/flows/flow-run-queue", () => ({
   enqueueFlowStep: enqueueFlowStepMock,
 }));
 
+const realFlowRunEvents = await import("@/api/lib/flows/flow-run-events");
 void mock.module("@/api/lib/flows/flow-run-events", () => ({
+  ...realFlowRunEvents,
   broadcastFlowRunUpdate: mock(() => undefined),
 }));
 

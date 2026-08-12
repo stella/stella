@@ -66,7 +66,9 @@ void mock.module("@/api/lib/sse", () => ({
   broadcast: broadcastMock,
   broadcastToOrganization: mock(),
 }));
+const realCapture = await import("@/api/lib/analytics/capture");
 void mock.module("@/api/lib/analytics/capture", () => ({
+  ...realCapture,
   captureError: mock(),
   captureRequestError: mock(),
 }));

@@ -576,7 +576,7 @@ describe("custom oxlint guardrails", () => {
     // Committed baseline, may only DECREASE: fix mocks and lower it. Raising it
     // means a new mock started dropping exports, and needs the same
     // justification as the other committed baselines in this repo.
-    const EXPORT_DROPPING_MOCK_BASELINE = 86;
+    const EXPORT_DROPPING_MOCK_BASELINE = 55;
     const root = path.join(import.meta.dir, "../../../../..");
     const apiRoot = path.join(root, "apps/api");
     const exportsByModuleFile = new Map<string, Set<string>>();

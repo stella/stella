@@ -11,7 +11,9 @@ import {
 import type { McpRequestContext } from "@/api/mcp/context";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
+const realCapture = await import("@/api/lib/analytics/capture");
 void mock.module("@/api/lib/analytics/capture", () => ({
+  ...realCapture,
   captureError: mock(),
   captureRequestError: mock(),
 }));

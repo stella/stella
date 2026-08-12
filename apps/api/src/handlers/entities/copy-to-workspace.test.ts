@@ -86,7 +86,9 @@ void mock.module("@/api/lib/search/projection-repair-queue", () => ({
 }));
 
 const captureErrorMock = mock(() => undefined);
+const realCapture = await import("@/api/lib/analytics/capture");
 void mock.module("@/api/lib/analytics/capture", () => ({
+  ...realCapture,
   captureError: captureErrorMock,
   captureRequestError: captureErrorMock,
 }));

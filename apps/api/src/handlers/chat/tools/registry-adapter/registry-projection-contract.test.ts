@@ -57,7 +57,9 @@ import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
 // --- Module mocks (before dynamic imports, canary pattern) -------------------
 
 const captureErrorMock = mock();
+const realCapture = await import("@/api/lib/analytics/capture");
 void mock.module("@/api/lib/analytics/capture", () => ({
+  ...realCapture,
   captureError: captureErrorMock,
   captureRequestError: captureErrorMock,
 }));
