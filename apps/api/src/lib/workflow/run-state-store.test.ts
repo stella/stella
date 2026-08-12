@@ -223,30 +223,30 @@ describe("workflow finalization state reads", () => {
       {
         command: "DEL",
         args: [
-          `workflow:${workspaceId}:completed-entities`,
-          `workflow:${workspaceId}:completed`,
+          `workflow-run:{${workspaceId}}:completed-entities`,
+          `workflow-run:{${workspaceId}}:completed`,
         ],
       },
       {
         command: "SET",
-        args: [`workflow:${workspaceId}:set-mode`, "1", "EX", "600"],
+        args: [`workflow-run:{${workspaceId}}:set-mode`, "1", "EX", "600"],
       },
       {
         command: "DEL",
         args: [
-          `workflow:${workspaceId}:plan-properties`,
-          `workflow:${workspaceId}:scoped`,
-          `workflow:${workspaceId}:service-tier`,
+          `workflow-run:{${workspaceId}}:plan-properties`,
+          `workflow-run:{${workspaceId}}:scoped`,
+          `workflow-run:{${workspaceId}}:service-tier`,
         ],
       },
       {
         command: "SET",
-        args: [`workflow:${workspaceId}:total`, "3", "EX", "600"],
+        args: [`workflow-run:{${workspaceId}}:total`, "3", "EX", "600"],
       },
       {
         command: "SET",
         args: [
-          `workflow:${workspaceId}:finalization-v1`,
+          `workflow-run:{${workspaceId}}:finalization-v1`,
           JSON.stringify(validManifest),
           "EX",
           "600",
@@ -277,9 +277,12 @@ describe("workflow finalization state reads", () => {
 
   test("reads and preserves the immediately previous release state", async () => {
     const values = new Map<string, string>([
-      [`workflow:${workspaceId}:plan-properties`, JSON.stringify([propertyId])],
-      [`workflow:${workspaceId}:scoped`, "1"],
-      [`workflow:${workspaceId}:service-tier`, "batch"],
+      [
+        `workflow-run:{${workspaceId}}:plan-properties`,
+        JSON.stringify([propertyId]),
+      ],
+      [`workflow-run:{${workspaceId}}:scoped`, "1"],
+      [`workflow-run:{${workspaceId}}:service-tier`, "batch"],
     ]);
     const store = createWorkflowRunStateStore({
       send: async (command, args) =>
@@ -320,17 +323,17 @@ describe("workflow finalization state reads", () => {
       workspaceId,
     });
 
-    expect(keys).toContain(`workflow:${workspaceId}:plan-properties`);
-    expect(keys).toContain(`workflow:${workspaceId}:scoped`);
-    expect(keys).toContain(`workflow:${workspaceId}:service-tier`);
-    expect(keys).toContain(`workflow:${workspaceId}:completed`);
-    expect(keys).toContain(`workflow:${workspaceId}:set-mode`);
+    expect(keys).toContain(`workflow-run:{${workspaceId}}:plan-properties`);
+    expect(keys).toContain(`workflow-run:{${workspaceId}}:scoped`);
+    expect(keys).toContain(`workflow-run:{${workspaceId}}:service-tier`);
+    expect(keys).toContain(`workflow-run:{${workspaceId}}:completed`);
+    expect(keys).toContain(`workflow-run:{${workspaceId}}:set-mode`);
   });
 
   test("recognizes a transitional constant-valued running lock", async () => {
     const values = new Map<string, string>([
-      [`workflow:${workspaceId}:request-id`, requestId],
-      [`workflow:${workspaceId}:running`, "1"],
+      [`workflow-run:{${workspaceId}}:request-id`, requestId],
+      [`workflow-run:{${workspaceId}}:running`, "1"],
     ]);
     const store = createWorkflowRunStateStore({
       send: async (command, args) =>

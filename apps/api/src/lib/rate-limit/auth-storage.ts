@@ -17,6 +17,7 @@ import {
   withCommandTimeout,
 } from "@/api/lib/rate-limit/redis-command-timeout";
 import { createRedisClient } from "@/api/lib/redis-client";
+import { coordinationKey } from "@/api/lib/redis-keys";
 
 type RateLimitValue = {
   key: string;
@@ -49,7 +50,6 @@ type AuthRateLimitStorageOptions = {
   commandTimer?: CommandTimer;
 };
 
-const REDIS_KEY_PREFIX = "auth:ratelimit:";
 const FALLBACK_CLEANUP_INTERVAL_MS = 60_000;
 /**
  * Bound every Redis command so a slow or unreachable Redis cannot stall
@@ -62,6 +62,11 @@ const DEFAULT_COMMAND_TIMER: CommandTimer = {
   set: (callback, delayMs) => setTimeout(callback, delayMs),
   clear: (timeoutId) => clearTimeout(timeoutId),
 };
+
+// better-auth's key already identifies one limited client, so it is the
+// colocation unit; each key is read and written alone.
+const authRateLimitKey = (key: string) =>
+  coordinationKey({ scope: "auth-ratelimit", slot: key });
 
 const isRateLimitValue = (value: unknown): value is RateLimitValue =>
   typeof value === "object" &&
@@ -127,7 +132,7 @@ export const createAuthRateLimitStorage = (
   const writeRedis = async (key: string, value: RateLimitValue) => {
     await withCommandTimeout({
       command: redis.set(
-        `${REDIS_KEY_PREFIX}${key}`,
+        authRateLimitKey(key),
         JSON.stringify(value),
         "PX",
         ttlMs,
@@ -143,7 +148,7 @@ export const createAuthRateLimitStorage = (
       try {
         const fallbackValue = readFallback(key);
         const raw = await withCommandTimeout({
-          command: redis.get(`${REDIS_KEY_PREFIX}${key}`),
+          command: redis.get(authRateLimitKey(key)),
           commandTimeoutMs: COMMAND_TIMEOUT_MS,
           label: "auth-rate-limit-redis-command",
           scheduleTimeout,

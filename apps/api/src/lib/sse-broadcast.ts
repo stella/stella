@@ -12,7 +12,13 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { createRedisClient } from "@/api/lib/redis-client";
 
-/** Redis pub/sub channel for cross-instance SSE broadcasts. */
+/**
+ * Redis pub/sub channel for cross-instance SSE broadcasts. A channel is not a
+ * key: `PUBLISH` reaches every subscriber cluster-wide regardless of slot, so
+ * this name carries no hashtag. Delivery is best-effort by design; receivers
+ * tolerate lost messages (`sse.ts` falls back to inline local delivery while
+ * its subscriber is detached).
+ */
 export const REDIS_CHANNEL = "sse:broadcast";
 
 export const INSTANCE_ID = `api:${process.pid}:${Bun.randomUUIDv7()}`;

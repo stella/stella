@@ -22,6 +22,7 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
 import { createRedisClient } from "@/api/lib/redis-client";
+import { coordinationKey, type CoordinationKey } from "@/api/lib/redis-keys";
 
 type RedisLike = {
   send: (command: string, args: string[]) => Promise<unknown>;
@@ -29,7 +30,19 @@ type RedisLike = {
 
 type CounterEntry = { count: number; expiresAt: number };
 
-const REDIS_KEY_PREFIX = "feedback:intake:";
+// The limited subject (IP, organization, content digest) is the colocation
+// unit; the bucket only separates the windows that ride on it. Each key is
+// read and written alone, so slotting by subject spreads the keyspace.
+const counterKey = ({ bucket, key }: { bucket: string; key: string }) =>
+  coordinationKey({
+    scope: "feedback-intake",
+    slot: key,
+    suffix: `counter:${bucket}`,
+  });
+
+const dedupKey = (key: string) =>
+  coordinationKey({ scope: "feedback-intake", slot: key, suffix: "dedup" });
+
 const REDIS_COMMAND_TIMEOUT_MS = 500;
 const FALLBACK_CLEANUP_THRESHOLD = 10_000;
 const FALLBACK_CLEANUP_INTERVAL_MS = 60_000;
@@ -115,7 +128,7 @@ export const createFeedbackIntakeGuards = ({
     try {
       const count = await evalCounter({
         commandTimeoutMs,
-        key: `${REDIS_KEY_PREFIX}${scoped}`,
+        key: counterKey({ bucket, key }),
         redis: getRedis(),
         windowMs,
       });
@@ -140,7 +153,7 @@ export const createFeedbackIntakeGuards = ({
     try {
       const reply = await withCommandTimeout({
         command: getRedis().send("SET", [
-          `${REDIS_KEY_PREFIX}dedup:${key}`,
+          dedupKey(key),
           "1",
           "NX",
           "PX",
@@ -168,7 +181,7 @@ export const createFeedbackIntakeGuards = ({
   }) => {
     try {
       await withCommandTimeout({
-        command: getRedis().send("DEL", [`${REDIS_KEY_PREFIX}dedup:${key}`]),
+        command: getRedis().send("DEL", [dedupKey(key)]),
         commandTimeoutMs,
         label: "feedback-intake-redis-command",
       });
@@ -188,7 +201,7 @@ export const createFeedbackIntakeGuards = ({
         command: getRedis().send("EVAL", [
           RELEASE_COUNTER_SCRIPT,
           "1",
-          `${REDIS_KEY_PREFIX}${scoped}`,
+          counterKey({ bucket, key }),
         ]),
         commandTimeoutMs,
         label: "feedback-intake-redis-command",
@@ -213,7 +226,7 @@ const evalCounter = async ({
   windowMs,
 }: {
   commandTimeoutMs: number;
-  key: string;
+  key: CoordinationKey;
   redis: RedisLike;
   windowMs: number;
 }): Promise<number> => {

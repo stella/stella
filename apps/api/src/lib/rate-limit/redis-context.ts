@@ -14,8 +14,8 @@ import {
   withCommandTimeout,
 } from "@/api/lib/rate-limit/redis-command-timeout";
 import { createRedisClient } from "@/api/lib/redis-client";
+import { coordinationKey, type CoordinationKey } from "@/api/lib/redis-keys";
 
-const REDIS_KEY_PREFIX = "api:ratelimit:v2:";
 const REQUEST_KEY_SEPARATOR = "\u001f";
 const REDIS_COMMAND_TIMEOUT_MS = 500;
 const REFUND_PROVENANCE_CLEANUP_INTERVAL_MS = 60_000;
@@ -391,8 +391,11 @@ export const createRedisRateLimit = ({
   generator: requestScopedGenerator(scope, counterKeyGenerator),
 });
 
-const redisRateLimitKey = (counterKey: string): string =>
-  `${REDIS_KEY_PREFIX}${counterKey}`;
+// One key per counter, read and written alone, so the counter itself is the
+// colocation unit: the keyspace spreads across the ring instead of piling
+// every limiter onto one node.
+const redisRateLimitKey = (counterKey: string): CoordinationKey =>
+  coordinationKey({ scope: "api-ratelimit", slot: counterKey });
 
 const parseIncrementReply = (
   reply: unknown,

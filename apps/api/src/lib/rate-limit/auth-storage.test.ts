@@ -129,7 +129,7 @@ describe("auth rate-limit storage", () => {
     redisDown = false;
 
     expect(await storage.get("ip:1.2.3.4")).toEqual(value(6, 2000));
-    expect(redisStore.get("auth:ratelimit:ip:1.2.3.4")).toBe(
+    expect(redisStore.get("auth-ratelimit:{ip:1.2.3.4}")).toBe(
       JSON.stringify(value(6, 2000)),
     );
   });

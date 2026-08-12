@@ -132,6 +132,21 @@ const withColdStartConnectRetries = (
  * RedisClient. BullMQ's adapter assigns onconnect/onclose on the raw
  * client, so a wrapped connection must own its raw client — never share
  * one with code that uses the client directly.
+ *
+ * Queue keys deliberately keep BullMQ's default `bull:` prefix, which carries
+ * no hashtag and is therefore not cluster-legal. Every other key goes through
+ * `redis-keys.ts` and already is (see `/conventions-scale`); the prefix is the
+ * one documented exception, because a queue's keys ARE its jobs. Changing the
+ * prefix mid-flight does not migrate them: the workers would start reading an
+ * empty namespace and every queued, delayed, and retrying job under the old
+ * prefix would be stranded with nothing to replay it. Deploying the change now
+ * would therefore lose work silently, which no key-naming improvement is worth.
+ *
+ * The prefix flips at the cluster migration itself, as part of that cutover:
+ * stop producers, let every queue drain to empty (`getJobCounts` at zero for
+ * waiting/active/delayed/paused across all queues), then deploy the connection
+ * change with `prefix: "{stella}"` set here. Until that cutover, do not
+ * introduce a prefix, and do not add unhashtagged keys anywhere else.
  */
 export const createBullMqConnection = (
   overrides?: RedisOptions,

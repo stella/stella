@@ -64,6 +64,7 @@ import {
   createBullMqConnection,
   createRedisClient,
 } from "@/api/lib/redis-client";
+import { unboundedCoordinationKey } from "@/api/lib/redis-keys";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import {
   presignDownloadUrl,
@@ -97,7 +98,14 @@ const SEARCH_INDEX_REPLAY_BATCH_SIZE = SEARCH_INDEX_REPLAY_CONCURRENCY * 2;
 const SEARCH_INDEX_ATTEMPT_TIMEOUT_MS = 30_000;
 const SEARCH_INDEX_REPLAY_STATE_TRANSITION_TIMEOUT_MS = 5000;
 const REPAIR_SETTLE_DELAY_MS = 5 * 60 * 1000;
-const REPAIR_SCAN_CURSOR_KEY = "document-processing:repair-scan-cursor:v1";
+// Single compare-and-set slot for the repair sweep's resume position, so the
+// sweep is its own colocation unit. Declared unbounded in redis-keys.ts: the
+// CAS script below deliberately writes it without an expiry.
+const REPAIR_SCAN_CURSOR_KEY = unboundedCoordinationKey({
+  scope: "ocr-repair-cursor",
+  slot: "repair-scan",
+  suffix: "v1",
+});
 const REPAIR_SCAN_CURSOR_COMMAND_TIMEOUT_MS = 2000;
 const QUEUE_HANDOFF_TIMEOUT_MS = 2000;
 const REPAIR_SCAN_CURSOR_CAS_SCRIPT = `

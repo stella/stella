@@ -214,7 +214,7 @@ describe("security canary alert deduplicator", () => {
     expect(send).toHaveBeenCalledWith("EVAL", [
       expect.stringContaining('redis.call("PTTL", KEYS[1])'),
       "1",
-      "security:canary:alert:machine-api-key",
+      "security-canary:{machine-api-key}:alert",
       "300000",
     ]);
   });

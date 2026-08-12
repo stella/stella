@@ -4,6 +4,12 @@ import * as v from "valibot";
 import { USAGE_SERVICE_TIERS } from "@/api/db/schema";
 import type { AIRequestServiceTier } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  coordinationExpireArguments,
+  coordinationKey,
+  coordinationSetArguments,
+  type CoordinationKey,
+} from "@/api/lib/redis-keys";
 import { brandPersistedPropertyId } from "@/api/lib/safe-id-boundaries";
 import {
   recordEntityCompletion,
@@ -16,10 +22,15 @@ import {
   selectRunningLockReservation,
 } from "@/api/lib/workflow/orphan-recovery";
 
-const WORKFLOW_KEY_PREFIX = "workflow";
+const WORKFLOW_RUN_SCOPE = "workflow-run";
 const FINALIZATION_MANIFEST_VERSION = 1;
 const TRANSITIONAL_RUNNING_LOCK_VALUE = "1";
-const RUNNING_LOCK_SCAN_PATTERN = `${WORKFLOW_KEY_PREFIX}:*:running`;
+// Derived from the key builder so the glob cannot drift from the key layout.
+const RUNNING_LOCK_SCAN_PATTERN = coordinationKey({
+  scope: WORKFLOW_RUN_SCOPE,
+  slot: "*",
+  suffix: "running",
+});
 const RUNNING_LOCK_SCAN_COUNT = "200";
 const RESERVE_RECOVERY_LOCK_SCRIPT = `
 local current = redis.call("GET", KEYS[1])
@@ -115,10 +126,20 @@ type WorkflowRunStateRedis = {
 
 type WorkflowRunStateField = (typeof WORKFLOW_RUN_STATE_FIELDS)[number];
 
+// The workspace is the colocation unit: `clear`, `initializeCompletion` and
+// COMPLETE_ENTITY_SCRIPT each touch several of these keys in one command, and
+// a cluster rejects a multi-key command whose keys span slots. Hashtagging the
+// workspace id keeps every field of one run on one node while distinct
+// workspaces still spread across the ring.
 const workflowKey = (
   workspaceId: SafeId<"workspace">,
   field: WorkflowRunStateField,
-): string => `${WORKFLOW_KEY_PREFIX}:${workspaceId}:${field}`;
+): CoordinationKey =>
+  coordinationKey({
+    scope: WORKFLOW_RUN_SCOPE,
+    slot: workspaceId,
+    suffix: field,
+  });
 
 const parseOptionalStringReply = (reply: unknown): string | null => {
   if (reply === null || typeof reply === "string") {
@@ -337,14 +358,20 @@ export const createWorkflowRunStateStore = (redis: WorkflowRunStateRedis) => {
       workspaceId: SafeId<"workspace">;
     }): Promise<void> => {
       await Promise.all([
-        redis.send("EXPIRE", [
-          workflowKey(workspaceId, "running"),
-          String(runLockTtlSec),
-        ]),
-        redis.send("EXPIRE", [
-          workflowKey(workspaceId, "request-id"),
-          String(runLockTtlSec),
-        ]),
+        redis.send(
+          "EXPIRE",
+          coordinationExpireArguments(
+            workflowKey(workspaceId, "running"),
+            runLockTtlSec,
+          ),
+        ),
+        redis.send(
+          "EXPIRE",
+          coordinationExpireArguments(
+            workflowKey(workspaceId, "request-id"),
+            runLockTtlSec,
+          ),
+        ),
       ]);
     },
 
@@ -383,18 +410,22 @@ export const createWorkflowRunStateStore = (redis: WorkflowRunStateRedis) => {
         ),
       );
       await Promise.all([
-        redis.send("SET", [
-          workflowKey(workspaceId, "total"),
-          String(targetCount),
-          "EX",
-          String(runLockTtlSec),
-        ]),
-        redis.send("SET", [
-          workflowKey(workspaceId, "finalization-v1"),
-          JSON.stringify(manifest),
-          "EX",
-          String(runLockTtlSec),
-        ]),
+        redis.send(
+          "SET",
+          coordinationSetArguments({
+            key: workflowKey(workspaceId, "total"),
+            value: String(targetCount),
+            ttl: { unit: "seconds", value: runLockTtlSec },
+          }),
+        ),
+        redis.send(
+          "SET",
+          coordinationSetArguments({
+            key: workflowKey(workspaceId, "finalization-v1"),
+            value: JSON.stringify(manifest),
+            ttl: { unit: "seconds", value: runLockTtlSec },
+          }),
+        ),
       ]);
     },
 
@@ -462,13 +493,15 @@ export const createWorkflowRunStateStore = (redis: WorkflowRunStateRedis) => {
     }): Promise<boolean> => {
       const runningKey = workflowKey(workspaceId, "running");
       const wasSet =
-        (await redis.send("SET", [
-          runningKey,
-          recoveryLockValue,
-          "EX",
-          String(runLockTtlSec),
-          "NX",
-        ])) === "OK";
+        (await redis.send(
+          "SET",
+          coordinationSetArguments({
+            key: runningKey,
+            value: recoveryLockValue,
+            ttl: { unit: "seconds", value: runLockTtlSec },
+            onlyIfAbsent: true,
+          }),
+        )) === "OK";
       if (wasSet) {
         const requestId = await getOptionalString(workspaceId, "request-id");
         if (requestId === expectedRequestId) {
@@ -518,10 +551,13 @@ export const createWorkflowRunStateStore = (redis: WorkflowRunStateRedis) => {
           (field) => field !== "completed-entities",
         ).map(
           async (field) =>
-            await redis.send("EXPIRE", [
-              workflowKey(workspaceId, field),
-              String(runLockTtlSec),
-            ]),
+            await redis.send(
+              "EXPIRE",
+              coordinationExpireArguments(
+                workflowKey(workspaceId, field),
+                runLockTtlSec,
+              ),
+            ),
         ),
       );
     },
@@ -535,14 +571,24 @@ export const createWorkflowRunStateStore = (redis: WorkflowRunStateRedis) => {
       runLockTtlSec: number;
       workspaceId: SafeId<"workspace">;
     }): Promise<void> => {
-      await redis.send("SET", [
-        workflowKey(workspaceId, "request-id"),
-        requestId,
-        "EX",
-        String(runLockTtlSec),
-      ]);
+      await redis.send(
+        "SET",
+        coordinationSetArguments({
+          key: workflowKey(workspaceId, "request-id"),
+          value: requestId,
+          ttl: { unit: "seconds", value: runLockTtlSec },
+        }),
+      );
     },
 
+    /**
+     * Running locks visible to this connection. A cluster scans one node per
+     * cursor, so this is a hint that accelerates reconciliation, never the
+     * only way an orphaned run is found: `reconcileOrphanedWorkflows` also
+     * derives candidates from pending cells and stale extraction-run rows in
+     * PostgreSQL, and those two durable sources are what make the reconciler
+     * complete.
+     */
     scanRunningWorkspaceIds: async (): Promise<string[]> => {
       const workspaceIds: string[] = [];
       let cursor = "0";
@@ -586,13 +632,15 @@ export const createWorkflowRunStateStore = (redis: WorkflowRunStateRedis) => {
       runLockTtlSec: number;
       workspaceId: SafeId<"workspace">;
     }): Promise<boolean> =>
-      (await redis.send("SET", [
-        workflowKey(workspaceId, "running"),
-        requestId,
-        "EX",
-        String(runLockTtlSec),
-        "NX",
-      ])) === "OK",
+      (await redis.send(
+        "SET",
+        coordinationSetArguments({
+          key: workflowKey(workspaceId, "running"),
+          value: requestId,
+          ttl: { unit: "seconds", value: runLockTtlSec },
+          onlyIfAbsent: true,
+        }),
+      )) === "OK",
   };
 };
 
