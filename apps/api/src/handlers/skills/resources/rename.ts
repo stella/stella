@@ -24,6 +24,11 @@ const renameSkillResourceBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Move one file of an agent skill to a new path, re-deriving its kind " +
+    "from that path and leaving the content untouched. A path identical to " +
+    "the old one, a path already used by another file in the same skill, and " +
+    "a bundled skill are all refused.",
   permissions: { agentSkill: ["update"] },
   mcp: { type: "capability", reason: "agent_tool_authoring" },
   params: renameSkillResourceParamsSchema,

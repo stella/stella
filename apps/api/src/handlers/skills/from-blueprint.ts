@@ -24,6 +24,12 @@ const fromBlueprintBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Create an editable draft skill from one of the bundled blueprints, a " +
+    "SKILL.md skeleton with placeholder resource files. The draft is " +
+    "installed disabled and under a fresh slug, so the same blueprint can be " +
+    "used more than once, and stays fully editable afterwards. Team scope " +
+    "requires admin or owner.",
   permissions: { agentSkill: ["create"] },
   mcp: { type: "capability", reason: "agent_tool_authoring" },
   body: fromBlueprintBodySchema,

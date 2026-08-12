@@ -5415,6 +5415,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "chat", "get-messages"],
                 capabilityId: "chat.get-messages",
+                description:
+                  "Read the most recent page of one of your own chat threads, together with the thread's context matters, model and reasoning-effort settings, anonymization flag, whether web search is available and enabled, and an estimate of the model context the next send would carry. Pass workspaceId for a matter-scoped thread and omit it for a global one; a scope that contradicts the stored thread is rejected. With allowMissingThread, a thread that does not exist yet returns an empty draft instead of a 404. Page further back with chat.get-older-messages.",
                 access: "read",
                 flags: [
                   {
@@ -5490,6 +5492,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "chat", "get-older-messages"],
                 capabilityId: "chat.get-older-messages",
+                description:
+                  "Page backwards through one of your own chat threads using the olderCursor a previous read returned. Returns only the message page and the next cursor, without the thread settings and context estimate that chat.get-messages carries. The thread must be yours and the workspaceId scope must match the one it was created in.",
                 access: "read",
                 flags: [
                   {
@@ -5566,6 +5570,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "chat", "get-threads"],
                 capabilityId: "chat.get-threads",
+                description:
+                  "List your own chat threads, most recently active first, split into global threads and groups per matter. Threads with no messages, and threads belonging to a matter that is being deleted, are left out. search matches the thread title or the matter name; paginate with limit and cursor.",
                 access: "read",
                 flags: [
                   {
@@ -5626,6 +5632,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "chat", "rename-thread"],
                 capabilityId: "chat.rename-thread",
+                description:
+                  "Set the title of one of your own chat threads. The new title is marked as user-chosen, so automatic title generation can never overwrite it afterwards. A thread that does not exist in the requested scope is a 404: this never creates one.",
                 access: "write",
                 flags: [
                   {
@@ -5709,6 +5717,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "chat", "update-thread"],
                 capabilityId: "chat.update-thread",
+                description:
+                  "Turn web search on or off for one of your own chat threads. Unlike chat.rename-thread this is an upsert: when no thread exists under that id it is created as an empty placeholder carrying the flag, so a draft can record the setting before its first message is sent.",
                 access: "write",
                 flags: [
                   {
@@ -26185,6 +26195,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "skills", "create"],
                 capabilityId: "skills.create",
+                description:
+                  "Author an agent skill from text: name, description, instruction body, and an optional slash command. Team scope requires admin or owner, private scope is your own. A command must be lowercase letters, digits, hyphens, or underscores, must not be one of the reserved commands, and must be free in the organization, as must the skill name. Refused once the per-user or per-organization skill limit is reached. Use skills.upload or skills.import-url for a packaged skill instead.",
                 access: "write",
                 flags: [
                   {
@@ -26365,6 +26377,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "skills", "from-blueprint"],
                 capabilityId: "skills.from-blueprint",
+                description:
+                  "Create an editable draft skill from one of the bundled blueprints, a SKILL.md skeleton with placeholder resource files. The draft is installed disabled and under a fresh slug, so the same blueprint can be used more than once, and stays fully editable afterwards. Team scope requires admin or owner.",
                 access: "write",
                 flags: [
                   {
@@ -26430,6 +26444,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "skills", "generate-draft"],
                 capabilityId: "skills.generate-draft",
+                description:
+                  "Draft a skill bundle with the model: returns SKILL.md markdown plus up to eight companion files under references/, prompts/, or knowledge/. Pass intent, optionally examples, and, to revise an existing draft, previousDraft with previousResources and feedback. Nothing is stored: pass the result to skills.create and the resource endpoints to keep it. Consumes AI usage.",
                 access: "write",
                 flags: [
                   {
@@ -26527,6 +26543,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "skills", "get"],
                 capabilityId: "skills.get",
+                description:
+                  "Read one agent skill in full: its instruction body, scope, origin, version, license, compatibility, source URL, slash command, and every resource file with its content. A team skill can only be read here by an admin or owner and a private one only by its author, which is stricter than skills.list, where both are visible without their bodies.",
                 access: "read",
                 flags: [
                   {
@@ -26681,6 +26699,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "skills", "import-url"],
                 capabilityId: "skills.import-url",
+                description:
+                  "Fetch and install one agent skill from a URL pointing at a SKILL.md file or a skill package. It is stored with a url origin, so it stays editable afterwards. Team scope requires admin or owner. To pull several skills out of a repository, use skills.discover and then skills.import instead.",
                 access: "write",
                 flags: [
                   {
@@ -26735,6 +26755,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "skills", "list"],
                 capabilityId: "skills.list",
+                description:
+                  "List the agent skills visible to you, the organization's team skills plus your own private ones, enabled first and then by scope and name, with cursor pagination, alongside the deployment's built-in skills. Instruction bodies come back only for skills that carry a slash command; read one skill in full with skills.get. Also reports whether you may manage team skills.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -26780,6 +26802,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "skills", "list-commands"],
                 capabilityId: "skills.list-commands",
+                description:
+                  "List the enabled skills that carry a slash command, shaped for the chat composer's command menu: id, scope, name, description, command, and the full instruction body to insert on pick. Capped at 250 rows and not paginated; use skills.list for the whole catalogue.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -26797,6 +26821,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "skills", "resources-create"],
                 capabilityId: "skills.resources.create",
+                description:
+                  "Add one text file to an agent skill at a path such as references/checklist.md, taking its kind from the path unless you pass one. A path already used in the skill is a 409, a skill at its file limit is refused, and bundled skills cannot be edited. Team skills require admin or owner, private ones their author. Use skills.resources.upload for a DOCX or PDF whose text must be extracted first.",
                 access: "write",
                 flags: [
                   {
@@ -26962,6 +26988,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "skills", "resources-rename"],
                 capabilityId: "skills.resources.rename",
+                description:
+                  "Move one file of an agent skill to a new path, re-deriving its kind from that path and leaving the content untouched. A path identical to the old one, a path already used by another file in the same skill, and a bundled skill are all refused.",
                 access: "write",
                 flags: [
                   {
@@ -27037,6 +27065,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "skills", "resources-rewrite"],
                 capabilityId: "skills.resources.rewrite",
+                description:
+                  "Rewrite one file of an agent skill with the model, from a free-text instruction and the file's current content. Returns the proposed content without saving it: persist it with skills.resources.update. Consumes AI usage.",
                 access: "write",
                 flags: [
                   {
@@ -27112,6 +27142,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "skills", "resources-update"],
                 capabilityId: "skills.resources.update",
+                description:
+                  "Replace the content of one file of an agent skill, addressed by its path. The path and kind stay as they are; use skills.resources.rename to change them. Bundled skills are read-only, team skills require admin or owner, and private ones their author.",
                 access: "write",
                 flags: [
                   {
@@ -27186,6 +27218,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "skills", "seed"],
                 capabilityId: "skills.seed",
+                description:
+                  "Install the four default slash-command skills (summarize, risks, compare, draft) as private skills for the signed-in user in the active organization. Returns seeded false and writes nothing when that user already has any authored skill with a command in this organization, so defaults someone deleted are not put back.",
                 access: "write",
                 flags: [],
                 inputOnly: [],
@@ -27203,6 +27237,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "skills", "update"],
                 capabilityId: "skills.update",
+                description:
+                  "Change an agent skill: enable or disable it, or edit its name, description, instruction body, version, or slash command. Pass command as null to clear it; at least one field is required. Enabling and disabling works on any skill you may manage, but editing the content of a bundled skill is refused. A rename also moves the slug, and a name or command already taken in the organization is a 409.",
                 access: "write",
                 flags: [
                   {

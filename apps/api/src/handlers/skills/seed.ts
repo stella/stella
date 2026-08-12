@@ -41,6 +41,12 @@ const DEFAULT_SKILLS = [
 ] as const;
 
 const config = {
+  description:
+    "Install the four default slash-command skills (summarize, risks, " +
+    "compare, draft) as private skills for the signed-in user in the active " +
+    "organization. Returns seeded false and writes nothing when that user " +
+    "already has any authored skill with a command in this organization, so " +
+    "defaults someone deleted are not put back.",
   permissions: { agentSkill: ["create"] },
   mcp: { type: "capability", reason: "agent_tool_authoring" },
 } satisfies HandlerConfig;

@@ -17,6 +17,11 @@ const uploadSkillBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Install an agent skill by uploading a skill pack or a bare SKILL.md " +
+    "file; the parser reads the bytes rather than trusting the declared " +
+    "media type. It is stored with an upload origin and stays editable. Team " +
+    "scope requires admin or owner.",
   permissions: { agentSkill: ["create"] },
   mcp: { type: "capability", reason: "agent_tool_authoring" },
   transport: {

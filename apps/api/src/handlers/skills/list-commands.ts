@@ -16,6 +16,11 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 //   3. its cache key is independent so editor mutations don't blow
 //      away unrelated catalogue/inspector reads
 const config = {
+  description:
+    "List the enabled skills that carry a slash command, shaped for the chat " +
+    "composer's command menu: id, scope, name, description, command, and the " +
+    "full instruction body to insert on pick. Capped at 250 rows and not " +
+    "paginated; use skills.list for the whole catalogue.",
   permissions: { chat: ["create"] },
   access: "read",
   mcp: { type: "capability", reason: "agent_tool_authoring" },

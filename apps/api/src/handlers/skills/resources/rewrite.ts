@@ -27,6 +27,11 @@ const rewriteSkillResourceBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Rewrite one file of an agent skill with the model, from a free-text " +
+    "instruction and the file's current content. Returns the proposed " +
+    "content without saving it: persist it with skills.resources.update. " +
+    "Consumes AI usage.",
   permissions: { agentSkill: ["update"] },
   mcp: { type: "capability", reason: "agent_tool_authoring" },
   params: rewriteSkillResourceParamsSchema,

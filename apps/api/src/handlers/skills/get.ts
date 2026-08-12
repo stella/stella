@@ -14,6 +14,12 @@ const getSkillParamsSchema = t.Object({
 });
 
 const config = {
+  description:
+    "Read one agent skill in full: its instruction body, scope, origin, " +
+    "version, license, compatibility, source URL, slash command, and every " +
+    "resource file with its content. A team skill can only be read here by " +
+    "an admin or owner and a private one only by its author, which is " +
+    "stricter than skills.list, where both are visible without their bodies.",
   permissions: { chat: ["create"] },
   access: "read",
   mcp: { type: "capability", reason: "agent_tool_authoring" },
