@@ -96,7 +96,7 @@ export const AIStep = ({
   const allProvidersConfirmed = providers.every((draft) => {
     const fp = fingerprintDraft(draft);
     const state = rowStates[draft.provider];
-    if (state.status === "valid" && state.savedKey && state.savedKey === fp) {
+    if (state.status === "valid" && state.savedKey === fp) {
       return true;
     }
     if (!fp && draft.apiKeyMasked !== undefined) {
@@ -228,10 +228,9 @@ export const AIStep = ({
       const fingerprint = fingerprintDraft(draft);
       const state = nextRowStates[draft.provider];
       const changedSavedKey =
-        state.savedKey !== undefined &&
+        state.status !== "idle" &&
         fingerprint !== null &&
-        fingerprint !== state.savedKey &&
-        state.status !== "idle";
+        fingerprint !== state.savedKey;
       const clearedKey =
         fingerprint === null && state.status !== "idle" && !draft.apiKeyMasked;
       if (changedSavedKey || clearedKey) {

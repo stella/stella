@@ -5,13 +5,16 @@ import type {
   ProviderValue,
 } from "@/components/ai-config-role-models.logic";
 
-export type RowState = {
-  status: ProviderRowStatus;
-  // Fingerprint of the key the user explicitly saved. The row
-  // becomes "saved" only if the current key matches; any edit
-  // resets the row to "idle".
-  savedKey?: string;
-};
+type FingerprintedRowStatus = Exclude<ProviderRowStatus, "idle" | "saved">;
+
+export type RowState =
+  | { status: "idle"; savedKey?: never }
+  | {
+      status: FingerprintedRowStatus;
+      // Fingerprint of the key this validation attempt checked. Any edit
+      // resets the row to "idle", which cannot retain a stale fingerprint.
+      savedKey: string;
+    };
 
 export type RowStateMap = Record<ProviderValue, RowState>;
 
@@ -22,12 +25,23 @@ export const createProviderPreview = (
   const items: ProviderPreview[] = [];
   for (const draft of providers) {
     const state = rowStates[draft.provider];
-    if (state.status === "checking" || state.status === "invalid") {
-      items.push({ provider: draft.provider, status: state.status });
-      continue;
-    }
-    if (state.status === "valid" || draft.apiKeyMasked !== undefined) {
-      items.push({ provider: draft.provider, status: "valid" });
+    switch (state.status) {
+      case "checking":
+      case "invalid":
+        items.push({ provider: draft.provider, status: state.status });
+        break;
+      case "valid":
+        items.push({ provider: draft.provider, status: "valid" });
+        break;
+      case "idle":
+        if (draft.apiKeyMasked !== undefined) {
+          items.push({ provider: draft.provider, status: "valid" });
+        }
+        break;
+      default: {
+        const unreachable: never = state;
+        return unreachable;
+      }
     }
   }
   return items;
