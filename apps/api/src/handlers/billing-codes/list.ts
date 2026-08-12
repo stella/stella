@@ -26,6 +26,10 @@ const readBillingCodesQuerySchema = t.Object({
 });
 
 const config = {
+  description:
+    "List a matter's task and activity billing codes, ordered by sort order " +
+    "then code, with cursor pagination. Filter by type (task or activity) " +
+    "and by whether the code is still active.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "billing_admin" },
   access: "read",

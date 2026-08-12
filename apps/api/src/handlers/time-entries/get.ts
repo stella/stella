@@ -14,6 +14,12 @@ const readTimeEntryByIdParamsSchema = workspaceParams({
 
 const readTimeEntryById = createSafeHandler(
   {
+    description:
+      "Read one time entry in a matter by id, with its minutes, rate, " +
+      "currency, narratives, billing status, source, task and activity " +
+      "codes, timer timestamps, and the timekeeper's name. A caller without " +
+      "time-entry approval access can only read their own entries; another " +
+      "user's entry is reported as not found.",
     permissions: { timeEntry: ["read"] },
     mcp: { type: "covered", by: "list_time_entries" },
     access: "read",

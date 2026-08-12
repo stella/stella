@@ -24,6 +24,12 @@ const rateTableCursor = createTimestampIdCursorCodec({
 
 const readRateTables = createSafeHandler(
   {
+    description:
+      "List a matter's rate tables oldest first with cursor pagination, " +
+      "returning each table's name, currency, default flag, and how many " +
+      "rate lines it holds. Use rates.entries-read for the lines themselves " +
+      "and rates.resolve for the rate that actually applies to a user on a " +
+      "date.",
     permissions: { rate: ["read"] },
     mcp: { type: "capability", reason: "billing_admin" },
     access: "read",

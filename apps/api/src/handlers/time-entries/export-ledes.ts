@@ -286,6 +286,12 @@ export const exportLedesHandler = async ({
 };
 
 const config = {
+  description:
+    "Export a matter's time entries as a LEDES 1998B e-billing file. Only " +
+    "billable, charged, not-written-off entries are included, so the " +
+    "selection is narrower than the CSV export of the same filters. Refused " +
+    "when an included entry has no effective rate, or when the selection " +
+    "spans more than one currency, which the format cannot represent.",
   permissions: { timeEntry: ["approve"] },
   mcp: { type: "capability", reason: "billing_admin" },
   access: "read",

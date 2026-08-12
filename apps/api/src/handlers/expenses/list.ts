@@ -38,6 +38,12 @@ const readExpensesQuerySchema = t.Object({
 });
 
 const config = {
+  description:
+    "List expenses in a matter, earliest date first, with cursor pagination. " +
+    "Filter by userId, work item (matterId), a date-incurred range " +
+    "(dateFrom/dateTo, ISO YYYY-MM-DD), status, category, and billable. Each " +
+    "item carries the amount in minor currency units, currency, category, " +
+    "markup percentage, status, and the recording user's name.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "billing_admin" },
   access: "read",

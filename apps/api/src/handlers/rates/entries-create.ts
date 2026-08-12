@@ -26,6 +26,13 @@ const rateEntryParamsSchema = workspaceParams({
 
 const createRateEntry = createSafeHandler(
   {
+    description:
+      "Add one rate line to a rate table: an hourly rate in integer minor " +
+      "currency units, effective from a date and optionally until another. " +
+      "Pass userId for a person-specific rate or omit it for the table's " +
+      "fallback rate. Refused when the date range overlaps an existing line " +
+      "for the same user, when userId is not a member of the organization, " +
+      "or when the table is at its line limit.",
     permissions: { rate: ["create"] },
     mcp: { type: "capability", reason: "billing_admin" },
     params: rateEntryParamsSchema,

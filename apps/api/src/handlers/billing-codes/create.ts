@@ -19,6 +19,10 @@ const createBillingCodeBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Add one task or activity billing code to a matter's code list. The code " +
+    "string must be unique within the matter, a duplicate is refused, and " +
+    "the matter has a fixed cap on how many codes it may hold.",
   permissions: { billingCode: ["create"] },
   mcp: { type: "capability", reason: "billing_admin" },
   body: createBillingCodeBodySchema,

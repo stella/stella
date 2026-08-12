@@ -86,6 +86,11 @@ const buildInvoiceUpdateAuditChanges = (
 
 const updateInvoice = createSafeHandler(
   {
+    description:
+      "Change a draft invoice's number, invoice date, due date, reference, " +
+      "notes, or currency. Only draft invoices can be edited, and the " +
+      "currency cannot change while any time entry or expense is still " +
+      "attached to the invoice.",
     permissions: { invoice: ["update"] },
     mcp: { type: "capability", reason: "billing_admin" },
     params: invoiceParamsSchema,

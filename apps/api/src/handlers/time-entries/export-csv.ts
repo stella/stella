@@ -153,6 +153,12 @@ export const exportCsvHandler = async ({
 };
 
 const config = {
+  description:
+    "Export a matter's time entries as CSV text, one row per entry with " +
+    "date, timekeeper name, work item, minutes, rate, amount, billable flag, " +
+    "status, task and activity codes, and narratives. Filter by date-worked " +
+    "range, status, and work item. Unlike the LEDES export this includes " +
+    "non-billable and written-off entries; the row count is capped.",
   permissions: { timeEntry: ["approve"] },
   mcp: { type: "capability", reason: "billing_admin" },
   access: "read",

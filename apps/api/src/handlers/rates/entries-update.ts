@@ -23,6 +23,11 @@ const rateEntryParamsSchema = workspaceParams({
 
 const updateRateEntry = createSafeHandler(
   {
+    description:
+      "Change one rate line's hourly rate or effective dates in a rate " +
+      "table. Changing the dates re-checks for overlap against the other " +
+      "lines for the same user and is refused on a conflict; the user a line " +
+      "applies to cannot be changed here.",
     permissions: { rate: ["update"] },
     mcp: { type: "capability", reason: "billing_admin" },
     params: rateEntryParamsSchema,

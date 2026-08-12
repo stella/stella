@@ -8,6 +8,11 @@ const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
 
 const readInvoiceById = createSafeHandler(
   {
+    description:
+      "Read one invoice with its full line detail: every attached time entry " +
+      "with its work item, every attached expense with its work item, plus " +
+      "status, dates, currency, and total. Use invoices.list for a paginated " +
+      "summary without line items.",
     permissions: { workspace: ["read"] },
     mcp: { type: "covered", by: "list_invoices" },
     access: "read",

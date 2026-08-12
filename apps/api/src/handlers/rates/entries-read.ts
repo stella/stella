@@ -51,6 +51,12 @@ const decodeRateEntryCursor = (cursor: string): RateEntryCursor | null => {
 
 const readRateEntries = createSafeHandler(
   {
+    description:
+      "List the rate lines of one rate table, earliest effective-from first, " +
+      "with cursor pagination. Each line carries the hourly rate in minor " +
+      "currency units, its effective dates, and the user it applies to (null " +
+      "for the table's fallback rate). A rate table that does not exist in " +
+      "this matter returns an empty page rather than an error.",
     permissions: { rate: ["read"] },
     mcp: { type: "capability", reason: "billing_admin" },
     access: "read",

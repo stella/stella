@@ -4525,6 +4525,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "billing-codes", "create"],
                 capabilityId: "billing-codes.create",
+                description:
+                  "Add one task or activity billing code to a matter's code list. The code string must be unique within the matter, a duplicate is refused, and the matter has a fixed cap on how many codes it may hold.",
                 access: "write",
                 flags: [
                   {
@@ -4700,6 +4702,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "billing-codes", "list"],
                 capabilityId: "billing-codes.list",
+                description:
+                  "List a matter's task and activity billing codes, ordered by sort order then code, with cursor pagination. Filter by type (task or activity) and by whether the code is still active.",
                 access: "read",
                 flags: [
                   {
@@ -4789,6 +4793,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "billing-codes", "update"],
                 capabilityId: "billing-codes.update",
+                description:
+                  "Change one billing code's code string, label, sort order, or active flag in a matter. Only the fields you pass are written, the code string must stay unique within the matter, and deactivating a code stops it being offered without rewriting entries already recorded under it.",
                 access: "write",
                 flags: [
                   {
@@ -13151,6 +13157,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "expenses", "create"],
                 capabilityId: "expenses.create",
+                description:
+                  "Record a disbursement in the current matter against a work item (matterId: the document, folder, or task the cost belongs to). amount is an integer in minor currency units with a 3-letter currency; dateIncurred is read in the timezoneId you pass and is refused when it is in the future or older than the entry-age limit. The expense starts as a draft.",
                 access: "write",
                 flags: [
                   {
@@ -13423,6 +13431,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "expenses", "list"],
                 capabilityId: "expenses.list",
+                description:
+                  "List expenses in a matter, earliest date first, with cursor pagination. Filter by userId, work item (matterId), a date-incurred range (dateFrom/dateTo, ISO YYYY-MM-DD), status, category, and billable. Each item carries the amount in minor currency units, currency, category, markup percentage, status, and the recording user's name.",
                 access: "read",
                 flags: [
                   {
@@ -13600,6 +13610,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "expenses", "update"],
                 capabilityId: "expenses.update",
+                description:
+                  "Change a draft or approved expense in a matter: its date, amount, currency, category, description, invoice description, billable flag, markup, work item, or status (draft or approved). A billed or written-off expense is refused; use expenses.delete to write off an unbilled one.",
                 access: "write",
                 flags: [
                   {
@@ -15930,6 +15942,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "invoices", "add-entries"],
                 capabilityId: "invoices.add-entries",
+                description:
+                  "Attach approved, billable, not-yet-invoiced time entries and expenses to a draft invoice, marking them billed and recomputing the invoice total. Every entry must match the invoice currency, because an invoice is single-currency and nothing is converted. Only draft invoices accept entries, and a concurrent change to the same entries fails with a retryable conflict rather than attaching part of the set.",
                 access: "write",
                 flags: [
                   {
@@ -16035,6 +16049,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "invoices", "create"],
                 capabilityId: "invoices.create",
+                description:
+                  "Create a draft invoice from approved, billable, not-yet-invoiced time entries in a matter, marking them billed and setting the total from their billed minutes and recorded rates. Every entry must already carry the invoice currency, since nothing is converted, and the invoice number must not already be in use. Expenses are added afterwards with invoices.add-entries.",
                 access: "write",
                 flags: [
                   {
@@ -16242,6 +16258,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "invoices", "get"],
                 capabilityId: "invoices.get",
+                description:
+                  "Read one invoice with its full line detail: every attached time entry with its work item, every attached expense with its work item, plus status, dates, currency, and total. Use invoices.list for a paginated summary without line items.",
                 access: "read",
                 flags: [
                   {
@@ -16300,6 +16318,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "invoices", "list"],
                 capabilityId: "invoices.list",
+                description:
+                  "List a matter's invoices oldest first with cursor pagination, returning each invoice's number, reference, status, dates, currency, and total, but not its line items. Use invoices.get to read the attached time entries and expenses.",
                 access: "read",
                 flags: [
                   {
@@ -16369,6 +16389,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "invoices", "remove-entries"],
                 capabilityId: "invoices.remove-entries",
+                description:
+                  "Detach time entries and expenses from a draft invoice, returning them to approved, unbilled status and recomputing the invoice total. Reversible: the same entries can be attached again with invoices.add-entries, and nothing is deleted. Only draft invoices may be changed, and ids that are not on this invoice are skipped without an error.",
                 access: "write",
                 flags: [
                   {
@@ -16474,6 +16496,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "invoices", "transition"],
                 capabilityId: "invoices.transition",
+                description:
+                  "Move an invoice through its lifecycle with one action: finalize (draft to finalized), send (finalized to sent), mark_paid (sent to paid), revert_to_draft (finalized back to draft), or void (from finalized, sent, or paid). Voiding also releases every attached time entry and expense back to approved, unbilled status and clears the paid timestamp. An action the invoice's current status does not allow is refused.",
                 access: "write",
                 flags: [
                   {
@@ -16565,6 +16589,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "invoices", "update"],
                 capabilityId: "invoices.update",
+                description:
+                  "Change a draft invoice's number, invoice date, due date, reference, notes, or currency. Only draft invoices can be edited, and the currency cannot change while any time entry or expense is still attached to the invoice.",
                 access: "write",
                 flags: [
                   {
@@ -24935,6 +24961,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "rates", "create"],
                 capabilityId: "rates.create",
+                description:
+                  "Create a rate table, a named set of hourly rates in a single currency, in a matter. Pass isDefault to make it the matter's default, which clears the flag on the previous default; matters have a fixed cap on how many rate tables they may hold. Add the rates themselves with rates.entries-create.",
                 access: "write",
                 flags: [
                   {
@@ -25081,6 +25109,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "rates", "entries-create"],
                 capabilityId: "rates.entries-create",
+                description:
+                  "Add one rate line to a rate table: an hourly rate in integer minor currency units, effective from a date and optionally until another. Pass userId for a person-specific rate or omit it for the table's fallback rate. Refused when the date range overlaps an existing line for the same user, when userId is not a member of the organization, or when the table is at its line limit.",
                 access: "write",
                 flags: [
                   {
@@ -25283,6 +25313,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "rates", "entries-read"],
                 capabilityId: "rates.entries-read",
+                description:
+                  "List the rate lines of one rate table, earliest effective-from first, with cursor pagination. Each line carries the hourly rate in minor currency units, its effective dates, and the user it applies to (null for the table's fallback rate). A rate table that does not exist in this matter returns an empty page rather than an error.",
                 access: "read",
                 flags: [
                   {
@@ -25368,6 +25400,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "rates", "entries-update"],
                 capabilityId: "rates.entries-update",
+                description:
+                  "Change one rate line's hourly rate or effective dates in a rate table. Changing the dates re-checks for overlap against the other lines for the same user and is refused on a conflict; the user a line applies to cannot be changed here.",
                 access: "write",
                 flags: [
                   {
@@ -25487,6 +25521,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "rates", "list"],
                 capabilityId: "rates.list",
+                description:
+                  "List a matter's rate tables oldest first with cursor pagination, returning each table's name, currency, default flag, and how many rate lines it holds. Use rates.entries-read for the lines themselves and rates.resolve for the rate that actually applies to a user on a date.",
                 access: "read",
                 flags: [
                   {
@@ -25630,6 +25666,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "rates", "update"],
                 capabilityId: "rates.update",
+                description:
+                  "Rename a rate table, change its currency, or make it the matter's default, which clears the flag on the previous default. Clearing the default flag is refused unless another table is already the default, so a matter is never left without one. Rates already recorded on time entries are not rewritten.",
                 access: "write",
                 flags: [
                   {
@@ -32261,6 +32299,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "time-entries", "batch-update"],
                 capabilityId: "time-entries.batch-update",
+                description:
+                  "Apply one action to up to 200 time entries in a matter at once: approve, revert_to_draft, mark_billable, or mark_non_billable. Entries that are not in the action's starting state are skipped and only the number of changed rows is returned. Approval is refused while any selected entry has a running timer or a billable entry has no rate; mark_billable re-resolves each entry's rate and is refused when one of them has no effective rate.",
                 access: "write",
                 flags: [
                   {
@@ -32597,6 +32637,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "time-entries", "export-csv"],
                 capabilityId: "time-entries.export-csv",
+                description:
+                  "Export a matter's time entries as CSV text, one row per entry with date, timekeeper name, work item, minutes, rate, amount, billable flag, status, task and activity codes, and narratives. Filter by date-worked range, status, and work item. Unlike the LEDES export this includes non-billable and written-off entries; the row count is capped.",
                 access: "read",
                 flags: [
                   {
@@ -32697,6 +32739,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "time-entries", "export-ledes"],
                 capabilityId: "time-entries.export-ledes",
+                description:
+                  "Export a matter's time entries as a LEDES 1998B e-billing file. Only billable, charged, not-written-off entries are included, so the selection is narrower than the CSV export of the same filters. Refused when an included entry has no effective rate, or when the selection spans more than one currency, which the format cannot represent.",
                 access: "read",
                 flags: [
                   {
@@ -32797,6 +32841,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "time-entries", "get"],
                 capabilityId: "time-entries.get",
+                description:
+                  "Read one time entry in a matter by id, with its minutes, rate, currency, narratives, billing status, source, task and activity codes, timer timestamps, and the timekeeper's name. A caller without time-entry approval access can only read their own entries; another user's entry is reported as not found.",
                 access: "read",
                 flags: [
                   {
@@ -33068,6 +33114,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "time-entries", "split"],
                 capabilityId: "time-entries.split",
+                description:
+                  "Split one time entry across several work items by percentage, between 2 and 10 parts totalling 100. The original entry is deleted and replaced by new entries that share a splitGroupId and inherit its date, rate, narrative, codes, and status, with the minutes apportioned and re-rounded to the billing increment. A billed or written-off entry, and a duration too short to divide, are refused.",
                 access: "write",
                 flags: [
                   {
@@ -33251,6 +33299,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "time-entries", "timer-start"],
                 capabilityId: "time-entries.timer-start",
+                description:
+                  "Start a running timer for the signed-in user in the current matter, creating a draft time entry dated today in the timezoneId you pass and optionally attached to a work item. The user's effective rate is resolved at start and an entry with no resolvable rate is recorded as non-billable. Refused when the user already has a running timer.",
                 access: "write",
                 flags: [
                   {
@@ -33337,6 +33387,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "time-entries", "timer-stop"],
                 capabilityId: "time-entries.timer-stop",
+                description:
+                  "Stop the signed-in user's running timer in the current matter, writing the elapsed minutes onto its draft time entry and rounding the billed minutes up to the billing increment. Fails when that user has no running timer in this matter.",
                 access: "write",
                 flags: [
                   {
@@ -33375,6 +33427,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "time-entries", "update"],
                 capabilityId: "time-entries.update",
+                description:
+                  "Change one time entry's date worked, duration, narratives, billable and no-charge flags, work item, or task and activity codes. Editing someone else's entry, or any entry past draft, requires time-entry approval access, and billed or written-off entries are always refused. Making an entry billable or moving its date re-resolves the rate and fails when none applies. The write is conditional on the entry being unchanged since it was read, so a concurrent edit returns a conflict instead of overwriting.",
                 access: "write",
                 flags: [
                   {

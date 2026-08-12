@@ -34,6 +34,11 @@ const invoiceCursor = createTimestampIdCursorCodec({
 
 const readInvoices = createSafeHandler(
   {
+    description:
+      "List a matter's invoices oldest first with cursor pagination, " +
+      "returning each invoice's number, reference, status, dates, currency, " +
+      "and total, but not its line items. Use invoices.get to read the " +
+      "attached time entries and expenses.",
     permissions: { workspace: ["read"] },
     mcp: { type: "tool", name: "list_invoices" },
     access: "read",
