@@ -1,4 +1,4 @@
-import { and, asc, eq, ne, notExists, or, sql } from "drizzle-orm";
+import { and, asc, eq, lt, lte, notExists, or, sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
@@ -10,6 +10,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE,
+  DESTRUCTIVE_EFFECT_LEGACY_STALE_PROCESSING_MS,
   assertValidS3DeletionEffectChunk,
   consumeInBatches,
   createS3DeletionEffectChunks,
@@ -331,12 +332,26 @@ export const failEntityDeletionEffectChunk = async (
 export const listRecoverableEntityDeletionEffectRequestIds = async (
   db: EntityDeletionEffectDb = rootDb,
 ): Promise<SafeId<"entityDeletionCleanupRequest">[]> => {
+  const legacyNow = new Date();
+  const legacyStaleBefore = new Date(
+    legacyNow.getTime() - DESTRUCTIVE_EFFECT_LEGACY_STALE_PROCESSING_MS,
+  );
   const legacyRows = await db
     .select({ id: entityDeletionCleanupRequests.id })
     .from(entityDeletionCleanupRequests)
     .where(
       and(
-        ne(entityDeletionCleanupRequests.status, "completed"),
+        or(
+          eq(entityDeletionCleanupRequests.status, "pending"),
+          and(
+            eq(entityDeletionCleanupRequests.status, "failed"),
+            lte(entityDeletionCleanupRequests.nextAttemptAt, legacyNow),
+          ),
+          and(
+            eq(entityDeletionCleanupRequests.status, "processing"),
+            lt(entityDeletionCleanupRequests.updatedAt, legacyStaleBefore),
+          ),
+        ),
         notExists(
           db
             .select({ id: entityDeletionEffectChunks.id })

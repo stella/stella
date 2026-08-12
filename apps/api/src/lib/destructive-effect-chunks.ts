@@ -3,6 +3,7 @@ import { panic } from "better-result";
 export const S3_DELETION_EFFECT_TYPE = "s3_delete" as const;
 export const S3_DELETION_EFFECT_CHUNK_SIZE = 50;
 export const DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE = 250;
+export const DESTRUCTIVE_EFFECT_LEGACY_STALE_PROCESSING_MS = 15 * 60_000;
 const RETRY_BASE_DELAY_MS = 60_000;
 const RETRY_MAX_DELAY_MS = 24 * 60 * 60_000;
 

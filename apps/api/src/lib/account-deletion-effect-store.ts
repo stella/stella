@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, lt, ne, notExists, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, lt, notExists, or, sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
@@ -10,6 +10,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE,
+  DESTRUCTIVE_EFFECT_LEGACY_STALE_PROCESSING_MS,
   assertValidS3DeletionEffectChunk,
   consumeInBatches,
   createS3DeletionEffectChunks,
@@ -377,12 +378,27 @@ export const failAccountDeletionEffectChunk = async (
 export const listRecoverableAccountDeletionEffectRequestIds = async (
   db: AccountDeletionEffectDb = rootDb,
 ): Promise<SafeId<"accountDeletionRequest">[]> => {
+  const legacyNow = new Date();
+  const legacyStaleBefore = new Date(
+    legacyNow.getTime() - DESTRUCTIVE_EFFECT_LEGACY_STALE_PROCESSING_MS,
+  );
   const legacyRows = await db
     .select({ id: accountDeletionRequests.id })
     .from(accountDeletionRequests)
     .where(
       and(
-        ne(accountDeletionRequests.status, "completed"),
+        lt(
+          accountDeletionRequests.attemptCount,
+          ACCOUNT_DELETION_EFFECT_MAX_ATTEMPTS,
+        ),
+        or(
+          eq(accountDeletionRequests.status, "pending"),
+          eq(accountDeletionRequests.status, "failed"),
+          and(
+            eq(accountDeletionRequests.status, "processing"),
+            lt(accountDeletionRequests.updatedAt, legacyStaleBefore),
+          ),
+        ),
         notExists(
           db
             .select({ id: accountDeletionEffectChunks.id })

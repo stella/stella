@@ -296,6 +296,40 @@ describe("destructive-effect lease fencing", () => {
     });
   });
 
+  test("legacy account recovery preserves retry and stale fences", async () => {
+    const exhaustedRequestId = toSafeId<"accountDeletionRequest">(
+      "00000000-0000-4000-8000-000000000118",
+    );
+    const activeRequestId = toSafeId<"accountDeletionRequest">(
+      "00000000-0000-4000-8000-000000000119",
+    );
+    await testDb.insert(accountDeletionRequests).values([
+      {
+        attemptCount: ACCOUNT_DELETION_EFFECT_MAX_ATTEMPTS,
+        id: exhaustedRequestId,
+        organizationIds: [],
+        status: "failed",
+        storageCleanup: { s3Keys: ["user/legacy-exhausted"] },
+        userId,
+        workspaceIds: [],
+      },
+      {
+        id: activeRequestId,
+        organizationIds: [],
+        status: "processing",
+        storageCleanup: { s3Keys: ["user/legacy-active"] },
+        userId,
+        workspaceIds: [],
+      },
+    ]);
+
+    const recoverable =
+      await listRecoverableAccountDeletionEffectRequestIds(accountEffectDb());
+
+    expect(recoverable).not.toContain(exhaustedRequestId);
+    expect(recoverable).not.toContain(activeRequestId);
+  });
+
   test("the account-deletion producer atomically writes bounded effects", async () => {
     const producerRequestId = toSafeId<"accountDeletionRequest">(
       "00000000-0000-4000-8000-000000000107",
@@ -433,6 +467,39 @@ describe("destructive-effect lease fencing", () => {
     expect(recoverable.indexOf(olderRequestId)).toBeLessThan(
       recoverable.indexOf(newerRequestId),
     );
+  });
+
+  test("legacy entity recovery preserves retry and stale fences", async () => {
+    const deferredRequestId = toSafeId<"entityDeletionCleanupRequest">(
+      "00000000-0000-4000-8000-000000000120",
+    );
+    const activeRequestId = toSafeId<"entityDeletionCleanupRequest">(
+      "00000000-0000-4000-8000-000000000121",
+    );
+    await testDb.insert(entityDeletionCleanupRequests).values([
+      {
+        errorMessage: "retry later",
+        id: deferredRequestId,
+        nextAttemptAt: new Date("2100-01-01T00:00:00.000Z"),
+        organizationId,
+        s3Keys: ["tenant/legacy-deferred"],
+        status: "failed",
+        workspaceId,
+      },
+      {
+        id: activeRequestId,
+        organizationId,
+        s3Keys: ["tenant/legacy-active"],
+        status: "processing",
+        workspaceId,
+      },
+    ]);
+
+    const recoverable =
+      await listRecoverableEntityDeletionEffectRequestIds(effectDb());
+
+    expect(recoverable).not.toContain(deferredRequestId);
+    expect(recoverable).not.toContain(activeRequestId);
   });
 
   test("one failed chunk does not poison later chunks", async () => {
