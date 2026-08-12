@@ -10,8 +10,8 @@ describe("Office dialog capability", () => {
   });
 
   test("accepts a structurally valid dialog API", () => {
-    expect(
-      isOfficeDialogApi({ displayDialogAsync: () => undefined }),
-    ).toBe(true);
+    expect(isOfficeDialogApi({ displayDialogAsync: () => undefined })).toBe(
+      true,
+    );
   });
 });
