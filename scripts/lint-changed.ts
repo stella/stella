@@ -12,6 +12,8 @@
 import { $ } from "bun";
 import { existsSync } from "node:fs";
 
+import { isChangedLintPath } from "./lint-paths";
+
 const mergeBase = (
   await $`git merge-base origin/main HEAD`.quiet().nothrow()
 ).stdout
@@ -25,17 +27,12 @@ const [committed, worktree, untracked] = await Promise.all([
   $`git ls-files --others --exclude-standard`.quiet().nothrow(),
 ]);
 
-const LINTABLE = /\.(ts|tsx|js|jsx|mjs|cjs)$/u;
-// oxlint already ignores these via config, but skip early so an all-generated
-// diff doesn't spin up the type-aware engine for nothing.
-const SKIP = /(\.gen\.ts$|\/generated\/|\/node_modules\/|routeTree\.gen)/u;
-
 const files = [
   ...new Set(
     [committed, worktree, untracked]
       .flatMap((r) => r.stdout.toString().split("\n"))
       .map((f) => f.trim())
-      .filter((f) => f && LINTABLE.test(f) && !SKIP.test(f))
+      .filter((f) => f !== "" && isChangedLintPath(f))
       .filter((f) => existsSync(f)),
   ),
 ];

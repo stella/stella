@@ -32,8 +32,8 @@ pre-push:
   parallel: false
   commands:
     code-check:
-      # One Oxc type-aware pass covers changed workspaces plus reverse
-      # dependants. Global compiler/lint inputs fall back to the full repo.
+      # Turbo caches lint and typecheck per affected workspace, including
+      # reverse dependants. Global inputs fall back to the full repo.
       run: bun run code-check:affected -- --base origin/main
     format:
       run: bun run format --concurrency=2 -- --check
