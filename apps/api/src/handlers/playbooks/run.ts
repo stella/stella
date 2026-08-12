@@ -9,6 +9,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import { openPlaybookRun } from "@/api/lib/document-review/open-playbook-run";
+import {
+  PLAYBOOK_RUN_START_OUTCOME,
+  playbookRunStartOutcome,
+} from "@/api/lib/document-review/playbook-run-start";
 import { enqueueDocumentReviewRuns } from "@/api/lib/document-review/run-queue";
 import { PLAYBOOK_RUN_DOCUMENTS_MAX } from "@/api/lib/document-review/table-run-create";
 import type { CreatePlaybookTableRunsResult } from "@/api/lib/document-review/table-run-create";
@@ -163,7 +167,7 @@ const runPlaybook = createSafeHandler(
     }
 
     if (txResult.materializedPropertyIds.length > 0) {
-      yield* Result.await(
+      const started = yield* Result.await(
         Result.tryPromise({
           try: async () =>
             await startWorkflow({
@@ -181,6 +185,21 @@ const runPlaybook = createSafeHandler(
             }),
         }),
       );
+      // Answering 200 on a start that never happened would leave a run
+      // nothing drives. Nothing is unwound: the columns are upserted by
+      // playbook source id and left stale, and the runs this request opened
+      // stay claimed, so a retry maps back to both.
+      if (
+        playbookRunStartOutcome(started.status) ===
+        PLAYBOOK_RUN_START_OUTCOME.NOT_STARTED
+      ) {
+        return Result.err(
+          new HandlerError({
+            status: 500,
+            message: "Failed to start the review.",
+          }),
+        );
+      }
     }
 
     return Result.ok({

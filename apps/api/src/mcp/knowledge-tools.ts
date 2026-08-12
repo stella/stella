@@ -35,6 +35,10 @@ import {
 } from "@/api/lib/clauses/types";
 import { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import { openPlaybookRun } from "@/api/lib/document-review/open-playbook-run";
+import {
+  PLAYBOOK_RUN_START_OUTCOME,
+  playbookRunStartOutcome,
+} from "@/api/lib/document-review/playbook-run-start";
 import { LIMITS } from "@/api/lib/limits";
 import {
   brandPersistedClauseCategoryId,
@@ -64,6 +68,7 @@ import {
   errorResult,
   internalFailureResult,
   intProp,
+  MCP_INTERNAL_ERROR_HINT,
   nullableStringProp,
   stringProp,
   structuredErrorResult,
@@ -1476,6 +1481,20 @@ const runPlaybookArgsSchema = v.strictObject({
   playbook_id: v.pipe(v.string(), v.minLength(1)),
 });
 
+/**
+ * A review whose workflow never started. Retryable by construction: the
+ * materialized columns are upserted by playbook source id and left stale, so
+ * calling the tool again maps back to the same columns and re-queues them
+ * rather than materializing a second set.
+ */
+const workflowStartFailureResult = () =>
+  structuredErrorResult({
+    code: "internal_error",
+    message: "Failed to start the review",
+    hint: MCP_INTERNAL_ERROR_HINT,
+    retryable: true,
+  });
+
 const handleRunPlaybookTool: McpToolHandler = async ({ args, context }) => {
   if (!roles[context.memberRole].authorize({ playbook: ["apply"] }).success) {
     return errorResult("Forbidden");
@@ -1567,7 +1586,16 @@ const handleRunPlaybookTool: McpToolHandler = async ({ args, context }) => {
   });
   if (Result.isError(started)) {
     captureError(started.error, { workspaceId });
-    return errorResult("Failed to start playbook review");
+    return workflowStartFailureResult();
+  }
+  // The queue reports an enqueue failure in band (having already captured the
+  // cause), so a success envelope here would promise an agent a review nothing
+  // drives.
+  if (
+    playbookRunStartOutcome(started.value.status) ===
+    PLAYBOOK_RUN_START_OUTCOME.NOT_STARTED
+  ) {
+    return workflowStartFailureResult();
   }
 
   return textResult({

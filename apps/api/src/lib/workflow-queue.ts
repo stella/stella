@@ -252,8 +252,23 @@ type StartWorkflowArgs = {
   serviceTier?: AIRequestServiceTier;
 };
 
+/**
+ * Every way a start attempt ends. Exported as a list so a caller can classify
+ * the whole set exhaustively instead of testing one status and treating the
+ * rest as success: `failed` in particular is an enqueue failure reported in
+ * band, not an exception, and reads as success to anyone who ignores it.
+ */
+export const WORKFLOW_START_STATUSES = [
+  "started",
+  "already-running",
+  "skipped",
+  "failed",
+] as const;
+
+export type WorkflowStartStatus = (typeof WORKFLOW_START_STATUSES)[number];
+
 type StartWorkflowResult = {
-  status: "started" | "already-running" | "skipped" | "failed";
+  status: WorkflowStartStatus;
 };
 
 const extractionRunScope = ({
@@ -422,11 +437,35 @@ export const startWorkflow = async ({
     return { status: "already-running" };
   }
 
-  await runStateStore.setRequestId({
-    requestId,
-    runLockTtlSec: RUNNING_LOCK_TTL_SEC,
-    workspaceId,
+  // Between the claim above and the try below, a throw would escape holding a
+  // lock nobody owns: the caller sees an exception, and its retry is answered
+  // `already-running` by the claim it orphaned, which reads as a run in
+  // flight. Report the same in-band failure the rest of the start path
+  // reports instead, releasing the claim first. Releasing is best-effort by
+  // necessity — the release travels the connection that just failed — and the
+  // hour-long TTL plus `reconcileOrphanedWorkflows` remain the backstop.
+  const requestIdSet = await Result.tryPromise({
+    try: async () =>
+      await runStateStore.setRequestId({
+        requestId,
+        runLockTtlSec: RUNNING_LOCK_TTL_SEC,
+        workspaceId,
+      }),
+    catch: (cause) => cause,
   });
+  if (Result.isError(requestIdSet)) {
+    // Compare-and-delete on this request's own id: the release runs after a
+    // Valkey failure, so by the time it lands the claim's TTL may have lapsed
+    // and a replacement run may hold the workspace. Releasing that one would
+    // hand a third caller a workspace two runs believe they own.
+    await runStateStore
+      .releaseClaim({ requestId, workspaceId })
+      .catch((releaseError: unknown) =>
+        captureError(releaseError, { workspaceId }),
+      );
+    captureError(requestIdSet.error, { workspaceId });
+    return { status: "failed" };
+  }
 
   const createdRunKey = await extractionRunStore
     .create({
