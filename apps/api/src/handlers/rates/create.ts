@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
+import { abortableTx } from "@/api/db/safe-db";
 import { rateTables } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -23,7 +24,7 @@ const createRateTable = createSafeHandler(
   },
   async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
     const txResult = yield* Result.await(
-      safeDb(async (tx) => {
+      abortableTx(safeDb, async (tx) => {
         // Lock rows then count to serialize concurrent adds.
         // PG rejects FOR UPDATE with aggregate functions.
         const lockedRows = await tx
@@ -33,11 +34,10 @@ const createRateTable = createSafeHandler(
           .for("update");
 
         if (lockedRows.length >= LIMITS.rateTablesPerWorkspace) {
-          return {
-            ok: false as const,
-            status: 400 as const,
+          throw new HandlerError({
+            status: 400,
             message: "Rate tables limit reached for this workspace",
-          };
+          });
         }
 
         const previousDefaults = body.isDefault
@@ -65,11 +65,12 @@ const createRateTable = createSafeHandler(
           .returning({ id: rateTables.id });
 
         if (!table) {
-          return {
-            ok: false as const,
-            status: 500 as const,
+          // The insert cleared the workspace's previous default table above, so
+          // returning here would commit a workspace with no default at all.
+          throw new HandlerError({
+            status: 500,
             message: "Failed to create rate table",
-          };
+          });
         }
 
         await recordAuditEvent(tx, [
@@ -98,18 +99,9 @@ const createRateTable = createSafeHandler(
           })),
         ]);
 
-        return { ok: true as const, id: table.id };
+        return { id: table.id };
       }),
     );
-
-    if (!txResult.ok) {
-      return Result.err(
-        new HandlerError({
-          status: txResult.status,
-          message: txResult.message,
-        }),
-      );
-    }
 
     return Result.ok({ id: txResult.id });
   },
