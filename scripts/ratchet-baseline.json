@@ -166,7 +166,7 @@
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 46,
+    "count": 45,
     "files": {
       "apps/api/src/handlers/case-law/decisions/sitemap.ts": 1,
       "apps/api/src/handlers/case-law/decisions/slug-backfill.ts": 2,
@@ -187,7 +187,7 @@
       "apps/api/src/lib/account-deletion-steps.ts": 2,
       "apps/api/src/lib/entity-cap-lock.ts": 1,
       "apps/api/src/lib/legal-search/case-law-search-index.ts": 1,
-      "apps/api/src/lib/template-clause-links.ts": 2,
+      "apps/api/src/lib/template-clause-links.ts": 1,
       "apps/api/src/lib/views/template-properties.ts": 1,
       "apps/api/src/lib/workflow-queue.ts": 1,
       "apps/api/src/scripts/backfill-corpus-storage.ts": 1,

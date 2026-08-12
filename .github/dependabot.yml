@@ -217,6 +217,9 @@ updates:
         patterns:
           - "streamdown*"
           - "@streamdown/*"
+      aws-sdk:
+        patterns:
+          - "@aws-sdk/*"
     versioning-strategy: increase
     commit-message:
       prefix: "chore"

@@ -39,7 +39,7 @@
     "dev:errors": "tail -F .dev-logs/errors.jsonl"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1104.0",
+    "@aws-sdk/client-s3": "^3.1105.0",
     "@aws-sdk/client-sesv2": "^3.1105.0",
     "@aws-sdk/client-sts": "^3.1105.0",
     "@aws-sdk/s3-request-presigner": "^3.1105.0",
@@ -47,7 +47,7 @@
     "@better-auth/oauth-provider": "catalog:",
     "@elysiajs/cors": "^1.4.2",
     "@firecrawl/anydoc": "0.1.6",
-    "@google/genai": "^2.13.0",
+    "@google/genai": "^2.16.0",
     "@libpdf/core": "catalog:",
     "@litko/yara-x": "^0.7.0",
     "@modelcontextprotocol/server": "2.0.0",
