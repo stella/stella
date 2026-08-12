@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -6,9 +7,31 @@ import {
   isPdfBytes,
   isPdfPreview,
   isPdfPreviewResponse,
+  validatePreviewUrl,
 } from "@/api/handlers/external-preview/preview";
 
 describe("external source preview", () => {
+  test("accepts public HTTP literals for preview fetching", async () => {
+    const result = await validatePreviewUrl("http://1.1.1.1/");
+
+    expect(Result.isOk(result)).toBe(true);
+  });
+
+  test("rejects every non-public literal address through the shared SSRF boundary", async () => {
+    const nonPublicUrls = [
+      "http://198.18.0.1/benchmark",
+      "http://198.51.100.1/documentation",
+      "http://[febf::1]/link-local",
+      "http://[ff02::1]/multicast",
+    ];
+
+    for (const url of nonPublicUrls) {
+      // oxlint-disable-next-line no-await-in-loop -- each literal must independently cross the async preview boundary
+      const result = await validatePreviewUrl(url);
+      expect(Result.isError(result), url).toBe(true);
+    }
+  });
+
   test("extracts readable text from the largest generic content block", () => {
     const text = extractReadableTextFromHtml(`
       <html>

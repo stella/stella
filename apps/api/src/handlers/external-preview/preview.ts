@@ -2,14 +2,16 @@ import { Result } from "better-result";
 import * as cheerio from "cheerio";
 import type { Element } from "domhandler";
 import { t } from "elysia";
-import { lookup } from "node:dns/promises";
-import { isIP } from "node:net";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { htmlToMarkdown } from "@/api/lib/markdown/html-to-markdown";
-import { fetchWithResolvedAddress } from "@/api/lib/safe-outbound-fetch";
+import {
+  fetchWithResolvedAddress,
+  OUTBOUND_PROTOCOL_POLICY,
+  validateOutboundFetchTarget,
+} from "@/api/lib/safe-outbound-fetch";
 import type {
   SafeOutboundAddress,
   SafeOutboundFetchResponse,
@@ -322,7 +324,7 @@ const extractHtmlTitle = (html: string): string | null => {
   return normalized.length > 0 ? normalized : null;
 };
 
-const validatePreviewUrl = async (
+export const validatePreviewUrl = async (
   rawUrl: string,
 ): Promise<Result<ValidatedPreviewUrl, HandlerError>> => {
   if (rawUrl.length > MAX_URL_LENGTH) {
@@ -340,37 +342,22 @@ const validatePreviewUrl = async (
     );
   }
 
-  if (url.protocol !== "https:" && url.protocol !== "http:") {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "Only HTTP and HTTPS sources can be previewed",
-      }),
-    );
-  }
-
-  if (url.username || url.password) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "Source URLs with credentials cannot be previewed",
-      }),
-    );
-  }
-
-  if (isBlockedHostname(url.hostname)) {
-    return Result.err(
-      new HandlerError({ status: 400, message: "Source host is not allowed" }),
-    );
-  }
-
-  const resolved = await resolvePublicAddresses(url.hostname);
-  if (Result.isError(resolved)) {
-    return Result.err(resolved.error);
-  }
-
   url.hash = "";
-  return Result.ok({ addresses: resolved.value, url });
+  const target = await validateOutboundFetchTarget(url, {
+    protocolPolicy: OUTBOUND_PROTOCOL_POLICY.HTTP_AND_HTTPS,
+    timeoutMs: PREVIEW_TIMEOUT_MS,
+  });
+  if (Result.isError(target)) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Source URL is not allowed",
+        cause: target.error,
+      }),
+    );
+  }
+
+  return Result.ok(target.value);
 };
 
 type ValidatedPreviewUrl = {
@@ -484,101 +471,6 @@ const isRedirectStatus = (status: number): boolean =>
 
 const readResponseText = (response: SafeOutboundFetchResponse): string =>
   new TextDecoder().decode(response.body.slice(0, MAX_PREVIEW_BYTES));
-
-const resolvePublicAddresses = async (
-  hostname: string,
-): Promise<Result<SafeOutboundAddress[], HandlerError>> => {
-  const literalFamily = isIP(hostname);
-  if (literalFamily !== 0) {
-    return isPrivateAddress(hostname)
-      ? Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Source host is not allowed",
-          }),
-        )
-      : Result.ok([
-          {
-            address: hostname,
-            family: literalFamily === 6 ? 6 : 4,
-          },
-        ]);
-  }
-
-  const addresses = await Result.tryPromise({
-    try: async () => await lookup(hostname, { all: true }),
-    catch: (cause) =>
-      new HandlerError({
-        status: 400,
-        message: "Source host could not be resolved",
-        cause,
-      }),
-  });
-
-  if (Result.isError(addresses)) {
-    return Result.err(addresses.error);
-  }
-
-  if (
-    addresses.value.length === 0 ||
-    addresses.value.some(({ address }) => isPrivateAddress(address))
-  ) {
-    return Result.err(
-      new HandlerError({ status: 400, message: "Source host is not allowed" }),
-    );
-  }
-
-  return Result.ok(
-    addresses.value.map(({ address, family }) => ({
-      address,
-      family: family === 6 ? 6 : 4,
-    })),
-  );
-};
-
-const isBlockedHostname = (hostname: string): boolean => {
-  const normalized = hostname.toLowerCase();
-  return normalized === "localhost" || normalized.endsWith(".localhost");
-};
-
-const isPrivateAddress = (address: string): boolean => {
-  if (address.startsWith("::ffff:")) {
-    return isPrivateAddress(address.slice("::ffff:".length));
-  }
-
-  if (isIP(address) === 6) {
-    const normalized = address.toLowerCase();
-    return (
-      normalized === "::" ||
-      normalized === "::1" ||
-      normalized.startsWith("fc") ||
-      normalized.startsWith("fd") ||
-      normalized.startsWith("fe80:")
-    );
-  }
-
-  const octets = address.split(".").map(Number);
-  if (octets.length !== 4 || octets.some((part) => !Number.isInteger(part))) {
-    return true;
-  }
-
-  const [a, b] = octets;
-  if (a === undefined || b === undefined) {
-    return true;
-  }
-
-  return (
-    a === 0 ||
-    a === 10 ||
-    a === 127 ||
-    (a === 100 && b >= 64 && b <= 127) ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 0) ||
-    (a === 192 && b === 168) ||
-    a >= 224
-  );
-};
 
 const getContentType = (headers: Headers): string | null => {
   const raw = headers.get("content-type");
