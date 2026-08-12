@@ -2493,7 +2493,7 @@ type Messages = {
   };
   "onboarding": {
     "aiConfigFailed": "Couldn't save your AI configuration. You can finish it from settings.";
-    "aiSubtitle": "Bring your own API key. You can change providers and models anytime.";
+    "aiSubtitle": "Add your API key. You can choose models later in settings.";
     "aiTitle": "Connect your AI provider";
     "appsSubtitle": "stella also works outside the browser: on your desktop, in your AI assistant, and in the terminal. You can come back to this setup anytime later.";
     "appsTitle": "Get stella everywhere";
@@ -2516,18 +2516,11 @@ type Messages = {
     "catalogueSearchPlaceholder": "Search skills and tools";
     "catalogueSubtitle": "stella can call these tools when answering. Pick the ones that match your practice; you can change this anytime in settings.";
     "catalogueThirdPartyConfirm": "Add anyway";
-    "catalogueThirdPartyDisclaimer": "This is third-party code contributed by {author}. stella has not reviewed, endorsed, or maintained it. You are solely responsible for verifying it is suitable for your practice and compliant with your team's policies. By adding it, you accept that you use it at your own risk.";
+    "catalogueThirdPartyDisclaimer": "This code is provided by {author}, not stella. stella does not review or maintain it. Before adding it, make sure it suits your work.";
     "catalogueTitle": "Customize your AI";
-    "cliCardDescription": "For technical users: script and automate your work.";
+    "cliCardDescription": "For technical users: automate your work.";
     "cliCardTitle": "Automate stella from the terminal";
     "continue": "Continue";
-    "creating": {
-      "ai": "Saving AI configuration...";
-      "done": "Finishing up...";
-      "invites": "Sending invitations...";
-      "org": "Creating your team...";
-    };
-    "creatingTrust": "Your data is encrypted at rest and in transit.";
     "enterTeamName": "Enter your team name above";
     "getStarted": "Get Started";
     "inviteExternal": "External — will have access to your documents";
@@ -2542,14 +2535,14 @@ type Messages = {
     "jurisdictionSaveFailed": "Couldn't save your jurisdictions. You can finish this from settings.";
     "jurisdictionSearchLabel": "Search countries";
     "jurisdictionSearchPlaceholder": "Search countries";
-    "jurisdictionSubtitle": "Choose the countries you commonly work with. stella will use this to customize your experience.";
+    "jurisdictionSubtitle": "Choose where you practice. stella will tailor AI responses and surface available sources: case law, legislation, and company registries.";
     "jurisdictionSuggested": "Suggested";
     "jurisdictionTitle": "Pick your practice jurisdictions";
     "mcpCardDescription": "AI assistants like Claude can work with your matters and documents.";
     "mcpCardTitle": "Use stella from your AI assistant";
     "orgNameLabel": "Team name";
     "orgNamePlaceholder": "Smith & Associates";
-    "orgSubtitle": "This is how your colleagues will find you.";
+    "orgSubtitle": "If you're joining an existing team, ask one of its members for an invite link instead.";
     "orgTitle": "Name your team";
     "setupChatgptStep1": "In ChatGPT, open Settings → Connectors and add a connector.";
     "setupClaudeStep1": "In Claude, open Settings → Connectors and choose “Add custom connector”.";

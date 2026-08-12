@@ -2490,7 +2490,7 @@
   },
   "onboarding": {
     "aiConfigFailed": "Nastavení AI se nepodařilo uložit. Můžete ho dokončit v nastavení.",
-    "aiSubtitle": "Přineste si vlastní API klíč. Poskytovatele i modely můžete kdykoliv změnit.",
+    "aiSubtitle": "Přidejte vlastní API klíč. Modely můžete vybrat později v nastavení.",
     "aiTitle": "Připojte svého poskytovatele AI",
     "appsSubtitle": "stella funguje i mimo prohlížeč: v aplikaci pro počítač, ve vašem AI asistentovi a v terminálu. K tomuto nastavení se můžete kdykoliv později vrátit.",
     "appsTitle": "Získejte stellu všude",
@@ -2513,18 +2513,11 @@
     "catalogueSearchPlaceholder": "Hledat dovednosti a nástroje",
     "catalogueSubtitle": "stella tyto nástroje může používat při odpovídání. Vyberte ty, které odpovídají vaší praxi; změnit je můžete kdykoli v nastavení.",
     "catalogueThirdPartyConfirm": "Přesto přidat",
-    "catalogueThirdPartyDisclaimer": "Toto je kód třetí strany od {author}. stella jej nereviduje, neschvaluje ani neudržuje. Sami odpovídáte za ověření, že je vhodný pro vaši praxi a v souladu s pravidly vašeho týmu. Přidáním přijímáte použití na vlastní riziko.",
+    "catalogueThirdPartyDisclaimer": "Tento kód poskytuje {author}, nikoli stella. stella jej nekontroluje ani neudržuje. Před přidáním ověřte, že je vhodný pro vaši práci.",
     "catalogueTitle": "Přizpůsobte si AI",
-    "cliCardDescription": "Pro technicky zdatné uživatele: skriptujte a automatizujte svou práci.",
+    "cliCardDescription": "Pro technicky zdatné uživatele: automatizujte svou práci.",
     "cliCardTitle": "Automatizujte stellu z terminálu",
     "continue": "Pokračovat",
-    "creating": {
-      "ai": "Ukládáme nastavení AI...",
-      "done": "Dokončujeme nastavení...",
-      "invites": "Odesíláme pozvánky...",
-      "org": "Vytváříme váš tým..."
-    },
-    "creatingTrust": "Vaše data jsou šifrovaná při přenosu i v úložišti.",
     "enterTeamName": "Zadejte výše název týmu",
     "getStarted": "Začít",
     "inviteExternal": "Externí uživatel — bude mít přístup k vašim dokumentům",
@@ -2539,14 +2532,14 @@
     "jurisdictionSaveFailed": "Jurisdikce se nepodařilo uložit. Můžete je doplnit v nastavení.",
     "jurisdictionSearchLabel": "Hledat země",
     "jurisdictionSearchPlaceholder": "Hledat země",
-    "jurisdictionSubtitle": "Vyberte země, se kterými běžně pracujete. stella podle toho přizpůsobí vaše prostředí.",
+    "jurisdictionSubtitle": "Vyberte země své praxe. stella podle nich přizpůsobí odpovědi AI a nabídne dostupné zdroje: judikaturu, předpisy a obchodní rejstříky.",
     "jurisdictionSuggested": "Doporučeno",
     "jurisdictionTitle": "Vyberte jurisdikce své praxe",
     "mcpCardDescription": "AI asistenti jako Claude mohou pracovat s vašimi spisy a dokumenty.",
     "mcpCardTitle": "Používejte stellu ve svém AI asistentovi",
     "orgNameLabel": "Název týmu",
     "orgNamePlaceholder": "Novák a partneři",
-    "orgSubtitle": "Tak vás najdou vaši kolegové.",
+    "orgSubtitle": "Pokud se připojujete k existujícímu týmu, požádejte některého z jeho členů o odkaz s pozvánkou.",
     "orgTitle": "Pojmenujte svůj tým",
     "setupChatgptStep1": "V aplikaci ChatGPT otevřete Nastavení → Konektory a přidejte konektor.",
     "setupClaudeStep1": "V aplikaci Claude otevřete Nastavení → Konektory a zvolte „Přidat vlastní konektor“.",
@@ -2562,7 +2555,7 @@
     "stepJurisdiction": "Jurisdikce",
     "stepOrganization": "Tým",
     "stepTeam": "Pozvánky",
-    "termsNotice": "Pokračováním souhlasíte s <terms>Podmínkami služby</terms>."
+    "termsNotice": "Pokračováním souhlasíte s našimi <terms>smluvními podmínkami</terms>."
   },
   "organization": {
     "aiConfig": {

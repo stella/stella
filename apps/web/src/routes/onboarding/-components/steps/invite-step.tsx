@@ -77,12 +77,14 @@ const parseInviteEmails = (
 };
 
 type InviteStepProps = {
+  isSubmitting: boolean;
   userEmail: string;
   onNext: (data: { emails: string[] }) => void;
   onEmailCountChange?: (count: number) => void;
 };
 
 export const InviteStep = ({
+  isSubmitting,
   userEmail,
   onNext,
   onEmailCountChange,
@@ -193,6 +195,7 @@ export const InviteStep = ({
                       <button
                         aria-label={t("common.remove")}
                         className="text-muted-foreground hover:text-foreground"
+                        disabled={isSubmitting}
                         onClick={() => removeEmail(email)}
                         type="button"
                       >
@@ -215,6 +218,7 @@ export const InviteStep = ({
 
         <Input
           autoFocus
+          disabled={isSubmitting}
           onChange={(e) => {
             setInput(e.target.value);
             if (error) {
@@ -238,6 +242,7 @@ export const InviteStep = ({
 
       <div className="mt-auto flex items-center justify-between gap-3 pt-8">
         <Button
+          disabled={isSubmitting}
           onClick={() => onNext({ emails: [] })}
           type="button"
           variant="ghost"
@@ -245,6 +250,7 @@ export const InviteStep = ({
           {t("onboarding.skipStep")}
         </Button>
         <Button
+          loading={isSubmitting}
           onClick={() => {
             let finalEmails = emails;
             if (input.trim()) {

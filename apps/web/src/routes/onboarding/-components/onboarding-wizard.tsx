@@ -45,12 +45,9 @@ import {
   reconcileCatalogueSlugsForJurisdictions,
 } from "@/routes/onboarding/-components/onboarding-catalogue-setup.logic";
 import { OnboardingLayout } from "@/routes/onboarding/-components/onboarding-layout";
-import { PricesPanel } from "@/routes/onboarding/-components/prices-panel";
 import { SidebarPreview } from "@/routes/onboarding/-components/sidebar-preview";
 import { AIStep } from "@/routes/onboarding/-components/steps/ai-step";
 import { CatalogueStep } from "@/routes/onboarding/-components/steps/catalogue-step";
-import type { Phase } from "@/routes/onboarding/-components/steps/creating-step";
-import { CreatingStep } from "@/routes/onboarding/-components/steps/creating-step";
 import type { DownloadTarget } from "@/routes/onboarding/-components/steps/download-step";
 import {
   DownloadSetupPreview,
@@ -70,8 +67,7 @@ type Step =
   | "catalogue"
   | "ai"
   | "invite"
-  | "download"
-  | "creating";
+  | "download";
 
 type WizardData = {
   orgName: string;
@@ -92,7 +88,7 @@ const STEP_TO_PROGRESS = {
   ai: 3,
   invite: 4,
   download: 5,
-} as const satisfies Record<Exclude<Step, "creating">, number>;
+} as const satisfies Record<Step, number>;
 
 export const OnboardingWizard = () => {
   const t = useTranslations();
@@ -132,9 +128,7 @@ export const OnboardingWizard = () => {
   const [jurisdictionSuggestionApplied, setJurisdictionSuggestionApplied] =
     useState(false);
 
-  // Creating step state
-  const [creatingPhase, setCreatingPhase] = useState<Phase>("org");
-  const [creatingProgress, setCreatingProgress] = useState(0);
+  const [isCreating, setIsCreating] = useState(false);
 
   // Live preview state
   const [previewOrgName, setPreviewOrgName] = useState("");
@@ -142,7 +136,6 @@ export const OnboardingWizard = () => {
   const [previewAiProviders, setPreviewAiProviders] = useState<
     readonly ProviderPreview[]
   >([]);
-  const [aiPhase, setAiPhase] = useState<"providers" | "models">("providers");
   const unavailableNativeToolBackendSlugs = useMemo<
     ReadonlySet<string> | undefined
   >(() => {
@@ -265,19 +258,7 @@ export const OnboardingWizard = () => {
 
   const executeSetup = useCallback(
     async (finalData: WizardData) => {
-      setStep("creating");
-      const startTime = Date.now();
-
-      const delay = async (ms: number) => {
-        await new Promise<void>((resolve) => {
-          setTimeout(resolve, ms);
-        });
-      };
-
-      // Phase 1: Create organization
-      setCreatingPhase("org");
-      setCreatingProgress(15);
-      await delay(800);
+      setIsCreating(true);
 
       const { data: orgData, error: createOrgError } =
         await authClient.organization.create({
@@ -291,12 +272,9 @@ export const OnboardingWizard = () => {
           title: createOrgError.message ?? t("errors.actionFailed"),
           type: "error",
         });
-        setStep("invite");
+        setIsCreating(false);
         return;
       }
-
-      await delay(600);
-      setCreatingProgress(35);
 
       const { error: setActiveError } = await authClient.organization.setActive(
         {
@@ -310,7 +288,7 @@ export const OnboardingWizard = () => {
           title: setActiveError.message ?? t("errors.actionFailed"),
           type: "error",
         });
-        setStep("invite");
+        setIsCreating(false);
         return;
       }
 
@@ -329,8 +307,6 @@ export const OnboardingWizard = () => {
           queryClient.refetchQueries({ queryKey: rootKeys.session }),
           queryClient.refetchQueries({ queryKey: rootKeys.role }),
         ]);
-        await delay(500);
-        setCreatingProgress(50);
 
         if (finalData.practiceJurisdictions.length > 0) {
           const { error: jurisdictionError } = await api[
@@ -405,7 +381,6 @@ export const OnboardingWizard = () => {
         );
         const catalogueTasks = [...installTasks, ...optOutTasks];
         if (catalogueTasks.length > 0) {
-          setCreatingProgress(55);
           const catalogueResults = await Promise.allSettled(catalogueTasks);
           const installResults = catalogueResults.slice(0, installTasks.length);
           const failedInstallCount = installResults.filter(
@@ -436,8 +411,6 @@ export const OnboardingWizard = () => {
           hasUsableProviderDrafts(finalData.aiProviders) &&
           aiOverrideModels !== null
         ) {
-          setCreatingPhase("ai");
-          setCreatingProgress(65);
           const { error: aiConfigError } = await api["organization-settings"][
             "ai-config"
           ].post({
@@ -477,9 +450,6 @@ export const OnboardingWizard = () => {
 
         // Phase 3: Send invitations
         if (finalData.emails.length > 0) {
-          setCreatingPhase("invites");
-          setCreatingProgress(80);
-
           const inviteResults = await Promise.all(
             finalData.emails.map(
               async (email) =>
@@ -503,39 +473,22 @@ export const OnboardingWizard = () => {
             });
           }
         }
-
-        await delay(500);
-        setCreatingProgress(90);
-
-        // Phase 3: Complete
-        setCreatingPhase("done");
-        setCreatingProgress(100);
-
-        // Minimum display time so the user can read the status
-        const elapsed = Date.now() - startTime;
-        const minDisplayMs = 4000;
-        if (elapsed < minDisplayMs) {
-          await new Promise<void>((resolve) => {
-            setTimeout(resolve, minDisplayMs - elapsed);
-          });
-        }
       } catch (error) {
         analytics.captureError(error);
       }
 
+      setIsCreating(false);
       setStep("download");
     },
     [
       analytics,
       queryClient,
-      setCreatingPhase,
-      setCreatingProgress,
+      setIsCreating,
       t,
       unavailableNativeToolBackendSlugs,
     ],
   );
 
-  const showPrices = step === "ai" && aiPhase === "models";
   let preview = (
     <SidebarPreview
       aiProviders={previewAiProviders}
@@ -591,27 +544,11 @@ export const OnboardingWizard = () => {
         />
       );
     }
-  } else if (showPrices) {
-    preview = (
-      <PricesPanel
-        providers={data.aiProviders.map((p) => p.provider)}
-        roleModels={data.aiRoleModels}
-      />
-    );
   } else if (step === "download") {
     preview = <DownloadSetupPreview target={downloadTarget} />;
   }
 
   const renderStep = () => {
-    if (step === "creating") {
-      return (
-        <CreatingStep
-          currentPhase={creatingPhase}
-          progress={creatingProgress}
-        />
-      );
-    }
-
     if (step === "organization") {
       return (
         <OnboardingLayout
@@ -717,11 +654,12 @@ export const OnboardingWizard = () => {
       return (
         <OnboardingLayout
           currentStep={STEP_TO_PROGRESS.invite}
-          onBack={() => setStep("ai")}
           preview={preview}
           totalSteps={TOTAL_STEPS}
+          {...(isCreating ? {} : { onBack: () => setStep("ai") })}
         >
           <InviteStep
+            isSubmitting={isCreating}
             onEmailCountChange={setPreviewEmailCount}
             userEmail={userEmail}
             onNext={({ emails }) => {
@@ -741,21 +679,13 @@ export const OnboardingWizard = () => {
       return (
         <OnboardingLayout
           currentStep={STEP_TO_PROGRESS.ai}
-          onBack={() => {
-            if (aiPhase === "models") {
-              setAiPhase("providers");
-              return;
-            }
-            setStep("catalogue");
-          }}
+          onBack={() => setStep("catalogue")}
           preview={preview}
           totalSteps={TOTAL_STEPS}
         >
           <AIStep
             onNext={() => setStep("invite")}
-            onPhaseChange={setAiPhase}
             onPreviewChange={setPreviewAiProviders}
-            phase={aiPhase}
             onProvidersChange={(aiProviders) => {
               setData((d) => ({ ...d, aiProviders }));
             }}
@@ -772,7 +702,6 @@ export const OnboardingWizard = () => {
               setStep("invite");
             }}
             providers={data.aiProviders}
-            roleModels={data.aiRoleModels}
           />
         </OnboardingLayout>
       );

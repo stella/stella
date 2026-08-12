@@ -8,6 +8,9 @@ import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import Tooltip from "@/components/tooltip";
 import { OnboardingProgress } from "@/routes/onboarding/-components/onboarding-progress";
 
+import landingGradientDarkUrl from "../../../../../landing/public/images/gradients/hero-dark.svg?url";
+import landingGradientLightUrl from "../../../../../landing/public/images/gradients/hero-light.svg?url";
+
 type OnboardingLayoutProps = {
   children: ReactNode;
   preview: ReactNode;
@@ -70,8 +73,31 @@ export const OnboardingLayout = ({
       {/* Right: preview — matches left column's vertical padding so the
           floating Theme/Language buttons (top-4) and the back arrow
           have breathing room above the card. */}
-      <div className="bg-muted hidden items-center justify-center px-6 pt-[10vh] pb-10 md:flex md:w-1/2">
-        {preview}
+      <div className="bg-muted relative hidden items-center justify-center overflow-hidden px-6 pt-[10vh] pb-10 md:flex md:w-1/2">
+        {/* The landing hero SVGs are the source of truth for these rays;
+            onboarding only lowers their opacity. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{
+            maskImage:
+              "linear-gradient(to right, var(--foreground) 0%, var(--foreground) 14%, transparent 43%, transparent 62%, var(--foreground) 88%, var(--foreground) 100%)",
+            WebkitMaskImage:
+              "linear-gradient(to right, var(--foreground) 0%, var(--foreground) 14%, transparent 43%, transparent 62%, var(--foreground) 88%, var(--foreground) 100%)",
+          }}
+        >
+          <img
+            alt=""
+            className="absolute inset-0 size-full opacity-25 dark:hidden"
+            src={landingGradientLightUrl}
+          />
+          <img
+            alt=""
+            className="absolute inset-0 hidden size-full opacity-[0.18] dark:block"
+            src={landingGradientDarkUrl}
+          />
+        </div>
+        <div className="relative z-10">{preview}</div>
       </div>
     </div>
   );

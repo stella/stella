@@ -189,7 +189,7 @@ const SetupPanel = ({
   title,
   children,
 }: React.PropsWithChildren<{ title: string }>) => (
-  <div className="bg-background border-border/40 flex max-h-full w-full max-w-[400px] flex-col gap-4 overflow-y-auto rounded-2xl border p-6 shadow-[0_1px_2px_rgb(0_0_0/0.04),0_8px_24px_rgb(0_0_0/0.06)]">
+  <div className="bg-background border-border/40 flex max-h-full w-full max-w-[480px] flex-col gap-4 overflow-y-auto rounded-2xl border p-6 shadow-[0_1px_2px_rgb(0_0_0/0.04),0_8px_24px_rgb(0_0_0/0.06)]">
     <h3 className="text-foreground text-sm font-medium">{title}</h3>
     {children}
   </div>
