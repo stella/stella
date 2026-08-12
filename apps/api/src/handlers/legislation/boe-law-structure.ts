@@ -12,6 +12,10 @@ const paramsSchema = t.Object({
 
 const boeLawStructure = createSafeRootHandler(
   {
+    description:
+      "Read the block outline of one consolidated Spanish BOE law: its " +
+      "parts, articles, and provisions with the block ids that address them. " +
+      "Use legislation.boe-text-block to fetch the text of a single block.",
     permissions: { workspace: ["read"] },
     mcp: { type: "covered", by: "search_legislation" },
     access: "read",

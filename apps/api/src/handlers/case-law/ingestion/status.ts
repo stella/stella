@@ -281,6 +281,14 @@ export const getIngestionStatus = async (
 };
 
 const config = {
+  description:
+    "Report case-law corpus ingestion health for operators. Per source: " +
+    "adapter key and whether an adapter is still registered for it, enabled " +
+    "flag, sync cursor, decisions held against the total the publisher " +
+    "reports, decisions inserted in the last hour and last day, failures and " +
+    "the top error types in the last day, the last ingestion event, and " +
+    "standing reconciliation counts (slices surveyed, short slices, parked " +
+    "and terminal items). Requires organization audit-log access.",
   // Operator-only ingestion observability: `auditLog: ["read"]` is held solely
   // by owner/admin (see `packages/permissions`), matching the admin/owner gate
   // this route used to carry as a route-level `onBeforeHandle`. Declaring it in

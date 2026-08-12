@@ -103,6 +103,11 @@ export const createMatterLinkHandler = async ({
 };
 
 const config = {
+  description:
+    "Link one case-law decision from the corpus to the current matter, with " +
+    "an optional note. A decision that is not in the corpus is a 404, a " +
+    "decision already linked to this matter is a 409, and the call is " +
+    "refused once the matter holds its maximum number of links.",
   permissions: { entity: ["create"] },
   mcp: { type: "capability", reason: "legal_corpus_admin" },
   body: createMatterLinkBodySchema,

@@ -27,6 +27,12 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createStoredTemplate } from "@/api/lib/templates/create-template";
 
 const config = {
+  description:
+    "Copy one built-in report template into the organization so it can be " +
+    "edited in Template Studio and picked like any other template. Pass the " +
+    "built-in's key. The clone keeps the built-in's fill manifest verbatim, " +
+    "so it fills identically, and its name gains a (copy) suffix when a " +
+    "template of that name already exists.",
   permissions: { workspace: ["read"], template: ["create"] },
   mcp: { type: "capability", reason: "reporting_export" },
   params: workspaceParams({}),

@@ -40,6 +40,11 @@ export const listMatterLinksHandler = async ({
 };
 
 const config = {
+  description:
+    "List the case-law decisions linked to the current matter, newest link " +
+    "first, each with its note and the decision's case number, ECLI, court, " +
+    "country, date, and type. Returns the whole set up to the per-matter " +
+    "link cap; there is no pagination.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "legal_corpus_admin" },
   access: "read",

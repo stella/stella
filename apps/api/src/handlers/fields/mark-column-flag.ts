@@ -48,6 +48,14 @@ const COLUMN_METADATA_FLAG = {
 } as const;
 
 const config = {
+  description:
+    "Set or clear the verified or locked flag on one column's cells across " +
+    "every document a filter selects in a matter, working in batches until " +
+    "the whole selection is covered. Folders and tasks are never touched. " +
+    "Returns how many cells changed plus an addedAt stamp: pass that stamp " +
+    "back as onlyAddedAt with set false to undo exactly this mark and leave " +
+    "flags from other marks alone. Pass groupByPropertyId and groupValue to " +
+    "restrict the batch to one group of a grouped view.",
   permissions: {
     entity: ["update"],
   },

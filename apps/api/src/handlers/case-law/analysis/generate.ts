@@ -311,6 +311,13 @@ export const generateAnalysis = async (
 };
 
 const config = {
+  description:
+    "Read the structural analysis of one court decision, starting generation " +
+    "when there is none yet. Returns status done with the stored analysis, " +
+    "generating while a run is in flight (poll until it is done), or error " +
+    "when the decision is unknown or its text could not be parsed. " +
+    "Generation runs in the background and a call made while one is already " +
+    "running does not start a second.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "legal_corpus_admin" },
   // Writes a "generating" sentinel and kicks off background AI generation

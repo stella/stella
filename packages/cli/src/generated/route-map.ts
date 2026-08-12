@@ -4914,6 +4914,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "case-law", "analysis-generate"],
                 capabilityId: "case-law.analysis.generate",
+                description:
+                  "Read the structural analysis of one court decision, starting generation when there is none yet. Returns status done with the stored analysis, generating while a run is in flight (poll until it is done), or error when the decision is unknown or its text could not be parsed. Generation runs in the background and a call made while one is already running does not start a second.",
                 access: "write",
                 flags: [
                   {
@@ -4956,6 +4958,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "case-law", "ingestion-status"],
                 capabilityId: "case-law.ingestion.status",
+                description:
+                  "Report case-law corpus ingestion health for operators. Per source: adapter key and whether an adapter is still registered for it, enabled flag, sync cursor, decisions held against the total the publisher reports, decisions inserted in the last hour and last day, failures and the top error types in the last day, the last ingestion event, and standing reconciliation counts (slices surveyed, short slices, parked and terminal items). Requires organization audit-log access.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -4974,6 +4978,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "case-law", "matter-links-create"],
                 capabilityId: "case-law.matter-links.create",
+                description:
+                  "Link one case-law decision from the corpus to the current matter, with an optional note. A decision that is not in the corpus is a 404, a decision already linked to this matter is a 409, and the call is refused once the matter holds its maximum number of links.",
                 access: "write",
                 flags: [
                   {
@@ -5106,6 +5112,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "case-law", "matter-links-list"],
                 capabilityId: "case-law.matter-links.list",
+                description:
+                  "List the case-law decisions linked to the current matter, newest link first, each with its note and the decision's case number, ECLI, court, country, date, and type. Returns the whole set up to the per-matter link cap; there is no pagination.",
                 access: "read",
                 flags: [
                   {
@@ -5149,6 +5157,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "catalogue", "install-skill"],
                 capabilityId: "catalogue.install-skill",
+                description:
+                  "Install one catalogue skill into the organization by slug, at team scope (the default) or private scope. Team scope requires admin or owner. The skill is stored as bundled content, so it cannot be edited afterwards. Refused when that slug is already installed at the same scope, or when the scope's skill limit is reached.",
                 access: "write",
                 flags: [
                   {
@@ -5200,6 +5210,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "catalogue", "list-catalogue"],
                 capabilityId: "catalogue.list-catalogue",
+                description:
+                  "List the tool catalogue for the signed-in user's organization: curated skills, MCP connectors, and native tools, plus the organization's own custom skills and custom MCP connectors as synthetic entries. Each entry reports its install state, whether it is enabled, whether it is locked (a baseline capability that cannot be toggled), whether it is recommended for the organization's practice jurisdictions, and the handles the uninstall paths need. The practice jurisdictions behind those recommendations are returned alongside.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -13834,6 +13846,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "fields", "mark-column-flag"],
                 capabilityId: "fields.mark-column-flag",
+                description:
+                  "Set or clear the verified or locked flag on one column's cells across every document a filter selects in a matter, working in batches until the whole selection is covered. Folders and tasks are never touched. Returns how many cells changed plus an addedAt stamp: pass that stamp back as onlyAddedAt with set false to undo exactly this mark and leave flags from other marks alone. Pass groupByPropertyId and groupValue to restrict the batch to one group of a grouped view.",
                 access: "write",
                 flags: [
                   {
@@ -14429,6 +14443,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "fields", "update-cell-metadata"],
                 capabilityId: "fields.update-cell-metadata",
+                description:
+                  "Set the manual flags and lock state of one cell, meaning one document's value for one property. manualFlags is merged against baseManualFlags rather than overwritten, so flags added or removed by someone else since you read the cell survive; when no flags remain and the cell is not locked, the metadata row is deleted. Use fields.upsert-by-id to change the cell's value itself, and fields.mark-column-flag to flag a whole column at once.",
                 access: "write",
                 flags: [
                   {
@@ -16736,6 +16752,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "legislation", "boe-get-law"],
                 capabilityId: "legislation.boe-get-law",
+                description:
+                  "Read one consolidated Spanish law from the BOE by its BOE-X-YYYY-N identifier. The metadata, analysis, fullText, and eli flags select which blocks the BOE returns; this queries the BOE service directly rather than the stella legislation corpus.",
                 access: "read",
                 flags: [
                   {
@@ -16833,6 +16851,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "legislation", "boe-law-structure"],
                 capabilityId: "legislation.boe-law-structure",
+                description:
+                  "Read the block outline of one consolidated Spanish BOE law: its parts, articles, and provisions with the block ids that address them. Use legislation.boe-text-block to fetch the text of a single block.",
                 access: "read",
                 flags: [
                   {
@@ -16872,6 +16892,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "legislation", "boe-related-laws"],
                 capabilityId: "legislation.boe-related-laws",
+                description:
+                  "List the Spanish BOE laws related to one law, narrowed by relationType: modifies, modifiedBy, derogates, derogatedBy, or all (the default).",
                 access: "read",
                 flags: [
                   {
@@ -16940,6 +16962,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "legislation", "boe-search"],
                 capabilityId: "legislation.boe-search",
+                description:
+                  "Search Spanish consolidated legislation on the BOE. At least one filter is required: free text, title, department code, legal-range code (law rank), subject-matter code, or a publication date range as YYYYMMDD. Paginate with limit and the opaque cursor. This queries the BOE service live; use legislation.search to search the stella legislation corpus instead.",
                 access: "read",
                 flags: [
                   {
@@ -17112,6 +17136,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "legislation", "boe-text-block"],
                 capabilityId: "legislation.boe-text-block",
+                description:
+                  "Read the text of one block of a consolidated Spanish BOE law, addressed by the law identifier and a block id taken from legislation.boe-law-structure.",
                 access: "read",
                 flags: [
                   {
@@ -17165,6 +17191,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "legislation", "borme-summary"],
                 capabilityId: "legislation.borme-summary",
+                description:
+                  "Read the BORME summary the Spanish commercial registry gazette published on one date, given as YYYYMMDD.",
                 access: "read",
                 flags: [
                   {
@@ -17204,6 +17232,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "legislation", "get"],
                 capabilityId: "legislation.get",
+                description:
+                  "Read one legislation document from the stella corpus by id: its ELI, title, country, language, document type, status, effective and version-validity dates, source links, metadata, full text, and parsed structure. Only documents from sources cleared for redistribution are returned; anything else reads as not found.",
                 access: "read",
                 flags: [
                   {
@@ -17246,6 +17276,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "legislation", "search"],
                 capabilityId: "legislation.search",
+                description:
+                  "Full-text search the stella legislation corpus, returning ranked hits with a highlighted snippet and each document's ELI, title, country, language, type, status, and effective date. Filter by jurisdiction, document type, status, source, language, and effective-date range; paginate with limit and cursor. Only sources cleared for redistribution are searched. Read a hit in full with legislation.get; use legislation.boe-search to query the Spanish BOE service directly instead.",
                 access: "read",
                 flags: [
                   {
@@ -25773,6 +25805,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "reports", "clone-builtin"],
                 capabilityId: "reports.clone-builtin",
+                description:
+                  "Copy one built-in report template into the organization so it can be edited in Template Studio and picked like any other template. Pass the built-in's key. The clone keeps the built-in's fill manifest verbatim, so it fills identically, and its name gains a (copy) suffix when a template of that name already exists.",
                 access: "write",
                 flags: [
                   {
