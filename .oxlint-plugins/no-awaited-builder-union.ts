@@ -91,7 +91,7 @@ const collectBranches = (node, branches) => {
 // (`this.query.for("update")`) is the same union, and bailing on it would let
 // every class-based query wrapper through a guard that claims to be systemic.
 const describeChain = (node) => {
-  const steps = [];
+  const steps: string[] = [];
   let current = unwrapWrappers(node);
   for (;;) {
     if (current === null) {
