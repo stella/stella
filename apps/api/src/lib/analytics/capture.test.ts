@@ -9,7 +9,9 @@ import {
 
 const captured: { properties: Record<string, unknown> }[] = [];
 
+const realClient = await import("@/api/lib/analytics/client");
 void mock.module("@/api/lib/analytics/client", () => ({
+  ...realClient,
   getAnalytics: () => ({
     capture: (params: { properties: Record<string, unknown> }) => {
       captured.push(params);

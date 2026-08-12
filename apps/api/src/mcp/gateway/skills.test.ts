@@ -14,7 +14,9 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 // captureError; mock it so the failure test stays hermetic and can assert the
 // error is captured (not silently swallowed) rather than depending on PostHog.
 const captureErrorMock = mock();
+const realCapture = await import("@/api/lib/analytics/capture");
 void mock.module("@/api/lib/analytics/capture", () => ({
+  ...realCapture,
   captureError: captureErrorMock,
   captureRequestError: mock(),
 }));

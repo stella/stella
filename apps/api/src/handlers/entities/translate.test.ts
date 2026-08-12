@@ -84,7 +84,9 @@ void mock.module("@/api/lib/file-derivative-queue", () => ({
   initFileDerivativeWorker: mock(() => undefined),
 }));
 
+const realCapture = await import("@/api/lib/analytics/capture");
 void mock.module("@/api/lib/analytics/capture", () => ({
+  ...realCapture,
   captureError: captureErrorMock,
   captureRequestError: mock(() => {}),
 }));

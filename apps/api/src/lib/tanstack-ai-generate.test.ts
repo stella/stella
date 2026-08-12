@@ -48,7 +48,9 @@ void mock.module("@tanstack/ai", () => ({
 }));
 
 const captureErrorMock = mock();
+const realCapture = await import("@/api/lib/analytics/capture");
 void mock.module("@/api/lib/analytics/capture", () => ({
+  ...realCapture,
   captureError: captureErrorMock,
   captureRequestError: captureErrorMock,
 }));

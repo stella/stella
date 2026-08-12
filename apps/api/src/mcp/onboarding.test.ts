@@ -12,7 +12,9 @@ const searchDecisionsHandlerMock = mock();
 const readDecisionHandlerMock = mock();
 const APP_BASE_URL = env.FRONTEND_URL.replace(/\/$/u, "");
 
+const realCapture = await import("@/api/lib/analytics/capture");
 void mock.module("@/api/lib/analytics/capture", () => ({
+  ...realCapture,
   captureError: captureErrorMock,
   captureRequestError: captureErrorMock,
 }));
