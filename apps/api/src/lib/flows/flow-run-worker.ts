@@ -140,6 +140,13 @@ type ReconcileOrphanedFlowRunsOptions = {
    * boot passes none, because a restart lost every job this process held.
    */
   stalledBefore?: Date;
+  /**
+   * The scheduler's runtime ceiling. A full-backlog drain can outlast the
+   * lease, and a sweep still issuing queue writes after its lease is gone can
+   * overlap the next cadence; checked between pages, so a drain stops at a
+   * page boundary rather than mid-batch.
+   */
+  signal?: AbortSignal;
 };
 
 // Keyset-paginate by id through every `pending`/`running` run and re-enqueue its
@@ -151,11 +158,15 @@ type ReconcileOrphanedFlowRunsOptions = {
 export const reconcileOrphanedFlowRuns = async ({
   batchSize = ORPHAN_SCAN_BATCH_SIZE,
   stalledBefore,
+  signal,
 }: ReconcileOrphanedFlowRunsOptions = {}): Promise<void> => {
   let cursor: SafeId<"flowRun"> | null = null;
   let reconciled = 0;
 
   for (;;) {
+    if (signal?.aborted === true) {
+      break;
+    }
     // oxlint-disable-next-line no-await-in-loop -- keyset pages are inherently sequential: each query needs the previous batch's last id as its cursor
     const batch = await rootDb
       .select({

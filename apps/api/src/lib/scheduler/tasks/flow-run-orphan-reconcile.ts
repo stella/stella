@@ -32,6 +32,7 @@ export const reconcileFlowRunOrphans: SchedulerTask = async ({
   // audit: skip — re-drives derived queue state; scheduler_job_runs is the
   // durable execution trail.
   await reconcileOrphanedFlowRuns({
+    signal,
     stalledBefore: new Date(Date.now() - STALL_WINDOW_MS),
   });
 
