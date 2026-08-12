@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { prorateHourlyCents } from "@stll/money";
 
+import { abortableTx } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   INVOICE_STATUS,
@@ -130,7 +131,7 @@ const createInvoice = createSafeHandler(
     const now = new Date();
     const expectedCount = entries.length;
 
-    const txResult = await safeDb(async (tx) => {
+    const txResult = await abortableTx(safeDb, async (tx) => {
       const [created] = await tx
         .insert(invoices)
         .values({
@@ -151,7 +152,10 @@ const createInvoice = createSafeHandler(
         });
 
       if (!created) {
-        return { ok: false as const };
+        throw new HandlerError({
+          status: 409,
+          message: INVOICE_ENTRIES_MODIFIED_MESSAGE,
+        });
       }
 
       const updated = await tx
@@ -215,7 +219,6 @@ const createInvoice = createSafeHandler(
       ]);
 
       return {
-        ok: true as const,
         id: created.id,
         invoiceNumber: created.invoiceNumber,
         totalAmount,
@@ -247,14 +250,6 @@ const createInvoice = createSafeHandler(
     }
 
     const result = txResult.value;
-    if (!result.ok) {
-      return Result.err(
-        new HandlerError({
-          status: 409,
-          message: INVOICE_ENTRIES_MODIFIED_MESSAGE,
-        }),
-      );
-    }
 
     return Result.ok({
       id: result.id,

@@ -4,6 +4,7 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import type { Transaction } from "@/api/db/root";
+import { abortableTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, workspaces } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -36,8 +37,8 @@ export const moveEntityHandler = async function* ({
   recordAuditEvent,
   body,
 }: MoveEntityHandlerProps) {
-  const txResult = yield* Result.await(
-    safeDb(async (tx) => {
+  yield* Result.await(
+    abortableTx(safeDb, async (tx) => {
       // Lock the entity row to prevent concurrent moves.
       const entityRows = await tx
         .select({
@@ -57,18 +58,10 @@ export const moveEntityHandler = async function* ({
       const entity = entityRows.at(0);
 
       if (!entity) {
-        return {
-          ok: false as const,
-          status: 404 as const,
-          message: "Entity not found",
-        };
+        throw new HandlerError({ status: 404, message: "Entity not found" });
       }
       if (entity.readOnly) {
-        return {
-          ok: false as const,
-          status: 409 as const,
-          message: "Entity is read-only",
-        };
+        throw new HandlerError({ status: 409, message: "Entity is read-only" });
       }
 
       if (body.parentId === null) {
@@ -94,16 +87,15 @@ export const moveEntityHandler = async function* ({
             },
           },
         });
-        return { ok: true as const };
+        return {};
       }
 
       // Prevent moving to itself.
       if (body.entityId === body.parentId) {
-        return {
-          ok: false as const,
-          status: 400 as const,
+        throw new HandlerError({
+          status: 400,
           message: "Cannot move an entity into itself",
-        };
+        });
       }
 
       // Lock and verify the target parent is a folder
@@ -121,19 +113,17 @@ export const moveEntityHandler = async function* ({
       const parent = parentRows.at(0);
 
       if (!parent) {
-        return {
-          ok: false as const,
-          status: 400 as const,
+        throw new HandlerError({
+          status: 400,
           message: "Parent entity not found in this workspace",
-        };
+        });
       }
 
       if (parent.kind !== "folder") {
-        return {
-          ok: false as const,
-          status: 400 as const,
+        throw new HandlerError({
+          status: 400,
           message: "Parent entity must be a folder",
-        };
+        });
       }
 
       // If the entity being moved is a folder, prevent cycles
@@ -147,11 +137,10 @@ export const moveEntityHandler = async function* ({
         );
 
         if (isDescendant) {
-          return {
-            ok: false as const,
-            status: 400 as const,
+          throw new HandlerError({
+            status: 400,
             message: "Cannot move a folder into one of its descendants",
-          };
+          });
         }
       }
 
@@ -180,15 +169,9 @@ export const moveEntityHandler = async function* ({
         },
       });
 
-      return { ok: true as const };
+      return {};
     }),
   );
-
-  if (!txResult.ok) {
-    return Result.err(
-      new HandlerError({ status: txResult.status, message: txResult.message }),
-    );
-  }
 
   syncWorkspaceSearchActivity(workspaceId).catch(captureError);
 

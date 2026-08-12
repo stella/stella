@@ -3,6 +3,7 @@ import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
+import { abortableTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   desktopEditSessions,
@@ -67,7 +68,7 @@ export const removeWorkspaceMemberHandler = async function* ({
   // FOR UPDATE on the row select (not aggregate) locks
   // member rows so concurrent removals serialize.
   const txResult = yield* Result.await(
-    safeDb(async (tx) => {
+    abortableTx(safeDb, async (tx) => {
       // Timer starts take this lock before inserting. Hold it through the
       // active-timer check and member deletion so removal cannot strand a
       // timer that starts concurrently.
@@ -83,7 +84,7 @@ export const removeWorkspaceMemberHandler = async function* ({
       const workspace = workspaceRows.at(0);
 
       if (!workspace) {
-        return { ok: false as const, reason: "not-found" as const };
+        throw new HandlerError({ status: 404, message: "Member not found" });
       }
 
       const lockedRows = await tx
@@ -98,11 +99,14 @@ export const removeWorkspaceMemberHandler = async function* ({
       // Check membership before the count guard so a non-member
       // gets 404, not 400 "last member".
       if (!lockedRows.some((r) => r.userId === userId)) {
-        return { ok: false as const, reason: "not-found" as const };
+        throw new HandlerError({ status: 404, message: "Member not found" });
       }
 
       if (lockedRows.length <= 1) {
-        return { ok: false as const, reason: "last-member" as const };
+        throw new HandlerError({
+          status: 400,
+          message: "Cannot remove the last workspace member",
+        });
       }
 
       const activeTimers = await tx
@@ -120,7 +124,10 @@ export const removeWorkspaceMemberHandler = async function* ({
         .for("update");
 
       if (activeTimers.at(0)) {
-        return { ok: false as const, reason: "timer-running" as const };
+        throw new HandlerError({
+          status: 409,
+          message: "Stop the member's active timer before removing them",
+        });
       }
 
       const ownedWork = await tx
@@ -143,7 +150,10 @@ export const removeWorkspaceMemberHandler = async function* ({
         .for("update");
 
       if (ownedWork.length > LIMITS.workspaceMemberRemovalWorkObligationsMax) {
-        return { ok: false as const, reason: "owned-work-limit" as const };
+        throw new HandlerError({
+          status: 409,
+          message: `Cannot remove a member with more than ${LIMITS.workspaceMemberRemovalWorkObligationsMax} owned work obligations. Reassign their work first.`,
+        });
       }
 
       const deleteResult = await tx
@@ -158,7 +168,7 @@ export const removeWorkspaceMemberHandler = async function* ({
       const deleted = deleteResult.at(0);
 
       if (!deleted) {
-        return { ok: false as const, reason: "not-found" as const };
+        throw new HandlerError({ status: 404, message: "Member not found" });
       }
 
       if (ownedWork.length > 0) {
@@ -277,42 +287,11 @@ export const removeWorkspaceMemberHandler = async function* ({
       }
 
       return {
-        ok: true as const,
         id: deleted.id,
         closedSessionIds: closedSessions.map((session) => session.id),
       };
     }),
   );
-
-  if (!txResult.ok) {
-    if (txResult.reason === "timer-running") {
-      return Result.err(
-        new HandlerError({
-          status: 409,
-          message: "Stop the member's active timer before removing them",
-        }),
-      );
-    }
-    if (txResult.reason === "owned-work-limit") {
-      return Result.err(
-        new HandlerError({
-          status: 409,
-          message: `Cannot remove a member with more than ${LIMITS.workspaceMemberRemovalWorkObligationsMax} owned work obligations. Reassign their work first.`,
-        }),
-      );
-    }
-    if (txResult.reason === "last-member") {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Cannot remove the last workspace member",
-        }),
-      );
-    }
-    return Result.err(
-      new HandlerError({ status: 404, message: "Member not found" }),
-    );
-  }
 
   await revokeWorkspaceSseAccess(workspaceId, userId);
 
