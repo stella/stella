@@ -250,8 +250,18 @@ export default eslintCompatPlugin({
         };
 
         const exitFunction = () => {
-          if (openCallbacks.at(-1)?.depth === functionDepth) {
+          const frame = openCallbacks.at(-1);
+          if (frame?.depth === functionDepth) {
             openCallbacks.pop();
+            // A nested transaction is a savepoint: its writes are released
+            // into the enclosing transaction, so they commit when the outer
+            // callback returns. Carrying the flag outward is what makes a
+            // failure returned after a nested write reportable; dropping the
+            // frame's state here would hide exactly that case.
+            const enclosing = openCallbacks.at(-1);
+            if (enclosing && frame.hasWrite) {
+              enclosing.hasWrite = true;
+            }
           }
           functionDepth -= 1;
         };

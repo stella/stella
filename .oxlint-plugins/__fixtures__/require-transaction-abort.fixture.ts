@@ -85,6 +85,31 @@ export const nestedClosureReturnIsNotTheCallback = async () =>
     return classify(await tx.select({ id: "six" }));
   });
 
+// A nested transaction is a savepoint, so its write is released into the
+// enclosing one and commits when the outer callback returns a failure.
+export const returnsAfterNestedTransactionWrote = async () =>
+  await safeDb(async () => {
+    await rootDb.transaction(async (innerTx) => {
+      await innerTx.insert({ id: "eight" });
+    });
+    // oxlint-disable-next-line require-transaction-abort/require-transaction-abort -- fixture: failure returned after a nested transaction wrote
+    return { ok: false as const, status: 400 as const, message: "rejected" };
+  });
+
+// The nested transaction wrote nothing, so the outer rejection commits
+// nothing: propagation must carry a write outward, never the mere nesting.
+export const returnsAfterEmptyNestedTransaction = async () =>
+  await safeDb(async () => {
+    const rows = await rootDb.transaction(
+      async (innerTx) => await innerTx.select({ id: "nine" }),
+    );
+    return {
+      ok: false as const,
+      status: 400 as const,
+      message: `${rows.length}`,
+    };
+  });
+
 // A read through the handle is not a write.
 export const returnsAfterReadOnly = async () =>
   await safeDb(async (tx) => {
