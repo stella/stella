@@ -110,7 +110,7 @@
     "ip-address": "^10.3.1",
     "jose": "^6.2.8",
     "jszip": "catalog:",
-    "nodemailer": "^9.0.4",
+    "nodemailer": "^9.0.5",
     "postal-mime": "^2.7.5",
     "posthog-node": "^5.48.1",
     "quickjs-emscripten": "^0.32.0",
