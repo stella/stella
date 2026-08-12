@@ -1,3 +1,4 @@
+import { TaggedError } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -5,7 +6,17 @@ import { properties } from "@/api/db/schema";
 import type { AIRequestServiceTier } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { WorkflowStartStatus } from "@/api/lib/workflow-queue";
 import { COMPUTED_PROPERTY_TOOL_TYPES } from "@/api/lib/workflow/get-execution-plan";
+
+/** The one start status that means nothing was queued. */
+const WORKFLOW_START_FAILED = "failed" satisfies WorkflowStartStatus;
+
+/** The follow-up run this workspace was owed did not get queued. */
+class StragglerCatchUpError extends TaggedError("StragglerCatchUpError")<{
+  message: string;
+  workspaceId: SafeId<"workspace">;
+}> {}
 
 /**
  * The starter the catch-up drives, narrowed to what it passes. Structural
@@ -19,6 +30,18 @@ export type StragglerRunStarter = (args: {
   scopedDb: ScopedDb;
   serviceTier: AIRequestServiceTier;
 }) => Promise<unknown>;
+
+/**
+ * The starter reports an enqueue failure in band rather than by rejecting, so
+ * a lone `.catch()` would drop exactly the case worth knowing about: the
+ * follow-up this workspace was owed never got queued, and nothing retries it
+ * until some later run finishes.
+ */
+const startReportedFailure = (result: unknown): boolean =>
+  typeof result === "object" &&
+  result !== null &&
+  "status" in result &&
+  result.status === WORKFLOW_START_FAILED;
 
 type StragglerCatchUpArgs = {
   workspaceId: SafeId<"workspace">;
@@ -78,13 +101,29 @@ export const startStragglerCatchUp = async ({
     }
     // Not awaited: the follow-up run plans and enqueues on its own, and a
     // finished run must not be held open (or failed) by the next one starting.
+    // Both outcomes are still read: a rejection and an in-band `failed` mean
+    // the same thing here, work this workspace is owed that no longer has a
+    // successor coming.
     startWorkflow({
       workspaceId,
       organizationId,
       userId,
       scopedDb,
       serviceTier,
-    }).catch((error: unknown) => captureError(error, { workspaceId }));
+    })
+      .then((result) => {
+        if (startReportedFailure(result)) {
+          captureError(
+            new StragglerCatchUpError({
+              message: "Straggler catch-up could not start its follow-up run",
+              workspaceId,
+            }),
+            { workspaceId },
+          );
+        }
+        return result;
+      })
+      .catch((error: unknown) => captureError(error, { workspaceId }));
   } catch (error: unknown) {
     captureError(error, { workspaceId });
   }
