@@ -15,6 +15,7 @@ const writeFileVersionMock = mock();
 const s3WriteMock = mock();
 const s3DeleteMock = mock();
 const processExtractionMock = mock();
+const requestNativeExtractionRunMock = mock();
 const pdfDerivativeMock = mock();
 const thumbnailDerivativeMock = mock();
 const diffStatsMock = mock();
@@ -52,6 +53,7 @@ void mock.module("@/api/lib/s3", () => ({
 }));
 void mock.module("@/api/lib/search/process-extraction", () => ({
   processExtraction: processExtractionMock,
+  requestNativeExtractionRun: requestNativeExtractionRunMock,
 }));
 const realFileDerivativeQueue = await import("@/api/lib/file-derivative-queue");
 void mock.module("@/api/lib/file-derivative-queue", () => ({
@@ -153,6 +155,7 @@ describe("createEntityVersionFromBuffer", () => {
       s3WriteMock,
       s3DeleteMock,
       processExtractionMock,
+      requestNativeExtractionRunMock,
       pdfDerivativeMock,
       thumbnailDerivativeMock,
       diffStatsMock,
@@ -166,6 +169,7 @@ describe("createEntityVersionFromBuffer", () => {
     });
     s3DeleteMock.mockResolvedValue(undefined);
     processExtractionMock.mockResolvedValue(undefined);
+    requestNativeExtractionRunMock.mockResolvedValue(null);
     pdfDerivativeMock.mockResolvedValue(undefined);
     thumbnailDerivativeMock.mockResolvedValue(undefined);
     diffStatsMock.mockResolvedValue(undefined);
@@ -270,6 +274,13 @@ describe("createEntityVersionFromBuffer", () => {
       }),
     );
     expect(s3DeleteMock).not.toHaveBeenCalled();
+    // The durable request is written inside the version transaction, pinned to
+    // the same file property the post-commit acceleration resolves.
+    expect(requestNativeExtractionRunMock).toHaveBeenCalledWith({
+      entityId: "entity_1",
+      filePropertyId: "property_1",
+      tx: expect.anything(),
+    });
     expect(processExtractionMock).toHaveBeenCalledWith("entity_1", {
       filePropertyId: "property_1",
     });
@@ -292,6 +303,7 @@ describe("createEntityVersionFromBuffer", () => {
       "org_1/ws_1/file_1.docx",
       expect.any(AbortSignal),
     );
+    expect(requestNativeExtractionRunMock).not.toHaveBeenCalled();
     expect(processExtractionMock).not.toHaveBeenCalled();
   });
 
@@ -351,6 +363,9 @@ describe("createEntityVersionFromBuffer", () => {
       expect(attempted.error).toBe(commitError);
     }
     expect(s3DeleteMock).not.toHaveBeenCalled();
+    // The extraction request rode along with the version write, so an
+    // acknowledgement lost after that commit still leaves a queued run.
+    expect(requestNativeExtractionRunMock).toHaveBeenCalledTimes(1);
     expect(processExtractionMock).not.toHaveBeenCalled();
   });
 

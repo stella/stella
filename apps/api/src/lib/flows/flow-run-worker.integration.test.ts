@@ -120,6 +120,7 @@ void mock.module("@/api/lib/s3", () => ({
 
 void mock.module("@/api/lib/search/process-extraction", () => ({
   processExtraction: mock(async () => {}),
+  requestNativeExtractionRun: mock(async () => null),
 }));
 
 const realFileDerivativeQueue = await import("@/api/lib/file-derivative-queue");

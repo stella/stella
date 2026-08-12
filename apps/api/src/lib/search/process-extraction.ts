@@ -4,7 +4,11 @@ import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
-import { documentProcessingRuns } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/root";
+import {
+  documentProcessingRuns,
+  SCOPED_NATIVE_EXTRACTION_ENQUEUE,
+} from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
@@ -23,7 +27,10 @@ import {
 } from "@/api/lib/search/extract-content";
 import { canExtractMimeType } from "@/api/lib/search/extractable-mime-types";
 import { getSearchProvider } from "@/api/lib/search/provider";
-import { findExtractionFileField } from "@/api/lib/search/types";
+import {
+  findExtractionFileField,
+  findExtractionFileFieldRow,
+} from "@/api/lib/search/types";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -362,18 +369,33 @@ export const executeNativeExtraction = async ({
 };
 
 /**
- * Durably request native extraction for the entity's selected file. The
- * document-processing worker owns extraction, persistence, indexing, and
- * retries; callers may still treat this as best-effort because the committed
- * run and bounded repair scan own eventual completion.
+ * The immutable source identity of a native-extraction run. Both request paths
+ * converge on it, so a duplicate enqueue can never create a second run for the
+ * same file.
  */
-export const processExtraction = async (
+const NATIVE_EXTRACTION_SOURCE_TARGET = [
+  documentProcessingRuns.organizationId,
+  documentProcessingRuns.kind,
+  documentProcessingRuns.entityVersionId,
+  documentProcessingRuns.fieldId,
+  documentProcessingRuns.sourceFileId,
+  documentProcessingRuns.sourceSha256Hex,
+  documentProcessingRuns.processorVersion,
+];
+
+/** Read handle only: the entity read runs on `rootDb` or on a scoped tx. */
+type ExtractionEntityReader = Pick<typeof rootDb, "query">;
+
+/**
+ * Load the entity state both request paths decide on. Sharing one query keeps
+ * the in-transaction request and the post-commit request resolving the same
+ * source file for the same entity.
+ */
+const readExtractionEntity = async (
+  db: ExtractionEntityReader,
   entityId: SafeId<"entity">,
-  options?: {
-    filePropertyId?: SafeId<"property"> | undefined;
-  },
-): Promise<void> => {
-  const entity = await rootDb.query.entities.findFirst({
+) =>
+  await db.query.entities.findFirst({
     where: { id: { eq: entityId } },
     columns: { id: true, workspaceId: true },
     with: {
@@ -406,63 +428,133 @@ export const processExtraction = async (
     },
   });
 
+type ExtractionEntity = NonNullable<
+  Awaited<ReturnType<typeof readExtractionEntity>>
+>;
+
+type NativeExtractionRunSource = {
+  entityVersionId: SafeId<"entityVersion">;
+  fieldId: SafeId<"field">;
+  fileField: Extract<FieldContent, { type: "file" }>;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+};
+
+/** `null` when a search mark, not a durable run, owns this projection. */
+const resolveNativeExtractionSource = (
+  entity: ExtractionEntity,
+  filePropertyId?: SafeId<"property">,
+): NativeExtractionRunSource | null => {
+  const workspace = entity.workspace ?? panic("Entity has no workspace");
+  const version =
+    entity.currentVersion ?? panic("Entity has no currentVersion");
+  const fileFieldRow = findExtractionFileFieldRow(
+    version.fields,
+    filePropertyId,
+  );
+  if (
+    !fileFieldRow ||
+    fileFieldRow.content.type !== "file" ||
+    searchIndexOwnerForFields(version.fields, filePropertyId) ===
+      SEARCH_INDEX_OWNER.searchMark
+  ) {
+    return null;
+  }
+  return {
+    entityVersionId: version.id,
+    fieldId: fileFieldRow.id,
+    fileField: fileFieldRow.content,
+    organizationId: toSafeId<"organization">(workspace.organizationId),
+    workspaceId: toSafeId<"workspace">(workspace.id),
+  };
+};
+
+const nativeExtractionRunValues = (
+  entityId: SafeId<"entity">,
+  source: NativeExtractionRunSource,
+) =>
+  ({
+    id: createSafeId<"documentProcessingRun">(),
+    ...SCOPED_NATIVE_EXTRACTION_ENQUEUE,
+    entityId,
+    entityVersionId: source.entityVersionId,
+    fieldId: source.fieldId,
+    organizationId: source.organizationId,
+    processorVersion: DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION,
+    sourceFileId: source.fileField.id,
+    sourceSha256Hex: source.fileField.sha256Hex,
+    workspaceId: source.workspaceId,
+  }) satisfies typeof documentProcessingRuns.$inferInsert;
+
+/**
+ * Commit the durable extraction request with the mutation that creates its
+ * source file, so no crash can land the file without the request.
+ *
+ * The row is exactly the shape `document_processing_runs_native_extraction_insert`
+ * admits for a scoped transaction: a queued, unattributed, upload-sourced
+ * native-extraction request for a workspace the transaction already holds.
+ * Everything after the insert (queue handoff, retries, state transitions)
+ * remains root-writer work, so callers still run `processExtraction` after the
+ * commit to accelerate what this row already guarantees.
+ *
+ * Returns the run id this transaction created, or `null` when the entity needs
+ * no durable extraction or an equivalent run already exists.
+ */
+export const requestNativeExtractionRun = async ({
+  entityId,
+  filePropertyId,
+  tx,
+}: {
+  entityId: SafeId<"entity">;
+  filePropertyId?: SafeId<"property"> | undefined;
+  tx: Transaction;
+}): Promise<SafeId<"documentProcessingRun"> | null> => {
+  const entity = await readExtractionEntity(tx, entityId);
+  if (!entity) {
+    return null;
+  }
+  const source = resolveNativeExtractionSource(entity, filePropertyId);
+  if (!source) {
+    return null;
+  }
+  const inserted = await tx
+    .insert(documentProcessingRuns)
+    .values(nativeExtractionRunValues(entityId, source))
+    .onConflictDoNothing({ target: NATIVE_EXTRACTION_SOURCE_TARGET })
+    .returning({ id: documentProcessingRuns.id });
+  return inserted.at(0)?.id ?? null;
+};
+
+/**
+ * Durably request native extraction for the entity's selected file. The
+ * document-processing worker owns extraction, persistence, indexing, and
+ * retries; callers may still treat this as best-effort because the committed
+ * run and bounded repair scan own eventual completion.
+ */
+export const processExtraction = async (
+  entityId: SafeId<"entity">,
+  options?: {
+    filePropertyId?: SafeId<"property"> | undefined;
+  },
+): Promise<void> => {
+  const entity = await readExtractionEntity(rootDb, entityId);
+
   if (!entity) {
     return;
   }
 
-  const workspace = entity.workspace ?? panic("Entity has no workspace");
-  const version =
-    entity.currentVersion ?? panic("Entity has no currentVersion");
-
-  const fileField = findExtractionFileField(
-    version.fields,
-    options?.filePropertyId,
-  );
-  const fileFieldRow = version.fields.find(
-    (field) =>
-      field.content.type === "file" &&
-      field.content.id === fileField?.id &&
-      (options?.filePropertyId === undefined ||
-        field.propertyId === options.filePropertyId),
-  );
-  if (
-    !(fileField && fileFieldRow) ||
-    searchIndexOwnerForFields(version.fields, options?.filePropertyId) ===
-      SEARCH_INDEX_OWNER.searchMark
-  ) {
+  const source = resolveNativeExtractionSource(entity, options?.filePropertyId);
+  if (!source) {
     await getSearchProvider().indexEntity(entityId);
     return;
   }
 
-  const organizationId = toSafeId<"organization">(workspace.organizationId);
-  const workspaceId = toSafeId<"workspace">(workspace.id);
+  const { entityVersionId, fieldId, fileField, organizationId, workspaceId } =
+    source;
   const inserted = await rootDb
     .insert(documentProcessingRuns)
-    .values({
-      id: createSafeId<"documentProcessingRun">(),
-      entityId,
-      entityVersionId: version.id,
-      fieldId: fileFieldRow.id,
-      kind: "native-extraction",
-      organizationId,
-      processorVersion: DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION,
-      requestedBy: null,
-      requestSource: "upload",
-      sourceFileId: fileField.id,
-      sourceSha256Hex: fileField.sha256Hex,
-      workspaceId,
-    })
-    .onConflictDoNothing({
-      target: [
-        documentProcessingRuns.organizationId,
-        documentProcessingRuns.kind,
-        documentProcessingRuns.entityVersionId,
-        documentProcessingRuns.fieldId,
-        documentProcessingRuns.sourceFileId,
-        documentProcessingRuns.sourceSha256Hex,
-        documentProcessingRuns.processorVersion,
-      ],
-    })
+    .values(nativeExtractionRunValues(entityId, source))
+    .onConflictDoNothing({ target: NATIVE_EXTRACTION_SOURCE_TARGET })
     .returning({ id: documentProcessingRuns.id });
   const created = inserted.at(0);
   if (created) {
@@ -481,11 +573,14 @@ export const processExtraction = async (
           eq(documentProcessingRuns.organizationId, organizationId),
           eq(documentProcessingRuns.workspaceId, workspaceId),
           eq(documentProcessingRuns.entityId, entityId),
-          eq(documentProcessingRuns.entityVersionId, version.id),
-          eq(documentProcessingRuns.fieldId, fileFieldRow.id),
+          eq(documentProcessingRuns.entityVersionId, entityVersionId),
+          eq(documentProcessingRuns.fieldId, fieldId),
           eq(documentProcessingRuns.sourceFileId, fileField.id),
           eq(documentProcessingRuns.sourceSha256Hex, fileField.sha256Hex),
-          eq(documentProcessingRuns.kind, "native-extraction"),
+          eq(
+            documentProcessingRuns.kind,
+            SCOPED_NATIVE_EXTRACTION_ENQUEUE.kind,
+          ),
           eq(
             documentProcessingRuns.processorVersion,
             DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION,
@@ -509,8 +604,8 @@ export const processExtraction = async (
     where: {
       entityId: { eq: entityId },
       organizationId: { eq: organizationId },
-      sourceEntityVersionId: { eq: version.id },
-      sourceFieldId: { eq: fileFieldRow.id },
+      sourceEntityVersionId: { eq: entityVersionId },
+      sourceFieldId: { eq: fieldId },
       sourceFileId: { eq: fileField.id },
       sourceSha256Hex: { eq: fileField.sha256Hex },
       workspaceId: { eq: workspaceId },

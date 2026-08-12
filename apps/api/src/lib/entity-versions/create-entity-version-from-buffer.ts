@@ -35,7 +35,10 @@ import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { deleteS3ObjectWithSignal, putS3ObjectWithSignal } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
-import { processExtraction } from "@/api/lib/search/process-extraction";
+import {
+  processExtraction,
+  requestNativeExtractionRun,
+} from "@/api/lib/search/process-extraction";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 class EntityVersionTargetError extends TaggedError("EntityVersionTargetError")<{
@@ -272,6 +275,16 @@ export const createEntityVersionFromBuffer = async ({
       });
       transactionState.durableReferencePrepared =
         versionWriteResult.status === "ok";
+      if (versionWriteResult.status === "ok") {
+        // Durable extraction request, committed with the version that owns the
+        // file. The post-commit call below only accelerates the queue handoff,
+        // so it pins the same file property and resolves the same source.
+        await requestNativeExtractionRun({
+          entityId,
+          filePropertyId: versionWriteResult.filePropertyId,
+          tx,
+        });
+      }
       return versionWriteResult;
     });
     if (Result.isError(writeResult)) {
