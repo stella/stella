@@ -32,6 +32,7 @@ type CatalogQueryRow = Pick<
   | "priceAmountCents"
   | "priceCurrency"
   | "billingInterval"
+  | "priceBasis"
   | "sortOrder"
   | "hostedPolicyRef"
 > & { key: UsagePolicyRow["policyKey"] };
@@ -40,6 +41,8 @@ export type UsagePolicyCatalogPrice = {
   amountCents: NonNullable<CatalogQueryRow["priceAmountCents"]>;
   currency: NonNullable<CatalogQueryRow["priceCurrency"]>;
   billingInterval: NonNullable<CatalogQueryRow["billingInterval"]>;
+  /** `per_seat` prices multiply by purchased seats; `flat` do not. */
+  basis: CatalogQueryRow["priceBasis"];
 };
 
 export type UsagePolicyCatalogHostedCheckout =
@@ -69,6 +72,7 @@ const catalogPrice = ({
   priceAmountCents,
   priceCurrency,
   billingInterval,
+  priceBasis,
 }: CatalogQueryRow): UsagePolicyCatalogPrice | null => {
   if (
     priceAmountCents === null &&
@@ -90,6 +94,7 @@ const catalogPrice = ({
     amountCents: priceAmountCents,
     currency: priceCurrency,
     billingInterval,
+    basis: priceBasis,
   };
 };
 
@@ -140,6 +145,7 @@ export const readUsagePolicyCatalog = async function* ({
             priceAmountCents: usagePolicies.priceAmountCents,
             priceCurrency: usagePolicies.priceCurrency,
             billingInterval: usagePolicies.billingInterval,
+            priceBasis: usagePolicies.priceBasis,
             sortOrder: usagePolicies.sortOrder,
             hostedPolicyRef: usagePolicies.hostedPolicyRef,
           })

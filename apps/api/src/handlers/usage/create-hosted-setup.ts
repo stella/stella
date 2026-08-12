@@ -17,6 +17,10 @@ import { isEntitlementConsumableAt } from "@/api/lib/usage/usage-ledger";
 
 const createHostedSetupBodySchema = t.Object({
   usagePolicyId: tSafeId("usagePolicy"),
+  // Seat count for seat-based subscription checkout. Bounded well below
+  // any legitimate organisation size; larger arrangements go through an
+  // operator, not self-service.
+  seats: t.Optional(t.Integer({ minimum: 1, maximum: 1000 })),
 });
 
 const config = {
@@ -52,6 +56,7 @@ const createHostedSetup = createSafeRootHandler(
             kind: usagePolicies.kind,
             visibility: usagePolicies.visibility,
             hostedPolicyRef: usagePolicies.hostedPolicyRef,
+            priceBasis: usagePolicies.priceBasis,
           })
           .from(usagePolicies)
           .where(eq(usagePolicies.id, body.usagePolicyId))
@@ -109,6 +114,17 @@ const createHostedSetup = createSafeRootHandler(
           }
         }
 
+        // Seat counts only make sense on seat-priced subscription
+        // checkout. On anything else — a pack, or a flat-priced plan —
+        // a quantity signals a confused client, and forwarding it to
+        // the provider could inflate the webhook's granted units.
+        if (
+          body.seats !== undefined &&
+          (policy.kind !== "subscription" || policy.priceBasis !== "per_seat")
+        ) {
+          return { kind: "seats_on_non_subscription" as const };
+        }
+
         return {
           kind: "ok" as const,
           policyRef: policy.hostedPolicyRef,
@@ -148,6 +164,14 @@ const createHostedSetup = createSafeRootHandler(
         }),
       );
     }
+    if (dbResult.kind === "seats_on_non_subscription") {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Seat counts apply to subscription policies only",
+        }),
+      );
+    }
 
     const baseUrl = env.FRONTEND_URL.endsWith("/")
       ? env.FRONTEND_URL.slice(0, -1)
@@ -169,6 +193,7 @@ const createHostedSetup = createSafeRootHandler(
       policyRef: dbResult.policyRef,
       accountRef: dbResult.accountRef ?? undefined,
       externalAccountRef,
+      seats: body.seats,
       returnUrl: usageSettingsUrl,
       successUrl: usageSettingsUrl,
       metadata: {

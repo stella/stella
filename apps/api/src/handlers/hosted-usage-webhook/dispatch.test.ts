@@ -781,6 +781,274 @@ describe("dispatch — handleHostedAllocation", () => {
   });
 });
 
+// Instants sampled at exact fractions of the 31-day fixture period, so the
+// pro-rata arithmetic is fixed by the payload rather than by the wall clock.
+const HALF_PERIOD_ISO = "2026-07-16T12:00:00.000Z";
+const QUARTER_REMAINING_ISO = "2026-07-24T06:00:00.000Z";
+const NEXT_PERIOD_HALF_ISO = "2026-08-16T12:00:00.000Z";
+const IN_PERIOD_ASOF = new Date(PERIOD_START.getTime() + 1000);
+const IN_NEXT_PERIOD_ASOF = new Date(NEXT_PERIOD_START.getTime() + 1000);
+
+const readSeatState = async (tx: Transaction, fx: Fixture) => {
+  const rows = await tx
+    .select({
+      seats: usageEntitlements.seats,
+      hostedPeakSeats: usageEntitlements.hostedPeakSeats,
+    })
+    .from(usageEntitlements)
+    .where(eq(usageEntitlements.organizationId, fx.organizationId));
+  return rows.at(0);
+};
+
+/** Fresh hosted entitlement at 3 seats: 1000 × 3 = 3000 periodic units. */
+const seedThreeSeats = async (tx: Transaction, fx: Fixture): Promise<void> => {
+  const created = await handleHostedEntitlementUpsert({
+    tx,
+    payload: buildEntitlementPayload(fx, {
+      occurred_at: PERIOD_START.toISOString(),
+    }),
+    eventId: "evt_seats_seed_create",
+  });
+  expect(created.kind).toBe("applied");
+};
+
+/** Seed, then raise to 5 seats at the period's midpoint (+1000 units). */
+const seedIncreaseToFive = async (
+  tx: Transaction,
+  fx: Fixture,
+): Promise<void> => {
+  await seedThreeSeats(tx, fx);
+  const increased = await handleHostedEntitlementUpsert({
+    tx,
+    payload: buildEntitlementPayload(fx, {
+      quantity: 5,
+      occurred_at: HALF_PERIOD_ISO,
+    }),
+    eventId: "evt_seats_seed_increase",
+  });
+  expect(increased.kind).toBe("applied");
+};
+
+describe("dispatch — mid-period seat proration", () => {
+  test("seat increase grants units for the added seats, pro-rated by the remaining period", async () => {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+      await seedIncreaseToFive(tx, fx);
+
+      const balance = await getRemainingUsageUnits({
+        tx,
+        organizationId: fx.organizationId,
+        asOf: IN_PERIOD_ASOF,
+      });
+      // 1000 × 3 periodic + floor(1000 × 2 added seats × 0.5 remaining)
+      expect(balance).toBe(4000);
+
+      const row = await readSeatState(tx, fx);
+      expect(row?.seats).toBe(5);
+      expect(row?.hostedPeakSeats).toBe(5);
+    });
+  });
+
+  test("a re-delivered seat increase does not grant the delta twice", async () => {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+      await seedIncreaseToFive(tx, fx);
+
+      // Same seat count, later timestamp, fresh event id. The added seats
+      // are granted once per period, not once per delivery — otherwise a
+      // provider retry would mint units at its own remaining fraction.
+      const redelivery = await handleHostedEntitlementUpsert({
+        tx,
+        payload: buildEntitlementPayload(fx, {
+          quantity: 5,
+          occurred_at: QUARTER_REMAINING_ISO,
+        }),
+        eventId: "evt_seats_increase_redelivered",
+      });
+      expect(redelivery.kind).toBe("applied");
+
+      const balance = await getRemainingUsageUnits({
+        tx,
+        organizationId: fx.organizationId,
+        asOf: IN_PERIOD_ASOF,
+      });
+      expect(balance).toBe(4000);
+    });
+  });
+
+  test("seat decrease grants nothing and claws nothing back", async () => {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+      await seedIncreaseToFive(tx, fx);
+
+      const decreased = await handleHostedEntitlementUpsert({
+        tx,
+        payload: buildEntitlementPayload(fx, {
+          quantity: 2,
+          occurred_at: "2026-07-17T00:00:00.000Z",
+        }),
+        eventId: "evt_seats_decrease",
+      });
+      expect(decreased.kind).toBe("applied");
+
+      const balance = await getRemainingUsageUnits({
+        tx,
+        organizationId: fx.organizationId,
+        asOf: IN_PERIOD_ASOF,
+      });
+      expect(balance).toBe(4000);
+
+      const row = await readSeatState(tx, fx);
+      expect(row?.seats).toBe(2);
+      // The peak records capacity already granted this period; it must not
+      // follow seats down, or the next increase would re-grant it.
+      expect(row?.hostedPeakSeats).toBe(5);
+    });
+  });
+
+  test("re-increasing up to the period peak grants nothing; only seats above it do", async () => {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+      await seedIncreaseToFive(tx, fx);
+      await handleHostedEntitlementUpsert({
+        tx,
+        payload: buildEntitlementPayload(fx, {
+          quantity: 2,
+          occurred_at: "2026-07-17T00:00:00.000Z",
+        }),
+        eventId: "evt_seats_cycle_down",
+      });
+
+      // Back up to 4, still under the period's peak of 5: that capacity was
+      // already paid out, so cycling seats cannot mint it again.
+      const belowPeak = await handleHostedEntitlementUpsert({
+        tx,
+        payload: buildEntitlementPayload(fx, {
+          quantity: 4,
+          occurred_at: "2026-07-18T00:00:00.000Z",
+        }),
+        eventId: "evt_seats_cycle_up_below_peak",
+      });
+      expect(belowPeak.kind).toBe("applied");
+      expect(
+        await getRemainingUsageUnits({
+          tx,
+          organizationId: fx.organizationId,
+          asOf: IN_PERIOD_ASOF,
+        }),
+      ).toBe(4000);
+
+      const abovePeak = await handleHostedEntitlementUpsert({
+        tx,
+        payload: buildEntitlementPayload(fx, {
+          quantity: 6,
+          occurred_at: QUARTER_REMAINING_ISO,
+        }),
+        eventId: "evt_seats_cycle_up_above_peak",
+      });
+      expect(abovePeak.kind).toBe("applied");
+      // Only the single seat above the peak counts, with a quarter of the
+      // period left: floor(1000 × 1 × 0.25) = 250.
+      expect(
+        await getRemainingUsageUnits({
+          tx,
+          organizationId: fx.organizationId,
+          asOf: IN_PERIOD_ASOF,
+        }),
+      ).toBe(4250);
+
+      const row = await readSeatState(tx, fx);
+      expect(row?.seats).toBe(6);
+      expect(row?.hostedPeakSeats).toBe(6);
+    });
+  });
+
+  test("period rollover resets the peak to the renewed seat count", async () => {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+      await seedThreeSeats(tx, fx);
+
+      const renewal = await handleHostedEntitlementUpsert({
+        tx,
+        payload: buildEntitlementPayload(fx, {
+          quantity: 2,
+          current_period_start: NEXT_PERIOD_START.toISOString(),
+          current_period_end: NEXT_PERIOD_END.toISOString(),
+          occurred_at: NEXT_PERIOD_START.toISOString(),
+        }),
+        eventId: "evt_seats_renewal",
+      });
+      expect(renewal.kind).toBe("applied");
+
+      // A new period allocates from scratch at the renewed seat count; the
+      // previous period's higher peak must not survive the rollover.
+      expect(
+        await getRemainingUsageUnits({
+          tx,
+          organizationId: fx.organizationId,
+          asOf: IN_NEXT_PERIOD_ASOF,
+        }),
+      ).toBe(2000);
+      expect((await readSeatState(tx, fx))?.hostedPeakSeats).toBe(2);
+
+      const increase = await handleHostedEntitlementUpsert({
+        tx,
+        payload: buildEntitlementPayload(fx, {
+          quantity: 3,
+          current_period_start: NEXT_PERIOD_START.toISOString(),
+          current_period_end: NEXT_PERIOD_END.toISOString(),
+          occurred_at: NEXT_PERIOD_HALF_ISO,
+        }),
+        eventId: "evt_seats_renewal_increase",
+      });
+      expect(increase.kind).toBe("applied");
+      // Measured against the reset peak of 2: floor(1000 × 1 × 0.5) = 500.
+      expect(
+        await getRemainingUsageUnits({
+          tx,
+          organizationId: fx.organizationId,
+          asOf: IN_NEXT_PERIOD_ASOF,
+        }),
+      ).toBe(2500);
+      expect((await readSeatState(tx, fx))?.hostedPeakSeats).toBe(3);
+    });
+  });
+
+  test("a row with no recorded peak measures the delta against its seat count", async () => {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+      await seedThreeSeats(tx, fx);
+      // Rows written before the peak column existed carry null. Those seats
+      // were granted by the period's periodic allocation, so the null must
+      // read as the row's seat count, never as zero.
+      await tx
+        .update(usageEntitlements)
+        .set({ hostedPeakSeats: null })
+        .where(eq(usageEntitlements.organizationId, fx.organizationId));
+
+      const increase = await handleHostedEntitlementUpsert({
+        tx,
+        payload: buildEntitlementPayload(fx, {
+          quantity: 5,
+          occurred_at: HALF_PERIOD_ISO,
+        }),
+        eventId: "evt_seats_legacy_null_peak",
+      });
+      expect(increase.kind).toBe("applied");
+
+      // floor(1000 × (5 − 3) × 0.5) = 1000 on top of the 3000 periodic units.
+      expect(
+        await getRemainingUsageUnits({
+          tx,
+          organizationId: fx.organizationId,
+          asOf: IN_PERIOD_ASOF,
+        }),
+      ).toBe(4000);
+      expect((await readSeatState(tx, fx))?.hostedPeakSeats).toBe(5);
+    });
+  });
+});
+
 describe("dispatch — out-of-order provider events", () => {
   test("a stale retry cannot resurrect a newer revocation", async () => {
     await withRolledBackTx(async (tx) => {

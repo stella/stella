@@ -13,6 +13,7 @@ import { rootDb } from "@/api/db/root";
 import {
   USAGE_POLICY_BILLING_INTERVALS,
   USAGE_POLICY_KINDS,
+  USAGE_POLICY_PRICE_BASES,
   USAGE_POLICY_VISIBILITIES,
   usagePolicies,
 } from "@/api/db/schema";
@@ -52,6 +53,7 @@ const usagePolicySeedSchema = v.pipe(
       v.nullable(v.picklist(USAGE_POLICY_BILLING_INTERVALS)),
       null,
     ),
+    priceBasis: v.optional(v.picklist(USAGE_POLICY_PRICE_BASES), "flat"),
     visibility: v.optional(v.picklist(USAGE_POLICY_VISIBILITIES), "hidden"),
     sortOrder: v.optional(
       v.pipe(
@@ -114,6 +116,7 @@ const seed = async (): Promise<void> => {
           priceAmountCents: seedPolicy.priceAmountCents,
           priceCurrency: seedPolicy.priceCurrency,
           billingInterval: seedPolicy.billingInterval,
+          priceBasis: seedPolicy.priceBasis,
           visibility: seedPolicy.visibility,
           sortOrder: seedPolicy.sortOrder,
         })
@@ -128,6 +131,7 @@ const seed = async (): Promise<void> => {
             priceAmountCents: seedPolicy.priceAmountCents,
             priceCurrency: seedPolicy.priceCurrency,
             billingInterval: seedPolicy.billingInterval,
+            priceBasis: seedPolicy.priceBasis,
             visibility: seedPolicy.visibility,
             sortOrder: seedPolicy.sortOrder,
           },
