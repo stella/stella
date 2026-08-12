@@ -100,12 +100,6 @@ DROP INDEX CONCURRENTLY IF EXISTS "chat_threads_compaction_due_idx";
 -- squawk-ignore prefer-robust-stmts
 CREATE INDEX CONCURRENTLY "chat_threads_compaction_due_idx" ON "chat_threads" ("compaction_scheduled_at", "compaction_attempted_at" ASC NULLS FIRST, "id") WHERE compaction_scheduled_at IS NOT NULL;
 --> statement-breakpoint
--- Outside the transaction, next to the concurrent index, because VALIDATE takes
--- only SHARE UPDATE EXCLUSIVE: it scans without blocking reads or writes. This
--- is what makes the migrated database structurally identical to schema.ts,
--- which declares an ordinary (valid) constraint.
-ALTER TABLE "chat_thread_compactions" VALIDATE CONSTRAINT "chat_thread_compactions_memory_eligibility_check";
---> statement-breakpoint
 -- squawk-ignore transaction-nesting, ban-uncommitted-transaction
 BEGIN;
 --> statement-breakpoint
