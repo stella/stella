@@ -47,7 +47,7 @@ const ruleNamesFromSource = (source: string): string[] => {
 const fixtureHasRuleDisable = (source: string, ruleId: string): boolean =>
   source.split("\n").some((line) => {
     const ruleList =
-      /^\s*(?://|\/\*|\{\/\*)\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s+(?<rules>.*)$/u.exec(
+      /^\s*(?:\/\/|\/\*|\{\/\*)\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s+(?<rules>.*)$/u.exec(
         line,
       )?.groups?.["rules"];
     if (ruleList === undefined) {
