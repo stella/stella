@@ -16,9 +16,10 @@
  *     MIME message would otherwise retain bytes that were omitted from the
  *     entity tree.
  *
- * On transaction failure every materialized S3 object (the message file
- * plus every accepted attachment) is deleted so no orphaned final
- * objects remain.
+ * When the transaction callback fails before preparing its durable reference,
+ * every materialized S3 object is deleted. A lost COMMIT acknowledgement keeps
+ * the objects under the pending upload's durable recovery ownership, because
+ * committed entity rows may already reference them.
  */
 import { Result, panic } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -604,6 +605,9 @@ export const finalizeEmailIngest = async function* ({
         }
       | { status: EntityCreateWriteFailureStatus };
 
+    const transactionState: {
+      status: "pending" | "durable_reference_prepared";
+    } = { status: "pending" };
     const writeResultResult = await safeDb(async (tx): Promise<WriteResult> => {
       const capacityResult = await checkEntityCreateCapacityForInsert({
         tx,
@@ -861,9 +865,17 @@ export const finalizeEmailIngest = async function* ({
         panic("Pending upload finalize marker update returned no rows");
       }
 
+      // `safeDb` cannot distinguish a callback rollback from a lost COMMIT
+      // acknowledgement. The finalized marker is atomic with every entity row;
+      // once prepared, cleanup belongs to the durable recovery record so this
+      // request cannot delete objects that a committed entity may reference.
+      transactionState.status = "durable_reference_prepared";
       return { status: "ok", finalized };
     });
-    if (Result.isError(writeResultResult)) {
+    if (
+      Result.isError(writeResultResult) &&
+      transactionState.status === "pending"
+    ) {
       const cleanupResult = await cleanupFinalObjects(
         "final-cleanup-after-db-error",
       );
