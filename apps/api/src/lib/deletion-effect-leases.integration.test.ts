@@ -12,6 +12,7 @@ import {
   claimNextAccountDeletionEffectChunk,
   completeAccountDeletionEffectChunk,
   failAccountDeletionEffectChunk,
+  listRecoverableAccountDeletionEffectRequestIds,
 } from "@/api/lib/account-deletion-effect-store";
 import { recordAccountDeletionRequest } from "@/api/lib/account-deletion-steps";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -158,6 +159,7 @@ describe("destructive-effect lease fencing", () => {
     const parent = (
       await testDb
         .select({
+          attemptCount: accountDeletionRequests.attemptCount,
           status: accountDeletionRequests.status,
           storageCleanup: accountDeletionRequests.storageCleanup,
         })
@@ -166,9 +168,63 @@ describe("destructive-effect lease fencing", () => {
         .limit(1)
     ).at(0);
     expect(parent).toEqual({
+      attemptCount: 0,
       status: "completed",
       storageCleanup: { s3Keys: [] },
     });
+  });
+
+  test("account recovery rotates requests by their last progress", async () => {
+    const olderRequestId = toSafeId<"accountDeletionRequest">(
+      "00000000-0000-4000-8000-000000000109",
+    );
+    const newerRequestId = toSafeId<"accountDeletionRequest">(
+      "00000000-0000-4000-8000-000000000110",
+    );
+    const requests = [
+      {
+        id: olderRequestId,
+        updatedAt: new Date("2000-01-01T00:00:00.000Z"),
+      },
+      {
+        id: newerRequestId,
+        updatedAt: new Date("2001-01-01T00:00:00.000Z"),
+      },
+    ];
+    await testDb.insert(accountDeletionRequests).values(
+      requests.map(({ id, updatedAt }) => ({
+        id,
+        organizationIds: [],
+        status: "pending" as const,
+        storageCleanup: { s3Keys: [`user/${id}`] },
+        updatedAt,
+        userId,
+        workspaceIds: [],
+      })),
+    );
+    await testDb.insert(accountDeletionEffectChunks).values(
+      requests.map(({ id }, index) => {
+        const chunk = createS3DeletionEffectChunks([`user/${id}`]).at(0);
+        if (!chunk) {
+          throw new Error("Expected account recovery effect chunk");
+        }
+        return {
+          ...chunk,
+          id: toSafeId<"accountDeletionEffectChunk">(
+            `00000000-0000-4000-8000-00000000011${index}`,
+          ),
+          requestId: id,
+        };
+      }),
+    );
+
+    const recoverable = await listRecoverableAccountDeletionEffectRequestIds(
+      accountEffectDb(),
+    );
+
+    expect(recoverable.indexOf(olderRequestId)).toBeLessThan(
+      recoverable.indexOf(newerRequestId),
+    );
   });
 
   test("the account-deletion producer atomically writes bounded effects", async () => {

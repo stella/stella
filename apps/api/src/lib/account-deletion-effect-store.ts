@@ -239,7 +239,6 @@ export const claimNextAccountDeletionEffectChunk = async (
     await tx
       .update(accountDeletionRequests)
       .set({
-        attemptCount: sql`${accountDeletionRequests.attemptCount} + 1`,
         completedAt: null,
         errorMessage: null,
         status: "processing",
@@ -353,10 +352,23 @@ export const listRecoverableAccountDeletionEffectRequestIds = async (
     .orderBy(asc(accountDeletionRequests.createdAt))
     .limit(RECOVERY_STATE_LIMIT);
   const chunkRows = await db
-    .selectDistinct({ requestId: accountDeletionEffectChunks.requestId })
+    .selectDistinct({
+      recoveryUpdatedAt: accountDeletionRequests.updatedAt,
+      requestId: accountDeletionEffectChunks.requestId,
+    })
     .from(accountDeletionEffectChunks)
+    .innerJoin(
+      accountDeletionRequests,
+      eq(
+        accountDeletionRequests.id,
+        accountDeletionEffectChunks.requestId,
+      ),
+    )
     .where(eligibleChunkPredicate())
-    .orderBy(asc(accountDeletionEffectChunks.requestId))
+    .orderBy(
+      asc(accountDeletionRequests.updatedAt),
+      asc(accountDeletionEffectChunks.requestId),
+    )
     .limit(RECOVERY_STATE_LIMIT);
   return [
     ...new Set([
