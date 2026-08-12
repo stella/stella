@@ -209,11 +209,14 @@ describe("destructive-effect lease fencing", () => {
           throw new Error("Expected account recovery effect chunk");
         }
         return {
-          ...chunk,
+          chunkIndex: chunk.chunkIndex,
+          effectType: chunk.effectType,
           id: toSafeId<"accountDeletionEffectChunk">(
             `00000000-0000-4000-8000-00000000011${index}`,
           ),
+          payloadHash: chunk.payloadHash,
           requestId: id,
+          s3Keys: chunk.s3Keys,
         };
       }),
     );
