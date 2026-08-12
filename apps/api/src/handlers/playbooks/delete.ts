@@ -1,7 +1,7 @@
 import { Result } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
-import { playbookDefinitions, properties } from "@/api/db/schema";
+import { playbookDefinitions } from "@/api/db/schema";
 import { playbookDefinitionParamsSchema } from "@/api/handlers/playbooks/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -10,11 +10,11 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   description:
-    "Permanently delete a playbook definition from the organization, including " +
-    "every approved version and every matter column it materialized, with the " +
-    "answers and verdicts stored in those columns. There is no in-use check: a " +
-    "playbook that has been run across many matters is deleted along with its " +
-    "results.",
+    "Permanently delete a playbook definition and every approved version of " +
+    "it from the organization. Columns the playbook materialized into matters " +
+    "are kept: they keep their extracted answers and verdicts and continue to " +
+    "work as ordinary columns, no longer owned by any playbook. Recorded " +
+    "review findings are kept as well. There is no in-use check.",
   permissions: { playbook: ["delete"] },
   mcp: { type: "capability", reason: "knowledge_library_admin" },
   params: playbookDefinitionParamsSchema,
@@ -27,8 +27,8 @@ const deletePlaybookDefinition = createSafeRootHandler(
 
     const deleted = yield* Result.await(
       safeDb(async (tx) => {
-        // Confirm org ownership before deleting any rows, so a foreign
-        // playbookId can't delete another org's materialized columns below.
+        // Confirm org ownership before deleting anything, so a foreign
+        // playbookId can never reach another org's definition.
         const playbook = await tx.query.playbookDefinitions.findFirst({
           where: {
             id: { eq: params.playbookId },
@@ -40,32 +40,12 @@ const deletePlaybookDefinition = createSafeRootHandler(
           return null;
         }
 
-        // Delete materialized columns in dependency order before the definition:
-        // a verdict property depends on its ASK via an ON DELETE RESTRICT edge,
-        // so the playbook_definition_id cascade alone fails for a playbook that
-        // has been run. Verdict rows (and their dependency edges) go first, then
-        // the ASK columns.
-        const owned = await tx
-          .select({ id: properties.id, tool: properties.tool })
-          .from(properties)
-          .where(eq(properties.playbookDefinitionId, params.playbookId));
-        type OwnedProperty = (typeof owned)[number];
-        const verdictIds: OwnedProperty["id"][] = [];
-        const askIds: OwnedProperty["id"][] = [];
-        for (const property of owned) {
-          if (property.tool.type === "playbook-verdict") {
-            verdictIds.push(property.id);
-          } else {
-            askIds.push(property.id);
-          }
-        }
-        if (verdictIds.length > 0) {
-          await tx.delete(properties).where(inArray(properties.id, verdictIds));
-        }
-        if (askIds.length > 0) {
-          await tx.delete(properties).where(inArray(properties.id, askIds));
-        }
-
+        // The materialized columns are deliberately left standing. The
+        // `playbook_definition_id` reference is ON DELETE SET NULL, so they are
+        // orphaned rather than dropped: each keeps the answers and verdicts it
+        // already holds for every document, keeps grading from the rules copied
+        // into its `tool`, and is re-adopted by `playbook_source_id` if the
+        // playbook is recreated and run again.
         await tx
           .delete(playbookDefinitions)
           .where(

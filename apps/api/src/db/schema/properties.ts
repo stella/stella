@@ -48,9 +48,17 @@ export const properties = p.pgTable(
     // playbooks or with manually-created columns. Null for any property not
     // created by a playbook.
     playbookSourceId: p.uuid("playbook_source_id"),
+    // Which playbook currently owns this column. Deleting the playbook nulls
+    // this rather than cascading: a column holds extracted answers and graded
+    // verdicts for every document in its workspace, and one org-level delete
+    // must not erase that work across every matter the playbook ever touched.
+    // An orphaned column keeps working as a plain column from the rules already
+    // copied into `tool`, and re-running a playbook re-adopts it by
+    // `playbookSourceId` (see `materializePlaybookRun`). Judgment itself lives
+    // in `document_review_findings`, which never referenced a playbook at all.
     playbookDefinitionId: safeUuid<"playbookDefinition">(
       "playbook_definition_id",
-    ).references(() => playbookDefinitions.id, { onDelete: "cascade" }),
+    ).references(() => playbookDefinitions.id, { onDelete: "set null" }),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [

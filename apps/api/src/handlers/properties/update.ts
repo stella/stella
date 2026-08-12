@@ -292,7 +292,7 @@ const updateProperty = createSafeHandler(
             tool: properties.tool,
             role: properties.role,
             status: properties.status,
-            playbookDefinitionId: properties.playbookDefinitionId,
+            playbookSourceId: properties.playbookSourceId,
           })
           .from(properties)
           .where(
@@ -442,9 +442,13 @@ const updateProperty = createSafeHandler(
         // that the composer's update body cannot round-trip; deleting and
         // reinserting from an empty `dependencies` here would wipe the gate and
         // leak the column into every document-type group. Preserve the existing
-        // rows on a manual save of a playbook-owned property.
+        // rows on a manual save of a playbook-materialized property.
+        //
+        // Keyed on `playbookSourceId`, not on the definition reference: that
+        // reference nulls when the playbook is deleted, and an orphaned column
+        // still carries the same gate rows that must survive a manual save.
         const preserveDependencies =
-          oldProperty.playbookDefinitionId !== null &&
+          oldProperty.playbookSourceId !== null &&
           body.tool.type === "manual-input";
 
         const promises: Promise<unknown>[] = [updatePropertyQuery];
