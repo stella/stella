@@ -11,6 +11,7 @@ describe("desktop release URL boundary", () => {
       { accepted: true, value: "http://mirror.example.com/releases" },
       { accepted: false, value: "ftp://mirror.example.com/releases" },
       { accepted: false, value: "data:text/plain,release" },
+      // eslint-disable-next-line no-script-url -- fixture: the environment boundary must reject this unsafe protocol
       { accepted: false, value: "javascript:alert(1)" },
     ] as const;
 
