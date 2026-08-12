@@ -42,9 +42,15 @@ type CleanupIntentRow = Pick<
   "attemptCount" | "id" | "objectKey"
 >;
 
-const createReconciliationSafeDb = (
-  updates: UpdateValues[],
-  rows: ReconciliationRow[] = [
+type CreateReconciliationSafeDbOptions = {
+  cleanupIntentRows?: CleanupIntentRow[] | undefined;
+  rows?: ReconciliationRow[] | undefined;
+  updates: UpdateValues[];
+};
+
+const createReconciliationSafeDb = ({
+  updates,
+  rows = [
     {
       declaredMime:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -61,8 +67,8 @@ const createReconciliationSafeDb = (
       workspaceId,
     },
   ],
-  cleanupIntentRows: CleanupIntentRow[] = [],
-): SafeDb =>
+  cleanupIntentRows = [],
+}: CreateReconciliationSafeDbOptions): SafeDb =>
   asTestRaw<SafeDb>(
     async <T>(run: (transaction: Transaction) => Promise<T>) => {
       const tx = asTestRaw<Transaction>({
@@ -179,7 +185,7 @@ test("keeps a reclaimed writer intent recoverable after deleting its object", as
   const updates: UpdateValues[] = [];
 
   const claimed = await reconcileStaleBufferIntentsGlobally({
-    safeDb: createReconciliationSafeDb(updates),
+    safeDb: createReconciliationSafeDb({ updates }),
     limit: 1,
     deleteObject: s3DeleteMock,
   });
@@ -224,7 +230,7 @@ test("shares one bounded cleanup pool across claimed email ingests", async () =>
   let deletionCount = 0;
 
   const claimed = await reconcileStaleBufferIntentsGlobally({
-    safeDb: createReconciliationSafeDb([], rows),
+    safeDb: createReconciliationSafeDb({ rows, updates: [] }),
     limit: 25,
     deleteObject: async () => {
       active += 1;
@@ -263,11 +269,13 @@ test("lets lifecycle tombstones progress fairly through the shared pool", async 
   let maximumActive = 0;
 
   const claimed = await reconcileStaleBufferIntentsGlobally({
-    safeDb: createReconciliationSafeDb(
-      [],
-      [row],
-      [{ attemptCount: 0, id: pendingUploadId, objectKey: tombstoneKey }],
-    ),
+    safeDb: createReconciliationSafeDb({
+      cleanupIntentRows: [
+        { attemptCount: 0, id: pendingUploadId, objectKey: tombstoneKey },
+      ],
+      rows: [row],
+      updates: [],
+    }),
     limit: 2,
     deleteObject: async (objectKey) => {
       startedKeys.push(objectKey);
@@ -281,6 +289,78 @@ test("lets lifecycle tombstones progress fairly through the shared pool", async 
   expect(claimed).toBe(2);
   expect(maximumActive).toBe(4);
   expect(startedKeys.indexOf(tombstoneKey)).toBeLessThan(8);
+});
+
+test("awaits sibling cleanup before propagating a claim failure", async () => {
+  const claimFailure = new Error("pending claim failed");
+  const tombstoneKey = `${organizationId}/${workspaceId}/tombstone`;
+  let deletionStarted: (() => void) | undefined;
+  let releaseDeletion: (() => void) | undefined;
+  const started = new Promise<void>((resolve) => {
+    deletionStarted = resolve;
+  });
+  const deletionBlock = new Promise<void>((resolve) => {
+    releaseDeletion = resolve;
+  });
+  const tx = asTestRaw<Transaction>({
+    select: () => ({
+      from: (table: unknown) => ({
+        where: () => ({
+          orderBy: () => ({
+            limit: () => ({
+              for: async () => {
+                if (table === pendingUploads) {
+                  throw claimFailure;
+                }
+                return [
+                  {
+                    attemptCount: 0,
+                    id: pendingUploadId,
+                    objectKey: tombstoneKey,
+                  },
+                ];
+              },
+            }),
+          }),
+        }),
+      }),
+    }),
+    update: () => ({
+      set: () => ({ where: async () => undefined }),
+    }),
+  });
+  const safeDb = asTestRaw<SafeDb>(
+    async <T>(run: (transaction: Transaction) => Promise<T>) =>
+      await Result.tryPromise({
+        try: async () => await run(tx),
+        catch: (cause) => cause,
+      }),
+  );
+  let settled = false;
+  const outcome = reconcileStaleBufferIntentsGlobally({
+    safeDb,
+    limit: 2,
+    deleteObject: async () => {
+      deletionStarted?.();
+      await deletionBlock;
+    },
+  }).then(
+    (value) => {
+      settled = true;
+      return { status: "fulfilled" as const, value };
+    },
+    (error: unknown) => {
+      settled = true;
+      return { status: "rejected" as const, error };
+    },
+  );
+
+  await started;
+  await Bun.sleep(0);
+  expect(settled).toBe(false);
+  releaseDeletion?.();
+
+  expect(await outcome).toEqual({ status: "rejected", error: claimFailure });
 });
 
 test("keeps a lifecycle tombstone while backing off repeated deletion", async () => {
@@ -424,7 +504,7 @@ test("stops an in-flight object cleanup when the scheduler aborts", async () => 
   });
   const controller = new AbortController();
   const reconciliation = reconcileStaleBufferIntentsGlobally({
-    safeDb: createReconciliationSafeDb(updates),
+    safeDb: createReconciliationSafeDb({ updates }),
     limit: 1,
     signal: controller.signal,
     deleteObject: s3DeleteMock,
