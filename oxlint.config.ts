@@ -592,6 +592,8 @@ export default defineConfig({
     "./.oxlint-plugins/require-toast-error-capture.ts",
     "./.oxlint-plugins/no-swallowed-rejection.ts",
     "./.oxlint-plugins/no-awaited-builder-union.ts",
+    "./.oxlint-plugins/confine-redis-client.ts",
+    "./.oxlint-plugins/require-coordination-key.ts",
   ],
 
   overrides: [
@@ -2211,6 +2213,75 @@ export default defineConfig({
       rules: {
         "no-crypto-random-uuid/no-crypto-random-uuid": "error",
         "no-native-s3-object-read/no-native-s3-object-read": "error",
+      },
+    },
+    {
+      // Valkey usage doctrine (/conventions-scale): Valkey holds only
+      // ephemeral coordination, and every consumer owes a degraded path for
+      // an outage. Both stay reviewable only while the set of modules that
+      // can open a connection is named here. A new entry is a decision about
+      // what may live in Valkey, so each one carries its reason.
+      files: [
+        "apps/api/src/**/*.ts",
+        ".oxlint-plugins/__fixtures__/confine-redis-client.fixture.ts",
+      ],
+      excludeFiles: ["apps/api/src/**/*.test.ts", "apps/api/src/tests/**/*.ts"],
+      rules: {
+        "confine-redis-client/confine-redis-client": [
+          "error",
+          {
+            allowedFiles: [
+              // Queue transport. Each module owns one BullMQ queue's
+              // connection lifecycle; BullMQ owns the key layout under its
+              // own prefix (see redis-client.ts for the cluster cutover).
+              "apps/api/src/lib/document-processing-enqueue.ts",
+              "apps/api/src/lib/document-processing-queue.ts",
+              "apps/api/src/lib/workflow-queue.ts",
+              "apps/api/src/lib/file-derivative-queue.ts",
+              "apps/api/src/lib/entity-deletion-cleanup-queue.ts",
+              "apps/api/src/lib/account-deletion-cleanup-queue.ts",
+              "apps/api/src/lib/style-set-package-cleanup-queue.ts",
+              "apps/api/src/lib/document-review/run-queue.ts",
+              "apps/api/src/lib/flows/flow-run-queue.ts",
+              "apps/api/src/lib/flows/flow-run-worker.ts",
+              "apps/api/src/lib/scheduler/bullmq.ts",
+              "apps/api/src/handlers/reports/report-export-queue.ts",
+              // Cross-instance SSE fan-out: publisher and subscriber. Lost
+              // messages degrade to inline local delivery.
+              "apps/api/src/lib/sse-broadcast.ts",
+              "apps/api/src/lib/sse.ts",
+              // TTL'd rate-limit counters. Each degrades to a per-process
+              // fallback map when Valkey is unreachable.
+              "apps/api/src/lib/rate-limit/redis-context.ts",
+              "apps/api/src/lib/rate-limit/auth-storage.ts",
+              "apps/api/src/mcp/gateway/rate-limit.ts",
+              "apps/api/src/handlers/feedback/intake-guards.ts",
+              // TTL'd alert deduplication; an outage emits the alert rather
+              // than suppressing it.
+              "apps/api/src/lib/security-canary.ts",
+              // TTL'd OCR worker readiness lease; absence reads as unready.
+              "apps/api/src/lib/document-processing-readiness.ts",
+              // Workflow run locks and progress counters, rebuilt from the
+              // durable orphan reconciler when they are lost.
+              "apps/api/src/lib/workflow/root-run-state-store.ts",
+              // Liveness probe: PINGs the connection it is reporting on.
+              "apps/api/src/lib/health/readiness.ts",
+            ],
+          },
+        ],
+      },
+    },
+    {
+      // Valkey key positions belong to `lib/redis-keys.ts`, which owns the
+      // hashtag placement and the per-scope expiry policy. Tests are exempt so
+      // a fixture can pin a produced key shape as a literal.
+      files: [
+        "apps/api/src/**/*.ts",
+        ".oxlint-plugins/__fixtures__/require-coordination-key.fixture.ts",
+      ],
+      excludeFiles: ["apps/api/src/**/*.test.ts", "apps/api/src/tests/**/*.ts"],
+      rules: {
+        "require-coordination-key/require-coordination-key": "error",
       },
     },
     {

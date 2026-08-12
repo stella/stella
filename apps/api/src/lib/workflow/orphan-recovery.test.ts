@@ -34,24 +34,26 @@ describe("selectExpiredStaleRunWorkspaceIds", () => {
 
 describe("parseRunningLockWorkspaceId", () => {
   test("extracts the workspace id from a running-lock key", () => {
-    expect(parseRunningLockWorkspaceId("workflow:ws-123:running")).toBe(
+    expect(parseRunningLockWorkspaceId("workflow-run:{ws-123}:running")).toBe(
       "ws-123",
     );
   });
 
   test("ignores sibling run-state keys so only locks are reconciled", () => {
     expect(
-      parseRunningLockWorkspaceId("workflow:ws-123:completed-entities"),
+      parseRunningLockWorkspaceId("workflow-run:{ws-123}:completed-entities"),
     ).toBeNull();
     expect(
-      parseRunningLockWorkspaceId("workflow:ws-123:request-id"),
+      parseRunningLockWorkspaceId("workflow-run:{ws-123}:request-id"),
     ).toBeNull();
-    expect(parseRunningLockWorkspaceId("workflow:ws-123:total")).toBeNull();
+    expect(
+      parseRunningLockWorkspaceId("workflow-run:{ws-123}:total"),
+    ).toBeNull();
   });
 
   test("ignores malformed keys", () => {
     expect(parseRunningLockWorkspaceId("running")).toBeNull();
-    expect(parseRunningLockWorkspaceId("workflow::running")).toBeNull();
+    expect(parseRunningLockWorkspaceId("workflow-run:{}:running")).toBeNull();
     expect(parseRunningLockWorkspaceId("other:ws-123:running")).toBeNull();
   });
 });

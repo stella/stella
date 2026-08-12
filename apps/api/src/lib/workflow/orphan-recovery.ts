@@ -2,10 +2,10 @@
 // Redis/DB/queue imports so the reconciler's logic is unit-testable and
 // importing it never triggers a connection or worker side effect.
 
-const RUNNING_LOCK_KEY = /^workflow:(?<workspaceId>[^:]+):running$/u;
+const RUNNING_LOCK_KEY = /^workflow-run:\{(?<workspaceId>[^{}]+)\}:running$/u;
 
 /**
- * Extract the workspace id from a `workflow:<workspaceId>:running` lock
+ * Extract the workspace id from a `workflow-run:{<workspaceId>}:running` lock
  * key. Returns null for any other workflow key (e.g. `:completed-entities`,
  * `:request-id`) or a malformed key, so only genuine locks are ever
  * considered for reconciliation.

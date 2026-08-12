@@ -294,7 +294,7 @@ describe("RedisRateLimitContext", () => {
     expect((await context.increment(healthyRequest)).count).toBe(1);
     await context.decrement(healthyRequest);
 
-    expect(decrementedKeys).toEqual(["api:ratelimit:v2:api:healthy"]);
+    expect(decrementedKeys).toEqual(["api-ratelimit:{api:healthy}"]);
     context.kill();
   });
 

@@ -61,7 +61,7 @@ describe("document OCR worker readiness", () => {
     await refreshDocumentOcrWorkerReadiness(writeLease);
 
     expect(writeLease).toHaveBeenCalledWith(
-      "document-processing:ocr-worker-ready:v1",
+      "ocr-readiness:{ocr-worker}:v1",
       "ready",
       90,
     );

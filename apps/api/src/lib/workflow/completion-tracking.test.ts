@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
+import { coordinationKey } from "@/api/lib/redis-keys";
 import {
   COMPLETE_ENTITY_SCRIPT,
   parseEntityCompletionReply,
   recordEntityCompletion,
   resetCompletionState,
+  type WorkflowCompletionKeys,
 } from "@/api/lib/workflow/completion-tracking";
 
 describe("completion reply validation", () => {
@@ -109,14 +111,18 @@ const createFakeRedis = (state: FakeRedisState) => ({
 });
 
 describe("entity completion state", () => {
+  // Built through the shared key builder rather than spelled out, so the
+  // fixture cannot drift from the hashtag layout the script depends on.
+  const runKey = (suffix: string) =>
+    coordinationKey({ scope: "workflow-run", slot: "ws_1", suffix });
   const keys = {
-    requestId: "workflow:ws_1:request-id",
-    running: "workflow:ws_1:running",
-    completedEntities: "workflow:ws_1:completed-entities",
-    total: "workflow:ws_1:total",
-    transitionalCompleted: "workflow:ws_1:completed",
-    setMode: "workflow:ws_1:set-mode",
-  };
+    requestId: runKey("request-id"),
+    running: runKey("running"),
+    completedEntities: runKey("completed-entities"),
+    total: runKey("total"),
+    transitionalCompleted: runKey("completed"),
+    setMode: runKey("set-mode"),
+  } satisfies WorkflowCompletionKeys;
   const activeRequestId = "req_1";
   const transitionalRunningLockValue = "1";
 

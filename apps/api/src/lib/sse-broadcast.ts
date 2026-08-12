@@ -10,9 +10,16 @@ import {
 } from "@stll/api-contract";
 
 import type { SafeId } from "@/api/lib/branded-types";
+import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
 import { createRedisClient } from "@/api/lib/redis-client";
 
-/** Redis pub/sub channel for cross-instance SSE broadcasts. */
+/**
+ * Redis pub/sub channel for cross-instance SSE broadcasts. A channel is not a
+ * key: `PUBLISH` reaches every subscriber cluster-wide regardless of slot, so
+ * this name carries no hashtag. Delivery is best-effort by design; receivers
+ * tolerate lost messages (`sse.ts` falls back to inline local delivery while
+ * its subscriber is detached).
+ */
 export const REDIS_CHANNEL = "sse:broadcast";
 
 export const INSTANCE_ID = `api:${process.pid}:${Bun.randomUUIDv7()}`;
@@ -133,14 +140,44 @@ export const parseRedisPayload = (raw: string): RedisPayload | null => {
 
 let publisher: ReturnType<typeof createRedisClient> | null = null;
 
+/**
+ * Bound the publisher the way every other coordination facade is bounded. On
+ * the client's defaults an unreachable Valkey buffers the PUBLISH in the
+ * offline queue and the promise never settles, which turns a best-effort
+ * broadcast into an unbounded wait: the desktop-edit-session expiry task
+ * awaits its publishes, so it would hold its lease forever instead of failing
+ * and rescheduling, and `sse.ts` would accumulate one pending promise per
+ * event for the length of the outage.
+ *
+ * Refusing to buffer is the right trade here: pub/sub delivery is already
+ * best-effort, and `broadcast`/`broadcastToOrganization` deliver to this
+ * instance's own clients regardless of the publish outcome.
+ */
+const PUBLISH_CONNECT_TIMEOUT_MS = 2000;
+
+/**
+ * The connection timeout only covers reaching a peer. A peer that accepts the
+ * connection and then stops replying (a partitioned node, a paused process)
+ * leaves the PUBLISH itself outstanding forever, which is the same unbounded
+ * wait by a different route, so the command is raced too.
+ */
+const PUBLISH_COMMAND_TIMEOUT_MS = 2000;
+
 const getPublisher = (): ReturnType<typeof createRedisClient> => {
-  publisher ??= createRedisClient();
+  publisher ??= createRedisClient({
+    connectionTimeout: PUBLISH_CONNECT_TIMEOUT_MS,
+    enableOfflineQueue: false,
+  });
   return publisher;
 };
 
 const publishRedisPayload = async (payload: RedisPayload): Promise<void> => {
   try {
-    await getPublisher().publish(REDIS_CHANNEL, JSON.stringify(payload));
+    await withCommandTimeout({
+      command: getPublisher().publish(REDIS_CHANNEL, JSON.stringify(payload)),
+      commandTimeoutMs: PUBLISH_COMMAND_TIMEOUT_MS,
+      label: "SSE broadcast publish",
+    });
   } catch (error: unknown) {
     throw new SSEBroadcastError({
       message: "SSE broadcast publish failed.",

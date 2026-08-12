@@ -3,10 +3,19 @@ import { Result } from "better-result";
 import { captureError } from "@/api/lib/analytics/capture";
 import { detached } from "@/api/lib/detached";
 import { createRedisClient } from "@/api/lib/redis-client";
+import {
+  coordinationKey,
+  coordinationSetArguments,
+  type CoordinationKey,
+} from "@/api/lib/redis-keys";
 import { withTimeout } from "@/api/lib/with-timeout";
 
-const DOCUMENT_OCR_WORKER_READINESS_KEY =
-  "document-processing:ocr-worker-ready:v1";
+// A single process-wide lease, so the worker role is its own colocation unit.
+const DOCUMENT_OCR_WORKER_READINESS_KEY = coordinationKey({
+  scope: "ocr-readiness",
+  slot: "ocr-worker",
+  suffix: "v1",
+});
 const DOCUMENT_OCR_WORKER_READINESS_VALUE = "ready";
 const DOCUMENT_OCR_WORKER_READINESS_TTL_SECONDS = 90;
 const DOCUMENT_OCR_WORKER_HEARTBEAT_INTERVAL_MS = 30_000;
@@ -52,7 +61,7 @@ export const isDocumentOcrWorkerAvailable = async (): Promise<boolean> => {
 
 export const refreshDocumentOcrWorkerReadiness = async (
   writeLease: (
-    key: string,
+    key: CoordinationKey,
     value: string,
     ttlSeconds: number,
   ) => Promise<unknown>,
@@ -77,7 +86,14 @@ export const startDocumentOcrWorkerReadiness = () => {
   let writeInFlight: Promise<unknown> | null = null;
   const refresh = async (): Promise<void> => {
     await refreshDocumentOcrWorkerReadiness(async (key, value, ttlSeconds) => {
-      const write = client.send("SET", [key, value, "EX", String(ttlSeconds)]);
+      const write = client.send(
+        "SET",
+        coordinationSetArguments({
+          key,
+          value,
+          ttl: { unit: "seconds", value: ttlSeconds },
+        }),
+      );
       writeInFlight = write;
       const markSettled = (): void => {
         if (writeInFlight === write) {

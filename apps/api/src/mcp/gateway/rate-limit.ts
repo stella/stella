@@ -3,6 +3,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
 import { createRedisClient } from "@/api/lib/redis-client";
+import { coordinationKey, type CoordinationKey } from "@/api/lib/redis-keys";
 
 type RedisLike = {
   send: (command: string, args: string[]) => Promise<unknown>;
@@ -24,7 +25,6 @@ type McpGatewayRateLimiterOptions = {
   onRedisError?: (error: unknown) => void;
 };
 
-const REDIS_KEY_PREFIX = "mcp:gateway:ratelimit:";
 const REDIS_COMMAND_TIMEOUT_MS = 500;
 const FALLBACK_CLEANUP_THRESHOLD = 10_000;
 const FALLBACK_CLEANUP_INTERVAL_MS = 60_000;
@@ -71,7 +71,11 @@ export const createMcpGatewayRateLimiter = ({
     try {
       const count = await consumeRedis({
         commandTimeoutMs,
-        key: `${REDIS_KEY_PREFIX}${key}`,
+        key: coordinationKey({
+          scope: "mcp-gateway-ratelimit",
+          slot: userId,
+          suffix: connectorSlug,
+        }),
         redis: getRedis(),
       });
       return count <= LIMITS.mcpGatewayRateLimitMax;
@@ -95,7 +99,7 @@ const consumeRedis = async ({
   redis,
 }: {
   commandTimeoutMs: number;
-  key: string;
+  key: CoordinationKey;
   redis: RedisLike;
 }): Promise<number> => {
   const rawCount = await withCommandTimeout({

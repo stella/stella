@@ -12,12 +12,19 @@ import { logger } from "@/api/lib/observability/logger";
 import { getRequestId } from "@/api/lib/observability/request-context";
 import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
 import { createRedisClient } from "@/api/lib/redis-client";
+import { coordinationKey } from "@/api/lib/redis-keys";
 
 const BEARER_SCHEME = "bearer";
 const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/u;
 const MACHINE_API_KEY_CREDENTIAL_LENGTH =
   MACHINE_API_KEY_PREFIX.length + MACHINE_API_KEY_LENGTH;
-const ALERT_DEDUP_KEY = "security:canary:alert:machine-api-key";
+// One key per canary kind, never read together with another, so the canary
+// kind is its own colocation unit.
+const ALERT_DEDUP_KEY = coordinationKey({
+  scope: "security-canary",
+  slot: "machine-api-key",
+  suffix: "alert",
+});
 const ALERT_DEDUP_WINDOW_MS = 5 * 60 * 1000;
 const REDIS_COMMAND_TIMEOUT_MS = 500;
 const CLAIM_ALERT_SCRIPT = `

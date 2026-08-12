@@ -1,9 +1,19 @@
 // Pure helpers for the atomic entity-completion script. This module stays
-// free of Redis imports so its concurrency invariants are testable in-process.
+// free of Redis client imports so its concurrency invariants are testable
+// in-process; it takes keys, never a connection.
+
+import {
+  coordinationSetArguments,
+  type CoordinationKey,
+} from "@/api/lib/redis-keys";
 
 // Atomically verifies that a job still belongs to the active workflow, records
 // the entity once, and returns progress. Bundling the operations closes the
 // stale-run check/write race; SADD/SCARD makes retries idempotent per entity.
+//
+// All six keys must share one cluster slot, which the `workflow-run` hashtag
+// on the workspace id guarantees; a cluster rejects a script whose keys span
+// slots.
 //
 // KEYS[1] = request-id, KEYS[2] = running, KEYS[3] = completed-entities,
 // KEYS[4] = total, KEYS[5] = transitional completed counter,
@@ -88,12 +98,12 @@ type EntityCompletionRedis = {
 };
 
 export type WorkflowCompletionKeys = {
-  requestId: string;
-  running: string;
-  completedEntities: string;
-  total: string;
-  transitionalCompleted: string;
-  setMode: string;
+  requestId: CoordinationKey;
+  running: CoordinationKey;
+  completedEntities: CoordinationKey;
+  total: CoordinationKey;
+  transitionalCompleted: CoordinationKey;
+  setMode: CoordinationKey;
 };
 
 type RecordEntityCompletionArgs = {
@@ -143,11 +153,20 @@ export const resetCompletionState = async ({
   runStateTtlSec,
 }: {
   redis: EntityCompletionRedis;
-  completedEntitiesKey: string;
-  transitionalCompletedKey: string;
-  setModeKey: string;
+  completedEntitiesKey: CoordinationKey;
+  transitionalCompletedKey: CoordinationKey;
+  setModeKey: CoordinationKey;
   runStateTtlSec: number;
 }): Promise<void> => {
+  // Both keys carry the same workspace hashtag, so this multi-key DEL stays
+  // inside one cluster slot.
   await redis.send("DEL", [completedEntitiesKey, transitionalCompletedKey]);
-  await redis.send("SET", [setModeKey, "1", "EX", String(runStateTtlSec)]);
+  await redis.send(
+    "SET",
+    coordinationSetArguments({
+      key: setModeKey,
+      value: "1",
+      ttl: { unit: "seconds", value: runStateTtlSec },
+    }),
+  );
 };
