@@ -1672,6 +1672,48 @@ export const getTanStackTextModelInfoForRole = (
   };
 };
 
+/**
+ * Metadata-only resolution for an explicit per-turn model selection.
+ * Mirrors `getTanStackTextModelById`'s provider/key-source branching
+ * without constructing an adapter, so metering and analytics can rate
+ * the model that actually served the turn rather than the role default.
+ */
+export const getTanStackTextModelInfoById = (
+  modelId: string,
+  orgConfig: OrgAIConfig | null | undefined,
+  role: ModelRole,
+): ResolvedTanStackTextModelInfo => {
+  const override = decodeModelOverride(modelId);
+
+  if (orgConfig) {
+    const providerConfig = override.provider
+      ? getOrgProviderConfig(orgConfig, override.provider)
+      : getPrimaryOrgProvider(orgConfig);
+    const region = providerRegion(providerConfig);
+    const provider = resolveTanStackTextProvider({
+      provider: providerConfig.provider,
+      region,
+    });
+    return {
+      keySource: "byok",
+      modelId: override.modelId,
+      provider,
+      ...(region === undefined ? {} : { region }),
+    };
+  }
+
+  if (!hasTanStackInstanceProvider() && !override.provider) {
+    throw byokRoleNotConfiguredError(role);
+  }
+
+  const provider = override.provider ?? getActiveProvider();
+  return {
+    keySource: "instance",
+    modelId: override.modelId,
+    provider: resolveTanStackTextProvider({ provider }),
+  };
+};
+
 export const getTanStackTextModelById = (
   modelId: string,
   orgConfig: OrgAIConfig | null | undefined,

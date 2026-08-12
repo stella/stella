@@ -13,6 +13,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import {
+  getTanStackTextModelInfoById,
   getTanStackTextModelInfoForRole,
   resolveEffectiveServiceTierForProvider,
   type ResolvedTanStackTextModelInfo,
@@ -52,6 +53,12 @@ type TanStackAIAnalyticsProps = {
   properties?: AnalyticsMetadata;
   analytics?: Analytics;
   modelRole?: ModelRole;
+  /**
+   * Explicit per-turn model selection (dev override or validated
+   * thread model). When set, metering rates this model instead of the
+   * role default.
+   */
+  selectedModelId?: string | undefined;
   orgAIConfig?: OrgAIConfig | null;
   usageMetering?: TanStackAIUsageMetering;
 };
@@ -262,6 +269,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
 }: TanStackAIAnalyticsProps): TanStackAIAnalyticsCallbacks => {
   const distinctId = config.distinctId ?? SERVER_DISTINCT_ID;
   const modelRole = config.modelRole ?? "chat";
+  const selectedModelId = config.selectedModelId;
   let modelInfo: ResolvedTanStackTextModelInfo | null | undefined;
   const startedAt = performance.now();
   let hasCapturedGenerationError = false;
@@ -274,13 +282,18 @@ export const createTanStackAIAnalyticsCallbacks = ({
       }
 
       try {
-        modelInfo = getTanStackTextModelInfoForRole(
-          modelRole,
-          config.orgAIConfig,
-          {
-            organizationId: config.usageMetering?.organizationId ?? null,
-          },
-        );
+        // An explicit per-turn selection outranks the role default:
+        // metering must rate the model that actually served the turn.
+        modelInfo =
+          selectedModelId !== undefined
+            ? getTanStackTextModelInfoById(
+                selectedModelId,
+                config.orgAIConfig,
+                modelRole,
+              )
+            : getTanStackTextModelInfoForRole(modelRole, config.orgAIConfig, {
+                organizationId: config.usageMetering?.organizationId ?? null,
+              });
       } catch (error) {
         modelInfo = null;
         logger.warn("tanstack_ai.analytics.model_info_unavailable", {

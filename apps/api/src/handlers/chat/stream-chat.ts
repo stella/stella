@@ -750,6 +750,8 @@ type CreateChatAttemptAnalyticsProps = {
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   safeDb: SafeDb;
+  /** Explicit per-turn model selection; undefined = role default. */
+  selectedModelId: string | undefined;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
@@ -761,6 +763,7 @@ const createChatAttemptAnalytics = ({
   organizationId,
   orgAIConfig,
   safeDb,
+  selectedModelId,
   threadId,
   userId,
   workspaceId,
@@ -781,6 +784,7 @@ const createChatAttemptAnalytics = ({
       organization_id: organizationId,
       ...(workspaceId ? { workspace_id: workspaceId } : {}),
     },
+    selectedModelId,
     sessionId: threadId,
     traceId: Bun.randomUUIDv7(),
   });
@@ -1011,6 +1015,7 @@ const runChatAttempt = async function* ({
     organizationId,
     orgAIConfig,
     safeDb,
+    selectedModelId: modelId,
     threadId,
     userId,
     workspaceId,
@@ -1021,6 +1026,9 @@ const runChatAttempt = async function* ({
     organizationId,
     orgAIConfig,
     safeDb,
+    // Compaction runs on the same adapter as the turn itself, so its
+    // consumption rates against the same selection.
+    selectedModelId: modelId,
     threadId,
     userId,
     workspaceId,
