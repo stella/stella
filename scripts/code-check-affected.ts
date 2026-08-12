@@ -3,14 +3,16 @@
 // Fast local code-quality gate.
 //
 // CI keeps the full repository-wide `code-check`. Pre-push uses this wrapper
-// to ask Turbo for changed workspaces plus reverse dependants, then runs one
-// shared Oxlint/tsgolint program over those complete workspace roots. Global
-// compiler, dependency-graph, and lint inputs conservatively fall back to the
-// full check.
+// to ask Turbo for changed workspaces plus reverse dependants, then caches each
+// workspace's complete lint and typecheck independently with bounded
+// concurrency. Root scripts sit outside Turbo, so only changed root sources are
+// linted directly. Global inputs conservatively fall back to the full check.
 
 import { panic } from "better-result";
 import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
+
+import { isChangedLintPath } from "./lint-paths";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const DEFAULT_BASE = "origin/main";
@@ -23,6 +25,7 @@ const FULL_CHECK_FILES = new Set([
   "oxlint.config.ts",
   "package.json",
   "scripts/code-check-affected.ts",
+  "scripts/lint-paths.ts",
   "scripts/lint-oxlint-fixtures.sh",
   "scripts/lint-root-scripts.sh",
   "scripts/tsconfig.json",
@@ -42,10 +45,15 @@ const FULL_CHECK_PREFIXES = [
 
 type CheckPlan =
   | { type: "full"; changedPath: string }
-  | { type: "affected"; targets: string[]; checkLanding: boolean };
+  | {
+      type: "affected";
+      targets: string[];
+      rootLintPaths: string[];
+    };
 
 type PlanCheckOptions = {
   changedPaths: readonly string[];
+  presentChangedPaths: readonly string[];
   affectedWorkspacePaths: readonly string[];
   workspacePaths: ReadonlySet<string>;
 };
@@ -70,6 +78,7 @@ const requiresFullCheck = (file: string): boolean =>
 
 export const planCheck = ({
   changedPaths,
+  presentChangedPaths,
   affectedWorkspacePaths,
   workspacePaths,
 }: PlanCheckOptions): CheckPlan => {
@@ -98,7 +107,15 @@ export const planCheck = ({
   return {
     type: "affected",
     targets,
-    checkLanding: targetSet.has("apps/landing"),
+    rootLintPaths: [
+      ...new Set(
+        presentChangedPaths.filter(
+          (changedPath) =>
+            workspaceForPath(changedPath) === null &&
+            isChangedLintPath(changedPath),
+        ),
+      ),
+    ].sort(),
   };
 };
 
@@ -224,17 +241,8 @@ const affectedWorkspacePaths = (mergeBase: string): string[] => {
 export const affectedCommands = (
   plan: Extract<CheckPlan, { type: "affected" }>,
 ) => {
-  // Root scripts sit outside every workspace, so no affected target covers
-  // their cross-cutting checks. Run those guards unconditionally.
-  const commands: string[][] = [
-    ["bun", "run", "env:check"],
-    ["bash", "scripts/lint-root-scripts.sh"],
-  ];
-  if (plan.checkLanding) {
-    commands.push(["bun", "--cwd", "apps/landing", "typecheck"]);
-    commands.push(["bun", "apps/landing/scripts/check-logical-properties.ts"]);
-  }
-  if (plan.targets.length > 0) {
+  const commands: string[][] = [["bun", "run", "env:check"]];
+  if (plan.rootLintPaths.length > 0) {
     commands.push([
       "bun",
       "--bun",
@@ -244,8 +252,19 @@ export const affectedCommands = (
       "--report-unused-disable-directives-severity=error",
       "--deny-warnings",
       "--type-aware",
-      "--type-check",
-      ...plan.targets,
+      ...plan.rootLintPaths,
+    ]);
+  }
+  if (plan.targets.length > 0) {
+    commands.push([
+      "bun",
+      "--bun",
+      "turbo",
+      "run",
+      "lint",
+      "typecheck",
+      "--concurrency=2",
+      ...plan.targets.map((target) => `--filter=./${target}`),
     ]);
   }
   commands.push(["bun", "run", "typecheck:repo"]);
@@ -257,6 +276,9 @@ const main = () => {
   const changed = changedPaths(options.base);
   const plan = planCheck({
     changedPaths: changed.paths,
+    presentChangedPaths: changed.paths.filter((changedPath) =>
+      existsSync(path.join(REPO_ROOT, changedPath)),
+    ),
     affectedWorkspacePaths: affectedWorkspacePaths(changed.mergeBase),
     workspacePaths: workspacePaths(),
   });

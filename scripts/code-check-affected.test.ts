@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { affectedCommands, planCheck } from "./code-check-affected";
+import { isChangedLintPath } from "./lint-paths";
 
 const WORKSPACES = new Set([
   "apps/api",
@@ -10,9 +11,14 @@ const WORKSPACES = new Set([
   "packages/ui",
 ]);
 
-const plan = (changedPaths: string[], affectedWorkspacePaths: string[]) =>
+const plan = (
+  changedPaths: string[],
+  affectedWorkspacePaths: string[],
+  presentChangedPaths = changedPaths,
+) =>
   planCheck({
     changedPaths,
+    presentChangedPaths,
     affectedWorkspacePaths,
     workspacePaths: WORKSPACES,
   });
@@ -27,7 +33,7 @@ describe("affected code-check planning", () => {
     ).toEqual({
       type: "affected",
       targets: ["apps/landing", "apps/web", "packages/ui"],
-      checkLanding: true,
+      rootLintPaths: [],
     });
   });
 
@@ -35,24 +41,48 @@ describe("affected code-check planning", () => {
     expect(plan(["README.md"], [])).toEqual({
       type: "affected",
       targets: [],
-      checkLanding: false,
+      rootLintPaths: [],
     });
   });
 
-  test("keeps lint and TypeScript diagnostics in one affected Oxc pass", () => {
+  test("caches lint and typecheck per affected workspace", () => {
     const commands = affectedCommands({
       type: "affected",
       targets: ["apps/web", "packages/ui"],
-      checkLanding: false,
+      rootLintPaths: [],
     });
-    // Root scripts belong to no workspace, so the guard must run regardless
-    // of which targets were affected.
-    expect(commands).toContainEqual(["bash", "scripts/lint-root-scripts.sh"]);
     expect(commands).toContainEqual(["bun", "run", "env:check"]);
+    expect(commands).toContainEqual([
+      "bun",
+      "--bun",
+      "turbo",
+      "run",
+      "lint",
+      "typecheck",
+      "--concurrency=2",
+      "--filter=./apps/web",
+      "--filter=./packages/ui",
+    ]);
+  });
+
+  test("lints changed root scripts outside Turbo workspaces", () => {
+    const commands = affectedCommands({
+      type: "affected",
+      targets: [],
+      rootLintPaths: ["scripts/guard.ts"],
+    });
+
     const oxc = commands.find((command) => command.includes("oxlint"));
     expect(oxc).toContain("--type-aware");
-    expect(oxc).toContain("--type-check");
-    expect(oxc?.slice(-2)).toEqual(["apps/web", "packages/ui"]);
+    expect(oxc?.at(-1)).toBe("scripts/guard.ts");
+  });
+
+  test("typechecks dependants without trying to lint a deleted source", () => {
+    expect(plan(["packages/ui/src/removed.ts"], ["packages/ui"], [])).toEqual({
+      type: "affected",
+      targets: ["packages/ui"],
+      rootLintPaths: [],
+    });
   });
 
   test.each([
@@ -60,6 +90,7 @@ describe("affected code-check planning", () => {
     "bun.lock",
     "bunfig.toml",
     "scripts/code-check-affected.ts",
+    "scripts/lint-paths.ts",
     "scripts/lint-oxlint-fixtures.sh",
     "scripts/lint-root-scripts.sh",
     "scripts/tsconfig.json",
@@ -93,5 +124,28 @@ describe("affected code-check planning", () => {
       type: "full",
       changedPath: "invalid Turbo workspace output",
     });
+  });
+});
+
+describe("changed lint path selection", () => {
+  test.each([
+    "apps/api/src/server.ts",
+    "apps/web/src/route.tsx",
+    "scripts/guard.mjs",
+    "scripts/worker.mts",
+    "packages/ui/vite.config.js",
+  ])("includes lintable source %s", (changedPath) => {
+    expect(isChangedLintPath(changedPath)).toBe(true);
+  });
+
+  test.each([
+    "README.md",
+    "apps/web/src/routeTree.gen.ts",
+    "apps/web/src/client.gen.mts",
+    "apps/api/src/generated/schema.ts",
+    "apps/api/src/not-real.mtsx",
+    "packages/ui/node_modules/library/index.js",
+  ])("excludes non-source or generated path %s", (changedPath) => {
+    expect(isChangedLintPath(changedPath)).toBe(false);
   });
 });
