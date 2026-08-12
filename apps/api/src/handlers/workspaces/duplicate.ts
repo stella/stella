@@ -44,9 +44,16 @@ import {
   propertyDependencyReadLimit,
 } from "@/api/lib/properties/dependency-limits";
 import { getS3 } from "@/api/lib/s3";
-import { processExtraction } from "@/api/lib/search/process-extraction";
 import {
+  processExtraction,
+  SEARCH_INDEX_OWNER,
+  searchIndexOwnerForFields,
+} from "@/api/lib/search/process-extraction";
+import type { SearchIndexOwner } from "@/api/lib/search/process-extraction";
+import {
+  enqueueEntitySearchRepairs,
   enqueueWorkspaceSearchRepairs,
+  flushEntitySearchRepairs,
   flushWorkspaceSearchRepairs,
 } from "@/api/lib/search/projection-repair-queue";
 import type { ViewLayout } from "@/api/lib/views-schema";
@@ -445,11 +452,19 @@ const duplicateWorkspace = createSafeHandler(
                   currentVersion: {
                     columns: { id: true },
                     with: {
+                      // Ascending field id is ascending creation order, which
+                      // is the order `findExtractionFileField` requires: the
+                      // copy must select the same file field for extraction
+                      // that the source does. At most one field per property,
+                      // so the limit is the structural bound, stated for the
+                      // unbounded-read rule.
                       fields: {
                         columns: {
                           propertyId: true,
                           content: true,
                         },
+                        orderBy: { id: "asc" },
+                        limit: LIMITS.propertiesCount,
                       },
                     },
                   },
@@ -718,7 +733,15 @@ const duplicateWorkspace = createSafeHandler(
       }
 
       const entityIdMap = new Map<string, SafeId<"entity">>();
-      const duplicatedEntityIds: SafeId<"entity">[] = [];
+      // Split by which mechanism owns each copy's search projection, so every
+      // duplicated entity is covered exactly once: a durable extraction run
+      // indexes the documents it extracts, and a dirty mark committed with
+      // this transaction covers everything else.
+      const duplicatedEntityIds: Record<SearchIndexOwner, SafeId<"entity">[]> =
+        {
+          [SEARCH_INDEX_OWNER.durableExtraction]: [],
+          [SEARCH_INDEX_OWNER.searchMark]: [],
+        };
       const entitiesToDuplicate = orderEntitiesForDuplicate(snapshot.entities);
 
       if (includeContent && entitiesToDuplicate.length > 0) {
@@ -825,7 +848,12 @@ const duplicateWorkspace = createSafeHandler(
           }
 
           entityIdMap.set(source.id, newEntityId);
-          duplicatedEntityIds.push(newEntityId);
+          // `newFields` is inserted in source field order and its ids are
+          // generated in that same order, so the copy resolves the same
+          // extraction source `processExtraction` will resolve for it.
+          duplicatedEntityIds[searchIndexOwnerForFields(newFields)].push(
+            newEntityId,
+          );
         }
       }
 
@@ -842,6 +870,10 @@ const duplicateWorkspace = createSafeHandler(
         },
       });
 
+      await enqueueEntitySearchRepairs(
+        tx,
+        duplicatedEntityIds[SEARCH_INDEX_OWNER.searchMark],
+      );
       await enqueueWorkspaceSearchRepairs(tx, [targetWorkspaceId]);
 
       return {
@@ -872,11 +904,20 @@ const duplicateWorkspace = createSafeHandler(
       );
     }
 
+    // Both post-commit calls only accelerate what the transaction already
+    // guarantees: the marked copies keep their queued row until a repair
+    // rebuilds their projection, and the documents keep the immutable source
+    // the bounded extraction repair scan requests a run for.
     flushWorkspaceSearchRepairs([txResult.value.workspaceId]).catch(
       captureError,
     );
+    flushEntitySearchRepairs(
+      txResult.value.entityIds[SEARCH_INDEX_OWNER.searchMark],
+    ).catch(captureError);
 
-    for (const entityId of txResult.value.entityIds) {
+    for (const entityId of txResult.value.entityIds[
+      SEARCH_INDEX_OWNER.durableExtraction
+    ]) {
       processExtraction(entityId).catch(captureError);
     }
 

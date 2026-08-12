@@ -46,8 +46,14 @@ void mock.module("@/api/lib/s3", () => ({
   },
 }));
 
-const processExtractionMock = mock(async () => undefined);
+// Spread the real module: the handler reads its search-index ownership split
+// from here, and that split is what these tests exercise. Only the durable
+// extraction request itself is replaced.
+const realProcessExtraction =
+  await import("@/api/lib/search/process-extraction");
+const processExtractionMock = mock(async (_entityId: string) => undefined);
 void mock.module("@/api/lib/search/process-extraction", () => ({
+  ...realProcessExtraction,
   processExtraction: processExtractionMock,
 }));
 
@@ -57,6 +63,13 @@ void mock.module("@/api/lib/search/index-global", () => ({
 }));
 
 const enqueueWorkspaceSearchRepairsMock = mock(async () => undefined);
+const enqueueEntitySearchRepairsMock = mock(
+  async (_tx: unknown, _entityIds: readonly string[]) => undefined,
+);
+const flushEntitySearchRepairsMock = mock(async () => ({
+  failed: 0,
+  repaired: 0,
+}));
 const flushWorkspaceSearchRepairsMock = mock(async () => ({
   failed: 0,
   repaired: 0,
@@ -69,10 +82,10 @@ void mock.module("@/api/lib/search/projection-repair-queue", () => ({
   SEARCH_PROJECTION_REPAIR_BATCH_SIZE: 32,
   drainSearchProjectionRepairQueue: idleRepairOutcome,
   enqueueContactSearchRepairs: async () => undefined,
-  enqueueEntitySearchRepairs: async () => undefined,
+  enqueueEntitySearchRepairs: enqueueEntitySearchRepairsMock,
   enqueueWorkspaceSearchRepairs: enqueueWorkspaceSearchRepairsMock,
   flushContactSearchRepairs: idleRepairOutcome,
-  flushEntitySearchRepairs: idleRepairOutcome,
+  flushEntitySearchRepairs: flushEntitySearchRepairsMock,
   flushWorkspaceSearchRepairs: flushWorkspaceSearchRepairsMock,
 }));
 
@@ -91,6 +104,16 @@ const isInsertedWorkspaceField = (
   value !== null &&
   "content" in value &&
   "propertyId" in value;
+
+const isInsertedEntity = (
+  value: unknown,
+): value is { id: string; name: string } =>
+  typeof value === "object" &&
+  value !== null &&
+  "id" in value &&
+  typeof value.id === "string" &&
+  "name" in value &&
+  typeof value.name === "string";
 
 const createContext = ({
   includeContent = false,
@@ -557,5 +580,193 @@ describe("duplicateWorkspace", () => {
     );
     expect(copiedContent.placeholder).toBe(imageContent.placeholder);
     expect(copiedContent.thumbnailDerivative).toEqual({ status: "ready" });
+  });
+
+  test("marks the copies extraction will not index, inside the transaction", async () => {
+    processExtractionMock.mockClear();
+    enqueueEntitySearchRepairsMock.mockClear();
+    flushEntitySearchRepairsMock.mockClear();
+
+    const filePropertyId = toSafeId<"property">("prop_file");
+    const notePropertyId = toSafeId<"property">("prop_note");
+    const documentContent: FieldContent = {
+      type: "file",
+      version: 1,
+      id: "source-file-id",
+      fileName: "evidence.png",
+      mimeType: "image/png",
+      sizeBytes: 1024,
+      encrypted: false,
+      sha256Hex: "a".repeat(64),
+      // The copy inherits a PDF rendering, so a durable run can read text
+      // from it and owns the copy's search projection.
+      pdfFileId: "source-pdf-id",
+      pdfDerivative: { status: "ready" },
+    };
+    const taskContent: FieldContent = {
+      type: "text",
+      version: 1,
+      value: "Draft the settlement offer",
+    };
+    const sourceEntity = {
+      parentId: null,
+      status: "open",
+      priority: null,
+      dueDate: null,
+      agendaKind: null,
+      startAt: null,
+      endAt: null,
+      occurredAt: null,
+      remindAt: null,
+      allDay: null,
+      timeZone: null,
+      location: null,
+      onlineMeetingUrl: null,
+      availability: null,
+      sensitivity: null,
+      organizer: null,
+      attendees: null,
+      recurrence: null,
+      agendaSource: null,
+      sortOrder: null,
+      metadata: null,
+    };
+    const insertedEntityIdsByName = new Map<string, string>();
+    let nextSequence = 0;
+
+    const { safeDb, scopedDb } = createScopedDbMock({
+      query: {
+        workspaces: {
+          findFirst: async () => ({
+            id: "ws_source123",
+            name: "Smith v Jones",
+            clientId: null,
+            billingReference: null,
+            color: null,
+            leadUserId: null,
+          }),
+        },
+        properties: {
+          findMany: async () => [
+            {
+              id: filePropertyId,
+              workspaceId: "ws_source123",
+              name: "Document",
+              status: "active",
+              content: { type: "file", version: 1 },
+              tool: null,
+              system: false,
+              kinds: ["document"],
+            },
+            {
+              id: notePropertyId,
+              workspaceId: "ws_source123",
+              name: "Notes",
+              status: "active",
+              content: { type: "text", version: 1 },
+              tool: null,
+              system: false,
+              kinds: ["task"],
+            },
+          ],
+        },
+        propertyDependencies: { findMany: async () => [] },
+        workspaceViews: { findMany: async () => [] },
+        workspaceMembers: { findMany: async () => [] },
+        workspaceContacts: { findMany: async () => [] },
+        organizationSettings: { findFirst: async () => null },
+        entities: {
+          findMany: async () => [
+            {
+              ...sourceEntity,
+              id: "entity_document",
+              kind: "document",
+              name: "evidence.png",
+              currentVersion: {
+                id: "version_document",
+                fields: [
+                  { propertyId: filePropertyId, content: documentContent },
+                ],
+              },
+            },
+            {
+              ...sourceEntity,
+              id: "entity_task",
+              kind: "task",
+              name: "Settlement offer",
+              currentVersion: {
+                id: "version_task",
+                fields: [{ propertyId: notePropertyId, content: taskContent }],
+              },
+            },
+          ],
+        },
+      },
+      select: (selectedFields: Record<string, unknown>) => {
+        if ("total" in selectedFields) {
+          return { from: () => ({ where: async () => [{ total: 0 }] }) };
+        }
+
+        if ("name" in selectedFields) {
+          return { from: () => ({ where: async () => [] }) };
+        }
+
+        throw new Error("Unexpected select fields");
+      },
+      insert: (table: unknown) => ({
+        values: (value: unknown) => {
+          if (table === documentCounters || table === matterCounters) {
+            return {
+              onConflictDoUpdate: () => ({
+                returning: async () => {
+                  nextSequence += 1;
+                  return [{ lastValue: nextSequence }];
+                },
+              }),
+            };
+          }
+
+          if (table === entities && isInsertedEntity(value)) {
+            insertedEntityIdsByName.set(value.name, value.id);
+            return undefined;
+          }
+
+          if (
+            table === auditLogs ||
+            table === entityVersions ||
+            table === fields ||
+            table === properties ||
+            table === workspaces
+          ) {
+            return undefined;
+          }
+
+          throw new Error("Unexpected insert table");
+        },
+      }),
+      update: () => ({ set: () => ({ where: async () => undefined }) }),
+      execute: async () => undefined,
+    });
+
+    const result = await duplicateWorkspace.handler(
+      createContext({ includeContent: true, safeDb, scopedDb }),
+    );
+
+    expect(result).toEqual({ workspaceId: expect.any(String) });
+
+    const copiedDocumentId = insertedEntityIdsByName.get("evidence.png");
+    const copiedTaskId = insertedEntityIdsByName.get("Settlement offer");
+    if (!(copiedDocumentId && copiedTaskId)) {
+      throw new Error("Expected both copies to be inserted");
+    }
+
+    // The task has no extraction run to index it, so its mark is written
+    // with the copies themselves; the document's projection arrives with the
+    // extraction that owns it, and marking it too would index it twice.
+    expect(enqueueEntitySearchRepairsMock).toHaveBeenCalledTimes(1);
+    expect(enqueueEntitySearchRepairsMock.mock.calls.at(0)?.at(1)).toEqual([
+      copiedTaskId,
+    ]);
+    expect(processExtractionMock.mock.calls).toEqual([[copiedDocumentId]]);
   });
 });
