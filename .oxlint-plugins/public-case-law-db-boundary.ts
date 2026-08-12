@@ -21,19 +21,21 @@ const PUBLIC_CASE_LAW_SCHEMA_IMPORTS = new Set([
 
 const PUBLIC_CASE_LAW_QUERY_RELATIONS = new Set(["caseLawDecisions"]);
 
-const isTxQueryMember = (node: unknown): boolean => {
+const getTxQueryObject = (node: unknown): AstNode | null => {
   if (!isAstNode(node) || node.type !== "MemberExpression") {
-    return false;
+    return null;
   }
   const object = node.object;
   if (!isAstNode(object) || object.type !== "MemberExpression") {
-    return false;
+    return null;
   }
-  return (
-    object.computed === false &&
-    isIdentifier(object.object, "tx") &&
-    isIdentifier(object.property, "query")
-  );
+  if (!isIdentifier(object.object, "tx")) {
+    return null;
+  }
+  if (object.computed !== false) {
+    return object;
+  }
+  return isIdentifier(object.property, "query") ? object : null;
 };
 
 const rawTemplateText = (node): string | null => {
@@ -76,7 +78,7 @@ export default eslintCompatPlugin({
             for (const specifier of specifiers) {
               const imported = getImportedName(specifier);
               if (
-                imported !== null &&
+                imported === null ||
                 !PUBLIC_CASE_LAW_SCHEMA_IMPORTS.has(imported)
               ) {
                 context.report({
@@ -87,12 +89,14 @@ export default eslintCompatPlugin({
             }
           },
           MemberExpression(node) {
-            if (!isTxQueryMember(node)) {
+            const queryObject = getTxQueryObject(node);
+            if (queryObject === null) {
               return;
             }
             const propertyName = getPropertyName(node.property);
             if (
-              propertyName !== null &&
+              queryObject.computed !== false ||
+              propertyName === null ||
               !PUBLIC_CASE_LAW_QUERY_RELATIONS.has(propertyName)
             ) {
               context.report({ node, messageId: "privateTxQuery" });

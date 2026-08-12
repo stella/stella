@@ -93,6 +93,25 @@ describe("public case-law route boundary", () => {
     expect(source).toContain("SET TRANSACTION READ ONLY");
   });
 
+  test("external role validation is bounded and retries after failure", async () => {
+    const source = await readPublicReadDbSource();
+    const validation = source.slice(
+      source.indexOf("const startRoleValidation"),
+      source.indexOf("const ensureRoleValidated"),
+    );
+
+    expect(source).toContain(
+      "connectionTimeout: EXTERNAL_CASE_LAW_CONNECTION_TIMEOUT_SECONDS",
+    );
+    expect(validation).toContain(".transaction(async (tx) =>");
+    expect(
+      validation.indexOf("configureExternalReadTransaction(tx)"),
+    ).toBeLessThan(validation.indexOf("validateExternalCaseLawDatabase(tx)"));
+    expect(validation).toContain(
+      'external.roleValidation = { status: "idle" }',
+    );
+  });
+
   test("shared-corpus reads cannot start document ingestion", async () => {
     const source = await readDeferredDocumentSource();
     const guard = source.indexOf("envBase.CASE_LAW_DATABASE_URL !== undefined");

@@ -335,6 +335,23 @@ describe("environment doctor output", () => {
     }
   });
 
+  test("rejects a non-PostgreSQL case-law database URL", () => {
+    const result = validateDoctorEnvironment({
+      app: "api",
+      input: {
+        ...validApiInput(),
+        CASE_LAW_DATABASE_URL: "https://db.example.com/stella?sslmode=require",
+      },
+    });
+
+    expect(result.status).toBe("invalid");
+    if (result.status === "invalid") {
+      expect(result.issues).toContain(
+        "CASE_LAW_DATABASE_URL: invalid secret value.",
+      );
+    }
+  });
+
   test.each([
     {
       expected:

@@ -97,6 +97,9 @@ test("server-rendered public law decisions stay stable after hydration", async (
   await page.reload({ waitUntil: "commit" });
 
   await expect(page.locator("article").first()).toBeVisible();
+  await expect(
+    page.getByRole("heading", { includeHidden: true, level: 1 }),
+  ).toHaveCount(1);
   const routeErrorTitle = page.locator("#route-error-title");
   const inspector = page.locator('[data-side="right"]');
   await expect(routeErrorTitle).toHaveCount(0);

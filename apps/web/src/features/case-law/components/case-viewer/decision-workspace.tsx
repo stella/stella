@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import { OutlineRail } from "@stll/ui/components/outline-rail";
 import type { OutlineItem } from "@stll/ui/components/outline-rail";
@@ -206,6 +207,9 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
+      <h1 className="sr-only">
+        <BidiText as="span">{decision.caseNumber}</BidiText>
+      </h1>
       <div className="relative min-h-0 flex-1">
         {hasAnalysis && analysisTree.length > 0 && (
           <OutlineRail

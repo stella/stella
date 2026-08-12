@@ -62,6 +62,16 @@ const databasePoolSecondsSchema = (fallback: string) =>
     fallback,
   );
 
+const postgresUrlSchema = () =>
+  v.pipe(
+    v.string(),
+    v.url(),
+    v.check((value) => {
+      const protocol = new URL(value).protocol;
+      return protocol === "postgres:" || protocol === "postgresql:";
+    }, "must use postgres:// or postgresql://."),
+  );
+
 type BoundedIntegerEnvOptions = {
   fallback: string;
   min: number;
@@ -91,7 +101,7 @@ export const envBaseServerSchema = {
   DATABASE_URL: v.pipe(v.string(), v.url()),
   DATABASE_ROOT_POOL_MAX: databasePoolMaxSchema(),
   DATABASE_RLS_POOL_MAX: databasePoolMaxSchema(),
-  CASE_LAW_DATABASE_URL: v.optional(v.pipe(v.string(), v.url())),
+  CASE_LAW_DATABASE_URL: v.optional(postgresUrlSchema()),
   CASE_LAW_DATABASE_POOL_MAX: databasePoolMaxSchema("2"),
   DATABASE_POOL_MAX_LIFETIME_S: databasePoolSecondsSchema("0"),
   DATABASE_POOL_IDLE_TIMEOUT_S: databasePoolSecondsSchema("0"),

@@ -10,6 +10,7 @@ import { envBase } from "@/api/env-base";
 import { queryCountLogger } from "@/api/lib/db-query-counter";
 
 const CASE_LAW_PUBLIC_READ_DB = Symbol("caseLawPublicReadDb");
+const EXTERNAL_CASE_LAW_CONNECTION_TIMEOUT_SECONDS = 10;
 
 export const PUBLIC_CASE_LAW_RELATIONS = [
   "case_law_citations",
@@ -53,13 +54,16 @@ export const assertCaseLawDatabaseRolePermissions = ({
 
 type ExternalCaseLawDatabase = {
   database: typeof rootDb;
-  roleValidation: Promise<void>;
+  roleValidation:
+    | { status: "idle" }
+    | { status: "pending"; promise: Promise<void> }
+    | { status: "validated" };
 };
 
 let externalCaseLawDatabase: ExternalCaseLawDatabase | null = null;
 
 const validateExternalCaseLawDatabase = async (
-  database: typeof rootDb,
+  database: Pick<Transaction, "execute">,
 ): Promise<void> => {
   const publicRelations = sql.join(
     PUBLIC_CASE_LAW_RELATIONS.map((name) => sql`${name}`),
@@ -112,6 +116,56 @@ const validateExternalCaseLawDatabase = async (
   assertCaseLawDatabaseRolePermissions(permissions);
 };
 
+const configureExternalReadTransaction = async (
+  tx: Transaction,
+): Promise<void> => {
+  await tx.execute(sql`SET TRANSACTION READ ONLY`);
+  await tx.execute(sql`SET LOCAL statement_timeout = '30s'`);
+  await tx.execute(sql`SET LOCAL lock_timeout = '1s'`);
+  await tx.execute(sql`SET LOCAL idle_in_transaction_session_timeout = '30s'`);
+};
+
+const startRoleValidation = async (
+  external: ExternalCaseLawDatabase,
+): Promise<void> => {
+  const promise = external.database
+    .transaction(async (tx) => {
+      await configureExternalReadTransaction(tx);
+      await validateExternalCaseLawDatabase(tx);
+    })
+    .then(
+      () => {
+        external.roleValidation = { status: "validated" };
+        return undefined;
+      },
+      (error: unknown) => {
+        external.roleValidation = { status: "idle" };
+        throw error;
+      },
+    );
+  external.roleValidation = { status: "pending", promise };
+  await promise;
+};
+
+const ensureRoleValidated = async (
+  external: ExternalCaseLawDatabase,
+): Promise<void> => {
+  switch (external.roleValidation.status) {
+    case "idle":
+      await startRoleValidation(external);
+      return;
+    case "pending":
+      await external.roleValidation.promise;
+      return;
+    case "validated":
+      return;
+    default: {
+      const unreachable: never = external.roleValidation;
+      panic("Unexpected case-law role validation state", unreachable);
+    }
+  }
+};
+
 const getCaseLawDatabase = async (): Promise<typeof rootDb> => {
   const url = envBase.CASE_LAW_DATABASE_URL;
   if (url === undefined) {
@@ -121,6 +175,7 @@ const getCaseLawDatabase = async (): Promise<typeof rootDb> => {
   if (externalCaseLawDatabase === null) {
     const client = new SQL({
       url,
+      connectionTimeout: EXTERNAL_CASE_LAW_CONNECTION_TIMEOUT_SECONDS,
       max: envBase.CASE_LAW_DATABASE_POOL_MAX,
       maxLifetime: envBase.DATABASE_POOL_MAX_LIFETIME_S,
       idleTimeout: envBase.DATABASE_POOL_IDLE_TIMEOUT_S,
@@ -132,11 +187,11 @@ const getCaseLawDatabase = async (): Promise<typeof rootDb> => {
     });
     externalCaseLawDatabase = {
       database,
-      roleValidation: validateExternalCaseLawDatabase(database),
+      roleValidation: { status: "idle" },
     };
   }
 
-  await externalCaseLawDatabase.roleValidation;
+  await ensureRoleValidated(externalCaseLawDatabase);
   return externalCaseLawDatabase.database;
 };
 
@@ -153,13 +208,10 @@ export const caseLawPublicReadDb: CaseLawPublicReadDb = Object.assign(
   ): Promise<T> => {
     const database = await getCaseLawDatabase();
     return await database.transaction(async (tx) => {
-      await tx.execute(sql`SET TRANSACTION READ ONLY`);
       if (envBase.CASE_LAW_DATABASE_URL !== undefined) {
-        await tx.execute(sql`SET LOCAL statement_timeout = '30s'`);
-        await tx.execute(sql`SET LOCAL lock_timeout = '1s'`);
-        await tx.execute(
-          sql`SET LOCAL idle_in_transaction_session_timeout = '30s'`,
-        );
+        await configureExternalReadTransaction(tx);
+      } else {
+        await tx.execute(sql`SET TRANSACTION READ ONLY`);
       }
 
       return await fn(tx);
