@@ -5,13 +5,14 @@ import { PgDialect, PgTable, getTableConfig } from "drizzle-orm/pg-core";
 import * as agentAuthSchema from "@/api/db/agent-auth-schema";
 import * as authSchema from "@/api/db/auth-schema";
 import * as schema from "@/api/db/schema";
-import {
+import { POLARITY } from "@/api/handlers/case-law/polarity/consts";
+
+const {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawCitations,
   caseLawDecisions,
   caseLawPolarityRules,
-} from "@/api/db/schema";
-import { POLARITY } from "@/api/handlers/case-law/polarity/consts";
+} = schema;
 
 /**
  * Allowed values of a CHECK constraint's IN list, read off the statement the
@@ -51,45 +52,85 @@ const POSTGRES_IDENTIFIER_LIMIT_BYTES = 63;
 
 type DeclaredName = {
   table: string;
-  name: string;
+  /** `undefined` when drizzle holds no name at all, so nothing can be measured. */
+  name: string | undefined;
   /** `false` for a name drizzle derived from the columns rather than one the schema chose. */
   explicit: boolean;
+};
+
+// `is()` is drizzle-orm's own runtime type guard (it checks the entity-kind tag
+// drizzle stamps on table instances), so this narrows `unknown` to `PgTable`
+// without an unsafe type assertion.
+const isPgTable = (value: unknown): value is PgTable => is(value, PgTable);
+
+// Spread into one annotated record rather than walking each namespace: the
+// annotation collapses the exports to `unknown` immediately, so neither the
+// traversal nor its inference has to build a union of every table type. The
+// three namespaces share no export name, so nothing is lost to a collision.
+const allSchemaExports: Record<string, unknown> = {
+  ...agentAuthSchema,
+  ...authSchema,
+  ...schema,
 };
 
 const declaredNames = (): DeclaredName[] => {
   const names: DeclaredName[] = [];
 
-  for (const value of [
-    ...Object.values(schema),
-    ...Object.values(authSchema),
-    ...Object.values(agentAuthSchema),
-  ]) {
-    if (!is(value, PgTable)) {
+  for (const value of Object.values(allSchemaExports)) {
+    if (!isPgTable(value)) {
       continue;
     }
     const config = getTableConfig(value);
     const table = config.name;
 
+    // `isNameExplicit` is drizzle's own record of whether the schema chose the
+    // name or drizzle derived it from the columns; every object kind below
+    // reports it, so this never has to guess from the shape of the string.
     for (const foreignKey of config.foreignKeys) {
       names.push({
         table,
         name: foreignKey.getName(),
-        explicit: foreignKey.reference().name !== undefined,
+        explicit: foreignKey.isNameExplicit(),
       });
     }
-    for (const name of [
-      ...config.indexes.map((index) => index.config.name),
-      ...config.uniqueConstraints.map((unique) => unique.name),
-      ...config.checks.map((check) => check.name),
-      ...config.primaryKeys.map((primaryKey) => primaryKey.getName()),
-      ...config.policies.map((policy) => policy.name),
-    ]) {
-      names.push({ table, name, explicit: true });
+    for (const index of config.indexes) {
+      names.push({
+        table,
+        name: index.config.name,
+        explicit: index.isNameExplicit,
+      });
+    }
+    for (const unique of config.uniqueConstraints) {
+      names.push({
+        table,
+        name: unique.getName(),
+        explicit: unique.isNameExplicit,
+      });
+    }
+    for (const primaryKey of config.primaryKeys) {
+      names.push({
+        table,
+        name: primaryKey.getName(),
+        explicit: primaryKey.isNameExplicit,
+      });
+    }
+    for (const check of config.checks) {
+      names.push({ table, name: check.name, explicit: true });
+    }
+    for (const policy of config.policies) {
+      names.push({ table, name: policy.name, explicit: true });
     }
   }
 
   return names;
 };
+
+const overLimit = (names: readonly DeclaredName[]): DeclaredName[] =>
+  names.filter(
+    ({ name }) =>
+      name !== undefined &&
+      Buffer.byteLength(name) > POSTGRES_IDENTIFIER_LIMIT_BYTES,
+  );
 
 /**
  * Foreign keys whose drizzle-derived name is longer than PostgreSQL can store.
@@ -146,17 +187,25 @@ describe("identifier length", () => {
   // A traversal that silently stopped finding constraints would make every
   // assertion below pass for the wrong reason.
   test("the schema declares the names this guard reads", () => {
-    expect(names.length).toBeGreaterThan(500);
+    expect(names.length).toBeGreaterThan(1000);
+  });
+
+  // An object drizzle holds no name for has nothing to measure, so it would
+  // slip past the length assertions entirely. There are none today; this keeps
+  // the guard total rather than merely broad.
+  test("every constraint and index carries a name to measure", () => {
+    expect(
+      names
+        .filter(({ name }) => name === undefined)
+        .map(({ table }) => table)
+        .toSorted(),
+    ).toEqual([]);
   });
 
   test("no name the schema chooses exceeds PostgreSQL's identifier limit", () => {
     expect(
-      names
+      overLimit(names)
         .filter(({ explicit }) => explicit)
-        .filter(
-          ({ name }) =>
-            Buffer.byteLength(name) > POSTGRES_IDENTIFIER_LIMIT_BYTES,
-        )
         .map(({ table, name }) => `${table}: ${name}`)
         .toSorted(),
     ).toEqual([]);
@@ -164,11 +213,7 @@ describe("identifier length", () => {
 
   test("drizzle-derived names over the limit are exactly the known set", () => {
     expect(
-      names
-        .filter(
-          ({ name }) =>
-            Buffer.byteLength(name) > POSTGRES_IDENTIFIER_LIMIT_BYTES,
-        )
+      overLimit(names)
         .map(({ name }) => name)
         .toSorted(),
     ).toEqual(LEGACY_DERIVED_NAMES_OVER_LIMIT.toSorted());

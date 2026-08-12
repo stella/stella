@@ -218,12 +218,51 @@ describe("chat SELECT — wrong user or workspace", () => {
     expect(c).toBe(0);
   });
 
-  test("different user in the same workspace sees zero rows", async () => {
+  // The two tests above read a global thread, whose workspace_id is NULL, so
+  // the organization pin is the only predicate that can exclude it. This reads
+  // a thread that belongs to a matter, where the organization pin has to hold
+  // on its own even though the workspace predicate would also reject.
+  test("another organization's matter thread is unreadable", async () => {
     const c = await scopedQuery(
       [ids.wsA1],
       ids.orgA,
       (tx) =>
         tx.$count(chatThreads, eq(chatThreads.id, ids.chatThreadWorkspaceB1)),
+      ids.userA1,
+    );
+    expect(c).toBe(0);
+  });
+
+  // chat_messages carries no organization column of its own; its policy reaches
+  // the tenant through the owning thread. Reading that thread's message is what
+  // exercises the join rather than a column comparison.
+  test("another organization's matter message is unreadable", async () => {
+    const c = await scopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      (tx) =>
+        tx.$count(
+          chatMessages,
+          eq(chatMessages.id, ids.chatMessageWorkspaceB1),
+        ),
+      ids.userA1,
+    );
+    expect(c).toBe(0);
+  });
+
+  // The row shares this reader's organization and matter, so the user pin is
+  // the only predicate that can hide it. Reading another organization's thread
+  // here would pass on the organization pin whether or not the user pin works,
+  // which is what the "another organization" tests above already cover.
+  test("different user in the same workspace sees zero rows", async () => {
+    const c = await scopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      (tx) =>
+        tx.$count(
+          chatThreads,
+          eq(chatThreads.id, ids.chatThreadWorkspaceA1UserA2),
+        ),
       ids.userA1,
     );
     expect(c).toBe(0);
@@ -1614,7 +1653,7 @@ describe("chat mutations — wrong user", () => {
         tx
           .update(chatMessages)
           .set({ content: { version: 1 as const, data: [] } })
-          .where(eq(chatMessages.id, ids.chatMessageWorkspaceB1))
+          .where(eq(chatMessages.id, ids.chatMessageWorkspaceA1UserA2))
           .returning({ id: chatMessages.id }),
       ids.userA1,
     );
@@ -1628,7 +1667,7 @@ describe("chat mutations — wrong user", () => {
       (tx) =>
         tx
           .delete(chatThreads)
-          .where(eq(chatThreads.id, ids.chatThreadWorkspaceB1))
+          .where(eq(chatThreads.id, ids.chatThreadWorkspaceA1UserA2))
           .returning({ id: chatThreads.id }),
       ids.userA1,
     );
