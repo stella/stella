@@ -46,8 +46,10 @@ void mock.module("@/api/lib/search/projection-repair-queue", () => ({
 }));
 
 const fileMock = mock(() => ({}));
-const writeMock = mock(async () => undefined);
-const s3DeleteMock = mock(async () => undefined);
+// Typed by their first argument so a test can read back the object keys the
+// copy wrote and the keys the rollback returned.
+const writeMock = mock(async (_key: string) => undefined);
+const s3DeleteMock = mock(async (_key: string) => undefined);
 
 // Spread the real module: mock.module is process-global; a partial mock would delete s3's other exports for later test files.
 const realS3 = await import("@/api/lib/s3");
@@ -298,5 +300,76 @@ describe("duplicate entity", () => {
       nestedDuplicate.id,
     ]);
     expect(flushEntitySearchRepairsMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("returns every object copied for an aborted duplicate", async () => {
+    processExtractionMock.mockClear();
+    enqueueEntitySearchRepairsMock.mockClear();
+    flushEntitySearchRepairsMock.mockClear();
+    writeMock.mockClear();
+    s3DeleteMock.mockClear();
+
+    // The nested folder is the third entity in copy order, so the root and
+    // the document (and the document's copied object) are already written
+    // when the copy rejects.
+    const brokenSubtree = [
+      ...sourceEntities.slice(0, 2),
+      {
+        id: nestedFolderId,
+        kind: "folder" as const,
+        name: "Nested",
+        parentId: rootFolderId,
+        currentVersion: null,
+      },
+    ];
+
+    const tx = {
+      query: {
+        entities: {
+          findFirst: async () => brokenSubtree.at(0),
+          findMany: async () => brokenSubtree,
+        },
+        workspaces: { findFirst: async () => ({ reference: null }) },
+      },
+      $count: async () => brokenSubtree.length,
+      select: () => ({
+        from: () => ({
+          where: async () =>
+            brokenSubtree.map((entity) => ({ name: entity.name })),
+        }),
+      }),
+      insert: (table: unknown) => ({
+        values: () =>
+          table === documentCounters
+            ? {
+                onConflictDoUpdate: () => ({
+                  returning: async () => [{ lastValue: 1 }],
+                }),
+              }
+            : undefined,
+      }),
+      update: () => ({ set: () => ({ where: async () => {} }) }),
+    };
+
+    const { safeDb } = createScopedDbMock(tx);
+    const result = await duplicateEntity.handler(createContext({ safeDb }));
+
+    // The abort travels as the same rejection the caller always answered.
+    expect(result).toMatchObject({
+      code: 400,
+      response: { message: "Entity has no current version" },
+    });
+
+    // No row survives the abort, so every object copied for it is an orphan
+    // and all of them go back.
+    const copiedKeys = writeMock.mock.calls.map(([key]) => key);
+    const deletedKeys = s3DeleteMock.mock.calls.map(([key]) => key);
+    expect(copiedKeys).toHaveLength(1);
+    expect(new Set(deletedKeys)).toEqual(new Set(copiedKeys));
+
+    // Nothing is indexed for copies that no longer exist.
+    expect(enqueueEntitySearchRepairsMock).not.toHaveBeenCalled();
+    expect(flushEntitySearchRepairsMock).not.toHaveBeenCalled();
+    expect(processExtractionMock).not.toHaveBeenCalled();
   });
 });

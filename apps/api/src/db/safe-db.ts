@@ -3,7 +3,7 @@ import type { UnhandledException } from "better-result";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDbRetryConfig as BaseSafeDbRetryConfig } from "@/api/db/scoped";
-import { DatabaseError } from "@/api/lib/errors/tagged-errors";
+import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { DatabaseRlsError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
@@ -39,6 +39,21 @@ export type SafeDb = <T>(
 export type SafeDbOrTx =
   | { safeDb: SafeDb; tx?: undefined }
   | { safeDb?: undefined; tx: Transaction };
+
+/**
+ * Recover the failure a transaction callback threw to abort itself.
+ *
+ * Returning a failure value from a transaction callback commits everything the
+ * callback has already written, so a business failure found mid-transaction
+ * has to throw instead. The scoped factories wrap anything the callback throws
+ * that is not a driver error in `UnhandledException`, so the thrown
+ * `HandlerError` travels as its cause and this returns it unchanged; a genuine
+ * database failure passes through as the error it already was.
+ */
+export const transactionAbortError = (
+  error: SafeDbError,
+): HandlerError | SafeDbError =>
+  HandlerError.is(error.cause) ? error.cause : error;
 
 export const withScopedTx = async <T>(
   handle: SafeDbOrTx,

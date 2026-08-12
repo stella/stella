@@ -6,6 +6,7 @@ import { t } from "elysia";
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import { transactionAbortError } from "@/api/db/safe-db";
 import { entities, workspaces } from "@/api/db/schema";
 import {
   collectFileCopySources,
@@ -489,10 +490,6 @@ const copyToWorkspaceHandler = async function* ({
       deleteSource,
     });
 
-    if (!copyResult.ok) {
-      return copyResult;
-    }
-
     // For move operations, delete source entities in the same transaction
     if (deleteSource) {
       // Delete in reverse order (children first) to respect FK constraints.
@@ -526,19 +523,15 @@ const copyToWorkspaceHandler = async function* ({
     return copyResult;
   });
 
+  // An aborted copy leaves no rows in the target and no deletions in the
+  // source, so every object copied for it is an orphan and the whole set
+  // goes back.
   if (Result.isError(txResultResult)) {
     await rollbackS3Copies(copiedS3Keys);
-    return Result.err(txResultResult.error);
+    return Result.err(transactionAbortError(txResultResult.error));
   }
 
   const txResult = txResultResult.value;
-
-  if (!txResult.ok) {
-    await rollbackS3Copies(copiedS3Keys);
-    return Result.err(
-      new HandlerError({ status: txResult.status, message: txResult.message }),
-    );
-  }
 
   if (deleteSource) {
     await cleanupMovedSourceFiles({

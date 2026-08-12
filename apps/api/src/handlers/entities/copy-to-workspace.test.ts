@@ -19,8 +19,10 @@ const arrayBufferMock = mock(async () =>
   ),
 );
 const fileMock = mock(() => ({ arrayBuffer: arrayBufferMock }));
-const writeMock = mock(async () => undefined);
-const s3DeleteMock = mock(async () => undefined);
+// Typed by their first argument so a test can read back the object keys the
+// copy wrote and the keys the rollback returned.
+const writeMock = mock(async (_key: string) => undefined);
+const s3DeleteMock = mock(async (_key: string) => undefined);
 
 // Spread the real module: mock.module is process-global; a partial mock would delete s3's other exports for later test files.
 const realS3 = await import("@/api/lib/s3");
@@ -1487,6 +1489,93 @@ describe("copy-to-workspace", () => {
       });
       expect("placeholder" in copiedField.content).toBe(false);
     }
+  });
+
+  test("returns every object copied for an aborted cross-matter copy", async () => {
+    const insertedEntities: InsertedEntity[] = [];
+    const sourceEntity = {
+      id: documentId,
+      kind: "document" as const,
+      name: "Doc.pdf",
+      parentId: null,
+      readOnly: false,
+      currentVersion: {
+        id: toSafeId<"entityVersion">("v1"),
+        fields: [{ propertyId: sourceFilePropertyId, content: fileContent }],
+      },
+    };
+
+    // The handler reads the source first; the copy then reads the target
+    // parent, which turns out to be a document rather than a folder.
+    let entityReadCount = 0;
+    const tx = {
+      query: {
+        entities: {
+          findFirst: async () => {
+            entityReadCount += 1;
+            return entityReadCount === 1
+              ? sourceEntity
+              : { kind: "document" as const };
+          },
+          findMany: async () => [sourceEntity],
+        },
+        properties: {
+          findMany: async (opts: {
+            where: { workspaceId: { eq: string } };
+          }) => [
+            {
+              id:
+                opts.where.workspaceId.eq === sourceWorkspaceId
+                  ? sourceFilePropertyId
+                  : targetFilePropertyId,
+              name: "Source File",
+              content: filePropertyContent,
+              system: true,
+            },
+          ],
+        },
+        workspaces: { findFirst: async () => ({ reference: null }) },
+      },
+      $count: async () => 0,
+      select: () => ({ from: () => ({ where: async () => [] }) }),
+      insert: (table: unknown) => ({
+        values: (value: unknown) => {
+          if (table === entities && isInsertedEntity(value)) {
+            insertedEntities.push(value);
+          }
+          return undefined;
+        },
+      }),
+      update: () => ({ set: () => ({ where: async () => {} }) }),
+    };
+
+    const { safeDb } = createScopedDbMock(tx);
+    const result = await copyToWorkspace.handler(
+      createContext({
+        safeDb,
+        entityId: documentId,
+        targetParentId: folderId,
+      }),
+    );
+
+    // The abort travels as the same rejection the caller always answered.
+    expect(result).toMatchObject({
+      code: 400,
+      response: { message: "Target parent must be a folder" },
+    });
+    expect(insertedEntities).toHaveLength(0);
+
+    // No row survives the abort, so every object copied for it is an orphan
+    // and all of them go back.
+    const copiedKeys = writeMock.mock.calls.map(([key]) => key);
+    const deletedKeys = s3DeleteMock.mock.calls.map(([key]) => key);
+    expect(copiedKeys).toHaveLength(1);
+    expect(new Set(deletedKeys)).toEqual(new Set(copiedKeys));
+
+    // Nothing is indexed for copies that no longer exist.
+    expect(enqueueEntitySearchRepairsMock).not.toHaveBeenCalled();
+    expect(flushEntitySearchRepairsMock).not.toHaveBeenCalled();
+    expect(processExtractionMock).not.toHaveBeenCalled();
   });
 
   test("rejects copy to same workspace", async () => {
