@@ -103,6 +103,12 @@ const readEntitySummariesHandler = async function* ({
 };
 
 const config = {
+  description:
+    "List a matter's documents, folders, and tasks as bare id and name " +
+    "pairs, newest first with cursor pagination. The cheapest listing " +
+    "available: no column values, no file metadata, no filters. Use " +
+    "entities.read-summaries-count for the total and entities.list when you " +
+    "need column values or filtering.",
   permissions: { workspace: ["read"] },
   mcp: { type: "covered", by: "list_documents" },
   access: "read",

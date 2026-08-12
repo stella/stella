@@ -26,6 +26,13 @@ const readFilesystemTreeBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Read a matter's folders and documents as one unpaginated tree, using " +
+    "the same filters, sorts, and search as the table listings; tasks are " +
+    "excluded. When a filter or search hides intermediate folders, their " +
+    "parent links come back separately as ancestorLinks, so a matched row's " +
+    "full path can still be resolved without those folders entering the tree " +
+    "itself.",
   permissions: { workspace: ["read"] },
   mcp: { type: "covered", by: "list_documents" },
   access: "read",

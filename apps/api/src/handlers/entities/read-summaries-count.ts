@@ -7,6 +7,10 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
+  description:
+    "Count all documents, folders, and tasks in a matter. The companion " +
+    "total for entities.read-summaries, whose pages carry no count of their " +
+    "own.",
   permissions: { workspace: ["read"] },
   mcp: { type: "covered", by: "list_documents" },
   access: "read",

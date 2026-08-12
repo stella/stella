@@ -7,6 +7,13 @@ import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { buildLineDiffSegments } from "@/api/lib/text-diff";
 
 const config = {
+  description:
+    "Return a plain-text, line-level diff of one document version's DOCX " +
+    "against its immediate predecessor; the first version is diffed against " +
+    "an empty document. Both texts are resolved server-side from the ids, " +
+    "and an empty segment list means nothing changed. Use " +
+    "entities.compare-versions for a DOCX redline between two versions you " +
+    "choose.",
   permissions: { workspace: ["read"] },
   mcp: { type: "covered", by: "read_document" },
   access: "read",

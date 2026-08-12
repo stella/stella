@@ -47,6 +47,14 @@ const readEntitiesBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "List a matter's documents, folders, and tasks as table rows, using the " +
+    "same filters, sorts, and search the matter's views use, with cursor " +
+    "pagination. fieldMode and fieldIds choose which column values come " +
+    "back, excludedKinds drops kinds you do not want, and previewableForAi " +
+    "keeps only documents whose content a model can read. Use " +
+    "entities.read-filesystem-tree for the same query shaped as a folder " +
+    "tree, and entities.get to read one row in full.",
   permissions: { workspace: ["read"] },
   mcp: { type: "tool", name: "list_documents" },
   access: "read",

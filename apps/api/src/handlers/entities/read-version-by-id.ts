@@ -96,6 +96,11 @@ const readVersionByIdHandler = async function* ({
 };
 
 const config = {
+  description:
+    "Read one specific version of a document in a matter: its version " +
+    "number, stamp, creation time, and the field values stored on that " +
+    "version. A version tombstoned by entities.delete-version reads as not " +
+    "found. Use entities.get for the current version.",
   permissions: { workspace: ["read"] },
   mcp: { type: "covered", by: "read_document" },
   access: "read",

@@ -9288,6 +9288,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "clip"],
                 capabilityId: "entities.clip",
+                description:
+                  "Save an external source as a link entity in the current matter: a title and url, plus optional snippet, citation, jurisdiction, and source type. No file is stored, only the reference and its metadata. Refused once the matter holds its maximum number of entities.",
                 access: "write",
                 flags: [
                   {
@@ -9412,6 +9414,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "compare-versions"],
                 capabilityId: "entities.compare-versions",
+                description:
+                  "Compare two versions of one DOCX document in a matter, returning a tracked-changes redline as a base64 DOCX along with the number of edits applied and the words added and removed. Both versions must carry a DOCX file. Accepting every change in the redline yields the target version, rejecting every change yields the base version. Use entities.version-diff for a plain-text diff against the immediate predecessor instead.",
                 access: "read",
                 flags: [
                   {
@@ -9638,6 +9642,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "create"],
                 capabilityId: "entities.create",
+                description:
+                  "Create an empty document, folder, or task in a matter (kind defaults to document) with a name and an optional parent folder. Nothing is attached: use entities.upload or the uploads flow to bring in a file, and entities.create-blank-document for a document that starts from an empty DOCX. Refused when the matter is at its entity limit or the parent is not a usable folder in this matter.",
                 access: "write",
                 flags: [
                   {
@@ -9740,6 +9746,8 @@ export const generatedRouteMap: RouteNode = {
                   "create-blank-document",
                 ],
                 capabilityId: "entities.create-blank-document",
+                description:
+                  "Create a document in a matter whose file is a fresh empty DOCX built from the stella template, optionally inside a parent folder. Returns the entity, its file field, and the file name, so it can be opened in the editor straight away. Use entities.create for a document with no file at all.",
                 access: "write",
                 flags: [
                   {
@@ -9817,6 +9825,8 @@ export const generatedRouteMap: RouteNode = {
                   "create-from-legal-source",
                 ],
                 capabilityId: "entities.create-from-legal-source",
+                description:
+                  "Compile a plain-text legal draft written in stella's legal-source markup into a DOCX and store it as a new document in the current matter. Returns the new entity and its file field plus a ready-made link and mention for chat. Refused with a structural-repair error when the source cannot be compiled, and when the generated file exceeds the document size limit or the matter is at its entity limit.",
                 access: "write",
                 flags: [
                   {
@@ -10031,6 +10041,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "duplicate"],
                 capabilityId: "entities.duplicate",
+                description:
+                  "Copy one document, or a folder with its whole subtree, inside the same matter, placing the copy alongside the original. Stored files are copied too, so the copies own their own bytes and get their own text extraction and PDF and thumbnail derivatives. Use entities.copy-to-workspace to copy into a different matter.",
                 access: "write",
                 flags: [
                   {
@@ -10091,6 +10103,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "get"],
                 capabilityId: "entities.get",
+                description:
+                  "Read one document, folder, or task in a matter: its kind, name, current version id and creation time, that version's field values, and which field is the current text-extraction source. Use entities.read-version-by-id to read a historical version, and entities.read-versions for the version list.",
                 access: "read",
                 flags: [
                   {
@@ -10151,6 +10165,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "list"],
                 capabilityId: "entities.list",
+                description:
+                  "List a matter's documents, folders, and tasks as table rows, using the same filters, sorts, and search the matter's views use, with cursor pagination. fieldMode and fieldIds choose which column values come back, excludedKinds drops kinds you do not want, and previewableForAi keeps only documents whose content a model can read. Use entities.read-filesystem-tree for the same query shaped as a folder tree, and entities.get to read one row in full.",
                 access: "read",
                 flags: [
                   {
@@ -10765,6 +10781,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "list-files"],
                 capabilityId: "entities.list-files",
+                description:
+                  "List every document in a matter that has an uploaded file, oldest first with cursor pagination, each with its entity id, name, parent folder, file name, and media type. Documents without a file, and folders and tasks, are left out; use entities.list for the full table with column values.",
                 access: "read",
                 flags: [
                   {
@@ -10830,6 +10848,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "list-folders"],
                 capabilityId: "entities.list-folders",
+                description:
+                  "List the folders of a matter, oldest first with cursor pagination, each with its id, name, and parent folder. Documents and tasks are left out; use entities.read-filesystem-tree for the folder tree with the documents in it.",
                 access: "read",
                 flags: [
                   {
@@ -10895,6 +10915,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "move"],
                 capabilityId: "entities.move",
+                description:
+                  "Move one document, folder, or task into another folder of the same matter, or out to the matter root by passing parentId null. The target must be a folder in this matter, a folder may not be moved into itself or into one of its own descendants, and a read-only entity is refused.",
                 access: "write",
                 flags: [
                   {
@@ -11052,6 +11074,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "organize-suggestions"],
                 capabilityId: "entities.organize-suggestions",
+                description:
+                  "Propose a folder placement and a tidied file name for up to 100 documents of a matter, given the folders that already exist plus an optional locale and free-text instructions. Returns one suggestion per file (folder path, suggested name, detected date, document type) and the empty folders it suggests removing. Suggestions only: nothing is moved, renamed, or deleted, so apply what you want with entities.move and entities.rename. Per-document summaries are generated and cached where missing, and the call consumes AI usage.",
                 access: "write",
                 flags: [
                   {
@@ -11172,6 +11196,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "read-filesystem-tree"],
                 capabilityId: "entities.read-filesystem-tree",
+                description:
+                  "Read a matter's folders and documents as one unpaginated tree, using the same filters, sorts, and search as the table listings; tasks are excluded. When a filter or search hides intermediate folders, their parent links come back separately as ancestorLinks, so a matched row's full path can still be resolved without those folders entering the tree itself.",
                 access: "read",
                 flags: [
                   {
@@ -11722,6 +11748,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "read-summaries"],
                 capabilityId: "entities.read-summaries",
+                description:
+                  "List a matter's documents, folders, and tasks as bare id and name pairs, newest first with cursor pagination. The cheapest listing available: no column values, no file metadata, no filters. Use entities.read-summaries-count for the total and entities.list when you need column values or filtering.",
                 access: "read",
                 flags: [
                   {
@@ -11789,6 +11817,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "read-summaries-count"],
                 capabilityId: "entities.read-summaries-count",
+                description:
+                  "Count all documents, folders, and tasks in a matter. The companion total for entities.read-summaries, whose pages carry no count of their own.",
                 access: "read",
                 flags: [
                   {
@@ -11831,6 +11861,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "read-version-by-id"],
                 capabilityId: "entities.read-version-by-id",
+                description:
+                  "Read one specific version of a document in a matter: its version number, stamp, creation time, and the field values stored on that version. A version tombstoned by entities.delete-version reads as not found. Use entities.get for the current version.",
                 access: "read",
                 flags: [
                   {
@@ -11905,6 +11937,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "read-versions"],
                 capabilityId: "entities.read-versions",
+                description:
+                  "List one document's version history, newest first, with a before cursor for older pages. Each version carries its number, stamp, label, description, the words added and removed against its predecessor, its author, and the file attached to it; tombstoned versions are left out. The response also names the entity's current version.",
                 access: "read",
                 flags: [
                   {
@@ -11980,6 +12014,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "read-window"],
                 capabilityId: "entities.read-window",
+                description:
+                  "Read a window of a matter's documents, folders, and tasks with the same filters, sorts, search, and field selection as entities.list, but with the page bounds the virtualized table scrolls by (200 rows by default). Prefer entities.list unless you are filling a table viewport.",
                 access: "read",
                 flags: [
                   {
@@ -12592,6 +12628,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "rename"],
                 capabilityId: "entities.rename",
+                description:
+                  "Rename one document, folder, or task in a matter. For a document the stored file name is renamed to match, so the table's file column stays in step with the entity name. A read-only entity is refused.",
                 access: "write",
                 flags: [
                   {
@@ -12860,6 +12898,8 @@ export const generatedRouteMap: RouteNode = {
                   "update-version-description",
                 ],
                 capabilityId: "entities.update-version-description",
+                description:
+                  "Set or clear the free-text description on one version of a document, up to 1024 characters. An annotation only: no file and no field value changes. A version tombstoned by entities.delete-version is refused. Use entities.update-version-label for the short label instead.",
                 access: "write",
                 flags: [
                   {
@@ -12951,6 +12991,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "update-version-label"],
                 capabilityId: "entities.update-version-label",
+                description:
+                  "Set or clear the short label on one version of a document, up to 128 characters, for marking a version as a draft, an execution copy, and so on. An annotation only, like entities.update-version-description, which carries the longer note. A tombstoned version is refused.",
                 access: "write",
                 flags: [
                   {
@@ -13042,6 +13084,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "version-diff"],
                 capabilityId: "entities.version-diff",
+                description:
+                  "Return a plain-text, line-level diff of one document version's DOCX against its immediate predecessor; the first version is diffed against an empty document. Both texts are resolved server-side from the ids, and an empty segment list means nothing changed. Use entities.compare-versions for a DOCX redline between two versions you choose.",
                 access: "read",
                 flags: [
                   {
@@ -13116,6 +13160,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "version-summarize"],
                 capabilityId: "entities.version-summarize",
+                description:
+                  "Summarize in prose what changed between one document version and its predecessor, over the same server-resolved text diff entities.version-diff returns. Returns summary null for identical versions, skipping the model call entirely. Consumes AI usage.",
                 access: "write",
                 flags: [
                   {

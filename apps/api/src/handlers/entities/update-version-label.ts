@@ -22,6 +22,11 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Set or clear the short label on one version of a document, up to 128 " +
+    "characters, for marking a version as a draft, an execution copy, and so " +
+    "on. An annotation only, like entities.update-version-description, which " +
+    "carries the longer note. A tombstoned version is refused.",
   permissions: { entity: ["update"] },
   mcp: { type: "covered", by: "save_document" },
   params: paramsSchema,

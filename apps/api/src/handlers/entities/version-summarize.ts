@@ -10,6 +10,11 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { buildLineDiffSegments, diffSegmentsToText } from "@/api/lib/text-diff";
 
 const config = {
+  description:
+    "Summarize in prose what changed between one document version and its " +
+    "predecessor, over the same server-resolved text diff " +
+    "entities.version-diff returns. Returns summary null for identical " +
+    "versions, skipping the model call entirely. Consumes AI usage.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "document_processing" },
   access: "write",

@@ -14,6 +14,12 @@ const bodySchema = t.Object({
 
 export default createSafeHandler(
   {
+    description:
+      "Create a document in a matter whose file is a fresh empty DOCX built " +
+      "from the stella template, optionally inside a parent folder. Returns " +
+      "the entity, its file field, and the file name, so it can be opened in " +
+      "the editor straight away. Use entities.create for a document with no " +
+      "file at all.",
     body: bodySchema,
     permissions: { entity: ["create"] },
     mcp: { type: "capability", reason: "document_processing" },

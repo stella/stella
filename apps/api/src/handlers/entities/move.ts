@@ -215,6 +215,11 @@ const checkIsDescendant = async (
 };
 
 const config = {
+  description:
+    "Move one document, folder, or task into another folder of the same " +
+    "matter, or out to the matter root by passing parentId null. The target " +
+    "must be a folder in this matter, a folder may not be moved into itself " +
+    "or into one of its own descendants, and a read-only entity is refused.",
   permissions: { entity: ["update"] },
   mcp: { type: "covered", by: "save_document" },
   body: moveEntityBodySchema,

@@ -158,6 +158,13 @@ export const createEntitiesHandler = async function* ({
 };
 
 const config = {
+  description:
+    "Create an empty document, folder, or task in a matter (kind defaults to " +
+    "document) with a name and an optional parent folder. Nothing is " +
+    "attached: use entities.upload or the uploads flow to bring in a file, " +
+    "and entities.create-blank-document for a document that starts from an " +
+    "empty DOCX. Refused when the matter is at its entity limit or the " +
+    "parent is not a usable folder in this matter.",
   permissions: { entity: ["create"] },
   mcp: { type: "tool", name: "save_document" },
   body: createEntityBodySchema,

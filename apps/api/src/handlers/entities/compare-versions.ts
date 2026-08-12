@@ -20,6 +20,14 @@ import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
+  description:
+    "Compare two versions of one DOCX document in a matter, returning a " +
+    "tracked-changes redline as a base64 DOCX along with the number of edits " +
+    "applied and the words added and removed. Both versions must carry a " +
+    "DOCX file. Accepting every change in the redline yields the target " +
+    "version, rejecting every change yields the base version. Use " +
+    "entities.version-diff for a plain-text diff against the immediate " +
+    "predecessor instead.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "document_processing" },
   access: "read",

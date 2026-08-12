@@ -313,6 +313,12 @@ const readVersionsHandler = async function* ({
 };
 
 const config = {
+  description:
+    "List one document's version history, newest first, with a before cursor " +
+    "for older pages. Each version carries its number, stamp, label, " +
+    "description, the words added and removed against its predecessor, its " +
+    "author, and the file attached to it; tombstoned versions are left out. " +
+    "The response also names the entity's current version.",
   permissions: { workspace: ["read"] },
   mcp: { type: "covered", by: "read_document" },
   access: "read",

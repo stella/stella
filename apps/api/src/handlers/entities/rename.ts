@@ -147,6 +147,10 @@ export const renameEntityHandler = async function* ({
 };
 
 const config = {
+  description:
+    "Rename one document, folder, or task in a matter. For a document the " +
+    "stored file name is renamed to match, so the table's file column stays " +
+    "in step with the entity name. A read-only entity is refused.",
   permissions: { entity: ["update"] },
   mcp: { type: "covered", by: "save_document" },
   body: renameEntityBodySchema,

@@ -26,6 +26,13 @@ const CREATE_FROM_LEGAL_SOURCE_ERROR_CODE = {
 
 export default createSafeHandler(
   {
+    description:
+      "Compile a plain-text legal draft written in stella's legal-source " +
+      "markup into a DOCX and store it as a new document in the current " +
+      "matter. Returns the new entity and its file field plus a ready-made " +
+      "link and mention for chat. Refused with a structural-repair error " +
+      "when the source cannot be compiled, and when the generated file " +
+      "exceeds the document size limit or the matter is at its entity limit.",
     body: createFromLegalSourceBodySchema,
     permissions: { entity: ["create"] },
     mcp: { type: "capability", reason: "document_processing" },
