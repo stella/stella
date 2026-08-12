@@ -8,6 +8,23 @@ import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 
 /**
+ * Bound for a complete allowlist read, wherever one happens.
+ *
+ * Both readers union three scopes: org-wide rows, a workspace's own rows, and
+ * a requested entity's. Only the workspace cap has a writer enforcing it, so
+ * the bound is that cap plus the org-wide allowance. Bounding by the workspace
+ * cap alone would panic a workspace at its cap the moment a single org-wide
+ * row exists — on the list endpoint and, worse, on the masking loader, where
+ * a failed read is a document that goes out unmasked.
+ */
+export const ALLOWLIST_READ_BOUND =
+  LIMITS.anonymizationAllowlistEntriesPerWorkspace +
+  LIMITS.anonymizationAllowlistEntriesOrgWide;
+
+export const ALLOWLIST_READ_INVARIANT =
+  "LIMITS.anonymizationAllowlistEntriesPerWorkspace (enforced by the create endpoint) plus LIMITS.anonymizationAllowlistEntriesOrgWide (capacity allowance; org-wide rows have no writer yet)";
+
+/**
  * Server-side helper that returns the canonicals the user (or
  * an org admin) has marked as false positives, so the chat-anon
  * pipeline can pass them through as `excludedCanonicals`.
@@ -65,9 +82,11 @@ export const loadAnonymizationAllowlistCanonicals = async ({
   const rows = await scopedDb(
     async (tx) =>
       await boundedAll({
-        invariant:
-          "LIMITS.anonymizationAllowlistEntriesPerWorkspace, enforced by the create endpoint; org-wide rows have no writer",
-        max: LIMITS.anonymizationAllowlistEntriesPerWorkspace,
+        // Same three scopes as the list endpoint, so the same bound: the
+        // org-wide branch is read whether or not a workspace scope is given,
+        // and a masking loader that panics leaves a document unmasked.
+        invariant: ALLOWLIST_READ_INVARIANT,
+        max: ALLOWLIST_READ_BOUND,
         table: "anonymization_allowlist_entries",
         query: (limit) =>
           tx

@@ -4,15 +4,15 @@ import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { sourceRegistryMembership } from "@/api/lib/legal-search/source-registry-membership";
 
 describe("sourceRegistryMembership", () => {
-  test("every registry key resolves as registered, in both directions", () => {
+  test("every registry key resolves to itself, in both directions", () => {
     const keys = Object.values(ADAPTER_KEYS);
-    const registered = keys.filter(
-      (key) => sourceRegistryMembership(key).type === "registered",
-    );
 
-    // Both directions: every registry key is recognized, and the count matches,
-    // so a key silently dropped from the registry cannot leave this passing.
-    expect(registered).toEqual(keys);
+    // Compares the produced memberships, not a filter over the input: a
+    // resolver that returned the wrong key for some entry would pass a
+    // filter-and-count check and fail this one.
+    expect(keys.map((key) => sourceRegistryMembership(key))).toEqual(
+      keys.map((key) => ({ type: "registered", adapterKey: key })),
+    );
     expect(keys.length).toBeGreaterThan(0);
   });
 

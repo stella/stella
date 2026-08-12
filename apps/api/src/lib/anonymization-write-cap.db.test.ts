@@ -54,7 +54,7 @@ const runRolledBack = async <T>(
   let value: T | undefined;
   try {
     await testDb.transaction(async (tx) => {
-      // oxlint-disable-next-line node/callback-return -- must call tx.rollback() after capturing the value
+      // eslint-disable-next-line node/callback-return -- must call tx.rollback() after capturing the value
       value = await callback(asTestRaw<Transaction>(tx));
       tx.rollback();
     });
@@ -331,6 +331,23 @@ describe("anonymization write-cap helpers", () => {
     // One key, so a blacklist create and an allowlist create on the
     // same workspace serialize against each other rather than racing.
     expect(keys).toHaveLength(1);
+  });
+
+  test("two workspaces take two locks, so unrelated writes do not serialize", async () => {
+    // A constant lock key would pass every same-workspace test above while
+    // queueing every workspace's anonymization writes behind every other's.
+    // The scope has to be in the key, and this is what says so.
+    const keys = await runRolledBack(async (tx) => {
+      const { workspaceId } = await seedScope(tx);
+      const other = await seedScope(tx);
+
+      await loadWorkspaceAnonymizationTermsForWrite(tx, workspaceId);
+      await loadWorkspaceAnonymizationTermsForWrite(tx, other.workspaceId);
+
+      return await heldAdvisoryLockKeys(tx);
+    });
+
+    expect(keys).toHaveLength(2);
   });
 
   test("the org-wide replace takes a lock of its own", async () => {

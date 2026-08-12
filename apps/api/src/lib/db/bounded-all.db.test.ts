@@ -36,7 +36,7 @@ const runRolledBack = async <T>(
   let value: T | undefined;
   try {
     await testDb.transaction(async (tx) => {
-      // oxlint-disable-next-line node/callback-return -- must call tx.rollback() after capturing the value
+      // eslint-disable-next-line node/callback-return -- must call tx.rollback() after capturing the value
       value = await callback(asTestRaw<Transaction>(tx));
       tx.rollback();
     });

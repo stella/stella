@@ -3,11 +3,14 @@ import { and, asc, eq, isNull, or } from "drizzle-orm";
 import { t } from "elysia";
 
 import { anonymizationAllowlistEntries } from "@/api/db/schema";
+import {
+  ALLOWLIST_READ_BOUND,
+  ALLOWLIST_READ_INVARIANT,
+} from "@/api/lib/anonymization-allowlist";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { boundedAll } from "@/api/lib/db/bounded-all";
-import { LIMITS } from "@/api/lib/limits";
 
 /**
  * Anonymization allowlist endpoints.
@@ -39,16 +42,6 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
-/**
- * Every row this read can return carries the requested workspace id
- * (workspace- and document-scoped rows alike), so the per-workspace
- * create cap bounds the whole result. Org-wide rows have no write path
- * yet; the endpoint that adds one must bring its own cap and widen
- * this bound by it.
- */
-const ALLOWLIST_READ_INVARIANT =
-  "LIMITS.anonymizationAllowlistEntriesPerWorkspace, enforced by the create endpoint; org-wide rows have no writer";
-
 const readWorkspaceAnonymizationAllowlist = createSafeHandler(
   config,
   async function* ({ query, safeDb, workspaceId }) {
@@ -58,7 +51,7 @@ const readWorkspaceAnonymizationAllowlist = createSafeHandler(
         async (tx) =>
           await boundedAll({
             invariant: ALLOWLIST_READ_INVARIANT,
-            max: LIMITS.anonymizationAllowlistEntriesPerWorkspace,
+            max: ALLOWLIST_READ_BOUND,
             table: "anonymization_allowlist_entries",
             query: (limit) =>
               tx

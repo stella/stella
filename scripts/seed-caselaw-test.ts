@@ -5,6 +5,8 @@
  * Usage: bun run scripts/seed-caselaw-test.ts
  */
 
+import { panic } from "better-result";
+
 import { parseNsDecisionHtml } from "../apps/api/src/handlers/case-law/ingestion/parsers/cz-ns";
 import { ADAPTER_KEYS } from "../apps/api/src/lib/legal-search/ingestion-constants";
 
@@ -62,11 +64,20 @@ const main = async () => {
   // rather than a literal because this row stands for a real adapter and
   // should say so: the operational views resolve each source's key against the
   // registry, and an invented one would be reported as unrecognized.
-  await db`
+  //
+  // The id comes back from the upsert rather than being assumed: `adapter_key`
+  // is unique, so if this key already exists under a different id (an earlier
+  // seed, a real ingestion run) the insert is skipped and SOURCE_ID identifies
+  // nothing. Decisions inserted against it would fail their source FK. The
+  // no-op `DO UPDATE` is what makes the row return its id either way.
+  const [source] = await db`
     INSERT INTO case_law_sources (id, adapter_key, name)
     VALUES (${SOURCE_ID}, ${ADAPTER_KEYS.CZ_NS}, 'Czech Supreme Court (test)')
-    ON CONFLICT (adapter_key) DO NOTHING
+    ON CONFLICT (adapter_key) DO UPDATE SET adapter_key = EXCLUDED.adapter_key
+    RETURNING id
   `;
+  const sourceId: string =
+    source?.id ?? panic("case_law_sources upsert returned no id");
 
   let success = 0;
 
@@ -108,7 +119,7 @@ const main = async () => {
         country, language, decision_date, decision_type,
         fulltext, source_url
       ) VALUES (
-        ${id}, ${SOURCE_ID}, ${caseNumber}, ${slug},
+        ${id}, ${sourceId}, ${caseNumber}, ${slug},
         ${meta.ecli}, ${meta.court ?? "Nejvyšší soud"},
         'CZE', 'cs', ${meta.decisionDate},
         ${meta.decisionType?.toLowerCase() ?? null},
