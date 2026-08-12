@@ -1523,6 +1523,48 @@ export const fetchStellaIngestionColumnPrivileges = async (
   return rows.rows;
 };
 
+type WorkspaceTenantPairForeignKey = {
+  table_name: string;
+  constraint_name: string;
+  /** `false` while a constraint is still NOT VALID: existing rows unchecked. */
+  validated: boolean;
+};
+
+/**
+ * Fetch every foreign key whose referencing columns are exactly
+ * (workspace_id, organization_id) and whose target is `workspaces`: the
+ * reference that makes a workspace/organization mismatch unrepresentable.
+ */
+export const fetchWorkspaceTenantPairForeignKeys = async (
+  db: TestDatabase,
+): Promise<WorkspaceTenantPairForeignKey[]> => {
+  const [firstColumn, secondColumn] = [
+    entities.workspaceId.name,
+    workspaces.organizationId.name,
+  ].toSorted();
+
+  const rows = await db.execute<WorkspaceTenantPairForeignKey>(sql`
+    SELECT rel.relname AS table_name,
+           con.conname AS constraint_name,
+           con.convalidated AS validated
+    FROM pg_catalog.pg_constraint con
+    JOIN pg_catalog.pg_class rel ON rel.oid = con.conrelid
+    JOIN pg_catalog.pg_namespace nsp ON nsp.oid = rel.relnamespace
+    WHERE con.contype = 'f'
+      AND nsp.nspname = 'public'
+      AND con.confrelid = 'public.workspaces'::regclass
+      AND (
+        SELECT array_agg(att.attname ORDER BY att.attname)
+        FROM unnest(con.conkey) AS referencing(attnum)
+        JOIN pg_catalog.pg_attribute att
+          ON att.attrelid = con.conrelid
+         AND att.attnum = referencing.attnum
+      ) = ARRAY[${firstColumn}, ${secondColumn}]::name[]
+    ORDER BY rel.relname
+  `);
+  return rows.rows;
+};
+
 /**
  * Fetch all tables that have a workspace_id or
  * organization_id column, to verify policy coverage.

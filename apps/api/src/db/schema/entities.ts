@@ -420,6 +420,13 @@ export const entityVersionAiSummaries = p.pgTable(
         foreignColumns: [entities.id, entities.workspaceId],
       })
       .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "entity_version_ai_summaries_workspace_organization_fk",
+      })
+      .onDelete("cascade"),
     ...wsOrganizationPolicies("entity_version_ai_summaries"),
   ],
 );
@@ -887,6 +894,13 @@ export const pendingUploads = p.pgTable(
         name: "pending_uploads_organization_fk",
         columns: [table.organizationId],
         foreignColumns: [organization.id],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "pending_uploads_workspace_organization_fk",
       })
       .onDelete("cascade"),
     ...wsOrganizationPolicies("pending_uploads"),

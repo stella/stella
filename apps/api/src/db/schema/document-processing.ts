@@ -191,6 +191,13 @@ export const documentProcessingRuns = p.pgTable(
       .onDelete("cascade"),
     p
       .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "document_processing_runs_workspace_organization_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
         columns: [table.fieldId, table.workspaceId],
         foreignColumns: [fields.id, fields.workspaceId],
       })

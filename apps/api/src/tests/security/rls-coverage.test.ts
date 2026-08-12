@@ -22,6 +22,7 @@ import {
   fetchStellaUserSelectColumnPrivileges,
   fetchStellaTablePrivileges,
   fetchStellaPolicies,
+  fetchWorkspaceTenantPairForeignKeys,
 } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
@@ -282,6 +283,84 @@ describe("policy coverage", () => {
     }
 
     expect(unpinned).toEqual([]);
+  });
+
+  // The policy test above states the tenant pair as an authorization rule.
+  // This one states it as a storage rule: a row whose organization_id does not
+  // belong to its workspace_id cannot be written at all, whatever policy or
+  // handler produced it. Only three tables carried the reference before, so
+  // "the pattern exists somewhere" was not the same as "the class is closed".
+  //
+  // Exemptions are properties of the table, not waivers, and the assertions
+  // below run in both directions so one cannot outlive its reason.
+  const TENANT_PAIR_EXEMPT = new Map<string, string>([
+    [
+      "audit_logs",
+      "matter deletion records the DELETE event after removing the workspace row, so any reference to workspaces would abort it",
+    ],
+    [
+      "buffer_object_cleanup_intents",
+      "storage-erasure outbox: references no ancestor so cleanup survives owner deletion (apps/api/src/db/schema/entities.test.ts)",
+    ],
+    [
+      "entity_deletion_cleanup_requests",
+      "storage-erasure outbox: references no ancestor so cleanup survives owner deletion (apps/api/src/db/schema/entities.test.ts)",
+    ],
+    [
+      "usage_events",
+      "metering ledger whose workspace_id is nullable attribution surviving matter deletion; the pair needs ON DELETE SET NULL (workspace_id), which drizzle cannot declare",
+    ],
+  ]);
+
+  test("every table with workspace_id and organization_id references the pair", async () => {
+    const scoped = await fetchScopedTables(testDb);
+    const pairForeignKeys = await fetchWorkspaceTenantPairForeignKeys(testDb);
+
+    const byScope = new Map<string, Set<string>>();
+    for (const { table_name, scope } of scoped) {
+      const scopes = byScope.get(table_name) ?? new Set<string>();
+      scopes.add(scope);
+      byScope.set(table_name, scopes);
+    }
+
+    const dualScopeTables = [...byScope.entries()]
+      .filter(
+        ([, scopes]) => scopes.has("workspace") && scopes.has("organization"),
+      )
+      .map(([table]) => table);
+
+    // The class exists: an empty list would make every assertion below vacuous.
+    expect(dualScopeTables.length).toBeGreaterThan(0);
+
+    const referencing = new Map(
+      pairForeignKeys.map((foreignKey) => [foreignKey.table_name, foreignKey]),
+    );
+
+    expect(
+      dualScopeTables
+        .filter((table) => !TENANT_PAIR_EXEMPT.has(table))
+        .filter((table) => !referencing.has(table))
+        .toSorted(),
+    ).toEqual([]);
+
+    // A constraint left NOT VALID enforces new writes only, so a forgotten
+    // VALIDATE migration would leave the existing rows unchecked forever.
+    expect(
+      pairForeignKeys
+        .filter(({ validated }) => !validated)
+        .map(({ constraint_name }) => constraint_name)
+        .toSorted(),
+    ).toEqual([]);
+
+    // Stale exemptions fail too: a table that lost one of the two columns, or
+    // that has since taken the reference, no longer needs an entry.
+    expect(
+      [...TENANT_PAIR_EXEMPT.keys()]
+        .filter(
+          (table) => !dualScopeTables.includes(table) || referencing.has(table),
+        )
+        .toSorted(),
+    ).toEqual([]);
   });
 
   test("every table with organization_id (org-only) has org policies", async () => {

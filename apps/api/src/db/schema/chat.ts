@@ -216,6 +216,16 @@ export const chatThreads = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    // RESTRICT mirrors the single-column workspace reference: a global thread
+    // (workspace_id NULL) is exempt under MATCH SIMPLE, and matter deletion
+    // removes threads explicitly before it removes the workspace.
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "chat_threads_workspace_organization_fk",
+      })
+      .onDelete("restrict"),
     p
       .index("chat_threads_workspace_user_idx")
       .on(table.workspaceId, table.userId),
@@ -353,6 +363,15 @@ export const chatTurns = p.pgTable(
         foreignColumns: [chatMessages.id, chatMessages.threadId],
       })
       .onDelete("cascade"),
+    // RESTRICT mirrors the single-column workspace reference; a global turn
+    // (workspace_id NULL) is exempt under MATCH SIMPLE.
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "chat_turns_workspace_organization_fk",
+      })
+      .onDelete("restrict"),
     p.check(
       "chat_turns_status_values_check",
       sql`${table.status} IN (${sql.join(CHAT_TURN_STATUS_SQL_VALUES, sql`, `)})`,
@@ -534,6 +553,13 @@ export const fileChatThreads = p.pgTable(
       .foreignKey({
         columns: [table.workspaceId],
         foreignColumns: [workspaces.id],
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "file_chat_threads_workspace_organization_fk",
       })
       .onDelete("cascade"),
     p

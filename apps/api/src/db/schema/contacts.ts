@@ -285,6 +285,13 @@ export const workspaceContacts = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "workspace_contacts_workspace_organization_fk",
+      })
+      .onDelete("cascade"),
     p.index("workspace_contacts_workspace_id_idx").on(table.workspaceId),
     p.index("workspace_contacts_contact_id_idx").on(table.contactId),
     p
