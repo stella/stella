@@ -18,7 +18,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
-import type { SafeId } from "@/api/lib/branded-types";
+import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import { preserveBufferObjectCleanupIntents } from "@/api/lib/buffer-intent-reconciliation";
 import { desktopEditMimeTypeForFileType } from "@/api/lib/desktop-edit-file-types";
 import {
@@ -110,8 +110,16 @@ type OrganizationTeardownOptions = OrganizationTeardownScope & {
   pagesMax?: number;
 };
 
-/** The previous page's last id, or null to start from the first row. */
-type PageCursor = string | null;
+/**
+ * The previous page's last id, or null to start from the first row.
+ *
+ * The cursor carries the brand of the column it walks, so a walk cannot be
+ * resumed from another table's id and the keyset comparison type-checks against
+ * the column it compares. Every walk below reads its cursor straight off the
+ * previous page's last row, which is already branded by the column's type, so
+ * nothing has to be re-branded on the way round.
+ */
+type PageCursor<TId extends SafeIdType> = SafeId<TId> | null;
 
 /**
  * Every walk below is recursion rather than a loop: a page is fully recorded
@@ -125,7 +133,7 @@ const recordFieldFilePage = async (
   scope: OrganizationTeardownScope,
   workspaceId: SafeId<"workspace">,
   record: TeardownPageSink,
-  cursor: PageCursor = null,
+  cursor: PageCursor<"field"> = null,
 ): Promise<void> => {
   const page = await scope.tx
     .select({ content: fields.content, id: fields.id })
@@ -199,7 +207,7 @@ const recordDesktopEditCheckpointPage = async (
   scope: OrganizationTeardownScope,
   workspaceId: SafeId<"workspace">,
   record: TeardownPageSink,
-  cursor: PageCursor = null,
+  cursor: PageCursor<"desktopEditSession"> = null,
 ): Promise<void> => {
   const page = await scope.tx
     .select({
@@ -243,7 +251,7 @@ const recordFolioCollabCheckpointPage = async (
   scope: OrganizationTeardownScope,
   workspaceId: SafeId<"workspace">,
   record: TeardownPageSink,
-  cursor: PageCursor = null,
+  cursor: PageCursor<"folioCollabSession"> = null,
 ): Promise<void> => {
   const page = await scope.tx
     .select({
@@ -300,7 +308,7 @@ const recordPendingUploadPage = async (
   scope: OrganizationTeardownScope,
   workspaceId: SafeId<"workspace">,
   record: TeardownPageSink,
-  cursor: PageCursor = null,
+  cursor: PageCursor<"pendingUpload"> = null,
 ): Promise<void> => {
   const page = await scope.tx
     .select({
@@ -339,6 +347,12 @@ const recordPendingUploadPage = async (
   await recordPendingUploadPage(scope, workspaceId, record, lastRow.id);
 };
 
+type ChatAttachment = {
+  s3Key: string;
+  thumbnailFileId: string | null;
+  userId: SafeId<"user">;
+};
+
 /**
  * Chat attachments and their thumbnails. The key is minted from the user id, so
  * it names no matter and the page is recorded against the organization itself.
@@ -348,7 +362,7 @@ const recordPendingUploadPage = async (
 const recordChatAttachmentPage = async (
   scope: OrganizationTeardownScope,
   record: TeardownPageSink,
-  cursor: PageCursor = null,
+  cursor: PageCursor<"userFile"> = null,
 ): Promise<void> => {
   const page = await scope.tx
     .select({
@@ -371,17 +385,27 @@ const recordChatAttachmentPage = async (
     return;
   }
 
+  // Branded here, at the read boundary: `user_files.user_id` is a plain text
+  // column, and this is where the value read off the persisted row becomes the
+  // ownership id the thumbnail key is built from. Nothing downstream sees the
+  // bare string.
+  const attachments: ChatAttachment[] = page.map((row) => ({
+    s3Key: row.s3Key,
+    thumbnailFileId: row.thumbnailFileId,
+    userId: brandPersistedUserId(row.userId),
+  }));
+
   await record(
     null,
-    page.flatMap(({ s3Key, thumbnailFileId, userId }) =>
-      thumbnailFileId === null
-        ? [s3Key]
+    attachments.flatMap((attachment) =>
+      attachment.thumbnailFileId === null
+        ? [attachment.s3Key]
         : [
-            s3Key,
+            attachment.s3Key,
             createUserFileKey({
-              fileId: thumbnailFileId,
+              fileId: attachment.thumbnailFileId,
               mimeType: THUMBNAIL_MIME_TYPE,
-              userId: brandPersistedUserId(userId),
+              userId: attachment.userId,
             }),
           ],
     ),
@@ -397,7 +421,7 @@ const recordChatAttachmentPage = async (
 const recordTemplatePage = async (
   scope: OrganizationTeardownScope,
   record: TeardownPageSink,
-  cursor: PageCursor = null,
+  cursor: PageCursor<"template"> = null,
 ): Promise<void> => {
   const page = await scope.tx
     .select({ id: templates.id, s3Key: templates.s3Key })
@@ -429,7 +453,7 @@ const recordTemplatePage = async (
 const recordTemplateVersionPage = async (
   scope: OrganizationTeardownScope,
   record: TeardownPageSink,
-  cursor: PageCursor = null,
+  cursor: PageCursor<"templateVersion"> = null,
 ): Promise<void> => {
   const page = await scope.tx
     .select({ id: templateVersions.id, s3Key: templateVersions.s3Key })
@@ -461,7 +485,7 @@ const recordTemplateVersionPage = async (
 const recordStyleSetPage = async (
   scope: OrganizationTeardownScope,
   record: TeardownPageSink,
-  cursor: PageCursor = null,
+  cursor: PageCursor<"styleSet"> = null,
 ): Promise<void> => {
   const page = await scope.tx
     .select({
@@ -540,7 +564,14 @@ export const recordOrganizationStorageTeardown = async ({
   tx,
 }: OrganizationTeardownOptions): Promise<OrganizationStorageTeardownResult> => {
   const requestIds: SafeId<"entityDeletionCleanupRequest">[] = [];
-  const record: TeardownPageSink = async (workspaceId, s3Keys) => {
+  // The scope is annotated rather than left to `TeardownPageSink`'s contextual
+  // type: an ownership id reaching a sink has to declare its brand where the
+  // parameter is written, so no future edit can widen it to a bare string
+  // without the change being visible right here.
+  const record: TeardownPageSink = async (
+    workspaceId: SafeId<"workspace"> | null,
+    s3Keys: string[],
+  ) => {
     const uniqueKeys = [...new Set(s3Keys)];
     if (uniqueKeys.length === 0) {
       return;

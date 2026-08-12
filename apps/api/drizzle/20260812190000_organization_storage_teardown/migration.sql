@@ -1,3 +1,4 @@
+-- stella-migration-safety: reviewed destructive-change - the DROP POLICY below is immediately followed by a CREATE POLICY of the same name on the same table, for the same command and role, whose only difference is that it also admits a NULL workspace_id; every predicate the old policy applied still applies, so no scoped writer gains a row it could not already insert and no reader is affected (the table is read only by the root worker). Rollback is the reverse pair, valid while no organization-owned page has been written yet: re-create the previous policy and restore NOT NULL. Once such a page exists the NOT NULL cannot be restored without first erasing rows that name objects still in the bucket, so a rollback past that point drains the queue first.
 SET LOCAL lock_timeout = '1s';--> statement-breakpoint
 SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 

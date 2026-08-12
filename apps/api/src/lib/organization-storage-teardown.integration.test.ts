@@ -470,6 +470,28 @@ afterAll(async () => {
   await releaseTestDb();
 });
 
+/**
+ * A page names either the matter its keys sit under, or the organization for
+ * the classes that never had a matter: templates, style-set packages, and chat
+ * attachments. Staged uploads additionally carry the legacy `tmp/` key, which
+ * predates the tenant prefix.
+ */
+const pageKeysMatchScope = ({
+  s3Keys,
+  workspaceId,
+}: {
+  s3Keys: string[];
+  workspaceId: SafeId<"workspace"> | null;
+}): boolean =>
+  s3Keys.every((key) =>
+    workspaceId === null
+      ? key.startsWith(`${fixture.organizationId}/templates/`) ||
+        key.startsWith(`${fixture.organizationId}/style-sets/`) ||
+        key.startsWith(`${fixture.userId}/`)
+      : key.startsWith(`${fixture.organizationId}/${workspaceId}/`) ||
+        key.startsWith("tmp/"),
+  );
+
 const recordedKeys = async (
   organizationId: SafeId<"organization">,
 ): Promise<string[]> => {
@@ -519,28 +541,10 @@ describe("organization deletion storage teardown", () => {
         ),
       );
 
-    for (const row of rows) {
-      const { workspaceId } = row;
-      if (workspaceId === null) {
-        // Organization-owned storage: templates, style sets, chat attachments.
-        expect(
-          row.s3Keys.every(
-            (key) =>
-              key.startsWith(`${fixture.organizationId}/templates/`) ||
-              key.startsWith(`${fixture.organizationId}/style-sets/`) ||
-              key.startsWith(`${fixture.userId}/`),
-          ),
-        ).toBe(true);
-        continue;
-      }
-      expect(
-        row.s3Keys.every(
-          (key) =>
-            key.startsWith(`${fixture.organizationId}/${workspaceId}/`) ||
-            key.startsWith("tmp/"),
-        ),
-      ).toBe(true);
-    }
+    // Filtering to the pages that break the rule beats asserting inside a loop:
+    // the expectation names the offending page instead of reporting that some
+    // unnamed row was false.
+    expect(rows.filter((row) => !pageKeysMatchScope(row))).toEqual([]);
   });
 
   test("hands a still-publishable upload key to the buffer tombstone", async () => {
