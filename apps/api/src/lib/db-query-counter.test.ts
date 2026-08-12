@@ -2,12 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { Elysia } from "elysia";
 
 import {
-  beginRequestQueryCounter,
   currentQueryCount,
   DB_QUERY_COUNT_HEADER,
   queryCountLogger,
   runWithQueryCounter,
 } from "@/api/lib/db-query-counter";
+import { runWithRequestScope } from "@/api/lib/observability/request-scope";
 
 // Yield to the microtask queue so two counter contexts interleave their
 // increments; this is what would break a shared (non-ALS) counter.
@@ -58,17 +58,30 @@ describe("db query counter logger", () => {
   });
 });
 
-// Integration: replicate the exact Elysia wiring from src/index.ts
-// (enterWith in onRequest, header in onAfterHandle) using the real exported
-// helpers, driven through `app.handle`. Importing the full `api` is avoided
-// because its module evaluation mounts better-auth (which needs DB/env);
-// exercising the helpers here proves the mechanism inside Elysia's lifecycle,
-// including that concurrent requests do not leak counts across each other.
+const QUERY_WAIT_MS = 3;
+const BACKGROUND_QUERY_WAIT_MS = 2;
+const REQUEST_ROUNDS = 12;
+
+// Integration: replicate the HTTP wiring from server.ts (`wrap` opens the
+// scope around the composed handler, `onAfterHandle` stamps the count) using
+// the real exported helpers. Importing the full `api` is avoided because its
+// module evaluation mounts better-auth (which needs DB/env).
+//
+// This runs against a real listener, not `app.handle`, because the failure it
+// pins only exists on a real event loop. The counter used to be opened with
+// `AsyncLocalStorage.enterWith` from `onRequest`, which leaves the store on the
+// ambient async context frame: a background loop (a BullMQ worker, a reconciler
+// tick, the SSE keep-alive — the API process runs all three) that resumed while
+// a request's frame was current adopted that request's counter and billed its
+// own queries to it, inflating one endpoint's `x-db-queries` by however many
+// queries it happened to issue. The route-smoke network baseline caught it as a
+// per-endpoint budget failure that passed on re-run.
 const buildCountingApp = () =>
   new Elysia()
-    .onRequest(() => {
-      beginRequestQueryCounter();
-    })
+    .wrap(
+      (handleRequest) => (request: Request) =>
+        runWithRequestScope(() => handleRequest(request)),
+    )
     .onAfterHandle(({ set }) => {
       const queryCount = currentQueryCount();
       if (queryCount !== undefined) {
@@ -76,23 +89,51 @@ const buildCountingApp = () =>
       }
     })
     .get("/queries/:count", async ({ params }) => {
-      await logQueriesInterleaved(Number(params.count));
+      // Waits on a timer rather than the microtask queue: a query is real I/O,
+      // and only an I/O wait leaves the gap in which the background loop below
+      // used to resume inside this request's async context frame.
+      for (let index = 0; index < Number(params.count); index += 1) {
+        // eslint-disable-next-line no-await-in-loop -- sequential queries are the shape being counted
+        await Bun.sleep(QUERY_WAIT_MS);
+        queryCountLogger.logQuery("SELECT request", []);
+      }
       return "ok";
     });
 
+// Queries from work that belongs to no request: started before any request
+// exists and never awaited by one.
+const runBackgroundQueries = (signal: { done: boolean }) => {
+  const loop = async () => {
+    while (!signal.done) {
+      // eslint-disable-next-line no-await-in-loop -- a background loop is sequential by nature; that is what lets it interleave with requests
+      await Bun.sleep(BACKGROUND_QUERY_WAIT_MS);
+      queryCountLogger.logQuery("SELECT background", []);
+    }
+  };
+  void loop();
+};
+
 describe("db query counter HTTP header", () => {
-  test("header equals the number of queries the handler ran", async () => {
-    const app = buildCountingApp();
+  test("a request counts its own queries and no others", async () => {
+    const signal = { done: false };
+    runBackgroundQueries(signal);
+    const app = buildCountingApp().listen({ port: 0 });
+    const origin = `http://localhost:${app.server?.port}`;
 
-    const response = await app.handle(
-      new Request("http://localhost/queries/4"),
-    );
+    const counts: (string | null)[] = [];
+    for (let round = 0; round < REQUEST_ROUNDS; round += 1) {
+      // eslint-disable-next-line no-await-in-loop -- each round must overlap the background loop in real time
+      const response = await fetch(`${origin}/queries/4`);
+      counts.push(response.headers.get(DB_QUERY_COUNT_HEADER));
+    }
 
-    expect(response.status).toBe(200);
-    expect(response.headers.get(DB_QUERY_COUNT_HEADER)).toBe("4");
+    signal.done = true;
+    await app.stop();
+
+    expect(counts).toEqual(Array.from({ length: REQUEST_ROUNDS }, () => "4"));
   });
 
-  test("concurrent requests get independent counts (no store leak)", async () => {
+  test("concurrent requests get independent counts", async () => {
     const app = buildCountingApp();
 
     const [three, seven] = await Promise.all([

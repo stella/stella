@@ -10,8 +10,12 @@ import {
   REQUEST_ID_HEADER,
   runWithRequestId,
 } from "@/api/lib/observability/request-context";
+import { runWithRequestScope } from "@/api/lib/observability/request-scope";
 
 const REQUEST_ID_PATTERN = /^req_[0-9a-f]{32}$/u;
+const HANDLER_WAIT_MS = 3;
+const BACKGROUND_WAIT_MS = 2;
+const REQUEST_ROUNDS = 12;
 
 describe("request id ambient store", () => {
   test("no id is active outside a request scope", () => {
@@ -40,14 +44,18 @@ describe("request metadata", () => {
   });
 });
 
-// Integration: replicate the exact Elysia wiring from src/index.ts (generate the
-// id in `onRequest` via `initRequestContext`, stamp it on `set.headers`) using
-// the real exported helpers, driven through `app.handle`. Importing the full
-// `api` is avoided because its module evaluation mounts better-auth (needs
-// DB/env); exercising the helpers here proves the receipt header inside Elysia's
-// lifecycle, including that concurrent requests get distinct ids.
+// Integration: replicate the exact Elysia wiring from server.ts (`wrap` opens
+// the request scope, `onRequest` generates the id via `initRequestContext` and
+// stamps it on `set.headers`) using the real exported helpers. Importing the
+// full `api` is avoided because its module evaluation mounts better-auth (needs
+// DB/env); exercising the helpers here proves the receipt header inside
+// Elysia's lifecycle, including that concurrent requests get distinct ids.
 const buildReceiptApp = () =>
   new Elysia()
+    .wrap(
+      (handleRequest) => (request: Request) =>
+        runWithRequestScope(() => handleRequest(request)),
+    )
     .onRequest(({ request, set }) => {
       initRequestContext(request);
       const requestId = getRequestId(request);
@@ -55,7 +63,12 @@ const buildReceiptApp = () =>
         set.headers[REQUEST_ID_HEADER] = requestId;
       }
     })
-    .get("/ping", () => "ok");
+    // Waits on a timer, as any real handler does: the ambient id has to survive
+    // an I/O gap, and that gap is where background work used to join the scope.
+    .get("/ping", async () => {
+      await Bun.sleep(HANDLER_WAIT_MS);
+      return getCurrentRequestId() ?? "no-ambient-id";
+    });
 
 describe("x-request-id response header", () => {
   test("every response carries a well-formed receipt id", async () => {
@@ -66,6 +79,44 @@ describe("x-request-id response header", () => {
     expect(response.status).toBe(200);
     const header = response.headers.get(REQUEST_ID_HEADER);
     expect(header).toMatch(REQUEST_ID_PATTERN);
+  });
+
+  // Over a real listener, because the failure this pins only exists on a real
+  // event loop: the ambient id used to be bound with
+  // `AsyncLocalStorage.enterWith`, which leaves it on the ambient async context
+  // frame, so a background loop resuming there adopted the in-flight request's
+  // id and stamped it on unrelated work from then on.
+  test("the ambient id belongs to its own request and never to background work", async () => {
+    const signal = { done: false };
+    const backgroundIds: (string | undefined)[] = [];
+    const backgroundLoop = async () => {
+      while (!signal.done) {
+        // eslint-disable-next-line no-await-in-loop -- a background loop is sequential by nature; that is what lets it interleave with requests
+        await Bun.sleep(BACKGROUND_WAIT_MS);
+        backgroundIds.push(getCurrentRequestId());
+      }
+    };
+    void backgroundLoop();
+
+    const app = buildReceiptApp().listen({ port: 0 });
+    const origin = `http://localhost:${app.server?.port}`;
+    const mismatches: string[] = [];
+    for (let round = 0; round < REQUEST_ROUNDS; round += 1) {
+      // eslint-disable-next-line no-await-in-loop -- each round must overlap the background loop in real time
+      const response = await fetch(`${origin}/ping`);
+      // eslint-disable-next-line no-await-in-loop -- see above
+      const ambient = await response.text();
+      const header = response.headers.get(REQUEST_ID_HEADER);
+      if (ambient !== header) {
+        mismatches.push(`${header} !== ${ambient}`);
+      }
+    }
+
+    signal.done = true;
+    await app.stop();
+
+    expect(mismatches).toEqual([]);
+    expect(backgroundIds.filter((id) => id !== undefined)).toEqual([]);
   });
 
   test("concurrent requests get distinct receipt ids", async () => {

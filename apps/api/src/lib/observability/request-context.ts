@@ -16,14 +16,32 @@ type RequestContext = {
 const requestContextStore = new WeakMap<Request, RequestContext>();
 
 /**
- * Ambient current-request id. Activated per request via `enterWith` (the same
- * mechanism the DB query counter uses), so code that has no `Request` in hand —
- * the MCP tool-error envelope, the generic-invoke success payload — can still
- * stamp the receipt without threading the id through every call. The lookup is a
- * no-op when no request is active (background jobs, boot-time work, tests that
- * never open a request scope), so those paths simply carry no receipt.
+ * Ambient current-request id, so code that has no `Request` in hand — the MCP
+ * tool-error envelope, the generic-invoke success payload — can still stamp the
+ * receipt without threading the id through every call. The lookup is a no-op
+ * when no request is active (background jobs, boot-time work, tests that never
+ * open a request scope), so those paths simply carry no receipt.
+ *
+ * The store holds a mutable slot rather than the id itself because the scope is
+ * opened at the fetch boundary (see `server.ts`) while the id is generated
+ * later, in {@link initRequestContext}. That split is deliberate:
+ * `AsyncLocalStorage.enterWith` would let the hook open the scope itself, but it
+ * mutates the ambient async context frame with no restore point, so a
+ * background timer or worker loop resuming while a request's frame is current
+ * adopts that request's id and stamps it on unrelated work from then on. `run`
+ * at the boundary confines the scope to the request's own callback tree.
  */
-const requestIdStore = new AsyncLocalStorage<string>();
+type AmbientRequestId = { current: string | null };
+
+const requestIdStore = new AsyncLocalStorage<AmbientRequestId>();
+
+/**
+ * Open an empty request-id scope for `fn` and its continuations. The HTTP layer
+ * calls this around the composed request handler; {@link initRequestContext}
+ * fills in the id once it has generated one.
+ */
+export const runWithRequestIdScope = <TResult>(fn: () => TResult): TResult =>
+  requestIdStore.run({ current: null }, fn);
 
 /**
  * A per-request correlation id: `req_` + 128 bits of Bun-native randomness
@@ -50,12 +68,14 @@ export const initRequestContext = (
   }
 
   requestContextStore.set(request, context);
-  // Bind the id to this request's async context so ambient readers
-  // (`getCurrentRequestId`) resolve it without a `Request` handle. Each request
-  // enters its own async context before `onRequest` runs, so the store does not
-  // leak across concurrent requests (same guarantee as
-  // `beginRequestQueryCounter`).
-  requestIdStore.enterWith(requestId);
+  // Bind the id to the scope the fetch boundary opened for this request, so
+  // ambient readers (`getCurrentRequestId`) resolve it without a `Request`
+  // handle. Callers outside the HTTP layer (tests, programmatic entry points)
+  // open no scope and simply carry no ambient id.
+  const ambient = requestIdStore.getStore();
+  if (ambient) {
+    ambient.current = requestId;
+  }
 };
 
 export const enrichRequestContext = (
@@ -80,7 +100,7 @@ export const getRequestId = (request: Request): string | undefined =>
 
 /** The receipt id of the active request async context, if any. */
 export const getCurrentRequestId = (): string | undefined =>
-  requestIdStore.getStore();
+  requestIdStore.getStore()?.current ?? undefined;
 
 /**
  * Run `fn` with `requestId` bound as the ambient current-request id. Used by
@@ -90,4 +110,4 @@ export const getCurrentRequestId = (): string | undefined =>
 export const runWithRequestId = <TResult>(
   requestId: string,
   fn: () => TResult,
-): TResult => requestIdStore.run(requestId, fn);
+): TResult => requestIdStore.run({ current: requestId }, fn);
