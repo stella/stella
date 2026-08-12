@@ -29,11 +29,14 @@ export function UsagePlansCard() {
   if (isLoading) {
     return <PlansSkeleton />;
   }
-  const policies = data?.policies ?? [];
-  const subscriptions = policies.filter(
+  // Query error or an unseeded deployment: nothing to sell, render nothing.
+  if (!data) {
+    return null;
+  }
+  const subscriptions = data.policies.filter(
     (policy) => policy.kind === "subscription",
   );
-  const packs = policies.filter((policy) => policy.kind === "addon");
+  const packs = data.policies.filter((policy) => policy.kind === "addon");
   if (subscriptions.length === 0 && packs.length === 0) {
     return null;
   }

@@ -13,6 +13,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { env } from "@/env";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -26,12 +27,18 @@ import { usagePoliciesOptions } from "@/routes/_protected.settings/-queries/usag
 export const Route = createFileRoute("/_protected/settings/organization/usage")(
   {
     component: UsageSettingsPage,
-    loader: ({ context }) => {
+    loader: async ({ context }) => {
       // The catalog exists only behind the usage flag; with the flag off
       // this route must issue exactly the requests it does today (the
       // route-smoke network baseline pins them).
       if (env.VITE_FEATURE_USAGE) {
-        prefetchRouteQuery(context.queryClient, usagePoliciesOptions);
+        await prefetchRouteQuery(
+          context.queryClient,
+          usagePoliciesOptions,
+          (error: unknown) => {
+            getAnalytics().captureError(error);
+          },
+        );
       }
     },
   },
