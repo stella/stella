@@ -68,6 +68,7 @@ const createHarness = (rows: StoredFinding[]) => {
 
   const context = asTestRaw<DecideFindingCtx>({
     body: { decision: "accepted" },
+    memberRole: { role: "owner" },
     params: { workspaceId: WORKSPACE_ID, findingId: FINDING_ID },
     safeDb,
     scopedDb,

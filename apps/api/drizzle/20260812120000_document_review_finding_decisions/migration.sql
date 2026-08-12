@@ -19,8 +19,7 @@ ALTER TABLE "document_review_findings"
 -- days old and tiny, and the migrator's single transaction holds the lock to
 -- commit either way, so NOT VALID + VALIDATE buys nothing here.
 ALTER TABLE "document_review_findings"
-  -- squawk-ignore constraint-missing-not-valid
-  -- squawk-ignore adding-foreign-key-constraint
+  -- squawk-ignore constraint-missing-not-valid, adding-foreign-key-constraint
   ADD CONSTRAINT "document_review_findings_decided_by_user_id_fk"
   FOREIGN KEY ("decided_by") REFERENCES "public"."user"("id")
   ON DELETE set null ON UPDATE no action;--> statement-breakpoint
