@@ -176,6 +176,10 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
+        const isIdentifierReference = (
+          node: unknown,
+        ): node is ESTree.IdentifierReference => isIdentifier(node);
+
         const resolveVariable = (
           identifier: ESTree.IdentifierReference,
         ): Variable | null => {
@@ -262,7 +266,7 @@ export default eslintCompatPlugin({
               isRawFilenameExpression(expression.alternate, seenVariables)
             );
           }
-          if (!isIdentifier(expression)) {
+          if (!isIdentifierReference(expression)) {
             return false;
           }
 
