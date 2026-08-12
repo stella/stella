@@ -29,8 +29,10 @@ import ts from "typescript";
 // invariant, so it additionally needs a ledger entry
 // (scripts/suppression-waivers.json).
 //
-// A `data-volume` rule guards an unbounded read or an N+1 query: a suppression
-// is a capacity decision, reviewable from the per-rule baseline diff alone.
+// A `data-volume` rule guards a capacity budget — an unbounded read, an N+1
+// query, or a pattern that blows up compiler work the way an unbounded read
+// blows up database work. A suppression is a capacity decision, reviewable
+// from the per-rule baseline diff alone.
 // An `observability` rule guards an error that reaches a user or a log: a
 // suppression means a failure the product can no longer explain, which is a
 // diagnosability decision rather than a tenancy or capacity one. Like
@@ -152,6 +154,12 @@ export const TRACKED_SUPPRESSION_RULES = [
     rule: "no-raw-use-effect/no-raw-use-effect",
     tier: "data-volume",
     guards: "raw effects outside the sanctioned effect wrappers",
+  },
+  {
+    rule: "no-awaited-builder-union/no-awaited-builder-union",
+    tier: "data-volume",
+    guards:
+      "awaited ternaries over two chain states of one query builder, which instantiate both builder types and their union",
   },
   {
     rule: "no-swallowed-rejection/no-swallowed-rejection",

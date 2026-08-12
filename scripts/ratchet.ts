@@ -2060,6 +2060,7 @@ const EXPECTED_NAMED_FIXTURE_SUPPRESSIONS = {
   "no-swallowed-rejection/no-swallowed-rejection": 0,
   "require-toast-error-capture/require-toast-error-capture": 0,
   "no-detached-void/no-detached-void": 0,
+  "no-awaited-builder-union/no-awaited-builder-union": 0,
 } as const satisfies Record<TrackedRule, number>;
 
 const TS_SUPPRESSION_FIXTURE_LINES = [

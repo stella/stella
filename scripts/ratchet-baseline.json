@@ -198,6 +198,10 @@
     "count": 0,
     "files": {}
   },
+  "no-awaited-builder-union-suppressions": {
+    "count": 0,
+    "files": {}
+  },
   "no-swallowed-rejection-suppressions": {
     "count": 8,
     "files": {
