@@ -52,10 +52,9 @@ function UsageSettingsPage() {
   const { data, isLoading } = useQuery(
     usageEntitlementOptions({ organizationId: activeOrganizationId }),
   );
-  const entitlement = data?.entitlement ?? null;
+  const entitlement = data?.entitlement;
   const packsPurchasable =
-    entitlement !== null &&
-    entitlement.source === "hosted" &&
+    entitlement?.source === "hosted" &&
     (entitlement.status === "active" || entitlement.status === "trialing");
 
   return (

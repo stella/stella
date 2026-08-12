@@ -53,7 +53,7 @@ export function UsagePlansCard({
           <Button
             className="mt-3"
             onClick={() => {
-              detached(refetch(), "UsagePlansCard");
+              detached(refetch(), "usage-plans.refetch-catalog");
             }}
             variant="ghost"
           >
