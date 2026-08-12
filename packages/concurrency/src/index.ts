@@ -41,6 +41,41 @@ const poolWidth = (limit: number, itemCount: number): number => {
   return Math.min(Math.max(Math.floor(limit), 1), itemCount);
 };
 
+export type ConcurrencyLimiter = <Value>(
+  operation: () => Promise<Value>,
+) => Promise<Value>;
+
+/** Share one FIFO concurrency budget across independently scheduled work. */
+export const createConcurrencyLimiter = (limit: number): ConcurrencyLimiter => {
+  const maximumActive = poolWidth(limit, Number.MAX_SAFE_INTEGER);
+  const waiting: (() => void)[] = [];
+  let active = 0;
+
+  const acquire = async (): Promise<void> => {
+    if (active < maximumActive) {
+      active += 1;
+      return;
+    }
+    await new Promise<void>((resolve) => {
+      waiting.push(resolve);
+    });
+  };
+
+  const release = (): void => {
+    const next = waiting.shift();
+    if (next) {
+      next();
+      return;
+    }
+    active -= 1;
+  };
+
+  return async <Value>(operation: () => Promise<Value>): Promise<Value> => {
+    await acquire();
+    return await operation().finally(release);
+  };
+};
+
 /**
  * Every result, in input order, with at most `limit` operations in flight.
  *
