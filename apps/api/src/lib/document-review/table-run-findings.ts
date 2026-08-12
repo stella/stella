@@ -102,7 +102,7 @@ export const recordTableRunVerdicts = async ({
     return { type: "no-run" };
   }
 
-  return await scopedDb(async (tx) => {
+  return await scopedDb(async (tx): Promise<RecordTableRunVerdictsResult> => {
     // At most one active run per document, and only a table-executed one is
     // ours to write into.
     const runs = await tx
