@@ -97,6 +97,34 @@ const pathKey = (name: string, importNames: string[]) =>
     ? `path:${name}`
     : `path:${name}#${[...importNames].sort((a, b) => a.localeCompare(b)).join(",")}`;
 
+/**
+ * Fields the comparison keys above account for. `message` carries no
+ * enforcement, so it is known and ignored.
+ *
+ * Anything else is a field that can change what an entry forbids while leaving
+ * its key identical — `allowTypeImports` and `allowImportNames` weaken a ban
+ * in place, `caseSensitive` and `importNamePattern` change what it matches — so
+ * an override could relax an inherited restriction and still look like it
+ * carries it. The guard fails closed on an unknown field rather than compare
+ * on a key that no longer describes the entry: teach the key builder first.
+ */
+const KNOWN_PATH_FIELDS = new Set(["name", "importNames", "message"]);
+const KNOWN_PATTERN_FIELDS = new Set(["group", "regex", "message"]);
+
+const unhandledEntryFields: string[] = [];
+
+const recordUnhandledFields = (
+  entry: Record<string, unknown>,
+  known: ReadonlySet<string>,
+  shape: string,
+) => {
+  for (const field of Object.keys(entry)) {
+    if (!known.has(field)) {
+      unhandledEntryFields.push(`${shape}.${field}`);
+    }
+  }
+};
+
 const restrictedImportKeys = (options: unknown): string[] => {
   const keys: string[] = [];
   const collectPath = (entry: unknown) => {
@@ -107,6 +135,7 @@ const restrictedImportKeys = (options: unknown): string[] => {
     if (!isRecord(entry)) {
       return;
     }
+    recordUnhandledFields(entry, KNOWN_PATH_FIELDS, "paths");
     const name = readString(entry, "name");
     if (name === undefined) {
       return;
@@ -121,6 +150,7 @@ const restrictedImportKeys = (options: unknown): string[] => {
     if (!isRecord(entry)) {
       return;
     }
+    recordUnhandledFields(entry, KNOWN_PATTERN_FIELDS, "patterns");
     const group = stringArray(entry["group"]);
     if (group.length > 0) {
       keys.push(`pattern:${group.join("|")}`);
@@ -386,6 +416,23 @@ test("override scopes that configure a tracked rule are uniquely named", () => {
       .map((scope) => scope.scope);
     expect(new Set(names).size).toBe(names.length);
   }
+});
+
+test("every restriction field is accounted for in the comparison key", () => {
+  // Run the collectors over the whole config so every entry is visited, then
+  // fail on any field the keys do not encode. Without this the guard compares
+  // on a key that can describe two entries with different enforcement: an
+  // override adding `allowTypeImports` or `allowImportNames` weakens an
+  // inherited ban in place, and a key built from name and importNames alone
+  // still matches, so the weakening reads as carrying the restriction.
+  unhandledEntryFields.length = 0;
+  for (const scope of readScopes(config)) {
+    for (const rule of TRACKED_RULES) {
+      RESTRICTION_KEYS[rule](scope.rules[rule]);
+    }
+  }
+
+  expect([...new Set(unhandledEntryFields)].sort()).toEqual([]);
 });
 
 test("no override silently drops an inherited restriction", () => {
