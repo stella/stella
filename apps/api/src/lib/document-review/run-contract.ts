@@ -6,6 +6,8 @@
 // modules (erased at build time). Nothing here imports a handler slice, so the
 // background worker and the endpoints share one definition of what a run is.
 
+import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
+
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ConstantMap } from "@/api/lib/constant-map";
 import { REFERENCE_ASSESSMENTS } from "@/api/lib/document-review/contract";
@@ -67,12 +69,39 @@ export const DOCUMENT_REVIEW_CHECK_KIND = {
   REFERENCE: "reference",
 } as const satisfies ConstantMap<DocumentReviewCheckKind>;
 
+/** The most finding rows one run can hold: one per confirmed topic per check
+ *  kind. Derived from the cap the create endpoint enforces, so every bounded
+ *  read over a run's findings moves with that cap instead of restating it. */
+export const DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX =
+  DOCUMENT_REVIEW_LIMITS.topicsMax * DOCUMENT_REVIEW_CHECK_KINDS.length;
+
 /** Outcome vocabulary per check kind. Total over the kind union by
  *  construction, so a new kind cannot land without a decided vocabulary. */
 export const DOCUMENT_REVIEW_OUTCOMES = {
   playbook: VERDICT_TIERS,
   reference: REFERENCE_ASSESSMENTS,
 } as const satisfies Record<DocumentReviewCheckKind, readonly string[]>;
+
+/**
+ * What a reviewer decided about one finding. A named disposition rather than
+ * an `isAccepted` flag: the set grows (deferred, escalated, waived) and each
+ * addition must force a decision at every site that reads it.
+ *
+ * `open` is the state a finding is born in, and the only one that carries no
+ * decider: the schema enforces `decision = 'open'` exactly when `decided_at`
+ * is null, so "decided" cannot drift from "has a decision".
+ */
+export const DOCUMENT_REVIEW_DECISIONS = [
+  "open",
+  "accepted",
+  "dismissed",
+] as const;
+export type DocumentReviewDecision = (typeof DOCUMENT_REVIEW_DECISIONS)[number];
+export const DOCUMENT_REVIEW_DECISION = {
+  OPEN: "open",
+  ACCEPTED: "accepted",
+  DISMISSED: "dismissed",
+} as const satisfies ConstantMap<DocumentReviewDecision>;
 
 /** Whether the pinned playbook came from an approved snapshot or from the
  *  live (draft) definition an author chose to run. */

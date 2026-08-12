@@ -42,6 +42,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import type { DocumentReviewTopic } from "@/api/lib/document-review/contract";
+import { carryOverDecisions } from "@/api/lib/document-review/decision-carry-over";
 import { compareReferenceDocuments } from "@/api/lib/document-review/reference-compare";
 import { extractAskContents } from "@/api/lib/document-review/review-extract";
 import type { ReviewAsk } from "@/api/lib/document-review/review-extract";
@@ -563,7 +564,7 @@ const executeRun = async (
     return referenceOutcome;
   }
 
-  return await finalizeRun(actor, plan);
+  return await finalizeRun(actor, run, plan);
 };
 
 const runPlaybookPass = async ({
@@ -786,9 +787,14 @@ const upsertFindings = async (
  * Complete the run only when the committed finding set is exactly the planned
  * one. Counting the rows, rather than trusting what the passes returned, makes
  * the terminal state a fact about the database instead of about this process.
+ *
+ * Completion is also where decisions cross over from the document's previous
+ * review, in the same transaction as the status flip: a run is never readable
+ * as completed with its inherited decisions still missing.
  */
 const finalizeRun = async (
   actor: RunActor,
+  run: ClaimedRun,
   plan: ReviewRunPlan,
 ): Promise<DocumentReviewRunErrorCode | null> => {
   const committed = await actor.scopedDb(async (tx) => {
@@ -810,6 +816,22 @@ const finalizeRun = async (
   }
 
   await actor.scopedDb(async (tx) => {
+    const carried = await carryOverDecisions({
+      tx,
+      workspaceId: actor.workspaceId,
+      runId: actor.runId,
+      entityId: run.entityId,
+      fileFieldId: run.fileFieldId,
+      basisType: run.basis.type,
+    });
+    if (carried > 0) {
+      logger.info("document_review_run.decisions_carried", {
+        count: String(carried),
+        runId: actor.runId,
+        workspaceId: actor.workspaceId,
+      });
+    }
+
     // audit: skip — terminal bookkeeping on the run row audited at create.
     await tx
       .update(documentReviewRuns)

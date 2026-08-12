@@ -7,22 +7,24 @@
  */
 
 import { Result } from "better-result";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 
-import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
-
-import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
+import {
+  documentReviewFindings,
+  documentReviewRuns,
+  playbookDefinitions,
+  playbookDefinitionVersions,
+} from "@/api/db/schema";
+import { resolvePlaybookStaleness } from "@/api/handlers/document-reviews/playbook-staleness";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
-import { DOCUMENT_REVIEW_CHECK_KINDS } from "@/api/lib/document-review/run-contract";
+import { tallyDecisions } from "@/api/lib/document-review/decision-counts";
+import {
+  basisPlaybook,
+  DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX,
+} from "@/api/lib/document-review/run-contract";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-
-/** The most rows a single run can hold: one per confirmed topic per check
- *  kind. Derived from the same caps the create endpoint enforces, so the read
- *  cannot silently outgrow them. */
-const FINDINGS_MAX =
-  DOCUMENT_REVIEW_LIMITS.topicsMax * DOCUMENT_REVIEW_CHECK_KINDS.length;
 
 const config = {
   description:
@@ -35,7 +37,7 @@ const config = {
 
 const readDocumentReviewRun = createSafeHandler(
   config,
-  async function* ({ params, safeDb, workspaceId }) {
+  async function* ({ params, safeDb, session, workspaceId }) {
     const runs = yield* Result.await(
       safeDb((tx) =>
         tx
@@ -84,6 +86,9 @@ const readDocumentReviewRun = createSafeHandler(
             positionId: documentReviewFindings.positionId,
             outcome: documentReviewFindings.outcome,
             payload: documentReviewFindings.payload,
+            decision: documentReviewFindings.decision,
+            decidedBy: documentReviewFindings.decidedBy,
+            decidedAt: documentReviewFindings.decidedAt,
           })
           .from(documentReviewFindings)
           .where(
@@ -97,9 +102,43 @@ const readDocumentReviewRun = createSafeHandler(
             asc(documentReviewFindings.createdAt),
             asc(documentReviewFindings.id),
           )
-          .limit(FINDINGS_MAX),
+          .limit(DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX),
       ),
     );
+
+    // Is the pinned playbook still the one an author would run today? One
+    // equality between two version ids, so it is answered on read rather than
+    // maintained as a flag every future approval would have to invalidate.
+    const pinned = basisPlaybook(run.basis);
+    const definitions =
+      pinned === null
+        ? []
+        : yield* Result.await(
+            safeDb((tx) =>
+              tx
+                .select({
+                  latestVersionId: sql<
+                    string | null
+                  >`(SELECT ${playbookDefinitionVersions.id}
+                       FROM ${playbookDefinitionVersions}
+                      WHERE ${playbookDefinitionVersions.playbookDefinitionId} = ${playbookDefinitions.id}
+                      ORDER BY ${playbookDefinitionVersions.version} DESC
+                      LIMIT 1)`,
+                })
+                .from(playbookDefinitions)
+                .where(
+                  and(
+                    eq(playbookDefinitions.id, pinned.definitionId),
+                    eq(
+                      playbookDefinitions.organizationId,
+                      session.activeOrganizationId,
+                    ),
+                  ),
+                )
+                .limit(1),
+            ),
+          );
+    const definition = definitions.at(0);
 
     return Result.ok({
       run: {
@@ -108,8 +147,28 @@ const readDocumentReviewRun = createSafeHandler(
         startedAt: run.startedAt === null ? null : run.startedAt.toISOString(),
         finishedAt:
           run.finishedAt === null ? null : run.finishedAt.toISOString(),
+        ...resolvePlaybookStaleness({
+          pinned,
+          latestVersionId: definition?.latestVersionId ?? null,
+          definitionExists: definition !== undefined,
+        }),
+        decisionCounts: tallyDecisions(
+          findings.map(({ decision }) => decision),
+        ),
       },
-      findings,
+      findings: findings.map((finding) => ({
+        id: finding.id,
+        topicId: finding.topicId,
+        topicTitle: finding.topicTitle,
+        checkKind: finding.checkKind,
+        positionId: finding.positionId,
+        outcome: finding.outcome,
+        payload: finding.payload,
+        decision: finding.decision,
+        decidedBy: finding.decidedBy,
+        decidedAt:
+          finding.decidedAt === null ? null : finding.decidedAt.toISOString(),
+      })),
     });
   },
 );

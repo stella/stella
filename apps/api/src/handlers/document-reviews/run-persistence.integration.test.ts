@@ -19,14 +19,18 @@ import {
 } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
+import type { Transaction } from "@/api/db/root";
 import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { carryOverDecisions } from "@/api/lib/document-review/decision-carry-over";
 import type {
+  DocumentReviewDecision,
   DocumentReviewFindingPayload,
   DocumentReviewRunBasis,
   DocumentReviewRunStatus,
 } from "@/api/lib/document-review/run-contract";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -59,12 +63,15 @@ const reviewTarget = (): ReviewTarget => ({
   entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
 });
 
+/** The pinned reference document every fixture finding cites. */
+const REFERENCE_FILE_FIELD_ID = toSafeId<"field">(Bun.randomUUIDv7());
+
 const referenceBasis: DocumentReviewRunBasis = {
   type: "references",
   references: [
     {
       entityId: toSafeId<"entity">(Bun.randomUUIDv7()),
-      fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
+      fileFieldId: REFERENCE_FILE_FIELD_ID,
       entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
       contentSha256: "b".repeat(64),
       name: "Precedent SPA",
@@ -129,6 +136,7 @@ const violationText = (error: unknown): string => {
 // leaving the constraint untested.
 const ACTIVE_RUN_INDEX = "document_review_runs_active_document_uidx";
 const FINDING_OUTCOME_CHECK = "document_review_findings_outcome_check";
+const DECISION_TIMING_CHECK = "document_review_findings_decision_timing_check";
 
 const referencePayload = (text: string): ReferenceFindingPayload => ({
   checkKind: "reference",
@@ -139,8 +147,16 @@ const referencePayload = (text: string): ReferenceFindingPayload => ({
     assessment: "different",
     consensus: "single",
     explanation: { type: "comparison", text },
-    targetCitations: [],
-    referenceCitations: [],
+    // Cited on both sides, as a real comparison finding is: the carry-over
+    // test turns on whether the quoted evidence changed, so a fixture with no
+    // citations could never exercise it.
+    targetCitations: [{ blockId: "para-7", text }],
+    referenceCitations: [
+      {
+        fileFieldId: REFERENCE_FILE_FIELD_ID,
+        citations: [{ blockId: "para-9", text }],
+      },
+    ],
     fix: null,
   },
 });
@@ -226,6 +242,17 @@ const upsertReferenceFinding = async (
       set: { payload, outcome: payload.finding.assessment },
     });
 };
+
+/** The decision columns of one run's findings, as stored. */
+const decisionsOf = async (runId: SafeId<"documentReviewRun">) =>
+  await testDb
+    .select({
+      decision: documentReviewFindings.decision,
+      decidedBy: documentReviewFindings.decidedBy,
+      decidedAt: documentReviewFindings.decidedAt,
+    })
+    .from(documentReviewFindings)
+    .where(eq(documentReviewFindings.runId, runId));
 
 beforeAll(async () => {
   const fixture = await getRlsFixture();
@@ -403,5 +430,138 @@ describe("document review run persistence", () => {
       outcome: "aligned",
       positionId: null,
     });
+  });
+
+  test("keeps a decision and its moment inseparable", async () => {
+    const target = reviewTarget();
+    const runId = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
+    await seedRun({ runId, status: "running", target });
+
+    const payload = referencePayload("decision probe");
+    const insertDecision = async ({
+      decision,
+      decidedAt,
+    }: {
+      decision: DocumentReviewDecision;
+      decidedAt: Date | null;
+    }): Promise<void> => {
+      await testDb.insert(documentReviewFindings).values({
+        id: toSafeId<"documentReviewFinding">(Bun.randomUUIDv7()),
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        runId,
+        entityId: target.entityId,
+        fileFieldId: target.fileFieldId,
+        entityVersionId: target.entityVersionId,
+        topicId: Bun.randomUUIDv7(),
+        topicTitle: "Governing law",
+        checkKind: "reference",
+        positionId: null,
+        outcome: payload.finding.assessment,
+        payload,
+        decision,
+        decidedBy: ids.userA1,
+        decidedAt,
+      });
+    };
+
+    // A decision with nobody's moment attached, and a moment attached to no
+    // decision: both are the same inconsistency, and neither is storable.
+    expect(
+      violationText(
+        await rejectionOf(
+          insertDecision({ decision: "accepted", decidedAt: null }),
+        ),
+      ),
+    ).toContain(DECISION_TIMING_CHECK);
+    expect(
+      violationText(
+        await rejectionOf(
+          insertDecision({ decision: "open", decidedAt: new Date() }),
+        ),
+      ),
+    ).toContain(DECISION_TIMING_CHECK);
+
+    await insertDecision({ decision: "dismissed", decidedAt: new Date() });
+  });
+
+  /**
+   * The carry-over statement, against a real database: it is hand-written SQL
+   * that joins prior findings back by id, so nothing but Postgres can confirm
+   * that it copies the right rows and leaves the rest alone.
+   */
+  test("carries a decision onto a re-run that repeats the finding", async () => {
+    const target = reviewTarget();
+    const decidedAt = new Date();
+
+    const firstRun = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
+    await seedRun({ runId: firstRun, status: "running", target });
+    await upsertReferenceFinding(firstRun, target, "Original passage");
+    await testDb
+      .update(documentReviewFindings)
+      .set({ decision: "accepted", decidedBy: ids.userA1, decidedAt })
+      .where(eq(documentReviewFindings.runId, firstRun));
+    await testDb
+      .update(documentReviewRuns)
+      .set({ status: "completed", finishedAt: new Date() })
+      .where(eq(documentReviewRuns.id, firstRun));
+
+    const repeatRun = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
+    await seedRun({ runId: repeatRun, status: "running", target });
+    await upsertReferenceFinding(repeatRun, target, "Original passage");
+    const carried = await carryOverDecisions({
+      tx: asTestRaw<Transaction>(testDb),
+      workspaceId: ids.wsA1,
+      runId: repeatRun,
+      entityId: target.entityId,
+      fileFieldId: target.fileFieldId,
+      basisType: referenceBasis.type,
+    });
+    expect(carried).toBe(1);
+    expect(await decisionsOf(repeatRun)).toEqual([
+      { decision: "accepted", decidedBy: ids.userA1, decidedAt },
+    ]);
+
+    // A run whose finding quotes different text inherits nothing: that is the
+    // one a reviewer has to read again.
+    await testDb
+      .update(documentReviewRuns)
+      .set({ status: "completed", finishedAt: new Date() })
+      .where(eq(documentReviewRuns.id, repeatRun));
+    const changedRun = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
+    await seedRun({ runId: changedRun, status: "running", target });
+    await upsertReferenceFinding(changedRun, target, "Renegotiated passage");
+    const carriedAfterChange = await carryOverDecisions({
+      tx: asTestRaw<Transaction>(testDb),
+      workspaceId: ids.wsA1,
+      runId: changedRun,
+      entityId: target.entityId,
+      fileFieldId: target.fileFieldId,
+      basisType: referenceBasis.type,
+    });
+    expect(carriedAfterChange).toBe(0);
+    expect(await decisionsOf(changedRun)).toEqual([
+      { decision: "open", decidedBy: null, decidedAt: null },
+    ]);
+  });
+
+  test("defaults a committed finding to undecided", async () => {
+    const target = reviewTarget();
+    const runId = toSafeId<"documentReviewRun">(Bun.randomUUIDv7());
+    await seedRun({ runId, status: "running", target });
+    await upsertReferenceFinding(runId, target, "Undecided by default");
+
+    const rows = await testDb
+      .select({
+        decision: documentReviewFindings.decision,
+        decidedBy: documentReviewFindings.decidedBy,
+        decidedAt: documentReviewFindings.decidedAt,
+      })
+      .from(documentReviewFindings)
+      .where(eq(documentReviewFindings.runId, runId));
+
+    expect(rows).toEqual([
+      { decision: "open", decidedBy: null, decidedAt: null },
+    ]);
   });
 });
