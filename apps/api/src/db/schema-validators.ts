@@ -153,6 +153,44 @@ export const playbookBundleSchema = t.Array(playbookBundleColumnSchema, {
 });
 export type PlaybookBundle = Static<typeof playbookBundleSchema>;
 
+/**
+ * Why a derivative reached `failed`. `enqueue` means the job never entered the
+ * queue, so nothing will ever pick the derivative up again and a reconciler
+ * must retry it; `processing` means the worker ran and exhausted its attempts,
+ * which is terminal. Absent on rows written before the distinction existed:
+ * those are read as terminal, because resurrecting a genuine processing
+ * failure is the more expensive mistake.
+ */
+export const DERIVATIVE_FAILURE_REASON = {
+  ENQUEUE: "enqueue",
+  PROCESSING: "processing",
+} as const;
+
+export type DerivativeFailureReason =
+  (typeof DERIVATIVE_FAILURE_REASON)[keyof typeof DERIVATIVE_FAILURE_REASON];
+
+/** Shared by both derivatives so their state machines cannot drift apart. */
+const derivativeStateSchema = t.Union([
+  t.Object({
+    status: t.Literal("not-required"),
+  }),
+  t.Object({
+    status: t.Literal("pending"),
+  }),
+  t.Object({
+    status: t.Literal("ready"),
+  }),
+  t.Object({
+    status: t.Literal("failed"),
+    reason: t.Optional(
+      t.Union([
+        t.Literal(DERIVATIVE_FAILURE_REASON.ENQUEUE),
+        t.Literal(DERIVATIVE_FAILURE_REASON.PROCESSING),
+      ]),
+    ),
+  }),
+]);
+
 export const fieldContentSchema = t.Union([
   t.Object({
     version: v1,
@@ -176,42 +214,12 @@ export const fieldContentSchema = t.Union([
     encrypted: t.Boolean(),
     sha256Hex: t.String({ minLength: 64, maxLength: 64 }),
     pdfFileId: t.Nullable(t.String({ format: "uuid" })),
-    pdfDerivative: t.Optional(
-      t.Union([
-        t.Object({
-          status: t.Literal("not-required"),
-        }),
-        t.Object({
-          status: t.Literal("pending"),
-        }),
-        t.Object({
-          status: t.Literal("ready"),
-        }),
-        t.Object({
-          status: t.Literal("failed"),
-        }),
-      ]),
-    ),
+    pdfDerivative: t.Optional(derivativeStateSchema),
     thumbnailFileId: t.Optional(t.Nullable(t.String({ format: "uuid" }))),
     // ThumbHash-rendered `data:image/png;base64,...` blur of the source
     // image (~400-700 bytes); rendered directly in an <img src>.
     placeholder: t.Optional(t.String({ maxLength: 2048 })),
-    thumbnailDerivative: t.Optional(
-      t.Union([
-        t.Object({
-          status: t.Literal("not-required"),
-        }),
-        t.Object({
-          status: t.Literal("pending"),
-        }),
-        t.Object({
-          status: t.Literal("ready"),
-        }),
-        t.Object({
-          status: t.Literal("failed"),
-        }),
-      ]),
-    ),
+    thumbnailDerivative: t.Optional(derivativeStateSchema),
     scanWarnings: t.Optional(t.Array(t.String({ maxLength: 256 }))),
   }),
   t.Object({

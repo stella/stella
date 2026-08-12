@@ -114,7 +114,9 @@ const enqueueImageThumbnailOrMarkFailedMock = mock(async () => undefined);
 const enqueueImageThumbnailMock = mock(async () => undefined);
 const enqueuePdfDerivativeMock = mock(async () => undefined);
 const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => undefined);
+const realFileDerivativeQueue = await import("@/api/lib/file-derivative-queue");
 void mock.module("@/api/lib/file-derivative-queue", () => ({
+  ...realFileDerivativeQueue,
   enqueueImageThumbnail: enqueueImageThumbnailMock,
   enqueueImageThumbnailOrMarkFailed: enqueueImageThumbnailOrMarkFailedMock,
   enqueuePdfDerivative: enqueuePdfDerivativeMock,

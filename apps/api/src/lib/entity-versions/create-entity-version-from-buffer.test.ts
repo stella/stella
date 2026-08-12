@@ -28,7 +28,9 @@ const realSse = await import("@/api/lib/sse");
 void mock.module("@/api/lib/entity-versions/write-file-version", () => ({
   writeFileVersion: writeFileVersionMock,
 }));
+const realFileObjectIds = await import("@/api/lib/files/file-object-ids");
 void mock.module("@/api/lib/files/file-object-ids", () => ({
+  ...realFileObjectIds,
   allocateFileObject: () => "file_1",
 }));
 void mock.module("@/api/lib/files/utils", () => ({
@@ -51,7 +53,9 @@ void mock.module("@/api/lib/s3", () => ({
 void mock.module("@/api/lib/search/process-extraction", () => ({
   processExtraction: processExtractionMock,
 }));
+const realFileDerivativeQueue = await import("@/api/lib/file-derivative-queue");
 void mock.module("@/api/lib/file-derivative-queue", () => ({
+  ...realFileDerivativeQueue,
   enqueuePdfDerivativeOrMarkFailed: pdfDerivativeMock,
   enqueueImageThumbnailOrMarkFailed: thumbnailDerivativeMock,
 }));

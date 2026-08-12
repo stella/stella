@@ -76,7 +76,9 @@ void mock.module("@/api/lib/search/process-extraction", () => ({
   processExtraction: processExtractionMock,
 }));
 
+const realFileDerivativeQueue = await import("@/api/lib/file-derivative-queue");
 void mock.module("@/api/lib/file-derivative-queue", () => ({
+  ...realFileDerivativeQueue,
   enqueueImageThumbnail: enqueueImageThumbnailMock,
   enqueueImageThumbnailOrMarkFailed: enqueueImageThumbnailOrMarkFailedMock,
   enqueuePdfDerivative: enqueuePdfDerivativeMock,

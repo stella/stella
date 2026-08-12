@@ -18,6 +18,8 @@ import { BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK } from "@/api/lib/scheduler
 import { CHAT_THREAD_COMPACTOR_TASK } from "@/api/lib/scheduler/tasks/chat-thread-compactor";
 import { EXPIRE_DESKTOP_EDIT_SESSIONS_TASK } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
 import { DISPATCH_DOCUMENT_OCR_TASK } from "@/api/lib/scheduler/tasks/document-processing-ocr";
+import { REPAIR_FILE_DERIVATIVES_TASK } from "@/api/lib/scheduler/tasks/file-derivative-repair";
+import { RECONCILE_FLOW_RUN_ORPHANS_TASK } from "@/api/lib/scheduler/tasks/flow-run-orphan-reconcile";
 import { INFO_SOUD_SYNC_TRACKED_CASES_TASK } from "@/api/lib/scheduler/tasks/infosoud";
 import { MEMORY_CURATOR_TASK } from "@/api/lib/scheduler/tasks/memory-curator";
 import { MEMORY_EXTRACTOR_TASK } from "@/api/lib/scheduler/tasks/memory-extractor";
@@ -203,6 +205,21 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: REPAIR_SEARCH_PROJECTIONS_TASK,
+  },
+  {
+    description: "Re-enqueue flow-run steps no queued job owns anymore",
+    id: "flows.reconcileOrphanRuns.fiveMinute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
+    task: RECONCILE_FLOW_RUN_ORPHANS_TASK,
+  },
+  {
+    description: "Re-drive file derivatives no queued job owns anymore",
+    id: "files.repairDerivatives.fiveMinute",
+    mode: "recurring",
+    payloadUpdate: "preserve",
+    schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
+    task: REPAIR_FILE_DERIVATIVES_TASK,
   },
   {
     description: "Delete template objects recorded by committed deletions",

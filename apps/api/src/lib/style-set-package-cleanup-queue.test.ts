@@ -50,4 +50,48 @@ describe("style set package cleanup queue", () => {
       },
     );
   });
+  test("reclaims the retained record of a completed no-op claim", async () => {
+    // A claim placed ahead of the write runs while the style set is still
+    // live, finds its key referenced, and completes doing nothing. That record
+    // is retained under the same key-derived job id, so a later replacement
+    // would add a duplicate id, BullMQ would drop it, and the superseded
+    // object would have no runnable cleanup.
+    const remove = mock(async () => undefined);
+    const getJob = mock(async () => ({
+      getState: async () => "completed",
+      remove,
+    }));
+    const add = mock(async () => undefined);
+
+    await enqueueStyleSetPackageCleanupJob({
+      cleanupQueue: { add, getJob },
+      delayMs: 900_000,
+      s3Key: "old.docx",
+      styleSetId: "set",
+    });
+
+    expect(remove).toHaveBeenCalledTimes(1);
+    expect(add).toHaveBeenCalledTimes(1);
+  });
+
+  test("leaves a claim that has not run yet alone", async () => {
+    // A delayed or active job is the claim; re-adding it would either be
+    // ignored or reset the grace period the caller is relying on.
+    const remove = mock(async () => undefined);
+    const getJob = mock(async () => ({
+      getState: async () => "delayed",
+      remove,
+    }));
+    const add = mock(async () => undefined);
+
+    await enqueueStyleSetPackageCleanupJob({
+      cleanupQueue: { add, getJob },
+      delayMs: 900_000,
+      s3Key: "old.docx",
+      styleSetId: "set",
+    });
+
+    expect(remove).not.toHaveBeenCalled();
+    expect(add).not.toHaveBeenCalled();
+  });
 });

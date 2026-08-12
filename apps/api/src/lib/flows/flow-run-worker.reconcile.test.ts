@@ -5,7 +5,15 @@
  * pagination's multi-batch path is exercised without seeding thousands of rows.
  */
 
-import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from "bun:test";
 
 import { organization } from "@/api/db/auth-schema";
 import { flowRuns, workspaces } from "@/api/db/schema";
@@ -51,6 +59,9 @@ describe("reconcileOrphanedFlowRuns", () => {
   const workspaceId = createSafeId<"workspace">();
   const userId = createSafeId<"user">();
   const nonTerminalRunIds: SafeId<"flowRun">[] = [];
+  const stalledRunIds: SafeId<"flowRun">[] = [];
+  const STALL_WINDOW_MS = 15 * 60 * 1000;
+  const STALLED_AT = new Date(Date.now() - 60 * 60 * 1000);
 
   beforeAll(async () => {
     await testDb.insert(organization).values({
@@ -78,6 +89,7 @@ describe("reconcileOrphanedFlowRuns", () => {
     ].map((row) => {
       const id = createSafeId<"flowRun">();
       nonTerminalRunIds.push(id);
+      stalledRunIds.push(id);
       return {
         id,
         workspaceId,
@@ -85,9 +97,23 @@ describe("reconcileOrphanedFlowRuns", () => {
         triggerSource,
         status: row.status,
         currentStepIndex: 0,
+        createdAt: STALLED_AT,
       };
     });
     await testDb.insert(flowRuns).values(rows);
+
+    // Just started: the standing sweep must leave it to the queue.
+    const freshRunId = createSafeId<"flowRun">();
+    nonTerminalRunIds.push(freshRunId);
+    await testDb.insert(flowRuns).values({
+      id: freshRunId,
+      workspaceId,
+      definitionSnapshot: SNAPSHOT,
+      triggerSource,
+      status: "running",
+      currentStepIndex: 0,
+      startedAt: new Date(),
+    });
     await testDb.insert(flowRuns).values({
       id: createSafeId<"flowRun">(),
       workspaceId,
@@ -98,15 +124,28 @@ describe("reconcileOrphanedFlowRuns", () => {
     });
   });
 
+  beforeEach(() => {
+    enqueuedRunIds.length = 0;
+  });
+
   afterAll(async () => {
     await releaseTestDb();
   });
 
   test("re-enqueues every pending/running run across batch boundaries", async () => {
-    await reconcileOrphanedFlowRuns(2);
+    await reconcileOrphanedFlowRuns({ batchSize: 2 });
 
     expect(enqueuedRunIds.toSorted()).toEqual(
       [...nonTerminalRunIds].toSorted(),
     );
+  });
+
+  test("the standing sweep skips runs inside the stall window", async () => {
+    await reconcileOrphanedFlowRuns({
+      batchSize: 2,
+      stalledBefore: new Date(Date.now() - STALL_WINDOW_MS),
+    });
+
+    expect(enqueuedRunIds.toSorted()).toEqual([...stalledRunIds].toSorted());
   });
 });

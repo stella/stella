@@ -12,7 +12,10 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { assertUnchangedSince } from "@/api/lib/optimistic-concurrency";
 import { getS3, writeS3ObjectWithRetry } from "@/api/lib/s3";
-import { enqueueStyleSetPackageCleanup } from "@/api/lib/style-set-package-cleanup-queue";
+import {
+  enqueueStyleSetPackageCleanup,
+  STYLE_SET_PACKAGE_ABANDON_DELAY_MS,
+} from "@/api/lib/style-set-package-cleanup-queue";
 import {
   buildStyleSetKey,
   STYLE_SET_DOWNLOAD_TTL_SECONDS,
@@ -29,6 +32,35 @@ type CreateStoredStyleSetOptions = {
   recordAuditEvent: AuditRecorder;
 };
 
+/**
+ * Claim the cleanup of a package before it is written.
+ *
+ * The object and the row that names it cannot commit together. Whatever runs
+ * last can be lost to a crash, so the only ordering with no orphan in it is
+ * to make the storage write the *second* step: the queued job outlives this
+ * process, and its worker deletes the object only if no row ended up naming
+ * it. A cleanup that cannot be claimed fails the request before anything is
+ * written, which leaves nothing behind either.
+ */
+const claimPackageCleanup = async (
+  s3Key: string,
+  styleSetId: SafeId<"styleSet">,
+) =>
+  await Result.tryPromise({
+    try: async () =>
+      await enqueueStyleSetPackageCleanup({
+        s3Key,
+        styleSetId,
+        delayMs: STYLE_SET_PACKAGE_ABANDON_DELAY_MS,
+      }),
+    catch: (cause) =>
+      new HandlerError({
+        status: 500,
+        message: "Could not prepare the style set package cleanup.",
+        cause,
+      }),
+  });
+
 export const createStoredStyleSet = async ({
   safeDb,
   organizationId,
@@ -41,6 +73,7 @@ export const createStoredStyleSet = async ({
     const styleSetId = createSafeId<"styleSet">();
     const s3Key = buildStyleSetKey({ organizationId, styleSetId });
 
+    yield* Result.await(claimPackageCleanup(s3Key, styleSetId));
     yield* Result.await(
       Result.tryPromise({
         try: async () =>
@@ -114,18 +147,21 @@ export const createStoredStyleSet = async ({
       return Result.ok(inserted);
     } finally {
       if (!persisted) {
-        Result.unwrap(
-          await Result.tryPromise({
-            try: async () => await getS3().delete(s3Key),
-            catch: (cause) =>
-              new HandlerError({
-                status: 500,
-                message: "Could not clean up the rejected style set package.",
-                cause,
-              }),
-          }),
-          "Rejected style set package cleanup failed",
-        );
+        // Fast path only: the claimed cleanup job is the durable one, so a
+        // failure here costs a delay, not the object. Throwing from a
+        // `finally` would also replace the rejection the caller must see.
+        const cleanup = await Result.tryPromise({
+          try: async () => await getS3().delete(s3Key),
+          catch: (cause) =>
+            new HandlerError({
+              status: 500,
+              message: "Could not clean up the rejected style set package.",
+              cause,
+            }),
+        });
+        if (Result.isError(cleanup)) {
+          captureError(cleanup.error);
+        }
       }
     }
   });
@@ -221,6 +257,7 @@ export const replaceStoredStyleSet = async ({
     }
 
     const s3Key = buildStyleSetKey({ organizationId, styleSetId });
+    yield* Result.await(claimPackageCleanup(s3Key, styleSetId));
     yield* Result.await(
       Result.tryPromise({
         try: async () =>
@@ -375,18 +412,19 @@ export const replaceStoredStyleSet = async ({
       return Result.ok(replaced.row);
     } finally {
       if (!persisted) {
-        Result.unwrap(
-          await Result.tryPromise({
-            try: async () => await getS3().delete(s3Key),
-            catch: (cause) =>
-              new HandlerError({
-                status: 500,
-                message: "Could not clean up the replacement style package.",
-                cause,
-              }),
-          }),
-          "Replacement style set package cleanup failed",
-        );
+        // Fast path only; see `createStoredStyleSet`.
+        const cleanup = await Result.tryPromise({
+          try: async () => await getS3().delete(s3Key),
+          catch: (cause) =>
+            new HandlerError({
+              status: 500,
+              message: "Could not clean up the replacement style package.",
+              cause,
+            }),
+        });
+        if (Result.isError(cleanup)) {
+          captureError(cleanup.error);
+        }
       }
     }
   });
