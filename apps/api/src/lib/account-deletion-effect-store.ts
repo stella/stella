@@ -359,10 +359,7 @@ export const listRecoverableAccountDeletionEffectRequestIds = async (
     .from(accountDeletionEffectChunks)
     .innerJoin(
       accountDeletionRequests,
-      eq(
-        accountDeletionRequests.id,
-        accountDeletionEffectChunks.requestId,
-      ),
+      eq(accountDeletionRequests.id, accountDeletionEffectChunks.requestId),
     )
     .where(eligibleChunkPredicate())
     .orderBy(

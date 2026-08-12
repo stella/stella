@@ -218,9 +218,8 @@ describe("destructive-effect lease fencing", () => {
       }),
     );
 
-    const recoverable = await listRecoverableAccountDeletionEffectRequestIds(
-      accountEffectDb(),
-    );
+    const recoverable =
+      await listRecoverableAccountDeletionEffectRequestIds(accountEffectDb());
 
     expect(recoverable.indexOf(olderRequestId)).toBeLessThan(
       recoverable.indexOf(newerRequestId),
