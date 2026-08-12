@@ -134,19 +134,39 @@ const getQueue = (): Queue<DocumentReviewRunJobData> => {
   return queue;
 };
 
-export const enqueueDocumentReviewRun = async ({
+/** One job, described exactly as the queue takes it. The run id IS the job
+ *  identity: a duplicate enqueue collapses onto the job already in flight
+ *  instead of scheduling a second execution. */
+const runJob = ({
   runId,
   workspaceId,
   organizationId,
   userId,
-}: EnqueueDocumentReviewRunArgs): Promise<void> => {
-  await getQueue().add(
-    JOB_NAME,
-    { runId, workspaceId, organizationId, userId },
-    // The run id IS the job identity: a duplicate enqueue collapses onto the
-    // job already in flight instead of scheduling a second execution.
-    { jobId: createBullMqJobId(workspaceId, runId) },
-  );
+}: EnqueueDocumentReviewRunArgs) => ({
+  name: JOB_NAME,
+  data: { runId, workspaceId, organizationId, userId },
+  opts: { jobId: createBullMqJobId(workspaceId, runId) },
+});
+
+export const enqueueDocumentReviewRun = async (
+  args: EnqueueDocumentReviewRunArgs,
+): Promise<void> => {
+  const { name, data, opts } = runJob(args);
+  await getQueue().add(name, data, opts);
+};
+
+/**
+ * Enqueue a whole matter's reviews in one round trip. A files-table run opens a
+ * run per document, so adding them one at a time would be one Redis round trip
+ * per document for no gain; `addBulk` is the same jobs, same ids, one call.
+ */
+export const enqueueDocumentReviewRuns = async (
+  runs: readonly EnqueueDocumentReviewRunArgs[],
+): Promise<void> => {
+  if (runs.length === 0) {
+    return;
+  }
+  await getQueue().addBulk(runs.map(runJob));
 };
 
 /**

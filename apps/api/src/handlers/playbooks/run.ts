@@ -12,11 +12,13 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { resolvePlaybookPin } from "@/api/lib/document-review/resolve-playbook-pin";
 import type { PinnedPlaybook } from "@/api/lib/document-review/run-contract";
-import { enqueueDocumentReviewRun } from "@/api/lib/document-review/run-queue";
-import { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
+import { enqueueDocumentReviewRuns } from "@/api/lib/document-review/run-queue";
+import {
+  createPlaybookTableRuns,
+  PLAYBOOK_RUN_DOCUMENTS_MAX,
+} from "@/api/lib/document-review/table-run-create";
 import type { CreatePlaybookTableRunsResult } from "@/api/lib/document-review/table-run-create";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { LIMITS } from "@/api/lib/limits";
 import { startWorkflow } from "@/api/lib/workflow-queue";
 import {
   materializePlaybookRun,
@@ -192,7 +194,7 @@ const runPlaybook = createSafeHandler(
       return Result.err(
         new HandlerError({
           status: 422,
-          message: `This matter holds more documents than one playbook run can review (${LIMITS.playbookRunDocumentsMax}). Review them in smaller matters.`,
+          message: `This matter holds more documents than one playbook run can review (${PLAYBOOK_RUN_DOCUMENTS_MAX}). Review them in smaller matters.`,
         }),
       );
     }
@@ -200,17 +202,15 @@ const runPlaybook = createSafeHandler(
     if (projection === PLAYBOOK_RUN_PROJECTION.NONE) {
       yield* Result.await(
         Result.tryPromise({
-          try: async () => {
-            for (const run of tableRuns.runs) {
-              // oxlint-disable-next-line no-await-in-loop -- bounded by LIMITS.playbookRunDocumentsMax; a parallel burst would spike the queue connection for no gain
-              await enqueueDocumentReviewRun({
+          try: async () =>
+            await enqueueDocumentReviewRuns(
+              tableRuns.runs.map((run) => ({
                 runId: run.runId,
                 workspaceId,
                 organizationId,
                 userId: user.id,
-              });
-            }
-          },
+              })),
+            ),
           // A run whose job never arrived stays `queued` and is reconciled to
           // `failed` by the review queue's janitor, so a partial enqueue never
           // leaves a document blocked forever.
