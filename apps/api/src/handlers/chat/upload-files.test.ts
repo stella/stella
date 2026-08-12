@@ -328,7 +328,9 @@ describe("chat attachment hydration", () => {
     // this pins the second, so a writer that stopped sanitizing fails here
     // rather than surfacing as a hostile name the waiver said was impossible.
     const hostileName = '../../etc/passwd";rm -rf /';
-    const values = mock(async () => undefined);
+    // Typed by what the assertion reads, so the captured row keeps its shape
+    // instead of arriving as an untyped call record.
+    const values = mock(async (_row: { fileName: string }) => undefined);
     const testTx = asTestRaw<Transaction>({
       insert: mock(() => ({ values })),
     });
@@ -349,11 +351,7 @@ describe("chat attachment hydration", () => {
     });
 
     expect(Result.isOk(result)).toBe(true);
-    const persisted = values.mock.calls.at(0)?.at(0);
-    const storedName =
-      typeof persisted === "object" && persisted !== null
-        ? Reflect.get(persisted, "fileName")
-        : undefined;
+    const storedName = values.mock.calls.at(0)?.at(0)?.fileName;
     expect(storedName).toBe(sanitizeFilename(hostileName));
     expect(storedName).not.toBe(hostileName);
   });
