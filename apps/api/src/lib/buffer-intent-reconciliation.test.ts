@@ -35,46 +35,57 @@ type UpdateValues = {
   status?: string | undefined;
 };
 
-const createReconciliationSafeDb = (updates: UpdateValues[]): SafeDb => {
-  const row = {
-    declaredMime:
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    id: pendingUploadId,
-    organizationId,
-    purpose: "entity_create",
-    purposeData: {
-      type: "entity_create" as const,
-      propertyId: toSafeId<"property">("00000000-0000-0000-0000-000000000004"),
-      reservedFileId: "00000000-0000-0000-0000-000000000005",
+type ReconciliationRow = Parameters<typeof pendingUploadRecoveryObjectKeys>[0];
+
+const createReconciliationSafeDb = (
+  updates: UpdateValues[],
+  rows: ReconciliationRow[] = [
+    {
+      declaredMime:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      id: pendingUploadId,
+      organizationId,
+      purpose: "entity_create",
+      purposeData: {
+        type: "entity_create" as const,
+        propertyId: toSafeId<"property">(
+          "00000000-0000-0000-0000-000000000004",
+        ),
+        reservedFileId: "00000000-0000-0000-0000-000000000005",
+      },
+      workspaceId,
     },
-    workspaceId,
-  };
-  const tx = asTestRaw<Transaction>({
-    select: () => ({
-      from: () => ({
-        where: () => ({
-          orderBy: () => ({
-            limit: () => ({
-              for: async () => [row],
+  ],
+): SafeDb => {
+  let transactionCount = 0;
+  return asTestRaw<SafeDb>(
+    async <T>(run: (transaction: Transaction) => Promise<T>) => {
+      const selectedRows = transactionCount === 0 ? rows : [];
+      transactionCount += 1;
+      const tx = asTestRaw<Transaction>({
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              orderBy: () => ({
+                limit: () => ({
+                  for: async () => selectedRows,
+                }),
+              }),
             }),
           }),
         }),
-      }),
-    }),
-    update: () => ({
-      set: (values: UpdateValues) => {
-        updates.push(values);
-        return { where: async () => undefined };
-      },
-    }),
-  });
-
-  return asTestRaw<SafeDb>(
-    async <T>(run: (transaction: Transaction) => Promise<T>) =>
-      await Result.tryPromise({
+        update: () => ({
+          set: (values: UpdateValues) => {
+            updates.push(values);
+            return { where: async () => undefined };
+          },
+        }),
+      });
+      return await Result.tryPromise({
         try: async () => await run(tx),
         catch: (cause) => cause,
-      }),
+      });
+    },
   );
 };
 
@@ -172,6 +183,51 @@ test("keeps a reclaimed writer intent recoverable after deleting its object", as
     }),
   );
   expect(updates.at(-1)).not.toHaveProperty("finalizedAt");
+});
+
+test("shares one bounded cleanup pool across claimed email ingests", async () => {
+  const rows = [0, 1, 2, 3, 4, 5].map(
+    (rowIndex) =>
+      ({
+        declaredMime: "message/rfc822",
+        id: toSafeId<"pendingUpload">(
+          `00000000-0000-0000-0000-${String(rowIndex + 10).padStart(12, "0")}`,
+        ),
+        organizationId,
+        purpose: "email_ingest",
+        purposeData: {
+          type: "email_ingest",
+          propertyId: toSafeId<"property">(
+            "00000000-0000-0000-0000-000000000004",
+          ),
+          recoveryObjectKeys: Array.from(
+            { length: 5 },
+            (_, objectIndex) =>
+              `${organizationId}/${workspaceId}/${String(rowIndex)}-${String(objectIndex)}`,
+          ),
+        },
+        workspaceId,
+      }) satisfies ReconciliationRow,
+  );
+  let active = 0;
+  let maximumActive = 0;
+  let deletionCount = 0;
+
+  const claimed = await reconcileStaleBufferIntentsGlobally({
+    safeDb: createReconciliationSafeDb([], rows),
+    limit: 25,
+    deleteObject: async () => {
+      active += 1;
+      deletionCount += 1;
+      maximumActive = Math.max(maximumActive, active);
+      await Bun.sleep(1);
+      active -= 1;
+    },
+  });
+
+  expect(claimed).toBe(6);
+  expect(deletionCount).toBe(30);
+  expect(maximumActive).toBe(4);
 });
 
 test("keeps a lifecycle tombstone while backing off repeated deletion", async () => {

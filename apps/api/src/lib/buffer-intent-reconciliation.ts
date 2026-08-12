@@ -443,48 +443,47 @@ const reconcileStaleBufferIntentBatch = async ({
     throw claimedResult.error;
   }
 
-  const cleanupResults = await Promise.all(
-    claimedResult.value.map(async (row) => {
-      const objectKeys = pendingUploadRecoveryObjectKeys(row);
-      if (objectKeys.length === 0) {
-        return null;
-      }
-
-      const cleanups = await mapWithConcurrency({
-        items: objectKeys,
-        limit: RECOVERY_DELETE_CONCURRENCY,
-        operation: async (objectKey) =>
-          await Result.tryPromise({
-            try: async () =>
-              await withTimeout(
-                async (operationSignal) =>
-                  await deleteObject(objectKey, operationSignal),
-                {
-                  label: "buffer-intent-reconciliation.delete",
-                  signal,
-                  timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
-                },
-              ),
-            catch: (cause) => cause,
-          }),
-      });
-      const failedCleanup = cleanups.find(Result.isError);
-      if (failedCleanup) {
-        if (!signal?.aborted) {
-          captureError(failedCleanup.error, {
-            pendingUploadId: row.id,
-            stage: `buffer-${row.purpose}-intent-reconcile`,
-          });
-        }
-        return null;
-      }
-      return row.id;
+  const cleanupResults = await mapWithConcurrency({
+    items: claimedResult.value.flatMap((row) =>
+      pendingUploadRecoveryObjectKeys(row).map((objectKey) => ({
+        objectKey,
+        row,
+      })),
+    ),
+    limit: RECOVERY_DELETE_CONCURRENCY,
+    operation: async ({ objectKey, row }) => ({
+      result: await Result.tryPromise({
+        try: async () =>
+          await withTimeout(
+            async (operationSignal) =>
+              await deleteObject(objectKey, operationSignal),
+            {
+              label: "buffer-intent-reconciliation.delete",
+              signal,
+              timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
+            },
+          ),
+        catch: (cause) => cause,
+      }),
+      row,
     }),
-  );
+  });
   signal?.throwIfAborted();
-  const cleanedIds = cleanupResults.filter(
-    (id): id is SafeId<"pendingUpload"> => id !== null,
-  );
+  const failedIds = new Set<SafeId<"pendingUpload">>();
+  for (const { result, row } of cleanupResults) {
+    if (!Result.isError(result) || failedIds.has(row.id)) {
+      continue;
+    }
+    failedIds.add(row.id);
+    captureError(result.error, {
+      pendingUploadId: row.id,
+      stage: `buffer-${row.purpose}-intent-reconcile`,
+    });
+  }
+  const cleanedIds = claimedResult.value.flatMap((row) => {
+    const hasRecoveryObjects = pendingUploadRecoveryObjectKeys(row).length > 0;
+    return hasRecoveryObjects && !failedIds.has(row.id) ? [row.id] : [];
+  });
   if (cleanedIds.length === 0) {
     return claimedResult.value.length;
   }
@@ -583,8 +582,10 @@ export const reconcileBufferObjectCleanupIntents = async ({
     throw claimedResult.error;
   }
 
-  await Promise.all(
-    claimedResult.value.map(async (row) => {
+  await mapWithConcurrency({
+    items: claimedResult.value,
+    limit: RECOVERY_DELETE_CONCURRENCY,
+    operation: async (row) => {
       const cleanup = await Result.tryPromise({
         try: async () =>
           await withTimeout(
@@ -604,8 +605,8 @@ export const reconcileBufferObjectCleanupIntents = async ({
           stage: "buffer-object-cleanup-reconcile",
         });
       }
-    }),
-  );
+    },
+  });
   signal?.throwIfAborted();
   return claimedResult.value.length;
 };
@@ -653,19 +654,20 @@ export const reconcileStaleBufferIntentsGlobally = async ({
 }): Promise<number> => {
   const pendingLimit = Math.ceil(limit / 2);
   const transferredLimit = Math.floor(limit / 2);
-  const [pendingCount, transferredCount] = await Promise.all([
-    reconcileStaleBufferIntentBatch({
-      safeDb,
-      limit: pendingLimit,
-      signal,
-      deleteObject,
-    }),
-    reconcileBufferObjectCleanupIntents({
-      safeDb,
-      limit: transferredLimit,
-      signal,
-      deleteObject,
-    }),
-  ]);
+  // Run both claim classes through one worker-wide deletion budget. Each
+  // reconciler bounds its flat object list, and sequencing prevents their
+  // independent pools from multiplying storage concurrency.
+  const pendingCount = await reconcileStaleBufferIntentBatch({
+    safeDb,
+    limit: pendingLimit,
+    signal,
+    deleteObject,
+  });
+  const transferredCount = await reconcileBufferObjectCleanupIntents({
+    safeDb,
+    limit: transferredLimit,
+    signal,
+    deleteObject,
+  });
   return pendingCount + transferredCount;
 };
