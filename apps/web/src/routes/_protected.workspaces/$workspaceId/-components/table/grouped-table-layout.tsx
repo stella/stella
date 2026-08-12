@@ -56,6 +56,11 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import type { EntityGroup } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import { GroupScopeProvider } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-scope";
+import {
+  getGroupSkeletonLayout,
+  GROUP_SKELETON_ROW_KEYS,
+  GROUP_TABLE_PAGE_SIZE,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout.logic";
 import { MobileTableOrientationGate } from "@/routes/_protected.workspaces/$workspaceId/-components/table/mobile-table-orientation-gate";
 import {
   DEFAULT_TABLE_COLUMN_MIN_SIZE,
@@ -63,21 +68,27 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-columns";
 import {
   WorkspaceGridCell,
+  WorkspaceGridHead,
   WorkspaceGridRow,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid";
 import { getOrderedColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid-order";
 import { WorkspaceTable } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table";
-import type { WorkspaceGridStyle } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
+import { RowEndFillerCell } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/end-fillers";
+import { HeaderEndFillerCell } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/header-cells";
+import {
+  TABLE_ROW_ESTIMATE_PX,
+  type WorkspaceGridStyle,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
 import {
   addPropertyColId,
+  getEndFillerGridColumn,
   getScrollableAncestor,
   getWorkspaceGridTemplateColumns,
+  tableEndFillerCellStyle,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals-helpers";
 import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import { useSyncSelectedEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-selected-entities";
 import { useTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state";
-
-const GROUP_TABLE_PAGE_SIZE = 200;
 
 // Grouped views eager-load only the first few sections' rows upfront; every
 // later section rides its IntersectionObserver scroll-gate (400px lookahead)
@@ -449,25 +460,47 @@ const GroupedAddRow = ({
   );
 };
 
-const SKELETON_ROW_KEYS = ["a", "b", "c", "d", "e"] as const;
-
 type GroupSkeletonProps = {
   columns: TableColumnDef[];
   tableState: ReturnType<typeof useTableState>;
-  rows: number;
+  totalRows: number | undefined;
 };
 
 // Placeholder rows in the real column grid, shown while a group's count (or its
-// rows) are still loading — so the view never flashes "0 items".
-const GroupSkeleton = ({ columns, tableState, rows }: GroupSkeletonProps) => {
+// rows) are still loading — so the view never flashes "0 items". Once the
+// authoritative count is known, reserve the first page's exact height while
+// keeping the animated skeleton DOM bounded; the ruled filler represents the
+// remaining rows without mounting hundreds of placeholders per group.
+const GroupSkeleton = ({
+  columns,
+  tableState,
+  totalRows,
+}: GroupSkeletonProps) => {
   const { renderColumns, gridStyle } = useGroupGridGeometry(
     columns,
     tableState,
   );
+  const { fillerRowCount, skeletonRowCount } =
+    getGroupSkeletonLayout(totalRows);
 
   return (
     <div style={gridStyle}>
-      {SKELETON_ROW_KEYS.slice(0, rows).map((rowKey) => (
+      <WorkspaceGridRow className="pointer-events-none">
+        {renderColumns.map((column) => (
+          <WorkspaceGridHead
+            className="flex items-center px-2"
+            key={column.id}
+            role="presentation"
+          >
+            <Skeleton className="h-3.5 w-2/5" />
+          </WorkspaceGridHead>
+        ))}
+        <HeaderEndFillerCell
+          addPropertyColumn={null}
+          renderColumns={renderColumns}
+        />
+      </WorkspaceGridRow>
+      {GROUP_SKELETON_ROW_KEYS.slice(0, skeletonRowCount).map((rowKey) => (
         <WorkspaceGridRow className="pointer-events-none" key={rowKey}>
           {renderColumns.map((column) => (
             <WorkspaceGridCell
@@ -478,8 +511,39 @@ const GroupSkeleton = ({ columns, tableState, rows }: GroupSkeletonProps) => {
               <Skeleton className="h-3.5 w-3/5" />
             </WorkspaceGridCell>
           ))}
+          <RowEndFillerCell
+            addPropertyColumn={null}
+            renderColumns={renderColumns}
+            selected={false}
+          />
         </WorkspaceGridRow>
       ))}
+      {fillerRowCount > 0 && (
+        <WorkspaceGridRow
+          className="pointer-events-none"
+          style={{ height: fillerRowCount * TABLE_ROW_ESTIMATE_PX }}
+        >
+          {renderColumns.map((column) => (
+            <WorkspaceGridCell
+              className="min-h-0 border-b-0 p-0"
+              key={column.id}
+              role="presentation"
+              style={tableEndFillerCellStyle}
+            />
+          ))}
+          <WorkspaceGridCell
+            className="min-h-0 border-e-0 border-b-0 p-0"
+            role="presentation"
+            style={{
+              gridColumn: getEndFillerGridColumn({
+                renderColumns,
+                addPropertyColumn: null,
+              }),
+              ...tableEndFillerCellStyle,
+            }}
+          />
+        </WorkspaceGridRow>
+      )}
     </div>
   );
 };
@@ -663,8 +727,8 @@ const GroupSection = ({
       {!collapsed && showSkeleton && (
         <GroupSkeleton
           columns={sectionColumns}
-          rows={Math.min(count ?? 3, 5)}
           tableState={tableState}
+          totalRows={count}
         />
       )}
       {!collapsed &&
