@@ -105,9 +105,11 @@ test("server-rendered public law decisions stay stable after hydration", async (
   await page.reload({ waitUntil: "commit" });
 
   await expect(page.locator("article").first()).toBeVisible();
-  // Source documents may contain their own level-one heading. Scope this to
-  // the viewer's accessible page title rather than assuming a global count.
-  await expect(page.locator("h1.sr-only")).toHaveCount(1);
+  // Imported judgments are self-contained articles and may carry their own h1.
+  // Assert the app-owned page title without constraining source-document markup.
+  const decisionTitle = page.locator('h1[data-slot="decision-title"]');
+  await expect(decisionTitle).toHaveCount(1);
+  await expect(decisionTitle).toHaveText(/\S/u);
   const routeErrorTitle = page.locator("#route-error-title");
   const inspector = page.locator('[data-side="right"]');
   await expect(routeErrorTitle).toHaveCount(0);

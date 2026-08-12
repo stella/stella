@@ -207,7 +207,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <h1 className="sr-only">
+      <h1 className="sr-only" data-slot="decision-title">
         <BidiText as="span">{decision.caseNumber}</BidiText>
       </h1>
       <div className="relative min-h-0 flex-1">
