@@ -615,7 +615,7 @@ export const TemplateStudioPage = ({
     if (sibling !== null) {
       detached(
         proposeFieldMirror({ path, sourceText: text, sibling }),
-        "makeField",
+        "template-studio.propose-field-mirror",
       );
     }
     return path;
@@ -1108,7 +1108,7 @@ export const TemplateStudioPage = ({
                 ),
               }),
           ),
-        "handleSave",
+        "template-studio.invalidate",
       );
       if (slotRenameErrorMessage === null) {
         stellaToast.add({

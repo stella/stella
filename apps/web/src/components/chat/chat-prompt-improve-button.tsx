@@ -127,7 +127,10 @@ export const ChatPromptImproveButton = ({
       return;
     }
     setOpen(false);
-    detached(improvePrompt(strategy), "ChatPromptImproveButton.improvePrompt");
+    detached(
+      improvePrompt(strategy),
+      "chat-prompt-improve-button.improve-prompt",
+    );
   };
 
   let label = t("chat.improvePrompt");

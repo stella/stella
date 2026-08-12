@@ -123,7 +123,7 @@ export const createTrailingSingleFlight = ({
       queued = true;
       return settled;
     }
-    detached(drain(), "createTrailingSingleFlight");
+    detached(drain(), "docx-edit-mode-logic.drain");
     return settled;
   };
 };

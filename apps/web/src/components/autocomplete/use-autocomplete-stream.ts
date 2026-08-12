@@ -273,7 +273,7 @@ export const useAutocompleteStream = (
         clearTimeout(debounceTimer);
       }
       debounceTimer = setTimeout(() => {
-        detached(fireRequest(), "scheduleTrigger");
+        detached(fireRequest(), "use-autocomplete-stream.fire-request");
       }, debounceMs);
     };
 

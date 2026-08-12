@@ -26,15 +26,15 @@ export const useInstallEntry = (organizationId: string) => {
         queryClient.invalidateQueries({
           queryKey: catalogueKeys.list(organizationId),
         }),
-        "onSuccess",
+        "use-install-entry.invalidate",
       );
       detached(
         queryClient.invalidateQueries({ queryKey: mcpQueryRoot() }),
-        "onSuccess",
+        "use-install-entry.invalidate",
       );
       detached(
         queryClient.invalidateQueries({ queryKey: agentSkillsQueryRoot() }),
-        "onSuccess",
+        "use-install-entry.invalidate",
       );
     },
   });

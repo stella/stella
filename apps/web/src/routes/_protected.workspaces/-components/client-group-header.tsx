@@ -59,7 +59,7 @@ export const ClientGroupHeader = ({
                   to: "/contacts/$contactId",
                   params: { contactId: group.clientId },
                 }),
-                "ClientGroupHeader",
+                "client-group-header.navigate",
               );
             }}
             onKeyDown={(e) => {
@@ -70,7 +70,7 @@ export const ClientGroupHeader = ({
                     to: "/contacts/$contactId",
                     params: { contactId: group.clientId },
                   }),
-                  "ClientGroupHeader",
+                  "client-group-header.navigate",
                 );
               }
             }}

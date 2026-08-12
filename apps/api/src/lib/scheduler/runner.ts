@@ -185,7 +185,7 @@ export const startSchedulerLoop = ({
         return;
       }
 
-      detached(runTick(), "scheduleNext");
+      detached(runTick(), "scheduler-runner.run-tick");
     }, pollIntervalMs);
   };
 
@@ -216,7 +216,7 @@ export const startSchedulerLoop = ({
       return;
     }
 
-    detached(runTick(), "startSchedulerLoop");
+    detached(runTick(), "scheduler-runner.run-tick");
   }, 0);
 
   return {
@@ -342,7 +342,7 @@ const startLeaseHeartbeat = ({
           "error.type": errorTag(error),
         });
       }),
-      "startLeaseHeartbeat",
+      "scheduler-runner.renew",
     );
   }, intervalMs);
 

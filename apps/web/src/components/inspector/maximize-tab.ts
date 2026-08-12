@@ -69,7 +69,7 @@ export const buildMaximizeTabAction = (
         queryClient,
         threadId: tab.id,
       }),
-      "buildMaximizeTabAction",
+      "maximize-tab.invalidate-chat-thread-across-scopes",
     );
     useInspectorTabsStore.getState().closeTab(tab.id);
     if (tabWorkspaceId === undefined) {
@@ -78,7 +78,7 @@ export const buildMaximizeTabAction = (
           to: "/chat/$threadId",
           params: { threadId: tab.id },
         }),
-        "buildMaximizeTabAction",
+        "maximize-tab.navigate",
       );
       return;
     }
@@ -87,7 +87,7 @@ export const buildMaximizeTabAction = (
         to: "/chat/workspaces/$workspaceId/$threadId",
         params: { workspaceId: tabWorkspaceId, threadId: tab.id },
       }),
-      "buildMaximizeTabAction",
+      "maximize-tab.navigate",
     );
   };
 };

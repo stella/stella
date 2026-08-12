@@ -848,7 +848,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     }
 
     pendingEditRequestRef.current = false;
-    detached(requestEditMode(), "DocxBrowserEditorContent");
+    detached(requestEditMode(), "docx-browser-editor.request-edit-mode");
   }, [compatibility, previewFile, requestEditMode, state.status]);
 
   // Auto-open when this component is used as a direct editor, or when the
@@ -873,7 +873,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     }
     didOpenRef.current = true;
     errorToastShownRef.current = false;
-    detached(open(), "DocxBrowserEditorContent");
+    detached(open(), "docx-browser-editor.open");
   }, [
     compatibility,
     collaborationEnabled,
@@ -1051,7 +1051,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   );
 
   const saveChangeCheckpoint = useCallback(() => {
-    detached(triggerCheckpointSave(), "DocxBrowserEditorContent");
+    detached(
+      triggerCheckpointSave(),
+      "docx-browser-editor.trigger-checkpoint-save",
+    );
   }, [triggerCheckpointSave]);
 
   // Awaitable variant of `saveChangeCheckpoint` for callers that
@@ -1077,7 +1080,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
 
       e.preventDefault();
       clearQueuedChangeCheckpoint();
-      detached(triggerCheckpointSave(), "handler");
+      detached(
+        triggerCheckpointSave(),
+        "docx-browser-editor.trigger-checkpoint-save",
+      );
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
@@ -1320,7 +1326,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     ) {
       didOpenRef.current = true;
       errorToastShownRef.current = false;
-      detached(open(), "DocxBrowserEditorContent");
+      detached(open(), "docx-browser-editor.open");
     }
   }, [
     canUnlock,
@@ -1348,7 +1354,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       handleUnlock();
       return;
     }
-    detached(handleFinalize(), "DocxBrowserEditorContent");
+    detached(handleFinalize(), "docx-browser-editor.finalize");
   }, [handleFinalize, handleUnlock, isUnlocked]);
 
   // Registers this render's action handles into the parent-provided ref
@@ -1390,7 +1396,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       cancel: handleCancel,
       finalize: () => {
         if (isCollaborativeEditing || state.status === "editing") {
-          detached(handleFinalize(), "finalize");
+          detached(handleFinalize(), "docx-browser-editor.finalize");
         }
       },
       flushPendingChanges,
@@ -1398,7 +1404,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         editorRef.current?.print();
       },
       unlock: () => {
-        detached(requestEditMode(), "unlock");
+        detached(requestEditMode(), "docx-browser-editor.request-edit-mode");
       },
     }),
     [

@@ -148,7 +148,7 @@ function AgentClaimPage() {
             className="flex flex-col gap-4"
             onSubmit={(event) => {
               event.preventDefault();
-              detached(handleApprove(), "AgentClaimPage");
+              detached(handleApprove(), "agent-claim.approve");
             }}
           >
             <div className="flex flex-col gap-2">

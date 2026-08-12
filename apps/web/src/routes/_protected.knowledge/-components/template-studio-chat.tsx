@@ -229,10 +229,13 @@ const ResolvedTemplateStudioChat = (props: TemplateStudioChatProps) => {
       key={chatThreadId}
       chatThreadId={chatThreadId}
       onNewThread={() => {
-        detached(rotateThread(), "ResolvedTemplateStudioChat");
+        detached(rotateThread(), "template-studio-chat.rotate-thread");
       }}
       onScopedPresetSend={(request) => {
-        detached(handleScopedPresetSend(request), "ResolvedTemplateStudioChat");
+        detached(
+          handleScopedPresetSend(request),
+          "template-studio-chat.scoped-preset-send",
+        );
       }}
       pendingPresetSend={pendingPresetSend}
       onPendingPresetSendHandled={() => {
@@ -1165,7 +1168,10 @@ const TemplateStudioChatInner = ({
     );
     for (const part of partsToRun) {
       executedIds.add(part.id);
-      detached(runActiveDocxEditToolCall(part), "TemplateStudioChatInner");
+      detached(
+        runActiveDocxEditToolCall(part),
+        "template-studio-chat.run-active-docx-edit-tool-call",
+      );
     }
   }, [messages, runActiveDocxEditToolCall]);
 

@@ -134,7 +134,7 @@ function ContactDetailPage() {
               });
               await navigate({ to: "/contacts" });
             })(),
-            "onSuccess",
+            "contacts.add",
           );
         },
         onError: (error) => {
@@ -168,7 +168,7 @@ function ContactDetailPage() {
           onClick={() => {
             detached(
               (async () => await navigate({ to: "/contacts" }))(),
-              "ContactDetailPage",
+              "contacts.navigate",
             );
           }}
           size="icon-xs"

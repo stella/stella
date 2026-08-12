@@ -125,7 +125,10 @@ function DesktopPage() {
                 <Button
                   loading={selfHostConnectStatus === "connecting"}
                   onClick={() => {
-                    detached(handleConnectSelfHostedDesktop(), "DesktopPage");
+                    detached(
+                      handleConnectSelfHostedDesktop(),
+                      "settings-account-desktop.connect-self-hosted-desktop",
+                    );
                   }}
                   size="lg"
                 >

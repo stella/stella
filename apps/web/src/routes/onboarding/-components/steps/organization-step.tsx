@@ -76,7 +76,7 @@ export const OrganizationStep = ({
             flashInput();
             return;
           }
-          detached(form.handleSubmit(), "OrganizationStep");
+          detached(form.handleSubmit(), "organization-step.submit");
         }}
       >
         <form.Field name="name">

@@ -510,7 +510,7 @@ const PlaybookEditorForm = ({
         queryClient.invalidateQueries({
           queryKey: knowledgeKeys.playbooks.detail(organizationId, playbookId),
         }),
-        "reportVersionConflict",
+        "playbook-editor.invalidate",
       );
     }
     stellaToast.add({
@@ -631,24 +631,19 @@ const PlaybookEditorForm = ({
       queryClient.invalidateQueries({
         queryKey: knowledgeKeys.playbooks.all(organizationId),
       }),
-      "handleSave",
+      "playbook-editor.invalidate",
     );
     return true;
   };
 
   /**
-   * Runs the save from a synchronous click handler and hands the outcome to
-   * `after`. The three "save now" affordances (toolbar, in-page leave, and
-   * navigation block) each follow up differently but must not each re-derive
-   * the detach-and-await dance.
+   * Runs the save and hands the outcome to `after`. The three "save now"
+   * affordances (toolbar, in-page leave, and navigation block) each follow up
+   * differently but must not each re-derive the await dance. Callers detach
+   * the returned promise under their own label.
    */
-  const saveThen = (label: string, after: (saved: boolean) => void) => {
-    detached(
-      (async () => {
-        after(await handleSave());
-      })(),
-      label,
-    );
+  const saveThen = async (after: (saved: boolean) => void) => {
+    after(await handleSave());
   };
 
   const handleDelete = async () => {
@@ -682,7 +677,7 @@ const PlaybookEditorForm = ({
       queryClient.invalidateQueries({
         queryKey: knowledgeKeys.playbooks.all(organizationId),
       }),
-      "handleDelete",
+      "playbook-editor.invalidate",
     );
     onSaved();
   };
@@ -711,7 +706,7 @@ const PlaybookEditorForm = ({
         queryClient.invalidateQueries({
           queryKey: knowledgeKeys.playbooks.all(organizationId),
         }),
-        "onSuccess",
+        "playbook-editor.invalidate",
       );
       stellaToast.add({
         type: "success",
@@ -822,7 +817,7 @@ const PlaybookEditorForm = ({
                       <Button
                         disabled={saving}
                         onClick={() => {
-                          detached(handleDelete(), "PlaybookEditorForm");
+                          detached(handleDelete(), "playbook-editor.delete");
                         }}
                         variant="destructive"
                       >
@@ -836,11 +831,14 @@ const PlaybookEditorForm = ({
                 disabled={!canSave || !isDirty || saving}
                 loading={saving}
                 onClick={() => {
-                  saveThen("PlaybookEditorForm", (saved) => {
-                    if (saved) {
-                      onSaved();
-                    }
-                  });
+                  detached(
+                    saveThen((saved) => {
+                      if (saved) {
+                        onSaved();
+                      }
+                    }),
+                    "playbook-editor.save",
+                  );
                 }}
                 type="button"
               >
@@ -1004,11 +1002,14 @@ const PlaybookEditorForm = ({
         primary={{
           label: t("common.saveAndLeave"),
           onClick: () => {
-            saveThen("PlaybookEditorForm.leave", (saved) => {
-              if (saved) {
-                onSaved();
-              }
-            });
+            detached(
+              saveThen((saved) => {
+                if (saved) {
+                  onSaved();
+                }
+              }),
+              "playbook-editor.save-and-leave",
+            );
           },
         }}
         secondary={{
@@ -1039,20 +1040,23 @@ const PlaybookEditorForm = ({
           label: t("common.saveAndLeave"),
           onClick: () => {
             navigationLeaveRequestedRef.current = true;
-            saveThen("PlaybookEditorForm.navigate", (saved) => {
-              if (navigationBlocker.status !== "blocked") {
-                return;
-              }
-              // A rejected save must not leave the dialog open over a latch
-              // nothing will release. Cancel the navigation and close: the
-              // draft is intact and `handleSave` has already said why.
-              if (saved) {
-                navigationBlocker.proceed();
-              } else {
-                navigationLeaveRequestedRef.current = false;
-                navigationBlocker.reset();
-              }
-            });
+            detached(
+              saveThen((saved) => {
+                if (navigationBlocker.status !== "blocked") {
+                  return;
+                }
+                // A rejected save must not leave the dialog open over a latch
+                // nothing will release. Cancel the navigation and close: the
+                // draft is intact and `handleSave` has already said why.
+                if (saved) {
+                  navigationBlocker.proceed();
+                } else {
+                  navigationLeaveRequestedRef.current = false;
+                  navigationBlocker.reset();
+                }
+              }),
+              "playbook-editor.save-and-navigate",
+            );
           },
         }}
         secondary={{

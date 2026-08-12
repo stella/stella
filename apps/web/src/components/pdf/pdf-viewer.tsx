@@ -73,7 +73,7 @@ const FullscreenPdfViewer = () => {
             s.pdfPage = page;
           }),
       }),
-      "handlePageChanged",
+      "pdf-viewer.navigate",
     );
   };
 

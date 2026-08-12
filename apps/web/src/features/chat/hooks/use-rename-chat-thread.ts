@@ -105,11 +105,11 @@ export const useRenameChatThread = (threadRef: ChatThreadRef) => {
     onSettled: () => {
       detached(
         invalidateChatThreadLists({ queryClient, workspaceId }),
-        "onSettled",
+        "use-rename-chat-thread.invalidate-chat-thread-lists",
       );
       detached(
         queryClient.invalidateQueries({ queryKey: titleKey }),
-        "onSettled",
+        "use-rename-chat-thread.invalidate",
       );
     },
   });

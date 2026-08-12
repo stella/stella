@@ -368,7 +368,7 @@ export const PeekPrintButton = () => {
     <Button
       disabled={!pdfDocument || isPrinting}
       onClick={() => {
-        detached(handlePrint(), "PeekPrintButton");
+        detached(handlePrint(), "peek-pdf-viewer.print");
       }}
       size="icon-xs"
       tooltip={t("common.print")}
@@ -429,7 +429,7 @@ export const PreparedPdfPrintButton = ({
     <Button
       disabled={disabled || isPrinting || fieldId.length === 0}
       onClick={() => {
-        detached(handlePrint(), "PreparedPdfPrintButton");
+        detached(handlePrint(), "peek-pdf-viewer.print");
       }}
       size="icon-xs"
       tooltip={t("common.print")}
@@ -597,7 +597,7 @@ const PeekDocxViewer = ({
           .catch((error: unknown) => {
             analytics.captureError(error);
           }),
-        "print",
+        "peek-pdf-viewer.fetch-print-pdf",
       );
     };
     printActions.set(fieldId, print);

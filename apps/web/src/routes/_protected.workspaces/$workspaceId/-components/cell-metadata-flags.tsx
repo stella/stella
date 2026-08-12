@@ -598,7 +598,7 @@ export const useCellMetadataFlags = ({
         queryClient.invalidateQueries({
           queryKey: entitiesKeys.all(workspaceId),
         }),
-        "onSuccess",
+        "cell-metadata-flags.invalidate",
       );
     },
     onError: (error) => {

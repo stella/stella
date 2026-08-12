@@ -225,7 +225,7 @@ export const initAccountDeletionCleanupWorker = () => {
           });
         }
       })(),
-      "reconcile",
+      "account-deletion-cleanup.reconcile",
     );
   };
   reconcile();

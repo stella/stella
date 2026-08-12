@@ -51,7 +51,7 @@ function AuthError() {
           onClick={() => {
             detached(
               navigate({ to: "/auth", search: { redirectTo } }),
-              "AuthError",
+              "auth-error.navigate",
             );
           }}
         >

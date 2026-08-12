@@ -296,7 +296,7 @@ export const RowActions = ({
               panel: "versions" as const,
             },
           }),
-          "RowActions",
+          "row-actions.navigate",
         );
       }
     : undefined;
@@ -606,7 +606,10 @@ export const RowActions = ({
       // released lock is a no-op on the API side).
       setTimeout(() => {
         stellaToast.close(toastId);
-        detached(forceTakeoverWithFeedback(), "handleReleaseLock");
+        detached(
+          forceTakeoverWithFeedback(),
+          "row-actions.force-takeover-with-feedback",
+        );
       }, 30_000);
     } catch {
       await forceTakeoverWithFeedback();
@@ -850,7 +853,7 @@ export const RowActions = ({
             className="min-h-11 sm:min-h-11"
             disabled={isOcrPending}
             onClick={() => {
-              detached(handleRunOcr(ocrSource), "RowActions");
+              detached(handleRunOcr(ocrSource), "row-actions.run-ocr");
             }}
           >
             <ScanTextIcon />
@@ -870,7 +873,7 @@ export const RowActions = ({
                   disabled={isOcrPending}
                   key={source.fieldId}
                   onClick={() => {
-                    detached(handleRunOcr(source), "RowActions");
+                    detached(handleRunOcr(source), "row-actions.run-ocr");
                   }}
                 >
                   <ScanTextIcon />
@@ -887,7 +890,9 @@ export const RowActions = ({
             {canRetryCell && (
               <MenuItem
                 disabled={retryDisabled}
-                onClick={() => detached(handleRetryCell(), "RowActions")}
+                onClick={() =>
+                  detached(handleRetryCell(), "row-actions.retry-cell")
+                }
               >
                 <RefreshCwIcon />
                 {t("common.retry")}
@@ -918,7 +923,7 @@ export const RowActions = ({
         {!isCellContext && canOpenInDesktop && (
           <MenuItem
             onClick={() => {
-              detached(handleOpenInDesktop(), "RowActions");
+              detached(handleOpenInDesktop(), "row-actions.open-in-desktop");
             }}
           >
             <LaptopIcon />
@@ -931,7 +936,7 @@ export const RowActions = ({
           desktopEditLockState !== "unlocked" && (
             <MenuItem
               onClick={() => {
-                detached(handleReleaseLock(), "RowActions");
+                detached(handleReleaseLock(), "row-actions.release-lock");
               }}
             >
               <LockOpenIcon />
@@ -966,7 +971,10 @@ export const RowActions = ({
                 key={source.fieldId}
                 exportStatus={source.exportStatus}
                 onDownload={(format) => {
-                  detached(handleOcrExport(source, format), "RowActions");
+                  detached(
+                    handleOcrExport(source, format),
+                    "row-actions.ocr-export",
+                  );
                 }}
                 searchablePdfLabel={t("workspaces.files.downloadSearchablePdf")}
                 textLabel={t("workspaces.files.downloadExtractedText")}
@@ -983,7 +991,7 @@ export const RowActions = ({
             {hasAnyFile && (isBulk || !hasDownloadVariants) && (
               <MenuItem
                 onClick={() => {
-                  detached(handleDownload(), "RowActions");
+                  detached(handleDownload(), "row-actions.download");
                 }}
               >
                 <DownloadIcon />
@@ -999,7 +1007,7 @@ export const RowActions = ({
                 <MenuSubPopup>
                   <MenuItem
                     onClick={() => {
-                      detached(handleDownload(), "RowActions");
+                      detached(handleDownload(), "row-actions.download");
                     }}
                   >
                     <DownloadIcon />
@@ -1008,7 +1016,7 @@ export const RowActions = ({
                   {hasPdfConversion && (
                     <MenuItem
                       onClick={() => {
-                        detached(handleDownload("pdf"), "RowActions");
+                        detached(handleDownload("pdf"), "row-actions.download");
                       }}
                     >
                       <FileOutputIcon />
@@ -1021,7 +1029,10 @@ export const RowActions = ({
                       render={
                         <MenuItem
                           onClick={() => {
-                            detached(handleDownload("scrubbed"), "RowActions");
+                            detached(
+                              handleDownload("scrubbed"),
+                              "row-actions.download",
+                            );
                           }}
                         >
                           <EraserIcon />
@@ -1038,7 +1049,7 @@ export const RowActions = ({
                         onDownload={(format) => {
                           detached(
                             handleOcrExport(source, format),
-                            "RowActions",
+                            "row-actions.ocr-export",
                           );
                         }}
                         searchablePdfLabel={t(
@@ -1062,7 +1073,7 @@ export const RowActions = ({
                             onDownload={(format) => {
                               detached(
                                 handleOcrExport(source, format),
-                                "RowActions",
+                                "row-actions.ocr-export",
                               );
                             }}
                             searchablePdfLabel={t(
@@ -1081,7 +1092,7 @@ export const RowActions = ({
             {hasAnyFolder && (
               <MenuItem
                 onClick={() => {
-                  detached(handleZipDownload(), "RowActions");
+                  detached(handleZipDownload(), "row-actions.zip-download");
                 }}
               >
                 <ArchiveIcon />
@@ -1090,7 +1101,7 @@ export const RowActions = ({
             )}
             <MenuItem
               onClick={() => {
-                detached(handleDuplicate(), "RowActions");
+                detached(handleDuplicate(), "row-actions.duplicate");
               }}
             >
               <CopyIcon />

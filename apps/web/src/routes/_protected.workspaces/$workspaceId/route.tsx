@@ -78,19 +78,19 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
         workflowOptions({ key: { workspaceId: wsId } }),
         onPrefetchError,
       ),
-      "loader",
+      "workspaces.prefetch",
     );
     detached(
       prefetchRouteQuery(qc, viewsOptions(wsId), onPrefetchError),
-      "loader",
+      "workspaces.prefetch",
     );
     detached(
       prefetchRouteQuery(qc, overviewOptions(wsId), onPrefetchError),
-      "loader",
+      "workspaces.prefetch",
     );
     detached(
       prefetchRouteQuery(qc, propertiesOptions(wsId), onPrefetchError),
-      "loader",
+      "workspaces.prefetch",
     );
 
     return workspace;
@@ -149,7 +149,7 @@ function RouteComponent() {
         queryClient.invalidateQueries({
           queryKey: workspacesKeys.overviewActivityAll(workspaceIdToInvalidate),
         }),
-        "handleWorkspaceActivityInvalidation",
+        "workspaces.invalidate",
       );
     },
     ACTIVITY_INVALIDATION_DEBOUNCE_MS,

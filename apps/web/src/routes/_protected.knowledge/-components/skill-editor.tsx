@@ -133,13 +133,13 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       queryClient.invalidateQueries({
         queryKey: knowledgeKeys.skills.all(activeOrganizationId),
       }),
-      "onChanged",
+      "skill-editor.invalidate",
     );
     detached(
       queryClient.invalidateQueries({
         queryKey: catalogueKeys.list(activeOrganizationId),
       }),
-      "onChanged",
+      "skill-editor.invalidate",
     );
   };
 
@@ -336,7 +336,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     },
     onSuccess: () => {
       onChanged();
-      detached(detail.refetch(), "onSuccess");
+      detached(detail.refetch(), "skill-editor.refetch");
     },
     onError: (error) => {
       if (APIError.is(error) && error.status === 409) {
@@ -362,7 +362,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     },
     onSuccess: (data) => {
       onChanged();
-      detached(detail.refetch(), "onSuccess");
+      detached(detail.refetch(), "skill-editor.refetch");
       // Open straight from the mutation response: the refetch has not landed
       // yet, so the new file is not in `resources` and selectFile would miss
       // it. New files are always .md, so this opens in the main-pane editor.
@@ -383,7 +383,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     },
     onSuccess: (data) => {
       onChanged();
-      detached(detail.refetch(), "onSuccess");
+      detached(detail.refetch(), "skill-editor.refetch");
       setSelected({
         type: "resource",
         resourceId: data.id,
@@ -423,7 +423,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         closeTab(tabId);
       }
       onChanged();
-      detached(detail.refetch(), "onSuccess");
+      detached(detail.refetch(), "skill-editor.refetch");
     },
     onError: (error) => toastError(error, t("common.unexpectedError")),
   });
@@ -437,7 +437,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     },
     onSuccess: (data, variables) => {
       onChanged();
-      detached(detail.refetch(), "onSuccess");
+      detached(detail.refetch(), "skill-editor.refetch");
       setRenamingResourceId(null);
       setRenameValue("");
       // Follow the rename: if the renamed row was selected, refresh selection.
@@ -582,7 +582,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   const handleUploadFiles = (files: readonly File[]) => {
     const takenPaths = new Set(existingPaths);
     for (const file of files) {
-      detached(handleUpload(file, takenPaths), "handleUploadFiles");
+      detached(handleUpload(file, takenPaths), "skill-editor.upload");
     }
   };
 

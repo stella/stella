@@ -190,7 +190,7 @@ export function TemplateStudioInspectorView({
       queryClient.invalidateQueries({
         queryKey: knowledgeKeys.templates.all(activeOrganizationId),
       }),
-      "commitRename",
+      "template-studio-inspector.invalidate",
     );
     stellaToast.add({ type: "success", title: t("templates.templateRenamed") });
   };
@@ -251,7 +251,8 @@ export function TemplateStudioInspectorView({
           active: rename.active,
           value: rename.value,
           onChange: (value) => setRename({ active: true, value }),
-          onCommit: () => detached(commitRename(), "onCommit"),
+          onCommit: () =>
+            detached(commitRename(), "template-studio-inspector.commit-rename"),
           onCancel: () => setRename({ active: false, value: "" }),
         }}
       />
@@ -377,7 +378,7 @@ export const StudioSaveAction = () => {
     <Button
       disabled={ui.isSaving}
       onClick={() => {
-        detached(actions.save(), "StudioSaveAction");
+        detached(actions.save(), "template-studio-inspector.save");
       }}
       size="xs"
     >
@@ -468,7 +469,9 @@ export const TemplateFillFacet = ({
             {t("templates.studio.fillStale")}
           </p>
           <Button
-            onClick={() => detached(fillActions?.save(), "TemplateFillFacet")}
+            onClick={() =>
+              detached(fillActions?.save(), "template-studio-inspector.save")
+            }
             size="sm"
             variant="outline"
           >
@@ -777,7 +780,7 @@ const queueLookupPreviews = (
           onResolved();
         }
       })(),
-      "queueLookupPreviews",
+      "template-studio-inspector.lookup-preview",
     );
   }, LOOKUP_PREVIEW_DEBOUNCE_MS);
 };
@@ -1295,7 +1298,10 @@ export const ClauseDriftPopover = ({
         }),
       });
     }
-    detached(queryClient.invalidateQueries({ queryKey }), "handleSyncAll");
+    detached(
+      queryClient.invalidateQueries({ queryKey }),
+      "template-studio-inspector.invalidate",
+    );
   };
 
   return (
@@ -1324,7 +1330,7 @@ export const ClauseDriftPopover = ({
           className="w-full"
           disabled={syncingAll}
           onClick={() => {
-            detached(handleSyncAll(), "ClauseDriftPopover");
+            detached(handleSyncAll(), "template-studio-inspector.sync-all");
           }}
           size="sm"
           variant="outline"
@@ -1434,14 +1440,14 @@ export const GuidanceFields = ({
     <div className="flex flex-col gap-4 p-4">
       <GuidanceNote
         label={t("templates.whenToUse")}
-        onBlur={() => detached(commit(), "GuidanceFields")}
+        onBlur={() => detached(commit(), "template-studio-inspector.commit")}
         onChange={setUseText}
         placeholder={t("templates.whenToUsePlaceholder")}
         value={useText}
       />
       <GuidanceNote
         label={t("templates.whenNotToUse")}
-        onBlur={() => detached(commit(), "GuidanceFields")}
+        onBlur={() => detached(commit(), "template-studio-inspector.commit")}
         onChange={setNotText}
         placeholder={t("templates.whenNotToUsePlaceholder")}
         value={notText}

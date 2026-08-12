@@ -155,7 +155,10 @@ const ClauseFillItem = ({
           <AiRewriteControl
             isPending={adjusting}
             onRewrite={(instruction) => {
-              detached(handleAdjust(instruction), "ClauseFillItem");
+              detached(
+                handleAdjust(instruction),
+                "fill-clauses-section.adjust",
+              );
             }}
           />
         </div>

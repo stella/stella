@@ -126,7 +126,7 @@ export const SilurusOfficeFileViewer = ({
         }
       });
       navigationQueueRef.current = observed;
-      detached(observed, "SilurusOfficeFileViewer.navigation");
+      detached(observed, "silurus-office-viewer.navigate");
     },
   );
   const navigateToLatestRequest = useLatestCallback(
@@ -252,7 +252,7 @@ export const SilurusOfficeFileViewer = ({
                 return undefined;
               })
               .catch(reportError),
-            "SilurusOfficeFileViewer.selection",
+            "silurus-office-viewer.get-worksheet",
           );
         };
 
@@ -297,7 +297,7 @@ export const SilurusOfficeFileViewer = ({
       navigateToLatestRequest(viewerRef.current);
     };
 
-    detached(load().catch(reportError), "SilurusOfficeFileViewer.load");
+    detached(load().catch(reportError), "silurus-office-viewer.load");
 
     return () => {
       disposed = true;

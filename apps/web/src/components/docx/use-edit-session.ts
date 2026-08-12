@@ -305,7 +305,7 @@ export const useEditSession = ({
   };
 
   const debouncedCheckpoint = useDebouncedCallback((buffer: ArrayBuffer) => {
-    detached(saveCheckpoint(buffer), "useEditSession");
+    detached(saveCheckpoint(buffer), "use-edit-session.save-checkpoint");
   }, CHECKPOINT_DEBOUNCE_MS);
   const cancelDebouncedCheckpoint = useLatestCallback(() => {
     debouncedCheckpoint.cancel();
@@ -323,7 +323,10 @@ export const useEditSession = ({
 
       sessionRef.current = null;
       const context = releaseContextRef.current;
-      detached(releaseEditSession(context), "useEditSession");
+      detached(
+        releaseEditSession(context),
+        "use-edit-session.release-edit-session",
+      );
     };
   });
 

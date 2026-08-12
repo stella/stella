@@ -193,7 +193,7 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
         hasNextPage={hasNextPage}
         isFetchingNextPage={isFetchingNextPage}
         onLoadMore={() => {
-          detached(fetchNextPage(), "FlatTableLayout");
+          detached(fetchNextPage(), "table-layout.fetch-next-page");
         }}
         table={table}
         contentMode={tableState.contentMode}

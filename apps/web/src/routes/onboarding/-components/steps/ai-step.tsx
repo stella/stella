@@ -285,7 +285,7 @@ export const AIStep = ({
               compact
               onProvidersChange={updateProviders}
               onSaveRow={(index) => {
-                detached(saveRow(index), "AIStep");
+                detached(saveRow(index), "ai-step.save-row");
               }}
               providers={providers}
               rowStatuses={rowStatusList}

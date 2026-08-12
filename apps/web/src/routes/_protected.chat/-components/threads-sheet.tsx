@@ -135,7 +135,7 @@ export const ThreadsSheet = ({
       return {
         isRetrying: isFetching,
         onRetry: () => {
-          detached(refetch(), "ThreadsSheet");
+          detached(refetch(), "threads-sheet.refetch");
         },
         status: "error",
       };
@@ -195,7 +195,7 @@ export const ThreadsSheet = ({
                 className="self-center"
                 disabled={isFetchingNextPage}
                 onClick={() => {
-                  detached(fetchNextPage(), "ThreadsSheet");
+                  detached(fetchNextPage(), "threads-sheet.fetch-next-page");
                 }}
                 size="sm"
                 variant="ghost"

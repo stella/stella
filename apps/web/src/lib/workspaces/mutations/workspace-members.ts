@@ -30,11 +30,11 @@ export const useAddWorkspaceMember = () => {
         queryClient.invalidateQueries({
           queryKey: workspaceMembersKeys.all(vars.workspaceId),
         }),
-        "onSuccess",
+        "workspace-members.invalidate",
       );
       detached(
         queryClient.invalidateQueries({ queryKey: workspacesKeys.all }),
-        "onSuccess",
+        "workspace-members.invalidate",
       );
     },
     onError: (error) => {

@@ -1682,7 +1682,7 @@ const sendMessage = createSafeRootHandler(
                           threadWorkspaceId: workspaceId,
                           userId: user.id,
                         }),
-                        "onFinish",
+                        "send-message.generate-thread-title",
                       );
                     }
                   }

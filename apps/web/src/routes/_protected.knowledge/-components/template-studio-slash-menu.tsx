@@ -563,7 +563,7 @@ export const useTemplateStudioSlashMenu = ({
           templateId,
         ),
       }),
-      "linkClauseToSlot",
+      "template-studio-slash-menu.invalidate",
     );
   };
 
@@ -589,7 +589,10 @@ export const useTemplateStudioSlashMenu = ({
     view.focus();
     markDirty();
     dismissSlash();
-    detached(linkClauseToSlot(clause.id, slotName), "activateSlashClause");
+    detached(
+      linkClauseToSlot(clause.id, slotName),
+      "template-studio-slash-menu.link-clause-to-slot",
+    );
   };
 
   const onSlashMenuKeyAction = (

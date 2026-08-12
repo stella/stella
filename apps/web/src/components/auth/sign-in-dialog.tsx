@@ -75,7 +75,7 @@ export const SignInDialog = ({
               redirectTo={redirectTo}
               showHeading={false}
               onOtpSent={({ email }) => {
-                detached(showOtpStep(email), "SignInDialog");
+                detached(showOtpStep(email), "sign-in-dialog.show-otp-step");
               }}
             />
           ) : (

@@ -164,7 +164,7 @@ export const InviteMemberDialog = ({
           errors={formErrors}
           onSubmit={(e) => {
             e.preventDefault();
-            detached(form.handleSubmit(), "InviteMemberDialog");
+            detached(form.handleSubmit(), "invite-member-dialog.submit");
           }}
         >
           <DialogHeader>

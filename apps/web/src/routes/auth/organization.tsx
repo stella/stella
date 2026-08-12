@@ -373,7 +373,7 @@ const CreateOrganizationForm = ({
           errors={formErrors}
           onSubmit={(event) => {
             event.preventDefault();
-            detached(form.handleSubmit(), "CreateOrganizationForm");
+            detached(form.handleSubmit(), "auth-organization.submit");
           }}
         >
           <form.Field name="name">

@@ -387,7 +387,7 @@ export const ChatThreadPage = ({
         queryClient,
         threadId: threadRef.threadId,
       }),
-      "moveToSide",
+      "chat-thread-page.invalidate-chat-thread-across-scopes",
     );
     if (threadRef.scope === "workspace") {
       openInspectorChat({
@@ -400,7 +400,7 @@ export const ChatThreadPage = ({
           to: "/workspaces/$workspaceId",
           params: { workspaceId: threadRef.workspaceId },
         }),
-        "moveToSide",
+        "chat-thread-page.navigate",
       );
       return;
     }
@@ -408,7 +408,7 @@ export const ChatThreadPage = ({
       id: threadRef.threadId,
       contextMatterIds: selectedContextMatterIds,
     });
-    detached(navigate({ to: "/chat" }), "moveToSide");
+    detached(navigate({ to: "/chat" }), "chat-thread-page.navigate");
   };
 
   const selectPrompt = (prompt: ChatPrompt) => {
@@ -432,11 +432,11 @@ export const ChatThreadPage = ({
           to: "/chat/workspaces/$workspaceId/new",
           params: { workspaceId: threadRef.workspaceId },
         }),
-        "startNewThread",
+        "chat-thread-page.navigate",
       );
       return;
     }
-    detached(navigate({ to: "/chat/new" }), "startNewThread");
+    detached(navigate({ to: "/chat/new" }), "chat-thread-page.navigate");
   };
 
   // The floating composer block grows with the draft (multi-line text,
@@ -485,7 +485,7 @@ export const ChatThreadPage = ({
               params: { workspaceId: threadRef.workspaceId },
               replace: true,
             }),
-            "ChatThreadPage",
+            "chat-thread-page.navigate",
           );
         } else {
           detached(
@@ -493,7 +493,7 @@ export const ChatThreadPage = ({
               to: "/chat/new",
               replace: true,
             }),
-            "ChatThreadPage",
+            "chat-thread-page.navigate",
           );
         }
       },
@@ -744,7 +744,7 @@ export const ChatThreadPage = ({
                       }
                       await sendMessage(await buildChatRequestMessage(draft));
                     }),
-                    "ChatThreadPage",
+                    "chat-thread-page.submit",
                   );
                 }}
               />
@@ -860,7 +860,7 @@ const useChatWebSearchSeed = ({
           queryClient,
           threadId: toSafeId<"chatThread">(threadRef.threadId),
         }),
-        "onSuccess",
+        "chat-thread-page.invalidate-chat-thread-across-scopes",
       );
       onSettled(threadRef.threadId, true);
     },

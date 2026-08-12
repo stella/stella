@@ -378,7 +378,10 @@ const useCategoryDropTarget = (
     setIsDragOver(false);
     const itemId = e.dataTransfer.getData(dragAndDrop.mime);
     if (itemId) {
-      detached(dragAndDrop.onAssign(itemId, targetCategoryId), "onDrop");
+      detached(
+        dragAndDrop.onAssign(itemId, targetCategoryId),
+        "category-sidebar.assign",
+      );
     }
   };
 
@@ -535,7 +538,7 @@ const CategoryRow = ({
             <Button
               disabled={deleting}
               onClick={() => {
-                detached(handleDelete(), "CategoryRow");
+                detached(handleDelete(), "category-sidebar.delete");
               }}
               variant="destructive"
             >
@@ -675,7 +678,7 @@ const CategoryFormDialogBody = ({
         <Button
           disabled={saving || !name.trim()}
           onClick={() => {
-            detached(handleSave(), "CategoryFormDialogBody");
+            detached(handleSave(), "category-sidebar.save");
           }}
         >
           {t("common.save")}

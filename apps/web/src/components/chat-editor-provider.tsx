@@ -771,7 +771,7 @@ export const useChatEditor = ({
         pendingWorkspaceEntitySearchRef.current = { queryKey: null, resolve };
         detached(
           debouncedFetchWorkspaceEntities({ query, resolve, workspace }),
-          "useChatEditor",
+          "chat-editor-provider.debounced-fetch-workspace-entities",
         );
       });
     },
@@ -1041,7 +1041,7 @@ export const useChatEditor = ({
         }
 
         event.preventDefault();
-        detached(submitHandlerRef.current?.(), "handleKeyDown");
+        detached(submitHandlerRef.current?.(), "chat-editor-provider.submit");
         return true;
       },
     },

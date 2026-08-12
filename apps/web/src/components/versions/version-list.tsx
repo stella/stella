@@ -237,7 +237,7 @@ export const VersionRow = ({
               aria-expanded={isDiffOpen}
               className="text-muted-foreground hover:text-foreground gap-1 px-1.5 text-xs font-normal"
               onClick={() => {
-                detached(toggleDiff(), "VersionRow");
+                detached(toggleDiff(), "version-list.toggle-diff");
               }}
               size="xs"
               variant="ghost"
@@ -256,7 +256,7 @@ export const VersionRow = ({
               className="text-muted-foreground hover:text-foreground"
               disabled={summary.status === "loading"}
               onClick={() => {
-                detached(handleSummarize(), "VersionRow");
+                detached(handleSummarize(), "version-list.summarize");
               }}
               size="icon-xs"
               title={t("common.summarizeChanges")}

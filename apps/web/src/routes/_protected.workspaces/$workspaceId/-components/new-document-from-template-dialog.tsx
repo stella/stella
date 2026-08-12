@@ -133,7 +133,10 @@ const TemplatePickList = ({
     if (!hasNextPage || isFetchingNextPage) {
       return;
     }
-    detached(fetchNextPage(), "TemplatePickList");
+    detached(
+      fetchNextPage(),
+      "new-document-from-template-dialog.fetch-next-page",
+    );
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
   const templates = data ? data.pages.flatMap((page) => page.items) : [];
@@ -251,7 +254,7 @@ const FillStep = ({
             queryClient.invalidateQueries({
               queryKey: entitiesKeys.all(workspaceId),
             }),
-            "NewDocumentFromTemplate.invalidateCreatedDocument",
+            "new-document-from-template-dialog.invalidate",
           );
           onCreated();
           switch (created.type) {
@@ -263,7 +266,7 @@ const FillStep = ({
                   params: { workspaceId, viewId: "all" },
                   search: { entity: entityId, field: created.fieldId },
                 }),
-                "NewDocumentFromTemplate.openCreatedDocument",
+                "new-document-from-template-dialog.navigate",
               );
               return;
             case "workspace":
@@ -272,7 +275,7 @@ const FillStep = ({
                   to: "/workspaces/$workspaceId/$viewId",
                   params: { workspaceId, viewId: "all" },
                 }),
-                "NewDocumentFromTemplate.openCreatedWorkspace",
+                "new-document-from-template-dialog.navigate",
               );
               return;
             default:

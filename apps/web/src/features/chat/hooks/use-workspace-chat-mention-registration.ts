@@ -133,7 +133,7 @@ export const useWorkspaceChatMentionRegistration = (
         pendingSearchRef.current = { queryKey: null, resolve };
         detached(
           debouncedSearchEntities({ query, resolve }),
-          "useWorkspaceChatMentionRegistration",
+          "use-workspace-chat-mention-registration.debounced-search-entities",
         );
       });
     },

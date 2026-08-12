@@ -155,7 +155,7 @@ export const Route = createFileRoute(
           getAnalytics().captureError(error);
         },
       ),
-      "loader",
+      "document.prefetch",
     );
 
     const entity = await ensureRouteQueryData(
@@ -178,7 +178,7 @@ export const Route = createFileRoute(
           getAnalytics().captureError(error);
         },
       ),
-      "loader",
+      "document.prefetch",
     );
 
     // `field` is the fieldId FullscreenPdfViewer eventually reads via
@@ -211,7 +211,7 @@ export const Route = createFileRoute(
             getAnalytics().captureError(error);
           },
         ),
-        "loader",
+        "document.prefetch",
       );
     }
 
@@ -232,7 +232,7 @@ export const Route = createFileRoute(
             getAnalytics().captureError(error);
           },
         ),
-        "loader",
+        "document.prefetch",
       );
     }
 
@@ -252,7 +252,7 @@ export const Route = createFileRoute(
             getAnalytics().captureError(error);
           },
         ),
-        "loader",
+        "document.prefetch",
       );
     }
   },
@@ -476,7 +476,7 @@ function RouteComponentInner({
         params: { workspaceId },
         replace: true,
       }),
-      "RouteComponentInner.entityDeleted",
+      "document.navigate",
     );
   }, [entityError, navigate, workspaceId]);
 
@@ -659,7 +659,7 @@ function RouteComponentInner({
           pdfPage: undefined,
         }),
       }),
-      "RouteComponentInner",
+      "document.navigate",
     );
   }, [fieldId, latestFileFieldForProperty, navigate]);
 
@@ -776,7 +776,7 @@ function RouteComponentInner({
                                 editing: undefined,
                               }),
                             }),
-                            "RouteComponentInner",
+                            "document.navigate",
                           );
                         }}
                         onSaved={(savedFieldId) => {
@@ -792,7 +792,7 @@ function RouteComponentInner({
                                 pdfPage: undefined,
                               }),
                             }),
-                            "RouteComponentInner",
+                            "document.navigate",
                           );
                         }}
                         onUnlockedChange={setDocxUnlocked}
@@ -1158,7 +1158,7 @@ const VersionDropZone = ({
               setIsUploading(false);
             }
           })(),
-          "onDrop",
+          "document.set-is-uploading",
         );
       },
     });

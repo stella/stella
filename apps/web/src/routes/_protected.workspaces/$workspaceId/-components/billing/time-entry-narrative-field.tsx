@@ -85,7 +85,7 @@ export const TimeEntryNarrativeField = ({
           onRewrite={(instruction) => {
             detached(
               polishNarrative(instruction),
-              "TimeEntryNarrativeField.polishNarrative",
+              "time-entry-narrative-field.polish-narrative",
             );
           }}
         />

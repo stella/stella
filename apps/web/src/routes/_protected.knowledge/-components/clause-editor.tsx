@@ -279,7 +279,7 @@ export const ClauseEditor = ({
                   getAnalytics().captureError(error);
                 },
               ),
-              "onUpdate",
+              "clause-editor.settle-review-persist",
             );
           }
           // Without onReviewResolved there is no incremental persist to wait
@@ -463,14 +463,20 @@ export const ClauseEditor = ({
       setHunkMenu(null);
       emitReviewStatus("resolved");
     }
-    detached(runRewrite(aiEdit.instruction, baseline), "submitAiEdit");
+    detached(
+      runRewrite(aiEdit.instruction, baseline),
+      "clause-editor.run-rewrite",
+    );
   };
 
   const startAiEdit = (instruction: string) => {
     if (aiEdit.status !== "idle") {
       return;
     }
-    detached(runRewrite(instruction, getLiveBody()), "startAiEdit");
+    detached(
+      runRewrite(instruction, getLiveBody()),
+      "clause-editor.run-rewrite",
+    );
   };
 
   const runResolveCommand = (command: PMCommand) => {

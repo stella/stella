@@ -129,7 +129,7 @@ export const PropertyPopover = ({
         queryClient.invalidateQueries({
           queryKey: entitiesKeys.all(workspaceId),
         }),
-        "onSuccess",
+        "property-popover.invalidate",
       );
       setIsOpen(false);
       if (!set || data.updatedCount === 0) {
@@ -231,7 +231,7 @@ export const PropertyPopover = ({
           content: property.content,
           tool: { ...tool, dependencies: nextDependencies },
         });
-        detached(startWorkflow(), "replaceDependency");
+        detached(startWorkflow(), "property-popover.start-workflow");
       } catch (error) {
         getAnalytics().captureError(error);
         stellaToast.add({
@@ -342,7 +342,10 @@ export const PropertyPopover = ({
                 <Button
                   className="justify-start gap-1.5 font-normal"
                   onClick={() => {
-                    detached(rerunProperty(), "PropertyPopover");
+                    detached(
+                      rerunProperty(),
+                      "property-popover.rerun-property",
+                    );
                   }}
                   size="sm"
                   variant="ghost"

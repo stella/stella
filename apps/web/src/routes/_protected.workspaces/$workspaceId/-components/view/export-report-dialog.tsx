@@ -348,7 +348,7 @@ const ExportReportDialogBody = ({
           queryKey: knowledgeKeys.templates.all(activeOrganizationId),
         }),
       ]),
-      "handleCustomize",
+      "export-report-dialog.invalidate",
     );
 
     stellaToast.add({
@@ -392,7 +392,7 @@ const ExportReportDialogBody = ({
               className="self-start"
               disabled={customizing}
               onClick={() => {
-                detached(handleCustomize(), "ExportReportDialogBody");
+                detached(handleCustomize(), "export-report-dialog.customize");
               }}
               size="sm"
               type="button"
@@ -469,7 +469,7 @@ const ExportReportDialogBody = ({
         <Button
           disabled={submitting || !resolvedValue}
           onClick={() => {
-            detached(handleSubmit(), "ExportReportDialogBody");
+            detached(handleSubmit(), "export-report-dialog.submit");
           }}
           type="button"
         >

@@ -218,7 +218,7 @@ function MyWorkPage() {
                       (async () => {
                         await handleCreateTask(ws.id);
                       })(),
-                      "MyTodosPage",
+                      "todos.create-task",
                     );
                   }}
                 >
@@ -277,7 +277,7 @@ function MyWorkPage() {
                         (async () => {
                           await handleCreateTask(ws.id);
                         })(),
-                        "MyTodosPage",
+                        "todos.create-task",
                       );
                     }}
                   >
@@ -308,7 +308,7 @@ function MyWorkPage() {
           className="self-center"
           disabled={isFetchingNextPage}
           onClick={() => {
-            detached(fetchNextPage(), "MyTodosPage");
+            detached(fetchNextPage(), "todos.fetch-next-page");
           }}
           size="sm"
           variant="outline"

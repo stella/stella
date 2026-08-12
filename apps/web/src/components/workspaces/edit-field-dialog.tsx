@@ -186,7 +186,7 @@ export const EditFieldDialog = ({
               startWorkflow({
                 entityIds: [entityId],
               }),
-              "onSuccess",
+              "edit-field-dialog.start-workflow",
             );
           },
           onSettled: () => {
@@ -217,7 +217,7 @@ export const EditFieldDialog = ({
               errors={errors}
               onSubmit={(e) => {
                 e.preventDefault();
-                detached(form.handleSubmit(), "EditFieldDialog");
+                detached(form.handleSubmit(), "edit-field-dialog.submit");
               }}
             >
               <DialogHeader>

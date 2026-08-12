@@ -410,7 +410,7 @@ const ComposerSkillsSubmenu = ({
     ) {
       return;
     }
-    detached(fetchNextPage(), "ComposerSkillsSubmenu.search");
+    detached(fetchNextPage(), "composer-plus-menu.fetch-next-page");
   }, [fetchNextPage, hasNextPage, isFetchingNextPage, open, query]);
 
   const filteredItems = query
@@ -497,7 +497,7 @@ const ComposerSkillsSubmenu = ({
           <MenuItem
             disabled={isFetchingNextPage}
             onClick={() => {
-              detached(fetchNextPage(), "ComposerSkillsSubmenu");
+              detached(fetchNextPage(), "composer-plus-menu.fetch-next-page");
             }}
           >
             {isFetchingNextPage ? t("common.loading") : t("common.loadMore")}
@@ -511,7 +511,7 @@ const ComposerSkillsSubmenu = ({
                 to: "/knowledge/tools",
                 search: { kind: "skill" },
               }),
-              "ComposerSkillsSubmenu",
+              "composer-plus-menu.navigate",
             );
           }}
         >
@@ -826,7 +826,7 @@ const ComposerMcpSubmenu = ({
   const openMcpSettings = () => {
     detached(
       navigate({ to: "/knowledge/tools", search: { kind: "mcp" } }),
-      "openMcpSettings",
+      "composer-plus-menu.navigate",
     );
   };
 
@@ -847,7 +847,7 @@ const ComposerMcpSubmenu = ({
       queryClient.invalidateQueries({
         queryKey: knowledgeKeys.mcp.connections(activeOrganizationId),
       }),
-      "handleToggle",
+      "composer-plus-menu.invalidate",
     );
   };
 
@@ -882,7 +882,7 @@ const ComposerMcpSubmenu = ({
           onClick={() => {
             detached(
               handleToggle(connection.id, !connection.enabled),
-              "ComposerMcpSubmenu",
+              "composer-plus-menu.toggle",
             );
           }}
         >

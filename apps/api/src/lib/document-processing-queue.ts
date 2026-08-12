@@ -441,7 +441,7 @@ export const createDocumentProcessingLeaseRenewal = ({
     };
     detached(
       renewal.then(releaseRenewal, releaseRenewal),
-      "document-processing.lease-heartbeat.release",
+      "document-processing.lease-heartbeat-release",
     );
     detached(
       (async () => {
@@ -457,7 +457,7 @@ export const createDocumentProcessingLeaseRenewal = ({
           onError(result.error);
         }
       })(),
-      "document-processing.lease-heartbeat.renew",
+      "document-processing.lease-heartbeat-renew",
     );
   };
 };

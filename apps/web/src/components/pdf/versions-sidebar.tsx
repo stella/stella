@@ -152,7 +152,7 @@ export const VersionsSidebar = ({
     if (container) {
       anchorScrollHeightRef.current = container.scrollHeight;
     }
-    detached(onLoadOlder?.(), "triggerLoadOlder");
+    detached(onLoadOlder?.(), "versions-sidebar.load-older");
   });
 
   // Drive the trigger from a top sentinel: when it scrolls into view
@@ -422,7 +422,10 @@ export const VersionsSidebar = ({
         onChange={(e) => {
           const file = e.target.files?.item(0);
           if (file) {
-            detached(handleUploadVersion(file), "VersionsSidebar");
+            detached(
+              handleUploadVersion(file),
+              "versions-sidebar.upload-version",
+            );
           }
           e.target.value = "";
         }}
@@ -459,10 +462,10 @@ export const VersionsSidebar = ({
                 version={version}
                 onDelete={handleDeleteVersion}
                 onDownload={(fid) => {
-                  detached(handleDownload(fid), "VersionsSidebar");
+                  detached(handleDownload(fid), "versions-sidebar.download");
                 }}
                 onRestore={(vid) => {
-                  detached(handleRestore(vid), "VersionsSidebar");
+                  detached(handleRestore(vid), "versions-sidebar.restore");
                 }}
                 onSetLabel={handleSetLabel}
                 onSwitchVersion={onSwitchVersion}
@@ -641,7 +644,7 @@ const VersionItem = ({
           if (version.file) {
             detached(
               onSwitchVersion(version.file.fieldId, version.id),
-              "VersionItem",
+              "versions-sidebar.switch-version",
             );
           }
         }}
@@ -667,7 +670,7 @@ const VersionItem = ({
                 onClick={() => {
                   detached(
                     onSetLabel(version.id, isActive ? null : label),
-                    "VersionItem",
+                    "versions-sidebar.set-label",
                   );
                 }}
               >
@@ -755,7 +758,10 @@ const VersionItem = ({
                       render={
                         <Button
                           onClick={() => {
-                            detached(onDelete(version.id), "VersionItem");
+                            detached(
+                              onDelete(version.id),
+                              "versions-sidebar.delete",
+                            );
                           }}
                           variant="destructive"
                         />

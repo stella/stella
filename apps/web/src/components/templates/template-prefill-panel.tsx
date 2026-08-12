@@ -250,7 +250,9 @@ export const TemplatePrefillPanel = ({
           <Button
             className="self-end"
             disabled={!hasSource || loading}
-            onClick={() => detached(runPrefill(), "TemplatePrefillPanel")}
+            onClick={() =>
+              detached(runPrefill(), "template-prefill-panel.run-prefill")
+            }
             size="sm"
             type="button"
           >

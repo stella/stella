@@ -69,7 +69,7 @@ export const useCreateBBoxes = ({
         queryClient.invalidateQueries({
           queryKey: workspaceKeys.justifications(workspaceId),
         }),
-        "onSuccess",
+        "use-create-b-boxes.invalidate",
       );
     },
     onSettled: () => {

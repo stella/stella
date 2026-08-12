@@ -163,7 +163,7 @@ export const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
       queryClient.invalidateQueries({
         queryKey: clausesOptions.queryKey,
       }),
-      "invalidateLinks",
+      "template-studio-fields.invalidate",
     );
   };
 
@@ -378,7 +378,7 @@ const SlotSyncButton = ({
     <Button
       disabled={syncing}
       onClick={() => {
-        detached(handleSync(), "SlotSyncButton");
+        detached(handleSync(), "template-studio-fields.sync");
       }}
       size="sm"
       variant="ghost"
@@ -1605,7 +1605,7 @@ const SaveRecipeDialog = ({
       queryClient.invalidateQueries({
         queryKey: knowledgeKeys.templateRecipes.all(activeOrganizationId),
       }),
-      "save",
+      "template-studio-fields.invalidate",
     );
     setName("");
     onOpenChange(false);
@@ -1637,7 +1637,7 @@ const SaveRecipeDialog = ({
               onChange={(e) => setName(e.currentTarget.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
-                  detached(save(), "SaveRecipeDialog");
+                  detached(save(), "template-studio-fields.save");
                 }
               }}
               value={name}
@@ -1650,7 +1650,7 @@ const SaveRecipeDialog = ({
           </DialogClose>
           <Button
             disabled={name.trim() === "" || saving}
-            onClick={() => detached(save(), "SaveRecipeDialog")}
+            onClick={() => detached(save(), "template-studio-fields.save")}
           >
             {saving ? (
               <Loader2Icon className="animate-spin" />
@@ -1735,11 +1735,11 @@ const ClauseSlotEditor = ({
     <Input
       autoFocus
       className="h-7 font-mono text-xs"
-      onBlur={() => detached(commit(), "ClauseSlotEditor")}
+      onBlur={() => detached(commit(), "template-studio-fields.commit")}
       onChange={(e) => setValue(e.currentTarget.value)}
       onKeyDown={(e) => {
         if (e.key === "Enter") {
-          detached(commit(), "ClauseSlotEditor");
+          detached(commit(), "template-studio-fields.commit");
         }
         if (e.key === "Escape") {
           setValue(slotName);

@@ -637,7 +637,7 @@ export const SearchDialog = ({
             type: "error",
           });
         }),
-        "SearchDialog.navigateAfterClose",
+        "search-dialog.navigate-to-target",
       );
     });
     onOpenChange(false);
@@ -937,7 +937,7 @@ export const SearchDialog = ({
           if (!entry?.isIntersecting || isFetchingNextPage) {
             return;
           }
-          detached(fetchNextPage(), "SearchDialog");
+          detached(fetchNextPage(), "search-dialog.fetch-next-page");
         },
         { root, rootMargin: "160px 0px" },
       );
@@ -1263,7 +1263,10 @@ export const SearchDialog = ({
                     </p>
                     <Button
                       onClick={() => {
-                        detached(refetchSearch(), "SearchDialog");
+                        detached(
+                          refetchSearch(),
+                          "search-dialog.refetch-search",
+                        );
                       }}
                       size="sm"
                       variant="outline"
@@ -1369,7 +1372,10 @@ export const SearchDialog = ({
                       {isFetchNextPageError && (
                         <Button
                           onClick={() => {
-                            detached(fetchNextPage(), "SearchDialog");
+                            detached(
+                              fetchNextPage(),
+                              "search-dialog.fetch-next-page",
+                            );
                           }}
                           size="sm"
                           variant="outline"
@@ -1742,7 +1748,7 @@ const SearchTextPreview = ({
           <Button
             disabled={isFetching}
             onClick={() => {
-              detached(refetch(), "SearchTextPreview");
+              detached(refetch(), "search-dialog.refetch");
             }}
             size="sm"
             variant="outline"

@@ -194,7 +194,7 @@ export const SkillResourcePanel = ({
       queue.pending = editorMarkdown;
       return;
     }
-    detached(runSaveLoop(editorMarkdown), "persistMarkdown");
+    detached(runSaveLoop(editorMarkdown), "skill-resource-panel.run-save-loop");
   };
 
   return (
@@ -219,7 +219,7 @@ export const SkillResourcePanel = ({
                     aria-label={t("common.save")}
                     disabled={saving || draft === tab.content}
                     onClick={() => {
-                      detached(save(), "SkillResourcePanel");
+                      detached(save(), "skill-resource-panel.save");
                     }}
                     size="xs"
                   >

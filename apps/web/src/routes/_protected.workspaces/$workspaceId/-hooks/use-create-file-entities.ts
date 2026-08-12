@@ -326,7 +326,10 @@ const uploadPreparedFileEntity = async ({
     // Best-effort cleanup: abortUpload swallows its own errors and its
     // result is never used, so don't block surfacing the original
     // network error on it completing.
-    detached(abortUpload(workspaceId, uploadId), "uploadPreparedFileEntity");
+    detached(
+      abortUpload(workspaceId, uploadId),
+      "use-create-file-entities.abort-upload",
+    );
     if (error instanceof Error) {
       throw error;
     }
@@ -683,7 +686,7 @@ export const useCreateFileEntities = (workspaceId: string) => {
     if (newEntityIds.length > 0) {
       detached(
         startWorkflow({ entityIds: newEntityIds }),
-        "startWorkflowForUploadedFiles",
+        "use-create-file-entities.start-workflow",
       );
     }
   };
@@ -747,7 +750,7 @@ export const useCreateFileEntities = (workspaceId: string) => {
               await queryClient.invalidateQueries({ queryKey: key }),
           ),
         ),
-        "onSettled",
+        "use-create-file-entities.invalidate",
       );
     },
   });

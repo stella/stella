@@ -267,7 +267,7 @@ export const EmailHtmlViewer = ({
         </p>
         <Button
           onClick={() => {
-            detached(previewQuery.refetch(), "EmailHtmlViewer");
+            detached(previewQuery.refetch(), "email-html-viewer.refetch");
           }}
           size="sm"
           variant="outline"

@@ -63,7 +63,7 @@ export const ContactOwnersEditor = ({ contact }: { contact: ContactData }) => {
               contactId: contact.id,
               invalidateWorkspaces: field === "responsibleAttorneyId",
             }),
-            "onSuccess",
+            "contact-owners-editor.invalidate-contact-caches",
           );
         },
         onError: () => {

@@ -247,7 +247,7 @@ const ActivityTimeline = ({
         });
         throw error;
       });
-    detached(request, "ActivityPanel.fetchNextPage");
+    detached(request, "activity-panel.fetch-next-page");
   };
 
   let activityContent: ReactNode;

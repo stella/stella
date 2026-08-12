@@ -375,7 +375,7 @@ const EditWorkspaceDocumentResult = ({
           setNameDialogOpen(false);
           detached(
             Promise.resolve(handleRetryAfterAuthorNameSet?.()),
-            "EditWorkspaceDocumentResult",
+            "tool-approval-card.retry-after-author-name",
           );
         }}
         onOpenChange={setNameDialogOpen}

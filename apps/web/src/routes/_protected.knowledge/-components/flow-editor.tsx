@@ -444,7 +444,7 @@ const FlowEditorForm = ({
       queryClient.invalidateQueries({
         queryKey: knowledgeKeys.flows.all(organizationId),
       }),
-      "handleSave",
+      "flow-editor.invalidate",
     );
     onSaved();
   };
@@ -477,7 +477,7 @@ const FlowEditorForm = ({
       queryClient.invalidateQueries({
         queryKey: knowledgeKeys.flows.all(organizationId),
       }),
-      "handleDelete",
+      "flow-editor.invalidate",
     );
     onSaved();
   };
@@ -518,7 +518,7 @@ const FlowEditorForm = ({
                     <Button
                       disabled={saving}
                       onClick={() => {
-                        detached(handleDelete(), "FlowEditorForm");
+                        detached(handleDelete(), "flow-editor.delete");
                       }}
                       variant="destructive"
                     >
@@ -532,7 +532,7 @@ const FlowEditorForm = ({
               disabled={!canSave || saving}
               loading={saving}
               onClick={() => {
-                detached(handleSave(), "FlowEditorForm");
+                detached(handleSave(), "flow-editor.save");
               }}
               type="button"
             >

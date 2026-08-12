@@ -93,7 +93,7 @@ export const OrganizationProfileCard = () => {
             errors={formErrors}
             onSubmit={(e) => {
               e.preventDefault();
-              detached(form.handleSubmit(), "OrganizationProfileCard");
+              detached(form.handleSubmit(), "profile-card.submit");
             }}
           >
             <form.Field name="name">

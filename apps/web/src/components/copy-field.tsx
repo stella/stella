@@ -42,7 +42,7 @@ export const CopyField = ({ label, value }: CopyFieldProps) => {
           <Button
             aria-label={t("common.copy")}
             onClick={() => {
-              detached(handleCopy(), "CopyField");
+              detached(handleCopy(), "copy-field.copy");
             }}
             size="icon-sm"
             type="button"

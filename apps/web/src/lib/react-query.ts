@@ -70,7 +70,7 @@ const withCriticalQueryTimeout = async <TData>(
               },
               { revert: false },
             ),
-            "withCriticalQueryTimeout",
+            "react-query.cancel-queries",
           );
           reject(
             new CriticalQueryTimeoutError({

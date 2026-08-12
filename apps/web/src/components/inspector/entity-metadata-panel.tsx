@@ -221,7 +221,10 @@ const EntityMetadataContent = ({
     }
 
     sawWorkflowRunning.current = false;
-    detached(refreshEntityFields(), "EntityMetadataContent");
+    detached(
+      refreshEntityFields(),
+      "entity-metadata-panel.refresh-entity-fields",
+    );
   }, [isWorkflowRunning, refreshEntityFields]);
 
   const entityFieldPropertyIds = new Set(

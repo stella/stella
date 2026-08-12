@@ -131,7 +131,7 @@ export const OfficeFileViewer = ({
         action: {
           label: t("workspaces.files.desktopEdit.action"),
           onClick: () => {
-            detached(openInDesktop(), "OfficeFileViewer");
+            detached(openInDesktop(), "office-file-viewer.open-in-desktop");
           },
         },
         description: t("workspaces.files.desktopEdit.editLocallyPrompt"),

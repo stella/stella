@@ -168,7 +168,10 @@ export const DevSidebarGroup = () => {
       },
       onSucceeded: () => {
         setSeeding(false);
-        detached(queryClient.invalidateQueries(), "DevSidebarGroup");
+        detached(
+          queryClient.invalidateQueries(),
+          "dev-sidebar-group.invalidate",
+        );
         stellaToast.add({ title: "Dev data seeded", type: "success" });
       },
       onPending: () => {
@@ -208,7 +211,10 @@ export const DevSidebarGroup = () => {
       },
       onSucceeded: () => {
         setSeedingFirmKnowledge(false);
-        detached(queryClient.invalidateQueries(), "DevSidebarGroup");
+        detached(
+          queryClient.invalidateQueries(),
+          "dev-sidebar-group.invalidate",
+        );
         stellaToast.add({
           title: "Firm knowledge seeded",
           description: "Text extraction continues in the background.",
@@ -324,7 +330,7 @@ export const DevSidebarGroup = () => {
         <MenuItem
           disabled={seeding}
           onClick={() => {
-            detached(handleSeed(), "DevSidebarGroup");
+            detached(handleSeed(), "dev-sidebar-group.seed");
           }}
         >
           <DatabaseIcon />
@@ -333,7 +339,10 @@ export const DevSidebarGroup = () => {
         <MenuItem
           disabled={seedingFirmKnowledge}
           onClick={() => {
-            detached(handleSeedFirmKnowledge(), "DevSidebarGroup");
+            detached(
+              handleSeedFirmKnowledge(),
+              "dev-sidebar-group.seed-firm-knowledge",
+            );
           }}
         >
           <LibraryBigIcon />
@@ -344,7 +353,7 @@ export const DevSidebarGroup = () => {
         <MenuItem
           disabled={cleaning}
           onClick={() => {
-            detached(handleClean(), "DevSidebarGroup");
+            detached(handleClean(), "dev-sidebar-group.clean");
           }}
         >
           <Trash2Icon />
@@ -354,7 +363,7 @@ export const DevSidebarGroup = () => {
         <MenuItem
           disabled={clearingCache}
           onClick={() => {
-            detached(handleClearCache(), "DevSidebarGroup");
+            detached(handleClearCache(), "dev-sidebar-group.clear-cache");
           }}
         >
           <RotateCcwIcon />

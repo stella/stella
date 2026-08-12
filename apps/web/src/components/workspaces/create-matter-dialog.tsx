@@ -413,7 +413,7 @@ const CreateMatterDialogBody = ({
                     onCreate={(...args) => {
                       detached(
                         handleCreateClient(...args),
-                        "CreateMatterDialogBody",
+                        "create-matter-dialog.create-client",
                       );
                     }}
                     onSelect={(contact) => {
@@ -462,7 +462,7 @@ const CreateMatterDialogBody = ({
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
-                  detached(handleSubmit(), "CreateMatterDialogBody");
+                  detached(handleSubmit(), "create-matter-dialog.submit");
                 }
               }}
               value={name}
@@ -631,7 +631,7 @@ const CreateMatterDialogBody = ({
           disabled={!canSubmit}
           loading={createWorkspace.isPending}
           onClick={() => {
-            detached(handleSubmit(), "CreateMatterDialogBody");
+            detached(handleSubmit(), "create-matter-dialog.submit");
           }}
         >
           {t("workspaces.createNewWorkspace")}

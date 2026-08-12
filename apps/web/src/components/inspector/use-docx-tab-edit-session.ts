@@ -124,7 +124,10 @@ export const useDocxTabEditSession = ({
     if (!compatibility) {
       return;
     }
-    detached(handleStartDocxEdit(target.id), "useDocxTabEditSession");
+    detached(
+      handleStartDocxEdit(target.id),
+      "use-docx-tab-edit-session.start-docx-edit",
+    );
     clearDocxEditRequest();
   }, [
     pendingDocxEditTabId,

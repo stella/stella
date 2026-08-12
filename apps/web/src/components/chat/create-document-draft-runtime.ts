@@ -219,7 +219,7 @@ export const registerCreateDocumentDraftSaver = (
       draftSavers = withoutRuntimeKey(draftSavers, key);
       detached(
         captureDraftSnapshot(toolCallId, saver),
-        "createDocumentDraftRuntime.captureUnmountedSnapshot",
+        "create-document-draft-runtime.capture-draft-snapshot",
       );
     }
   };

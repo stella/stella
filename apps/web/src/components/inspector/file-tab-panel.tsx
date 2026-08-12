@@ -447,7 +447,7 @@ export const FileTabPanel = ({
                   stellaToast.add({ title: message, type: "error" });
                 },
               }),
-              "FileTabPanel",
+              "file-tab-panel.download-tab-original-file",
             );
           }}
           size="xs"
@@ -586,7 +586,7 @@ export const FileTabPanel = ({
                         justificationPage: 1,
                       }),
                     }),
-                    "FileTabPanel",
+                    "file-tab-panel.navigate",
                   );
                 }}
                 workspaceId={tab.workspaceId}
@@ -747,7 +747,10 @@ export const FileTabPanel = ({
               "bg-primary/10 text-primary ring-primary/60 animate-pulse ring-2",
           )}
           onClick={() => {
-            detached(handleStartDocxEdit(tab.id), "FileTabPanel");
+            detached(
+              handleStartDocxEdit(tab.id),
+              "file-tab-panel.start-docx-edit",
+            );
           }}
           size="xs"
           variant="ghost"
@@ -763,7 +766,7 @@ export const FileTabPanel = ({
   const fullViewButton = (
     <Button
       onClick={() => {
-        detached(handleOpenFullView(), "FileTabPanel");
+        detached(handleOpenFullView(), "file-tab-panel.open-full-view");
       }}
       size="xs"
       variant="ghost"
@@ -867,7 +870,7 @@ export const FileTabPanel = ({
             onOpenAttachment={openEmailAttachment}
             overlayActivation={emailPreviewOverlayActivation}
             onRetryChatResolution={() => {
-              detached(entityQuery.refetch(), "FileTabPanel");
+              detached(entityQuery.refetch(), "file-tab-panel.refetch");
             }}
             chatHost={EMAIL_CHAT_HOST.parent}
             workspaceId={tab.workspaceId}
@@ -903,7 +906,7 @@ export const FileTabPanel = ({
             </p>
             <Button
               onClick={() => {
-                detached(markdownTextQuery.refetch(), "FileTabPanel");
+                detached(markdownTextQuery.refetch(), "file-tab-panel.refetch");
               }}
               size="xs"
               variant="secondary"
@@ -1142,7 +1145,7 @@ export const FileTabPanel = ({
                         justificationPage: 1,
                       }),
                     }),
-                    "FileTabPanel",
+                    "file-tab-panel.navigate",
                   );
                 }}
                 workspaceId={tab.workspaceId}
@@ -1230,7 +1233,7 @@ export const FileTabPanel = ({
                             field: tab.id,
                           }),
                         }),
-                        "onMissingEditor",
+                        "file-tab-panel.navigate",
                       );
                     },
                   }
@@ -1255,7 +1258,7 @@ export const FileTabPanel = ({
               activeFieldId={null}
               entityId={tab.entityId}
               onOpenFullView={() => {
-                detached(handleOpenFullView(), "FileTabPanel");
+                detached(handleOpenFullView(), "file-tab-panel.open-full-view");
               }}
               workspaceId={tab.workspaceId}
             />
@@ -1281,7 +1284,7 @@ export const FileTabPanel = ({
       }) ? (
         <EmailChatResolutionAlert
           onRetry={() => {
-            detached(entityQuery.refetch(), "FileTabPanel");
+            detached(entityQuery.refetch(), "file-tab-panel.refetch");
           }}
         />
       ) : null}

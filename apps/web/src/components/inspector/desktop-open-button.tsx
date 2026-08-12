@@ -66,7 +66,7 @@ export const DesktopOpenButton = ({
       disabled={isOpening}
       key={attentionSequence ?? "idle"}
       onClick={() => {
-        detached(open(), "DesktopOpenButton");
+        detached(open(), "desktop-open-button.open");
       }}
       onAnimationEnd={(event) => {
         if (event.target !== event.currentTarget) {

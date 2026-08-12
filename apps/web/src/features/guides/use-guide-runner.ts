@@ -507,7 +507,7 @@ export const useGuideRunner = ({
   };
 
   const start = (tour: GuideTour) => {
-    detached(runTour(tour), "useGuideRunner");
+    detached(runTour(tour), "use-guide-runner.run-tour");
   };
 
   return {

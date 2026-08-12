@@ -137,7 +137,10 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
         },
         {
           onSuccess: () => {
-            detached(invalidateCalendarTasks(), "CalendarView");
+            detached(
+              invalidateCalendarTasks(),
+              "calendar-view.invalidate-calendar-tasks",
+            );
           },
         },
       );
@@ -449,10 +452,13 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
               type: "error",
             });
           } finally {
-            detached(invalidateCalendarTasks(), "CalendarView");
+            detached(
+              invalidateCalendarTasks(),
+              "calendar-view.invalidate-calendar-tasks",
+            );
           }
         })(),
-        "CalendarView",
+        "calendar-view.patch",
       );
     } else if (datePropertyId === TASK_DATE_IDS[1] && kind === "task") {
       detached(
@@ -475,10 +481,13 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
               type: "error",
             });
           } finally {
-            detached(invalidateCalendarTasks(), "CalendarView");
+            detached(
+              invalidateCalendarTasks(),
+              "calendar-view.invalidate-calendar-tasks",
+            );
           }
         })(),
-        "CalendarView",
+        "calendar-view.patch",
       );
     } else if (isTaskDateProperty(datePropertyId)) {
       // Future-proofing for any new built-in task date pseudo-property.
@@ -507,7 +516,10 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
         },
         {
           onSuccess: () => {
-            detached(invalidateCalendarTasks(), "CalendarView");
+            detached(
+              invalidateCalendarTasks(),
+              "calendar-view.invalidate-calendar-tasks",
+            );
           },
         },
       );

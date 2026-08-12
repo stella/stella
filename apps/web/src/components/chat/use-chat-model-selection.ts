@@ -139,7 +139,7 @@ export const useChatModelSelection = ({
           pendingRef.current = null;
         }
       }),
-      "selectModel",
+      "use-chat-model-selection.persist-selection",
     );
   };
 

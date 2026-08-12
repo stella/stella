@@ -39,21 +39,21 @@ function RootRedirect() {
         }
 
         if (!authContext.session) {
-          detached(navigate({ to: "/auth", replace: true }), "RootRedirect");
+          detached(navigate({ to: "/auth", replace: true }), "root.navigate");
           return;
         }
 
         if (!authContext.session.activeOrganizationId) {
           detached(
             navigate({ to: "/auth/organization", replace: true }),
-            "RootRedirect",
+            "root.navigate",
           );
           return;
         }
 
-        detached(navigate({ to: "/chat", replace: true }), "RootRedirect");
+        detached(navigate({ to: "/chat", replace: true }), "root.navigate");
       })(),
-      "RootRedirect",
+      "root.load-auth-context",
     );
 
     return () => {

@@ -438,7 +438,7 @@ const MatterPickerSection = ({
         <Button
           disabled={isSubmitting || isDownloading}
           onClick={() => {
-            detached(handleDownload(), "MatterPickerSection.download");
+            detached(handleDownload(), "needs-matter-card.download");
           }}
           size="sm"
           type="button"
@@ -450,7 +450,7 @@ const MatterPickerSection = ({
         <Button
           disabled={selectedMatterId === null || isSubmitting || isDownloading}
           onClick={() => {
-            detached(handleContinue(), "MatterPickerSection");
+            detached(handleContinue(), "needs-matter-card.continue");
           }}
           size="sm"
           type="button"
@@ -513,7 +513,7 @@ const CreatedSuccessCard = ({ output, onOpen }: CreatedSuccessCardProps) => {
             "border-border/50 hover:bg-muted/60 flex w-full items-center gap-3 border-t px-3 py-3 text-start transition-colors",
           )}
           onClick={() => {
-            detached(onOpen(matterOutput), "CreatedSuccessCard");
+            detached(onOpen(matterOutput), "needs-matter-card.open");
           }}
           type="button"
         >

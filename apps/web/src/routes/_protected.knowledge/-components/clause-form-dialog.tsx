@@ -332,7 +332,7 @@ const ClauseFormDialogBody = ({
         <Button
           disabled={saving || !form.title.trim() || reviewStatus !== "resolved"}
           onClick={() => {
-            detached(handleSave(), "ClauseFormDialogBody");
+            detached(handleSave(), "clause-form-dialog.save");
           }}
         >
           {t("common.save")}

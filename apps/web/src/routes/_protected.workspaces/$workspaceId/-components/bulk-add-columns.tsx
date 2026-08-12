@@ -377,7 +377,7 @@ const BulkBody = ({ workspaceId, onClose, dirtyRef }: BulkBodyProps) => {
       // extraction to actually populate cells; manual columns don't.
       // Same convention the single-column dialog uses.
       if (items.some((item) => item.toolType === "ai-model")) {
-        detached(startWorkflow(), "handleSubmit");
+        detached(startWorkflow(), "bulk-add-columns.start-workflow");
       }
       stellaToast.add({
         title:
@@ -474,7 +474,7 @@ const BulkBody = ({ workspaceId, onClose, dirtyRef }: BulkBodyProps) => {
             disabled={!canSubmit}
             loading={batch.isPending}
             onClick={() => {
-              detached(handleSubmit(), "BulkBody");
+              detached(handleSubmit(), "bulk-add-columns.submit");
             }}
             size="sm"
           >

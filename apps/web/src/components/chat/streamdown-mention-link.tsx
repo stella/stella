@@ -204,7 +204,7 @@ const DecisionChip = ({
           ? () =>
               detached(
                 openCaseLawDecision(decisionRef, navigate),
-                "DecisionChip",
+                "streamdown-mention-link.open-case-law-decision",
               )
           : undefined
       }
@@ -294,7 +294,7 @@ const SkillRefChip = ({
       onActivate={() =>
         detached(
           navigate({ to: "/knowledge/tools", search: { kind: "skill" } }),
-          "SkillRefChip",
+          "streamdown-mention-link.navigate",
         )
       }
       truncate
@@ -341,7 +341,7 @@ const WorkspaceRefChip = ({
             to: "/workspaces/$workspaceId",
             params: { workspaceId },
           }),
-          "WorkspaceRefChip",
+          "streamdown-mention-link.navigate",
         )
       }
       truncate
@@ -378,7 +378,7 @@ const buildParsedEntityActivate =
           });
         }
       })(),
-      "buildParsedEntityActivate",
+      "streamdown-mention-link.open-entity-in-inspector",
     );
   };
 
@@ -449,7 +449,7 @@ const ParsedMentionChip = ({
             to: "/workspaces/$workspaceId",
             params: { workspaceId: id },
           }),
-          "ParsedMentionChip",
+          "streamdown-mention-link.navigate",
         )
       }
       truncate

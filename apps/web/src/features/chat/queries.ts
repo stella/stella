@@ -1007,7 +1007,7 @@ export const createChatRuntime = ({
     const stream = client.sendMessage(message, options?.body);
 
     if (!hasUserMessage(snapshot.messages, message.id)) {
-      detached(stream.catch(ignoreAbandonedStreamError), "sendThreadMessage");
+      detached(stream.catch(ignoreAbandonedStreamError), "chat-queries.stream");
       const error = new ChatMessageStartError(message.id);
       captureRuntimeError(error);
       throw error;
@@ -1098,12 +1098,12 @@ export const createChatRuntime = ({
       if (!hasUserMessage(snapshot.messages, message.id)) {
         detached(
           stream.catch(ignoreAbandonedStreamError),
-          "startRouteHandoffMessage",
+          "chat-queries.stream",
         );
         throw captureRuntimeError(new ChatMessageStartError(message.id));
       }
 
-      detached(stream.catch(reportRuntimeError), "startRouteHandoffMessage");
+      detached(stream.catch(reportRuntimeError), "chat-queries.stream");
       return { messageId: message.id, status: "started", stream };
     },
     stop: () => {
@@ -2429,7 +2429,7 @@ export const acquireChatRuntime = ({
           workspaceId: key.scope === "workspace" ? key.workspaceId : undefined,
         }),
       ]),
-      "chatTurnTerminal",
+      "chat-queries.invalidate-chat-thread",
     );
   };
   const runtime = createChatRuntime({
@@ -2827,6 +2827,6 @@ export const applyChatModelChange = ({
   );
   detached(
     invalidateChatThreadAcrossScopes({ queryClient, threadId }),
-    "applyChatModelChange",
+    "chat-queries.invalidate-chat-thread-across-scopes",
   );
 };

@@ -77,7 +77,7 @@ export const InstallPackButton = ({
     <Button
       disabled={busy}
       onClick={() => {
-        detached(onClick(), "InstallPackButton");
+        detached(onClick(), "install-pack-button.click");
       }}
       size="xs"
       variant="outline"

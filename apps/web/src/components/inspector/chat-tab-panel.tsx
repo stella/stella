@@ -456,7 +456,10 @@ export const ChatTabPanel = ({
     if (data.usedAnonymization || !hasThreadMessages) {
       return;
     }
-    detached(suggestTitleIntoLabel(), "ChatTabPanel");
+    detached(
+      suggestTitleIntoLabel(),
+      "chat-tab-panel.suggest-title-into-label",
+    );
   };
 
   // New-chat lives in the composer's status row (the dock), not the
@@ -596,7 +599,7 @@ export const ChatTabPanel = ({
             onCommit: () => {
               labelSessionRef.current += 1;
               labelDraftRef.current = null;
-              detached(labelRename.commit(), "onCommit");
+              detached(labelRename.commit(), "chat-tab-panel.commit");
             },
             onCancel: () => {
               labelSessionRef.current += 1;
@@ -608,7 +611,10 @@ export const ChatTabPanel = ({
                 hasMessages={hasThreadMessages}
                 isPending={isSuggestingTitle}
                 onTrigger={() => {
-                  detached(suggestTitleIntoLabel(), "ChatTabPanel");
+                  detached(
+                    suggestTitleIntoLabel(),
+                    "chat-tab-panel.suggest-title-into-label",
+                  );
                 }}
                 usedAnonymization={data.usedAnonymization}
               />
@@ -696,7 +702,7 @@ export const ChatTabPanel = ({
                       }
                       await sendMessage(await buildChatRequestMessage(draft));
                     }),
-                    "ChatTabPanel",
+                    "chat-tab-panel.submit",
                   );
                 }}
               />

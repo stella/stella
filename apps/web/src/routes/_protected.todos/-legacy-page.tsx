@@ -311,7 +311,7 @@ export function LegacyTodosPage() {
           className="self-center"
           disabled={isFetchingNextPage}
           onClick={() => {
-            detached(fetchNextPage(), "LegacyTodosPage");
+            detached(fetchNextPage(), "legacy-page.fetch-next-page");
           }}
           size="sm"
           variant="outline"

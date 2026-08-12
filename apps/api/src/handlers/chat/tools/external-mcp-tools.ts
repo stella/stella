@@ -316,7 +316,7 @@ const loadConnectorTools = async ({
             async () =>
               await closeAbandonedClient({ client, connectorSlug: row.slug }),
           ),
-        "loadConnectorTools",
+        "external-mcp-tools.discovery",
       );
     } else {
       // `discovery` has already settled (that rejection is `error`), so

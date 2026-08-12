@@ -42,7 +42,7 @@ export const useSavedPrompts = (): ChatPrompt[] => {
     ) {
       return;
     }
-    detached(fetchNextPage(), "useSavedPrompts");
+    detached(fetchNextPage(), "use-saved-prompts.fetch-next-page");
   }, [activeOrganizationId, fetchNextPage, hasNextPage, isFetchingNextPage]);
   const rows = commandShortcutRowsFromSkillPages(skillPages?.pages);
 

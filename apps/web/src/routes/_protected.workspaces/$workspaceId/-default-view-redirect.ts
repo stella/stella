@@ -75,7 +75,7 @@ export const useDefaultWorkspaceViewRedirect = ({
           if (target.to === "/workspaces") {
             detached(
               navigate({ to: "/workspaces", replace: true }),
-              "DefaultViewRedirect",
+              "default-view-redirect.navigate",
             );
             return;
           }
@@ -86,7 +86,7 @@ export const useDefaultWorkspaceViewRedirect = ({
               params: target.params,
               replace: true,
             }),
-            "DefaultViewRedirect",
+            "default-view-redirect.navigate",
           );
         } catch (error) {
           if (!run.cancelled) {
@@ -98,7 +98,7 @@ export const useDefaultWorkspaceViewRedirect = ({
           }
         }
       })(),
-      "DefaultViewRedirect",
+      "default-view-redirect.resolve-target",
     );
 
     return () => {

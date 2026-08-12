@@ -180,7 +180,7 @@ export const ClauseDetailView = ({
       queryClient.invalidateQueries({
         queryKey: knowledgeKeys.clauses.detail(organizationId, clauseId),
       }),
-      "refreshDetail",
+      "clause-detail.invalidate",
     );
   };
 
@@ -529,7 +529,7 @@ const ClauseHeader = ({
           }}
           onChange={setTitleDraft}
           onCommit={() => {
-            detached(saveTitle(), "ClauseHeader");
+            detached(saveTitle(), "clause-detail.save-title");
           }}
           value={titleDraft}
         />
@@ -552,7 +552,7 @@ const ClauseHeader = ({
         <Select
           disabled={!canEdit}
           onValueChange={(val) => {
-            detached(saveCategory(val ?? ""), "ClauseHeader");
+            detached(saveCategory(val ?? ""), "clause-detail.save-category");
           }}
           value={detail.categoryId ?? ""}
         >
@@ -576,7 +576,7 @@ const ClauseHeader = ({
             !dirtySinceVersion || savingVersion || reviewStatus !== "resolved"
           }
           onClick={() => {
-            detached(saveVersion(), "ClauseHeader");
+            detached(saveVersion(), "clause-detail.save-version");
           }}
           size="sm"
           variant="outline"
@@ -628,7 +628,10 @@ const ClauseHeader = ({
         primary={{
           label: t("clauses.saveVersionAndLeave"),
           onClick: () => {
-            detached(saveVersionAndLeave(), "onClick");
+            detached(
+              saveVersionAndLeave(),
+              "clause-detail.save-version-and-leave",
+            );
           },
         }}
         secondary={{
@@ -835,13 +838,13 @@ const ClauseBodyEditor = ({
         saveBody(body, explicitReviewFlushToken).catch((error: unknown) => {
           getAnalytics().captureError(error);
         }),
-        "ClauseBodyEditor",
+        "clause-detail.save-body",
       );
     };
   }, [saveBody]);
 
   const debouncedSave = useDebouncedCallback((body: ClauseParagraph[]) => {
-    detached(saveBody(body), "ClauseBodyEditor");
+    detached(saveBody(body), "clause-detail.save-body");
   }, 1200);
 
   if (!canEdit) {
@@ -874,7 +877,7 @@ const ClauseBodyEditor = ({
         content={detail.body}
         onBlur={(body) => {
           debouncedSave.cancel();
-          detached(saveBody(body), "ClauseBodyEditor");
+          detached(saveBody(body), "clause-detail.save-body");
         }}
         onChange={(body) => {
           // Mark un-versioned the instant the body is edited (not when the
@@ -950,7 +953,7 @@ const ClauseInlineTextField = ({
       <Input
         id={`clause-${field}`}
         onBlur={() => {
-          detached(commit(draft), "ClauseInlineTextField");
+          detached(commit(draft), "clause-detail.commit");
         }}
         onChange={(e) => setDraft(e.target.value)}
         placeholder={placeholder}
@@ -1028,7 +1031,7 @@ const ClauseLanguageField = ({
     if (next === value) {
       return;
     }
-    detached(save(next), "handleChange");
+    detached(save(next), "clause-detail.save");
   };
 
   if (!canEdit) {
@@ -1112,7 +1115,7 @@ const ClauseUsageNotesField = ({
   });
 
   const debouncedSave = useDebouncedCallback((text: string) => {
-    detached(save(text), "ClauseUsageNotesField");
+    detached(save(text), "clause-detail.save");
   }, 1200);
 
   if (!canEdit) {
@@ -1139,7 +1142,7 @@ const ClauseUsageNotesField = ({
         id="clause-usage-notes"
         onBlur={() => {
           debouncedSave.cancel();
-          detached(save(draft), "ClauseUsageNotesField");
+          detached(save(draft), "clause-detail.save");
         }}
         onChange={(e) => {
           setDraft(e.target.value);
@@ -1355,7 +1358,7 @@ const VariantRow = ({
             aria-label={t("common.moveUp")}
             disabled={!canMoveUp || reordering}
             onClick={() => {
-              detached(handleReorder("up"), "VariantRow");
+              detached(handleReorder("up"), "clause-detail.reorder");
             }}
             size="icon-xs"
             variant="ghost"
@@ -1366,7 +1369,7 @@ const VariantRow = ({
             aria-label={t("common.moveDown")}
             disabled={!canMoveDown || reordering}
             onClick={() => {
-              detached(handleReorder("down"), "VariantRow");
+              detached(handleReorder("down"), "clause-detail.reorder");
             }}
             size="icon-xs"
             variant="ghost"
@@ -1422,7 +1425,7 @@ const VariantRow = ({
             <Button
               disabled={deleting}
               onClick={() => {
-                detached(handleDelete(), "VariantRow");
+                detached(handleDelete(), "clause-detail.delete");
               }}
               variant="destructive"
             >
@@ -1447,7 +1450,7 @@ const VariantRow = ({
             <Button
               disabled={promoting}
               onClick={() => {
-                detached(handlePromote(), "VariantRow");
+                detached(handlePromote(), "clause-detail.promote");
               }}
             >
               {t("clauses.useAsMainBody")}
@@ -1595,7 +1598,7 @@ const VariantFormDialogBody = ({
         <Button
           disabled={saving || !label.trim()}
           onClick={() => {
-            detached(handleSave(), "VariantFormDialogBody");
+            detached(handleSave(), "clause-detail.save");
           }}
         >
           {t("common.save")}
@@ -1695,7 +1698,10 @@ const HistoryTab = ({
               key={ver.id}
               onRestored={onRefresh}
               onToggleDiff={() => {
-                detached(handleVersionClick(ver.id), "HistoryTab");
+                detached(
+                  handleVersionClick(ver.id),
+                  "clause-detail.version-click",
+                );
               }}
               version={ver}
             />
@@ -1821,7 +1827,7 @@ const VersionRow = ({
             <Button
               disabled={restoring}
               onClick={() => {
-                detached(handleRestore(), "VersionRow");
+                detached(handleRestore(), "clause-detail.restore");
               }}
             >
               {t("clauses.restoreVersion")}

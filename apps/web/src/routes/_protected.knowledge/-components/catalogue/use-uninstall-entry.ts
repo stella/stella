@@ -67,21 +67,21 @@ export const useUninstallEntry = (
         queryClient.invalidateQueries({
           queryKey: catalogueKeys.list(organizationId),
         }),
-        "onSuccess",
+        "use-uninstall-entry.invalidate",
       );
       detached(
         queryClient.invalidateQueries({ queryKey: mcpQueryRoot() }),
-        "onSuccess",
+        "use-uninstall-entry.invalidate",
       );
       detached(
         queryClient.invalidateQueries({ queryKey: agentSkillsQueryRoot() }),
-        "onSuccess",
+        "use-uninstall-entry.invalidate",
       );
       detached(
         queryClient.invalidateQueries({
           queryKey: knowledgeKeys.mcp.all(organizationId),
         }),
-        "onSuccess",
+        "use-uninstall-entry.invalidate",
       );
       stellaToast.add({
         title: t("common.remove"),

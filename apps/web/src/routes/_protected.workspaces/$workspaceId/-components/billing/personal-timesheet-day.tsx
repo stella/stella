@@ -195,7 +195,10 @@ export const PersonalTimesheetDay = ({
             <Button
               disabled={entriesQuery.isFetchingNextPage}
               onClick={() => {
-                detached(entriesQuery.fetchNextPage(), "PersonalTimesheetDay");
+                detached(
+                  entriesQuery.fetchNextPage(),
+                  "personal-timesheet-day.fetch-next-page",
+                );
               }}
               variant="outline"
             >
@@ -287,7 +290,7 @@ export const PersonalTimesheetDay = ({
                         type: "error",
                       });
                     }),
-                  "PersonalTimesheetDay",
+                  "personal-timesheet-day.delete-entry",
                 );
               }}
               variant="destructive"

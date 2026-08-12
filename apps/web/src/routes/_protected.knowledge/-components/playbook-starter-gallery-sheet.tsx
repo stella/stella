@@ -72,7 +72,7 @@ const PlaybookStarterGallerySheetBody = ({
         queryClient.invalidateQueries({
           queryKey: knowledgeKeys.playbooks.all(organizationId),
         }),
-        "onSuccess",
+        "playbook-starter-gallery-sheet.invalidate",
       );
       stellaToast.add({
         title: t("knowledge.playbooks.starters.addedToast"),

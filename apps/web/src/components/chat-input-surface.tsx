@@ -337,7 +337,7 @@ export const ChatInputSurface = ({
                 guideAnchorsEnabled={guideAnchorsEnabled}
                 isGenerating={isGenerating}
                 onSend={() => {
-                  detached(submitDraft(), "ChatInputSurface");
+                  detached(submitDraft(), "chat-input-surface.submit-draft");
                 }}
                 onStop={onStop}
               />

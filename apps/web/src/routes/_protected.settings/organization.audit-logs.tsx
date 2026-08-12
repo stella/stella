@@ -173,7 +173,7 @@ function AuditLogsPage() {
           type: "error",
         });
       }),
-      "handleExportClick",
+      "settings-organization-audit-logs.export",
     );
   };
 

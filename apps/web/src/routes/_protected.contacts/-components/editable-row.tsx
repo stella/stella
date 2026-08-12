@@ -102,7 +102,7 @@ export const EditableRow = ({
                 contactId: contact.id,
                 invalidateWorkspaces: field === "displayName",
               }),
-              "onSuccess",
+              "editable-row.invalidate-contact-caches",
             );
           },
           onError: () => {
@@ -133,7 +133,7 @@ export const EditableRow = ({
               : undefined
           }
           onBlur={() => {
-            detached(rename.commit(), "EditableRow");
+            detached(rename.commit(), "editable-row.commit");
           }}
           onChange={(e) => rename.setDraft(e.target.value)}
           onKeyDown={(e) => {

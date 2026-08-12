@@ -309,7 +309,7 @@ export const AskUserCard = ({
       return;
     }
     setIsEditing(false);
-    detached(onEditAndRerun(part.id, output), "AskUserCard");
+    detached(onEditAndRerun(part.id, output), "ask-user-card.edit-and-rerun");
   }, [input, onEditAndRerun, buildOutput, part.id]);
 
   const handleFormSubmit = useCallback<

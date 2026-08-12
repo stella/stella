@@ -196,7 +196,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
 
   useExternalSyncEffect(() => {
     if (aiEnabled && ast && analysisState.status === "idle") {
-      detached(generate(), "DecisionWorkspace");
+      detached(generate(), "decision-workspace.generate");
     }
   }, [aiEnabled, analysisState.status, ast, generate]);
 
@@ -221,7 +221,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
         {aiEnabled ? (
           <Button
             onClick={() => {
-              detached(generate(), "DecisionWorkspace");
+              detached(generate(), "decision-workspace.generate");
             }}
             size="sm"
             variant="outline"
@@ -308,7 +308,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                   <Button
                     className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-colors"
                     onClick={() => {
-                      detached(generate(), "DecisionWorkspace");
+                      detached(generate(), "decision-workspace.generate");
                     }}
                     size="sm"
                     variant="ghost"

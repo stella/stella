@@ -314,7 +314,7 @@ const MattersTableRow = ({
         to: "/workspaces/$workspaceId",
         params: { workspaceId: workspace.id },
       }),
-      "openMatter",
+      "matters-table.navigate",
     );
   };
 

@@ -224,13 +224,13 @@ const InvoiceDetail = ({
       queryClient.invalidateQueries({
         queryKey: invoicesKeys.all(workspaceId),
       }),
-      "invalidateAll",
+      "invoices.invalidate",
     );
     detached(
       queryClient.invalidateQueries({
         queryKey: timeEntriesKeys.all(workspaceId),
       }),
-      "invalidateAll",
+      "invoices.invalidate",
     );
   };
 
@@ -804,7 +804,7 @@ const EditInvoiceForm = ({
         queryClient.invalidateQueries({
           queryKey: invoicesKeys.all(workspaceId),
         }),
-        "onSubmit",
+        "invoices.invalidate",
       );
       onClose();
     },
@@ -818,7 +818,7 @@ const EditInvoiceForm = ({
       errors={formErrors}
       onSubmit={(e) => {
         e.preventDefault();
-        detached(form.handleSubmit(), "EditInvoiceForm");
+        detached(form.handleSubmit(), "invoices.submit");
       }}
     >
       <h2 className="text-sm font-semibold">

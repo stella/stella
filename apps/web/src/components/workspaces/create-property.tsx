@@ -573,7 +573,7 @@ const PropertyComposerBody = ({
             // the prompt, type, options, or dependencies may have
             // changed; manual properties don't have a workflow.
             if (nextTool.type === "ai-model") {
-              detached(startWorkflow(), "onSuccess");
+              detached(startWorkflow(), "create-property.start-workflow");
             }
             onClose();
           },
@@ -631,7 +631,10 @@ const PropertyComposerBody = ({
             extractionContext && extractionContext.filePropertyId !== null
               ? { entityIds: [extractionContext.entityId] }
               : undefined;
-          detached(startWorkflow(workflowArgs), "onSuccess");
+          detached(
+            startWorkflow(workflowArgs),
+            "create-property.start-workflow",
+          );
           onClose();
           onCreated?.(result);
         },

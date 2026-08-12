@@ -212,7 +212,7 @@ function ChatIndex() {
                 threadId,
               }),
             }),
-            "onSuccess",
+            "chat.invalidate",
           );
         },
         onError: () => {
@@ -296,7 +296,7 @@ function ChatIndex() {
       id: threadIdRef.current ?? createChatThreadId(),
       contextMatterIds,
     });
-    detached(navigate({ to: "/chat" }), "moveToSide");
+    detached(navigate({ to: "/chat" }), "chat.navigate");
   };
 
   const handleSubmit = async (draft: ChatInputDraft) => {
@@ -352,7 +352,10 @@ function ChatIndex() {
         to: "/chat/$threadId",
         params: { threadId: threadRef.threadId },
       });
-      detached(invalidateGroupedChatThreads(queryClient), "ChatIndex");
+      detached(
+        invalidateGroupedChatThreads(queryClient),
+        "chat.invalidate-grouped-chat-threads",
+      );
       return;
     }
     if (!(await ensureAIAvailable())) {
@@ -424,7 +427,10 @@ function ChatIndex() {
         threadId: threadIdRef.current ?? createChatThreadId(),
       },
     });
-    detached(invalidateGroupedChatThreads(queryClient), "ChatIndex");
+    detached(
+      invalidateGroupedChatThreads(queryClient),
+      "chat.invalidate-grouped-chat-threads",
+    );
   };
 
   return (
