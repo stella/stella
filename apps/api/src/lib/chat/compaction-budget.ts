@@ -3,20 +3,20 @@
  * use, maps it through the catalog's documented context window, and derives
  * the compaction trigger plus the proportionally-scaled preserved tail.
  *
- * Split from `compaction.ts` (pure token math) so that module stays free of
- * provider/model-resolution dependencies. Used by both the send path (to gate
- * and drive checkpointing) and the read path (to size the context meter), so a
- * thread's meter denominator matches the trigger its next send will apply.
+ * Kept out of the chat slice so the background compactor resolves a thread's
+ * budget the same way its sends do. Used by the send path (to gate
+ * checkpointing), the read path (to size the context meter), and the compactor,
+ * so a thread's meter denominator matches the trigger its next send applies.
  */
 import { getContextWindowTokens } from "@stll/ai-catalog";
 
-import {
-  resolveCompactionTriggerTokens,
-  resolvePreserveTokensForTrigger,
-} from "@/api/handlers/chat/compaction";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decodeChatModelSelection } from "@/api/lib/chat-model-selection";
+import {
+  resolveCompactionTriggerTokens,
+  resolvePreserveTokensForTrigger,
+} from "@/api/lib/chat/compaction-tokens";
 import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
 
 export type ChatCompactionBudget = {

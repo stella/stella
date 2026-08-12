@@ -9,7 +9,6 @@ import {
 } from "@/api/handlers/chat/chat-scope";
 import { computeThreadContextUsage } from "@/api/handlers/chat/compaction";
 import type { ThreadContextUsage } from "@/api/handlers/chat/compaction";
-import { resolveChatCompactionBudget } from "@/api/handlers/chat/compaction-budget";
 import { loadWindowedThreadMessages } from "@/api/handlers/chat/history-window";
 import { loadChatMessagePage } from "@/api/handlers/chat/message-page";
 import { readLatestChatCompactionOnTx } from "@/api/handlers/chat/persistent-compaction";
@@ -21,6 +20,7 @@ import type { ChatMessage } from "@/api/handlers/chat/types";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
+import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";
@@ -212,11 +212,6 @@ const getMessages = createSafeRootHandler(
         // read once and threaded into loadWindowedThreadMessages (which would
         // otherwise re-run the identical query itself), so both observe the
         // same compaction state instead of racing as two independent reads.
-        // `isAnonymized` mirrors the thread's persisted flag: anonymized
-        // threads never checkpoint, so the capped branch bounds this read the
-        // same way the send path bounds its history window (a long
-        // anonymized thread must not scan every row just to render the
-        // meter).
         const checkpoint = await readLatestChatCompactionOnTx({
           threadId,
           tx,
@@ -225,7 +220,6 @@ const getMessages = createSafeRootHandler(
           await loadWindowedThreadMessages({
             tx,
             threadId,
-            isAnonymized: thread.usedAnonymization,
             checkpoint,
           }),
         );

@@ -75,9 +75,8 @@ import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistenc
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import {
   compactChatMessagesForModel,
-  shouldCompactChatMessages,
+  chatThreadNeedsCompaction,
 } from "@/api/handlers/chat/compaction";
-import { resolveChatCompactionBudget } from "@/api/handlers/chat/compaction-budget";
 import {
   computeAssistantTurnWorkspaceIds,
   extractIncomingMessageWorkspaceIds,
@@ -87,7 +86,6 @@ import { ChatError } from "@/api/handlers/chat/errors";
 import { generateThreadTitle } from "@/api/handlers/chat/generate-thread-title";
 import {
   chatMessageExistsForThread,
-  loadFullThreadHistory,
   resolveTruncationTarget,
 } from "@/api/handlers/chat/history-window";
 import { isExternalMcpToolPart } from "@/api/handlers/chat/mcp-tool-parts";
@@ -95,7 +93,6 @@ import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message
 import { planMessagePersistence } from "@/api/handlers/chat/persist-message";
 import {
   applyChatCompactionCheckpoint,
-  persistChatCompactionCheckpoint,
   readLatestChatCompaction,
 } from "@/api/handlers/chat/persistent-compaction";
 import {
@@ -167,6 +164,7 @@ import {
   createGeneratedDocumentActiveDraftContext,
   hasPersistedGeneratedDocumentActiveDraftContext,
 } from "@/api/lib/chat/active-draft-context";
+import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import { isReadyGeneratedDocumentDraft } from "@/api/lib/chat/created-draft";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
@@ -179,6 +177,7 @@ import {
   type ChatRefInputState,
   type ChatUnresolvedInputRefContext,
 } from "@/api/lib/chat/ref-token";
+import { markChatThreadCompactionDue } from "@/api/lib/chat/thread-compaction";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { rewriteWorkspaceUrlsToMentions } from "@/api/lib/chat/workspace-url-mentions";
 import { detached } from "@/api/lib/detached";
@@ -202,8 +201,6 @@ import {
 import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys";
 import { getAppBaseUrl } from "@/api/mcp/tool-utils";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
-
-const CHAT_COMPACTION_CHECKPOINT_TIMEOUT_MS = 120_000;
 
 /**
  * Dev model overrides (`body.devModelId`) are local-only: reject them outside
@@ -766,7 +763,6 @@ const sendMessage = createSafeRootHandler(
               ? []
               : activeDraftContext.originDataWorkspaceIds,
           initialContextMatterIds: requestedContextMatterIds,
-          isAnonymized: body.sendMode === CHAT_SEND_MODE.anonymized,
           organizationId: session.activeOrganizationId,
           recordAuditEvent,
           safeDb,
@@ -1654,11 +1650,7 @@ const sendMessage = createSafeRootHandler(
                       messagesAfterAssistantPersist !== null &&
                       body.sendMode !== CHAT_SEND_MODE.anonymized
                     ) {
-                      scheduleChatCompactionCheckpoint({
-                        abortSignal: AbortSignal.timeout(
-                          CHAT_COMPACTION_CHECKPOINT_TIMEOUT_MS,
-                        ),
-                        boundary: thirdPartyBoundary,
+                      await markChatCompactionDue({
                         chatModelOverride,
                         messages: messagesAfterAssistantPersist,
                         organizationId: session.activeOrganizationId,
@@ -1871,12 +1863,10 @@ const selectMessagesForContextInput = async ({
     return messages;
   }
 
-  return (
-    applyChatCompactionCheckpoint({
-      checkpoint: checkpointResult.value,
-      messages,
-    }) ?? messages
-  );
+  return applyChatCompactionCheckpoint({
+    checkpoint: checkpointResult.value,
+    messages,
+  });
 };
 
 const compactMessagesForContext = async ({
@@ -1976,139 +1966,50 @@ const applyAssistantPersistencePlan = ({
   }
 };
 
-type ScheduleChatCompactionCheckpointProps = ChatCompactionModelProps & {
-  abortSignal: AbortSignal;
-  boundary: ReturnType<typeof createChatThirdPartyBoundary>;
+type MarkChatCompactionDueProps = ChatCompactionModelProps & {
   messages: ChatMessage[];
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
 };
 
-const scheduleChatCompactionCheckpoint = ({
-  abortSignal,
-  boundary,
+/**
+ * Put the thread on the compaction queue when its window crosses the trigger.
+ *
+ * The whole of compaction's cost — reading the delta and calling the
+ * summarizer — belongs to the scheduler task that drains this queue. All the
+ * send path contributes is the token estimate it already has in memory and one
+ * indexed update, so a send never waits on a checkpoint and never has to
+ * survive one.
+ *
+ * The mark is idempotent and re-derived on every send, which is what makes it
+ * self-healing: if this update is lost, the next send over the trigger stamps
+ * the thread again.
+ */
+const markChatCompactionDue = async ({
   chatModelOverride,
   messages,
   organizationId,
   orgAIConfig,
-  reasoningEffort,
   safeDb,
   threadId,
-}: ScheduleChatCompactionCheckpointProps): void => {
-  const { triggerTokens, preserveTokens } = resolveChatCompactionBudget({
+}: MarkChatCompactionDueProps): Promise<void> => {
+  const { triggerTokens } = resolveChatCompactionBudget({
     chatModelOverride,
     orgAIConfig,
     organizationId,
   });
 
-  // Cheap token-estimate gate over the per-send window. For non-anonymized
-  // threads (the only ones that schedule a checkpoint) the window now holds the
-  // full pre-checkpoint history, so it accurately signals whether compaction is
-  // due; the common case is under the trigger and issues no full-history read.
-  if (!shouldCompactChatMessages(messages, triggerTokens)) {
+  if (!chatThreadNeedsCompaction({ messages, triggerTokens })) {
     return;
   }
 
-  detached(
-    runChatCompactionCheckpoint({
-      abortSignal,
-      boundary,
-      chatModelOverride,
-      organizationId,
-      orgAIConfig,
-      reasoningEffort,
-      preserveTokens,
-      safeDb,
-      threadId,
-      triggerTokens,
-    }).catch((error: unknown) => {
-      captureError(error, {
-        threadId,
-        feature: "chat.compaction_checkpoint_persist",
-      });
-    }),
-    "scheduleChatCompactionCheckpoint",
+  const marked = await safeDb(
+    async (tx) => await markChatThreadCompactionDue({ threadId, tx }),
   );
-};
-
-type RunChatCompactionCheckpointProps = ChatCompactionModelProps & {
-  abortSignal: AbortSignal;
-  boundary: ReturnType<typeof createChatThirdPartyBoundary>;
-  preserveTokens: number;
-  safeDb: SafeDb;
-  threadId: SafeId<"chatThread">;
-  triggerTokens: number;
-};
-
-const runChatCompactionCheckpoint = async ({
-  abortSignal,
-  boundary,
-  chatModelOverride,
-  organizationId,
-  orgAIConfig,
-  reasoningEffort,
-  preserveTokens,
-  safeDb,
-  threadId,
-  triggerTokens,
-}: RunChatCompactionCheckpointProps): Promise<void> => {
-  // Summarize from the true start of the conversation. The window passed to
-  // the gate above is enough to know a checkpoint is due, but the durable
-  // summary must cover the full unsummarized prefix [0..newFirstKept] with
-  // real boundary message ids, or context summarized into an earlier
-  // checkpoint would be silently dropped. Never feed a synthetic compaction
-  // summary message here: its id is not a real chat_messages row and would
-  // violate the firstKept/firstSummarized FKs.
-  const dataScopeResult = await safeDb((tx) =>
-    tx.query.chatThreads.findFirst({
-      where: { id: { eq: threadId } },
-      columns: { dataWorkspaceIds: true },
-    }),
-  );
-  if (Result.isError(dataScopeResult)) {
-    captureError(dataScopeResult.error, {
+  if (Result.isError(marked)) {
+    captureError(marked.error, {
       threadId,
-      feature: "chat.compaction_checkpoint_data_scope",
-    });
-    return;
-  }
-  if (!dataScopeResult.value) {
-    return;
-  }
-
-  const historyResult = await loadFullThreadHistory({ safeDb, threadId });
-  if (Result.isError(historyResult)) {
-    captureError(historyResult.error, {
-      threadId,
-      feature: "chat.compaction_checkpoint_history",
-    });
-    return;
-  }
-
-  const persistResult = await persistChatCompactionCheckpoint({
-    abortSignal,
-    boundary,
-    dataWorkspaceIds: dataScopeResult.value.dataWorkspaceIds,
-    messages: historyResult.value,
-    modelId: chatModelOverride,
-    onSummaryError: (error) => {
-      captureError(error, {
-        threadId,
-        feature: "chat.compaction_checkpoint_summary",
-      });
-    },
-    organizationId,
-    orgAIConfig,
-    reasoningEffort,
-    preserveTokens,
-    safeDb,
-    threadId,
-    triggerTokens,
-  });
-  if (Result.isError(persistResult)) {
-    captureError(persistResult.error, {
-      threadId,
-      feature: "chat.compaction_checkpoint_persist",
+      feature: "chat.compaction_enqueue",
     });
   }
 };

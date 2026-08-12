@@ -15,6 +15,7 @@ import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
 import { RECONCILE_BUFFER_INTENTS_TASK } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
 import { RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK } from "@/api/lib/scheduler/tasks/case-law-corpus-upload-cleanup";
 import { BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK } from "@/api/lib/scheduler/tasks/case-law-redaction-tombstone-backfill";
+import { CHAT_THREAD_COMPACTOR_TASK } from "@/api/lib/scheduler/tasks/chat-thread-compactor";
 import { EXPIRE_DESKTOP_EDIT_SESSIONS_TASK } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
 import { DISPATCH_DOCUMENT_OCR_TASK } from "@/api/lib/scheduler/tasks/document-processing-ocr";
 import { INFO_SOUD_SYNC_TRACKED_CASES_TASK } from "@/api/lib/scheduler/tasks/infosoud";
@@ -254,6 +255,17 @@ export const DECLARED_SCHEDULER_JOBS = [
       everyMs: 60 * 60 * 1000,
     },
     task: MEMORY_EXTRACTOR_TASK,
+  },
+  {
+    description:
+      "Fold new chat-thread messages into their durable compaction checkpoint",
+    id: "chat.compactThreads.everyFiveMinutes",
+    mode: "recurring",
+    schedule: {
+      type: "interval",
+      everyMs: 5 * 60 * 1000,
+    },
+    task: CHAT_THREAD_COMPACTOR_TASK,
   },
 ] as const satisfies readonly DeclaredSchedulerJob[];
 

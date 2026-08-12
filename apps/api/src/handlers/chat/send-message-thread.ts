@@ -118,7 +118,6 @@ type LoadThreadProps = {
    */
   initialDataWorkspaceIds: readonly SafeId<"workspace">[];
   initialContextMatterIds: SafeId<"workspace">[];
-  isAnonymized: boolean;
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
@@ -157,7 +156,6 @@ const loadThreadAttempt = async ({
   claimAttempt,
   initialDataWorkspaceIds,
   initialContextMatterIds,
-  isAnonymized,
   organizationId,
   recordAuditEvent,
   safeDb,
@@ -292,7 +290,6 @@ const loadThreadAttempt = async ({
         claimAttempt: claimAttempt + 1,
         initialDataWorkspaceIds,
         initialContextMatterIds,
-        isAnonymized,
         organizationId,
         recordAuditEvent,
         safeDb,
@@ -315,7 +312,7 @@ const loadThreadAttempt = async ({
         return Result.ok(retried);
       }
       const windowedMessages = yield* Result.await(
-        loadWindowedThreadMessages({ safeDb, threadId, isAnonymized }),
+        loadWindowedThreadMessages({ safeDb, threadId }),
       );
       existingResult.value.data.messages = windowedMessages;
       if (
@@ -424,7 +421,7 @@ const loadThreadAttempt = async ({
           return Result.ok(retried);
         }
         const recoveredMessages = yield* Result.await(
-          loadWindowedThreadMessages({ safeDb, threadId, isAnonymized }),
+          loadWindowedThreadMessages({ safeDb, threadId }),
         );
         recoveredResult.value.data.messages = recoveredMessages;
         return Result.ok(recoveredResult.value);

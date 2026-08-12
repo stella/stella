@@ -10,6 +10,7 @@ import {
 
 import {
   aiMemoryPolicies,
+  CHAT_COMPACTION_MEMORY_ELIGIBILITIES,
   chatMessageSearchDocumentPolicies,
   chatMessagePolicies,
   chatTurnPolicies,
@@ -34,6 +35,7 @@ import {
 } from "./common";
 import type {
   AnyPgColumn,
+  ChatCompactionMemoryEligibility,
   ChatCompactionSummary,
   ChatMessageRole,
   ChatTitleSource,
@@ -47,6 +49,11 @@ import { templates } from "./templates";
 const REASONING_EFFORT_SQL_VALUES = REASONING_EFFORTS.map((effort) =>
   sql.raw(`'${effort}'`),
 );
+
+const CHAT_COMPACTION_MEMORY_ELIGIBILITY_SQL_VALUES =
+  CHAT_COMPACTION_MEMORY_ELIGIBILITIES.map((eligibility) =>
+    sql.raw(`'${eligibility}'`),
+  );
 
 const CHAT_TURN_STATUS_SQL_VALUES = CHAT_TURN_STATUSES.map((status) =>
   sql.raw(`'${status}'`),
@@ -168,6 +175,40 @@ export const chatThreads = p.pgTable(
     recapPromptVersion: p.smallint("recap_prompt_version"),
     recapGeneratedAt: timestamptz("recap_generated_at"),
     usedAnonymization: p.boolean("used_anonymization").notNull().default(false),
+    /**
+     * Durable queue address for incremental thread compaction. Null means no
+     * compaction work is pending. A send whose history window crosses the
+     * compaction trigger stamps `now()`; the compactor claims a due thread by
+     * overwriting this with its lease expiry and settles it with a
+     * compare-and-set on that token, so a send that wakes the thread while a
+     * run is in flight is never erased.
+     */
+    compactionScheduledAt: timestamptz("compaction_scheduled_at"),
+    /**
+     * When the compactor last attempted this thread. Failed attempts stay
+     * eligible but rotate behind untouched work, so one permanently failing
+     * thread cannot monopolize a batch.
+     */
+    compactionAttemptedAt: timestamptz("compaction_attempted_at"),
+    /**
+     * Consecutive failed compaction attempts, reset by any run that makes
+     * progress. Drives the capped exponential backoff the failed settlement
+     * writes into `compactionScheduledAt`, so a thread that cannot be compacted
+     * at all stops costing a claim slot and a provider call every tick.
+     */
+    compactionAttempts: p.integer("compaction_attempts").notNull().default(0),
+    /**
+     * Bumped whenever an edit, replay, or delete invalidates the checkpoint
+     * chain. The compactor reads it with the delta and compares it again under
+     * the thread lock, so a message change that commits mid-run is detected
+     * before the summary is written.
+     *
+     * Needed because the compactor's other guard compares active checkpoint
+     * ids, which is vacuous on a thread that has none: invalidation marks no
+     * row stale, both sides read null, and a summary built from superseded
+     * content would be accepted and its cursor advanced past the corrected row.
+     */
+    compactionEpoch: p.integer("compaction_epoch").notNull().default(0),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
       .notNull()
@@ -185,6 +226,16 @@ export const chatThreads = p.pgTable(
       .index("chat_threads_org_user_updated_id_idx")
       .on(table.organizationId, table.userId, table.updatedAt, table.id),
     p.index("chat_threads_user_updated_idx").on(table.userId, table.updatedAt),
+    // Serves the compactor's claim seek: due threads oldest-first, with
+    // never-attempted work ahead of previously failed work.
+    p
+      .index("chat_threads_compaction_due_idx")
+      .on(
+        table.compactionScheduledAt,
+        sql`${table.compactionAttemptedAt} ASC NULLS FIRST`,
+        table.id,
+      )
+      .where(sql`${table.compactionScheduledAt} IS NOT NULL`),
     p.check(
       "chat_threads_reasoning_effort_selection_check",
       sql`${table.chatReasoningEffort} IS NULL OR (${table.chatModel} IS NOT NULL AND ${table.chatReasoningEffort} IN (${sql.join(REASONING_EFFORT_SQL_VALUES, sql`, `)}))`,
@@ -641,11 +692,40 @@ export const chatThreadCompactions = p.pgTable(
       .notNull()
       .references(() => chatMessages.id, { onDelete: "cascade" }),
     summarizedMessageCount: p.integer("summarized_message_count").notNull(),
+    /**
+     * Encoded `(created_at, id)` keyset cursor for the last message this
+     * checkpoint chain summarized. Every compactor run reads only the bounded
+     * delta after it, so no run rereads lifetime history. Null on rows written
+     * before the cursor landed; such a chain resumes from the start of the
+     * thread and re-anchors on its next run.
+     */
+    deltaCursor: p.text("delta_cursor"),
+    /**
+     * Messages summarized by the whole checkpoint chain, not just this run.
+     * `summarizedMessageCount` deliberately stays per-run so the memory
+     * extractor's `[firstSummarized..lastSummarized]` transcript range remains
+     * bounded.
+     */
+    totalSummarizedMessageCount: p
+      .integer("total_summarized_message_count")
+      .notNull()
+      .default(0),
     totalTokens: p.integer("total_tokens").notNull(),
     preservedTokens: p.integer("preserved_tokens").notNull(),
     promptVersion: p.smallint("prompt_version").notNull(),
     modelProvider: p.text("model_provider"),
     modelId: p.text("model_id"),
+    /**
+     * Whether this summary may be mined for AI memory, and when not, why.
+     * Recorded per segment and inherited along the chain, because a cumulative
+     * summary cannot be re-derived from the messages it replaced. See
+     * `ChatCompactionMemoryEligibility` for the values and their monotonicity.
+     */
+    memoryEligibility: p
+      .varchar("memory_eligibility", { length: 20 })
+      .$type<ChatCompactionMemoryEligibility>()
+      .notNull()
+      .default("unknown"),
     // Set by the memory extractor once it has proposed memories from
     // this compaction, so the background job stays idempotent.
     memoryExtractedAt: timestamptz("memory_extracted_at"),
@@ -675,6 +755,16 @@ export const chatThreadCompactions = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    // Read off CHAT_COMPACTION_MEMORY_ELIGIBILITIES rather than re-listed: a
+    // new eligibility value must reach the constraint and the column together,
+    // and the extractability map beside the const is already total over it.
+    p.check(
+      "chat_thread_compactions_memory_eligibility_check",
+      sql`${table.memoryEligibility} IN (${sql.join(
+        CHAT_COMPACTION_MEMORY_ELIGIBILITY_SQL_VALUES,
+        sql`, `,
+      )})`,
+    ),
     p
       .uniqueIndex("chat_thread_compactions_active_thread_uidx")
       .on(table.threadId)

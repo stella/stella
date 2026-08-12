@@ -27,7 +27,7 @@ import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import { planAssistantFinishPersistence } from "@/api/handlers/chat/persist-message";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
 import {
-  markActiveChatCompactionCheckpointStale,
+  invalidateChatCompactionChain,
   shouldInvalidateChatCompactionCheckpoint,
 } from "@/api/handlers/chat/persistent-compaction";
 import { shouldMarkThreadUsedAnonymization } from "@/api/handlers/chat/thread-anonymization";
@@ -554,7 +554,7 @@ const runPersistMessage = async ({
           persistencePlan,
         })
       ) {
-        await markActiveChatCompactionCheckpointStale({ threadId, tx });
+        await invalidateChatCompactionChain({ threadId, tx });
       }
 
       const updatedMessageId = persistencePlan.messageId;
@@ -677,7 +677,7 @@ const runPersistMessage = async ({
         persistencePlan,
       })
     ) {
-      await markActiveChatCompactionCheckpointStale({ threadId, tx });
+      await invalidateChatCompactionChain({ threadId, tx });
     }
 
     await recordAuditEvent(tx, {
