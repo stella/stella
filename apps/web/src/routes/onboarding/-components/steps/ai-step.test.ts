@@ -91,7 +91,14 @@ describe("AI provider continuation", () => {
     ).toBe(true);
   });
 
-  test("requires every provider credential to be confirmed", () => {
+  test("requires at least one confirmed credential and every provider confirmed", () => {
+    expect(
+      canContinueWithProviderConfiguration({
+        providers: ["google"],
+        hasAnyConfirmed: false,
+        allProvidersConfirmed: true,
+      }),
+    ).toBe(false);
     expect(
       canContinueWithProviderConfiguration({
         providers: ["google"],
