@@ -747,7 +747,9 @@ const downloadDataAttachment = ({
 
   const encoded = url.slice(payloadStart + BASE64_DATA_MARKER.length);
   const binary = atob(encoded);
-  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  const bytes = Uint8Array.from(binary, (character) =>
+    character.charCodeAt(0),
+  );
   downloadFile(new Blob([bytes], { type: mimeType }), fileName);
 };
 

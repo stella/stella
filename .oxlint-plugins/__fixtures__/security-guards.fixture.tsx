@@ -48,6 +48,7 @@ export const UnsafeBuiltLink = () => (
 );
 export const SafeLink = () => <a href={sanitizeHref(item.url)}>Open</a>;
 
+// oxlint-disable-next-line eslint/no-shadow -- fixture: a shadowed binding must not satisfy the imported-member scope guard
 const shadowedMemberReferences = (member: {
   organizationId: string;
   userId: string;
