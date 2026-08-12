@@ -8,7 +8,7 @@ import {
   safeUuid,
   safeWorkspaceId,
   user,
-  wsOrganizationReadOnlyPolicies,
+  wsOrganizationScopedRequestPolicies,
 } from "./common";
 import { workspaces } from "./contacts";
 import { entities, entityVersions, fields } from "./entities";
@@ -51,6 +51,44 @@ const DOCUMENT_PROCESSING_STATUS_SQL_VALUES = DOCUMENT_PROCESSING_STATUSES.map(
 
 const DOCUMENT_PROCESSING_REQUEST_SOURCE_SQL_VALUES =
   DOCUMENT_PROCESSING_REQUEST_SOURCES.map((source) => sql.raw(`'${source}'`));
+
+/**
+ * The one row a scoped (tenant) transaction may write to this table: a fresh,
+ * unattributed native-extraction request for a file it just committed.
+ *
+ * Native extraction reads text the tenant already uploaded and costs local
+ * processing only. OCR runs spend external processing budget, `manual` and
+ * `repair` requests carry different retry policy, and every state transition
+ * after the insert belongs to the worker, so all of those stay root-writer
+ * only. `requestedBy` is null because the run is caused by an upload rather
+ * than requested by a person; pinning it keeps a scoped session from
+ * attributing a run to another user.
+ *
+ * The insert policy below and `processExtraction` both read this constant, so
+ * the shape the database accepts and the shape the application writes cannot
+ * drift apart.
+ */
+export const SCOPED_NATIVE_EXTRACTION_ENQUEUE = {
+  attemptCount: 0,
+  kind: "native-extraction",
+  requestedBy: null,
+  requestSource: "upload",
+  status: "queued",
+} as const satisfies {
+  attemptCount: number;
+  kind: DocumentProcessingKind;
+  requestedBy: null;
+  requestSource: DocumentProcessingRequestSource;
+  status: DocumentProcessingStatus;
+};
+
+const scopedEnqueueShapeCheck = sql`(
+  kind = ${sql.raw(`'${SCOPED_NATIVE_EXTRACTION_ENQUEUE.kind}'`)}
+  AND request_source = ${sql.raw(`'${SCOPED_NATIVE_EXTRACTION_ENQUEUE.requestSource}'`)}
+  AND status = ${sql.raw(`'${SCOPED_NATIVE_EXTRACTION_ENQUEUE.status}'`)}
+  AND requested_by IS NULL
+  AND attempt_count = ${sql.raw(String(SCOPED_NATIVE_EXTRACTION_ENQUEUE.attemptCount))}
+)`;
 
 /**
  * Durable execution record for processing one immutable document source.
@@ -234,6 +272,14 @@ export const documentProcessingRuns = p.pgTable(
       "document_processing_runs_source_sha256_hex_check",
       sql`${table.sourceSha256Hex} ~ '^[0-9a-f]{64}$'`,
     ),
-    ...wsOrganizationReadOnlyPolicies("document_processing_runs"),
+    // The upload that creates the source file may enqueue its own extraction
+    // request through its scoped transaction, so the request cannot be lost
+    // between that commit and a follow-up write. Same shape as
+    // `entity_deletion_cleanup_insert` on entity_deletion_cleanup_requests.
+    ...wsOrganizationScopedRequestPolicies({
+      insertPolicyName: "document_processing_runs_native_extraction_insert",
+      requestShapeCheck: scopedEnqueueShapeCheck,
+      tableName: "document_processing_runs",
+    }),
   ],
 );
