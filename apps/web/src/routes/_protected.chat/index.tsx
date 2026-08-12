@@ -61,7 +61,7 @@ import {
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
-import { useAnalytics } from "@/lib/analytics/provider";
+import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import { api } from "@/lib/api";
 import {
@@ -75,9 +75,11 @@ import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { skillsOptions } from "@/lib/knowledge/queries";
 import { usePinnedStore } from "@/lib/pinned-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
+import { prefetchRouteQuery } from "@/lib/react-query";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
@@ -86,6 +88,29 @@ import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
 
 export const Route = createFileRoute("/_protected/chat/")({
+  loader: ({ context }) => {
+    const activeOrganizationId = context.user.activeOrganizationId;
+    const onPrefetchError = (error: unknown) => {
+      getAnalytics().captureError(error);
+    };
+
+    detached(
+      Promise.all([
+        prefetchRouteQuery(
+          context.queryClient,
+          workspacesNavigationOptions(activeOrganizationId),
+          onPrefetchError,
+        ),
+        context.queryClient.prefetchInfiniteQuery(
+          groupedChatThreadsOptions({ activeOrganizationId }),
+        ),
+        context.queryClient.prefetchInfiniteQuery(
+          skillsOptions(activeOrganizationId),
+        ),
+      ]),
+      "chat-index.prefetch",
+    );
+  },
   component: ChatIndex,
 });
 

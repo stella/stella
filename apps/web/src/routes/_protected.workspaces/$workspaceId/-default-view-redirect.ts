@@ -25,15 +25,11 @@ type DefaultWorkspaceViewTarget =
 // router redirect so it can drive a mounted-component navigation: a beforeLoad
 // throw-redirect on this client-only route blanks the page on cold direct
 // loads (see the no-beforeload-redirect lint rule).
-const resolveDefaultWorkspaceViewTarget = async ({
+export const resolveDefaultWorkspaceViewTarget = async ({
   queryClient,
   workspaceId,
 }: DefaultWorkspaceViewInput): Promise<DefaultWorkspaceViewTarget> => {
   const options = viewsOptions(workspaceId);
-
-  // Avoid serving stale cache from a previous workspace that had no views.
-  await queryClient.invalidateQueries({ queryKey: options.queryKey });
-
   const views = await ensureRouteQueryData(queryClient, options);
   const firstView = views.at(0);
 
