@@ -10,18 +10,37 @@ import { Frame, FramePanel } from "@stll/ui/components/frame";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { env } from "@/env";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { prefetchRouteQuery } from "@/lib/react-query";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
 import type { UsageEntitlement } from "@/lib/usage-queries";
+import { UsagePlansCard } from "@/routes/_protected.settings/-components/organization/usage-plans-card";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { usagePoliciesOptions } from "@/routes/_protected.settings/-queries/usage-policies";
 
 export const Route = createFileRoute("/_protected/settings/organization/usage")(
   {
     component: UsageSettingsPage,
+    loader: async ({ context }) => {
+      // The catalog exists only behind the usage flag; with the flag off
+      // this route must issue exactly the requests it does today (the
+      // route-smoke network baseline pins them).
+      if (env.VITE_FEATURE_USAGE) {
+        await prefetchRouteQuery(
+          context.queryClient,
+          usagePoliciesOptions,
+          (error: unknown) => {
+            getAnalytics().captureError(error);
+          },
+        );
+      }
+    },
   },
 );
 
@@ -33,6 +52,10 @@ function UsageSettingsPage() {
   const { data, isLoading } = useQuery(
     usageEntitlementOptions({ organizationId: activeOrganizationId }),
   );
+  const entitlement = data?.entitlement;
+  const packsPurchasable =
+    entitlement?.source === "hosted" &&
+    (entitlement.status === "active" || entitlement.status === "trialing");
 
   return (
     <>
@@ -41,6 +64,11 @@ function UsageSettingsPage() {
         title={t("settings.organization.usage")}
       />
       <UsageBody data={data?.entitlement ? data : null} isLoading={isLoading} />
+      {env.VITE_FEATURE_USAGE && (
+        <div className="mt-6 space-y-6">
+          <UsagePlansCard packsPurchasable={packsPurchasable} />
+        </div>
+      )}
     </>
   );
 }
