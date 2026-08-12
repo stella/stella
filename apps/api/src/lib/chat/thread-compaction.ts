@@ -298,7 +298,11 @@ const readCompactionEpochOnTx = async ({
     .from(chatThreads)
     .where(eq(chatThreads.id, threadId))
     .limit(1);
-  const rows = await (lock ? query.for("update") : query);
+  // Awaited inside each branch rather than `await (lock ? a : b)`: the ternary
+  // form makes the compiler build the union of two full Drizzle builder types
+  // before awaiting it, which on its own pushed apps/api past its
+  // instantiation budget. Awaiting first leaves it unioning two row arrays.
+  const rows = lock ? await query.for("update") : await query;
   // A missing thread cannot match any observed epoch, so the advance declines.
   return rows.at(0)?.compactionEpoch ?? MISSING_THREAD_EPOCH;
 };

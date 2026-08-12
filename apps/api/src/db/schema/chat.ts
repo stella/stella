@@ -10,6 +10,7 @@ import {
 
 import {
   aiMemoryPolicies,
+  CHAT_COMPACTION_MEMORY_ELIGIBILITIES,
   chatMessageSearchDocumentPolicies,
   chatMessagePolicies,
   chatTurnPolicies,
@@ -48,6 +49,11 @@ import { templates } from "./templates";
 const REASONING_EFFORT_SQL_VALUES = REASONING_EFFORTS.map((effort) =>
   sql.raw(`'${effort}'`),
 );
+
+const CHAT_COMPACTION_MEMORY_ELIGIBILITY_SQL_VALUES =
+  CHAT_COMPACTION_MEMORY_ELIGIBILITIES.map((eligibility) =>
+    sql.raw(`'${eligibility}'`),
+  );
 
 const CHAT_TURN_STATUS_SQL_VALUES = CHAT_TURN_STATUSES.map((status) =>
   sql.raw(`'${status}'`),
@@ -742,6 +748,16 @@ export const chatThreadCompactions = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    // Read off CHAT_COMPACTION_MEMORY_ELIGIBILITIES rather than re-listed: a
+    // new eligibility value must reach the constraint and the column together,
+    // and the extractability map beside the const is already total over it.
+    p.check(
+      "chat_thread_compactions_memory_eligibility_check",
+      sql`${table.memoryEligibility} IN (${sql.join(
+        CHAT_COMPACTION_MEMORY_ELIGIBILITY_SQL_VALUES,
+        sql`, `,
+      )})`,
+    ),
     p
       .uniqueIndex("chat_thread_compactions_active_thread_uidx")
       .on(table.threadId)

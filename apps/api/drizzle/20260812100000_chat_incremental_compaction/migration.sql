@@ -31,7 +31,14 @@ ALTER TABLE "chat_thread_compactions" ADD COLUMN IF NOT EXISTS "total_summarized
 -- the backfill below promotes the ones whose provenance IS recoverable.
 ALTER TABLE "chat_thread_compactions" ADD COLUMN IF NOT EXISTS "memory_eligibility" varchar(20) DEFAULT 'unknown' NOT NULL;--> statement-breakpoint
 ALTER TABLE "chat_thread_compactions" DROP CONSTRAINT IF EXISTS "chat_thread_compactions_memory_eligibility_check";--> statement-breakpoint
-ALTER TABLE "chat_thread_compactions" ADD CONSTRAINT "chat_thread_compactions_memory_eligibility_check" CHECK (memory_eligibility IN ('eligible', 'message-opted-out', 'consent-inactive', 'unknown'));--> statement-breakpoint
+-- NOT VALID: enforced for every write from this statement on, without the
+-- ACCESS EXCLUSIVE scan of the existing rows. chat_thread_compactions carries
+-- one row per compaction per thread and grows with chat use, so that scan is
+-- not something to take under lock. The rows are trivially conforming — the
+-- column is added above with a constant default and only ever written from
+-- CHAT_COMPACTION_MEMORY_ELIGIBILITIES — so the validation below is a
+-- formality that marks the constraint valid for the planner.
+ALTER TABLE "chat_thread_compactions" ADD CONSTRAINT "chat_thread_compactions_memory_eligibility_check" CHECK (memory_eligibility IN ('eligible', 'message-opted-out', 'consent-inactive', 'unknown')) NOT VALID;--> statement-breakpoint
 -- Backfill the chains that predate these columns. Bounded by the partial unique
 -- index on (thread_id) WHERE status = 'active': at most one row per thread, not
 -- one per compaction.
@@ -92,6 +99,12 @@ DROP INDEX CONCURRENTLY IF EXISTS "chat_threads_compaction_due_idx";
 -- interrupted build, so the drop above is the retry-safe postcondition instead.
 -- squawk-ignore prefer-robust-stmts
 CREATE INDEX CONCURRENTLY "chat_threads_compaction_due_idx" ON "chat_threads" ("compaction_scheduled_at", "compaction_attempted_at" ASC NULLS FIRST, "id") WHERE compaction_scheduled_at IS NOT NULL;
+--> statement-breakpoint
+-- Outside the transaction, next to the concurrent index, because VALIDATE takes
+-- only SHARE UPDATE EXCLUSIVE: it scans without blocking reads or writes. This
+-- is what makes the migrated database structurally identical to schema.ts,
+-- which declares an ordinary (valid) constraint.
+ALTER TABLE "chat_thread_compactions" VALIDATE CONSTRAINT "chat_thread_compactions_memory_eligibility_check";
 --> statement-breakpoint
 -- squawk-ignore transaction-nesting, ban-uncommitted-transaction
 BEGIN;
