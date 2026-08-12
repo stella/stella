@@ -108,7 +108,7 @@
   },
   "resolutions": {
     "@expo/cli": "57.0.13",
-    "@expo/router-server": "57.0.4",
+    "@expo/router-server": "57.0.5",
     "@expo/ui": "57.0.9",
     "@emnapi/core": "1.9.1",
     "@emnapi/runtime": "1.9.1",
