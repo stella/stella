@@ -1,6 +1,7 @@
 import { useOptimistic, useRef, useState, useTransition } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
 import {
   CheckCircle2Icon,
   EyeOffIcon,
@@ -252,31 +253,42 @@ export const PropertyPopover = ({
     if (!result) {
       return;
     }
-    if (result.status === "started") {
-      stellaToast.add({
-        title: t("workspaces.workflow.startedSuccessfully"),
-        type: "success",
-      });
-      return;
+    const { status } = result;
+    switch (status) {
+      case "started":
+        stellaToast.add({
+          title: t("workspaces.workflow.startedSuccessfully"),
+          type: "success",
+        });
+        return;
+      case "already-running":
+        stellaToast.add({
+          title: t("common.running"),
+          type: "info",
+        });
+        return;
+      case "skipped":
+        stellaToast.add({
+          title: t("workspaces.workflow.noFieldsToProcess"),
+          type: "info",
+        });
+        return;
+      case "ai-unavailable":
+        // Re-running a column is an explicit request, so say why nothing
+        // happened; the side-effect call sites stay quiet on this one.
+        stellaToast.add({
+          title: t("errors.failedToStartWorkflow"),
+          type: "error",
+        });
+        return;
+      case "failed":
+        // Already reported by `useStartWorkflow`, error included.
+        return;
+      default: {
+        const exhaustive: never = status;
+        panic(`Unhandled workflow start status: ${String(exhaustive)}`);
+      }
     }
-    if (result.status === "already-running") {
-      stellaToast.add({
-        title: t("common.running"),
-        type: "info",
-      });
-      return;
-    }
-    if (result.status === "skipped") {
-      stellaToast.add({
-        title: t("workspaces.workflow.noFieldsToProcess"),
-        type: "info",
-      });
-      return;
-    }
-    stellaToast.add({
-      title: t("errors.failedToStartWorkflow"),
-      type: "error",
-    });
   };
 
   return (
