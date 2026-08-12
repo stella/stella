@@ -21,8 +21,10 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const s3FileMock = mock((key: string) => ({ key }));
-const s3WriteMock = mock(async () => undefined);
-const s3DeleteMock = mock(async () => undefined);
+// Typed by their first argument so a test can read back the object keys the
+// duplicate wrote and the keys the cleanup returned.
+const s3WriteMock = mock(async (_key: string) => undefined);
+const s3DeleteMock = mock(async (_key: string) => undefined);
 
 // Spread the real module: mock.module is process-global; a partial mock would delete s3's other exports for later test files.
 const realS3 = await import("@/api/lib/s3");
@@ -769,6 +771,120 @@ describe("duplicateWorkspace", () => {
       copiedTaskId,
     ]);
     expect(processExtractionMock.mock.calls).toEqual([[copiedDocumentId]]);
+  });
+
+  test("returns every object copied for an aborted duplicate", async () => {
+    s3WriteMock.mockClear();
+    s3DeleteMock.mockClear();
+    enqueueEntitySearchRepairsMock.mockClear();
+    enqueueWorkspaceSearchRepairsMock.mockClear();
+
+    const filePropertyId = toSafeId<"property">("prop_file");
+    const insertedTables: unknown[] = [];
+
+    const { safeDb, scopedDb } = createScopedDbMock({
+      query: {
+        workspaces: {
+          findFirst: async () => ({
+            id: "ws_source123",
+            name: "Smith v Jones",
+            clientId: null,
+            billingReference: null,
+            color: null,
+            leadUserId: null,
+          }),
+        },
+        properties: {
+          findMany: async () => [
+            {
+              id: filePropertyId,
+              workspaceId: "ws_source123",
+              name: "Document",
+              status: "active",
+              content: { type: "file", version: 1 },
+              tool: null,
+              system: false,
+              kinds: ["document"],
+            },
+          ],
+        },
+        propertyDependencies: { findMany: async () => [] },
+        workspaceViews: { findMany: async () => [] },
+        workspaceMembers: { findMany: async () => [] },
+        workspaceContacts: { findMany: async () => [] },
+        organizationSettings: { findFirst: async () => null },
+        entities: {
+          findMany: async () => [
+            {
+              id: "entity_document",
+              kind: "document",
+              name: "evidence.png",
+              parentId: null,
+              currentVersion: {
+                id: "version_document",
+                fields: [
+                  {
+                    propertyId: filePropertyId,
+                    content: {
+                      type: "file",
+                      version: 1,
+                      id: "source-file-id",
+                      fileName: "evidence.png",
+                      mimeType: "image/png",
+                      sizeBytes: 1024,
+                      encrypted: false,
+                      sha256Hex: "a".repeat(64),
+                      pdfFileId: null,
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      },
+      select: (selectedFields: Record<string, unknown>) =>
+        "total" in selectedFields
+          ? {
+              from: () => ({
+                where: async () => [{ total: LIMITS.workspacesCount }],
+              }),
+            }
+          : { from: () => ({ where: async () => [] }) },
+      insert: (table: unknown) => ({
+        values: () => {
+          insertedTables.push(table);
+          return {
+            onConflictDoUpdate: () => ({
+              returning: async () => [{ lastValue: 1 }],
+            }),
+          };
+        },
+      }),
+      update: () => ({ set: () => ({ where: async () => undefined }) }),
+      execute: async () => undefined,
+    });
+
+    const result = await duplicateWorkspace.handler(
+      createContext({ includeContent: true, safeDb, scopedDb }),
+    );
+
+    // The abort travels as the same rejection the caller always answered.
+    expect(result).toEqual({
+      code: 400,
+      response: { message: "Workspaces limit reached" },
+    });
+    expect(insertedTables).toEqual([]);
+
+    // No row survives the abort, so every object copied for it is an orphan
+    // and all of them go back.
+    const copiedKeys = s3WriteMock.mock.calls.map(([key]) => key);
+    const deletedKeys = s3DeleteMock.mock.calls.map(([key]) => key);
+    expect(copiedKeys).toHaveLength(1);
+    expect(new Set(deletedKeys)).toEqual(new Set(copiedKeys));
+
+    expect(enqueueEntitySearchRepairsMock).not.toHaveBeenCalled();
+    expect(enqueueWorkspaceSearchRepairsMock).not.toHaveBeenCalled();
   });
 
   test("rejects an oversized source before the duplicate writes anything", async () => {

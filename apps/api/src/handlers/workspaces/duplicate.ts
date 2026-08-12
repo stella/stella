@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { member } from "@/api/db/auth-schema";
 import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
+import { transactionAbortError } from "@/api/db/safe-db";
 import {
   entities,
   entityVersions,
@@ -496,10 +497,8 @@ const duplicateWorkspace = createSafeHandler(
       );
     }
 
-    // Checked before anything is written. The write transaction commits what
-    // it has already inserted when it returns a failure, so rejecting the
-    // source size from inside it would answer 400 and still leave the target
-    // matter, its properties, and its views behind.
+    // Checked before anything is written: the snapshot already carries the
+    // count, so the source size never has to reach the write transaction.
     if (snapshot.entities.length > LIMITS.entitiesCount) {
       return Result.err(
         new HandlerError({ status: 400, message: "Entities limit reached" }),
@@ -538,6 +537,10 @@ const duplicateWorkspace = createSafeHandler(
       }
     }
 
+    // Every rejection below throws rather than returning: returning from a
+    // transaction callback commits whatever it has already written, so a
+    // rejection raised part-way through would persist half a matter and then
+    // have the caller delete the objects those committed rows point at.
     const txResult = await safeDb(async (tx) => {
       const [countResult, duplicatedNames, settings, orgMembers] =
         await Promise.all([
@@ -582,19 +585,17 @@ const duplicateWorkspace = createSafeHandler(
 
       const activeCount = countResult.at(0)?.total ?? 0;
       if (activeCount >= LIMITS.workspacesCount) {
-        return {
-          ok: false as const,
-          status: 400 as const,
+        throw new HandlerError({
+          status: 400,
           message: "Workspaces limit reached",
-        };
+        });
       }
 
       if (orgMembers.length !== snapshot.members.length) {
-        return {
-          ok: false as const,
-          status: 400 as const,
+        throw new HandlerError({
+          status: 400,
           message: "Some users are not members of this organization",
-        };
+        });
       }
 
       const newName =
@@ -623,11 +624,10 @@ const duplicateWorkspace = createSafeHandler(
         .then((rows) => rows.at(0));
 
       if (!counter) {
-        return {
-          ok: false as const,
-          status: 500 as const,
+        throw new HandlerError({
+          status: 500,
           message: "Failed to create matter counter",
-        };
+        });
       }
 
       const reference = toReference({
@@ -757,11 +757,10 @@ const duplicateWorkspace = createSafeHandler(
       if (includeContent && entitiesToDuplicate.length > 0) {
         for (const source of entitiesToDuplicate) {
           if (!source.currentVersion) {
-            return {
-              ok: false as const,
-              status: 400 as const,
+            throw new HandlerError({
+              status: 400,
               message: "Entity has no current version",
-            };
+            });
           }
 
           const newEntityId = createSafeId<"entity">();
@@ -879,31 +878,19 @@ const duplicateWorkspace = createSafeHandler(
       await enqueueWorkspaceSearchRepairs(tx, [targetWorkspaceId]);
 
       return {
-        ok: true as const,
         workspaceId: targetWorkspaceId,
         entityIds: duplicatedEntityIds,
       };
     });
 
+    // An aborted duplicate leaves no target matter, so every object copied
+    // for it is an orphan and the whole set goes back.
     if (Result.isError(txResult)) {
       await cleanupCopiedS3Keys({
         copiedS3Keys,
         targetWorkspaceId,
       });
-      return Result.err(txResult.error);
-    }
-
-    if (!txResult.value.ok) {
-      await cleanupCopiedS3Keys({
-        copiedS3Keys,
-        targetWorkspaceId,
-      });
-      return Result.err(
-        new HandlerError({
-          status: txResult.value.status,
-          message: txResult.value.message,
-        }),
-      );
+      return Result.err(transactionAbortError(txResult.error));
     }
 
     // Both post-commit calls only accelerate what the transaction already
