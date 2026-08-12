@@ -53,6 +53,10 @@ export const readWorkflowHandler = async ({
 };
 
 const config = {
+  description:
+    "Report whether an extraction workflow is running in a matter and " +
+    "describe its most recent run: scope, status, how many targets it covers " +
+    "and how many are done, error code, and start and finish times.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "workflow_orchestration" },
   access: "read",

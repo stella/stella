@@ -73,6 +73,13 @@ const querySchema = t.Object({
 
 const boeSearch = createSafeRootHandler(
   {
+    description:
+      "Search Spanish consolidated legislation on the BOE. At least one " +
+      "filter is required: free text, title, department code, legal-range " +
+      "code (law rank), subject-matter code, or a publication date range as " +
+      "YYYYMMDD. Paginate with limit and the opaque cursor. This queries the " +
+      "BOE service live; use legislation.search to search the stella " +
+      "legislation corpus instead.",
     permissions: { workspace: ["read"] },
     mcp: { type: "tool", name: "search_legislation" },
     access: "read",

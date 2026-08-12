@@ -43,6 +43,15 @@ const serializeThreadRevision = (updatedAt: Date | null): string | null =>
   updatedAt?.toISOString() ?? null;
 
 const config = {
+  description:
+    "Read the most recent page of one of your own chat threads, together " +
+    "with the thread's context matters, model and reasoning-effort settings, " +
+    "anonymization flag, whether web search is available and enabled, and an " +
+    "estimate of the model context the next send would carry. Pass " +
+    "workspaceId for a matter-scoped thread and omit it for a global one; a " +
+    "scope that contradicts the stored thread is rejected. With " +
+    "allowMissingThread, a thread that does not exist yet returns an empty " +
+    "draft instead of a 404. Page further back with chat.get-older-messages.",
   permissions: { chat: ["create"] },
   access: "read",
   mcp: { type: "capability", reason: "assistant_chat" },

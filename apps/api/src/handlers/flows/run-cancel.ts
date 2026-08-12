@@ -7,6 +7,10 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { cancelFlowRun } from "@/api/lib/flows/flow-executor";
 
 const config = {
+  description:
+    "Cancel a flow run that is still in progress in a matter, returning the " +
+    "run id and the status it settled on. Work already committed by steps " +
+    "that finished is not undone.",
   permissions: { flow: ["run"] },
   access: "write",
   mcp: { type: "capability", reason: "workflow_orchestration" },

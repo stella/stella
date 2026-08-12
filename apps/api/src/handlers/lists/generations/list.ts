@@ -23,6 +23,10 @@ const querySchema = t.Object({
   cursor: t.Optional(t.String({ maxLength: 512 })),
 });
 const config = {
+  description:
+    "List one list's generation runs, newest first, with cursor pagination: " +
+    "each run's status, its instruction, and its created, updated, and " +
+    "completed timestamps.",
   permissions: { workspace: ["read"] },
   access: "read",
   mcp: { type: "capability", reason: "workflow_orchestration" },

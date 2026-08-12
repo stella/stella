@@ -21,6 +21,11 @@ const updateSkillResourceBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Replace the content of one file of an agent skill, addressed by its " +
+    "path. The path and kind stay as they are; use skills.resources.rename " +
+    "to change them. Bundled skills are read-only, team skills require admin " +
+    "or owner, and private ones their author.",
   permissions: { agentSkill: ["update"] },
   mcp: { type: "capability", reason: "agent_tool_authoring" },
   params: updateSkillResourceParamsSchema,

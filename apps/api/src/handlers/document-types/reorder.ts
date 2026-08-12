@@ -7,6 +7,12 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
+  description:
+    "Set the display order of the organization's document types: each id's " +
+    "position in orderedIds becomes its sort order. Ids that do not belong " +
+    "to the organization are ignored, and any type you leave out of the list " +
+    "keeps the sort order it already had. Ordering is cosmetic, so no audit " +
+    "event is recorded.",
   permissions: { organizationSettings: ["update"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   body: reorderDocumentTypesBodySchema,

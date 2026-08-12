@@ -19,6 +19,10 @@ import { LIMITS } from "@/api/lib/limits";
 import { broadcastWorkspaceResourceChanges } from "@/api/lib/resource-realtime";
 
 const config = {
+  description:
+    "Set the tab order of a matter's views. viewIds must name every view of " +
+    "the matter exactly once in the order you want; a partial list, an " +
+    "unknown id, or a duplicate is refused. Only positions change.",
   permissions: { view: ["update"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   body: t.Object({

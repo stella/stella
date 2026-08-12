@@ -34,6 +34,11 @@ const querySchema = t.Object({
   cursor: t.Optional(t.String({ maxLength: 512 })),
 });
 const config = {
+  description:
+    "List one generation run's candidates in proposal order with cursor " +
+    "pagination: the proposed item fields, the candidate's status, the item " +
+    "it was accepted as when it has one, and the sources it cites. The run's " +
+    "own status is returned alongside the page.",
   permissions: { workspace: ["read"] },
   access: "read",
   mcp: { type: "capability", reason: "workflow_orchestration" },

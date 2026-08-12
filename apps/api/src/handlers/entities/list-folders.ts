@@ -74,6 +74,11 @@ const listFoldersHandler = async function* ({
 };
 
 const config = {
+  description:
+    "List the folders of a matter, oldest first with cursor pagination, each " +
+    "with its id, name, and parent folder. Documents and tasks are left out; " +
+    "use entities.read-filesystem-tree for the folder tree with the " +
+    "documents in it.",
   permissions: { workspace: ["read"] },
   mcp: { type: "covered", by: "list_documents" },
   access: "read",

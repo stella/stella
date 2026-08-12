@@ -270,6 +270,13 @@ const fillPreviewHandler = async function* ({
 };
 
 const config = {
+  description:
+    "Run the full fill of a stored template with the given values and return " +
+    "text instead of a file: the filled paragraphs, the character count, " +
+    "placeholders no value matched, values no marker used, and any " +
+    "structural errors. It does the same work as a real fill, AI-drafted " +
+    "fields included, so it is not a cheap dry run. Use templates.fill-by-id " +
+    "to download the document.",
   // Same `use` grant as the REST fill routes: this runs the full stored-template
   // substitution pipeline (rendering filled paragraphs and consuming AI-fill
   // usage), so a read-only role must not reach it.

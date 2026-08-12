@@ -8,6 +8,10 @@ import { LIMITS } from "@/api/lib/limits";
 import { parseViewLayout } from "@/api/lib/views-schema";
 
 const config = {
+  description:
+    "List your own saved view templates, newest first, each with its name, " +
+    "layout, layout type, and the columns that layout needs. Personal: " +
+    "templates saved by other members are never returned.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   access: "read",

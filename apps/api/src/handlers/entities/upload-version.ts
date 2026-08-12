@@ -10,6 +10,13 @@ import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 const config = {
+  description:
+    "Add a new version to an existing document by uploading a file over a " +
+    "multipart request, replacing that document's current file. The bytes " +
+    "are scanned and a rejected file fails the call; a read-only entity, an " +
+    "open desktop editing session, and a current version that changed under " +
+    "you are all conflicts. An agent surface cannot send multipart: use " +
+    "uploads.create with purpose entity_version and then uploads.update.",
   permissions: { entity: ["update"] },
   mcp: { type: "capability", reason: "document_processing" },
   transport: {

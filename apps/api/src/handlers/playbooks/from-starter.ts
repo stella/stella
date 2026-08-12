@@ -16,6 +16,12 @@ const fromStarterBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Create a playbook from one of the bundled starter playbooks, cloning " +
+    "its positions with fresh ids and otherwise taking exactly the path " +
+    "playbooks.create takes, including validation, the per-organization " +
+    "limit, and the draft status. Browse the available starters with " +
+    "playbooks.list-starters.",
   permissions: { playbook: ["create"] },
   mcp: { type: "capability", reason: "knowledge_library_admin" },
   body: fromStarterBodySchema,

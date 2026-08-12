@@ -14,6 +14,12 @@ import { parseViewLayoutSafe } from "@/api/lib/views-schema";
 import { cleanStalePropertyIds } from "@/api/lib/views/utils";
 
 const config = {
+  description:
+    "List a matter's views in tab order, each with its layout, position, and " +
+    "creation time. Default view names come back localized for the request's " +
+    "language, and references to deleted columns are stripped out of the " +
+    "layouts. A pure read: default views are seeded when the matter is " +
+    "created, so listing never mints one.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   access: "read",

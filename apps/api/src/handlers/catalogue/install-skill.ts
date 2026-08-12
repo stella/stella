@@ -31,6 +31,12 @@ const installSkillBody = t.Object({
 });
 
 const config = {
+  description:
+    "Install one catalogue skill into the organization by slug, at team " +
+    "scope (the default) or private scope. Team scope requires admin or " +
+    "owner. The skill is stored as bundled content, so it cannot be edited " +
+    "afterwards. Refused when that slug is already installed at the same " +
+    "scope, or when the scope's skill limit is reached.",
   permissions: { organizationSettings: ["update"] },
   mcp: { type: "capability", reason: "agent_tool_authoring" },
   body: installSkillBody,

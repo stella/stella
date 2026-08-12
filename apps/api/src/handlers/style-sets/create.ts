@@ -17,6 +17,12 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Create an organization style set from an uploaded DOCX, taking that " +
+    "document's styles as the stored package. Any upload whose file name " +
+    "ends in .docx is accepted whatever media type it declares. Use " +
+    "style-sets.create-from-editor to build one from explicit settings " +
+    "instead of a file.",
   permissions: { styleSet: ["create"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   transport: {

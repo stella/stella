@@ -10,6 +10,10 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { resolveFlowReviewGate } from "@/api/lib/flows/flow-executor";
 
 const config = {
+  description:
+    "Resolve a flow run waiting at a review gate: pass decision approved or " +
+    "rejected, with an optional note. The run continues or stops " +
+    "accordingly, and its id and new status come back.",
   permissions: { flow: ["review"] },
   access: "write",
   mcp: { type: "capability", reason: "workflow_orchestration" },

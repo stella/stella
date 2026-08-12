@@ -36,6 +36,12 @@ export const buildTimerBillingSnapshot = (
 
 const timerStart = createSafeHandler(
   {
+    description:
+      "Start a running timer for the signed-in user in the current matter, " +
+      "creating a draft time entry dated today in the timezoneId you pass " +
+      "and optionally attached to a work item. The user's effective rate is " +
+      "resolved at start and an entry with no resolvable rate is recorded as " +
+      "non-billable. Refused when the user already has a running timer.",
     permissions: { timeEntry: ["create"] },
     mcp: { type: "capability", reason: "billing_admin" },
     body: timerStartBodySchema,

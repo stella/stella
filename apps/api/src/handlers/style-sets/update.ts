@@ -18,6 +18,10 @@ const paramsSchema = t.Object({ styleSetId: tSafeId("styleSet") });
 const bodySchema = t.Object({ name: tDefaultVarchar });
 
 const config = {
+  description:
+    "Rename one organization style set; its export file name follows the new " +
+    "name. The stored style package is untouched, so use style-sets.replace " +
+    "or style-sets.update-from-editor to change the styles themselves.",
   permissions: { styleSet: ["update"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   params: paramsSchema,

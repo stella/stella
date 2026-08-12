@@ -35,6 +35,15 @@ const CUSTOM_SKILL_LIST_LIMIT =
   LIMITS.agentSkillsPerUser + LIMITS.agentSkillsTeamPerOrganization;
 
 const config = {
+  description:
+    "List the tool catalogue for the signed-in user's organization: curated " +
+    "skills, MCP connectors, and native tools, plus the organization's own " +
+    "custom skills and custom MCP connectors as synthetic entries. Each " +
+    "entry reports its install state, whether it is enabled, whether it is " +
+    "locked (a baseline capability that cannot be toggled), whether it is " +
+    "recommended for the organization's practice jurisdictions, and the " +
+    "handles the uninstall paths need. The practice jurisdictions behind " +
+    "those recommendations are returned alongside.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "agent_tool_authoring" },
   access: "read",

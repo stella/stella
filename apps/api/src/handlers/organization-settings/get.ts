@@ -14,6 +14,11 @@ import {
 } from "@/api/lib/matter-reference";
 
 const config = {
+  description:
+    "Read the organization's general settings: document processing mode, " +
+    "matter-number pattern and padding, practice jurisdictions, prompt " +
+    "caching, and memory extraction. An organization that has never saved " +
+    "settings gets the defaults rather than an error.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "anonymization_admin" },
   access: "read",

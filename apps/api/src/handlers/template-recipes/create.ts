@@ -10,6 +10,11 @@ import {
 } from "./recipes";
 
 const config = {
+  description:
+    "Create a template recipe, a named reusable block of pre-configured " +
+    "template fields, from a name, an optional description, and a definition " +
+    "object that is structurally validated before it is stored. Refused once " +
+    "the organization holds its maximum number of recipes.",
   permissions: { template: ["create"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   body: createTemplateRecipeBodySchema,

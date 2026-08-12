@@ -27,6 +27,13 @@ const splitEntryBodySchema = t.Object({
 
 const splitEntry = createSafeHandler(
   {
+    description:
+      "Split one time entry across several work items by percentage, between " +
+      "2 and 10 parts totalling 100. The original entry is deleted and " +
+      "replaced by new entries that share a splitGroupId and inherit its " +
+      "date, rate, narrative, codes, and status, with the minutes " +
+      "apportioned and re-rounded to the billing increment. A billed or " +
+      "written-off entry, and a duration too short to divide, are refused.",
     permissions: { timeEntry: ["approve"] },
     mcp: { type: "capability", reason: "billing_admin" },
     access: "write",

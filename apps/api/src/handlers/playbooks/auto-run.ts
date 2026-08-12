@@ -17,6 +17,15 @@ import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-project
 import { resolveApplicablePlaybooks } from "@/api/lib/workflow/route-playbooks";
 
 const config = {
+  description:
+    "Run every applicable playbook over a matter in one pass and materialize " +
+    "their columns onto its table: a playbook with no document-type scope " +
+    "always applies, one scoped to a document type only when that type is " +
+    "present among the matter's classified documents. Each playbook pins its " +
+    "own latest approved version and opens its own per-document runs; a " +
+    "playbook that hits a limit is skipped while the rest continue. Returns " +
+    "how many playbooks ran, how many columns were materialized, and how " +
+    "many document runs opened. Use playbooks.run for a single playbook.",
   permissions: { playbook: ["apply"] },
   access: "write",
   mcp: { type: "capability", reason: "knowledge_library_admin" },

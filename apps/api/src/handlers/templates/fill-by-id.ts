@@ -447,6 +447,15 @@ const fillByIdHandler = async function* ({
 };
 
 const config = {
+  description:
+    "Fill a stored template and return the finished document as DOCX (the " +
+    "default) or PDF. values is a JSON-encoded map of field path to value; " +
+    "clauseOverrides replaces a clause slot's body for this fill only. " +
+    "Registry lookups, formulas, composite fields, AI-drafted fields, and " +
+    "conditional sections resolve server-side. Use " +
+    "templates.fill-to-workspace to save the same fill into a matter instead " +
+    "of downloading it, and templates.fill-preview to see the text without " +
+    "producing a file.",
   permissions: { template: ["use"] },
   access: "write",
   mcp: { type: "covered", by: "fill_template" },

@@ -18,6 +18,14 @@ import { assertUnchangedSince } from "@/api/lib/optimistic-concurrency";
 import { PLAYBOOK_VERSION_SOURCE } from "@/api/lib/workflow/playbook-positions";
 
 const config = {
+  description:
+    "Approve a playbook definition: snapshot its current name, description, " +
+    "scope, and positions as a new immutable version, then mark the " +
+    "definition approved. Runs pin the latest approved version, so this is " +
+    "what publishes edits to reviews. Pass expectedUpdatedAt as a " +
+    "concurrency token; a definition that changed since you read it is a " +
+    "conflict. Approving an already-approved playbook is allowed and simply " +
+    "appends another version.",
   permissions: { playbook: ["approve"] },
   access: "write",
   mcp: { type: "capability", reason: "knowledge_library_admin" },

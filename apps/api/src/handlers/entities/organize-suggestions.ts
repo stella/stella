@@ -1051,6 +1051,15 @@ const hashSummarySource = ({
 };
 
 const config = {
+  description:
+    "Propose a folder placement and a tidied file name for up to 100 " +
+    "documents of a matter, given the folders that already exist plus an " +
+    "optional locale and free-text instructions. Returns one suggestion per " +
+    "file (folder path, suggested name, detected date, document type) and " +
+    "the empty folders it suggests removing. Suggestions only: nothing is " +
+    "moved, renamed, or deleted, so apply what you want with entities.move " +
+    "and entities.rename. Per-document summaries are generated and cached " +
+    "where missing, and the call consumes AI usage.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "document_processing" },
   access: "write",

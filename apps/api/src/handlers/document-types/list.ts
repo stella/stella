@@ -7,6 +7,11 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { LIMITS } from "@/api/lib/limits";
 
 const config = {
+  description:
+    "List the organization's document types in display order, each with its " +
+    "id, immutable key, label, and sort order. The starter taxonomy is " +
+    "seeded when the organization is created, so this only ever reads. The " +
+    "list is bounded and returned whole rather than paginated.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   access: "read",

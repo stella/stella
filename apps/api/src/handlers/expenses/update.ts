@@ -32,6 +32,12 @@ const updateExpenseBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Change a draft or approved expense in a matter: its date, amount, " +
+    "currency, category, description, invoice description, billable flag, " +
+    "markup, work item, or status (draft or approved). A billed or " +
+    "written-off expense is refused; use expenses.delete to write off an " +
+    "unbilled one.",
   permissions: { expense: ["update"] },
   mcp: { type: "capability", reason: "billing_admin" },
   body: updateExpenseBodySchema,

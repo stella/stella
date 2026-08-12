@@ -24,6 +24,12 @@ import {
 } from "@/api/lib/views/utils";
 
 const config = {
+  description:
+    "Add a view (a tab) to a matter with a name and a layout. Duplicate " +
+    "sorts and multiple kind filters are refused, the columns the layout " +
+    "needs are created when your role may create columns, and references to " +
+    "columns that do not exist are dropped. A matter may hold only one " +
+    "overview view, and a fixed maximum of views in total.",
   permissions: { view: ["create"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   body: tCreateViewInputSchema,

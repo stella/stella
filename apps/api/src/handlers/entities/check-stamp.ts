@@ -137,6 +137,13 @@ const lookupByVerificationCode = async (
   });
 
 const config = {
+  description:
+    "Check whether an uploaded DOCX carries a stella stamp and, if so, which " +
+    "document in this organization it belongs to. The embedded verification " +
+    "code is tried first, then the stamp string, and the answer is the " +
+    "matching entity with its matter, stamp, and version number, or match " +
+    "null. Nothing is stored: this is what distinguishes adding a new " +
+    "version of an existing document from uploading a new one.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "document_processing" },
   access: "read",

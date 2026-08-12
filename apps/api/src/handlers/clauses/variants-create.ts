@@ -11,6 +11,10 @@ const createVariantParamsSchema = t.Object({
 });
 
 const config = {
+  description:
+    "Add a variant, an alternative wording of a clause carrying its own " +
+    "label, to one clause. Refused when the clause does not exist in this " +
+    "organization or already holds its maximum number of variants.",
   permissions: { clause: ["create"] },
   mcp: { type: "capability", reason: "knowledge_library_admin" },
   params: createVariantParamsSchema,

@@ -12,6 +12,11 @@ const syncAllTemplateClausesParamsSchema = t.Object({
 });
 
 const config = {
+  description:
+    "Re-pin every outdated clause link of one template to its clause's " +
+    "current version in a single transaction, auditing each link as if it " +
+    "had been synced on its own. Links already on the current version are " +
+    "left untouched.",
   permissions: { template: ["update"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   params: syncAllTemplateClausesParamsSchema,

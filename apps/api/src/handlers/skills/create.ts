@@ -32,6 +32,14 @@ const createSkillBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Author an agent skill from text: name, description, instruction body, " +
+    "and an optional slash command. Team scope requires admin or owner, " +
+    "private scope is your own. A command must be lowercase letters, digits, " +
+    "hyphens, or underscores, must not be one of the reserved commands, and " +
+    "must be free in the organization, as must the skill name. Refused once " +
+    "the per-user or per-organization skill limit is reached. Use " +
+    "skills.upload or skills.import-url for a packaged skill instead.",
   permissions: { agentSkill: ["create"] },
   mcp: { type: "capability", reason: "agent_tool_authoring" },
   body: createSkillBodySchema,

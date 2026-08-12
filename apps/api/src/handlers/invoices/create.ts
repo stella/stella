@@ -40,6 +40,13 @@ const createInvoiceBodySchema = t.Object({
 
 const createInvoice = createSafeHandler(
   {
+    description:
+      "Create a draft invoice from approved, billable, not-yet-invoiced time " +
+      "entries in a matter, marking them billed and setting the total from " +
+      "their billed minutes and recorded rates. Every entry must already " +
+      "carry the invoice currency, since nothing is converted, and the " +
+      "invoice number must not already be in use. Expenses are added " +
+      "afterwards with invoices.add-entries.",
     permissions: { invoice: ["create"] },
     mcp: { type: "capability", reason: "billing_admin" },
     body: createInvoiceBodySchema,

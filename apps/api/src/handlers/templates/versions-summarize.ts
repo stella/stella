@@ -17,6 +17,11 @@ const templateVersionSummarizeParamsSchema = t.Object({
 });
 
 const config = {
+  description:
+    "Summarize in prose what changed in one template version compared with " +
+    "its predecessor, over the same diff templates.versions-diff returns. " +
+    "Returns summary null when the two are identical, skipping the model " +
+    "call. Consumes AI usage.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   access: "write",

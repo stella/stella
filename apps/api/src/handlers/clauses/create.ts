@@ -175,6 +175,12 @@ export const createClauseHandler = async function* ({
 };
 
 const config = {
+  description:
+    "Create a clause in the organization's clause library: a title and an " +
+    "ordered body of paragraphs, plus optional category, language, " +
+    "description, usage notes, and metadata. The clause starts at version 1 " +
+    "with a matching version snapshot. Refused when the organization is at " +
+    "its clause limit or the category does not exist.",
   permissions: { clause: ["create"] },
   mcp: { type: "tool", name: "save_clause" },
   body: createClauseBodySchema,

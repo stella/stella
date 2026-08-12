@@ -96,6 +96,14 @@ const buildAttachEvents = (params: {
 
 const addEntries = createSafeHandler(
   {
+    description:
+      "Attach approved, billable, not-yet-invoiced time entries and expenses " +
+      "to a draft invoice, marking them billed and recomputing the invoice " +
+      "total. Every entry must match the invoice currency, because an " +
+      "invoice is single-currency and nothing is converted. Only draft " +
+      "invoices accept entries, and a concurrent change to the same entries " +
+      "fails with a retryable conflict rather than attaching part of the " +
+      "set.",
     permissions: { invoice: ["update"] },
     mcp: { type: "capability", reason: "billing_admin" },
     params: invoiceParamsSchema,

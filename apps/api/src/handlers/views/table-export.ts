@@ -178,6 +178,10 @@ export const sanitizeWorksheetName = (value: string): string => {
 };
 
 const config = {
+  description:
+    "Export one view's rows as a file in CSV, XLSX, or DOCX, using the " +
+    "columns, filters, and ordering the view defines. Returns the file " +
+    "bytes; views.list describes a view but never its rows.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   access: "read",

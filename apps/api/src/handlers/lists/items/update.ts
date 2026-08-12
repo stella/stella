@@ -18,6 +18,12 @@ const bodySchema = t.Object({
   description: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
 });
 const config = {
+  description:
+    "Change one list item's section, its ordering position within the list, " +
+    "or its description; only the fields you pass are written, and a section " +
+    "that does not belong to this list is refused. The item's name, status, " +
+    "priority, and due date live on the task behind it, so change those with " +
+    "tasks.update.",
   permissions: { entity: ["update"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   body: bodySchema,

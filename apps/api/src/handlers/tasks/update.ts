@@ -587,6 +587,15 @@ export const updateTaskHandler = async function* ({
 
 const updateTask = createSafeHandler(
   {
+    description:
+      "Change one task in a matter: name, status, priority, due date, list " +
+      "item type, sort order, or the calendar fields of an agenda item " +
+      "(kind, start, end, occurrence, reminder, all-day, time zone, " +
+      "location, meeting URL, availability, sensitivity, organizer, " +
+      "attendees, recurrence). Only the fields you pass are written and a " +
+      "read-only task is refused. Where governed work is enabled a status " +
+      "change also records a lifecycle event, and workflowReason carries the " +
+      "explanation stored with it.",
     permissions: { entity: ["update"] },
     mcp: { type: "covered", by: "save_task" },
     body: updateTaskBodySchema,

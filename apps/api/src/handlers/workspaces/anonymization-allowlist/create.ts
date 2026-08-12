@@ -21,6 +21,15 @@ import { LIMITS } from "@/api/lib/limits";
 const SCOPE_VALUES = ["document", "workspace"] as const;
 
 const config = {
+  description:
+    "Add a never-mask entry to a matter's anonymization allowlist, so a term " +
+    "that detection finds is left in the clear. scope workspace covers the " +
+    "whole matter; scope document covers one document and needs an entityId " +
+    "belonging to this matter. Only matter-scoped entries can be created " +
+    "here, never organization-wide ones. A term already listed is a no-op, " +
+    "until the matter reaches its allowlist limit: the cap is checked before " +
+    "the duplicate is detected, so replaying an existing entry is refused " +
+    "there rather than reported as a no-op.",
   permissions: { workspace: ["update"] },
   mcp: { type: "capability", reason: "anonymization_admin" },
   body: t.Object({

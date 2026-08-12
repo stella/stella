@@ -21,6 +21,12 @@ const clauseSlotsParamsSchema = t.Object({
 });
 
 const config = {
+  description:
+    "List the clause slots of one template together with the resolved body " +
+    "of the clause linked to each, using the same resolution the fill path " +
+    "runs, so a fill form can show what will be inserted and adjust it for " +
+    "that fill. Slots with no linked clause are left out; those fill as " +
+    "unmatched placeholders.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   access: "read",

@@ -5,6 +5,11 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
+  description:
+    "List the bundled starter playbooks available to instantiate: each " +
+    "starter's id, name, description, target document type, and how many " +
+    "positions it holds. Metadata only, enough to render a picker; create " +
+    "one with playbooks.from-starter.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "knowledge_library_admin" },
   access: "read",

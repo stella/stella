@@ -68,6 +68,11 @@ const previewOrganizationSettingsHandler = async function* ({
 };
 
 const config = {
+  description:
+    "Preview the matter number a pattern would produce next: the pattern and " +
+    "padding are validated, the counter for the scope that pattern falls in " +
+    "is read, and the rendered reference is returned with the sequence value " +
+    "it would take. Nothing is stored and no counter is advanced.",
   permissions: { organizationSettings: ["update"] },
   access: "read",
   mcp: { type: "capability", reason: "anonymization_admin" },

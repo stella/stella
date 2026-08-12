@@ -201,6 +201,14 @@ export const createContactHandler = async function* ({
 
 const createContact = createSafeRootHandler(
   {
+    description:
+      "Create a contact in the organization address book. type (person or " +
+      "organization), displayName, and the contact id are supplied in the " +
+      "body; names, emails, phones, addresses, tags, registration and tax " +
+      "numbers, bank and billing details, default hourly rate, payment " +
+      "terms, and originating or responsible attorneys are optional. Refused " +
+      "once the organization holds its maximum number of contacts, or when " +
+      "an attorney id is not a member of the organization.",
     permissions: { contact: ["create"] },
     mcp: { type: "tool", name: "save_contact" },
     body: createContactBodySchema,

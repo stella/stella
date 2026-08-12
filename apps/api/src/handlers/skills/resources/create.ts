@@ -36,6 +36,14 @@ const createSkillResourceBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Add one text file to an agent skill at a path such as " +
+    "references/checklist.md, taking its kind from the path unless you pass " +
+    "one. A path already used in the skill is a 409, a skill at its file " +
+    "limit is refused, and bundled skills cannot be edited. Team skills " +
+    "require admin or owner, private ones their author. Use " +
+    "skills.resources.upload for a DOCX or PDF whose text must be extracted " +
+    "first.",
   permissions: { agentSkill: ["update"] },
   mcp: { type: "capability", reason: "agent_tool_authoring" },
   params: createSkillResourceParamsSchema,

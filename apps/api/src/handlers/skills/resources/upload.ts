@@ -52,6 +52,12 @@ const uploadSkillResourceBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Add one file to an agent skill by uploading it. A DOCX or PDF is stored " +
+    "as its extracted text and anything else is decoded as UTF-8; content " +
+    "beyond the per-file character limit is truncated rather than rejected. " +
+    "The path, duplicate, file-count, and editability rules match " +
+    "skills.resources.create, which takes the text directly as JSON.",
   permissions: { agentSkill: ["update"] },
   mcp: { type: "capability", reason: "agent_tool_authoring" },
   transport: {

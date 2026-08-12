@@ -18,6 +18,14 @@ const manualFlagsSchema = t.Array(t.String({ minLength: 1, maxLength: 64 }), {
 });
 
 const config = {
+  description:
+    "Set the manual flags and lock state of one cell, meaning one document's " +
+    "value for one property. manualFlags is merged against baseManualFlags " +
+    "rather than overwritten, so flags added or removed by someone else " +
+    "since you read the cell survive; when no flags remain and the cell is " +
+    "not locked, the metadata row is deleted. Use fields.upsert-by-id to " +
+    "change the cell's value itself, and fields.mark-column-flag to flag a " +
+    "whole column at once.",
   permissions: {
     entity: ["update"],
   },

@@ -323,6 +323,14 @@ const downloadZipHandler = async function* ({
 };
 
 const config = {
+  description:
+    "Stream one folder of a matter, with every descendant folder and every " +
+    "document file below it, as a ZIP archive named after the folder. Empty " +
+    "folders are kept as directory entries and colliding file names are " +
+    "de-duplicated. Files that could not be fetched from storage do not fail " +
+    "the download: they are listed in a notice file inside the archive. " +
+    "Refused when the entity is not a folder; the grant is recorded in the " +
+    "audit trail.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "document_processing" },
   access: "read",

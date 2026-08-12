@@ -22,6 +22,11 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Set or clear the free-text description on one version of a document, up " +
+    "to 1024 characters. An annotation only: no file and no field value " +
+    "changes. A version tombstoned by entities.delete-version is refused. " +
+    "Use entities.update-version-label for the short label instead.",
   permissions: { entity: ["update"] },
   mcp: { type: "covered", by: "save_document" },
   params: paramsSchema,

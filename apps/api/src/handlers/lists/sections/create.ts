@@ -18,6 +18,10 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Add a section to an active list, with a name and an optional ordering " +
+    "position. Refused when the list is not active or already holds its " +
+    "maximum number of sections.",
   permissions: { view: ["update"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   body: bodySchema,

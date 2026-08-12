@@ -16,6 +16,12 @@ const importSkillBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Fetch and install one agent skill from a URL pointing at a SKILL.md " +
+    "file or a skill package. It is stored with a url origin, so it stays " +
+    "editable afterwards. Team scope requires admin or owner. To pull " +
+    "several skills out of a repository, use skills.discover and then " +
+    "skills.import instead.",
   permissions: { agentSkill: ["create"] },
   mcp: { type: "capability", reason: "agent_tool_authoring" },
   body: importSkillBodySchema,

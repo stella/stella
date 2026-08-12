@@ -325,6 +325,15 @@ export const updateTimeEntryHandler = async function* ({
 
 const updateTimeEntryById = createSafeHandler(
   {
+    description:
+      "Change one time entry's date worked, duration, narratives, billable " +
+      "and no-charge flags, work item, or task and activity codes. Editing " +
+      "someone else's entry, or any entry past draft, requires time-entry " +
+      "approval access, and billed or written-off entries are always " +
+      "refused. Making an entry billable or moving its date re-resolves the " +
+      "rate and fails when none applies. The write is conditional on the " +
+      "entry being unchanged since it was read, so a concurrent edit returns " +
+      "a conflict instead of overwriting.",
     permissions: { timeEntry: ["update"] },
     mcp: { type: "covered", by: "save_time_entry" },
     body: updateTimeEntryBodySchema,

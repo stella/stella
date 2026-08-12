@@ -17,6 +17,12 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Replace one style set's stored package with the styles from an uploaded " +
+    "DOCX, keeping its id and name. Any upload whose file name ends in .docx " +
+    "is accepted whatever media type it declares. Documents and templates " +
+    "already created from the style set are unaffected, because they copied " +
+    "its styles at creation time.",
   permissions: { styleSet: ["update"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   transport: {

@@ -19,6 +19,12 @@ import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
 
 const config = {
+  description:
+    "List your own chat threads, most recently active first, split into " +
+    "global threads and groups per matter. Threads with no messages, and " +
+    "threads belonging to a matter that is being deleted, are left out. " +
+    "search matches the thread title or the matter name; paginate with limit " +
+    "and cursor.",
   permissions: { chat: ["create"] },
   access: "read",
   mcp: { type: "capability", reason: "assistant_chat" },

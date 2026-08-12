@@ -15,6 +15,15 @@ import { assertUnchangedSince } from "@/api/lib/optimistic-concurrency";
 import { assertPositionsValid } from "@/api/lib/workflow/playbook-positions-validation";
 
 const config = {
+  description:
+    "Replace a playbook definition's name, description, scope, and " +
+    "positions; the positions are validated and their automatic questions " +
+    "re-derived. Any edit invalidates a prior approval, so the playbook " +
+    "drops back to draft with its approval metadata cleared and runs keep " +
+    "using the last approved version until it is approved again. Pass " +
+    "expectedUpdatedAt as a concurrency token; a definition changed since " +
+    "you read it is a conflict, and the new updatedAt comes back for the " +
+    "next save.",
   permissions: { playbook: ["update"] },
   mcp: { type: "capability", reason: "knowledge_library_admin" },
   params: playbookDefinitionParamsSchema,

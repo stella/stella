@@ -175,6 +175,11 @@ export const createEntityLinkHandler = async function* ({
 
 const createEntityLink = createSafeHandler(
   {
+    description:
+      "Link a task to another document, folder, or task, with a link type " +
+      "that defaults to related. Both ends must be in this matter, an entity " +
+      "cannot be linked to itself, and a read-only entity is refused. Remove " +
+      "the link with tasks.entity-links-delete.",
     permissions: { entity: ["update"] },
     mcp: { type: "covered", by: "save_task" },
     body: createEntityLinkBodySchema,

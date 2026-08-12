@@ -14,6 +14,10 @@ const getTemplateVersionParamsSchema = t.Object({
 });
 
 const config = {
+  description:
+    "Read one stored template version: its number, field count, creation " +
+    "time, and a short-lived presigned URL to download that version's DOCX. " +
+    "The download grant is recorded in the audit trail.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   access: "read",

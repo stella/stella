@@ -49,6 +49,14 @@ const updateWorkspaceBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Change a matter: its name, reference, billing reference, colour, or " +
+    "lead (who must already be a member of it). Only the fields you pass are " +
+    "written. Attaching a client to a personal matter is a one-way promotion " +
+    "and must go through promote, which takes the client contact and " +
+    "optionally the members to share it with at the same time; a bare " +
+    "clientId on a personal matter, and any attempt to re-promote a matter " +
+    "that already has a client, are refused.",
   permissions: { workspace: ["update"] },
   mcp: { type: "covered", by: "save_matter" },
   body: updateWorkspaceBodySchema,

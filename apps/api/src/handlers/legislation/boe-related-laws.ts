@@ -25,6 +25,10 @@ const querySchema = t.Object({
 
 const boeRelatedLaws = createSafeRootHandler(
   {
+    description:
+      "List the Spanish BOE laws related to one law, narrowed by " +
+      "relationType: modifies, modifiedBy, derogates, derogatedBy, or all " +
+      "(the default).",
     permissions: { workspace: ["read"] },
     mcp: { type: "covered", by: "search_legislation" },
     access: "read",

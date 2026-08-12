@@ -20,6 +20,12 @@ const updateBillingCodeBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Change one billing code's code string, label, sort order, or active " +
+    "flag in a matter. Only the fields you pass are written, the code string " +
+    "must stay unique within the matter for its type, and deactivating a " +
+    "code stops it " +
+    "being offered without rewriting entries already recorded under it.",
   permissions: { billingCode: ["update"] },
   mcp: { type: "capability", reason: "billing_admin" },
   body: updateBillingCodeBodySchema,

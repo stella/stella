@@ -85,6 +85,16 @@ ${numbered}`;
 };
 
 const config = {
+  description:
+    "Rewrite the prose of a clause body with the model, following a " +
+    "free-text instruction plus the clause title and usage notes when " +
+    "supplied. The body goes in and the revised body comes back, so this " +
+    "works on an unsaved draft as well; nothing is stored. The model is " +
+    "instructed to keep paragraph order, lists, and every {{ }} template " +
+    "marker, and to change ordinary paragraph text only, but the result is " +
+    "not verified against the original, so review a rewrite before saving " +
+    "one that carries markers. A changed paragraph loses its inline " +
+    "formatting. Consumes AI usage.",
   permissions: { clause: ["update"] },
   mcp: { type: "capability", reason: "knowledge_library_admin" },
   body: rewriteClauseBodySchema,

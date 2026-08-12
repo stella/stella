@@ -20,6 +20,10 @@ const bodySchema = t.Object({
   status: t.String({ minLength: 1, maxLength: 32 }),
 });
 const config = {
+  description:
+    "Set the verification status of one source attached to a list item. Any " +
+    "status other than unverified records who set it and when; setting it " +
+    "back to unverified clears both.",
   permissions: { entity: ["update"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   body: bodySchema,

@@ -27,6 +27,13 @@ const createExpenseBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Record a disbursement in the current matter against a work item " +
+    "(matterId: the document, folder, or task the cost belongs to). amount " +
+    "is an integer in minor currency units with a 3-letter currency; " +
+    "dateIncurred is read in the timezoneId you pass and is refused when it " +
+    "is in the future or older than the entry-age limit. The expense starts " +
+    "as a draft.",
   permissions: { expense: ["create"] },
   mcp: { type: "capability", reason: "billing_admin" },
   body: createExpenseBodySchema,

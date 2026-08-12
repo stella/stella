@@ -29,6 +29,11 @@ const clipBodySchema = t.Object({
 
 export default createSafeHandler(
   {
+    description:
+      "Save an external source as a link entity in the current matter: a " +
+      "title and url, plus optional snippet, citation, jurisdiction, and " +
+      "source type. No file is stored, only the reference and its metadata. " +
+      "Refused once the matter holds its maximum number of entities.",
     body: clipBodySchema,
     permissions: { entity: ["create"] },
     mcp: { type: "capability", reason: "document_processing" },

@@ -107,6 +107,12 @@ export const readLegislationHandler = async (
 };
 
 const config = {
+  description:
+    "Read one legislation document from the stella corpus by id: its ELI, " +
+    "title, country, language, document type, status, effective and " +
+    "version-validity dates, source links, metadata, full text, and parsed " +
+    "structure. Only documents from sources cleared for redistribution are " +
+    "returned; anything else reads as not found.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "legal_corpus_admin" },
   access: "read",

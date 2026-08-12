@@ -8,6 +8,11 @@ import { boundedAll } from "@/api/lib/db/bounded-all";
 import { LIMITS } from "@/api/lib/limits";
 
 const config = {
+  description:
+    "Read the organization-wide always-mask terms: each entry's canonical " +
+    "form, label, spelling variants, and enabled flag. Matter-scoped terms " +
+    "live in the same table but are never returned here; read those with " +
+    "workspaces.anonymization-terms.list.",
   permissions: { organizationSettings: ["update"] },
   access: "read",
   mcp: { type: "capability", reason: "anonymization_admin" },

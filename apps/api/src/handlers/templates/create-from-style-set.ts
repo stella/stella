@@ -63,6 +63,11 @@ const createTemplateFromStyleSetHandler = async function* ({
 };
 
 const config = {
+  description:
+    "Create an empty template whose document is built from one of the " +
+    "organization's style sets, so it starts in that house style, with a " +
+    "name and an optional category. Like templates.create-blank it carries " +
+    "no fields until a document is saved onto it.",
   permissions: { template: ["create"], styleSet: ["use"] },
   access: "write",
   mcp: { type: "capability", reason: "template_authoring_ui" },

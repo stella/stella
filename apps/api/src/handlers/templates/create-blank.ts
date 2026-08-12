@@ -66,6 +66,11 @@ const createBlankTemplateHandler = async function* ({
 };
 
 const config = {
+  description:
+    "Create an empty template from the stella base DOCX, with a name and an " +
+    "optional category. It carries no fields yet: add markers by editing the " +
+    "document and storing it with templates.save-document. Use " +
+    "templates.create to upload a DOCX that already has {{field}} markers.",
   permissions: { template: ["create"] },
   // Not reachable through save_template (which requires a DOCX on create).
   mcp: { type: "capability", reason: "template_authoring_ui" },

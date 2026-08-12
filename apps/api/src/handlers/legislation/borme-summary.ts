@@ -12,6 +12,9 @@ const paramsSchema = t.Object({
 
 const bormeSummary = createSafeRootHandler(
   {
+    description:
+      "Read the BORME summary the Spanish commercial registry gazette " +
+      "published on one date, given as YYYYMMDD.",
     permissions: { workspace: ["read"] },
     mcp: { type: "capability", reason: "legal_corpus_admin" },
     access: "read",

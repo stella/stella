@@ -279,6 +279,11 @@ const buildMinimalPdf = (lines: readonly string[]): Uint8Array => {
 };
 
 const config = {
+  description:
+    "Render a matter's time entries as a PDF timesheet report: one block per " +
+    "entry plus total hours and totals per currency. Filter by date-worked " +
+    "range, status, and work item. Returns PDF bytes; use " +
+    "time-entries.export-csv to get the same entries as text.",
   permissions: { timeEntry: ["approve"] },
   mcp: { type: "capability", reason: "billing_admin" },
   access: "read",

@@ -113,6 +113,14 @@ const buildVoidEvents = (params: {
 
 const transitionInvoice = createSafeHandler(
   {
+    description:
+      "Move an invoice through its lifecycle with one action: finalize " +
+      "(draft to finalized), send (finalized to sent), mark_paid (sent to " +
+      "paid), revert_to_draft (finalized back to draft), or void (from " +
+      "finalized, sent, or paid). Voiding also releases every attached time " +
+      "entry and expense back to approved, unbilled status and clears the " +
+      "paid timestamp. An action the invoice's current status does not allow " +
+      "is refused.",
     permissions: { invoice: ["update"] },
     mcp: { type: "capability", reason: "billing_admin" },
     params: invoiceParamsSchema,

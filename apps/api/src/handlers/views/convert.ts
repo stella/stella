@@ -25,6 +25,12 @@ const VIEW_LAYOUT_TYPES = [
 ] as const;
 
 const config = {
+  description:
+    "Convert one view of a matter to another layout type (table, filesystem, " +
+    "kanban, calendar, or timeline), carrying over as much of its filters " +
+    "and sorts as the target layout supports. Converting to overview, or to " +
+    "the layout the view already has, is refused. Use views.update to change " +
+    "a view's name or the details of its current layout.",
   permissions: { view: ["update"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   params: workspaceParams({ viewId: tSafeId("workspaceView") }),

@@ -34,6 +34,11 @@ import { boundedAll } from "@/api/lib/db/bounded-all";
  */
 
 const config = {
+  description:
+    "Read the never-mask entries that apply in a matter: the " +
+    "organization-wide ones plus the matter's own and, when entityId is " +
+    "given, that document's own, merged into one list so a detection run can " +
+    "be filtered in a single pass.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "anonymization_admin" },
   access: "read",

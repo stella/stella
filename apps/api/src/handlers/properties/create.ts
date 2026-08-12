@@ -16,6 +16,14 @@ import {
 import { lockWorkspacePropertyWrites } from "@/api/lib/properties/property-lock";
 
 const config = {
+  description:
+    "Add one property (a column) to a matter: its name, value type, and " +
+    "either an AI prompt tool, optionally depending on other columns, or a " +
+    "manual-input tool. An AI column is created stale, so its values are " +
+    "produced by the next run rather than immediately. Refused when the " +
+    "matter is at its property limit, when a dependency is not a property of " +
+    "this matter, or when the matter already has a document-type classifier " +
+    "column.",
   permissions: { property: ["create"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   body: createPropertyBodySchema,

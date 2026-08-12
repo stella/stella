@@ -13,6 +13,12 @@ const unlinkTemplateClauseParamsSchema = t.Object({
 });
 
 const config = {
+  description:
+    "Remove one clause link from a template, with its pinned version, " +
+    "variant, and slot assignment. Reversible: nothing leaves the clause " +
+    "library and the same clause can be linked again with " +
+    "templates.clauses-link. The template's own document is not rewritten, " +
+    "so the slot marker stays in it.",
   permissions: { template: ["update"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   params: unlinkTemplateClauseParamsSchema,

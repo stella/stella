@@ -5,6 +5,10 @@ import { getPlaybookDefinitionHandler } from "./read";
 import { playbookDefinitionParamsSchema } from "./schema";
 
 const config = {
+  description:
+    "Read one playbook definition in full: its name, description, " +
+    "document-type scope, positions, status, and approval metadata. Use " +
+    "playbooks.list for the paginated overview.",
   permissions: { workspace: ["read"] },
   mcp: { type: "covered", by: "list_playbooks" },
   access: "read",

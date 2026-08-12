@@ -11,6 +11,11 @@ const getClauseParamsSchema = t.Object({
 });
 
 const config = {
+  description:
+    "Read one clause in full: its body, category, language, description, " +
+    "usage notes, metadata, and current version number, plus every variant " +
+    "in sort order and the list of its stored versions. Use " +
+    "clauses.read-version for the body of a particular version.",
   permissions: { workspace: ["read"] },
   mcp: { type: "covered", by: "list_clauses" },
   access: "read",

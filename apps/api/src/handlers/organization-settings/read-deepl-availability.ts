@@ -4,6 +4,10 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
+  description:
+    "Report whether the organization has a translation provider key " +
+    "configured, as a single boolean. Nothing about the key itself, not even " +
+    "a masked preview, is returned here.",
   // Any org member needs to know whether translation is usable;
   // the answer is a single boolean. Anything that exposes the key
   // (even masked) lives behind organizationSettings:update — see

@@ -7,6 +7,11 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { listTemplateRecipesHandler } from "./recipes";
 
 const config = {
+  description:
+    "List the organization's template recipes alphabetically by name, each " +
+    "with its id, description, and full definition. Recipes are capped per " +
+    "organization, so the whole set comes back in one response without a " +
+    "cursor.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   access: "read",

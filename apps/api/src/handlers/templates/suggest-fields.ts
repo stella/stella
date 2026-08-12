@@ -17,6 +17,13 @@ const suggestFieldsBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Ask the model which literal values in a slice of template text (a whole " +
+    "document or just a selection) should become fillable fields, with " +
+    "optional extra instructions. Returns raw suggestions of literal text, " +
+    "proposed field path, and input type for a human to accept or reject; " +
+    "unlike templates.prepare it never rewrites the document. Consumes AI " +
+    "usage.",
   // Authoring assistance (which literals should become {{fields}}) that spends
   // org AI, so it takes the same `template: ["create"]` grant as its chat twin
   // `suggest_template_fields`; a fill-only or read-only role must not reach it.

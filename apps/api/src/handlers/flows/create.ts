@@ -13,6 +13,12 @@ import { syncFlowScheduleTrigger } from "@/api/lib/flows/sync-flow-schedule-trig
 import { LIMITS } from "@/api/lib/limits";
 
 const config = {
+  description:
+    "Create an automation flow definition in the organization: name, " +
+    "description, ordered steps, a trigger, and whether it is enabled. The " +
+    "definition is validated before it is stored, and a schedule trigger is " +
+    "registered with the scheduler afterwards. Refused once the organization " +
+    "holds its maximum number of flows.",
   permissions: { flow: ["create"] },
   mcp: { type: "capability", reason: "workflow_orchestration" },
   body: flowDefinitionBodySchema,

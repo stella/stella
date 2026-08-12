@@ -16,6 +16,11 @@ const updateTemplateCategoryParamsSchema = t.Object({
 });
 
 const config = {
+  description:
+    "Rename or re-describe one template category, move it under a different " +
+    "parent (or to the root by passing null), or change its sort order. Only " +
+    "the fields you pass are written, and a move that would make the tree " +
+    "circular is refused.",
   permissions: { template: ["update"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   params: updateTemplateCategoryParamsSchema,

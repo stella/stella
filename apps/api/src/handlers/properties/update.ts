@@ -226,6 +226,15 @@ const updatePropertyBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Replace one property's name, value type, and tool (an AI prompt with " +
+    "its dependencies, or manual input) in a matter. A change that affects " +
+    "extraction marks the column, and every column that transitively depends " +
+    "on it, stale so the next run recomputes them. Refused on a circular " +
+    "dependency, on a second document-type classifier, on a file property " +
+    "without a manual-input tool, and on a select fallback that is not one " +
+    "of the supplied options. The dependency rows of a playbook-materialized " +
+    "manual column are preserved rather than rewritten.",
   permissions: { property: ["update"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   params: workspaceParams({ propertyId: tSafeId("property") }),

@@ -40,6 +40,13 @@ const generateDraftBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Draft a skill bundle with the model: returns SKILL.md markdown plus up " +
+    "to eight companion files under references/, prompts/, or knowledge/. " +
+    "Pass intent, optionally examples, and, to revise an existing draft, " +
+    "previousDraft with previousResources and feedback. Nothing is stored: " +
+    "pass the result to skills.create and the resource endpoints to keep it. " +
+    "Consumes AI usage.",
   permissions: { agentSkill: ["create"] },
   mcp: { type: "capability", reason: "agent_tool_authoring" },
   body: generateDraftBodySchema,

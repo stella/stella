@@ -89,6 +89,13 @@ const buildDetachEvents = (params: {
 
 const removeEntries = createSafeHandler(
   {
+    description:
+      "Detach time entries and expenses from a draft invoice, returning them " +
+      "to approved, unbilled status and recomputing the invoice total. " +
+      "Reversible: the same entries can be attached again with " +
+      "invoices.add-entries, and nothing is deleted. Only draft invoices may " +
+      "be changed, and ids that are not on this invoice are skipped without " +
+      "an error.",
     permissions: { invoice: ["update"] },
     mcp: { type: "capability", reason: "billing_admin" },
     params: invoiceParamsSchema,

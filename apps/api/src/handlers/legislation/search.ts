@@ -432,6 +432,15 @@ export const searchLegislationHandler = async (
 };
 
 const config = {
+  description:
+    "Full-text search the stella legislation corpus, returning ranked hits " +
+    "with a highlighted snippet and each document's ELI, title, country, " +
+    "language, type, status, and effective date. Filter by jurisdiction, " +
+    "document type, status, source, language, and effective-date range; " +
+    "paginate with limit and cursor. Only sources cleared for redistribution " +
+    "are searched. Read a hit in full with legislation.get; use " +
+    "legislation.boe-search to query the Spanish BOE service directly " +
+    "instead.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "legal_corpus_admin" },
   access: "read",

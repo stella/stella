@@ -21,6 +21,10 @@ const querySchema = t.Object({
 });
 
 const config = {
+  description:
+    "List a matter's lists, newest first, with cursor pagination, filtered " +
+    "by status (active by default, archived on request). Each entry carries " +
+    "the name, description, status, and timestamps.",
   permissions: { workspace: ["read"] },
   access: "read",
   mcp: { type: "capability", reason: "workspace_schema" },

@@ -4525,6 +4525,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "billing-codes", "create"],
                 capabilityId: "billing-codes.create",
+                description:
+                  "Add one task or activity billing code to a matter's code list. The code string must be unique within the matter for its type, so the same literal may exist once as a task code and once as an activity code; a duplicate of the same type is refused, and the matter has a fixed cap on how many codes it may hold.",
                 access: "write",
                 flags: [
                   {
@@ -4700,6 +4702,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "billing-codes", "list"],
                 capabilityId: "billing-codes.list",
+                description:
+                  "List a matter's task and activity billing codes, ordered by sort order then code, with cursor pagination. Filter by type (task or activity) and by whether the code is still active.",
                 access: "read",
                 flags: [
                   {
@@ -4789,6 +4793,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "billing-codes", "update"],
                 capabilityId: "billing-codes.update",
+                description:
+                  "Change one billing code's code string, label, sort order, or active flag in a matter. Only the fields you pass are written, the code string must stay unique within the matter for its type, and deactivating a code stops it being offered without rewriting entries already recorded under it.",
                 access: "write",
                 flags: [
                   {
@@ -4908,6 +4914,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "case-law", "analysis-generate"],
                 capabilityId: "case-law.analysis.generate",
+                description:
+                  "Read the structural analysis of one court decision, starting generation when there is none yet. Returns status done with the stored analysis, generating while a run is in flight (poll until it is done), or error when the decision is unknown or its text could not be parsed. Generation runs in the background and a call made while one is already running does not start a second.",
                 access: "write",
                 flags: [
                   {
@@ -4950,6 +4958,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "case-law", "ingestion-status"],
                 capabilityId: "case-law.ingestion.status",
+                description:
+                  "Report case-law corpus ingestion health for operators. Per source: adapter key and whether an adapter is still registered for it, enabled flag, sync cursor, decisions held against the total the publisher reports, decisions inserted in the last hour and last day, failures and the top error types in the last day, the last ingestion event, and standing reconciliation counts (slices surveyed, short slices, parked and terminal items). Requires organization audit-log access.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -4968,6 +4978,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "case-law", "matter-links-create"],
                 capabilityId: "case-law.matter-links.create",
+                description:
+                  "Link one case-law decision from the corpus to the current matter, with an optional note. A decision that is not in the corpus is a 404, a decision already linked to this matter is a 409, and the call is refused once the matter holds its maximum number of links.",
                 access: "write",
                 flags: [
                   {
@@ -5100,6 +5112,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "case-law", "matter-links-list"],
                 capabilityId: "case-law.matter-links.list",
+                description:
+                  "List the case-law decisions linked to the current matter, newest link first, each with its note and the decision's case number, ECLI, court, country, date, and type. Returns the whole set up to the per-matter link cap; there is no pagination.",
                 access: "read",
                 flags: [
                   {
@@ -5143,6 +5157,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "catalogue", "install-skill"],
                 capabilityId: "catalogue.install-skill",
+                description:
+                  "Install one catalogue skill into the organization by slug, at team scope (the default) or private scope. Team scope requires admin or owner. The skill is stored as bundled content, so it cannot be edited afterwards. Refused when that slug is already installed at the same scope, or when the scope's skill limit is reached.",
                 access: "write",
                 flags: [
                   {
@@ -5194,6 +5210,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "catalogue", "list-catalogue"],
                 capabilityId: "catalogue.list-catalogue",
+                description:
+                  "List the tool catalogue for the signed-in user's organization: curated skills, MCP connectors, and native tools, plus the organization's own custom skills and custom MCP connectors as synthetic entries. Each entry reports its install state, whether it is enabled, whether it is locked (a baseline capability that cannot be toggled), whether it is recommended for the organization's practice jurisdictions, and the handles the uninstall paths need. The practice jurisdictions behind those recommendations are returned alongside.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -5397,6 +5415,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "chat", "get-messages"],
                 capabilityId: "chat.get-messages",
+                description:
+                  "Read the most recent page of one of your own chat threads, together with the thread's context matters, model and reasoning-effort settings, anonymization flag, whether web search is available and enabled, and an estimate of the model context the next send would carry. Pass workspaceId for a matter-scoped thread and omit it for a global one; a scope that contradicts the stored thread is rejected. With allowMissingThread, a thread that does not exist yet returns an empty draft instead of a 404. Page further back with chat.get-older-messages.",
                 access: "read",
                 flags: [
                   {
@@ -5472,6 +5492,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "chat", "get-older-messages"],
                 capabilityId: "chat.get-older-messages",
+                description:
+                  "Page backwards through one of your own chat threads using the olderCursor a previous read returned. Returns only the message page and the next cursor, without the thread settings and context estimate that chat.get-messages carries. The thread must be yours and the workspaceId scope must match the one it was created in.",
                 access: "read",
                 flags: [
                   {
@@ -5548,6 +5570,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "chat", "get-threads"],
                 capabilityId: "chat.get-threads",
+                description:
+                  "List your own chat threads, most recently active first, split into global threads and groups per matter. Threads with no messages, and threads belonging to a matter that is being deleted, are left out. search matches the thread title or the matter name; paginate with limit and cursor.",
                 access: "read",
                 flags: [
                   {
@@ -5608,6 +5632,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "chat", "rename-thread"],
                 capabilityId: "chat.rename-thread",
+                description:
+                  "Set the title of one of your own chat threads. The new title is marked as user-chosen, so automatic title generation can never overwrite it afterwards. A thread that does not exist in the requested scope is a 404: this never creates one.",
                 access: "write",
                 flags: [
                   {
@@ -5691,6 +5717,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "chat", "update-thread"],
                 capabilityId: "chat.update-thread",
+                description:
+                  "Turn web search on or off for one of your own chat threads. Unlike chat.rename-thread this is an upsert: when no thread exists under that id it is created as an empty placeholder carrying the flag, so a draft can record the setting before its first message is sent.",
                 access: "write",
                 flags: [
                   {
@@ -5777,6 +5805,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "categories-create"],
                 capabilityId: "clauses.categories-create",
+                description:
+                  "Create a category in the organization's clause library taxonomy, optionally under a parent category. Refused once the organization holds its maximum number of categories, or when the named parent does not exist.",
                 access: "write",
                 flags: [
                   {
@@ -5890,6 +5920,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "categories-list"],
                 capabilityId: "clauses.categories-list",
+                description:
+                  "List the organization's clause categories in sort order, each with its id, parent, name, description, and sort order. The taxonomy is capped per organization and comes back whole; there is no pagination.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -5908,6 +5940,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "categories-update"],
                 capabilityId: "clauses.categories-update",
+                description:
+                  "Rename or re-describe one clause category, move it under a different parent (or to the root by passing null), or change its sort order. Only the fields you pass are written. A category cannot become its own parent, and a move that would make the tree circular is refused.",
                 access: "write",
                 flags: [
                   {
@@ -6014,6 +6048,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "create"],
                 capabilityId: "clauses.create",
+                description:
+                  "Create a clause in the organization's clause library: a title and an ordered body of paragraphs, plus optional category, language, description, usage notes, and metadata. The clause starts at version 1 with a matching version snapshot. Refused when the organization is at its clause limit or the category does not exist.",
                 access: "write",
                 flags: [
                   {
@@ -6269,6 +6305,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "get"],
                 capabilityId: "clauses.get",
+                description:
+                  "Read one clause in full: its body, category, language, description, usage notes, metadata, and current version number, plus every variant in sort order and the list of its stored versions. Use clauses.read-version for the body of a particular version.",
                 access: "read",
                 flags: [
                   {
@@ -6311,6 +6349,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "list"],
                 capabilityId: "clauses.list",
+                description:
+                  "List the organization's clause library. Without q, clauses come back newest first with cursor pagination; with q they are matched on the title as a substring or on the clause text as a prefix search, ordered by title, and no cursor is returned. Filter by categoryId. Items carry title, category, language, description, and current version but not the body: read that with clauses.get.",
                 access: "read",
                 flags: [
                   {
@@ -6399,6 +6439,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "read-version"],
                 capabilityId: "clauses.read-version",
+                description:
+                  "Read the stored body of one specific clause version, with its version number and creation time. Use clauses.get for the clause's current body and its version list, and clauses.versions-restore to bring an old version back into use.",
                 access: "read",
                 flags: [
                   {
@@ -6457,6 +6499,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "rewrite"],
                 capabilityId: "clauses.rewrite",
+                description:
+                  "Rewrite the prose of a clause body with the model, following a free-text instruction plus the clause title and usage notes when supplied. The body goes in and the revised body comes back, so this works on an unsaved draft as well; nothing is stored. The model is instructed to keep paragraph order, lists, and every {{ }} template marker, and to change ordinary paragraph text only, but the result is not verified against the original, so review a rewrite before saving one that carries markers. A changed paragraph loses its inline formatting. Consumes AI usage.",
                 access: "write",
                 flags: [
                   {
@@ -6625,6 +6669,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "template-slot-preview"],
                 capabilityId: "clauses.template-slot-preview",
+                description:
+                  "Resolve one template's clause slots to the plain text of the clauses linked to them, keyed by slot name, using the same version and variant rules the fill path applies, so the preview matches the filled document. Slots that are unlinked, or whose target version cannot be resolved, are left out and keep their marker visible.",
                 access: "read",
                 flags: [
                   {
@@ -6667,6 +6713,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "update"],
                 capabilityId: "clauses.update",
+                description:
+                  "Change a clause's title, category, language, body, description, usage notes, or metadata; only the fields you pass are written. By default a new body is saved as the working copy without touching history. Pass snapshotVersion true to also append a version snapshot and move the current version forward: that is skipped when the body is identical to the latest snapshot, and refused when the clause is at its version limit.",
                 access: "write",
                 flags: [
                   {
@@ -6916,6 +6964,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "variants-create"],
                 capabilityId: "clauses.variants-create",
+                description:
+                  "Add a variant, an alternative wording of a clause carrying its own label, to one clause. Refused when the clause does not exist in this organization or already holds its maximum number of variants.",
                 access: "write",
                 flags: [
                   {
@@ -7142,6 +7192,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "variants-list"],
                 capabilityId: "clauses.variants-list",
+                description:
+                  "List one clause's variants in sort order, each with its label, body, and position. A clause that does not belong to this organization is a 404.",
                 access: "read",
                 flags: [
                   {
@@ -7184,6 +7236,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "variants-update"],
                 capabilityId: "clauses.variants-update",
+                description:
+                  "Change one variant's label, body, or position within its clause; only the fields you pass are written.",
                 access: "write",
                 flags: [
                   {
@@ -7379,6 +7433,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "versions-diff"],
                 capabilityId: "clauses.versions-diff",
+                description:
+                  "Return a plain-text, line-level diff between one stored clause version and the clause's current body. An empty segment list means the two are identical. This is what backs the what-changed disclosure shown on a template link pointing at an outdated version.",
                 access: "read",
                 flags: [
                   {
@@ -7437,6 +7493,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "versions-restore"],
                 capabilityId: "clauses.versions-restore",
+                description:
+                  "Restore a stored clause version by copying its body onto the clause as a new version. History is append-only: the older versions stay and the version number moves forward rather than back. The body is read server-side from the version id, never supplied by the caller. Refused when the clause is at its version limit.",
                 access: "write",
                 flags: [
                   {
@@ -7495,6 +7553,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "versions-summarize"],
                 capabilityId: "clauses.versions-summarize",
+                description:
+                  "Summarize in prose what changed between one stored clause version and the clause's current body, over the same diff clauses.versions-diff returns. Returns summary null when the two are identical, skipping the model call. Consumes AI usage.",
                 access: "write",
                 flags: [
                   {
@@ -7649,6 +7709,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "contacts", "create"],
                 capabilityId: "contacts.create",
+                description:
+                  "Create a contact in the organization address book. type (person or organization), displayName, and the contact id are supplied in the body; names, emails, phones, addresses, tags, registration and tax numbers, bank and billing details, default hourly rate, payment terms, and originating or responsible attorneys are optional. Refused once the organization holds its maximum number of contacts, or when an attorney id is not a member of the organization.",
                 access: "write",
                 flags: [
                   {
@@ -8314,6 +8376,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "contacts", "list"],
                 capabilityId: "contacts.list",
+                description:
+                  "List the organization address book alphabetically by display name, with cursor pagination. Filter by type (person or organization) and by q, which matches a substring of the display name only. Each item carries the names, emails, phones, tags, and the number of matters the contact is the client of. Use contacts.search for a short unpaginated lookup that also matches first, last, and organization names.",
                 access: "read",
                 flags: [
                   {
@@ -8387,6 +8451,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "contacts", "search"],
                 capabilityId: "contacts.search",
+                description:
+                  "Look up contacts by name, for a picker: q matches a substring of the display name, first name, last name, or organization name, normalized so Arabic spellings match, optionally narrowed by type. Returns at most 20 contacts ordered by display name with no cursor; use contacts.list to page the whole address book.",
                 access: "read",
                 flags: [
                   {
@@ -8438,6 +8504,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "contacts", "update"],
                 capabilityId: "contacts.update",
+                description:
+                  "Change a contact in the organization address book, writing only the fields you pass and clearing a nullable one when you pass null. metadata is merged into the stored object rather than replacing it. An attorney id that is not a member of the organization is refused, and an unknown contact is a 404.",
                 access: "write",
                 flags: [
                   {
@@ -9029,6 +9097,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "document-types", "create"],
                 capabilityId: "document-types.create",
+                description:
+                  "Add one document type to the organization's classification list. Its key is slugified from the label and de-duplicated automatically, and the type is appended at the end of the display order. Refused once the organization holds the maximum number of document types.",
                 access: "write",
                 flags: [
                   {
@@ -9113,6 +9183,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "document-types", "list"],
                 capabilityId: "document-types.list",
+                description:
+                  "List the organization's document types in display order, each with its id, immutable key, label, and sort order. The starter taxonomy is seeded when the organization is created, so this only ever reads. The list is bounded and returned whole rather than paginated.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -9131,6 +9203,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "document-types", "reorder"],
                 capabilityId: "document-types.reorder",
+                description:
+                  "Set the display order of the organization's document types: each id's position in orderedIds becomes its sort order. Ids that do not belong to the organization are ignored, and any type you leave out of the list keeps the sort order it already had. Ordering is cosmetic, so no audit event is recorded.",
                 access: "write",
                 flags: [
                   {
@@ -9177,6 +9251,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "document-types", "update"],
                 capabilityId: "document-types.update",
+                description:
+                  "Rename one document type. Only the label changes: the key is immutable, and the display order is set through document-types.reorder.",
                 access: "write",
                 flags: [
                   {
@@ -9244,6 +9320,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "clip"],
                 capabilityId: "entities.clip",
+                description:
+                  "Save an external source as a link entity in the current matter: a title and url, plus optional snippet, citation, jurisdiction, and source type. No file is stored, only the reference and its metadata. Refused once the matter holds its maximum number of entities.",
                 access: "write",
                 flags: [
                   {
@@ -9368,6 +9446,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "compare-versions"],
                 capabilityId: "entities.compare-versions",
+                description:
+                  "Compare two versions of one DOCX document in a matter, returning a tracked-changes redline as a base64 DOCX along with the number of edits applied and the words added and removed. Both versions must carry a DOCX file. Accepting every change in the redline yields the target version, rejecting every change yields the base version. Use entities.version-diff for a plain-text diff against the immediate predecessor instead.",
                 access: "read",
                 flags: [
                   {
@@ -9594,6 +9674,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "create"],
                 capabilityId: "entities.create",
+                description:
+                  "Create an empty document, folder, or task in a matter (kind defaults to document) with a name and an optional parent folder. Nothing is attached: use entities.upload or the uploads flow to bring in a file, and entities.create-blank-document for a document that starts from an empty DOCX. Refused when the matter is at its entity limit or the parent is not a usable folder in this matter.",
                 access: "write",
                 flags: [
                   {
@@ -9696,6 +9778,8 @@ export const generatedRouteMap: RouteNode = {
                   "create-blank-document",
                 ],
                 capabilityId: "entities.create-blank-document",
+                description:
+                  "Create a document in a matter whose file is a fresh empty DOCX built from the stella template, optionally inside a parent folder. Returns the entity, its file field, and the file name, so it can be opened in the editor straight away. Use entities.create for a document with no file at all.",
                 access: "write",
                 flags: [
                   {
@@ -9773,6 +9857,8 @@ export const generatedRouteMap: RouteNode = {
                   "create-from-legal-source",
                 ],
                 capabilityId: "entities.create-from-legal-source",
+                description:
+                  "Compile a plain-text legal draft written in stella's legal-source markup into a DOCX and store it as a new document in the current matter. Returns the new entity and its file field plus a ready-made link and mention for chat. Refused with a structural-repair error when the source cannot be compiled, and when the generated file exceeds the document size limit or the matter is at its entity limit.",
                 access: "write",
                 flags: [
                   {
@@ -9987,6 +10073,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "duplicate"],
                 capabilityId: "entities.duplicate",
+                description:
+                  "Copy one document, or a folder with its whole subtree, inside the same matter, placing the copy alongside the original. Stored files are copied too, so the copies own their own bytes and get their own text extraction and PDF and thumbnail derivatives. Use entities.copy-to-workspace to copy into a different matter.",
                 access: "write",
                 flags: [
                   {
@@ -10047,6 +10135,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "get"],
                 capabilityId: "entities.get",
+                description:
+                  "Read one document, folder, or task in a matter: its kind, name, current version id and creation time, that version's field values, and which field is the current text-extraction source. Use entities.read-version-by-id to read a historical version, and entities.read-versions for the version list.",
                 access: "read",
                 flags: [
                   {
@@ -10107,6 +10197,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "list"],
                 capabilityId: "entities.list",
+                description:
+                  "List a matter's documents, folders, and tasks as table rows, using the same filters, sorts, and search the matter's views use, with cursor pagination. fieldMode and fieldIds choose which column values come back, excludedKinds drops kinds you do not want, and previewableForAi keeps only documents whose content a model can read. Use entities.read-filesystem-tree for the same query shaped as a folder tree, and entities.get to read one row in full.",
                 access: "read",
                 flags: [
                   {
@@ -10721,6 +10813,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "list-files"],
                 capabilityId: "entities.list-files",
+                description:
+                  "List every document in a matter that has an uploaded file, oldest first with cursor pagination, each with its entity id, name, parent folder, file name, and media type. Documents without a file, and folders and tasks, are left out; use entities.list for the full table with column values.",
                 access: "read",
                 flags: [
                   {
@@ -10786,6 +10880,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "list-folders"],
                 capabilityId: "entities.list-folders",
+                description:
+                  "List the folders of a matter, oldest first with cursor pagination, each with its id, name, and parent folder. Documents and tasks are left out; use entities.read-filesystem-tree for the folder tree with the documents in it.",
                 access: "read",
                 flags: [
                   {
@@ -10851,6 +10947,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "move"],
                 capabilityId: "entities.move",
+                description:
+                  "Move one document, folder, or task into another folder of the same matter, or out to the matter root by passing parentId null. The target must be a folder in this matter, a folder may not be moved into itself or into one of its own descendants, and a read-only entity is refused.",
                 access: "write",
                 flags: [
                   {
@@ -11008,6 +11106,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "organize-suggestions"],
                 capabilityId: "entities.organize-suggestions",
+                description:
+                  "Propose a folder placement and a tidied file name for up to 100 documents of a matter, given the folders that already exist plus an optional locale and free-text instructions. Returns one suggestion per file (folder path, suggested name, detected date, document type) and the empty folders it suggests removing. Suggestions only: nothing is moved, renamed, or deleted, so apply what you want with entities.move and entities.rename. Per-document summaries are generated and cached where missing, and the call consumes AI usage.",
                 access: "write",
                 flags: [
                   {
@@ -11128,6 +11228,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "read-filesystem-tree"],
                 capabilityId: "entities.read-filesystem-tree",
+                description:
+                  "Read a matter's folders and documents as one unpaginated tree, using the same filters, sorts, and search as the table listings; tasks are excluded. When a filter or search hides intermediate folders, their parent links come back separately as ancestorLinks, so a matched row's full path can still be resolved without those folders entering the tree itself.",
                 access: "read",
                 flags: [
                   {
@@ -11678,6 +11780,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "read-summaries"],
                 capabilityId: "entities.read-summaries",
+                description:
+                  "List a matter's documents, folders, and tasks as bare id and name pairs, newest first with cursor pagination. The cheapest listing available: no column values, no file metadata, no filters. Use entities.read-summaries-count for the total and entities.list when you need column values or filtering.",
                 access: "read",
                 flags: [
                   {
@@ -11745,6 +11849,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "read-summaries-count"],
                 capabilityId: "entities.read-summaries-count",
+                description:
+                  "Count all documents, folders, and tasks in a matter. The companion total for entities.read-summaries, whose pages carry no count of their own.",
                 access: "read",
                 flags: [
                   {
@@ -11787,6 +11893,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "read-version-by-id"],
                 capabilityId: "entities.read-version-by-id",
+                description:
+                  "Read one specific version of a document in a matter: its version number, stamp, creation time, and the field values stored on that version. A version tombstoned by entities.delete-version reads as not found. Use entities.get for the current version.",
                 access: "read",
                 flags: [
                   {
@@ -11861,6 +11969,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "read-versions"],
                 capabilityId: "entities.read-versions",
+                description:
+                  "List one document's version history, newest first, with a before cursor for older pages. Each version carries its number, stamp, label, description, the words added and removed against its predecessor, its author, and the file attached to it; tombstoned versions are left out. The response also names the entity's current version.",
                 access: "read",
                 flags: [
                   {
@@ -11936,6 +12046,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "read-window"],
                 capabilityId: "entities.read-window",
+                description:
+                  "Read a window of a matter's documents, folders, and tasks with the same filters, sorts, search, and field selection as entities.list, but with the page bounds the virtualized table scrolls by (200 rows by default). Prefer entities.list unless you are filling a table viewport.",
                 access: "read",
                 flags: [
                   {
@@ -12548,6 +12660,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "rename"],
                 capabilityId: "entities.rename",
+                description:
+                  "Rename one document, folder, or task in a matter. For a document the stored file name is renamed to match, so the table's file column stays in step with the entity name. A read-only entity is refused.",
                 access: "write",
                 flags: [
                   {
@@ -12816,6 +12930,8 @@ export const generatedRouteMap: RouteNode = {
                   "update-version-description",
                 ],
                 capabilityId: "entities.update-version-description",
+                description:
+                  "Set or clear the free-text description on one version of a document, up to 1024 characters. An annotation only: no file and no field value changes. A version tombstoned by entities.delete-version is refused. Use entities.update-version-label for the short label instead.",
                 access: "write",
                 flags: [
                   {
@@ -12907,6 +13023,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "update-version-label"],
                 capabilityId: "entities.update-version-label",
+                description:
+                  "Set or clear the short label on one version of a document, up to 128 characters, for marking a version as a draft, an execution copy, and so on. An annotation only, like entities.update-version-description, which carries the longer note. A tombstoned version is refused.",
                 access: "write",
                 flags: [
                   {
@@ -12998,6 +13116,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "version-diff"],
                 capabilityId: "entities.version-diff",
+                description:
+                  "Return a plain-text, line-level diff of one document version's DOCX against its immediate predecessor; the first version is diffed against an empty document. Both texts are resolved server-side from the ids, and an empty segment list means nothing changed. Use entities.compare-versions for a DOCX redline between two versions you choose.",
                 access: "read",
                 flags: [
                   {
@@ -13072,6 +13192,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "entities", "version-summarize"],
                 capabilityId: "entities.version-summarize",
+                description:
+                  "Summarize in prose what changed between one document version and its predecessor, over the same server-resolved text diff entities.version-diff returns. Returns summary null for identical versions, skipping the model call entirely. Consumes AI usage.",
                 access: "write",
                 flags: [
                   {
@@ -13151,6 +13273,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "expenses", "create"],
                 capabilityId: "expenses.create",
+                description:
+                  "Record a disbursement in the current matter against a work item (matterId: the document, folder, or task the cost belongs to). amount is an integer in minor currency units with a 3-letter currency; dateIncurred is read in the timezoneId you pass and is refused when it is in the future or older than the entry-age limit. The expense starts as a draft.",
                 access: "write",
                 flags: [
                   {
@@ -13423,6 +13547,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "expenses", "list"],
                 capabilityId: "expenses.list",
+                description:
+                  "List expenses in a matter, earliest date first, with cursor pagination. Filter by userId, work item (matterId), a date-incurred range (dateFrom/dateTo, ISO YYYY-MM-DD), status, category, and billable. Each item carries the amount in minor currency units, currency, category, markup percentage, status, and the recording user's name.",
                 access: "read",
                 flags: [
                   {
@@ -13600,6 +13726,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "expenses", "update"],
                 capabilityId: "expenses.update",
+                description:
+                  "Change a draft or approved expense in a matter: its date, amount, currency, category, description, invoice description, billable flag, markup, work item, or status (draft or approved). A billed or written-off expense is refused; use expenses.delete to write off an unbilled one.",
                 access: "write",
                 flags: [
                   {
@@ -13822,6 +13950,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "fields", "mark-column-flag"],
                 capabilityId: "fields.mark-column-flag",
+                description:
+                  "Set or clear the verified or locked flag on one column's cells across every document a filter selects in a matter, working in batches until the whole selection is covered. Folders and tasks are never touched. Returns how many cells changed plus an addedAt stamp: pass that stamp back as onlyAddedAt with set false to undo exactly this mark and leave flags from other marks alone. Pass groupByPropertyId and groupValue to restrict the batch to one group of a grouped view.",
                 access: "write",
                 flags: [
                   {
@@ -14417,6 +14547,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "fields", "update-cell-metadata"],
                 capabilityId: "fields.update-cell-metadata",
+                description:
+                  "Set the manual flags and lock state of one cell, meaning one document's value for one property. manualFlags is merged against baseManualFlags rather than overwritten, so flags added or removed by someone else since you read the cell survive; when no flags remain and the cell is not locked, the metadata row is deleted. Use fields.upsert-by-id to change the cell's value itself, and fields.mark-column-flag to flag a whole column at once.",
                 access: "write",
                 flags: [
                   {
@@ -14814,6 +14946,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "flows", "create"],
                 capabilityId: "flows.create",
+                description:
+                  "Create an automation flow definition in the organization: name, description, ordered steps, a trigger, and whether it is enabled. The definition is validated before it is stored, and a schedule trigger is registered with the scheduler afterwards. Refused once the organization holds its maximum number of flows.",
                 access: "write",
                 flags: [
                   {
@@ -15139,6 +15273,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "flows", "get"],
                 capabilityId: "flows.get",
+                description:
+                  "Read one flow definition: its name, description, steps, trigger, and enabled flag. Use flows.list to browse the organization's flows and flows.run-detail to read a run of one.",
                 access: "read",
                 flags: [
                   {
@@ -15229,6 +15365,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "flows", "run-cancel"],
                 capabilityId: "flows.run-cancel",
+                description:
+                  "Cancel a flow run that is still in progress in a matter, returning the run id and the status it settled on. Work already committed by steps that finished is not undone.",
                 access: "write",
                 flags: [
                   {
@@ -15446,6 +15584,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "flows", "run-review"],
                 capabilityId: "flows.run-review",
+                description:
+                  "Resolve a flow run waiting at a review gate: pass decision approved or rejected, with an optional note. The run continues or stops accordingly, and its id and new status come back.",
                 access: "write",
                 flags: [
                   {
@@ -15622,6 +15762,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "flows", "update"],
                 capabilityId: "flows.update",
+                description:
+                  "Replace one flow definition's name, description, steps, trigger, and enabled flag. The whole definition is revalidated and written, so this is not a partial update. The scheduler row is reconciled afterwards, so changing or removing a schedule trigger, or disabling the flow, also stops it from firing.",
                 access: "write",
                 flags: [
                   {
@@ -15930,6 +16072,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "invoices", "add-entries"],
                 capabilityId: "invoices.add-entries",
+                description:
+                  "Attach approved, billable, not-yet-invoiced time entries and expenses to a draft invoice, marking them billed and recomputing the invoice total. Every entry must match the invoice currency, because an invoice is single-currency and nothing is converted. Only draft invoices accept entries, and a concurrent change to the same entries fails with a retryable conflict rather than attaching part of the set.",
                 access: "write",
                 flags: [
                   {
@@ -16035,6 +16179,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "invoices", "create"],
                 capabilityId: "invoices.create",
+                description:
+                  "Create a draft invoice from approved, billable, not-yet-invoiced time entries in a matter, marking them billed and setting the total from their billed minutes and recorded rates. Every entry must already carry the invoice currency, since nothing is converted, and the invoice number must not already be in use. Expenses are added afterwards with invoices.add-entries.",
                 access: "write",
                 flags: [
                   {
@@ -16242,6 +16388,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "invoices", "get"],
                 capabilityId: "invoices.get",
+                description:
+                  "Read one invoice with its full line detail: every attached time entry with its work item, every attached expense with its work item, plus status, dates, currency, and total. Use invoices.list for a paginated summary without line items.",
                 access: "read",
                 flags: [
                   {
@@ -16300,6 +16448,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "invoices", "list"],
                 capabilityId: "invoices.list",
+                description:
+                  "List a matter's invoices oldest first with cursor pagination, returning each invoice's number, reference, status, dates, currency, and total, but not its line items. Use invoices.get to read the attached time entries and expenses.",
                 access: "read",
                 flags: [
                   {
@@ -16369,6 +16519,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "invoices", "remove-entries"],
                 capabilityId: "invoices.remove-entries",
+                description:
+                  "Detach time entries and expenses from a draft invoice, returning them to approved, unbilled status and recomputing the invoice total. Reversible: the same entries can be attached again with invoices.add-entries, and nothing is deleted. Only draft invoices may be changed, and ids that are not on this invoice are skipped without an error.",
                 access: "write",
                 flags: [
                   {
@@ -16474,6 +16626,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "invoices", "transition"],
                 capabilityId: "invoices.transition",
+                description:
+                  "Move an invoice through its lifecycle with one action: finalize (draft to finalized), send (finalized to sent), mark_paid (sent to paid), revert_to_draft (finalized back to draft), or void (from finalized, sent, or paid). Voiding also releases every attached time entry and expense back to approved, unbilled status and clears the paid timestamp. An action the invoice's current status does not allow is refused.",
                 access: "write",
                 flags: [
                   {
@@ -16565,6 +16719,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "invoices", "update"],
                 capabilityId: "invoices.update",
+                description:
+                  "Change a draft invoice's number, invoice date, due date, reference, notes, or currency. Only draft invoices can be edited, and the currency cannot change while any time entry or expense is still attached to the invoice.",
                 access: "write",
                 flags: [
                   {
@@ -16710,6 +16866,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "legislation", "boe-get-law"],
                 capabilityId: "legislation.boe-get-law",
+                description:
+                  "Read one consolidated Spanish law from the BOE by its BOE-X-YYYY-N identifier. The metadata, analysis, fullText, and eli flags select which blocks the BOE returns; this queries the BOE service directly rather than the stella legislation corpus.",
                 access: "read",
                 flags: [
                   {
@@ -16807,6 +16965,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "legislation", "boe-law-structure"],
                 capabilityId: "legislation.boe-law-structure",
+                description:
+                  "Read the block outline of one consolidated Spanish BOE law: its parts, articles, and provisions with the block ids that address them. Use legislation.boe-text-block to fetch the text of a single block.",
                 access: "read",
                 flags: [
                   {
@@ -16846,6 +17006,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "legislation", "boe-related-laws"],
                 capabilityId: "legislation.boe-related-laws",
+                description:
+                  "List the Spanish BOE laws related to one law, narrowed by relationType: modifies, modifiedBy, derogates, derogatedBy, or all (the default).",
                 access: "read",
                 flags: [
                   {
@@ -16914,6 +17076,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "legislation", "boe-search"],
                 capabilityId: "legislation.boe-search",
+                description:
+                  "Search Spanish consolidated legislation on the BOE. At least one filter is required: free text, title, department code, legal-range code (law rank), subject-matter code, or a publication date range as YYYYMMDD. Paginate with limit and the opaque cursor. This queries the BOE service live; use legislation.search to search the stella legislation corpus instead.",
                 access: "read",
                 flags: [
                   {
@@ -17086,6 +17250,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "legislation", "boe-text-block"],
                 capabilityId: "legislation.boe-text-block",
+                description:
+                  "Read the text of one block of a consolidated Spanish BOE law, addressed by the law identifier and a block id taken from legislation.boe-law-structure.",
                 access: "read",
                 flags: [
                   {
@@ -17139,6 +17305,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "legislation", "borme-summary"],
                 capabilityId: "legislation.borme-summary",
+                description:
+                  "Read the BORME summary the Spanish commercial registry gazette published on one date, given as YYYYMMDD.",
                 access: "read",
                 flags: [
                   {
@@ -17178,6 +17346,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "legislation", "get"],
                 capabilityId: "legislation.get",
+                description:
+                  "Read one legislation document from the stella corpus by id: its ELI, title, country, language, document type, status, effective and version-validity dates, source links, metadata, full text, and parsed structure. Only documents from sources cleared for redistribution are returned; anything else reads as not found.",
                 access: "read",
                 flags: [
                   {
@@ -17220,6 +17390,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "legislation", "search"],
                 capabilityId: "legislation.search",
+                description:
+                  "Full-text search the stella legislation corpus, returning ranked hits with a highlighted snippet and each document's ELI, title, country, language, type, status, and effective date. Filter by jurisdiction, document type, status, source, language, and effective-date range; paginate with limit and cursor. Only sources cleared for redistribution are searched. Read a hit in full with legislation.get; use legislation.boe-search to query the Spanish BOE service directly instead.",
                 access: "read",
                 flags: [
                   {
@@ -17383,6 +17555,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "columns-create"],
                 capabilityId: "lists.columns.create",
+                description:
+                  "Add a column to a list by binding one of the matter's properties to it, with an optional position and a required flag. The list must be active and the property must belong to the same matter. A property can be bound only once per list: binding it again returns the existing column rather than creating a second one, except once the list holds its maximum number of columns, where the cap is checked first and the call is refused.",
                 access: "write",
                 flags: [
                   {
@@ -17485,6 +17659,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "create"],
                 capabilityId: "lists.create",
+                description:
+                  "Create a list in a matter from a name and an optional description; it starts active and empty. Refused once the matter holds its maximum number of lists. Add structure afterwards with lists.sections.create and lists.columns.create.",
                 access: "write",
                 flags: [
                   {
@@ -17559,6 +17735,8 @@ export const generatedRouteMap: RouteNode = {
                   "generation-candidates-acceptance-create",
                 ],
                 capabilityId: "lists.generation-candidates.acceptance.create",
+                description:
+                  "Accept one candidate from a generation run: create the item it proposes as a task in the matter, optionally in a named section, and copy the candidate's sources onto the new item with their locators and quotes. The candidate is claimed before the item is created, so two concurrent accepts cannot both produce one, and the run flips to committed once no candidate is left pending. A candidate whose sources have disappeared is refused and the reserved item is cleaned up.",
                 access: "write",
                 flags: [
                   {
@@ -17671,6 +17849,8 @@ export const generatedRouteMap: RouteNode = {
                   "generation-candidates-create",
                 ],
                 capabilityId: "lists.generation-candidates.create",
+                description:
+                  "Submit the candidates a generation run produced: per candidate a name, description, item type, status, priority, due date, suggested assignees, and the sources it was drawn from, each naming a document version with a locator and optional quote. Every source must be one of the run's own source versions. The run moves from running to review; candidates stay proposals until they are accepted or rejected.",
                 access: "write",
                 flags: [
                   {
@@ -17925,6 +18105,8 @@ export const generatedRouteMap: RouteNode = {
                   "generation-candidates-list",
                 ],
                 capabilityId: "lists.generation-candidates.list",
+                description:
+                  "List one generation run's candidates in proposal order with cursor pagination: the proposed item fields, the candidate's status, the item it was accepted as when it has one, and the sources it cites. The run's own status is returned alongside the page.",
                 access: "read",
                 flags: [
                   {
@@ -18026,6 +18208,8 @@ export const generatedRouteMap: RouteNode = {
                   "generation-candidates-rejection-create",
                 ],
                 capabilityId: "lists.generation-candidates.rejection.create",
+                description:
+                  "Reject one pending candidate of a generation run so it is never turned into a list item. Only a pending candidate can be rejected; the run flips to committed once nothing is left pending. Nothing is deleted: the candidate stays in the run with status rejected.",
                 access: "write",
                 flags: [
                   {
@@ -18118,6 +18302,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "generations-create"],
                 capabilityId: "lists.generations.create",
+                description:
+                  "Start a generation run over a list: an instruction plus the document versions to read, each named by its entity and version id and each appearing once. Every source must be a live document version in this matter. Returns the run id with status running; the candidates it produces are submitted separately and leave the run in review.",
                 access: "write",
                 flags: [
                   {
@@ -18217,6 +18403,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "generations-list"],
                 capabilityId: "lists.generations.list",
+                description:
+                  "List one list's generation runs, newest first, with cursor pagination: each run's status, its instruction, and its created, updated, and completed timestamps.",
                 access: "read",
                 flags: [
                   {
@@ -18298,6 +18486,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "get"],
                 capabilityId: "lists.get",
+                description:
+                  "Read one list with its sections in order, its columns (each bound property with its position and required flag), and how many items it holds. The items themselves come from lists.items.list.",
                 access: "read",
                 flags: [
                   {
@@ -18352,6 +18542,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "items-activity-list"],
                 capabilityId: "lists.items.activity.list",
+                description:
+                  "Read one list item's activity trail, newest first with cursor pagination: the audit entries recorded against the item and against the task behind it, each with its action, the actor's name, the recorded changes, and the operation label.",
                 access: "read",
                 flags: [
                   {
@@ -18449,6 +18641,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "items-comments-create"],
                 capabilityId: "lists.items.comments.create",
+                description:
+                  "Add a comment to one list item. The comment is stored against the item and shows up in its activity trail.",
                 access: "write",
                 flags: [
                   {
@@ -18539,6 +18733,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "items-list"],
                 capabilityId: "lists.items.list",
+                description:
+                  "List one list's items in list order with cursor pagination. Each item carries its name, item type, task status, priority, due date, section, position, description, and review status, plus the values it holds for the properties the list binds as columns.",
                 access: "read",
                 flags: [
                   {
@@ -18620,6 +18816,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "items-reviews-update"],
                 capabilityId: "lists.items.reviews.update",
+                description:
+                  "Record a review decision on one list item, with an optional note. The item's review status becomes that decision and the decision is appended to the item's review history; an unrecognized decision is refused.",
                 access: "write",
                 flags: [
                   {
@@ -18722,6 +18920,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "items-sources-create"],
                 capabilityId: "lists.items.sources.create",
+                description:
+                  "Attach a source to one list item: the document version it comes from plus a locator (the whole document, a DOCX block, or a PDF page) and an optional quote. The source must be a live document version in this matter. A new source starts unverified; change that with lists.items.sources.verification.update.",
                 access: "write",
                 flags: [
                   {
@@ -18901,6 +19101,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "items-sources-list"],
                 capabilityId: "lists.items.sources.list",
+                description:
+                  "List the sources attached to one list item with cursor pagination, each with the document version it points at, its locator, its quote, and its verification status with who verified it and when.",
                 access: "read",
                 flags: [
                   {
@@ -19002,6 +19204,8 @@ export const generatedRouteMap: RouteNode = {
                   "items-sources-verification-update",
                 ],
                 capabilityId: "lists.items.sources.verification.update",
+                description:
+                  "Set the verification status of one source attached to a list item. Any status other than unverified records who set it and when; setting it back to unverified clears both.",
                 access: "write",
                 flags: [
                   {
@@ -19108,6 +19312,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "items-update"],
                 capabilityId: "lists.items.update",
+                description:
+                  "Change one list item's section, its ordering position within the list, or its description; only the fields you pass are written, and a section that does not belong to this list is refused. The item's name, status, priority, and due date live on the task behind it, so change those with tasks.update.",
                 access: "write",
                 flags: [
                   {
@@ -19225,6 +19431,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "list"],
                 capabilityId: "lists.list",
+                description:
+                  "List a matter's lists, newest first, with cursor pagination, filtered by status (active by default, archived on request). Each entry carries the name, description, status, and timestamps.",
                 access: "read",
                 flags: [
                   {
@@ -19304,6 +19512,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "sections-create"],
                 capabilityId: "lists.sections.create",
+                description:
+                  "Add a section to an active list, with a name and an optional ordering position. Refused when the list is not active or already holds its maximum number of sections.",
                 access: "write",
                 flags: [
                   {
@@ -19392,6 +19602,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "lists", "update"],
                 capabilityId: "lists.update",
+                description:
+                  "Rename a list, change its description, or move it between active and archived. Only the fields you pass are written, an unrecognized status is refused, and a call that changes nothing is a no-op rather than an error.",
                 access: "write",
                 flags: [
                   {
@@ -19522,6 +19734,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "organization-settings", "get"],
                 capabilityId: "organization-settings.get",
+                description:
+                  "Read the organization's general settings: document processing mode, matter-number pattern and padding, practice jurisdictions, prompt caching, and memory extraction. An organization that has never saved settings gets the defaults rather than an error.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -19540,6 +19754,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "organization-settings", "preview"],
                 capabilityId: "organization-settings.preview",
+                description:
+                  "Preview the matter number a pattern would produce next: the pattern and padding are validated, the counter for the scope that pattern falls in is read, and the rendered reference is returned with the sequence value it would take. Nothing is stored and no counter is advanced.",
                 access: "read",
                 flags: [
                   {
@@ -19600,6 +19816,8 @@ export const generatedRouteMap: RouteNode = {
                   "read-ai-availability",
                 ],
                 capabilityId: "organization-settings.read-ai-availability",
+                description:
+                  "Report whether AI is usable in this organization: whether the deployment provides a model, whether the organization has configured its own provider, whether either of those makes AI available at all, and whether the reduced-cost deferred service tier can be used. Booleans only, so any member may read it.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -19623,6 +19841,8 @@ export const generatedRouteMap: RouteNode = {
                 ],
                 capabilityId:
                   "organization-settings.read-anonymization-blacklist",
+                description:
+                  "Read the organization-wide always-mask terms: each entry's canonical form, label, spelling variants, and enabled flag. Matter-scoped terms live in the same table but are never returned here; read those with workspaces.anonymization-terms.list.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -19645,6 +19865,8 @@ export const generatedRouteMap: RouteNode = {
                   "read-deepl-availability",
                 ],
                 capabilityId: "organization-settings.read-deepl-availability",
+                description:
+                  "Report whether the organization has a translation provider key configured, as a single boolean. Nothing about the key itself, not even a masked preview, is returned here.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -19663,6 +19885,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "organization-settings", "update"],
                 capabilityId: "organization-settings.update",
+                description:
+                  "Change the organization's general settings: document processing mode, matter-number pattern and padding, prompt caching, and memory extraction. Only the fields you pass are written and the matter-number pattern is validated against its padding first. Turning document processing off is refused while an automatic run is still going. Practice jurisdictions are set through organization-settings.update-practice-jurisdictions.",
                 access: "write",
                 flags: [
                   {
@@ -19762,6 +19986,8 @@ export const generatedRouteMap: RouteNode = {
                 ],
                 capabilityId:
                   "organization-settings.update-anonymization-blacklist",
+                description:
+                  "Replace the organization-wide always-mask list with the entries you pass: terms not in the list are deleted, terms already present are updated, and the rest are inserted, so this is a whole-list replacement rather than a merge, and an empty list clears every organization-wide term. Matter-scoped terms in the same table are left untouched.",
                 access: "write",
                 flags: [],
                 inputOnly: ["body.entries"],
@@ -19880,6 +20106,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "playbooks", "approve"],
                 capabilityId: "playbooks.approve",
+                description:
+                  "Approve a playbook definition: snapshot its current name, description, scope, and positions as a new immutable version, then mark the definition approved. Runs pin the latest approved version, so this is what publishes edits to reviews. Pass expectedUpdatedAt as a concurrency token; a definition that changed since you read it is a conflict. Approving an already-approved playbook is allowed and simply appends another version.",
                 access: "write",
                 flags: [
                   {
@@ -19941,6 +20169,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "playbooks", "auto-run"],
                 capabilityId: "playbooks.auto-run",
+                description:
+                  "Run every applicable playbook over a matter in one pass and materialize their columns onto its table: a playbook with no document-type scope always applies, one scoped to a document type only when that type is present among the matter's classified documents. Each playbook pins its own latest approved version and opens its own per-document runs; a playbook that hits a limit is skipped while the rest continue. Returns how many playbooks ran, how many columns were materialized, and how many document runs opened. Use playbooks.run for a single playbook.",
                 access: "write",
                 flags: [
                   {
@@ -19983,6 +20213,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "playbooks", "create"],
                 capabilityId: "playbooks.create",
+                description:
+                  "Create a playbook definition in the organization from a name, an optional description, an optional document-type scope, and its positions. The positions are validated and the automatic questions derived from their tier rules before storage. It starts as a draft: approve it with playbooks.approve before runs will use it.",
                 access: "write",
                 flags: [
                   {
@@ -21087,6 +21319,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "playbooks", "from-starter"],
                 capabilityId: "playbooks.from-starter",
+                description:
+                  "Create a playbook from one of the bundled starter playbooks, cloning its positions with fresh ids and otherwise taking exactly the path playbooks.create takes, including validation, the per-organization limit, and the draft status. Browse the available starters with playbooks.list-starters.",
                 access: "write",
                 flags: [
                   {
@@ -21128,6 +21362,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "playbooks", "get"],
                 capabilityId: "playbooks.get",
+                description:
+                  "Read one playbook definition in full: its name, description, document-type scope, positions, status, and approval metadata. Use playbooks.list for the paginated overview.",
                 access: "read",
                 flags: [
                   {
@@ -21170,6 +21406,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "playbooks", "list"],
                 capabilityId: "playbooks.list",
+                description:
+                  "List the organization's playbook definitions with cursor pagination, each with its scope, status, and approval metadata. Read one playbook's positions in full with playbooks.get.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -21220,6 +21458,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "playbooks", "list-starters"],
                 capabilityId: "playbooks.list-starters",
+                description:
+                  "List the bundled starter playbooks available to instantiate: each starter's id, name, description, target document type, and how many positions it holds. Metadata only, enough to render a picker; create one with playbooks.from-starter.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -21238,6 +21478,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "playbooks", "list-versions"],
                 capabilityId: "playbooks.list-versions",
+                description:
+                  "List one playbook's approval history, newest version first: the version number, the name it carried at that version, when it was created, and by whom. A version is only written when a playbook is approved, so the list is capped rather than cursor-paginated.",
                 access: "read",
                 flags: [
                   {
@@ -21301,6 +21543,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "playbooks", "restore-version"],
                 capabilityId: "playbooks.restore-version",
+                description:
+                  "Restore a stored playbook version by copying its name, description, scope, and positions back onto the definition. A restore counts as an edit: the playbook returns to draft with its approval metadata cleared, so it must be approved again before runs pick it up, and the stored version itself is left untouched.",
                 access: "write",
                 flags: [
                   {
@@ -21444,6 +21688,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "playbooks", "update"],
                 capabilityId: "playbooks.update",
+                description:
+                  "Replace a playbook definition's name, description, scope, and positions; the positions are validated and their automatic questions re-derived. Any edit invalidates a prior approval, so the playbook drops back to draft with its approval metadata cleared and runs keep using the last approved version until it is approved again. Pass expectedUpdatedAt as a concurrency token; a definition changed since you read it is a conflict, and the new updatedAt comes back for the next save.",
                 access: "write",
                 flags: [
                   {
@@ -22544,6 +22790,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "properties", "create"],
                 capabilityId: "properties.create",
+                description:
+                  "Add one property (a column) to a matter: its name, value type, and either an AI prompt tool, optionally depending on other columns, or a manual-input tool. An AI column is created stale, so its values are produced by the next run rather than immediately. Refused when the matter is at its property limit, when a dependency is not a property of this matter, or when the matter already has a document-type classifier column.",
                 access: "write",
                 flags: [
                   {
@@ -23175,6 +23423,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "properties", "create-batch"],
                 capabilityId: "properties.create-batch",
+                description:
+                  "Add up to ten properties (columns) to a matter in a single transaction, under the same rules as properties.create: all of them land or none do, the resulting count must stay within the matter's property limit, every dependency must be a property of this matter, and at most one document-type classifier may exist. Returns the new property ids.",
                 access: "write",
                 flags: [
                   {
@@ -23899,6 +24149,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "properties", "preview"],
                 capabilityId: "properties.preview",
+                description:
+                  "Run a column prompt against one document without creating the column or storing anything, so a prompt can be tried before it is saved. Pass the prompt, the value type, the entityId to run it against, any select options, and the columns it depends on. Returns status ready with the generated value, skipped when the dependency values are missing or unusable on that document, unsupported when the document cannot be processed, or empty when the model returned nothing.",
                 access: "read",
                 flags: [
                   {
@@ -24037,6 +24289,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "properties", "suggest-prompt"],
                 capabilityId: "properties.suggest-prompt",
+                description:
+                  "Draft or refine a column's extraction prompt with the model, from the column name, value type, select options, a free-text instruction, and optionally the prompt as it stands. Returns one single-line prompt of at most 280 characters and stores nothing. Consumes AI usage.",
                 access: "write",
                 flags: [
                   {
@@ -24160,6 +24414,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "properties", "update"],
                 capabilityId: "properties.update",
+                description:
+                  "Replace one property's name, value type, and tool (an AI prompt with its dependencies, or manual input) in a matter. A change that affects extraction marks the column, and every column that transitively depends on it, stale so the next run recomputes them. Refused on a circular dependency, on a second document-type classifier, on a file property without a manual-input tool, and on a select fallback that is not one of the supplied options. The dependency rows of a playbook-materialized manual column are preserved rather than rewritten.",
                 access: "write",
                 flags: [
                   {
@@ -24935,6 +25191,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "rates", "create"],
                 capabilityId: "rates.create",
+                description:
+                  "Create a rate table, a named set of hourly rates in a single currency, in a matter. Pass isDefault to make it the matter's default, which clears the flag on the previous default; matters have a fixed cap on how many rate tables they may hold. Add the rates themselves with rates.entries-create.",
                 access: "write",
                 flags: [
                   {
@@ -25081,6 +25339,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "rates", "entries-create"],
                 capabilityId: "rates.entries-create",
+                description:
+                  "Add one rate line to a rate table: an hourly rate in integer minor currency units, effective from a date and optionally until another. Pass userId for a person-specific rate or omit it for the table's fallback rate. Refused when the date range overlaps an existing line for the same user, when userId is not a member of the organization, or when the table is at its line limit.",
                 access: "write",
                 flags: [
                   {
@@ -25283,6 +25543,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "rates", "entries-read"],
                 capabilityId: "rates.entries-read",
+                description:
+                  "List the rate lines of one rate table, earliest effective-from first, with cursor pagination. Each line carries the hourly rate in minor currency units, its effective dates, and the user it applies to (null for the table's fallback rate). A rate table that does not exist in this matter returns an empty page rather than an error.",
                 access: "read",
                 flags: [
                   {
@@ -25368,6 +25630,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "rates", "entries-update"],
                 capabilityId: "rates.entries-update",
+                description:
+                  "Change one rate line's hourly rate or effective dates in a rate table. Changing the dates re-checks for overlap against the other lines for the same user and is refused on a conflict; the user a line applies to cannot be changed here.",
                 access: "write",
                 flags: [
                   {
@@ -25487,6 +25751,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "rates", "list"],
                 capabilityId: "rates.list",
+                description:
+                  "List a matter's rate tables oldest first with cursor pagination, returning each table's name, currency, default flag, and how many rate lines it holds. Use rates.entries-read for the lines themselves and rates.resolve for the rate that actually applies to a user on a date.",
                 access: "read",
                 flags: [
                   {
@@ -25630,6 +25896,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "rates", "update"],
                 capabilityId: "rates.update",
+                description:
+                  "Rename a rate table, change its currency, or make it the matter's default, which clears the flag on the previous default. Unsetting the flag on the only default table is refused, so a matter that has a default keeps one; a matter whose tables were all created without the flag has none, and rate resolution handles that. Rates already recorded on time entries are not rewritten.",
                 access: "write",
                 flags: [
                   {
@@ -25735,6 +26003,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "reports", "clone-builtin"],
                 capabilityId: "reports.clone-builtin",
+                description:
+                  "Copy one built-in report template into the organization so it can be edited in Template Studio and picked like any other template. Pass the built-in's key. The clone keeps the built-in's fill manifest verbatim, so it fills identically, and its name gains a (copy) suffix when a template of that name already exists.",
                 access: "write",
                 flags: [
                   {
@@ -26113,6 +26383,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "skills", "create"],
                 capabilityId: "skills.create",
+                description:
+                  "Author an agent skill from text: name, description, instruction body, and an optional slash command. Team scope requires admin or owner, private scope is your own. A command must be lowercase letters, digits, hyphens, or underscores, must not be one of the reserved commands, and must be free in the organization, as must the skill name. Refused once the per-user or per-organization skill limit is reached. Use skills.upload or skills.import-url for a packaged skill instead.",
                 access: "write",
                 flags: [
                   {
@@ -26293,6 +26565,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "skills", "from-blueprint"],
                 capabilityId: "skills.from-blueprint",
+                description:
+                  "Create an editable draft skill from one of the bundled blueprints, a SKILL.md skeleton with placeholder resource files. The draft is installed disabled and under a fresh slug, so the same blueprint can be used more than once, and stays fully editable afterwards. Team scope requires admin or owner.",
                 access: "write",
                 flags: [
                   {
@@ -26358,6 +26632,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "skills", "generate-draft"],
                 capabilityId: "skills.generate-draft",
+                description:
+                  "Draft a skill bundle with the model: returns SKILL.md markdown plus up to eight companion files under references/, prompts/, or knowledge/. Pass intent, optionally examples, and, to revise an existing draft, previousDraft with previousResources and feedback. Nothing is stored: pass the result to skills.create and the resource endpoints to keep it. Consumes AI usage.",
                 access: "write",
                 flags: [
                   {
@@ -26455,6 +26731,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "skills", "get"],
                 capabilityId: "skills.get",
+                description:
+                  "Read one agent skill in full: its instruction body, scope, origin, version, license, compatibility, source URL, slash command, and every resource file with its content. A team skill can only be read here by an admin or owner and a private one only by its author, which is stricter than skills.list, where both are visible without their bodies.",
                 access: "read",
                 flags: [
                   {
@@ -26609,6 +26887,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "skills", "import-url"],
                 capabilityId: "skills.import-url",
+                description:
+                  "Fetch and install one agent skill from a URL pointing at a SKILL.md file or a skill package. It is stored with a url origin, so it stays editable afterwards. Team scope requires admin or owner. To pull several skills out of a repository, use skills.discover and then skills.import instead.",
                 access: "write",
                 flags: [
                   {
@@ -26663,6 +26943,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "skills", "list"],
                 capabilityId: "skills.list",
+                description:
+                  "List the agent skills visible to you, the organization's team skills plus your own private ones, enabled first and then by scope and name, with cursor pagination, alongside the deployment's built-in skills. Instruction bodies come back only for skills that carry a slash command; read one skill in full with skills.get. Also reports whether you may manage team skills.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -26708,6 +26990,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "skills", "list-commands"],
                 capabilityId: "skills.list-commands",
+                description:
+                  "List the enabled skills that carry a slash command, shaped for the chat composer's command menu: id, scope, name, description, command, and the full instruction body to insert on pick. Capped at 250 rows and not paginated; use skills.list for the whole catalogue.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -26725,6 +27009,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "skills", "resources-create"],
                 capabilityId: "skills.resources.create",
+                description:
+                  "Add one text file to an agent skill at a path such as references/checklist.md, taking its kind from the path unless you pass one. A path already used in the skill is a 409, a skill at its file limit is refused, and bundled skills cannot be edited. Team skills require admin or owner, private ones their author. Use skills.resources.upload for a DOCX or PDF whose text must be extracted first.",
                 access: "write",
                 flags: [
                   {
@@ -26890,6 +27176,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "skills", "resources-rename"],
                 capabilityId: "skills.resources.rename",
+                description:
+                  "Move one file of an agent skill to a new path, re-deriving its kind from that path and leaving the content untouched. A path identical to the old one, a path already used by another file in the same skill, and a bundled skill are all refused.",
                 access: "write",
                 flags: [
                   {
@@ -26965,6 +27253,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "skills", "resources-rewrite"],
                 capabilityId: "skills.resources.rewrite",
+                description:
+                  "Rewrite one file of an agent skill with the model, from a free-text instruction and the file's current content. Returns the proposed content without saving it: persist it with skills.resources.update. Consumes AI usage.",
                 access: "write",
                 flags: [
                   {
@@ -27040,6 +27330,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "skills", "resources-update"],
                 capabilityId: "skills.resources.update",
+                description:
+                  "Replace the content of one file of an agent skill, addressed by its path. The path and kind stay as they are; use skills.resources.rename to change them. Bundled skills are read-only, team skills require admin or owner, and private ones their author.",
                 access: "write",
                 flags: [
                   {
@@ -27114,6 +27406,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "skills", "seed"],
                 capabilityId: "skills.seed",
+                description:
+                  "Install the four default slash-command skills (summarize, risks, compare, draft) as private skills for the signed-in user in the active organization. Returns seeded false and writes nothing when that user already has any authored skill with a command in this organization, so defaults someone deleted are not put back.",
                 access: "write",
                 flags: [],
                 inputOnly: [],
@@ -27131,6 +27425,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "skills", "update"],
                 capabilityId: "skills.update",
+                description:
+                  "Change an agent skill: enable or disable it, or edit its name, description, instruction body, version, or slash command. Pass command as null to clear it; at least one field is required. Enabling and disabling works on any skill you may manage, but editing the content of a bundled skill is refused. A rename also moves the slug, and a name or command already taken in the organization is a 409.",
                 access: "write",
                 flags: [
                   {
@@ -27259,6 +27555,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "style-sets", "create-from-editor"],
                 capabilityId: "style-sets.create-from-editor",
+                description:
+                  "Create an organization style set from explicit editor settings applied to the built-in stella preset, with no DOCX involved. Returns the new style set's id, name, and updatedAt.",
                 access: "write",
                 flags: [
                   {
@@ -27586,6 +27884,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "style-sets", "download"],
                 capabilityId: "style-sets.download",
+                description:
+                  "Mint a short-lived download URL for one organization style set's stored DOCX package, recording the download in the audit trail. A style set that is unknown or already deleted is a 404.",
                 access: "read",
                 flags: [
                   {
@@ -27628,6 +27928,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "style-sets", "list"],
                 capabilityId: "style-sets.list",
+                description:
+                  "List the organization's style sets, most recently updated first, with cursor pagination; deleted ones are left out. Each item carries the name, file name, size in bytes, and timestamps, and the response also reports the maximum number of style sets the organization may hold.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -27674,6 +27976,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "style-sets", "read-editor"],
                 capabilityId: "style-sets.read-editor",
+                description:
+                  "Read one organization style set as editor settings: its name, updatedAt, and the style settings parsed out of the stored DOCX package. Pass that updatedAt back to style-sets.update-from-editor as expectedUpdatedAt so a concurrent edit is not silently overwritten.",
                 access: "read",
                 flags: [
                   {
@@ -27716,6 +28020,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "style-sets", "read-stella-editor"],
                 capabilityId: "style-sets.read-stella-editor",
+                description:
+                  "Read the built-in stella style preset as editor settings, the starting point for a new style set. Takes no arguments and reads no stored data.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -27734,6 +28040,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "style-sets", "update"],
                 capabilityId: "style-sets.update",
+                description:
+                  "Rename one organization style set; its export file name follows the new name. The stored style package is untouched, so use style-sets.replace or style-sets.update-from-editor to change the styles themselves.",
                 access: "write",
                 flags: [
                   {
@@ -27796,6 +28104,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "style-sets", "update-from-editor"],
                 capabilityId: "style-sets.update-from-editor",
+                description:
+                  "Rewrite one style set's package from explicit editor settings, using its current package as the base, and set its name at the same time. Pass expectedUpdatedAt from style-sets.read-editor so an edit made in the meantime is rejected instead of overwritten.",
                 access: "write",
                 flags: [
                   {
@@ -28119,6 +28429,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "tasks", "assignees-add"],
                 capabilityId: "tasks.assignees-add",
+                description:
+                  "Assign one member of the matter to a task, in a role that defaults to assignee. Repeating an assignment updates that user's role instead of duplicating it. Refused when the user is not a member of this matter and when the task is read-only. Remove an assignment with tasks.assignees-remove.",
                 access: "write",
                 flags: [
                   {
@@ -28283,6 +28595,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "tasks", "calendar"],
                 capabilityId: "tasks.calendar",
+                description:
+                  "Read a matter's tasks that fall inside a date-time window, shaped for a calendar. datePropertyIds chooses which date fields place an item, including the built-in created, updated, due, and start dates; endDatePropertyId supplies the end of a range. Filters and sorts follow the same contract as the table views.",
                 access: "read",
                 flags: [
                   {
@@ -28846,6 +29160,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "tasks", "create"],
                 capabilityId: "tasks.create",
+                description:
+                  "Create a task in the current matter: name plus optional parent, status, priority, due date, assignees, calendar fields for an agenda item (kind, start, end, occurrence, reminder, all-day, time zone, location, meeting URL, attendees, recurrence), list placement, and, where the deployment enables governed work, its owner and target and deadline dates. Change one afterwards with tasks.update.",
                 access: "write",
                 flags: [
                   {
@@ -29413,6 +29729,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "tasks", "entity-links-create"],
                 capabilityId: "tasks.entity-links-create",
+                description:
+                  "Link a task to another document, folder, or task, with a link type that defaults to related. Both ends must be in this matter, an entity cannot be linked to itself, and a read-only entity is refused. Remove the link with tasks.entity-links-delete.",
                 access: "write",
                 flags: [
                   {
@@ -29565,6 +29883,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "tasks", "entity-links-read"],
                 capabilityId: "tasks.entity-links-read",
+                description:
+                  "List every link one task has, in both directions, each with the entity at the other end and its kind. Change them with tasks.entity-links-create and tasks.entity-links-delete.",
                 access: "read",
                 flags: [
                   {
@@ -29623,6 +29943,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "tasks", "get"],
                 capabilityId: "tasks.get",
+                description:
+                  "Read one task in full: its own fields, its assignees with their users, its governed-work ownership with the most recent lifecycle events, its child tasks with their assignees, its links in both directions, and who created it.",
                 access: "read",
                 flags: [
                   {
@@ -29681,6 +30003,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "tasks", "update"],
                 capabilityId: "tasks.update",
+                description:
+                  "Change one task in a matter: name, status, priority, due date, list item type, sort order, or the calendar fields of an agenda item (kind, start, end, occurrence, reminder, all-day, time zone, location, meeting URL, availability, sensitivity, organizer, attendees, recurrence). Only the fields you pass are written and a read-only task is refused. Where governed work is enabled a status change also records a lifecycle event, and workflowReason carries the explanation stored with it.",
                 access: "write",
                 flags: [
                   {
@@ -30136,6 +30460,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "template-recipes", "create"],
                 capabilityId: "template-recipes.create",
+                description:
+                  "Create a template recipe, a named reusable block of pre-configured template fields, from a name, an optional description, and a definition object that is structurally validated before it is stored. Refused once the organization holds its maximum number of recipes.",
                 access: "write",
                 flags: [
                   {
@@ -30234,6 +30560,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "template-recipes", "list"],
                 capabilityId: "template-recipes.list",
+                description:
+                  "List the organization's template recipes alphabetically by name, each with its id, description, and full definition. Recipes are capped per organization, so the whole set comes back in one response without a cursor.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -30257,6 +30585,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "binding-catalog"],
                 capabilityId: "templates.binding-catalog",
+                description:
+                  "List the data-binding options a template field can be bound to: every (source, field) pair in the binding taxonomy with its label key. The catalog is static and identical for every matter in the organization; it takes no arguments and reads no stored data.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -30275,6 +30605,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "categories-create"],
                 capabilityId: "templates.categories-create",
+                description:
+                  "Create a category in the organization's template category tree, optionally under a parent category.",
                 access: "write",
                 flags: [
                   {
@@ -30388,6 +30720,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "categories-list"],
                 capabilityId: "templates.categories-list",
+                description:
+                  "List the organization's template categories with their parents, descriptions, and sort order, enough to render the whole tree. The set is bounded per organization and returned whole, without a cursor.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -30406,6 +30740,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "categories-update"],
                 capabilityId: "templates.categories-update",
+                description:
+                  "Rename or re-describe one template category, move it under a different parent (or to the root by passing null), or change its sort order. Only the fields you pass are written, and a move that would make the tree circular is refused.",
                 access: "write",
                 flags: [
                   {
@@ -30512,6 +30848,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "check"],
                 capabilityId: "templates.check",
+                description:
+                  "Run the authoring checks over one stored template and return their findings: broken marker structure and invalid markers, markers with no manifest field and manifest fields with no marker, clause slots with no linked clause and links with no slot, fields missing a label or input type, selects with no options, and formulas or conditions referring to unknown paths. Read-only: it reports, it never repairs.",
                 access: "read",
                 flags: [
                   {
@@ -30554,6 +30892,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "clause-slots"],
                 capabilityId: "templates.clause-slots",
+                description:
+                  "List the clause slots of one template together with the resolved body of the clause linked to each, using the same resolution the fill path runs, so a fill form can show what will be inserted and adjust it for that fill. Slots with no linked clause are left out; those fill as unmatched placeholders.",
                 access: "read",
                 flags: [
                   {
@@ -30596,6 +30936,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "clauses-link"],
                 capabilityId: "templates.clauses-link",
+                description:
+                  "Link a clause from the library into a template, optionally pinning one of its variants and naming the clause slot it fills. The link records the clause's version as it is now, so later edits to the clause do not reach the template until it is synced. Refused once the template holds its maximum number of clause links.",
                 access: "write",
                 flags: [
                   {
@@ -30689,6 +31031,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "clauses-list"],
                 capabilityId: "templates.clauses-list",
+                description:
+                  "List the clauses linked to one template: each link's id, clause, pinned variant and version, slot name, sort order, and whether the pinned version has fallen behind the clause's current one.",
                 access: "read",
                 flags: [
                   {
@@ -30731,6 +31075,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "clauses-slot-update"],
                 capabilityId: "templates.clauses-slot-update",
+                description:
+                  "Assign one clause link of a template to a named clause slot, or clear the assignment by passing null. The clause, its pinned version, and its variant are untouched: only which slot the link fills changes.",
                 access: "write",
                 flags: [
                   {
@@ -30807,6 +31153,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "clauses-sync"],
                 capabilityId: "templates.clauses-sync",
+                description:
+                  "Re-pin one clause link of a template to its clause's current version, so the next fill inserts the newest wording. The link's slot and variant stay as they are. Use templates.clauses-sync-all to do this for every outdated link at once.",
                 access: "write",
                 flags: [
                   {
@@ -30865,6 +31213,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "clauses-sync-all"],
                 capabilityId: "templates.clauses-sync-all",
+                description:
+                  "Re-pin every outdated clause link of one template to its clause's current version in a single transaction, auditing each link as if it had been synced on its own. Links already on the current version are left untouched.",
                 access: "write",
                 flags: [
                   {
@@ -30907,6 +31257,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "clauses-unlink"],
                 capabilityId: "templates.clauses-unlink",
+                description:
+                  "Remove one clause link from a template, with its pinned version, variant, and slot assignment. Reversible: nothing leaves the clause library and the same clause can be linked again with templates.clauses-link. The template's own document is not rewritten, so the slot marker stays in it.",
                 access: "write",
                 flags: [
                   {
@@ -30965,6 +31317,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "create-blank"],
                 capabilityId: "templates.create-blank",
+                description:
+                  "Create an empty template from the stella base DOCX, with a name and an optional category. It carries no fields yet: add markers by editing the document and storing it with templates.save-document. Use templates.create to upload a DOCX that already has {{field}} markers.",
                 access: "write",
                 flags: [
                   {
@@ -31025,6 +31379,8 @@ export const generatedRouteMap: RouteNode = {
                   "create-from-style-set",
                 ],
                 capabilityId: "templates.create-from-style-set",
+                description:
+                  "Create an empty template whose document is built from one of the organization's style sets, so it starts in that house style, with a name and an optional category. Like templates.create-blank it carries no fields until a document is saved onto it.",
                 access: "write",
                 flags: [
                   {
@@ -31141,6 +31497,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "fill-preview"],
                 capabilityId: "templates.fill-preview",
+                description:
+                  "Run the full fill of a stored template with the given values and return text instead of a file: the filled paragraphs, the character count, placeholders no value matched, values no marker used, and any structural errors. It does the same work as a real fill, AI-drafted fields included, so it is not a cheap dry run. Use templates.fill-by-id to download the document.",
                 access: "read",
                 flags: [
                   {
@@ -31201,6 +31559,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "fill-to-workspace"],
                 capabilityId: "templates.fill-to-workspace",
+                description:
+                  "Fill a stored template and save the result as a new document in a matter rather than returning bytes. Same values and clauseOverrides contract as templates.fill-by-id, plus an optional document name (the .docx extension is appended when missing) and a parent folder; the created entity is returned.",
                 access: "write",
                 flags: [
                   {
@@ -31417,6 +31777,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "get"],
                 capabilityId: "templates.get",
+                description:
+                  "Read one template's record: name, file name, size, manifest, field count, tags, languages, whenToUse and whenNotToUse guidance, usage counters, and a short-lived presigned URL for its current DOCX. The download grant is recorded in the audit trail.",
                 access: "read",
                 flags: [
                   {
@@ -31522,6 +31884,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "lookup-preview"],
                 capabilityId: "templates.lookup-preview",
+                description:
+                  "Preview a registry-lookup field: resolve a company number against the chosen public register and render the field's format string over the hit, returning the text with its bold and italic markers left in place for the client to interpret. Refused when the number is not plausible for that register or the register is disabled for the organization, and a 404 when the company is not found. Outcomes are cached per register and number, and no model is involved.",
                 access: "read",
                 flags: [
                   {
@@ -31612,6 +31976,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "prefill"],
                 capabilityId: "templates.prefill",
+                description:
+                  "Suggest values for one stored template's fields from source material: an uploaded DOCX or PDF, pasted text, or the stored extracted text of up to five documents picked from a matter, in any combination. Returns a suggestion per field with the snippet it came from; nothing is written to the template and no document is filled. Pass timezone so dates are anchored to your calendar day rather than the server's. Consumes AI usage.",
                 access: "write",
                 flags: [
                   {
@@ -31699,6 +32065,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "preview"],
                 capabilityId: "templates.preview",
+                description:
+                  "Read one stored template as text for display: its paragraphs tagged with header, body, or footer origin, the character count, the structural marker errors positioned against those paragraphs, and the names of its clause slots.",
                 access: "read",
                 flags: [
                   {
@@ -31741,6 +32109,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "suggest-fields"],
                 capabilityId: "templates.suggest-fields",
+                description:
+                  "Ask the model which literal values in a slice of template text (a whole document or just a selection) should become fillable fields, with optional extra instructions. Returns raw suggestions of literal text, proposed field path, and input type for a human to accept or reject; unlike templates.prepare it never rewrites the document. Consumes AI usage.",
                 access: "write",
                 flags: [
                   {
@@ -31793,6 +32163,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "update"],
                 capabilityId: "templates.update",
+                description:
+                  "Change a template's record: name, category, tags, languages, whenToUse and whenNotToUse guidance, or the embedded manifest supplied as a JSON string. Only the fields you pass are written. The stored DOCX itself is untouched: store a new document body with templates.save-document.",
                 access: "write",
                 flags: [
                   {
@@ -31944,6 +32316,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "versions-diff"],
                 capabilityId: "templates.versions-diff",
+                description:
+                  "Return a plain-text, line-level diff of one template version against its predecessor; the first version is diffed against an empty document. Both texts are resolved server-side from the ids, and an empty segment list means nothing changed.",
                 access: "read",
                 flags: [
                   {
@@ -32002,6 +32376,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "versions-get"],
                 capabilityId: "templates.versions-get",
+                description:
+                  "Read one stored template version: its number, field count, creation time, and a short-lived presigned URL to download that version's DOCX. The download grant is recorded in the audit trail.",
                 access: "read",
                 flags: [
                   {
@@ -32060,6 +32436,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "versions-list"],
                 capabilityId: "templates.versions-list",
+                description:
+                  "List one template's versions, newest first, with cursor pagination. Each entry carries its version number, field count, creation time, and the author's name and image, which are blank for a version saved by someone who has left the organization.",
                 access: "read",
                 flags: [
                   {
@@ -32131,6 +32509,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "versions-summarize"],
                 capabilityId: "templates.versions-summarize",
+                description:
+                  "Summarize in prose what changed in one template version compared with its predecessor, over the same diff templates.versions-diff returns. Returns summary null when the two are identical, skipping the model call. Consumes AI usage.",
                 access: "write",
                 flags: [
                   {
@@ -32261,6 +32641,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "time-entries", "batch-update"],
                 capabilityId: "time-entries.batch-update",
+                description:
+                  "Apply one action to up to 200 time entries in a matter at once: approve, revert_to_draft, mark_billable, or mark_non_billable. Entries that are not in the action's starting state are skipped and only the number of changed rows is returned. Approval is refused while any selected entry has a running timer or a billable entry has no rate; mark_billable re-resolves each entry's rate and is refused when one of them has no effective rate.",
                 access: "write",
                 flags: [
                   {
@@ -32597,6 +32979,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "time-entries", "export-csv"],
                 capabilityId: "time-entries.export-csv",
+                description:
+                  "Export a matter's time entries as CSV text, one row per entry with date, timekeeper name, work item, minutes, rate, amount, billable flag, status, task and activity codes, and narratives. Filter by date-worked range, status, and work item. Unlike the LEDES export this includes non-billable and written-off entries; the row count is capped.",
                 access: "read",
                 flags: [
                   {
@@ -32697,6 +33081,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "time-entries", "export-ledes"],
                 capabilityId: "time-entries.export-ledes",
+                description:
+                  "Export a matter's time entries as a LEDES 1998B e-billing file. Only billable, charged, not-written-off entries are included, so the selection is narrower than the CSV export of the same filters. Refused when an included entry has no effective rate, or when the selection spans more than one currency, which the format cannot represent.",
                 access: "read",
                 flags: [
                   {
@@ -32797,6 +33183,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "time-entries", "get"],
                 capabilityId: "time-entries.get",
+                description:
+                  "Read one time entry in a matter by id, with its minutes, rate, currency, narratives, billing status, source, task and activity codes, timer timestamps, and the timekeeper's name. A caller without time-entry approval access can only read their own entries; another user's entry is reported as not found.",
                 access: "read",
                 flags: [
                   {
@@ -33068,6 +33456,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "time-entries", "split"],
                 capabilityId: "time-entries.split",
+                description:
+                  "Split one time entry across several work items by percentage, between 2 and 10 parts totalling 100. The original entry is deleted and replaced by new entries that share a splitGroupId and inherit its date, rate, narrative, codes, and status, with the minutes apportioned and re-rounded to the billing increment. A billed or written-off entry, and a duration too short to divide, are refused.",
                 access: "write",
                 flags: [
                   {
@@ -33251,6 +33641,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "time-entries", "timer-start"],
                 capabilityId: "time-entries.timer-start",
+                description:
+                  "Start a running timer for the signed-in user in the current matter, creating a draft time entry dated today in the timezoneId you pass and optionally attached to a work item. The user's effective rate is resolved at start and an entry with no resolvable rate is recorded as non-billable. Refused when the user already has a running timer.",
                 access: "write",
                 flags: [
                   {
@@ -33337,6 +33729,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "time-entries", "timer-stop"],
                 capabilityId: "time-entries.timer-stop",
+                description:
+                  "Stop the signed-in user's running timer in the current matter, writing the elapsed minutes onto its draft time entry and rounding the billed minutes up to the billing increment. Fails when that user has no running timer in this matter.",
                 access: "write",
                 flags: [
                   {
@@ -33375,6 +33769,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "time-entries", "update"],
                 capabilityId: "time-entries.update",
+                description:
+                  "Change one time entry's date worked, duration, narratives, billable and no-charge flags, work item, or task and activity codes. Editing someone else's entry, or any entry past draft, requires time-entry approval access, and billed or written-off entries are always refused. Making an entry billable or moving its date re-resolves the rate and fails when none applies. The write is conditional on the entry being unchanged since it was read, so a concurrent edit returns a conflict instead of overwriting.",
                 access: "write",
                 flags: [
                   {
@@ -33948,6 +34344,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "view-templates", "create"],
                 capabilityId: "view-templates.create",
+                description:
+                  "Save a view layout as a personal view template, the blueprint used to create views in other matters. Duplicate sorts and multiple kind filters are refused, references to columns that do not exist are dropped, and the columns the layout needs are captured so they can be recreated wherever the template is applied. Names are unique per user, so a repeat name is a 409, and the per-user template limit applies.",
                 access: "write",
                 flags: [
                   {
@@ -34885,6 +35283,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "view-templates", "list"],
                 capabilityId: "view-templates.list",
+                description:
+                  "List your own saved view templates, newest first, each with its name, layout, layout type, and the columns that layout needs. Personal: templates saved by other members are never returned.",
                 access: "read",
                 flags: [
                   {
@@ -34928,6 +35328,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "views", "convert"],
                 capabilityId: "views.convert",
+                description:
+                  "Convert one view of a matter to another layout type (table, filesystem, kanban, calendar, or timeline), carrying over as much of its filters and sorts as the target layout supports. Converting to overview, or to the layout the view already has, is refused. Use views.update to change a view's name or the details of its current layout.",
                 access: "write",
                 flags: [
                   {
@@ -35021,6 +35423,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "views", "create"],
                 capabilityId: "views.create",
+                description:
+                  "Add a view (a tab) to a matter with a name and a layout. Duplicate sorts and multiple kind filters are refused, the columns the layout needs are created when your role may create columns, and references to columns that do not exist are dropped. A matter may hold only one overview view, and a fixed maximum of views in total.",
                 access: "write",
                 flags: [
                   {
@@ -36220,6 +36624,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "views", "list"],
                 capabilityId: "views.list",
+                description:
+                  "List a matter's views in tab order, each with its layout, position, and creation time. Default view names come back localized for the request's language, and references to deleted columns are stripped out of the layouts. A pure read: default views are seeded when the matter is created, so listing never mints one.",
                 access: "read",
                 flags: [
                   {
@@ -36258,6 +36664,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "views", "reorder"],
                 capabilityId: "views.reorder",
+                description:
+                  "Set the tab order of a matter's views. viewIds must name every view of the matter exactly once in the order you want; a partial list, an unknown id, or a duplicate is refused. Only positions change.",
                 access: "write",
                 flags: [
                   {
@@ -36323,6 +36731,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "views", "update"],
                 capabilityId: "views.update",
+                description:
+                  "Rename one view of a matter or replace its layout. The layout type cannot change here, use views.convert for that; duplicate sorts and multiple kind filters are refused, columns the new layout needs are created when your role may create columns, and references to deleted columns are dropped.",
                 access: "write",
                 flags: [
                   {
@@ -37913,6 +38323,8 @@ export const generatedRouteMap: RouteNode = {
                   "anonymization-allowlist-create",
                 ],
                 capabilityId: "workspaces.anonymization-allowlist.create",
+                description:
+                  "Add a never-mask entry to a matter's anonymization allowlist, so a term that detection finds is left in the clear. scope workspace covers the whole matter; scope document covers one document and needs an entityId belonging to this matter. Only matter-scoped entries can be created here, never organization-wide ones. A term already listed is a no-op, until the matter reaches its allowlist limit: the cap is checked before the duplicate is detected, so replaying an existing entry is refused there rather than reported as a no-op.",
                 access: "write",
                 flags: [
                   {
@@ -38084,6 +38496,8 @@ export const generatedRouteMap: RouteNode = {
                   "anonymization-allowlist-list",
                 ],
                 capabilityId: "workspaces.anonymization-allowlist.list",
+                description:
+                  "Read the never-mask entries that apply in a matter: the organization-wide ones plus the matter's own and, when entityId is given, that document's own, merged into one list so a detection run can be filtered in a single pass.",
                 access: "read",
                 flags: [
                   {
@@ -38147,6 +38561,8 @@ export const generatedRouteMap: RouteNode = {
                   "anonymization-terms-create",
                 ],
                 capabilityId: "workspaces.anonymization-terms.create",
+                description:
+                  "Add always-mask terms to a matter's anonymization gazetteer, each with a canonical form, a label, and optional spelling variants. Idempotent per canonical form: a term the matter already holds is left as it is and not counted as inserted. Refused when the batch would push the matter past its term limit. Organization-wide terms are managed separately.",
                 access: "write",
                 flags: [
                   {
@@ -38289,6 +38705,8 @@ export const generatedRouteMap: RouteNode = {
                   "anonymization-terms-list",
                 ],
                 capabilityId: "workspaces.anonymization-terms.list",
+                description:
+                  "Read a matter's own always-mask terms with their canonical form, label, variants, and enabled flag. Organization-wide terms are not included; read those with organization-settings.read-anonymization-blacklist.",
                 access: "read",
                 flags: [
                   {
@@ -38327,6 +38745,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "workspaces", "archive"],
                 capabilityId: "workspaces.archive",
+                description:
+                  "Archive a matter: it stops being writable and is cleared from members' last-visited matter. Reversible with workspaces.unarchive, and nothing is deleted. Refused while document processing is running in the matter or any timer is still running there.",
                 access: "write",
                 flags: [
                   {
@@ -38365,6 +38785,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "workspaces", "cell-retry"],
                 capabilityId: "workspaces.cell-retry",
+                description:
+                  "Re-run the AI extraction for one cell, meaning one document's value for one AI column, in a matter. Refused when the property is not AI-extracted, when the document is read-only, when the cell is locked, and while another workflow is already running in the matter.",
                 access: "write",
                 flags: [
                   {
@@ -38591,6 +39013,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "workspaces", "duplicate"],
                 capabilityId: "workspaces.duplicate",
+                description:
+                  "Copy a matter into a new one: its columns with their dependencies, views, members, party contacts, client, billing reference, colour, and lead. With includeContent true its documents, folders, tasks, and their stored files are copied as well; with false the new matter starts empty. The copy takes the organization's next matter number and its name gains a numeric suffix when earlier copies exist. Refused once the organization is at its matter limit.",
                 access: "write",
                 flags: [
                   {
@@ -38670,6 +39094,8 @@ export const generatedRouteMap: RouteNode = {
                   "read-justifications",
                 ],
                 capabilityId: "workspaces.read-justifications",
+                description:
+                  "Read the stored justifications for the current versions of up to one page of documents in a matter: per extracted cell, the explanation the model gave, the bounding boxes on the source file, and the file fields those boxes belong to.",
                 access: "read",
                 flags: [
                   {
@@ -38739,6 +39165,8 @@ export const generatedRouteMap: RouteNode = {
                   "read-workflow-status",
                 ],
                 capabilityId: "workspaces.read-workflow-status",
+                description:
+                  "Report whether an extraction workflow is running in a matter and describe its most recent run: scope, status, how many targets it covers and how many are done, error code, and start and finish times.",
                 access: "read",
                 flags: [
                   {
@@ -38781,6 +39209,8 @@ export const generatedRouteMap: RouteNode = {
                   "read-workflow-target-count",
                 ],
                 capabilityId: "workspaces.read-workflow-target-count",
+                description:
+                  "Count the documents an extraction workflow would process in a matter, optionally narrowed to a set of entity ids. Use it before workspaces.workflow-start to size the run.",
                 access: "read",
                 flags: [
                   {
@@ -38843,6 +39273,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "workspaces", "unarchive"],
                 capabilityId: "workspaces.unarchive",
+                description:
+                  "Return an archived matter to active so it is writable again. The counterpart of workspaces.archive: a matter that is not archived is left exactly as it is.",
                 access: "write",
                 flags: [
                   {
@@ -38881,6 +39313,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "workspaces", "update"],
                 capabilityId: "workspaces.update",
+                description:
+                  "Change a matter: its name, reference, billing reference, colour, or lead (who must already be a member of it). Only the fields you pass are written. Attaching a client to a personal matter is a one-way promotion and must go through promote, which takes the client contact and optionally the members to share it with at the same time; a bare clientId on a personal matter, and any attempt to re-promote a matter that already has a client, are refused.",
                 access: "write",
                 flags: [
                   {
@@ -39030,6 +39464,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "workspaces", "workflow-start"],
                 capabilityId: "workspaces.workflow-start",
+                description:
+                  "Start an extraction workflow in a matter, filling the AI columns of the documents that need it. Narrow it with entityIds and propertyIds, set the processing order with entityIdsOrder, and choose serviceTier standard or flex, where flex is the cheaper deferred tier and is refused when the configured provider does not offer it. Returns the run's status, including already-running when one is in flight.",
                 access: "write",
                 flags: [
                   {
@@ -39341,6 +39777,8 @@ export const generatedRouteMap: RouteNode = {
                   "workspace-members-add",
                 ],
                 capabilityId: "workspaces.workspace-members-add",
+                description:
+                  "Add one member of the organization to a matter, granting them access to it. A user who is already a member is a 409, and the call is refused once the matter holds its maximum number of members. Revoke access with workspaces.workspace-members-remove.",
                 access: "write",
                 flags: [
                   {

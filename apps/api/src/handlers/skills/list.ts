@@ -33,6 +33,13 @@ const listSkillsQuerySchema = t.Object({
 });
 
 const config = {
+  description:
+    "List the agent skills visible to you, the organization's team skills " +
+    "plus your own private ones, enabled first and then by scope and name, " +
+    "with cursor pagination, alongside the deployment's built-in skills. " +
+    "Instruction bodies come back only for skills that carry a slash " +
+    "command; read one skill in full with skills.get. Also reports whether " +
+    "you may manage team skills.",
   permissions: { chat: ["create"] },
   access: "read",
   mcp: { type: "capability", reason: "agent_tool_authoring" },

@@ -5,6 +5,11 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { buildBindingCatalog } from "@/api/lib/template-binding/binding-catalog";
 
 const config = {
+  description:
+    "List the data-binding options a template field can be bound to: every " +
+    "(source, field) pair in the binding taxonomy with its label key. The " +
+    "catalog is static and identical for every matter in the organization; " +
+    "it takes no arguments and reads no stored data.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   access: "read",

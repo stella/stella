@@ -18,6 +18,13 @@ const updateRateTableBodySchema = t.Object({
 
 const updateRateTable = createSafeHandler(
   {
+    description:
+      "Rename a rate table, change its currency, or make it the matter's " +
+      "default, which clears the flag on the previous default. Unsetting the " +
+      "flag on the only default table is refused, so a matter that has a " +
+      "default keeps one; a matter whose tables were all created without the " +
+      "flag has none, and rate resolution handles that. Rates already " +
+      "recorded on time entries are not rewritten.",
     permissions: { rate: ["update"] },
     mcp: { type: "capability", reason: "billing_admin" },
     body: updateRateTableBodySchema,

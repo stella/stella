@@ -1241,6 +1241,14 @@ const uploadEntityHandler = async function* ({
 };
 
 const config = {
+  description:
+    "Upload a file as a new document in the current matter over a multipart " +
+    "request: the file, a name, and the propertyId of the matter's file " +
+    "column. The bytes are scanned before they are stored and a rejected " +
+    "file fails the call; text extraction, PDF and thumbnail derivatives, " +
+    "and any upload-triggered flows start afterwards. An agent surface " +
+    "cannot send multipart: use uploads.create with purpose entity_create " +
+    "and then uploads.update.",
   permissions: { entity: ["create"] },
   mcp: { type: "capability", reason: "document_processing" },
   transport: {

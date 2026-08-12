@@ -12,6 +12,10 @@ import { LIMITS } from "@/api/lib/limits";
 const paramsSchema = t.Object({ listId: tSafeId("legalList") });
 
 const config = {
+  description:
+    "Read one list with its sections in order, its columns (each bound " +
+    "property with its position and required flag), and how many items it " +
+    "holds. The items themselves come from lists.items.list.",
   permissions: { workspace: ["read"] },
   access: "read",
   mcp: { type: "capability", reason: "workspace_schema" },

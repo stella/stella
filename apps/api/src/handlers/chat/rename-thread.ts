@@ -14,6 +14,11 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 
 const config = {
+  description:
+    "Set the title of one of your own chat threads. The new title is marked " +
+    "as user-chosen, so automatic title generation can never overwrite it " +
+    "afterwards. A thread that does not exist in the requested scope is a " +
+    "404: this never creates one.",
   permissions: { chat: ["update"] },
   mcp: { type: "capability", reason: "chat_thread_ui" },
   params: t.Object({ threadId: tSafeId("chatThread") }),

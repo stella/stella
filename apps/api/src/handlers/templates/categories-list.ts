@@ -7,6 +7,10 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { listTemplateCategoriesHandler } from "./categories";
 
 const config = {
+  description:
+    "List the organization's template categories with their parents, " +
+    "descriptions, and sort order, enough to render the whole tree. The set " +
+    "is bounded per organization and returned whole, without a cursor.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   access: "read",

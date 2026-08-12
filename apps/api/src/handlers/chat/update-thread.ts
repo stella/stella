@@ -14,6 +14,11 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  description:
+    "Turn web search on or off for one of your own chat threads. Unlike " +
+    "chat.rename-thread this is an upsert: when no thread exists under that " +
+    "id it is created as an empty placeholder carrying the flag, so a draft " +
+    "can record the setting before its first message is sent.",
   permissions: { chat: ["update"] },
   mcp: { type: "capability", reason: "assistant_chat" },
   params: t.Object({ threadId: tSafeId("chatThread") }),

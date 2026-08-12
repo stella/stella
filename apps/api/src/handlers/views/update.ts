@@ -22,6 +22,12 @@ import {
 } from "@/api/lib/views/utils";
 
 const config = {
+  description:
+    "Rename one view of a matter or replace its layout. The layout type " +
+    "cannot change here, use views.convert for that; duplicate sorts and " +
+    "multiple kind filters are refused, columns the new layout needs are " +
+    "created when your role may create columns, and references to deleted " +
+    "columns are dropped.",
   permissions: { view: ["update"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   params: workspaceParams({ viewId: tSafeId("workspaceView") }),

@@ -31,6 +31,13 @@ const createViewTemplateBodySchema = t.Object(
 );
 
 const config = {
+  description:
+    "Save a view layout as a personal view template, the blueprint used to " +
+    "create views in other matters. Duplicate sorts and multiple kind " +
+    "filters are refused, references to columns that do not exist are " +
+    "dropped, and the columns the layout needs are captured so they can be " +
+    "recreated wherever the template is applied. Names are unique per user, " +
+    "so a repeat name is a 409, and the per-user template limit applies.",
   permissions: { view: ["create"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   body: createViewTemplateBodySchema,

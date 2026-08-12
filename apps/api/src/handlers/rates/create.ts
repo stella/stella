@@ -18,6 +18,12 @@ const createRateTableBodySchema = t.Object({
 
 const createRateTable = createSafeHandler(
   {
+    description:
+      "Create a rate table, a named set of hourly rates in a single " +
+      "currency, in a matter. Pass isDefault to make it the matter's " +
+      "default, which clears the flag on the previous default; matters have " +
+      "a fixed cap on how many rate tables they may hold. Add the rates " +
+      "themselves with rates.entries-create.",
     permissions: { rate: ["create"] },
     mcp: { type: "capability", reason: "billing_admin" },
     body: createRateTableBodySchema,

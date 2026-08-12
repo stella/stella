@@ -22,6 +22,10 @@ const bodySchema = t.Object({
   note: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
 });
 const config = {
+  description:
+    "Record a review decision on one list item, with an optional note. The " +
+    "item's review status becomes that decision and the decision is appended " +
+    "to the item's review history; an unrecognized decision is refused.",
   permissions: { entity: ["update"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   body: bodySchema,

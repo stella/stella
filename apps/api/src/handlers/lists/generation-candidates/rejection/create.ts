@@ -18,6 +18,11 @@ const bodySchema = t.Object({
   candidateId: tSafeId("legalListGenerationCandidate"),
 });
 const config = {
+  description:
+    "Reject one pending candidate of a generation run so it is never turned " +
+    "into a list item. Only a pending candidate can be rejected; the run " +
+    "flips to committed once nothing is left pending. Nothing is deleted: " +
+    "the candidate stays in the run with status rejected.",
   permissions: { entity: ["create"] },
   mcp: { type: "capability", reason: "workflow_orchestration" },
   body: bodySchema,

@@ -46,6 +46,11 @@ const readEntitiesWindowBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Read a window of a matter's documents, folders, and tasks with the same " +
+    "filters, sorts, search, and field selection as entities.list, but with " +
+    "the page bounds the virtualized table scrolls by (200 rows by default). " +
+    "Prefer entities.list unless you are filling a table viewport.",
   permissions: { workspace: ["read"] },
   mcp: { type: "covered", by: "read_content_across_matters" },
   access: "read",

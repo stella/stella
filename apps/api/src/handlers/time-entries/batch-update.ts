@@ -99,6 +99,14 @@ const batchChangesFor = (
 
 const batchUpdate = createSafeHandler(
   {
+    description:
+      "Apply one action to up to 200 time entries in a matter at once: " +
+      "approve, revert_to_draft, mark_billable, or mark_non_billable. " +
+      "Entries that are not in the action's starting state are skipped and " +
+      "only the number of changed rows is returned. Approval is refused " +
+      "while any selected entry has a running timer or a billable entry has " +
+      "no rate; mark_billable re-resolves each entry's rate and is refused " +
+      "when one of them has no effective rate.",
     permissions: { timeEntry: ["approve"] },
     mcp: { type: "capability", reason: "billing_admin" },
     access: "write",

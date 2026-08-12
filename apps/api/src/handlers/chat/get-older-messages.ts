@@ -15,6 +15,12 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  description:
+    "Page backwards through one of your own chat threads using the " +
+    "olderCursor a previous read returned. Returns only the message page and " +
+    "the next cursor, without the thread settings and context estimate that " +
+    "chat.get-messages carries. The thread must be yours and the workspaceId " +
+    "scope must match the one it was created in.",
   permissions: { chat: ["create"] },
   access: "read",
   mcp: { type: "capability", reason: "assistant_chat" },

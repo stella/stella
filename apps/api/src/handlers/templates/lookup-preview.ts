@@ -22,6 +22,14 @@ const lookupPreviewBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Preview a registry-lookup field: resolve a company number against the " +
+    "chosen public register and render the field's format string over the " +
+    "hit, returning the text with its bold and italic markers left in place " +
+    "for the client to interpret. Refused when the number is not plausible " +
+    "for that register or the register is disabled for the organization, and " +
+    "a 404 when the company is not found. Outcomes are cached per register " +
+    "and number, and no model is involved.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   access: "read",

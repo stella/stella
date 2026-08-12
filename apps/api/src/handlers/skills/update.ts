@@ -47,6 +47,13 @@ const updateSkillBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Change an agent skill: enable or disable it, or edit its name, " +
+    "description, instruction body, version, or slash command. Pass command " +
+    "as null to clear it; at least one field is required. Enabling and " +
+    "disabling works on any skill you may manage, but editing the content of " +
+    "a bundled skill is refused. A rename also moves the slug, and a name or " +
+    "command already taken in the organization is a 409.",
   permissions: { agentSkill: ["update"] },
   mcp: { type: "capability", reason: "agent_tool_authoring" },
   params: updateSkillParamsSchema,
