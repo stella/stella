@@ -17,6 +17,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createFileKey } from "@/api/lib/files/utils";
+import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { getS3, readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
@@ -28,7 +29,7 @@ export const FOLIO_COLLAB_TOKEN_TTL_MS = 60 * 60 * 1000;
 export const FOLIO_COLLAB_SESSION_MAX_LIFETIME_MS = 8 * 60 * 60 * 1000;
 
 const FOLIO_COLLAB_TOKEN_PART_LENGTH = 32;
-export const FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE = "application/octet-stream";
+export { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE };
 /**
  * Yjs collaborative-edit snapshots are deltas over the base DOCX,
  * not the document itself. 10 MB comfortably covers extended

@@ -207,7 +207,15 @@ export const entityDeletionCleanupRequests = p.pgTable(
   {
     id: pUuid<"entityDeletionCleanupRequest">().primaryKey(),
     organizationId: safeOrganizationId("organization_id").notNull(),
-    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    /**
+     * The matter whose storage this page erases, or null for keys the
+     * organization owns directly (`{org}/templates/…`, `{org}/style-sets/…`,
+     * and the user-prefixed chat objects, none of which sit under a matter).
+     * Organization deletion records both kinds, so the column states which
+     * scope a page came from rather than forcing a matter onto keys that
+     * never had one.
+     */
+    workspaceId: safeWorkspaceId("workspace_id"),
     s3Keys: p.text("s3_keys").array().notNull(),
     status: p
       .text("status", { enum: ENTITY_DELETION_CLEANUP_STATUSES })
@@ -250,7 +258,7 @@ export const entityDeletionCleanupRequests = p.pgTable(
     p.pgPolicy("entity_deletion_cleanup_insert", {
       for: "insert",
       to: stella,
-      withCheck: sql`${workspaceCheck} AND ${organizationCheck}`,
+      withCheck: sql`(workspace_id IS NULL OR ${workspaceCheck}) AND ${organizationCheck}`,
     }),
   ],
 );
