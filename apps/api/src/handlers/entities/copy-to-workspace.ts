@@ -39,7 +39,11 @@ import { LIMITS } from "@/api/lib/limits";
 import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/lib/properties/create-schema";
 import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtime";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
-import { processExtraction } from "@/api/lib/search/process-extraction";
+import {
+  processExtraction,
+  SEARCH_INDEX_OWNER,
+} from "@/api/lib/search/process-extraction";
+import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
 const copyToWorkspaceBodySchema = t.Object({
   entityId: tSafeId("entity"),
@@ -285,11 +289,17 @@ const copyToWorkspaceHandler = async function* ({
           currentVersion: {
             columns: { id: true },
             with: {
+              // Ascending field id is ascending creation order, the order
+              // `findExtractionFileField` requires, so the copy resolves the
+              // same extraction source as the entity it came from. At most
+              // one field per property bounds the read.
               fields: {
                 columns: {
                   propertyId: true,
                   content: true,
                 },
+                orderBy: { id: "asc" },
+                limit: LIMITS.propertiesCount,
               },
             },
           },
@@ -336,6 +346,8 @@ const copyToWorkspaceHandler = async function* ({
                     propertyId: true,
                     content: true,
                   },
+                  orderBy: { id: "asc" },
+                  limit: LIMITS.propertiesCount,
                 },
               },
             },
@@ -538,8 +550,16 @@ const copyToWorkspaceHandler = async function* ({
     });
   }
 
-  // Process search extraction for new entities
-  for (const entityId of txResult.entityIds) {
+  // Acceleration only: the marks are already committed, and the standing
+  // drain repairs whatever a lost flush leaves behind.
+  flushEntitySearchRepairs(
+    txResult.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
+  ).catch(captureError);
+
+  // Request extraction for the copies a run indexes
+  for (const entityId of txResult.entityIdsBySearchIndexOwner[
+    SEARCH_INDEX_OWNER.durableExtraction
+  ]) {
     processExtraction(entityId).catch(captureError);
   }
 
@@ -577,7 +597,7 @@ const copyToWorkspaceHandler = async function* ({
 
   return Result.ok({
     entityId: txResult.entityId,
-    entityIds: txResult.entityIds,
+    entityIds: txResult.copiedEntities.map(({ entityId }) => entityId),
   });
 };
 

@@ -86,6 +86,45 @@ export const requiresDurableNativeExtraction = (
   return canExtractMimeType(pickExtractionSource(fileField).extractionMimeType);
 };
 
+/**
+ * Which mechanism writes an entity's search projection once its current
+ * version is committed.
+ *
+ * `durable-extraction` means a document-processing run owns it: the run
+ * persists the extracted text and indexes the entity when it completes, so a
+ * search mark written beside it would index the same entity a second time
+ * with no text. `search-mark` means nothing else will write the projection,
+ * so the mutation must mark the entity dirty inside its own transaction.
+ *
+ * `processExtraction` reads this to pick its own branch, so a caller that
+ * splits its entities by owner cannot drift from what extraction actually
+ * does with them.
+ */
+export const SEARCH_INDEX_OWNER = {
+  durableExtraction: "durable-extraction",
+  searchMark: "search-mark",
+} as const;
+
+export type SearchIndexOwner =
+  (typeof SEARCH_INDEX_OWNER)[keyof typeof SEARCH_INDEX_OWNER];
+
+/**
+ * `fields` must arrive in the same stable order `findExtractionFileField`
+ * requires: ascending field id, which is ascending creation order.
+ */
+export const searchIndexOwnerForFields = (
+  fields: readonly {
+    content: FieldContent;
+    propertyId?: SafeId<"property"> | undefined;
+  }[],
+  filePropertyId?: SafeId<"property">,
+): SearchIndexOwner => {
+  const fileField = findExtractionFileField(fields, filePropertyId);
+  return fileField && requiresDurableNativeExtraction(fileField)
+    ? SEARCH_INDEX_OWNER.durableExtraction
+    : SEARCH_INDEX_OWNER.searchMark;
+};
+
 type NativeExtractionProjectionOptions = {
   charCount: number;
   ciphertext: Buffer;
@@ -387,7 +426,9 @@ export const processExtraction = async (
         field.propertyId === options.filePropertyId),
   );
   if (
-    !(fileField && fileFieldRow && requiresDurableNativeExtraction(fileField))
+    !(fileField && fileFieldRow) ||
+    searchIndexOwnerForFields(version.fields, options?.filePropertyId) ===
+      SEARCH_INDEX_OWNER.searchMark
   ) {
     await getSearchProvider().indexEntity(entityId);
     return;
