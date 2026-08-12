@@ -27,16 +27,17 @@ import { isTlsOrLoopbackUrl } from "@/api/lib/secure-service-url";
  */
 export const DEPLOYED_NODE_ENVS = new Set(["production", "staging"]);
 
-const databasePoolMaxSchema = v.optional(
-  v.pipe(
-    v.string(),
-    v.digits(),
-    v.transform(Number),
-    v.integer(),
-    v.minValue(1),
-  ),
-  "5",
-);
+const databasePoolMaxSchema = (fallback = "5") =>
+  v.optional(
+    v.pipe(
+      v.string(),
+      v.digits(),
+      v.transform(Number),
+      v.integer(),
+      v.minValue(1),
+    ),
+    fallback,
+  );
 
 const documentOcrBatchIntervalMinutesSchema = v.optional(
   v.pipe(
@@ -59,6 +60,16 @@ const databasePoolSecondsSchema = (fallback: string) =>
   v.optional(
     v.pipe(v.string(), v.digits(), v.transform(Number), v.integer()),
     fallback,
+  );
+
+const postgresUrlSchema = () =>
+  v.pipe(
+    v.string(),
+    v.url(),
+    v.check((value) => {
+      const protocol = new URL(value).protocol;
+      return protocol === "postgres:" || protocol === "postgresql:";
+    }, "must use postgres:// or postgresql://."),
   );
 
 type BoundedIntegerEnvOptions = {
@@ -88,8 +99,10 @@ export const envBaseServerSchema = {
   SKIP_MIGRATION_CHECK: v.optional(v.pipe(v.string(), v.parseBoolean())),
   INGESTION_USER_AGENT: v.optional(v.string()),
   DATABASE_URL: v.pipe(v.string(), v.url()),
-  DATABASE_ROOT_POOL_MAX: databasePoolMaxSchema,
-  DATABASE_RLS_POOL_MAX: databasePoolMaxSchema,
+  DATABASE_ROOT_POOL_MAX: databasePoolMaxSchema(),
+  DATABASE_RLS_POOL_MAX: databasePoolMaxSchema(),
+  CASE_LAW_DATABASE_URL: v.optional(postgresUrlSchema()),
+  CASE_LAW_DATABASE_POOL_MAX: databasePoolMaxSchema("2"),
   DATABASE_POOL_MAX_LIFETIME_S: databasePoolSecondsSchema("0"),
   DATABASE_POOL_IDLE_TIMEOUT_S: databasePoolSecondsSchema("0"),
   DOCUMENT_OCR_BATCH_INTERVAL_MINUTES: documentOcrBatchIntervalMinutesSchema,
@@ -123,6 +136,10 @@ export const envBaseServerSchema = {
   // (`<generation>_<country>`, e.g. case_law_v1_svk); bump the prefix to
   // rebuild all jurisdictions and flip to it.
   LEGAL_SEARCH_INDEX_GENERATION: v.optional(v.string(), "case_law_v1"),
+  // Local-development-only search endpoint for consuming a shared corpus.
+  // Request-path searches use it while mutations remain bound to the separate
+  // admin endpoint below, which shared-corpus mode requires to stay unset.
+  CORPUS_INDEX_SEARCH_ENDPOINT: v.optional(v.pipe(v.string(), v.url())),
   CORPUS_INDEX_ENDPOINT: v.optional(v.pipe(v.string(), v.url())),
   CORPUS_INDEX_S3_BUCKET: v.optional(v.string()),
   // Falls back to S3_BUCKET when unset (dev). Required when corpus
@@ -174,7 +191,9 @@ export const databaseComponentEnvSchema = {
 };
 
 type EnvBaseInvariantInput = {
+  CASE_LAW_DATABASE_URL?: string | undefined;
   CORPUS_INDEX_ENDPOINT?: string | undefined;
+  CORPUS_INDEX_SEARCH_ENDPOINT?: string | undefined;
   CORPUS_INDEXING_ENABLED: boolean;
   CORPUS_STORAGE_ENABLED: boolean;
   CORPUS_STORAGE_MODE?: CorpusStorageMode | undefined;
@@ -189,7 +208,9 @@ type EnvBaseInvariantInput = {
 };
 
 export const envBaseInvariantViolation = ({
+  CASE_LAW_DATABASE_URL,
   CORPUS_INDEX_ENDPOINT,
+  CORPUS_INDEX_SEARCH_ENDPOINT,
   CORPUS_INDEXING_ENABLED,
   CORPUS_STORAGE_ENABLED,
   CORPUS_STORAGE_MODE,
@@ -204,6 +225,48 @@ export const envBaseInvariantViolation = ({
 }: EnvBaseInvariantInput): string | null => {
   if (!isDev && !hasSecureDatabaseTransport(DATABASE_URL)) {
     return "DATABASE_URL must enable TLS outside loopback or Railway private networking.";
+  }
+  if (
+    CASE_LAW_DATABASE_URL !== undefined &&
+    !hasSecureDatabaseTransport(CASE_LAW_DATABASE_URL)
+  ) {
+    return "CASE_LAW_DATABASE_URL must enable TLS outside loopback or Railway private networking.";
+  }
+  if (!isDev && CASE_LAW_DATABASE_URL !== undefined) {
+    return "CASE_LAW_DATABASE_URL is only supported in local development.";
+  }
+  if (
+    CORPUS_INDEX_SEARCH_ENDPOINT !== undefined &&
+    !isTlsOrLoopbackUrl(CORPUS_INDEX_SEARCH_ENDPOINT, {
+      plaintextProtocol: "http:",
+      tlsProtocol: "https:",
+    })
+  ) {
+    return "CORPUS_INDEX_SEARCH_ENDPOINT must use HTTPS unless it targets a loopback address.";
+  }
+  if (!isDev && CORPUS_INDEX_SEARCH_ENDPOINT !== undefined) {
+    return "CORPUS_INDEX_SEARCH_ENDPOINT is only supported in local development.";
+  }
+  if (
+    CASE_LAW_DATABASE_URL !== undefined &&
+    LEGAL_SEARCH_PROVIDER !== "corpus-index"
+  ) {
+    return 'CASE_LAW_DATABASE_URL requires LEGAL_SEARCH_PROVIDER="corpus-index".';
+  }
+  if (
+    CASE_LAW_DATABASE_URL !== undefined &&
+    CORPUS_INDEX_SEARCH_ENDPOINT === undefined
+  ) {
+    return "CASE_LAW_DATABASE_URL requires CORPUS_INDEX_SEARCH_ENDPOINT.";
+  }
+  if (
+    CASE_LAW_DATABASE_URL !== undefined &&
+    CORPUS_INDEX_ENDPOINT !== undefined
+  ) {
+    return "CORPUS_INDEX_ENDPOINT must be unset when CASE_LAW_DATABASE_URL is configured.";
+  }
+  if (CASE_LAW_DATABASE_URL !== undefined && CORPUS_INDEXING_ENABLED) {
+    return "CORPUS_INDEXING_ENABLED must be false when CASE_LAW_DATABASE_URL is configured.";
   }
   if (
     !isDev &&
@@ -224,9 +287,10 @@ export const envBaseInvariantViolation = ({
   }
   if (
     LEGAL_SEARCH_PROVIDER === "corpus-index" &&
+    CORPUS_INDEX_SEARCH_ENDPOINT === undefined &&
     CORPUS_INDEX_ENDPOINT === undefined
   ) {
-    return "LEGAL_SEARCH_PROVIDER=corpus-index requires CORPUS_INDEX_ENDPOINT to be set.";
+    return "LEGAL_SEARCH_PROVIDER=corpus-index requires CORPUS_INDEX_SEARCH_ENDPOINT or CORPUS_INDEX_ENDPOINT to be set.";
   }
 
   return corpusStorageInvariantViolation({

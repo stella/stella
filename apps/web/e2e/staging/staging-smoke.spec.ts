@@ -96,16 +96,17 @@ test("server-rendered public law decisions stay stable after hydration", async (
   // navigation alone would never exercise the hydration path that broke.
   await page.reload({ waitUntil: "commit" });
 
-  // Case numbers look like "6 Tdo 647/2017"; anchoring on the slash-year
-  // tail keeps the regex linear.
-  await expect(page.getByRole("heading", { name: /\/\d{4}/u })).toBeVisible();
+  await expect(page.locator("article").first()).toBeVisible();
+  await expect(
+    page.getByRole("heading", { includeHidden: true, level: 1 }),
+  ).toHaveCount(1);
   const routeErrorTitle = page.locator("#route-error-title");
   const inspector = page.locator('[data-side="right"]');
   await expect(routeErrorTitle).toHaveCount(0);
   await expect(inspector).toHaveAttribute("data-state", "expanded");
 
   // Authentication resolution and the lazy inspector graph settle after the
-  // decision heading appears. Keep observing long enough to catch a delayed
+  // decision body appears. Keep observing long enough to catch a delayed
   // remount, stale-chunk retry, or cross-tab store reconciliation.
   await page.waitForTimeout(5000);
   await expect(routeErrorTitle).toHaveCount(0);

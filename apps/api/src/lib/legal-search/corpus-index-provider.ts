@@ -1,6 +1,5 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
 import {
   caseLawCorpusIndexProjections,
   caseLawDecisions,
@@ -8,6 +7,7 @@ import {
 } from "@/api/db/schema";
 // eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
+import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { isUuid } from "@/api/lib/custom-schema";
 import {
@@ -106,11 +106,13 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
 
   // Upper bound for the pagination early-stop: scanning may end only
   // once no unseen candidate could out-blend the page cursor.
-  const [authorityBound] = await rootDb
-    .select({
-      max: sql<number>`coalesce(max(${caseLawDecisions.citationAuthority}), 0)`,
-    })
-    .from(caseLawDecisions);
+  const [authorityBound] = await caseLawPublicReadDb((tx) =>
+    tx
+      .select({
+        max: sql<number>`coalesce(max(${caseLawDecisions.citationAuthority}), 0)`,
+      })
+      .from(caseLawDecisions),
+  );
   const maxAuthority = authorityBound?.max ?? 0;
 
   const searchPage = await readCorpusIndexSearchPage({
@@ -133,39 +135,41 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
       const rows =
         ids.length === 0
           ? []
-          : await rootDb
-              .select({
-                id: caseLawDecisions.id,
-                caseNumber: caseLawDecisions.caseNumber,
-                ecli: caseLawDecisions.ecli,
-                court: caseLawDecisions.court,
-                country: caseLawDecisions.country,
-                language: caseLawDecisions.language,
-                decisionDate: caseLawDecisions.decisionDate,
-                decisionType: caseLawDecisions.decisionType,
-                sourceUrl: caseLawDecisions.sourceUrl,
-                citationCount: caseLawDecisions.citationCount,
-                citationAuthority: caseLawDecisions.citationAuthority,
-                createdAt: caseLawDecisions.createdAt,
-              })
-              .from(caseLawDecisions)
-              .leftJoin(
-                caseLawCorpusIndexProjections,
-                caseLawCorpusProjectionJoin(generation),
-              )
-              .innerJoin(
-                caseLawSources,
-                eq(caseLawSources.id, caseLawDecisions.sourceId),
-              )
-              // Same gates as the public search rehydration: source
-              // policy, and only rows whose index state is current.
-              .where(
-                and(
-                  inArray(caseLawDecisions.id, ids),
-                  redistributableCaseLawSource,
-                  currentCaseLawCorpusProjection(generation),
+          : await caseLawPublicReadDb((tx) =>
+              tx
+                .select({
+                  id: caseLawDecisions.id,
+                  caseNumber: caseLawDecisions.caseNumber,
+                  ecli: caseLawDecisions.ecli,
+                  court: caseLawDecisions.court,
+                  country: caseLawDecisions.country,
+                  language: caseLawDecisions.language,
+                  decisionDate: caseLawDecisions.decisionDate,
+                  decisionType: caseLawDecisions.decisionType,
+                  sourceUrl: caseLawDecisions.sourceUrl,
+                  citationCount: caseLawDecisions.citationCount,
+                  citationAuthority: caseLawDecisions.citationAuthority,
+                  createdAt: caseLawDecisions.createdAt,
+                })
+                .from(caseLawDecisions)
+                .leftJoin(
+                  caseLawCorpusIndexProjections,
+                  caseLawCorpusProjectionJoin(generation),
+                )
+                .innerJoin(
+                  caseLawSources,
+                  eq(caseLawSources.id, caseLawDecisions.sourceId),
+                )
+                // Same gates as the public search rehydration: source
+                // policy, and only rows whose index state is current.
+                .where(
+                  and(
+                    inArray(caseLawDecisions.id, ids),
+                    redistributableCaseLawSource,
+                    currentCaseLawCorpusProjection(generation),
+                  ),
                 ),
-              );
+            );
 
       // Keyed by plain string id (candidate ids from corpus index are strings).
       const displayById = new Map(rows.map((row) => [String(row.id), row]));

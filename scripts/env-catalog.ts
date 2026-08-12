@@ -73,11 +73,13 @@ const INTERNAL_SERVER_KEYS = new Set([
   "AZURE_RESOURCE_NAME",
   "BETTER_AUTH_COOKIE_PREFIX",
   "BETTER_AUTH_URL",
+  "CASE_LAW_DATABASE_POOL_MAX",
   "CORPUS_INDEXING_ENABLED",
   "CORPUS_INDEX_BATCH_SIZE",
   "CORPUS_INDEX_ENDPOINT",
   "CORPUS_INDEX_INTERVAL_MS",
   "CORPUS_INDEX_READ_CONCURRENCY",
+  "CORPUS_INDEX_SEARCH_ENDPOINT",
   "CORPUS_INDEX_S3_BUCKET",
   "CORPUS_STORAGE_ENABLED",
   "CORPUS_STORAGE_MODE",
@@ -239,6 +241,12 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Maximum RLS pool size. Keep its sum with DATABASE_ROOT_POOL_MAX within the process connection budget.",
   DATABASE_ROOT_POOL_MAX:
     "Maximum root pool size. Keep its sum with DATABASE_RLS_POOL_MAX within the process connection budget.",
+  CASE_LAW_DATABASE_POOL_MAX:
+    "Maximum connections in the optional local read-only public case-law pool.",
+  CASE_LAW_DATABASE_URL:
+    "Local-development-only read-only Postgres URL for a shared public case-law corpus. Unset uses DATABASE_URL.",
+  CORPUS_INDEX_SEARCH_ENDPOINT:
+    "Local-development-only search endpoint for a shared corpus index. Unset uses CORPUS_INDEX_ENDPOINT; this endpoint is never used for index mutations.",
   DATABASE_URL:
     "Postgres owner URL used by Drizzle. Requests downgrade to the stella role so row-level security applies.",
   DB_HOST:
@@ -374,7 +382,8 @@ const CONDITIONAL_REQUIREMENT_NOTES: Record<string, string> = {
   AGENT_SANDBOX_IMAGE: "AGENT_SANDBOX_RUNS_ENABLED is true",
   AGENT_SANDBOX_MCP_URL: "AGENT_SANDBOX_RUNS_ENABLED is true",
   CONTENT_ENCRYPTION_KEY: "NODE_ENV is production or staging",
-  CORPUS_INDEX_ENDPOINT: "LEGAL_SEARCH_PROVIDER is corpus-index",
+  CORPUS_INDEX_SEARCH_ENDPOINT:
+    "LEGAL_SEARCH_PROVIDER is corpus-index and CORPUS_INDEX_ENDPOINT is unset",
   LEGAL_CORPUS_S3_BUCKET: "corpus storage is enabled in a deployed environment",
   MICROSOFT_AUTH_TENANT_ID: "Microsoft OAuth credentials are configured",
   S3_ACCESS_KEY_ID: 'S3_CREDENTIALS_PROVIDER is "env"',

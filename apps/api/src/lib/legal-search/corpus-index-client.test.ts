@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 
+import { envBase } from "@/api/env-base";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 
@@ -10,11 +11,13 @@ import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-p
 // id-order results. These tests stub global fetch and assert on the
 // outgoing request, not on engine behaviour.
 
-type RecordedRequest = { path: string; body: string };
+type RecordedRequest = { host: string; path: string; body: string };
 
 let requests: RecordedRequest[];
 let responseBody: unknown;
 const originalFetch = globalThis.fetch;
+const originalCorpusIndexEndpoint = envBase.CORPUS_INDEX_ENDPOINT;
+const originalCorpusIndexSearchEndpoint = envBase.CORPUS_INDEX_SEARCH_ENDPOINT;
 
 beforeEach(() => {
   requests = [];
@@ -32,8 +35,10 @@ beforeEach(() => {
     input: Parameters<typeof fetch>[0],
     init?: Parameters<typeof fetch>[1],
   ): Promise<Response> => {
+    const url = new URL(resolveUrl(input));
     requests.push({
-      path: new URL(resolveUrl(input)).pathname,
+      host: url.host,
+      path: url.pathname,
       body: typeof init?.body === "string" ? init.body : "",
     });
     return new Response(JSON.stringify(responseBody), { status: 200 });
@@ -45,6 +50,10 @@ beforeEach(() => {
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  Object.assign(envBase, {
+    CORPUS_INDEX_ENDPOINT: originalCorpusIndexEndpoint,
+    CORPUS_INDEX_SEARCH_ENDPOINT: originalCorpusIndexSearchEndpoint,
+  });
 });
 
 test("search sends the documented sort_by parameter", async () => {
@@ -59,12 +68,30 @@ test("search sends the documented sort_by parameter", async () => {
 
   expect(result.isOk()).toBe(true);
   const request = requests.at(0);
+  expect(request?.host).toBe("localhost:7281");
   expect(request?.path).toBe("/api/v1/legal_corpus_v1_cze/search");
   const body: Record<string, unknown> = JSON.parse(request?.body ?? "{}");
   expect(body["sort_by"]).toBe("_score");
   // The engine ignores unknown keys, so the old misnamed parameter would
   // silently fall back to document-id order.
   expect(body).not.toHaveProperty("sort_by_field");
+});
+
+test("search falls back to the shared corpus index endpoint", async () => {
+  responseBody = { num_hits: 0, hits: [], snippets: [] };
+  Object.assign(envBase, {
+    CORPUS_INDEX_ENDPOINT: "http://localhost:7290",
+    CORPUS_INDEX_SEARCH_ENDPOINT: undefined,
+  });
+
+  const result = await getCorpusIndexClient().search({
+    indexId: "legal_corpus_v1_cze",
+    query: "text:smlouva",
+    maxHits: 10,
+  });
+
+  expect(result.isOk()).toBe(true);
+  expect(requests.at(0)?.host).toBe("localhost:7290");
 });
 
 test("search rejects a malformed external response", async () => {
@@ -174,6 +201,7 @@ test("delete-by-query posts one document-scoped delete task", async () => {
   // indexer never has to know how many documents a row previously emitted.
   expect(requests).toHaveLength(1);
   const request = requests.at(0);
+  expect(request?.host).toBe("localhost:7280");
   expect(request?.path).toBe("/api/v1/legal_corpus_v1_cze/delete-tasks");
   const body: Record<string, unknown> = JSON.parse(request?.body ?? "{}");
   expect(body["query"]).toBe('document_id:"dec-1"');

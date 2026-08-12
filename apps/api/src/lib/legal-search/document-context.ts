@@ -1,6 +1,6 @@
-import { rootDb } from "@/api/db/root";
 import { corpusStorageMode } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
+import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import {
   readCorpusAst,
   readCorpusPayloadOrFallback,
@@ -12,24 +12,27 @@ import type { LegalDocumentContext } from "@/api/lib/legal-search/types";
  * Canonical text + AST for a decision, for the AI reader. Prefers object
  * storage when enabled, degrading to the Postgres columns on a transient
  * S3 failure so a read is never harder than today. A row with no Postgres
- * copy has nothing to degrade to and surfaces the failure instead. Global
- * corpus data, so it reads via rootDb.
+ * copy has nothing to degrade to and surfaces the failure instead. The
+ * public-corpus read boundary may resolve to a separately credentialed,
+ * read-only database.
  */
 export const loadDocumentContext = async (
   decisionId: SafeId<"caseLawDecision">,
 ): Promise<LegalDocumentContext | null> => {
-  const decision = await rootDb.query.caseLawDecisions.findFirst({
-    where: { id: { eq: decisionId } },
-    columns: {
-      id: true,
-      caseNumber: true,
-      court: true,
-      documentAst: true,
-      fulltext: true,
-      astS3Key: true,
-      textS3Key: true,
-    },
-  });
+  const decision = await caseLawPublicReadDb((tx) =>
+    tx.query.caseLawDecisions.findFirst({
+      where: { id: { eq: decisionId } },
+      columns: {
+        id: true,
+        caseNumber: true,
+        court: true,
+        documentAst: true,
+        fulltext: true,
+        astS3Key: true,
+        textS3Key: true,
+      },
+    }),
+  );
 
   if (!decision) {
     return null;

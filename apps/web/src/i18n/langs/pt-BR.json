@@ -28,7 +28,6 @@
     "title": "Conecte seu agente"
   },
   "ai": {
-    "analyzeWithAI": "Analisar com IA",
     "chooseRewriteInstruction": "Opções de reescrita",
     "editWithAI": "Editar com IA",
     "keyRequired": {

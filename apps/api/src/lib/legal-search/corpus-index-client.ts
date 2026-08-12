@@ -63,11 +63,20 @@ export type CorpusIndexClient = {
   ) => Promise<Result<void, CorpusIndexError>>;
 };
 
-const baseUrl = (): string => {
+const mutationBaseUrl = (): string => {
   const value = envBase.CORPUS_INDEX_ENDPOINT;
   if (value === undefined || value.length === 0) {
+    panic("CORPUS_INDEX_ENDPOINT is required for corpus index mutations");
+  }
+  return value.replace(/(?<!\/)\/+$/u, "");
+};
+
+const searchBaseUrl = (): string => {
+  const value =
+    envBase.CORPUS_INDEX_SEARCH_ENDPOINT ?? envBase.CORPUS_INDEX_ENDPOINT;
+  if (value === undefined || value.length === 0) {
     panic(
-      "CORPUS_INDEX_ENDPOINT is required when the corpus index search provider is selected",
+      "CORPUS_INDEX_SEARCH_ENDPOINT or CORPUS_INDEX_ENDPOINT is required when the corpus index search provider is selected",
     );
   }
   return value.replace(/(?<!\/)\/+$/u, "");
@@ -85,11 +94,12 @@ const toCorpusIndexError = (error: unknown): CorpusIndexError =>
       });
 
 const requestJson = async (
+  baseUrl: string,
   path: string,
   init: Omit<RequestInit, "signal">,
   timeoutMs: number,
 ): Promise<unknown> => {
-  const response = await fetchWithTimeout(`${baseUrl()}${path}`, {
+  const response = await fetchWithTimeout(`${baseUrl}${path}`, {
     ...init,
     timeoutMs,
   });
@@ -123,6 +133,7 @@ const buildClient = (): CorpusIndexClient => ({
     await Result.tryPromise({
       try: async () => {
         await requestJson(
+          mutationBaseUrl(),
           "/api/v1/indexes",
           {
             method: "POST",
@@ -139,6 +150,7 @@ const buildClient = (): CorpusIndexClient => ({
     await Result.tryPromise({
       try: async () => {
         await requestJson(
+          mutationBaseUrl(),
           `/api/v1/indexes/${indexId}`,
           { method: "DELETE" },
           ADMIN_TIMEOUT_MS,
@@ -151,7 +163,7 @@ const buildClient = (): CorpusIndexClient => ({
     await Result.tryPromise({
       try: async () => {
         const response = await fetchWithTimeout(
-          `${baseUrl()}/api/v1/indexes/${indexId}`,
+          `${mutationBaseUrl()}/api/v1/indexes/${indexId}`,
           {
             method: "GET",
             timeoutMs: ADMIN_TIMEOUT_MS,
@@ -178,6 +190,7 @@ const buildClient = (): CorpusIndexClient => ({
           .split("\n")
           .filter((line) => line.trim().length > 0).length;
         const response = await requestJson(
+          mutationBaseUrl(),
           `/api/v1/${indexId}/ingest?commit=auto`,
           {
             method: "POST",
@@ -242,6 +255,7 @@ const buildClient = (): CorpusIndexClient => ({
           body["snippet_fields"] = snippetFields.join(",");
         }
         const response = await requestJson(
+          searchBaseUrl(),
           `/api/v1/${indexId}/search`,
           {
             method: "POST",
@@ -282,6 +296,7 @@ const buildClient = (): CorpusIndexClient => ({
     await Result.tryPromise({
       try: async () => {
         await requestJson(
+          mutationBaseUrl(),
           `/api/v1/${indexId}/delete-tasks`,
           {
             method: "POST",

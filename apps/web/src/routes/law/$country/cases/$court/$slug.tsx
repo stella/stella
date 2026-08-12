@@ -30,13 +30,6 @@ export const Route = createFileRoute("/law/$country/cases/$court/$slug")({
 });
 
 function PublicDecisionRoute() {
-  const params = Route.useParams({
-    select: ({ country, court, slug }) => ({
-      country,
-      court,
-      slug,
-    }),
-  });
   const decision = Route.useLoaderData();
   const initialSearchQuery = Route.useSearch({ select: (search) => search.q });
 
@@ -44,7 +37,6 @@ function PublicDecisionRoute() {
     <PublicDecisionViewer
       decision={decision}
       initialSearchQuery={initialSearchQuery}
-      params={params}
     />
   );
 }
