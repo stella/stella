@@ -22,14 +22,45 @@ import type { UsagePolicyEntry } from "@/routes/_protected.settings/-queries/usa
  * Rendered only behind the usage feature flag; on deployments without a
  * seeded catalog the empty list renders nothing at all.
  */
-export function UsagePlansCard() {
+export function UsagePlansCard({
+  packsPurchasable,
+}: {
+  /**
+   * Whether the organisation can buy add-on packs right now (a
+   * consumable hosted entitlement exists). The server enforces this
+   * on setup; the flag keeps the button honest instead of letting a
+   * click round-trip into a rejection.
+   */
+  packsPurchasable: boolean;
+}) {
   const t = useTranslations();
-  const { data, isLoading } = useQuery(usagePoliciesOptions);
+  const { data, isLoading, isError, refetch } = useQuery(usagePoliciesOptions);
 
   if (isLoading) {
     return <PlansSkeleton />;
   }
-  // Query error or an unseeded deployment: nothing to sell, render nothing.
+  // A failed catalog read must not masquerade as an empty catalog:
+  // purchasing silently vanishing is indistinguishable from "nothing
+  // for sale" and would hide real outages.
+  if (isError) {
+    return (
+      <Frame>
+        <FramePanel>
+          <p className="text-muted-foreground text-sm">
+            {t("errors.actionFailed")}
+          </p>
+          <Button
+            className="mt-3"
+            onClick={() => void refetch()}
+            variant="ghost"
+          >
+            {t("common.retry")}
+          </Button>
+        </FramePanel>
+      </Frame>
+    );
+  }
+  // Unseeded deployment: nothing to sell, render nothing.
   if (!data) {
     return null;
   }
@@ -54,7 +85,12 @@ export function UsagePlansCard() {
             </p>
             <ul className="mt-4 space-y-3">
               {subscriptions.map((policy) => (
-                <PolicyRow key={policy.id} policy={policy} withSeats />
+                <PolicyRow
+                  key={policy.id}
+                  policy={policy}
+                  purchasable
+                  withSeats
+                />
               ))}
             </ul>
           </FramePanel>
@@ -71,7 +107,12 @@ export function UsagePlansCard() {
             </p>
             <ul className="mt-4 space-y-3">
               {packs.map((policy) => (
-                <PolicyRow key={policy.id} policy={policy} withSeats={false} />
+                <PolicyRow
+                  key={policy.id}
+                  policy={policy}
+                  purchasable={packsPurchasable}
+                  withSeats={false}
+                />
               ))}
             </ul>
           </FramePanel>
@@ -101,9 +142,11 @@ const MAX_SEATS = 1000;
 
 function PolicyRow({
   policy,
+  purchasable,
   withSeats,
 }: {
   policy: UsagePolicyEntry;
+  purchasable: boolean;
   withSeats: boolean;
 }) {
   const t = useTranslations();
@@ -183,7 +226,11 @@ function PolicyRow({
           </>
         )}
         <Button
-          disabled={pending || policy.hostedCheckout.status !== "available"}
+          disabled={
+            pending ||
+            !purchasable ||
+            policy.hostedCheckout.status !== "available"
+          }
           onClick={() => checkout.mutate()}
         >
           {t("settings.organization.usagePlanCheckout")}

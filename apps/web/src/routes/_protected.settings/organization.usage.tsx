@@ -62,7 +62,14 @@ function UsageSettingsPage() {
       <UsageBody data={data?.entitlement ? data : null} isLoading={isLoading} />
       {env.VITE_FEATURE_USAGE && (
         <div className="mt-6 space-y-6">
-          <UsagePlansCard />
+          <UsagePlansCard
+            packsPurchasable={
+              data?.entitlement !== undefined &&
+              data.entitlement.source === "hosted" &&
+              (data.entitlement.status === "active" ||
+                data.entitlement.status === "trialing")
+            }
+          />
         </div>
       )}
     </>
