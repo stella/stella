@@ -21,6 +21,7 @@ import type {
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import {
+  canContinueWithProviderConfiguration,
   createProviderPreview,
   type RowStateMap,
 } from "@/routes/onboarding/-components/steps/ai-step.logic";
@@ -95,7 +96,11 @@ export const AIStep = ({
     const state = rowStates[draft.provider];
     return state.status === "valid" || draft.apiKeyMasked !== undefined;
   });
-  const canContinue = hasAnyConfirmed && allProvidersConfirmed;
+  const canContinue = canContinueWithProviderConfiguration({
+    providers: getProviderValues(providers),
+    hasAnyConfirmed,
+    allProvidersConfirmed,
+  });
 
   // Created once and mutated in place (never reassigned), so a stable
   // useState value works without the rebuild-every-render cost of

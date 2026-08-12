@@ -8,8 +8,8 @@ import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import Tooltip from "@/components/tooltip";
 import { OnboardingProgress } from "@/routes/onboarding/-components/onboarding-progress";
 
-import landingGradientDarkUrl from "../../../../../landing/public/images/gradients/hero-dark.svg?url";
-import landingGradientLightUrl from "../../../../../landing/public/images/gradients/hero-light.svg?url";
+const ONBOARDING_GRADIENT_DARK_URL = "/branding/onboarding-gradient-dark.svg";
+const ONBOARDING_GRADIENT_LIGHT_URL = "/branding/onboarding-gradient-light.svg";
 
 type OnboardingLayoutProps = {
   children: ReactNode;
@@ -89,12 +89,12 @@ export const OnboardingLayout = ({
           <img
             alt=""
             className="absolute inset-0 size-full opacity-25 dark:hidden"
-            src={landingGradientLightUrl}
+            src={ONBOARDING_GRADIENT_LIGHT_URL}
           />
           <img
             alt=""
             className="absolute inset-0 hidden size-full opacity-[0.18] dark:block"
-            src={landingGradientDarkUrl}
+            src={ONBOARDING_GRADIENT_DARK_URL}
           />
         </div>
         <div className="relative z-10">{preview}</div>

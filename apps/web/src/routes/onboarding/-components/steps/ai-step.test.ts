@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import { createProviderCredentialDraft } from "@/components/ai-config-role-models.logic";
-import { createProviderPreview } from "@/routes/onboarding/-components/steps/ai-step.logic";
+import {
+  canContinueWithProviderConfiguration,
+  createProviderPreview,
+} from "@/routes/onboarding/-components/steps/ai-step.logic";
 import type { RowState } from "@/routes/onboarding/-components/steps/ai-step.logic";
 
 const idleRowStates = {
@@ -58,5 +61,43 @@ describe("AI provider preview", () => {
     expect(createProviderPreview([google], idleRowStates)).toEqual([
       { provider: "google", status: "valid" },
     ]);
+  });
+});
+
+describe("AI provider continuation", () => {
+  const confirmed = {
+    hasAnyConfirmed: true,
+    allProvidersConfirmed: true,
+  } as const;
+
+  test("requires recommended models for every role", () => {
+    expect(
+      canContinueWithProviderConfiguration({
+        providers: ["google"],
+        ...confirmed,
+      }),
+    ).toBe(true);
+    expect(
+      canContinueWithProviderConfiguration({
+        providers: ["mistral"],
+        ...confirmed,
+      }),
+    ).toBe(false);
+    expect(
+      canContinueWithProviderConfiguration({
+        providers: ["mistral", "openai"],
+        ...confirmed,
+      }),
+    ).toBe(true);
+  });
+
+  test("requires every provider credential to be confirmed", () => {
+    expect(
+      canContinueWithProviderConfiguration({
+        providers: ["google"],
+        hasAnyConfirmed: true,
+        allProvidersConfirmed: false,
+      }),
+    ).toBe(false);
   });
 });
