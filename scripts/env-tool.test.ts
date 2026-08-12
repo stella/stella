@@ -343,7 +343,7 @@ describe("environment doctor output", () => {
     },
     {
       expected:
-        "LEGAL_SEARCH_PROVIDER=corpus-index requires CORPUS_INDEX_ENDPOINT to be set.",
+        "LEGAL_SEARCH_PROVIDER=corpus-index requires CORPUS_INDEX_SEARCH_ENDPOINT or CORPUS_INDEX_ENDPOINT to be set.",
       overrides: { LEGAL_SEARCH_PROVIDER: "corpus-index" },
     },
     {
@@ -383,6 +383,79 @@ describe("environment doctor output", () => {
         DATABASE_URL:
           "postgres://owner:password@db.example.com:5432/stella?sslmode=disable",
         NODE_ENV: "production",
+      },
+    },
+    {
+      expected:
+        "CASE_LAW_DATABASE_URL must enable TLS outside loopback or Railway private networking.",
+      overrides: {
+        CASE_LAW_DATABASE_URL:
+          "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=disable",
+        CONTENT_ENCRYPTION_KEY: "a".repeat(64),
+        NODE_ENV: "staging",
+      },
+    },
+    {
+      expected: "CASE_LAW_DATABASE_URL is only supported in local development.",
+      overrides: {
+        CASE_LAW_DATABASE_URL:
+          "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require",
+        CONTENT_ENCRYPTION_KEY: "a".repeat(64),
+        NODE_ENV: "staging",
+      },
+    },
+    {
+      expected:
+        "CORPUS_INDEX_SEARCH_ENDPOINT must use HTTPS unless it targets a loopback address.",
+      overrides: {
+        CORPUS_INDEX_SEARCH_ENDPOINT: "http://search.example.com",
+      },
+    },
+    {
+      expected:
+        "CORPUS_INDEX_SEARCH_ENDPOINT is only supported in local development.",
+      overrides: {
+        CONTENT_ENCRYPTION_KEY: "a".repeat(64),
+        CORPUS_INDEX_SEARCH_ENDPOINT: "https://search.example.com",
+        NODE_ENV: "staging",
+      },
+    },
+    {
+      expected:
+        'CASE_LAW_DATABASE_URL requires LEGAL_SEARCH_PROVIDER="corpus-index".',
+      overrides: {
+        CASE_LAW_DATABASE_URL:
+          "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require",
+      },
+    },
+    {
+      expected: "CASE_LAW_DATABASE_URL requires CORPUS_INDEX_SEARCH_ENDPOINT.",
+      overrides: {
+        CASE_LAW_DATABASE_URL:
+          "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require",
+        LEGAL_SEARCH_PROVIDER: "corpus-index",
+      },
+    },
+    {
+      expected:
+        "CORPUS_INDEX_ENDPOINT must be unset when CASE_LAW_DATABASE_URL is configured.",
+      overrides: {
+        CASE_LAW_DATABASE_URL:
+          "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require",
+        CORPUS_INDEX_ENDPOINT: "https://quickwit-admin.example.com",
+        CORPUS_INDEX_SEARCH_ENDPOINT: "https://quickwit-search.example.com",
+        LEGAL_SEARCH_PROVIDER: "corpus-index",
+      },
+    },
+    {
+      expected:
+        "CORPUS_INDEXING_ENABLED must be false when CASE_LAW_DATABASE_URL is configured.",
+      overrides: {
+        CASE_LAW_DATABASE_URL:
+          "postgres://case_law_reader:password@db.example.com:5432/stella?sslmode=require",
+        CORPUS_INDEXING_ENABLED: "true",
+        CORPUS_INDEX_SEARCH_ENDPOINT: "https://quickwit-search.example.com",
+        LEGAL_SEARCH_PROVIDER: "corpus-index",
       },
     },
     {

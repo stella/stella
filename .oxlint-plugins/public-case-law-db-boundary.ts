@@ -13,7 +13,13 @@ const isAstNode = (value: unknown): value is AstNode =>
   "type" in value &&
   typeof (value as { type: unknown }).type === "string";
 
-const isCaseLawName = (name: string): boolean => name.startsWith("caseLaw");
+const PUBLIC_CASE_LAW_SCHEMA_IMPORTS = new Set([
+  "caseLawCorpusIndexProjections",
+  "caseLawDecisions",
+  "caseLawSources",
+]);
+
+const PUBLIC_CASE_LAW_QUERY_RELATIONS = new Set(["caseLawDecisions"]);
 
 const isTxQueryMember = (node: unknown): boolean => {
   if (!isAstNode(node) || node.type !== "MemberExpression") {
@@ -53,9 +59,9 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           privateCaseLawImport:
-            "Public case-law data files may only import caseLaw* tables from '@/api/db/schema'.",
+            "Public case-law data files may only import the explicit public case-law table allowlist from '@/api/db/schema'.",
           privateTxQuery:
-            "Public case-law data files may only query tx.query.caseLaw* relations.",
+            "Public case-law data files may only use the explicit public tx.query relation allowlist.",
           privateSqlText:
             "Public case-law SQL must not mention private workspace, user, organization, matter, file, chat, task, or contact tables.",
         },
@@ -69,7 +75,10 @@ export default eslintCompatPlugin({
             const specifiers = node.specifiers;
             for (const specifier of specifiers) {
               const imported = getImportedName(specifier);
-              if (imported !== null && !isCaseLawName(imported)) {
+              if (
+                imported !== null &&
+                !PUBLIC_CASE_LAW_SCHEMA_IMPORTS.has(imported)
+              ) {
                 context.report({
                   node: specifier,
                   messageId: "privateCaseLawImport",
@@ -82,7 +91,10 @@ export default eslintCompatPlugin({
               return;
             }
             const propertyName = getPropertyName(node.property);
-            if (propertyName !== null && !isCaseLawName(propertyName)) {
+            if (
+              propertyName !== null &&
+              !PUBLIC_CASE_LAW_QUERY_RELATIONS.has(propertyName)
+            ) {
               context.report({ node, messageId: "privateTxQuery" });
             }
           },

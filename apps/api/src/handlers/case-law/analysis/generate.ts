@@ -33,12 +33,14 @@ import { parseUsableDocumentAst } from "@stll/legal-ast/document-ast";
 import { rootDb } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions } from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { formatDecisionForPrompt } from "@/api/lib/case-law/analysis-prompt";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { detached } from "@/api/lib/detached";
@@ -212,20 +214,29 @@ export const generateAnalysis = async (
   promptCachingEnabled: boolean,
 ): Promise<Result<GenerateAnalysisResponse, HandlerError>> => {
   // audit: skip — background AI analysis output
-  const decision = await scopedDb((tx) =>
-    tx.query.caseLawDecisions.findFirst({
-      where: { id: { eq: decisionId } },
-      columns: {
-        id: true,
-        language: true,
-        court: true,
-        country: true,
-        decisionType: true,
-        documentAst: true,
-        analysis: true,
-      },
-    }),
-  );
+  const decisionColumns = {
+    id: true,
+    language: true,
+    court: true,
+    country: true,
+    decisionType: true,
+    documentAst: true,
+    analysis: true,
+  } as const;
+  const decision =
+    envBase.CASE_LAW_DATABASE_URL === undefined
+      ? await scopedDb((tx) =>
+          tx.query.caseLawDecisions.findFirst({
+            where: { id: { eq: decisionId } },
+            columns: decisionColumns,
+          }),
+        )
+      : await caseLawPublicReadDb((tx) =>
+          tx.query.caseLawDecisions.findFirst({
+            where: { id: { eq: decisionId } },
+            columns: decisionColumns,
+          }),
+        );
 
   if (!decision) {
     return Result.ok({ status: "error", error: "Decision not found" });
@@ -248,6 +259,16 @@ export const generateAnalysis = async (
     if (Date.now() - startedAt < SENTINEL_STALE_MS) {
       return Result.ok({ status: "generating" });
     }
+  }
+
+  // A shared corpus connection is deliberately read-only. It may serve an
+  // analysis already persisted by the owning environment, but this process
+  // must never try to create or update one in that database.
+  if (envBase.CASE_LAW_DATABASE_URL !== undefined) {
+    return Result.ok({
+      status: "error",
+      error: "Analysis is unavailable for this decision",
+    });
   }
 
   // AI availability is checked only on the path that actually invokes the

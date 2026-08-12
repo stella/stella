@@ -11,6 +11,7 @@
  * `documentPending` instead; the fetch is wired in here.
  */
 
+import { envBase } from "@/api/env-base";
 import {
   isDeferredDocumentFetchable,
   readThroughDeferredDocument,
@@ -30,6 +31,14 @@ const hydrate = async (
   decision: ReadableDecision,
   recordDemand: boolean,
 ): Promise<ReadableDecision> => {
+  // The local shared-corpus mode is strictly read-side. An incomplete remote
+  // decision stays metadata-only instead of starting the ingestion path,
+  // which would otherwise crawl the publisher and write through the local
+  // ingestion database.
+  if (envBase.CASE_LAW_DATABASE_URL !== undefined) {
+    return decision;
+  }
+
   if (
     !isDeferredDocumentFetchable({
       adapterKey: decision.source.adapterKey,

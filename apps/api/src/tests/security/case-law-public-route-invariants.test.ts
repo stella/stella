@@ -18,6 +18,8 @@ void scopedDbIsPublicReadDb;
 const ROUTES_FILE = "apps/api/src/handlers/case-law/public-routes.ts";
 const LIST_DECISIONS_FILE = "apps/api/src/handlers/case-law/decisions/list.ts";
 const READ_DECISION_FILE = "apps/api/src/handlers/case-law/decisions/get.ts";
+const DEFERRED_DOCUMENT_FILE =
+  "apps/api/src/handlers/case-law/decisions/get-deferred-document.ts";
 const FACETS_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/facets.ts";
 const SEARCH_DECISIONS_FILE =
@@ -37,6 +39,8 @@ const readSource = async (path: string) =>
 const readRoutesSource = async () => await readSource(ROUTES_FILE);
 const readListSource = async () => await readSource(LIST_DECISIONS_FILE);
 const readDecisionSource = async () => await readSource(READ_DECISION_FILE);
+const readDeferredDocumentSource = async () =>
+  await readSource(DEFERRED_DOCUMENT_FILE);
 const readFacetsSource = async () => await readSource(FACETS_DECISIONS_FILE);
 const readSearchSource = async () => await readSource(SEARCH_DECISIONS_FILE);
 const readSearchSchemaSource = async () =>
@@ -89,18 +93,31 @@ describe("public case-law route boundary", () => {
     expect(source).toContain("SET TRANSACTION READ ONLY");
   });
 
+  test("shared-corpus reads cannot start document ingestion", async () => {
+    const source = await readDeferredDocumentSource();
+    const guard = source.indexOf("envBase.CASE_LAW_DATABASE_URL !== undefined");
+    const ingestionCall = source.indexOf("readThroughDeferredDocument({");
+
+    expect(guard).toBeGreaterThanOrEqual(0);
+    expect(ingestionCall).toBeGreaterThan(guard);
+  });
+
   test("public read transaction only exposes case-law relational queries", () => {
     type PublicQueryKeys = keyof CaseLawPublicReadTransaction["query"];
-    type PublicQueryKeysAreCaseLawOnly =
-      PublicQueryKeys extends `caseLaw${string}` ? true : false;
+    type PublicQueryKeysAreDecisionOnly =
+      PublicQueryKeys extends "caseLawDecisions" ? true : false;
     type PublicTxCanQueryCaseLawDecisions =
       "caseLawDecisions" extends PublicQueryKeys ? true : false;
+    type PublicTxCanQueryMatterLinks =
+      "caseLawMatterLinks" extends PublicQueryKeys ? true : false;
 
-    const publicQueryKeysAreCaseLawOnly: PublicQueryKeysAreCaseLawOnly = true;
+    const publicQueryKeysAreDecisionOnly: PublicQueryKeysAreDecisionOnly = true;
     const publicTxCanQueryCaseLawDecisions: PublicTxCanQueryCaseLawDecisions = true;
+    const publicTxCanQueryMatterLinks: PublicTxCanQueryMatterLinks = false;
 
-    expect(publicQueryKeysAreCaseLawOnly).toBe(true);
+    expect(publicQueryKeysAreDecisionOnly).toBe(true);
     expect(publicTxCanQueryCaseLawDecisions).toBe(true);
+    expect(publicTxCanQueryMatterLinks).toBe(false);
   });
 
   test("public read routes are not protected by auth middleware", async () => {

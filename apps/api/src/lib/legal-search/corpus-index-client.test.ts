@@ -10,7 +10,7 @@ import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-p
 // id-order results. These tests stub global fetch and assert on the
 // outgoing request, not on engine behaviour.
 
-type RecordedRequest = { path: string; body: string };
+type RecordedRequest = { host: string; path: string; body: string };
 
 let requests: RecordedRequest[];
 let responseBody: unknown;
@@ -32,8 +32,10 @@ beforeEach(() => {
     input: Parameters<typeof fetch>[0],
     init?: Parameters<typeof fetch>[1],
   ): Promise<Response> => {
+    const url = new URL(resolveUrl(input));
     requests.push({
-      path: new URL(resolveUrl(input)).pathname,
+      host: url.host,
+      path: url.pathname,
       body: typeof init?.body === "string" ? init.body : "",
     });
     return new Response(JSON.stringify(responseBody), { status: 200 });
@@ -59,6 +61,7 @@ test("search sends the documented sort_by parameter", async () => {
 
   expect(result.isOk()).toBe(true);
   const request = requests.at(0);
+  expect(request?.host).toBe("localhost:7281");
   expect(request?.path).toBe("/api/v1/legal_corpus_v1_cze/search");
   const body: Record<string, unknown> = JSON.parse(request?.body ?? "{}");
   expect(body["sort_by"]).toBe("_score");
@@ -174,6 +177,7 @@ test("delete-by-query posts one document-scoped delete task", async () => {
   // indexer never has to know how many documents a row previously emitted.
   expect(requests).toHaveLength(1);
   const request = requests.at(0);
+  expect(request?.host).toBe("localhost:7280");
   expect(request?.path).toBe("/api/v1/legal_corpus_v1_cze/delete-tasks");
   const body: Record<string, unknown> = JSON.parse(request?.body ?? "{}");
   expect(body["query"]).toBe('document_id:"dec-1"');
