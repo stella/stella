@@ -248,7 +248,7 @@ const AuthorField = ({
       <a
         aria-label={fieldLabel}
         className="hover:bg-muted -mx-1 flex w-fit max-w-full min-w-0 items-center gap-2 rounded-md px-1 py-0.5 transition-colors"
-        href={safeAuthorUrl}
+        href={sanitizeHref(authorUrl)}
         onClick={(e) => e.stopPropagation()}
         rel="noreferrer"
         target="_blank"

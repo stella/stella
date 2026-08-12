@@ -26,6 +26,7 @@ import {
 import { useGuideRunner } from "@/features/guides/use-guide-runner";
 import { useOnboardingProgress } from "@/features/guides/use-onboarding-progress";
 import { COMMUNITY_FORUM_URL, CONTACT_EMAIL } from "@/lib/consts";
+import { sanitizeHref } from "@/lib/sanitize-href";
 
 const HELP_TABS = {
   guides: "guides",
@@ -113,7 +114,7 @@ const GuideCommunityPanel = () => {
             // The label duplicates the visible text: the anchor's children are
             // injected by `Button`, so the linter cannot see them statically.
             aria-label={t("guides.community.linkLabel")}
-            href={COMMUNITY_FORUM_URL}
+            href={sanitizeHref(COMMUNITY_FORUM_URL)}
             rel="noreferrer noopener"
             target="_blank"
           />

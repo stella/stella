@@ -82,6 +82,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { detached } from "@/lib/detached";
+import { sanitizeHref } from "@/lib/sanitize-href";
 import {
   getUserFileContentUrl,
   getUserFileThumbnailUrl,
@@ -778,7 +779,7 @@ const UserAttachments = ({
               "bg-muted/50 rounded-md px-2 py-1",
               "text-muted-foreground text-xs",
             )}
-            href={contentUrl}
+            href={sanitizeHref(contentUrl)}
             key={key}
             rel="noreferrer"
             target="_blank"

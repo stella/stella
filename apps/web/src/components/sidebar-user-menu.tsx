@@ -52,6 +52,7 @@ import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { getDisplayName } from "@/lib/get-display-name";
 import { organizationListOptions } from "@/lib/organization/queries";
+import { sanitizeHref } from "@/lib/sanitize-href";
 
 const CHANGELOG_URL = "https://stll.app/changelog";
 const isDev = import.meta.env.DEV;
@@ -254,7 +255,7 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
             render={
               <a
                 aria-label={t("selfhost.viewReleaseNotes")}
-                href={CHANGELOG_URL}
+                href={sanitizeHref(CHANGELOG_URL)}
                 rel="noreferrer"
                 target="_blank"
               />
