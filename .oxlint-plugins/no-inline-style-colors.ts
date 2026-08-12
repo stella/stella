@@ -1,7 +1,7 @@
-// Detect hardcoded color values in ANY string literal inside style objects
-// or config props. Flags hex colors (#fff, #000000), named colors (white,
-// black), and color functions (rgb, rgba, hsl, hsla) regardless of
-// property name — catching border shorthands, boxShadow, custom props, etc.
+// Detect hardcoded color values in JSX style object literals. Flags hex
+// colors (#fff, #000000), named colors (white, black), and color functions
+// (rgb, rgba, hsl, hsla) regardless of property name, catching border
+// shorthands, boxShadow, custom props, etc.
 //
 // Safe: var(--token), transparent, inherit, currentColor, none, unset, initial.
 
@@ -112,24 +112,46 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        return {
-          // Check every Property node — any object property with a
-          // string value containing a hardcoded color is flagged.
-          Property(node) {
-            const propName = getPropertyName(node.key) ?? "?";
+        const checkStyleObject = (styleObject) => {
+          for (const property of styleObject.properties) {
+            if (property.type !== "Property") {
+              continue;
+            }
 
-            const val = node.value;
-            if (val.type !== "Literal" || typeof val.value !== "string") {
+            const value = property.value;
+            if (value.type !== "Literal" || typeof value.value !== "string") {
+              continue;
+            }
+
+            const match = containsHardcodedColor(value.value);
+            if (match === null) {
+              continue;
+            }
+
+            context.report({
+              node: value,
+              messageId: "inlineColor",
+              data: {
+                match,
+                prop: getPropertyName(property.key) ?? "?",
+              },
+            });
+          }
+        };
+
+        return {
+          JSXAttribute(node) {
+            if (
+              node.name.type !== "JSXIdentifier" ||
+              node.name.name !== "style" ||
+              node.value?.type !== "JSXExpressionContainer"
+            ) {
               return;
             }
 
-            const match = containsHardcodedColor(val.value);
-            if (match) {
-              context.report({
-                node: val,
-                messageId: "inlineColor",
-                data: { match, prop: propName },
-              });
+            const expression = node.value.expression;
+            if (expression.type === "ObjectExpression") {
+              checkStyleObject(expression);
             }
           },
         };

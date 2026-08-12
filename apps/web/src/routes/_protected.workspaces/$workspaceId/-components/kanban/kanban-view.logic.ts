@@ -146,14 +146,10 @@ const getGroupOptions = (property: WorkspaceProperty): GroupOption[] => {
 export { TASK_STATUS_ORDER };
 
 const STATUS_OPTION_COLORS = {
-  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- OptionColor domain constant, not a CSS color value
   open: "gray",
-  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- OptionColor domain constant, not a CSS color value
   in_progress: "blue",
   in_review: "amber",
-  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- OptionColor domain constant, not a CSS color value
   done: "green",
-  // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- OptionColor domain constant, not a CSS color value
   cancelled: "red",
 } as const satisfies Record<TaskStatus, OptionColor>;
 

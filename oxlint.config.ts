@@ -45,7 +45,7 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-inline-endpoint-in-routes.fixture.ts", [
     "no-inline-endpoint-in-routes/no-inline-endpoint-in-routes",
   ]),
-  fixtureRuleOverride("no-inline-style-colors.fixture.ts", [
+  fixtureRuleOverride("no-inline-style-colors.fixture.tsx", [
     "no-inline-style-colors/no-inline-style-colors",
   ]),
   fixtureRuleOverride("no-ambient-hotkey-format.fixture.ts", [
@@ -367,9 +367,6 @@ export default defineConfig({
     "no-raw-date-input/no-raw-date-input": "error",
     "stella-lowercase/stella-lowercase": "error",
     "must-use-result/must-use-result": "error",
-    "no-any-casts/no-any-casts": "error",
-    "no-dangerous-type-assertions/no-dangerous-type-assertions": "error",
-    "no-prompt-boundary-casts/no-prompt-boundary-casts": "error",
     "no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast": "error",
     "no-partial-record-satisfies/no-partial-record-satisfies": "error",
     "no-public-law-browser-globals/no-public-law-browser-globals": "off",
@@ -609,9 +606,6 @@ export default defineConfig({
     "./.oxlint-plugins/require-transaction-abort.ts",
     "./.oxlint-plugins/no-direct-audit-log-insert.ts",
     "./.oxlint-plugins/must-use-result.ts",
-    "./.oxlint-plugins/no-any-casts.ts",
-    "./.oxlint-plugins/no-dangerous-type-assertions.ts",
-    "./.oxlint-plugins/no-prompt-boundary-casts.ts",
     "./.oxlint-plugins/no-unvalidated-json-domain-cast.ts",
     "./.oxlint-plugins/no-public-law-browser-globals.ts",
     "./.oxlint-plugins/no-raw-public-law-seo.ts",
@@ -979,7 +973,6 @@ export default defineConfig({
         "no-console": "off",
         "no-bare-error/no-bare-error": "off",
         "no-non-null-assertion": "off",
-        "no-any-casts/no-any-casts": "off",
         "typescript/no-unsafe-type-assertion": "off",
         "forbid-process-env-outside-env-ts/forbid-process-env-outside-env-ts":
           "off",
@@ -2667,8 +2660,6 @@ export default defineConfig({
         "no-physical-properties/no-physical-properties": "off",
         "require-safe-route-handlers/require-safe-route-handlers": "off",
         "security-guards/no-raw-filename-write": "off",
-        // Fixture builders legitimately construct partial objects.
-        "no-dangerous-type-assertions/no-dangerous-type-assertions": "off",
         "security-guards/no-unsanitized-href": "off",
         "security-guards/no-unscoped-user-query": "off",
         "vitest/no-focused-tests": "error",

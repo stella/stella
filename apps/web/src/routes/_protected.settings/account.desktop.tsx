@@ -20,6 +20,7 @@ import {
   WINDOWS_MSI_URL,
 } from "@/lib/desktop-downloads";
 import { detached } from "@/lib/detached";
+import { sanitizeHref } from "@/lib/sanitize-href";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
 export const Route = createFileRoute("/_protected/settings/account/desktop")({
@@ -78,30 +79,42 @@ function DesktopPage() {
           <div className="flex flex-col gap-3 p-1">
             {platform === "mac" && (
               <>
-                <a className={primaryClass} href={MACOS_DMG_URL}>
+                <a className={primaryClass} href={sanitizeHref(MACOS_DMG_URL)}>
                   {t("settings.account.desktopDownloadMac")}
                 </a>
-                <a className={secondaryClass} href={WINDOWS_EXE_URL}>
+                <a
+                  className={secondaryClass}
+                  href={sanitizeHref(WINDOWS_EXE_URL)}
+                >
                   {t("settings.account.desktopDownloadOtherMac")}
                 </a>
               </>
             )}
             {platform === "windows" && (
               <>
-                <a className={primaryClass} href={WINDOWS_EXE_URL}>
+                <a
+                  className={primaryClass}
+                  href={sanitizeHref(WINDOWS_EXE_URL)}
+                >
                   {t("settings.account.desktopDownloadWindows")}
                 </a>
-                <a className={secondaryClass} href={WINDOWS_MSI_URL}>
+                <a
+                  className={secondaryClass}
+                  href={sanitizeHref(WINDOWS_MSI_URL)}
+                >
                   {t("settings.account.desktopDownloadOtherWindows")}
                 </a>
               </>
             )}
             {platform === "other" && (
               <div className="flex flex-col gap-2">
-                <a className={primaryClass} href={WINDOWS_EXE_URL}>
+                <a
+                  className={primaryClass}
+                  href={sanitizeHref(WINDOWS_EXE_URL)}
+                >
                   {t("settings.account.desktopDownloadWindows")}
                 </a>
-                <a className={outlineClass} href={MACOS_DMG_URL}>
+                <a className={outlineClass} href={sanitizeHref(MACOS_DMG_URL)}>
                   {t("settings.account.desktopDownloadMac")}
                 </a>
               </div>

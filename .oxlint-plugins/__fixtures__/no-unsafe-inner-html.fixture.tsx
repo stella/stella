@@ -70,10 +70,26 @@ export const UnsafeSpreadPayload = () => (
   />
 );
 
+const shadowedSanitizeHtml = (value: string): string => value;
+
+export const UnsafeShadowedSanitizer = () => (
+  <div
+    dangerouslySetInnerHTML={{
+      // oxlint-disable-next-line no-unsafe-inner-html/no-unsafe-inner-html
+      __html: shadowedSanitizeHtml(rawHtml),
+    }}
+  />
+);
+
 // --- Cases the rule MUST NOT flag ---
 
-export const SafeSanitizedCall = () => (
-  <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(rawHtml) }} />
+export const SafeSanitizedCallWithProvenance = () => (
+  <div
+    dangerouslySetInnerHTML={{
+      // safe-html: sanitized locally by the fixture's escaping sanitizeHtml helper
+      __html: sanitizeHtml(rawHtml),
+    }}
+  />
 );
 
 export const SafeAnnotatedSource = () => (
@@ -87,6 +103,7 @@ export const SafeAnnotatedSource = () => (
 
 export const SafeTemplateInterpolation = () => {
   const element = document.createElement("div");
+  // safe-html: rawHtml is escaped by escapeHtml before interpolation
   element.innerHTML = `<strong>${escapeHtml(rawHtml)}</strong>`;
   return element;
 };
