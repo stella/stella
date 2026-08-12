@@ -16,6 +16,7 @@ import {
   stella,
   user,
   workspaceIdCheck,
+  wsOrganizationPolicies,
   wsPolicies,
   timestamptz,
 } from "./common";
@@ -292,7 +293,7 @@ export const workspaceContacts = p.pgTable(
     p
       .uniqueIndex("workspace_contacts_ws_contact_role_uidx")
       .on(table.workspaceId, table.contactId, table.role),
-    ...wsPolicies(),
+    ...wsOrganizationPolicies("workspace_contacts"),
   ],
 );
 

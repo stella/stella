@@ -1018,6 +1018,66 @@ const countShadowedNamespaces = (content: string): number => {
   return block === undefined ? 0 : (block.match(/^[ \t]*"/gmu) ?? []).length;
 };
 
+const PG_TABLE_MARKER = "p.pgTable(";
+const WORKSPACE_ONLY_POLICIES_MARKER = "...wsPolicies()";
+const ORGANIZATION_ID_COLUMN_MARKER = "organizationId:";
+
+// Offsets of every occurrence of `marker`, left to right.
+const markerOffsets = (source: string, marker: string): number[] => {
+  const offsets: number[] = [];
+  let offset = source.indexOf(marker);
+  while (offset !== -1) {
+    offsets.push(offset);
+    offset = source.indexOf(marker, offset + marker.length);
+  }
+  return offsets;
+};
+
+// True when some occurrence of `marker` opens a line, i.e. only indentation
+// precedes it. Distinguishes a property declaration from the same identifier
+// appearing mid-expression.
+const hasLineLeadingMarker = (source: string, marker: string): boolean =>
+  markerOffsets(source, marker).some((offset) => {
+    let start = offset;
+    while (
+      start > 0 &&
+      (source[start - 1] === " " || source[start - 1] === "\t")
+    ) {
+      start -= 1;
+    }
+    return start === 0 || source[start - 1] === "\n";
+  });
+
+/**
+ * Tables that persist an `organization_id` alongside `workspace_id` but
+ * authorize rows with `wsPolicies()`, which pins only the workspace. The
+ * org-pinned form `wsOrganizationPolicies("<table>")` requires both scopes in
+ * every command, so a row whose `organization_id` disagrees with the
+ * transaction's tenant stays unreachable however its workspace was authorized.
+ * A table with no `organization_id` column has nothing to pin and is not
+ * counted; adding the column to such a table is a schema decision, not a
+ * policy one. Must stay at zero.
+ *
+ * Plain substring scanning throughout: the declaration boundaries and both
+ * markers are fixed strings, so no pattern here can backtrack.
+ */
+const countWorkspaceOnlyRlsOnOrgTables = (content: string): number => {
+  const source = stripComments(content);
+  const starts = markerOffsets(source, PG_TABLE_MARKER);
+
+  let count = 0;
+  for (const [index, start] of starts.entries()) {
+    const body = source.slice(start, starts[index + 1] ?? source.length);
+    if (
+      body.includes(WORKSPACE_ONLY_POLICIES_MARKER) &&
+      hasLineLeadingMarker(body, ORGANIZATION_ID_COLUMN_MARKER)
+    ) {
+      count += 1;
+    }
+  }
+  return count;
+};
+
 type FileCounter = (content: string, file: string) => number;
 
 type RatchetMetric = {
@@ -1317,6 +1377,14 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: ["apps/web/src/features/**/*.{ts,tsx}"],
     exclude: isExcludedSource,
     count: countCrossSliceImports(crossesFeature),
+  },
+  {
+    id: "workspace-only-rls-on-org-tables",
+    description:
+      "drizzle tables declaring an organizationId column while authorizing rows with wsPolicies() (workspace pin only) instead of wsOrganizationPolicies(<table>) (workspace pin AND organization pin); at 0 — keep it there",
+    include: ["apps/api/src/db/schema/**/*.ts"],
+    exclude: isExcludedSource,
+    count: countWorkspaceOnlyRlsOnOrgTables,
   },
 ];
 
@@ -2122,6 +2190,64 @@ const SUPPRESSION_FIXTURE_LINES = [
 ];
 const SELF_TEST_SUPPRESSIONS = `${SUPPRESSION_FIXTURE_LINES.join("\n")}\n`;
 
+const WORKSPACE_ONLY_RLS_FIXTURE_LINES = [
+  "export const counted = p.pgTable(",
+  '  "counted",',
+  "  {",
+  '    organizationId: safeOrganizationId("organization_id").notNull(),',
+  '    workspaceId: safeWorkspaceId("workspace_id").notNull(),',
+  "  },",
+  "  (table) => [...wsPolicies()],",
+  ");",
+  "export const alsoCounted = p.pgTable(",
+  '  "also_counted",',
+  "  {",
+  '    organizationId: safeOrganizationId("organization_id").notNull(),',
+  '    workspaceId: safeWorkspaceId("workspace_id").notNull(),',
+  "  },",
+  "  (table) => [...wsPolicies()],",
+  ");",
+  "export const noOrgColumn = p.pgTable(",
+  '  "no_org_column",',
+  '  { workspaceId: safeWorkspaceId("workspace_id").notNull() },',
+  "  (table) => [...wsPolicies()],",
+  ");",
+  "export const alreadyPinned = p.pgTable(",
+  '  "already_pinned",',
+  "  {",
+  '    organizationId: safeOrganizationId("organization_id").notNull(),',
+  '    workspaceId: safeWorkspaceId("workspace_id").notNull(),',
+  "  },",
+  '  (table) => [...wsOrganizationPolicies("already_pinned")],',
+  ");",
+  "export const orgScoped = p.pgTable(",
+  '  "org_scoped",',
+  '  { organizationId: safeOrganizationId("organization_id").notNull() },',
+  "  (table) => [...orgPolicies()],",
+  ");",
+  "export const jsonPayloadOnly = p.pgTable(",
+  '  "json_payload_only",',
+  "  {",
+  '    workspaceId: safeWorkspaceId("workspace_id").notNull(),',
+  "    payload: jsonb().$type<{ organizationId: string }>(),",
+  "  },",
+  "  (table) => [...wsPolicies()],",
+  ");",
+  "// export const commented = p.pgTable(",
+  '//   "commented",',
+  '//   { organizationId: safeOrganizationId("organization_id").notNull() },',
+  "//   (table) => [...wsPolicies()],",
+  "// );",
+];
+const SELF_TEST_WORKSPACE_ONLY_RLS = `${WORKSPACE_ONLY_RLS_FIXTURE_LINES.join("\n")}\n`;
+// Expected: the two tables that declare organizationId AND spread wsPolicies().
+// Excluded: the workspace-only table with no organizationId column, the table
+// already on wsOrganizationPolicies, the org-only table, the table whose only
+// `organizationId:` sits mid-line inside a JSONB payload type rather than
+// opening a column declaration, and the fully commented-out declaration — the
+// last one proving the comment strip runs before the scan.
+const EXPECTED_WORKSPACE_ONLY_RLS = 2;
+
 const writeFixture = (root: string, rel: string, content: string): void => {
   const full = path.join(root, rel);
   mkdirSync(path.dirname(full), { recursive: true });
@@ -2376,6 +2502,11 @@ const runSelfTest = (): number => {
       root,
       "apps/web/src/features/alpha/uses-beta.ts",
       SELF_TEST_CROSS_FEATURE,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/db/schema/workspace-only-rls.ts",
+      SELF_TEST_WORKSPACE_ONLY_RLS,
     );
     // Both mirrors, so each `include` glob is exercised rather than only the
     // first: the metric's whole point is that the two artifacts stay in step.
@@ -2663,6 +2794,16 @@ const runSelfTest = (): number => {
     if (crossFeatureMetric.count !== EXPECTED_CROSS_FEATURE) {
       failures.push(
         `cross-feature-imports counted ${crossFeatureMetric.count}, expected ${EXPECTED_CROSS_FEATURE}`,
+      );
+    }
+
+    const workspaceOnlyRlsMetric = requireSnapshot(
+      snapshot,
+      "workspace-only-rls-on-org-tables",
+    );
+    if (workspaceOnlyRlsMetric.count !== EXPECTED_WORKSPACE_ONLY_RLS) {
+      failures.push(
+        `workspace-only-rls-on-org-tables counted ${workspaceOnlyRlsMetric.count}, expected ${EXPECTED_WORKSPACE_ONLY_RLS}`,
       );
     }
 

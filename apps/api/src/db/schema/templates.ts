@@ -17,7 +17,6 @@ import {
   safeWorkspaceId,
   tsvector,
   user,
-  wsPolicies,
   wsOrganizationPolicies,
   wsOrganizationReadOnlyPolicies,
   timestamptz,
@@ -257,7 +256,7 @@ export const searchDocuments = p.pgTable(
       .index("search_documents_org_updated_id_idx")
       .on(table.organizationId, table.updatedAt.desc(), table.entityId.desc()),
     p.index("search_documents_tsv_idx").using("gin", table.tsv),
-    ...wsPolicies(),
+    ...wsOrganizationPolicies("search_documents"),
   ],
 );
 
@@ -383,7 +382,7 @@ export const workspaceSearchDocuments = p.pgTable(
         table.workspaceId.desc(),
       ),
     p.index("workspace_search_docs_tsv_idx").using("gin", table.tsv),
-    ...wsPolicies(),
+    ...wsOrganizationPolicies("workspace_search_documents"),
   ],
 );
 
@@ -545,6 +544,6 @@ export const extractedContent = p.pgTable(
         AND ${table.ocrPayloadIv} IS NOT NULL
       )`,
     ),
-    ...wsPolicies(),
+    ...wsOrganizationPolicies("extracted_content"),
   ],
 );
