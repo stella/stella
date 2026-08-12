@@ -437,11 +437,31 @@ export const startWorkflow = async ({
     return { status: "already-running" };
   }
 
-  await runStateStore.setRequestId({
-    requestId,
-    runLockTtlSec: RUNNING_LOCK_TTL_SEC,
-    workspaceId,
+  // Between the claim above and the try below, a throw would escape holding a
+  // lock nobody owns: the caller sees an exception, and its retry is answered
+  // `already-running` by the claim it orphaned, which reads as a run in
+  // flight. Report the same in-band failure the rest of the start path
+  // reports instead, releasing the claim first. Releasing is best-effort by
+  // necessity — the release travels the connection that just failed — and the
+  // hour-long TTL plus `reconcileOrphanedWorkflows` remain the backstop.
+  const requestIdSet = await Result.tryPromise({
+    try: async () =>
+      await runStateStore.setRequestId({
+        requestId,
+        runLockTtlSec: RUNNING_LOCK_TTL_SEC,
+        workspaceId,
+      }),
+    catch: (cause) => cause,
   });
+  if (Result.isError(requestIdSet)) {
+    await runStateStore
+      .clear(workspaceId)
+      .catch((clearError: unknown) =>
+        captureError(clearError, { workspaceId }),
+      );
+    captureError(requestIdSet.error, { workspaceId });
+    return { status: "failed" };
+  }
 
   const createdRunKey = await extractionRunStore
     .create({
