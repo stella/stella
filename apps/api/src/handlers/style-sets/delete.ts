@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { t } from "elysia";
 
+import { abortableTx } from "@/api/db/safe-db";
 import { styleSets } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -30,7 +31,7 @@ export default createSafeRootHandler(
   config,
   async function* ({ safeDb, session, params, recordAuditEvent }) {
     const deleted = yield* Result.await(
-      safeDb(async (tx) => {
+      abortableTx(safeDb, async (tx) => {
         await tx.execute(
           sql`SELECT pg_advisory_xact_lock(hashtext(${params.styleSetId}))`,
         );
@@ -48,7 +49,10 @@ export default createSafeRootHandler(
           },
         });
         if (!existing) {
-          return false;
+          throw new HandlerError({
+            status: 404,
+            message: "Style set not found",
+          });
         }
 
         const deletedAt = existing.deletedAt ?? new Date();
@@ -86,7 +90,13 @@ export default createSafeRootHandler(
           deletionBoundary?.token === null ||
           deletionBoundary === undefined
         ) {
-          return false;
+          // The soft delete and its audit row are already written here, so
+          // returning would commit a recorded deletion the handler then
+          // reports as a missing style set.
+          throw new HandlerError({
+            status: 404,
+            message: "Style set not found",
+          });
         }
         return {
           deletedAtToken: deletionBoundary.token,
@@ -97,11 +107,6 @@ export default createSafeRootHandler(
       }),
     );
 
-    if (deleted === false) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Style set not found" }),
-      );
-    }
     yield* Result.await(
       Result.tryPromise({
         try: async () =>
