@@ -21,6 +21,10 @@ import {
   CASE_LAW_SOURCE_ROWS_BOUND,
   CASE_LAW_SOURCE_ROWS_INVARIANT,
 } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  createUnrecognizedSourceReporter,
+  sourceRegistryMembership,
+} from "@/api/lib/legal-search/source-registry-membership";
 
 /**
  * Where the standing listing reconciliation stands for one source.
@@ -44,6 +48,12 @@ type SourceReconciliationStatus = {
 
 type SourceStatus = {
   adapterKey: string;
+  /**
+   * False when no adapter is registered for `adapterKey`: a retired source, or
+   * a seeded/test row. The corpus figures below are still that row's own, but
+   * nothing will ingest into it, which is not visible from the numbers alone.
+   */
+  adapterRegistered: boolean;
   name: string;
   enabled: boolean;
   syncCursor: string | null;
@@ -107,6 +117,9 @@ export const getIngestionStatus = async (
     });
 
     const sourceStatuses: SourceStatus[] = [];
+    const reportUnrecognizedSource = createUnrecognizedSourceReporter(
+      "case_law.ingestion_status",
+    );
 
     for (const source of sources) {
       // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential by design: single scoped-db transaction client, must not be parallelized
@@ -209,8 +222,14 @@ export const getIngestionStatus = async (
               lastCheckedAt: sliceRow?.lastCheckedAt?.toISOString() ?? null,
             };
 
+      const membership = sourceRegistryMembership(source.adapterKey);
+      if (membership.type === "unrecognized") {
+        reportUnrecognizedSource(source.adapterKey);
+      }
+
       sourceStatuses.push({
         adapterKey: source.adapterKey,
+        adapterRegistered: membership.type === "registered",
         name: source.name,
         enabled: source.enabled,
         syncCursor: source.syncCursor,

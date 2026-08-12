@@ -14,15 +14,23 @@ export const ADAPTER_KEYS = {
 export type AdapterKey = (typeof ADAPTER_KEYS)[keyof typeof ADAPTER_KEYS];
 
 /**
- * Bound for a complete `case_law_sources` read. Every source row names
- * an adapter key and `case_law_sources_adapter_key_idx` makes that key
- * unique, so the catalogue holds at most one row per registered
- * adapter. Registering an adapter widens the bound on its own.
+ * Capacity bound for a complete `case_law_sources` read, and nothing more.
+ *
+ * Deliberately NOT `ADAPTER_KEYS.length`. The registry is deployment state
+ * while the rows are history: a retired adapter leaves its row behind, a
+ * seeded environment carries fixture sources, and a test creates its own. All
+ * three are legitimate rows that a registry-sized bound would turn into a
+ * panic, in the operational views that exist to explain the corpus.
+ *
+ * Generous on purpose. The number is not a claim about which sources exist —
+ * that question is answered at read time, per row, against the registry — it
+ * is the point past which a complete read stops being a bounded one and the
+ * table has clearly grown a shape nobody designed.
  */
-export const CASE_LAW_SOURCE_ROWS_BOUND = Object.keys(ADAPTER_KEYS).length;
+export const CASE_LAW_SOURCE_ROWS_BOUND = 64;
 
 export const CASE_LAW_SOURCE_ROWS_INVARIANT =
-  "one row per ADAPTER_KEYS entry, enforced by case_law_sources_adapter_key_idx";
+  "case_law_sources is an operator-curated catalogue of at most a few dozen rows; the adapter registry is validated per row at read time, not by this bound";
 
 /**
  * Global parser version. Bump when ANY parser's AST output
