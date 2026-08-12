@@ -38,6 +38,7 @@ import type {
 } from "@/api/lib/document-review/run-contract";
 import { finalizeReviewRun } from "@/api/lib/document-review/run-finalize";
 import { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
+import { deletePlaybookColumns } from "@/api/lib/properties/delete-playbook-columns";
 import type { Position } from "@/api/lib/workflow/playbook-positions";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -53,7 +54,10 @@ let testDb: TestDatabase;
 let ids: TestIds;
 
 const seededRunIds: SafeId<"documentReviewRun">[] = [];
-const seededPropertyIds: SafeId<"property">[] = [];
+// Tracked by kind, because that is what taking them down again requires: a
+// verdict column's dependency edge restricts deleting the ASK column it reads.
+const seededAskIds: SafeId<"property">[] = [];
+const seededVerdictIds: SafeId<"property">[] = [];
 const seededPlaybookIds: SafeId<"playbookDefinition">[] = [];
 
 const POSITION_ID = "11111111-1111-4111-8111-111111111111";
@@ -166,7 +170,8 @@ const seedMaterializedColumns = async (
 ): Promise<{ askId: SafeId<"property">; verdictId: SafeId<"property"> }> => {
   const askId = toSafeId<"property">(Bun.randomUUIDv7());
   const verdictId = toSafeId<"property">(Bun.randomUUIDv7());
-  seededPropertyIds.push(askId, verdictId);
+  seededAskIds.push(askId);
+  seededVerdictIds.push(verdictId);
   await testDb.insert(properties).values([
     {
       id: askId,
@@ -260,6 +265,24 @@ const propertyCount = async (): Promise<number> => {
   return rows.at(0)?.value ?? 0;
 };
 
+/**
+ * Take materialized columns down the way the product does, through the helper
+ * `materializePlaybookRun` uses. A single statement over both kinds violates
+ * the dependency edge's RESTRICT, which is a fact about the schema the fixture
+ * has to respect rather than work around.
+ */
+const removeColumns = async (
+  verdictIds: readonly SafeId<"property">[],
+  askIds: readonly SafeId<"property">[],
+): Promise<void> => {
+  await deletePlaybookColumns({
+    tx: asTestRaw<Transaction>(testDb),
+    workspaceId: ids.wsA1,
+    verdictIds,
+    askIds,
+  });
+};
+
 const clearRuns = async (): Promise<void> => {
   if (seededRunIds.length === 0) {
     return;
@@ -279,11 +302,7 @@ beforeAll(async () => {
 afterAll(async () => {
   try {
     await clearRuns();
-    if (seededPropertyIds.length > 0) {
-      await testDb
-        .delete(properties)
-        .where(inArray(properties.id, seededPropertyIds));
-    }
+    await removeColumns(seededVerdictIds, seededAskIds);
     if (seededPlaybookIds.length > 0) {
       await testDb
         .delete(playbookDefinitions)
@@ -480,16 +499,15 @@ describe("deleting what a review was measured against", () => {
     const findingId = await seedFinding(runId);
 
     // The verdict column reads the ASK column, so the ASK cannot go first.
+    // This is the rule `handlers/properties/delete.ts` answers 400 for when a
+    // reviewer tries to delete one column on its own.
     expect(
-      violationText(
-        await rejectionOf(
-          testDb.delete(properties).where(eq(properties.id, askId)),
-        ),
-      ),
+      violationText(await rejectionOf(removeColumns([], [askId]))),
     ).toContain(DEPENDS_ON_RESTRICT_FK);
 
-    await testDb.delete(properties).where(eq(properties.id, verdictId));
-    await testDb.delete(properties).where(eq(properties.id, askId));
+    // Taken down through the same helper `materializePlaybookRun` uses, so the
+    // fixture cannot drift from the order the product deletes in.
+    await removeColumns([verdictId], [askId]);
 
     const remaining = await testDb
       .select({ id: properties.id })

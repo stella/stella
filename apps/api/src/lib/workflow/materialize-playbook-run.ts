@@ -16,6 +16,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { remapNodePropertyIds } from "@/api/lib/conditions/ast-utils";
 import { LIMITS } from "@/api/lib/limits";
 import { createDefaultTool } from "@/api/lib/properties/create-schema";
+import { deletePlaybookColumns } from "@/api/lib/properties/delete-playbook-columns";
 import { lockWorkspacePropertyWrites } from "@/api/lib/properties/property-lock";
 import type {
   PlaybookScope,
@@ -503,29 +504,15 @@ export const materializePlaybookRun = async ({
   await upsertProperties(askRows);
   await upsertProperties(verdictRows);
 
-  // Drop columns this pass no longer produces: verdicts for positions edited back
-  // to extract-only, and both ASK/verdict columns for removed positions. Verdicts
-  // go first because their dependency edge restricts deleting the ASK column.
-  if (obsoleteVerdictIds.length > 0) {
-    await tx
-      .delete(properties)
-      .where(
-        and(
-          eq(properties.workspaceId, workspaceId),
-          inArray(properties.id, obsoleteVerdictIds),
-        ),
-      );
-  }
-  if (obsoleteAskIds.length > 0) {
-    await tx
-      .delete(properties)
-      .where(
-        and(
-          eq(properties.workspaceId, workspaceId),
-          inArray(properties.id, obsoleteAskIds),
-        ),
-      );
-  }
+  // Drop columns this pass no longer produces: verdicts for positions edited
+  // back to extract-only, and both ASK/verdict columns for removed positions.
+  // The order the two kinds come down in is the helper's business.
+  await deletePlaybookColumns({
+    tx,
+    workspaceId,
+    verdictIds: obsoleteVerdictIds,
+    askIds: obsoleteAskIds,
+  });
 
   // Replace the materialized columns' dependencies wholesale: clear the existing
   // edges for every ASK/verdict id this run owns, then insert the current set.
