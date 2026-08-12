@@ -160,14 +160,13 @@ const testPaths = [
   }),
 ].sort();
 
-// A path-shaped argument narrows each batch rather than joining it; see
+// A positional pattern narrows each batch rather than joining it; see
 // scripts/test-path-filters.ts for why appending would defeat the batcher.
-const { bunArguments, pathFilters } =
-  partitionRunnerArguments(forwardedArguments);
-const selectedTestPaths = selectTestPaths(testPaths, pathFilters);
+const { bunArguments, patterns } = partitionRunnerArguments(forwardedArguments);
+const selectedTestPaths = selectTestPaths(testPaths, patterns);
 
 if (selectedTestPaths?.size === 0) {
-  console.error(`No test files match: ${pathFilters.join(", ")}`);
+  console.error(`No test files match: ${patterns.join(", ")}`);
   process.exit(1);
 }
 
