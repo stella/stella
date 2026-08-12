@@ -89,9 +89,21 @@ export const enqueueStyleSetPackageCleanupJob = async ({
   s3Key: string;
   styleSetId: string;
 }): Promise<void> => {
+  // The job id is derived from the key, so a claim for a key this queue has
+  // already handled collides with the retained record of that run. Both
+  // terminal states have to be reclaimed, not just `failed`: a claim placed
+  // ahead of the write completes as a no-op while the style set is still live,
+  // and `removeOnComplete` keeps that record, so a later replacement of the
+  // same key would `add()` a duplicate id, BullMQ would ignore it, and the
+  // superseded object would be left with no runnable cleanup. A job still
+  // waiting, delayed, or active needs no re-add: it is the claim.
   const jobId = createBullMqJobId(CLEANUP_JOB_NAME, s3Key);
   const existingJob = await cleanupQueue.getJob(jobId);
-  if (existingJob && (await existingJob.getState()) === "failed") {
+  if (existingJob) {
+    const state = await existingJob.getState();
+    if (state !== "completed" && state !== "failed") {
+      return;
+    }
     await existingJob.remove();
   }
 
