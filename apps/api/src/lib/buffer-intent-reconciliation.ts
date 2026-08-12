@@ -671,7 +671,7 @@ export const reconcileStaleBufferIntentsGlobally = async ({
   const pendingLimit = Math.ceil(limit / 2);
   const transferredLimit = Math.floor(limit / 2);
   const deleteLimiter = createConcurrencyLimiter(RECOVERY_DELETE_CONCURRENCY);
-  const [pendingCount, transferredCount] = await Promise.all([
+  const [pendingResult, transferredResult] = await Promise.allSettled([
     reconcileStaleBufferIntentBatch({
       safeDb,
       limit: pendingLimit,
@@ -687,5 +687,11 @@ export const reconcileStaleBufferIntentsGlobally = async ({
       deleteLimiter,
     }),
   ]);
-  return pendingCount + transferredCount;
+  if (pendingResult.status === "rejected") {
+    throw pendingResult.reason;
+  }
+  if (transferredResult.status === "rejected") {
+    throw transferredResult.reason;
+  }
+  return pendingResult.value + transferredResult.value;
 };
