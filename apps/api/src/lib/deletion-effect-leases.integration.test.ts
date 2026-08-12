@@ -314,8 +314,11 @@ describe("destructive-effect lease fencing", () => {
         .where(eq(entityDeletionEffectChunks.id, poison.chunkId))
         .limit(1)
     ).at(0);
+    if (!failedChunk) {
+      throw new Error("Expected failed effect chunk");
+    }
     expect(failedParent).toEqual({
-      nextAttemptAt: failedChunk?.nextAttemptAt,
+      nextAttemptAt: failedChunk.nextAttemptAt,
       status: "failed",
     });
     expect(failedParent?.nextAttemptAt).toBeInstanceOf(Date);
