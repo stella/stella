@@ -56,10 +56,10 @@ export const runWithRequestIdScope = <TResult>(fn: () => TResult): TResult =>
 
 /**
  * Tag the active request as AI-classed for the split latency SLO. Called
- * wherever AI work is committed to: the safe-handler factory (static
- * `requiresUsage` config) and the dynamic usage preflight
- * (`assertUsageAvailableForHandler`). No-op outside a request scope
- * (background workers), whose durations never reach the completion hooks.
+ * from the model-resolution seam (`resolveTanStackTextModel`), which every
+ * inference path passes through, so classification cannot be forgotten at
+ * a call site. No-op outside a request scope (background workers), whose
+ * durations never reach the completion hooks.
  */
 export const markAiRequest = (): void => {
   const ambient = requestIdStore.getStore();

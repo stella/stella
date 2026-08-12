@@ -29,6 +29,9 @@ describe("buildRequestDurationRecord", () => {
     for (const metric of directive?.Metrics ?? []) {
       expect(record).toHaveProperty(metric.Name);
     }
+    expect(record._aws.Timestamp).toBe(base.timestamp);
+    expect(record["http.route"]).toBe(base.route);
+    expect(record["http.status_code"]).toBe(base.statusCode);
   });
 
   test("rounds duration to an integer millisecond value", () => {

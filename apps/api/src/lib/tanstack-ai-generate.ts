@@ -29,6 +29,7 @@ import type {
 } from "@/api/lib/chat/model-ingress-guard";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
+import { markAiRequest } from "@/api/lib/observability/request-context";
 import {
   providerSafeJsonSchemaOptionsForTanStackProvider,
   type ProviderSafeJsonSchemaProjectionOptions,
@@ -615,14 +616,22 @@ export const resolveTanStackTextModel = ({
   orgAIConfig,
   reasoningEffort,
   role,
-}: ResolveTextModelOptions): ResolvedTanStackTextModel =>
-  modelId
+}: ResolveTextModelOptions): ResolvedTanStackTextModel => {
+  // Every inference path (chat, subagents, field generators, workflow
+  // batches) resolves its model here, so this is the one seam where a
+  // request is classified `ai` for the split latency SLO — a new AI
+  // endpoint cannot forget to classify itself. No-op outside a request
+  // scope (background workers).
+  markAiRequest();
+
+  return modelId
     ? getTanStackTextModelById(modelId, orgAIConfig, {
         role,
         organizationId,
         reasoningEffort,
       })
     : getTanStackTextModelForRole(role, orgAIConfig, { organizationId });
+};
 
 const messagesFromInput = (
   input: GenerateTanStackInputOptions,
