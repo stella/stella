@@ -612,5 +612,9 @@
   "cross-feature-imports": {
     "count": 0,
     "files": {}
+  },
+  "workspace-only-rls-on-org-tables": {
+    "count": 0,
+    "files": {}
   }
 }
