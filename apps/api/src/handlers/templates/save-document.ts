@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
+import { abortableTx } from "@/api/db/safe-db";
 import { templates, templateVersions } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -240,7 +241,7 @@ const saveTemplateDocument = createSafeRootHandler(
     // write the same key (one clobbering the other), and leave the committed
     // version pointing at the loser's bytes.
     const txResult = yield* Result.await(
-      safeDb(async (tx) => {
+      abortableTx(safeDb, async (tx) => {
         await tx.execute(
           sql`SELECT pg_advisory_xact_lock(hashtext(${templateId}))`,
         );
@@ -260,7 +261,10 @@ const saveTemplateDocument = createSafeRootHandler(
             ),
           );
         if (!locked) {
-          return { ok: false as const, reason: "not-found" as const };
+          throw new HandlerError({
+            status: 404,
+            message: "Template not found",
+          });
         }
 
         const versionCount = await tx.$count(
@@ -269,7 +273,10 @@ const saveTemplateDocument = createSafeRootHandler(
         );
 
         if (versionCount >= LIMITS.templateVersionsPerTemplate) {
-          return { ok: false as const, reason: "limit" as const };
+          throw new HandlerError({
+            status: 400,
+            message: "Version limit reached for this template",
+          });
         }
 
         const newVersion = locked.currentVersion + 1;
@@ -335,26 +342,17 @@ const saveTemplateDocument = createSafeRootHandler(
 
         if (!row) {
           // The update targeted a row the locked re-read just confirmed exists;
-          // a missing returning row means it vanished mid-transaction.
-          return { ok: false as const, reason: "not-found" as const };
+          // a missing returning row means it vanished mid-transaction. Returning
+          // here (rather than throwing) would commit the template update, the
+          // version row, and the audit event above while answering 404.
+          throw new HandlerError({
+            status: 404,
+            message: "Template not found",
+          });
         }
-        return { ok: true as const, row };
+        return { row };
       }),
     );
-
-    if (!txResult.ok) {
-      if (txResult.reason === "not-found") {
-        return Result.err(
-          new HandlerError({ status: 404, message: "Template not found" }),
-        );
-      }
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Version limit reached for this template",
-        }),
-      );
-    }
 
     return Result.ok(txResult.row);
   },
