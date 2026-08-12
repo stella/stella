@@ -33,6 +33,8 @@ import {
   type ClauseRun,
   isClauseBody,
 } from "@/api/lib/clauses/types";
+import { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
+import { openPlaybookRun } from "@/api/lib/document-review/open-playbook-run";
 import { LIMITS } from "@/api/lib/limits";
 import {
   brandPersistedClauseCategoryId,
@@ -41,8 +43,8 @@ import {
   brandPersistedPlaybookDefinitionId,
 } from "@/api/lib/safe-id-boundaries";
 import { startWorkflow } from "@/api/lib/workflow-queue";
-import { materializePlaybookRun } from "@/api/lib/workflow/materialize-playbook-run";
 import type { Position } from "@/api/lib/workflow/playbook-positions";
+import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
   defineTextFieldSpec,
@@ -1503,32 +1505,38 @@ const handleRunPlaybookTool: McpToolHandler = async ({ args, context }) => {
   );
   const recordAuditEvent = bindWorkspaceRecorder(context, workspaceId);
 
-  // Mirror the HTTP run handler: resolve the org-scoped definition and
-  // materialize its columns in one transaction, then enqueue the workflow.
-  // Usage is metered downstream per extracted property by the workflow, not
-  // synchronously here (the HTTP route defers metering the same way).
+  // Mirror the HTTP run handler by calling exactly what it calls: pin the
+  // playbook's approved snapshot, materialize its columns, and open one
+  // durable review run per document, in one transaction. Usage is metered
+  // downstream per extracted property by the workflow, not synchronously here
+  // (the HTTP route defers metering the same way).
   const txResult = await context.safeDb(async (tx) => {
-    const playbook = await tx.query.playbookDefinitions.findFirst({
+    const definition = await tx.query.playbookDefinitions.findFirst({
       where: {
         id: { eq: playbookId },
         organizationId: { eq: organizationId },
       },
-      columns: { positions: true, scope: true },
+      columns: { id: true, name: true, positions: true, scope: true },
     });
-    if (!playbook) {
+    if (!definition) {
       return {
         ok: false as const,
         status: 404 as const,
         message: "Playbook not found",
       };
     }
-    return await materializePlaybookRun({
+    return await openPlaybookRun({
       tx,
       workspaceId,
       organizationId,
-      playbookId,
-      positions: playbook.positions.items,
-      scope: playbook.scope,
+      userId: context.userId,
+      definition,
+      latestApprovedVersion: await loadLatestApprovedVersion({
+        tx,
+        organizationId,
+        playbookDefinitionId: definition.id,
+      }),
+      projection: PLAYBOOK_RUN_PROJECTION.COLUMNS,
       recordAuditEvent,
     });
   });
