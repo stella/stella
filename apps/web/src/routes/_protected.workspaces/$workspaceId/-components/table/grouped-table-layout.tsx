@@ -68,16 +68,20 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-columns";
 import {
   WorkspaceGridCell,
+  WorkspaceGridHead,
   WorkspaceGridRow,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid";
 import { getOrderedColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid-order";
 import { WorkspaceTable } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table";
+import { RowEndFillerCell } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/end-fillers";
+import { HeaderEndFillerCell } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/header-cells";
 import {
   TABLE_ROW_ESTIMATE_PX,
   type WorkspaceGridStyle,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
 import {
   addPropertyColId,
+  getEndFillerGridColumn,
   getScrollableAncestor,
   getWorkspaceGridTemplateColumns,
   tableEndFillerCellStyle,
@@ -481,6 +485,21 @@ const GroupSkeleton = ({
 
   return (
     <div style={gridStyle}>
+      <WorkspaceGridRow className="pointer-events-none">
+        {renderColumns.map((column) => (
+          <WorkspaceGridHead
+            className="flex items-center px-2"
+            key={column.id}
+            role="presentation"
+          >
+            <Skeleton className="h-3.5 w-2/5" />
+          </WorkspaceGridHead>
+        ))}
+        <HeaderEndFillerCell
+          addPropertyColumn={null}
+          renderColumns={renderColumns}
+        />
+      </WorkspaceGridRow>
       {GROUP_SKELETON_ROW_KEYS.slice(0, skeletonRowCount).map((rowKey) => (
         <WorkspaceGridRow className="pointer-events-none" key={rowKey}>
           {renderColumns.map((column) => (
@@ -492,6 +511,11 @@ const GroupSkeleton = ({
               <Skeleton className="h-3.5 w-3/5" />
             </WorkspaceGridCell>
           ))}
+          <RowEndFillerCell
+            addPropertyColumn={null}
+            renderColumns={renderColumns}
+            selected={false}
+          />
         </WorkspaceGridRow>
       ))}
       {fillerRowCount > 0 && (
@@ -507,6 +531,17 @@ const GroupSkeleton = ({
               style={tableEndFillerCellStyle}
             />
           ))}
+          <WorkspaceGridCell
+            className="min-h-0 border-e-0 border-b-0 p-0"
+            role="presentation"
+            style={{
+              gridColumn: getEndFillerGridColumn({
+                renderColumns,
+                addPropertyColumn: null,
+              }),
+              ...tableEndFillerCellStyle,
+            }}
+          />
         </WorkspaceGridRow>
       )}
     </div>
