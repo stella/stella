@@ -1,5 +1,9 @@
 import { panic } from "better-result";
 
+import { REVIEW_DECISION } from "@/components/ai-suggestions/document-review-queries";
+import type { DocumentReviewDecision } from "@/components/ai-suggestions/document-review-queries";
+import { isDecisionSettled } from "@/components/ai-suggestions/document-review-run.logic";
+import type { ReviewFindingDecisionRow } from "@/components/ai-suggestions/document-review-run.logic";
 import type {
   PlaybookFinding,
   ReferenceFinding,
@@ -12,12 +16,31 @@ export type ReviewResultItem = {
   title: string;
   playbook: PlaybookFinding | null;
   reference: ReferenceFinding | null;
+  /** Every finding row the card stands for: one per check kind that judged
+   *  this topic, and what the reviewer decided about each. */
+  decisions: readonly ReviewFindingDecisionRow[];
 };
 
 type BuildReviewResultItemsArgs = {
   topics: readonly ReviewTopic[];
   playbookFindings: readonly PlaybookFinding[] | null;
   referenceFindings: readonly ReferenceFinding[] | null;
+  decisions: readonly ReviewFindingDecisionRow[];
+};
+
+const groupDecisionsByTopicId = (
+  decisions: readonly ReviewFindingDecisionRow[],
+): ReadonlyMap<string, ReviewFindingDecisionRow[]> => {
+  const byTopicId = new Map<string, ReviewFindingDecisionRow[]>();
+  for (const row of decisions) {
+    const existing = byTopicId.get(row.topicId);
+    if (existing === undefined) {
+      byTopicId.set(row.topicId, [row]);
+      continue;
+    }
+    existing.push(row);
+  }
+  return byTopicId;
 };
 
 const uniqueById = <T>(
@@ -40,6 +63,7 @@ export const buildReviewResultItems = ({
   topics,
   playbookFindings,
   referenceFindings,
+  decisions,
 }: BuildReviewResultItemsArgs): ReviewResultItem[] => {
   // `null` findings mean that basis was not part of the run; an empty array
   // means it ran and returned nothing. A basis that never ran gets no index, so
@@ -60,6 +84,7 @@ export const buildReviewResultItems = ({
           (finding) => finding.topicId,
           "reference",
         );
+  const decisionsByTopicId = groupDecisionsByTopicId(decisions);
   const consumedPlaybookIds = new Set<string>();
   const consumedReferenceIds = new Set<string>();
   const results: ReviewResultItem[] = [];
@@ -85,11 +110,18 @@ export const buildReviewResultItems = ({
     if (reference !== null) {
       consumedReferenceIds.add(reference.topicId);
     }
+    const topicDecisions = decisionsByTopicId.get(topic.topicId);
+    if (topicDecisions === undefined) {
+      // Both sides come from the same finding rows, so a topic with a result
+      // and no row means the two views of the run disagree.
+      return panic(`Review topic ${topic.topicId} has no finding row`);
+    }
     results.push({
       id: topic.topicId,
       title: topic.title,
       playbook,
       reference,
+      decisions: topicDecisions,
     });
   }
 
@@ -108,6 +140,29 @@ export const buildReviewResultItems = ({
   return results;
 };
 
+/**
+ * The decision a card carries: the one every finding behind it shares, or
+ * `open` while any is undecided or the two check kinds were decided
+ * differently. A card that does not speak with one voice still needs the
+ * reviewer, which is exactly what `open` means here.
+ */
+export const reviewItemDecision = ({
+  decisions,
+}: Pick<ReviewResultItem, "decisions">): DocumentReviewDecision => {
+  const first = decisions.at(0);
+  if (first === undefined) {
+    return REVIEW_DECISION.OPEN;
+  }
+  return decisions.every((row) => row.decision === first.decision)
+    ? first.decision
+    : REVIEW_DECISION.OPEN;
+};
+
+/**
+ * Whether the finding itself is one a reviewer has to answer, before any
+ * disposition is taken. Kept separate from the decision so the two questions —
+ * "is this a problem?" and "has someone dealt with it?" — never merge.
+ */
 export const isReviewResultActionable = ({
   playbook,
   reference,
@@ -132,3 +187,12 @@ export const isReviewResultActionable = ({
       return false;
   }
 };
+
+/**
+ * What the "Action needed" filter counts: a flagged finding nobody has
+ * disposed of yet. Accepting or dismissing takes the card off the list without
+ * changing what the run found.
+ */
+export const isReviewResultActionNeeded = (item: ReviewResultItem): boolean =>
+  !isDecisionSettled(reviewItemDecision(item)) &&
+  isReviewResultActionable(item);

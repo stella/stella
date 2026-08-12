@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import type { ReviewFindingDecisionRow } from "@/components/ai-suggestions/document-review-run.logic";
 import type {
   PlaybookFinding,
   ReferenceFinding,
@@ -9,6 +10,7 @@ import {
   buildReviewResultItems,
   isReviewResultActionable,
 } from "@/components/inspector/playbook-review-results.logic";
+import { toSafeId } from "@/lib/safe-id";
 
 const playbookTopic: ReviewTopic = {
   type: "playbook",
@@ -45,12 +47,25 @@ const referenceFinding: ReferenceFinding = {
   fix: null,
 };
 
+const playbookRow: ReviewFindingDecisionRow = {
+  id: toSafeId<"documentReviewFinding">("0198f2c4-6a55-7c31-9a10-3b1d2f4c5e70"),
+  topicId: playbookTopic.topicId,
+  decision: "open",
+};
+
+const referenceRow: ReviewFindingDecisionRow = {
+  id: toSafeId<"documentReviewFinding">("0198f2c4-6a55-7c31-9a10-3b1d2f4c5e71"),
+  topicId: playbookTopic.topicId,
+  decision: "open",
+};
+
 describe("review result composition", () => {
   test("joins playbook and reference assessments into one confirmed topic", () => {
     const results = buildReviewResultItems({
       topics: [playbookTopic],
       playbookFindings: [playbookFinding],
       referenceFindings: [referenceFinding],
+      decisions: [playbookRow, referenceRow],
     });
 
     expect(results).toEqual([
@@ -59,6 +74,7 @@ describe("review result composition", () => {
         title: "Notice period",
         playbook: playbookFinding,
         reference: referenceFinding,
+        decisions: [playbookRow, referenceRow],
       },
     ]);
     expect(results.every(isReviewResultActionable)).toBe(true);
@@ -77,6 +93,7 @@ describe("review result composition", () => {
       topics: [referenceTopic, playbookTopic],
       playbookFindings: [playbookFinding],
       referenceFindings: [referenceFinding],
+      decisions: [playbookRow, referenceRow],
     });
 
     expect(results.map((result) => result.id)).toEqual([playbookTopic.topicId]);
@@ -90,6 +107,7 @@ describe("review result composition", () => {
           { ...playbookFinding, positionId: "unconfirmed-position" },
         ],
         referenceFindings: null,
+        decisions: [playbookRow],
       }),
     ).toThrow("Review topic");
   });

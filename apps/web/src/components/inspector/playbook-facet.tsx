@@ -2,13 +2,19 @@
 
 import { useState } from "react";
 
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { Result } from "better-result";
 import {
   CheckIcon,
   ChevronRightIcon,
   FileTextIcon,
   PlusIcon,
+  RotateCcwIcon,
   ScanSearchIcon,
   SearchIcon,
   Trash2Icon,
@@ -58,15 +64,31 @@ import type {
   ReviewBasis,
 } from "@/components/ai-suggestions/document-review-basis.logic";
 import {
+  decideReviewFindings,
   documentReviewRunOptions,
   documentReviewRunsOptions,
   documentReviewSourcesOptions,
+  REVIEW_DECISION,
+} from "@/components/ai-suggestions/document-review-queries";
+import type {
+  DecidedReviewDecision,
+  DocumentReviewDecision,
+  DocumentReviewDecisionCounts,
+  DocumentReviewFindingRow,
 } from "@/components/ai-suggestions/document-review-queries";
 import {
+  applyFindingDecisions,
+  resolveReviewRunFreshness,
   resolveReviewRunRestore,
   restoreReviewRun,
   restoredRunId,
+  reviewDecisionProgress,
   reviewRunView,
+} from "@/components/ai-suggestions/document-review-run.logic";
+import type {
+  ReviewFindingDecisionRow,
+  ReviewPlaybookFreshness,
+  ReviewRunFreshness,
 } from "@/components/ai-suggestions/document-review-run.logic";
 import {
   isNegotiablePlaybookVerdict,
@@ -93,6 +115,8 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import {
   buildReviewResultItems,
   isReviewResultActionable,
+  isReviewResultActionNeeded,
+  reviewItemDecision,
 } from "@/components/inspector/playbook-review-results.logic";
 import type { ReviewResultItem } from "@/components/inspector/playbook-review-results.logic";
 import type { OverallRisk } from "@/components/inspector/playbook-risk-rollup";
@@ -101,6 +125,7 @@ import Tooltip from "@/components/tooltip";
 import { getWordEditAuthorName } from "@/features/chat/hooks/use-chat-user-context";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
+import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { DOCX_MIME } from "@/lib/consts";
@@ -115,6 +140,7 @@ import {
   playbookDetailOptions,
   playbooksOptions,
 } from "@/lib/knowledge/queries";
+import { entityVersionsOptions } from "@/lib/workspaces/queries/entity-versions";
 
 type PlaybookFacetProps = {
   entityId: string;
@@ -152,6 +178,14 @@ export const PlaybookFacet = ({
   );
   const cancelComment = usePlaybookReviewStore((state) => state.cancelComment);
   const resetSession = usePlaybookReviewStore((state) => state.resetSession);
+
+  // Which version of the document is on screen now. The tab's facet bar reads
+  // the same query for its version badge, so a restored run learns whether it
+  // still describes the current document without a request of its own.
+  const { data: versions } = useQuery(
+    entityVersionsOptions({ workspaceId, entityId }),
+  );
+  const currentEntityVersionId = versions?.currentVersionId ?? null;
 
   const { data: playbooksData } = useQuery(
     playbooksOptions(user.activeOrganizationId, PLAYBOOK_PICKER_LIMIT),
@@ -458,6 +492,7 @@ export const PlaybookFacet = ({
         commentStateByFinding={
           session === undefined ? {} : session.commentState
         }
+        currentEntityVersionId={currentEntityVersionId}
         editorAvailable={editorAvailable}
         fixStateByFinding={session === undefined ? {} : session.fixState}
         onAcceptFix={acceptFix}
@@ -508,6 +543,8 @@ type ReviewRunPanelProps = {
   workspaceId: string;
   runId: string;
   organizationId: string;
+  /** The document's current version, or `null` while it is not known yet. */
+  currentEntityVersionId: string | null;
   editorAvailable: boolean;
   commentStateByFinding: Record<string, ReviewCommentState>;
   fixStateByFinding: Record<string, ReviewFixState>;
@@ -537,6 +574,7 @@ const ReviewRunPanel = ({
   workspaceId,
   runId,
   organizationId,
+  currentEntityVersionId,
   editorAvailable,
   commentStateByFinding,
   fixStateByFinding,
@@ -551,11 +589,35 @@ const ReviewRunPanel = ({
   onScrollToFix,
 }: ReviewRunPanelProps) => {
   const t = useTranslations();
+  const analytics = useAnalytics();
+  const queryClient = useQueryClient();
+  const runQuery = documentReviewRunOptions({ workspaceId, runId });
   const {
     data: runDetail,
     error: runError,
     refetch: refetchRun,
-  } = useQuery(documentReviewRunOptions({ workspaceId, runId }));
+  } = useQuery(runQuery);
+
+  // The endpoint answers with the rows it wrote, so the decision lands in the
+  // run's cache entry directly: refetching the run per click would re-read
+  // every finding to learn what this response already says.
+  const decide = useMutation({
+    mutationFn: decideReviewFindings,
+    onSuccess: (decided) => {
+      queryClient.setQueryData(runQuery.queryKey, (previous) =>
+        applyFindingDecisions(previous, decided),
+      );
+    },
+    // `unwrapEden` already localized and tagged what the endpoint returned, so
+    // the thrown error is what gets captured and shown.
+    onError: (error) => {
+      analytics.captureError(error);
+      stellaToast.add({
+        type: "error",
+        title: t("inspector.review.decisionFailed"),
+      });
+    },
+  });
   const restored = runDetail === undefined ? null : restoreReviewRun(runDetail);
   const restoredPlaybookId =
     restored === null ? null : restored.basis.playbookId;
@@ -618,11 +680,18 @@ const ReviewRunPanel = ({
   return (
     <ResultsView
       commentStateByFinding={commentStateByFinding}
+      decisionCounts={run.decisionCounts}
+      decisionPending={decide.isPending}
+      decisions={restored.decisions}
       editorAvailable={editorAvailable}
       fixStateByFinding={fixStateByFinding}
+      freshness={resolveReviewRunFreshness({ run, currentEntityVersionId })}
       negotiationBySourceId={negotiationLookup(playbookDetail)}
       onAcceptFix={onAcceptFix}
       onAddReferenceComment={onAddReferenceComment}
+      onDecide={(findingIds, decision) => {
+        decide.mutate({ workspaceId, findingIds, decision });
+      }}
       onInsertFix={onInsertFix}
       onOpenReferenceCitation={(referenceFieldId, blockId, text) => {
         const reference = restored.basis.references.find(
@@ -1262,11 +1331,19 @@ type ResultsViewProps = {
   referenceFindings: readonly ReferenceFinding[] | null;
   references: readonly ReferenceFile[];
   commentStateByFinding: Record<string, ReviewCommentState>;
+  decisions: readonly ReviewFindingDecisionRow[];
+  decisionCounts: DocumentReviewDecisionCounts;
+  decisionPending: boolean;
   fixStateByFinding: Record<string, ReviewFixState>;
+  freshness: ReviewRunFreshness;
   negotiationBySourceId: ReadonlyMap<string, Negotiation>;
   playbookName: string;
   editorAvailable: boolean;
   topics: readonly ReviewTopic[];
+  onDecide: (
+    findingIds: readonly DocumentReviewFindingRow["id"][],
+    decision: DocumentReviewDecision,
+  ) => void;
   onReviewAgain: () => void;
   onScrollToBlock: (blockId: string) => void;
   onInsertFix: (findingId: string, fix: ReviewFindingFix | null) => void;
@@ -1286,11 +1363,16 @@ const ResultsView = ({
   referenceFindings,
   references,
   commentStateByFinding,
+  decisions,
+  decisionCounts,
+  decisionPending,
   fixStateByFinding,
+  freshness,
   negotiationBySourceId,
   playbookName,
   editorAvailable,
   topics,
+  onDecide,
   onReviewAgain,
   onScrollToBlock,
   onInsertFix,
@@ -1305,7 +1387,9 @@ const ResultsView = ({
     topics,
     playbookFindings,
     referenceFindings,
+    decisions,
   });
+  const progress = reviewDecisionProgress(decisionCounts);
 
   return (
     <div className="bg-background flex h-full flex-col">
@@ -1319,12 +1403,26 @@ const ResultsView = ({
             referenceCount={references.length}
           />
         </div>
-        <Button onClick={onReviewAgain} size="xs" variant="outline">
-          {t("inspector.review.reviewAgain")}
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          {progress.total > 0 && (
+            <span className="text-muted-foreground text-[11px] tabular-nums">
+              {t("inspector.review.decidedCount", {
+                decided: progress.decided,
+                total: progress.total,
+              })}
+            </span>
+          )}
+          <Button onClick={onReviewAgain} size="xs" variant="outline">
+            {t("inspector.review.reviewAgain")}
+          </Button>
+        </div>
       </header>
 
       <div className="flex-1 overflow-y-auto px-2 py-2">
+        <ReviewFreshnessNotice
+          freshness={freshness}
+          onReviewAgain={onReviewAgain}
+        />
         {playbookFindings !== null && playbookFindings.length > 0 && (
           <RiskSummaryCard
             editorAvailable={editorAvailable}
@@ -1336,11 +1434,13 @@ const ResultsView = ({
           <ReviewResultList
             editorAvailable={editorAvailable}
             commentStateByFinding={commentStateByFinding}
+            decisionPending={decisionPending}
             fixStateByFinding={fixStateByFinding}
             items={results}
             negotiationBySourceId={negotiationBySourceId}
             onAcceptFix={onAcceptFix}
             onAddComment={onAddReferenceComment}
+            onDecide={onDecide}
             onInsertFix={onInsertFix}
             onOpenReferenceCitation={onOpenReferenceCitation}
             onRejectFix={onRejectFix}
@@ -1352,6 +1452,62 @@ const ResultsView = ({
           <NoReviewIssues />
         )}
       </div>
+    </div>
+  );
+};
+
+/** Which notice a pinned playbook calls for, or none while it is still the one
+ *  an author would run today. Total over the freshness vocabulary. */
+const PLAYBOOK_FRESHNESS_NOTICE = {
+  current: null,
+  stale: "inspector.review.playbookOutdated",
+  missing: "inspector.review.playbookDeleted",
+} as const satisfies Record<ReviewPlaybookFreshness, TranslationKey | null>;
+
+/**
+ * What this review has fallen behind. Both notices are shown together when
+ * both apply: they are different reasons to run again, and a reviewer deciding
+ * findings should see each one.
+ */
+const ReviewFreshnessNotice = ({
+  freshness,
+  onReviewAgain,
+}: {
+  freshness: ReviewRunFreshness;
+  onReviewAgain: () => void;
+}) => {
+  const t = useTranslations();
+  const notices: TranslationKey[] = [];
+  if (freshness.documentChanged) {
+    notices.push("inspector.review.documentChanged");
+  }
+  const playbookNotice = PLAYBOOK_FRESHNESS_NOTICE[freshness.playbook];
+  if (playbookNotice !== null) {
+    notices.push(playbookNotice);
+  }
+  if (notices.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="border-warning/30 bg-warning/10 mb-2 rounded-lg border px-3 py-2">
+      <ul className="text-warning-foreground space-y-1 text-xs">
+        {notices.map((notice) => (
+          <li key={notice}>{t(notice)}</li>
+        ))}
+      </ul>
+      {/* A run whose playbook was deleted is a record of what was reviewed,
+          not something that can be measured again against that playbook. */}
+      {freshness.playbook !== "missing" && (
+        <Button
+          className="mt-2"
+          onClick={onReviewAgain}
+          size="xs"
+          variant="outline"
+        >
+          {t("inspector.review.reviewAgain")}
+        </Button>
+      )}
     </div>
   );
 };
@@ -1411,9 +1567,14 @@ type ReviewResultListProps = {
   items: readonly ReviewResultItem[];
   references: readonly ReferenceFile[];
   commentStateByFinding: Record<string, ReviewCommentState>;
+  decisionPending: boolean;
   fixStateByFinding: Record<string, ReviewFixState>;
   negotiationBySourceId: ReadonlyMap<string, Negotiation>;
   editorAvailable: boolean;
+  onDecide: (
+    findingIds: readonly DocumentReviewFindingRow["id"][],
+    decision: DocumentReviewDecision,
+  ) => void;
   onScrollToBlock: (blockId: string) => void;
   onInsertFix: (findingId: string, fix: ReviewFindingFix | null) => void;
   onScrollToFix: (revisionIds: readonly number[]) => void;
@@ -1433,9 +1594,11 @@ const ReviewResultList = ({
   items,
   references,
   commentStateByFinding,
+  decisionPending,
   fixStateByFinding,
   negotiationBySourceId,
   editorAvailable,
+  onDecide,
   onScrollToBlock,
   onInsertFix,
   onScrollToFix,
@@ -1446,7 +1609,9 @@ const ReviewResultList = ({
 }: ReviewResultListProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const actionableItems = items.filter(isReviewResultActionable);
+  // Deciding a card takes it out of this list without changing what the run
+  // found: "Action needed" counts findings nobody has answered yet.
+  const actionableItems = items.filter(isReviewResultActionNeeded);
   const [filter, setFilter] = useState<ReviewResultFilter>(
     actionableItems.length > 0 ? "actionable" : "all",
   );
@@ -1497,6 +1662,7 @@ const ReviewResultList = ({
           <ReviewResultCard
             editorAvailable={editorAvailable}
             commentStateByFinding={commentStateByFinding}
+            decisionPending={decisionPending}
             expanded={visibleExpandedId === item.id}
             fixStateByFinding={fixStateByFinding}
             item={item}
@@ -1508,6 +1674,7 @@ const ReviewResultList = ({
             }
             onAcceptFix={onAcceptFix}
             onAddComment={onAddComment}
+            onDecide={onDecide}
             onInsertFix={onInsertFix}
             onOpenReferenceCitation={onOpenReferenceCitation}
             onRejectFix={onRejectFix}
@@ -1524,7 +1691,12 @@ const ReviewResultList = ({
         <div className="flex flex-col items-center justify-center gap-1 px-6 py-8 text-center">
           <CheckIcon className="text-success mb-1 size-5" />
           <p className="text-foreground text-sm font-medium">
-            {t("inspector.review.noMaterialDifferences")}
+            {/* An empty "Action needed" list means one of two different
+                things: the run flagged nothing, or a reviewer has answered
+                everything it flagged. */}
+            {items.some(isReviewResultActionable)
+              ? t("inspector.review.allDecided")
+              : t("inspector.review.noMaterialDifferences")}
           </p>
         </div>
       )}
@@ -1536,10 +1708,15 @@ type ReviewResultCardProps = {
   item: ReviewResultItem;
   references: readonly ReferenceFile[];
   commentStateByFinding: Record<string, ReviewCommentState>;
+  decisionPending: boolean;
   fixStateByFinding: Record<string, ReviewFixState>;
   negotiation: Negotiation | undefined;
   editorAvailable: boolean;
   expanded: boolean;
+  onDecide: (
+    findingIds: readonly DocumentReviewFindingRow["id"][],
+    decision: DocumentReviewDecision,
+  ) => void;
   onToggle: () => void;
   onScrollToBlock: (blockId: string) => void;
   onInsertFix: (findingId: string, fix: ReviewFindingFix | null) => void;
@@ -1558,10 +1735,12 @@ const ReviewResultCard = ({
   item,
   references,
   commentStateByFinding,
+  decisionPending,
   fixStateByFinding,
   negotiation,
   editorAvailable,
   expanded,
+  onDecide,
   onToggle,
   onScrollToBlock,
   onInsertFix,
@@ -1577,6 +1756,7 @@ const ReviewResultCard = ({
   const assessmentLabels = useReferenceAssessmentLabels();
   const detailId = `review-result-${item.id}`;
   const { playbook, reference } = item;
+  const decision = reviewItemDecision(item);
   const citations: PlaybookCitation[] = [];
   if (playbook !== null) {
     citations.push(...playbook.citations);
@@ -1588,7 +1768,15 @@ const ReviewResultCard = ({
   const hasBothSources = playbook !== null && reference !== null;
 
   return (
-    <li className="bg-card overflow-hidden rounded-lg border">
+    <li
+      className={cn(
+        "bg-card overflow-hidden rounded-lg border",
+        // A decided card recedes while it is collapsed; opening it puts the
+        // finding back at full strength so the reviewer can read what they
+        // decided about.
+        decision !== REVIEW_DECISION.OPEN && !expanded && "opacity-60",
+      )}
+    >
       <button
         aria-controls={detailId}
         aria-expanded={expanded}
@@ -1650,6 +1838,16 @@ const ReviewResultCard = ({
             {reference?.consensus === "mixed" && (
               <span className="border-warning/30 text-warning-foreground inline-flex items-center rounded-full border px-1.5 py-0.5 text-[11px] font-medium">
                 {t("inspector.review.referencesDisagree")}
+              </span>
+            )}
+            {decision !== REVIEW_DECISION.OPEN && (
+              <span
+                className={cn(
+                  "inline-flex items-center rounded-full border px-1.5 py-0.5 text-[11px] font-medium",
+                  DECISION_CHIP[decision],
+                )}
+              >
+                {t(DECISION_LABEL[decision])}
               </span>
             )}
           </div>
@@ -1729,9 +1927,94 @@ const ReviewResultCard = ({
             playbook={playbook}
             reference={reference}
           />
+          <ReviewDecisionActions
+            decision={decision}
+            onDecide={(next) =>
+              onDecide(
+                item.decisions.map((row) => row.id),
+                next,
+              )
+            }
+            pending={decisionPending}
+          />
         </div>
       )}
     </li>
+  );
+};
+
+/** How a recorded decision reads on the card. Both maps are total over the
+ *  decisions a reviewer can take, so a new disposition must state its label
+ *  and its colour here rather than rendering as nothing. */
+const DECISION_CHIP = {
+  accepted: "border-success/30 text-success",
+  dismissed: "border-border text-muted-foreground",
+} as const satisfies Record<DecidedReviewDecision, string>;
+
+const DECISION_LABEL = {
+  accepted: "inspector.review.decisions.accepted",
+  dismissed: "inspector.review.decisions.dismissed",
+} as const satisfies Record<DecidedReviewDecision, TranslationKey>;
+
+/**
+ * The reviewer's disposition on one card. Accepting and dismissing are the
+ * same gesture with different meanings — the finding was dealt with, or it was
+ * judged not to matter — and both are withdrawn by reopening it.
+ *
+ * A card joins one finding per check kind, so the decision is recorded against
+ * every row behind it: a reviewer answers the topic, not the executor.
+ */
+const ReviewDecisionActions = ({
+  decision,
+  pending,
+  onDecide,
+}: {
+  decision: DocumentReviewDecision;
+  pending: boolean;
+  onDecide: (decision: DocumentReviewDecision) => void;
+}) => {
+  const t = useTranslations();
+  return (
+    <section
+      aria-label={t("inspector.review.decision")}
+      className="flex flex-wrap items-center gap-2 border-t pt-3"
+    >
+      {decision === REVIEW_DECISION.OPEN ? (
+        <>
+          <Button
+            className="h-7 px-2.5 text-xs"
+            disabled={pending}
+            onClick={() => onDecide(REVIEW_DECISION.ACCEPTED)}
+            size="sm"
+            variant="outline"
+          >
+            <CheckIcon className="me-1 size-3.5" />
+            {t("common.accept")}
+          </Button>
+          <Button
+            className="h-7 px-2.5 text-xs"
+            disabled={pending}
+            onClick={() => onDecide(REVIEW_DECISION.DISMISSED)}
+            size="sm"
+            variant="ghost"
+          >
+            <XIcon className="me-1 size-3.5" />
+            {t("common.dismiss")}
+          </Button>
+        </>
+      ) : (
+        <Button
+          className="h-7 px-2.5 text-xs"
+          disabled={pending}
+          onClick={() => onDecide(REVIEW_DECISION.OPEN)}
+          size="sm"
+          variant="ghost"
+        >
+          <RotateCcwIcon className="me-1 size-3.5" />
+          {t("inspector.review.reopen")}
+        </Button>
+      )}
+    </section>
   );
 };
 
