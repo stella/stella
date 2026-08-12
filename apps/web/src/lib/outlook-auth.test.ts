@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -5,6 +6,7 @@ import {
   buildOutlookOrganizationSelectionUrl,
   buildOutlookSignInPath,
   outlookSessionHandoff,
+  surfaceOutlookHandoffFailure,
 } from "@/lib/outlook-auth";
 
 describe("Outlook authentication handoff", () => {
@@ -42,9 +44,28 @@ describe("Outlook authentication handoff", () => {
     );
   });
 
-  test("routes signed-out users through the configured Stella sign-in methods", () => {
+  test("routes signed-out users through the configured stella sign-in methods", () => {
     expect(buildOutlookSignInPath("https://outlook.example.test")).toBe(
       "/auth?redirectTo=%2Fsign-in-outlook%3FparentOrigin%3Dhttps%253A%252F%252Foutlook.example.test",
     );
+  });
+
+  test("surfaces initialization failures before propagating them to telemetry", async () => {
+    const error = new Error("Office initialization failed");
+    let surfaced = false;
+
+    const result = await Result.tryPromise({
+      try: async () =>
+        await surfaceOutlookHandoffFailure(Promise.reject(error), () => {
+          surfaced = true;
+        }),
+      catch: (cause) => cause,
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toBe(error);
+    }
+    expect(surfaced).toBe(true);
   });
 });
