@@ -21,6 +21,10 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 const deleteObjectMock = mock(async () => undefined);
+const extractionMock = mock(async () => undefined);
+const uploadFlowMock = mock(async () => undefined);
+const pdfDerivativeMock = mock(async () => undefined);
+const thumbnailDerivativeMock = mock(async () => undefined);
 
 const realS3 = await import("@/api/lib/s3");
 
@@ -30,6 +34,19 @@ void mock.module("@/api/lib/s3", () => ({
     delete: deleteObjectMock,
   }),
   readS3ArrayBuffer: async () => new ArrayBuffer(0),
+}));
+
+void mock.module("@/api/lib/search/process-extraction", () => ({
+  processExtraction: extractionMock,
+}));
+
+void mock.module("@/api/lib/flows/maybe-start-upload-triggered-flows", () => ({
+  maybeStartUploadTriggeredFlows: uploadFlowMock,
+}));
+
+void mock.module("@/api/lib/file-derivative-queue", () => ({
+  enqueueImageThumbnailOrMarkFailed: thumbnailDerivativeMock,
+  enqueuePdfDerivativeOrMarkFailed: pdfDerivativeMock,
 }));
 
 const { default: abortUpload } = await import("./delete");
@@ -314,6 +331,16 @@ describe("presigned upload mutation flow", () => {
       purposeData: {
         type: "email_ingest",
         propertyId: ids.propertyA1,
+        postCommitKickoffs: [
+          {
+            encrypted: false,
+            entityId: ids.entityA1,
+            fieldId: ids.fieldA1,
+            sourceUploadId: uploadId,
+            fileName: "message.eml",
+            mimeType: "message/rfc822",
+          },
+        ],
       },
       declaredName: "message.eml",
       declaredMime: "message/rfc822",
@@ -335,6 +362,16 @@ describe("presigned upload mutation flow", () => {
         userId: ids.userA1,
       }),
     );
+    const finalizedReplay = await finalizeUpload.handler(
+      asTestRaw<FinalizeCtx>(
+        createContext({
+          params: { workspaceId: ids.wsA1, uploadId },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
 
     const first = await reconcileUpload.handler(context);
     const replay = await reconcileUpload.handler(context);
@@ -344,6 +381,11 @@ describe("presigned upload mutation flow", () => {
       state: "complete",
     });
     expect(replay).toEqual(first);
+    expect(finalizedReplay).toEqual({ finalizedResult });
+    expect(extractionMock).toHaveBeenCalledTimes(3);
+    expect(uploadFlowMock).toHaveBeenCalledTimes(3);
+    expect(pdfDerivativeMock).toHaveBeenCalledTimes(3);
+    expect(thumbnailDerivativeMock).toHaveBeenCalledTimes(3);
   });
 
   test("does not let workspace A abort workspace B upload IDs", async () => {
