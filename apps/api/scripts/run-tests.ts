@@ -7,6 +7,7 @@ import {
   readModuleMockMetadata,
   type ModuleMockTest,
 } from "../src/tests/module-mock-batching";
+import { partitionRunnerArguments, selectTestPaths } from "./test-path-filters";
 
 const PROPERTY_FLAG = "--property";
 const TEST_FILE_GLOB = "src/**/*.test.{ts,tsx}";
@@ -159,6 +160,22 @@ const testPaths = [
   }),
 ].sort();
 
+// A positional pattern narrows each batch rather than joining it; see
+// scripts/test-path-filters.ts for why appending would defeat the batcher.
+const { bunArguments, patterns } = partitionRunnerArguments(forwardedArguments);
+const selectedTestPaths = selectTestPaths(testPaths, patterns);
+
+if (selectedTestPaths?.size === 0) {
+  console.error(`No test files match: ${patterns.join(", ")}`);
+  process.exit(1);
+}
+
+/** Keep a batch's composition, run only the selection inside it. */
+const selectWithinBatch = (batch: string[]): string[] =>
+  selectedTestPaths === null
+    ? batch
+    : batch.filter((testPath) => selectedTestPaths.has(testPath));
+
 const classifiedTests = await Promise.all(
   testPaths.map(async (testPath) => ({
     source: await Bun.file(path.join(apiRoot, testPath)).text(),
@@ -285,7 +302,7 @@ const runTests = async ({
   if (isolate) {
     command.push("--isolate");
   }
-  command.push(...forwardedArguments, ...testFiles);
+  command.push(...bunArguments, ...testFiles);
 
   const child = Bun.spawn({
     cmd: command,
@@ -344,7 +361,9 @@ const runTestBatches = async ({
     return 0;
   }
 
-  const batch = testFiles.slice(batchStart, batchStart + batchSize);
+  const batch = selectWithinBatch(
+    testFiles.slice(batchStart, batchStart + batchSize),
+  );
   const exitCode = await runTests({ isolate, maxPeakRssMb, testFiles: batch });
   if (exitCode !== 0) {
     return exitCode;
@@ -380,7 +399,11 @@ const runPreparedTestBatches = async ({
   if (batch === undefined) {
     return 0;
   }
-  const exitCode = await runTests({ isolate, maxPeakRssMb, testFiles: batch });
+  const exitCode = await runTests({
+    isolate,
+    maxPeakRssMb,
+    testFiles: selectWithinBatch(batch),
+  });
   if (exitCode !== 0) {
     return exitCode;
   }
