@@ -5,6 +5,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
+import { bufferObjectCleanupIntents, pendingUploads } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -36,6 +37,10 @@ type UpdateValues = {
 };
 
 type ReconciliationRow = Parameters<typeof pendingUploadRecoveryObjectKeys>[0];
+type CleanupIntentRow = Pick<
+  typeof bufferObjectCleanupIntents.$inferSelect,
+  "attemptCount" | "id" | "objectKey"
+>;
 
 const createReconciliationSafeDb = (
   updates: UpdateValues[],
@@ -56,19 +61,25 @@ const createReconciliationSafeDb = (
       workspaceId,
     },
   ],
-): SafeDb => {
-  let transactionCount = 0;
-  return asTestRaw<SafeDb>(
+  cleanupIntentRows: CleanupIntentRow[] = [],
+): SafeDb =>
+  asTestRaw<SafeDb>(
     async <T>(run: (transaction: Transaction) => Promise<T>) => {
-      const selectedRows = transactionCount === 0 ? rows : [];
-      transactionCount += 1;
       const tx = asTestRaw<Transaction>({
         select: () => ({
-          from: () => ({
+          from: (table: unknown) => ({
             where: () => ({
               orderBy: () => ({
                 limit: () => ({
-                  for: async () => selectedRows,
+                  for: async () => {
+                    if (table === pendingUploads) {
+                      return rows;
+                    }
+                    if (table === bufferObjectCleanupIntents) {
+                      return cleanupIntentRows;
+                    }
+                    return [];
+                  },
                 }),
               }),
             }),
@@ -87,7 +98,6 @@ const createReconciliationSafeDb = (
       });
     },
   );
-};
 
 beforeEach(() => {
   s3DeleteMock.mockReset();
@@ -228,6 +238,49 @@ test("shares one bounded cleanup pool across claimed email ingests", async () =>
   expect(claimed).toBe(6);
   expect(deletionCount).toBe(30);
   expect(maximumActive).toBe(4);
+});
+
+test("lets lifecycle tombstones progress fairly through the shared pool", async () => {
+  const pendingKeyPrefix = `${organizationId}/${workspaceId}/pending`;
+  const tombstoneKey = `${organizationId}/${workspaceId}/tombstone`;
+  const row = {
+    declaredMime: "message/rfc822",
+    id: pendingUploadId,
+    organizationId,
+    purpose: "email_ingest",
+    purposeData: {
+      type: "email_ingest",
+      propertyId: toSafeId<"property">("00000000-0000-0000-0000-000000000004"),
+      recoveryObjectKeys: Array.from(
+        { length: 8 },
+        (_, index) => `${pendingKeyPrefix}-${String(index)}`,
+      ),
+    },
+    workspaceId,
+  } satisfies ReconciliationRow;
+  const startedKeys: string[] = [];
+  let active = 0;
+  let maximumActive = 0;
+
+  const claimed = await reconcileStaleBufferIntentsGlobally({
+    safeDb: createReconciliationSafeDb(
+      [],
+      [row],
+      [{ attemptCount: 0, id: pendingUploadId, objectKey: tombstoneKey }],
+    ),
+    limit: 2,
+    deleteObject: async (objectKey) => {
+      startedKeys.push(objectKey);
+      active += 1;
+      maximumActive = Math.max(maximumActive, active);
+      await Bun.sleep(1);
+      active -= 1;
+    },
+  });
+
+  expect(claimed).toBe(2);
+  expect(maximumActive).toBe(4);
+  expect(startedKeys.indexOf(tombstoneKey)).toBeLessThan(8);
 });
 
 test("keeps a lifecycle tombstone while backing off repeated deletion", async () => {
