@@ -1999,7 +1999,7 @@ const ReviewDecisionActions = ({
             variant="ghost"
           >
             <XIcon className="me-1 size-3.5" />
-            {t("common.dismiss")}
+            {t("inspector.review.dismiss")}
           </Button>
         </>
       ) : (
