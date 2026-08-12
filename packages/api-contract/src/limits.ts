@@ -20,3 +20,15 @@ export const AGENT_SKILLS_CHAT_METADATA_MAX = 200;
 
 /** Max page size for one entity's DOCX suggestion list. */
 export const DOCX_SUGGESTIONS_PAGE_SIZE_MAX = 200;
+
+/**
+ * Max properties (columns) one matter may define. The client disables the
+ * add-column affordances at the cap; the server rejects past it.
+ */
+export const PROPERTIES_PER_WORKSPACE_MAX = 20;
+
+/**
+ * Max entities (rows) one matter may hold. The client disables the
+ * add-row affordances at the cap; the server rejects past it.
+ */
+export const ENTITIES_PER_WORKSPACE_MAX = 10_000;

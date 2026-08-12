@@ -2,7 +2,6 @@ import { status } from "elysia";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
-import { LIMITS } from "@/api/lib/limits";
 
 type ReadWorkspaceHandlerProps = {
   scopedDb: ScopedDb;
@@ -41,5 +40,11 @@ export const readWorkspaceHandler = async ({
     return status(403);
   }
 
-  return { ...result, limits: LIMITS };
+  // The matter row and its client card, nothing else. This response used to
+  // carry the whole server `LIMITS` table (~7 KiB) on one of the hottest reads
+  // in the app, so every new server-side bound inflated every matter load.
+  // The two bounds the client actually reads are static product constants it
+  // imports from `@stll/api-contract`. Anything genuinely per-org or
+  // plan-dependent belongs here as a named subset, never a spread of a table.
+  return result;
 };

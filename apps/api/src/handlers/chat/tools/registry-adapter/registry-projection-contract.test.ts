@@ -16,7 +16,6 @@ import type { RegistryLookupResponse } from "@/api/lib/business-registries/dispa
 import { deriveRefMediationEntry } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
-import { LIMITS } from "@/api/lib/limits";
 import type { SearchResult } from "@/api/lib/search/types";
 import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -328,7 +327,6 @@ const CONTRACT_CORPUS = {
             displayName: "Acme s.r.o.",
             color: null,
           },
-          limits: LIMITS,
         } satisfies Awaited<ReturnType<typeof readWorkspaceHandler>>);
         readOverviewHandlerMock.mockResolvedValue({
           entityCount: 1,
