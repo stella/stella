@@ -1,7 +1,9 @@
 import {
   AGENT_SKILLS_CHAT_METADATA_MAX,
   CHAT_RICH_PART_LIMITS,
+  ENTITIES_PER_WORKSPACE_MAX,
   FLOW_RUN_INPUT_ENTITIES_MAX,
+  PROPERTIES_PER_WORKSPACE_MAX,
 } from "@stll/api-contract";
 import {
   CHAT_CONTEXT_FILE_MAX_BYTES,
@@ -29,8 +31,8 @@ export const LIMITS = {
   workspacesCount: 1000,
   workspaceNavigationPageSizeDefault: 100,
   workspaceNavigationPageSizeMax: 1000,
-  propertiesCount: 20,
-  entitiesCount: 10_000,
+  propertiesCount: PROPERTIES_PER_WORKSPACE_MAX,
+  entitiesCount: ENTITIES_PER_WORKSPACE_MAX,
   entitiesPageSizeDefault: 100,
   entitiesPageSizeMax: 500,
   entitiesWindowSizeDefault: 200,
