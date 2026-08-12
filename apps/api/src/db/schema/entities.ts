@@ -187,8 +187,10 @@ export const entities = p.pgTable(
 
 /**
  * Durable S3 cleanup work created in the same transaction as an entity delete.
- * It deliberately does not reference the deleted entity: the record must
- * survive the cascade so a queue retry can complete the storage erasure.
+ * It deliberately does not reference the deleted entity or its workspace: the
+ * record must survive that cascade so a queue retry can complete the storage
+ * erasure. The tenant root is the one ancestor it does reference, so a row can
+ * never name an organization that does not exist.
  */
 export const entityDeletionCleanupRequests = p.pgTable(
   "entity_deletion_cleanup_requests",
@@ -233,6 +235,15 @@ export const entityDeletionCleanupRequests = p.pgTable(
       "entity_deletion_cleanup_attempt_count_nonnegative_check",
       sql`${table.attemptCount} >= 0`,
     ),
+    // Named explicitly: drizzle's generated name exceeds PostgreSQL's 63-byte
+    // identifier limit and would be silently truncated in the catalog.
+    p
+      .foreignKey({
+        name: "entity_deletion_cleanup_requests_organization_fk",
+        columns: [table.organizationId],
+        foreignColumns: [organization.id],
+      })
+      .onDelete("cascade"),
     // The delete request may create this outbox row through its scoped
     // transaction; all later reads and state transitions are root-worker only.
     p.pgPolicy("entity_deletion_cleanup_insert", {
@@ -870,15 +881,24 @@ export const pendingUploads = p.pgTable(
           AND ${table.purpose} IN ('entity_create', 'entity_version')
           AND ${table.purposeData}->>'reservedFileId' IS NOT NULL`,
       ),
+    p
+      .foreignKey({
+        name: "pending_uploads_organization_fk",
+        columns: [table.organizationId],
+        foreignColumns: [organization.id],
+      })
+      .onDelete("cascade"),
     ...wsOrganizationPolicies("pending_uploads"),
   ],
 );
 
 /**
  * Durable tombstones for server-generated object writes interrupted by a
- * workspace or account deletion. They intentionally have no foreign keys:
- * recovery must survive both workspace cascades and user cleanup until the
- * original writer confirms that it can no longer publish the reserved key.
+ * workspace or account deletion. They intentionally do not reference the
+ * workspace or the user: recovery must survive both workspace cascades and
+ * user cleanup until the original writer confirms that it can no longer
+ * publish the reserved key. Only the tenant root is referenced, so a tombstone
+ * cannot outlive the organization whose bucket prefix it names.
  */
 export const bufferObjectCleanupIntents = p.pgTable(
   "buffer_object_cleanup_intents",
@@ -899,6 +919,13 @@ export const bufferObjectCleanupIntents = p.pgTable(
       "buffer_object_cleanup_attempt_count_nonnegative_check",
       sql`${table.attemptCount} >= 0`,
     ),
+    p
+      .foreignKey({
+        name: "buffer_object_cleanup_intents_organization_fk",
+        columns: [table.organizationId],
+        foreignColumns: [organization.id],
+      })
+      .onDelete("cascade"),
     // Lifecycle deletion may transfer the intent through its scoped
     // transaction. The original scoped writer may remove it only after its
     // PUT settles and exact-key cleanup succeeds; retry reads stay root-only.

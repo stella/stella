@@ -288,6 +288,15 @@ export const searchDocumentPreviewPassages = p.pgTable(
         table.ordinal,
       ),
     p.index("search_doc_preview_passages_tsv_idx").using("gin", table.tsv),
+    // Named explicitly: drizzle's generated name exceeds PostgreSQL's 63-byte
+    // identifier limit and would be silently truncated in the catalog.
+    p
+      .foreignKey({
+        name: "search_document_preview_passages_organization_fk",
+        columns: [table.organizationId],
+        foreignColumns: [organization.id],
+      })
+      .onDelete("cascade"),
     ...wsOrganizationReadOnlyPolicies("search_document_preview_passages"),
   ],
 );
@@ -353,6 +362,13 @@ export const contactSearchDocumentPreviewPassages = p.pgTable(
         table.ordinal,
       ),
     p.index("contact_preview_passages_tsv_idx").using("gin", table.tsv),
+    p
+      .foreignKey({
+        name: "contact_search_document_preview_passages_organization_fk",
+        columns: [table.organizationId],
+        foreignColumns: [organization.id],
+      })
+      .onDelete("cascade"),
     ...orgReadOnlyPolicies("contact_search_document_preview_passages"),
   ],
 );
@@ -414,6 +430,13 @@ export const workspaceSearchDocumentPreviewPassages = p.pgTable(
         table.ordinal,
       ),
     p.index("workspace_preview_passages_tsv_idx").using("gin", table.tsv),
+    p
+      .foreignKey({
+        name: "workspace_search_document_preview_passages_organization_fk",
+        columns: [table.organizationId],
+        foreignColumns: [organization.id],
+      })
+      .onDelete("cascade"),
     ...wsOrganizationReadOnlyPolicies(
       "workspace_search_document_preview_passages",
     ),
@@ -447,10 +470,10 @@ export const searchProjectionRepairQueue = p.pgTable(
       .text("kind", { enum: SEARCH_PROJECTION_KINDS })
       .$type<SearchProjectionKind>()
       .notNull(),
+    // Deliberately without a foreign key: a mark whose source is gone is not
+    // an error to prevent but work to discard, and the drain discards it on
+    // its next pass.
     sourceId: p.uuid("source_id").notNull(),
-    // Tenancy for the row policies only, and deliberately without a foreign
-    // key: a mark whose source is gone is not an error to prevent but work to
-    // discard, and the drain discards it on its next pass.
     organizationId: safeOrganizationId("organization_id").notNull(),
     revision: p.uuid("revision").notNull(),
     enqueuedAt: timestamptz("enqueued_at").notNull().defaultNow(),
@@ -473,6 +496,13 @@ export const searchProjectionRepairQueue = p.pgTable(
       "search_projection_repair_attempts_nonnegative_check",
       sql`${table.attempts} >= 0`,
     ),
+    p
+      .foreignKey({
+        name: "search_projection_repair_queue_organization_fk",
+        columns: [table.organizationId],
+        foreignColumns: [organization.id],
+      })
+      .onDelete("cascade"),
     ...orgPolicies(),
   ],
 );
