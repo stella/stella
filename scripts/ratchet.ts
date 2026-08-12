@@ -1989,6 +1989,9 @@ const EXPECTED_NAMED_FIXTURE_SUPPRESSIONS = {
   "require-query-limit/require-query-limit": 6,
   "no-db-await-in-loop/no-db-await-in-loop": 0,
   "no-raw-use-effect/no-raw-use-effect": 2,
+  "no-swallowed-rejection/no-swallowed-rejection": 0,
+  "require-toast-error-capture/require-toast-error-capture": 0,
+  "no-detached-void/no-detached-void": 0,
 } as const satisfies Record<TrackedRule, number>;
 
 const TS_SUPPRESSION_FIXTURE_LINES = [

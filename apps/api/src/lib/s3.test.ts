@@ -72,6 +72,37 @@ describe("resolveS3Credentials", () => {
     expect(requestedUrls).toEqual(["http://169.254.170.2/v2/credentials/task"]);
   });
 
+  test("does not fall back to the instance role when the task token is unreadable", async () => {
+    // IMDS answers with the EC2 instance's role, which on ECS is the host's
+    // and is routinely broader than the task's. A task configured for
+    // container credentials whose token file cannot be read must fail, not
+    // quietly run under wider credentials than it was granted.
+    const requestedUrls: string[] = [];
+    const fetchImpl = async (
+      url: string | URL | Request,
+    ): Promise<Response> => {
+      requestedUrls.push(requestUrl(url));
+      return ecsCredentialsResponse();
+    };
+
+    await resolveS3Credentials({
+      endpoint: "https://s3.eu-central-1.amazonaws.com",
+      fetchImpl,
+      runtimeEnv: {
+        AWS_CONTAINER_CREDENTIALS_RELATIVE_URI: "/v2/credentials/task",
+        AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE:
+          "/var/run/secrets/does-not-exist",
+      },
+    });
+
+    // The property is which endpoint was asked, not what came back: the
+    // credential endpoint is skipped (no usable Authorization header) and IMDS
+    // is never reached, so no instance-role credential can enter the process.
+    // Resolution falling through to configured static credentials afterwards
+    // is a different source and not a widening.
+    expect(requestedUrls).toEqual([]);
+  });
+
   test("prefers static credentials for S3-compatible endpoints in auto mode", async () => {
     const requestedUrls: string[] = [];
     const fetchImpl = createTrackedEcsCredentialsFetch(requestedUrls);
