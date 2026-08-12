@@ -436,6 +436,14 @@ const abortReasonToError = (reason: unknown): Error => {
  */
 export const parseSafeOutboundUrl = (
   rawUrl: string,
+): Result<URL, SafeOutboundFetchError> =>
+  parseOutboundUrl(rawUrl, "https-only");
+
+type OutboundProtocolPolicy = "http-and-https" | "https-only";
+
+const parseOutboundUrl = (
+  rawUrl: string,
+  protocolPolicy: OutboundProtocolPolicy,
 ): Result<URL, SafeOutboundFetchError> => {
   const trimmed = rawUrl.trim();
   if (trimmed.length === 0 || trimmed.length > MAX_OUTBOUND_URL_LENGTH) {
@@ -460,9 +468,17 @@ export const parseSafeOutboundUrl = (
     );
   }
 
-  if (url.protocol !== "https:") {
+  const isAllowedProtocol =
+    url.protocol === "https:" ||
+    (protocolPolicy === "http-and-https" && url.protocol === "http:");
+  if (!isAllowedProtocol) {
     return Result.err(
-      new SafeOutboundFetchError({ message: "URL must use HTTPS" }),
+      new SafeOutboundFetchError({
+        message:
+          protocolPolicy === "https-only"
+            ? "URL must use HTTPS"
+            : "URL must use HTTP or HTTPS",
+      }),
     );
   }
 
@@ -537,8 +553,8 @@ type ResolveOutboundAddresses = (
 ) => Promise<Result<SafeOutboundAddress[], SafeOutboundFetchError>>;
 
 /**
- * Full SSRF check: parses the URL with `parseSafeOutboundUrl`, then
- * resolves DNS and rejects targets whose resolved addresses fall in
+ * Full SSRF check: applies the selected protocol policy, then resolves DNS
+ * and rejects targets whose resolved addresses fall in
  * any private, loopback, link-local, multicast, or reserved range.
  * The returned `addresses` are meant to be pinned into the actual
  * fetch (see `safeOutboundFetchBytes`) so DNS cannot be re-resolved
@@ -547,14 +563,16 @@ type ResolveOutboundAddresses = (
 export const validateOutboundFetchTarget = async (
   rawUrl: string | URL,
   {
+    protocolPolicy = "https-only",
     resolveAddresses = resolvePublicAddresses,
     timeoutMs = 0,
   }: {
+    protocolPolicy?: OutboundProtocolPolicy;
     resolveAddresses?: ResolveOutboundAddresses;
     timeoutMs?: number;
   } = {},
 ): Promise<Result<OutboundFetchTarget, SafeOutboundFetchError>> => {
-  const parsed = parseSafeOutboundUrl(rawUrl.toString());
+  const parsed = parseOutboundUrl(rawUrl.toString(), protocolPolicy);
   if (Result.isError(parsed)) {
     return Result.err(parsed.error);
   }
