@@ -209,6 +209,18 @@ const BENIGN: readonly RegExp[] = [
   // oversized final segment beyond the 6-digit cap) is never silently
   // truncated to a shorter benign-looking prefix.
   /[čc]\.\s{0,3}j\.:?\s{0,3}\d{1,6}(?:\/\d{1,6}){2,4}(?![\p{L}\d/])/u,
+  // The letter-segment form of the same administrative reference, where a
+  // department code sits in one of the slash-joined segments: "č. j.
+  // KK/547/DS/19-3" (regional authority), "č. j. 2194/OD/19-4/Rsz" (city
+  // transport department), "č. j. 5/OH/8433/01-Sa/533" (environmental
+  // inspectorate). Two properties separate these from a court docket: the
+  // reference carries no whitespace, and it joins four or more segments,
+  // while the widest court docket the extractor accepts
+  // (CASE_NUMBER_BODY_COMMA) reaches three. The leading lookahead keeps the
+  // no-whitespace chamber+registry spelling ("36Co/52/53/2023") out, and the
+  // trailing one prevents a longer or oversized reference from matching a
+  // benign-looking prefix of itself.
+  /[čc]\.\s{0,3}j\.:?\s{0,3}(?!\d{1,3}\p{L}{1,6}\/)[\p{L}\d-]{1,10}(?:\/[\p{L}\d-]{1,10}){3,5}(?![\p{L}\d/-])/u,
 ];
 
 const isBenign = (candidate: string): boolean =>
