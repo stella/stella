@@ -24,7 +24,7 @@ import type {
 import { isTemplateManifest } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
-import { getS3 } from "@/api/lib/s3";
+import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { buildTemplateVersionS3Key } from "@/api/lib/templates/storage-keys";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -282,7 +282,10 @@ const saveTemplateDocument = createSafeRootHandler(
         // they must serialize anyway so vN's bytes aren't overwritten before the
         // version row commits.
 
-        await getS3().write(versionS3Key, new Uint8Array(updatedDocx));
+        await writeS3ObjectWithRetry({
+          data: new Uint8Array(updatedDocx),
+          key: versionS3Key,
+        });
 
         const [row] = await tx
           .update(templates)

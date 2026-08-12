@@ -248,6 +248,15 @@ export const ENTITY_DELETION_CLEANUP_STATUSES = [
 export type EntityDeletionCleanupStatus =
   (typeof ENTITY_DELETION_CLEANUP_STATUSES)[number];
 
+export const TEMPLATE_DELETION_CLEANUP_STATUSES = [
+  "pending",
+  "processing",
+  "completed",
+  "failed",
+] as const;
+export type TemplateDeletionCleanupStatus =
+  (typeof TEMPLATE_DELETION_CLEANUP_STATUSES)[number];
+
 /**
  * Search projections driven by the transactional repair queue. This one list
  * types the queue column, generates the table's CHECK constraint, and keys

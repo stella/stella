@@ -52,6 +52,10 @@ import {
   repairSearchSemanticTimestampsTask,
 } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
 import {
+  CLEAN_TEMPLATE_DELETION_OBJECTS_TASK,
+  cleanTemplateDeletionObjects,
+} from "@/api/lib/scheduler/tasks/template-deletion-cleanup";
+import {
   BACKFILL_WORK_OBLIGATIONS_TASK,
   backfillWorkObligations,
 } from "@/api/lib/scheduler/tasks/work-obligation-backfill";
@@ -83,6 +87,7 @@ const SCHEDULER_TASKS = {
   [REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK]: repairSearchSemanticTimestampsTask,
   [MEMORY_CURATOR_TASK]: curateAiMemories,
   [MEMORY_EXTRACTOR_TASK]: extractMemoriesFromCompactions,
+  [CLEAN_TEMPLATE_DELETION_OBJECTS_TASK]: cleanTemplateDeletionObjects,
 } as const satisfies Record<string, SchedulerTask>;
 
 export type RegisteredSchedulerTaskName = keyof typeof SCHEDULER_TASKS;

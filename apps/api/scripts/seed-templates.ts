@@ -36,7 +36,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ClauseBody, ClauseParagraph } from "@/api/lib/clauses/types";
 import { writeManifest } from "@/api/lib/docx/template-manifest";
 import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
-import { getS3 } from "@/api/lib/s3";
+import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 
 import { ensureTestUsers } from "./seed-test-user";
 import {
@@ -2481,7 +2481,10 @@ export async function seedTemplates(
     // Upload to S3
     const s3Key = `${ORG_ID}/templates/${templateId}.docx`;
     // oxlint-disable-next-line no-await-in-loop -- bounded memory: write one template's DOCX buffer to S3 at a time
-    await getS3().write(s3Key, new Uint8Array(docxBuffer));
+    await writeS3ObjectWithRetry({
+      data: new Uint8Array(docxBuffer),
+      key: s3Key,
+    });
 
     // Insert template
     // oxlint-disable-next-line no-await-in-loop -- depends on the template DOCX uploaded to S3 just above this iteration
@@ -2505,7 +2508,10 @@ export async function seedTemplates(
     // Insert version v1
     const versionS3Key = `${ORG_ID}/templates/${templateId}/v1.docx`;
     // oxlint-disable-next-line no-await-in-loop -- bounded memory: write one template's DOCX buffer to S3 at a time
-    await getS3().write(versionS3Key, new Uint8Array(docxBuffer));
+    await writeS3ObjectWithRetry({
+      data: new Uint8Array(docxBuffer),
+      key: versionS3Key,
+    });
 
     // oxlint-disable-next-line no-await-in-loop -- depends on the template version's DOCX buffer written to S3 just above this iteration
     await rootDb

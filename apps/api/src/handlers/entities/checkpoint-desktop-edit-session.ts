@@ -27,7 +27,7 @@ import { scanFile } from "@/api/lib/file-scan/scan";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
-import { getS3 } from "@/api/lib/s3";
+import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 export const checkpointDesktopEditSessionParamsSchema = t.Object({
@@ -234,7 +234,7 @@ export const checkpointDesktopEditSessionHandler = async ({
     // token-holder overwrite the checkpoint, desyncing the S3 object from
     // the persisted checkpointSha256Hex. The lock is held for one write on
     // a low-frequency, single-session path.
-    await getS3().write(key, new Uint8Array(buffer));
+    await writeS3ObjectWithRetry({ data: new Uint8Array(buffer), key });
 
     const checkpointedAt = new Date();
 

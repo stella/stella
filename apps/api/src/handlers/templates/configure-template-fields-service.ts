@@ -32,7 +32,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { deleteS3Keys } from "@/api/lib/files/utils";
 import { logger } from "@/api/lib/observability/logger";
-import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
+import { readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { buildTemplateRevisionS3Key } from "@/api/lib/templates/storage-keys";
 
 type ConfigureTemplateFieldsOptions = {
@@ -164,7 +164,7 @@ export const configureTemplateFields = async function* ({
         templateId,
         version: locked.currentVersion,
       });
-      await getS3().write(revisionS3Key, updatedBytes);
+      await writeS3ObjectWithRetry({ data: updatedBytes, key: revisionS3Key });
 
       await tx
         .update(templates)

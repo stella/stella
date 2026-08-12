@@ -24,6 +24,7 @@ import { MEMORY_EXTRACTOR_TASK } from "@/api/lib/scheduler/tasks/memory-extracto
 import { REPAIR_CHAT_SEARCH_INDEX_TASK } from "@/api/lib/scheduler/tasks/search-chat-index";
 import { REPAIR_SEARCH_PROJECTIONS_TASK } from "@/api/lib/scheduler/tasks/search-projection-repair";
 import { REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
+import { CLEAN_TEMPLATE_DELETION_OBJECTS_TASK } from "@/api/lib/scheduler/tasks/template-deletion-cleanup";
 import { BACKFILL_WORK_OBLIGATIONS_TASK } from "@/api/lib/scheduler/tasks/work-obligation-backfill";
 
 type SchedulerJobDefinition = {
@@ -202,6 +203,13 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: REPAIR_SEARCH_PROJECTIONS_TASK,
+  },
+  {
+    description: "Delete template objects recorded by committed deletions",
+    id: "templates.cleanDeletionObjects.oneMinute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: CLEAN_TEMPLATE_DELETION_OBJECTS_TASK,
   },
   {
     description:

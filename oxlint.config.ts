@@ -503,6 +503,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-relative-time-helpers.ts",
     "./.oxlint-plugins/no-crypto-random-uuid.ts",
     "./.oxlint-plugins/no-native-s3-object-read.ts",
+    "./.oxlint-plugins/no-native-s3-object-write.ts",
     "./.oxlint-plugins/no-raw-use-effect.ts",
     "./.oxlint-plugins/no-ref-mirror.ts",
     "./.oxlint-plugins/no-shared-suspense-query.ts",
@@ -698,6 +699,16 @@ export default defineConfig({
       ],
       rules: {
         "no-native-s3-object-read/no-native-s3-object-read": "error",
+      },
+    },
+    {
+      // Exercise no-native-s3-object-write against its regression fixture;
+      // production enforcement is scoped to apps/api below.
+      files: [
+        ".oxlint-plugins/__fixtures__/no-native-s3-object-write.fixture.ts",
+      ],
+      rules: {
+        "no-native-s3-object-write/no-native-s3-object-write": "error",
       },
     },
     {
@@ -2225,9 +2236,17 @@ export default defineConfig({
     },
     {
       files: ["apps/api/**/*.ts"],
+      excludeFiles: [
+        // These are the only low-level documents-bucket writers: they own
+        // abort signals and tenant-scoped signing, which the retry helper
+        // intentionally cannot provide.
+        "apps/api/src/lib/s3.ts",
+        "apps/api/src/lib/s3-presign.ts",
+      ],
       rules: {
         "no-crypto-random-uuid/no-crypto-random-uuid": "error",
         "no-native-s3-object-read/no-native-s3-object-read": "error",
+        "no-native-s3-object-write/no-native-s3-object-write": "error",
       },
     },
     {

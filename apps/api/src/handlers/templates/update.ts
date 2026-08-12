@@ -18,7 +18,7 @@ import { isTemplateManifest } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { pickDefined } from "@/api/lib/pick-defined";
-import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
+import { readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { buildTemplateVersionS3Key } from "@/api/lib/templates/storage-keys";
 import {
   MAX_TEMPLATE_LANGUAGES,
@@ -246,7 +246,10 @@ const updateTemplateHandler = async function* ({
         // wait, and they must serialize anyway so vN's bytes aren't
         // overwritten before the version row commits.
 
-        await getS3().write(versionS3Key, new Uint8Array(updatedDocx));
+        await writeS3ObjectWithRetry({
+          data: new Uint8Array(updatedDocx),
+          key: versionS3Key,
+        });
 
         const [r] = await tx
           .update(templates)

@@ -11,7 +11,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { assertUnchangedSince } from "@/api/lib/optimistic-concurrency";
-import { getS3 } from "@/api/lib/s3";
+import { getS3, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { enqueueStyleSetPackageCleanup } from "@/api/lib/style-set-package-cleanup-queue";
 import {
   buildStyleSetKey,
@@ -43,7 +43,8 @@ export const createStoredStyleSet = async ({
 
     yield* Result.await(
       Result.tryPromise({
-        try: async () => await getS3().write(s3Key, buffer),
+        try: async () =>
+          await writeS3ObjectWithRetry({ data: buffer, key: s3Key }),
         catch: (cause) =>
           new HandlerError({
             status: 500,
@@ -222,7 +223,8 @@ export const replaceStoredStyleSet = async ({
     const s3Key = buildStyleSetKey({ organizationId, styleSetId });
     yield* Result.await(
       Result.tryPromise({
-        try: async () => await getS3().write(s3Key, buffer),
+        try: async () =>
+          await writeS3ObjectWithRetry({ data: buffer, key: s3Key }),
         catch: (cause) =>
           new HandlerError({
             status: 500,

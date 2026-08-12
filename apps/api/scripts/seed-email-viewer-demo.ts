@@ -29,7 +29,7 @@ import {
   parseEmail,
   parsedEmailToText,
 } from "@/api/lib/files/email-to-html";
-import { getS3 } from "@/api/lib/s3";
+import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import { buildDefaultViewRows } from "@/api/lib/views";
 
@@ -261,7 +261,11 @@ const seedEmailViewerDemo = async () => {
 
     const s3Key = `${target.organizationId}/${target.workspaceId}/${fileId}.eml`;
     // oxlint-disable-next-line no-await-in-loop -- keep fixture uploads bounded and deterministic
-    await getS3().write(s3Key, new Uint8Array(content));
+    await writeS3ObjectWithRetry({
+      contentType: EML_MIME_TYPE,
+      data: new Uint8Array(content),
+      key: s3Key,
+    });
 
     const fileContent = {
       version: 1,

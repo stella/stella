@@ -721,12 +721,11 @@ export const headObject = async (
   });
 
 /**
- * Server-side CopyObject. Used by finalize to promote a scanned
- * staged upload object to its final workspace key without
- * pulling bytes through the API task. We prefer this over Bun's
- * `write(target, file(source))` for promotion specifically
- * because the SDK v3 path is documented as a server-side copy;
- * Bun's behaviour for that signature is not promised by its types.
+ * Server-side documents-bucket copy without pulling bytes through the API
+ * task. Upload finalization promotes a scanned staged object; workspace and
+ * entity duplication create independently owned durable objects. We prefer
+ * this documented SDK v3 primitive over Bun's `write(target, file(source))`,
+ * whose copy behaviour is not promised by its types.
  */
 export const copyObject = async (
   sourceKey: string,

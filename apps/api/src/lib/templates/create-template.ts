@@ -32,7 +32,7 @@ import {
 import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { getS3 } from "@/api/lib/s3";
+import { getS3, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { buildTemplateS3Key } from "@/api/lib/templates/storage-keys";
 import { detectTemplateLanguagesFromDocx } from "@/api/lib/templates/template-languages";
@@ -190,7 +190,10 @@ export const createStoredTemplate = async function* ({
   const templateId = createSafeId<"template">();
   const s3Key = buildTemplateS3Key(organizationId, templateId);
 
-  await getS3().write(s3Key, new Uint8Array(docxWithManifest));
+  await writeS3ObjectWithRetry({
+    data: new Uint8Array(docxWithManifest),
+    key: s3Key,
+  });
 
   const versionId = createSafeId<"templateVersion">();
 

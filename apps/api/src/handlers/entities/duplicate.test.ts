@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
 import {
@@ -50,6 +51,9 @@ const fileMock = mock(() => ({}));
 // copy wrote and the keys the rollback returned.
 const writeMock = mock(async (_key: string) => undefined);
 const s3DeleteMock = mock(async (_key: string) => undefined);
+const copyObjectMock = mock<
+  (sourceKey: string, targetKey: string) => Promise<Result<void, unknown>>
+>(async () => Result.ok(undefined));
 
 // Spread the real module: mock.module is process-global; a partial mock would delete s3's other exports for later test files.
 const realS3 = await import("@/api/lib/s3");
@@ -70,7 +74,14 @@ void mock.module("@/api/lib/s3", () => ({
   },
 }));
 
+const realS3Presign = await import("@/api/lib/s3-presign");
+void mock.module("@/api/lib/s3-presign", () => ({
+  ...realS3Presign,
+  copyObject: copyObjectMock,
+}));
+
 const { default: duplicateEntity } = await import("./duplicate");
+const { copyFileObject } = await import("./copy-utils");
 
 const workspaceId = toSafeId<"workspace">("workspace_1");
 const userId = toSafeId<"user">("user_1");
@@ -92,6 +103,36 @@ const fileContent = {
   sha256Hex: "a".repeat(64),
   pdfFileId: null,
 } satisfies FieldContent;
+
+test("reserves a copy destination before an ambiguous S3 failure", async () => {
+  copyObjectMock.mockClear();
+  const copyError = new Error("copy response lost");
+  copyObjectMock.mockImplementationOnce(async () => Result.err(copyError));
+  const copiedS3Keys: string[] = [];
+
+  // bun-types declares `.rejects.toBe` as void, so capture the rejection
+  // explicitly for both type-aware lint and the runtime assertion.
+  const rejection: unknown = await copyFileObject({
+    sourceEntityId: documentId,
+    sourceFileId: fileContent.id,
+    sourcePropertyId: propertyId,
+    sourceKey: "organizations/source/workspaces/source/files/source.docx",
+    mimeType: fileContent.mimeType,
+    organizationId,
+    targetWorkspaceId: workspaceId,
+    copiedS3Keys,
+  }).then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  expect(rejection).toBe(copyError);
+  const targetKey = copyObjectMock.mock.calls.at(-1)?.at(1);
+  if (!targetKey) {
+    throw new Error("Expected copyObject to receive a target key");
+  }
+  expect(copiedS3Keys).toEqual([targetKey]);
+});
 
 type InsertedEntity = {
   id: SafeId<"entity">;
@@ -177,6 +218,7 @@ const createContext = ({
 
 describe("duplicate entity", () => {
   test("duplicates folder trees instead of rejecting folders", async () => {
+    copyObjectMock.mockClear();
     processExtractionMock.mockClear();
     enqueueEntitySearchRepairsMock.mockClear();
     flushEntitySearchRepairsMock.mockClear();
@@ -267,7 +309,7 @@ describe("duplicate entity", () => {
     if (duplicatedFileField.content.type === "file") {
       expect(duplicatedFileField.content.id).not.toBe(fileContent.id);
     }
-    expect(writeMock).toHaveBeenCalledTimes(1);
+    expect(copyObjectMock).toHaveBeenCalledTimes(1);
 
     const rootDuplicate = insertedEntities.at(0);
     const documentDuplicate = insertedEntities.at(1);
@@ -306,7 +348,7 @@ describe("duplicate entity", () => {
     processExtractionMock.mockClear();
     enqueueEntitySearchRepairsMock.mockClear();
     flushEntitySearchRepairsMock.mockClear();
-    writeMock.mockClear();
+    copyObjectMock.mockClear();
     s3DeleteMock.mockClear();
 
     // The nested folder is the third entity in copy order, so the root and
@@ -362,7 +404,9 @@ describe("duplicate entity", () => {
 
     // No row survives the abort, so every object copied for it is an orphan
     // and all of them go back.
-    const copiedKeys = writeMock.mock.calls.map(([key]) => key);
+    const copiedKeys = copyObjectMock.mock.calls.map(
+      ([_sourceKey, targetKey]) => targetKey,
+    );
     const deletedKeys = s3DeleteMock.mock.calls.map(([key]) => key);
     expect(copiedKeys).toHaveLength(1);
     expect(new Set(deletedKeys)).toEqual(new Set(copiedKeys));
