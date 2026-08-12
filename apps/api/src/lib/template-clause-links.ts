@@ -1,13 +1,13 @@
 /** Shared template-clause link operations used by the clause and template slices. */
 import { panic } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, or, sql } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import { isClauseSlotName } from "@stll/template-conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { templateClauses } from "@/api/db/schema";
+import { clauseVersions, templateClauses } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -678,6 +678,41 @@ export const syncAllClausesHandler = async ({
       limit: LIMITS.templateClausesPerTemplate,
     });
 
+    const targetVersionByClauseId = new Map<SafeId<"clause">, number>();
+    for (const link of links) {
+      if (isOutdatedLink(link) && link.clauseId && link.clause) {
+        targetVersionByClauseId.set(link.clauseId, link.clause.currentVersion);
+      }
+    }
+    if (targetVersionByClauseId.size === 0) {
+      return [];
+    }
+
+    const targetPredicates = [...targetVersionByClauseId].map(
+      ([clauseId, version]) =>
+        and(
+          eq(clauseVersions.clauseId, clauseId),
+          eq(clauseVersions.version, version),
+        ),
+    );
+    const currentVersions = await tx
+      .select({
+        clauseId: clauseVersions.clauseId,
+        id: clauseVersions.id,
+        version: clauseVersions.version,
+      })
+      .from(clauseVersions)
+      .where(
+        and(
+          eq(clauseVersions.organizationId, organizationId),
+          or(...targetPredicates),
+        ),
+      )
+      .limit(targetVersionByClauseId.size);
+    const currentVersionByClauseId = new Map(
+      currentVersions.map((version) => [version.clauseId, version]),
+    );
+
     const synced: SafeId<"templateClause">[] = [];
 
     for (const link of links) {
@@ -685,15 +720,7 @@ export const syncAllClausesHandler = async ({
         continue;
       }
 
-      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential: ordered read/update/audit steps run inside the one bulk-sync transaction
-      const latestVersion = await tx.query.clauseVersions.findFirst({
-        where: {
-          clauseId: { eq: link.clauseId },
-          version: link.clause.currentVersion,
-          organizationId: { eq: organizationId },
-        },
-        columns: { id: true, version: true },
-      });
+      const latestVersion = currentVersionByClauseId.get(link.clauseId);
 
       if (!latestVersion) {
         continue;
