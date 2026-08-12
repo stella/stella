@@ -153,7 +153,7 @@ export const KanbanCard = ({
         onCancel={rename.cancel}
         onChange={rename.setDraft}
         onCommit={() => {
-          detached(rename.commit(), "KanbanCard");
+          detached(rename.commit(), "kanban-card.commit");
         }}
         value={rename.state.draft}
       />

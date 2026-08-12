@@ -334,7 +334,7 @@ const EditablePropertyValue = ({
       className="h-7 text-sm"
       disabled={saving}
       onBlur={() => {
-        detached(save(), "DocumentPropertiesSection");
+        detached(save(), "document-properties-section.save");
       }}
       onChange={(event) => setDraft(event.target.value)}
       onKeyDown={(event) => {

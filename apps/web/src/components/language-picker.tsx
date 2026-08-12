@@ -33,7 +33,9 @@ export const LanguagePicker = () => {
           {supportedLanguages.map((code) => (
             <MenuRadioItem
               key={code}
-              onClick={() => detached(setLang(code), "LanguagePicker")}
+              onClick={() =>
+                detached(setLang(code), "language-picker.set-lang")
+              }
               value={code}
             >
               {LANG_ENDONYMS[code]}

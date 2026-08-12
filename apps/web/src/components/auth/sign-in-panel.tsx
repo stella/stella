@@ -295,7 +295,7 @@ export const SignInPanel = ({
           errors={formErrors}
           onSubmit={(e) => {
             e.preventDefault();
-            detached(form.handleSubmit(), "SignInPanel");
+            detached(form.handleSubmit(), "sign-in-panel.submit");
           }}
         >
           <form.Field name="email">
@@ -409,7 +409,7 @@ const PasswordSignInForm = ({
       errors={formErrors}
       onSubmit={(e) => {
         e.preventDefault();
-        detached(form.handleSubmit(), "PasswordSignInForm");
+        detached(form.handleSubmit(), "sign-in-panel.submit");
       }}
     >
       <form.Field name="email">
@@ -531,7 +531,7 @@ const BootstrapSignUpForm = ({
         errors={formErrors}
         onSubmit={(e) => {
           e.preventDefault();
-          detached(form.handleSubmit(), "BootstrapSignUpForm");
+          detached(form.handleSubmit(), "sign-in-panel.submit");
         }}
       >
         <form.Field name="email">

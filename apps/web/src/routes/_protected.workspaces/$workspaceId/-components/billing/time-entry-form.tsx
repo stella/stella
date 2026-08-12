@@ -138,7 +138,7 @@ export const TimeEntryForm = ({
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        detached(form.handleSubmit(), "TimeEntryForm");
+        detached(form.handleSubmit(), "time-entry-form.submit");
       }}
     >
       <div className="flex flex-col gap-1.5">

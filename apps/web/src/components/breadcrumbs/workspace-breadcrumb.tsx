@@ -190,12 +190,12 @@ export const WorkspaceBreadcrumb = ({
         <Input
           className={`${breadcrumbInputClassName} w-28 text-sm`}
           onBlur={() => {
-            detached(refRename.commit(), "WorkspaceBreadcrumb");
+            detached(refRename.commit(), "workspace-breadcrumb.commit");
           }}
           onChange={(e) => refRename.setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
-              detached(refRename.commit(), "WorkspaceBreadcrumb");
+              detached(refRename.commit(), "workspace-breadcrumb.commit");
             }
             if (e.key === "Escape") {
               refRename.cancel();
@@ -263,7 +263,10 @@ export const WorkspaceBreadcrumb = ({
                     className={`${matterNameInputClassName} w-fit`}
                     disabled={updateWorkspace.isPending}
                     onBlur={() => {
-                      detached(nameRename.commit(), "WorkspaceBreadcrumb");
+                      detached(
+                        nameRename.commit(),
+                        "workspace-breadcrumb.commit",
+                      );
                     }}
                     onChange={(e) => nameRename.setDraft(e.target.value)}
                     onKeyDown={(e) => {
@@ -368,7 +371,7 @@ export const WorkspaceBreadcrumb = ({
             className={`${matterNameInputClassName} w-fit`}
             disabled={updateWorkspace.isPending}
             onBlur={() => {
-              detached(nameRename.commit(), "WorkspaceBreadcrumb");
+              detached(nameRename.commit(), "workspace-breadcrumb.commit");
             }}
             onChange={(e) => nameRename.setDraft(e.target.value)}
             onKeyDown={(e) => {

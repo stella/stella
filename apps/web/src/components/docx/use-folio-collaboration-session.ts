@@ -416,7 +416,10 @@ export const useFolioCollaborationSession = ({
           },
         });
       })().catch((error: unknown) => {
-        detached(cancelOpeningSession(), "FolioCollabSession");
+        detached(
+          cancelOpeningSession(),
+          "use-folio-collaboration-session.cancel-opening-session",
+        );
         if (isDisposed()) {
           return;
         }
@@ -427,12 +430,15 @@ export const useFolioCollaborationSession = ({
           message: userErrorFromThrown(error, t("errors.actionFailed")),
         });
       }),
-      "FolioCollabSession",
+      "use-folio-collaboration-session.open-session",
     );
 
     return () => {
       disposed = true;
-      detached(cancelOpeningSession(), "FolioCollabSession");
+      detached(
+        cancelOpeningSession(),
+        "use-folio-collaboration-session.cancel-opening-session",
+      );
       provider?.destroy();
     };
   }, [

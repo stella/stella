@@ -69,7 +69,7 @@ export const ManualTimeEntryForm = ({
             narrative: narrative.trim(),
             billable,
           }),
-          "ManualTimeEntryForm",
+          "manual-time-entry-form.submit",
         );
       }}
     >

@@ -41,7 +41,7 @@ function NewChatRedirect() {
         replace: true,
         to: "/chat/$threadId",
       }),
-      "NewChatRedirect",
+      "chat-new.navigate",
     );
   });
 

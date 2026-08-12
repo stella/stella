@@ -169,7 +169,7 @@ export const useDecisionAnalysis = (
     // state: refetch the polling query so it picks up a fresh
     // result instead of staying on the cached failure.
     if (isGenerating && hasErrorResult) {
-      detached(refetch(), "generate");
+      detached(refetch(), "use-decision-analysis.refetch");
       return;
     }
     if (isGenerating) {

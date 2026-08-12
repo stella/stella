@@ -304,7 +304,7 @@ export const generateAnalysis = async (
       orgAIConfig,
       promptCachingEnabled,
     ),
-    "generateAnalysis",
+    "analysis-generate.run-generation",
   );
 
   return Result.ok({ status: "generating" });

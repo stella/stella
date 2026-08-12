@@ -41,7 +41,7 @@ function NewWorkspaceChatRedirect() {
         replace: true,
         to: "/chat/workspaces/$workspaceId/$threadId",
       }),
-      "NewWorkspaceChatRedirect",
+      "chat-workspace-new.navigate",
     );
   });
 

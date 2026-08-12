@@ -50,7 +50,7 @@ export const Route = createFileRoute(
           getAnalytics().captureError(error);
         },
       ),
-      "loader",
+      "expenses.prefetch",
     );
   },
   component: ExpensesPage,

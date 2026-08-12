@@ -269,7 +269,7 @@ export const useMatterActions = (
           });
           detached(
             queryClient.invalidateQueries({ queryKey: workspacesKeys.all }),
-            "onSuccess",
+            "matter-context-menu.invalidate",
           );
           onDeleted?.();
         },
@@ -299,7 +299,7 @@ export const useMatterActions = (
     isPinned,
     onAddMember: () => setAddMemberOpen(true),
     onCopyLink: () => {
-      detached(handleCopyLink(), "onCopyLink");
+      detached(handleCopyLink(), "matter-context-menu.copy-link");
     },
     onDelete: () => setDeleteOpen(true),
     onOpenInNewTab: () => {
@@ -543,11 +543,11 @@ export const AddMemberDialog = ({
             queryClient.invalidateQueries({
               queryKey: workspaceMembersKeys.all(workspaceId),
             }),
-            "onSuccess",
+            "matter-context-menu.invalidate",
           );
           detached(
             queryClient.invalidateQueries({ queryKey: workspacesKeys.all }),
-            "onSuccess",
+            "matter-context-menu.invalidate",
           );
           onOpenChange(false);
           setSelectedUserId(null);

@@ -642,7 +642,10 @@ export const ExistingFileOrganizerDialog = ({
               }
             }}
             onRegenerate={() => {
-              detached(requestAiSuggestions(), "ExistingFileOrganizerDialog");
+              detached(
+                requestAiSuggestions(),
+                "existing-file-organizer-dialog.request-ai-suggestions",
+              );
             }}
             onToggle={() => setShowInstructions((current) => !current)}
             value={userInstructions}
@@ -651,7 +654,10 @@ export const ExistingFileOrganizerDialog = ({
             <FailureBanner
               disabled={false}
               onRetry={() => {
-                detached(requestAiSuggestions(), "ExistingFileOrganizerDialog");
+                detached(
+                  requestAiSuggestions(),
+                  "existing-file-organizer-dialog.request-ai-suggestions",
+                );
               }}
             />
           )}
@@ -690,7 +696,10 @@ export const ExistingFileOrganizerDialog = ({
               className="me-auto"
               disabled={isGeneratingSuggestions || rows.length === 0}
               onClick={() => {
-                detached(requestAiSuggestions(), "ExistingFileOrganizerDialog");
+                detached(
+                  requestAiSuggestions(),
+                  "existing-file-organizer-dialog.request-ai-suggestions",
+                );
               }}
               type="button"
               variant="outline"

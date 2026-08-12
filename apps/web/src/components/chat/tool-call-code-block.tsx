@@ -80,7 +80,7 @@ export const ToolCallCodeBlock = ({
           aria-label={t("common.copy")}
           className="text-muted-foreground"
           onClick={() => {
-            detached(handleCopy(), "ToolCallCodeBlock");
+            detached(handleCopy(), "tool-call-code-block.copy");
           }}
           size="icon-xs"
           type="button"

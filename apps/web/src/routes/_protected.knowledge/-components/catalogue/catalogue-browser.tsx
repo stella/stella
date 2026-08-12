@@ -248,13 +248,13 @@ export const CatalogueBrowser = ({
       queryClient.invalidateQueries({
         queryKey: knowledgeKeys.skills.all(organizationId),
       }),
-      "onSkillSheetChanged",
+      "catalogue-browser.invalidate",
     );
     detached(
       queryClient.invalidateQueries({
         queryKey: catalogueKeys.list(organizationId),
       }),
-      "onSkillSheetChanged",
+      "catalogue-browser.invalidate",
     );
   };
 
@@ -267,7 +267,7 @@ export const CatalogueBrowser = ({
         to: "/knowledge/tools/$skillId",
         params: { skillId: skill.id },
       }),
-      "onBlueprintCreated",
+      "catalogue-browser.navigate",
     );
   };
 
@@ -280,7 +280,7 @@ export const CatalogueBrowser = ({
         to: "/knowledge/tools/$skillId",
         params: { skillId: entry.installedSkillId },
       }),
-      "openEditInstalledSkill",
+      "catalogue-browser.navigate",
     );
   };
 

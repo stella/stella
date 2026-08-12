@@ -175,7 +175,7 @@ function RouteComponent() {
       queryClient.invalidateQueries({
         queryKey: knowledgeKeys.flows.all(organizationId),
       }),
-      "handleToggleEnabled",
+      "knowledge-workflows.invalidate",
     );
   };
 
@@ -212,7 +212,7 @@ function RouteComponent() {
           queryClient.invalidateQueries({
             queryKey: knowledgeKeys.flows.all(organizationId),
           }),
-          "RouteComponent",
+          "knowledge-workflows.invalidate",
         );
       }}
       onSelect={(flow) => setView({ kind: "editor", flowId: flow.id })}
@@ -220,7 +220,10 @@ function RouteComponent() {
         setView({ kind: "editor", flowId: null, example })
       }
       onToggleEnabled={(flow, enabled) => {
-        detached(handleToggleEnabled(flow, enabled), "RouteComponent");
+        detached(
+          handleToggleEnabled(flow, enabled),
+          "knowledge-workflows.toggle-enabled",
+        );
       }}
       togglingId={togglingId}
     />

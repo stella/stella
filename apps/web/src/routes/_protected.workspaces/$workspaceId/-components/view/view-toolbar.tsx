@@ -502,7 +502,7 @@ const TableExportMenu = ({ view, workspaceId }: TableExportMenuProps) => {
                 closeOnClick={false}
                 disabled={exportingFormat !== null}
                 onClick={() => {
-                  detached(handleExport(option.format), "TableExportMenu");
+                  detached(handleExport(option.format), "view-toolbar.export");
                 }}
               >
                 <ExportFormatIcon
@@ -754,7 +754,7 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
           closeOnClick={false}
           disabled={isRunning}
           onClick={() => {
-            detached(handleAutoRun(), "RunPlaybookControl");
+            detached(handleAutoRun(), "view-toolbar.auto-run");
           }}
         >
           <WandSparklesIcon className="size-3.5" />
@@ -802,7 +802,7 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
             disabled={isRunning}
             key={playbook.id}
             onClick={() => {
-              detached(handleRun(playbook.id), "RunPlaybookControl");
+              detached(handleRun(playbook.id), "view-toolbar.run");
             }}
           >
             {playbook.name}

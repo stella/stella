@@ -323,7 +323,7 @@ const CreateRateTableForm = ({
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        detached(form.handleSubmit(), "CreateRateTableForm");
+        detached(form.handleSubmit(), "rate-management-dialog.submit");
       }}
     >
       <div className="flex gap-3">
@@ -667,7 +667,7 @@ const CreateRateEntryForm = ({
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        detached(form.handleSubmit(), "CreateRateEntryForm");
+        detached(form.handleSubmit(), "rate-management-dialog.submit");
       }}
     >
       <div className="flex flex-col gap-1.5">

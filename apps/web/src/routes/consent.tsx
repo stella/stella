@@ -255,7 +255,7 @@ function ConsentPage() {
               className="w-full sm:w-auto"
               disabled={isPending}
               onClick={() => {
-                detached(handleConsent(false), "ConsentPage");
+                detached(handleConsent(false), "consent.decline");
               }}
               type="button"
               variant="ghost"
@@ -267,7 +267,7 @@ function ConsentPage() {
               disabled={isPending}
               loading={isPending}
               onClick={() => {
-                detached(handleConsent(true), "ConsentPage");
+                detached(handleConsent(true), "consent.allow");
               }}
               type="button"
             >

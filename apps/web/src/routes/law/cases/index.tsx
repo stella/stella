@@ -217,7 +217,7 @@ function PublicCaseLawIndex() {
         replace: true,
         search: (prev) => ({ ...prev, notFound: undefined }),
       }),
-      "PublicCaseLawIndex",
+      "cases.navigate",
     );
   }, [notFound, navigate, t]);
   const routeFilters = createDecisionFiltersFromSearch(search);
@@ -275,7 +275,7 @@ function PublicCaseLawIndex() {
             onClick={() => {
               detached(
                 (async () => await fetchNextPage())(),
-                "PublicCaseLawIndex",
+                "cases.fetch-next-page",
               );
             }}
             variant="outline"

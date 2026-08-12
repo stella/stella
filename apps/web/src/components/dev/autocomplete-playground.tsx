@@ -361,7 +361,7 @@ export const AutocompletePlayground = () => {
         clearTimeout(debounceRef.current);
       }
       debounceRef.current = setTimeout(() => {
-        detached(triggerRequest(), "scheduleTrigger");
+        detached(triggerRequest(), "autocomplete-playground.trigger-request");
       }, DEBOUNCE_MS);
     };
 

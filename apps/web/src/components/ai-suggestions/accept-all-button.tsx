@@ -88,7 +88,7 @@ export const AcceptAllButton = ({
       Promise.resolve(onAcceptAll(pendingItems)).finally(() => {
         setIsAccepting(false);
       }),
-      "runAccept",
+      "accept-all-button.accept-all",
     );
   };
 

@@ -761,7 +761,7 @@ export const PromptBar = (props: PromptBarProps) => {
         Promise.resolve(
           onSubmit({ prompt: preset.prompt, presetId: preset.id, files: [] }),
         ),
-        "PromptBar preset",
+        "ai-suggestions-host.submit-preset",
       );
     },
     [canSubmitNow, onSubmit, presetScopeChooser],
@@ -1055,7 +1055,7 @@ export const PromptBar = (props: PromptBarProps) => {
                 isGenerating={isGenerating}
                 onRetry={retryOffer}
                 onSend={() => {
-                  detached(submitDraft(), "PromptBar");
+                  detached(submitDraft(), "ai-suggestions-host.submit-draft");
                 }}
                 onStop={onStop}
               />

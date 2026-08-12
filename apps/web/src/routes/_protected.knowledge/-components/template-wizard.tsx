@@ -511,7 +511,7 @@ export const ConfigureStep = ({
           <form
             className="flex flex-col gap-5"
             onSubmit={(...args) => {
-              detached(handleSave(...args), "ConfigureStep");
+              detached(handleSave(...args), "template-wizard.save");
             }}
           >
             <Field>

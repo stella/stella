@@ -468,7 +468,7 @@ export const LinkClauseDialog = ({
           <Button
             disabled={linking || !selectedClauseId || slotUnavailable}
             onClick={() => {
-              detached(handleLink(), "LinkClauseDialog");
+              detached(handleLink(), "link-clause-dialog.link");
             }}
           >
             {t("clauses.linkClause")}

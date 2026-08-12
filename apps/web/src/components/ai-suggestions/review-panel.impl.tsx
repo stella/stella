@@ -447,7 +447,7 @@ export const ReviewPanelImpl = ({
                     item={item}
                     key={item.id}
                     onAccept={() => {
-                      detached(acceptOne(item), "ReviewPanelImpl");
+                      detached(acceptOne(item), "review-panel-impl.accept-one");
                     }}
                     onNavigate={() => navigateTo(item)}
                     onReject={() => rejectOne(item)}

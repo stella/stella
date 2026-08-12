@@ -727,7 +727,10 @@ export const OnboardingWizard = () => {
             onNext={({ emails }) => {
               const finalData = { ...data, emails };
               setData(finalData);
-              detached(executeSetup(finalData), "renderStep");
+              detached(
+                executeSetup(finalData),
+                "onboarding-wizard.execute-setup",
+              );
             }}
           />
         </OnboardingLayout>
@@ -788,10 +791,16 @@ export const OnboardingWizard = () => {
           onSelect={setDownloadTarget}
           selected={downloadTarget}
           onNext={() => {
-            detached(navigate({ to: "/chat", replace: true }), "renderStep");
+            detached(
+              navigate({ to: "/chat", replace: true }),
+              "onboarding-wizard.navigate",
+            );
           }}
           onSkip={() => {
-            detached(navigate({ to: "/chat", replace: true }), "renderStep");
+            detached(
+              navigate({ to: "/chat", replace: true }),
+              "onboarding-wizard.navigate",
+            );
           }}
         />
       </OnboardingLayout>

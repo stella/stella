@@ -1372,7 +1372,7 @@ const FileChatOverlayInner = ({
             items,
             docxEditorRef,
           }),
-          "FileChatOverlayInner",
+          "file-chat-overlay.persist-queued-suggestions",
         );
       }
       return {
@@ -1952,7 +1952,10 @@ const FileChatOverlayInner = ({
     );
     for (const part of partsToRun) {
       executedIds.add(part.id);
-      detached(runFolioAgentDocToolCall(part), "FileChatOverlayInner");
+      detached(
+        runFolioAgentDocToolCall(part),
+        "file-chat-overlay.run-folio-agent-doc-tool-call",
+      );
     }
   }, [messages, runFolioAgentDocToolCall]);
 
@@ -2036,7 +2039,10 @@ const FileChatOverlayInner = ({
     );
     for (const part of partsToRun) {
       executedIds.add(part.id);
-      detached(runActiveDocxEditToolCall(part), "FileChatOverlayInner");
+      detached(
+        runActiveDocxEditToolCall(part),
+        "file-chat-overlay.run-active-docx-edit-tool-call",
+      );
     }
   }, [messages, runActiveDocxEditToolCall]);
 
@@ -2326,7 +2332,7 @@ const FileChatOverlayInner = ({
                     }
                     await sendMessage(await buildChatRequestMessage(draft));
                   }),
-                  "FileChatOverlayInner",
+                  "file-chat-overlay.submit",
                 );
               }}
             />

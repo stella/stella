@@ -269,7 +269,7 @@ function RouteComponent() {
                     exitDetail();
                   }
                 })(),
-                "onClick",
+                "knowledge-templates.save",
               );
             },
           }}
@@ -316,10 +316,13 @@ function RouteComponent() {
         onCreateBlank={() => setStylePickerOpen(true)}
         onDeleted={invalidateTemplates}
         onDiscovered={(file) => {
-          detached(openUploadedTemplate(file), "RouteComponent");
+          detached(
+            openUploadedTemplate(file),
+            "knowledge-templates.open-uploaded-template",
+          );
         }}
         onLoadMore={() => {
-          detached(fetchNextPage(), "RouteComponent");
+          detached(fetchNextPage(), "knowledge-templates.fetch-next-page");
         }}
         onSelect={(template) => setView({ kind: "detail", template })}
         selectedCategoryId={selectedCategoryId}

@@ -128,7 +128,10 @@ export const TemplateVersionsTab = ({
               <Button
                 aria-label={t("common.download")}
                 onClick={() => {
-                  detached(handleDownload(version.id), "TemplateVersionsTab");
+                  detached(
+                    handleDownload(version.id),
+                    "template-versions-tab.download",
+                  );
                 }}
                 size="icon-xs"
                 title={t("common.download")}
@@ -159,7 +162,10 @@ export const TemplateVersionsTab = ({
             className="text-muted-foreground w-full"
             disabled={isFetchingNextPage}
             onClick={() => {
-              detached(fetchNextPage(), "TemplateVersionsTab");
+              detached(
+                fetchNextPage(),
+                "template-versions-tab.fetch-next-page",
+              );
             }}
             size="sm"
             variant="ghost"

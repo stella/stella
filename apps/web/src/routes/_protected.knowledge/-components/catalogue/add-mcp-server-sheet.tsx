@@ -56,13 +56,13 @@ export const AddMcpServerSheet = ({
       queryClient.invalidateQueries({
         queryKey: catalogueKeys.list(organizationId),
       }),
-      "invalidate",
+      "add-mcp-server-sheet.invalidate",
     );
     detached(
       queryClient.invalidateQueries({
         queryKey: knowledgeKeys.mcp.all(organizationId),
       }),
-      "invalidate",
+      "add-mcp-server-sheet.invalidate",
     );
   };
 

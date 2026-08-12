@@ -246,7 +246,7 @@ const InvoicesList = ({ workspaceId }: { workspaceId: string }) => {
                     invoiceId: invoice.id,
                   },
                 }),
-                "InvoicesList",
+                "invoices.navigate",
               );
             }}
           >
@@ -266,7 +266,7 @@ const InvoicesList = ({ workspaceId }: { workspaceId: string }) => {
           <Button
             disabled={isFetchingNextPage}
             onClick={() => {
-              detached(fetchNextPage(), "InvoicesList");
+              detached(fetchNextPage(), "invoices.fetch-next-page");
             }}
             size="sm"
             variant="ghost"

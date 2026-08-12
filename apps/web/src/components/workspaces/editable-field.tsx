@@ -186,7 +186,7 @@ const InlineEditor = ({
         queryClient.invalidateQueries({
           queryKey: entitiesKeys.all(workspaceId),
         }),
-        "onSuccess",
+        "editable-field.invalidate",
       );
       // Manual edit on an AI-extraction cell should latch the
       // cell so the next workflow sweep doesn't overwrite what
@@ -199,7 +199,10 @@ const InlineEditor = ({
         return;
       }
       // Trigger dependent AI columns after manual edit
-      detached(startWorkflow({ entityIds: [entityId] }), "onSuccess");
+      detached(
+        startWorkflow({ entityIds: [entityId] }),
+        "editable-field.start-workflow",
+      );
     },
     onError: () => {
       stellaToast.add({

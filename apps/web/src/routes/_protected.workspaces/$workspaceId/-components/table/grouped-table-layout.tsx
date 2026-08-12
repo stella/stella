@@ -690,7 +690,10 @@ const GroupSection = ({
               isFetchingNextPage={query.isFetchingNextPage}
               onLoadMore={() => {
                 if (query.hasNextPage && !query.isFetchingNextPage) {
-                  detached(query.fetchNextPage(), "GroupSection");
+                  detached(
+                    query.fetchNextPage(),
+                    "grouped-table-layout.fetch-next-page",
+                  );
                 }
               }}
               outerScrollRef={outerScrollRef}

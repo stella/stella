@@ -90,7 +90,10 @@ export const ChatWebSearchToggle = ({
     // Reconcile against the server on both paths: confirm the optimistic flip
     // on success, or land the rolled-back truth after an error.
     onSettled: () => {
-      detached(invalidateChatThread({ queryClient, threadRef }), "onSettled");
+      detached(
+        invalidateChatThread({ queryClient, threadRef }),
+        "chat-web-search-toggle.invalidate-chat-thread",
+      );
     },
   });
 

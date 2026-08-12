@@ -117,7 +117,7 @@ export const OTPPanel = ({
         search: { redirectTo },
         replace: true,
       }),
-      "handleUseDifferentEmail",
+      "otp-panel.navigate",
     );
   };
 

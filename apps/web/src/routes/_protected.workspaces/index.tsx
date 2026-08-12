@@ -166,7 +166,7 @@ const MattersContent = ({
       queryClient.invalidateQueries({
         queryKey: workspacesKeys.list(activeOrganizationId),
       }),
-      "MattersContent",
+      "workspaces.invalidate",
     );
   });
 
@@ -251,7 +251,7 @@ const MattersContent = ({
 
     detached(
       navigate({ to: "/workspaces", search: {}, replace: true }),
-      "MattersContent",
+      "workspaces.navigate",
     );
   });
 

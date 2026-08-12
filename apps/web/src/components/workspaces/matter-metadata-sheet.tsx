@@ -159,7 +159,7 @@ export const MatterMetadataPanel = ({
             queryClient.invalidateQueries({
               queryKey: workspacesKeys.byId(workspaceId),
             }),
-            "onSuccess",
+            "matter-metadata-sheet.invalidate",
           );
         },
         onError: (error) => {
@@ -206,7 +206,7 @@ export const MatterMetadataPanel = ({
               onDeleted?.();
               await navigate({ to: "/workspaces" });
             })(),
-            "onSuccess",
+            "matter-metadata-sheet.update",
           );
         },
       },
@@ -251,7 +251,7 @@ export const MatterMetadataPanel = ({
               to: "/workspaces/$workspaceId",
               params: { workspaceId: data.workspaceId },
             }),
-            "onSuccess",
+            "matter-metadata-sheet.navigate",
           );
         },
       },

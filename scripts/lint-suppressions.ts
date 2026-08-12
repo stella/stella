@@ -176,6 +176,12 @@ export const TRACKED_SUPPRESSION_RULES = [
     tier: "observability",
     guards: "detached `void` calls with no rejection handler",
   },
+  {
+    rule: "require-detached-label-shape/require-detached-label-shape",
+    tier: "observability",
+    guards:
+      "detached-promise labels that cannot correlate a captured rejection to a call site",
+  },
 ] as const satisfies readonly TrackedSuppressionRule[];
 
 export type TrackedRule = (typeof TRACKED_SUPPRESSION_RULES)[number]["rule"];

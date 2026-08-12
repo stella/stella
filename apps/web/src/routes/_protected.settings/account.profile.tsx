@@ -652,7 +652,10 @@ function ProfilePageBody() {
                     loading={isPendingTasksFetching}
                     variant="outline"
                     onClick={() => {
-                      detached(refetchPendingTasks(), "ProfilePageBody");
+                      detached(
+                        refetchPendingTasks(),
+                        "settings-account-profile.refetch-pending-tasks",
+                      );
                     }}
                   >
                     {t("common.retry")}
@@ -936,7 +939,7 @@ const LocalePreferences = () => {
           <Select
             onValueChange={(value) => {
               if (value) {
-                detached(setLang(value), "LocalePreferences");
+                detached(setLang(value), "settings-account-profile.set-lang");
               }
             }}
             value={lang}

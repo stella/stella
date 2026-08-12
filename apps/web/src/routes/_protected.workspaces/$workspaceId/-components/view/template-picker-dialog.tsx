@@ -113,7 +113,7 @@ export const TemplatePickerDialog = ({
           onCreated(newId);
           onOpenChange(false);
           if (hasAITemplateProperty) {
-            detached(startWorkflow(), "onSuccess");
+            detached(startWorkflow(), "template-picker-dialog.start-workflow");
           }
         },
         onError: () => {

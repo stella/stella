@@ -280,7 +280,7 @@ export const MessageExportMenu = ({
               (!includeMessage && (artifact === undefined || !includeArtifact))
             }
             onClick={() => {
-              detached(handleExport(), "MessageExportMenu");
+              detached(handleExport(), "message-export-menu.export");
             }}
             size="sm"
           >

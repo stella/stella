@@ -155,7 +155,7 @@ export const CopyToMatterDialog = ({
             to: "/workspaces/$workspaceId",
             params: { workspaceId: targetWorkspaceId },
           }),
-          "goToMatter",
+          "copy-to-matter-dialog.navigate",
         );
       },
     };
@@ -237,7 +237,7 @@ export const CopyToMatterDialog = ({
           <Button
             disabled={!target || isSubmitting}
             onClick={() => {
-              detached(handleSubmit(), "CopyToMatterDialog");
+              detached(handleSubmit(), "copy-to-matter-dialog.submit");
             }}
           >
             {(() => {

@@ -678,7 +678,7 @@ const TemplateRow = ({
     onClick: () =>
       detached(
         downloadTemplateSource(template.id, t("common.unexpectedError")),
-        "onClick",
+        "template-list.download-template-source",
       ),
   });
   if (canUpdateTemplate) {
@@ -686,13 +686,20 @@ const TemplateRow = ({
       categoryAction(
         t("common.uncategorized"),
         template.categoryId === null,
-        () => detached(onAssignCategory(template.id, null), "TemplateRow"),
+        () =>
+          detached(
+            onAssignCategory(template.id, null),
+            "template-list.assign-category",
+          ),
       ),
     ];
     for (const category of categories) {
       categorySubmenu.push(
         categoryAction(category.name, template.categoryId === category.id, () =>
-          detached(onAssignCategory(template.id, category.id), "TemplateRow"),
+          detached(
+            onAssignCategory(template.id, category.id),
+            "template-list.assign-category",
+          ),
         ),
       );
     }
@@ -862,7 +869,7 @@ const TemplateRow = ({
             <Button
               disabled={deleting}
               onClick={() => {
-                detached(handleDelete(), "TemplateRow");
+                detached(handleDelete(), "template-list.delete");
               }}
               variant="destructive"
             >
@@ -893,7 +900,10 @@ const TemplateRow = ({
       )}
       <CategoryFormDialog
         onCreated={(category) =>
-          detached(onAssignCategory(template.id, category.id), "TemplateRow")
+          detached(
+            onAssignCategory(template.id, category.id),
+            "template-list.assign-category",
+          )
         }
         onOpenChange={setCreateCategoryOpen}
         onSaved={onCategoriesChanged}
@@ -1173,7 +1183,7 @@ const TemplateTagsDialogBody = ({
         <Button
           disabled={saving}
           onClick={() => {
-            detached(handleSave(), "TemplateTagsDialogBody");
+            detached(handleSave(), "template-list.save");
           }}
         >
           {t("common.save")}
@@ -1289,7 +1299,7 @@ const TemplateGuidanceDialogBody = ({
         <Button
           disabled={saving}
           onClick={() => {
-            detached(handleSave(), "TemplateGuidanceDialogBody");
+            detached(handleSave(), "template-list.save");
           }}
         >
           {t("common.save")}

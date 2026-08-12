@@ -134,7 +134,7 @@ export function AddToStella({
 
   const handleClick = () => {
     if (state.type === "role-error") {
-      detached(roleQuery.refetch(), "AddToStella");
+      detached(roleQuery.refetch(), "add-to-stella.refetch");
       return;
     }
     if (state.type === "install") {

@@ -193,7 +193,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
       queryClient.invalidateQueries({
         queryKey: workspacesKeys.overview(workspaceId),
       }),
-      "OverviewView",
+      "overview-view.invalidate",
     );
     useInspectorTabsStore
       .getState()
@@ -412,7 +412,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                   to: "/workspaces/$workspaceId/$viewId",
                   params: { workspaceId, viewId: view.id },
                 }),
-                "OverviewView",
+                "overview-view.navigate",
               );
             }
           }}
@@ -429,7 +429,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                   to: "/workspaces/$workspaceId/$viewId",
                   params: { workspaceId, viewId: view.id },
                 }),
-                "OverviewView",
+                "overview-view.navigate",
               );
             }
           }}
@@ -470,7 +470,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                   to: "/workspaces/$workspaceId/timesheets",
                   params: { workspaceId },
                 }),
-                "OverviewView",
+                "overview-view.navigate",
               );
             }}
             value={formatHours(totalHoursThisWeek)}
@@ -486,7 +486,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                   to: "/workspaces/$workspaceId/workflows",
                   params: { workspaceId },
                 }),
-                "OverviewView",
+                "overview-view.navigate",
               );
             }}
             sublabel={
@@ -524,7 +524,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
             <Button
               className="h-7 text-xs"
               onClick={() => {
-                detached(handleCreateTask(), "OverviewView");
+                detached(handleCreateTask(), "overview-view.create-task");
               }}
               size="sm"
               variant="ghost"
@@ -627,7 +627,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               {upcomingMenu.task === null ? (
                 <MenuItem
                   onClick={() => {
-                    detached(handleCreateTask(), "OverviewView");
+                    detached(handleCreateTask(), "overview-view.create-task");
                   }}
                 >
                   <EntityKindIcon kind="task" />
@@ -726,7 +726,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                       to: "/workspaces/$workspaceId/timesheets",
                       params: { workspaceId },
                     }),
-                    "OverviewView",
+                    "overview-view.navigate",
                   );
                 }}
                 size="sm"
@@ -898,7 +898,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                         to: "/workspaces/$workspaceId/timesheets",
                         params: { workspaceId },
                       }),
-                      "OverviewView",
+                      "overview-view.navigate",
                     );
                   }}
                   size="sm"

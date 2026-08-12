@@ -80,7 +80,7 @@ function ReportExportRecoveryPage() {
           title: t("common.unexpectedError"),
         });
       }),
-      "handleDownloadClick",
+      "reports.download",
     );
   };
 
@@ -144,7 +144,7 @@ function ReportExportRecoveryPage() {
 
           {data.status === "completed" &&
             typeof data.resultEntityId === "string" && (
-              <Button onClick={() => detached(handleOpen(), "openReport")}>
+              <Button onClick={() => detached(handleOpen(), "reports.open")}>
                 {t("workspaces.views.reportExport.openReport")}
               </Button>
             )}

@@ -252,7 +252,7 @@ const BackupCodesList = ({ codes }: { codes: readonly string[] }) => {
       <div className="flex gap-2">
         <Button
           onClick={() => {
-            detached(handleCopyAll(), "BackupCodesList");
+            detached(handleCopyAll(), "two-factor-card.copy-all");
           }}
           size="sm"
           variant="outline"
@@ -394,7 +394,7 @@ const EnableTwoFactorDialog = ({
       return;
     }
     // A later submit (e.g. after a wrong password) re-runs with the new value.
-    detached(enableQuery.refetch(), "submitPassword");
+    detached(enableQuery.refetch(), "two-factor-card.refetch");
   };
 
   return (
@@ -475,7 +475,7 @@ const EnableTwoFactorDialog = ({
                 <Button
                   loading={enableQuery.isFetching}
                   onClick={() => {
-                    detached(enableQuery.refetch(), "EnableTwoFactorDialog");
+                    detached(enableQuery.refetch(), "two-factor-card.refetch");
                   }}
                   variant="outline"
                 >

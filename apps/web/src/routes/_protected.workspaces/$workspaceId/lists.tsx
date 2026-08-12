@@ -170,7 +170,7 @@ function LegalListsPage() {
               onClick={() =>
                 detached(
                   navigate({ search: { list: list.id } }),
-                  "LegalListsPage",
+                  "lists.navigate",
                 )
               }
               variant="ghost"
@@ -183,7 +183,7 @@ function LegalListsPage() {
           className="flex gap-2 border-t p-2"
           onSubmit={(event) => {
             event.preventDefault();
-            detached(createList(), "LegalListsPage");
+            detached(createList(), "lists.create-list");
           }}
         >
           <Input
@@ -415,7 +415,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
           className="flex gap-2"
           onSubmit={(event) => {
             event.preventDefault();
-            detached(createSection(), "LegalListDetail");
+            detached(createSection(), "lists.create-section");
           }}
         >
           <Input
@@ -471,7 +471,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
               </Select>
               <Button
                 disabled={selectedPropertyId === NO_COLUMN_VALUE}
-                onClick={() => detached(addColumn(), "LegalListDetail")}
+                onClick={() => detached(addColumn(), "lists.add-column")}
                 size="sm"
                 type="button"
                 variant="outline"
@@ -490,7 +490,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
         className="flex gap-2 border-b px-6 py-3"
         onSubmit={(event) => {
           event.preventDefault();
-          detached(createItem(), "LegalListDetail");
+          detached(createItem(), "lists.create-item");
         }}
       >
         <Input
@@ -597,7 +597,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
                         onClick={() =>
                           detached(
                             decideCandidate(candidate.id, "reject"),
-                            "LegalListDetail",
+                            "lists.decide-candidate",
                           )
                         }
                         size="sm"
@@ -613,7 +613,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
                         onClick={() =>
                           detached(
                             decideCandidate(candidate.id, "accept"),
-                            "LegalListDetail",
+                            "lists.decide-candidate",
                           )
                         }
                         size="sm"
@@ -753,7 +753,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
                     aria-label={t("common.accept")}
                     disabled={item.reviewStatus === "verified"}
                     onClick={() =>
-                      detached(verifyItem(item.id), "LegalListDetail")
+                      detached(verifyItem(item.id), "lists.verify-item")
                     }
                     size="icon-sm"
                     variant="ghost"
@@ -774,7 +774,9 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
           <div className="flex justify-center p-4">
             <Button
               disabled={items.isFetchingNextPage}
-              onClick={() => detached(items.fetchNextPage(), "LegalListDetail")}
+              onClick={() =>
+                detached(items.fetchNextPage(), "lists.fetch-next-page")
+              }
               variant="outline"
             >
               {t("common.loadMore")}
@@ -813,7 +815,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
                   },
                 });
               })(),
-              "LegalListDetail",
+              "lists.fetch-query",
             );
           }}
           workspaceId={workspaceId}
@@ -912,7 +914,7 @@ const ItemSourcesPanel = ({
                     aria-label={t("common.accept")}
                     disabled={source.verificationStatus === "verified"}
                     onClick={() =>
-                      detached(verifySource(source.id), "LegalListDetail")
+                      detached(verifySource(source.id), "lists.verify-source")
                     }
                     size="icon-sm"
                     variant="ghost"

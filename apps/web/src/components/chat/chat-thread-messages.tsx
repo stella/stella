@@ -160,7 +160,7 @@ export const ChatThreadMessages = ({
     if (container) {
       anchorScrollHeightRef.current = container.scrollHeight;
     }
-    detached(onLoadOlder?.(), "triggerLoadOlder");
+    detached(onLoadOlder?.(), "chat-thread-messages.load-older");
   });
 
   // Drive the trigger from a top sentinel: when it scrolls into view
@@ -868,7 +868,10 @@ export const ChatErrorMessage = ({
             <Button
               disabled={isGenerating}
               onClick={() => {
-                detached(onSendWithoutAnonymization(), "ChatErrorMessage");
+                detached(
+                  onSendWithoutAnonymization(),
+                  "chat-thread-messages.send-without-anonymization",
+                );
               }}
               size="sm"
               variant="destructive-outline"
@@ -880,7 +883,7 @@ export const ChatErrorMessage = ({
             <Button
               disabled={isGenerating}
               onClick={() => {
-                detached(onResend(), "ChatErrorMessage");
+                detached(onResend(), "chat-thread-messages.resend");
               }}
               size="sm"
               variant="destructive-outline"
@@ -1001,7 +1004,7 @@ const AssistantMessageActions = ({
           aria-label={t("common.copy")}
           className="text-muted-foreground h-6 px-1.5 text-xs"
           onClick={() => {
-            detached(handleCopy(), "AssistantMessageActions");
+            detached(handleCopy(), "chat-thread-messages.copy");
           }}
           size="xs"
           variant="ghost"
@@ -1017,7 +1020,7 @@ const AssistantMessageActions = ({
           onClick={() => {
             detached(
               onResend?.({ messageId: message.id }),
-              "AssistantMessageActions",
+              "chat-thread-messages.resend",
             );
           }}
           size="xs"
@@ -1478,7 +1481,7 @@ const AssistantMessageParts = ({
             onEditAndRerun: (toolCallId, output) => {
               detached(
                 onAskUserEditAndRerun(toolCallId, output),
-                "onEditAndRerun",
+                "chat-thread-messages.ask-user-edit-and-rerun",
               );
             },
           })}
@@ -1486,7 +1489,7 @@ const AssistantMessageParts = ({
           onSubmit={(toolCallId, output) => {
             detached(
               onAskUserSubmit(toolCallId, output),
-              "AssistantMessageParts",
+              "chat-thread-messages.ask-user-submit",
             );
           }}
           part={part}

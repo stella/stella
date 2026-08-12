@@ -229,7 +229,7 @@ function ToolsPage() {
             queryClient.invalidateQueries({
               queryKey: catalogueKeys.list(organizationId),
             }),
-            "ToolsPage",
+            "knowledge-tools.invalidate",
           );
           return;
         }

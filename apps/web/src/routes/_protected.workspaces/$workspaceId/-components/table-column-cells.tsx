@@ -516,7 +516,7 @@ const WithOpenEntityButton = ({
         entityId: extraction.entityId,
         propertyId: extraction.property.id,
       }).finally(() => setIsRetrying(false)),
-      "handleRetry",
+      "table-column-cells.retry-cell",
     );
   };
 

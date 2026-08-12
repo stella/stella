@@ -91,7 +91,7 @@ export const PdfViewerControls = ({
             s.pdfPage = pageNumber;
           }),
       }),
-      "navigateToPage",
+      "pdf-viewer-controls.navigate",
     );
   };
 
@@ -250,7 +250,7 @@ export const PdfViewerControls = ({
             <Button
               disabled={!fileMetadata || isDownloading || fieldId.length === 0}
               onClick={() => {
-                detached(handleDownload(), "PdfViewerControls");
+                detached(handleDownload(), "pdf-viewer-controls.download");
               }}
               size="icon-xs"
               tooltip={t("common.download")}
@@ -261,7 +261,7 @@ export const PdfViewerControls = ({
             <Button
               disabled={printDisabled || isPrinting || fieldId.length === 0}
               onClick={() => {
-                detached(handlePrint(), "PdfViewerControls");
+                detached(handlePrint(), "pdf-viewer-controls.print");
               }}
               size="icon-xs"
               tooltip={t("common.print")}

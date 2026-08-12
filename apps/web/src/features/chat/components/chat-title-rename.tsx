@@ -212,7 +212,7 @@ const ChatTitleRenameSession = ({
     if (usedAnonymization || !hasMessages) {
       return;
     }
-    detached(suggestIntoDraft(), "ChatTitleRename");
+    detached(suggestIntoDraft(), "chat-title-rename.suggest-into-draft");
   });
 
   // `/rename-chat` handoff: a composer records the request in the command
@@ -248,7 +248,10 @@ const ChatTitleRenameSession = ({
             hasMessages={hasMessages}
             isPending={isSuggesting}
             onTrigger={() => {
-              detached(suggestIntoDraft(), "ChatTitleRename");
+              detached(
+                suggestIntoDraft(),
+                "chat-title-rename.suggest-into-draft",
+              );
             }}
             usedAnonymization={usedAnonymization}
           />
@@ -267,7 +270,7 @@ const ChatTitleRenameSession = ({
         onCommit={() => {
           sessionRef.current += 1;
           draftRef.current = null;
-          detached(inlineRename.commit(), "ChatTitleRename");
+          detached(inlineRename.commit(), "chat-title-rename.commit");
         }}
         value={inlineRename.state.draft}
       />

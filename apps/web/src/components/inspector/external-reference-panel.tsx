@@ -994,7 +994,10 @@ export const ExternalReferencePanel = ({
           >
             <Button
               onClick={() => {
-                detached(copyConfirmHref(), "ExternalReferencePanel");
+                detached(
+                  copyConfirmHref(),
+                  "external-reference-panel.copy-confirm-href",
+                );
               }}
               variant="outline"
             >

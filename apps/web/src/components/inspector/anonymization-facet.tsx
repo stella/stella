@@ -1010,7 +1010,10 @@ export const AnonymizationFacet = ({
       )}
       <AnonymizationContextMenu
         onAnonymize={(selection) => {
-          detached(addTerm(selection, pendingLabel), "AnonymizationFacet");
+          detached(
+            addTerm(selection, pendingLabel),
+            "anonymization-facet.add-term",
+          );
         }}
       />
     </div>

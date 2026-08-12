@@ -129,7 +129,7 @@ const PdfChip = ({ workspaceId, justification, citation }: PdfChipProps) => {
                 }),
             });
           })(),
-          "PdfChip",
+          "justification.create-bounding-boxes",
         );
       }}
       onMouseEnter={() => {

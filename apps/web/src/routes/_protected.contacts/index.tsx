@@ -345,7 +345,7 @@ const ContactTableRow = ({
         to: "/contacts/$contactId",
         params: { contactId: row.original.id },
       }),
-      "openContact",
+      "contacts.navigate",
     );
   };
 
@@ -399,7 +399,7 @@ const ContactRowActions = ({ contact }: { contact: ContactItem }) => {
             queryClient.invalidateQueries({
               queryKey: contactsKeys.all,
             }),
-            "onSuccess",
+            "contacts.invalidate",
           );
           stellaToast.add({
             title: t("success.contactDeleted"),
@@ -801,7 +801,7 @@ const CreateContactDialog = ({
           errors={formErrors}
           onSubmit={(e) => {
             e.preventDefault();
-            detached(form.handleSubmit(), "CreateContactDialog");
+            detached(form.handleSubmit(), "contacts.submit");
           }}
         >
           <DialogHeader>
@@ -951,7 +951,7 @@ const CreateContactDialog = ({
                               onClick={() => {
                                 detached(
                                   handleAresLookup(),
-                                  "CreateContactDialog",
+                                  "contacts.ares-lookup",
                                 );
                               }}
                               type="button"

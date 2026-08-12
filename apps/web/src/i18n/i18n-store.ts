@@ -510,7 +510,7 @@ export const useI18nStore = create<State & Actions>()(
         ) {
           return;
         }
-        detached(state.loadMessages(state.lang), "onRehydrateStorage");
+        detached(state.loadMessages(state.lang), "i18n-store.load-messages");
       },
     },
   ),

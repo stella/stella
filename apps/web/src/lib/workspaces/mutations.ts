@@ -226,7 +226,7 @@ export const useDuplicateWorkspace = () => {
     onSuccess: () => {
       detached(
         queryClient.invalidateQueries({ queryKey: workspacesKeys.all }),
-        "onSuccess",
+        "workspaces-mutations.invalidate",
       );
     },
     onError: (error) => {

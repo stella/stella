@@ -124,7 +124,7 @@ export const AIPromptInput = ({
     if (!hasNextSkillPage || isFetchingNextSkillPage) {
       return;
     }
-    detached(fetchNextSkillPage(), "AIPromptInput");
+    detached(fetchNextSkillPage(), "ai-prompt-input.fetch-next-skill-page");
   }, [fetchNextSkillPage, hasNextSkillPage, isFetchingNextSkillPage]);
   const slashItems = useMemo<SlashItem[]>(
     () =>

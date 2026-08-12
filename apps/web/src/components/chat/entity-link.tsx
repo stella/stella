@@ -68,7 +68,7 @@ export const EntityLink = ({
         onClick={() =>
           detached(
             openCaseLawDecision(resourceTarget.resource.id, navigate),
-            "EntityLink",
+            "entity-link.open-case-law-decision",
           )
         }
         type="button"
@@ -117,7 +117,7 @@ export const EntityLink = ({
             });
           }
         })(),
-        "handleClick",
+        "entity-link.open-entity-in-inspector",
       );
       return;
     }
@@ -126,7 +126,7 @@ export const EntityLink = ({
         to: "/workspaces/$workspaceId",
         params: { workspaceId: id },
       }),
-      "handleClick",
+      "entity-link.navigate",
     );
   };
 

@@ -35,7 +35,7 @@ export const useCreateViewTemplate = () => {
         queryClient.invalidateQueries({
           queryKey: viewTemplateKeys.all({ organizationId }),
         }),
-        "onSuccess",
+        "view-templates.invalidate",
       );
     },
     onError: (error) => {
@@ -71,7 +71,7 @@ export const useDeleteViewTemplate = () => {
         queryClient.invalidateQueries({
           queryKey: viewTemplateKeys.all({ organizationId }),
         }),
-        "onSuccess",
+        "view-templates.invalidate",
       );
     },
     onError: (error) => {

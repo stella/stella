@@ -52,7 +52,10 @@ function McpOAuthCallbackPage() {
     // `window.location.assign`). If we're still here after a tick,
     // route back to the MCP settings page so the user is not stranded.
     const fallback = window.setTimeout(() => {
-      detached(navigate({ to: KNOWLEDGE_MCP_PATH }), "McpOAuthCallbackPage");
+      detached(
+        navigate({ to: KNOWLEDGE_MCP_PATH }),
+        "mcp-oauth-callback.navigate",
+      );
     }, FALLBACK_NAVIGATE_DELAY_MS);
     return () => window.clearTimeout(fallback);
   });
@@ -81,7 +84,7 @@ function McpOAuthCallbackPage() {
               window.close();
               detached(
                 navigate({ to: KNOWLEDGE_MCP_PATH }),
-                "McpOAuthCallbackPage",
+                "mcp-oauth-callback.navigate",
               );
             }}
             type="button"

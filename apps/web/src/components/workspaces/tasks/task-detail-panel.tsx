@@ -301,16 +301,16 @@ const TaskDetailPanelContent = ({
                   queryClient.invalidateQueries({
                     queryKey: taskKeys.detail(workspaceId, taskId),
                   }),
-                  "TaskDetailPanel",
+                  "task-detail-panel.invalidate",
                 );
               }
             })(),
-            "TaskDetailPanel",
+            "task-detail-panel.auto-assign",
           );
         } else {
           detached(
             queryClient.invalidateQueries({ queryKey: myTasksKeys.all }),
-            "TaskDetailPanel",
+            "task-detail-panel.invalidate",
           );
         }
       }

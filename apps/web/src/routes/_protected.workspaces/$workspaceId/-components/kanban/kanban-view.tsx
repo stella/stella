@@ -358,7 +358,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
             queryClient.invalidateQueries({
               queryKey: entitiesKeys.all(workspaceId),
             }),
-            "onSuccess",
+            "kanban-view.invalidate",
           );
         },
       },
@@ -611,14 +611,14 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
                   taskStatus:
                     isStatusGrouping && value !== null ? value : undefined,
                 }),
-                "KanbanView",
+                "kanban-view.create",
               );
             }}
             onDrop={(entityId) => handleDrop(value, entityId)}
             onFileUpload={(files) => {
               detached(
                 (async () => await handleFileUpload(value, files))(),
-                "KanbanView",
+                "kanban-view.file-upload",
               );
             }}
             onHideColumn={
@@ -691,7 +691,7 @@ const KanbanGroupColumn = ({
       isLoadingMore={query.isFetchingNextPage}
       onLoadMore={() => {
         if (query.hasNextPage && !query.isFetchingNextPage) {
-          detached(query.fetchNextPage(), "KanbanGroupColumn");
+          detached(query.fetchNextPage(), "kanban-view.fetch-next-page");
         }
       }}
       workspaceId={workspaceId}

@@ -55,7 +55,10 @@ export const installPDFDocumentCleanup = (queryClient: QueryClient) => {
       return;
     }
 
-    detached(destroyPDFDocument(rawData.value), "installPDFDocumentCleanup");
+    detached(
+      destroyPDFDocument(rawData.value),
+      "use-pdf-document.destroy-pdf-document",
+    );
   });
 };
 

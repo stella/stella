@@ -161,7 +161,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                   to: "/workspaces/$workspaceId",
                   params: { workspaceId },
                 }),
-                "onClick",
+                "inspector-panel.navigate",
               );
             },
           }
@@ -406,7 +406,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
           to: "/workspaces/$workspaceId/$viewId",
           params: { workspaceId: tab.workspaceId, viewId: "all" },
         }),
-        "InspectorPanel",
+        "inspector-panel.navigate",
       );
     },
     [navigate],
@@ -563,7 +563,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
                       to: "/workspaces/$workspaceId",
                       params: { workspaceId: activeTab.workspaceId },
                     }),
-                    "InspectorPanel",
+                    "inspector-panel.navigate",
                   );
                 }}
               />

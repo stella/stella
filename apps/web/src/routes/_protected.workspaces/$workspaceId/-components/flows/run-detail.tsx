@@ -148,7 +148,7 @@ const RunDetailContent = ({
       queryClient.invalidateQueries({
         queryKey: flowRunsKeys.all(workspaceId),
       }),
-      "handleCancel",
+      "run-detail.invalidate",
     );
   };
 
@@ -180,7 +180,7 @@ const RunDetailContent = ({
                 <Button
                   disabled={cancelling}
                   onClick={() => {
-                    detached(handleCancel(), "RunDetailContent");
+                    detached(handleCancel(), "run-detail.cancel");
                   }}
                   variant="destructive"
                 >
@@ -212,7 +212,7 @@ const RunDetailContent = ({
               queryClient.invalidateQueries({
                 queryKey: flowRunsKeys.all(workspaceId),
               }),
-              "RunDetailContent",
+              "run-detail.invalidate",
             );
           }}
           run={run}
@@ -312,7 +312,7 @@ const StepRunOutput = ({
               t("flows.runs.createdDocument"),
               workspaceId,
             ),
-            "StepRunOutput",
+            "run-detail.open-entity-in-inspector",
           );
         }}
         size="sm"
@@ -436,7 +436,7 @@ const ReviewGateCard = ({
         <Button
           disabled={!canReview || submitting}
           onClick={() => {
-            detached(submit("rejected"), "ReviewGateCard");
+            detached(submit("rejected"), "run-detail.submit");
           }}
           type="button"
           variant="outline"
@@ -447,7 +447,7 @@ const ReviewGateCard = ({
           disabled={!canReview || submitting}
           loading={submitting}
           onClick={() => {
-            detached(submit("approved"), "ReviewGateCard");
+            detached(submit("approved"), "run-detail.submit");
           }}
           type="button"
         >

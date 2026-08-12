@@ -217,7 +217,7 @@ const CustomFieldRow = ({
         disabled={disabled}
         maxLength={128}
         onBlur={() => {
-          detached(save(), "CustomFieldRow");
+          detached(save(), "contact-custom-fields-editor.save");
         }}
         onChange={(event) => setLabelDraft(event.currentTarget.value)}
         value={label}
@@ -227,7 +227,7 @@ const CustomFieldRow = ({
         disabled={disabled}
         maxLength={2000}
         onBlur={() => {
-          detached(save(), "CustomFieldRow");
+          detached(save(), "contact-custom-fields-editor.save");
         }}
         onChange={(event) => setValueDraft(event.currentTarget.value)}
         value={value}

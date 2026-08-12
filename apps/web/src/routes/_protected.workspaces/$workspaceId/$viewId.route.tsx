@@ -140,7 +140,7 @@ export const Route = createFileRoute(
               getAnalytics().captureError(error);
             },
           ),
-          "loader",
+          "workspace-view.prefetch",
         );
       } else {
         detached(
@@ -155,7 +155,7 @@ export const Route = createFileRoute(
               getAnalytics().captureError(error);
             },
           ),
-          "loader",
+          "workspace-view.prefetch",
         );
       }
       detached(
@@ -170,7 +170,7 @@ export const Route = createFileRoute(
             getAnalytics().captureError(error);
           },
         ),
-        "loader",
+        "workspace-view.prefetch",
       );
       return;
     }
@@ -354,7 +354,7 @@ function ViewShell({ activeView, workspaceId }: ViewContentProps) {
                   params: { workspaceId, viewId },
                   search: { page: undefined },
                 }),
-                "ViewShell",
+                "workspace-view.navigate",
               );
             }}
             workspaceId={workspaceId}

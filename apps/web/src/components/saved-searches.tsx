@@ -266,7 +266,10 @@ export const SavedSearches = ({
             <Button
               className="h-11 w-full justify-start"
               onClick={() => {
-                detached(savedSearchesQuery.refetch(), "SavedSearches");
+                detached(
+                  savedSearchesQuery.refetch(),
+                  "saved-searches.refetch",
+                );
               }}
               variant="ghost"
             >
@@ -321,7 +324,10 @@ export const SavedSearches = ({
               className="h-11 w-full"
               disabled={savedSearchesQuery.isFetchingNextPage}
               onClick={() => {
-                detached(savedSearchesQuery.fetchNextPage(), "SavedSearches");
+                detached(
+                  savedSearchesQuery.fetchNextPage(),
+                  "saved-searches.fetch-next-page",
+                );
               }}
               variant="ghost"
             >

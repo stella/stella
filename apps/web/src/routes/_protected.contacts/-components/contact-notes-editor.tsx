@@ -63,7 +63,7 @@ export const ContactNotesEditor = ({ contact }: { contact: ContactData }) => {
               activeOrganizationId,
               contactId: contact.id,
             }),
-            "onSuccess",
+            "contact-notes-editor.invalidate-contact-caches",
           );
         },
         onError: () => {

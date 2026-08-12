@@ -271,7 +271,7 @@ const showPromiseToast = () => {
         error: { title: "Save failed" },
       },
     ),
-    "showPromiseToast",
+    "ui-playground.promise-toast",
   );
 };
 

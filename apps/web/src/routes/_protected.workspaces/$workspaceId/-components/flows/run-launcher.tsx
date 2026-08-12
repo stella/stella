@@ -103,7 +103,7 @@ export const RunLauncher = ({
       queryClient.invalidateQueries({
         queryKey: flowRunsKeys.all(workspaceId),
       }),
-      "handleStart",
+      "run-launcher.invalidate",
     );
     onStarted(response.data.runId);
   };
@@ -188,7 +188,7 @@ export const RunLauncher = ({
           }
           loading={starting}
           onClick={() => {
-            detached(handleStart(), "RunLauncher");
+            detached(handleStart(), "run-launcher.start");
           }}
           type="button"
         >

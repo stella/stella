@@ -209,14 +209,14 @@ export const ClauseList = ({
                   <DropdownMenuContent>
                     <DropdownMenuItem
                       onClick={() => {
-                        detached(handleExport("json"), "ClauseList");
+                        detached(handleExport("json"), "clause-list.export");
                       }}
                     >
                       {t("clauses.exportAsJson")}
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={() => {
-                        detached(handleExport("csv"), "ClauseList");
+                        detached(handleExport("csv"), "clause-list.export");
                       }}
                     >
                       {t("clauses.exportAsCsv")}

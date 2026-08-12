@@ -135,7 +135,7 @@ export const TranslateDocumentDialog = ({
                 // `RouteComponent` bounces back to the workspace.
                 search: { entity: data.entityId, field: data.fieldId },
               }),
-              "onClick",
+              "translate-document-dialog.navigate",
             );
           },
         },

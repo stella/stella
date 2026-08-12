@@ -457,7 +457,7 @@ export const PlaybookFacet = ({
                 });
               }
             })(),
-            "PlaybookFacet.confirmTopics",
+            "playbook-facet.confirm-topics",
           );
         }}
         topics={session.topics}
@@ -472,7 +472,10 @@ export const PlaybookFacet = ({
         onChangeBasis={() => resetSession(entityId, fileFieldId)}
         onRetry={() => {
           if (session.basis !== null) {
-            detached(runReview(session.basis, session.topics), "PlaybookFacet");
+            detached(
+              runReview(session.basis, session.topics),
+              "playbook-facet.run-review",
+            );
           }
         }}
       />
@@ -497,15 +500,18 @@ export const PlaybookFacet = ({
         fixStateByFinding={session === undefined ? {} : session.fixState}
         onAcceptFix={acceptFix}
         onAddReferenceComment={(finding) => {
-          detached(addFindingComment(finding), "PlaybookFacet.addComment");
+          detached(
+            addFindingComment(finding),
+            "playbook-facet.add-finding-comment",
+          );
         }}
         onInsertFix={(findingId, fix) => {
-          detached(insertFix(findingId, fix), "PlaybookFacet");
+          detached(insertFix(findingId, fix), "playbook-facet.insert-fix");
         }}
         onOpenReferenceCitation={openReferenceCitation}
         onRejectFix={rejectFix}
         onRetry={(retry) => {
-          detached(retryRun(retry), "PlaybookFacet.retryRun");
+          detached(retryRun(retry), "playbook-facet.retry-run");
         }}
         onReviewAgain={() => resetSession(entityId, fileFieldId)}
         onScrollToBlock={scrollToBlock}
@@ -523,7 +529,7 @@ export const PlaybookFacet = ({
       target={{ entityId, fileFieldId }}
       workspaceId={workspaceId}
       onReview={(basis, seededTopics) => {
-        detached(runReview(basis, seededTopics), "PlaybookFacet");
+        detached(runReview(basis, seededTopics), "playbook-facet.run-review");
       }}
     />
   );
@@ -641,7 +647,7 @@ const ReviewRunPanel = ({
         message={t("common.unexpectedError")}
         onChangeBasis={onReviewAgain}
         onRetry={() => {
-          detached(refetchRun(), "ReviewRunPanel.refetch");
+          detached(refetchRun(), "playbook-facet.refetch-run");
         }}
       />
     );
@@ -946,7 +952,7 @@ const ReferenceFilePicker = ({
                 className="w-full"
                 disabled={isFetchingNextPage}
                 onClick={() =>
-                  detached(fetchNextPage(), "ReferenceFilePicker.fetchNextPage")
+                  detached(fetchNextPage(), "playbook-facet.fetch-next-page")
                 }
                 size="sm"
                 type="button"

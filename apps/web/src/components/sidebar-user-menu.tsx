@@ -162,7 +162,7 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
                 navigate({
                   to: "/settings",
                 }),
-                "SidebarUserMenu",
+                "sidebar-user-menu.navigate",
               );
             }}
           >
@@ -227,7 +227,7 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
                   <MenuRadioItem
                     key={langCode}
                     onClick={() =>
-                      detached(setLang(langCode), "SidebarUserMenu")
+                      detached(setLang(langCode), "sidebar-user-menu.set-lang")
                     }
                     value={langCode}
                   >

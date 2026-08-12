@@ -494,7 +494,7 @@ export const useChatSession = ({
             });
           }
         })(),
-        "useChatSession.createDocumentDraftReady",
+        "use-chat-session.settle-create-document-draft-with-retry",
       );
     }
   }, [addToolResult, chat, messages, t]);
@@ -967,7 +967,7 @@ export const useChatSession = ({
         workspaceKeys: workspacesKeys,
         workspaceId,
       }),
-      "useChatSession.deleteDocument",
+      "use-chat-session.reconcile-document-deletion-tool-calls",
     );
   }, [getContextMatterIds, messages, queryClient, workspaceId]);
 
@@ -1010,7 +1010,7 @@ export const useChatSession = ({
         queryClient.invalidateQueries({
           queryKey: entitiesKeys.all(workspaceId),
         }),
-        "useChatSession.editWorkspaceDocumentReplacement",
+        "use-chat-session.invalidate",
       );
     }
   }, [messages, queryClient, workspaceId]);
@@ -1234,7 +1234,7 @@ export const useChatSession = ({
             purpose: "native-display",
           }),
         ),
-        "useChatSession",
+        "use-chat-session.prefetch",
       );
 
       if (!promotedDraftInPlace) {
@@ -1335,7 +1335,7 @@ export const useChatSession = ({
     // queued turn with the wrong mode.
     detached(
       dispatchQueuedMessage(dispatched).catch(ignoreQueuedDispatchError),
-      "useChatSession",
+      "use-chat-session.dispatch-queued-message",
     );
   }, [
     applySendQueueEvent,

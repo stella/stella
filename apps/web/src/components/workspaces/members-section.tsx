@@ -148,11 +148,11 @@ const MemberRow = ({
             queryClient.invalidateQueries({
               queryKey: workspaceMembersKeys.all(workspaceId),
             }),
-            "onSuccess",
+            "members-section.invalidate",
           );
           detached(
             queryClient.invalidateQueries({ queryKey: workspacesKeys.all }),
-            "onSuccess",
+            "members-section.invalidate",
           );
         },
         onError: () => {
@@ -272,7 +272,7 @@ export const AddMemberDialog = ({
             queryClient.invalidateQueries({
               queryKey: workspaceMembersKeys.all(workspaceId),
             }),
-            "onSuccess",
+            "members-section.invalidate",
           );
           setIsOpen(false);
           setSelectedUserId(null);

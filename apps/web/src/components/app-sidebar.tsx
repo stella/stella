@@ -235,7 +235,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
   // matter route when the matter the user is viewing is the one deleted.
   const handleMatterDeleted = (workspaceId: string) => {
     if (workspaceMatch?.params.workspaceId === workspaceId) {
-      detached(navigate({ to: "/workspaces" }), "handleMatterDeleted");
+      detached(navigate({ to: "/workspaces" }), "app-sidebar.navigate");
     }
   };
 
@@ -377,13 +377,13 @@ export const AppSidebar = (props: AppSidebarProps) => {
           to: "/workspaces/$workspaceId",
           params: { workspaceId: ws.id },
         }),
-        "onClick",
+        "app-sidebar.navigate",
       );
     },
   });
 
   const openChat = () => {
-    detached(navigate({ to: "/chat" }), "openChat");
+    detached(navigate({ to: "/chat" }), "app-sidebar.navigate");
   };
 
   const knowledgeRecents: ContextAction[] = [];
@@ -403,7 +403,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       label: t(s.titleKey),
       icon: <Icon />,
       onClick: () => {
-        detached(navigate({ to: s.to }), "onClick");
+        detached(navigate({ to: s.to }), "app-sidebar.navigate");
       },
     });
   }
@@ -433,7 +433,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     },
     matters: {
       action: () => {
-        detached(navigate({ to: "/workspaces" }), "action");
+        detached(navigate({ to: "/workspaces" }), "app-sidebar.navigate");
       },
       contextMenu: {
         primaryAction: {
@@ -447,19 +447,19 @@ export const AppSidebar = (props: AppSidebarProps) => {
     },
     caseLaw: {
       action: () => {
-        detached(navigate({ to: "/law/cases" }), "action");
+        detached(navigate({ to: "/law/cases" }), "app-sidebar.navigate");
       },
       contextMenu: {},
     },
     tools: {
       action: () => {
-        detached(navigate({ to: "/tools" }), "action");
+        detached(navigate({ to: "/tools" }), "app-sidebar.navigate");
       },
       contextMenu: {},
     },
     knowledge: {
       action: () => {
-        detached(navigate({ to: "/knowledge" }), "action");
+        detached(navigate({ to: "/knowledge" }), "app-sidebar.navigate");
       },
       contextMenu: {
         recents: knowledgeRecents,
@@ -467,7 +467,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     },
     contacts: {
       action: () => {
-        detached(navigate({ to: "/contacts" }), "action");
+        detached(navigate({ to: "/contacts" }), "app-sidebar.navigate");
       },
       contextMenu: {
         primaryAction: {
@@ -475,7 +475,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
           label: t("navigation.contacts"),
           icon: <UsersIcon />,
           onClick: () => {
-            detached(navigate({ to: "/contacts" }), "onClick");
+            detached(navigate({ to: "/contacts" }), "app-sidebar.navigate");
           },
         },
       },
@@ -495,7 +495,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
             to: "/workspaces/$workspaceId",
             params: { workspaceId: ws.id },
           }),
-          "action",
+          "app-sidebar.navigate",
         );
       },
     })),
@@ -1170,7 +1170,7 @@ const MatterItem = ({
             autoFocus
             className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-sm shadow-none outline-none focus-visible:ring-0"
             onBlur={() => {
-              detached(rename.commit(), "MatterItem");
+              detached(rename.commit(), "app-sidebar.commit");
             }}
             onChange={(e) => rename.setDraft(e.currentTarget.value)}
             onKeyDown={(e) => {
@@ -1439,7 +1439,7 @@ const MatterActivityList = ({
           <MatterActivityRow>
             <button
               onClick={() => {
-                detached(refetch(), "MatterActivityList");
+                detached(refetch(), "app-sidebar.refetch");
               }}
               type="button"
             >
@@ -1513,7 +1513,7 @@ const MatterActivityList = ({
               <MatterActivityRow>
                 <button
                   onClick={() => {
-                    detached(openEntity(item), "MatterActivityList");
+                    detached(openEntity(item), "app-sidebar.open-entity");
                   }}
                   type="button"
                 >
@@ -1530,7 +1530,7 @@ const MatterActivityList = ({
             <button
               disabled={isFetchingNextPage}
               onClick={() => {
-                detached(fetchNextPage(), "MatterActivityList");
+                detached(fetchNextPage(), "app-sidebar.fetch-next-page");
               }}
               type="button"
             >

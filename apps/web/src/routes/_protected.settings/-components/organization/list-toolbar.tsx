@@ -60,7 +60,7 @@ export const OrganizationListToolbar = () => {
         to: "/settings/organization/members",
         search: (prev) => ({ ...prev, q: value || undefined }),
       }),
-      "OrganizationListToolbar",
+      "list-toolbar.navigate",
     );
   }, 300);
 

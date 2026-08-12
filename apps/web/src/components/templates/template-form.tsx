@@ -1521,7 +1521,7 @@ const RegistryAutofillControl = ({
             // Guard the Enter path on the same loading state as the button so
             // two quick Enters cannot fire overlapping lookups.
             if (!loading) {
-              detached(handleLookup(), "RegistryAutofillControl");
+              detached(handleLookup(), "template-form.lookup");
             }
           }
         }}
@@ -1530,7 +1530,7 @@ const RegistryAutofillControl = ({
       />
       <Button
         disabled={loading || companyId.trim() === ""}
-        onClick={() => detached(handleLookup(), "RegistryAutofillControl")}
+        onClick={() => detached(handleLookup(), "template-form.lookup")}
         type="button"
         variant="outline"
       >
@@ -2277,7 +2277,7 @@ export const TemplateForm = ({
       }
       detached(
         fillToMatter(saveTarget.workspaceId, saveTarget.parentId ?? null),
-        "handleSubmit",
+        "template-form.fill-to-matter",
       );
       return;
     }
@@ -2309,7 +2309,7 @@ export const TemplateForm = ({
     if (saveTarget?.kind === "matter") {
       detached(
         fillToMatter(saveTarget.workspaceId, saveTarget.parentId ?? null),
-        "confirmEmptyWarning",
+        "template-form.fill-to-matter",
       );
     }
   };
@@ -2595,7 +2595,7 @@ export const TemplateForm = ({
                       matterTarget.workspaceId,
                       matterTarget.parentId,
                     ),
-                    "TemplateForm",
+                    "template-form.fill-to-matter",
                   );
                 }
               }}
@@ -2657,7 +2657,7 @@ export const useFillToMatterSaveTarget = (
         queryClient.invalidateQueries({
           queryKey: entitiesKeys.all(workspaceId),
         }),
-        "TemplateForm.invalidateCreatedDocument",
+        "template-form.invalidate",
       );
       onDone?.();
       switch (created.type) {
@@ -2668,7 +2668,7 @@ export const useFillToMatterSaveTarget = (
               params: { workspaceId, viewId: "all" },
               search: { entity: entityId, field: created.fieldId },
             }),
-            "TemplateForm.openCreatedDocument",
+            "template-form.navigate",
           );
           return;
         case "workspace":
@@ -2677,7 +2677,7 @@ export const useFillToMatterSaveTarget = (
               to: "/workspaces/$workspaceId/$viewId",
               params: { workspaceId, viewId: "all" },
             }),
-            "TemplateForm.openCreatedWorkspace",
+            "template-form.navigate",
           );
           return;
         default:

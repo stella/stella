@@ -48,7 +48,7 @@ export const useWorkspaceSSE = (
           case WORKSPACE_REALTIME_QUERY_ACTION.INVALIDATE:
             detached(
               queryClient.invalidateQueries({ queryKey: action.queryKey }),
-              "useWorkspaceSSE",
+              "sse.invalidate",
             );
             break;
           case WORKSPACE_REALTIME_QUERY_ACTION.REMOVE_PREFIX:

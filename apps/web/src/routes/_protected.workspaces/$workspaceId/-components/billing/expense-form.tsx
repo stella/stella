@@ -99,7 +99,7 @@ export const ExpenseForm = ({
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        detached(form.handleSubmit(), "ExpenseForm");
+        detached(form.handleSubmit(), "expense-form.submit");
       }}
     >
       <div className="flex flex-col gap-1.5">

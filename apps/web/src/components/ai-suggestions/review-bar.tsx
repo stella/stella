@@ -229,7 +229,7 @@ export const ReviewBar = ({
         return;
       }
       claimShortcut(event);
-      detached(acceptAndAdvance(), "ReviewBar");
+      detached(acceptAndAdvance(), "review-bar.accept-and-advance");
       return;
     }
     if (matchesKeyboardEvent(event, prevHotkey)) {
@@ -327,7 +327,7 @@ export const ReviewBar = ({
             className="h-7 px-2.5 text-xs"
             disabled={activeAction === "busy"}
             onClick={() => {
-              detached(acceptAndAdvance(), "ReviewBar");
+              detached(acceptAndAdvance(), "review-bar.accept-and-advance");
             }}
             size="sm"
             tooltip={`${t("common.accept")} · ${formatForDisplay(acceptHotkey)}`}

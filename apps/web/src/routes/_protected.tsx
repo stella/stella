@@ -185,7 +185,7 @@ export const Route = createFileRoute("/_protected")({
         aiAvailabilityOptions({ organizationId: activeOrganizationId }),
         onPrefetchError,
       ),
-      "beforeLoad",
+      "protected-layout.prefetch",
     );
     const rolePrefetch = prefetchRouteQuery(
       context.queryClient,
@@ -195,7 +195,7 @@ export const Route = createFileRoute("/_protected")({
     if (location.pathname === MEMORY_ROUTE_PATH) {
       // The child settles this same in-flight query together with its panel
       // data before chrome can mount, keeping all three requests in one wave.
-      detached(rolePrefetch, "beforeLoad.memory-role");
+      detached(rolePrefetch, "protected-layout.role-prefetch");
     } else {
       await rolePrefetch;
     }

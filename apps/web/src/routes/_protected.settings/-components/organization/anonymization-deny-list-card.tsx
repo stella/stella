@@ -503,7 +503,10 @@ export const AnonymizationDenyListCard = () => {
                   if (!file) {
                     return;
                   }
-                  detached(handleImportFile(file), "AnonymizationDenyListCard");
+                  detached(
+                    handleImportFile(file),
+                    "anonymization-deny-list-card.import-file",
+                  );
                   event.target.value = "";
                 }}
                 ref={fileInputRef}

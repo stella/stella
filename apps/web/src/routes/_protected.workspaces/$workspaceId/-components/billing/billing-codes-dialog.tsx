@@ -279,7 +279,7 @@ const CreateCodeForm = ({
       onSubmit={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        detached(form.handleSubmit(), "CreateCodeForm");
+        detached(form.handleSubmit(), "billing-codes-dialog.submit");
       }}
     >
       <div className="flex gap-3">

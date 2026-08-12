@@ -774,7 +774,10 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                         aria-label={t("workspaces.copyToMatter.rootFolder")}
                         className="text-muted-foreground hover:text-foreground text-xs"
                         onClick={() => {
-                          detached(navigateToFolder(), "FilesystemView");
+                          detached(
+                            navigateToFolder(),
+                            "tree-view.navigate-to-folder",
+                          );
                         }}
                         type="button"
                       />
@@ -819,7 +822,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                                 onClick={() => {
                                   detached(
                                     navigateToFolder(),
-                                    "FilesystemView",
+                                    "tree-view.navigate-to-folder",
                                   );
                                 }}
                                 onDoubleClick={(e) => {
@@ -839,7 +842,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                               onClick={() => {
                                 detached(
                                   navigateToFolder(crumb.id),
-                                  "FilesystemView",
+                                  "tree-view.navigate-to-folder",
                                 );
                               }}
                               type="button"
@@ -932,7 +935,10 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                     gridTemplate={gridTemplate}
                     node={row.node}
                     onNavigateToFolder={(folderId) => {
-                      detached(navigateToFolder(folderId), "FilesystemView");
+                      detached(
+                        navigateToFolder(folderId),
+                        "tree-view.navigate-to-folder",
+                      );
                     }}
                     onRename={(entityId, newName) => {
                       renameEntity.mutate({

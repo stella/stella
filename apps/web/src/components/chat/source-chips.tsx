@@ -371,7 +371,7 @@ const SourceChip = ({
           });
         }
       })(),
-      "handleClick",
+      "source-chips.open-entity-in-inspector",
     );
   };
 

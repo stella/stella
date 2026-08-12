@@ -389,7 +389,7 @@ export const useReviewActions = ({
             docxSuggestionMutationChain.delete(id);
           }
         }),
-        "useReviewActions",
+        "use-review-actions.serialize-docx-mutation",
       );
       return await next;
     },
@@ -530,7 +530,7 @@ export const useReviewActions = ({
             toastStaleResolution();
           }
         })(),
-        "useReviewActions",
+        "use-review-actions.run-serialized",
       );
     }
   });
@@ -586,7 +586,7 @@ export const useReviewActions = ({
             toastStaleResolution();
           }
         })(),
-        "useReviewActions",
+        "use-review-actions.run-serialized",
       );
     }
   });
@@ -685,7 +685,7 @@ export const useReviewActions = ({
         }
         toastPersistFailed();
       })(),
-      "useReviewActions",
+      "use-review-actions.run-serialized",
     );
   });
 
@@ -753,7 +753,7 @@ export const useReviewActions = ({
           );
           surfaceBatchResolveToast(results);
         })(),
-        "useReviewActions",
+        "use-review-actions.persist-claimed-outcomes",
       );
     },
   );
@@ -815,7 +815,7 @@ export const useReviewActions = ({
         );
         surfaceBatchResolveToast(results);
       })(),
-      "useReviewActions",
+      "use-review-actions.persist-outcomes",
     );
   });
 

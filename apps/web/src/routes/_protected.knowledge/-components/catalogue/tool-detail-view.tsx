@@ -147,7 +147,7 @@ const ToolDetailContent = ({
         to: "/knowledge/tools/$skillId",
         params: { skillId: entry.installedSkillId },
       }),
-      "onEditSkill",
+      "tool-detail-view.navigate",
     );
   };
 

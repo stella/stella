@@ -284,7 +284,7 @@ const LoadOlderVersionLifecycle = ({
   loadOlder: () => Promise<void>;
 }) => {
   useMountEffect(() => {
-    detached(loadOlder(), "LoadOlderVersionLifecycle");
+    detached(loadOlder(), "versions-facet.load-older");
   });
   return null;
 };

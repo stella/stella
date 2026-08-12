@@ -175,7 +175,7 @@ export const TemplateClausesTab = ({ templateId }: TemplateClausesTabProps) => {
             <Button
               disabled={syncingAll}
               onClick={() => {
-                detached(handleSyncAll(), "TemplateClausesTab");
+                detached(handleSyncAll(), "template-clauses-tab.sync-all");
               }}
               size="sm"
               variant="outline"
@@ -336,7 +336,7 @@ const LinkedClauseRow = ({
             <Button
               disabled={syncing}
               onClick={() => {
-                detached(handleSync(), "LinkedClauseRow");
+                detached(handleSync(), "template-clauses-tab.sync");
               }}
               size="sm"
               variant="ghost"
@@ -432,7 +432,7 @@ export const OutdatedChanges = ({
           aria-expanded={isDiffOpen}
           className="text-muted-foreground hover:text-foreground gap-1 px-1.5 text-xs font-normal"
           onClick={() => {
-            detached(toggleDiff(), "OutdatedChanges");
+            detached(toggleDiff(), "template-clauses-tab.toggle-diff");
           }}
           size="xs"
           variant="ghost"
@@ -449,7 +449,7 @@ export const OutdatedChanges = ({
           className="text-muted-foreground hover:text-foreground"
           disabled={summary.status === "loading"}
           onClick={() => {
-            detached(handleSummarize(), "OutdatedChanges");
+            detached(handleSummarize(), "template-clauses-tab.summarize");
           }}
           size="icon-xs"
           title={t("common.summarizeChanges")}
@@ -560,7 +560,7 @@ export const UnlinkButton = ({
           <Button
             disabled={unlinking}
             onClick={() => {
-              detached(handleUnlink(), "UnlinkButton");
+              detached(handleUnlink(), "template-clauses-tab.unlink");
             }}
             variant="destructive"
           >

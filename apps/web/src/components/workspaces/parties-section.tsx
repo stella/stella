@@ -81,7 +81,7 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
             queryClient.invalidateQueries({
               queryKey: contactsKeys.all,
             }),
-            "onSuccess",
+            "parties-section.invalidate",
           );
           handleSetClient({ id, displayName: name });
         },
@@ -108,7 +108,7 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
             queryClient.invalidateQueries({
               queryKey: workspacesKeys.byId(workspaceId),
             }),
-            "onSuccess",
+            "parties-section.invalidate",
           );
         },
         onError: () => {
@@ -301,7 +301,7 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
             queryClient.invalidateQueries({
               queryKey: contactsKeys.all,
             }),
-            "onSuccess",
+            "parties-section.invalidate",
           );
           setSelectedContact({ id, displayName: name });
         },
@@ -335,13 +335,13 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
             queryClient.invalidateQueries({
               queryKey: workspacesKeys.byId(workspaceId),
             }),
-            "onSuccess",
+            "parties-section.invalidate",
           );
           detached(
             queryClient.invalidateQueries({
               queryKey: workspacesKeys.all,
             }),
-            "onSuccess",
+            "parties-section.invalidate",
           );
           handleClose();
         },
@@ -487,7 +487,7 @@ const PartyRow = ({ party, workspaceId }: PartyRowProps) => {
             queryClient.invalidateQueries({
               queryKey: workspaceContactsOptions(workspaceId).queryKey,
             }),
-            "onSuccess",
+            "parties-section.invalidate",
           );
         },
         onError: () => {
@@ -609,7 +609,7 @@ const AddPartyDialog = ({
             queryClient.invalidateQueries({
               queryKey: workspaceContactsOptions(workspaceId).queryKey,
             }),
-            "onSuccess",
+            "parties-section.invalidate",
           );
           setIsOpen(false);
           setSelectedContact(null);

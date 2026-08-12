@@ -64,7 +64,7 @@ export const useContactPatch = (contact: ContactData) => {
         activeOrganizationId,
         contactId: contact.id,
       }),
-      "handleSuccess",
+      "contact-caches.invalidate-contact-caches",
     );
   };
 
