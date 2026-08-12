@@ -50,6 +50,7 @@ export type InsertAutomatedFlowRunWithinCapInput = {
  */
 export type InsertAutomatedFlowRunWithinCapResult =
   | { outcome: "started" }
+  | { outcome: "duplicate" }
   | { outcome: "capped"; dailyRunCount: number };
 
 export const insertAutomatedFlowRunWithinCap = async ({
@@ -65,6 +66,14 @@ export const insertAutomatedFlowRunWithinCap = async ({
     await tx.execute(
       sql`select pg_advisory_xact_lock(${FLOW_RUN_CAP_LOCK_NAMESPACE}, hashtext(${definitionId}))`,
     );
+
+    const existing = await tx.query.flowRuns.findFirst({
+      where: { id: { eq: rows.run.id } },
+      columns: { id: true },
+    });
+    if (existing) {
+      return { outcome: "duplicate" };
+    }
 
     const dailyRunCount = await tx.$count(
       flowRuns,

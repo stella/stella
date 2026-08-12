@@ -45,6 +45,8 @@ export type MaybeStartUploadTriggeredFlowsArgs = {
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   fileName: string;
+  /** Stable source-event key when this scan may be replayed. */
+  idempotencyKey?: string;
 };
 
 export const maybeStartUploadTriggeredFlows = async ({
@@ -52,6 +54,7 @@ export const maybeStartUploadTriggeredFlows = async ({
   workspaceId,
   organizationId,
   fileName,
+  idempotencyKey,
 }: MaybeStartUploadTriggeredFlowsArgs): Promise<void> => {
   const definitionsResult = await Result.tryPromise({
     try: () =>
@@ -107,6 +110,7 @@ export const maybeStartUploadTriggeredFlows = async ({
       createdByUserId: definition.createdByUserId,
       triggerSource: { type: "file-upload", entityId },
       inputEntityIds: [entityId],
+      ...(idempotencyKey !== undefined && { idempotencyKey }),
       enqueueDelayMs: FLOW_UPLOAD_TRIGGER_DELAY_MS,
       logContext: {
         definitionId: definition.id,

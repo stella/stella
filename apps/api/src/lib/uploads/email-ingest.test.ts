@@ -3,8 +3,12 @@ import { describe, expect, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
+import type { EmailIngestPostCommitKickoff } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
-import { persistEmailIngestRecoveryKeys } from "@/api/lib/uploads/email-ingest";
+import {
+  persistEmailIngestRecoveryKeys,
+  scheduleEmailIngestPostCommitWork,
+} from "@/api/lib/uploads/email-ingest";
 import {
   detectEmailContainer,
   emailIngestFinalObjectCleanupFailure,
@@ -113,6 +117,71 @@ test("preserves final objects after the transaction prepares durable references"
   expect(writeFailure).toBeGreaterThan(durableReference);
   expect(rollbackGuard).toBeGreaterThan(writeFailure);
   expect(objectCleanup).toBeGreaterThan(rollbackGuard);
+});
+
+test("re-reads durable state and schedules post-commit work after an ambiguous commit", () => {
+  const durableReference = emailIngestSource.indexOf(
+    'transactionState.status = "durable_reference_prepared"',
+  );
+  const durableRead = emailIngestSource.indexOf(
+    "tx.query.pendingUploads.findFirst",
+    durableReference,
+  );
+  const postCommitReplay = emailIngestSource.indexOf(
+    "replayEmailIngestPostCommitWork",
+    durableRead,
+  );
+  const errorPropagation = emailIngestSource.indexOf(
+    "yield* writeResultResult",
+    durableRead,
+  );
+
+  expect(durableRead).toBeGreaterThan(durableReference);
+  expect(postCommitReplay).toBeGreaterThan(durableRead);
+  expect(errorPropagation).toBeGreaterThan(postCommitReplay);
+});
+
+test("replays every post-commit operation from durable kickoff descriptors", async () => {
+  const entityId = toSafeId<"entity">("00000000-0000-0000-0000-000000000005");
+  const fieldId = toSafeId<"field">("00000000-0000-0000-0000-000000000006");
+  const organizationId = toSafeId<"organization">(
+    "00000000-0000-0000-0000-000000000007",
+  );
+  const kickoffs = [
+    {
+      encrypted: false,
+      entityId,
+      fieldId,
+      sourceUploadId: pendingUploadId,
+      fileName: "message.eml",
+      mimeType: "message/rfc822",
+    },
+  ] satisfies EmailIngestPostCommitKickoff[];
+  const calls: string[] = [];
+
+  scheduleEmailIngestPostCommitWork({
+    kickoffs,
+    organizationId,
+    userId,
+    workspaceId,
+    operations: {
+      processExtraction: async () => {
+        calls.push("extract");
+      },
+      maybeStartUploadTriggeredFlows: async () => {
+        calls.push("flow");
+      },
+      enqueuePdfDerivativeOrMarkFailed: async () => {
+        calls.push("pdf");
+      },
+      enqueueImageThumbnailOrMarkFailed: async () => {
+        calls.push("thumbnail");
+      },
+    },
+  });
+  await Promise.resolve();
+
+  expect(calls).toEqual(["extract", "flow", "pdf", "thumbnail"]);
 });
 
 describe("email attachment policy", () => {

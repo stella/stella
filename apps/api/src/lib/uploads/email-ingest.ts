@@ -26,6 +26,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import type {
+  EmailIngestPostCommitKickoff,
   PendingUploadFinalizedResult,
   PendingUploadPurposeData,
 } from "@/api/db/schema";
@@ -195,13 +196,114 @@ type AcceptedAttachment = {
   scanWarnings: string[] | undefined;
 };
 
-/** One derivative/extraction kickoff issued after the ingest commits. */
-type DerivativeKickoff = {
-  entityId: SafeId<"entity">;
-  fieldId: SafeId<"field">;
-  fileName: string;
-  mimeType: string;
-  encrypted: boolean;
+type EmailIngestPostCommitOperations = {
+  processExtraction: typeof processExtraction;
+  maybeStartUploadTriggeredFlows: typeof maybeStartUploadTriggeredFlows;
+  enqueuePdfDerivativeOrMarkFailed: typeof enqueuePdfDerivativeOrMarkFailed;
+  enqueueImageThumbnailOrMarkFailed: typeof enqueueImageThumbnailOrMarkFailed;
+};
+
+export type ScheduleEmailIngestPostCommitWorkOptions = {
+  kickoffs: EmailIngestPostCommitKickoff[];
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace">;
+  operations: EmailIngestPostCommitOperations;
+};
+
+export const scheduleEmailIngestPostCommitWork = ({
+  kickoffs,
+  organizationId,
+  userId,
+  workspaceId,
+  operations,
+}: ScheduleEmailIngestPostCommitWorkOptions): void => {
+  for (const kickoff of kickoffs) {
+    operations.processExtraction(kickoff.entityId).catch((error: unknown) => {
+      captureError(error, {
+        entityId: kickoff.entityId,
+        mimeType: kickoff.mimeType,
+      });
+    });
+    operations
+      .maybeStartUploadTriggeredFlows({
+        entityId: kickoff.entityId,
+        workspaceId,
+        organizationId,
+        fileName: kickoff.fileName,
+        idempotencyKey: kickoff.sourceUploadId,
+      })
+      .catch((error: unknown) => {
+        captureError(error, {
+          entityId: kickoff.entityId,
+          workspaceId,
+        });
+      });
+    operations
+      .enqueuePdfDerivativeOrMarkFailed({
+        encrypted: kickoff.encrypted,
+        entityId: kickoff.entityId,
+        fieldId: kickoff.fieldId,
+        mimeType: kickoff.mimeType,
+        organizationId,
+        userId,
+        workspaceId,
+      })
+      .catch((error: unknown) => {
+        captureError(error, {
+          entityId: kickoff.entityId,
+          fieldId: kickoff.fieldId,
+          mimeType: kickoff.mimeType,
+        });
+      });
+    operations
+      .enqueueImageThumbnailOrMarkFailed({
+        encrypted: kickoff.encrypted,
+        entityId: kickoff.entityId,
+        fieldId: kickoff.fieldId,
+        mimeType: kickoff.mimeType,
+        organizationId,
+        userId,
+        workspaceId,
+      })
+      .catch((error: unknown) => {
+        captureError(error, {
+          entityId: kickoff.entityId,
+          fieldId: kickoff.fieldId,
+          mimeType: kickoff.mimeType,
+        });
+      });
+  }
+};
+
+type ReplayEmailIngestPostCommitWorkOptions = {
+  organizationId: SafeId<"organization">;
+  purposeData: EmailIngestPurposeData;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace">;
+};
+
+export const replayEmailIngestPostCommitWork = ({
+  organizationId,
+  purposeData,
+  userId,
+  workspaceId,
+}: ReplayEmailIngestPostCommitWorkOptions): void => {
+  const kickoffs =
+    purposeData.postCommitKickoffs ??
+    panic("Finalized email ingest has no post-commit work descriptors");
+  scheduleEmailIngestPostCommitWork({
+    kickoffs,
+    organizationId,
+    userId,
+    workspaceId,
+    operations: {
+      processExtraction,
+      maybeStartUploadTriggeredFlows,
+      enqueuePdfDerivativeOrMarkFailed,
+      enqueueImageThumbnailOrMarkFailed,
+    },
+  });
 };
 
 const attachmentMimeType = (attachment: EmailAttachment): string =>
@@ -602,6 +704,7 @@ export const finalizeEmailIngest = async function* ({
             PendingUploadFinalizedResult,
             { type: "email_ingest" }
           >;
+          purposeData: EmailIngestPurposeData;
         }
       | { status: EntityCreateWriteFailureStatus };
 
@@ -841,6 +944,29 @@ export const finalizeEmailIngest = async function* ({
         renamed: renamed.renamed,
         attachmentEntityIds: accepted.map((attachment) => attachment.entityId),
       };
+      const postCommitKickoffs: EmailIngestPostCommitKickoff[] = [
+        {
+          entityId: messageEntityId,
+          mimeType: declaredMime,
+          fieldId: messageFieldId,
+          sourceUploadId: uploadId,
+          fileName: finalized.fileName,
+          encrypted: messageEncrypted,
+        },
+        ...accepted.map((attachment) => ({
+          entityId: attachment.entityId,
+          mimeType: attachment.mimeType,
+          fieldId: attachment.fieldId,
+          sourceUploadId: uploadId,
+          fileName: attachment.fileName,
+          encrypted: attachment.encrypted,
+        })),
+      ];
+      const finalizedPurposeData: EmailIngestPurposeData = {
+        ...purposeData,
+        recoveryObjectKeys: writtenKeys,
+        postCommitKickoffs,
+      };
 
       // audit: skip — final FSM transition on pending_uploads; the
       // entity-level audit rows landed above in this same transaction.
@@ -849,6 +975,7 @@ export const finalizeEmailIngest = async function* ({
         .set({
           status: "finalized",
           finalizedResult: finalized,
+          purposeData: finalizedPurposeData,
           finalizedAt: new Date(),
         })
         .where(
@@ -870,8 +997,59 @@ export const finalizeEmailIngest = async function* ({
       // once prepared, cleanup belongs to the durable recovery record so this
       // request cannot delete objects that a committed entity may reference.
       transactionState.status = "durable_reference_prepared";
-      return { status: "ok", finalized };
+      return { status: "ok", finalized, purposeData: finalizedPurposeData };
     });
+
+    if (
+      Result.isError(writeResultResult) &&
+      transactionState.status === "durable_reference_prepared"
+    ) {
+      const durableResult = await safeDb((tx) =>
+        tx.query.pendingUploads.findFirst({
+          where: {
+            id: { eq: uploadId },
+            userId: { eq: userId },
+            workspaceId: { eq: workspaceId },
+          },
+          columns: {
+            finalizedResult: true,
+            purposeData: true,
+            status: true,
+          },
+        }),
+      );
+      if (Result.isOk(durableResult)) {
+        const durable =
+          durableResult.value ?? panic("Email ingest upload disappeared");
+        if (durable.status === "finalized") {
+          if (
+            durable.finalizedResult?.type !== "email_ingest" ||
+            durable.purposeData.type !== "email_ingest"
+          ) {
+            panic("Finalized email ingest has inconsistent durable data");
+          }
+          const durablePurposeData = durable.purposeData;
+          return finalizeOk({
+            finalizedResult: durable.finalizedResult,
+            finalKey: messageFinalKey,
+            afterPromote: () =>
+              replayEmailIngestPostCommitWork({
+                organizationId,
+                purposeData: durablePurposeData,
+                userId,
+                workspaceId,
+              }),
+          });
+        }
+
+        const cleanupResult = await cleanupFinalObjects(
+          "final-cleanup-after-rolled-back-commit",
+        );
+        if (Result.isError(cleanupResult)) {
+          return cleanupResult;
+        }
+      }
+    }
     if (
       Result.isError(writeResultResult) &&
       transactionState.status === "pending"
@@ -897,78 +1075,15 @@ export const finalizeEmailIngest = async function* ({
         rejectReason: writeResult.status,
       });
     }
-    const { finalized } = writeResult;
+    const { finalized, purposeData: finalizedPurposeData } = writeResult;
 
-    const afterPromote = () => {
-      const kickoffs: DerivativeKickoff[] = [
-        {
-          entityId: messageEntityId,
-          mimeType: declaredMime,
-          fieldId: messageFieldId,
-          fileName: finalized.fileName,
-          encrypted: messageEncrypted,
-        },
-      ];
-      for (const attachment of accepted) {
-        kickoffs.push({
-          entityId: attachment.entityId,
-          mimeType: attachment.mimeType,
-          fieldId: attachment.fieldId,
-          fileName: attachment.fileName,
-          encrypted: attachment.encrypted,
-        });
-      }
-
-      for (const kickoff of kickoffs) {
-        processExtraction(kickoff.entityId).catch((error: unknown) => {
-          captureError(error, {
-            entityId: kickoff.entityId,
-            mimeType: kickoff.mimeType,
-          });
-        });
-        maybeStartUploadTriggeredFlows({
-          entityId: kickoff.entityId,
-          workspaceId,
-          organizationId,
-          fileName: kickoff.fileName,
-        }).catch((error: unknown) => {
-          captureError(error, {
-            entityId: kickoff.entityId,
-            workspaceId,
-          });
-        });
-        enqueuePdfDerivativeOrMarkFailed({
-          encrypted: kickoff.encrypted,
-          entityId: kickoff.entityId,
-          fieldId: kickoff.fieldId,
-          mimeType: kickoff.mimeType,
-          organizationId,
-          userId,
-          workspaceId,
-        }).catch((error: unknown) => {
-          captureError(error, {
-            entityId: kickoff.entityId,
-            fieldId: kickoff.fieldId,
-            mimeType: kickoff.mimeType,
-          });
-        });
-        enqueueImageThumbnailOrMarkFailed({
-          encrypted: kickoff.encrypted,
-          entityId: kickoff.entityId,
-          fieldId: kickoff.fieldId,
-          mimeType: kickoff.mimeType,
-          organizationId,
-          userId,
-          workspaceId,
-        }).catch((error: unknown) => {
-          captureError(error, {
-            entityId: kickoff.entityId,
-            fieldId: kickoff.fieldId,
-            mimeType: kickoff.mimeType,
-          });
-        });
-      }
-    };
+    const afterPromote = () =>
+      replayEmailIngestPostCommitWork({
+        organizationId,
+        purposeData: finalizedPurposeData,
+        userId,
+        workspaceId,
+      });
 
     return finalizeOk({
       finalizedResult: finalized,

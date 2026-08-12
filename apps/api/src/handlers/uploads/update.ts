@@ -47,7 +47,10 @@ import { scanFile } from "@/api/lib/file-scan/scan";
 import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import type { HeadObjectResult, S3PresignError } from "@/api/lib/s3-presign";
 import { copyObject, headObject } from "@/api/lib/s3-presign";
-import { finalizeEmailIngest } from "@/api/lib/uploads/email-ingest";
+import {
+  finalizeEmailIngest,
+  replayEmailIngestPostCommitWork,
+} from "@/api/lib/uploads/email-ingest";
 import { finalizeEntityCreate } from "@/api/lib/uploads/entity-create";
 import {
   FINALIZE_CLAIM_TIMEOUT_MS,
@@ -218,6 +221,17 @@ const finalizeUpload = createSafeHandler(
         );
       }
       if (existing.status === "finalized" && existing.finalizedResult) {
+        if (existing.finalizedResult.type === "email_ingest") {
+          if (existing.purposeData.type !== "email_ingest") {
+            panic("Finalized email ingest has inconsistent purpose data");
+          }
+          replayEmailIngestPostCommitWork({
+            organizationId: session.activeOrganizationId,
+            purposeData: existing.purposeData,
+            userId: user.id,
+            workspaceId,
+          });
+        }
         capture("finalized", "complete", "none");
         return Result.ok({ finalizedResult: existing.finalizedResult });
       }

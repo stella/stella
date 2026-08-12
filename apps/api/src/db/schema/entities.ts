@@ -1066,6 +1066,15 @@ export const PENDING_UPLOAD_PURPOSES = [
   "email_ingest",
 ] as const;
 
+export type EmailIngestPostCommitKickoff = {
+  entityId: SafeId<"entity">;
+  fieldId: SafeId<"field">;
+  sourceUploadId: SafeId<"pendingUpload">;
+  fileName: string;
+  mimeType: string;
+  encrypted: boolean;
+};
+
 export type PendingUploadPurposeData =
   | {
       type: "entity_create";
@@ -1100,6 +1109,8 @@ export type PendingUploadPurposeData =
       parentId?: SafeId<"entity"> | null;
       /** Exact deterministic final keys owned by this recoverable ingest. */
       recoveryObjectKeys?: string[];
+      /** Durable work descriptors replayed after the entity transaction commits. */
+      postCommitKickoffs?: EmailIngestPostCommitKickoff[];
     };
 
 export type PendingUploadFinalizedResult =

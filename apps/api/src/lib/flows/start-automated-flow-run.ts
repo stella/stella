@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import { createHash } from "node:crypto";
 
 import { rootDb } from "@/api/db/root";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -11,7 +12,34 @@ import { enqueueFlowStep } from "@/api/lib/flows/flow-run-queue";
 import type { FlowTriggerSource } from "@/api/lib/flows/flow-types";
 import { buildFlowRunRows } from "@/api/lib/flows/start-flow-run";
 import { logger } from "@/api/lib/observability/logger";
-import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import {
+  brandDerivedFlowRunId,
+  brandPersistedUserId,
+} from "@/api/lib/safe-id-boundaries";
+
+const FILE_UPLOAD_FLOW_RUN_ID_NAMESPACE = "stella:file-upload-flow-run:v1";
+
+const createAutomatedFlowRunId = (
+  definitionId: SafeId<"flowDefinition">,
+  triggerSource: Extract<
+    FlowTriggerSource,
+    { type: "schedule" | "file-upload" }
+  >,
+  idempotencyKey: string | undefined,
+): SafeId<"flowRun"> => {
+  if (triggerSource.type === "schedule" || idempotencyKey === undefined) {
+    return createSafeId<"flowRun">();
+  }
+
+  const hex = createHash("sha256")
+    .update(
+      `${FILE_UPLOAD_FLOW_RUN_ID_NAMESPACE}:${definitionId}:${triggerSource.entityId}:${idempotencyKey}`,
+    )
+    .digest("hex");
+  return brandDerivedFlowRunId(
+    `${hex.slice(0, 8)}-${hex.slice(8, 12)}-8${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`,
+  );
+};
 
 /**
  * Shared tail for both automated triggers (schedule + file-upload): guarantee
@@ -39,6 +67,8 @@ export type StartAutomatedFlowRunArgs = {
     { type: "schedule" | "file-upload" }
   >;
   inputEntityIds: SafeId<"entity">[];
+  /** Stable source-event key when a file-upload trigger may be replayed. */
+  idempotencyKey?: string;
   /** Optional BullMQ delay for step 0 (file-upload defers past extraction). */
   enqueueDelayMs?: number;
   /** String-only structured-log context (definitionId, workspaceId, ...). */
@@ -91,6 +121,7 @@ export const startAutomatedFlowRun = async (
     createdByUserId,
     triggerSource,
     inputEntityIds,
+    idempotencyKey,
     enqueueDelayMs,
     logContext,
   }: StartAutomatedFlowRunArgs,
@@ -161,7 +192,11 @@ export const startAutomatedFlowRun = async (
     return;
   }
 
-  const runId = createSafeId<"flowRun">();
+  const runId = createAutomatedFlowRunId(
+    definitionId,
+    triggerSource,
+    idempotencyKey,
+  );
   const rows = buildFlowRunRows({
     runId,
     workspaceId,
@@ -188,6 +223,10 @@ export const startAutomatedFlowRun = async (
       ...logContext,
       dailyRunCount: insertResult.value.dailyRunCount,
     });
+    return;
+  }
+  if (insertResult.value.outcome === "duplicate") {
+    logger.info("flow.automated_run_duplicate", logContext);
     return;
   }
 
