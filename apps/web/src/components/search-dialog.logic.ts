@@ -1,11 +1,7 @@
-import {
-  resourceRef,
-  RESOURCE_TYPE,
-  toResourceName,
-  toSafeId,
-} from "@stll/api-contract";
+import { resourceRef, RESOURCE_TYPE, toResourceName } from "@stll/api-contract";
 import type { GlobalSearchHit } from "@stll/api/types";
 
+import { toSafeId } from "@/lib/safe-id";
 import type { RecentFile } from "@/lib/search-recents";
 
 type ChatGlobalSearchHit = Extract<GlobalSearchHit, { type: "chat" }>;

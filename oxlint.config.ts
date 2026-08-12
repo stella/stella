@@ -192,6 +192,16 @@ const apiSafeIdBrandingImport = {
     "Only approved boundary modules and tests may brand raw IDs with toSafeId.",
 };
 
+// The portable contract helper brands any string for any id kind, so reaching
+// it directly would route around both the sanctioned boundaries above and the
+// SafeIdType union. apps/web re-exports it once; apps/api never imports it.
+const apiPortableSafeIdBrandingImport = {
+  name: "@stll/api-contract/safe-id",
+  importNames: ["toSafeId"],
+  message:
+    "Brand ids through '@/api/lib/safe-id-boundaries', not the portable contract helper.",
+};
+
 export default defineConfig({
   extends: [core, react],
   rules: {
@@ -2161,7 +2171,13 @@ export default defineConfig({
       rules: {
         "no-restricted-imports": [
           "error",
-          { paths: [noZodImport, apiSafeIdBrandingImport] },
+          {
+            paths: [
+              noZodImport,
+              apiSafeIdBrandingImport,
+              apiPortableSafeIdBrandingImport,
+            ],
+          },
         ],
       },
     },
@@ -2207,10 +2223,12 @@ export default defineConfig({
         "apps/api/src/lib/auth.ts",
         "apps/api/src/lib/search/**",
         "apps/api/src/lib/safe-id-boundaries.ts",
-        "apps/api/src/types.ts",
       ],
       rules: {
-        "no-restricted-imports": ["error", { paths: [noZodImport] }],
+        "no-restricted-imports": [
+          "error",
+          { paths: [noZodImport, apiPortableSafeIdBrandingImport] },
+        ],
       },
     },
     {
@@ -2407,6 +2425,7 @@ export default defineConfig({
                 message:
                   "Handlers must receive SafeId from macros (workspaceAccessMacro, authMacro) or actor session validation, not construct it from raw strings.",
               },
+              apiPortableSafeIdBrandingImport,
               {
                 name: "@/api/db",
                 importNames: ["createScopedDb"],
@@ -2495,6 +2514,7 @@ export default defineConfig({
             paths: [
               noZodImport,
               apiSafeIdBrandingImport,
+              apiPortableSafeIdBrandingImport,
               {
                 name: "@/api/lib/api-handlers",
                 importNames: ["createHandler", "createRootHandler"],

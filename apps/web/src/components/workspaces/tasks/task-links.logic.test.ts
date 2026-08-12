@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { resourceRef, RESOURCE_TYPE, toSafeId } from "@stll/api-contract";
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
 import { getEntityLinkResource } from "@/components/workspaces/tasks/task-links.logic";
+import { toSafeId } from "@/lib/safe-id";
 
 describe("task link resource identity", () => {
   test("upgrades a legacy entity ID at the client boundary", () => {

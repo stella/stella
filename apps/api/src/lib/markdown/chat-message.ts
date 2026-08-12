@@ -5,13 +5,17 @@ import {
   RESOURCE_TYPE,
   toChatMentionResourceHref,
   toChatResourceHref,
-  toSafeId,
   isChatMentionCategory,
   isChatReferenceCategory,
 } from "@stll/api-contract";
 
 import type { ChatMention, ChatMentionHref } from "@/api/lib/chat/references";
 import { htmlToMarkdown } from "@/api/lib/markdown/html-to-markdown";
+import {
+  brandPersistedCaseLawDecisionId,
+  brandPersistedEntityId,
+  brandPersistedWorkspaceId,
+} from "@/api/lib/safe-id-boundaries";
 
 const ALLOWED_TAGS = new Set([
   "a",
@@ -125,7 +129,7 @@ const toMentionHref = (mention: ChatMention): ChatMentionHref => {
               type: "workspace",
               workspace: resourceRef({
                 type: RESOURCE_TYPE.WORKSPACE,
-                id: toSafeId<"workspace">(mention.workspaceId),
+                id: brandPersistedWorkspaceId(mention.workspaceId),
               }),
             },
     });
@@ -142,7 +146,7 @@ const toDecisionReferenceHref = (id: string) =>
     type: RESOURCE_TYPE.CASE_LAW_DECISION,
     resource: resourceRef({
       type: RESOURCE_TYPE.CASE_LAW_DECISION,
-      id: toSafeId<"caseLawDecision">(id),
+      id: brandPersistedCaseLawDecisionId(id),
     }),
   });
 
@@ -221,7 +225,7 @@ const replaceMentionsWithAnchors = (
             label,
             resource: resourceRef({
               type: RESOURCE_TYPE.ENTITY,
-              id: toSafeId<"entity">(id),
+              id: brandPersistedEntityId(id),
             }),
             workspaceId: sourceWorkspaceId,
           }
@@ -231,7 +235,7 @@ const replaceMentionsWithAnchors = (
             label,
             resource: resourceRef({
               type: RESOURCE_TYPE.WORKSPACE,
-              id: toSafeId<"workspace">(id),
+              id: brandPersistedWorkspaceId(id),
             }),
           };
 

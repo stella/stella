@@ -71,6 +71,7 @@ import {
   readTenantS3ArrayBuffer,
   writeTenantS3Object,
 } from "@/api/lib/s3-presign";
+import { brandPersistedFieldId } from "@/api/lib/safe-id-boundaries";
 import {
   executeNativeExtraction,
   requiresDurableNativeExtraction,
@@ -78,7 +79,6 @@ import {
 import { getSearchProvider } from "@/api/lib/search/provider";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
-import { toSafeId } from "@/api/types";
 
 const OCR_SOURCE_URL_TTL_SECONDS = 35 * 60;
 const WORKER_CONCURRENCY = 2;
@@ -1458,7 +1458,7 @@ export const readRepairScanCursor = async (
     label: "document OCR repair cursor read",
     timeoutMs,
   });
-  return cursor === null ? null : toSafeId<"field">(cursor);
+  return cursor === null ? null : brandPersistedFieldId(cursor);
 };
 
 export const writeRepairScanCursor = async ({

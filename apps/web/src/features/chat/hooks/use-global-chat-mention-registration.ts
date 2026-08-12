@@ -1,4 +1,4 @@
-import { resourceRef, RESOURCE_TYPE, toSafeId } from "@stll/api-contract";
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
 import { useChatEditorExtensions } from "@/components/chat-editor-provider";
 import type {
@@ -11,6 +11,7 @@ import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { assertPublicLawApiData } from "@/lib/public-law-api";
+import { toSafeId } from "@/lib/safe-id";
 
 const GLOBAL_CHAT_MENTION_EXTENSION_ID = "global-chat:org-mentions";
 

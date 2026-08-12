@@ -1,7 +1,7 @@
 import type { JSONContent } from "@tiptap/react";
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { resourceRef, RESOURCE_TYPE, toSafeId } from "@stll/api-contract";
+import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
@@ -15,6 +15,7 @@ import {
   useChatDraftStore,
 } from "@/lib/chat-draft-store";
 import { getChatThreadKey, toChatThreadId } from "@/lib/chat-thread-ref";
+import { toSafeId } from "@/lib/safe-id";
 
 const docWithText = (text: string): JSONContent => ({
   type: "doc",

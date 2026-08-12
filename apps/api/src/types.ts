@@ -48,7 +48,6 @@ export type MemoriesAPI = Elysia<
   MemoriesRoutes
 >;
 
-export { toSafeId } from "@/api/lib/branded-types";
 export type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 export type { LegalListSourceLocator } from "@/api/lib/lists/types";
 export type { Page } from "@/api/lib/pagination";
