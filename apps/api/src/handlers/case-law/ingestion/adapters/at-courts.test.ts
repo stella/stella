@@ -260,6 +260,19 @@ describe("Austrian RIS adapter", () => {
     expect((await adapter.fetchPage(null, {})).isErr()).toBe(true);
   });
 
+  it("refuses a monthly set beyond the reconciliation page cap", async () => {
+    const adapter = createAtCourtsAdapter({
+      now: () => new Date("2026-02-01T00:00:00Z"),
+      request: async () => listingResponse([listingItem()], 20_001),
+      sleep: async () => {},
+    });
+
+    expect((await adapter.fetchPage(null, {})).isErr()).toBe(true);
+    expect(
+      adapter.reconciliation?.listSlicePage({ slice: "2026-01", page: 0 }),
+    ).rejects.toThrow("exceeds 200 pages");
+  });
+
   it("quarantines an identity-less row without blocking later documents", async () => {
     const xml = await fixtureXml();
     const unkeyable = listingItem(null);

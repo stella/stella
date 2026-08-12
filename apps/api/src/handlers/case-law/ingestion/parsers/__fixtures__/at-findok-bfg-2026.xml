@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Segmente>
+  <Segment>
+    <Grundk>
+      <appdat>14.07.2026</appdat>
+      <behoerde>BFG</behoerde>
+      <betreff>Parkometerfall, 15 Minuten-Parkscheine verwendet</betreff>
+      <doktyptxt>Bescheidbeschwerde - Einzel - Erkenntnis</doktyptxt>
+      <ecli>ECLI:AT:BFG:2026:RV.7500368.2026</ecli>
+      <gz>RV/7500368/2026</gz>
+      <matbez_erf_sub>
+        <matbez_erf>Verwaltungsstrafsachen Wien</matbez_erf>
+      </matbez_erf_sub>
+      <ngesamt_erf_sub>
+        <ngesamt_erf>§ 4 Abs. 1 Wiener Parkometergesetz 2006, LGBl. Nr. 09/2006</ngesamt_erf>
+        <ngesamt_erf>§ 5 Abs. 2 Wiener Parkometerabgabeverordnung, ABl. Nr. 51/2005</ngesamt_erf>
+      </ngesamt_erf_sub>
+      <stammnr>152257</stammnr>
+    </Grundk>
+    <Segk>
+      <dokformat>text/xhtml</dokformat>
+      <stammnr>152257</stammnr>
+      <txt>&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;html&gt;&lt;head&gt;&lt;title&gt;&lt;/title&gt;&lt;/head&gt;&lt;body&gt;
+&lt;h1 class="titel"&gt;IM NAMEN DER REPUBLIK&lt;/h1&gt;
+&lt;p&gt;Das Bundesfinanzgericht hat über die Beschwerde gegen das Straferkenntnis wegen einer Verwaltungsübertretung zu Recht erkannt:&lt;/p&gt;
+&lt;p&gt;I. Die Beschwerde wird als unbegründet abgewiesen und das Straferkenntnis bestätigt.&lt;/p&gt;
+&lt;h1 style="text-align:center;"&gt;Entscheidungsgründe&lt;/h1&gt;
+&lt;p&gt;&lt;strong&gt;Sachverhalt:&lt;/strong&gt; Zum Beanstandungszeitpunkt befand sich im Fahrzeug kein gültiger Parkschein.&lt;/p&gt;
+&lt;h2&gt;Rechtliche Würdigung&lt;/h2&gt;
+&lt;p class="zitierung"&gt;Nach § 5 Abs. 2 Wiener Parkometerabgabeverordnung ist die Abgabe bei Beginn des Abstellens zu entrichten.&lt;/p&gt;
+&lt;p style="text-align:center;"&gt;Wien, am 14. Juli 2026&lt;/p&gt;
+&lt;/body&gt;&lt;/html&gt;</txt>
+    </Segk>
+  </Segment>
+</Segmente>

@@ -78,6 +78,11 @@ const jsonResponse = (body: unknown): Response =>
     headers: { "Content-Type": "application/json; charset=utf-8" },
   });
 
+const gzipJsonResponse = (body: unknown): Response =>
+  new Response(Bun.gzipSync(JSON.stringify(body)), {
+    headers: { "Content-Type": "application/gzip" },
+  });
+
 const htmlResponse = (body: string): Response =>
   new Response(body, {
     headers: { "Content-Type": "text/html; charset=utf-8" },
@@ -120,6 +125,24 @@ type AdapterCoverage =
       readonly maxSteadyStatePositions: number;
     }
   | { readonly disposition: "excluded"; readonly reason: string };
+
+const AT_RIS_COVERAGE = {
+  disposition: "exercised",
+  exhaustedSource: () =>
+    jsonResponse({
+      OgdSearchResult: {
+        OgdDocumentResults: {
+          Hits: {
+            "@pageNumber": "1",
+            "@pageSize": "100",
+            "#text": "0",
+          },
+        },
+      },
+    }),
+  maxSteadyStateCursors: 4,
+  maxSteadyStatePositions: 1,
+} as const satisfies AdapterCoverage;
 
 /**
  * Total over the adapter-key vocabulary, so a new jurisdiction fails to
@@ -212,19 +235,23 @@ const ADAPTER_CONFORMANCE = {
     maxSteadyStateCursors: 4,
     maxSteadyStatePositions: 1,
   },
-  [ADAPTER_KEYS.AT_COURTS]: {
+  [ADAPTER_KEYS.AT_COURTS]: AT_RIS_COVERAGE,
+  [ADAPTER_KEYS.AT_VFGH]: AT_RIS_COVERAGE,
+  [ADAPTER_KEYS.AT_VWGH]: AT_RIS_COVERAGE,
+  [ADAPTER_KEYS.AT_BVWG]: AT_RIS_COVERAGE,
+  [ADAPTER_KEYS.AT_LVWG]: AT_RIS_COVERAGE,
+  [ADAPTER_KEYS.AT_ASYLGH]: AT_RIS_COVERAGE,
+  [ADAPTER_KEYS.AT_UBAS]: AT_RIS_COVERAGE,
+  [ADAPTER_KEYS.AT_UVS]: AT_RIS_COVERAGE,
+  [ADAPTER_KEYS.AT_VERG]: AT_RIS_COVERAGE,
+  [ADAPTER_KEYS.AT_UMSE]: AT_RIS_COVERAGE,
+  [ADAPTER_KEYS.AT_BKS]: AT_RIS_COVERAGE,
+  [ADAPTER_KEYS.AT_FINDOK]: {
     disposition: "exercised",
     exhaustedSource: () =>
-      jsonResponse({
-        OgdSearchResult: {
-          OgdDocumentResults: {
-            Hits: {
-              "@pageNumber": "1",
-              "@pageSize": "100",
-              "#text": "0",
-            },
-          },
-        },
+      gzipJsonResponse({
+        generierungsdatum: "07.08.2026 06:16",
+        data: [],
       }),
     maxSteadyStateCursors: 4,
     maxSteadyStatePositions: 1,

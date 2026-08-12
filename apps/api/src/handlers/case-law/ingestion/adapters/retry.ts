@@ -28,6 +28,8 @@ export const backoffMs = (
 ): number => Math.min(baseMs * 2 ** attempt + Math.random() * baseMs, maxMs);
 
 type FetchWithRetryOptions = {
+  /** Optional publisher-wide gate run before every network attempt. */
+  beforeAttempt?: (() => Promise<void>) | undefined;
   /** Maximum retry attempts (default: 2). */
   maxRetries?: number;
   /** Per-request timeout in ms (default: ADAPTER_TIMEOUT.REQUEST). */
@@ -81,6 +83,7 @@ export const fetchWithRetry = async (
     maxDelayMs = 30_000,
     signal,
     adapterKey,
+    beforeAttempt,
   } = opts;
 
   const headers = new Headers(init?.headers);
@@ -91,6 +94,10 @@ export const fetchWithRetry = async (
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     if (signal?.aborted) {
       throw signal.reason ?? new DOMException("Aborted", "AbortError");
+    }
+    if (beforeAttempt !== undefined) {
+      // oxlint-disable-next-line no-await-in-loop -- every retry must reserve its own publisher-rate slot
+      await beforeAttempt();
     }
 
     try {

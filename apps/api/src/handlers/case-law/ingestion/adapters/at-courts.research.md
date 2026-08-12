@@ -1,107 +1,128 @@
 # Austrian case-law source decision
 
-Research date: 2026-08-11
+Research dates: 2026-08-11 to 2026-08-12
 
 ## Decision
 
-Use the Austrian Federal Legal Information System (RIS) Open Government Data
-API, beginning with the `Justiz` application. It is the official, enumerable,
-machine-readable publication surface for the Supreme Court (OGH) and selected
-higher regional, regional, and district court decisions. Keep the other RIS
-applications as separate follow-up slices: their response metadata differs,
-and combining five independently paginated result sets would hide source
-boundaries inside one cursor.
+Use the official RIS Open Government Data API for every enumerable RIS court
+and historical adjudicatory collection. Use the official Findok IWG holdings
+manifests for BFG and UFS fiscal decisions. Keep each RIS application as its own
+source because its publisher count, metadata branch, cursor, and successor
+boundary are independent. Keep BFG and UFS in one Findok source whose lexical
+year slices preserve the UFS-to-BFG successor chain.
 
-The existing `at-courts` adapter is not ready to activate. It omits the API's
-mandatory `Applikation` parameter, does not adopt the RIS document ID, strips
-HTML instead of parsing the richer XML, stores no raw document, and paginates a
-moving modification-date result set. The first implementation should replace
-those mechanics rather than add a second Austrian source key.
+Do not scrape the courts' selected “current decisions” pages: they overlap the
+complete machine surfaces. Do not claim that the official publication corpus is
+every case disposed of in Austria. Publication statutes, court selection rules,
+and historical digitisation gaps mean it is the broadest enumerable official
+corpus, not the universe of court files.
+
+The observed, currently valid scope is **823,238 official documents**:
+
+- 738,176 Austrian RIS decision texts across ordinary courts, the five current
+  public-law court collections, AsylGH, and five closed adjudicatory archives;
+- 85,062 current Findok inventory entries across BFG and UFS.
+
+Counts are point-in-time publisher counts, not timeless completeness claims.
+Adapters obtain their benchmark from the live publisher surfaces.
 
 ## Source matrix
 
-| Candidate                                                                                                           | Corpus and court coverage                                                                                                                                                                                                                                                                                                                                                                                           | Enumeration and format                                                                                                                                                                                                                                                                                                                                                                                  | Publisher total                                                                                                                  | Licence and access constraints                                                                                                                                                                                                                                                                                                                                                                                    | Decision                                                                                                             |
-| ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| [RIS OGD API](https://www.data.gv.at/datasets/0fb9ae1a-92cb-4ab8-a589-470c16d4fe21)                                 | National official system. The five principal decision-text applications reported 669,749 documents on the research date: Justiz 172,213; VfGH 25,728; VwGH 140,390; BVwG 287,126; LVwG 44,292. `Justiz` contains all OGH decisions since 1991, important earlier OGH decisions, selected OLG/LG/BG decisions, and 2,200 foreign-court documents under `AUSL`; the Austrian first-source scope is therefore 170,013. | `GET https://data.bka.gv.at/ris/api/v2.6/Judikatur`; mandatory `Applikation`; exact decision-text selection; inclusive `EntscheidungsdatumVon`/`Bis`; deterministic date sort; 1-based pages of up to 100. Each listing row carries `Technisch.ID`, metadata, and direct XML, HTML, RTF, and PDF URLs. XML preserves publisher sections such as `Kopf`, `Spruch`, `Text`, and `Rechtliche Beurteilung`. | `Hits.#text` states the matched count on every response.                                                                         | [CC BY 4.0](https://www.ris.bka.gv.at/UI/Ogd.aspx), no registration. The [OGD FAQ](https://www.ris.bka.gv.at/RisInfo/OGD-FAQ.pdf) asks clients to pause 1–2 seconds between pages, run bulk downloads outside 06:00–18:00 or on weekends, and notify `ris.it@bka.gv.at` before an initial mass download. `www.ris.bka.gv.at/robots.txt` currently states `crawl-delay: 5`; use the stricter five-second interval. | **First source**, scoped initially to Austrian documents in `Justiz`.                                                |
-| [Constitutional Court site](https://www.vfgh.gv.at/service/anlaufstellen/registry.en.html)                          | The court says all decisions from 1980 onward are available without charge; its printed official collection covers more than 20,000 cases, while pre-1980 material is in the Austrian National Library's ALEX portal.                                                                                                                                                                                               | The court's own site presents selected current/public-interest material. Its registry identifies RIS as the prompt, searchable full-text publication system. No independent complete list, stable API, or publisher total was found on the court site.                                                                                                                                                  | No own-site total; RIS `Vfgh` reported 25,728 decision texts.                                                                    | Ordinary site terms/robots apply; the complete machine surface is RIS OGD.                                                                                                                                                                                                                                                                                                                                        | Do not duplicate RIS. Add a dedicated RIS `Vfgh` adapter later so its metadata contract stays explicit.              |
-| [Administrative Court site](https://www.vwgh.gv.at/rechtsprechung/index.html)                                       | The VwGH states that all decisions since 1990 are continuously recorded in RIS; selected older decisions also exist there.                                                                                                                                                                                                                                                                                          | Own site exposes recent decisions and public-interest selections, then links to RIS for the complete collection. No independent complete paging API or total was found.                                                                                                                                                                                                                                 | No own-site total; RIS `Vwgh` reported 140,390 decision texts, including selected historical material.                           | Ordinary site terms/robots apply; RIS OGD governs machine access to the complete set.                                                                                                                                                                                                                                                                                                                             | Do not crawl the selected own-site feed. Add RIS `Vwgh` later.                                                       |
-| [Justice/OGH publication](https://www.ris.bka.gv.at/UI/Judikatur/Justiz/Kontakt.aspx)                               | OGH, OLG, LG, BG, and a small foreign-court subset. All OGH decisions since 1991; important criminal decisions since 1976 and civil decisions since 1984; selected OLG from 1995 and LG from 1996.                                                                                                                                                                                                                  | The Ministry of Justice describes the free decision database as part of RIS. RIS OGD is the complete list and supplies stable document IDs plus XML/HTML/RTF/PDF detail.                                                                                                                                                                                                                                | RIS `Justiz` reported 172,213 decision texts; the exact `Gericht=AUSL` query reported 2,200, leaving 170,013 Austrian documents. | RIS OGD CC BY 4.0 and its politeness rules apply.                                                                                                                                                                                                                                                                                                                                                                 | This is the first implementation tranche. Exclude `Organ` values beginning with `AUSL` so the country remains `AUT`. |
-| Regional administrative court sites                                                                                 | Nine Länder courts. RIS documents selected LVwG decisions from 2014; the live result set also contains a small amount of older predecessor material.                                                                                                                                                                                                                                                                | Individual court sites are fragmented and often publish selected/current decisions. RIS exposes one enumerable `Lvwg` application with date filters, `Bundesland`, stable IDs, and four detail formats.                                                                                                                                                                                                 | RIS `Lvwg` reported 44,292 decision texts; no authoritative combined total was found on the nine own sites.                      | Individual portal rules vary. RIS OGD offers one documented licence and politeness contract.                                                                                                                                                                                                                                                                                                                      | Later RIS `Lvwg` adapter; do not maintain nine crawlers first.                                                       |
-| [Federal Fiscal Court / Findok](https://findok.bmf.gv.at/findok/hilfe/EFSZ/BMF/FINDOK-INT-2/Inhalt-der-Findok.html) | BFG decisions from 2014 and predecessor UFS material. This corpus is outside the five RIS applications above.                                                                                                                                                                                                                                                                                                       | Search UI has full text, date, docket, ECLI, decision/headnote selection, and stable-looking UUID document IDs. Its IWG inventory offers downloadable holdings lists, but an inexpensive publisher total and documented stable paging API still need verification.                                                                                                                                      | Not established in this research pass.                                                                                           | Findok states that BFG/UFS documents are anonymised; § 23 BFGG may prevent publication when substantial private or public interests oppose it. Terms and bulk-download expectations need a separate review.                                                                                                                                                                                                       | Valuable second-source expansion after RIS, not part of the first adapter.                                           |
-| ALEX historical constitutional collection                                                                           | Selected constitutional decisions before 1980.                                                                                                                                                                                                                                                                                                                                                                      | Scanned historical volumes, not a modern decision-level API. Enumeration is volume/page oriented; OCR and stable decision mapping require separate research.                                                                                                                                                                                                                                            | The VfGH says its printed collection has documented more than 20,000 cases overall, not a machine-readable ALEX decision total.  | Austrian National Library terms apply.                                                                                                                                                                                                                                                                                                                                                                            | Historical follow-up only.                                                                                           |
-| Commercial databases (RDB, Lexis 360, MANZ, juris equivalents)                                                      | Broader editorial collections, headnotes, and commentary.                                                                                                                                                                                                                                                                                                                                                           | Contractual/search surfaces, not a public ingestion API.                                                                                                                                                                                                                                                                                                                                                | Subscription-dependent.                                                                                                          | Commercial terms and database rights.                                                                                                                                                                                                                                                                                                                                                                             | Out of scope.                                                                                                        |
+| Official surface | Published scope and observed count | Enumeration and identity | Formats, licence, and access | Decision |
+| --- | --- | --- | --- | --- |
+| [RIS OGD](https://www.data.gv.at/datasets/0fb9ae1a-92cb-4ab8-a589-470c16d4fe21) | `Justiz` 172,213 texts, including 2,200 `AUSL` foreign documents; Austrian scope 170,013. `Vfgh` 25,728; `Vwgh` 140,415; `Bvwg` 287,371; `Lvwg` 44,292. | `GET https://data.bka.gv.at/ris/api/v2.6/Judikatur`; mandatory `Applikation`; decision-date range; deterministic date sort; 1-based pages of 100; total in `Hits.#text`; publisher identity in `Metadaten.Technisch.ID`. | XML, HTML, RTF, and PDF links per listing. [CC BY 4.0](https://www.ris.bka.gv.at/UI/Ogd.aspx). The [OGD FAQ](https://www.ris.bka.gv.at/RisInfo/OGD-FAQ.pdf) asks bulk clients to pause, use off-hours, and coordinate initial mass downloads; RIS robots specifies five seconds. | Primary surface. One adapter per application, with one distributed five-second publisher gate shared by listings, details, totals, and retries. |
+| RIS historical court and adjudicatory applications | `AsylGH` 52,219 (2008–2013); `Ubas` 3,625 (1998–2008); `Uvs` 9,830 (1991–2013); `Verg` 3,935 (1994–2013); `Umse` 370 (1995–2013); `Bks` 378 (2001–2013). | Same OGD envelope and technical ID. Closed first/last month boundaries make every archive re-askable without querying nonexistent future periods. | Same RIS XML and CC BY 4.0 contract. | Separate sources. These preserve UBAS → AsylGH → BVwG, UVS → LVwG, and historical review-body boundaries without docket-based deduplication. |
+| [VfGH own site](https://www.vfgh.gv.at/rechtsprechung/rechtsprechung_ueberblick.de.html) | Decisions from 1980 and about two-thirds of published pre-1980 case law are in RIS; the German overview narrows publication to Erkenntnisse and selected Beschlüsse. | Own “current decisions” pages are selected PDFs without an independent complete list or total. | Ordinary site rules; RIS is the linked machine corpus. | Do not duplicate RIS. Historical remainder belongs to ALEX research. |
+| [VwGH own site](https://www.vwgh.gv.at/rechtsprechung/index.html) | The court says all decisions since 1990 are continuously captured in RIS. Older coverage is selected/backfilled. | Own current/public-interest page is selected; no second complete API or total was found. | Ordinary site rules; RIS is canonical. | Do not duplicate RIS. |
+| Individual BVwG and LVwG sites | BVwG material begins in 2014. RIS expressly describes LVwG publication as selected across all nine Länder courts; its API also contains legacy-dated predecessor material. | Own sites link to RIS or publish selected/current material. RIS provides one complete enumerable publisher holding for each application. | RIS access contract applies. | Use RIS `Bvwg` and `Lvwg`, not ten fragile site crawlers. |
+| [Findok IWG downloads](https://findok.bmf.gv.at/findok/hilfe/EFSZ/BMF/FINDOK-INT-2/BENUTZERUNTERST-TZUNG/Dokumentendownload.html) | BFG: 39,872 valid entries from 2014. UFS predecessor: 45,190 valid entries from 2003–2013. | Weekly complete gzipped JSON inventories at `bestandsliste-bfg.gz` and `bestandsliste-ufs.gz`; each row has UUID `dokumentId`, `stammNr`, docket, date, authority, ZIP/PDF paths, and validity. Adopt `dokumentId`; pin crawling to a manifest hash; slice by decision year. | ZIP contains decision XML with embedded XHTML; PDF is directly listed. Findok documents are **CC0**. Use a shared 1.5-second publisher gate and bounded archive/XML reads. | Second primary surface. Treat native BFG/UFS manifests as one successor-chain source; never ingest Findok search results blended from external RIS/VwGH sources. |
+| [ALEX VfGH](https://alex.onb.ac.at/vgh.htm), [ALEX VwGH](https://alex.onb.ac.at/cgi-content/alex?aid=vgr&apm=0), historical [Reichsgericht](https://alex.onb.ac.at/rgr.htm) and [OGH](https://alex.onb.ac.at/ogh.htm) | Official historical published volumes, including VfGH 1919–1979, VwGH volumes from 1876, Reichsgericht 1869–1918, and historical OGH civil collections. Substantial overlap with RIS. | Volume/page/scan enumeration; no verified complete per-decision listing API, stable decision identity, OCR boundary, publisher decision total, or reuse licence for the digitised artifacts was found. | ÖNB site rules apply. OCR and decision segmentation would create identities not enumerated by the publisher. | Do not activate as an ingestion adapter. Treat as a dedicated research/OCR project with a source-held volume/page identity design. |
+| Commercial databases | Editorially broader discovery, headnotes, cross-references, commentary, and sometimes additional selected decisions. | Contractual search products, not public official enumeration APIs. | Subscription and database terms. | Out of scope; do not use as an ingestion source. |
 
-The five live totals came from identical RIS queries selecting
-`Dokumenttyp.SucheInEntscheidungstexten=true`, page 1, and sorting by decision
-date for `Justiz`, `Vfgh`, `Vwgh`, `Bvwg`, and `Lvwg`. They are publisher query
-totals, not claims that every decision ever rendered is published.
+## RIS enumeration design
 
-## Enumeration design for `Justiz`
+- Ask for decision texts only with
+  `Dokumenttyp.SucheInEntscheidungstexten=true`; querying decision texts and
+  headnotes together double-counts publisher artifacts.
+- Slice by closed calendar month (`YYYY-MM`) from each application's earliest
+  listed month through the last complete UTC month. Closed archives also have a
+  fixed terminal month.
+- Page with `DokumenteProSeite=OneHundred`, 1-based `Seitennummer`, ascending
+  decision date, and inclusive `EntscheidungsdatumVon`/`Bis` boundaries.
+- Refuse a month above 200 pages (20,000 texts) in both crawl and
+  reconciliation; a newly oversized application must move to finer slices
+  rather than silently truncate.
+- Validate the returned page number and page size. Collect and then verify the
+  exact listed-identity digest before reporting coverage; a changed set restarts
+  the slice.
+- Use `Metadaten.Technisch.ID` once for crawl, reconciliation listing, and build.
+  A missing or malformed ID receives a content-addressed quarantine identity so
+  one bad row cannot pin the slice.
+- Read the total from `Hits.#text`. Only a parsed zero means empty; HTTP failure,
+  timeout, malformed JSON, or an unfamiliar envelope throws.
+- Fetch only the ID-derived, publisher-listed HTTPS XML path. Retain listing and
+  XML in `sourceRaw`; expose the listed HTML URL to readers.
+- `Justiz` alone excludes `Organ` beginning `AUSL`; its total subtracts the exact
+  publisher `Gericht=AUSL` subset so source scope and benchmark agree.
+- A Redis-time gate serialises all RIS requests across sources and deployed
+  runner replicas. Local/test runs use an equivalent process gate.
 
-- Slice by calendar month (`YYYY-MM`), from `1925-04` through the last complete
-  UTC month. A month is re-askable, sorts in walk order, excludes the
-  publisher's still-live current day, and is comfortably below the
-  reconciliation engine's 200-page ceiling at the API's 100-document page
-  size.
-- Ask for decision texts only:
-  `Applikation=Justiz`,
-  `Dokumenttyp.SucheInEntscheidungstexten=true`,
-  `EntscheidungsdatumVon=YYYY-MM-01`,
-  `EntscheidungsdatumBis=<month end>`,
-  `Sortierung.SortDirection=Ascending`,
-  `Sortierung.SortedByColumn=Datum`,
-  `DokumenteProSeite=OneHundred`, and a 1-based `Seitennummer`.
-- Treat `Metadaten.Technisch.ID` as the opaque `sourceDocumentId`. Use the same
-  identity helper for crawl results, reconciliation listings, and detail
-  builds. Never key on `Geschaeftszahl`: one docket can have multiple published
-  texts, and the API separately publishes headnotes.
-- Read the publisher total from `OgdDocumentResults.Hits.#text`. A parsed zero
-  is an empty slice; non-2xx, timeout, malformed JSON, or an unrecognised
-  envelope throws and leaves the cursor/slice unsettled.
-- Fetch the listed XML URL only after constraining it to HTTPS RIS document
-  paths derived from the listed ID. XML is richer than stripped HTML and is
-  retained verbatim as `sourceRaw`; HTML remains the human-facing document
-  URL.
-- The live crawl starts at and rechecks the last complete month.
-  Reconciliation owns the historical walk from `1925-04`, including a recent
-  tip window, so initial backfill and later publication of an old decision use
-  the same repairable enumeration path.
-- Page a fixed monthly query. Before declaring a mutable month complete, the
-  adapter must verify the exact listed-identity digest or otherwise hold the
-  slice; offset pagination over a live global modification sort is not safe.
+The [RIS URL manual](https://ris.bka.gv.at/RisInfo/LinksaufDokumenteimRISsetzen.pdf)
+documents stable application/document links and date filters. The OGD FAQ also
+documents history queries for changed or deleted documents; those are a later
+incremental-efficiency option, not a substitute for reconciliation.
 
-The 2026-08-11 `Justiz` query reported **172,213** decision-text documents;
-the companion `Gericht=AUSL` query reported **2,200**, leaving an Austrian
-publisher total of **170,013**. `getTotalCount` must issue both queries and
-subtract the foreign subset, so the benchmark and crawl measure the same
-publisher universe.
+## Findok enumeration design
 
-## Legal and data-handling notes
+- Download the two official weekly manifests, validate every row and duplicate
+  identity, retain only `gueltig=true`, and report the sum as the source total.
+- Adopt UUID `dokumentId` as `sourceDocumentId`; retain `stammNr`, collection,
+  title, publication timestamp, and the original manifest row. A malformed UUID
+  receives a stable quarantine identity plus a repair alias when corrected.
+- Walk lexical successor slices `2003-ufs` … `2013-ufs`, `2014-bfg` … current
+  year. The largest observed annual sets were 4,731 UFS documents (2012) and
+  3,604 BFG documents (2015): 48 and 37 pages respectively, safely below
+  reconciliation's 200-page limit at 100 identities per page.
+- Cache a validated manifest briefly, pin crawl cursors to its content hash, and
+  restart rather than bank coverage if the weekly snapshot changes mid-walk.
+- Fetch only the exact manifest-derived ZIP path. Bound compressed bytes, entry
+  count, uncompressed XML bytes, and total expansion before parsing the embedded
+  XHTML. Retain manifest listing plus publisher XML as raw source.
+- Treat 404/410 as absent detail. Transient failures and malformed archives
+  throw; reconciliation never stores a hollow listing-only decision.
+
+## Legal and coverage notes
 
 [§ 7 Austrian UrhG](https://www.ris.bka.gv.at/NormDokument.wxe?Abfrage=Bundesnormen&Gesetzesnummer=10001848&Paragraf=7)
-states that laws, regulations, official decrees, notices, and decisions do not
-receive copyright protection. RIS nevertheless distributes its OGD data under
-CC BY 4.0, so downstream use must retain the required source attribution.
+excludes official decisions from copyright protection. RIS nevertheless applies
+CC BY 4.0, so its attribution is retained. Findok explicitly publishes its IWG
+documents under CC0.
 
-RIS publication is already anonymised or pseudonymised by the responsible
-court workflow. For example, [§ 15 OGHG practice described in RIS](https://www.ris.bka.gv.at/JustizEntscheidung.wxe?Abfrage=Justiz&Dokumentnummer=JJT_20181219_OGH0002_0080OB00140_05D0000_000&IncludeSelf=True)
-requires names, addresses, and identifying locations to be masked while
-preserving comprehensibility. That is not a guarantee that every historical
-document is perfectly redacted; Stella must preserve the publisher text and
-must not attempt to reverse anonymisation.
+Published decisions are already anonymised or pseudonymised by the responsible
+court workflow. Stella preserves the official text and must not try to reverse
+anonymisation. Historical documents can still contain imperfect redactions, so
+official publication is not a reason to treat text as nonsensitive operational
+data.
 
-Austria assigns ECLI when covered decisions are published online. The
-[European e-Justice description](https://e-justice.europa.eu/topics/legislation-and-case-law/european-case-law-identifier-ecli/at_en)
-lists the VfGH, OGH and other courts, BVwG, BFG, LVwG, and the data-protection
-authority. Capture `EuropeanCaseLawIdentifier` exactly where present.
+The [European e-Justice ECLI description](https://e-justice.europa.eu/topics/legislation-and-case-law/european-case-law-identifier-ecli/at_en)
+lists Austrian participating courts including VfGH, OGH, BVwG, BFG, and LVwG.
+Capture the publisher ECLI exactly where present.
 
-## Explicit follow-ups
+BFG publication is constrained by § 23 BFGG and can omit decisions for protected
+interests or limited significance. RIS ordinary, historical, and LVwG holdings
+also contain expressly selected subsets. Commercial providers can therefore be
+better research products without being better official completeness benchmarks:
+they add editorial selection, citation networks, journals, and commentary, while
+the official adapters measure only what each publisher says it holds.
 
-- Add separate RIS adapters for `Vfgh`, `Vwgh`, `Bvwg`, and `Lvwg`, reusing the
-  transport and XML parser while keeping each publisher application, count,
-  cursor, and metadata schema visible.
-- Research Findok's IWG inventory and machine endpoints for BFG/UFS coverage.
-- Research ALEX decision-level enumeration and OCR quality for pre-1980 VfGH
-  material.
-- Austrian citation extraction and report-series handling are out of scope for
-  the first adapter and reconciliation commits.
+Administrative-authority collections such as DSB/DSK, disciplinary commissions,
+equal-treatment commissions, PVAK, and UPTS are official legal decisions but are
+not court case law. They remain outside the default court corpus unless Stella
+introduces an explicit adjudicatory-authority source category.
+
+## Deferred work
+
+- ALEX volume segmentation, OCR quality, stable publisher-held identity, licence,
+  and overlap reconciliation require a separate project before ingestion.
+- RIS change/deletion history can later reduce steady-state reconciliation cost.
+- Austrian citation extraction and report-series handling remain out of scope.
