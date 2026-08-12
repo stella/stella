@@ -15,7 +15,12 @@ ALTER TABLE "document_review_findings"
 
 -- The decider's account may be removed; the decision and its timestamp must
 -- not go with it, so the reference nulls rather than cascades.
+-- Added validating for the same reason as the CHECKs below: the table is two
+-- days old and tiny, and the migrator's single transaction holds the lock to
+-- commit either way, so NOT VALID + VALIDATE buys nothing here.
 ALTER TABLE "document_review_findings"
+  -- squawk-ignore constraint-missing-not-valid
+  -- squawk-ignore adding-foreign-key-constraint
   ADD CONSTRAINT "document_review_findings_decided_by_user_id_fk"
   FOREIGN KEY ("decided_by") REFERENCES "public"."user"("id")
   ON DELETE set null ON UPDATE no action;--> statement-breakpoint
