@@ -15,6 +15,10 @@ export const UnsafeStyles = () => (
       // MUST flag: named colors cannot adapt to dark mode.
       // oxlint-disable-next-line no-inline-style-colors/no-inline-style-colors -- fixture: named colors must be rejected
       textDecoration: "underline red",
+
+      // MUST flag: static template literals are hardcoded colors too.
+      // oxlint-disable-next-line no-inline-style-colors/no-inline-style-colors -- fixture: static template colors must be rejected
+      color: `#fff`,
     }}
   />
 );

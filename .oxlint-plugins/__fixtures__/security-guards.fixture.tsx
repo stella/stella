@@ -22,6 +22,14 @@ const rawAlias = file.name;
 // oxlint-disable-next-line security-guards/no-raw-filename-write -- fixture: a local alias must not launder an upload filename
 export const rawAliasedFile = { fileName: rawAlias };
 
+const { name } = file;
+// oxlint-disable-next-line security-guards/no-raw-filename-write -- fixture: destructuring must not launder an upload filename
+export const rawDestructuredFile = { fileName: name };
+
+const { name: renamedName } = file;
+// oxlint-disable-next-line security-guards/no-raw-filename-write -- fixture: renamed destructuring must preserve filename taint
+export const rawRenamedDestructuredFile = { fileName: renamedName };
+
 // oxlint-disable-next-line security-guards/no-raw-filename-write -- fixture: string composition preserves raw filename taint
 export const rawTemplatedFile = { fileName: `copy-${file.name}` };
 
@@ -40,6 +48,11 @@ export const UnsafeBuiltLink = () => (
 );
 export const SafeLink = () => <a href={sanitizeHref(item.url)}>Open</a>;
 
+const shadowedMemberReferences = (member: {
+  organizationId: string;
+  userId: string;
+}) => [member.userId, member.organizationId];
+
 export const unsafeDocumentResponse =
   // oxlint-disable-next-line security-guards/require-secure-document-response -- fixture: direct attachment Response bypasses the typed security boundary
   new Response(bytes, {
@@ -56,3 +69,4 @@ export const emptyResponse = new Response(null, { status: 404 });
 void user;
 void member;
 void RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS;
+void shadowedMemberReferences;

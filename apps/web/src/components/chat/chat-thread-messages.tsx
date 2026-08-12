@@ -83,6 +83,7 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { detached } from "@/lib/detached";
 import { sanitizeHref } from "@/lib/sanitize-href";
+import { downloadFile } from "@/lib/utils";
 import {
   getUserFileContentUrl,
   getUserFileThumbnailUrl,
@@ -725,6 +726,31 @@ const getAttachmentPlaceholder = (
   part: ChatAttachmentPart,
 ): string | undefined => part.metadata?.placeholder;
 
+const DATA_URL_PREFIX = "data:";
+const BASE64_DATA_MARKER = ";base64,";
+
+type DownloadDataAttachmentOptions = {
+  fileName: string;
+  mimeType: string;
+  url: string;
+};
+
+const downloadDataAttachment = ({
+  fileName,
+  mimeType,
+  url,
+}: DownloadDataAttachmentOptions): void => {
+  const payloadStart = url.indexOf(BASE64_DATA_MARKER);
+  if (!url.startsWith(DATA_URL_PREFIX) || payloadStart === -1) {
+    return;
+  }
+
+  const encoded = url.slice(payloadStart + BASE64_DATA_MARKER.length);
+  const binary = atob(encoded);
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  downloadFile(new Blob([bytes], { type: mimeType }), fileName);
+};
+
 const UserAttachments = ({
   parts,
 }: {
@@ -772,20 +798,46 @@ const UserAttachments = ({
           );
         }
 
+        const attachmentContent = (
+          <>
+            <FileTextIcon className="size-3" />
+            <span>{filename ?? fallbackLabel}</span>
+          </>
+        );
+        const attachmentClassName = cn(
+          "flex items-center gap-1.5",
+          "bg-muted/50 rounded-md px-2 py-1",
+          "text-muted-foreground text-xs",
+        );
+
+        if (contentUrl.startsWith(DATA_URL_PREFIX)) {
+          return (
+            <button
+              className={attachmentClassName}
+              key={key}
+              onClick={() =>
+                downloadDataAttachment({
+                  fileName: filename ?? fallbackLabel,
+                  mimeType,
+                  url: contentUrl,
+                })
+              }
+              type="button"
+            >
+              {attachmentContent}
+            </button>
+          );
+        }
+
         return (
           <a
-            className={cn(
-              "flex items-center gap-1.5",
-              "bg-muted/50 rounded-md px-2 py-1",
-              "text-muted-foreground text-xs",
-            )}
+            className={attachmentClassName}
             href={sanitizeHref(contentUrl)}
             key={key}
             rel="noreferrer"
             target="_blank"
           >
-            <FileTextIcon className="size-3" />
-            <span>{filename ?? fallbackLabel}</span>
+            {attachmentContent}
           </a>
         );
       })}

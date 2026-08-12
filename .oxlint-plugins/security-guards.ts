@@ -7,7 +7,13 @@
 //   4. require-secure-document-response — direct raw document Response
 //      construction outside the typed security boundary
 
-import { eslintCompatPlugin, type Ranged } from "@oxlint/plugins";
+import {
+  eslintCompatPlugin,
+  type ESTree,
+  type Ranged,
+  type Scope,
+  type Variable,
+} from "@oxlint/plugins";
 
 import {
   getImportedName,
@@ -46,15 +52,6 @@ const RAW_INPUT_OBJECTS = new Set(["file", "body", "query", "part"]);
 
 // Property names on those objects that carry raw filenames
 const RAW_NAME_PROPS = new Set(["name", "filename", "fileName"]);
-
-type ScopeVariable = {
-  defs: { node: unknown }[];
-};
-
-type Scope = {
-  set: Map<string, ScopeVariable>;
-  upper: Scope | null;
-};
 
 // ── Rule 2: no-unsanitized-href ────────────────────────────────
 //
@@ -179,7 +176,9 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        const resolveVariable = (identifier): ScopeVariable | null => {
+        const resolveVariable = (
+          identifier: ESTree.IdentifierReference,
+        ): Variable | null => {
           let scope: Scope | null = context.sourceCode.getScope(identifier);
           while (scope !== null) {
             const variable = scope.set.get(identifier.name);
@@ -191,7 +190,38 @@ export default eslintCompatPlugin({
           return null;
         };
 
-        const isRawFilenameExpression = (node, seenVariables = new Set()) => {
+        const isRawDestructuredFilename = (
+          declaration: ESTree.VariableDeclarator,
+          identifierName: string,
+        ): boolean => {
+          const init = unwrapExpression(declaration.init);
+          if (
+            !isIdentifier(init) ||
+            !RAW_INPUT_OBJECTS.has(init.name) ||
+            declaration.id.type !== "ObjectPattern"
+          ) {
+            return false;
+          }
+
+          return declaration.id.properties.some((property) => {
+            if (property.type !== "Property") {
+              return false;
+            }
+            const boundValue =
+              property.value.type === "AssignmentPattern"
+                ? property.value.left
+                : property.value;
+            return (
+              RAW_NAME_PROPS.has(getPropertyName(property.key) ?? "") &&
+              isIdentifier(boundValue, identifierName)
+            );
+          });
+        };
+
+        const isRawFilenameExpression = (
+          node: unknown,
+          seenVariables = new Set<Variable>(),
+        ): boolean => {
           const expression = unwrapExpression(node);
           if (!isAstNode(expression)) {
             return false;
@@ -245,9 +275,11 @@ export default eslintCompatPlugin({
           nextSeenVariables.add(variable);
           return variable.defs.some((definition) => {
             const declaration = definition.node;
+            if (declaration.type !== "VariableDeclarator") {
+              return false;
+            }
             return (
-              isAstNode(declaration) &&
-              declaration.type === "VariableDeclarator" &&
+              isRawDestructuredFilename(declaration, expression.name) ||
               isRawFilenameExpression(declaration.init, nextSeenVariables)
             );
           });
@@ -370,13 +402,29 @@ export default eslintCompatPlugin({
       createOnce(context) {
         let userImportNode: Ranged | null = null;
         let memberLocalName: string | null = null;
+        let memberImportVariable: Variable | null = null;
         let hasMemberUserIdReference = false;
         let hasMemberOrganizationIdReference = false;
+
+        const resolveVariable = (
+          identifier: ESTree.IdentifierReference,
+        ): Variable | null => {
+          let scope: Scope | null = context.sourceCode.getScope(identifier);
+          while (scope !== null) {
+            const variable = scope.set.get(identifier.name);
+            if (variable !== undefined) {
+              return variable;
+            }
+            scope = scope.upper;
+          }
+          return null;
+        };
 
         return {
           before() {
             userImportNode = null;
             memberLocalName = null;
+            memberImportVariable = null;
             hasMemberUserIdReference = false;
             hasMemberOrganizationIdReference = false;
           },
@@ -396,6 +444,8 @@ export default eslintCompatPlugin({
               }
               if (importedName === "member") {
                 memberLocalName = spec.local.name;
+                memberImportVariable =
+                  context.sourceCode.getDeclaredVariables(spec).at(0) ?? null;
               }
             }
           },
@@ -404,7 +454,8 @@ export default eslintCompatPlugin({
               memberLocalName === null ||
               node.computed ||
               !isIdentifier(node.object, memberLocalName) ||
-              !isIdentifier(node.property)
+              !isIdentifier(node.property) ||
+              resolveVariable(node.object) !== memberImportVariable
             ) {
               return;
             }

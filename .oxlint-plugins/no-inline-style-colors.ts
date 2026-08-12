@@ -5,7 +5,7 @@
 //
 // Safe: var(--token), transparent, inherit, currentColor, none, unset, initial.
 
-import { eslintCompatPlugin } from "@oxlint/plugins";
+import { eslintCompatPlugin, type ESTree } from "@oxlint/plugins";
 
 import { getPropertyName } from "./utils.ts";
 
@@ -99,6 +99,17 @@ function containsHardcodedColor(value: string): string | null {
   return null;
 }
 
+function getStaticStyleValue(value: ESTree.Expression): string | undefined {
+  if (value.type === "Literal" && typeof value.value === "string") {
+    return value.value;
+  }
+  if (value.type !== "TemplateLiteral" || value.expressions.length > 0) {
+    return undefined;
+  }
+  const quasi = value.quasis.at(0);
+  return quasi?.value.cooked ?? quasi?.value.raw;
+}
+
 export default eslintCompatPlugin({
   meta: { name: "no-inline-style-colors" },
   rules: {
@@ -112,18 +123,19 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        const checkStyleObject = (styleObject) => {
+        const checkStyleObject = (styleObject: ESTree.ObjectExpression) => {
           for (const property of styleObject.properties) {
             if (property.type !== "Property") {
               continue;
             }
 
             const value = property.value;
-            if (value.type !== "Literal" || typeof value.value !== "string") {
+            const staticValue = getStaticStyleValue(value);
+            if (staticValue === undefined) {
               continue;
             }
 
-            const match = containsHardcodedColor(value.value);
+            const match = containsHardcodedColor(staticValue);
             if (match === null) {
               continue;
             }
