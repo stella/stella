@@ -1464,6 +1464,12 @@ const PLAYBOOK_FRESHNESS_NOTICE = {
   missing: "inspector.review.playbookDeleted",
 } as const satisfies Record<ReviewPlaybookFreshness, TranslationKey | null>;
 
+type ReviewFreshnessNoticeKey =
+  | "inspector.review.documentChanged"
+  | NonNullable<
+      (typeof PLAYBOOK_FRESHNESS_NOTICE)[keyof typeof PLAYBOOK_FRESHNESS_NOTICE]
+    >;
+
 /**
  * What this review has fallen behind. Both notices are shown together when
  * both apply: they are different reasons to run again, and a reviewer deciding
@@ -1477,7 +1483,9 @@ const ReviewFreshnessNotice = ({
   onReviewAgain: () => void;
 }) => {
   const t = useTranslations();
-  const notices: TranslationKey[] = [];
+  // Literal key union rather than TranslationKey: these messages carry no ICU
+  // arguments, and the narrow type keeps the one-argument `t(key)` overload.
+  const notices: ReviewFreshnessNoticeKey[] = [];
   if (freshness.documentChanged) {
     notices.push("inspector.review.documentChanged");
   }
