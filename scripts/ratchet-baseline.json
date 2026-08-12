@@ -226,6 +226,10 @@
       "packages/scripts/src/dev-runner.ts": 2
     }
   },
+  "require-detached-label-shape-suppressions": {
+    "count": 0,
+    "files": {}
+  },
   "lint-suppression-directives": {
     "count": 772,
     "files": {
