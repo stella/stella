@@ -12,6 +12,9 @@ const updateVariantParamsSchema = t.Object({
 });
 
 const config = {
+  description:
+    "Change one variant's label, body, or position within its clause; only " +
+    "the fields you pass are written.",
   permissions: { clause: ["update"] },
   mcp: { type: "capability", reason: "knowledge_library_admin" },
   params: updateVariantParamsSchema,

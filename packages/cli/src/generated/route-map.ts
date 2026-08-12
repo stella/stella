@@ -5805,6 +5805,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "categories-create"],
                 capabilityId: "clauses.categories-create",
+                description:
+                  "Create a category in the organization's clause library taxonomy, optionally under a parent category. Refused once the organization holds its maximum number of categories, or when the named parent does not exist.",
                 access: "write",
                 flags: [
                   {
@@ -5918,6 +5920,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "categories-list"],
                 capabilityId: "clauses.categories-list",
+                description:
+                  "List the organization's clause categories in sort order, each with its id, parent, name, description, and sort order. The taxonomy is capped per organization and comes back whole; there is no pagination.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -5936,6 +5940,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "categories-update"],
                 capabilityId: "clauses.categories-update",
+                description:
+                  "Rename or re-describe one clause category, move it under a different parent (or to the root by passing null), or change its sort order. Only the fields you pass are written. A category cannot become its own parent, and a move that would make the tree circular is refused.",
                 access: "write",
                 flags: [
                   {
@@ -6042,6 +6048,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "create"],
                 capabilityId: "clauses.create",
+                description:
+                  "Create a clause in the organization's clause library: a title and an ordered body of paragraphs, plus optional category, language, description, usage notes, and metadata. The clause starts at version 1 with a matching version snapshot. Refused when the organization is at its clause limit or the category does not exist.",
                 access: "write",
                 flags: [
                   {
@@ -6297,6 +6305,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "get"],
                 capabilityId: "clauses.get",
+                description:
+                  "Read one clause in full: its body, category, language, description, usage notes, metadata, and current version number, plus every variant in sort order and the list of its stored versions. Use clauses.read-version for the body of a particular version.",
                 access: "read",
                 flags: [
                   {
@@ -6339,6 +6349,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "list"],
                 capabilityId: "clauses.list",
+                description:
+                  "List the organization's clause library. Without q, clauses come back newest first with cursor pagination; with q they are matched on the title as a substring or on the clause text as a prefix search, ordered by title, and no cursor is returned. Filter by categoryId. Items carry title, category, language, description, and current version but not the body: read that with clauses.get.",
                 access: "read",
                 flags: [
                   {
@@ -6427,6 +6439,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "read-version"],
                 capabilityId: "clauses.read-version",
+                description:
+                  "Read the stored body of one specific clause version, with its version number and creation time. Use clauses.get for the clause's current body and its version list, and clauses.versions-restore to bring an old version back into use.",
                 access: "read",
                 flags: [
                   {
@@ -6485,6 +6499,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "rewrite"],
                 capabilityId: "clauses.rewrite",
+                description:
+                  "Rewrite the prose of a clause body with the model, following a free-text instruction plus the clause title and usage notes when supplied. The body goes in and the revised body comes back, so this works on an unsaved draft as well; nothing is stored. Paragraph order, lists, and every {{ }} template marker are preserved and only ordinary paragraph text changes, though a changed paragraph loses its inline formatting. Consumes AI usage.",
                 access: "write",
                 flags: [
                   {
@@ -6653,6 +6669,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "template-slot-preview"],
                 capabilityId: "clauses.template-slot-preview",
+                description:
+                  "Resolve one template's clause slots to the plain text of the clauses linked to them, keyed by slot name, using the same version and variant rules the fill path applies, so the preview matches the filled document. Slots that are unlinked, or whose target version cannot be resolved, are left out and keep their marker visible.",
                 access: "read",
                 flags: [
                   {
@@ -6695,6 +6713,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "update"],
                 capabilityId: "clauses.update",
+                description:
+                  "Change a clause's title, category, language, body, description, usage notes, or metadata; only the fields you pass are written. By default a new body is saved as the working copy without touching history. Pass snapshotVersion true to also append a version snapshot and move the current version forward: that is skipped when the body is identical to the latest snapshot, and refused when the clause is at its version limit.",
                 access: "write",
                 flags: [
                   {
@@ -6944,6 +6964,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "variants-create"],
                 capabilityId: "clauses.variants-create",
+                description:
+                  "Add a variant, an alternative wording of a clause carrying its own label, to one clause. Refused when the clause does not exist in this organization or already holds its maximum number of variants.",
                 access: "write",
                 flags: [
                   {
@@ -7170,6 +7192,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "variants-list"],
                 capabilityId: "clauses.variants-list",
+                description:
+                  "List one clause's variants in sort order, each with its label, body, and position. A clause that does not belong to this organization is a 404.",
                 access: "read",
                 flags: [
                   {
@@ -7212,6 +7236,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "variants-update"],
                 capabilityId: "clauses.variants-update",
+                description:
+                  "Change one variant's label, body, or position within its clause; only the fields you pass are written.",
                 access: "write",
                 flags: [
                   {
@@ -7407,6 +7433,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "versions-diff"],
                 capabilityId: "clauses.versions-diff",
+                description:
+                  "Return a plain-text, line-level diff between one stored clause version and the clause's current body. An empty segment list means the two are identical. This is what backs the what-changed disclosure shown on a template link pointing at an outdated version.",
                 access: "read",
                 flags: [
                   {
@@ -7465,6 +7493,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "versions-restore"],
                 capabilityId: "clauses.versions-restore",
+                description:
+                  "Restore a stored clause version by copying its body onto the clause as a new version. History is append-only: the older versions stay and the version number moves forward rather than back. The body is read server-side from the version id, never supplied by the caller. Refused when the clause is at its version limit.",
                 access: "write",
                 flags: [
                   {
@@ -7523,6 +7553,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "clauses", "versions-summarize"],
                 capabilityId: "clauses.versions-summarize",
+                description:
+                  "Summarize in prose what changed between one stored clause version and the clause's current body, over the same diff clauses.versions-diff returns. Returns summary null when the two are identical, skipping the model call. Consumes AI usage.",
                 access: "write",
                 flags: [
                   {
@@ -30330,6 +30362,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "template-recipes", "create"],
                 capabilityId: "template-recipes.create",
+                description:
+                  "Create a template recipe, a named reusable block of pre-configured template fields, from a name, an optional description, and a definition object that is structurally validated before it is stored. Refused once the organization holds its maximum number of recipes.",
                 access: "write",
                 flags: [
                   {
@@ -30428,6 +30462,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "template-recipes", "list"],
                 capabilityId: "template-recipes.list",
+                description:
+                  "List the organization's template recipes alphabetically by name, each with its id, description, and full definition. Recipes are capped per organization, so the whole set comes back in one response without a cursor.",
                 access: "read",
                 flags: [],
                 inputOnly: [],

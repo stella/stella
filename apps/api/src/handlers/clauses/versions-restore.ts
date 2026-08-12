@@ -20,6 +20,12 @@ const restoreClauseVersionParamsSchema = t.Object({
 });
 
 const config = {
+  description:
+    "Restore a stored clause version by copying its body onto the clause as " +
+    "a new version. History is append-only: the older versions stay and the " +
+    "version number moves forward rather than back. The body is read " +
+    "server-side from the version id, never supplied by the caller. Refused " +
+    "when the clause is at its version limit.",
   permissions: { clause: ["update"] },
   mcp: { type: "capability", reason: "knowledge_library_admin" },
   params: restoreClauseVersionParamsSchema,

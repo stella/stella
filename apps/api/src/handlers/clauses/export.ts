@@ -196,6 +196,12 @@ export const exportHandler = async function* ({
 };
 
 const config = {
+  description:
+    "Download the organization's clauses as a single file: JSON by default, " +
+    "carrying each clause with its variants, metadata, and category path, or " +
+    "CSV with slug, title, body text, and tags per clause. Pass ids as a " +
+    "comma-separated list to export a subset; the number of rows is capped. " +
+    "The JSON form is exactly what clauses.import reads back.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "knowledge_library_admin" },
   access: "read",

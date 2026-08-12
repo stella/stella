@@ -429,6 +429,14 @@ export const importHandler = async function* ({
 };
 
 const config = {
+  description:
+    "Bulk-create clauses from an uploaded file. The content chooses the " +
+    "parser: a clauses.export JSON payload (version 1), including variants, " +
+    "metadata, and category names that are created when they do not exist " +
+    "yet, otherwise a CSV with slug, title, body, and tags headers. Existing " +
+    "clauses are never updated, only new ones created. The batch size is " +
+    "capped, and clauses beyond the organization's remaining capacity are " +
+    "reported as skipped instead of failing the import.",
   permissions: { clause: ["create"] },
   mcp: { type: "capability", reason: "knowledge_library_admin" },
   transport: {

@@ -11,6 +11,11 @@ const updateClauseCategoryParamsSchema = t.Object({
 });
 
 const config = {
+  description:
+    "Rename or re-describe one clause category, move it under a different " +
+    "parent (or to the root by passing null), or change its sort order. Only " +
+    "the fields you pass are written. A category cannot become its own " +
+    "parent, and a move that would make the tree circular is refused.",
   permissions: { clause: ["update"] },
   mcp: { type: "capability", reason: "knowledge_library_admin" },
   params: updateClauseCategoryParamsSchema,

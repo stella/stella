@@ -15,6 +15,11 @@ const clauseVersionDiffParamsSchema = t.Object({
 });
 
 const config = {
+  description:
+    "Return a plain-text, line-level diff between one stored clause version " +
+    "and the clause's current body. An empty segment list means the two are " +
+    "identical. This is what backs the what-changed disclosure shown on a " +
+    "template link pointing at an outdated version.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "knowledge_library_admin" },
   access: "read",

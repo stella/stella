@@ -17,6 +17,11 @@ const clauseVersionSummarizeParamsSchema = t.Object({
 });
 
 const config = {
+  description:
+    "Summarize in prose what changed between one stored clause version and " +
+    "the clause's current body, over the same diff clauses.versions-diff " +
+    "returns. Returns summary null when the two are identical, skipping the " +
+    "model call. Consumes AI usage.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "knowledge_library_admin" },
   access: "write",

@@ -376,6 +376,14 @@ const addFieldDiff = (
 };
 
 const config = {
+  description:
+    "Change a clause's title, category, language, body, description, usage " +
+    "notes, or metadata; only the fields you pass are written. By default a " +
+    "new body is saved as the working copy without touching history. Pass " +
+    "snapshotVersion true to also append a version snapshot and move the " +
+    "current version forward: that is skipped when the body is identical to " +
+    "the latest snapshot, and refused when the clause is at its version " +
+    "limit.",
   permissions: { clause: ["update"] },
   mcp: { type: "covered", by: "save_clause" },
   params: updateClauseParamsSchema,

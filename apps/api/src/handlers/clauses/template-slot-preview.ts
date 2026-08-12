@@ -28,6 +28,12 @@ const templateSlotPreviewParamsSchema = t.Object({
 });
 
 const config = {
+  description:
+    "Resolve one template's clause slots to the plain text of the clauses " +
+    "linked to them, keyed by slot name, using the same version and variant " +
+    "rules the fill path applies, so the preview matches the filled " +
+    "document. Slots that are unlinked, or whose target version cannot be " +
+    "resolved, are left out and keep their marker visible.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "knowledge_library_admin" },
   access: "read",
