@@ -19,7 +19,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createFileKey } from "@/api/lib/files/utils";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
-import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
+import { getS3, readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -421,7 +421,11 @@ export const storeFolioCollabSnapshot = async ({
     organizationId: value.organizationId,
     workspaceId: value.workspaceId,
   });
-  await getS3().write(key, snapshotBytes);
+  await writeS3ObjectWithRetry({
+    contentType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+    data: snapshotBytes,
+    key,
+  });
 
   const storedAt = new Date();
   await rootDb

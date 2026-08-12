@@ -30,7 +30,7 @@ import {
   THUMBNAIL_MIME_TYPE,
 } from "@/api/lib/files/image-derivative";
 import { createUserFileKey } from "@/api/lib/files/utils";
-import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
+import { getS3, readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import {
   brandPersistedEntityId,
   brandPersistedFieldId,
@@ -185,7 +185,11 @@ const backfillChatFiles = async (): Promise<number> => {
         userId: brandPersistedUserId(row.userId),
       });
       // oxlint-disable-next-line no-await-in-loop -- writes one thumbnail per row before patching the row; sequential keeps S3 write and DB update paired
-      await getS3().write(thumbnailKey, thumbnail.value.webp);
+      await writeS3ObjectWithRetry({
+        contentType: THUMBNAIL_MIME_TYPE,
+        data: thumbnail.value.webp,
+        key: thumbnailKey,
+      });
       // oxlint-disable-next-line no-await-in-loop -- compare-and-set row update depends on the just-written thumbnail object
       const updatedRows = await Result.tryPromise({
         try: async () =>

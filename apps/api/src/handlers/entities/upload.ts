@@ -55,7 +55,7 @@ import { isEncryptedPdf } from "@/api/lib/files/pdf-utils";
 import { createFileKey } from "@/api/lib/files/utils";
 import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
-import { getS3 } from "@/api/lib/s3";
+import { getS3, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import type { SanitizedFileName } from "@/api/lib/sanitize-filename";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
@@ -910,7 +910,11 @@ const uploadEntityHandler = async function* ({
 
   const s3Keys = [sourceKey];
 
-  await getS3().write(sourceKey, new Uint8Array(fileBuffer));
+  await writeS3ObjectWithRetry({
+    contentType: file.type,
+    data: new Uint8Array(fileBuffer),
+    key: sourceKey,
+  });
 
   try {
     const entityId = createSafeId<"entity">();

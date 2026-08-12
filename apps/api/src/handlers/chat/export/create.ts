@@ -47,11 +47,9 @@ import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { LIMITS } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
-import { getS3 } from "@/api/lib/s3";
+import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
-import { withTimeout } from "@/api/lib/with-timeout";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 /** How long the presigned download stays valid (seconds). Short: the URL is
@@ -251,16 +249,11 @@ const createMessageExport = createSafeRootHandler(
     yield* Result.await(
       Result.tryPromise({
         try: async () =>
-          await withTimeout(
-            async () =>
-              await getS3().write(key, renderedExport.docx, {
-                type: DOCX_MIME_TYPE,
-              }),
-            {
-              label: "chat-export-object-write",
-              timeoutMs: LIMITS.chatExportObjectIoTimeoutMs,
-            },
-          ),
+          await writeS3ObjectWithRetry({
+            contentType: DOCX_MIME_TYPE,
+            data: new Uint8Array(renderedExport.docx),
+            key,
+          }),
         catch: (cause) =>
           new HandlerError({
             status: 502,

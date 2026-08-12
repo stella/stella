@@ -45,6 +45,7 @@ import {
   propertyDependencyReadLimit,
 } from "@/api/lib/properties/dependency-limits";
 import { getS3 } from "@/api/lib/s3";
+import { copyObject } from "@/api/lib/s3-presign";
 import {
   processExtraction,
   SEARCH_INDEX_OWNER,
@@ -285,11 +286,13 @@ const orderEntitiesForDuplicate = <
 };
 
 const copyWorkspaceFile = async ({
+  copiedS3Keys,
   copy,
   organizationId,
   sourceWorkspaceId,
   targetWorkspaceId,
 }: {
+  copiedS3Keys: string[];
   copy: FileCopy;
   organizationId: SafeId<"organization">;
   sourceWorkspaceId: SafeId<"workspace">;
@@ -307,10 +310,14 @@ const copyWorkspaceFile = async ({
     fileId: copy.targetFileId,
     mimeType: copy.mimeType,
   });
-  await getS3().write(targetKey, getS3().file(sourceKey), {
-    type: copy.mimeType,
-  });
-  return targetKey;
+  // Reserve the deterministic destination before starting the copy. A timed-out
+  // request may still have completed in S3, so rollback must delete this key even
+  // when the client never observes a successful response.
+  copiedS3Keys.push(targetKey);
+  const copied = await copyObject(sourceKey, targetKey);
+  if (Result.isError(copied)) {
+    throw copied.error;
+  }
 };
 
 const copyWorkspaceFiles = async ({
@@ -337,13 +344,13 @@ const copyWorkspaceFiles = async ({
       }
 
       // oxlint-disable-next-line no-await-in-loop -- sequential by design: worker drains the shared queue sequentially; bounded concurrency comes from running multiple copyNext workers
-      const key = await copyWorkspaceFile({
+      await copyWorkspaceFile({
+        copiedS3Keys,
         copy,
         organizationId,
         sourceWorkspaceId,
         targetWorkspaceId,
       });
-      copiedS3Keys.push(key);
     }
   };
 

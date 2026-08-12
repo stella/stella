@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { documentCounters, entities, fields } from "@/api/db/schema";
@@ -23,6 +24,9 @@ const fileMock = mock(() => ({ arrayBuffer: arrayBufferMock }));
 // copy wrote and the keys the rollback returned.
 const writeMock = mock(async (_key: string) => undefined);
 const s3DeleteMock = mock(async (_key: string) => undefined);
+const copyObjectMock = mock<
+  (sourceKey: string, targetKey: string) => Promise<Result<void, unknown>>
+>(async () => Result.ok(undefined));
 
 // Spread the real module: mock.module is process-global; a partial mock would delete s3's other exports for later test files.
 const realS3 = await import("@/api/lib/s3");
@@ -41,6 +45,12 @@ void mock.module("@/api/lib/s3", () => ({
   readCorpusS3Bytes: () => {
     throw new Error("Unexpected corpus object read in this suite");
   },
+}));
+
+const realS3Presign = await import("@/api/lib/s3-presign");
+void mock.module("@/api/lib/s3-presign", () => ({
+  ...realS3Presign,
+  copyObject: copyObjectMock,
 }));
 
 // Spread the real module: the copy helper reads its search-index ownership
@@ -206,6 +216,7 @@ const isInsertedField = (value: unknown): value is InsertedField =>
 beforeEach(() => {
   arrayBufferMock.mockClear();
   fileMock.mockClear();
+  copyObjectMock.mockClear();
   writeMock.mockClear();
   s3DeleteMock.mockClear();
   captureErrorMock.mockClear();
@@ -427,8 +438,7 @@ describe("copy-to-workspace", () => {
     expect(copiedField?.content.type).toBe("file");
 
     // S3 file was copied
-    expect(fileMock).toHaveBeenCalled();
-    expect(writeMock).toHaveBeenCalled();
+    expect(copyObjectMock).toHaveBeenCalled();
 
     // The extraction run that reads the copied PDF indexes it, so the copy
     // carries no mark of its own; marking it too would index it twice.
@@ -1141,7 +1151,7 @@ describe("copy-to-workspace", () => {
 
     expect(insertedFields).toHaveLength(0);
     expect(fileMock).not.toHaveBeenCalled();
-    expect(writeMock).not.toHaveBeenCalled();
+    expect(copyObjectMock).not.toHaveBeenCalled();
   });
 
   test("keeps move success when source file cleanup lookup fails", async () => {
@@ -1257,7 +1267,7 @@ describe("copy-to-workspace", () => {
       entityIds: expect.any(Array),
     });
     expect(deletedEntityCount).toBe(1);
-    expect(writeMock).toHaveBeenCalledTimes(1);
+    expect(copyObjectMock).toHaveBeenCalledTimes(1);
     expect(s3DeleteMock).not.toHaveBeenCalled();
     expect(captureErrorMock).toHaveBeenCalledTimes(1);
   });
@@ -1567,7 +1577,9 @@ describe("copy-to-workspace", () => {
 
     // No row survives the abort, so every object copied for it is an orphan
     // and all of them go back.
-    const copiedKeys = writeMock.mock.calls.map(([key]) => key);
+    const copiedKeys = copyObjectMock.mock.calls.map(
+      ([_sourceKey, targetKey]) => targetKey,
+    );
     const deletedKeys = s3DeleteMock.mock.calls.map(([key]) => key);
     expect(copiedKeys).toHaveLength(1);
     expect(new Set(deletedKeys)).toEqual(new Set(copiedKeys));

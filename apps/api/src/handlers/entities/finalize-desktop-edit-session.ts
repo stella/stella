@@ -46,7 +46,7 @@ import {
 import { pdfDerivativeStateForFile } from "@/api/lib/files/gotenberg";
 import { createFileKey } from "@/api/lib/files/utils";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
-import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
+import { getS3, readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 
@@ -447,7 +447,11 @@ export const finalizeDesktopEditSessionHandler = async ({
       });
       uploadedKeys.push(sourceKey);
 
-      await getS3().write(sourceKey, storedBytes);
+      await writeS3ObjectWithRetry({
+        contentType: canonicalMimeType,
+        data: storedBytes,
+        key: sourceKey,
+      });
 
       await tx.insert(entityVersions).values({
         entityId: editSession.entityId,

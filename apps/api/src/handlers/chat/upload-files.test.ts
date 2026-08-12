@@ -71,6 +71,7 @@ void mock.module("@/api/lib/s3", () => ({
   readCorpusS3Bytes: () => {
     throw new Error("Unexpected corpus object read in this suite");
   },
+  writeS3ObjectWithRetry: writeMock,
 }));
 
 const {

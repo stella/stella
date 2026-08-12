@@ -1,4 +1,4 @@
-import { panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { and, eq, isNull, like } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -24,6 +24,7 @@ import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivativ
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
+import { copyObject } from "@/api/lib/s3-presign";
 import {
   SEARCH_INDEX_OWNER,
   searchIndexOwnerForFields,
@@ -174,10 +175,14 @@ export const copyFileObject = async ({
     fileId: newFileId,
     mimeType,
   });
-  const s3 = getS3();
-
-  await s3.write(targetKey, s3.file(sourceKey), { type: mimeType });
+  // Reserve the deterministic destination before starting the copy. A timed-out
+  // request may still have completed in S3, so rollback must delete this key even
+  // when the client never observes a successful response.
   copiedS3Keys.push(targetKey);
+  const copied = await copyObject(sourceKey, targetKey);
+  if (Result.isError(copied)) {
+    throw copied.error;
+  }
 
   return {
     sourceEntityId,

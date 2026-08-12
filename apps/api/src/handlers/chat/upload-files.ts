@@ -45,7 +45,7 @@ import {
 } from "@/api/lib/files/image-derivative";
 import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
-import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
+import { getS3, readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { isUserFileUrl, toUserFileUrl } from "@/api/lib/user-files/types";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -510,7 +510,12 @@ export const uploadUserFile = async ({
 
     yield* Result.await(
       Result.tryPromise({
-        try: async () => await getS3().write(s3Key, file.bytes),
+        try: async () =>
+          await writeS3ObjectWithRetry({
+            contentType: file.mimeType,
+            data: file.bytes,
+            key: s3Key,
+          }),
         catch: (cause) =>
           new HandlerError({
             status: 500,
@@ -541,7 +546,12 @@ export const uploadUserFile = async ({
           userId,
         });
         const writeThumbnailResult = await Result.tryPromise({
-          try: async () => await getS3().write(key, thumbnailResult.value.webp),
+          try: async () =>
+            await writeS3ObjectWithRetry({
+              contentType: THUMBNAIL_MIME_TYPE,
+              data: thumbnailResult.value.webp,
+              key,
+            }),
           catch: (cause) => cause,
         });
         if (Result.isError(writeThumbnailResult)) {

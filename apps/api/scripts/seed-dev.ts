@@ -81,7 +81,7 @@ import {
   parsedEmailToText,
 } from "@/api/lib/files/email-to-html";
 import { cents } from "@/api/lib/money";
-import { getS3 } from "@/api/lib/s3";
+import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import { buildDefaultViewRows } from "@/api/lib/views";
 import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
@@ -5649,7 +5649,10 @@ export async function seed(organizationId?: string, userId?: string) {
       const fileId = seedId(`${wsLabel}-file-${j}`);
       const s3Key = `${ORG_ID}/${wsId}/${fileId}.${format.extension}`;
       // oxlint-disable-next-line no-await-in-loop -- bounded memory: upload one document's bytes to S3 at a time
-      await getS3().write(s3Key, new Uint8Array(content));
+      await writeS3ObjectWithRetry({
+        data: new Uint8Array(content),
+        key: s3Key,
+      });
 
       // DOCX files are rendered natively via Folio — no PDF twin needed.
       // Non-DOCX convertible types still get a PDF twin from Gotenberg.

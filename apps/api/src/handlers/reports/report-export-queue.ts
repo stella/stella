@@ -44,7 +44,7 @@ import { createBullMqConnection } from "@/api/lib/redis-client";
 import { listPendingReportExportNotifications } from "@/api/lib/report-export-notification-recovery";
 import { recoverStuckReportExports } from "@/api/lib/report-export-recovery";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
-import { getS3 } from "@/api/lib/s3";
+import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import {
   brandPersistedReportExportId,
   brandPersistedUserId,
@@ -528,7 +528,11 @@ const runExport = async ({
   // presigns it. The stored key's extension is what the status endpoint uses
   // to name the download, so no format column is needed on the export row.
   const key = `exports/${actor.organizationId}/${actor.workspaceId}/${actor.exportId}.${delivery.ext}`;
-  await getS3().write(key, delivery.buffer);
+  await writeS3ObjectWithRetry({
+    contentType: delivery.mimeType,
+    data: delivery.buffer,
+    key,
+  });
   await completeExport(actor, { type: "download", s3Key: key });
 };
 

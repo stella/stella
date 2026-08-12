@@ -93,7 +93,10 @@ describe("policy coverage", () => {
     "ai_memories",
   ]);
   const APPEND_ONLY = new Set(["audit_logs"]);
-  const INSERT_ONLY = new Set(["entity_deletion_cleanup_requests"]);
+  const INSERT_ONLY = new Set([
+    "entity_deletion_cleanup_requests",
+    "template_deletion_cleanup_requests",
+  ]);
   const INSERT_DELETE_ONLY = new Set(["buffer_object_cleanup_intents"]);
   const GLOBAL_CASE_LAW_TABLES = [
     "case_law_citations",
@@ -303,10 +306,14 @@ describe("policy coverage", () => {
     for (const table of orgOnlyTables) {
       const tablePolicies = policies.filter((p) => p.table_name === table);
       const cmds = new Set(tablePolicies.map((p) => p.command));
-      expect(cmds).toContain("r");
       expect(cmds).toContain("a");
-      expect(cmds).toContain("w");
-      expect(cmds).toContain("d");
+      if (INSERT_ONLY.has(table)) {
+        expect(cmds).toEqual(new Set(["a"]));
+      } else {
+        expect(cmds).toContain("r");
+        expect(cmds).toContain("w");
+        expect(cmds).toContain("d");
+      }
 
       // Verify expressions reference the correct column
       // AND the correct session variable

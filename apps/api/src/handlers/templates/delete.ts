@@ -1,17 +1,16 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { templates } from "@/api/db/schema";
+import { templateDeletionCleanupRequests, templates } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import type { SafeId } from "@/api/lib/branded-types";
+import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { deleteS3Keys } from "@/api/lib/files/utils";
 
 const deleteTemplateParamsSchema = t.Object({
   templateId: tSafeId("template"),
@@ -30,9 +29,15 @@ const deleteTemplateHandler = async function* ({
   templateId,
   recordAuditEvent,
 }: DeleteTemplateProps) {
-  const existing = yield* Result.await(
-    safeDb((tx) =>
-      tx.query.templates.findFirst({
+  const outcome = yield* Result.await(
+    safeDb(async (tx) => {
+      // Template writes use the same fence. Collecting the keys only after
+      // taking it prevents a concurrent save from adding a version between
+      // the read and the deletion.
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${templateId}))`,
+      );
+      const existing = await tx.query.templates.findFirst({
         where: {
           id: { eq: templateId },
           organizationId: { eq: organizationId },
@@ -41,31 +46,28 @@ const deleteTemplateHandler = async function* ({
         with: {
           versions: { columns: { s3Key: true } },
         },
-      }),
-    ),
-  );
+      });
+      if (!existing) {
+        return { status: "not-found" as const };
+      }
 
-  if (!existing) {
-    return Result.err(
-      new HandlerError({ status: 404, message: "Template not found" }),
-    );
-  }
+      // Collect all S3 keys (current + historical versions) before the
+      // cascade delete removes the version rows.
+      const s3Keys = new Set<string>();
+      s3Keys.add(existing.s3Key);
+      for (const v of existing.versions) {
+        s3Keys.add(v.s3Key);
+      }
 
-  // Collect all S3 keys (current + historical versions)
-  // before the cascade delete removes the version rows.
-  const s3Keys = new Set<string>();
-  s3Keys.add(existing.s3Key);
-  for (const v of existing.versions) {
-    s3Keys.add(v.s3Key);
-  }
+      // Storage cannot join the database transaction. Record the exact keys
+      // before deleting their source rows; the recurring cleanup task retries
+      // this durable request until erasure succeeds.
+      await tx.insert(templateDeletionCleanupRequests).values({
+        id: createSafeId<"templateDeletionCleanupRequest">(),
+        organizationId,
+        s3Keys: [...s3Keys],
+      });
 
-  Result.unwrap(
-    await deleteS3Keys([...s3Keys]),
-    "Template file cleanup must succeed before deleting database records",
-  );
-
-  yield* Result.await(
-    safeDb(async (tx) => {
       await tx
         .delete(templates)
         .where(
@@ -88,8 +90,15 @@ const deleteTemplateHandler = async function* ({
         },
         metadata: { versionCount: existing.versions.length },
       });
+      return { status: "deleted" as const };
     }),
   );
+
+  if (outcome.status === "not-found") {
+    return Result.err(
+      new HandlerError({ status: 404, message: "Template not found" }),
+    );
+  }
 
   return Result.ok({});
 };

@@ -42,7 +42,7 @@ import {
   permissiveRouteSchema,
 } from "@/api/lib/permissive-route-schema";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
-import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
+import { getS3, readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -276,7 +276,11 @@ const finalizeFolioCollabSession = createSafeTokenHandler<
   };
 
   try {
-    await getS3().write(sourceKey, storedBytes);
+    await writeS3ObjectWithRetry({
+      contentType: DOCX_MIME_TYPE,
+      data: storedBytes,
+      key: sourceKey,
+    });
 
     // Phase C: txn — lock + verify state hasn't drifted + write rows.
     const result = await scopedDb(async (tx) => {

@@ -5,8 +5,10 @@ import { CONTACT_TYPES } from "@stll/api-contract";
 import {
   ENTITY_KINDS,
   SEARCH_PROJECTION_KINDS,
+  TEMPLATE_DELETION_CLEANUP_STATUSES,
   bytea,
   jsonb,
+  organizationCheck,
   orgPolicies,
   orgReadOnlyPolicies,
   organization,
@@ -15,6 +17,7 @@ import {
   safeOrganizationId,
   safeUuid,
   safeWorkspaceId,
+  stella,
   tsvector,
   user,
   wsOrganizationPolicies,
@@ -25,6 +28,7 @@ import type {
   AnyPgColumn,
   SafeId,
   SearchProjectionKind,
+  TemplateDeletionCleanupStatus,
   TemplateManifest,
 } from "./common";
 import { contacts, workspaces } from "./contacts";
@@ -222,6 +226,66 @@ export const templateVersions = p.pgTable(
       .onDelete("cascade"),
     p.index("template_versions_organization_id_idx").on(table.organizationId),
     ...orgPolicies(),
+  ],
+);
+
+const TEMPLATE_DELETION_CLEANUP_STATUS_SQL_VALUES =
+  TEMPLATE_DELETION_CLEANUP_STATUSES.map((status) => sql.raw(`'${status}'`));
+
+/**
+ * Durable object cleanup recorded in the same transaction that deletes a
+ * template. It has no template foreign key because it must survive that
+ * deletion until storage erasure succeeds.
+ */
+export const templateDeletionCleanupRequests = p.pgTable(
+  "template_deletion_cleanup_requests",
+  {
+    id: pUuid<"templateDeletionCleanupRequest">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    s3Keys: p.text("s3_keys").array().notNull(),
+    status: p
+      .text("status", { enum: TEMPLATE_DELETION_CLEANUP_STATUSES })
+      .$type<TemplateDeletionCleanupStatus>()
+      .notNull()
+      .default("pending"),
+    attemptCount: p.integer("attempt_count").notNull().default(0),
+    errorMessage: p.text("error_message"),
+    nextAttemptAt: timestamptz("next_attempt_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    completedAt: timestamptz("completed_at"),
+  },
+  (table) => [
+    p
+      .index("template_deletion_cleanup_pending_schedule_idx")
+      .on(table.createdAt, table.id)
+      .where(sql`${table.status} = 'pending'`),
+    p
+      .index("template_deletion_cleanup_failed_schedule_idx")
+      .on(table.nextAttemptAt, table.id)
+      .where(sql`${table.status} = 'failed'`),
+    p
+      .index("template_deletion_cleanup_processing_lease_idx")
+      .on(table.updatedAt, table.id)
+      .where(sql`${table.status} = 'processing'`),
+    p.check(
+      "template_deletion_cleanup_status_values_check",
+      sql`${table.status} IN (${sql.join(TEMPLATE_DELETION_CLEANUP_STATUS_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "template_deletion_cleanup_attempt_count_nonnegative_check",
+      sql`${table.attemptCount} >= 0`,
+    ),
+    // The deleting request may create the outbox row, but only the root
+    // scheduler reads keys or transitions cleanup state.
+    p.pgPolicy("template_deletion_cleanup_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: organizationCheck,
+    }),
   ],
 );
 

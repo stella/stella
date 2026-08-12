@@ -23,7 +23,7 @@ import {
   validatePostAuth,
 } from "@/api/lib/permissive-route-schema";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
-import { getS3 } from "@/api/lib/s3";
+import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 import { authorizeFolioCollabCredentials } from "./session-credentials";
@@ -194,7 +194,8 @@ const checkpointFolioCollabSession = createSafeTokenHandler(
       });
 
       const s3WriteResult = await Result.tryPromise(
-        async () => await getS3().write(key, new Uint8Array(buffer)),
+        async () =>
+          await writeS3ObjectWithRetry({ data: new Uint8Array(buffer), key }),
       );
 
       if (Result.isError(s3WriteResult)) {

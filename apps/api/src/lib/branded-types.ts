@@ -39,6 +39,7 @@ export type SafeIdType =
   | "chatThread"
   | "fileChatThread"
   | "templateChatThread"
+  | "templateDeletionCleanupRequest"
   | "clause"
   | "clauseCategory"
   | "clauseVariant"

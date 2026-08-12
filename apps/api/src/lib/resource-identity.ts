@@ -76,6 +76,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   },
   fileChatThread: { type: "non_resource", reason: "association" },
   templateChatThread: { type: "non_resource", reason: "association" },
+  templateDeletionCleanupRequest: { type: "non_resource", reason: "job" },
   clause: { type: "resource", resourceType: RESOURCE_TYPE.CLAUSE },
   clauseCategory: {
     type: "resource",

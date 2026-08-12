@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
 import { member } from "@/api/db/auth-schema";
@@ -25,6 +26,9 @@ const s3FileMock = mock((key: string) => ({ key }));
 // duplicate wrote and the keys the cleanup returned.
 const s3WriteMock = mock(async (_key: string) => undefined);
 const s3DeleteMock = mock(async (_key: string) => undefined);
+const copyObjectMock = mock<
+  (sourceKey: string, targetKey: string) => Promise<Result<void, unknown>>
+>(async () => Result.ok(undefined));
 
 // Spread the real module: mock.module is process-global; a partial mock would delete s3's other exports for later test files.
 const realS3 = await import("@/api/lib/s3");
@@ -47,6 +51,12 @@ void mock.module("@/api/lib/s3", () => ({
   readCorpusS3Bytes: () => {
     throw new Error("Unexpected corpus object read in this suite");
   },
+}));
+
+const realS3Presign = await import("@/api/lib/s3-presign");
+void mock.module("@/api/lib/s3-presign", () => ({
+  ...realS3Presign,
+  copyObject: copyObjectMock,
 }));
 
 // Spread the real module: the handler reads its search-index ownership split
@@ -393,6 +403,7 @@ describe("duplicateWorkspace", () => {
   });
 
   test("copies and remaps image thumbnail refs when duplicating content", async () => {
+    copyObjectMock.mockClear();
     s3FileMock.mockClear();
     s3WriteMock.mockClear();
     s3DeleteMock.mockClear();
@@ -567,7 +578,7 @@ describe("duplicateWorkspace", () => {
     );
 
     expect(result).toEqual({ workspaceId: expect.any(String) });
-    expect(s3WriteMock).toHaveBeenCalledTimes(3);
+    expect(copyObjectMock).toHaveBeenCalledTimes(3);
     expect(insertedFields).toHaveLength(1);
 
     const copiedContent = insertedFields.at(0)?.content;
@@ -774,7 +785,7 @@ describe("duplicateWorkspace", () => {
   });
 
   test("returns every object copied for an aborted duplicate", async () => {
-    s3WriteMock.mockClear();
+    copyObjectMock.mockClear();
     s3DeleteMock.mockClear();
     enqueueEntitySearchRepairsMock.mockClear();
     enqueueWorkspaceSearchRepairsMock.mockClear();
@@ -878,7 +889,9 @@ describe("duplicateWorkspace", () => {
 
     // No row survives the abort, so every object copied for it is an orphan
     // and all of them go back.
-    const copiedKeys = s3WriteMock.mock.calls.map(([key]) => key);
+    const copiedKeys = copyObjectMock.mock.calls.map(
+      ([_sourceKey, targetKey]) => targetKey,
+    );
     const deletedKeys = s3DeleteMock.mock.calls.map(([key]) => key);
     expect(copiedKeys).toHaveLength(1);
     expect(new Set(deletedKeys)).toEqual(new Set(copiedKeys));
@@ -888,7 +901,7 @@ describe("duplicateWorkspace", () => {
   });
 
   test("rejects an oversized source before the duplicate writes anything", async () => {
-    s3WriteMock.mockClear();
+    copyObjectMock.mockClear();
 
     const { safeDb, scopedDb } = createScopedDbMock({
       query: {
@@ -940,6 +953,6 @@ describe("duplicateWorkspace", () => {
       code: 400,
       response: { message: "Entities limit reached" },
     });
-    expect(s3WriteMock).not.toHaveBeenCalled();
+    expect(copyObjectMock).not.toHaveBeenCalled();
   });
 });

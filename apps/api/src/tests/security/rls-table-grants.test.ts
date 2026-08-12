@@ -69,6 +69,7 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
 const POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES = new Set([
   "buffer_object_cleanup_intents",
   "entity_deletion_cleanup_requests",
+  "template_deletion_cleanup_requests",
 ]);
 
 // Post-bootstrap control-plane auth tables that deny `stella` entirely
