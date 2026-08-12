@@ -33,6 +33,7 @@ export const noopAnalytics: Analytics = {
   },
   capturePageViewed: noop,
   captureGuideStepSkipped: noop,
+  captureRouteErrorLifecycle: noop,
   identifyUser: noop,
   reset: noop,
 };

@@ -1,7 +1,7 @@
 import { useState, useTransition } from "react";
 
 import { CancelledError, useQueryClient } from "@tanstack/react-query";
-import { Link, Navigate } from "@tanstack/react-router";
+import { Link, Navigate, useRouteContext } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
 import { CopyIcon, MailIcon, RefreshCcwIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -15,6 +15,7 @@ import {
   buildErrorReportMailto,
   isNetworkError,
   recoverRouteError,
+  resolveRouteErrorRecovery,
   resolveRouteErrorSupport,
 } from "@/components/route-components.logic";
 import { StellaMark } from "@/components/stella-mark";
@@ -220,8 +221,13 @@ const UnexpectedRouteError = ({
   retry,
 }: UnexpectedRouteErrorProps) => {
   const analytics = useAnalytics();
+  const routeErrorLifecycle = useRouteContext({
+    from: "__root__",
+    select: (context) => context.routeErrorLifecycle,
+  });
   const t = useTranslations();
   const [errorReference] = useState(createErrorReference);
+  const recovery = resolveRouteErrorRecovery(routeError);
   const support = resolveRouteErrorSupport({
     deployment: env.VITE_SELFHOST ? "selfHosted" : "hosted",
     feedbackRecipient: env.VITE_FEEDBACK_EMAIL_TO,
@@ -243,12 +249,15 @@ const UnexpectedRouteError = ({
     }
   }
 
-  useExternalSyncEffect(() => {
-    analytics.captureError(routeError, {
-      type: "recovery",
-      reference: errorReference,
-    });
-  }, [analytics, routeError, errorReference]);
+  useExternalSyncEffect(
+    () =>
+      routeErrorLifecycle.shown({
+        error: routeError,
+        recovery: recovery.type,
+        reference: errorReference,
+      }),
+    [routeErrorLifecycle, routeError, errorReference, recovery.type],
+  );
 
   const handleCopyReference = async () => {
     try {
@@ -270,6 +279,7 @@ const UnexpectedRouteError = ({
       : null;
 
   const handleRecovery = () => {
+    routeErrorLifecycle.retryStarted(errorReference, recovery.type);
     recoverRouteError({
       error: routeError,
       reloadPage: () => window.location.reload(),

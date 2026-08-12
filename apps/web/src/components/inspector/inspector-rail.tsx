@@ -1,7 +1,7 @@
 import { useRef } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useRouteContext } from "@tanstack/react-router";
 import {
   FileTextIcon,
   MessageSquareIcon,
@@ -63,6 +63,13 @@ type InspectorRailProps = {
   workspaceId?: string | undefined;
 };
 
+const inspectorDiagnosticState = (tabCount: number, minimized: boolean) => {
+  if (tabCount === 0) {
+    return "empty";
+  }
+  return minimized ? "minimized" : "open";
+};
+
 export const InspectorRail = ({
   activeId,
   minimized,
@@ -73,7 +80,16 @@ export const InspectorRail = ({
   tabs,
   workspaceId,
 }: InspectorRailProps) => {
+  const routeErrorLifecycle = useRouteContext({
+    select: (context) => context.routeErrorLifecycle,
+    strict: false,
+  });
   const t = useTranslations();
+  const inspectorState = inspectorDiagnosticState(tabs.length, minimized);
+  useExternalSyncEffect(
+    () => routeErrorLifecycle.updateInspectorState(inspectorState),
+    [routeErrorLifecycle, inspectorState],
+  );
   const activeTab = tabs.find((tab) => tab.id === activeId);
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const { data: activeSkillCatalogueData } = useQuery({

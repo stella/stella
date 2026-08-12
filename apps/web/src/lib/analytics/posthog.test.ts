@@ -78,6 +78,8 @@ void mock.module("posthog-js", () => ({
 }));
 
 const { createPostHogAnalytics } = await import("./posthog");
+const { sanitizeRouteErrorLifecycleEvent } =
+  await import("./posthog-route-error");
 
 describe("PostHog browser analytics adapter", () => {
   beforeEach(() => {
@@ -240,6 +242,100 @@ describe("PostHog browser analytics adapter", () => {
     expect(captureExceptionMock.mock.calls.at(-1)?.[1]).toEqual({
       error_reference: "ERR-DEAD-BEEF-1234",
     });
+  });
+
+  test("captures route crash lifecycle properties", async () => {
+    const { analytics } = createPostHogAnalytics(
+      "phc_test",
+      "https://posthog.test",
+    );
+    analytics.captureRouteErrorLifecycle({
+      errorFingerprint: "ERRFP-1234ABCD",
+      incidentReference: "ERR-DEAD-BEEF-1234",
+      inspectorState: "open",
+      recovery: "retry-route",
+      reference: "ERR-DEAD-BEEF-1234",
+      routeTemplate: "/law/$country/cases/$court/$slug",
+      status: "recurred",
+    });
+    await Bun.sleep(0);
+
+    expect(captureMock).toHaveBeenCalledWith(
+      WEB_ANALYTICS_EVENTS.routeErrorRecovery,
+      {
+        error_reference: "ERR-DEAD-BEEF-1234",
+        error_fingerprint: "ERRFP-1234ABCD",
+        incident_reference: "ERR-DEAD-BEEF-1234",
+        inspector_state: "open",
+        recovery: "retry-route",
+        route_template: "/law/$country/cases/$court/$slug",
+        status: "recurred",
+      },
+    );
+  });
+
+  test("keeps only crash diagnostics from an SDK-enriched lifecycle event", () => {
+    createPostHogAnalytics("phc_test", "https://posthog.test");
+
+    expect(
+      sanitizeRouteErrorLifecycleEvent({
+        event: WEB_ANALYTICS_EVENTS.routeErrorRecovery,
+        properties: {
+          $current_url:
+            "https://staging.stll.app/workspaces/private-matter?document=secret#selection",
+          $distinct_id: "user_123",
+          $pathname: "/workspaces/private-matter",
+          $referrer: "https://mail.example.test/client-name",
+          $raw_user_agent: "private browser fingerprint",
+          $session_id: "018f9f0e-7b42-7cc8-9a5d-42db46f6842d",
+          app_commit: "abc123",
+          app_version: "test",
+          document_title: "Client Smith v Example",
+          error_reference: "ERR-FEED-FACE-5678",
+          error_fingerprint: "ERRFP-1234ABCD",
+          incident_reference: "ERR-DEAD-BEEF-1234",
+          inspector_state: "minimized",
+          privileged_content: "never retain me",
+          recovery: "retry-route",
+          route_template: "/law/$country/cases/$court/$slug",
+          status: "recurred",
+        },
+      }),
+    ).toEqual({
+      event: WEB_ANALYTICS_EVENTS.routeErrorRecovery,
+      properties: {
+        $distinct_id: "user_123",
+        $session_id: "018f9f0e-7b42-7cc8-9a5d-42db46f6842d",
+        app_commit: "abc123",
+        app_version: "test",
+        error_reference: "ERR-FEED-FACE-5678",
+        error_fingerprint: "ERRFP-1234ABCD",
+        incident_reference: "ERR-DEAD-BEEF-1234",
+        inspector_state: "minimized",
+        recovery: "retry-route",
+        route_template: "/law/$country/cases/$court/$slug",
+        status: "recurred",
+      },
+    });
+  });
+
+  test("drops malformed crash diagnostics", () => {
+    createPostHogAnalytics("phc_test", "https://posthog.test");
+
+    expect(
+      sanitizeRouteErrorLifecycleEvent({
+        event: WEB_ANALYTICS_EVENTS.routeErrorRecovery,
+        properties: {
+          error_reference: "ERR-DEAD-BEEF-1234",
+          error_fingerprint: "ERRFP-1234ABCD",
+          incident_reference: "ERR-DEAD-BEEF-1234",
+          inspector_state: "open",
+          recovery: "retry-route",
+          route_template: "/workspaces/private matter",
+          status: "shown",
+        },
+      }),
+    ).toBeNull();
   });
 
   test("before_send strips exception messages and stack frames", () => {

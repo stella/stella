@@ -5,6 +5,7 @@ export const WEB_ANALYTICS_EVENTS = {
   identify: "$identify",
   pageViewed: "page_viewed",
   guideStepSkipped: "guide_step_skipped",
+  routeErrorRecovery: "route_error_recovery",
 } as const;
 
 export type WebAnalyticsEvent =
@@ -14,6 +15,9 @@ export type Analytics = {
   captureError: (error: unknown, context?: ErrorCaptureContext) => void;
   capturePageViewed: (properties: PageViewedProperties) => void;
   captureGuideStepSkipped: (properties: GuideStepSkippedProperties) => void;
+  captureRouteErrorLifecycle: (
+    properties: RouteErrorLifecycleProperties,
+  ) => void;
   identifyUser: (user: AnalyticsUserIdentity) => void;
   reset: (options?: AnalyticsResetOptions) => void;
 };
@@ -45,6 +49,19 @@ export type AnalyticsResetOptions = {
 
 export type PageViewedProperties = {
   path: string;
+};
+
+type RouteErrorLifecycleCommon = {
+  errorFingerprint: string;
+  incidentReference: ErrorReference;
+  inspectorState: "empty" | "minimized" | "open" | "unavailable";
+  recovery: "reload-page" | "retry-route";
+  reference: ErrorReference;
+  routeTemplate: string;
+};
+
+export type RouteErrorLifecycleProperties = RouteErrorLifecycleCommon & {
+  status: "shown" | "retry_started" | "recurred";
 };
 
 export type AnalyticsUserIdentity = {

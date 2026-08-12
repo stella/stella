@@ -16,6 +16,7 @@ import {
   DefaultPendingComponent,
 } from "@/components/route-components";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
+import type { RouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
 import "@/fonts.css";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 import "@stll/ui/globals.css";
@@ -28,6 +29,7 @@ const DevRoot = isDev
 export const Route = createRootRouteWithContext<{
   analyticsValue: AnalyticsValue;
   queryClient: QueryClient;
+  routeErrorLifecycle: RouteErrorLifecycleController;
 }>()({
   ssr: ({ location }) => isPublicSsrPath(location.pathname),
   shellComponent: RootDocument,
