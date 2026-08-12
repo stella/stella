@@ -44,6 +44,26 @@ const ruleNamesFromSource = (source: string): string[] => {
     : [...literalNames, computedRuleName];
 };
 
+const fixtureHasRuleDisable = (source: string, ruleId: string): boolean =>
+  source.split("\n").some((line) => {
+    const ruleList =
+      /^\s*(?://|\/\*|\{\/\*)\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s+(?<rules>.*)$/u.exec(
+        line,
+      )?.groups?.["rules"];
+    if (ruleList === undefined) {
+      return false;
+    }
+
+    return (
+      ruleList
+        .split(/\s+--(?:\s|$)/u, 1)
+        .at(0)
+        ?.replace(/\s*\*\/\}?\s*$/u, "")
+        ?.split(",")
+        .some((rule) => rule.trim() === ruleId) ?? false
+    );
+  });
+
 for (const file of pluginFiles) {
   const pluginName = path.basename(file, ".ts");
   const source = readFileSync(path.join(PLUGIN_DIRECTORY, file), "utf-8");
@@ -100,8 +120,12 @@ for (const file of pluginFiles) {
     if (!enabledRuleIds.has(fullRuleId)) {
       errors.push(`${file}: ${fullRuleId} is not enabled in production config`);
     }
-    if (!fixtureSources.some((fixture) => fixture.includes(fullRuleId))) {
-      errors.push(`${file}: fixture does not target ${fullRuleId}`);
+    if (
+      !fixtureSources.some((fixture) =>
+        fixtureHasRuleDisable(fixture, fullRuleId),
+      )
+    ) {
+      errors.push(`${file}: fixture does not disable ${fullRuleId}`);
     }
     if (!readme.includes(`\`${ruleName}\``)) {
       errors.push(`${file}: README does not name rule \`${ruleName}\``);
