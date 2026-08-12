@@ -8,6 +8,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { isDeferredServiceTierAvailableForRole } from "@/api/lib/tanstack-ai-models";
 import { startWorkflow } from "@/api/lib/workflow-queue";
+import { isReportedWorkflowStartStatus } from "@/api/lib/workflow/workflow-start-disposition";
 
 const config = {
   permissions: { workspace: ["update"] },
@@ -47,7 +48,7 @@ const workflowStart = createSafeHandler(
       );
     }
 
-    const result = yield* Result.await(
+    const { status } = yield* Result.await(
       Result.tryPromise({
         try: async () =>
           await startWorkflow({
@@ -71,7 +72,18 @@ const workflowStart = createSafeHandler(
       }),
     );
 
-    return Result.ok(result);
+    // The queue answers a failed enqueue as a status, so returning it verbatim
+    // would report a workflow that will never run as a 200.
+    if (!isReportedWorkflowStartStatus(status)) {
+      return Result.err(
+        new HandlerError({
+          status: 500,
+          message: "Failed to start the workflow",
+        }),
+      );
+    }
+
+    return Result.ok({ status });
   },
 );
 

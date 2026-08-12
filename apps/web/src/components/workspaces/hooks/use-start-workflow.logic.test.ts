@@ -1,12 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
+import { APIError, toAPIError } from "@/lib/errors/api";
 import { workflowTargetCountOptions } from "@/lib/workspaces/queries/workspace";
 
 import {
   estimateWorkflowTargetCount,
   LARGE_WORKFLOW_ENTITY_PROMPT_THRESHOLD,
+  performWorkflowStart,
   resolveWorkflowStartDecision,
   resolveWorkflowServiceTier,
+  WORKFLOW_START_FAILED,
 } from "./use-start-workflow.logic";
 import type { WorkflowTargetCountQueryClient } from "./use-start-workflow.logic";
 
@@ -193,5 +196,86 @@ describe("workflow start decision", () => {
     });
 
     expect(serviceTier).toBe("flex");
+  });
+});
+
+/** Records what the hook would show and capture for one start attempt. */
+const createWorkflowStartSurface = () => {
+  const captured: unknown[] = [];
+  const counts = { notified: 0, queued: 0 };
+
+  return {
+    captured,
+    counts,
+    ports: {
+      captureError: (error: unknown) => {
+        captured.push(error);
+      },
+      notifyFailure: () => {
+        counts.notified += 1;
+      },
+      onQueued: async () => {
+        counts.queued += 1;
+        await Promise.resolve();
+      },
+    },
+  };
+};
+
+describe("performing a workflow start", () => {
+  test("reports a rejected request instead of answering the caller with it", async () => {
+    const { captured, counts, ports } = createWorkflowStartSurface();
+    const requestError = new TypeError("Failed to fetch");
+
+    const result = await performWorkflowStart({
+      ...ports,
+      request: async () => {
+        throw requestError;
+      },
+    });
+
+    // Every call site but the column re-run drops this answer, so a failure
+    // only the return value carries is a workflow that silently never ran.
+    expect(result).toBe(WORKFLOW_START_FAILED);
+    expect(captured).toEqual([requestError]);
+    expect(counts).toEqual({ notified: 1, queued: 0 });
+  });
+
+  test("reports an error status and hands the typed error to telemetry", async () => {
+    const { captured, counts, ports } = createWorkflowStartSurface();
+
+    const result = await performWorkflowStart({
+      ...ports,
+      // What `unwrapEden` throws for the endpoint's failed-enqueue answer.
+      request: async () => {
+        throw toAPIError({
+          status: 500,
+          value: { message: "Failed to start the workflow" },
+        });
+      },
+    });
+
+    expect(result).toBe(WORKFLOW_START_FAILED);
+    expect(counts).toEqual({ notified: 1, queued: 0 });
+    const [capturedError] = captured;
+    if (!APIError.is(capturedError)) {
+      throw new Error("Expected the response error to reach telemetry typed");
+    }
+    expect(capturedError.status).toBe(500);
+  });
+
+  test("passes a reported status through once the workflow cache is refreshed", async () => {
+    const { captured, counts, ports } = createWorkflowStartSurface();
+
+    const result = await performWorkflowStart({
+      ...ports,
+      request: async () => ({ status: "already-running" as const }),
+    });
+
+    // A run already holds the workspace: nothing failed, so the caller gets
+    // the status and no failure is reported for it.
+    expect(result).toEqual({ status: "already-running" });
+    expect(counts).toEqual({ notified: 0, queued: 1 });
+    expect(captured).toEqual([]);
   });
 });
