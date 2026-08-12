@@ -25,6 +25,15 @@ export type CycleResult = {
   /** Decisions the dedup short-circuit dropped as already stored, unchanged. */
   skipped: number;
   pagesProcessed: number;
+  /**
+   * Whether the persisted cursor ended the cycle somewhere new.
+   *
+   * Distance travelled, which `pagesProcessed` deliberately is not: an adapter
+   * that re-returns its current cursor walks a page per poll without moving
+   * (cz-nss yields `${today}:0` once it reaches today). Only this separates a
+   * source with nothing left from one still working through it.
+   */
+  cursorAdvanced: boolean;
 };
 
 /**
@@ -68,9 +77,15 @@ export const cycleMadeProgress = ({
  * source that is keeping up.
  */
 export const CYCLE_PRODUCTIVITY = {
-  /** Rows written. The source is moving, however the cycle ended. */
+  /**
+   * The source is moving, however the cycle ended: rows written, or the cursor
+   * carried forward over listings that yielded none.
+   */
   PRODUCTIVE: "productive",
-  /** Nothing fetched and nothing written: the source is caught up. */
+  /**
+   * Nothing fetched, nothing written, and the cursor stood still: the source
+   * is caught up.
+   */
   QUIET: "quiet",
   /**
    * Decisions fetched, none written: the adapter re-read ground it already
@@ -109,6 +124,16 @@ export const classifyCycleProductivity = (
   }
   if (cycleDecisionsProcessed(cycle) > 0) {
     return CYCLE_PRODUCTIVITY.UNPRODUCTIVE_RESCAN;
+  }
+  // Order matters: a cursor that advances while decisions are re-read is the
+  // forward re-ingest the re-scan backoff deliberately accepts a cost on, so
+  // the re-scan check stays ahead of this one. Reaching here means the cycle
+  // fetched no decisions at all, and a cursor that still moved covered listing
+  // ground with none to give: an enumeration walking a stretch of the source
+  // it does not hold. Reading that as caught up parks a running backfill on
+  // the daily cadence, where it advances one page budget per day.
+  if (cycle.cursorAdvanced) {
+    return CYCLE_PRODUCTIVITY.PRODUCTIVE;
   }
   return cycle.outcome === CYCLE_OUTCOME.COMPLETED
     ? CYCLE_PRODUCTIVITY.QUIET
