@@ -187,10 +187,20 @@ export const entities = p.pgTable(
 
 /**
  * Durable S3 cleanup work created in the same transaction as an entity delete.
- * It deliberately does not reference the deleted entity or its workspace: the
- * record must survive that cascade so a queue retry can complete the storage
- * erasure. The tenant root is the one ancestor it does reference, so a row can
- * never name an organization that does not exist.
+ *
+ * This table has NO foreign keys, to any ancestor, including `organization`.
+ * That is load-bearing, not an oversight, and `entities.test.ts` fails if one
+ * is added. The reason is that `s3_keys` is the only surviving record of which
+ * objects to erase: every S3 deletion in the codebase is key-driven from rows
+ * like this one (`deleteS3Keys` in `lib/files/utils.ts`), nothing anywhere
+ * lists an S3 prefix, and the documents bucket expires only `tmp/` and
+ * `exports/` keys, never a finalized `{org}/{workspace}/{file}` key. So a
+ * cascade here does not clean up: it destroys the erasure instructions while
+ * the objects they name still exist, and no later process can rediscover them.
+ *
+ * Adding an ancestor reference is therefore only safe once that ancestor's
+ * deletion performs its own storage teardown. Until then the row must outlive
+ * every ancestor, and tenancy stays a plain column that the RLS policy reads.
  */
 export const entityDeletionCleanupRequests = p.pgTable(
   "entity_deletion_cleanup_requests",
@@ -235,15 +245,6 @@ export const entityDeletionCleanupRequests = p.pgTable(
       "entity_deletion_cleanup_attempt_count_nonnegative_check",
       sql`${table.attemptCount} >= 0`,
     ),
-    // Named explicitly: drizzle's generated name exceeds PostgreSQL's 63-byte
-    // identifier limit and would be silently truncated in the catalog.
-    p
-      .foreignKey({
-        name: "entity_deletion_cleanup_requests_organization_fk",
-        columns: [table.organizationId],
-        foreignColumns: [organization.id],
-      })
-      .onDelete("cascade"),
     // The delete request may create this outbox row through its scoped
     // transaction; all later reads and state transitions are root-worker only.
     p.pgPolicy("entity_deletion_cleanup_insert", {
@@ -894,11 +895,20 @@ export const pendingUploads = p.pgTable(
 
 /**
  * Durable tombstones for server-generated object writes interrupted by a
- * workspace or account deletion. They intentionally do not reference the
- * workspace or the user: recovery must survive both workspace cascades and
- * user cleanup until the original writer confirms that it can no longer
- * publish the reserved key. Only the tenant root is referenced, so a tombstone
- * cannot outlive the organization whose bucket prefix it names.
+ * workspace or account deletion.
+ *
+ * This table has NO foreign keys, to any ancestor, including `organization`,
+ * and `entities.test.ts` fails if one is added. The tombstone is the only
+ * record that a reserved key may still be published: recovery must outlive the
+ * workspace cascade and the user cleanup that interrupted the write, until the
+ * original writer confirms it can no longer publish. The reserved key is a
+ * finalized `{org}/{workspace}/{file}` key built by `createFileKey`, which no
+ * bucket lifecycle rule expires and no prefix sweep can find, so cascading the
+ * tombstone away leaves the object stranded rather than cleaned up.
+ *
+ * Adding an ancestor reference is therefore only safe once that ancestor's
+ * deletion performs its own storage teardown. Until then tenancy stays a plain
+ * column that the RLS policy reads.
  */
 export const bufferObjectCleanupIntents = p.pgTable(
   "buffer_object_cleanup_intents",
@@ -919,13 +929,6 @@ export const bufferObjectCleanupIntents = p.pgTable(
       "buffer_object_cleanup_attempt_count_nonnegative_check",
       sql`${table.attemptCount} >= 0`,
     ),
-    p
-      .foreignKey({
-        name: "buffer_object_cleanup_intents_organization_fk",
-        columns: [table.organizationId],
-        foreignColumns: [organization.id],
-      })
-      .onDelete("cascade"),
     // Lifecycle deletion may transfer the intent through its scoped
     // transaction. The original scoped writer may remove it only after its
     // PUT settles and exact-key cleanup succeeds; retry reads stay root-only.

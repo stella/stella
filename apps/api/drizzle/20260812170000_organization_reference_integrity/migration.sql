@@ -1,34 +1,48 @@
 SET LOCAL lock_timeout = '1s';--> statement-breakpoint
 SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 
--- Give the last seven organization_id columns a foreign key to organization.
--- These tables carried the column for row-level security alone: the value was
--- an authorization input the database could not check, so a row could name a
--- tenant that never existed and nothing would say so. Every other
+-- Give five of the remaining organization_id columns a foreign key to
+-- organization. These tables carried the column for row-level security alone:
+-- the value was an authorization input the database could not check, so a row
+-- could name a tenant that never existed and nothing would say so. Every other
 -- organization_id in the schema already references organization(id) ON DELETE
 -- CASCADE. This is that same consistency one layer below the org-pinned
 -- policies added in 20260812110000, and it narrows nothing the application
 -- relies on: every writer already supplies the organization of its own scoped
 -- transaction.
 --
--- ON DELETE CASCADE on all seven, matching every sibling. Per table:
+-- Two tables are deliberately excluded, because for them a cascade is not
+-- cleanup but data loss:
+--
+--   entity_deletion_cleanup_requests, buffer_object_cleanup_intents
+--     NOT given a foreign key. Each row is the only surviving record of which
+--     S3 objects still have to be erased. Every S3 deletion in the codebase is
+--     key-driven from rows like these (lib/files/utils.ts), nothing anywhere
+--     lists an S3 prefix, and the documents bucket expires only tmp/ and
+--     exports/ keys, never a finalized {org}/{workspace}/{file} key. Cascading
+--     these rows would delete the erasure instructions while the objects they
+--     name still exist, and nothing could rediscover them. They keep no entity,
+--     workspace, or user reference for exactly the same reason; organization is
+--     not an exception to that rule. An ancestor reference becomes safe here
+--     only once that ancestor's deletion performs its own storage teardown.
+--     Guarded by apps/api/src/db/schema/entities.test.ts.
+--
+-- ON DELETE CASCADE on the five that are included. Per table:
 --
 --   pending_uploads
 --     Five-minute upload reservations. Its workspace_id already cascades from
 --     workspaces, so a tenant delete removed these transitively; the direct
 --     edge closes the case where organization_id disagrees with that workspace.
---
---   entity_deletion_cleanup_requests, buffer_object_cleanup_intents
---     Durable storage-erasure work. Both deliberately keep no entity,
---     workspace, or user reference so a retry can finish erasing objects after
---     the row's subject is gone. The tenant root is the one ancestor whose
---     disappearance also ends the work, so it is the one ancestor they should
---     reference.
+--     The reservation itself names no object that outlives it: a reserved key
+--     that was actually written is tracked by a buffer_object_cleanup_intents
+--     tombstone, which is one of the two tables excluded above.
 --
 --   search_projection_repair_queue
 --     source_id stays unreferenced by design: a mark whose source is gone is
 --     work to discard on the next drain, not an error to prevent. Tenancy is a
---     separate question and gets the real edge.
+--     separate question and gets the real edge. Unlike the two excluded tables
+--     this queue holds no object keys at all; its drain only rewrites and
+--     deletes database rows, so a mark for a departed tenant is genuinely moot.
 --
 --   search_document_preview_passages,
 --   contact_search_document_preview_passages,
@@ -37,21 +51,15 @@ SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 --     The organization edge states the tenant path directly instead of leaving
 --     it implied by the parent chain, which is what the policies read.
 --
--- No index is added on the referencing side. The three queues drain to empty,
+-- No index is added on the referencing side. The repair queue drains to empty,
 -- and the four projection tables already lead a scope index with
 -- organization_id, so the cascade has an access path everywhere it matters.
 --
--- Constraint names are given explicitly rather than left to drizzle: six of the
--- seven generated names exceed PostgreSQL's 63-byte identifier limit and would
--- be truncated server-side, reintroducing the schema/catalog divergence this
--- migration exists to remove. Each statement is one line because squawk
+-- Constraint names are given explicitly rather than left to drizzle: four of
+-- the five generated names exceed PostgreSQL's 63-byte identifier limit and
+-- would be truncated server-side, reintroducing the schema/catalog divergence
+-- this migration exists to remove. Each statement is one line because squawk
 -- anchors a suppression to the line directly above the statement it reports.
-
--- squawk-ignore constraint-missing-not-valid, adding-foreign-key-constraint -- entity_deletion_cleanup_requests is an outbox that drains to empty; its steady-state row count is the erasure work currently in flight, so the scan is bounded by the deploy-time backlog rather than by tenant data.
-ALTER TABLE "entity_deletion_cleanup_requests" ADD CONSTRAINT "entity_deletion_cleanup_requests_organization_fk" FOREIGN KEY ("organization_id") REFERENCES "organization" ("id") ON DELETE CASCADE;--> statement-breakpoint
-
--- squawk-ignore constraint-missing-not-valid, adding-foreign-key-constraint -- buffer_object_cleanup_intents is an outbox that drains to empty; each row is one interrupted object write awaiting confirmation, so the scan is bounded by the deploy-time backlog rather than by tenant data.
-ALTER TABLE "buffer_object_cleanup_intents" ADD CONSTRAINT "buffer_object_cleanup_intents_organization_fk" FOREIGN KEY ("organization_id") REFERENCES "organization" ("id") ON DELETE CASCADE;--> statement-breakpoint
 
 -- squawk-ignore constraint-missing-not-valid, adding-foreign-key-constraint -- search_projection_repair_queue holds at most one row per stale source and the drain deletes each row it repairs, so the table is bounded by the sources currently behind, not by the corpus.
 ALTER TABLE "search_projection_repair_queue" ADD CONSTRAINT "search_projection_repair_queue_organization_fk" FOREIGN KEY ("organization_id") REFERENCES "organization" ("id") ON DELETE CASCADE;--> statement-breakpoint

@@ -474,6 +474,12 @@ export const searchProjectionRepairQueue = p.pgTable(
     // an error to prevent but work to discard, and the drain discards it on
     // its next pass.
     sourceId: p.uuid("source_id").notNull(),
+    // Unlike the storage-cleanup outboxes in schema/entities.ts, this queue
+    // holds no object keys: the drain only rewrites and deletes database rows.
+    // A repair mark for a tenant that no longer exists is genuinely moot, so
+    // cascading it from organization discards nothing that anything could act
+    // on later. See the comments on entity_deletion_cleanup_requests and
+    // buffer_object_cleanup_intents for why those two cannot do the same.
     organizationId: safeOrganizationId("organization_id").notNull(),
     revision: p.uuid("revision").notNull(),
     enqueuedAt: timestamptz("enqueued_at").notNull().defaultNow(),
