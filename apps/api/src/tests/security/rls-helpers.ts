@@ -23,18 +23,22 @@ import {
   documentCounters,
   docxSuggestions,
   entities,
+  entityVersionAiSummaries,
   entityVersions,
   expenses,
+  extractedContent,
   fields,
   fileChatThreads,
   invoices,
   justifications,
   matterCounters,
   organizationSettings,
+  pendingUploads,
   properties,
   propertyDependencies,
   rateEntries,
   rateTables,
+  searchDocuments,
   templateCategories,
   templateChatThreads,
   templateClauses,
@@ -45,7 +49,9 @@ import {
   workspaceContacts,
   workspaceMembers,
   workspaces,
+  workspaceSearchDocuments,
 } from "@/api/db/schema";
+import type { PendingUploadPurposeData } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeIdType } from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
@@ -89,6 +95,10 @@ export const createTestIds = () => ({
   entityVersionA1: id<"entityVersion">(),
   entityVersionA2: id<"entityVersion">(),
   entityVersionB1: id<"entityVersion">(),
+  entityVersionAiSummaryA1: id<"entityVersionAiSummary">(),
+  entityVersionAiSummaryB1: id<"entityVersionAiSummary">(),
+  pendingUploadA1: id<"pendingUpload">(),
+  pendingUploadB1: id<"pendingUpload">(),
   propertyA1: id<"property">(),
   propertyA2: id<"property">(),
   propertyB1: id<"property">(),
@@ -214,6 +224,11 @@ export const wsScopedTables = [
   expenses,
   invoices,
   caseLawMatterLinks,
+  entityVersionAiSummaries,
+  pendingUploads,
+  searchDocuments,
+  workspaceSearchDocuments,
+  extractedContent,
 ] as const;
 
 /** All organization-only tables with `organization_id`. */
@@ -1086,6 +1101,161 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       workspaceId: ids.wsA1,
       role: "user",
       content: chatContent("workspace-b1"),
+    },
+  ]);
+
+  // ── Derived projections and upload reservations ──
+  //
+  // Nothing here is written by a direct user edit: search projections,
+  // extracted text, AI summaries, and upload reservations are all produced by
+  // background or boundary paths. That is exactly why they need fixtures: the
+  // row-level loops can only exercise a table's workspace and organization
+  // pins if the table has rows in both tenants.
+
+  await db.insert(searchDocuments).values([
+    {
+      entityId: ids.entityA1,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      kind: "document" as const,
+      title: "Agreement A1",
+      searchableText: "agreement a1 body",
+      language: "en",
+    },
+    {
+      entityId: ids.entityB1,
+      organizationId: ids.orgB,
+      workspaceId: ids.wsB1,
+      kind: "document" as const,
+      title: "Agreement B1",
+      searchableText: "agreement b1 body",
+      language: "en",
+    },
+  ]);
+
+  await db.insert(workspaceSearchDocuments).values([
+    {
+      workspaceId: ids.wsA1,
+      organizationId: ids.orgA,
+      title: "WS A1",
+      searchableText: "ws a1 REF-A1",
+    },
+    {
+      workspaceId: ids.wsB1,
+      organizationId: ids.orgB,
+      title: "WS B1",
+      searchableText: "ws b1 REF-B1",
+    },
+  ]);
+
+  // `iv` is 12 bytes because that is what AES-GCM uses in
+  // apps/api/src/lib/content-encryption.ts; the ciphertext is opaque to RLS,
+  // but a wrong-width IV would be a fixture the production reader could never
+  // have written. `sourceSha256Hex` satisfies the 64-hex-character CHECK and
+  // matches the digest already seeded on the corresponding file field.
+  await db.insert(extractedContent).values([
+    {
+      entityId: ids.entityA1,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      sourceEntityVersionId: ids.entityVersionA1,
+      sourceFieldId: ids.fileFieldA1,
+      sourceFileId: ids.fileObjectA1,
+      sourceSha256Hex: "a".repeat(64),
+      ciphertext: Buffer.from("extracted text a1"),
+      iv: Buffer.alloc(12, 0xa1),
+      charCount: 17,
+      language: "en",
+    },
+    {
+      entityId: ids.entityB1,
+      organizationId: ids.orgB,
+      workspaceId: ids.wsB1,
+      sourceEntityVersionId: ids.entityVersionB1,
+      sourceFieldId: ids.fileFieldB1,
+      sourceFileId: ids.fileObjectB1,
+      sourceSha256Hex: "b".repeat(64),
+      ciphertext: Buffer.from("extracted text b1"),
+      iv: Buffer.alloc(12, 0xb1),
+      charCount: 17,
+      language: "en",
+    },
+  ]);
+
+  // `sourceTextHash` is the cache key the summary reader compares against, so
+  // it is a real sha256 digest rather than a placeholder. `promptVersion` is
+  // the writer's current version; the unique index is per (version, prompt).
+  await db.insert(entityVersionAiSummaries).values([
+    {
+      id: ids.entityVersionAiSummaryA1,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      entityId: ids.entityA1,
+      entityVersionId: ids.entityVersionA1,
+      promptVersion: 1,
+      sourceTextHash: new Bun.CryptoHasher("sha256")
+        .update(ids.entityVersionA1)
+        .digest("hex"),
+      summary: "Summary of agreement A1",
+      language: "en",
+      modelProvider: "anthropic",
+      modelId: "claude-haiku-4-5-20251001",
+    },
+    {
+      id: ids.entityVersionAiSummaryB1,
+      organizationId: ids.orgB,
+      workspaceId: ids.wsB1,
+      entityId: ids.entityB1,
+      entityVersionId: ids.entityVersionB1,
+      promptVersion: 1,
+      sourceTextHash: new Bun.CryptoHasher("sha256")
+        .update(ids.entityVersionB1)
+        .digest("hex"),
+      summary: "Summary of agreement B1",
+      language: "en",
+      modelProvider: "anthropic",
+      modelId: "claude-haiku-4-5-20251001",
+    },
+  ]);
+
+  // A reservation expires five minutes after creation; seeding it in the
+  // future keeps the row in the state the finalize path actually reads.
+  const pendingUploadExpiry = new Date(Date.now() + 5 * 60 * 1000);
+  const docxMime =
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+  await db.insert(pendingUploads).values([
+    {
+      id: ids.pendingUploadA1,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+      purpose: "entity_create" as const,
+      purposeData: {
+        type: "entity_create",
+        propertyId: ids.filePropertyA1,
+      } satisfies PendingUploadPurposeData,
+      declaredName: "agreement-a.docx",
+      declaredMime: docxMime,
+      declaredSize: 1024,
+      declaredSha256: "a".repeat(64),
+      expiresAt: pendingUploadExpiry,
+    },
+    {
+      id: ids.pendingUploadB1,
+      organizationId: ids.orgB,
+      workspaceId: ids.wsB1,
+      userId: ids.userB1,
+      purpose: "entity_create" as const,
+      purposeData: {
+        type: "entity_create",
+        propertyId: ids.filePropertyB1,
+      } satisfies PendingUploadPurposeData,
+      declaredName: "agreement-b.docx",
+      declaredMime: docxMime,
+      declaredSize: 1024,
+      declaredSha256: "b".repeat(64),
+      expiresAt: pendingUploadExpiry,
     },
   ]);
 
