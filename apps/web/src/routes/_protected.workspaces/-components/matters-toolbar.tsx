@@ -12,6 +12,7 @@ import {
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
+import { WORKSPACES_PER_ORGANIZATION_MAX } from "@stll/api-contract";
 import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
 import {
@@ -197,7 +198,8 @@ const CreateMatterPopover = ({ className }: CreateMatterPopoverProps) => {
     return null;
   }
 
-  const isLimitReached = data.workspaces.length >= data.workspacesCountLimit;
+  const isLimitReached =
+    data.workspaces.length >= WORKSPACES_PER_ORGANIZATION_MAX;
   if (isLimitReached) {
     return null;
   }

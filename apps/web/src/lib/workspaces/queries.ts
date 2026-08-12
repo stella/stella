@@ -87,7 +87,6 @@ export const workspacesRouteOptions = (activeOrganizationId: string) =>
 
 type WorkspaceNavigationData = {
   workspaces: WorkspaceNavigationItem[];
-  workspacesCountLimit: number;
 };
 
 export const workspacesNavigationOptions = (activeOrganizationId: string) =>
@@ -99,10 +98,7 @@ export const workspacesNavigationOptions = (activeOrganizationId: string) =>
         statusScope: WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE,
       });
 
-      return {
-        workspaces: page.workspaces,
-        workspacesCountLimit: page.workspacesCountLimit,
-      } satisfies WorkspaceNavigationData;
+      return { workspaces: page.workspaces } satisfies WorkspaceNavigationData;
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });

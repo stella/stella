@@ -22,6 +22,12 @@ export const AGENT_SKILLS_CHAT_METADATA_MAX = 200;
 export const DOCX_SUGGESTIONS_PAGE_SIZE_MAX = 200;
 
 /**
+ * Per-organization cap on matters (workspaces), enforced on create. The client
+ * hides "new matter" surfaces at the cap.
+ */
+export const WORKSPACES_PER_ORGANIZATION_MAX = 1000;
+
+/**
  * Max properties (columns) one matter may define. The client disables the
  * add-column affordances at the cap; the server rejects past it.
  */

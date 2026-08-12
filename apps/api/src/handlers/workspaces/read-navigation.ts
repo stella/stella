@@ -135,10 +135,9 @@ const readWorkspaceNavigation = createSafeRootHandler(
       items,
       limit: page.limit,
       nextCursor: page.nextCursor,
-      // Compatibility fields for active navigation consumers. The memory
+      // Compatibility field for active navigation consumers. The memory
       // picker reads the standard page fields above and follows nextCursor.
       workspaces: items,
-      workspacesCountLimit: LIMITS.workspacesCount,
     });
   },
 );

@@ -209,10 +209,7 @@ const readWorkspaces = createSafeRootHandler(
       };
     });
 
-    return Result.ok({
-      workspaces,
-      workspacesCountLimit: LIMITS.workspacesCount,
-    });
+    return Result.ok({ workspaces });
   },
 );
 
