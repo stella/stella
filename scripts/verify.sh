@@ -241,6 +241,8 @@ else
   run_step "Result consumption" bun run check:result-consumption -- --all
 fi
 run_step "React Compiler bailout guard" bun scripts/rc-bailouts.ts --check
+run_step "Oxlint override union guard" bun test \
+  scripts/oxlint-override-union.test.ts
 run_step "Ratchet guard" run_ratchet_guard
 run_step "Suppression waiver ledger" run_suppression_waiver_guard
 run_step "Crawl posture guard" run_crawl_posture_guard

@@ -622,6 +622,20 @@ jobs:
         # local loop. Regenerate: `bun scripts/rc-bailouts.ts --write-baseline`.
         run: bun scripts/rc-bailouts.ts --check
 
+      - name: Oxlint override union guard
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # Oxlint resolves `overrides` by replacement: for a given file the last
+        # override that mentions a rule supplies that rule's whole
+        # configuration. For a list-of-restrictions rule
+        # (`no-restricted-imports` and friends) a scope that adds one ban
+        # therefore deletes every ban it inherited, and nothing fails — the
+        # forbidden import just stops being reported. This guard resolves the
+        # tracked rules against the real repository file list the way oxlint
+        # does and fails when a scope's effective restriction set is missing an
+        # inherited entry. Deliberate narrowings live in DELIBERATE_NARROWINGS
+        # with a reason and are checked in both directions.
+        run: bun test scripts/oxlint-override-union.test.ts
+
       - name: Ratchet guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # Whole-repo convention metrics (see RATCHET_METRICS in
