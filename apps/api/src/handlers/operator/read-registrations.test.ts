@@ -36,14 +36,15 @@ const mockRow = (id: string): MockRow => ({
   createdAtCursor: "2026-07-10T12:00:00.000000",
 });
 
-const buildApp = ({
+/** The app plus a counter of how many times it opened the instance-wide read. */
+const buildCountedApp = ({
   configuredToken,
   rows = [],
 }: {
   configuredToken: string | undefined;
   rows?: MockRow[];
 }) => {
-  const { safeDb } = createScopedDbMock({
+  const { getCallCount, safeDb } = createScopedDbMock({
     select: () => ({
       from: () => ({
         where: () => ({
@@ -58,12 +59,20 @@ const buildApp = ({
     getConfiguredToken: () => configuredToken,
     safeDb,
   });
-  return new Elysia({ prefix: "/operator" }).get(
-    "/registrations",
-    endpoint.handler,
-    endpoint.config,
-  );
+  return {
+    app: new Elysia({ prefix: "/operator" }).get(
+      "/registrations",
+      endpoint.handler,
+      endpoint.config,
+    ),
+    getCallCount,
+  };
 };
+
+const buildApp = (options: {
+  configuredToken: string | undefined;
+  rows?: MockRow[];
+}) => buildCountedApp(options).app;
 
 const registrationsRequest = (
   params: Record<string, string>,
@@ -192,6 +201,79 @@ describe("GET /operator/registrations", () => {
         "name",
       ]);
     }
+  });
+
+  // The `no-unscoped-user-query` waiver on the registrations query rests on
+  // this: the read spans every account on the instance and has no tenant to
+  // scope by, so the token gate is the whole boundary. A gate that runs after
+  // the read, or beside it, would still answer 404/401 while the accounts had
+  // already been fetched.
+  const gatedCases = [
+    {
+      name: "unconfigured deployment, valid credential and filter",
+      configuredToken: undefined,
+      headers: { authorization: `Bearer ${TOKEN}` },
+      params: { since: daysAgo(1).toISOString() },
+      status: 404,
+    },
+    {
+      name: "configured deployment, no credential",
+      configuredToken: TOKEN,
+      headers: {},
+      params: { since: daysAgo(1).toISOString() },
+      status: 401,
+    },
+    {
+      name: "configured deployment, wrong credential",
+      configuredToken: TOKEN,
+      headers: { authorization: `Bearer ${TOKEN}-wrong` },
+      params: { since: daysAgo(1).toISOString() },
+      status: 401,
+    },
+    {
+      name: "authorized credential, since outside the lookback window",
+      configuredToken: TOKEN,
+      headers: { authorization: `Bearer ${TOKEN}` },
+      params: {
+        since: daysAgo(
+          OPERATOR_REGISTRATIONS_MAX_LOOKBACK_DAYS + 1,
+        ).toISOString(),
+      },
+      status: 400,
+    },
+  ];
+
+  for (const gatedCase of gatedCases) {
+    test(`${gatedCase.name}: answers ${gatedCase.status} without reading a single account`, async () => {
+      const { app, getCallCount } = buildCountedApp({
+        configuredToken: gatedCase.configuredToken,
+        rows: [mockRow("op-gate-a")],
+      });
+
+      const response = await app.handle(
+        registrationsRequest(gatedCase.params, gatedCase.headers),
+      );
+
+      expect(response.status).toBe(gatedCase.status);
+      expect(getCallCount()).toBe(0);
+    });
+  }
+
+  test("an authorized request reads once, and only once", async () => {
+    const { app, getCallCount } = buildCountedApp({
+      configuredToken: TOKEN,
+      rows: [mockRow("op-gate-a")],
+    });
+
+    const response = await app.handle(
+      registrationsRequest(
+        { since: daysAgo(1).toISOString() },
+        { authorization: `Bearer ${TOKEN}` },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(getCallCount()).toBe(1);
   });
 
   test("emits a nextCursor when more rows exist than the requested limit", async () => {

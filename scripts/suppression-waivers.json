@@ -48,7 +48,7 @@
       "symbol": "toAuditLogConditions",
       "count": 1,
       "reason": "org-scoped compliance filter, not an ownership source",
-      "evidence": "apps/api/src/handlers/audit-logs/query.ts#queryAuditLogPage"
+      "evidence": "apps/api/src/handlers/audit-logs/query-scope.integration.test.ts"
     },
     {
       "id": "SW-0006",
@@ -87,8 +87,8 @@
       "file": "apps/api/src/handlers/chat/stream-chat.ts",
       "symbol": "hydrateMessages",
       "count": 1,
-      "reason": "DB read-back from user_files, already sanitized on upload",
-      "evidence": "apps/api/src/lib/uploads/entity-create.test.ts"
+      "reason": "DB read-back from the caller's own user_files row, sanitized by the single upload writer; the request part's own filename is never used",
+      "evidence": "apps/api/src/handlers/chat/hydrate-messages.integration.test.ts"
     },
     {
       "id": "SW-0010",
@@ -98,7 +98,7 @@
       "symbol": "import @/api/db/auth-schema",
       "count": 1,
       "reason": "operator observability is deliberately instance-wide: the endpoint is token-gated at the deployment level and lists registrations across the whole instance, so there is no organization to scope by.",
-      "evidence": "apps/api/src/handlers/operator/query.test.ts#authorizeOperatorAccess"
+      "evidence": "apps/api/src/handlers/operator/read-registrations.test.ts"
     },
     {
       "id": "SW-0011",
@@ -108,7 +108,7 @@
       "symbol": "import @/api/db/auth-schema",
       "count": 1,
       "reason": "joined via RLS-scoped workspaceMembers filtered by org-derived wsIds (see comment above)",
-      "evidence": "apps/api/src/handlers/workspaces/list.ts#readWorkspaces"
+      "evidence": "apps/api/src/handlers/workspaces/list.integration.test.ts"
     },
     {
       "id": "SW-0012",
@@ -118,7 +118,7 @@
       "symbol": "import @/api/db/auth-schema",
       "count": 1,
       "reason": "actor and affected-user IDs come only from audit rows already scoped to this authorized organization and workspace; a membership join would erase retained attribution after account deletion.",
-      "evidence": "apps/api/src/handlers/workspaces/read-overview-activity.ts#readOverviewActivity"
+      "evidence": "apps/api/src/handlers/workspaces/read-overview-activity.integration.test.ts"
     }
   ]
 }
