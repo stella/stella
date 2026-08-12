@@ -98,7 +98,6 @@ import {
   resolveSignupRateLimitClientIp,
 } from "@/api/lib/client-ip";
 import {
-  beginRequestQueryCounter,
   currentQueryCount,
   DB_QUERY_COUNT_HEADER,
 } from "@/api/lib/db-query-counter";
@@ -125,6 +124,7 @@ import {
   initRequestContext,
   REQUEST_ID_HEADER,
 } from "@/api/lib/observability/request-context";
+import { runWithRequestScope } from "@/api/lib/observability/request-scope";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 import {
   isCorpusS3Stale,
@@ -259,14 +259,6 @@ const buildRequestLogDetails = ({
 const api = new Elysia()
   .onRequest(async (context) => {
     const { request, set } = context;
-
-    // Start the per-request query counter before any handler (or better-auth
-    // session lookup) can issue a query, so those queries are attributed to
-    // this request. `enterWith` binds the store to this request's async
-    // context; each request enters its own context, so counts do not leak.
-    if (DB_QUERY_COUNTER_ENABLED) {
-      beginRequestQueryCounter();
-    }
 
     setSecurityHeaders(set);
 
@@ -607,6 +599,34 @@ const api = new Elysia()
 
 export default api;
 
+// Scope the per-request async stores — the ambient request id and the dev/CI
+// DB query counter — around the whole composed handler.
+//
+// No lifecycle hook can do this: a hook runs *inside* the request, so both
+// stores used to open themselves from `onRequest` with
+// `AsyncLocalStorage.enterWith`. `enterWith` mutates the ambient async context
+// frame with no restore point, and the runtime leaves that frame current for
+// callbacks it dispatches afterwards, so a background loop (a BullMQ worker, a
+// reconciler tick, the SSE keep-alive) resuming there adopted the in-flight
+// request's stores and kept them from then on — billing its own queries to that
+// request's `x-db-queries` count and stamping that request's receipt id on
+// unrelated work. `run` restores the previous frame, so the scope covers the
+// request's own callback tree and nothing else.
+//
+// `wrap` is the only place that sees a whole request as one function: Elysia
+// applies it to both the general handler and the per-route handlers it hands to
+// Bun's native router, which `api.fetch` alone would miss. It is a private
+// Elysia API, so pin its two observable effects rather than trusting it: the
+// `x-request-id` header and the `x-db-queries` count both disappear if a future
+// release stops applying higher-order functions, and the route-smoke network
+// baseline fails on a budgeted endpoint whose response drops the count header.
+const scopeRequestAsyncStores = (): void => {
+  api.wrap(
+    (handleRequest) => (request: Request) =>
+      runWithRequestScope(() => handleRequest(request)),
+  );
+};
+
 const startS3RefreshLoop = () => {
   const timer = setInterval(() => {
     if (isS3Stale()) {
@@ -674,6 +694,8 @@ const startServer = async (): Promise<void> => {
 
   // BullMQ worker for durable document review runs.
   const documentReviewRunWorker = initDocumentReviewRunWorker();
+
+  scopeRequestAsyncStores();
 
   api.listen({
     port: getApiPort(),

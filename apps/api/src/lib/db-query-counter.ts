@@ -11,8 +11,8 @@ import type { Logger } from "drizzle-orm";
 // the database, so it is safe to import from shared modules (see the
 // "Module Side Effects" rules in AGENTS.md). Callers decide when to activate a
 // store; the Drizzle logger is a no-op whenever no store is active (background
-// jobs, boot-time queries, production requests), so wiring it in costs nothing
-// beyond an ALS lookup on those paths.
+// jobs, boot-time queries), so wiring it in costs nothing beyond an ALS lookup
+// on those paths. Deployed environments wire no logger at all.
 import { AsyncLocalStorage } from "node:async_hooks";
 
 /** Response header carrying the per-request query count outside production. */
@@ -28,25 +28,25 @@ const queryCounterStore = new AsyncLocalStorage<QueryCounter>();
  * Run `fn` inside a fresh counter store. Every query logged through
  * {@link queryCountLogger} while `fn` (and its awaited continuations) run
  * increments this store and no other, so interleaved async contexts count
- * independently. Prefer this when the whole unit of work is a single callback.
+ * independently.
+ *
+ * This is the only supported way to open a store. `AsyncLocalStorage.enterWith`
+ * would be the convenient alternative for a lifecycle split across separate
+ * callbacks (Elysia's hooks), but it mutates the ambient async context frame
+ * without a restore point: the runtime leaves that frame current for callbacks
+ * it dispatches afterwards, so a background timer or worker loop that resumes
+ * while a request's frame is current adopts that request's store and bills its
+ * own queries to that request's `x-db-queries` count — for as long as the loop
+ * lives. `run` restores the previous frame when `fn` returns, so nothing
+ * outside the callback tree can join the store. The HTTP layer therefore wraps
+ * the composed request handler (see `server.ts`) rather than opening a store
+ * from a hook.
  */
 export const runWithQueryCounter = <TResult>(
   fn: (counter: Readonly<QueryCounter>) => TResult,
 ): TResult => {
   const counter: QueryCounter = { count: 0 };
   return queryCounterStore.run(counter, () => fn(counter));
-};
-
-/**
- * Activate a fresh counter store for the current async context and everything
- * downstream of it. Used by the HTTP layer, where the request lifecycle is
- * split across separate Elysia hook callbacks and there is no single function
- * to wrap with {@link runWithQueryCounter}. Each incoming request enters its
- * own async context before this runs, so the store does not leak across
- * concurrent requests.
- */
-export const beginRequestQueryCounter = (): void => {
-  queryCounterStore.enterWith({ count: 0 });
 };
 
 /** Current active store's query count, or `undefined` when no store is active. */
