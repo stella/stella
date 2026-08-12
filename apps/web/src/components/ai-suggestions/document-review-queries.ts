@@ -136,6 +136,68 @@ export type DocumentReviewRunRow = DocumentReviewRunDetail["run"];
 export type DocumentReviewFindingRow =
   DocumentReviewRunDetail["findings"][number];
 
+/** What a reviewer decided about one finding, and how many findings sit in
+ *  each decision. Both read back from the run itself, so the client cannot
+ *  name a disposition the endpoint does not accept. */
+export type DocumentReviewDecision = DocumentReviewFindingRow["decision"];
+export type DocumentReviewDecisionCounts =
+  DocumentReviewRunRow["decisionCounts"];
+
+/**
+ * The decision vocabulary as named constants. Keyed by the uppercased union,
+ * so a decision added on the server fails typecheck here rather than leaving
+ * the client with a value it never mentions.
+ */
+export const REVIEW_DECISION = {
+  OPEN: "open",
+  ACCEPTED: "accepted",
+  DISMISSED: "dismissed",
+} as const satisfies Record<
+  Uppercase<DocumentReviewDecision>,
+  DocumentReviewDecision
+>;
+
+/** A decision the reviewer has actually taken: everything the vocabulary holds
+ *  except the state a finding is born in. */
+export type DecidedReviewDecision = Exclude<
+  DocumentReviewDecision,
+  typeof REVIEW_DECISION.OPEN
+>;
+
+type DecideReviewFindingsArgs = {
+  workspaceId: string;
+  /** Every finding row behind the card being decided: one per check kind that
+   *  judged the topic, so a combined run decides both in one gesture. */
+  findingIds: readonly DocumentReviewFindingRow["id"][];
+  decision: DocumentReviewDecision;
+};
+
+/**
+ * Record one decision against a card's findings. The endpoint decides a single
+ * finding, and a card joins at most one finding per check kind, so this is a
+ * bounded fan-out rather than an unbounded loop.
+ */
+export const decideReviewFindings = async ({
+  workspaceId,
+  findingIds,
+  decision,
+}: DecideReviewFindingsArgs) =>
+  await Promise.all(
+    findingIds.map(async (findingId) =>
+      unwrapEden(
+        await api
+          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          ["document-reviews"].findings({ findingId })
+          .patch({ decision }),
+      ),
+    ),
+  );
+
+/** One recorded decision as the endpoint answers it. */
+export type DecidedReviewFinding = Awaited<
+  ReturnType<typeof decideReviewFindings>
+>[number];
+
 export const documentReviewRunOptions = (ref: DocumentReviewRunRef) =>
   queryOptions({
     queryKey: documentReviewRunKeys.detail(ref),
