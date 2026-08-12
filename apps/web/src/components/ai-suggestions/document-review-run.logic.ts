@@ -10,7 +10,12 @@
 
 import type { ReferenceFile } from "@/components/ai-suggestions/document-review-basis.logic";
 import type {
+  DecidedReviewFinding,
+  DocumentReviewDecision,
+  DocumentReviewDecisionCounts,
+  DocumentReviewFindingRow,
   DocumentReviewRunDetail,
+  DocumentReviewRunRow,
   DocumentReviewRunStatus,
   DocumentReviewRunSummary,
 } from "@/components/ai-suggestions/document-review-queries";
@@ -196,10 +201,19 @@ export const restoreReviewBasis = (
   }
 };
 
+/** What a reviewer decided about one of the run's findings, kept apart from
+ *  the engine payload the cards render: the decision belongs to the row, not
+ *  to the judgment the model produced. */
+export type ReviewFindingDecisionRow = Pick<
+  DocumentReviewFindingRow,
+  "id" | "topicId" | "decision"
+>;
+
 export type RestoredReviewRun = {
   basis: RestoredReviewBasis;
   topics: ReviewTopic[];
   results: ReviewResults;
+  decisions: ReviewFindingDecisionRow[];
 };
 
 /**
@@ -215,9 +229,15 @@ export const restoreReviewRun = ({
 }: DocumentReviewRunDetail): RestoredReviewRun => {
   const playbook: PlaybookFinding[] = [];
   const references: ReferenceFinding[] = [];
+  const decisions: ReviewFindingDecisionRow[] = [];
   const judgedTopicIds = new Set<string>();
   for (const finding of findings) {
     judgedTopicIds.add(finding.topicId);
+    decisions.push({
+      id: finding.id,
+      topicId: finding.topicId,
+      decision: finding.decision,
+    });
     switch (finding.payload.checkKind) {
       case "playbook":
         playbook.push(finding.payload.finding);
@@ -247,5 +267,138 @@ export const restoreReviewRun = ({
       playbook: ranPlaybookCheck ? playbook : null,
       references: ranReferenceCheck ? references : null,
     },
+    decisions,
   };
 };
+
+/**
+ * Whether a decision settles a finding. Total over the vocabulary, so a new
+ * disposition cannot land without stating whether it still needs a reviewer —
+ * and the counting below, written out per member for the same reason, fails
+ * typecheck in the same file.
+ */
+const DECISION_SETTLES = {
+  open: false,
+  accepted: true,
+  dismissed: true,
+} as const satisfies Record<DocumentReviewDecision, boolean>;
+
+export const isDecisionSettled = (decision: DocumentReviewDecision): boolean =>
+  DECISION_SETTLES[decision];
+
+export type ReviewDecisionProgress = { decided: number; total: number };
+
+/** How far the reviewer has worked through a run's findings. */
+export const reviewDecisionProgress = ({
+  open,
+  accepted,
+  dismissed,
+}: DocumentReviewDecisionCounts): ReviewDecisionProgress => ({
+  decided: accepted + dismissed,
+  total: open + accepted + dismissed,
+});
+
+/** Tally the findings a cached run holds. The counts are a fact about those
+ *  rows, so they are recounted from them rather than patched in step. */
+const tallyReviewDecisions = (
+  findings: readonly { decision: DocumentReviewDecision }[],
+): DocumentReviewDecisionCounts => {
+  const counts: DocumentReviewDecisionCounts = {
+    open: 0,
+    accepted: 0,
+    dismissed: 0,
+  };
+  for (const { decision } of findings) {
+    counts[decision] += 1;
+  }
+  return counts;
+};
+
+/**
+ * Fold recorded decisions back into the cached run detail.
+ *
+ * The endpoint answers with the row it wrote, so the cache is updated from
+ * that answer instead of being refetched: a decision changes one field on one
+ * finding, and re-reading the whole run per click would poll the findings back
+ * for nothing. The counts are recomputed from the updated rows so the header
+ * cannot disagree with the cards below it.
+ */
+export const applyFindingDecisions = (
+  detail: DocumentReviewRunDetail | undefined,
+  decided: readonly DecidedReviewFinding[],
+): DocumentReviewRunDetail | undefined => {
+  if (detail === undefined) {
+    return undefined;
+  }
+  const decidedById = new Map(decided.map((row) => [row.id, row]));
+  const findings = detail.findings.map((finding) => {
+    const update = decidedById.get(finding.id);
+    // A row that belongs to another run is not this cache entry's business:
+    // finding ids are unique, so this only guards a mismatched write.
+    if (update === undefined || update.runId !== detail.run.id) {
+      return finding;
+    }
+    return {
+      ...finding,
+      decision: update.decision,
+      decidedBy: update.decidedBy,
+      decidedAt: update.decidedAt,
+    };
+  });
+  return {
+    run: { ...detail.run, decisionCounts: tallyReviewDecisions(findings) },
+    findings,
+  };
+};
+
+/** How today's playbook stands against the one the run pinned. */
+export type ReviewPlaybookFreshness = "current" | "stale" | "missing";
+
+/** What a completed run has fallen behind, if anything. */
+export type ReviewRunFreshness = {
+  /** The document has a newer version than the one this run measured. */
+  documentChanged: boolean;
+  playbook: ReviewPlaybookFreshness;
+};
+
+type ResolveReviewRunFreshnessArgs = {
+  run: Pick<
+    DocumentReviewRunRow,
+    "entityVersionId" | "playbookStale" | "playbookMissing"
+  >;
+  /** The document's current version, or `null` while the client does not know
+   *  it yet. */
+  currentEntityVersionId: string | null;
+};
+
+const playbookFreshness = ({
+  playbookStale,
+  playbookMissing,
+}: Pick<
+  DocumentReviewRunRow,
+  "playbookStale" | "playbookMissing"
+>): ReviewPlaybookFreshness => {
+  // A deleted definition is missing, never stale: a run cannot be behind a
+  // playbook that no longer exists, and there is nothing left to re-run it
+  // against.
+  if (playbookMissing) {
+    return "missing";
+  }
+  return playbookStale ? "stale" : "current";
+};
+
+/**
+ * Document staleness is one equality the client is the only party able to
+ * make: the server pinned the version it reviewed, and the reader is what
+ * knows which version is on screen now. An unknown current version reports no
+ * change rather than a false alarm.
+ */
+export const resolveReviewRunFreshness = ({
+  run,
+  currentEntityVersionId,
+}: ResolveReviewRunFreshnessArgs): ReviewRunFreshness => ({
+  documentChanged:
+    currentEntityVersionId !== null &&
+    currentEntityVersionId !== run.entityVersionId,
+  playbook: playbookFreshness(run),
+});

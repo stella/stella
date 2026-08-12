@@ -1963,6 +1963,7 @@ type Messages = {
       "actionNeeded": "Action needed";
       "addComment": "Add as comment";
       "addTopic": "Add topic";
+      "allDecided": "Every finding here has been decided.";
       "assessment": {
         "additionalInTarget": "Additional in target";
         "aligned": "Consistent with references";
@@ -1974,7 +1975,16 @@ type Messages = {
       "changeBasis": "Change review basis";
       "commentFailed": "Couldn't add the comment";
       "comparedWithReferences": "{count, plural, one {Compared with # reference document} other {Compared with # reference documents}}";
+      "decidedCount": "{decided, number}/{total, number} decided";
+      "decision": "Decision";
+      "decisionFailed": "Couldn't record your decision";
+      "decisions": {
+        "accepted": "Accepted";
+        "dismissed": "Dismissed";
+      };
       "description": "Choose an authored playbook, reference documents, or both.";
+      "dismiss": "Dismiss";
+      "documentChanged": "This document changed after this review.";
       "failed": "Document review failed";
       "insertFailed": "Couldn't insert the suggested wording";
       "insertSuggestion": "Insert suggested wording";
@@ -1983,8 +1993,10 @@ type Messages = {
       "noMaterialDifferences": "No material differences found";
       "noPlaybook": "No playbook";
       "noReferencesFound": "No matching DOCX documents.";
+      "playbookDeleted": "This playbook no longer exists; the review is kept as a record.";
       "playbookFindings": "Playbook findings";
       "playbookLabel": "Playbook (optional)";
+      "playbookOutdated": "A newer approved version of this playbook exists.";
       "playbookTopic": "Seeded from the playbook";
       "referenceDocument": "Reference document";
       "referenceFindings": "Reference comparison";
@@ -1995,6 +2007,7 @@ type Messages = {
       "referencesLabel": "Reference documents (optional)";
       "removeReference": "Remove reference {name}";
       "removeTopic": "Remove topic {name}";
+      "reopen": "Reopen";
       "results": "Review results";
       "reviewAgain": "Run another review";
       "reviewedAgainstCombined": "{count, plural, one {Reviewed against {name} and # reference document} other {Reviewed against {name} and # reference documents}}";
