@@ -18,6 +18,7 @@ import {
 import { toSafeId } from "@/api/lib/branded-types";
 import { toDataUrl } from "@/api/lib/data-url";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -318,5 +319,40 @@ describe("chat attachment hydration", () => {
     expect(writeMock).toHaveBeenCalledTimes(1);
     expect(s3DeleteMock).toHaveBeenCalledTimes(1);
     expect(recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  test("stores a sanitized filename, whatever the caller supplied", async () => {
+    // SW-0009 waives `no-raw-filename-write` at `hydrateMessages` on two
+    // claims: hydration names files from the stored row, and the stored row
+    // was sanitized by this single writer. The hydration test pins the first;
+    // this pins the second, so a writer that stopped sanitizing fails here
+    // rather than surfacing as a hostile name the waiver said was impossible.
+    const hostileName = '../../etc/passwd";rm -rf /';
+    // Typed by what the assertion reads, so the captured row keeps its shape
+    // instead of arriving as an untyped call record.
+    const values = mock(async (_row: { fileName: string }) => undefined);
+    const testTx = asTestRaw<Transaction>({
+      insert: mock(() => ({ values })),
+    });
+    const safeDb: SafeDb = async (callback) =>
+      await Result.tryPromise(async () => await callback(testTx));
+
+    const result = await uploadUserFile({
+      file: {
+        bytes: new TextEncoder().encode("confidential text"),
+        fileName: hostileName,
+        mimeType: TEXT_PLAIN_MIME_TYPE,
+      },
+      recordAuditEvent: mock(async () => undefined),
+      safeDb,
+      threadId: toSafeId<"chatThread">("11111111-1111-4111-8111-111111111112"),
+      userId: toSafeId<"user">("11111111-1111-4111-8111-111111111113"),
+      workspaceId,
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    const storedName = values.mock.calls.at(0)?.at(0)?.fileName;
+    expect(storedName).toBe(sanitizeFilename(hostileName));
+    expect(storedName).not.toBe(hostileName);
   });
 });
