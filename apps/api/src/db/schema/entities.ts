@@ -187,8 +187,20 @@ export const entities = p.pgTable(
 
 /**
  * Durable S3 cleanup work created in the same transaction as an entity delete.
- * It deliberately does not reference the deleted entity: the record must
- * survive the cascade so a queue retry can complete the storage erasure.
+ *
+ * This table has NO foreign keys, to any ancestor, including `organization`.
+ * That is load-bearing, not an oversight, and `entities.test.ts` fails if one
+ * is added. The reason is that `s3_keys` is the only surviving record of which
+ * objects to erase: every S3 deletion in the codebase is key-driven from rows
+ * like this one (`deleteS3Keys` in `lib/files/utils.ts`), nothing anywhere
+ * lists an S3 prefix, and the documents bucket expires only `tmp/` and
+ * `exports/` keys, never a finalized `{org}/{workspace}/{file}` key. So a
+ * cascade here does not clean up: it destroys the erasure instructions while
+ * the objects they name still exist, and no later process can rediscover them.
+ *
+ * Adding an ancestor reference is therefore only safe once that ancestor's
+ * deletion performs its own storage teardown. Until then the row must outlive
+ * every ancestor, and tenancy stays a plain column that the RLS policy reads.
  */
 export const entityDeletionCleanupRequests = p.pgTable(
   "entity_deletion_cleanup_requests",
@@ -870,15 +882,33 @@ export const pendingUploads = p.pgTable(
           AND ${table.purpose} IN ('entity_create', 'entity_version')
           AND ${table.purposeData}->>'reservedFileId' IS NOT NULL`,
       ),
+    p
+      .foreignKey({
+        name: "pending_uploads_organization_fk",
+        columns: [table.organizationId],
+        foreignColumns: [organization.id],
+      })
+      .onDelete("cascade"),
     ...wsOrganizationPolicies("pending_uploads"),
   ],
 );
 
 /**
  * Durable tombstones for server-generated object writes interrupted by a
- * workspace or account deletion. They intentionally have no foreign keys:
- * recovery must survive both workspace cascades and user cleanup until the
- * original writer confirms that it can no longer publish the reserved key.
+ * workspace or account deletion.
+ *
+ * This table has NO foreign keys, to any ancestor, including `organization`,
+ * and `entities.test.ts` fails if one is added. The tombstone is the only
+ * record that a reserved key may still be published: recovery must outlive the
+ * workspace cascade and the user cleanup that interrupted the write, until the
+ * original writer confirms it can no longer publish. The reserved key is a
+ * finalized `{org}/{workspace}/{file}` key built by `createFileKey`, which no
+ * bucket lifecycle rule expires and no prefix sweep can find, so cascading the
+ * tombstone away leaves the object stranded rather than cleaned up.
+ *
+ * Adding an ancestor reference is therefore only safe once that ancestor's
+ * deletion performs its own storage teardown. Until then tenancy stays a plain
+ * column that the RLS policy reads.
  */
 export const bufferObjectCleanupIntents = p.pgTable(
   "buffer_object_cleanup_intents",
