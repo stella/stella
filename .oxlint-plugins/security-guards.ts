@@ -209,7 +209,10 @@ export default eslintCompatPlugin({
           ) {
             return true;
           }
-          if (expression.type === "TemplateLiteral") {
+          if (
+            expression.type === "TemplateLiteral" &&
+            Array.isArray(expression.expressions)
+          ) {
             return expression.expressions.some((part) =>
               isRawFilenameExpression(part, seenVariables),
             );
