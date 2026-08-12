@@ -579,9 +579,7 @@ export const desktopEditHandoffs = p.pgTable(
     forceTakeover: p.boolean("force_takeover").notNull().default(false),
     expiresAt: timestamptz("expires_at").notNull(),
     consumedAt: timestamptz("consumed_at"),
-    desktopSessionId: safeUuid<"desktopEditSession">(
-      "desktop_session_id",
-    ).references(() => desktopEditSessions.id, { onDelete: "set null" }),
+    desktopSessionId: safeUuid<"desktopEditSession">("desktop_session_id"),
     openedAt: timestamptz("opened_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
@@ -596,6 +594,13 @@ export const desktopEditHandoffs = p.pgTable(
       .index("desktop_edit_handoffs_workspace_created_by_idx")
       .on(table.workspaceId, table.createdBy),
     p.uniqueIndex("desktop_edit_handoffs_token_hash_uidx").on(table.tokenHash),
+    p
+      .foreignKey({
+        columns: [table.desktopSessionId],
+        foreignColumns: [desktopEditSessions.id],
+        name: "desktop_edit_handoffs_desktop_session_fk",
+      })
+      .onDelete("set null"),
     p
       .foreignKey({
         columns: [table.entityId, table.workspaceId],
@@ -624,9 +629,7 @@ export const folioCollabSessions = p.pgTable(
     baseVersionId: safeUuid<"entityVersion">("base_version_id")
       .notNull()
       .references(() => entityVersions.id, { onDelete: "cascade" }),
-    finalizedVersionId: safeUuid<"entityVersion">(
-      "finalized_version_id",
-    ).references(() => entityVersions.id, { onDelete: "set null" }),
+    finalizedVersionId: safeUuid<"entityVersion">("finalized_version_id"),
     createdBy: p
       .text("created_by")
       .notNull()
@@ -669,6 +672,13 @@ export const folioCollabSessions = p.pgTable(
     p
       .index("folio_collab_sessions_base_version_id_idx")
       .on(table.baseVersionId),
+    p
+      .foreignKey({
+        columns: [table.finalizedVersionId],
+        foreignColumns: [entityVersions.id],
+        name: "folio_collab_sessions_finalized_version_fk",
+      })
+      .onDelete("set null"),
     p
       .uniqueIndex("folio_collab_sessions_open_uidx")
       .on(table.workspaceId, table.entityId, table.propertyId)
@@ -1039,6 +1049,7 @@ export const cellMetadata = p.pgTable(
       .foreignKey({
         columns: [table.propertyId, table.workspaceId],
         foreignColumns: [properties.id, properties.workspaceId],
+        name: "cell_metadata_property_workspace_fk",
       })
       .onDelete("cascade"),
     p.index("cell_metadata_workspace_id_idx").on(table.workspaceId),

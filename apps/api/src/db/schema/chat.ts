@@ -566,12 +566,14 @@ export const fileChatThreads = p.pgTable(
       .foreignKey({
         columns: [table.entityId, table.workspaceId],
         foreignColumns: [entities.id, entities.workspaceId],
+        name: "file_chat_threads_entity_workspace_fk",
       })
       .onDelete("cascade"),
     p
       .foreignKey({
         columns: [table.fieldId, table.workspaceId],
         foreignColumns: [fields.id, fields.workspaceId],
+        name: "file_chat_threads_field_workspace_fk",
       })
       .onDelete("cascade"),
     ...fileChatThreadPolicies(),
@@ -616,6 +618,7 @@ export const templateChatThreads = p.pgTable(
       .foreignKey({
         columns: [table.templateId, table.organizationId],
         foreignColumns: [templates.id, templates.organizationId],
+        name: "template_chat_threads_template_organization_fk",
       })
       .onDelete("cascade"),
     ...templateChatThreadPolicies(),
@@ -706,17 +709,13 @@ export const chatThreadCompactions = p.pgTable(
     summaryMarkdown: p.text("summary_markdown").notNull(),
     firstSummarizedMessageId: safeUuid<"chatMessage">(
       "first_summarized_message_id",
-    )
-      .notNull()
-      .references(() => chatMessages.id, { onDelete: "cascade" }),
+    ).notNull(),
     lastSummarizedMessageId: safeUuid<"chatMessage">(
       "last_summarized_message_id",
-    )
-      .notNull()
-      .references(() => chatMessages.id, { onDelete: "cascade" }),
-    firstKeptMessageId: safeUuid<"chatMessage">("first_kept_message_id")
-      .notNull()
-      .references(() => chatMessages.id, { onDelete: "cascade" }),
+    ).notNull(),
+    firstKeptMessageId: safeUuid<"chatMessage">(
+      "first_kept_message_id",
+    ).notNull(),
     summarizedMessageCount: p.integer("summarized_message_count").notNull(),
     /**
      * Encoded `(created_at, id)` keyset cursor for the last message this
@@ -781,6 +780,30 @@ export const chatThreadCompactions = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    // The three message references are named explicitly: drizzle's generated
+    // names exceed PostgreSQL's 63-byte identifier limit and were silently
+    // truncated in the catalog until 20260813110000 renamed them.
+    p
+      .foreignKey({
+        columns: [table.firstSummarizedMessageId],
+        foreignColumns: [chatMessages.id],
+        name: "chat_thread_compactions_first_summarized_message_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.lastSummarizedMessageId],
+        foreignColumns: [chatMessages.id],
+        name: "chat_thread_compactions_last_summarized_message_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.firstKeptMessageId],
+        foreignColumns: [chatMessages.id],
+        name: "chat_thread_compactions_first_kept_message_fk",
+      })
+      .onDelete("cascade"),
     // Read off CHAT_COMPACTION_MEMORY_ELIGIBILITIES rather than re-listed: a
     // new eligibility value must reach the constraint and the column together,
     // and the extractability map beside the const is already total over it.
