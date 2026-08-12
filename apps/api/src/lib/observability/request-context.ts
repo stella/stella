@@ -139,4 +139,5 @@ export const getCurrentRequestId = (): string | undefined =>
 export const runWithRequestId = <TResult>(
   requestId: string,
   fn: () => TResult,
-): TResult => requestIdStore.run({ current: requestId, isAiRequest: false }, fn);
+): TResult =>
+  requestIdStore.run({ current: requestId, isAiRequest: false }, fn);
