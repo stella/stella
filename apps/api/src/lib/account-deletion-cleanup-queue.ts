@@ -1,9 +1,13 @@
 import { Result } from "better-result";
 import { Queue, Worker } from "bullmq";
-import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
 
-import { rootDb } from "@/api/db/root";
-import { accountDeletionRequests } from "@/api/db/schema";
+import {
+  claimNextAccountDeletionEffectChunk,
+  completeAccountDeletionEffectChunk,
+  ensureAccountDeletionEffectChunks,
+  failAccountDeletionEffectChunk,
+  listRecoverableAccountDeletionEffectRequestIds,
+} from "@/api/lib/account-deletion-effect-store";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
@@ -18,9 +22,7 @@ const STORAGE_CLEANUP_JOB_NAME = "storage-cleanup";
 const DEFAULT_JOB_ATTEMPTS = 5;
 const WORKER_CONCURRENCY = 2;
 const RECONCILE_INTERVAL_MS = 60_000;
-const STALE_PROCESSING_MS = 15 * 60_000;
-const RECONCILE_BATCH_SIZE = 50;
-const MAX_RECONCILED_ATTEMPTS = 20;
+const MAX_CHUNKS_PER_JOB = 10;
 
 type AccountDeletionCleanupJobData = {
   requestId: SafeId<"accountDeletionRequest">;
@@ -32,15 +34,19 @@ type AccountDeletionCleanupQueue = Pick<
 >;
 
 type AccountDeletionCleanupRequestDeps = {
+  claimChunk: typeof claimNextAccountDeletionEffectChunk;
+  completeChunk: typeof completeAccountDeletionEffectChunk;
   deleteS3Keys: typeof deleteS3Keys;
-  logger: Pick<typeof logger, "warn">;
-  rootDb: Pick<typeof rootDb, "select" | "update">;
+  ensureChunks: typeof ensureAccountDeletionEffectChunks;
+  failChunk: typeof failAccountDeletionEffectChunk;
 };
 
 const defaultCleanupRequestDeps: AccountDeletionCleanupRequestDeps = {
+  claimChunk: claimNextAccountDeletionEffectChunk,
+  completeChunk: completeAccountDeletionEffectChunk,
   deleteS3Keys,
-  logger,
-  rootDb,
+  ensureChunks: ensureAccountDeletionEffectChunks,
+  failChunk: failAccountDeletionEffectChunk,
 };
 
 let queue: Queue<AccountDeletionCleanupJobData> | null = null;
@@ -84,97 +90,67 @@ export const enqueueAccountDeletionCleanupJob = async ({
   const existingJob = await cleanupQueue.getJob(jobId);
   if (existingJob) {
     const state = await existingJob.getState();
-    if (state === "failed") {
+    if (state === "failed" || state === "completed") {
       await existingJob.remove();
+    } else {
+      return;
     }
   }
 
   await cleanupQueue.add(STORAGE_CLEANUP_JOB_NAME, { requestId }, { jobId });
 };
 
+type DrainAccountDeletionEffectsParams = {
+  deps: AccountDeletionCleanupRequestDeps;
+  remaining: number;
+  requestId: SafeId<"accountDeletionRequest">;
+};
+
+const drainAccountDeletionEffects = async ({
+  deps,
+  remaining,
+  requestId,
+}: DrainAccountDeletionEffectsParams): Promise<void> => {
+  if (remaining === 0) {
+    return;
+  }
+  const claim = await deps.claimChunk(requestId);
+  if (!claim) {
+    return;
+  }
+  const deleteResult = await deps.deleteS3Keys(claim.s3Keys);
+  if (Result.isError(deleteResult)) {
+    await deps.failChunk(claim, deleteResult.error);
+    throw deleteResult.error;
+  }
+  await deps.completeChunk(claim);
+  await drainAccountDeletionEffects({
+    deps,
+    remaining: remaining - 1,
+    requestId,
+  });
+};
+
 export const processAccountDeletionCleanupRequest = async (
   requestId: SafeId<"accountDeletionRequest">,
   deps: AccountDeletionCleanupRequestDeps = defaultCleanupRequestDeps,
 ): Promise<void> => {
-  const request = await deps.rootDb
-    .select({
-      id: accountDeletionRequests.id,
-      status: accountDeletionRequests.status,
-      storageCleanup: accountDeletionRequests.storageCleanup,
-    })
-    .from(accountDeletionRequests)
-    .where(eq(accountDeletionRequests.id, requestId))
-    .limit(1)
-    .then((rows) => rows.at(0));
-
-  if (!request) {
-    deps.logger.warn("account_deletion_cleanup.request_missing", { requestId });
-    return;
-  }
-
-  if (request.status === "completed") {
-    return;
-  }
-
-  const s3Keys = request.storageCleanup.s3Keys;
-
-  await deps.rootDb
-    .update(accountDeletionRequests)
-    .set({
-      attemptCount: sql`${accountDeletionRequests.attemptCount} + 1`,
-      errorMessage: null,
-      status: "processing",
-      updatedAt: new Date(),
-    })
-    .where(eq(accountDeletionRequests.id, requestId));
-
-  if (s3Keys.length === 0) {
-    await markCleanupCompleted(requestId, deps.rootDb);
-    return;
-  }
-
-  const deleteResult = await deps.deleteS3Keys(s3Keys);
-  if (Result.isError(deleteResult)) {
-    await deps.rootDb
-      .update(accountDeletionRequests)
-      .set({
-        errorMessage: deleteResult.error.message,
-        status: "failed",
-        updatedAt: new Date(),
-      })
-      .where(eq(accountDeletionRequests.id, requestId));
-
-    throw deleteResult.error;
-  }
-
-  await markCleanupCompleted(requestId, deps.rootDb);
+  await deps.ensureChunks(requestId);
+  await drainAccountDeletionEffects({
+    deps,
+    remaining: MAX_CHUNKS_PER_JOB,
+    requestId,
+  });
 };
 
 export const enqueuePendingAccountDeletionCleanupRequests =
   async (): Promise<number> => {
-    const staleBefore = new Date(Date.now() - STALE_PROCESSING_MS);
-    const rows = await rootDb
-      .select({ id: accountDeletionRequests.id })
-      .from(accountDeletionRequests)
-      .where(
-        and(
-          lt(accountDeletionRequests.attemptCount, MAX_RECONCILED_ATTEMPTS),
-          or(
-            inArray(accountDeletionRequests.status, ["pending", "failed"]),
-            and(
-              eq(accountDeletionRequests.status, "processing"),
-              lt(accountDeletionRequests.updatedAt, staleBefore),
-            ),
-          ),
-        ),
-      )
-      .orderBy(asc(accountDeletionRequests.createdAt))
-      .limit(RECONCILE_BATCH_SIZE);
+    const requestIds = await listRecoverableAccountDeletionEffectRequestIds();
 
     await Promise.all(
-      rows.map(async (row) => await enqueueAccountDeletionCleanup(row.id)),
+      requestIds.map(async (id) => await enqueueAccountDeletionCleanup(id)),
     );
-    return rows.length;
+    return requestIds.length;
   };
 
 export const initAccountDeletionCleanupWorker = () => {
@@ -241,19 +217,4 @@ export const initAccountDeletionCleanupWorker = () => {
       await worker.close();
     },
   };
-};
-
-const markCleanupCompleted = async (
-  requestId: SafeId<"accountDeletionRequest">,
-  db: AccountDeletionCleanupRequestDeps["rootDb"] = rootDb,
-): Promise<void> => {
-  await db
-    .update(accountDeletionRequests)
-    .set({
-      completedAt: new Date(),
-      errorMessage: null,
-      status: "completed",
-      updatedAt: new Date(),
-    })
-    .where(eq(accountDeletionRequests.id, requestId));
 };

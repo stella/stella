@@ -2,68 +2,37 @@ import { Result, type Result as BetterResult } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+import { ENTITY_DELETION_EFFECT_KIND } from "@/api/lib/entity-deletion-effect-store";
+import type { EntityDeletionEffectClaim } from "@/api/lib/entity-deletion-effect-store";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 type RequestStatus = "pending" | "processing" | "completed" | "failed";
 
-type RequestRow = {
-  attemptCount: number;
-  id: SafeId<"entityDeletionCleanupRequest">;
-  s3Keys: string[];
-  status: RequestStatus;
-};
-
-type UpdateValues = { s3Keys?: string[]; status?: RequestStatus };
-
 const requestId = toSafeId<"entityDeletionCleanupRequest">(
   "00000000-0000-0000-0000-000000000001",
 );
-let requestRow: RequestRow | null = null;
-let statuses: RequestStatus[] = [];
+const claim: EntityDeletionEffectClaim = asTestRaw({
+  attemptCount: 1,
+  chunkId: toSafeId<"entityDeletionEffectChunk">(
+    "00000000-0000-0000-0000-000000000002",
+  ),
+  lease: {
+    kind: ENTITY_DELETION_EFFECT_KIND,
+    token: toSafeId<"effectLease">("00000000-0000-0000-0000-000000000003"),
+  },
+  requestId,
+  s3Keys: ["org/workspace/file.pdf"],
+});
 
 const deleteS3KeysMock = mock(
   async (_keys: string[]): Promise<BetterResult<void, Error>> => Result.ok(),
 );
 
-const rootDbMock = {
-  select: mock((_selection: unknown) => ({
-    from: () => ({
-      where: () => ({
-        limit: async () => (requestRow ? [requestRow] : []),
-      }),
-    }),
-  })),
-  update: mock((_table: unknown) => ({
-    set: (values: UpdateValues) => ({
-      where: () => {
-        if (values.s3Keys && requestRow) {
-          requestRow.s3Keys = values.s3Keys;
-        }
-        if (values.status) {
-          if (values.status === "processing" && requestRow) {
-            requestRow.attemptCount++;
-          }
-          statuses.push(values.status);
-          if (requestRow) {
-            requestRow.status = values.status;
-          }
-        }
-        return {
-          returning: async () =>
-            requestRow
-              ? [
-                  {
-                    attemptCount: requestRow.attemptCount,
-                    s3Keys: requestRow.s3Keys,
-                  },
-                ]
-              : [],
-        };
-      },
-    }),
-  })),
-};
+const claimChunk = mock(async () => claim as EntityDeletionEffectClaim | null);
+const completeChunk = mock(async () => true);
+const ensureChunks = mock(async () => 0);
+const failChunk = mock(async () => true);
 
 const {
   createEntityDeletionCleanupReconciler,
@@ -79,23 +48,27 @@ const queueSource = await Bun.file(
 const cleanupDeps = asTestRaw<
   NonNullable<Parameters<typeof processEntityDeletionCleanupRequest>[1]>
 >({
+  claimChunk,
+  completeChunk,
   deleteS3Keys: deleteS3KeysMock,
-  logger: { warn: mock(() => {}) },
-  rootDb: rootDbMock,
+  ensureChunks,
+  failChunk,
   storageDeleteTimeoutMs: 1000,
 });
 
 describe("entity deletion cleanup queue", () => {
   beforeEach(() => {
-    requestRow = {
-      attemptCount: 0,
-      id: requestId,
-      s3Keys: ["org/workspace/file.pdf"],
-      status: "pending",
-    };
-    statuses = [];
+    claimChunk.mockReset();
+    claimChunk.mockImplementationOnce(async () => claim);
+    claimChunk.mockImplementation(async () => null);
+    completeChunk.mockReset();
+    completeChunk.mockImplementation(async () => true);
     deleteS3KeysMock.mockReset();
     deleteS3KeysMock.mockImplementation(async () => Result.ok());
+    ensureChunks.mockReset();
+    ensureChunks.mockImplementation(async () => 0);
+    failChunk.mockReset();
+    failChunk.mockImplementation(async () => true);
   });
 
   test("records a failed cleanup attempt for durable recovery", async () => {
@@ -111,23 +84,20 @@ describe("entity deletion cleanup queue", () => {
       (error: unknown) => error,
     );
     expect(rejection).toMatchObject({ message: "storage unavailable" });
-    expect(requestRow?.status).toBe("failed");
-
     expect(deleteS3KeysMock).toHaveBeenCalledTimes(1);
-    expect(statuses).toEqual(["processing", "failed"]);
-    expect(requestRow?.status).toBe("failed");
-    expect(requestRow?.s3Keys).toEqual(["org/workspace/file.pdf"]);
+    expect(failChunk).toHaveBeenCalledWith(
+      claim,
+      expect.objectContaining({ message: "storage unavailable" }),
+    );
+    expect(completeChunk).not.toHaveBeenCalled();
   });
 
   test("retires storage keys only after cleanup completes", async () => {
     await processEntityDeletionCleanupRequest(requestId, cleanupDeps);
 
     expect(deleteS3KeysMock).toHaveBeenCalledWith(["org/workspace/file.pdf"]);
-    expect(statuses).toEqual(["processing", "completed"]);
-    expect(requestRow).toMatchObject({
-      s3Keys: [],
-      status: "completed",
-    });
+    expect(completeChunk).toHaveBeenCalledWith(claim);
+    expect(failChunk).not.toHaveBeenCalled();
   });
 
   test("times out a stalled storage deletion and schedules durable recovery", async () => {
@@ -150,25 +120,7 @@ describe("entity deletion cleanup queue", () => {
       label: "entity-deletion-cleanup.storage-delete",
       timeoutMs: 5,
     });
-    expect(statuses).toEqual(["processing", "failed"]);
-    expect(requestRow?.status).toBe("failed");
-  });
-
-  test("fences a stale claim from overwriting its successor", () => {
-    const claim = queueSource.indexOf(
-      "attemptCount: entityDeletionCleanupRequests.attemptCount",
-    );
-    const finalizationFence =
-      "eq(entityDeletionCleanupRequests.attemptCount, claim.attemptCount)";
-    const firstFinalization = queueSource.indexOf(finalizationFence, claim);
-    const secondFinalization = queueSource.indexOf(
-      finalizationFence,
-      firstFinalization + finalizationFence.length,
-    );
-
-    expect(claim).toBeGreaterThan(-1);
-    expect(firstFinalization).toBeGreaterThan(claim);
-    expect(secondFinalization).toBeGreaterThan(firstFinalization);
+    expect(failChunk).toHaveBeenCalledWith(claim, rejection);
   });
 
   test("replaces a completed queue job for nonterminal durable cleanup", async () => {
@@ -332,15 +284,8 @@ describe("entity deletion cleanup queue", () => {
   });
 
   test("scans each recovery state through its matching bounded schedule", () => {
-    expect(queueSource).not.toContain("MAX_RECONCILED_ATTEMPTS");
     expect(queueSource).toContain(
-      'eq(entityDeletionCleanupRequests.status, "pending")',
-    );
-    expect(queueSource).toContain(
-      "lte(entityDeletionCleanupRequests.nextAttemptAt, now)",
-    );
-    expect(queueSource).toContain(
-      "lt(entityDeletionCleanupRequests.updatedAt, staleBefore)",
+      "listRecoverableEntityDeletionEffectRequestIds",
     );
     expect(queueSource).toContain("enableOfflineQueue: false");
   });

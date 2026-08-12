@@ -153,7 +153,15 @@
         },
         {
           "path": "apps/api/src/lib/entity-deletion-cleanup-queue.ts",
-          "contains": ["deleteS3Keys", "RETRY_MAX_DELAY_MS", "nextAttemptAt"]
+          "contains": ["deleteS3Keys", "completeEntityDeletionEffectChunk"]
+        },
+        {
+          "path": "apps/api/src/lib/entity-deletion-effect-store.ts",
+          "contains": ["leaseToken", "nextAttemptAt", "s3Keys: []"]
+        },
+        {
+          "path": "apps/api/src/lib/destructive-effect-chunks.ts",
+          "contains": ["RETRY_MAX_DELAY_MS"]
         },
         {
           "path": "apps/api/src/handlers/workspaces/delete.ts",

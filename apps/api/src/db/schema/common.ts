@@ -270,6 +270,15 @@ export const SEARCH_PROJECTION_KINDS = [
 ] as const;
 export type SearchProjectionKind = (typeof SEARCH_PROJECTION_KINDS)[number];
 
+export const DESTRUCTIVE_EFFECT_CHUNK_STATUSES = [
+  "pending",
+  "processing",
+  "completed",
+  "failed",
+] as const;
+export type DestructiveEffectChunkStatus =
+  (typeof DESTRUCTIVE_EFFECT_CHUNK_STATUSES)[number];
+
 export type AccountDeletionStorageCleanup = {
   s3Keys: string[];
 };
