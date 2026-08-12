@@ -25,6 +25,7 @@ import {
   DOCUMENT_REVIEW_FINDINGS_PER_RUN_MAX,
 } from "@/api/lib/document-review/run-contract";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { PLAYBOOK_VERSION_SOURCE } from "@/api/lib/workflow/playbook-positions";
 
 const config = {
   description:
@@ -122,6 +123,7 @@ const readDocumentReviewRun = createSafeHandler(
                   >`(SELECT ${playbookDefinitionVersions.id}
                        FROM ${playbookDefinitionVersions}
                       WHERE ${playbookDefinitionVersions.playbookDefinitionId} = ${playbookDefinitions.id}
+                        AND ${playbookDefinitionVersions.source} = ${PLAYBOOK_VERSION_SOURCE.APPROVAL}
                       ORDER BY ${playbookDefinitionVersions.version} DESC
                       LIMIT 1)`,
                 })

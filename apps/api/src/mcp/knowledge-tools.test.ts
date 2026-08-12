@@ -9,10 +9,19 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 const materializePlaybookRunMock = mock();
 const startWorkflowMock = mock();
+// The two database reads `openPlaybookRun` makes around the materializer. The
+// opener itself, and the pin resolution inside it, stay real: they are what
+// this suite checks the tool for.
+const loadLatestApprovedVersionMock = mock();
+const createPlaybookTableRunsMock = mock();
 
 const realMaterializeRun =
   await import("@/api/lib/workflow/materialize-playbook-run");
 const realWorkflowQueue = await import("@/api/lib/workflow-queue");
+const realApprovedVersions =
+  await import("@/api/lib/document-review/approved-playbook-versions");
+const realTableRunCreate =
+  await import("@/api/lib/document-review/table-run-create");
 
 void mock.module("@/api/lib/workflow/materialize-playbook-run", () => ({
   ...realMaterializeRun,
@@ -22,6 +31,19 @@ void mock.module("@/api/lib/workflow/materialize-playbook-run", () => ({
 void mock.module("@/api/lib/workflow-queue", () => ({
   ...realWorkflowQueue,
   startWorkflow: startWorkflowMock,
+}));
+
+void mock.module(
+  "@/api/lib/document-review/approved-playbook-versions",
+  () => ({
+    ...realApprovedVersions,
+    loadLatestApprovedVersion: loadLatestApprovedVersionMock,
+  }),
+);
+
+void mock.module("@/api/lib/document-review/table-run-create", () => ({
+  ...realTableRunCreate,
+  createPlaybookTableRuns: createPlaybookTableRunsMock,
 }));
 
 const { handleMcpToolCall, listMcpTools } = await import("@/api/mcp/tools");
@@ -51,6 +73,33 @@ const createClauseScopedDb = (rows: unknown[]) =>
       return await run(builder);
     }),
   );
+
+const PLAYBOOK_ID = toSafeId<"playbookDefinition">("pb_1");
+const APPROVED_VERSION_ID = toSafeId<"playbookDefinitionVersion">("pbv_1");
+
+/**
+ * A playbook's positions, tagged by the issue text so the approved snapshot and
+ * the live definition are told apart by every assertion below.
+ *
+ * A factory rather than a shared constant: `toMatchObject` walks the objects it
+ * is handed, and a fixture reused across assertions must not carry state from
+ * one into the next.
+ */
+const positionsSaying = (issue: string) => ({
+  version: 2,
+  items: [
+    {
+      mode: "extract",
+      sourceId: "11111111-1111-4111-8111-111111111111",
+      issue,
+      ask: {
+        question: "What is the notice period?",
+        content: { version: 1, type: "text" },
+      },
+      enabled: true,
+    },
+  ],
+});
 
 /** A scopedDb whose playbookDefinitions.findFirst resolves to `playbook`. */
 const createPlaybookScopedDb = (playbook: unknown) =>
@@ -104,6 +153,8 @@ describe("MCP knowledge tools", () => {
   beforeEach(() => {
     materializePlaybookRunMock.mockReset();
     startWorkflowMock.mockReset();
+    loadLatestApprovedVersionMock.mockReset();
+    createPlaybookTableRunsMock.mockReset();
   });
 
   afterAll(() => {
@@ -226,7 +277,16 @@ describe("MCP knowledge tools", () => {
     );
   });
 
-  test("run_playbook materializes columns and queues the review workflow", async () => {
+  test("run_playbook reviews the approved snapshot, opens its runs, and queues the workflow", async () => {
+    // The playbook was edited after it was approved. Everything the tool does
+    // must come from the approved snapshot: a review an agent started must be
+    // measured against the same standard the HTTP surfaces measure against,
+    // not against whatever the definition said at that moment.
+    loadLatestApprovedVersionMock.mockResolvedValue({
+      id: APPROVED_VERSION_ID,
+      name: "Approved name",
+      positions: positionsSaying("As approved"),
+    });
     materializePlaybookRunMock.mockResolvedValue({
       ok: true,
       materializedPropertyIds: [
@@ -234,13 +294,21 @@ describe("MCP knowledge tools", () => {
         toSafeId<"property">("p2"),
       ],
     });
+    createPlaybookTableRunsMock.mockResolvedValue({
+      runs: [{ runId: toSafeId<"documentReviewRun">("run_1"), entityId: "e1" }],
+      skippedActiveCount: 0,
+      uncoveredCount: 0,
+      expectedFindingCount: 1,
+    });
     startWorkflowMock.mockResolvedValue(undefined);
 
     const result = await handleMcpToolCall({
       args: { matter_id: "ws_1", playbook_id: "pb_1" },
       context: createContext({
         scopedDb: createPlaybookScopedDb({
-          positions: { version: 2, items: [] },
+          id: PLAYBOOK_ID,
+          name: "Live draft name",
+          positions: positionsSaying("Edited after approval"),
           scope: null,
         }),
       }),
@@ -249,7 +317,35 @@ describe("MCP knowledge tools", () => {
 
     expect(result.isError).toBeFalsy();
     expect(parseToolPayload(result)).toEqual({ runPropertyCount: 2 });
+
+    // Columns still materialize, but from the snapshot rather than the live
+    // definition: the cell a lawyer reads on the table and the finding the run
+    // records answer the same question.
     expect(materializePlaybookRunMock).toHaveBeenCalledTimes(1);
+    expect(materializePlaybookRunMock.mock.calls.at(0)?.[0]).toMatchObject({
+      playbookId: PLAYBOOK_ID,
+      positions: positionsSaying("As approved").items,
+    });
+
+    // And a durable run per document, pinned to the version it was measured
+    // against, projected onto the table the tool materialized into.
+    expect(createPlaybookTableRunsMock).toHaveBeenCalledTimes(1);
+    expect(createPlaybookTableRunsMock.mock.calls.at(0)?.[0]).toMatchObject({
+      workspaceId: "ws_1",
+      userId: "user_1",
+      projection: "columns",
+      docTypeGate: null,
+      playbook: {
+        definitionId: PLAYBOOK_ID,
+        versionId: APPROVED_VERSION_ID,
+        provenance: "approved",
+        definitionSnapshot: {
+          name: "Approved name",
+          positions: positionsSaying("As approved"),
+        },
+      },
+    });
+
     expect(startWorkflowMock).toHaveBeenCalledTimes(1);
     expect(startWorkflowMock.mock.calls.at(0)?.[0]).toMatchObject({
       propertyIds: [toSafeId<"property">("p1"), toSafeId<"property">("p2")],

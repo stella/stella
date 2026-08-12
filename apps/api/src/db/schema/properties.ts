@@ -1,3 +1,6 @@
+import { PLAYBOOK_VERSION_SOURCES } from "@/api/lib/workflow/playbook-positions";
+import type { PlaybookVersionSource } from "@/api/lib/workflow/playbook-positions";
+
 import {
   PROPERTY_ROLES,
   PROPERTY_STATUSES,
@@ -121,6 +124,13 @@ export const propertyDependencies = p.pgTable(
 
 // -- Playbook definitions --
 
+// The accepted `source` values, derived from the const the writers use, so the
+// column and the type cannot drift apart.
+const VERSION_SOURCE_SQL_VALUES = sql.join(
+  PLAYBOOK_VERSION_SOURCES.map((value) => sql.raw(`'${value}'`)),
+  sql`, `,
+);
+
 /**
  * An org-scoped playbook definition: a saved, reusable set of graded
  * Positions. It joins clauses and templates under the org-level
@@ -178,6 +188,13 @@ export const playbookDefinitions = p.pgTable(
  * one row per `(playbookDefinitionId, version)`, never updated in place.
  * `restore-version.ts` reads a row here and copies it back onto the
  * definition as a new draft; it never rewrites this table.
+ *
+ * Every row names why it was written (`source`). A review run pins "the
+ * playbook's latest approved version", which is a filter on that column, not
+ * the newest row: a snapshot taken for any other reason must not become the
+ * standard a document was judged against. The column has no default, so a new
+ * writer has to decide, and `PLAYBOOK_VERSION_SOURCES` has to grow before it
+ * can write anything but an approval.
  */
 export const playbookDefinitionVersions = p.pgTable(
   "playbook_definition_versions",
@@ -188,6 +205,7 @@ export const playbookDefinitionVersions = p.pgTable(
       "playbook_definition_id",
     ).notNull(),
     version: p.integer().notNull(),
+    source: p.text("source").notNull().$type<PlaybookVersionSource>(),
     name: p.varchar({ length: 256 }).notNull(),
     description: p.text(),
     scope: jsonb().$type<PlaybookScope>(),
@@ -215,6 +233,10 @@ export const playbookDefinitionVersions = p.pgTable(
     p
       .index("playbook_def_versions_organization_id_idx")
       .on(table.organizationId),
+    p.check(
+      "playbook_def_versions_source_values_check",
+      sql`${table.source} IN (${VERSION_SOURCE_SQL_VALUES})`,
+    ),
     ...orgPolicies(),
   ],
 );

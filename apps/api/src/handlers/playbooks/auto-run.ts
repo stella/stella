@@ -4,10 +4,12 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { workspaceParams } from "@/api/lib/custom-schema";
+import { loadLatestApprovedVersions } from "@/api/lib/document-review/approved-playbook-versions";
+import { openPlaybookRun } from "@/api/lib/document-review/open-playbook-run";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { startWorkflow } from "@/api/lib/workflow-queue";
-import { materializePlaybookRun } from "@/api/lib/workflow/materialize-playbook-run";
+import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
 import { resolveApplicablePlaybooks } from "@/api/lib/workflow/route-playbooks";
 
 const config = {
@@ -24,9 +26,11 @@ const config = {
 //  - a doc-type-scoped playbook applies only when its type's LABEL is present
 //    among the workspace's "Document Type" classifier values, so we never
 //    materialize empty columns for types absent from the matter.
-// Each playbook stays gated to its own subset via `materializePlaybookRun`; a
-// per-playbook failure (e.g. the properties cap) skips that one and the batch
-// continues.
+// The table is the point here, so every playbook runs projected onto it. Each
+// stays gated to its own subset via `openPlaybookRun`, which pins the same
+// approved snapshot a single run pins and opens the same durable per-document
+// runs; a per-playbook failure (e.g. the properties cap) skips that one and the
+// batch continues.
 const autoRunPlaybooks = createSafeHandler(
   config,
   async function* ({
@@ -43,7 +47,12 @@ const autoRunPlaybooks = createSafeHandler(
       safeDb(async (tx) => {
         const playbooks = await tx.query.playbookDefinitions.findMany({
           where: { organizationId: { eq: organizationId } },
-          columns: { id: true, positions: true, scope: true },
+          columns: {
+            id: true,
+            name: true,
+            positions: true,
+            scope: true,
+          },
           limit: LIMITS.playbookDefinitionsCount,
         });
 
@@ -54,35 +63,50 @@ const autoRunPlaybooks = createSafeHandler(
           playbooks,
         });
 
+        // One read for the whole batch: a pin per playbook resolved separately
+        // would grow the round-trips with the org's library.
+        const approvedVersions = await loadLatestApprovedVersions({
+          tx,
+          organizationId,
+          playbookDefinitionIds: applicable.map((playbook) => playbook.id),
+        });
+
         const materializedPropertyIds: SafeId<"property">[] = [];
         let playbooksRun = 0;
+        let documentRunCount = 0;
 
-        for (const playbook of applicable) {
+        for (const definition of applicable) {
           // oxlint-disable-next-line no-await-in-loop -- one shared transaction: each run reads the cumulative property count to enforce the per-workspace cap, and a single tx cannot run writes in parallel
-          const result = await materializePlaybookRun({
+          const opened = await openPlaybookRun({
             tx,
             workspaceId,
             organizationId,
-            playbookId: playbook.id,
-            positions: playbook.positions.items,
-            scope: playbook.scope,
+            userId: user.id,
+            definition,
+            latestApprovedVersion: approvedVersions.get(definition.id) ?? null,
+            projection: PLAYBOOK_RUN_PROJECTION.COLUMNS,
             recordAuditEvent,
           });
           // Skip a playbook that hit a per-run limit; the rest of the batch
           // still materializes rather than failing the whole auto-run.
-          if (!result.ok || result.materializedPropertyIds.length === 0) {
+          if (!opened.ok || opened.materializedPropertyIds.length === 0) {
             continue;
           }
-          materializedPropertyIds.push(...result.materializedPropertyIds);
+          materializedPropertyIds.push(...opened.materializedPropertyIds);
+          documentRunCount += opened.tableRuns.runs.length;
           playbooksRun += 1;
         }
 
-        return { playbooksRun, materializedPropertyIds };
+        return { playbooksRun, materializedPropertyIds, documentRunCount };
       }),
     );
 
     if (txResult.materializedPropertyIds.length === 0) {
-      return Result.ok({ playbooksRun: 0, runPropertyCount: 0 });
+      return Result.ok({
+        playbooksRun: 0,
+        runPropertyCount: 0,
+        documentRunCount: 0,
+      });
     }
 
     yield* Result.await(
@@ -107,6 +131,7 @@ const autoRunPlaybooks = createSafeHandler(
     return Result.ok({
       playbooksRun: txResult.playbooksRun,
       runPropertyCount: txResult.materializedPropertyIds.length,
+      documentRunCount: txResult.documentRunCount,
     });
   },
 );

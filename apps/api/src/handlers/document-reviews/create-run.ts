@@ -9,12 +9,9 @@
  */
 
 import { panic, Result } from "better-result";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
-import {
-  documentReviewRuns,
-  playbookDefinitionVersions,
-} from "@/api/db/schema";
+import { documentReviewRuns } from "@/api/db/schema";
 import { resolveReviewSelection } from "@/api/handlers/document-reviews/review-selection";
 import { validateReviewTopics } from "@/api/handlers/document-reviews/review-topics";
 import { createDocumentReviewRunBodySchema } from "@/api/handlers/document-reviews/schemas";
@@ -24,6 +21,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { workspaceParams } from "@/api/lib/custom-schema";
+import { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import { resolvePlaybookPin } from "@/api/lib/document-review/resolve-playbook-pin";
 import { DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES } from "@/api/lib/document-review/run-contract";
 import type {
@@ -148,25 +146,13 @@ const createDocumentReviewRun = createSafeHandler(
           if (!definition) {
             return null;
           }
-          const versions = await tx
-            .select({
-              id: playbookDefinitionVersions.id,
-              name: playbookDefinitionVersions.name,
-              positions: playbookDefinitionVersions.positions,
-            })
-            .from(playbookDefinitionVersions)
-            .where(
-              and(
-                eq(playbookDefinitionVersions.playbookDefinitionId, playbookId),
-                eq(playbookDefinitionVersions.organizationId, organizationId),
-              ),
-            )
-            .orderBy(desc(playbookDefinitionVersions.version))
-            .limit(1);
-          const latest = versions.at(0);
           return {
             definition,
-            latestApprovedVersion: latest ?? null,
+            latestApprovedVersion: await loadLatestApprovedVersion({
+              tx,
+              organizationId,
+              playbookDefinitionId: playbookId,
+            }),
           };
         }),
       );

@@ -6,17 +6,17 @@ import { documentTypes, fields } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { loadLatestApprovedVersions } from "@/api/lib/document-review/approved-playbook-versions";
+import { openPlaybookRun } from "@/api/lib/document-review/open-playbook-run";
 import { LIMITS } from "@/api/lib/limits";
 import type { DocTypeClassifier } from "@/api/lib/workflow/materialize-playbook-run";
-import {
-  materializePlaybookRun,
-  resolveDocTypeClassifier,
-} from "@/api/lib/workflow/materialize-playbook-run";
+import { resolveDocTypeClassifier } from "@/api/lib/workflow/materialize-playbook-run";
 import type {
   PlaybookPositions,
   PlaybookScope,
   PlaybookTrigger,
 } from "@/api/lib/workflow/playbook-positions";
+import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
 
 // One shared routing seam. `resolveApplicablePlaybooks` narrows a set of org
 // playbooks to those that apply to a workspace's documents (workspace-wide, or
@@ -24,8 +24,12 @@ import type {
 // values). Both the manual files-table auto-run and the classification trigger
 // resolve through here so the applicability rules cannot drift between surfaces.
 
+// Everything routing needs to decide a playbook applies, plus what pinning it
+// needs when it has never been approved (`name`/`positions` are the draft
+// snapshot `resolvePlaybookPin` falls back to).
 export type RoutablePlaybook = {
   id: SafeId<"playbookDefinition">;
+  name: string;
   positions: PlaybookPositions;
   scope: PlaybookScope | null;
 };
@@ -87,7 +91,7 @@ export const classifierParticipatedInPlan = ({
 // Workspace-wide playbooks pass through; doc-type-scoped ones survive only when
 // their label is present among the classifier's values. One distinct query over
 // the candidate labels keeps the read bounded by the document-type count.
-export const resolveApplicablePlaybooks = async ({
+export const resolveApplicablePlaybooks = async <T extends RoutablePlaybook>({
   tx,
   workspaceId,
   organizationId,
@@ -97,12 +101,14 @@ export const resolveApplicablePlaybooks = async ({
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
-  playbooks: readonly RoutablePlaybook[];
+  // Generic over the row: applicability reads only `scope`, and a caller that
+  // selected more columns (the pinned name, say) keeps them on the way out.
+  playbooks: readonly T[];
   // The "Document Type" classifier, pre-resolved by a caller that already
   // fetched it (classification routing threads it in to avoid a duplicate
   // lookup). Omitted by the auto-run path, which resolves it internally below.
   classifier?: DocTypeClassifier | null;
-}): Promise<RoutablePlaybook[]> => {
+}): Promise<T[]> => {
   const scoped = playbooks.filter((playbook) =>
     Boolean(playbook.scope?.documentTypeKey),
   );
@@ -206,8 +212,10 @@ type RouteClassifiedDocumentsArgs = {
 };
 
 // Classification-driven routing: after the Document Type classifier resolves for
-// a workspace, materialize every applicable `onClassified` org playbook over the
-// files table and start one workflow across the union of materialized columns.
+// a workspace, run every applicable `onClassified` org playbook over the files
+// table — projected onto it, pinned to the same approved snapshot a manual run
+// pins, opening the same durable per-document runs — and start one workflow
+// across the union of materialized columns.
 // Idempotent by construction: materializePlaybookRun upserts by playbookSourceId,
 // so re-running over an already-materialized playbook maps back to the same
 // columns instead of duplicating them; already-graded verdict cells are only
@@ -233,7 +241,7 @@ export const routeClassifiedDocuments = async ({
         organizationId: { eq: organizationId },
         RAW: (table) => sql`${table.scope}->>'trigger' = 'onClassified'`,
       },
-      columns: { id: true, positions: true, scope: true },
+      columns: { id: true, name: true, positions: true, scope: true },
       limit: LIMITS.playbookDefinitionsCount,
     });
 
@@ -272,16 +280,24 @@ export const routeClassifiedDocuments = async ({
       userId,
     });
 
+    // One read for the whole batch rather than a pin per playbook.
+    const approvedVersions = await loadLatestApprovedVersions({
+      tx,
+      organizationId,
+      playbookDefinitionIds: applicable.map((playbook) => playbook.id),
+    });
+
     const ids: SafeId<"property">[] = [];
-    for (const playbook of applicable) {
+    for (const definition of applicable) {
       // oxlint-disable-next-line no-await-in-loop -- one shared transaction: each run reads the cumulative property count to enforce the per-workspace cap, and a single tx cannot run writes in parallel
-      const result = await materializePlaybookRun({
+      const result = await openPlaybookRun({
         tx,
         workspaceId,
         organizationId,
-        playbookId: playbook.id,
-        positions: playbook.positions.items,
-        scope: playbook.scope,
+        userId,
+        definition,
+        latestApprovedVersion: approvedVersions.get(definition.id) ?? null,
+        projection: PLAYBOOK_RUN_PROJECTION.COLUMNS,
         recordAuditEvent,
         auditMetadata: ROUTED_AUDIT_METADATA,
       });
@@ -291,7 +307,7 @@ export const routeClassifiedDocuments = async ({
         // hitting the properties cap) is not silently invisible.
         captureError(new Error(result.message), {
           workspaceId,
-          playbookId: playbook.id,
+          playbookId: definition.id,
           status: String(result.status),
         });
         continue;

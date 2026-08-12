@@ -9,7 +9,8 @@ export type PlaybookDefinitionForPin = {
   positions: PlaybookPositions;
 };
 
-/** The newest row in `playbook_definition_versions` for that definition. */
+/** The newest `playbook_definition_versions` row for that definition whose
+ *  `source` is an approval (see `loadLatestApprovedVersions`). */
 export type PlaybookVersionForPin = {
   id: SafeId<"playbookDefinitionVersion">;
   name: string;

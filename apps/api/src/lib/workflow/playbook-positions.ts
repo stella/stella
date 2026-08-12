@@ -3,6 +3,7 @@ import type { Static } from "elysia";
 
 import { propertyContentSchema } from "@/api/db/schema-validators";
 import { tConditionNode } from "@/api/lib/conditions/contract";
+import type { ConstantMap } from "@/api/lib/constant-map";
 import {
   positionRuleSchema,
   positionSeveritySchema,
@@ -220,3 +221,17 @@ export const playbookDefinitionStatusSchema = t.Union([
 export type PlaybookDefinitionStatus = Static<
   typeof playbookDefinitionStatusSchema
 >;
+
+// ── Version provenance ────────────────────────────────────────────
+// Why a `playbook_definition_versions` row exists. Today approval is the only
+// reason one is written, and a run pins "the playbook's latest approved
+// version" by reading the newest row — which is only the same thing while that
+// stays true. The column says which it is instead of leaving the reader to
+// assume, so a future snapshot taken for another reason (an import, a restore,
+// an autosave) has to name itself and cannot be mistaken for an approval.
+// Deliberately no default: a writer must decide.
+export const PLAYBOOK_VERSION_SOURCES = ["approval"] as const;
+export type PlaybookVersionSource = (typeof PLAYBOOK_VERSION_SOURCES)[number];
+export const PLAYBOOK_VERSION_SOURCE = {
+  APPROVAL: "approval",
+} as const satisfies ConstantMap<PlaybookVersionSource>;
