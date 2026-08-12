@@ -1,10 +1,11 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { properties } from "@/api/db/schema";
 import type { AIRequestServiceTier } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { COMPUTED_PROPERTY_TOOL_TYPES } from "@/api/lib/workflow/get-execution-plan";
 
 /**
  * The starter the catch-up drives, narrowed to what it passes. Structural
@@ -32,7 +33,7 @@ type StragglerCatchUpArgs = {
  * Start a follow-up run for whatever the workspace still owes once a run
  * finishes.
  *
- * Two things leave a stale ai-model column behind a finished run: a column
+ * Two things leave a computed column stale behind a finished run: a column
  * created mid-run, which was never in that run's plan, and a start answered
  * `already-running`, whose caller materialized its columns and left the enqueue
  * to the run in flight. The playbook surfaces classify that answer as benign on
@@ -41,10 +42,12 @@ type StragglerCatchUpArgs = {
  * finished run performs it: the run a deferred start raced is as likely to be a
  * cell-scoped retry as a workspace-wide sweep.
  *
- * The filter on `tool.type = 'ai-model'` is what keeps this from looping.
- * Manual columns may legitimately sit stale (e.g. after a type edit) and the
- * planner skips them, so an unfiltered query would fire no-op workflows
- * forever.
+ * The tool-type filter is what keeps this from looping, and it asks the planner
+ * which types those are. Manual columns may legitimately sit stale (e.g. after
+ * a type edit) and no run computes them, so an unfiltered query would fire
+ * no-op workflows forever; a hand-listed filter would instead miss a computed
+ * type, which is how a graded playbook position with a manual ASK could
+ * materialize a stale verdict column nothing came back for.
  */
 export const startStragglerCatchUp = async ({
   workspaceId,
@@ -63,7 +66,9 @@ export const startStragglerCatchUp = async ({
           and(
             eq(properties.workspaceId, workspaceId),
             eq(properties.status, "stale"),
-            sql`${properties.tool}->>'type' = 'ai-model'`,
+            inArray(sql`${properties.tool}->>'type'`, [
+              ...COMPUTED_PROPERTY_TOOL_TYPES,
+            ]),
           ),
         )
         .limit(1),

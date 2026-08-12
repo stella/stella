@@ -50,6 +50,16 @@ const MANUAL_TOOL = {
   type: "manual-input",
 } as const satisfies PropertyTool;
 
+/** The verdict half of a graded position, materialized stale beside its ASK. */
+const VERDICT_TOOL = {
+  version: 1,
+  type: "playbook-verdict",
+  askPropertyId: "01931f4a-0000-7000-8000-0000000000a5",
+  rule: { kind: "positionMatch" },
+  severity: "medium",
+  tiers: { fallbacks: [], acceptableRules: [], notAcceptableRules: [] },
+} as const satisfies PropertyTool;
+
 const seedProperty = async ({
   status,
   tool,
@@ -169,6 +179,23 @@ describe("the catch-up a finished run owes", () => {
     await seedProperty({ status: "fresh", tool: ASK_TOOL, workspaceId: WS_ID });
     try {
       expect(await runCatchUp()).toEqual([]);
+    } finally {
+      await clearProperties();
+    }
+  });
+
+  test("starts a follow-up run for a stale verdict column", async () => {
+    // A graded position whose ASK needs no extraction (an empty question
+    // materializes a manual, already-fresh ASK) leaves only its verdict column
+    // owed. The verdict engine grades it, so it is as much owed work as an
+    // extraction is.
+    await seedProperty({
+      status: "stale",
+      tool: VERDICT_TOOL,
+      workspaceId: WS_ID,
+    });
+    try {
+      expect(await runCatchUp()).toHaveLength(1);
     } finally {
       await clearProperties();
     }

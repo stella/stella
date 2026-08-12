@@ -1,10 +1,12 @@
 import { Panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { propertyToolSchema } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   buildDependencyGraph,
   buildLevelBatches,
+  COMPUTED_PROPERTY_TOOL_TYPES,
   getPropertyExecutionPlan,
 } from "@/api/lib/workflow/get-execution-plan";
 import type {
@@ -22,6 +24,17 @@ const aiModelTool = {
 const manualInputTool = {
   version: 1 as const,
   type: "manual-input" as const,
+};
+
+// The graded half of a playbook position: computed by the verdict engine
+// rather than the LLM extraction path, but planned like any other column.
+const verdictTool = {
+  version: 1 as const,
+  type: "playbook-verdict" as const,
+  askPropertyId: "01931f4a-0000-7000-8000-0000000000a5",
+  rule: { kind: "positionMatch" as const },
+  severity: "medium" as const,
+  tiers: { fallbacks: [], acceptableRules: [], notAcceptableRules: [] },
 };
 
 const textContent = {
@@ -547,5 +560,54 @@ describe("getPropertyExecutionPlan", () => {
     expect(() =>
       getPropertyExecutionPlan({ properties, dependencies }),
     ).toThrow(Panic);
+  });
+});
+
+describe("COMPUTED_PROPERTY_TOOL_TYPES", () => {
+  /** Every tool type a column can carry, read from the stored shape itself. */
+  const allToolTypes = propertyToolSchema.anyOf.map(
+    (member) => member.properties.type.const,
+  );
+  /** The rest: columns a person fills in, which sit stale legitimately. */
+  const USER_ENTERED_TOOL_TYPES = ["manual-input"] as const;
+
+  test("every tool type is either computed or user-entered", () => {
+    // Both directions, because the straggler catch-up asks this list whether a
+    // finished run left the workspace owing anything: a computed type missing
+    // from it is work nothing comes back for, and a user-entered type inside
+    // it is a follow-up run that fires forever.
+    expect(
+      [...COMPUTED_PROPERTY_TOOL_TYPES, ...USER_ENTERED_TOOL_TYPES].toSorted(),
+    ).toEqual(allToolTypes.toSorted());
+  });
+
+  test("the planner schedules exactly the tool types declared computed", () => {
+    // One column of every tool type, each reading the file column the way a
+    // materialized playbook column does (the plan drops its first level, which
+    // is the inputs themselves).
+    const properties: ExecutionPlanProperty[] = [
+      createProperty("F", { content: fileContent, tool: manualInputTool }),
+      createProperty("A", { tool: aiModelTool }),
+      createProperty("B", { tool: manualInputTool }),
+      createProperty("C", { tool: verdictTool }),
+    ];
+    const dependencies: PropertyDependency[] = [
+      propertyDependency("A", "F"),
+      propertyDependency("B", "F"),
+      propertyDependency("C", "F"),
+    ];
+
+    const scheduled = getPropertyExecutionPlan({
+      properties,
+      dependencies,
+    }).flatMap((level) =>
+      level.flatMap((batch) =>
+        batch.properties.map((property) => property.tool.type),
+      ),
+    );
+
+    expect(scheduled.toSorted()).toEqual(
+      [...COMPUTED_PROPERTY_TOOL_TYPES].toSorted(),
+    );
   });
 });
