@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { roles } from "@stll/permissions";
 
+import { abortableTx } from "@/api/db/safe-db";
 import { workspaceViews } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -97,8 +98,8 @@ const updateView = createSafeHandler(
       return Result.ok({});
     }
 
-    const updateResult = yield* Result.await(
-      safeDb(async (tx) => {
+    yield* Result.await(
+      abortableTx(safeDb, async (tx) => {
         if (parsedLayout !== undefined) {
           const resolvedTemplateProperties = await resolveTemplateProperties({
             tx,
@@ -111,9 +112,6 @@ const updateView = createSafeHandler(
             recordAuditEvent,
           });
 
-          if (!resolvedTemplateProperties.ok) {
-            return resolvedTemplateProperties;
-          }
           cleanStalePropertyIds(
             parsedLayout,
             resolvedTemplateProperties.propertyIds,
@@ -148,19 +146,8 @@ const updateView = createSafeHandler(
           resourceId: viewId,
           changes,
         });
-
-        return { ok: true as const };
       }),
     );
-
-    if (!updateResult.ok) {
-      return Result.err(
-        new HandlerError({
-          status: updateResult.status,
-          message: updateResult.message,
-        }),
-      );
-    }
 
     broadcastWorkspaceResourceUpdated(
       workspaceId,

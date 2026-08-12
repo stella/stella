@@ -4,6 +4,7 @@ import { eq, sql } from "drizzle-orm";
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { roles } from "@stll/permissions";
 
+import { abortableTx } from "@/api/db/safe-db";
 import { workspaceViews } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -52,7 +53,7 @@ const createView = createSafeHandler(
     }
 
     const txResult = yield* Result.await(
-      safeDb(async (tx) => {
+      abortableTx(safeDb, async (tx) => {
         const existing = await tx
           .select({ id: workspaceViews.id, layout: workspaceViews.layout })
           .from(workspaceViews)
@@ -64,19 +65,17 @@ const createView = createSafeHandler(
         );
 
         if (layout.type === "overview" && hasOverviewView) {
-          return {
-            ok: false as const,
-            status: 400 as const,
+          throw new HandlerError({
+            status: 400,
             message: "Overview view already exists",
-          };
+          });
         }
 
         if (existing.length >= LIMITS.viewsCount) {
-          return {
-            ok: false as const,
-            status: 400 as const,
+          throw new HandlerError({
+            status: 400,
             message: "Views limit reached",
-          };
+          });
         }
 
         const resolvedTemplateProperties = await resolveTemplateProperties({
@@ -90,13 +89,6 @@ const createView = createSafeHandler(
           recordAuditEvent,
         });
 
-        if (!resolvedTemplateProperties.ok) {
-          return {
-            ok: false as const,
-            status: resolvedTemplateProperties.status,
-            message: resolvedTemplateProperties.message,
-          };
-        }
         cleanStalePropertyIds(layout, resolvedTemplateProperties.propertyIds);
 
         const [maxRow] = await tx
@@ -120,11 +112,13 @@ const createView = createSafeHandler(
           .returning();
 
         if (!inserted) {
-          return {
-            ok: false as const,
-            status: 500 as const,
+          // Resolving the template columns above may have created columns,
+          // dependency rows, and audit events; returning here would commit them
+          // without the view they belong to.
+          throw new HandlerError({
+            status: 500,
             message: "Failed to create view",
-          };
+          });
         }
 
         await recordAuditEvent(tx, {
@@ -144,7 +138,6 @@ const createView = createSafeHandler(
         });
 
         return {
-          ok: true as const,
           view: {
             version: 1 as const,
             id: inserted.id,
@@ -156,15 +149,6 @@ const createView = createSafeHandler(
         };
       }),
     );
-
-    if (!txResult.ok) {
-      return Result.err(
-        new HandlerError({
-          status: txResult.status,
-          message: txResult.message,
-        }),
-      );
-    }
 
     broadcastWorkspaceResourceUpdated(
       workspaceId,
