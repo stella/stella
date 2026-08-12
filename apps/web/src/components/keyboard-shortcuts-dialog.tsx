@@ -1,6 +1,6 @@
 import { useId, useState } from "react";
 
-import { formatForDisplay, useHotkeyRecorder } from "@tanstack/react-hotkeys";
+import { useHotkeyRecorder } from "@tanstack/react-hotkeys";
 import type { Hotkey } from "@tanstack/react-hotkeys";
 import { PencilIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -18,9 +18,11 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import {
+  formatHotkeyForPlatform,
   formatShortcutBinding,
   isEditableEventTarget,
   SHOW_SHORTCUTS_KEY,
@@ -159,6 +161,7 @@ const RebindableBinding = ({
   onReset,
 }: RebindableBindingProps) => {
   const t = useTranslations();
+  const hotkeyPlatform = useHydrationSafeHotkeyPlatform();
   const [pending, setPending] = useState<Hotkey | null>(null);
   const [rebindError, setRebindError] = useState<RebindError | null>(null);
   const [isBusy, setIsBusy] = useState(false);
@@ -243,7 +246,7 @@ const RebindableBinding = ({
         <div className="flex items-center gap-2">
           <kbd className="border-primary bg-muted text-foreground min-w-16 rounded border border-dashed px-1.5 py-0.5 text-center text-xs">
             {preview
-              ? formatForDisplay(preview)
+              ? formatHotkeyForPlatform(preview, hotkeyPlatform)
               : t("navigation.shortcutsDialog.pressKeys")}
           </kbd>
           <Button
@@ -282,7 +285,7 @@ const RebindableBinding = ({
         </Button>
       ) : null}
       <kbd className="border-border bg-muted text-muted-foreground rounded border px-1.5 py-0.5 text-xs">
-        {formatShortcutBinding({ type: "hotkey", hotkey })}
+        {formatShortcutBinding({ type: "hotkey", hotkey }, hotkeyPlatform)}
       </kbd>
       <Button
         // Quiet entry affordance: hidden until the row is hovered or receives

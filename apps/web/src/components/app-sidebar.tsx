@@ -14,7 +14,7 @@ import {
   draggable,
   dropTargetForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
-import { formatForDisplay, useHotkey } from "@tanstack/react-hotkeys";
+import { useHotkey } from "@tanstack/react-hotkeys";
 import {
   hashKey,
   useInfiniteQuery,
@@ -109,6 +109,7 @@ import {
 import { useChromeQuery, useHasMounted } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useGuidesPreviewEnabled } from "@/hooks/use-guides-preview";
+import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -119,7 +120,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { NAV_KEY } from "@/lib/hotkeys";
+import { formatHotkeyForPlatform, NAV_KEY } from "@/lib/hotkeys";
 import { knowledgeSections } from "@/lib/knowledge/navigation";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
@@ -150,6 +151,7 @@ const GuideHelpDrawer = lazy(async () => {
 
 export const AppSidebar = (props: AppSidebarProps) => {
   const t = useTranslations();
+  const hotkeyPlatform = useHydrationSafeHotkeyPlatform();
   const navigate = routeApi.useNavigate();
   const canCreateMatter = usePermissions({ workspace: ["create"] });
   const canUseStyleSets = usePermissions({ styleSet: ["use"] });
@@ -630,7 +632,10 @@ export const AppSidebar = (props: AppSidebarProps) => {
                         return (
                           <SidebarMenuBadge>
                             <kbd className="text-muted-foreground text-[0.625rem]">
-                              {formatForDisplay(searchHotkey)}
+                              {formatHotkeyForPlatform(
+                                searchHotkey,
+                                hotkeyPlatform,
+                              )}
                             </kbd>
                           </SidebarMenuBadge>
                         );

@@ -191,12 +191,39 @@ export type ShortcutGroup = {
   readonly shortcuts: readonly ShortcutDescriptor[];
 };
 
+export type HotkeyPlatform = ReturnType<typeof detectPlatform>;
+
+export const SSR_HOTKEY_PLATFORM: HotkeyPlatform = "linux";
+
+export type HotkeyPlatformState =
+  | { readonly status: "pre-mount"; readonly detected: HotkeyPlatform }
+  | { readonly status: "mounted"; readonly detected: HotkeyPlatform };
+
 /**
- * Format a shortcut's full, platform-correct key combo for display in the
- * cheatsheet (e.g. `⌘K` on macOS, `Ctrl+K` elsewhere).
+ * The server and first browser render always use one canonical platform.
+ * Once mounted, labels can safely switch to the browser's detected platform.
  */
-export const formatShortcutBinding = (binding: ShortcutBinding): string =>
-  binding.type === "hotkey" ? formatForDisplay(binding.hotkey) : binding.char;
+export const resolveHydrationSafeHotkeyPlatform = (
+  state: HotkeyPlatformState,
+): HotkeyPlatform =>
+  state.status === "mounted" ? state.detected : SSR_HOTKEY_PLATFORM;
+
+export const formatHotkeyForPlatform = (
+  hotkey: Hotkey,
+  platform: HotkeyPlatform,
+): string => formatForDisplay(hotkey, { platform });
+
+/**
+ * Format a shortcut's full, platform-correct key combo for display. Callers
+ * must pass the platform returned by useHydrationSafeHotkeyPlatform().
+ */
+export const formatShortcutBinding = (
+  binding: ShortcutBinding,
+  platform: HotkeyPlatform,
+): string =>
+  binding.type === "hotkey"
+    ? formatHotkeyForPlatform(binding.hotkey, platform)
+    : binding.char;
 
 /**
  * Whether a keyboard event originates from a text-entry control. Global

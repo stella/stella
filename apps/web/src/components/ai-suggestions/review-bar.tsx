@@ -30,10 +30,7 @@
 import { useRef } from "react";
 import type { RefObject } from "react";
 
-import {
-  formatForDisplay,
-  matchesKeyboardEvent,
-} from "@tanstack/react-hotkeys";
+import { matchesKeyboardEvent } from "@tanstack/react-hotkeys";
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -68,8 +65,10 @@ import {
 import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store";
 import { useReviewActions } from "@/components/ai-suggestions/use-review-actions";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
+import { formatHotkeyForPlatform } from "@/lib/hotkeys";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 
 const EMPTY_SUGGESTIONS: readonly ReviewSuggestion[] = [];
@@ -94,6 +93,7 @@ export const ReviewBar = ({
   requestDocxEditMode,
 }: ReviewBarProps) => {
   const t = useTranslations();
+  const hotkeyPlatform = useHydrationSafeHotkeyPlatform();
   // Effective (user-rebindable) bindings for the four review shortcuts. The
   // capture-phase handler below matches against these, and the tooltips render
   // them, so a rebind changes both behavior and the discoverable hint. These
@@ -291,7 +291,10 @@ export const ReviewBar = ({
         disabled={activeIndex <= 0}
         onClick={goPrev}
         size="icon-sm"
-        tooltip={`${t("common.previous")} · ${formatForDisplay(prevHotkey)}`}
+        tooltip={`${t("common.previous")} · ${formatHotkeyForPlatform(
+          prevHotkey,
+          hotkeyPlatform,
+        )}`}
         variant="ghost"
       >
         <ChevronUpIcon className="size-4" />
@@ -301,7 +304,10 @@ export const ReviewBar = ({
         disabled={activeIndex >= suggestions.length - 1}
         onClick={goNext}
         size="icon-sm"
-        tooltip={`${t("common.next")} · ${formatForDisplay(nextHotkey)}`}
+        tooltip={`${t("common.next")} · ${formatHotkeyForPlatform(
+          nextHotkey,
+          hotkeyPlatform,
+        )}`}
         variant="ghost"
       >
         <ChevronDownIcon className="size-4" />
@@ -330,7 +336,10 @@ export const ReviewBar = ({
               detached(acceptAndAdvance(), "review-bar.accept-and-advance");
             }}
             size="sm"
-            tooltip={`${t("common.accept")} · ${formatForDisplay(acceptHotkey)}`}
+            tooltip={`${t("common.accept")} · ${formatHotkeyForPlatform(
+              acceptHotkey,
+              hotkeyPlatform,
+            )}`}
             variant="default"
           >
             <CheckIcon className="me-1 size-3.5 @max-[80rem]/file-viewer:me-0" />
@@ -343,7 +352,10 @@ export const ReviewBar = ({
             disabled={activeAction === "busy"}
             onClick={rejectAndAdvance}
             size="sm"
-            tooltip={`${t("docxReview.reject")} · ${formatForDisplay(rejectHotkey)}`}
+            tooltip={`${t("docxReview.reject")} · ${formatHotkeyForPlatform(
+              rejectHotkey,
+              hotkeyPlatform,
+            )}`}
             variant="outline"
           >
             <XIcon className="me-1 size-3.5 @max-[80rem]/file-viewer:me-0" />
