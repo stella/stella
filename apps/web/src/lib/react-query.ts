@@ -6,7 +6,7 @@ import type {
   QueryClient,
   QueryKey,
 } from "@tanstack/react-query";
-import { TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
 
 import { STALE_TIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
@@ -116,10 +116,38 @@ export const prefetchNonCriticalQuery = async <
   options: FetchQueryOptions<TQueryFnData, TError, TData, TQueryKey>,
   onError: (error: unknown) => void,
 ) => {
-  try {
-    await queryClient.fetchQuery(options);
-  } catch (error) {
-    onError(error);
+  const result = await Result.tryPromise({
+    try: async () => await queryClient.fetchQuery(options),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(result)) {
+    onError(result.error);
+  }
+};
+
+export const prefetchNonCriticalInfiniteQuery = async <
+  TQueryFnData,
+  TError = Error,
+  TData = TQueryFnData,
+  TQueryKey extends QueryKey = QueryKey,
+  TPageParam = unknown,
+>(
+  queryClient: QueryClient,
+  options: FetchInfiniteQueryOptions<
+    TQueryFnData,
+    TError,
+    TData,
+    TQueryKey,
+    TPageParam
+  >,
+  onError: (error: unknown) => void,
+) => {
+  const result = await Result.tryPromise({
+    try: async () => await queryClient.fetchInfiniteQuery(options),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(result)) {
+    onError(result.error);
   }
 };
 

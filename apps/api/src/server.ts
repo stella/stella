@@ -258,6 +258,8 @@ const buildRequestLogDetails = ({
   return details;
 };
 
+const CORS_PREFLIGHT_MAX_AGE_SECONDS = 60 * 60;
+
 const api = new Elysia()
   .onRequest(async (context) => {
     const { request, set } = context;
@@ -329,6 +331,7 @@ const api = new Elysia()
         "Content-Disposition",
         REQUEST_ID_HEADER,
       ],
+      maxAge: CORS_PREFLIGHT_MAX_AGE_SECONDS,
     }),
   )
   .onError(({ error, set, code, request, route }) => {
