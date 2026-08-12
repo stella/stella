@@ -54,14 +54,11 @@ const fixtureHasRuleDisable = (source: string, ruleId: string): boolean =>
       return false;
     }
 
-    return (
-      ruleList
-        .split(/\s+--(?:\s|$)/u, 1)
-        .at(0)
-        ?.replace(/\s*\*\/\}?\s*$/u, "")
-        ?.split(",")
-        .some((rule) => rule.trim() === ruleId) ?? false
-    );
+    return ruleList
+      .replace(/\s+--(?:\s|$).*$/u, "")
+      .replace(/\s*\*\/\}?\s*$/u, "")
+      .split(",")
+      .some((rule) => rule.trim() === ruleId);
   });
 
 for (const file of pluginFiles) {
