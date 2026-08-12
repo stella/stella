@@ -115,9 +115,11 @@ class Repository {
 export const repository = new Repository();
 
 // MUST flag: a statically known computed key chains exactly like its dotted
-// form, so these are two chain states and not one opaque `[]` step.
+// form, so these are two chain states and not one opaque `[]` step. The
+// dot-notation suppression is what lets the fixture write the computed form
+// this case exists to cover.
 export const computedRows = async () => {
-  // oxlint-disable-next-line no-awaited-builder-union/no-awaited-builder-union
+  // oxlint-disable-next-line no-awaited-builder-union/no-awaited-builder-union, typescript/dot-notation
   const rows = await (lock ? query["for"]("update") : query);
   return rows;
 };
