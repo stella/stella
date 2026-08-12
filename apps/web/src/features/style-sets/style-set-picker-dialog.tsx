@@ -21,6 +21,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { styleSetsOptions } from "@/features/style-sets/style-set-queries";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
 export type StyleSelection =
@@ -90,6 +91,7 @@ const StyleSetPickerDialogBody = ({
 
   const handleSubmit = () => {
     submit().catch((error: unknown) => {
+      getAnalytics().captureError(error);
       setCreating(false);
       stellaToast.add({
         type: "error",

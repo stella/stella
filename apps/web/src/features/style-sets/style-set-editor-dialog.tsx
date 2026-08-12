@@ -31,6 +31,7 @@ import {
   styleSetsKeys,
   stellaStyleEditorOptions,
 } from "@/features/style-sets/style-set-queries";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
@@ -172,6 +173,10 @@ const LoadedStyleSetEditor = ({
     error: Parameters<typeof userErrorMessage>[0] | null,
   ) => {
     if (error) {
+      // An API error response reaches the user through the same toast as a
+      // rejected request, so it has to reach analytics the same way too; the
+      // catch in `handleSubmit` only ever sees the rejection.
+      getAnalytics().captureError(error);
       setSaving(false);
       stellaToast.add({
         type: "error",
@@ -220,6 +225,7 @@ const LoadedStyleSetEditor = ({
   const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     save().catch((error: unknown) => {
+      getAnalytics().captureError(error);
       setSaving(false);
       stellaToast.add({
         type: "error",

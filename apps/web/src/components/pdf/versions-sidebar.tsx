@@ -37,6 +37,7 @@ import { VersionList, VersionRow } from "@/components/versions/version-list";
 import type { VersionDiffSegment } from "@/components/versions/version-list";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
@@ -312,7 +313,8 @@ export const VersionsSidebar = ({
       if (response.error) {
         throw toAPIError(response.error);
       }
-    } catch {
+    } catch (error) {
+      getAnalytics().captureError(error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
       await invalidateVersions();
       return;
@@ -342,7 +344,8 @@ export const VersionsSidebar = ({
       if (response.error) {
         throw toAPIError(response.error);
       }
-    } catch {
+    } catch (error) {
+      getAnalytics().captureError(error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
     } finally {
       await invalidateVersions();
@@ -360,7 +363,8 @@ export const VersionsSidebar = ({
       if (response.error) {
         throw toAPIError(response.error);
       }
-    } catch {
+    } catch (error) {
+      getAnalytics().captureError(error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
     } finally {
       await invalidateVersions();

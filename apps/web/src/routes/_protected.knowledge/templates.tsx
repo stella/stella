@@ -132,23 +132,21 @@ function RouteComponent() {
   };
 
   const invalidateTemplates = useCallback(() => {
-    queryClient
-      .invalidateQueries({
+    detached(
+      queryClient.invalidateQueries({
         queryKey: knowledgeKeys.templates.all(activeOrganizationId),
-      })
-      .catch(() => {
-        /* fire-and-forget */
-      });
+      }),
+      "knowledge-templates.invalidate-templates",
+    );
   }, [queryClient, activeOrganizationId]);
 
   const invalidateCategories = () => {
-    queryClient
-      .invalidateQueries({
+    detached(
+      queryClient.invalidateQueries({
         queryKey: knowledgeKeys.templateCategories.all(activeOrganizationId),
-      })
-      .catch(() => {
-        /* fire-and-forget */
-      });
+      }),
+      "knowledge-templates.invalidate-categories",
+    );
   };
 
   // Uploading a template drops you straight into the Studio: create it (the

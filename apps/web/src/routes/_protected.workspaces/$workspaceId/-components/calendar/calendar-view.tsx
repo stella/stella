@@ -13,6 +13,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useLocale } from "@/i18n/formatting-context";
 import { getFirstWeekday, getWeekendDays } from "@/i18n/week";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
@@ -441,7 +442,8 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
             if (response.error) {
               throw toAPIError(response.error);
             }
-          } catch {
+          } catch (error) {
+            getAnalytics().captureError(error);
             stellaToast.add({
               title: t("errors.actionFailed"),
               type: "error",
@@ -466,7 +468,8 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
             if (response.error) {
               throw toAPIError(response.error);
             }
-          } catch {
+          } catch (error) {
+            getAnalytics().captureError(error);
             stellaToast.add({
               title: t("errors.actionFailed"),
               type: "error",
@@ -639,9 +642,10 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
                           key={day.date}
                           mode="month"
                           onCreate={(kind) => {
-                            handleCreate(day.date, kind).catch(() => {
-                              // Error handled inside handleCreate
-                            });
+                            detached(
+                              handleCreate(day.date, kind),
+                              "calendar-view.create-entry-month",
+                            );
                           }}
                           onDrop={(entityId, kind) =>
                             handleDrop({ date: day.date, entityId, kind })
@@ -673,9 +677,10 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
                   key={day.date}
                   mode={mode}
                   onCreate={(kind) => {
-                    handleCreate(day.date, kind).catch(() => {
-                      // Error handled inside handleCreate
-                    });
+                    detached(
+                      handleCreate(day.date, kind),
+                      "calendar-view.create-entry-week",
+                    );
                   }}
                   onDrop={(entityId, kind) =>
                     handleDrop({ date: day.date, entityId, kind })

@@ -47,6 +47,7 @@ import {
   resolveDocumentTypeClassifier,
 } from "@/components/workspaces/table/group-columns";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { toSafeId } from "@/lib/safe-id";
 import type { PropertyDependency, WorkspacePropertyOption } from "@/lib/types";
@@ -388,7 +389,8 @@ const BulkBody = ({ workspaceId, onClose, dirtyRef }: BulkBodyProps) => {
         type: "success",
       });
       onClose();
-    } catch {
+    } catch (error) {
+      getAnalytics().captureError(error);
       stellaToast.add({
         title: t("workspaces.properties.bulk.createFailed"),
         type: "error",

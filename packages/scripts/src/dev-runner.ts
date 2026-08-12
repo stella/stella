@@ -1573,6 +1573,9 @@ const openBrowser = (url: string) => {
     }, DEFAULT_OPEN_BROWSER_TIMEOUT_MS);
     timeout.unref();
 
+    // Dev tooling: no capture channel to route this through, and
+    // `child.exited` settles with a status rather than rejecting.
+    // eslint-disable-next-line no-detached-void/no-detached-void
     void child.exited.finally(() => {
       clearTimeout(timeout);
     });
@@ -1797,6 +1800,9 @@ const main = async () => {
     }
 
     await Promise.all(
+      // Every child was just killed, so a non-zero settlement is the
+      // expected outcome of the shutdown, not a fault to report.
+      // eslint-disable-next-line no-swallowed-rejection/no-swallowed-rejection
       children.map(async ({ child }) => await child.exited.catch(() => 1)),
     );
   };
@@ -1829,6 +1835,9 @@ const main = async () => {
 
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.on(signal, () => {
+      // `shutdown` ends in `process.exit`, so this promise never settles for
+      // a handler to observe.
+      // eslint-disable-next-line no-detached-void/no-detached-void
       void shutdown(0);
     });
   }

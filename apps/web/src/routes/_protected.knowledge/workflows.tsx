@@ -8,6 +8,7 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { workflowsRouteAvailable } from "@/hooks/use-workflows-preview";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
@@ -138,7 +139,10 @@ function RouteComponent() {
         ...flowDetailOptions(organizationId, flow.id),
         staleTime: 0,
       })
-      .catch(() => null);
+      .catch((error: unknown) => {
+        getAnalytics().captureError(error);
+        return null;
+      });
 
     if (!detail || !("steps" in detail)) {
       setTogglingId(null);

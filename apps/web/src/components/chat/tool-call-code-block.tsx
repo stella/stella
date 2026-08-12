@@ -8,6 +8,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 
 const TOOL_CODE_THEME = {
@@ -65,7 +66,8 @@ export const ToolCallCodeBlock = ({
     try {
       await navigator.clipboard.writeText(code);
       stellaToast.add({ title: t("common.copied"), type: "success" });
-    } catch {
+    } catch (error) {
+      getAnalytics().captureError(error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
     }
   };

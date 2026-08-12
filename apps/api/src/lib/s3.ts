@@ -9,8 +9,9 @@ import { S3Client } from "bun";
 
 import { envBase } from "@/api/env-base";
 import { contentDisposition } from "@/api/lib/content-disposition";
-import { safeErrorCode } from "@/api/lib/errors/utils";
+import { errorTag, safeErrorCode } from "@/api/lib/errors/utils";
 import { fetchWithTimeout } from "@/api/lib/fetch";
+import { logger } from "@/api/lib/observability/logger";
 import {
   credentialsFromEnvValues,
   type OptionalS3Credentials,
@@ -83,6 +84,42 @@ const fetchCredentialJson = async (
   }
 };
 
+/**
+ * The container credential endpoint this runtime is configured to use, or null
+ * when it is not configured or the configuration is unusable.
+ *
+ * A URL here means a task role is intended and reachable, which is what makes
+ * an IMDS fallback a widening rather than a retry. A malformed URI returns null
+ * and keeps its long-standing "ignore and carry on" behaviour.
+ */
+const containerCredentialsUrl = (
+  runtimeEnv: CredentialRuntimeEnv,
+): string | null => {
+  const relativeUri = runtimeEnv["AWS_CONTAINER_CREDENTIALS_RELATIVE_URI"];
+  const fullUri = runtimeEnv["AWS_CONTAINER_CREDENTIALS_FULL_URI"];
+
+  if (relativeUri) {
+    if (!relativeUri.startsWith("/")) {
+      return null;
+    }
+    return `${ECS_CREDENTIALS_BASE_URL}${relativeUri}`;
+  }
+
+  if (!fullUri) {
+    return null;
+  }
+
+  try {
+    const parsedUrl = new URL(fullUri);
+    if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+      return null;
+    }
+    return parsedUrl.toString();
+  } catch {
+    return null;
+  }
+};
+
 const fetchEcsCredentials = async ({
   fetchImpl = fetch,
   runtimeEnv = process.env,
@@ -90,36 +127,7 @@ const fetchEcsCredentials = async ({
   fetchImpl?: Fetcher;
   runtimeEnv?: CredentialRuntimeEnv;
 } = {}): Promise<S3Credentials | null> => {
-  const relativeUri = runtimeEnv["AWS_CONTAINER_CREDENTIALS_RELATIVE_URI"];
-  const fullUri = runtimeEnv["AWS_CONTAINER_CREDENTIALS_FULL_URI"];
-
-  if (!relativeUri && !fullUri) {
-    return null;
-  }
-
-  const url = (() => {
-    if (relativeUri) {
-      if (!relativeUri.startsWith("/")) {
-        return null;
-      }
-      return `${ECS_CREDENTIALS_BASE_URL}${relativeUri}`;
-    }
-
-    if (!fullUri) {
-      return null;
-    }
-
-    try {
-      const parsedUrl = new URL(fullUri);
-      if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
-        return null;
-      }
-      return parsedUrl.toString();
-    } catch {
-      return null;
-    }
-  })();
-
+  const url = containerCredentialsUrl(runtimeEnv);
   if (!url) {
     return null;
   }
@@ -132,12 +140,21 @@ const fetchEcsCredentials = async ({
   if (authorizationToken) {
     headers["Authorization"] = authorizationToken;
   } else if (authorizationTokenFile) {
-    const token = await Bun.file(authorizationTokenFile)
-      .text()
-      .catch(() => null);
-    if (token) {
-      headers["Authorization"] = token.trim();
+    // The token file is configured, so an unreadable one is a
+    // misconfiguration, not an optional read. Sending the credential request
+    // without the header can only fail at the endpoint, several layers away
+    // from the cause; report it here and let the caller fall through to the
+    // next credential source.
+    const token = await Result.tryPromise(
+      async () => await Bun.file(authorizationTokenFile).text(),
+    );
+    if (token.isErr()) {
+      logger.warn("s3.container_credentials_token_unreadable", {
+        "error.type": errorTag(token.error),
+      });
+      return null;
     }
+    headers["Authorization"] = token.value.trim();
   }
 
   return await fetchCredentialJson(url, { fetchImpl, headers });
@@ -286,6 +303,20 @@ const resolveAwsRuntimeCredentials = async (
   const ecsCredentials = await fetchEcsCredentials({ fetchImpl, runtimeEnv });
   if (ecsCredentials) {
     return ecsCredentials;
+  }
+
+  // A task configured for container credentials does not fall through to the
+  // instance role. IMDS answers with the EC2 instance's role, which on ECS is
+  // the host's and is routinely broader than the task's, so treating an
+  // unreadable token file or a failed container request as "try the next
+  // source" would quietly widen the credentials the process runs under. No
+  // container configuration means no such boundary to cross, and IMDS is then
+  // the ordinary next source.
+  if (containerCredentialsUrl(runtimeEnv)) {
+    logger.warn("s3.container_credentials_unavailable", {
+      "fallback.suppressed": "imds",
+    });
+    return null;
   }
 
   const imdsCredentials = await fetchImdsCredentials({ fetchImpl });

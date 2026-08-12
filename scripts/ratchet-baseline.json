@@ -203,8 +203,32 @@
     "count": 0,
     "files": {}
   },
+  "no-swallowed-rejection-suppressions": {
+    "count": 8,
+    "files": {
+      "apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.ts": 1,
+      "apps/api/src/handlers/chat/tools/external-mcp-tools.ts": 1,
+      "apps/api/src/lib/errors/utils.ts": 1,
+      "apps/api/src/lib/with-timeout.ts": 1,
+      "apps/web/src/workers/anonymize-chat-worker.ts": 1,
+      "packages/agent-engine/src/bun-docker/provider.ts": 1,
+      "packages/scripts/src/dev-runner.ts": 1,
+      "packages/ui/src/components/destructive-confirm-dialog.tsx": 1
+    }
+  },
+  "require-toast-error-capture-suppressions": {
+    "count": 0,
+    "files": {}
+  },
+  "no-detached-void-suppressions": {
+    "count": 3,
+    "files": {
+      "packages/agent-engine/src/bun-docker/provider.ts": 1,
+      "packages/scripts/src/dev-runner.ts": 2
+    }
+  },
   "lint-suppression-directives": {
-    "count": 773,
+    "count": 772,
     "files": {
       "apps/api/scripts/ai-provider-canary-config.ts": 1,
       "apps/api/scripts/ai-provider-canary.ts": 4,
@@ -473,7 +497,6 @@
       "apps/web/src/routes/_protected.knowledge/-components/clause-diff-view.tsx": 2,
       "apps/web/src/routes/_protected.knowledge/-components/clause-editor.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx": 2,
-      "apps/web/src/routes/_protected.knowledge/-components/template-list.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/template-studio-slash-menu.tsx": 3,
       "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx": 3,

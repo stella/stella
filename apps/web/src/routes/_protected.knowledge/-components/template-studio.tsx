@@ -27,6 +27,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { DOCX_MIME } from "@/lib/consts";
@@ -1120,7 +1121,8 @@ export const TemplateStudioPage = ({
       // still-pending steps (and their retry) are not discarded by the
       // unmount's store reset.
       return slotRenameErrorMessage === null;
-    } catch {
+    } catch (error) {
+      getAnalytics().captureError(error);
       stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
       return false;
     } finally {

@@ -1121,16 +1121,15 @@ export const StudioInsertRow = () => {
       {sessionTemplateId !== null && (
         <LinkClauseDialog
           onLinked={() => {
-            queryClient
-              .invalidateQueries({
+            detached(
+              queryClient.invalidateQueries({
                 queryKey: knowledgeKeys.templates.clauses(
                   activeOrganizationId,
                   sessionTemplateId,
                 ),
-              })
-              .catch(() => {
-                /* fire-and-forget */
-              });
+              }),
+              "template-studio-inspector.link-clause-invalidate",
+            );
           }}
           onOpenChange={setLinkClauseOpen}
           open={linkClauseOpen}

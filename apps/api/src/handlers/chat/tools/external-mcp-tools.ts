@@ -307,6 +307,10 @@ const loadConnectorTools = async ({
       // idempotent (safe even if it ends up closing the same client twice).
       detached(
         discovery
+          // Sequencing only: this rejection is the same `error` the
+          // surrounding branch already handled, so re-reporting it here
+          // would double-count one failure.
+          // eslint-disable-next-line no-swallowed-rejection/no-swallowed-rejection
           .catch(() => undefined)
           .then(
             async () =>

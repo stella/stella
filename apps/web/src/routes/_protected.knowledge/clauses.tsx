@@ -8,6 +8,7 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import {
   clauseCategoriesOptions,
@@ -252,20 +253,18 @@ function RouteComponent() {
   const handleRefresh = useCallback(() => {
     setExtraClauses([]);
     setNextCursor(undefined);
-    queryClient
-      .invalidateQueries({
+    detached(
+      queryClient.invalidateQueries({
         queryKey: knowledgeKeys.clauses.all(activeOrganizationId),
-      })
-      .catch(() => {
-        /* fire-and-forget */
-      });
-    queryClient
-      .invalidateQueries({
+      }),
+      "knowledge-clauses.invalidate-clauses",
+    );
+    detached(
+      queryClient.invalidateQueries({
         queryKey: knowledgeKeys.clauseCategories.all(activeOrganizationId),
-      })
-      .catch(() => {
-        /* fire-and-forget */
-      });
+      }),
+      "knowledge-clauses.invalidate-categories",
+    );
   }, [queryClient, activeOrganizationId]);
 
   // ── Back to list ───────────────────────────────────
@@ -314,14 +313,13 @@ function RouteComponent() {
         loading={loadingMore}
         nextCursor={currentNextCursor}
         onCategoriesChanged={() => {
-          queryClient
-            .invalidateQueries({
+          detached(
+            queryClient.invalidateQueries({
               queryKey:
                 knowledgeKeys.clauseCategories.all(activeOrganizationId),
-            })
-            .catch(() => {
-              /* fire-and-forget */
-            });
+            }),
+            "knowledge-clauses.categories-changed",
+          );
         }}
         onCategorySelect={handleCategorySelect}
         onClauseSelect={(clause) =>
@@ -331,9 +329,7 @@ function RouteComponent() {
           })
         }
         onLoadMore={() => {
-          handleLoadMore().catch(() => {
-            /* fire-and-forget */
-          });
+          detached(handleLoadMore(), "knowledge-clauses.load-more");
         }}
         onNewClause={() => setCreateOpen(true)}
         onRefresh={handleRefresh}

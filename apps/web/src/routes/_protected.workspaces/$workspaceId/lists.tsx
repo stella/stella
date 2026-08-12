@@ -44,6 +44,7 @@ import {
 } from "@/components/workspaces/tasks/task-detail-constants";
 import type { ListItemType } from "@/components/workspaces/tasks/task-detail-constants";
 import { env } from "@/env";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
@@ -138,6 +139,7 @@ function LegalListsPage() {
     });
     setCreatingList(false);
     if (result.isErr()) {
+      getAnalytics().captureError(result.error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
       return;
     }
@@ -275,6 +277,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
     });
     setCreating(false);
     if (result.isErr()) {
+      getAnalytics().captureError(result.error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
       return;
     }
@@ -375,6 +378,7 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
     });
     setDecidingCandidateId(null);
     if (result.isErr()) {
+      getAnalytics().captureError(result.error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
       return;
     }

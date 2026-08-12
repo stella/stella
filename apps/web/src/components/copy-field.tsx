@@ -9,6 +9,7 @@ import {
 } from "@stll/ui/components/input-group";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 
 type CopyFieldProps = {
@@ -26,7 +27,8 @@ export const CopyField = ({ label, value }: CopyFieldProps) => {
     try {
       await navigator.clipboard.writeText(value);
       stellaToast.add({ title: t("common.copied"), type: "success" });
-    } catch {
+    } catch (error) {
+      getAnalytics().captureError(error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
     }
   };

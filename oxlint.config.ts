@@ -589,6 +589,8 @@ export default defineConfig({
     "./.oxlint-plugins/no-detached-void.ts",
     "./.oxlint-plugins/no-broad-translation-callable.ts",
     "./.oxlint-plugins/no-partial-record-satisfies.ts",
+    "./.oxlint-plugins/require-toast-error-capture.ts",
+    "./.oxlint-plugins/no-swallowed-rejection.ts",
   ],
 
   overrides: [
@@ -1012,18 +1014,53 @@ export default defineConfig({
       },
     },
     {
-      // App source (the two surfaces the detached-promise ratchet counts):
-      // ban the value-level `void` operator so a floating promise is routed
-      // through the `detached(promise, context)` helper instead of throwing
-      // its rejection away. The `void` TYPE keyword is a different AST node
-      // and is untouched.
+      // Product source: ban the value-level `void` operator so a floating
+      // promise is routed through the `detached(promise, context)` helper
+      // instead of throwing its rejection away. The `void` TYPE keyword is a
+      // different AST node and is untouched. Shared packages are in scope
+      // too: they had no guard, and a rejection dropped in a package is as
+      // invisible as one dropped in an app.
       files: [
         "apps/api/src/**/*.{ts,tsx}",
         "apps/web/src/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
         ".oxlint-plugins/__fixtures__/no-detached-void.fixture.ts",
       ],
       rules: {
         "no-detached-void/no-detached-void": "error",
+      },
+    },
+    {
+      // The other half of the detached-promise guard: `.catch(() => null)`
+      // passes every floating-promise check while discarding the rejection,
+      // which is what the `void` ban exists to prevent. Product code only;
+      // resource teardown and response-body reads are allowlisted in the rule.
+      files: [
+        "apps/api/src/**/*.{ts,tsx}",
+        "apps/web/src/**/*.{ts,tsx}",
+        "packages/*/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-swallowed-rejection.fixture.ts",
+      ],
+      rules: {
+        "no-swallowed-rejection/no-swallowed-rejection": "error",
+      },
+    },
+    {
+      // Swallowing a rejection in a test is how a test asserts that nothing
+      // downstream depends on it. Mirror the detached-promise exclusion.
+      files: [
+        "apps/api/src/**/*.{test,spec}.{ts,tsx}",
+        "apps/api/src/**/tests/**",
+        "apps/api/src/**/__tests__/**",
+        "apps/web/src/**/*.{test,spec}.{ts,tsx}",
+        "apps/web/src/**/tests/**",
+        "apps/web/src/**/__tests__/**",
+        "packages/*/src/**/*.{test,spec}.{ts,tsx}",
+        "packages/*/src/**/tests/**",
+        "packages/*/src/**/__tests__/**",
+      ],
+      rules: {
+        "no-swallowed-rejection/no-swallowed-rejection": "off",
       },
     },
     {
@@ -1037,9 +1074,25 @@ export default defineConfig({
         "apps/web/src/**/*.{test,spec}.{ts,tsx}",
         "apps/web/src/**/tests/**",
         "apps/web/src/**/__tests__/**",
+        "packages/*/src/**/*.{test,spec}.{ts,tsx}",
+        "packages/*/src/**/tests/**",
+        "packages/*/src/**/__tests__/**",
       ],
       rules: {
         "no-detached-void/no-detached-void": "off",
+      },
+    },
+    {
+      // Error toasts: scoped to apps/web, the only surface that raises
+      // `stellaToast`. A handler that shows an error toast without binding
+      // and capturing the caught error surfaces the failure to one user and
+      // to nobody else.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/require-toast-error-capture.fixture.ts",
+      ],
+      rules: {
+        "require-toast-error-capture/require-toast-error-capture": "error",
       },
     },
     {

@@ -763,9 +763,7 @@ export const FileTabPanel = ({
   const fullViewButton = (
     <Button
       onClick={() => {
-        handleOpenFullView().catch(() => {
-          /* fire-and-forget */
-        });
+        detached(handleOpenFullView(), "FileTabPanel");
       }}
       size="xs"
       variant="ghost"
@@ -1257,9 +1255,7 @@ export const FileTabPanel = ({
               activeFieldId={null}
               entityId={tab.entityId}
               onOpenFullView={() => {
-                handleOpenFullView().catch(() => {
-                  /* fire-and-forget */
-                });
+                detached(handleOpenFullView(), "FileTabPanel");
               }}
               workspaceId={tab.workspaceId}
             />

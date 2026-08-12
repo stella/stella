@@ -21,6 +21,7 @@ import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import type { TranslationKey } from "@/i18n/types";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
@@ -338,6 +339,7 @@ export const AnonymizationDenyListCard = () => {
         type: "success",
       });
     } catch (error) {
+      getAnalytics().captureError(error);
       stellaToast.add({
         title: userErrorFromThrown(error, t("errors.actionFailed")),
         type: "error",

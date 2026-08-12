@@ -27,6 +27,7 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { usePermissions } from "@/hooks/use-permissions";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import {
   timeEntriesInfiniteOptions,
@@ -108,7 +109,8 @@ export const PersonalTimesheetDay = ({
         });
       }
       setDialog({ type: "closed" });
-    } catch {
+    } catch (error) {
+      getAnalytics().captureError(error);
       stellaToast.add({ title: tErrors("actionFailed"), type: "error" });
     }
   };
@@ -278,7 +280,8 @@ export const PersonalTimesheetDay = ({
                   deleteEntry
                     .mutateAsync({ workspaceId, id: deletingId })
                     .then(() => setDeletingId(null))
-                    .catch(() => {
+                    .catch((error: unknown) => {
+                      getAnalytics().captureError(error);
                       stellaToast.add({
                         title: tErrors("actionFailed"),
                         type: "error",

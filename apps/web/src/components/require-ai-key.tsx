@@ -39,7 +39,7 @@ import type {
 } from "@/components/ai-config-role-models.logic";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useMountEffect } from "@/hooks/use-effect";
-import { useAnalytics } from "@/lib/analytics/provider";
+import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapEden } from "@/lib/errors/api";
@@ -63,6 +63,7 @@ const AIUnavailableContext = createContext(false);
 
 export const AIAvailabilityProvider = ({ children }: PropsWithChildren) => {
   const [open, setOpen] = useState(false);
+  const tErrors = useTranslations("errors");
   const queryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const availabilityOptions = useMemo(
@@ -78,15 +79,30 @@ export const AIAvailabilityProvider = ({ children }: PropsWithChildren) => {
   const ensureAIAvailable = useCallback(async () => {
     const availability = await queryClient
       .fetchQuery(availabilityOptions)
-      .catch(() => undefined);
+      .catch((error: unknown) => {
+        getAnalytics().captureError(error);
+        // Callers read `false` as "do not proceed" and stop there, so without
+        // this the action the user just triggered would appear to do nothing.
+        stellaToast.add({
+          title: tErrors("actionFailed"),
+          type: "error",
+        });
+        return null;
+      });
 
-    if (availability?.available) {
+    // A failed availability check is not evidence that no key is configured,
+    // so it must not open the configure-key dialog.
+    if (availability === null) {
+      return false;
+    }
+
+    if (availability.available) {
       return true;
     }
 
     setOpen(true);
     return false;
-  }, [availabilityOptions, queryClient]);
+  }, [availabilityOptions, queryClient, tErrors]);
 
   const openIfAIUnavailable = useCallback(() => {
     if (data && !data.available && !isFetching) {

@@ -182,8 +182,12 @@ export const TemplateList = ({
     }
 
     setDiscovering(true);
-    const response = await api.templates.discover.post({ file });
-    setDiscovering(false);
+    // `finally` rather than a straight-line reset: both callers hand this
+    // promise to `detached`, so a rejected request would leave the dropzone
+    // stuck in its discovering state with nothing to clear it.
+    const response = await api.templates.discover.post({ file }).finally(() => {
+      setDiscovering(false);
+    });
 
     if (response.error) {
       stellaToast.add({
@@ -213,7 +217,7 @@ export const TemplateList = ({
     const file = e.target.files?.item(0);
     if (file) {
       // Errors are surfaced as toasts inside discover
-      discover(file).catch(() => undefined);
+      detached(discover(file), "template-list.discover-selected");
     }
     e.target.value = "";
   };
@@ -252,8 +256,7 @@ export const TemplateList = ({
       return;
     }
     // Errors are surfaced as toasts inside discover
-    // oxlint-disable-next-line no-empty-function
-    discover(file).catch(() => {});
+    detached(discover(file), "template-list.discover-dropped");
   };
 
   if (templates.length === 0 && !selectedCategoryId) {
@@ -1449,12 +1452,11 @@ const useInvalidateTemplates = () => {
   });
 
   return () => {
-    queryClient
-      .invalidateQueries({
+    detached(
+      queryClient.invalidateQueries({
         queryKey: knowledgeKeys.templates.all(activeOrganizationId),
-      })
-      .catch(() => {
-        /* fire-and-forget */
-      });
+      }),
+      "template-list.invalidate-templates",
+    );
   };
 };

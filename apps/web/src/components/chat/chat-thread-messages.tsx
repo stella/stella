@@ -78,6 +78,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useMaybeStickToBottomContext } from "@/hooks/use-stick-to-bottom";
 import type { TranslationKey } from "@/i18n/types";
+import { getAnalytics } from "@/lib/analytics/provider";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { detached } from "@/lib/detached";
@@ -987,7 +988,8 @@ const AssistantMessageActions = ({
     try {
       await navigator.clipboard.writeText(text);
       stellaToast.add({ title: t("common.copied"), type: "success" });
-    } catch {
+    } catch (error) {
+      getAnalytics().captureError(error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
     }
   };

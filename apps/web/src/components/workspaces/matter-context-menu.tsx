@@ -53,6 +53,7 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { UserIdentity } from "@/components/user-avatar";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { resolveMatterColor } from "@/lib/matter-colors";
@@ -241,7 +242,8 @@ export const useMatterActions = (
     try {
       await navigator.clipboard.writeText(url);
       stellaToast.add({ title: t("common.copied"), type: "success" });
-    } catch {
+    } catch (error) {
+      getAnalytics().captureError(error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
     }
   };
