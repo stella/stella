@@ -88,12 +88,12 @@ export type { Messages as default };
 `;
 
 if (checkOnly) {
-  const existing = await Bun.file(outputPath)
-    .text()
-    // A missing generated file is the "stale" answer this check is asking
-    // for, not a failure to report.
-    // eslint-disable-next-line no-swallowed-rejection/no-swallowed-rejection
-    .catch(() => "");
+  // A missing generated file is the "stale" answer this check is asking for,
+  // so it is tested for rather than caught: a blanket catch would report a
+  // permissions or I/O failure as staleness and send the reader to regenerate
+  // a file they cannot read.
+  const outputFile = Bun.file(outputPath);
+  const existing = (await outputFile.exists()) ? await outputFile.text() : "";
   if (existing !== declaration) {
     console.error(
       `Error: ${outputPath} is out of sync with en.json. Run \`bun run typegen\`.`,

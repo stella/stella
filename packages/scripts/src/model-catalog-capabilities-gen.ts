@@ -328,12 +328,12 @@ const main = async (): Promise<void> => {
   ]);
   const rows = buildCapabilityRows({ openRouterDefaults, upstream });
   const rendered = renderCapabilitiesModule(rows);
-  const existing = await Bun.file(OUTPUT_PATH)
-    .text()
-    // A missing generated file is the "stale" answer this check is asking
-    // for, not a failure to report.
-    // eslint-disable-next-line no-swallowed-rejection/no-swallowed-rejection
-    .catch(() => null);
+  // A missing generated file is the "stale" answer this check is asking for,
+  // so it is tested for rather than caught: a blanket catch would report a
+  // permissions or I/O failure as staleness and send the reader to regenerate
+  // a file they cannot read.
+  const outputFile = Bun.file(OUTPUT_PATH);
+  const existing = (await outputFile.exists()) ? await outputFile.text() : null;
   if (checkOnly) {
     if (existing === rendered) {
       console.log("capabilities.gen.ts is current.");

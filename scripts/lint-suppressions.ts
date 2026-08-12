@@ -31,7 +31,17 @@ import ts from "typescript";
 //
 // A `data-volume` rule guards an unbounded read or an N+1 query: a suppression
 // is a capacity decision, reviewable from the per-rule baseline diff alone.
-export const SUPPRESSION_TIERS = ["security", "data-volume"] as const;
+// An `observability` rule guards an error that reaches a user or a log: a
+// suppression means a failure the product can no longer explain, which is a
+// diagnosability decision rather than a tenancy or capacity one. Like
+// `data-volume` and unlike `security`, it carries a per-rule budget but no
+// waiver ledger: the exceptions are numerous and individually cheap to read
+// from the baseline diff, and none of them stands down an authorization check.
+export const SUPPRESSION_TIERS = [
+  "security",
+  "data-volume",
+  "observability",
+] as const;
 
 export type SuppressionTier = (typeof SUPPRESSION_TIERS)[number];
 
@@ -142,6 +152,21 @@ export const TRACKED_SUPPRESSION_RULES = [
     rule: "no-raw-use-effect/no-raw-use-effect",
     tier: "data-volume",
     guards: "raw effects outside the sanctioned effect wrappers",
+  },
+  {
+    rule: "no-swallowed-rejection/no-swallowed-rejection",
+    tier: "observability",
+    guards: "promise rejections discarded without capture",
+  },
+  {
+    rule: "require-toast-error-capture/require-toast-error-capture",
+    tier: "observability",
+    guards: "error toasts shown without capturing the error behind them",
+  },
+  {
+    rule: "no-detached-void/no-detached-void",
+    tier: "observability",
+    guards: "detached `void` calls with no rejection handler",
   },
 ] as const satisfies readonly TrackedSuppressionRule[];
 

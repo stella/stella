@@ -182,8 +182,12 @@ export const TemplateList = ({
     }
 
     setDiscovering(true);
-    const response = await api.templates.discover.post({ file });
-    setDiscovering(false);
+    // `finally` rather than a straight-line reset: both callers hand this
+    // promise to `detached`, so a rejected request would leave the dropzone
+    // stuck in its discovering state with nothing to clear it.
+    const response = await api.templates.discover.post({ file }).finally(() => {
+      setDiscovering(false);
+    });
 
     if (response.error) {
       stellaToast.add({

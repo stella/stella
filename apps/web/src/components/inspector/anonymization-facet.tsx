@@ -230,10 +230,11 @@ export const AnonymizationFacet = ({
           ),
         });
 
+      // No `onError` capture here: the only caller awaits `mutateAsync` inside
+      // a try/catch that captures and toasts, so a handler here would report
+      // the same failure twice. `deleteMutation` below is fire-and-forget and
+      // keeps its handler for that reason.
       return unwrapEden(response);
-    },
-    onError: (error) => {
-      analytics.captureError(error);
     },
   });
   const deleteMutation = useMutation({

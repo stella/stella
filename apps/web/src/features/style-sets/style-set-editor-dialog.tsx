@@ -173,6 +173,10 @@ const LoadedStyleSetEditor = ({
     error: Parameters<typeof userErrorMessage>[0] | null,
   ) => {
     if (error) {
+      // An API error response reaches the user through the same toast as a
+      // rejected request, so it has to reach analytics the same way too; the
+      // catch in `handleSubmit` only ever sees the rejection.
+      getAnalytics().captureError(error);
       setSaving(false);
       stellaToast.add({
         type: "error",

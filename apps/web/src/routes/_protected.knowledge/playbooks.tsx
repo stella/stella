@@ -131,9 +131,11 @@ function RouteComponent() {
     }
     setLoadingMore(false);
 
-    // A thrown request (e.g. network) is swallowed as before — the caller ignores it.
+    // Rethrown rather than swallowed: the caller hands this promise to
+    // `detached`, which captures what comes out of it. Returning here would
+    // leave a failed load with no toast and no capture.
     if (Result.isError(result)) {
-      return;
+      throw result.error;
     }
 
     const response = result.value;

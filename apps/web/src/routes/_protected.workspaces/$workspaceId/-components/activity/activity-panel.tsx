@@ -223,6 +223,10 @@ const ActivityTimeline = ({
       .fetchNextPage()
       .then((result) => {
         if (result.isError) {
+          // The resolved error result reaches the user through the same toast
+          // as a rejection, so it is captured here too; the `.catch` below only
+          // sees a rejected request.
+          getAnalytics().captureError(result.error);
           stellaToast.add({
             description: userErrorFromThrown(
               result.error,
