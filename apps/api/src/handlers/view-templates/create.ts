@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
+import { abortableTx } from "@/api/db/safe-db";
 import { workspaceViewTemplates } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -60,7 +61,7 @@ const createViewTemplate = createSafeHandler(
     }
 
     const insertResult = yield* Result.await(
-      safeDb(async (tx) => {
+      abortableTx(safeDb, async (tx) => {
         await tx.execute(
           sql`SELECT pg_advisory_xact_lock(hashtext(${session.activeOrganizationId}), hashtext(${user.id}))`,
         );
@@ -77,11 +78,10 @@ const createViewTemplate = createSafeHandler(
         );
 
         if (existingCount >= LIMITS.viewTemplatesPerUser) {
-          return {
-            ok: false as const,
-            status: 400 as const,
+          throw new HandlerError({
+            status: 400,
             message: "View template limit reached",
-          };
+          });
         }
 
         const workspaceProperties = await tx.query.properties.findMany({
@@ -143,11 +143,10 @@ const createViewTemplate = createSafeHandler(
 
         const row = rows.at(0);
         if (!row) {
-          return {
-            ok: false as const,
-            status: 409 as const,
+          throw new HandlerError({
+            status: 409,
             message: "A view template with this name already exists",
-          };
+          });
         }
 
         await recordAuditEvent(tx, {
@@ -166,18 +165,9 @@ const createViewTemplate = createSafeHandler(
           },
         });
 
-        return { ok: true as const, id: row.id };
+        return { id: row.id };
       }),
     );
-
-    if (!insertResult.ok) {
-      return Result.err(
-        new HandlerError({
-          status: insertResult.status,
-          message: insertResult.message,
-        }),
-      );
-    }
 
     return Result.ok({ id: insertResult.id });
   },

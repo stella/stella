@@ -3,6 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { abortableTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import { templates, templateVersions } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -185,7 +186,7 @@ const updateTemplateHandler = async function* ({
     // (templateId, version) unique index. Mirrors save-document.ts /
     // configure-template-fields-service.ts.
     const txResult = yield* Result.await(
-      safeDb(async (tx) => {
+      abortableTx(safeDb, async (tx) => {
         await tx.execute(
           sql`SELECT pg_advisory_xact_lock(hashtext(${templateId}))`,
         );
@@ -206,7 +207,10 @@ const updateTemplateHandler = async function* ({
             ),
           );
         if (!locked) {
-          return { ok: false as const, reason: "not-found" as const };
+          throw new HandlerError({
+            status: 404,
+            message: "Template not found",
+          });
         }
 
         const versionCount = await tx.$count(
@@ -215,7 +219,10 @@ const updateTemplateHandler = async function* ({
         );
 
         if (versionCount >= LIMITS.templateVersionsPerTemplate) {
-          return { ok: false as const, reason: "limit" as const };
+          throw new HandlerError({
+            status: 400,
+            message: "Version limit reached for this template",
+          });
         }
 
         // Re-embed the manifest in the DOCX so the S3 file
@@ -296,25 +303,17 @@ const updateTemplateHandler = async function* ({
         if (!r) {
           // The update targeted a row the locked re-read just confirmed
           // exists; a missing returning row means it vanished mid-transaction.
-          return { ok: false as const, reason: "not-found" as const };
+          // Returning here (rather than throwing) would commit the template
+          // update, the version row, and the audit event above while
+          // answering 404.
+          throw new HandlerError({
+            status: 404,
+            message: "Template not found",
+          });
         }
-        return { ok: true as const, row: r };
+        return { row: r };
       }),
     );
-
-    if (!txResult.ok) {
-      if (txResult.reason === "not-found") {
-        return Result.err(
-          new HandlerError({ status: 404, message: "Template not found" }),
-        );
-      }
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Version limit reached for this template",
-        }),
-      );
-    }
 
     return Result.ok(txResult.row);
   }

@@ -112,6 +112,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-safe-outbound-target.fixture.ts", [
     "require-safe-outbound-target/require-safe-outbound-target",
   ]),
+  fixtureRuleOverride("require-transaction-abort.fixture.ts", [
+    "require-transaction-abort/require-transaction-abort",
+  ]),
   fixtureRuleOverride("security-guards.fixture.tsx", [
     "security-guards/no-raw-filename-write",
     "security-guards/no-unsanitized-href",
@@ -543,6 +546,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-bare-error.ts",
     "./.oxlint-plugins/ai-output-strict-schema.ts",
     "./.oxlint-plugins/require-audit-on-mutation.ts",
+    "./.oxlint-plugins/require-transaction-abort.ts",
     "./.oxlint-plugins/no-direct-audit-log-insert.ts",
     "./.oxlint-plugins/must-use-result.ts",
     "./.oxlint-plugins/no-any-casts.ts",
@@ -1994,6 +1998,18 @@ export default defineConfig({
       excludeFiles: ["apps/api/src/handlers/**/*.test.ts"],
       rules: {
         "require-audit-on-mutation/require-audit-on-mutation": "error",
+      },
+    },
+    {
+      // Returning a failure value from a transaction callback commits the
+      // partial write it was meant to reject. Scoped to the API source, where
+      // `safeDb` / `.transaction(...)` open real transactions; the two session
+      // openers that must commit alongside their error are named inside the
+      // rule.
+      files: ["apps/api/src/**/*.ts"],
+      excludeFiles: ["apps/api/src/**/*.test.ts", "apps/api/src/tests/**/*.ts"],
+      rules: {
+        "require-transaction-abort/require-transaction-abort": "error",
       },
     },
     {

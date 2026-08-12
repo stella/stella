@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 
+import { abortableTx } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   expenses,
@@ -134,14 +135,17 @@ const transitionInvoice = createSafeHandler(
 
     if (body.action === "void") {
       const txResult = yield* Result.await(
-        safeDb(async (tx) => {
+        abortableTx(safeDb, async (tx) => {
           const existing = await lockInvoiceInStatus(tx, {
             invoiceId: params.invoiceId,
             workspaceId,
             status: transition.from,
           });
           if (!existing) {
-            return { ok: false as const };
+            throw new HandlerError({
+              status: 409,
+              message: "Invoice cannot be voided from its current status",
+            });
           }
 
           const updated = await tx
@@ -158,7 +162,10 @@ const transitionInvoice = createSafeHandler(
 
           const voidedInvoice = updated.at(0);
           if (!voidedInvoice) {
-            return { ok: false as const };
+            throw new HandlerError({
+              status: 409,
+              message: "Invoice cannot be voided from its current status",
+            });
           }
 
           const revertedTimeEntries = await tx
@@ -201,18 +208,9 @@ const transitionInvoice = createSafeHandler(
             }),
           );
 
-          return { ok: true as const, id: voidedInvoice.id };
+          return { id: voidedInvoice.id };
         }),
       );
-
-      if (!txResult.ok) {
-        return Result.err(
-          new HandlerError({
-            status: 409,
-            message: "Invoice cannot be voided from its current status",
-          }),
-        );
-      }
 
       return Result.ok({ id: txResult.id });
     }

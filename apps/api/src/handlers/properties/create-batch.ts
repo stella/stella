@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 
+import { abortableTx } from "@/api/db/safe-db";
 import { properties, propertyDependencies } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -42,7 +43,7 @@ const createPropertiesBatch = createSafeHandler(
     }
 
     const txResult = yield* Result.await(
-      safeDb(async (tx) => {
+      abortableTx(safeDb, async (tx) => {
         await lockWorkspacePropertyWrites(tx, workspaceId);
         const existingRows = await tx
           .select({
@@ -56,11 +57,10 @@ const createPropertiesBatch = createSafeHandler(
           .where(eq(properties.workspaceId, workspaceId));
 
         if (existingRows.length + body.items.length > LIMITS.propertiesCount) {
-          return {
-            ok: false as const,
-            status: 400 as const,
+          throw new HandlerError({
+            status: 400,
             message: "Properties limit reached",
-          };
+          });
         }
 
         const createsDocumentTypeClassifier = builtItems.filter(
@@ -80,11 +80,10 @@ const createPropertiesBatch = createSafeHandler(
               }),
             ))
         ) {
-          return {
-            ok: false as const,
-            status: 422 as const,
+          throw new HandlerError({
+            status: 422,
             message: "Document type classifier already exists",
-          };
+          });
         }
 
         const allDependencyIds = new Set<SafeId<"property">>();
@@ -107,11 +106,10 @@ const createPropertiesBatch = createSafeHandler(
               ),
             );
           if (dependencyRows.length !== allDependencyIds.size) {
-            return {
-              ok: false as const,
-              status: 422 as const,
+            throw new HandlerError({
+              status: 422,
               message: "Dependency property not found",
-            };
+            });
           }
         }
 
@@ -138,11 +136,12 @@ const createPropertiesBatch = createSafeHandler(
             .returning({ id: properties.id });
 
           if (!inserted) {
-            return {
-              ok: false as const,
-              status: 500 as const,
+            // Earlier iterations of this loop already inserted properties,
+            // dependency rows, and audit events that would otherwise commit.
+            throw new HandlerError({
+              status: 500,
               message: "Failed to create property",
-            };
+            });
           }
 
           if (dependencies.length > 0) {
@@ -177,18 +176,9 @@ const createPropertiesBatch = createSafeHandler(
           insertedIds.push(inserted.id);
         }
 
-        return { ok: true as const, ids: insertedIds };
+        return { ids: insertedIds };
       }),
     );
-
-    if (!txResult.ok) {
-      return Result.err(
-        new HandlerError({
-          status: txResult.status,
-          message: txResult.message,
-        }),
-      );
-    }
 
     return Result.ok({ ids: txResult.ids });
   },

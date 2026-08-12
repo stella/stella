@@ -4,6 +4,7 @@ import type { Transaction } from "@/api/db/root";
 import { properties, propertyDependencies } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ViewLayout, ViewTemplateProperty } from "@/api/lib/views-schema";
 import {
   collectTemplateProperties,
@@ -445,6 +446,19 @@ describe("collectTemplateProperties", () => {
   });
 });
 
+const rejectionOf = async (
+  pending: Promise<unknown>,
+): Promise<HandlerError> => {
+  const outcome = await pending.then(
+    () => null,
+    (error: unknown) => error,
+  );
+  if (!HandlerError.is(outcome)) {
+    throw new Error("resolveTemplateProperties resolved instead of rejecting");
+  }
+  return outcome;
+};
+
 describe("resolveTemplateProperties", () => {
   test("rejects file template columns with AI tools before inserting", async () => {
     const { insertMock, tx } = createTemplatePropertyValidationTx();
@@ -457,20 +471,21 @@ describe("resolveTemplateProperties", () => {
       createIfMissing: true,
     } satisfies ViewTemplateProperty;
 
-    const result = await resolveTemplateProperties({
-      tx,
-      workspaceId,
-      layout: tableLayout(templateProperty.sourceId),
-      templateProperties: [templateProperty],
-      canCreateProperties: true,
-      recordAuditEvent: noopAuditRecorder,
-    });
+    const rejection = await rejectionOf(
+      resolveTemplateProperties({
+        tx,
+        workspaceId,
+        layout: tableLayout(templateProperty.sourceId),
+        templateProperties: [templateProperty],
+        canCreateProperties: true,
+        recordAuditEvent: noopAuditRecorder,
+      }),
+    );
 
-    expect(result).toEqual({
-      ok: false,
-      status: 422,
-      message: "File template columns must use manual input",
-    });
+    expect(rejection.status).toBe(422);
+    expect(rejection.message).toBe(
+      "File template columns must use manual input",
+    );
     expect(insertMock).not.toHaveBeenCalled();
   });
 
@@ -486,20 +501,19 @@ describe("resolveTemplateProperties", () => {
       createIfMissing: true,
     } satisfies ViewTemplateProperty;
 
-    const result = await resolveTemplateProperties({
-      tx,
-      workspaceId,
-      layout: tableLayout(templateProperty.sourceId),
-      templateProperties: [templateProperty, templateProperty],
-      canCreateProperties: true,
-      recordAuditEvent: noopAuditRecorder,
-    });
+    const rejection = await rejectionOf(
+      resolveTemplateProperties({
+        tx,
+        workspaceId,
+        layout: tableLayout(templateProperty.sourceId),
+        templateProperties: [templateProperty, templateProperty],
+        canCreateProperties: true,
+        recordAuditEvent: noopAuditRecorder,
+      }),
+    );
 
-    expect(result).toEqual({
-      ok: false,
-      status: 422,
-      message: "Duplicate template property sourceId",
-    });
+    expect(rejection.status).toBe(422);
+    expect(rejection.message).toBe("Duplicate template property sourceId");
     expect(executeMock).not.toHaveBeenCalled();
     expect(insertMock).not.toHaveBeenCalled();
   });
@@ -520,20 +534,21 @@ describe("resolveTemplateProperties", () => {
       createIfMissing: true,
     } satisfies ViewTemplateProperty;
 
-    const result = await resolveTemplateProperties({
-      tx,
-      workspaceId,
-      layout: tableLayout(templateProperty.sourceId),
-      templateProperties: [templateProperty],
-      canCreateProperties: true,
-      recordAuditEvent: noopAuditRecorder,
-    });
+    const rejection = await rejectionOf(
+      resolveTemplateProperties({
+        tx,
+        workspaceId,
+        layout: tableLayout(templateProperty.sourceId),
+        templateProperties: [templateProperty],
+        canCreateProperties: true,
+        recordAuditEvent: noopAuditRecorder,
+      }),
+    );
 
-    expect(result).toEqual({
-      ok: false,
-      status: 400,
-      message: "Fallback must match one of the supplied options",
-    });
+    expect(rejection.status).toBe(400);
+    expect(rejection.message).toBe(
+      "Fallback must match one of the supplied options",
+    );
     expect(insertMock).not.toHaveBeenCalled();
   });
 
@@ -559,20 +574,19 @@ describe("resolveTemplateProperties", () => {
       dependencies: [{ dependsOnSourceId: "source_a", condition: null }],
     } satisfies ViewTemplateProperty;
 
-    const result = await resolveTemplateProperties({
-      tx,
-      workspaceId,
-      layout: tableLayout(propertyA.sourceId),
-      templateProperties: [propertyA, propertyB],
-      canCreateProperties: true,
-      recordAuditEvent: noopAuditRecorder,
-    });
+    const rejection = await rejectionOf(
+      resolveTemplateProperties({
+        tx,
+        workspaceId,
+        layout: tableLayout(propertyA.sourceId),
+        templateProperties: [propertyA, propertyB],
+        canCreateProperties: true,
+        recordAuditEvent: noopAuditRecorder,
+      }),
+    );
 
-    expect(result).toEqual({
-      ok: false,
-      status: 422,
-      message: "Circular template dependency detected",
-    });
+    expect(rejection.status).toBe(422);
+    expect(rejection.message).toBe("Circular template dependency detected");
     expect(executeMock).toHaveBeenCalledTimes(1);
     expect(returningMock).not.toHaveBeenCalled();
     expect(dependencyValuesMock).not.toHaveBeenCalled();
@@ -612,7 +626,6 @@ describe("resolveTemplateProperties", () => {
     });
 
     expect(result).toEqual({
-      ok: true,
       layout: {
         ...layout,
         columnOrder: ["existing_property", "created_property"],
@@ -660,7 +673,6 @@ describe("resolveTemplateProperties", () => {
     });
 
     expect(result).toEqual({
-      ok: true,
       layout: {
         ...layout,
         columnOrder: ["created_property"],
@@ -690,7 +702,7 @@ describe("resolveTemplateProperties", () => {
       createIfMissing: true,
     } satisfies ViewTemplateProperty;
 
-    const result = await resolveTemplateProperties({
+    await resolveTemplateProperties({
       tx,
       workspaceId,
       layout: tableLayout(templateProperty.sourceId),
@@ -699,7 +711,6 @@ describe("resolveTemplateProperties", () => {
       recordAuditEvent: noopAuditRecorder,
     });
 
-    expect(result.ok).toBe(true);
     expect(returningMock).toHaveBeenCalledTimes(1);
     const persistedTool = propertyValuesMock.mock.calls[0]?.[0].tool;
     expect(persistedTool?.type).toBe("ai-model");
@@ -738,7 +749,7 @@ describe("resolveTemplateProperties", () => {
       createIfMissing: true,
     } satisfies ViewTemplateProperty;
 
-    const result = await resolveTemplateProperties({
+    await resolveTemplateProperties({
       tx,
       workspaceId,
       layout: tableLayout(templateProperty.sourceId),
@@ -747,7 +758,6 @@ describe("resolveTemplateProperties", () => {
       recordAuditEvent: noopAuditRecorder,
     });
 
-    expect(result.ok).toBe(true);
     expect(returningMock).toHaveBeenCalledTimes(1);
     expect(propertyValuesMock.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
@@ -768,21 +778,21 @@ describe("resolveTemplateProperties", () => {
       createIfMissing: true,
     } satisfies ViewTemplateProperty;
 
-    const result = await resolveTemplateProperties({
-      tx,
-      workspaceId,
-      layout: tableLayout(templateProperty.sourceId),
-      templateProperties: [templateProperty],
-      canCreateProperties: true,
-      recordAuditEvent: noopAuditRecorder,
-    });
+    const rejection = await rejectionOf(
+      resolveTemplateProperties({
+        tx,
+        workspaceId,
+        layout: tableLayout(templateProperty.sourceId),
+        templateProperties: [templateProperty],
+        canCreateProperties: true,
+        recordAuditEvent: noopAuditRecorder,
+      }),
+    );
 
-    expect(result).toEqual({
-      ok: false,
-      status: 422,
-      message:
-        "Document type classifier templates must be AI single-select columns",
-    });
+    expect(rejection.status).toBe(422);
+    expect(rejection.message).toBe(
+      "Document type classifier templates must be AI single-select columns",
+    );
     expect(returningMock).not.toHaveBeenCalled();
   });
 
@@ -799,39 +809,38 @@ describe("resolveTemplateProperties", () => {
       type: "ai-model",
       prompt: "Classify the document type.",
     } satisfies ViewTemplateProperty["tool"];
-    const result = await resolveTemplateProperties({
-      tx,
-      workspaceId,
-      layout: tableLayout("source_document_type_a"),
-      templateProperties: [
-        {
-          version: 1,
-          sourceId: "source_document_type_a",
-          name: "Document Type",
-          content,
-          tool,
-          role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
-          createIfMissing: true,
-        },
-        {
-          version: 1,
-          sourceId: "source_document_type_b",
-          name: "Type de document",
-          content,
-          tool,
-          role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
-          createIfMissing: true,
-        },
-      ],
-      canCreateProperties: true,
-      recordAuditEvent: noopAuditRecorder,
-    });
+    const rejection = await rejectionOf(
+      resolveTemplateProperties({
+        tx,
+        workspaceId,
+        layout: tableLayout("source_document_type_a"),
+        templateProperties: [
+          {
+            version: 1,
+            sourceId: "source_document_type_a",
+            name: "Document Type",
+            content,
+            tool,
+            role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
+            createIfMissing: true,
+          },
+          {
+            version: 1,
+            sourceId: "source_document_type_b",
+            name: "Type de document",
+            content,
+            tool,
+            role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
+            createIfMissing: true,
+          },
+        ],
+        canCreateProperties: true,
+        recordAuditEvent: noopAuditRecorder,
+      }),
+    );
 
-    expect(result).toEqual({
-      ok: false,
-      status: 422,
-      message: "Duplicate template property role",
-    });
+    expect(rejection.status).toBe(422);
+    expect(rejection.message).toBe("Duplicate template property role");
     expect(insertMock).not.toHaveBeenCalled();
   });
 
@@ -883,7 +892,6 @@ describe("resolveTemplateProperties", () => {
     });
 
     expect(result).toEqual({
-      ok: true,
       layout: tableLayout("existing_property"),
       propertyIds: ["existing_property"],
     });
@@ -941,7 +949,6 @@ describe("resolveTemplateProperties", () => {
     });
 
     expect(result).toEqual({
-      ok: true,
       layout: tableLayout("tagged_classifier"),
       propertyIds: ["source_document_type", "tagged_classifier"],
     });
@@ -998,7 +1005,6 @@ describe("resolveTemplateProperties", () => {
     });
 
     expect(result).toEqual({
-      ok: true,
       layout: tableLayout("tagged_classifier"),
       propertyIds: ["source_document_type", "tagged_classifier"],
     });
@@ -1047,7 +1053,6 @@ describe("resolveTemplateProperties", () => {
     });
 
     expect(result).toEqual({
-      ok: true,
       layout: tableLayout("existing_property"),
       propertyIds: ["existing_property"],
     });
@@ -1082,21 +1087,21 @@ describe("resolveTemplateProperties", () => {
       createIfMissing: true,
     } satisfies ViewTemplateProperty;
 
-    const result = await resolveTemplateProperties({
-      tx,
-      workspaceId,
-      layout: tableLayout(templateProperty.sourceId),
-      templateProperties: [templateProperty],
-      canCreateProperties: true,
-      recordAuditEvent: noopAuditRecorder,
-    });
+    const rejection = await rejectionOf(
+      resolveTemplateProperties({
+        tx,
+        workspaceId,
+        layout: tableLayout(templateProperty.sourceId),
+        templateProperties: [templateProperty],
+        canCreateProperties: true,
+        recordAuditEvent: noopAuditRecorder,
+      }),
+    );
 
-    expect(result).toEqual({
-      ok: false,
-      status: 422,
-      message:
-        "Document type classifier role is attached to an incompatible column",
-    });
+    expect(rejection.status).toBe(422);
+    expect(rejection.message).toBe(
+      "Document type classifier role is attached to an incompatible column",
+    );
     expect(returningMock).not.toHaveBeenCalled();
   });
 
@@ -1141,7 +1146,6 @@ describe("resolveTemplateProperties", () => {
     });
 
     expect(result).toEqual({
-      ok: true,
       layout: tableLayout("existing_property"),
       propertyIds: ["existing_property"],
     });
@@ -1186,7 +1190,6 @@ describe("resolveTemplateProperties", () => {
     });
 
     expect(result).toEqual({
-      ok: true,
       layout: tableLayout("existing_property"),
       propertyIds: ["existing_property"],
     });
@@ -1214,7 +1217,7 @@ describe("resolveTemplateProperties", () => {
       createIfMissing: true,
     } satisfies ViewTemplateProperty;
 
-    const result = await resolveTemplateProperties({
+    await resolveTemplateProperties({
       tx,
       workspaceId,
       layout: tableLayout(templateProperty.sourceId),
@@ -1223,7 +1226,6 @@ describe("resolveTemplateProperties", () => {
       recordAuditEvent: noopAuditRecorder,
     });
 
-    expect(result.ok).toBe(true);
     expect(returningMock).toHaveBeenCalledTimes(1);
     expect(propertyValuesMock.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
@@ -1254,7 +1256,7 @@ describe("resolveTemplateProperties", () => {
       createIfMissing: true,
     } satisfies ViewTemplateProperty;
 
-    const result = await resolveTemplateProperties({
+    await resolveTemplateProperties({
       tx,
       workspaceId,
       layout: tableLayout(templateProperty.sourceId),
@@ -1263,7 +1265,6 @@ describe("resolveTemplateProperties", () => {
       recordAuditEvent: noopAuditRecorder,
     });
 
-    expect(result.ok).toBe(true);
     expect(returningMock).toHaveBeenCalledTimes(1);
     expect(propertyValuesMock.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
@@ -1284,7 +1285,7 @@ describe("resolveTemplateProperties", () => {
       createIfMissing: true,
     } satisfies ViewTemplateProperty;
 
-    const result = await resolveTemplateProperties({
+    await resolveTemplateProperties({
       tx,
       workspaceId,
       layout: tableLayout(templateProperty.sourceId),
@@ -1293,7 +1294,6 @@ describe("resolveTemplateProperties", () => {
       recordAuditEvent: noopAuditRecorder,
     });
 
-    expect(result.ok).toBe(true);
     expect(returningMock).toHaveBeenCalledTimes(1);
     expect(propertyValuesMock.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
@@ -1345,7 +1345,7 @@ describe("resolveTemplateProperties", () => {
       columnPinning: [],
     };
 
-    const result = await resolveTemplateProperties({
+    await resolveTemplateProperties({
       tx,
       workspaceId,
       layout,
@@ -1354,7 +1354,6 @@ describe("resolveTemplateProperties", () => {
       recordAuditEvent: noopAuditRecorder,
     });
 
-    expect(result.ok).toBe(true);
     expect(returningMock).toHaveBeenCalledTimes(2);
     const insertedRows = propertyValuesMock.mock.calls.flatMap((call) => {
       const row = call.at(0);
@@ -1411,7 +1410,6 @@ describe("resolveTemplateProperties", () => {
     });
 
     expect(result).toEqual({
-      ok: true,
       layout: {
         ...layout,
         columnOrder: ["created_property"],

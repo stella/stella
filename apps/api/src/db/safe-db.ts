@@ -55,6 +55,21 @@ export const transactionAbortError = (
 ): HandlerError | SafeDbError =>
   HandlerError.is(error.cause) ? error.cause : error;
 
+/**
+ * Run a transaction whose callback aborts by throwing.
+ *
+ * Same contract as calling the handle directly, except a `HandlerError` thrown
+ * to abort arrives as the failure instead of the `UnhandledException` the
+ * scoped factory wrapped it in, so `yield* Result.await(...)` answers with the
+ * handler's own status and message rather than a 500.
+ */
+export const abortableTx = async <T>(
+  safeDb: SafeDb,
+  fn: (tx: Transaction) => Promise<T>,
+  retry?: SafeDbRetryConfig,
+): Promise<Result<T, HandlerError | SafeDbError>> =>
+  (await safeDb(fn, retry)).mapError(transactionAbortError);
+
 export const withScopedTx = async <T>(
   handle: SafeDbOrTx,
   fn: (tx: Transaction) => Promise<T>,

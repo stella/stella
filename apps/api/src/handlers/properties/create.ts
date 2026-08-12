@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 
+import { abortableTx } from "@/api/db/safe-db";
 import { properties, propertyDependencies } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -32,7 +33,7 @@ const createProperty = createSafeHandler(
     const { content, tool, dependencies, role } = built;
 
     const txResult = yield* Result.await(
-      safeDb(async (tx) => {
+      abortableTx(safeDb, async (tx) => {
         await lockWorkspacePropertyWrites(tx, workspaceId);
         const existingRows = await tx
           .select({
@@ -46,11 +47,10 @@ const createProperty = createSafeHandler(
           .where(eq(properties.workspaceId, workspaceId));
 
         if (existingRows.length >= LIMITS.propertiesCount) {
-          return {
-            ok: false as const,
-            status: 400 as const,
+          throw new HandlerError({
+            status: 400,
             message: "Properties limit reached",
-          };
+          });
         }
 
         if (
@@ -64,11 +64,10 @@ const createProperty = createSafeHandler(
             }),
           )
         ) {
-          return {
-            ok: false as const,
-            status: 422 as const,
+          throw new HandlerError({
+            status: 422,
             message: "Document type classifier already exists",
-          };
+          });
         }
 
         if (dependencies.length > 0) {
@@ -89,11 +88,10 @@ const createProperty = createSafeHandler(
           });
 
           if (dependencyRows.length !== dependencyIds.length) {
-            return {
-              ok: false as const,
-              status: 422 as const,
+            throw new HandlerError({
+              status: 422,
               message: "Dependency property not found",
-            };
+            });
           }
         }
 
@@ -112,11 +110,10 @@ const createProperty = createSafeHandler(
           .returning({ id: properties.id });
 
         if (!inserted) {
-          return {
-            ok: false as const,
-            status: 500 as const,
+          throw new HandlerError({
+            status: 500,
             message: "Failed to create property",
-          };
+          });
         }
 
         if (dependencies.length > 0) {
@@ -146,18 +143,9 @@ const createProperty = createSafeHandler(
           },
         });
 
-        return { ok: true as const, id: inserted.id };
+        return { id: inserted.id };
       }),
     );
-
-    if (!txResult.ok) {
-      return Result.err(
-        new HandlerError({
-          status: txResult.status,
-          message: txResult.message,
-        }),
-      );
-    }
 
     return Result.ok({ id: txResult.id });
   },

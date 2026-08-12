@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { abortableTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   entities,
@@ -277,7 +278,7 @@ export const updateTaskHandler = async function* ({
   }
 
   const txResult = yield* Result.await(
-    safeDb(async (tx) => {
+    abortableTx(safeDb, async (tx) => {
       const workflowRelevant =
         body.status !== undefined ||
         body.dueDate !== undefined ||
@@ -301,11 +302,12 @@ export const updateTaskHandler = async function* ({
         });
       }
       if (features.governedWorkflow && workflowRelevant && !workflow) {
-        return {
-          status: "workflow_error" as const,
-          code: 409 as const,
+        // The backfill above may have written the obligation row this branch
+        // then declares missing; returning would commit it behind the 409.
+        throw new HandlerError({
+          status: 409,
           message: "Task workflow is not initialized",
-        };
+        });
       }
 
       const workflowSet: Partial<typeof workObligations.$inferInsert> = {};
@@ -335,12 +337,11 @@ export const updateTaskHandler = async function* ({
             (workflow.status !== WORK_OBLIGATION_STATUS.ACTIVE ||
               workflow.ownerUserId !== userId)
           ) {
-            return {
-              status: "workflow_error" as const,
-              code: 409 as const,
+            throw new HandlerError({
+              status: 409,
               message:
                 "Only the acknowledged accountable owner can complete this work",
-            };
+            });
           }
           nextWorkflowStatus = WORK_OBLIGATION_STATUS.COMPLETED;
           workflowEventType = WORK_OBLIGATION_EVENT_TYPE.COMPLETED;
@@ -353,11 +354,10 @@ export const updateTaskHandler = async function* ({
             workflow.status !== WORK_OBLIGATION_STATUS.UNASSIGNED &&
             !workflowReason
           ) {
-            return {
-              status: "workflow_error" as const,
-              code: 400 as const,
+            throw new HandlerError({
+              status: 400,
               message: "A reason is required when cancelling assigned work",
-            };
+            });
           }
           nextWorkflowStatus = WORK_OBLIGATION_STATUS.CANCELLED;
           workflowEventType = WORK_OBLIGATION_EVENT_TYPE.CANCELLED;
@@ -415,11 +415,10 @@ export const updateTaskHandler = async function* ({
             !updatesLegacyDeadline &&
             body.dueDate > workflow.hardDeadlineDate
           ) {
-            return {
-              status: "workflow_error" as const,
-              code: 400 as const,
+            throw new HandlerError({
+              status: 400,
               message: "Working target cannot be after the hard deadline",
-            };
+            });
           }
           workflowSet.workingTargetDate = body.dueDate;
           workflowChanges["workingTargetDate"] = {
@@ -549,18 +548,9 @@ export const updateTaskHandler = async function* ({
         });
       }
 
-      return { status: "updated" as const, rows };
+      return { rows };
     }),
   );
-
-  if (txResult.status === "workflow_error") {
-    return Result.err(
-      new HandlerError({
-        status: txResult.code,
-        message: txResult.message,
-      }),
-    );
-  }
 
   const { rows: updated } = txResult;
 

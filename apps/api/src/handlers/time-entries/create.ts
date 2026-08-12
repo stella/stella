@@ -3,6 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { abortableTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import { TIME_ENTRY_SOURCE, timeEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -152,7 +153,7 @@ export const createTimeEntryHandler = async function* ({
   const billedMinutes = roundToBillingIncrement(body.durationMinutes);
 
   const txResult = yield* Result.await(
-    safeDb(async (tx) => {
+    abortableTx(safeDb, async (tx) => {
       await tx.execute(
         sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
       );
@@ -162,11 +163,10 @@ export const createTimeEntryHandler = async function* ({
       );
 
       if (count >= LIMITS.timeEntriesPerWorkspace) {
-        return {
-          ok: false as const,
-          status: 400 as const,
+        throw new HandlerError({
+          status: 400,
           message: "Time entries limit reached for this workspace",
-        };
+        });
       }
 
       const [entry] = await tx
@@ -191,11 +191,10 @@ export const createTimeEntryHandler = async function* ({
         .returning({ id: timeEntries.id });
 
       if (!entry) {
-        return {
-          ok: false as const,
-          status: 500 as const,
+        throw new HandlerError({
+          status: 500,
           message: "Failed to create time entry",
-        };
+        });
       }
 
       await recordAuditEvent(tx, {
@@ -219,18 +218,9 @@ export const createTimeEntryHandler = async function* ({
         },
       });
 
-      return { ok: true as const, id: entry.id };
+      return { id: entry.id };
     }),
   );
-
-  if (!txResult.ok) {
-    return Result.err(
-      new HandlerError({
-        status: txResult.status,
-        message: txResult.message,
-      }),
-    );
-  }
 
   return Result.ok({ id: txResult.id });
 };

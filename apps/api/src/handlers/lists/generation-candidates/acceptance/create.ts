@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
+import { abortableTx } from "@/api/db/safe-db";
 import {
   entities,
   legalListGenerationCandidates,
@@ -162,7 +163,21 @@ const acceptGenerationCandidate = createSafeHandler(
       );
     }
 
-    const cleanupAcceptance = async (reason: string) =>
+    // Whether this request created the task entity or adopted one an earlier
+    // acceptance attempt already committed. Deleting an adopted entity cascades
+    // through legal_list_items_entity_fk and takes a live list item, its
+    // sources, and its assignees with it, none of which this request wrote.
+    type AcceptanceEntityOwnership = "created-here" | "adopted";
+
+    type ReleaseAcceptanceOptions = {
+      reason: string;
+      entityOwnership: AcceptanceEntityOwnership;
+    };
+
+    const cleanupAcceptance = async ({
+      reason,
+      entityOwnership,
+    }: ReleaseAcceptanceOptions) =>
       await safeDb(async (tx) => {
         const current = (
           await tx
@@ -189,14 +204,16 @@ const acceptGenerationCandidate = createSafeHandler(
           return { status: "accepted" as const };
         }
 
-        await tx
-          .delete(entities)
-          .where(
-            and(
-              eq(entities.id, acceptedEntityId),
-              eq(entities.workspaceId, workspaceId),
-            ),
-          );
+        if (entityOwnership === "created-here") {
+          await tx
+            .delete(entities)
+            .where(
+              and(
+                eq(entities.id, acceptedEntityId),
+                eq(entities.workspaceId, workspaceId),
+              ),
+            );
+        }
 
         if (
           current?.status !== "accepting" ||
@@ -252,12 +269,20 @@ const acceptGenerationCandidate = createSafeHandler(
       }),
     );
     if (existingItemResult.isErr()) {
-      const cleanup = await cleanupAcceptance("item_lookup_failed");
+      // The lookup failed, so this request never reached entity creation and
+      // owns nothing to delete.
+      const cleanup = await cleanupAcceptance({
+        reason: "item_lookup_failed",
+        entityOwnership: "adopted",
+      });
       if (cleanup.isOk() && cleanup.value.status === "accepted") {
         return Result.ok({ entityId: acceptedEntityId });
       }
       return Result.err(existingItemResult.error);
     }
+    const entityOwnership: AcceptanceEntityOwnership = existingItemResult.value
+      ? "adopted"
+      : "created-here";
     const taskResult = existingItemResult.value
       ? Result.ok({ entityId: existingItemResult.value.entityId })
       : await Result.gen(() =>
@@ -285,7 +310,11 @@ const acceptGenerationCandidate = createSafeHandler(
           }),
         );
     if (taskResult.isErr()) {
-      const cleanup = await cleanupAcceptance("task_creation_failed");
+      // Only reachable when this request ran the task creation itself.
+      const cleanup = await cleanupAcceptance({
+        reason: "task_creation_failed",
+        entityOwnership: "created-here",
+      });
       if (cleanup.isErr()) {
         return Result.err(cleanup.error);
       }
@@ -296,7 +325,25 @@ const acceptGenerationCandidate = createSafeHandler(
     }
 
     const entityId = taskResult.value.entityId;
-    const finalizedResult = await safeDb(async (tx) => {
+
+    // Releasing the reservation after the finalizing transaction gave up. The
+    // entity is deleted only when this request created it: an item the previous
+    // attempt already committed is live user data that a release must leave
+    // alone.
+    const releaseLostClaim = async (reason: string) => {
+      const cleanup = await cleanupAcceptance({ reason, entityOwnership });
+      if (cleanup.isErr()) {
+        return Result.err(cleanup.error);
+      }
+      if (cleanup.value.status === "accepted") {
+        return Result.ok({ entityId });
+      }
+      return Result.err(
+        new HandlerError({ status: 409, message: "Candidate claim was lost" }),
+      );
+    };
+
+    const finalizedResult = await abortableTx(safeDb, async (tx) => {
       const run = (
         await tx
           .select({ id: legalListGenerationRuns.id })
@@ -409,7 +456,12 @@ const acceptGenerationCandidate = createSafeHandler(
         )
         .returning({ id: legalListGenerationCandidates.id });
       if (!accepted.at(0)) {
-        return { status: "conflict" as const };
+        // The item source rows were inserted just above, so returning here
+        // would commit sources for an item this candidate never accepted.
+        throw new HandlerError({
+          status: 409,
+          message: "Candidate claim was lost",
+        });
       }
 
       const pending = await tx.query.legalListGenerationCandidates.findFirst({
@@ -446,7 +498,16 @@ const acceptGenerationCandidate = createSafeHandler(
       return { status: "accepted" as const };
     });
     if (finalizedResult.isErr()) {
-      const cleanup = await cleanupAcceptance("finalization_failed");
+      // A lost claim aborts the transaction rather than committing the staged
+      // source rows, so it arrives as the thrown HandlerError; anything else is
+      // a database failure.
+      if (HandlerError.is(finalizedResult.error)) {
+        return await releaseLostClaim("claim_lost");
+      }
+      const cleanup = await cleanupAcceptance({
+        reason: "finalization_failed",
+        entityOwnership,
+      });
       if (cleanup.isOk() && cleanup.value.status === "accepted") {
         return Result.ok({ entityId });
       }
@@ -454,19 +515,13 @@ const acceptGenerationCandidate = createSafeHandler(
     }
     const finalized = finalizedResult.value;
     if (finalized.status === "conflict") {
-      const cleanup = await cleanupAcceptance("claim_lost");
-      if (cleanup.isErr()) {
-        return Result.err(cleanup.error);
-      }
-      if (cleanup.value.status === "accepted") {
-        return Result.ok({ entityId });
-      }
-      return Result.err(
-        new HandlerError({ status: 409, message: "Candidate claim was lost" }),
-      );
+      return await releaseLostClaim("claim_lost");
     }
     if (finalized.status === "source-missing") {
-      const cleanup = await cleanupAcceptance("source_missing");
+      const cleanup = await cleanupAcceptance({
+        reason: "source_missing",
+        entityOwnership,
+      });
       if (cleanup.isErr()) {
         return Result.err(cleanup.error);
       }

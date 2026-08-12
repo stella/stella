@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
+import { abortableTx } from "@/api/db/safe-db";
 import { rateEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -111,7 +112,7 @@ const createRateEntry = createSafeHandler(
     }
 
     const txResult = yield* Result.await(
-      safeDb(async (tx) => {
+      abortableTx(safeDb, async (tx) => {
         await tx.execute(
           sql`SELECT pg_advisory_xact_lock(hashtext(${params.rateTableId}))`,
         );
@@ -122,11 +123,10 @@ const createRateEntry = createSafeHandler(
         );
 
         if (totalEntries >= LIMITS.rateEntriesPerTable) {
-          return {
-            ok: false as const,
-            status: 400 as const,
+          throw new HandlerError({
+            status: 400,
             message: "Rate entries limit reached for this table",
-          };
+          });
         }
 
         const overlapRows = await tx
@@ -137,11 +137,10 @@ const createRateEntry = createSafeHandler(
         const overlap = overlapRows.at(0);
 
         if (overlap) {
-          return {
-            ok: false as const,
-            status: 400 as const,
+          throw new HandlerError({
+            status: 400,
             message: "Date range overlaps with an existing entry for this user",
-          };
+          });
         }
 
         const [entry] = await tx
@@ -157,11 +156,10 @@ const createRateEntry = createSafeHandler(
           .returning({ id: rateEntries.id });
 
         if (!entry) {
-          return {
-            ok: false as const,
-            status: 500 as const,
+          throw new HandlerError({
+            status: 500,
             message: "Failed to create rate entry",
-          };
+          });
         }
 
         await recordAuditEvent(tx, {
@@ -182,18 +180,9 @@ const createRateEntry = createSafeHandler(
           },
         });
 
-        return { ok: true as const, id: entry.id };
+        return { id: entry.id };
       }),
     );
-
-    if (!txResult.ok) {
-      return Result.err(
-        new HandlerError({
-          status: txResult.status,
-          message: txResult.message,
-        }),
-      );
-    }
 
     return Result.ok({ id: txResult.id });
   },
