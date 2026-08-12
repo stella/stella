@@ -514,14 +514,14 @@ mechanics, and similar), not gaps in coverage.
 | health_infra           | 1     |
 | hosted_billing         | 6     |
 | mcp_transport          | 11    |
-| native_tool_ui         | 3     |
+| native_tool_ui         | 5     |
 | provider_secret        | 20    |
 | public_indexing        | 2     |
 | realtime_stream        | 2     |
 | search_ui              | 5     |
 | session_token_exchange | 13    |
 | ui_navigation_state    | 8     |
-| upload_mechanics       | 14    |
+| upload_mechanics       | 15    |
 | url_preview            | 2     |
 
-Total: 139
+Total: 142
