@@ -15,6 +15,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { assertUnchangedSince } from "@/api/lib/optimistic-concurrency";
+import { PLAYBOOK_VERSION_SOURCE } from "@/api/lib/workflow/playbook-positions";
 
 const config = {
   permissions: { playbook: ["approve"] },
@@ -95,6 +96,9 @@ const approvePlaybookDefinition = createSafeRootHandler(
           organizationId,
           playbookDefinitionId: playbookId,
           version: nextVersion,
+          // What a run's "latest approved version" filters on. Approval is the
+          // only reason this handler writes a snapshot.
+          source: PLAYBOOK_VERSION_SOURCE.APPROVAL,
           name: locked.name,
           description: locked.description,
           scope: locked.scope,

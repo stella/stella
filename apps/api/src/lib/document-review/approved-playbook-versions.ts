@@ -14,6 +14,7 @@ import type { Transaction } from "@/api/db/root";
 import { playbookDefinitionVersions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { PlaybookVersionForPin } from "@/api/lib/document-review/resolve-playbook-pin";
+import { PLAYBOOK_VERSION_SOURCE } from "@/api/lib/workflow/playbook-positions";
 
 type LoadArgs = {
   tx: Transaction;
@@ -57,6 +58,9 @@ export const loadLatestApprovedVersions = async ({
           ...playbookDefinitionIds,
         ]),
         eq(playbookDefinitionVersions.organizationId, organizationId),
+        // "Latest approved" is a filter, not an ordering: a snapshot written
+        // for any other reason must never become the pinned standard.
+        eq(playbookDefinitionVersions.source, PLAYBOOK_VERSION_SOURCE.APPROVAL),
       ),
     )
     .orderBy(
