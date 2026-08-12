@@ -593,6 +593,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-swallowed-rejection.ts",
     "./.oxlint-plugins/no-awaited-builder-union.ts",
     "./.oxlint-plugins/confine-redis-client.ts",
+    "./.oxlint-plugins/require-coordination-key.ts",
   ],
 
   overrides: [
@@ -2268,6 +2269,19 @@ export default defineConfig({
             ],
           },
         ],
+      },
+    },
+    {
+      // Valkey key positions belong to `lib/redis-keys.ts`, which owns the
+      // hashtag placement and the per-scope expiry policy. Tests are exempt so
+      // a fixture can pin a produced key shape as a literal.
+      files: [
+        "apps/api/src/**/*.ts",
+        ".oxlint-plugins/__fixtures__/require-coordination-key.fixture.ts",
+      ],
+      excludeFiles: ["apps/api/src/**/*.test.ts", "apps/api/src/tests/**/*.ts"],
+      rules: {
+        "require-coordination-key/require-coordination-key": "error",
       },
     },
     {

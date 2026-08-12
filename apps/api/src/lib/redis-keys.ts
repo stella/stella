@@ -73,7 +73,7 @@ type CoordinationKeyOptions = {
    */
   slot: string;
   /** Optional discriminator between keys within one slot. */
-  suffix?: string;
+  suffix?: string | undefined;
 };
 
 const buildKey = ({ scope, slot, suffix }: CoordinationKeyOptions) => {

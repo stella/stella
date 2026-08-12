@@ -17,7 +17,7 @@ import {
   withCommandTimeout,
 } from "@/api/lib/rate-limit/redis-command-timeout";
 import { createRedisClient } from "@/api/lib/redis-client";
-import { coordinationKey } from "@/api/lib/redis-keys";
+import { coordinationKey, type CoordinationKey } from "@/api/lib/redis-keys";
 
 type RateLimitValue = {
   key: string;
@@ -30,10 +30,14 @@ type AuthRateLimitStorage = {
   set: (key: string, value: RateLimitValue) => Promise<void>;
 };
 
+// The typed client methods are outside the `send(command, args)` shape the
+// `require-coordination-key` lint rule inspects, so the key position is held by
+// the type instead: a hand-written string does not satisfy `CoordinationKey`.
+// `expiryMode` is likewise non-optional, which is this path's TTL discipline.
 type AuthRateLimitRedisClient = {
-  get: (key: string) => Promise<string | null>;
+  get: (key: CoordinationKey) => Promise<string | null>;
   set: (
-    key: string,
+    key: CoordinationKey,
     value: string,
     expiryMode: "PX",
     ttlMs: number,

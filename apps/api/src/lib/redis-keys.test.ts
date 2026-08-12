@@ -9,7 +9,13 @@ import {
   type CoordinationScope,
 } from "@/api/lib/redis-keys";
 
-const SCOPES = Object.keys(COORDINATION_KEY_EXPIRY);
+const isCoordinationScope = (value: string): value is CoordinationScope =>
+  value in COORDINATION_KEY_EXPIRY;
+
+const SCOPES = Object.keys(COORDINATION_KEY_EXPIRY).filter(isCoordinationScope);
+
+/** Widen a built key so it can be compared against an expected literal. */
+const text = (key: string): string => key;
 
 const HASHTAG = /\{(?<slot>[^{}]*)\}/u;
 
@@ -29,12 +35,14 @@ const buildFor = (scope: CoordinationScope, slot: string, suffix?: string) =>
 
 describe("coordination key layout", () => {
   test("every declared scope builds a scope-prefixed, single-hashtag key", () => {
+    // The guard above must not have dropped a scope on the way in.
+    expect(SCOPES).toHaveLength(Object.keys(COORDINATION_KEY_EXPIRY).length);
     const built = new Set<string>();
     for (const scope of SCOPES) {
       const key = buildFor(scope, "slot-a", "field");
       built.add(scope);
       expect(key.startsWith(`${scope}:`)).toBe(true);
-      expect(key).toBe(`${scope}:{slot-a}:field`);
+      expect(text(key)).toBe(`${scope}:{slot-a}:field`);
       // Exactly one hashtag: a second pair would leave the cluster routing on
       // the first one while the reader assumes the last.
       expect(occurrences(key, "{")).toBe(1);
@@ -157,7 +165,7 @@ describe("scan globs", () => {
       slot: "*",
       suffix: "running",
     });
-    expect(pattern).toBe("workflow-run:{*}:running");
+    expect(text(pattern)).toBe("workflow-run:{*}:running");
 
     const lock = coordinationKey({
       scope: "workflow-run",
