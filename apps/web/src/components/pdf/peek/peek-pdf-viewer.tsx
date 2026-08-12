@@ -43,7 +43,6 @@ import {
 } from "@/components/pdf/peek/peek-pdf-print";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { StellaMark } from "@/components/stella-mark";
-import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { DOCX_MIME } from "@/lib/consts";
@@ -288,52 +287,40 @@ export const PeekPdfControls = ({
 
   return (
     <>
-      <Tooltip
-        content={t("workspaces.pdf.zoomOut")}
-        layer={tooltipLayer}
-        render={
-          <Button
-            disabled={!onZoomOut}
-            onClick={onZoomOut}
-            size="icon-xs"
-            variant="ghost"
-          >
-            <MinusIcon className="size-3" />
-          </Button>
-        }
-      />
-      <Tooltip
-        content={t("workspaces.pdf.zoomIn")}
-        layer={tooltipLayer}
-        render={
-          <Button
-            disabled={!onZoomIn}
-            onClick={onZoomIn}
-            size="icon-xs"
-            variant="ghost"
-          >
-            <PlusIcon className="size-3" />
-          </Button>
-        }
-      />
-      <Tooltip
-        content={t("workspaces.pdf.resetZoom")}
-        layer={tooltipLayer}
-        render={
-          <Button
-            disabled={!canResetZoom || !onResetZoom}
-            onClick={onResetZoom}
-            size="icon-xs"
-            variant="ghost"
-          >
-            {scaleOffset > 0 ? (
-              <FoldHorizontalIcon className="size-3" />
-            ) : (
-              <UnfoldHorizontalIcon className="size-3" />
-            )}
-          </Button>
-        }
-      />
+      <Button
+        disabled={!onZoomOut}
+        onClick={onZoomOut}
+        size="icon-xs"
+        tooltip={t("workspaces.pdf.zoomOut")}
+        tooltipLayer={tooltipLayer}
+        variant="ghost"
+      >
+        <MinusIcon className="size-3" />
+      </Button>
+      <Button
+        disabled={!onZoomIn}
+        onClick={onZoomIn}
+        size="icon-xs"
+        tooltip={t("workspaces.pdf.zoomIn")}
+        tooltipLayer={tooltipLayer}
+        variant="ghost"
+      >
+        <PlusIcon className="size-3" />
+      </Button>
+      <Button
+        disabled={!canResetZoom || !onResetZoom}
+        onClick={onResetZoom}
+        size="icon-xs"
+        tooltip={t("workspaces.pdf.resetZoom")}
+        tooltipLayer={tooltipLayer}
+        variant="ghost"
+      >
+        {scaleOffset > 0 ? (
+          <FoldHorizontalIcon className="size-3" />
+        ) : (
+          <UnfoldHorizontalIcon className="size-3" />
+        )}
+      </Button>
     </>
   );
 };
@@ -378,21 +365,17 @@ export const PeekPrintButton = () => {
   }, [analytics, pdfDocument]);
 
   return (
-    <Tooltip
-      content={t("common.print")}
-      render={
-        <Button
-          disabled={!pdfDocument || isPrinting}
-          onClick={() => {
-            detached(handlePrint(), "PeekPrintButton");
-          }}
-          size="icon-xs"
-          variant="ghost"
-        >
-          <PrinterIcon className="size-3.5" />
-        </Button>
-      }
-    />
+    <Button
+      disabled={!pdfDocument || isPrinting}
+      onClick={() => {
+        detached(handlePrint(), "PeekPrintButton");
+      }}
+      size="icon-xs"
+      tooltip={t("common.print")}
+      variant="ghost"
+    >
+      <PrinterIcon className="size-3.5" />
+    </Button>
   );
 };
 
@@ -443,21 +426,17 @@ export const PreparedPdfPrintButton = ({
   }, [analytics, fieldId, workspaceId]);
 
   return (
-    <Tooltip
-      content={t("common.print")}
-      render={
-        <Button
-          disabled={disabled || isPrinting || fieldId.length === 0}
-          onClick={() => {
-            detached(handlePrint(), "PreparedPdfPrintButton");
-          }}
-          size="icon-xs"
-          variant="ghost"
-        >
-          <PrinterIcon className="size-3.5" />
-        </Button>
-      }
-    />
+    <Button
+      disabled={disabled || isPrinting || fieldId.length === 0}
+      onClick={() => {
+        detached(handlePrint(), "PreparedPdfPrintButton");
+      }}
+      size="icon-xs"
+      tooltip={t("common.print")}
+      variant="ghost"
+    >
+      <PrinterIcon className="size-3.5" />
+    </Button>
   );
 };
 

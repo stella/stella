@@ -7,26 +7,30 @@ import {
   TooltipPopup,
   TooltipTrigger,
 } from "@stll/ui/components/tooltip";
+import type { OverlayLayer } from "@stll/ui/lib/overlay-layer";
+import { hasTooltipContent } from "@stll/ui/lib/tooltip-content";
 
 type TooltipTriggerOptions = {
   trigger: React.ReactElement;
-  tooltip: React.ReactNode | undefined | false;
+  tooltip: React.ReactNode;
+  layer?: OverlayLayer | undefined;
 };
 
-const renderTooltipTrigger = ({ trigger, tooltip }: TooltipTriggerOptions) => {
-  if (
-    tooltip === undefined ||
-    tooltip === null ||
-    tooltip === "" ||
-    tooltip === false
-  ) {
+const renderTooltipTrigger = ({
+  trigger,
+  tooltip,
+  layer,
+}: TooltipTriggerOptions) => {
+  if (!hasTooltipContent(tooltip)) {
     return trigger;
   }
 
   return (
     <Tooltip>
       <TooltipTrigger render={trigger} />
-      <TooltipPopup>{tooltip}</TooltipPopup>
+      <TooltipPopup {...(layer === undefined ? {} : { layer })}>
+        {tooltip}
+      </TooltipPopup>
     </Tooltip>
   );
 };

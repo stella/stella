@@ -572,6 +572,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-static-catalogue-route-import.ts",
     "./.oxlint-plugins/no-workspace-field-value-drift.ts",
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
+    "./.oxlint-plugins/no-disabled-tooltip-trigger.ts",
     "./.oxlint-plugins/no-document-cookie.ts",
     "./.oxlint-plugins/require-safe-window-open.ts",
     "./.oxlint-plugins/require-safe-outbound-target.ts",
@@ -1219,6 +1220,20 @@ export default defineConfig({
       ],
       rules: {
         "icon-button-requires-tooltip/icon-button-requires-tooltip": "error",
+      },
+    },
+    {
+      // The companion to the rule above: a tooltip wrapped around a disabled
+      // Button never opens, because the button receives no hover or focus.
+      // Button's own `tooltip` prop keeps it reachable while blocking
+      // activation; an outer wrapper cannot.
+      files: [
+        "apps/*/src/**/*.tsx",
+        "packages/*/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-disabled-tooltip-trigger.fixture.tsx",
+      ],
+      rules: {
+        "no-disabled-tooltip-trigger/no-disabled-tooltip-trigger": "error",
       },
     },
     {

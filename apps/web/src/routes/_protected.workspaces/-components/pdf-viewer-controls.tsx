@@ -21,7 +21,6 @@ import {
   printPdfBuffer,
 } from "@/components/pdf/peek/peek-pdf-print";
 import { PeekPdfControls } from "@/components/pdf/peek/peek-pdf-viewer";
-import Tooltip from "@/components/tooltip";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -179,38 +178,30 @@ export const PdfViewerControls = ({
       {!isDocx && (
         <>
           <Separator className="mx-1 h-4" orientation="vertical" />
-          <Tooltip
-            content={t("workspaces.pdf.previousPage")}
-            render={
-              <Button
-                disabled={currentPage <= 1}
-                onClick={() => {
-                  setEditingPage(null);
-                  navigateToPage(currentPage - 1);
-                }}
-                size="icon-xs"
-                variant="ghost"
-              >
-                <ChevronUpIcon className="size-3.5" />
-              </Button>
-            }
-          />
-          <Tooltip
-            content={t("workspaces.pdf.nextPage")}
-            render={
-              <Button
-                disabled={currentPage >= totalPages}
-                onClick={() => {
-                  setEditingPage(null);
-                  navigateToPage(currentPage + 1);
-                }}
-                size="icon-xs"
-                variant="ghost"
-              >
-                <ChevronDownIcon className="size-3.5" />
-              </Button>
-            }
-          />
+          <Button
+            disabled={currentPage <= 1}
+            onClick={() => {
+              setEditingPage(null);
+              navigateToPage(currentPage - 1);
+            }}
+            size="icon-xs"
+            tooltip={t("workspaces.pdf.previousPage")}
+            variant="ghost"
+          >
+            <ChevronUpIcon className="size-3.5" />
+          </Button>
+          <Button
+            disabled={currentPage >= totalPages}
+            onClick={() => {
+              setEditingPage(null);
+              navigateToPage(currentPage + 1);
+            }}
+            size="icon-xs"
+            tooltip={t("workspaces.pdf.nextPage")}
+            variant="ghost"
+          >
+            <ChevronDownIcon className="size-3.5" />
+          </Button>
           <div className="ms-1.5 me-2 flex gap-x-1.5 text-sm">
             <input
               aria-label={t("common.currentPage")}
@@ -256,38 +247,28 @@ export const PdfViewerControls = ({
       <div className="flex items-center">
         {showFileActions && (
           <>
-            <Tooltip
-              content={t("common.download")}
-              render={
-                <Button
-                  disabled={
-                    !fileMetadata || isDownloading || fieldId.length === 0
-                  }
-                  onClick={() => {
-                    detached(handleDownload(), "PdfViewerControls");
-                  }}
-                  size="icon-xs"
-                  variant="ghost"
-                >
-                  <DownloadIcon className="size-3.5" />
-                </Button>
-              }
-            />
-            <Tooltip
-              content={t("common.print")}
-              render={
-                <Button
-                  disabled={printDisabled || isPrinting || fieldId.length === 0}
-                  onClick={() => {
-                    detached(handlePrint(), "PdfViewerControls");
-                  }}
-                  size="icon-xs"
-                  variant="ghost"
-                >
-                  <PrinterIcon className="size-3.5" />
-                </Button>
-              }
-            />
+            <Button
+              disabled={!fileMetadata || isDownloading || fieldId.length === 0}
+              onClick={() => {
+                detached(handleDownload(), "PdfViewerControls");
+              }}
+              size="icon-xs"
+              tooltip={t("common.download")}
+              variant="ghost"
+            >
+              <DownloadIcon className="size-3.5" />
+            </Button>
+            <Button
+              disabled={printDisabled || isPrinting || fieldId.length === 0}
+              onClick={() => {
+                detached(handlePrint(), "PdfViewerControls");
+              }}
+              size="icon-xs"
+              tooltip={t("common.print")}
+              variant="ghost"
+            >
+              <PrinterIcon className="size-3.5" />
+            </Button>
           </>
         )}
         {extraControls}

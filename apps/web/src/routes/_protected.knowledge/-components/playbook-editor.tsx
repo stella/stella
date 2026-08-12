@@ -732,8 +732,8 @@ const PlaybookEditorForm = ({
   });
 
   const handleApprove = () => {
-    // `isDirty` is also what disables the button; re-checked here because the
-    // trigger stays interactive (see the aria-disabled tooltip below).
+    // `isDirty` is also what disables the button; re-checked here because a
+    // disabled button carrying a tooltip stays interactive to the browser.
     if (playbookId === null || updatedAt === null || isDirty) {
       return;
     }
@@ -777,37 +777,24 @@ const PlaybookEditorForm = ({
                   {t("knowledge.playbooks.versions.versionHistory")}
                 </Button>
               )}
-              {isEdit &&
-                canApprove && (
-                  // `aria-disabled` rather than `disabled` while the draft is
-                  // dirty: a `disabled` button gets `pointer-events-none`, so
-                  // the tooltip explaining *why* approval is unavailable could
-                  // never be hovered or focused. `handleApprove` re-checks.
-                  <Tooltip
-                    content={
-                      isDirty
-                        ? t("knowledge.playbooks.approval.saveBeforeApprove")
-                        : undefined
-                    }
-                    render={
-                      <Button
-                        aria-disabled={isDirty || undefined}
-                        className={cn(
-                          isDirty && "cursor-not-allowed opacity-64",
-                        )}
-                        disabled={approveMutation.isPending}
-                        loading={approveMutation.isPending}
-                        onClick={handleApprove}
-                        size="sm"
-                        type="button"
-                        variant="outline"
-                      />
-                    }
-                  >
-                    <ShieldCheckIcon />
-                    {t("knowledge.playbooks.approval.approve")}
-                  </Tooltip>
-                )}
+              {isEdit && canApprove && (
+                <Button
+                  disabled={isDirty || approveMutation.isPending}
+                  loading={approveMutation.isPending}
+                  onClick={handleApprove}
+                  size="sm"
+                  tooltip={
+                    isDirty
+                      ? t("knowledge.playbooks.approval.saveBeforeApprove")
+                      : undefined
+                  }
+                  type="button"
+                  variant="outline"
+                >
+                  <ShieldCheckIcon />
+                  {t("knowledge.playbooks.approval.approve")}
+                </Button>
+              )}
               {isEdit && canDelete && (
                 <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>
                   <Button

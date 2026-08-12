@@ -36,7 +36,6 @@ import {
 } from "@stll/ui/components/dialog";
 import { stellaToast } from "@stll/ui/components/toast";
 
-import Tooltip from "@/components/tooltip";
 import { useLocale } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -161,21 +160,17 @@ export const TranslateDocumentDialog = ({
 
   return (
     <Dialog onOpenChange={setOpen} open={open}>
-      <Tooltip
-        content={t("common.translate")}
+      <DialogTrigger
         render={
-          <DialogTrigger
-            render={
-              <Button
-                disabled={disabled}
-                size="icon-xs"
-                variant="ghost"
-                aria-label={t("common.translate")}
-              >
-                <LanguagesIcon className="size-3.5" />
-              </Button>
-            }
-          />
+          <Button
+            aria-label={t("common.translate")}
+            disabled={disabled}
+            size="icon-xs"
+            tooltip={t("common.translate")}
+            variant="ghost"
+          >
+            <LanguagesIcon className="size-3.5" />
+          </Button>
         }
       />
       <DialogPopup>
