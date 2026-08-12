@@ -79,7 +79,10 @@ import { skillsOptions } from "@/lib/knowledge/queries";
 import { usePinnedStore } from "@/lib/pinned-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
-import { prefetchRouteQuery } from "@/lib/react-query";
+import {
+  prefetchNonCriticalInfiniteQuery,
+  prefetchRouteQuery,
+} from "@/lib/react-query";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
@@ -101,11 +104,15 @@ export const Route = createFileRoute("/_protected/chat/")({
           workspacesNavigationOptions(activeOrganizationId),
           onPrefetchError,
         ),
-        context.queryClient.prefetchInfiniteQuery(
+        prefetchNonCriticalInfiniteQuery(
+          context.queryClient,
           groupedChatThreadsOptions({ activeOrganizationId }),
+          onPrefetchError,
         ),
-        context.queryClient.prefetchInfiniteQuery(
+        prefetchNonCriticalInfiniteQuery(
+          context.queryClient,
           skillsOptions(activeOrganizationId),
+          onPrefetchError,
         ),
       ]),
       "chat-index.prefetch",

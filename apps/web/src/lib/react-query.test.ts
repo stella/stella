@@ -6,6 +6,7 @@ import {
   ROUTE_QUERY_STALE_TIME_MS,
   ensureCriticalQueryData,
   ensureRouteInfiniteQueryData,
+  prefetchNonCriticalInfiniteQuery,
   prefetchNonCriticalQuery,
   routeQueryOptions,
 } from "@/lib/react-query";
@@ -174,5 +175,45 @@ describe("prefetchNonCriticalQuery", () => {
     );
 
     expect(onError).not.toHaveBeenCalled();
+  });
+});
+
+describe("prefetchNonCriticalInfiniteQuery", () => {
+  test("reports every independently failing prefetch", async () => {
+    const queryClient = new QueryClient();
+    const firstError = new Error("first failure");
+    const secondError = new Error("second failure");
+    const onError = mock((_error: unknown): void => {});
+
+    await Promise.all([
+      prefetchNonCriticalInfiniteQuery(
+        queryClient,
+        {
+          getNextPageParam: () => undefined,
+          initialPageParam: 0,
+          queryKey: ["first-failing-infinite-query"],
+          queryFn: async () => {
+            throw firstError;
+          },
+        },
+        onError,
+      ),
+      prefetchNonCriticalInfiniteQuery(
+        queryClient,
+        {
+          getNextPageParam: () => undefined,
+          initialPageParam: 0,
+          queryKey: ["second-failing-infinite-query"],
+          queryFn: async () => {
+            throw secondError;
+          },
+        },
+        onError,
+      ),
+    ]);
+
+    expect(onError).toHaveBeenCalledTimes(2);
+    expect(onError).toHaveBeenCalledWith(firstError);
+    expect(onError).toHaveBeenCalledWith(secondError);
   });
 });

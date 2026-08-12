@@ -123,6 +123,30 @@ export const prefetchNonCriticalQuery = async <
   }
 };
 
+export const prefetchNonCriticalInfiniteQuery = async <
+  TQueryFnData,
+  TError = Error,
+  TData = TQueryFnData,
+  TQueryKey extends QueryKey = QueryKey,
+  TPageParam = unknown,
+>(
+  queryClient: QueryClient,
+  options: FetchInfiniteQueryOptions<
+    TQueryFnData,
+    TError,
+    TData,
+    TQueryKey,
+    TPageParam
+  >,
+  onError: (error: unknown) => void,
+) => {
+  try {
+    await queryClient.fetchInfiniteQuery(options);
+  } catch (error) {
+    onError(error);
+  }
+};
+
 type RouteFreshenableQueryOptions = {
   staleTime?: unknown;
 };
