@@ -1,9 +1,7 @@
 [
   "src/handlers/case-law/ingestion/pipeline.test.ts::src/lib/observability/logger",
   "src/handlers/chat/send-message.test.ts::src/lib/search/index-chat",
-  "src/handlers/chat/tools/create-workspace-document-tools.test.ts::src/lib/file-derivative-queue",
   "src/handlers/chat/tools/create-workspace-document-tools.test.ts::src/lib/search/process-extraction",
-  "src/handlers/chat/tools/edit-workspace-document-tools.test.ts::src/lib/file-derivative-queue",
   "src/handlers/chat/tools/edit-workspace-document-tools.test.ts::src/lib/search/process-extraction",
   "src/handlers/chat/tools/external-mcp-tools-discovery.test.ts::src/lib/mcp-upstream/connections",
   "src/handlers/chat/tools/template-tools-suggest-fields-error.test.ts::src/lib/templates/suggest-template-fields",
@@ -24,8 +22,6 @@
   "src/lib/ai-provider-probe.test.ts::src/lib/safe-outbound-fetch",
   "src/lib/bbox/ai-generate-b-boxes.test.ts::src/lib/tanstack-ai-generate",
   "src/lib/docx/ai-field-generator.test.ts::src/lib/tanstack-ai-models",
-  "src/lib/entity-versions/create-entity-version-from-buffer.test.ts::src/lib/file-derivative-queue",
-  "src/lib/entity-versions/create-entity-version-from-buffer.test.ts::src/lib/files/file-object-ids",
   "src/lib/entity-versions/create-entity-version-from-buffer.test.ts::src/lib/files/utils",
   "src/lib/entity-versions/create-entity-version-from-buffer.test.ts::src/lib/root-scoped-db",
   "src/lib/entity-versions/create-entity-version-from-buffer.test.ts::src/lib/search/process-extraction",
