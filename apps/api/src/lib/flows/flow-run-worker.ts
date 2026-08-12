@@ -1,5 +1,5 @@
 import { Worker } from "bullmq";
-import { and, asc, gt, inArray } from "drizzle-orm";
+import { and, asc, gt, inArray, lt, sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import { flowRuns } from "@/api/db/schema";
@@ -36,7 +36,7 @@ const MAX_STALLED_COUNT = 2;
 // hung job "active" and blocking follow-up steps.
 const FLOW_STEP_JOB_TIMEOUT_MS = 4 * 60 * 1000;
 
-// Batch size for the boot-time orphan re-enqueue scan. The scan keyset-paginates
+// Batch size for the orphan re-enqueue scan. The scan keyset-paginates
 // through every pending/running run rather than stopping at the first batch, so a
 // backlog larger than one batch is still fully recovered.
 const ORPHAN_SCAN_BATCH_SIZE = 1000;
@@ -119,6 +119,11 @@ export const initFlowRunWorker = (): Worker<FlowStepJobData> => {
   // idempotent: the deterministic job id no-ops a still-live job, and the
   // executor guards against re-running an already-completed step.
   // `awaiting_review` runs are intentionally parked on a human, not orphans.
+  //
+  // The standing reconciler (`flows.reconcileOrphanRuns`) covers the same
+  // ground on a cadence, but only past a stall window. This call is kept
+  // without one because a restart is proof that this process's in-flight
+  // jobs are gone: waiting out the window would idle every run it just lost.
   reconcileOrphanedFlowRuns().catch((error: unknown) => {
     captureError(error);
     logger.error("flow.reconcile_failed", errorSystemFields(error));
@@ -127,15 +132,26 @@ export const initFlowRunWorker = (): Worker<FlowStepJobData> => {
   return worker;
 };
 
+type ReconcileOrphanedFlowRunsOptions = {
+  batchSize?: number;
+  /**
+   * Only reconcile runs that last moved before this instant. The standing
+   * sweep passes one so a run the queue is still working on is left alone;
+   * boot passes none, because a restart lost every job this process held.
+   */
+  stalledBefore?: Date;
+};
+
 // Keyset-paginate by id through every `pending`/`running` run and re-enqueue its
 // current step. Re-adding the step does not change the row's status, so a plain
 // `LIMIT` scan would re-select the same head of the backlog on every restart and
 // never reach the tail; ordering by id and advancing a cursor visits each run
 // exactly once until the backlog is drained. `batchSize` is injectable so tests
 // can exercise the multi-batch path without seeding thousands of rows.
-export const reconcileOrphanedFlowRuns = async (
-  batchSize: number = ORPHAN_SCAN_BATCH_SIZE,
-): Promise<void> => {
+export const reconcileOrphanedFlowRuns = async ({
+  batchSize = ORPHAN_SCAN_BATCH_SIZE,
+  stalledBefore,
+}: ReconcileOrphanedFlowRunsOptions = {}): Promise<void> => {
   let cursor: SafeId<"flowRun"> | null = null;
   let reconciled = 0;
 
@@ -151,6 +167,14 @@ export const reconcileOrphanedFlowRuns = async (
         and(
           inArray(flowRuns.status, ["pending", "running"]),
           cursor === null ? undefined : gt(flowRuns.id, cursor),
+          // `startedAt` moves when the run leaves `pending`; `createdAt` is
+          // the only timestamp a run that never started has.
+          stalledBefore === undefined
+            ? undefined
+            : lt(
+                sql`coalesce(${flowRuns.startedAt}, ${flowRuns.createdAt})`,
+                stalledBefore,
+              ),
         ),
       )
       .orderBy(asc(flowRuns.id))

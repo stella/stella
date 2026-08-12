@@ -32,6 +32,10 @@ import {
   runScheduledFlow,
 } from "@/api/lib/scheduler/tasks/flow-run";
 import {
+  RECONCILE_FLOW_RUN_ORPHANS_TASK,
+  reconcileFlowRunOrphans,
+} from "@/api/lib/scheduler/tasks/flow-run-orphan-reconcile";
+import {
   INFO_SOUD_SYNC_TRACKED_CASES_TASK,
   syncInfoSoudTrackedCases,
 } from "@/api/lib/scheduler/tasks/infosoud";
@@ -93,6 +97,7 @@ const SCHEDULER_TASKS = {
   [MEMORY_EXTRACTOR_TASK]: extractMemoriesFromCompactions,
   [CLEAN_TEMPLATE_DELETION_OBJECTS_TASK]: cleanTemplateDeletionObjects,
   [REPAIR_FILE_DERIVATIVES_TASK]: repairFileDerivatives,
+  [RECONCILE_FLOW_RUN_ORPHANS_TASK]: reconcileFlowRunOrphans,
 } as const satisfies Record<string, SchedulerTask>;
 
 export type RegisteredSchedulerTaskName = keyof typeof SCHEDULER_TASKS;
