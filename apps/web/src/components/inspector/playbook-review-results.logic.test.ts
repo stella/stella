@@ -9,6 +9,8 @@ import type {
 import {
   buildReviewResultItems,
   isReviewResultActionable,
+  isReviewResultActionNeeded,
+  reviewItemDecision,
 } from "@/components/inspector/playbook-review-results.logic";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -110,5 +112,66 @@ describe("review result composition", () => {
         decisions: [playbookRow],
       }),
     ).toThrow("Review topic");
+  });
+});
+
+const decidedItem = (
+  playbookDecision: ReviewFindingDecisionRow["decision"],
+  referenceDecision: ReviewFindingDecisionRow["decision"],
+) => {
+  const item = buildReviewResultItems({
+    topics: [playbookTopic],
+    playbookFindings: [playbookFinding],
+    referenceFindings: [referenceFinding],
+    decisions: [
+      { ...playbookRow, decision: playbookDecision },
+      { ...referenceRow, decision: referenceDecision },
+    ],
+  }).at(0);
+  if (item === undefined) {
+    throw new Error("The confirmed topic produced no result item");
+  }
+  return item;
+};
+
+describe("what still needs the reviewer", () => {
+  test("a flagged finding nobody has answered needs action", () => {
+    const item = decidedItem("open", "open");
+
+    expect(reviewItemDecision(item)).toBe("open");
+    expect(isReviewResultActionNeeded(item)).toBe(true);
+  });
+
+  test("accepting or dismissing takes the finding off the list", () => {
+    for (const decision of ["accepted", "dismissed"] as const) {
+      const item = decidedItem(decision, decision);
+
+      expect(reviewItemDecision(item)).toBe(decision);
+      // The finding is unchanged; only the reviewer's answer to it moved.
+      expect(isReviewResultActionable(item)).toBe(true);
+      expect(isReviewResultActionNeeded(item)).toBe(false);
+    }
+  });
+
+  test("a card whose checks were decided differently still needs the reviewer", () => {
+    const mixed = decidedItem("accepted", "dismissed");
+    const partly = decidedItem("accepted", "open");
+
+    expect(reviewItemDecision(mixed)).toBe("open");
+    expect(isReviewResultActionNeeded(mixed)).toBe(true);
+    expect(reviewItemDecision(partly)).toBe("open");
+    expect(isReviewResultActionNeeded(partly)).toBe(true);
+  });
+
+  test("a finding that was never flagged needs no action, decided or not", () => {
+    const aligned = buildReviewResultItems({
+      topics: [playbookTopic],
+      playbookFindings: [{ ...playbookFinding, verdict: "compliant" }],
+      referenceFindings: [{ ...referenceFinding, assessment: "aligned" }],
+      decisions: [playbookRow, referenceRow],
+    });
+
+    expect(aligned.filter(isReviewResultActionable)).toEqual([]);
+    expect(aligned.filter(isReviewResultActionNeeded)).toEqual([]);
   });
 });
