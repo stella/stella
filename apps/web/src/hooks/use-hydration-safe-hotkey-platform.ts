@@ -5,7 +5,7 @@ import { detectPlatform } from "@tanstack/react-hotkeys";
 import { resolveHydrationSafeHotkeyPlatform } from "@/lib/hotkeys";
 import type { HotkeyPlatform } from "@/lib/hotkeys";
 
-const subscribeToPlatform = () => () => {};
+const subscribeToPlatform = (_onStoreChange: () => void) => () => undefined;
 
 const getServerPlatform = (): HotkeyPlatform =>
   resolveHydrationSafeHotkeyPlatform({
@@ -23,10 +23,9 @@ const getBrowserPlatform = (): HotkeyPlatform =>
  * Returns the canonical SSR platform through hydration, then the browser's
  * actual platform after mount. Use this for every shortcut rendered as text.
  */
-export const useHydrationSafeHotkeyPlatform = (): HotkeyPlatform => {
-  return useSyncExternalStore(
+export const useHydrationSafeHotkeyPlatform = (): HotkeyPlatform =>
+  useSyncExternalStore(
     subscribeToPlatform,
     getBrowserPlatform,
     getServerPlatform,
   );
-};
