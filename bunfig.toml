@@ -7,12 +7,6 @@ minimumReleaseAgeExcludes = [
   # Temporary third-party exceptions must carry the exact instant at which
   # the normal five-day quarantine admits the currently pinned release.
   "@silurus/ooxml", # quarantine-expires: 2026-08-13T15:09:39.800Z
-  "@tanstack/ai", # quarantine-expires: 2026-08-12T06:35:00.848Z
-  "@tanstack/ai-bedrock", # quarantine-expires: 2026-08-12T06:34:57.780Z
-  "@tanstack/ai-client", # quarantine-expires: 2026-08-12T06:34:57.600Z
-  "@tanstack/ai-code-mode", # quarantine-expires: 2026-08-12T06:35:00.747Z
-  "@tanstack/ai-mcp", # quarantine-expires: 2026-08-12T06:35:03.430Z
-  "@tanstack/ai-react", # quarantine-expires: 2026-08-12T06:35:09.720Z
   # First-party @stll packages are on public npm (open source). They share a
   # release cadence and would otherwise be blocked on every publish cycle.
   # Permanent exclusions record their original introduction for auditability.
