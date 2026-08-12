@@ -132,6 +132,7 @@ describe("review result composition", () => {
       topics: [playbookTopic],
       playbookFindings: [persisted],
       referenceFindings: null,
+      decisions: [playbookRow],
     });
 
     expect(results).toEqual([
@@ -140,6 +141,7 @@ describe("review result composition", () => {
         title: "Notice period",
         playbook: persisted,
         reference: null,
+        decisions: [playbookRow],
       },
     ]);
     expect(results.every(isReviewResultActionable)).toBe(true);
