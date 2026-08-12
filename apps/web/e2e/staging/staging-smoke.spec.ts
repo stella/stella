@@ -99,16 +99,16 @@ test("server-rendered public law decisions stay stable after hydration", async (
   // Case numbers look like "6 Tdo 647/2017"; anchoring on the slash-year
   // tail keeps the regex linear.
   await expect(page.getByRole("heading", { name: /\/\d{4}/u })).toBeVisible();
-  const routeError = page.getByText("This page couldn’t be opened");
+  const routeErrorTitle = page.locator("#route-error-title");
   const inspector = page.locator('[data-side="right"]');
-  await expect(routeError).toBeHidden();
+  await expect(routeErrorTitle).toHaveCount(0);
   await expect(inspector).toHaveAttribute("data-state", "expanded");
 
   // Authentication resolution and the lazy inspector graph settle after the
   // decision heading appears. Keep observing long enough to catch a delayed
   // remount, stale-chunk retry, or cross-tab store reconciliation.
   await page.waitForTimeout(5000);
-  await expect(routeError).toBeHidden();
+  await expect(routeErrorTitle).toHaveCount(0);
   await expect(inspector).toHaveAttribute("data-state", "expanded");
   expect(pageErrors).toEqual([]);
   expect(failedAssets).toEqual([]);
