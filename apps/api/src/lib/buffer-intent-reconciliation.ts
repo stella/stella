@@ -14,7 +14,11 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createFileKey } from "@/api/lib/file-key";
-import { mapWithConcurrency } from "@/api/lib/map-with-concurrency";
+import {
+  createConcurrencyLimiter,
+  type ConcurrencyLimiter,
+  mapWithConcurrency,
+} from "@/api/lib/map-with-concurrency";
 import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -373,12 +377,14 @@ const reconcileStaleBufferIntentBatch = async ({
   limit,
   signal,
   deleteObject = deleteS3ObjectWithSignal,
+  deleteLimiter,
 }: {
   safeDb: SafeDb;
   scope?: BufferIntentScope | undefined;
   limit: number;
   signal?: AbortSignal | undefined;
   deleteObject?: typeof deleteS3ObjectWithSignal;
+  deleteLimiter?: ConcurrencyLimiter | undefined;
 }): Promise<number> => {
   signal?.throwIfAborted();
   const reconcileClaimId = Bun.randomUUIDv7().slice(0, 64);
@@ -443,6 +449,9 @@ const reconcileStaleBufferIntentBatch = async ({
     throw claimedResult.error;
   }
 
+  const runDelete =
+    deleteLimiter ?? createConcurrencyLimiter(RECOVERY_DELETE_CONCURRENCY);
+
   const cleanupResults = await mapWithConcurrency({
     items: claimedResult.value.flatMap((row) =>
       pendingUploadRecoveryObjectKeys(row).map((objectKey) => ({
@@ -451,22 +460,23 @@ const reconcileStaleBufferIntentBatch = async ({
       })),
     ),
     limit: RECOVERY_DELETE_CONCURRENCY,
-    operation: async ({ objectKey, row }) => ({
-      result: await Result.tryPromise({
-        try: async () =>
-          await withTimeout(
-            async (operationSignal) =>
-              await deleteObject(objectKey, operationSignal),
-            {
-              label: "buffer-intent-reconciliation.delete",
-              signal,
-              timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
-            },
-          ),
-        catch: (cause) => cause,
-      }),
-      row,
-    }),
+    operation: async ({ objectKey, row }) =>
+      await runDelete(async () => ({
+        result: await Result.tryPromise({
+          try: async () =>
+            await withTimeout(
+              async (operationSignal) =>
+                await deleteObject(objectKey, operationSignal),
+              {
+                label: "buffer-intent-reconciliation.delete",
+                signal,
+                timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
+              },
+            ),
+          catch: (cause) => cause,
+        }),
+        row,
+      })),
   });
   signal?.throwIfAborted();
   const failedIds = new Set<SafeId<"pendingUpload">>();
@@ -534,11 +544,13 @@ export const reconcileBufferObjectCleanupIntents = async ({
   limit,
   signal,
   deleteObject = deleteS3ObjectWithSignal,
+  deleteLimiter,
 }: {
   safeDb: SafeDb;
   limit: number;
   signal?: AbortSignal | undefined;
   deleteObject?: typeof deleteS3ObjectWithSignal;
+  deleteLimiter?: ConcurrencyLimiter | undefined;
 }): Promise<number> => {
   if (limit === 0) {
     return 0;
@@ -582,30 +594,34 @@ export const reconcileBufferObjectCleanupIntents = async ({
     throw claimedResult.error;
   }
 
+  const runDelete =
+    deleteLimiter ?? createConcurrencyLimiter(RECOVERY_DELETE_CONCURRENCY);
+
   await mapWithConcurrency({
     items: claimedResult.value,
     limit: RECOVERY_DELETE_CONCURRENCY,
-    operation: async (row) => {
-      const cleanup = await Result.tryPromise({
-        try: async () =>
-          await withTimeout(
-            async (operationSignal) =>
-              await deleteObject(row.objectKey, operationSignal),
-            {
-              label: "buffer-object-cleanup.delete",
-              signal,
-              timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
-            },
-          ),
-        catch: (cause) => cause,
-      });
-      if (Result.isError(cleanup) && !signal?.aborted) {
-        captureError(cleanup.error, {
-          pendingUploadId: row.id,
-          stage: "buffer-object-cleanup-reconcile",
+    operation: async (row) =>
+      await runDelete(async () => {
+        const cleanup = await Result.tryPromise({
+          try: async () =>
+            await withTimeout(
+              async (operationSignal) =>
+                await deleteObject(row.objectKey, operationSignal),
+              {
+                label: "buffer-object-cleanup.delete",
+                signal,
+                timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,
+              },
+            ),
+          catch: (cause) => cause,
         });
-      }
-    },
+        if (Result.isError(cleanup) && !signal?.aborted) {
+          captureError(cleanup.error, {
+            pendingUploadId: row.id,
+            stage: "buffer-object-cleanup-reconcile",
+          });
+        }
+      }),
   });
   signal?.throwIfAborted();
   return claimedResult.value.length;
@@ -654,20 +670,22 @@ export const reconcileStaleBufferIntentsGlobally = async ({
 }): Promise<number> => {
   const pendingLimit = Math.ceil(limit / 2);
   const transferredLimit = Math.floor(limit / 2);
-  // Run both claim classes through one worker-wide deletion budget. Each
-  // reconciler bounds its flat object list, and sequencing prevents their
-  // independent pools from multiplying storage concurrency.
-  const pendingCount = await reconcileStaleBufferIntentBatch({
-    safeDb,
-    limit: pendingLimit,
-    signal,
-    deleteObject,
-  });
-  const transferredCount = await reconcileBufferObjectCleanupIntents({
-    safeDb,
-    limit: transferredLimit,
-    signal,
-    deleteObject,
-  });
+  const deleteLimiter = createConcurrencyLimiter(RECOVERY_DELETE_CONCURRENCY);
+  const [pendingCount, transferredCount] = await Promise.all([
+    reconcileStaleBufferIntentBatch({
+      safeDb,
+      limit: pendingLimit,
+      signal,
+      deleteObject,
+      deleteLimiter,
+    }),
+    reconcileBufferObjectCleanupIntents({
+      safeDb,
+      limit: transferredLimit,
+      signal,
+      deleteObject,
+      deleteLimiter,
+    }),
+  ]);
   return pendingCount + transferredCount;
 };
