@@ -21325,7 +21325,7 @@ export const generatedRouteMap: RouteNode = {
                 flags: [
                   {
                     kind: "enum",
-                    enum: ["nda", "dpa", "msa"],
+                    enum: ["nda", "dpa", "msa", "saas"],
                     repeatable: false,
                     flag: "--starter-id",
                     prop: "starterId",
@@ -21349,7 +21349,7 @@ export const generatedRouteMap: RouteNode = {
                         starterId: {
                           default: "nda",
                           type: "string",
-                          enum: ["nda", "dpa", "msa"],
+                          enum: ["nda", "dpa", "msa", "saas"],
                         },
                       },
                     },
