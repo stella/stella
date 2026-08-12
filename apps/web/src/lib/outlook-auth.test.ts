@@ -6,6 +6,7 @@ import {
   buildOutlookOrganizationSelectionUrl,
   buildOutlookSignInPath,
   outlookSessionHandoff,
+  resolveOutlookSessionLookup,
   surfaceOutlookHandoffFailure,
 } from "@/lib/outlook-auth";
 
@@ -36,6 +37,21 @@ describe("Outlook authentication handoff", () => {
         token: "token",
       }),
     ).toBe("deliver");
+  });
+
+  test("propagates a resolved session lookup error before classifying the user as signed out", () => {
+    const lookupError = { status: 503 };
+    const mappedError = new Error("Session lookup failed");
+
+    expect(() =>
+      resolveOutlookSessionLookup({
+        mapError: (error) => {
+          expect(error).toBe(lookupError);
+          return mappedError;
+        },
+        result: { data: null, error: lookupError },
+      }),
+    ).toThrow(mappedError);
   });
 
   test("encodes the dialog origin in a safe relative handoff", () => {
