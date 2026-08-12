@@ -23,6 +23,7 @@ import {
   timestamptz,
   user,
   workspaceCheck,
+  wsOrganizationPolicies,
   wsPolicies,
 } from "./common";
 import type {
@@ -407,7 +408,7 @@ export const entityVersionAiSummaries = p.pgTable(
         foreignColumns: [entities.id, entities.workspaceId],
       })
       .onDelete("cascade"),
-    ...wsPolicies(),
+    ...wsOrganizationPolicies("entity_version_ai_summaries"),
   ],
 );
 
@@ -869,7 +870,7 @@ export const pendingUploads = p.pgTable(
           AND ${table.purpose} IN ('entity_create', 'entity_version')
           AND ${table.purposeData}->>'reservedFileId' IS NOT NULL`,
       ),
-    ...wsPolicies(),
+    ...wsOrganizationPolicies("pending_uploads"),
   ],
 );
 

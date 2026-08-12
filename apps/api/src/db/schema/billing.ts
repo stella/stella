@@ -138,7 +138,7 @@ export const billingCodes = p.pgTable(
     p
       .uniqueIndex("billing_codes_ws_type_code_uidx")
       .on(table.workspaceId, table.type, table.code),
-    ...wsPolicies(),
+    ...wsOrganizationPolicies("billing_codes"),
   ],
 );
 
@@ -164,7 +164,7 @@ export const rateTables = p.pgTable(
       .index("rate_tables_ws_default_idx")
       .on(table.workspaceId, table.isDefault),
     p.index("rate_tables_ws_client_idx").on(table.workspaceId, table.clientId),
-    ...wsPolicies(),
+    ...wsOrganizationPolicies("rate_tables"),
   ],
 );
 
@@ -239,7 +239,7 @@ export const expenses = p.pgTable(
       .on(table.workspaceId, table.userId, table.dateIncurred),
     p.index("expenses_invoice_idx").on(table.invoiceId),
     p.check("expenses_amount_positive_check", sql`${table.amount} > 0`),
-    ...wsPolicies(),
+    ...wsOrganizationPolicies("expenses"),
   ],
 );
 
@@ -277,6 +277,6 @@ export const invoices = p.pgTable(
     p
       .uniqueIndex("invoices_ws_number_uidx")
       .on(table.workspaceId, table.invoiceNumber),
-    ...wsPolicies(),
+    ...wsOrganizationPolicies("invoices"),
   ],
 );
