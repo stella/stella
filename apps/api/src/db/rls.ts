@@ -354,9 +354,9 @@ export const wsOrganizationReadOnlyPolicies = (tableName: string) => [
  * causes the work, and whose lifecycle after that insert stays root-writer
  * only.
  *
- * `requestShapeCheck` is the contract: it must pin every column that decides
- * what the request costs or who it is attributed to, so the scoped role can
- * write exactly the one shape the application enqueues and nothing else. It is
+ * `requestShapeCheck` is the contract: it must pin every caller-controlled
+ * request and lifecycle field, so the scoped role can write exactly the one
+ * fresh shape the application enqueues and nothing else. It is
  * AND-ed with the same workspace + organization pin the table's read policy
  * uses, and UPDATE/DELETE stay denied, so a tenant can never advance, retry, or
  * re-attribute the row it requested.

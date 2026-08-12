@@ -13,11 +13,14 @@ SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 --
 -- The blanket INSERT denial is replaced by a permissive INSERT policy whose
 -- WITH CHECK pins the same workspace and organization scopes the SELECT policy
--- uses, plus the exact enqueue shape:
+-- uses, the exact enqueue shape, and the persisted current file source. The
+-- latter prevents a scoped session from substituting an arbitrary file id or
+-- digest while asking the root worker to process it:
 --
 --   kind = 'native-extraction' AND request_source = 'upload'
 --   AND status = 'queued' AND requested_by IS NULL AND attempt_count = 0
---   AND processor_version = 1
+--   AND processor_version = 1, with no claim, progress, error, schedule, or
+--   completion metadata and database-clock creation/update timestamps
 --
 -- `processor_version` is pinned because it participates in
 -- document_processing_runs_source_uidx, the conflict identity that makes
@@ -28,20 +31,21 @@ SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 -- the constant and this policy disagree, so that lands as a red test rather
 -- than as inserts denied in production.
 --
--- so the scoped role can create only a fresh, unattributed, upload-sourced
--- native-extraction request for a workspace it already holds. OCR runs (which
--- spend external processing budget), manual and repair requests, and every
--- state transition after the insert stay root-writer only: the RESTRICTIVE
--- UPDATE and DELETE denials are untouched, so a tenant cannot advance, retry,
--- re-attribute, or delete the row it requested. Table privileges are unchanged.
+-- The scoped role can create only a fresh, unattributed, upload-sourced
+-- native-extraction request for the current file in a workspace it already
+-- holds. OCR runs (which spend external processing budget), manual and repair
+-- requests, and every state transition after the insert stay root-writer only:
+-- the RESTRICTIVE UPDATE and DELETE denials are untouched, so a tenant cannot
+-- advance, retry, re-attribute, or delete the row it requested. Table
+-- privileges are unchanged.
 --
 -- Precedent: entity_deletion_cleanup_insert (20260730140000), where the delete
 -- request creates its outbox row through its own scoped transaction.
 --
 -- The predicate below is the exact rendering of
 -- wsOrganizationScopedRequestPolicies() from apps/api/src/db/rls.ts with
--- document_processing.ts's shape check, so drizzle's declarative model and the
--- live catalog agree and db:push reports no drift.
+-- document_processing.ts's shape and source checks, so drizzle's declarative
+-- model and the live catalog agree and db:push reports no drift.
 
 -- stella-migration-safety: reviewed destructive-change - the restrictive INSERT denial is dropped and immediately replaced, in the same transaction, by a narrower permissive INSERT policy; the table is never left accepting an unscoped insert, and SELECT/UPDATE/DELETE authorization is unchanged. Rollback recreates the restrictive policy with the matching application revision.
 
@@ -78,4 +82,29 @@ CREATE POLICY "document_processing_runs_native_extraction_insert"
     AND requested_by IS NULL
     AND attempt_count = 0
     AND processor_version = 1
+    AND progress_completed = 0
+    AND progress_total IS NULL
+    AND error_code IS NULL
+    AND error_at IS NULL
+    AND claimed_at IS NULL
+    AND claimed_by IS NULL
+    AND next_attempt_at IS NULL
+    AND started_at IS NULL
+    AND finished_at IS NULL
+    AND created_at = CURRENT_TIMESTAMP
+    AND updated_at = CURRENT_TIMESTAMP
+    AND EXISTS (
+      SELECT 1
+      FROM entities scoped_enqueue_entity
+      INNER JOIN fields scoped_enqueue_field
+        ON scoped_enqueue_field.id = document_processing_runs.field_id
+        AND scoped_enqueue_field.workspace_id = document_processing_runs.workspace_id
+        AND scoped_enqueue_field.entity_version_id = document_processing_runs.entity_version_id
+      WHERE scoped_enqueue_entity.id = document_processing_runs.entity_id
+        AND scoped_enqueue_entity.workspace_id = document_processing_runs.workspace_id
+        AND scoped_enqueue_entity.current_version_id = document_processing_runs.entity_version_id
+        AND scoped_enqueue_field.content->>'type' = 'file'
+        AND scoped_enqueue_field.content->>'id' = document_processing_runs.source_file_id::text
+        AND scoped_enqueue_field.content->>'sha256Hex' = document_processing_runs.source_sha256_hex
+    )
   )));

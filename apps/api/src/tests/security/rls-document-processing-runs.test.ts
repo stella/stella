@@ -1,5 +1,12 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { and, eq, isNull, lte, or } from "drizzle-orm";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  test,
+} from "bun:test";
+import { and, eq, inArray, isNull, lte, or } from "drizzle-orm";
 
 import {
   DOCUMENT_PROCESSING_KINDS,
@@ -46,22 +53,35 @@ afterAll(async () => {
   await releaseRlsFixture();
 });
 
+const generatedRunIds = new Set<SafeId<"documentProcessingRun">>();
+
+afterEach(async () => {
+  if (generatedRunIds.size === 0) {
+    return;
+  }
+  await testDb
+    .delete(documentProcessingRuns)
+    .where(inArray(documentProcessingRuns.id, [...generatedRunIds]));
+  generatedRunIds.clear();
+});
+
 /** The row the upload path writes, for the seeded document in wsA1/orgA. */
-const enqueueValues = () =>
-  ({
-    id: createSafeId<"documentProcessingRun">(),
+const enqueueValues = () => {
+  const id = createSafeId<"documentProcessingRun">();
+  generatedRunIds.add(id);
+  return {
+    id,
     ...SCOPED_NATIVE_EXTRACTION_ENQUEUE,
     entityId: ids.entityA1,
     entityVersionId: ids.entityVersionA1,
     fieldId: ids.fileFieldA1,
     organizationId: ids.orgA,
     processorVersion: DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION,
-    // Distinct per call: the source identity is unique, so reusing one file id
-    // would make a later insert a no-op conflict instead of a policy decision.
-    sourceFileId: Bun.randomUUIDv7(),
+    sourceFileId: ids.fileObjectA1,
     sourceSha256Hex: "a".repeat(64),
     workspaceId: ids.wsA1,
-  }) satisfies typeof documentProcessingRuns.$inferInsert;
+  } satisfies typeof documentProcessingRuns.$inferInsert;
+};
 
 const tryCatch = async (fn: () => Promise<unknown>) => {
   try {
@@ -119,6 +139,50 @@ const offShapeCases: RejectionCase[] = [
     label: "attribution to a user",
     overrides: () => ({ requestedBy: ids.userA1 }),
   },
+  {
+    label: "progress already recorded",
+    overrides: () => ({ progressCompleted: 1 }),
+  },
+  {
+    label: "a progress total already recorded",
+    overrides: () => ({ progressTotal: 2 }),
+  },
+  {
+    label: "an error already recorded",
+    overrides: () => ({ errorCode: "forged" }),
+  },
+  {
+    label: "an error timestamp already recorded",
+    overrides: () => ({ errorAt: new Date() }),
+  },
+  {
+    label: "an existing worker claim",
+    overrides: () => ({ claimedBy: "forged-worker" }),
+  },
+  {
+    label: "an existing worker claim timestamp",
+    overrides: () => ({ claimedAt: new Date() }),
+  },
+  {
+    label: "a deferred schedule",
+    overrides: () => ({ nextAttemptAt: new Date(Date.now() + 60_000) }),
+  },
+  {
+    label: "an existing start timestamp",
+    overrides: () => ({ startedAt: new Date() }),
+  },
+  {
+    label: "an existing finish timestamp",
+    overrides: () => ({ finishedAt: new Date() }),
+  },
+  {
+    label: "a forged creation timestamp",
+    overrides: () => ({ createdAt: new Date(0) }),
+  },
+  {
+    label: "a forged update timestamp",
+    overrides: () => ({ updatedAt: new Date(0) }),
+  },
 ];
 
 const foreignScopeCases: RejectionCase[] = [
@@ -136,6 +200,25 @@ const foreignScopeCases: RejectionCase[] = [
   {
     label: "another organization on an authorized workspace",
     overrides: () => ({ organizationId: ids.orgB }),
+  },
+];
+
+const foreignSourceCases: RejectionCase[] = [
+  {
+    label: "a source file id absent from the current field",
+    overrides: () => ({ sourceFileId: Bun.randomUUIDv7() }),
+  },
+  {
+    label: "a source digest absent from the current field",
+    overrides: () => ({ sourceSha256Hex: "c".repeat(64) }),
+  },
+  {
+    label: "a non-file field",
+    overrides: () => ({ fieldId: ids.fieldA1 }),
+  },
+  {
+    label: "an entity version that does not own the file field",
+    overrides: () => ({ entityVersionId: ids.entityVersionA2 }),
   },
 ];
 
@@ -172,7 +255,21 @@ describe("document_processing_runs INSERT", () => {
       `status ${SCOPED_NATIVE_EXTRACTION_ENQUEUE.status}`,
     ]);
     expect([...exercised].filter((label) => !declared.includes(label))).toEqual(
-      ["attempts already spent", "attribution to a user"],
+      [
+        "attempts already spent",
+        "attribution to a user",
+        "progress already recorded",
+        "a progress total already recorded",
+        "an error already recorded",
+        "an error timestamp already recorded",
+        "an existing worker claim",
+        "an existing worker claim timestamp",
+        "a deferred schedule",
+        "an existing start timestamp",
+        "an existing finish timestamp",
+        "a forged creation timestamp",
+        "a forged update timestamp",
+      ],
     );
   });
 
@@ -185,6 +282,14 @@ describe("document_processing_runs INSERT", () => {
   }
 
   for (const { label, overrides } of foreignScopeCases) {
+    test(`rejects ${label}`, async () => {
+      expectRejected(
+        await insertAsScopedRole({ ...enqueueValues(), ...overrides() }),
+      );
+    });
+  }
+
+  for (const { label, overrides } of foreignSourceCases) {
     test(`rejects ${label}`, async () => {
       expectRejected(
         await insertAsScopedRole({ ...enqueueValues(), ...overrides() }),
@@ -275,13 +380,16 @@ describe("document_processing_runs — request durability", () => {
     const values = enqueueValues();
     expect(await insertAsScopedRole(values)).toBeNull();
 
+    const duplicateId = createSafeId<"documentProcessingRun">();
+    generatedRunIds.add(duplicateId);
+
     const duplicate = await scopedQuery(
       [ids.wsA1],
       ids.orgA,
       async (tx) =>
         await tx
           .insert(documentProcessingRuns)
-          .values({ ...values, id: createSafeId<"documentProcessingRun">() })
+          .values({ ...values, id: duplicateId })
           .onConflictDoNothing({
             target: [
               documentProcessingRuns.organizationId,

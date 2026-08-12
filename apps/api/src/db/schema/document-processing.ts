@@ -72,17 +72,35 @@ const DOCUMENT_PROCESSING_REQUEST_SOURCE_SQL_VALUES =
  */
 export const SCOPED_NATIVE_EXTRACTION_ENQUEUE = {
   attemptCount: 0,
+  claimedAt: null,
+  claimedBy: null,
+  errorAt: null,
+  errorCode: null,
+  finishedAt: null,
   kind: "native-extraction",
+  nextAttemptAt: null,
   processorVersion: DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION,
+  progressCompleted: 0,
+  progressTotal: null,
   requestedBy: null,
   requestSource: "upload",
+  startedAt: null,
   status: "queued",
 } as const satisfies {
   attemptCount: number;
+  claimedAt: null;
+  claimedBy: null;
+  errorAt: null;
+  errorCode: null;
+  finishedAt: null;
   kind: DocumentProcessingKind;
+  nextAttemptAt: null;
   processorVersion: number;
+  progressCompleted: number;
+  progressTotal: null;
   requestedBy: null;
   requestSource: DocumentProcessingRequestSource;
+  startedAt: null;
   status: DocumentProcessingStatus;
 };
 
@@ -101,6 +119,31 @@ const scopedEnqueueShapeCheck = sql`(
   AND requested_by IS NULL
   AND attempt_count = ${sql.raw(String(SCOPED_NATIVE_EXTRACTION_ENQUEUE.attemptCount))}
   AND processor_version = ${sql.raw(String(SCOPED_NATIVE_EXTRACTION_ENQUEUE.processorVersion))}
+  AND progress_completed = ${sql.raw(String(SCOPED_NATIVE_EXTRACTION_ENQUEUE.progressCompleted))}
+  AND progress_total IS NULL
+  AND error_code IS NULL
+  AND error_at IS NULL
+  AND claimed_at IS NULL
+  AND claimed_by IS NULL
+  AND next_attempt_at IS NULL
+  AND started_at IS NULL
+  AND finished_at IS NULL
+  AND created_at = CURRENT_TIMESTAMP
+  AND updated_at = CURRENT_TIMESTAMP
+  AND EXISTS (
+    SELECT 1
+    FROM entities scoped_enqueue_entity
+    INNER JOIN fields scoped_enqueue_field
+      ON scoped_enqueue_field.id = document_processing_runs.field_id
+      AND scoped_enqueue_field.workspace_id = document_processing_runs.workspace_id
+      AND scoped_enqueue_field.entity_version_id = document_processing_runs.entity_version_id
+    WHERE scoped_enqueue_entity.id = document_processing_runs.entity_id
+      AND scoped_enqueue_entity.workspace_id = document_processing_runs.workspace_id
+      AND scoped_enqueue_entity.current_version_id = document_processing_runs.entity_version_id
+      AND scoped_enqueue_field.content->>'type' = 'file'
+      AND scoped_enqueue_field.content->>'id' = document_processing_runs.source_file_id::text
+      AND scoped_enqueue_field.content->>'sha256Hex' = document_processing_runs.source_sha256_hex
+  )
 )`;
 
 /**
@@ -287,8 +330,10 @@ export const documentProcessingRuns = p.pgTable(
     ),
     // The upload that creates the source file may enqueue its own extraction
     // request through its scoped transaction, so the request cannot be lost
-    // between that commit and a follow-up write. Same shape as
-    // `entity_deletion_cleanup_insert` on entity_deletion_cleanup_requests.
+    // between that commit and a follow-up write. The policy binds the request
+    // to the persisted current file field; a scoped caller cannot substitute
+    // another source id or digest. Same shape as `entity_deletion_cleanup_insert`
+    // on entity_deletion_cleanup_requests.
     ...wsOrganizationScopedRequestPolicies({
       insertPolicyName: "document_processing_runs_native_extraction_insert",
       requestShapeCheck: scopedEnqueueShapeCheck,

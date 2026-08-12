@@ -276,7 +276,7 @@ describe("schema invariants", () => {
     const migration = readFileSync(
       path.join(
         import.meta.dir,
-        "../../../drizzle/20260813220000_document_processing_scoped_enqueue/migration.sql",
+        "../../../drizzle/20260813230000_document_processing_scoped_enqueue/migration.sql",
       ),
       "utf-8",
     );
