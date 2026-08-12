@@ -49,7 +49,12 @@ enforcement, branded types) live in
   edge-case inputs, or isolating external services
 - Test tenant isolation and ownership-source rules at the
   highest meaningful layer, not only as pure helper tests
-- Every bug fix gets a regression test
+- Every bug fix needs a durable guard, but not necessarily an example test:
+  prefer types, derivation, schemas, lint rules, or broader invariants when they
+  eliminate the bug class
+- Guard the invariant, not the accident. Do not memorialize a one-off typo,
+  stale literal, or incidental implementation detail in a dedicated test when
+  structural coupling makes that failure impossible
 - Avoid "tests for tests' sake": don't add shallow examples
   just to increase coverage if a stronger invariant test would
   cover the same surface with more signal
