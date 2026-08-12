@@ -64,7 +64,7 @@ function UsageSettingsPage() {
         <div className="mt-6 space-y-6">
           <UsagePlansCard
             packsPurchasable={
-              data?.entitlement !== undefined &&
+              data?.entitlement != null &&
               data.entitlement.source === "hosted" &&
               (data.entitlement.status === "active" ||
                 data.entitlement.status === "trialing")

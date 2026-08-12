@@ -12,6 +12,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { usagePoliciesOptions } from "@/routes/_protected.settings/-queries/usage-policies";
@@ -51,7 +52,9 @@ export function UsagePlansCard({
           </p>
           <Button
             className="mt-3"
-            onClick={() => void refetch()}
+            onClick={() => {
+              detached(refetch(), "UsagePlansCard");
+            }}
             variant="ghost"
           >
             {t("common.retry")}
