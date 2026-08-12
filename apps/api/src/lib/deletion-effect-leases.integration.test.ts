@@ -483,6 +483,35 @@ describe("destructive-effect lease fencing", () => {
     );
   });
 
+  test("legacy entity materialization fences older conditional workers", async () => {
+    const legacyRequestId = toSafeId<"entityDeletionCleanupRequest">(
+      "00000000-0000-4000-8000-000000000122",
+    );
+    await testDb.insert(entityDeletionCleanupRequests).values({
+      id: legacyRequestId,
+      organizationId,
+      s3Keys: ["tenant/legacy-materialization"],
+      status: "pending",
+      workspaceId,
+    });
+
+    expect(
+      await ensureEntityDeletionEffectChunks(legacyRequestId, effectDb()),
+    ).toBe(1);
+
+    const parent = (
+      await testDb
+        .select({
+          attemptCount: entityDeletionCleanupRequests.attemptCount,
+          status: entityDeletionCleanupRequests.status,
+        })
+        .from(entityDeletionCleanupRequests)
+        .where(eq(entityDeletionCleanupRequests.id, legacyRequestId))
+        .limit(1)
+    ).at(0);
+    expect(parent).toEqual({ attemptCount: 0, status: "processing" });
+  });
+
   test("legacy entity recovery preserves retry and stale fences", async () => {
     const deferredRequestId = toSafeId<"entityDeletionCleanupRequest">(
       "00000000-0000-4000-8000-000000000120",

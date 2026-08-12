@@ -102,10 +102,13 @@ export const getDestructiveEffectRetryAt = ({
   attemptCount: number;
   now: Date;
 }): Date => {
-  const exponent = Math.min(Math.max(attemptCount - 1, 0), 30);
-  const delayMs = Math.min(
-    RETRY_BASE_DELAY_MS * 2 ** exponent,
-    RETRY_MAX_DELAY_MS,
-  );
+  const delayMs = getDestructiveEffectRetryDelayMs(attemptCount);
   return new Date(now.getTime() + delayMs);
+};
+
+export const getDestructiveEffectRetryDelayMs = (
+  attemptCount: number,
+): number => {
+  const exponent = Math.min(Math.max(attemptCount - 1, 0), 30);
+  return Math.min(RETRY_BASE_DELAY_MS * 2 ** exponent, RETRY_MAX_DELAY_MS);
 };

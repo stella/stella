@@ -14,7 +14,7 @@ import {
   assertValidS3DeletionEffectChunk,
   consumeInBatches,
   createS3DeletionEffectChunks,
-  getDestructiveEffectRetryAt,
+  getDestructiveEffectRetryDelayMs,
 } from "@/api/lib/destructive-effect-chunks";
 import { createEffectLease } from "@/api/lib/effect-lease";
 import type { EffectLease } from "@/api/lib/effect-lease";
@@ -183,6 +183,16 @@ export const ensureEntityDeletionEffectChunks = async (
     }
     const chunks = createS3DeletionEffectChunks(request.s3Keys);
     if (chunks.length > 0) {
+      await tx
+        .update(entityDeletionCleanupRequests)
+        .set({
+          completedAt: null,
+          errorMessage: null,
+          nextAttemptAt: null,
+          status: "processing",
+          updatedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .where(eq(entityDeletionCleanupRequests.id, requestId));
       await consumeInBatches({
         batchSize: DESTRUCTIVE_EFFECT_CHUNK_INSERT_BATCH_SIZE,
         consume: async (batch) => {
@@ -213,7 +223,6 @@ export const claimNextEntityDeletionEffectChunk = async (
   db: EntityDeletionEffectDb = rootDb,
 ): Promise<EntityDeletionEffectClaim | null> =>
   await db.transaction(async (tx) => {
-    const now = new Date();
     const candidate = (
       await tx
         .select({ id: entityDeletionEffectChunks.id })
@@ -238,13 +247,11 @@ export const claimNextEntityDeletionEffectChunk = async (
         .set({
           attemptCount: sql`${entityDeletionEffectChunks.attemptCount} + 1`,
           errorMessage: null,
-          leaseExpiresAt: new Date(
-            now.getTime() + ENTITY_DELETION_EFFECT_LEASE_MS,
-          ),
+          leaseExpiresAt: sql`CURRENT_TIMESTAMP + (${ENTITY_DELETION_EFFECT_LEASE_MS} * INTERVAL '1 millisecond')`,
           leaseToken: lease.token,
           nextAttemptAt: null,
           status: "processing",
-          updatedAt: now,
+          updatedAt: sql`CURRENT_TIMESTAMP`,
         })
         .where(
           and(
@@ -272,7 +279,7 @@ export const claimNextEntityDeletionEffectChunk = async (
         errorMessage: null,
         nextAttemptAt: null,
         status: "processing",
-        updatedAt: now,
+        updatedAt: sql`CURRENT_TIMESTAMP`,
       })
       .where(eq(entityDeletionCleanupRequests.id, requestId));
     return {
@@ -325,7 +332,7 @@ export const failEntityDeletionEffectChunk = async (
   db: EntityDeletionEffectDb = rootDb,
 ): Promise<boolean> =>
   await db.transaction(async (tx) => {
-    const failedAt = new Date();
+    const retryDelayMs = getDestructiveEffectRetryDelayMs(claim.attemptCount);
     const settled = (
       await tx
         .update(entityDeletionEffectChunks)
@@ -333,12 +340,9 @@ export const failEntityDeletionEffectChunk = async (
           errorMessage: error.message,
           leaseExpiresAt: null,
           leaseToken: null,
-          nextAttemptAt: getDestructiveEffectRetryAt({
-            attemptCount: claim.attemptCount,
-            now: failedAt,
-          }),
+          nextAttemptAt: sql`CURRENT_TIMESTAMP + (${retryDelayMs} * INTERVAL '1 millisecond')`,
           status: "failed",
-          updatedAt: failedAt,
+          updatedAt: sql`CURRENT_TIMESTAMP`,
         })
         .where(
           and(

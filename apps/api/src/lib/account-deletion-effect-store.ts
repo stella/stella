@@ -14,7 +14,7 @@ import {
   assertValidS3DeletionEffectChunk,
   consumeInBatches,
   createS3DeletionEffectChunks,
-  getDestructiveEffectRetryAt,
+  getDestructiveEffectRetryDelayMs,
 } from "@/api/lib/destructive-effect-chunks";
 import { createEffectLease } from "@/api/lib/effect-lease";
 import type { EffectLease } from "@/api/lib/effect-lease";
@@ -227,7 +227,6 @@ export const claimNextAccountDeletionEffectChunk = async (
   db: AccountDeletionEffectDb = rootDb,
 ): Promise<AccountDeletionEffectClaim | null> =>
   await db.transaction(async (tx) => {
-    const now = new Date();
     const candidate = (
       await tx
         .select({
@@ -260,9 +259,9 @@ export const claimNextAccountDeletionEffectChunk = async (
             errorMessage: EXHAUSTED_LEASE_ERROR,
             leaseExpiresAt: null,
             leaseToken: null,
-            nextAttemptAt: now,
+            nextAttemptAt: sql`CURRENT_TIMESTAMP`,
             status: "failed",
-            updatedAt: now,
+            updatedAt: sql`CURRENT_TIMESTAMP`,
           })
           .where(
             and(
@@ -288,13 +287,11 @@ export const claimNextAccountDeletionEffectChunk = async (
         .set({
           attemptCount: sql`${accountDeletionEffectChunks.attemptCount} + 1`,
           errorMessage: null,
-          leaseExpiresAt: new Date(
-            now.getTime() + ACCOUNT_DELETION_EFFECT_LEASE_MS,
-          ),
+          leaseExpiresAt: sql`CURRENT_TIMESTAMP + (${ACCOUNT_DELETION_EFFECT_LEASE_MS} * INTERVAL '1 millisecond')`,
           leaseToken: lease.token,
           nextAttemptAt: null,
           status: "processing",
-          updatedAt: now,
+          updatedAt: sql`CURRENT_TIMESTAMP`,
         })
         .where(
           and(
@@ -321,7 +318,7 @@ export const claimNextAccountDeletionEffectChunk = async (
         completedAt: null,
         errorMessage: null,
         status: "processing",
-        updatedAt: now,
+        updatedAt: sql`CURRENT_TIMESTAMP`,
       })
       .where(eq(accountDeletionRequests.id, requestId));
     return {
@@ -374,7 +371,7 @@ export const failAccountDeletionEffectChunk = async (
   db: AccountDeletionEffectDb = rootDb,
 ): Promise<boolean> =>
   await db.transaction(async (tx) => {
-    const failedAt = new Date();
+    const retryDelayMs = getDestructiveEffectRetryDelayMs(claim.attemptCount);
     const settled = (
       await tx
         .update(accountDeletionEffectChunks)
@@ -382,12 +379,9 @@ export const failAccountDeletionEffectChunk = async (
           errorMessage: error.message,
           leaseExpiresAt: null,
           leaseToken: null,
-          nextAttemptAt: getDestructiveEffectRetryAt({
-            attemptCount: claim.attemptCount,
-            now: failedAt,
-          }),
+          nextAttemptAt: sql`CURRENT_TIMESTAMP + (${retryDelayMs} * INTERVAL '1 millisecond')`,
           status: "failed",
-          updatedAt: failedAt,
+          updatedAt: sql`CURRENT_TIMESTAMP`,
         })
         .where(
           and(
