@@ -2,6 +2,14 @@ import { expect, test } from "@playwright/test";
 
 import { appShellNavigationLink } from "../helpers/app-shell";
 
+const MACOS_USER_AGENT =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
+  "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36";
+
+// The public shell is rendered on Linux and hydrated on the user's platform.
+// Emulating macOS catches ambient platform reads that Linux-only CI misses.
+test.use({ userAgent: MACOS_USER_AGENT });
+
 // The smoke user mirrors the production default state: org owner,
 // no usage entitlement row, no AI provider config. Regressions that
 // only appear in that state must fail here, not in front of a user.
@@ -97,9 +105,9 @@ test("server-rendered public law decisions stay stable after hydration", async (
   await page.reload({ waitUntil: "commit" });
 
   await expect(page.locator("article").first()).toBeVisible();
-  await expect(
-    page.getByRole("heading", { includeHidden: true, level: 1 }),
-  ).toHaveCount(1);
+  // Source documents may contain their own level-one heading. Scope this to
+  // the viewer's accessible page title rather than assuming a global count.
+  await expect(page.locator("h1.sr-only")).toHaveCount(1);
   const routeErrorTitle = page.locator("#route-error-title");
   const inspector = page.locator('[data-side="right"]');
   await expect(routeErrorTitle).toHaveCount(0);

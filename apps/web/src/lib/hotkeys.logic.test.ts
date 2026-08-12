@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  formatHydrationSafeHotkey,
   formatShortcutBinding,
+  HOTKEYS,
   SHORTCUT_CONTEXTS,
   SHORTCUT_GROUPS,
 } from "@/lib/hotkeys";
@@ -34,6 +36,31 @@ describe("shortcut registry is the single source of truth", () => {
   test("every registry shortcut has a unique, stable id", () => {
     const ids = allShortcuts.map((shortcut) => shortcut.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe("SSR-visible shortcut labels", () => {
+  test("keep the server and first macOS render identical", () => {
+    const serverLabel = formatHydrationSafeHotkey({
+      hotkey: HOTKEYS.SEARCH,
+      mounted: false,
+      platform: "linux",
+    });
+    const firstMacRenderLabel = formatHydrationSafeHotkey({
+      hotkey: HOTKEYS.SEARCH,
+      mounted: false,
+      platform: "mac",
+    });
+
+    expect(serverLabel).toBe("Ctrl+K");
+    expect(firstMacRenderLabel).toBe(serverLabel);
+    expect(
+      formatHydrationSafeHotkey({
+        hotkey: HOTKEYS.SEARCH,
+        mounted: true,
+        platform: "mac",
+      }),
+    ).toBe("⌘ K");
   });
 });
 

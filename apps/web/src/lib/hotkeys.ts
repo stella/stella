@@ -191,6 +191,27 @@ export type ShortcutGroup = {
   readonly shortcuts: readonly ShortcutDescriptor[];
 };
 
+type HydrationSafeHotkeyOptions = {
+  hotkey: Hotkey;
+  mounted: boolean;
+  platform?: ReturnType<typeof detectPlatform>;
+};
+
+/**
+ * Format an SSR-visible shortcut without letting the server and the first
+ * browser render observe different operating systems. The browser switches to
+ * its real platform only after mount, when changing text can no longer break
+ * hydration.
+ */
+export const formatHydrationSafeHotkey = ({
+  hotkey,
+  mounted,
+  platform,
+}: HydrationSafeHotkeyOptions): string =>
+  formatForDisplay(hotkey, {
+    platform: mounted ? (platform ?? detectPlatform()) : "linux",
+  });
+
 /**
  * Format a shortcut's full, platform-correct key combo for display in the
  * cheatsheet (e.g. `⌘K` on macOS, `Ctrl+K` elsewhere).

@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState } from "react";
 import type { ReactNode } from "react";
 
-import { formatForDisplay, useHotkey } from "@tanstack/react-hotkeys";
+import { useHotkey } from "@tanstack/react-hotkeys";
 import {
   Link,
   Outlet,
@@ -38,6 +38,7 @@ import {
 import { StellaWordmark } from "@/components/stella-wordmark";
 import Tooltip from "@/components/tooltip";
 import { getWorkspacePrimaryNavItems } from "@/components/workspace-primary-nav";
+import { useHasMounted } from "@/hooks/use-chrome-query";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
@@ -47,7 +48,7 @@ import {
   SIDE_RAIL_WIDTH,
   TOOLBAR_ROW_HEIGHT,
 } from "@/lib/consts";
-import { HOTKEYS } from "@/lib/hotkeys";
+import { formatHydrationSafeHotkey, HOTKEYS } from "@/lib/hotkeys";
 import { isPublicLawSsrRouteEnabled } from "@/lib/public-law-launch";
 import { isPublicToolsRouteEnabled } from "@/lib/public-tools-launch";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
@@ -169,6 +170,11 @@ const PublicSidebar = ({
   });
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
+  const mounted = useHasMounted();
+  const searchHotkeyLabel = formatHydrationSafeHotkey({
+    hotkey: HOTKEYS.SEARCH,
+    mounted,
+  });
   const [searchOpen, setSearchOpen] = useState(false);
   // This shell is server-rendered; the localStorage-backed preview
   // toggle is browser-only and would mismatch hydration. The host/env
@@ -249,7 +255,7 @@ const PublicSidebar = ({
                     </SidebarMenuButton>
                     <SidebarMenuBadge>
                       <kbd className="text-muted-foreground text-[0.625rem]">
-                        {formatForDisplay(HOTKEYS.SEARCH)}
+                        {searchHotkeyLabel}
                       </kbd>
                     </SidebarMenuBadge>
                   </SidebarMenuItem>
