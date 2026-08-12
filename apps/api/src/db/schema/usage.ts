@@ -47,7 +47,6 @@ export const USAGE_POLICY_VISIBILITIES = ["public", "hidden"] as const;
  * read site.
  */
 export const USAGE_POLICY_PRICE_BASES = ["flat", "per_seat"] as const;
-export type UsagePolicyPriceBasis = (typeof USAGE_POLICY_PRICE_BASES)[number];
 
 const USAGE_POLICY_KIND_SQL_VALUES = USAGE_POLICY_KINDS.map((kind) =>
   sql.raw(`'${kind}'`),

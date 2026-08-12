@@ -7,7 +7,10 @@ SET statement_timeout = '5s';--> statement-breakpoint
 ALTER TABLE "usage_policies"
   ADD COLUMN IF NOT EXISTS "price_basis" text DEFAULT 'flat' NOT NULL;--> statement-breakpoint
 
+-- Validating immediately: the catalog is operator-seeded and bounded at
+-- 100 rows, so the scan is instant and NOT VALID + VALIDATE buys nothing.
 ALTER TABLE "usage_policies"
+  -- squawk-ignore constraint-missing-not-valid
   ADD CONSTRAINT "usage_policies_price_basis_domain"
   CHECK (price_basis IN ('flat', 'per_seat'));--> statement-breakpoint
 
@@ -20,6 +23,9 @@ ALTER TABLE "usage_policies"
 ALTER TABLE "usage_entitlements"
   ADD COLUMN IF NOT EXISTS "hosted_peak_seats" integer;--> statement-breakpoint
 
+-- Validating immediately for the same reason: at most one entitlement
+-- row per organisation, and the new column is NULL everywhere.
 ALTER TABLE "usage_entitlements"
+  -- squawk-ignore constraint-missing-not-valid
   ADD CONSTRAINT "usage_entitlements_hosted_peak_seats_positive"
   CHECK (hosted_peak_seats IS NULL OR hosted_peak_seats > 0);
