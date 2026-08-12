@@ -13,10 +13,36 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-const processExtractionMock = mock(async () => {});
-
+// Spread the real module: the copy helper reads its search-index ownership
+// split from here. Only the durable extraction request itself is replaced.
+const realProcessExtraction =
+  await import("@/api/lib/search/process-extraction");
+const processExtractionMock = mock(async (_entityId: string) => undefined);
 void mock.module("@/api/lib/search/process-extraction", () => ({
+  ...realProcessExtraction,
   processExtraction: processExtractionMock,
+}));
+
+const enqueueEntitySearchRepairsMock = mock(
+  async (_tx: unknown, _entityIds: readonly string[]) => undefined,
+);
+const flushEntitySearchRepairsMock = mock(async () => ({
+  failed: 0,
+  repaired: 0,
+}));
+// The full export set, not just the two this suite asserts on: a partial
+// factory silently leaves the rest of the module real, so a consumer reaching
+// the queue through another entry point would open a transaction here.
+const idleRepairOutcome = async () => ({ failed: 0, repaired: 0 });
+void mock.module("@/api/lib/search/projection-repair-queue", () => ({
+  SEARCH_PROJECTION_REPAIR_BATCH_SIZE: 32,
+  drainSearchProjectionRepairQueue: idleRepairOutcome,
+  enqueueContactSearchRepairs: async () => undefined,
+  enqueueEntitySearchRepairs: enqueueEntitySearchRepairsMock,
+  enqueueWorkspaceSearchRepairs: async () => undefined,
+  flushContactSearchRepairs: idleRepairOutcome,
+  flushEntitySearchRepairs: flushEntitySearchRepairsMock,
+  flushWorkspaceSearchRepairs: idleRepairOutcome,
 }));
 
 const fileMock = mock(() => ({}));
@@ -149,6 +175,10 @@ const createContext = ({
 
 describe("duplicate entity", () => {
   test("duplicates folder trees instead of rejecting folders", async () => {
+    processExtractionMock.mockClear();
+    enqueueEntitySearchRepairsMock.mockClear();
+    flushEntitySearchRepairsMock.mockClear();
+
     const insertedEntities: InsertedEntity[] = [];
     const insertedVersions: unknown[] = [];
     const insertedFields: unknown[] = [];
@@ -258,6 +288,15 @@ describe("duplicate entity", () => {
     expect(nestedDuplicate.kind).toBe("folder");
     expect(nestedDuplicate.name).toBe("Nested");
     expect(nestedDuplicate.parentId).toBe(rootDuplicate.id);
-    expect(processExtractionMock).toHaveBeenCalledTimes(3);
+    // The DOCX copy is indexed by the extraction run that reads it; the two
+    // folder copies have no such run, so their marks are written inside the
+    // copy transaction and only flushed afterwards.
+    expect(processExtractionMock.mock.calls).toEqual([[documentDuplicate.id]]);
+    expect(enqueueEntitySearchRepairsMock).toHaveBeenCalledTimes(1);
+    expect(enqueueEntitySearchRepairsMock.mock.calls.at(0)?.at(1)).toEqual([
+      rootDuplicate.id,
+      nestedDuplicate.id,
+    ]);
+    expect(flushEntitySearchRepairsMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -25,7 +25,11 @@ import {
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
 import { LIMITS } from "@/api/lib/limits";
-import { processExtraction } from "@/api/lib/search/process-extraction";
+import {
+  processExtraction,
+  SEARCH_INDEX_OWNER,
+} from "@/api/lib/search/process-extraction";
+import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
 const duplicateEntityBodySchema = t.Object({
   entityId: tSafeId("entity"),
@@ -62,11 +66,17 @@ const duplicateEntityHandler = async function* ({
           currentVersion: {
             columns: { id: true },
             with: {
+              // Ascending field id is ascending creation order, the order
+              // `findExtractionFileField` requires, so the copy resolves the
+              // same extraction source as the entity it came from. At most
+              // one field per property bounds the read.
               fields: {
                 columns: {
                   propertyId: true,
                   content: true,
                 },
+                orderBy: { id: "asc" },
+                limit: LIMITS.propertiesCount,
               },
             },
           },
@@ -102,6 +112,8 @@ const duplicateEntityHandler = async function* ({
                     propertyId: true,
                     content: true,
                   },
+                  orderBy: { id: "asc" },
+                  limit: LIMITS.propertiesCount,
                 },
               },
             },
@@ -177,7 +189,15 @@ const duplicateEntityHandler = async function* ({
     );
   }
 
-  for (const entityId of txResult.entityIds) {
+  // Acceleration only: the marks are already committed, and the standing
+  // drain repairs whatever a lost flush leaves behind.
+  flushEntitySearchRepairs(
+    txResult.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
+  ).catch(captureError);
+
+  for (const entityId of txResult.entityIdsBySearchIndexOwner[
+    SEARCH_INDEX_OWNER.durableExtraction
+  ]) {
     processExtraction(entityId).catch(captureError);
   }
 

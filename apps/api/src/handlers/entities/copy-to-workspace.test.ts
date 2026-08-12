@@ -41,9 +41,36 @@ void mock.module("@/api/lib/s3", () => ({
   },
 }));
 
-const processExtractionMock = mock(async () => {});
+// Spread the real module: the copy helper reads its search-index ownership
+// split from here. Only the durable extraction request itself is replaced.
+const realProcessExtraction =
+  await import("@/api/lib/search/process-extraction");
+const processExtractionMock = mock(async (_entityId: string) => undefined);
 void mock.module("@/api/lib/search/process-extraction", () => ({
+  ...realProcessExtraction,
   processExtraction: processExtractionMock,
+}));
+
+const enqueueEntitySearchRepairsMock = mock(
+  async (_tx: unknown, _entityIds: readonly string[]) => undefined,
+);
+const flushEntitySearchRepairsMock = mock(async () => ({
+  failed: 0,
+  repaired: 0,
+}));
+// The full export set, not just the two this suite asserts on: a partial
+// factory silently leaves the rest of the module real, so a consumer reaching
+// the queue through another entry point would open a transaction here.
+const idleRepairOutcome = async () => ({ failed: 0, repaired: 0 });
+void mock.module("@/api/lib/search/projection-repair-queue", () => ({
+  SEARCH_PROJECTION_REPAIR_BATCH_SIZE: 32,
+  drainSearchProjectionRepairQueue: idleRepairOutcome,
+  enqueueContactSearchRepairs: async () => undefined,
+  enqueueEntitySearchRepairs: enqueueEntitySearchRepairsMock,
+  enqueueWorkspaceSearchRepairs: async () => undefined,
+  flushContactSearchRepairs: idleRepairOutcome,
+  flushEntitySearchRepairs: flushEntitySearchRepairsMock,
+  flushWorkspaceSearchRepairs: idleRepairOutcome,
 }));
 
 const captureErrorMock = mock(() => undefined);
@@ -181,6 +208,8 @@ beforeEach(() => {
   s3DeleteMock.mockClear();
   captureErrorMock.mockClear();
   processExtractionMock.mockClear();
+  enqueueEntitySearchRepairsMock.mockClear();
+  flushEntitySearchRepairsMock.mockClear();
   syncWorkspaceSearchActivityMock.mockClear();
   enqueueImageThumbnailMock.mockClear();
   enqueueImageThumbnailOrMarkFailedMock.mockClear();
@@ -398,6 +427,14 @@ describe("copy-to-workspace", () => {
     // S3 file was copied
     expect(fileMock).toHaveBeenCalled();
     expect(writeMock).toHaveBeenCalled();
+
+    // The extraction run that reads the copied PDF indexes it, so the copy
+    // carries no mark of its own; marking it too would index it twice.
+    if (!copiedEntity) {
+      throw new Error("Expected the copy to be inserted");
+    }
+    expect(processExtractionMock.mock.calls).toEqual([[copiedEntity.id]]);
+    expect(enqueueEntitySearchRepairsMock.mock.calls.at(0)?.at(1)).toEqual([]);
   });
 
   test("maps document type classifier fields by role before name fallback", async () => {
@@ -1316,6 +1353,17 @@ describe("copy-to-workspace", () => {
     expect(copiedChild?.kind).toBe("document");
     expect(copiedChild?.name).toBe("Child.pdf");
     expect(copiedChild?.parentId).toBe(copiedFolder?.id);
+
+    // Neither copy has a file for an extraction run to read, so both are
+    // marked dirty inside the copy transaction and nothing else would index
+    // them if the post-commit flush were lost.
+    expect(processExtractionMock).not.toHaveBeenCalled();
+    expect(enqueueEntitySearchRepairsMock).toHaveBeenCalledTimes(1);
+    expect(enqueueEntitySearchRepairsMock.mock.calls.at(0)?.at(1)).toEqual([
+      copiedFolder?.id,
+      copiedChild?.id,
+    ]);
+    expect(flushEntitySearchRepairsMock).toHaveBeenCalledTimes(1);
   });
 
   test("remaps file IDs in field content for S3 copy", async () => {

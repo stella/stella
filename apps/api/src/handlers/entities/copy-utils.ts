@@ -23,6 +23,12 @@ import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivativ
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
+import {
+  SEARCH_INDEX_OWNER,
+  searchIndexOwnerForFields,
+} from "@/api/lib/search/process-extraction";
+import type { SearchIndexOwner } from "@/api/lib/search/process-extraction";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
 export type EntityFieldSnapshot = {
   propertyId: SafeId<"property">;
@@ -459,7 +465,13 @@ type CopyEntitiesErrorResult = {
 type CopyEntitiesSuccessResult = {
   ok: true;
   entityId: SafeId<"entity">;
-  entityIds: SafeId<"entity">[];
+  /**
+   * The copies grouped by which mechanism writes their search projection.
+   * `search-mark` copies already carry a dirty mark committed with this
+   * transaction; the caller only flushes it. `durable-extraction` copies are
+   * indexed by the run the caller requests for them.
+   */
+  entityIdsBySearchIndexOwner: Record<SearchIndexOwner, SafeId<"entity">[]>;
   copiedEntities: CopiedEntity[];
   /** File fields that may need PDF derivative generation. */
   fileFields: CopiedFileField[];
@@ -571,7 +583,14 @@ export const copyEntities = async ({
 
   const idMap = new Map<SafeId<"entity">, SafeId<"entity">>();
   const copiedEntities: CopiedEntity[] = [];
-  const copiedEntityIds: SafeId<"entity">[] = [];
+  // Split by which mechanism owns each copy's search projection, so every
+  // copy is covered exactly once: a durable extraction run indexes the
+  // documents it extracts, and a dirty mark committed with this transaction
+  // covers everything else.
+  const copiedEntityIds: Record<SearchIndexOwner, SafeId<"entity">[]> = {
+    [SEARCH_INDEX_OWNER.durableExtraction]: [],
+    [SEARCH_INDEX_OWNER.searchMark]: [],
+  };
   const fileFields: CopiedFileField[] = [];
 
   for (const source of sourceEntities) {
@@ -646,36 +665,36 @@ export const copyEntities = async ({
       .set({ currentVersionId: newVersionId })
       .where(eq(entities.id, newEntityId));
 
-    const sourceFields = source.currentVersion.fields;
-    if (sourceFields.length > 0) {
-      const fieldInserts = sourceFields.map((field) => {
-        const fieldId = createSafeId<"field">();
+    const fieldInserts = source.currentVersion.fields.map((field) => {
+      const fieldId = createSafeId<"field">();
 
-        // Track file fields for PDF derivative enqueueing
-        if (field.content.type === "file") {
-          fileFields.push({
-            entityId: newEntityId,
-            fieldId,
-            mimeType: field.content.mimeType,
-            encrypted: field.content.encrypted,
-          });
-        }
+      // Track file fields for PDF derivative enqueueing
+      if (field.content.type === "file") {
+        fileFields.push({
+          entityId: newEntityId,
+          fieldId,
+          mimeType: field.content.mimeType,
+          encrypted: field.content.encrypted,
+        });
+      }
 
-        return {
-          id: fieldId,
-          workspaceId: targetWorkspaceId,
-          propertyId: field.propertyId,
-          entityVersionId: newVersionId,
-          content: field.content,
-        };
-      });
-
+      return {
+        id: fieldId,
+        workspaceId: targetWorkspaceId,
+        propertyId: field.propertyId,
+        entityVersionId: newVersionId,
+        content: field.content,
+      };
+    });
+    if (fieldInserts.length > 0) {
       // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential field insert depends on the version created in this iteration
       await tx.insert(fields).values(fieldInserts);
     }
 
     idMap.set(source.id, newEntityId);
-    copiedEntityIds.push(newEntityId);
+    // The field ids above are minted in insertion order, so the copy resolves
+    // the same extraction source `processExtraction` will resolve for it.
+    copiedEntityIds[searchIndexOwnerForFields(fieldInserts)].push(newEntityId);
     copiedEntities.push({
       sourceId: source.id,
       entityId: newEntityId,
@@ -721,10 +740,17 @@ export const copyEntities = async ({
     };
   }
 
+  // Written here, inside the copy transaction: the mark commits or rolls back
+  // with the copies themselves, so a lost post-commit flush costs nothing.
+  await enqueueEntitySearchRepairs(
+    tx,
+    copiedEntityIds[SEARCH_INDEX_OWNER.searchMark],
+  );
+
   return {
     ok: true,
     entityId: rootEntityId,
-    entityIds: copiedEntityIds,
+    entityIdsBySearchIndexOwner: copiedEntityIds,
     copiedEntities,
     fileFields,
   };
