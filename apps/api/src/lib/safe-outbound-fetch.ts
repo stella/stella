@@ -437,9 +437,15 @@ const abortReasonToError = (reason: unknown): Error => {
 export const parseSafeOutboundUrl = (
   rawUrl: string,
 ): Result<URL, SafeOutboundFetchError> =>
-  parseOutboundUrl(rawUrl, "https-only");
+  parseOutboundUrl(rawUrl, OUTBOUND_PROTOCOL_POLICY.HTTPS_ONLY);
 
-type OutboundProtocolPolicy = "http-and-https" | "https-only";
+export const OUTBOUND_PROTOCOL_POLICY = {
+  HTTP_AND_HTTPS: "http-and-https",
+  HTTPS_ONLY: "https-only",
+} as const;
+
+type OutboundProtocolPolicy =
+  (typeof OUTBOUND_PROTOCOL_POLICY)[keyof typeof OUTBOUND_PROTOCOL_POLICY];
 
 const parseOutboundUrl = (
   rawUrl: string,
@@ -470,12 +476,13 @@ const parseOutboundUrl = (
 
   const isAllowedProtocol =
     url.protocol === "https:" ||
-    (protocolPolicy === "http-and-https" && url.protocol === "http:");
+    (protocolPolicy === OUTBOUND_PROTOCOL_POLICY.HTTP_AND_HTTPS &&
+      url.protocol === "http:");
   if (!isAllowedProtocol) {
     return Result.err(
       new SafeOutboundFetchError({
         message:
-          protocolPolicy === "https-only"
+          protocolPolicy === OUTBOUND_PROTOCOL_POLICY.HTTPS_ONLY
             ? "URL must use HTTPS"
             : "URL must use HTTP or HTTPS",
       }),
@@ -563,7 +570,7 @@ type ResolveOutboundAddresses = (
 export const validateOutboundFetchTarget = async (
   rawUrl: string | URL,
   {
-    protocolPolicy = "https-only",
+    protocolPolicy = OUTBOUND_PROTOCOL_POLICY.HTTPS_ONLY,
     resolveAddresses = resolvePublicAddresses,
     timeoutMs = 0,
   }: {

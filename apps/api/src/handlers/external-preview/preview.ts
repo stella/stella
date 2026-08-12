@@ -9,6 +9,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { htmlToMarkdown } from "@/api/lib/markdown/html-to-markdown";
 import {
   fetchWithResolvedAddress,
+  OUTBOUND_PROTOCOL_POLICY,
   validateOutboundFetchTarget,
 } from "@/api/lib/safe-outbound-fetch";
 import type {
@@ -343,7 +344,7 @@ export const validatePreviewUrl = async (
 
   url.hash = "";
   const target = await validateOutboundFetchTarget(url, {
-    protocolPolicy: "http-and-https",
+    protocolPolicy: OUTBOUND_PROTOCOL_POLICY.HTTP_AND_HTTPS,
     timeoutMs: PREVIEW_TIMEOUT_MS,
   });
   if (Result.isError(target)) {

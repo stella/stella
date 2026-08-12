@@ -11,6 +11,12 @@ import {
 } from "@/api/handlers/external-preview/preview";
 
 describe("external source preview", () => {
+  test("accepts public HTTP literals for preview fetching", async () => {
+    const result = await validatePreviewUrl("http://1.1.1.1/");
+
+    expect(Result.isOk(result)).toBe(true);
+  });
+
   test("rejects every non-public literal address through the shared SSRF boundary", async () => {
     const nonPublicUrls = [
       "http://198.18.0.1/benchmark",
