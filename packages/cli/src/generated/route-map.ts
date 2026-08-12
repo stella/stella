@@ -4526,7 +4526,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "billing-codes", "create"],
                 capabilityId: "billing-codes.create",
                 description:
-                  "Add one task or activity billing code to a matter's code list. The code string must be unique within the matter, a duplicate is refused, and the matter has a fixed cap on how many codes it may hold.",
+                  "Add one task or activity billing code to a matter's code list. The code string must be unique within the matter for its type, so the same literal may exist once as a task code and once as an activity code; a duplicate of the same type is refused, and the matter has a fixed cap on how many codes it may hold.",
                 access: "write",
                 flags: [
                   {
@@ -4794,7 +4794,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "billing-codes", "update"],
                 capabilityId: "billing-codes.update",
                 description:
-                  "Change one billing code's code string, label, sort order, or active flag in a matter. Only the fields you pass are written, the code string must stay unique within the matter, and deactivating a code stops it being offered without rewriting entries already recorded under it.",
+                  "Change one billing code's code string, label, sort order, or active flag in a matter. Only the fields you pass are written, the code string must stay unique within the matter for its type, and deactivating a code stops it being offered without rewriting entries already recorded under it.",
                 access: "write",
                 flags: [
                   {
@@ -6500,7 +6500,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "clauses", "rewrite"],
                 capabilityId: "clauses.rewrite",
                 description:
-                  "Rewrite the prose of a clause body with the model, following a free-text instruction plus the clause title and usage notes when supplied. The body goes in and the revised body comes back, so this works on an unsaved draft as well; nothing is stored. Paragraph order, lists, and every {{ }} template marker are preserved and only ordinary paragraph text changes, though a changed paragraph loses its inline formatting. Consumes AI usage.",
+                  "Rewrite the prose of a clause body with the model, following a free-text instruction plus the clause title and usage notes when supplied. The body goes in and the revised body comes back, so this works on an unsaved draft as well; nothing is stored. The model is instructed to keep paragraph order, lists, and every {{ }} template marker, and to change ordinary paragraph text only, but the result is not verified against the original, so review a rewrite before saving one that carries markers. A changed paragraph loses its inline formatting. Consumes AI usage.",
                 access: "write",
                 flags: [
                   {
@@ -17556,7 +17556,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "lists", "columns-create"],
                 capabilityId: "lists.columns.create",
                 description:
-                  "Add a column to a list by binding one of the matter's properties to it, with an optional position and a required flag. The list must be active and the property must belong to the same matter. A property can be bound only once per list: binding it again returns the existing column rather than creating a second one. Refused once the list holds its maximum number of columns.",
+                  "Add a column to a list by binding one of the matter's properties to it, with an optional position and a required flag. The list must be active and the property must belong to the same matter. A property can be bound only once per list: binding it again returns the existing column rather than creating a second one, except once the list holds its maximum number of columns, where the cap is checked first and the call is refused.",
                 access: "write",
                 flags: [
                   {
@@ -25897,7 +25897,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "rates", "update"],
                 capabilityId: "rates.update",
                 description:
-                  "Rename a rate table, change its currency, or make it the matter's default, which clears the flag on the previous default. Clearing the default flag is refused unless another table is already the default, so a matter is never left without one. Rates already recorded on time entries are not rewritten.",
+                  "Rename a rate table, change its currency, or make it the matter's default, which clears the flag on the previous default. Unsetting the flag on the only default table is refused, so a matter that has a default keeps one; a matter whose tables were all created without the flag has none, and rate resolution handles that. Rates already recorded on time entries are not rewritten.",
                 access: "write",
                 flags: [
                   {
@@ -38324,7 +38324,7 @@ export const generatedRouteMap: RouteNode = {
                 ],
                 capabilityId: "workspaces.anonymization-allowlist.create",
                 description:
-                  "Add a never-mask entry to a matter's anonymization allowlist, so a term that detection finds is left in the clear. scope workspace covers the whole matter; scope document covers one document and needs an entityId belonging to this matter. Only matter-scoped entries can be created here, never organization-wide ones. A term already listed is a no-op, and the call is refused once the matter is at its allowlist limit.",
+                  "Add a never-mask entry to a matter's anonymization allowlist, so a term that detection finds is left in the clear. scope workspace covers the whole matter; scope document covers one document and needs an entityId belonging to this matter. Only matter-scoped entries can be created here, never organization-wide ones. A term already listed is a no-op, until the matter reaches its allowlist limit: the cap is checked before the duplicate is detected, so replaying an existing entry is refused there rather than reported as a no-op.",
                 access: "write",
                 flags: [
                   {

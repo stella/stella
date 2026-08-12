@@ -23,8 +23,9 @@ const config = {
     "with an optional position and a required flag. The list must be active " +
     "and the property must belong to the same matter. A property can be " +
     "bound only once per list: binding it again returns the existing column " +
-    "rather than creating a second one. Refused once the list holds its " +
-    "maximum number of columns.",
+    "rather than creating a second one, except once the list holds its " +
+    "maximum number of columns, where the cap is checked first and the call " +
+    "is refused.",
   permissions: { view: ["update"] },
   mcp: { type: "capability", reason: "workspace_schema" },
   body: bodySchema,
