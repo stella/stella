@@ -44,19 +44,59 @@ const ruleNamesFromSource = (source: string): string[] => {
     : [...literalNames, computedRuleName];
 };
 
+const DISABLE_DIRECTIVE_PREFIXES = [
+  "oxlint-disable-next-line ",
+  "oxlint-disable-line ",
+  "oxlint-disable ",
+  "eslint-disable-next-line ",
+  "eslint-disable-line ",
+  "eslint-disable ",
+] as const;
+
+const commentBodyFromLine = (line: string): string | undefined => {
+  const trimmedLine = line.trimStart();
+  if (trimmedLine.startsWith("{/*")) {
+    return trimmedLine.slice(3).trimStart();
+  }
+  if (trimmedLine.startsWith("/*") || trimmedLine.startsWith("//")) {
+    return trimmedLine.slice(2).trimStart();
+  }
+  return undefined;
+};
+
+const stripBlockCommentEnd = (ruleList: string): string => {
+  if (ruleList.endsWith("*/}")) {
+    return ruleList.slice(0, -3);
+  }
+  if (ruleList.endsWith("*/")) {
+    return ruleList.slice(0, -2);
+  }
+  return ruleList;
+};
+
 const fixtureHasRuleDisable = (source: string, ruleId: string): boolean =>
   source.split("\n").some((line) => {
-    const ruleList =
-      /^\s*(?:\/\/|\/\*|\{\/\*)\s*(?:oxlint|eslint)-disable(?:-next-line|-line)?\s+(?<rules>.*)$/u.exec(
-        line,
-      )?.groups?.["rules"];
-    if (ruleList === undefined) {
+    const commentBody = commentBodyFromLine(line);
+    if (commentBody === undefined) {
+      return false;
+    }
+    const directivePrefix = DISABLE_DIRECTIVE_PREFIXES.find((prefix) =>
+      commentBody.startsWith(prefix),
+    );
+    if (directivePrefix === undefined) {
       return false;
     }
 
-    return ruleList
-      .replace(/\s+--(?:\s|$).*$/u, "")
-      .replace(/\s*\*\/\}?\s*$/u, "")
+    const directiveBody = commentBody.slice(directivePrefix.length);
+    const rationaleStart = directiveBody.indexOf(" --");
+    const ruleList = (
+      rationaleStart === -1
+        ? directiveBody
+        : directiveBody.slice(0, rationaleStart)
+    ).trimEnd();
+    const rules = stripBlockCommentEnd(ruleList);
+
+    return rules
       .split(",")
       .some((rule) => rule.trim() === ruleId);
   });
