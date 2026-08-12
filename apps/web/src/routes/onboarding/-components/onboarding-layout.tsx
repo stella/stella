@@ -97,7 +97,9 @@ export const OnboardingLayout = ({
             src={ONBOARDING_GRADIENT_DARK_URL}
           />
         </div>
-        <div className="relative z-10">{preview}</div>
+        <div className="relative z-10 flex h-full w-full items-center justify-center">
+          {preview}
+        </div>
       </div>
     </div>
   );
