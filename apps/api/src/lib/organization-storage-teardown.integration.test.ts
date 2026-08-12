@@ -21,6 +21,8 @@ import {
   userFiles,
   workspaces,
 } from "@/api/db/schema";
+import type { PendingUploadPurposeData } from "@/api/db/schema";
+import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -48,6 +50,20 @@ const DOCX_MIME =
 const PDF_MIME = "application/pdf";
 
 const uuid = () => Bun.randomUUIDv7();
+
+// Fixture literals that stand in for a producer's output are pinned against the
+// producing type, so a value the domain does not actually have fails here, with
+// the offending property named, instead of surfacing as an unresolved insert
+// overload several lines away.
+const FILE_PROPERTY_CONTENT = {
+  version: 1,
+  type: "file",
+} as const satisfies PropertyContent;
+
+const MANUAL_PROPERTY_TOOL = {
+  version: 1,
+  type: "manual-input",
+} as const satisfies PropertyTool;
 
 type Fixture = {
   chatAttachmentKey: string;
@@ -146,8 +162,8 @@ const seedFileDocument = async ({
     id: propertyId,
     workspaceId,
     name: "Source file",
-    content: { version: 1, type: "file" },
-    tool: { version: 1, type: "manual" },
+    content: FILE_PROPERTY_CONTENT,
+    tool: MANUAL_PROPERTY_TOOL,
     status: "fresh",
   });
   const fieldId = toSafeId<"field">(uuid());
@@ -303,12 +319,14 @@ beforeAll(async () => {
     workspaceId: firstWorkspaceId,
     userId,
     purpose: "entity_create",
+    // `reservedFileId` is the field that makes this reservation recoverable:
+    // it is the final key the writer had already claimed, and the teardown has
+    // to record it even though the object may not exist yet.
     purposeData: {
       type: "entity_create",
-      parentId: null,
       propertyId: toSafeId<"property">(uuid()),
       reservedFileId,
-    },
+    } as const satisfies PendingUploadPurposeData,
     declaredName: "staged.docx",
     declaredMime: DOCX_MIME,
     declaredSize: 1024,

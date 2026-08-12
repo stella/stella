@@ -9,6 +9,7 @@ SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 -- workspace_id becomes nullable and states the scope a page came from instead
 -- of forcing a matter onto keys that never had one. Matter-scoped pages, which
 -- are still every page document deletion writes, keep naming their workspace.
+-- squawk-ignore ban-drop-not-null -- Organization-level cleanup pages deliberately have no matter scope, and every reader already handles the null: the insert policy recreated below admits it explicitly and the erasure worker reads only organization_id and s3_keys.
 ALTER TABLE "entity_deletion_cleanup_requests" ALTER COLUMN "workspace_id" DROP NOT NULL;--> statement-breakpoint
 
 -- The insert policy has to admit the new scope. Organization-owned pages are
