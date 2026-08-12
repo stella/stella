@@ -129,14 +129,31 @@ const supportsMailbox18 = (office: OfficeRuntime): boolean => {
   }
 };
 
-const attachmentMetadata = (
-  attachment: Office.AttachmentDetails | Office.AttachmentDetailsCompose,
-): OfficeAttachmentMetadata => ({
-  id: attachment.id,
-  isInline: attachment.isInline,
-  name: attachment.name,
-  size: attachment.size,
-});
+type OfficeAttachmentDetails =
+  | Pick<
+      Office.AttachmentDetails,
+      "contentType" | "id" | "isInline" | "name" | "size"
+    >
+  | Pick<Office.AttachmentDetailsCompose, "id" | "isInline" | "name" | "size">;
+
+export const toOfficeAttachmentMetadata = (
+  attachment: OfficeAttachmentDetails,
+): OfficeAttachmentMetadata => {
+  const metadata = {
+    id: attachment.id,
+    isInline: attachment.isInline,
+    name: attachment.name,
+    size: attachment.size,
+  };
+  if (!("contentType" in attachment)) {
+    return metadata;
+  }
+
+  const contentType: unknown = Reflect.get(attachment, "contentType");
+  return typeof contentType === "string"
+    ? { ...metadata, contentType }
+    : metadata;
+};
 
 const unavailable = (
   reason: "api-unavailable" | "requirement-unsupported",
@@ -157,7 +174,7 @@ export const getOfficeAttachmentCapabilities = (
   if (Array.isArray(attachmentList)) {
     list = {
       read: async () =>
-        await Promise.resolve(attachmentList.map(attachmentMetadata)),
+        await Promise.resolve(attachmentList.map(toOfficeAttachmentMetadata)),
       status: "available",
     };
   } else if (mailbox18 && typeof getAttachmentsAsync === "function") {
@@ -167,7 +184,7 @@ export const getOfficeAttachmentCapabilities = (
           await fromOfficeAsync<Office.AttachmentDetailsCompose[]>((callback) =>
             getAttachmentsAsync.call(item, callback),
           )
-        ).map((attachment) => attachmentMetadata(attachment)),
+        ).map(toOfficeAttachmentMetadata),
       status: "available",
     };
   } else {

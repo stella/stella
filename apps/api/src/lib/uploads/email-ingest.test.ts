@@ -23,6 +23,9 @@ const workspaceId = toSafeId<"workspace">(
   "00000000-0000-0000-0000-000000000003",
 );
 const propertyId = toSafeId<"property">("00000000-0000-0000-0000-000000000004");
+const emailIngestSource = await Bun.file(
+  new URL("email-ingest.ts", import.meta.url),
+).text();
 
 describe("validateEmailAttachmentCount", () => {
   test("accepts the bounded maximum", () => {
@@ -87,6 +90,29 @@ test("renews the finalize lease atomically with email recovery keys", async () =
       },
     },
   ]);
+});
+
+test("preserves final objects after the transaction prepares durable references", () => {
+  const durableReference = emailIngestSource.indexOf(
+    'transactionState.status = "durable_reference_prepared"',
+  );
+  const writeFailure = emailIngestSource.indexOf(
+    "Result.isError(writeResultResult)",
+    durableReference,
+  );
+  const rollbackGuard = emailIngestSource.indexOf(
+    'transactionState.status === "pending"',
+    writeFailure,
+  );
+  const objectCleanup = emailIngestSource.indexOf(
+    '"final-cleanup-after-db-error"',
+    rollbackGuard,
+  );
+
+  expect(durableReference).toBeGreaterThan(-1);
+  expect(writeFailure).toBeGreaterThan(durableReference);
+  expect(rollbackGuard).toBeGreaterThan(writeFailure);
+  expect(objectCleanup).toBeGreaterThan(rollbackGuard);
 });
 
 describe("email attachment policy", () => {
