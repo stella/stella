@@ -5,6 +5,8 @@ import { DOCUMENT_REVIEW_LIMITS } from "@stll/api-contract";
 
 import { tSafeId } from "@/api/lib/custom-schema";
 import type { DocumentReviewTopic as ReviewEngineTopic } from "@/api/lib/document-review/contract";
+import { DOCUMENT_REVIEW_DECISIONS } from "@/api/lib/document-review/run-contract";
+import type { DocumentReviewDecision } from "@/api/lib/document-review/run-contract";
 
 export const documentReviewRefSchema = t.Object({
   entityId: tSafeId("entity"),
@@ -44,6 +46,18 @@ type Assignable<Source extends Target, Target> = Source;
 export type DocumentReviewTopic = Assignable<
   Static<typeof documentReviewTopicSchema>,
   ReviewEngineTopic
+>;
+
+// The decision vocabulary reaches the wire from the same const the column's
+// CHECK constraint is derived from, so the schema cannot accept a value the
+// database refuses.
+export const decideReviewFindingBodySchema = t.Object({
+  decision: t.UnionEnum([...DOCUMENT_REVIEW_DECISIONS]),
+});
+
+export type DocumentReviewDecisionInput = Assignable<
+  Static<typeof decideReviewFindingBodySchema>["decision"],
+  DocumentReviewDecision
 >;
 
 const reviewDocumentsSchema = {
