@@ -77,6 +77,11 @@ export const LIMITS = {
   playbookDefinitionsCount: 100,
   playbookDefinitionsPageSizeDefault: 50,
   playbookDefinitionsPageSizeMax: 100,
+  /** Documents one playbook run opens durable review runs for. Every run
+   *  embeds the playbook snapshot and the topic list by value, so the bound is
+   *  about how much a single run may write, not about how many documents a
+   *  matter may hold. */
+  playbookRunDocumentsMax: 500,
   /** Per-org cap on saved flow (Workflows) definitions. Per-definition size
    *  is bounded by MAX_FLOW_STEPS in flow-types.ts. */
   flowDefinitionsCount: 100,

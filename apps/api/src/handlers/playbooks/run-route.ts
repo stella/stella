@@ -29,6 +29,7 @@ export const playbookRunsRoute = new Elysia({
     validateWorkspaceAccess: true,
   })
   .post("/:playbookId/run", runPlaybook.handler, {
+    body: runPlaybook.config.body,
     params: runPlaybook.config.params,
     resourceSetUpdated: playbookRunRealtimeUpdates,
     permissions: runPlaybook.config.permissions,

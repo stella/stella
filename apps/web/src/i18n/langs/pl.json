@@ -4100,6 +4100,10 @@
       "autoRun": "Automatyczne uruchamianie",
       "autoRunHint": "Automatycznie wykrywa i uruchamia każdy playbook pasujący do typów dokumentów",
       "autoRunStarted": "Uruchamianie {count, plural, one {# playbook} few {# playbooki} many {# playbooków} other {# playbooka}}",
+      "projection": "Show results as",
+      "projectionColumns": "Table columns",
+      "projectionNone": "Review only",
+      "reviewStarted": "Reviewing {count, plural, one {# document} other {# documents}}",
       "run": "Uruchom playbook",
       "runFailed": "Nie udało się uruchomić playbooka",
       "runStarted": "Uruchamianie playbooka ({count, plural, one {# kolumna} few {# kolumny} many {# kolumn} other {# kolumny}})"

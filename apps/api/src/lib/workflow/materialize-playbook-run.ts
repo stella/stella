@@ -86,7 +86,7 @@ const buildVerdictTool = ({
   };
 };
 
-type DocTypeGate = {
+export type DocTypeGate = {
   propertyId: SafeId<"property">;
   condition: ConditionNode;
   // The resolved taxonomy label the classifier field must equal for a row to

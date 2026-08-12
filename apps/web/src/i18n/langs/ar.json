@@ -4100,6 +4100,10 @@
       "autoRun": "تشغيل تلقائي",
       "autoRunHint": "يكتشف ويشغّل تلقائيًا كل دليل مراجعة يطابق أنواع المستندات",
       "autoRunStarted": "جارٍ تشغيل {count, plural, zero {لا أدلة مراجعة} one {دليل مراجعة واحد} two {دليلا مراجعة} few {# أدلة مراجعة} many {# دليل مراجعة} other {# دليل مراجعة}}",
+      "projection": "Show results as",
+      "projectionColumns": "Table columns",
+      "projectionNone": "Review only",
+      "reviewStarted": "Reviewing {count, plural, one {# document} other {# documents}}",
       "run": "تشغيل دليل المراجعة",
       "runFailed": "فشل تشغيل دليل المراجعة",
       "runStarted": "جارٍ تشغيل دليل المراجعة ({count, plural, zero {لا أعمدة} one {عمود واحد} two {عمودان} few {# أعمدة} many {# عمودًا} other {# عمود}})"

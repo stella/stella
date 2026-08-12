@@ -4100,6 +4100,10 @@
       "autoRun": "Automātiska palaišana",
       "autoRunHint": "Automātiski nosaka un palaiž katru pārbaudes ceļvedi, kas atbilst dokumentu tipiem",
       "autoRunStarted": "Notiek palaišana: {count, plural, zero {# pārbaudes ceļvežu} one {# pārbaudes ceļvedis} other {# pārbaudes ceļveži}}",
+      "projection": "Show results as",
+      "projectionColumns": "Table columns",
+      "projectionNone": "Review only",
+      "reviewStarted": "Reviewing {count, plural, one {# document} other {# documents}}",
       "run": "Palaist pārbaudes ceļvedi",
       "runFailed": "Neizdevās palaist pārbaudes ceļvedi",
       "runStarted": "Tiek palaists pārbaudes ceļvedis ({count, plural, zero {# kolonnu} one {# kolonna} other {# kolonnas}})"

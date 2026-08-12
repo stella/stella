@@ -4100,6 +4100,10 @@
       "autoRun": "Automatikus futtatás",
       "autoRunHint": "Automatikusan felismeri és futtatja az összes playbookot, amely megfelel a dokumentumok típusainak",
       "autoRunStarted": "{count, plural, one {# playbook futtatása} other {# playbook futtatása}}",
+      "projection": "Show results as",
+      "projectionColumns": "Table columns",
+      "projectionNone": "Review only",
+      "reviewStarted": "Reviewing {count, plural, one {# document} other {# documents}}",
       "run": "Playbook futtatása",
       "runFailed": "Nem sikerült futtatni a playbookot",
       "runStarted": "Playbook futtatása ({count, plural, one {# oszlop} other {# oszlop}})"

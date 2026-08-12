@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { resolvePlaybookPin } from "@/api/handlers/document-reviews/resolve-playbook-pin";
+import { toSafeId } from "@/api/lib/branded-types";
+import { resolvePlaybookPin } from "@/api/lib/document-review/resolve-playbook-pin";
 import type {
   PlaybookDefinitionForPin,
   PlaybookVersionForPin,
-} from "@/api/handlers/document-reviews/resolve-playbook-pin";
-import { toSafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/document-review/resolve-playbook-pin";
 import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
 
 const positionsWithIssue = (issue: string): PlaybookPositions => ({

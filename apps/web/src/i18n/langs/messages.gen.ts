@@ -4103,6 +4103,10 @@ type Messages = {
       "autoRun": "Auto run";
       "autoRunHint": "Auto-detect and run every playbook matching the documents' types";
       "autoRunStarted": "Running {count, plural, one {# playbook} other {# playbooks}}";
+      "projection": "Show results as";
+      "projectionColumns": "Table columns";
+      "projectionNone": "Review only";
+      "reviewStarted": "Reviewing {count, plural, one {# document} other {# documents}}";
       "run": "Run playbook";
       "runFailed": "Failed to run playbook";
       "runStarted": "Running playbook ({count, plural, one {# column} other {# columns}})";

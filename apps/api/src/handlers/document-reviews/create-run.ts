@@ -15,7 +15,6 @@ import {
   documentReviewRuns,
   playbookDefinitionVersions,
 } from "@/api/db/schema";
-import { resolvePlaybookPin } from "@/api/handlers/document-reviews/resolve-playbook-pin";
 import { resolveReviewSelection } from "@/api/handlers/document-reviews/review-selection";
 import { validateReviewTopics } from "@/api/handlers/document-reviews/review-topics";
 import { createDocumentReviewRunBodySchema } from "@/api/handlers/document-reviews/schemas";
@@ -25,6 +24,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { workspaceParams } from "@/api/lib/custom-schema";
+import { resolvePlaybookPin } from "@/api/lib/document-review/resolve-playbook-pin";
 import { DOCUMENT_REVIEW_RUN_ACTIVE_STATUSES } from "@/api/lib/document-review/run-contract";
 import type {
   DocumentReviewRunBasis,
