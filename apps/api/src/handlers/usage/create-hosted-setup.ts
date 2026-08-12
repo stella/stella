@@ -56,6 +56,7 @@ const createHostedSetup = createSafeRootHandler(
             kind: usagePolicies.kind,
             visibility: usagePolicies.visibility,
             hostedPolicyRef: usagePolicies.hostedPolicyRef,
+            priceBasis: usagePolicies.priceBasis,
           })
           .from(usagePolicies)
           .where(eq(usagePolicies.id, body.usagePolicyId))
@@ -113,9 +114,14 @@ const createHostedSetup = createSafeRootHandler(
           }
         }
 
-        // Seat counts only make sense on subscription checkout; a seat
-        // count on a credit-pack purchase signals a confused client.
-        if (body.seats !== undefined && policy.kind !== "subscription") {
+        // Seat counts only make sense on seat-priced subscription
+        // checkout. On anything else — a pack, or a flat-priced plan —
+        // a quantity signals a confused client, and forwarding it to
+        // the provider could inflate the webhook's granted units.
+        if (
+          body.seats !== undefined &&
+          (policy.kind !== "subscription" || policy.priceBasis !== "per_seat")
+        ) {
           return { kind: "seats_on_non_subscription" as const };
         }
 

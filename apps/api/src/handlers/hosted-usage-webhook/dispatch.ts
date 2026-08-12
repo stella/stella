@@ -158,7 +158,12 @@ const findEntitlementByHostedExternalId = async (
         hostedEntitlementExternalId,
       ),
     )
-    .limit(1);
+    .limit(1)
+    // Row lock: concurrent deliveries for one entitlement must
+    // serialize, or two seat-increase events can both read the same
+    // peak and grant overlapping deltas. The waiter re-reads the row
+    // after the winner commits, so it sees the updated peak.
+    .for("update");
   return rows.at(0) ?? null;
 };
 
@@ -200,7 +205,9 @@ const findEntitlementByHostedAccountRef = async (
     })
     .from(usageEntitlements)
     .where(eq(usageEntitlements.hostedAccountRef, hostedAccountRef))
-    .limit(1);
+    .limit(1)
+    // Same serialization rationale as the external-id finder above.
+    .for("update");
   return rows.at(0) ?? null;
 };
 
