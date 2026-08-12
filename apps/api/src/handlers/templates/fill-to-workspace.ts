@@ -58,6 +58,12 @@ const resolveDocumentFileName = (
 };
 
 const config = {
+  description:
+    "Fill a stored template and save the result as a new document in a " +
+    "matter rather than returning bytes. Same values and clauseOverrides " +
+    "contract as templates.fill-by-id, plus an optional document name (the " +
+    ".docx extension is appended when missing) and a parent folder; the " +
+    "created entity is returned.",
   permissions: { template: ["use"], entity: ["create"] },
   access: "write",
   mcp: { type: "covered", by: "save_filled_template" },

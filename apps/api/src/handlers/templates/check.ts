@@ -96,6 +96,13 @@ const checkTemplateHandler = async function* ({
 };
 
 const config = {
+  description:
+    "Run the authoring checks over one stored template and return their " +
+    "findings: broken marker structure and invalid markers, markers with no " +
+    "manifest field and manifest fields with no marker, clause slots with no " +
+    "linked clause and links with no slot, fields missing a label or input " +
+    "type, selects with no options, and formulas or conditions referring to " +
+    "unknown paths. Read-only: it reports, it never repairs.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   access: "read",

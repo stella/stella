@@ -13,6 +13,11 @@ const syncTemplateClauseParamsSchema = t.Object({
 });
 
 const config = {
+  description:
+    "Re-pin one clause link of a template to its clause's current version, " +
+    "so the next fill inserts the newest wording. The link's slot and " +
+    "variant stay as they are. Use templates.clauses-sync-all to do this for " +
+    "every outdated link at once.",
   permissions: { template: ["update"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   params: syncTemplateClauseParamsSchema,

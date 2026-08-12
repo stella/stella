@@ -12,6 +12,10 @@ const listTemplateClausesParamsSchema = t.Object({
 });
 
 const config = {
+  description:
+    "List the clauses linked to one template: each link's id, clause, pinned " +
+    "variant and version, slot name, sort order, and whether the pinned " +
+    "version has fallen behind the clause's current one.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   access: "read",

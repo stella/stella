@@ -50,6 +50,12 @@ export const discoverHandler = async ({ body: { file } }: DiscoverProps) => {
 };
 
 const config = {
+  description:
+    "Inspect an uploaded DOCX and report the fillable fields it carries: the " +
+    "markers found in the document merged with any manifest already embedded " +
+    "in it, the named conditions from that manifest, and any structural " +
+    "marker errors. Reads the supplied bytes and stores nothing; use " +
+    "templates.get for a template that is already in the library.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   access: "read",

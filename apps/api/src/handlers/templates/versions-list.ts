@@ -24,6 +24,11 @@ const listTemplateVersionsQuerySchema = t.Object({
 });
 
 const config = {
+  description:
+    "List one template's versions, newest first, with cursor pagination. " +
+    "Each entry carries its version number, field count, creation time, and " +
+    "the author's name and image, which are blank for a version saved by " +
+    "someone who has left the organization.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   access: "read",

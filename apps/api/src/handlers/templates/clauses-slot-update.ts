@@ -17,6 +17,10 @@ const updateClauseSlotBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Assign one clause link of a template to a named clause slot, or clear " +
+    "the assignment by passing null. The clause, its pinned version, and its " +
+    "variant are untouched: only which slot the link fills changes.",
   permissions: { template: ["update"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   params: updateClauseSlotParamsSchema,

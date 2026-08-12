@@ -10,6 +10,9 @@ import {
 } from "./categories";
 
 const config = {
+  description:
+    "Create a category in the organization's template category tree, " +
+    "optionally under a parent category.",
   permissions: { template: ["create"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   body: createTemplateCategoryBodySchema,

@@ -99,6 +99,13 @@ const saveDocumentParamsSchema = t.Object({
 });
 
 const config = {
+  description:
+    "Store an edited DOCX as the template's next version: the file becomes " +
+    "the current body, the manifest is merged from the optional edited " +
+    "manifest and what discovery finds in the document, fields whose markers " +
+    "are gone are dropped unless they derive their value without one, and " +
+    "the previous version stays in history. Refused once the template holds " +
+    "its maximum number of versions.",
   permissions: { template: ["update"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   transport: {

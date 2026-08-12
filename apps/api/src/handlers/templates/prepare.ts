@@ -15,6 +15,13 @@ const prepareBodySchema = t.Object({
 });
 
 const config = {
+  description:
+    "Turn a finished DOCX into a template: the model proposes which literal " +
+    "values should become fields, those spans are rewritten as markers, and " +
+    "a manifest is embedded. Returns the prepared DOCX as base64 with the " +
+    "field count and how many suggestions could not be applied, for review " +
+    "before it is stored as a template. Unlike templates.suggest-fields this " +
+    "rewrites the document. Consumes AI usage.",
   // Authoring an entire template from a document (AI-marks fields, rewrites the
   // docx), so it needs `template: ["create"]` like `/create`, not bare workspace
   // read; this also keeps a read-only role from spending org AI here.

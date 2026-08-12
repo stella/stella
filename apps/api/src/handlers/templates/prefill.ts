@@ -159,6 +159,14 @@ const extractFieldValues = async ({
 };
 
 const config = {
+  description:
+    "Suggest values for one stored template's fields from source material: " +
+    "an uploaded DOCX or PDF, pasted text, or the stored extracted text of " +
+    "up to five documents picked from a matter, in any combination. Returns " +
+    "a suggestion per field with the snippet it came from; nothing is " +
+    "written to the template and no document is filled. Pass timezone so " +
+    "dates are anchored to your calendar day rather than the server's. " +
+    "Consumes AI usage.",
   permissions: { template: ["use"] },
   access: "write",
   mcp: { type: "capability", reason: "template_authoring_ui" },

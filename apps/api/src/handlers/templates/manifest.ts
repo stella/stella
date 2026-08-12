@@ -113,6 +113,11 @@ export const manifestHandler = async ({
 };
 
 const config = {
+  description:
+    "Embed a field manifest into an uploaded DOCX and return the rewritten " +
+    "DOCX. manifest must be an object with a finite numeric version and a " +
+    "fields array whose entries each carry a string path. Both legs of this " +
+    "call are bytes; nothing in the template library is read or written.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   access: "read",

@@ -15,6 +15,11 @@ const templateVersionDiffParamsSchema = t.Object({
 });
 
 const config = {
+  description:
+    "Return a plain-text, line-level diff of one template version against " +
+    "its predecessor; the first version is diffed against an empty document. " +
+    "Both texts are resolved server-side from the ids, and an empty segment " +
+    "list means nothing changed.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   access: "read",

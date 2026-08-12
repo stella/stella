@@ -16,6 +16,11 @@ const getTemplateParamsSchema = t.Object({
 const PRESIGN_EXPIRES_IN = 900;
 
 const config = {
+  description:
+    "Read one template's record: name, file name, size, manifest, field " +
+    "count, tags, languages, whenToUse and whenNotToUse guidance, usage " +
+    "counters, and a short-lived presigned URL for its current DOCX. The " +
+    "download grant is recorded in the audit trail.",
   permissions: { workspace: ["read"] },
   mcp: { type: "covered", by: "list_templates" },
   access: "read",

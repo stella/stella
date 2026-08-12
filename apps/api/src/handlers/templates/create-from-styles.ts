@@ -88,6 +88,12 @@ const createTemplateFromStylesHandler = async function* ({
 };
 
 const config = {
+  description:
+    "Create an empty template that takes its styles from an uploaded DOCX. " +
+    "Only sanitized style resources are read and a fresh package is written, " +
+    "so the source document's text, images, comments, and revisions never " +
+    "enter the template. Any upload whose file name ends in .docx is " +
+    "accepted whatever media type it declares.",
   permissions: { template: ["create"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   transport: {

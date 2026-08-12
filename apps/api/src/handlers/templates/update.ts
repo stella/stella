@@ -364,6 +364,11 @@ const updateTemplateHandler = async function* ({
 };
 
 const config = {
+  description:
+    "Change a template's record: name, category, tags, languages, whenToUse " +
+    "and whenNotToUse guidance, or the embedded manifest supplied as a JSON " +
+    "string. Only the fields you pass are written. The stored DOCX itself is " +
+    "untouched: store a new document body with templates.save-document.",
   permissions: { template: ["update"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   params: updateTemplateParamsSchema,

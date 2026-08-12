@@ -30487,6 +30487,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "binding-catalog"],
                 capabilityId: "templates.binding-catalog",
+                description:
+                  "List the data-binding options a template field can be bound to: every (source, field) pair in the binding taxonomy with its label key. The catalog is static and identical for every matter in the organization; it takes no arguments and reads no stored data.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -30505,6 +30507,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "categories-create"],
                 capabilityId: "templates.categories-create",
+                description:
+                  "Create a category in the organization's template category tree, optionally under a parent category.",
                 access: "write",
                 flags: [
                   {
@@ -30618,6 +30622,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "categories-list"],
                 capabilityId: "templates.categories-list",
+                description:
+                  "List the organization's template categories with their parents, descriptions, and sort order, enough to render the whole tree. The set is bounded per organization and returned whole, without a cursor.",
                 access: "read",
                 flags: [],
                 inputOnly: [],
@@ -30636,6 +30642,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "categories-update"],
                 capabilityId: "templates.categories-update",
+                description:
+                  "Rename or re-describe one template category, move it under a different parent (or to the root by passing null), or change its sort order. Only the fields you pass are written, and a move that would make the tree circular is refused.",
                 access: "write",
                 flags: [
                   {
@@ -30742,6 +30750,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "check"],
                 capabilityId: "templates.check",
+                description:
+                  "Run the authoring checks over one stored template and return their findings: broken marker structure and invalid markers, markers with no manifest field and manifest fields with no marker, clause slots with no linked clause and links with no slot, fields missing a label or input type, selects with no options, and formulas or conditions referring to unknown paths. Read-only: it reports, it never repairs.",
                 access: "read",
                 flags: [
                   {
@@ -30784,6 +30794,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "clause-slots"],
                 capabilityId: "templates.clause-slots",
+                description:
+                  "List the clause slots of one template together with the resolved body of the clause linked to each, using the same resolution the fill path runs, so a fill form can show what will be inserted and adjust it for that fill. Slots with no linked clause are left out; those fill as unmatched placeholders.",
                 access: "read",
                 flags: [
                   {
@@ -30826,6 +30838,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "clauses-link"],
                 capabilityId: "templates.clauses-link",
+                description:
+                  "Link a clause from the library into a template, optionally pinning one of its variants and naming the clause slot it fills. The link records the clause's version as it is now, so later edits to the clause do not reach the template until it is synced. Refused once the template holds its maximum number of clause links.",
                 access: "write",
                 flags: [
                   {
@@ -30919,6 +30933,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "clauses-list"],
                 capabilityId: "templates.clauses-list",
+                description:
+                  "List the clauses linked to one template: each link's id, clause, pinned variant and version, slot name, sort order, and whether the pinned version has fallen behind the clause's current one.",
                 access: "read",
                 flags: [
                   {
@@ -30961,6 +30977,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "clauses-slot-update"],
                 capabilityId: "templates.clauses-slot-update",
+                description:
+                  "Assign one clause link of a template to a named clause slot, or clear the assignment by passing null. The clause, its pinned version, and its variant are untouched: only which slot the link fills changes.",
                 access: "write",
                 flags: [
                   {
@@ -31037,6 +31055,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "clauses-sync"],
                 capabilityId: "templates.clauses-sync",
+                description:
+                  "Re-pin one clause link of a template to its clause's current version, so the next fill inserts the newest wording. The link's slot and variant stay as they are. Use templates.clauses-sync-all to do this for every outdated link at once.",
                 access: "write",
                 flags: [
                   {
@@ -31095,6 +31115,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "clauses-sync-all"],
                 capabilityId: "templates.clauses-sync-all",
+                description:
+                  "Re-pin every outdated clause link of one template to its clause's current version in a single transaction, auditing each link as if it had been synced on its own. Links already on the current version are left untouched.",
                 access: "write",
                 flags: [
                   {
@@ -31137,6 +31159,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "clauses-unlink"],
                 capabilityId: "templates.clauses-unlink",
+                description:
+                  "Remove one clause link from a template, with its pinned version, variant, and slot assignment. Reversible: nothing leaves the clause library and the same clause can be linked again with templates.clauses-link. The template's own document is not rewritten, so the slot marker stays in it.",
                 access: "write",
                 flags: [
                   {
@@ -31195,6 +31219,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "create-blank"],
                 capabilityId: "templates.create-blank",
+                description:
+                  "Create an empty template from the stella base DOCX, with a name and an optional category. It carries no fields yet: add markers by editing the document and storing it with templates.save-document. Use templates.create to upload a DOCX that already has {{field}} markers.",
                 access: "write",
                 flags: [
                   {
@@ -31255,6 +31281,8 @@ export const generatedRouteMap: RouteNode = {
                   "create-from-style-set",
                 ],
                 capabilityId: "templates.create-from-style-set",
+                description:
+                  "Create an empty template whose document is built from one of the organization's style sets, so it starts in that house style, with a name and an optional category. Like templates.create-blank it carries no fields until a document is saved onto it.",
                 access: "write",
                 flags: [
                   {
@@ -31371,6 +31399,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "fill-preview"],
                 capabilityId: "templates.fill-preview",
+                description:
+                  "Run the full fill of a stored template with the given values and return text instead of a file: the filled paragraphs, the character count, placeholders no value matched, values no marker used, and any structural errors. It does the same work as a real fill, AI-drafted fields included, so it is not a cheap dry run. Use templates.fill-by-id to download the document.",
                 access: "read",
                 flags: [
                   {
@@ -31431,6 +31461,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "fill-to-workspace"],
                 capabilityId: "templates.fill-to-workspace",
+                description:
+                  "Fill a stored template and save the result as a new document in a matter rather than returning bytes. Same values and clauseOverrides contract as templates.fill-by-id, plus an optional document name (the .docx extension is appended when missing) and a parent folder; the created entity is returned.",
                 access: "write",
                 flags: [
                   {
@@ -31647,6 +31679,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "get"],
                 capabilityId: "templates.get",
+                description:
+                  "Read one template's record: name, file name, size, manifest, field count, tags, languages, whenToUse and whenNotToUse guidance, usage counters, and a short-lived presigned URL for its current DOCX. The download grant is recorded in the audit trail.",
                 access: "read",
                 flags: [
                   {
@@ -31752,6 +31786,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "lookup-preview"],
                 capabilityId: "templates.lookup-preview",
+                description:
+                  "Preview a registry-lookup field: resolve a company number against the chosen public register and render the field's format string over the hit, returning the text with its bold and italic markers left in place for the client to interpret. Refused when the number is not plausible for that register or the register is disabled for the organization, and a 404 when the company is not found. Outcomes are cached per register and number, and no model is involved.",
                 access: "read",
                 flags: [
                   {
@@ -31842,6 +31878,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "prefill"],
                 capabilityId: "templates.prefill",
+                description:
+                  "Suggest values for one stored template's fields from source material: an uploaded DOCX or PDF, pasted text, or the stored extracted text of up to five documents picked from a matter, in any combination. Returns a suggestion per field with the snippet it came from; nothing is written to the template and no document is filled. Pass timezone so dates are anchored to your calendar day rather than the server's. Consumes AI usage.",
                 access: "write",
                 flags: [
                   {
@@ -31929,6 +31967,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "preview"],
                 capabilityId: "templates.preview",
+                description:
+                  "Read one stored template as text for display: its paragraphs tagged with header, body, or footer origin, the character count, the structural marker errors positioned against those paragraphs, and the names of its clause slots.",
                 access: "read",
                 flags: [
                   {
@@ -31971,6 +32011,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "suggest-fields"],
                 capabilityId: "templates.suggest-fields",
+                description:
+                  "Ask the model which literal values in a slice of template text (a whole document or just a selection) should become fillable fields, with optional extra instructions. Returns raw suggestions of literal text, proposed field path, and input type for a human to accept or reject; unlike templates.prepare it never rewrites the document. Consumes AI usage.",
                 access: "write",
                 flags: [
                   {
@@ -32023,6 +32065,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "update"],
                 capabilityId: "templates.update",
+                description:
+                  "Change a template's record: name, category, tags, languages, whenToUse and whenNotToUse guidance, or the embedded manifest supplied as a JSON string. Only the fields you pass are written. The stored DOCX itself is untouched: store a new document body with templates.save-document.",
                 access: "write",
                 flags: [
                   {
@@ -32174,6 +32218,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "versions-diff"],
                 capabilityId: "templates.versions-diff",
+                description:
+                  "Return a plain-text, line-level diff of one template version against its predecessor; the first version is diffed against an empty document. Both texts are resolved server-side from the ids, and an empty segment list means nothing changed.",
                 access: "read",
                 flags: [
                   {
@@ -32232,6 +32278,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "versions-get"],
                 capabilityId: "templates.versions-get",
+                description:
+                  "Read one stored template version: its number, field count, creation time, and a short-lived presigned URL to download that version's DOCX. The download grant is recorded in the audit trail.",
                 access: "read",
                 flags: [
                   {
@@ -32290,6 +32338,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "versions-list"],
                 capabilityId: "templates.versions-list",
+                description:
+                  "List one template's versions, newest first, with cursor pagination. Each entry carries its version number, field count, creation time, and the author's name and image, which are blank for a version saved by someone who has left the organization.",
                 access: "read",
                 flags: [
                   {
@@ -32361,6 +32411,8 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "templates", "versions-summarize"],
                 capabilityId: "templates.versions-summarize",
+                description:
+                  "Summarize in prose what changed in one template version compared with its predecessor, over the same diff templates.versions-diff returns. Returns summary null when the two are identical, skipping the model call. Consumes AI usage.",
                 access: "write",
                 flags: [
                   {

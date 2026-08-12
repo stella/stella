@@ -82,6 +82,11 @@ const previewTemplateHandler = async function* ({
 };
 
 const config = {
+  description:
+    "Read one stored template as text for display: its paragraphs tagged " +
+    "with header, body, or footer origin, the character count, the " +
+    "structural marker errors positioned against those paragraphs, and the " +
+    "names of its clause slots.",
   permissions: { workspace: ["read"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
   access: "read",
