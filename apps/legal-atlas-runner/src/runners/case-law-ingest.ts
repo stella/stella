@@ -198,6 +198,7 @@ let draining = false;
 /** Read via a call so per-site flow analysis cannot misjudge the flag. */
 const isDraining = (): boolean => draining;
 const DRAIN_FORCE_EXIT_MS = 90_000;
+const drainController = new AbortController();
 
 const drainOnSigterm = (): void => {
   process.on("SIGTERM", () => {
@@ -205,6 +206,7 @@ const drainOnSigterm = (): void => {
       return;
     }
     draining = true;
+    drainController.abort();
     logInfo("[daemon] SIGTERM received; draining (no new work will start)");
     setTimeout(() => {
       logInfo("[daemon] Drain window elapsed; exiting");
@@ -677,11 +679,16 @@ type CycleBounds = {
   maxDecisions?: number | undefined;
 };
 
+type CycleAttempt =
+  | { type: "drained" }
+  | { type: "lease_busy" }
+  | { cycle: CycleResult; type: "ran" };
+
 const runOneCycle = async (
   adapterKey: string,
   name: string,
   bounds: CycleBounds = {},
-): Promise<CycleResult> => {
+): Promise<CycleAttempt> => {
   const initialCursor =
     adapterKey === ADAPTER_KEYS.CZ_REGIONAL ? daysAgoCursor(7) : null;
 
@@ -693,11 +700,7 @@ const runOneCycle = async (
   if (!sourceLease) {
     logInfo(`[${adapterKey}] Source is leased by another ingestion worker`);
     return {
-      outcome: CYCLE_OUTCOME.FAILED,
-      inserted: 0,
-      skipped: 0,
-      pagesProcessed: 0,
-      cursorAdvanced: false,
+      type: "lease_busy",
     };
   }
   const { source } = sourceLease;
@@ -715,13 +718,17 @@ const runOneCycle = async (
   try {
     const adapter = getAdapter(adapterKey);
     const cycleMs = adapter?.maxCycleMs ?? MAX_CYCLE_MS;
+    const signal = AbortSignal.any([
+      AbortSignal.timeout(cycleMs),
+      drainController.signal,
+    ]);
 
     result = await runIngestionPipeline({
       source,
       sourceLease,
       scopedDb: ingestionDb,
       dbSlot: dbWriteSemaphore,
-      signal: AbortSignal.timeout(cycleMs),
+      signal,
       ...(bounds.maxPages !== undefined && { maxPages: bounds.maxPages }),
       ...(bounds.maxDecisions !== undefined && {
         maxDecisions: bounds.maxDecisions,
@@ -754,6 +761,10 @@ const runOneCycle = async (
     } catch (error) {
       logError(`[${adapterKey}] Failed to release source lease:`, error);
     }
+  }
+
+  if (drainController.signal.aborted) {
+    return { type: "drained" };
   }
 
   const durationMs = Math.round(performance.now() - t0);
@@ -800,11 +811,14 @@ const runOneCycle = async (
   }
 
   return {
-    outcome,
-    inserted: result?.inserted ?? 0,
-    skipped: result?.skipped ?? 0,
-    pagesProcessed: result?.pagesProcessed ?? 0,
-    cursorAdvanced: cursorAfter !== cursorBefore,
+    cycle: {
+      outcome,
+      inserted: result?.inserted ?? 0,
+      skipped: result?.skipped ?? 0,
+      pagesProcessed: result?.pagesProcessed ?? 0,
+      cursorAdvanced: cursorAfter !== cursorBefore,
+    },
+    type: "ran",
   };
 };
 
@@ -831,6 +845,7 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
     if (isDraining()) {
       return;
     }
+    let leaseBusy = false;
     try {
       // Bound concurrent cycles: the fetch/enrich/parse phase runs outside
       // the DB-write slot, so without this every source crawls its backlog
@@ -844,7 +859,7 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
         cycleSemaphore.release();
         return;
       }
-      let cycle: CycleResult;
+      let attempt: CycleAttempt;
       // Hard wall-clock backstop on the held slot. runOneCycle has awaits that
       // ignore the per-cycle abort signal (the source lookup before it is
       // created, the event write after the pipeline); if one wedges on a
@@ -856,7 +871,7 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
       cyclesSinceWatchdogTick.add(adapterKey);
       try {
         // oxlint-disable-next-line no-await-in-loop -- continuous daemon: one cycle at a time per adapter so the persisted cursor advances in order
-        cycle = await runWithHardDeadline(
+        attempt = await runWithHardDeadline(
           adapterKey,
           CYCLE_HARD_DEADLINE_MS,
           async () => await runOneCycle(adapterKey, name),
@@ -865,33 +880,43 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
         inFlightCycles.delete(adapterKey);
         cycleSemaphore.release();
       }
-      const { outcome } = cycle;
-
-      // A stall is a cycle that advanced no page, whatever its outcome; a halt
-      // or a timeout that still walked pages moved the cursor.
-      const madeProgress = cycleMadeProgress(cycle);
-      noProgressStreak = madeProgress ? 0 : noProgressStreak + 1;
-
-      if (outcome === CYCLE_OUTCOME.FAILED && !madeProgress) {
-        backoffFailures++;
+      if (attempt.type === "lease_busy") {
+        // Another healthy task owns this source during a rolling handoff.
+        // This is neither source progress nor a failure; retry promptly without
+        // mutating the source's accumulated health or cadence evidence.
+        leaseBusy = true;
+      } else if (attempt.type === "drained") {
+        return;
       } else {
-        backoffFailures = 0;
-        // How the cycle ended does not decide the cadence; what it wrote
-        // does. An adapter whose page budget outlasts its cycle deadline
-        // times out every cycle, so keying the cadence on a clean outcome
-        // pinned a source re-fetching its stored corpus to the fast cadence
-        // forever, holding a cycle slot against sources with work.
-        const step = stepCadence(streaks, cycle);
-        streaks = step.streaks;
-        if (step.cadence !== cadence) {
-          cadence = step.cadence;
-          logInfo(`[${adapterKey}] ${CADENCE_ENTRY_MESSAGE[cadence]}`);
-        }
-        if (step.unproductiveRescan) {
-          logger.error("case_law.ingestion.unproductive_rescan", {
-            adapterKey,
-            ...step.unproductiveRescan,
-          });
+        const { cycle } = attempt;
+        const { outcome } = cycle;
+
+        // A stall is a cycle that advanced no page, whatever its outcome; a halt
+        // or a timeout that still walked pages moved the cursor.
+        const madeProgress = cycleMadeProgress(cycle);
+        noProgressStreak = madeProgress ? 0 : noProgressStreak + 1;
+
+        if (outcome === CYCLE_OUTCOME.FAILED && !madeProgress) {
+          backoffFailures++;
+        } else {
+          backoffFailures = 0;
+          // How the cycle ended does not decide the cadence; what it wrote
+          // does. An adapter whose page budget outlasts its cycle deadline
+          // times out every cycle, so keying the cadence on a clean outcome
+          // pinned a source re-fetching its stored corpus to the fast cadence
+          // forever, holding a cycle slot against sources with work.
+          const step = stepCadence(streaks, cycle);
+          streaks = step.streaks;
+          if (step.cadence !== cadence) {
+            cadence = step.cadence;
+            logInfo(`[${adapterKey}] ${CADENCE_ENTRY_MESSAGE[cadence]}`);
+          }
+          if (step.unproductiveRescan) {
+            logger.error("case_law.ingestion.unproductive_rescan", {
+              adapterKey,
+              ...step.unproductiveRescan,
+            });
+          }
         }
       }
     } catch (error) {
@@ -922,10 +947,12 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
     writeHeartbeat();
     // Failure backoff wins when active (5s, 10s, 20s, 40s, cap 60s).
     // Otherwise the cadence the last returned cycle earned.
-    const delayMs =
-      backoffFailures > 0
-        ? Math.min(CYCLE_DELAY_MS * 2 ** backoffFailures, 60_000)
-        : CYCLE_CADENCE_DELAY_MS[cadence];
+    let delayMs = CYCLE_CADENCE_DELAY_MS[cadence];
+    if (leaseBusy) {
+      delayMs = CYCLE_DELAY_MS;
+    } else if (backoffFailures > 0) {
+      delayMs = Math.min(CYCLE_DELAY_MS * 2 ** backoffFailures, 60_000);
+    }
     // oxlint-disable-next-line no-await-in-loop -- inter-cycle backoff/idle delay; the loop must pause before the next cycle, so this await is intentionally sequential
     await Bun.sleep(delayMs);
   }
@@ -985,6 +1012,8 @@ export const runCaseLawIngest = async (
     return 64;
   }
 
+  drainOnSigterm();
+
   // Single adapter: run once and exit (useful for debugging and for
   // bounded staging sample runs).
   if (filterKey) {
@@ -1000,11 +1029,17 @@ export const runCaseLawIngest = async (
     // apps/api/src/lib/s3.ts), no shared state. runOneCycle depends on
     // both completing first, so it stays sequential after.
     await Promise.all([refreshS3(), refreshCorpusS3()]);
-    const { outcome } = await runOneCycle(match.adapterKey, match.name, {
+    if (isDraining()) {
+      return 0;
+    }
+    const attempt = await runOneCycle(match.adapterKey, match.name, {
       maxPages,
       maxDecisions,
     });
-    return outcome === "completed" ? 0 : 1;
+    if (attempt.type === "lease_busy" || attempt.type === "drained") {
+      return 0;
+    }
+    return attempt.cycle.outcome === CYCLE_OUTCOME.COMPLETED ? 0 : 1;
   }
 
   if (SOURCES.length === 0) {
@@ -1014,7 +1049,6 @@ export const runCaseLawIngest = async (
 
   // All adapters: independent concurrent loops.
   daemonMode = true;
-  drainOnSigterm();
   logInfo("Ingestion daemon started.");
   startEventLoopWatchdog();
   await refreshS3();
