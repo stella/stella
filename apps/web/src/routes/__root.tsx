@@ -49,7 +49,9 @@ export const Route = createRootRouteWithContext<{
     ],
   }),
   pendingComponent: () => <DefaultPendingComponent className="h-dvh" />,
-  errorComponent: RootErrorComponent,
+  errorComponent: (props) => (
+    <DefaultErrorComponent className="h-dvh" {...props} />
+  ),
 });
 
 function RootComponent() {
@@ -57,37 +59,24 @@ function RootComponent() {
     select: (context) => ({
       analyticsValue: context.analyticsValue,
       queryClient: context.queryClient,
-      routeErrorLifecycle: context.routeErrorLifecycle,
     }),
   });
 
   return (
-    <RouteErrorLifecycleProvider controller={appContext.routeErrorLifecycle}>
-      <AppProviders
-        analyticsValue={appContext.analyticsValue}
-        queryClient={appContext.queryClient}
-      >
-        <RootApp />
-      </AppProviders>
-    </RouteErrorLifecycleProvider>
-  );
-}
-
-function RootErrorComponent(
-  props: Parameters<typeof DefaultErrorComponent>[0],
-) {
-  const routeErrorLifecycle = Route.useRouteContext({
-    select: (context) => context.routeErrorLifecycle,
-  });
-
-  return (
-    <RouteErrorLifecycleProvider controller={routeErrorLifecycle}>
-      <DefaultErrorComponent className="h-dvh" {...props} />
-    </RouteErrorLifecycleProvider>
+    <AppProviders
+      analyticsValue={appContext.analyticsValue}
+      queryClient={appContext.queryClient}
+    >
+      <RootApp />
+    </AppProviders>
   );
 }
 
 function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
+  const routeErrorLifecycle = Route.useRouteContext({
+    select: (context) => context.routeErrorLifecycle,
+  });
+
   return (
     // prepaint-init.js mutates the html element's class, and for RTL
     // locales its lang/dir, before React hydrates the document, so the
@@ -103,7 +92,9 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
         <script src="/prepaint-init.js" />
       </head>
       <body>
-        {children}
+        <RouteErrorLifecycleProvider controller={routeErrorLifecycle}>
+          {children}
+        </RouteErrorLifecycleProvider>
         <Scripts />
       </body>
     </html>
