@@ -3989,14 +3989,14 @@
           "trigger": "Spustil(a)",
           "webhook": "Webové volání"
         },
-        "empty": "V této věci zatím není žádná aktivita.",
+        "empty": "V tomto spisu zatím není žádná aktivita.",
         "filterLabel": "Filtrovat aktivitu",
         "filters": {
           "all": "Veškerá aktivita",
           "automation": "Automatizace",
           "court": "Soud",
           "documents": "Dokumenty",
-          "matter": "Věc",
+          "matter": "Údaje spisu",
           "tasks": "Položky agendy",
           "team": "Tým"
         },
@@ -4028,9 +4028,9 @@
           "automation": "automatizace",
           "court": "soudní záznam",
           "document": "dokument",
-          "matter": "věc",
+          "matter": "spis",
           "task": "položka agendy",
-          "team": "tým věci"
+          "team": "tým spisu"
         },
         "title": "Aktivita",
         "views": {
