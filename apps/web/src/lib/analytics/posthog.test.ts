@@ -300,6 +300,7 @@ describe("PostHog browser analytics adapter", () => {
           route_template: "/law/$country/cases/$court/$slug",
           status: "recurred",
         },
+        uuid: "enriched-route-error-event",
       }),
     ).toEqual({
       event: WEB_ANALYTICS_EVENTS.routeErrorRecovery,
@@ -316,6 +317,7 @@ describe("PostHog browser analytics adapter", () => {
         route_template: "/law/$country/cases/$court/$slug",
         status: "recurred",
       },
+      uuid: "enriched-route-error-event",
     });
   });
 
@@ -334,6 +336,7 @@ describe("PostHog browser analytics adapter", () => {
           route_template: "/workspaces/private matter",
           status: "shown",
         },
+        uuid: "malformed-route-error-event",
       }),
     ).toBeNull();
   });

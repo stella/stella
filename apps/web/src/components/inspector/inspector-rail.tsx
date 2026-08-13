@@ -87,7 +87,7 @@ export const InspectorRail = ({
   const t = useTranslations();
   const inspectorState = inspectorDiagnosticState(tabs.length, minimized);
   useExternalSyncEffect(
-    () => routeErrorLifecycle.updateInspectorState(inspectorState),
+    () => routeErrorLifecycle?.updateInspectorState(inspectorState),
     [routeErrorLifecycle, inspectorState],
   );
   const activeTab = tabs.find((tab) => tab.id === activeId);
