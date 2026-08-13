@@ -46,7 +46,6 @@ import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey, toChatThreadId } from "@/lib/chat-thread-ref";
 import { STALE_TIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { useDevStore } from "@/lib/dev-store";
 import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
@@ -1368,13 +1367,6 @@ export const buildSendRequestBody = ({
           : { docxEditRepresentation }),
       },
     };
-  }
-
-  if (import.meta.env.DEV) {
-    const devModelId = useDevStore.getState().chatModelId;
-    if (devModelId) {
-      body.devModelId = devModelId;
-    }
   }
 
   if (run.resume === undefined) {

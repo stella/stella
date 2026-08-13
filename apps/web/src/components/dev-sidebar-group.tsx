@@ -13,11 +13,7 @@ import { useShallow } from "zustand/react/shallow";
 
 import {
   MenuCheckboxItem,
-  MenuGroup,
-  MenuGroupLabel,
   MenuItem,
-  MenuRadioGroup,
-  MenuRadioItem,
   MenuSeparator,
   MenuSub,
   MenuSubPopup,
@@ -25,34 +21,9 @@ import {
 } from "@stll/ui/components/menu";
 import { stellaToast } from "@stll/ui/components/toast";
 
-import {
-  encodeModelSelection,
-  MODEL_OPTIONS_BY_PROVIDER,
-  PROVIDER_KEYS,
-  PROVIDER_LABELS,
-} from "@/components/ai-config-role-models.logic";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { useDevStore } from "@/lib/dev-store";
-
-/**
- * Options for the dev-only chat-model override.
- *
- * Sourced from MODEL_OPTIONS_BY_PROVIDER — the same catalog the org
- * BYOK picker uses — so this list never drifts from the real model
- * catalog. Values carry the provider so the API routes the override
- * through the matching model factory instead of the active provider.
- */
-const CHAT_MODELS: { value: string; label: string }[] = [
-  // Empty value falls through to getModelForRole("chat") on the API.
-  { value: "", label: "Default (chat role)" },
-  ...PROVIDER_KEYS.flatMap((provider) =>
-    MODEL_OPTIONS_BY_PROVIDER[provider].map((modelId) => ({
-      value: encodeModelSelection({ provider, modelId }),
-      label: `${PROVIDER_LABELS[provider]} · ${modelId}`,
-    })),
-  ),
-];
 
 const SEED_STATUS_POLL_INTERVAL_MS = 1000;
 const SEED_STATUS_MAX_POLLS = 180;
@@ -130,8 +101,6 @@ export const DevSidebarGroup = () => {
       setTanstackDevtools: s.setTanstackDevtools,
       sourceInspector: s.sourceInspector,
       setSourceInspector: s.setSourceInspector,
-      chatModelId: s.chatModelId,
-      setChatModelId: s.setChatModelId,
       reactGrab: s.reactGrab,
       setReactGrab: s.setReactGrab,
       publicLawPreview: s.publicLawPreview,
@@ -311,21 +280,6 @@ export const DevSidebarGroup = () => {
         >
           Simulate slow load
         </MenuCheckboxItem>
-        <MenuSeparator />
-        <MenuGroup>
-          <MenuGroupLabel>Chat Model</MenuGroupLabel>
-          <MenuRadioGroup value={dev.chatModelId ?? ""}>
-            {CHAT_MODELS.map((m) => (
-              <MenuRadioItem
-                key={m.value}
-                onClick={() => dev.setChatModelId(m.value || null)}
-                value={m.value}
-              >
-                {m.label}
-              </MenuRadioItem>
-            ))}
-          </MenuRadioGroup>
-        </MenuGroup>
         <MenuSeparator />
         <MenuItem
           disabled={seeding}
