@@ -93,9 +93,15 @@ COPY apps/ocr-service/pipeline.yaml /opt/stella/pipeline.yaml
 COPY apps/ocr-service/healthcheck.py /opt/stella/healthcheck.py
 COPY apps/ocr-service/THIRD-PARTY-NOTICES.md /opt/stella/THIRD-PARTY-NOTICES.md
 
-# Exercise the native runtime closure during the image build. This imports
-# libpaddle and fails if any CUDA or cuDNN shared library is absent.
-RUN python -c "import paddle; assert paddle.device.is_compiled_with_cuda()"
+# Exercise the native runtime closure during the image build. The NVIDIA
+# container runtime injects exactly libcuda from the host; every toolkit and
+# cuDNN dependency must already resolve inside this image.
+RUN set -eux; \
+    libpaddle="$(find /opt/stella/venv -path '*/paddle/base/libpaddle.so' -print -quit)"; \
+    test -n "${libpaddle}"; \
+    ldd "${libpaddle}"; \
+    missing="$(ldd "${libpaddle}" | awk '/=> not found/ { print $1 }')"; \
+    test "${missing}" = "libcuda.so.1"
 
 WORKDIR /opt/stella
 USER stella
