@@ -6,7 +6,6 @@ import { useTranslations } from "use-intl";
 import { cn } from "@stll/ui/lib/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";
-import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
 import { knowledgeSections } from "@/lib/knowledge/navigation";
 
@@ -16,15 +15,11 @@ export const Route = createFileRoute("/_protected/knowledge/")({
 
 function KnowledgeLanding() {
   const t = useTranslations();
-  const playbooksEnabled = usePlaybooksPreviewEnabled();
   const workflowsEnabled = useWorkflowsPreviewEnabled();
   const canUseStyleSets = usePermissions({ styleSet: ["use"] });
 
   const sectionCards: ReactNode[] = [];
   for (const section of knowledgeSections) {
-    if (section.key === "playbooks" && !playbooksEnabled) {
-      continue;
-    }
     if (section.key === "workflows" && !workflowsEnabled) {
       continue;
     }

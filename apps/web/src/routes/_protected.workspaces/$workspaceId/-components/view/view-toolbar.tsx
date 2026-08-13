@@ -53,7 +53,6 @@ import {
 } from "@/components/workspaces/entity-utils";
 import { PropertyIcon } from "@/components/workspaces/property-helpers";
 import { resolveDocumentTypeClassifier } from "@/components/workspaces/table/group-columns";
-import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
 import { useLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -583,7 +582,6 @@ type RunPlaybookControlProps = {
  */
 const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
   const t = useTranslations();
-  const playbooksEnabled = usePlaybooksPreviewEnabled();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const activeOrganizationId = protectedRouteApi.useRouteContext({
@@ -729,10 +727,6 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
   };
 
   const isRunning = runningPlaybookId !== null || isAutoRunning;
-
-  if (!playbooksEnabled) {
-    return null;
-  }
 
   return (
     <Menu onOpenChange={setOpen} open={open}>

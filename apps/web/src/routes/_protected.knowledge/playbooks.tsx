@@ -1,14 +1,13 @@
 import { useCallback, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, getRouteApi, redirect } from "@tanstack/react-router";
+import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 
-import { playbooksRouteAvailable } from "@/hooks/use-playbooks-preview";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { userErrorMessage } from "@/lib/errors/user-safe";
@@ -16,7 +15,6 @@ import type { PlaybookListItem } from "@/lib/knowledge/playbook-types";
 import { knowledgeKeys, playbooksOptions } from "@/lib/knowledge/queries";
 import { PlaybookEditor } from "@/routes/_protected.knowledge/-components/playbook-editor";
 import { PlaybookList } from "@/routes/_protected.knowledge/-components/playbook-list";
-import { PlaybookStarterGallerySheet } from "@/routes/_protected.knowledge/-components/playbook-starter-gallery-sheet";
 
 // ── View discriminated union ─────────────────────────
 
@@ -25,11 +23,6 @@ type View = { kind: "list" } | { kind: "editor"; playbookId: string | null };
 // ── Route ────────────────────────────────────────────
 
 export const Route = createFileRoute("/_protected/knowledge/playbooks")({
-  beforeLoad: () => {
-    if (!playbooksRouteAvailable()) {
-      throw redirect({ to: "/knowledge" });
-    }
-  },
   component: RouteComponent,
 });
 
@@ -37,26 +30,40 @@ const protectedRouteApi = getRouteApi("/_protected");
 
 const PLAYBOOK_ROW_KEYS = ["a", "b", "c", "d", "e", "f"];
 
-// Mirrors the PlaybookList layout (toolbar + divided rows) so the page does
-// not jump when playbooks land; only the values fade in.
 function PlaybooksPageSkeleton() {
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-end gap-1 border-b px-4 py-2">
-        <Skeleton className="h-8 w-8 rounded-md" />
-        <Skeleton className="h-8 w-28 rounded-md" />
+    <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-9 px-5 py-7 sm:px-7 sm:py-9">
+        <div className="flex items-center justify-between gap-4">
+          <div className="space-y-2">
+            <Skeleton className="h-7 w-36" />
+            <Skeleton className="h-4 w-96 max-w-full" />
+          </div>
+          <Skeleton className="h-11 w-36 rounded-md" />
+        </div>
+        <div>
+          <Skeleton className="mb-3 h-5 w-44" />
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {["starter-a", "starter-b", "starter-c", "starter-d"].map((key) => (
+              <Skeleton className="h-44 rounded-xl" key={key} />
+            ))}
+          </div>
+        </div>
+        <div>
+          <Skeleton className="mb-3 h-5 w-28" />
+          <ul className="divide-y rounded-xl border">
+            {PLAYBOOK_ROW_KEYS.map((key) => (
+              <li className="flex min-h-16 items-center gap-3 px-4" key={key}>
+                <Skeleton className="size-9 shrink-0 rounded-lg" />
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <Skeleton className="h-4 w-48" />
+                  <Skeleton className="h-3 w-32" />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
-      <ul className="flex-1 divide-y overflow-y-auto">
-        {PLAYBOOK_ROW_KEYS.map((key) => (
-          <li className="flex items-center gap-3 px-4 py-3" key={key}>
-            <Skeleton className="size-9 shrink-0 rounded-lg" />
-            <div className="min-w-0 flex-1 space-y-1.5">
-              <Skeleton className="h-4 w-48" />
-              <Skeleton className="h-3 w-32" />
-            </div>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }
@@ -68,7 +75,6 @@ function RouteComponent() {
     select: (ctx) => ctx.user.activeOrganizationId,
   });
   const [view, setView] = useState<View>({ kind: "list" });
-  const [starterGalleryOpen, setStarterGalleryOpen] = useState(false);
 
   // Extra playbooks from cursor-based pagination. nextCursor is three-state:
   // undefined = "not yet loaded extras" (fall back to initialNextCursor),
@@ -208,30 +214,17 @@ function RouteComponent() {
   }
 
   return (
-    <>
-      <PlaybookList
-        loading={loadingMore}
-        nextCursor={currentNextCursor}
-        onBrowseStarters={() => setStarterGalleryOpen(true)}
-        onLoadMore={() => {
-          detached(handleLoadMore(), "knowledge-playbooks.load-more");
-        }}
-        onNewPlaybook={() => setView({ kind: "editor", playbookId: null })}
-        onRefresh={handleRefresh}
-        onSelect={(playbook) =>
-          setView({ kind: "editor", playbookId: playbook.id })
-        }
-        playbooks={playbooks}
-      />
-      <PlaybookStarterGallerySheet
-        onCreated={(playbook) => {
-          handleRefresh();
-          setView({ kind: "editor", playbookId: playbook.id });
-        }}
-        onOpenChange={setStarterGalleryOpen}
-        open={starterGalleryOpen}
-        organizationId={activeOrganizationId}
-      />
-    </>
+    <PlaybookList
+      loading={loadingMore}
+      nextCursor={currentNextCursor}
+      onLoadMore={() => {
+        detached(handleLoadMore(), "knowledge-playbooks.load-more");
+      }}
+      onNewPlaybook={() => setView({ kind: "editor", playbookId: null })}
+      onRefresh={handleRefresh}
+      onSelect={(playbookId) => setView({ kind: "editor", playbookId })}
+      organizationId={activeOrganizationId}
+      playbooks={playbooks}
+    />
   );
 }

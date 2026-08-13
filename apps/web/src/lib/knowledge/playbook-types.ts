@@ -52,6 +52,17 @@ type PlaybookListData = Exclude<
 
 export type PlaybookListItem = PlaybookListData["items"][number];
 
+export type RecentPlaybookResponse = Awaited<
+  ReturnType<typeof api.playbooks.recent.get>
+>;
+
+type RecentPlaybookData = Exclude<
+  NonNullable<Extract<RecentPlaybookResponse, { data: unknown }>["data"]>,
+  Response
+>;
+
+export type RecentPlaybookItem = RecentPlaybookData["items"][number];
+
 export type PlaybookVersionsResponse = Awaited<
   ReturnType<ReturnType<typeof api.playbooks>["versions"]["get"]>
 >;

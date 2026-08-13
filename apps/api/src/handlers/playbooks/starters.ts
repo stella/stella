@@ -98,6 +98,11 @@ const buildMaximumCheck = (
   },
 });
 
+const buildDefaultStarterAsk = (issue: string): StarterAskInput => ({
+  question: `What does the agreement provide regarding the following issue: ${issue}?`,
+  content: { version: 1, type: "text" },
+});
+
 // Builds one GRADED position, threading a per-playbook id counter through the
 // sourceId and every tier-rule/fallback-entry id so they stay distinct within
 // the playbook (uniqueness across playbooks does not matter: every id is
@@ -114,6 +119,7 @@ const buildGradedPosition = (
     input.evaluation?.type === "maximum"
       ? buildMaximumCheck(sourceId, input.evaluation.value)
       : undefined;
+  const ask = input.ask ?? buildDefaultStarterAsk(input.issue);
 
   return {
     mode: "graded",
@@ -121,7 +127,7 @@ const buildGradedPosition = (
     issue: input.issue,
     severity: input.severity,
     enabled: true,
-    ask: input.ask ? { mode: "manual", ...input.ask } : { mode: "auto" },
+    ask: { mode: "manual", ...ask },
     ...(check ? { check } : {}),
     ...(input.guidance ? { guidance: input.guidance } : {}),
     tiers: {

@@ -287,8 +287,8 @@ export const createPlaybookTableRuns = async ({
   await tx.execute(sql`
     INSERT INTO ${documentReviewRuns} (
       id, organization_id, workspace_id, entity_id, file_field_id,
-      entity_version_id, content_sha256, basis, topics, status, executor,
-      total, requested_by, started_at
+      entity_version_id, content_sha256, playbook_definition_id, basis, topics,
+      status, executor, total, requested_by, started_at
     )
     SELECT target.id,
            ${organizationId}::varchar,
@@ -297,6 +297,7 @@ export const createPlaybookTableRuns = async ({
            target.file_field_id,
            target.entity_version_id,
            target.content_sha256,
+           ${playbook.definitionId}::uuid,
            ${JSON.stringify(basis)}::text::jsonb,
            ${JSON.stringify(topics)}::text::jsonb,
            ${status}::text,

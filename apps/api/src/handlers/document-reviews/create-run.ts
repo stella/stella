@@ -217,6 +217,7 @@ const createDocumentReviewRun = createSafeHandler(
           fileFieldId: target.file.fileFieldId,
           entityVersionId: target.entityVersionId,
           contentSha256: target.file.sha256Hex,
+          playbookDefinitionId: playbook?.definitionId,
           basis,
           topics,
           status: "queued",

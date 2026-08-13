@@ -250,6 +250,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `playbooks.list`            | read               | stella:read            | —       | curated tool `list_playbooks`                                  |
 | `playbooks.list-starters`   | read               | stella:read            | —       | generic invoke → `stella capability playbooks list-starters`   |
 | `playbooks.list-versions`   | read               | stella:read            | —       | generic invoke → `stella capability playbooks list-versions`   |
+| `playbooks.recent.list`     | read               | stella:read            | —       | generic invoke → `stella capability playbooks recent-list`     |
 | `playbooks.restore-version` | write              | stella:knowledge_write | —       | generic invoke → `stella capability playbooks restore-version` |
 | `playbooks.run`             | write              | stella:knowledge_write | —       | curated tool `run_playbook`                                    |
 | `playbooks.update`          | write              | stella:knowledge_write | —       | generic invoke → `stella capability playbooks update`          |

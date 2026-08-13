@@ -64,7 +64,6 @@ export const envWebClientSchema = {
   // Off by default so deployments that should not be crawled can still
   // serve sitemaps for verification while staying non-indexable.
   VITE_SEO_INDEXABLE: featureFlagSchema,
-  VITE_PLAYBOOKS_ENABLED: featureFlagSchema,
   VITE_WORKFLOWS_ENABLED: featureFlagSchema,
   VITE_GUIDES_ENABLED: featureFlagSchema,
   VITE_FEATURE_CONTACTS: featureFlagSchema,

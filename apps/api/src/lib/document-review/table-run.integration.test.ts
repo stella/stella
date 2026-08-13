@@ -38,7 +38,10 @@ import type {
 } from "@/api/lib/document-review/run-contract";
 import { finalizeReviewRun } from "@/api/lib/document-review/run-finalize";
 import { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
-import { deletePlaybookColumns } from "@/api/lib/properties/delete-playbook-columns";
+import {
+  deletePlaybookColumns,
+  deletePlaybookPositionColumns,
+} from "@/api/lib/properties/delete-playbook-columns";
 import type { Position } from "@/api/lib/workflow/playbook-positions";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -330,6 +333,7 @@ describe("opening runs for a files table", () => {
         entityVersionId: documentReviewRuns.entityVersionId,
         fileFieldId: documentReviewRuns.fileFieldId,
         contentSha256: documentReviewRuns.contentSha256,
+        playbookDefinitionId: documentReviewRuns.playbookDefinitionId,
         status: documentReviewRuns.status,
         executor: documentReviewRuns.executor,
         total: documentReviewRuns.total,
@@ -343,6 +347,7 @@ describe("opening runs for a files table", () => {
         entityVersionId: ids.entityVersionA1,
         fileFieldId: ids.fileFieldA1,
         contentSha256: FIXTURE_CONTENT_SHA256,
+        playbookDefinitionId: definitionId,
         // Unprojected: the review queue owns it, so it waits to be claimed.
         status: "queued",
         executor: "worker",
@@ -445,6 +450,23 @@ describe("opening runs for a files table", () => {
 });
 
 describe("deleting what a review was measured against", () => {
+  test("deleting one visible playbook result removes its ASK and verdict rows", async () => {
+    const definitionId = await seedPlaybookDefinition();
+    const { askId, verdictId } = await seedMaterializedColumns(definitionId);
+
+    await deletePlaybookPositionColumns({
+      tx: asTestRaw<Transaction>(testDb),
+      workspaceId: ids.wsA1,
+      playbookSourceId: POSITION_ID,
+    });
+
+    const remaining = await testDb
+      .select({ id: properties.id })
+      .from(properties)
+      .where(inArray(properties.id, [askId, verdictId]));
+    expect(remaining).toEqual([]);
+  });
+
   test("deleting the playbook orphans its columns and keeps the findings", async () => {
     const definitionId = await seedPlaybookDefinition();
     const { askId, verdictId } = await seedMaterializedColumns(definitionId);

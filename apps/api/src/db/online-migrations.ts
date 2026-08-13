@@ -108,6 +108,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   },
   {
     createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "playbook_definitions_org_starter_id_uidx" ON public."playbook_definitions" USING btree ("organization_id", "starter_id") WHERE "starter_id" IS NOT NULL',
+    definitionBody:
+      "ON public.playbook_definitions USING btree (organization_id, starter_id) WHERE (starter_id IS NOT NULL)",
+    isUnique: true,
+    name: "playbook_definitions_org_starter_id_uidx",
+    tableName: "playbook_definitions",
+  },
+  {
+    createSql:
       'CREATE INDEX CONCURRENTLY "report_exports_workspace_requester_created_idx" ON public."report_exports" USING btree ("workspace_id", "requested_by", "created_at", "id")',
     definitionBody:
       "ON public.report_exports USING btree (workspace_id, requested_by, created_at, id)",

@@ -114,7 +114,6 @@ import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotke
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
-import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
 import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -160,7 +159,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const { state, toggleSidebar, isMobile } = useSidebar();
   const isCollapsed = state === "collapsed" && !isMobile;
   const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
-  const playbooksPreviewEnabled = usePlaybooksPreviewEnabled();
   const workflowsPreviewEnabled = useWorkflowsPreviewEnabled();
   const guidesPreviewEnabled = useGuidesPreviewEnabled();
   const primaryNavItems = getWorkspacePrimaryNavItems({
@@ -389,9 +387,6 @@ export const AppSidebar = (props: AppSidebarProps) => {
   const knowledgeRecents: ContextAction[] = [];
   for (const s of knowledgeSections) {
     if (s.key === "styles" && !canUseStyleSets) {
-      continue;
-    }
-    if (s.key === "playbooks" && !playbooksPreviewEnabled) {
       continue;
     }
     if (s.key === "workflows" && !workflowsPreviewEnabled) {

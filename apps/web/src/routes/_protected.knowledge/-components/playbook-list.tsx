@@ -1,33 +1,44 @@
+import { useQuery } from "@tanstack/react-query";
 import {
   ClipboardCheckIcon,
-  LibraryIcon,
+  Clock3Icon,
   PlusIcon,
   RotateCcwIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import { Skeleton } from "@stll/ui/components/skeleton";
+import { cn } from "@stll/ui/lib/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
-import type { PlaybookListItem } from "@/lib/knowledge/playbook-types";
+import type {
+  PlaybookListItem,
+  RecentPlaybookItem,
+} from "@/lib/knowledge/playbook-types";
+import { recentPlaybooksOptions } from "@/lib/knowledge/queries";
+import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
+import { PlaybookStarterCards } from "@/routes/_protected.knowledge/-components/playbook-starter-cards";
 
 type PlaybookListProps = {
   playbooks: PlaybookListItem[];
   nextCursor: string | null;
   loading: boolean;
-  onBrowseStarters: () => void;
+  organizationId: string;
   onNewPlaybook: () => void;
-  onSelect: (playbook: PlaybookListItem) => void;
+  onSelect: (playbookId: string) => void;
   onLoadMore: () => void;
   onRefresh: () => void;
 };
+
+const RECENT_SKELETON_KEYS = ["recent-a", "recent-b", "recent-c"];
 
 export const PlaybookList = ({
   playbooks,
   nextCursor,
   loading,
-  onBrowseStarters,
+  organizationId,
   onNewPlaybook,
   onSelect,
   onLoadMore,
@@ -35,84 +46,184 @@ export const PlaybookList = ({
 }: PlaybookListProps) => {
   const t = useTranslations();
   const canCreate = usePermissions({ playbook: ["create"] });
+  const { data: recentData, isLoading: recentLoading } = useQuery({
+    ...recentPlaybooksOptions(organizationId),
+    refetchOnWindowFocus: false,
+  });
+  const recentPlaybooks = recentData ? recentData.items : [];
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-end gap-1 border-b px-4 py-2">
-        <Button
-          aria-label={t("common.refresh")}
-          onClick={onRefresh}
-          size="icon-sm"
-          title={t("common.refresh")}
-          variant="ghost"
-        >
-          <RotateCcwIcon />
-        </Button>
-        {canCreate && (
-          <Button
-            aria-label={t("knowledge.playbooks.starters.browseButton")}
-            onClick={onBrowseStarters}
-            size="sm"
-            title={t("knowledge.playbooks.starters.browseButton")}
-            variant="outline"
-          >
-            <LibraryIcon />
-            <span className="hidden sm:inline">
-              {t("knowledge.playbooks.starters.browseButton")}
-            </span>
-          </Button>
-        )}
-        {canCreate && (
-          <Button
-            aria-label={t("knowledge.playbooks.createPlaybook")}
-            onClick={onNewPlaybook}
-            size="sm"
-            title={t("knowledge.playbooks.createPlaybook")}
-          >
-            <PlusIcon />
-            <span className="hidden sm:inline">
-              {t("knowledge.playbooks.createPlaybook")}
-            </span>
-          </Button>
-        )}
-      </div>
-
-      <div className="flex-1 overflow-y-auto">
-        {playbooks.length === 0 && !loading && (
-          <div className="flex flex-col items-center justify-center gap-1 p-8">
-            <p className="text-sm font-medium">
-              {t("knowledge.playbooks.empty")}
-            </p>
-            <p className="text-muted-foreground text-sm">
-              {t("knowledge.playbooks.emptyDescription")}
+    <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-9 px-5 py-7 sm:px-7 sm:py-9">
+        <header className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              {t("common.playbooks")}
+            </h1>
+            <p className="text-muted-foreground mt-1 max-w-2xl text-sm">
+              {t("knowledge.playbooks.homeDescription")}
             </p>
           </div>
+          {canCreate && (
+            <Button className="h-11 shrink-0" onClick={onNewPlaybook}>
+              <PlusIcon />
+              {t("knowledge.playbooks.createPlaybook")}
+            </Button>
+          )}
+        </header>
+
+        {canCreate && (
+          <section aria-labelledby="recommended-playbooks-heading">
+            <SectionHeading
+              id="recommended-playbooks-heading"
+              title={t("knowledge.playbooks.recommended")}
+            />
+            <PlaybookStarterCards
+              onCreated={onSelect}
+              organizationId={organizationId}
+            />
+          </section>
         )}
 
-        <ul className="divide-y">
-          {playbooks.map((playbook) => (
-            <PlaybookRow
-              key={playbook.id}
-              onSelect={() => onSelect(playbook)}
-              playbook={playbook}
+        {(recentLoading || recentPlaybooks.length > 0) && (
+          <section aria-labelledby="recent-playbooks-heading">
+            <SectionHeading
+              id="recent-playbooks-heading"
+              title={t("knowledge.playbooks.recent")}
             />
-          ))}
-        </ul>
+            {recentLoading ? (
+              <div className="divide-y rounded-xl border">
+                {RECENT_SKELETON_KEYS.map((key) => (
+                  <div
+                    className="flex min-h-16 items-center gap-3 px-4"
+                    key={key}
+                  >
+                    <Skeleton className="size-9 rounded-lg" />
+                    <div className="flex-1 space-y-1.5">
+                      <Skeleton className="h-4 w-48" />
+                      <Skeleton className="h-3 w-28" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <ul className="divide-y rounded-xl border">
+                {recentPlaybooks.map((playbook) => (
+                  <RecentPlaybookRow
+                    key={playbook.id}
+                    onSelect={() => onSelect(playbook.id)}
+                    playbook={playbook}
+                  />
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
 
-        {nextCursor && (
-          <div className="flex justify-center border-t p-3">
+        <section aria-labelledby="all-playbooks-heading">
+          <div className="mb-3 flex min-h-11 items-center justify-between gap-3">
+            <h2 className="text-base font-semibold" id="all-playbooks-heading">
+              {t("knowledge.playbooks.all")}
+            </h2>
             <Button
-              disabled={loading}
-              onClick={onLoadMore}
-              size="sm"
+              aria-label={t("common.refresh")}
+              className="size-11"
+              onClick={onRefresh}
+              size="icon"
+              title={t("common.refresh")}
               variant="ghost"
             >
-              {t("common.loadMore")}
+              <RotateCcwIcon />
             </Button>
           </div>
-        )}
+
+          {playbooks.length === 0 && !loading ? (
+            <div className="rounded-xl border border-dashed px-5 py-8">
+              <p className="text-sm font-medium">
+                {t("knowledge.playbooks.empty")}
+              </p>
+              <p className="text-muted-foreground mt-1 text-sm">
+                {t("knowledge.playbooks.emptyDescription")}
+              </p>
+            </div>
+          ) : (
+            <ul className="divide-y rounded-xl border">
+              {playbooks.map((playbook) => (
+                <PlaybookRow
+                  key={playbook.id}
+                  onSelect={() => onSelect(playbook.id)}
+                  playbook={playbook}
+                />
+              ))}
+            </ul>
+          )}
+
+          {nextCursor && (
+            <div className="flex justify-center pt-3">
+              <Button
+                className="min-h-11"
+                disabled={loading}
+                onClick={onLoadMore}
+                variant="ghost"
+              >
+                {t("common.loadMore")}
+              </Button>
+            </div>
+          )}
+        </section>
       </div>
     </div>
+  );
+};
+
+type SectionHeadingProps = {
+  id: string;
+  title: string;
+};
+
+const SectionHeading = ({ id, title }: SectionHeadingProps) => (
+  <div className="mb-3">
+    <h2 className="text-base font-semibold" id={id}>
+      {title}
+    </h2>
+  </div>
+);
+
+const RecentPlaybookRow = ({
+  playbook,
+  onSelect,
+}: {
+  playbook: RecentPlaybookItem;
+  onSelect: () => void;
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  return (
+    <li>
+      <button
+        className="hover:bg-muted/50 flex min-h-16 w-full items-center gap-3 px-4 py-3 text-start"
+        onClick={onSelect}
+        type="button"
+      >
+        <div className="bg-muted flex size-9 shrink-0 items-center justify-center rounded-lg">
+          <Clock3Icon className="text-muted-foreground size-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium" dir="auto">
+            {playbook.name}
+          </p>
+          <p className="text-muted-foreground mt-0.5 truncate text-xs">
+            {t("knowledge.playbooks.lastUsed", {
+              date: format.dateTime(
+                new Date(playbook.lastUsedAt),
+                MEDIUM_DATE_SHORT_TIME_FORMAT,
+              ),
+            })}
+          </p>
+        </div>
+        <PlaybookStatusBadge status={playbook.status} />
+      </button>
+    </li>
   );
 };
 
@@ -129,7 +240,7 @@ const PlaybookRow = ({
   return (
     <li>
       <button
-        className="hover:bg-muted/50 flex w-full items-center gap-3 px-4 py-3 text-start"
+        className="hover:bg-muted/50 flex min-h-16 w-full items-center gap-3 px-4 py-3 text-start"
         onClick={onSelect}
         type="button"
       >
@@ -140,20 +251,44 @@ const PlaybookRow = ({
           <p className="truncate text-sm font-medium" dir="auto">
             {playbook.name}
           </p>
-          <p className="text-muted-foreground truncate text-xs" dir="auto">
+          <p
+            className="text-muted-foreground mt-0.5 truncate text-xs"
+            dir="auto"
+          >
             {playbook.description ??
-              format.dateTime(new Date(playbook.createdAt), {
-                dateStyle: "medium",
+              t("knowledge.playbooks.updatedAt", {
+                date: format.dateTime(new Date(playbook.updatedAt), {
+                  dateStyle: "medium",
+                }),
               })}
           </p>
         </div>
-        {playbook.status === "approved" && (
-          <span className="bg-success/15 text-success inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium tracking-wider uppercase">
-            {t("knowledge.playbooks.approval.statusApproved")}
-          </span>
-        )}
+        <PlaybookStatusBadge status={playbook.status} />
         <span className="sr-only">{t("common.edit")}</span>
       </button>
     </li>
+  );
+};
+
+const PlaybookStatusBadge = ({
+  status,
+}: {
+  status: PlaybookListItem["status"];
+}) => {
+  const t = useTranslations();
+  const approved = status === "approved";
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 rounded-full px-2 py-0.5 text-xs font-medium",
+        approved
+          ? "bg-success/15 text-success"
+          : "bg-muted text-muted-foreground",
+      )}
+    >
+      {approved
+        ? t("knowledge.playbooks.approval.statusApproved")
+        : t("knowledge.playbooks.approval.statusDraft")}
+    </span>
   );
 };
