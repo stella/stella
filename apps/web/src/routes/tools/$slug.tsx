@@ -184,7 +184,7 @@ function PublicToolDetail() {
           {homepage && (
             <a
               className="text-primary text-sm hover:underline"
-              href={homepage}
+              href={sanitizeHref(homepage)}
               rel="noreferrer"
               target="_blank"
             >
@@ -236,7 +236,7 @@ function DownloadAffordance({ entry }: { entry: LoadedCatalogueEntry }) {
         render={
           <a
             aria-label={t("common.download")}
-            href={toolDownloadPath(entry.slug)}
+            href={sanitizeHref(toolDownloadPath(entry.slug))}
           />
         }
         variant="outline"
@@ -250,7 +250,7 @@ function DownloadAffordance({ entry }: { entry: LoadedCatalogueEntry }) {
       render={
         <a
           aria-label={t("publicTools.downloadUpstream")}
-          href={githubArchiveUrl(entry)}
+          href={sanitizeHref(githubArchiveUrl(entry))}
           rel="noreferrer"
           target="_blank"
         />
@@ -299,7 +299,7 @@ function ToolContent({
       {entry.source === "github" && (
         <a
           className="text-primary text-sm hover:underline"
-          href={githubSkillTreeUrl(entry)}
+          href={sanitizeHref(githubSkillTreeUrl(entry))}
           rel="noreferrer"
           target="_blank"
         >

@@ -282,7 +282,7 @@ const renderInline = ({
   return (
     <a
       className="decoration-border underline underline-offset-2 hover:decoration-current"
-      href={safeHref}
+      href={sanitizeHref(node.href)}
       key={key}
       rel="noopener noreferrer"
       target="_blank"

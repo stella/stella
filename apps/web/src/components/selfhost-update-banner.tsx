@@ -112,7 +112,7 @@ export const SelfhostUpdateBanner = () => {
           })}{" "}
           <a
             className="inline-flex items-center gap-1 underline underline-offset-2 hover:no-underline"
-            href={safeHref}
+            href={sanitizeHref(release.html_url)}
             rel="noopener noreferrer"
             target="_blank"
           >

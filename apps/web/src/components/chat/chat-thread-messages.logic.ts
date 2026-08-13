@@ -1,7 +1,39 @@
+import { Result } from "better-result";
+
 import type {
   ChatAnonRestoration,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
+import { ClientOperationError } from "@/lib/errors/client";
+
+export const DATA_URL_PREFIX = "data:";
+const BASE64_DATA_MARKER = ";base64,";
+
+export const decodeBase64DataUrl = (url: string) => {
+  const payloadStart = url.indexOf(BASE64_DATA_MARKER);
+  if (!url.startsWith(DATA_URL_PREFIX) || payloadStart === -1) {
+    return Result.err(
+      new ClientOperationError({
+        action: "decode-chat-attachment",
+        message: "Chat attachment is not a base64 data URL",
+      }),
+    );
+  }
+
+  const encoded = url.slice(payloadStart + BASE64_DATA_MARKER.length);
+  return Result.try(() => atob(encoded))
+    .map((binary) =>
+      Uint8Array.from(binary, (character) => character.codePointAt(0) ?? 0),
+    )
+    .mapError(
+      (cause) =>
+        new ClientOperationError({
+          action: "decode-chat-attachment",
+          cause,
+          message: "Chat attachment contains malformed base64 data",
+        }),
+    );
+};
 
 const USER_MESSAGE_FALLBACK_BLOCK_TAGS = Object.freeze([
   "blockquote",

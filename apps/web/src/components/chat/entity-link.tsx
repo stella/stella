@@ -15,6 +15,7 @@ import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
 import { MatterIcon } from "@/components/matter-icon";
 import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
 import { detached } from "@/lib/detached";
+import { sanitizeHref } from "@/lib/sanitize-href";
 
 const ICON_CLASS = "inline size-3 shrink-0";
 
@@ -47,7 +48,7 @@ export const EntityLink = ({
 
   if (!href) {
     return (
-      <a href={href} {...props}>
+      <a href={sanitizeHref(href)} {...props}>
         {children}
       </a>
     );
@@ -82,7 +83,12 @@ export const EntityLink = ({
   const parsed = parseStellaMentionHref(href);
   if (!parsed) {
     return (
-      <a href={href} rel="noopener noreferrer" target="_blank" {...props}>
+      <a
+        href={sanitizeHref(href)}
+        rel="noopener noreferrer"
+        target="_blank"
+        {...props}
+      >
         {children}
       </a>
     );

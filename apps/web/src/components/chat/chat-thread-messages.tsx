@@ -43,6 +43,8 @@ import {
   assistantMessageFallbackText,
   buildMessageTurns,
   collectAnonRestorations,
+  DATA_URL_PREFIX,
+  decodeBase64DataUrl,
   EMPTY_RESTORATION_PAIRS,
   getFollowingAssistantRestorations,
   getMentionTagAttr,
@@ -82,10 +84,12 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { detached } from "@/lib/detached";
+import { sanitizeHref } from "@/lib/sanitize-href";
 import {
   getUserFileContentUrl,
   getUserFileThumbnailUrl,
 } from "@/lib/user-files";
+import { downloadFile } from "@/lib/utils";
 
 export const ChatThreadMessages = ({
   activeFileName,
@@ -724,6 +728,29 @@ const getAttachmentPlaceholder = (
   part: ChatAttachmentPart,
 ): string | undefined => part.metadata?.placeholder;
 
+type DownloadDataAttachmentOptions = {
+  errorTitle: string;
+  fileName: string;
+  mimeType: string;
+  url: string;
+};
+
+const downloadDataAttachment = ({
+  errorTitle,
+  fileName,
+  mimeType,
+  url,
+}: DownloadDataAttachmentOptions): void => {
+  const decoded = decodeBase64DataUrl(url);
+  if (decoded.isErr()) {
+    getAnalytics().captureError(decoded.error);
+    stellaToast.add({ title: errorTitle, type: "error" });
+    return;
+  }
+
+  downloadFile(new Blob([decoded.value], { type: mimeType }), fileName);
+};
+
 const UserAttachments = ({
   parts,
 }: {
@@ -771,20 +798,47 @@ const UserAttachments = ({
           );
         }
 
+        const attachmentContent = (
+          <>
+            <FileTextIcon className="size-3" />
+            <span>{filename ?? fallbackLabel}</span>
+          </>
+        );
+        const attachmentClassName = cn(
+          "flex items-center gap-1.5",
+          "bg-muted/50 rounded-md px-2 py-1",
+          "text-muted-foreground text-xs",
+        );
+
+        if (contentUrl.startsWith(DATA_URL_PREFIX)) {
+          return (
+            <button
+              className={attachmentClassName}
+              key={key}
+              onClick={() =>
+                downloadDataAttachment({
+                  errorTitle: t("errors.actionFailed"),
+                  fileName: filename ?? fallbackLabel,
+                  mimeType,
+                  url: contentUrl,
+                })
+              }
+              type="button"
+            >
+              {attachmentContent}
+            </button>
+          );
+        }
+
         return (
           <a
-            className={cn(
-              "flex items-center gap-1.5",
-              "bg-muted/50 rounded-md px-2 py-1",
-              "text-muted-foreground text-xs",
-            )}
-            href={contentUrl}
+            className={attachmentClassName}
+            href={sanitizeHref(contentUrl)}
             key={key}
             rel="noreferrer"
             target="_blank"
           >
-            <FileTextIcon className="size-3" />
-            <span>{filename ?? fallbackLabel}</span>
+            {attachmentContent}
           </a>
         );
       })}

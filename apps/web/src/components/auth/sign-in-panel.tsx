@@ -97,7 +97,7 @@ const authCapabilitiesQueryOptions = {
 const renderTermsLink = (chunks: ReactNode) => (
   <a
     className="hover:text-foreground underline"
-    href={termsUrl}
+    href={sanitizeHref(termsUrl)}
     rel="noreferrer"
     target="_blank"
   >

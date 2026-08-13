@@ -610,7 +610,7 @@ export const StreamdownMentionLink = ({
 
   if (!interactive) {
     return (
-      <a href={href} {...props}>
+      <a href={sanitizeHref(href)} {...props}>
         {children}
       </a>
     );
@@ -628,7 +628,12 @@ export const StreamdownMentionLink = ({
   }
 
   return (
-    <a href={href} rel="noopener noreferrer" target="_blank" {...props}>
+    <a
+      href={sanitizeHref(href)}
+      rel="noopener noreferrer"
+      target="_blank"
+      {...props}
+    >
       {children}
     </a>
   );

@@ -1,13 +1,13 @@
-// Detect hardcoded color values in ANY string literal inside style objects
-// or config props. Flags hex colors (#fff, #000000), named colors (white,
-// black), and color functions (rgb, rgba, hsl, hsla) regardless of
-// property name — catching border shorthands, boxShadow, custom props, etc.
+// Detect hardcoded color values in JSX style object literals. Flags hex
+// colors (#fff, #000000), named colors (white, black), and color functions
+// (rgb, rgba, hsl, hsla) regardless of property name, catching border
+// shorthands, boxShadow, custom props, etc.
 //
 // Safe: var(--token), transparent, inherit, currentColor, none, unset, initial.
 
-import { eslintCompatPlugin } from "@oxlint/plugins";
+import { eslintCompatPlugin, type ESTree } from "@oxlint/plugins";
 
-import { getPropertyName } from "./utils.ts";
+import { getPropertyName, isAstNode, unwrapExpression } from "./utils.ts";
 
 // Hex color pattern anywhere in a string
 const HEX_IN_STRING = /#[0-9a-f]{3,8}\b/i;
@@ -99,6 +99,20 @@ function containsHardcodedColor(value: string): string | null {
   return null;
 }
 
+function getStaticStyleValue(value: ESTree.Expression): string | undefined {
+  if (value.type === "Literal" && typeof value.value === "string") {
+    return value.value;
+  }
+  if (value.type !== "TemplateLiteral" || value.expressions.length > 0) {
+    return undefined;
+  }
+  const quasi = value.quasis.at(0);
+  return quasi?.value.cooked ?? quasi?.value.raw;
+}
+
+const isObjectExpression = (node: unknown): node is ESTree.ObjectExpression =>
+  isAstNode(node) && node.type === "ObjectExpression";
+
 export default eslintCompatPlugin({
   meta: { name: "no-inline-style-colors" },
   rules: {
@@ -112,24 +126,47 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        return {
-          // Check every Property node — any object property with a
-          // string value containing a hardcoded color is flagged.
-          Property(node) {
-            const propName = getPropertyName(node.key) ?? "?";
+        const checkStyleObject = (styleObject: ESTree.ObjectExpression) => {
+          for (const property of styleObject.properties) {
+            if (property.type !== "Property") {
+              continue;
+            }
 
-            const val = node.value;
-            if (val.type !== "Literal" || typeof val.value !== "string") {
+            const value = property.value;
+            const staticValue = getStaticStyleValue(value);
+            if (staticValue === undefined) {
+              continue;
+            }
+
+            const match = containsHardcodedColor(staticValue);
+            if (match === null) {
+              continue;
+            }
+
+            context.report({
+              node: value,
+              messageId: "inlineColor",
+              data: {
+                match,
+                prop: getPropertyName(property.key) ?? "?",
+              },
+            });
+          }
+        };
+
+        return {
+          JSXAttribute(node) {
+            if (
+              node.name.type !== "JSXIdentifier" ||
+              node.name.name !== "style" ||
+              node.value?.type !== "JSXExpressionContainer"
+            ) {
               return;
             }
 
-            const match = containsHardcodedColor(val.value);
-            if (match) {
-              context.report({
-                node: val,
-                messageId: "inlineColor",
-                data: { match, prop: propName },
-              });
+            const expression = unwrapExpression(node.value.expression);
+            if (isObjectExpression(expression)) {
+              checkStyleObject(expression);
             }
           },
         };

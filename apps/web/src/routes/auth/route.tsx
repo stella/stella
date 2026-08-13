@@ -4,6 +4,7 @@ import { useTranslations } from "use-intl";
 import { LanguagePicker } from "@/components/language-picker";
 import { StellaWordmark } from "@/components/stella-wordmark";
 import { ThemePicker } from "@/components/theme-picker";
+import { sanitizeHref } from "@/lib/sanitize-href";
 import { loadAuthContext } from "@/routes/-auth-context";
 
 const landingUrl = "https://stll.app";
@@ -35,7 +36,7 @@ function AuthLayout() {
             <a
               aria-label="Stella"
               className="inline-flex transition-opacity hover:opacity-80"
-              href={landingUrl}
+              href={sanitizeHref(landingUrl)}
             >
               <StellaWordmark className="text-foreground h-6 w-auto" />
             </a>

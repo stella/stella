@@ -26,6 +26,7 @@ import { createErrorReference } from "@/lib/analytics/error-reference";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { isMemberError, isUnauthorizedError } from "@/lib/errors/auth";
+import { sanitizeHref } from "@/lib/sanitize-href";
 
 type DefaultErrorComponentProps = ErrorComponentProps & {
   className?: string;
@@ -325,7 +326,7 @@ const UnexpectedRouteError = ({
               render={
                 <a
                   aria-label={t("routeError.reportProblem")}
-                  href={reportHref}
+                  href={sanitizeHref(reportHref)}
                 />
               }
               variant="ghost"

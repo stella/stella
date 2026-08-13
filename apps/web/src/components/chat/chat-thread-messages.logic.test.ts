@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   assistantMessageFallbackText,
   collectAnonRestorations,
+  decodeBase64DataUrl,
   getFollowingAssistantRestorations,
   userMessageFallbackText,
 } from "@/components/chat/chat-thread-messages.logic";
@@ -22,6 +23,28 @@ const assistantMessage = (
   metadata: pairs.length > 0 ? { anonRestorations: { pairs } } : undefined,
   parts: [{ type: "text", content: "reply" }],
   role: "assistant",
+});
+
+describe("pending attachment data URLs", () => {
+  test("decodes every byte from valid base64", () => {
+    const result = decodeBase64DataUrl(
+      "data:application/octet-stream;base64,AAH/",
+    );
+
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) {
+      return;
+    }
+    expect(Array.from(result.value)).toEqual([0, 1, 255]);
+  });
+
+  test("returns a recoverable error for malformed base64", () => {
+    const result = decodeBase64DataUrl(
+      "data:application/octet-stream;base64,%%%",
+    );
+
+    expect(result.isErr()).toBe(true);
+  });
 });
 
 describe("assistantMessageFallbackText", () => {

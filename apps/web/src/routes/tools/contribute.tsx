@@ -32,6 +32,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { pageTitle } from "@/lib/page-title";
 import { createPublicToolsHead } from "@/lib/public-tools-seo";
+import { sanitizeHref } from "@/lib/sanitize-href";
 import { PRACTICE_AREA_LABEL_KEY } from "@/lib/tools-catalogue";
 import {
   createLatestCommitLookupGuard,
@@ -145,7 +146,7 @@ function ContributePage() {
             render={
               <a
                 aria-label={t("publicTools.contribute.contributingLink")}
-                href={CATALOGUE_CONTRIBUTING_URL}
+                href={sanitizeHref(CATALOGUE_CONTRIBUTING_URL)}
                 rel="noreferrer"
                 target="_blank"
               />
@@ -158,7 +159,7 @@ function ContributePage() {
             render={
               <a
                 aria-label={t("publicTools.contribute.repoLink")}
-                href={CATALOGUE_ENTRIES_URL}
+                href={sanitizeHref(CATALOGUE_ENTRIES_URL)}
                 rel="noreferrer"
                 target="_blank"
               />
@@ -557,10 +558,12 @@ function AddSkillForm() {
             render={
               <a
                 aria-label={t("publicTools.contribute.form.openPr")}
-                href={githubNewFileUrl({
-                  slug: form.slug,
-                  manifestJson: json,
-                })}
+                href={sanitizeHref(
+                  githubNewFileUrl({
+                    slug: form.slug,
+                    manifestJson: json,
+                  }),
+                )}
                 rel="noreferrer"
                 target="_blank"
               />

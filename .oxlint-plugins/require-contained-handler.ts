@@ -36,13 +36,6 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // suppress per-line with `// oxlint-disable-next-line require-contained-handler`
 // and explain why.
 
-// Implementation note: oxlint's custom-plugin runtime does not deliver
-// JSX-specific visitor keys (JSXOpeningElement, JSXAttribute, …) to
-// `create()` return objects. We therefore walk the file from `Program`
-// and recurse manually. JSX attribute names use `JSXIdentifier`, not
-// the plain `Identifier` that shared utilities recognise; we read
-// `attr.name.name` directly.
-
 // `onBlur` is intentionally absent: blur's `target` is the element losing
 // focus, not the new focus destination, so the DOM-containment check the
 // helper performs cannot answer "did focus leave for a portaled child?".
@@ -223,34 +216,8 @@ export default eslintCompatPlugin({
           }
         };
 
-        const walk = (node) => {
-          if (node === null || typeof node !== "object") {
-            return;
-          }
-          if (Array.isArray(node)) {
-            for (const child of node) {
-              walk(child);
-            }
-            return;
-          }
-          if (typeof node.type !== "string") {
-            return;
-          }
-          if (node.type === "JSXOpeningElement") {
-            checkOpening(node);
-          }
-          for (const key of Object.keys(node)) {
-            if (key === "parent" || key === "loc" || key === "range") {
-              continue;
-            }
-            walk(node[key]);
-          }
-        };
-
         return {
-          Program(node) {
-            walk(node);
-          },
+          JSXOpeningElement: checkOpening,
         };
       },
     },

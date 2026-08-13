@@ -41,6 +41,7 @@ import type { ContextMenuAction } from "@/components/context-menu";
 import { useLocale } from "@/i18n/formatting-context";
 import { compareByLocale } from "@/lib/collation";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
+import { sanitizeHref } from "@/lib/sanitize-href";
 import { isCatalogueEntryAvailableDuringOnboarding } from "@/routes/onboarding/-components/onboarding-catalogue-setup.logic";
 
 const toRowDisplay = (entry: LoadedCatalogueEntry): CatalogueRowDisplay => ({
@@ -406,7 +407,7 @@ export const CatalogueStep = ({
               </p>
               <a
                 className="border-border bg-background hover:bg-muted text-foreground inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors"
-                href={PROPOSE_TOOL_URL}
+                href={sanitizeHref(PROPOSE_TOOL_URL)}
                 rel="noreferrer"
                 target="_blank"
               >
@@ -447,7 +448,7 @@ export const CatalogueStep = ({
             link: (chunks) => (
               <a
                 className="hover:text-foreground underline"
-                href={PROPOSE_TOOL_URL}
+                href={sanitizeHref(PROPOSE_TOOL_URL)}
                 rel="noreferrer"
                 target="_blank"
               >

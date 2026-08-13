@@ -7,13 +7,21 @@
 //   4. require-secure-document-response — direct raw document Response
 //      construction outside the typed security boundary
 
-import { eslintCompatPlugin, type Ranged } from "@oxlint/plugins";
+import {
+  eslintCompatPlugin,
+  type ESTree,
+  type Ranged,
+  type Scope,
+  type Variable,
+} from "@oxlint/plugins";
 
 import {
   getImportedName,
   getPropertyName,
+  isAstNode,
   isCallTo,
   isIdentifier,
+  unwrapExpression,
 } from "./utils.ts";
 
 // ── Rule 1: no-raw-filename-write ──────────────────────────────
@@ -21,12 +29,12 @@ import {
 // User-supplied filenames can contain path traversal segments
 // (../../etc/passwd) or control characters. All values assigned
 // to a `fileName` property must pass through `sanitizeFilename`
-// before reaching storage or downstream logic.
+// before reaching storage or downstream logic. Stable local aliases and
+// string composition remain tainted, so a temporary variable cannot launder
+// `file.name` before the sink.
 //
 // Safe patterns (not flagged):
 //   fileName: sanitizeFilename(file.name)
-//   fileName: sanitizedFileName          (variable from prior call)
-//   fileName: resolvedName.value         (.value accessor)
 //   fileName: content.fileName           (DB read-back)
 //   fileName: true                       (Drizzle column selector)
 //   fileName: null / undefined
@@ -34,6 +42,7 @@ import {
 //
 // Flagged:
 //   fileName: file.name       (raw File.name from upload)
+//   const raw = file.name; { fileName: raw }
 //   fileName: body.name       (raw request body)
 //   fileName: body.fileName   (raw request body, camelCase)
 //   fileName: part.filename   (raw multipart part)
@@ -46,21 +55,19 @@ const RAW_NAME_PROPS = new Set(["name", "filename", "fileName"]);
 
 // ── Rule 2: no-unsanitized-href ────────────────────────────────
 //
-// Passing unsanitized dynamic values to <a href={...}> enables
-// javascript: XSS. Flag MemberExpression values (e.g. node.href,
-// data.url) that are not wrapped in sanitizeHref().
+// Passing unsanitized dynamic values to <a href={...}> enables javascript:
+// XSS. Dynamic destinations must be sanitized at the sink; a local variable
+// or arbitrary URL-building function does not prove a safe protocol.
 //
 // Safe patterns (not flagged):
 //   href="https://..."                  (string literal)
 //   href={`/path/${id}`}                (template literal)
 //   href={sanitizeHref(url)}            (sanitizer call)
-//   href={localVariable}                (simple Identifier — props, computed)
-//   href={condition ? a : b}            (ternary)
-//   href={getUrl()}                     (function call)
-//
 // Flagged:
 //   href={node.href}       (data object property access)
 //   href={item.url}        (data object property access)
+//   href={url}             (origin is not proven at the sink)
+//   href={buildUrl()}      (arbitrary calls are not sanitizers)
 
 const SAFE_HREF_PREFIXES = ["http", "/", "#", "mailto:"];
 
@@ -88,11 +95,11 @@ const isSanitizeHrefCall = (node): boolean => isCallTo(node, "sanitizeHref");
 
 // ── Rule 3: no-unscoped-user-query ─────────────────────────────
 //
-// Importing the `user` table from auth-schema without also
-// importing `member` suggests the query may not be scoped
-// by organization membership. While workspace-scoped handlers
-// already filter by workspaceId, importing member is a safety
-// net that ensures organization-level scoping is available.
+// Importing the `user` table from auth-schema requires an organization-scoped
+// membership relation in the same file. Merely importing `member` is not
+// proof: the query must reference both member.userId and
+// member.organizationId. Alternative authorized scopes require a narrow
+// suppression with evidence.
 //
 // Only applies to handler files (configured via overrides).
 
@@ -169,6 +176,119 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
+        const isIdentifierReference = (
+          node: unknown,
+        ): node is ESTree.IdentifierReference => isIdentifier(node);
+
+        const resolveVariable = (
+          identifier: ESTree.IdentifierReference,
+        ): Variable | null => {
+          let scope: Scope | null = context.sourceCode.getScope(identifier);
+          while (scope !== null) {
+            const variable = scope.set.get(identifier.name);
+            if (variable !== undefined) {
+              return variable;
+            }
+            scope = scope.upper;
+          }
+          return null;
+        };
+
+        const isRawDestructuredFilename = (
+          declaration: ESTree.VariableDeclarator,
+          identifierName: string,
+        ): boolean => {
+          const init = unwrapExpression(declaration.init);
+          if (
+            !isIdentifier(init) ||
+            !RAW_INPUT_OBJECTS.has(init.name) ||
+            declaration.id.type !== "ObjectPattern"
+          ) {
+            return false;
+          }
+
+          return declaration.id.properties.some((property) => {
+            if (property.type !== "Property") {
+              return false;
+            }
+            const boundValue =
+              property.value.type === "AssignmentPattern"
+                ? property.value.left
+                : property.value;
+            return (
+              RAW_NAME_PROPS.has(getPropertyName(property.key) ?? "") &&
+              isIdentifier(boundValue, identifierName)
+            );
+          });
+        };
+
+        const isRawFilenameExpression = (
+          node: unknown,
+          seenVariables = new Set<Variable>(),
+        ): boolean => {
+          const expression = unwrapExpression(node);
+          if (!isAstNode(expression)) {
+            return false;
+          }
+          if (isCallTo(expression, "sanitizeFilename")) {
+            return false;
+          }
+          if (
+            expression.type === "MemberExpression" &&
+            expression.computed === false &&
+            isIdentifier(expression.object) &&
+            isIdentifier(expression.property) &&
+            RAW_INPUT_OBJECTS.has(expression.object.name) &&
+            RAW_NAME_PROPS.has(expression.property.name)
+          ) {
+            return true;
+          }
+          if (
+            expression.type === "TemplateLiteral" &&
+            Array.isArray(expression.expressions)
+          ) {
+            return expression.expressions.some((part) =>
+              isRawFilenameExpression(part, seenVariables),
+            );
+          }
+          if (
+            expression.type === "BinaryExpression" ||
+            expression.type === "LogicalExpression"
+          ) {
+            return (
+              isRawFilenameExpression(expression.left, seenVariables) ||
+              isRawFilenameExpression(expression.right, seenVariables)
+            );
+          }
+          if (expression.type === "ConditionalExpression") {
+            return (
+              isRawFilenameExpression(expression.consequent, seenVariables) ||
+              isRawFilenameExpression(expression.alternate, seenVariables)
+            );
+          }
+          if (!isIdentifierReference(expression)) {
+            return false;
+          }
+
+          const variable = resolveVariable(expression);
+          if (variable === null || seenVariables.has(variable)) {
+            return false;
+          }
+
+          const nextSeenVariables = new Set(seenVariables);
+          nextSeenVariables.add(variable);
+          return variable.defs.some((definition) => {
+            const declaration = definition.node;
+            if (declaration.type !== "VariableDeclarator") {
+              return false;
+            }
+            return (
+              isRawDestructuredFilename(declaration, expression.name) ||
+              isRawFilenameExpression(declaration.init, nextSeenVariables)
+            );
+          });
+        };
+
         return {
           Property(node) {
             // Only check property assignments named "fileName"
@@ -176,74 +296,8 @@ export default eslintCompatPlugin({
               return;
             }
 
-            const value = node.value;
-
-            // Allow shorthand { fileName } (key === value, just passing through)
-            if (node.shorthand) {
-              return;
-            }
-
-            // Allow boolean literals (Drizzle column selectors: { fileName: true })
-            if (value.type === "Literal" && typeof value.value === "boolean") {
-              return;
-            }
-
-            // Allow null / undefined
-            if (value.type === "Literal" && value.value === null) {
-              return;
-            }
-            if (isIdentifier(value, "undefined")) {
-              return;
-            }
-
-            // Allow string literals ("report.pdf")
-            if (value.type === "Literal" && typeof value.value === "string") {
-              return;
-            }
-
-            // Allow template literals
-            if (value.type === "TemplateLiteral") {
-              return;
-            }
-
-            // Allow sanitizeFilename() calls
-            if (isCallTo(value, "sanitizeFilename")) {
-              return;
-            }
-
-            // Allow .value accessors (resolvedName.value, fileName.value)
-            // These come from Result unwrapping after sanitization.
-            if (
-              value.type === "MemberExpression" &&
-              !value.computed &&
-              isIdentifier(value.property, "value")
-            ) {
-              return;
-            }
-
-            // Allow variables whose name indicates prior sanitization
-            if (isIdentifier(value) && /sanitize/i.test(value.name)) {
-              return;
-            }
-
-            // Now check for the dangerous patterns:
-            // file.name, body.name, body.fileName, part.filename, query.name
-            if (value.type !== "MemberExpression" || value.computed) {
-              return;
-            }
-
-            if (!isIdentifier(value.object) || !isIdentifier(value.property)) {
-              return;
-            }
-
-            if (
-              RAW_INPUT_OBJECTS.has(value.object.name) &&
-              RAW_NAME_PROPS.has(value.property.name)
-            ) {
-              context.report({
-                node,
-                messageId: "rawFilename",
-              });
+            if (isRawFilenameExpression(node.value)) {
+              context.report({ node, messageId: "rawFilename" });
             }
           },
         };
@@ -256,10 +310,9 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           unsanitizedHref:
-            "Sanitize dynamic href values with " +
-            "sanitizeHref() to prevent javascript: XSS. " +
-            "Static http(s) URLs and relative paths are " +
-            "allowed.",
+            "Sanitize dynamic href values with sanitizeHref() at the anchor " +
+            "sink to prevent javascript: XSS. Static http(s), mailto, " +
+            "fragment, and relative literals are allowed.",
         },
       },
       createOnce(context) {
@@ -275,7 +328,7 @@ export default eslintCompatPlugin({
 
             // Verify this is on an <a> element
             const opening = node.parent;
-            if (!opening || opening.type !== "JSXOpeningElement") {
+            if (opening.type !== "JSXOpeningElement") {
               return;
             }
 
@@ -324,35 +377,15 @@ export default eslintCompatPlugin({
               return;
             }
 
-            // Allow simple Identifiers (props, locally computed vars).
-            // These are typically safe because they come from
-            // component props or local computation, not raw data.
-            if (expr.type === "Identifier") {
+            if (isIdentifier(expr, "undefined")) {
               return;
             }
 
-            // Allow ternary / logical expressions (computed values)
-            if (
-              expr.type === "ConditionalExpression" ||
-              expr.type === "LogicalExpression"
-            ) {
+            if (expr.type === "Literal" && expr.value === null) {
               return;
             }
 
-            // Allow function/method calls (e.g. getUrl(), buildHref())
-            if (expr.type === "CallExpression") {
-              return;
-            }
-
-            // Flag MemberExpression (node.href, item.url, data.link)
-            // These access properties on data objects and may carry
-            // unsanitized user/external content.
-            if (expr.type === "MemberExpression") {
-              context.report({
-                node,
-                messageId: "unsanitizedHref",
-              });
-            }
+            context.report({ node, messageId: "unsanitizedHref" });
           },
         };
       },
@@ -364,20 +397,40 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           unscopedUserQuery:
-            "Importing 'user' without 'member' from " +
-            "auth-schema may allow cross-org data access. " +
-            "Import 'member' and join on organizationId " +
-            "to scope user queries.",
+            "Queries importing 'user' from auth-schema must reference both " +
+            "member.userId and member.organizationId in the same file. " +
+            "Join through organization membership, or suppress narrowly " +
+            "with evidence for another authorized scope.",
         },
       },
       createOnce(context) {
         let userImportNode: Ranged | null = null;
-        let hasMemberImport = false;
+        let memberLocalName: string | null = null;
+        let memberImportVariable: Variable | null = null;
+        let hasMemberUserIdReference = false;
+        let hasMemberOrganizationIdReference = false;
+
+        const resolveVariable = (
+          identifier: ESTree.IdentifierReference,
+        ): Variable | null => {
+          let scope: Scope | null = context.sourceCode.getScope(identifier);
+          while (scope !== null) {
+            const variable = scope.set.get(identifier.name);
+            if (variable !== undefined) {
+              return variable;
+            }
+            scope = scope.upper;
+          }
+          return null;
+        };
 
         return {
           before() {
             userImportNode = null;
-            hasMemberImport = false;
+            memberLocalName = null;
+            memberImportVariable = null;
+            hasMemberUserIdReference = false;
+            hasMemberOrganizationIdReference = false;
           },
           ImportDeclaration(node) {
             if (node.source.value !== AUTH_SCHEMA_MODULE) {
@@ -394,13 +447,36 @@ export default eslintCompatPlugin({
                 userImportNode = spec;
               }
               if (importedName === "member") {
-                hasMemberImport = true;
+                memberLocalName = spec.local.name;
+                memberImportVariable =
+                  context.sourceCode.getDeclaredVariables(spec).at(0) ?? null;
               }
+            }
+          },
+          MemberExpression(node) {
+            if (
+              memberLocalName === null ||
+              node.computed ||
+              !isIdentifier(node.object, memberLocalName) ||
+              !isIdentifier(node.property) ||
+              resolveVariable(node.object) !== memberImportVariable
+            ) {
+              return;
+            }
+
+            if (node.property.name === "userId") {
+              hasMemberUserIdReference = true;
+            }
+            if (node.property.name === "organizationId") {
+              hasMemberOrganizationIdReference = true;
             }
           },
 
           "Program:exit"() {
-            if (userImportNode && !hasMemberImport) {
+            if (
+              userImportNode &&
+              (!hasMemberUserIdReference || !hasMemberOrganizationIdReference)
+            ) {
               context.report({
                 node: userImportNode,
                 messageId: "unscopedUserQuery",

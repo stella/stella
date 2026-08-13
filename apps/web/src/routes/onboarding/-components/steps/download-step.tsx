@@ -17,6 +17,7 @@ import {
   WINDOWS_EXE_URL,
   WINDOWS_MSI_URL,
 } from "@/lib/desktop-downloads";
+import { sanitizeHref } from "@/lib/sanitize-href";
 
 /**
  * Single source of truth for the card order: drives the rendered card
@@ -251,12 +252,12 @@ const DesktopSetupPanel = () => {
 
   let downloads: React.ReactNode = (
     <>
-      <a className={primaryClass} href={WINDOWS_EXE_URL}>
+      <a className={primaryClass} href={sanitizeHref(WINDOWS_EXE_URL)}>
         {t("settings.account.desktopDownloadWindows")}
       </a>
       <a
         className={cn(buttonVariants({ variant: "outline" }), "w-full")}
-        href={MACOS_DMG_URL}
+        href={sanitizeHref(MACOS_DMG_URL)}
       >
         {t("settings.account.desktopDownloadMac")}
       </a>
@@ -265,10 +266,10 @@ const DesktopSetupPanel = () => {
   if (platform === "mac") {
     downloads = (
       <>
-        <a className={primaryClass} href={MACOS_DMG_URL}>
+        <a className={primaryClass} href={sanitizeHref(MACOS_DMG_URL)}>
           {t("settings.account.desktopDownloadMac")}
         </a>
-        <a className={secondaryClass} href={WINDOWS_EXE_URL}>
+        <a className={secondaryClass} href={sanitizeHref(WINDOWS_EXE_URL)}>
           {t("settings.account.desktopDownloadOtherMac")}
         </a>
       </>
@@ -276,10 +277,10 @@ const DesktopSetupPanel = () => {
   } else if (platform === "windows") {
     downloads = (
       <>
-        <a className={primaryClass} href={WINDOWS_EXE_URL}>
+        <a className={primaryClass} href={sanitizeHref(WINDOWS_EXE_URL)}>
           {t("settings.account.desktopDownloadWindows")}
         </a>
-        <a className={secondaryClass} href={WINDOWS_MSI_URL}>
+        <a className={secondaryClass} href={sanitizeHref(WINDOWS_MSI_URL)}>
           {t("settings.account.desktopDownloadOtherWindows")}
         </a>
       </>

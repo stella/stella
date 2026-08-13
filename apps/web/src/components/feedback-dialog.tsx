@@ -17,6 +17,7 @@ import { buildFeedbackMailto } from "@/components/feedback-dialog.logic";
 import { SidebarMenuButton, SidebarMenuItem } from "@/components/sidebar";
 import { env } from "@/env";
 import { COMMUNITY_FORUM_URL } from "@/lib/consts";
+import { sanitizeHref } from "@/lib/sanitize-href";
 
 export const FeedbackDialog = ({ userEmail }: Props) => {
   const t = useTranslations();
@@ -43,7 +44,7 @@ export const FeedbackDialog = ({ userEmail }: Props) => {
             render={
               <a
                 aria-label={t("feedback.discord")}
-                href={COMMUNITY_FORUM_URL}
+                href={sanitizeHref(COMMUNITY_FORUM_URL)}
                 rel="noreferrer"
                 target="_blank"
               />
@@ -56,7 +57,7 @@ export const FeedbackDialog = ({ userEmail }: Props) => {
             render={
               <a
                 aria-label={t("feedback.github")}
-                href={GITHUB_FEEDBACK_URL}
+                href={sanitizeHref(GITHUB_FEEDBACK_URL)}
                 rel="noreferrer"
                 target="_blank"
               />
@@ -67,7 +68,9 @@ export const FeedbackDialog = ({ userEmail }: Props) => {
           </MenuItem>
           {mailto && (
             <MenuItem
-              render={<a aria-label={t("common.email")} href={mailto} />}
+              render={
+                <a aria-label={t("common.email")} href={sanitizeHref(mailto)} />
+              }
             >
               <MailIcon />
               {t("common.email")}
