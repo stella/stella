@@ -25,6 +25,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 //   - a template literal starting with `${env.VITE_API_URL}` then `/v1`
 
 import {
+  type AstNode,
   filenameForContext,
   getPropertyName,
   isAstNode,
@@ -38,15 +39,13 @@ import {
 const RELATIVE_API_PATH = /^\/(?:api|v1)(?:\/|$)/u;
 const V1_PATH = /^\/v1(?:\/|$)/u;
 
-type AstNode = Record<string, unknown> & { type: string };
-
 const API_ENV_KEYS = ["VITE_API_URL", "VITE_BROWSER_API_URL"] as const;
 const API_ENV_OWNERS = [
   "apps/web/src/env.ts",
   "apps/web/src/lib/api-origins.ts",
 ] as const;
 
-const isDirectApiEnvAccess = (node: unknown): boolean =>
+const isDirectApiEnvAccess = (node: unknown): node is AstNode =>
   isAstNode(node) &&
   node.type === "MemberExpression" &&
   isIdentifier(node.object, "env") &&
