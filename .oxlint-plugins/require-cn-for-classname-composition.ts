@@ -838,23 +838,22 @@ export default eslintCompatPlugin({
             if (expression === null) {
               return { type: "opaque" };
             }
-            if (
-              expression.type === "ConditionalExpression" ||
-              isLogicalExpression(expression)
-            ) {
-              const outcomes: LogicalOutcome[] =
-                expression.type === "ConditionalExpression"
-                  ? [
-                      {
-                        propertyAbsent: false,
-                        value: expression.consequent,
-                      },
-                      {
-                        propertyAbsent: false,
-                        value: expression.alternate,
-                      },
-                    ]
-                  : logicalOutcomes(expression);
+            let outcomes: LogicalOutcome[] | null = null;
+            if (expression.type === "ConditionalExpression") {
+              outcomes = [
+                {
+                  propertyAbsent: false,
+                  value: expression.consequent,
+                },
+                {
+                  propertyAbsent: false,
+                  value: expression.alternate,
+                },
+              ];
+            } else if (isLogicalExpression(expression)) {
+              outcomes = logicalOutcomes(expression);
+            }
+            if (outcomes !== null) {
               const resolutions = outcomes.map((outcome) =>
                 outcome.propertyAbsent || isProvablyNonObject(outcome.value)
                   ? { type: "absent" as const }
