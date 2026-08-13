@@ -43,33 +43,6 @@ import {
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
 
-type InspectorRailProps = {
-  activeId: string | null;
-  minimized: boolean;
-  onActivateTab: (tabId: string) => void;
-  onCloseTab: (tabId: string) => void;
-  onOpenChat: (
-    args?: Parameters<
-      (args?: {
-        label?: string;
-        workspaceId?: string | undefined;
-        contextMatterIds?: string[];
-        activeSkill?: ChatTab["activeSkill"];
-      }) => void
-    >[0],
-  ) => void;
-  onSetMinimized: (minimized: boolean) => void;
-  tabs: InspectorTab[];
-  workspaceId?: string | undefined;
-};
-
-const inspectorDiagnosticState = (tabCount: number, minimized: boolean) => {
-  if (tabCount === 0) {
-    return "empty";
-  }
-  return minimized ? "minimized" : "open";
-};
-
 export const InspectorRail = ({
   activeId,
   minimized,
@@ -219,6 +192,33 @@ export const InspectorRail = ({
       </div>
     </div>
   );
+};
+
+type InspectorRailProps = {
+  activeId: string | null;
+  minimized: boolean;
+  onActivateTab: (tabId: string) => void;
+  onCloseTab: (tabId: string) => void;
+  onOpenChat: (
+    args?: Parameters<
+      (args?: {
+        label?: string;
+        workspaceId?: string | undefined;
+        contextMatterIds?: string[];
+        activeSkill?: ChatTab["activeSkill"];
+      }) => void
+    >[0],
+  ) => void;
+  onSetMinimized: (minimized: boolean) => void;
+  tabs: InspectorTab[];
+  workspaceId?: string | undefined;
+};
+
+const inspectorDiagnosticState = (tabCount: number, minimized: boolean) => {
+  if (tabCount === 0) {
+    return "empty";
+  }
+  return minimized ? "minimized" : "open";
 };
 
 /** Extract a short abbreviation from a filename (stem, not extension). */

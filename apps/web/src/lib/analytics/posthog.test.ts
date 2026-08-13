@@ -244,12 +244,12 @@ describe("PostHog browser analytics adapter", () => {
     });
   });
 
-  test("captures route crash lifecycle properties", async () => {
+  test("captures and sanitizes route crash lifecycle properties", async () => {
     const { analytics } = createPostHogAnalytics(
       "phc_test",
       "https://posthog.test",
     );
-    analytics.captureRouteErrorLifecycle({
+    await analytics.captureRouteErrorLifecycle({
       errorFingerprint: "ERRFP-1234ABCD",
       incidentReference: "ERR-DEAD-BEEF-1234",
       inspectorState: "open",
@@ -258,8 +258,6 @@ describe("PostHog browser analytics adapter", () => {
       routeTemplate: "/law/$country/cases/$court/$slug",
       status: "recurred",
     });
-    await Bun.sleep(0);
-
     expect(captureMock).toHaveBeenCalledWith(
       WEB_ANALYTICS_EVENTS.routeErrorRecovery,
       {
@@ -272,6 +270,41 @@ describe("PostHog browser analytics adapter", () => {
         status: "recurred",
       },
     );
+
+    expect(
+      initOptions?.before_send({
+        event: WEB_ANALYTICS_EVENTS.routeErrorRecovery,
+        properties: {
+          $current_url:
+            "https://staging.stll.app/workspaces/private-matter?document=secret#selection",
+          error_reference: "ERR-DEAD-BEEF-1234",
+          error_fingerprint: "ERRFP-1234ABCD",
+          incident_reference: "ERR-DEAD-BEEF-1234",
+          inspector_state: "open",
+          privileged_content: "never retain me",
+          recovery: "retry-route",
+          route_template: "/law/$country/cases/$court/$slug",
+          status: "shown",
+        },
+      }),
+    ).toEqual({
+      event: WEB_ANALYTICS_EVENTS.routeErrorRecovery,
+      properties: {
+        error_reference: "ERR-DEAD-BEEF-1234",
+        error_fingerprint: "ERRFP-1234ABCD",
+        incident_reference: "ERR-DEAD-BEEF-1234",
+        inspector_state: "open",
+        recovery: "retry-route",
+        route_template: "/law/$country/cases/$court/$slug",
+        status: "shown",
+      },
+    });
+    expect(
+      initOptions?.before_send({
+        event: WEB_ANALYTICS_EVENTS.routeErrorRecovery,
+        properties: { route_template: "/workspaces/private matter" },
+      }),
+    ).toBeNull();
   });
 
   test("keeps only crash diagnostics from an SDK-enriched lifecycle event", () => {

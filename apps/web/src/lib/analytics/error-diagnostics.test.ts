@@ -10,6 +10,15 @@ const errorWithStack = (message: string, stack: string) => {
 };
 
 describe("browser error diagnostics", () => {
+  test("emits the analytics fingerprint format", () => {
+    const error = errorWithStack(
+      "redacted",
+      "at https://staging.stll.app/assets/case-viewer-A1b2.js:42:7",
+    );
+
+    expect(fingerprintTelemetryError(error)).toMatch(/^ERRFP-[0-9A-F]{8}$/u);
+  });
+
   test("fingerprints a compiled asset frame without using the message", () => {
     const first = errorWithStack(
       "Client Smith privileged decision",

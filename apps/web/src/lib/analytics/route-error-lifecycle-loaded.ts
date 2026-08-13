@@ -27,11 +27,11 @@ export const createLoadedRouteErrorLifecycleController = (
   let currentRouteTemplate = initial.routeTemplate;
   let inspectorState = initial.inspectorState;
 
-  const capture = (
+  const capture = async (
     incident: RouteErrorIncident,
     status: RouteErrorLifecycleProperties["status"],
   ) => {
-    analytics.captureRouteErrorLifecycle({ ...incident, status });
+    await analytics.captureRouteErrorLifecycle({ ...incident, status });
   };
 
   const caught = (routeTemplate: string) => {
@@ -63,10 +63,10 @@ export const createLoadedRouteErrorLifecycleController = (
       routeTemplate,
     };
     state = { incident, type: "visible" };
-    capture(incident, priorIncident ? "recurred" : "shown");
+    void capture(incident, priorIncident ? "recurred" : "shown");
   };
 
-  const retryStarted: RouteErrorLifecycleController["retryStarted"] = (
+  const retryStarted: RouteErrorLifecycleController["retryStarted"] = async (
     reference,
     recovery,
   ) => {
@@ -77,7 +77,7 @@ export const createLoadedRouteErrorLifecycleController = (
     if (recovery === "retry-route") {
       state = { incident, type: "retrying" };
     }
-    capture(incident, "retry_started");
+    await capture(incident, "retry_started");
   };
 
   const routeResolved = (routeTemplate: string) => {

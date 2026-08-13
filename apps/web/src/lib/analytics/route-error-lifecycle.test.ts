@@ -24,6 +24,7 @@ const setup = () => {
     }),
     captureRouteErrorLifecycle: mock((properties) => {
       events.push(properties);
+      return Promise.resolve();
     }),
   } satisfies Pick<Analytics, "captureError" | "captureRouteErrorLifecycle">;
 
@@ -43,6 +44,8 @@ describe("route error lifecycle diagnostics", () => {
     const { analytics, errors, events } = setup();
     const controller = createRouteErrorLifecycleController(analytics);
     const error = new TypeError("Privileged decision text");
+    controller.routeResolved(ROUTE_TEMPLATE);
+    controller.updateInspectorState("open");
     controller.caught(ROUTE_TEMPLATE);
     controller.shown({
       error,
@@ -54,7 +57,7 @@ describe("route error lifecycle diagnostics", () => {
       recovery: "retry-route",
       reference: FIRST_REFERENCE,
     });
-    controller.retryStarted(FIRST_REFERENCE, "retry-route");
+    await controller.retryStarted(FIRST_REFERENCE, "retry-route");
 
     expect(errors).toEqual([
       {
@@ -62,25 +65,34 @@ describe("route error lifecycle diagnostics", () => {
         error,
       },
     ]);
-    await Bun.sleep(0);
-
     expect(events.map(({ status }) => status)).toEqual([
       "shown",
       "retry_started",
     ]);
+    expect(events.at(0)).toMatchObject({
+      inspectorState: "open",
+      routeTemplate: ROUTE_TEMPLATE,
+    });
   });
 
-  test("reads the attempted leaf route at catch time", () => {
+  test("reads the errored route or attempted leaf at catch time", () => {
     expect(
       resolveCaughtRouteTemplate([
-        { fullPath: "/" },
-        { fullPath: ROUTE_TEMPLATE },
+        { fullPath: "/", status: "success" },
+        { fullPath: "/law/$country", status: "error" },
+        { fullPath: ROUTE_TEMPLATE, status: "pending" },
+      ]),
+    ).toBe("/law/$country");
+    expect(
+      resolveCaughtRouteTemplate([
+        { fullPath: "/", status: "success" },
+        { fullPath: ROUTE_TEMPLATE, status: "pending" },
       ]),
     ).toBe(ROUTE_TEMPLATE);
     expect(resolveCaughtRouteTemplate([])).toBe("unknown");
   });
 
-  test("reports an in-app retry", () => {
+  test("reports an in-app retry", async () => {
     const { controller, events } = setup();
     const error = new TypeError("Privileged decision text");
     controller.caught(ROUTE_TEMPLATE);
@@ -90,7 +102,7 @@ describe("route error lifecycle diagnostics", () => {
       reference: FIRST_REFERENCE,
     });
 
-    controller.retryStarted(FIRST_REFERENCE, "retry-route");
+    await controller.retryStarted(FIRST_REFERENCE, "retry-route");
 
     expect(events.map(({ status }) => status)).toEqual([
       "shown",
@@ -98,7 +110,7 @@ describe("route error lifecycle diagnostics", () => {
     ]);
   });
 
-  test("keeps one incident reference when the retry crashes again", () => {
+  test("keeps one incident reference when the retry crashes again", async () => {
     const { controller, events } = setup();
     const firstError = new TypeError("First privileged payload");
     controller.caught(ROUTE_TEMPLATE);
@@ -107,7 +119,7 @@ describe("route error lifecycle diagnostics", () => {
       recovery: "retry-route",
       reference: FIRST_REFERENCE,
     });
-    controller.retryStarted(FIRST_REFERENCE, "retry-route");
+    await controller.retryStarted(FIRST_REFERENCE, "retry-route");
 
     const secondError = new RangeError("Second privileged payload");
     controller.caught(ROUTE_TEMPLATE);
@@ -132,7 +144,7 @@ describe("route error lifecycle diagnostics", () => {
     });
   });
 
-  test("does not claim that a page reload recovered", () => {
+  test("does not claim that a page reload recovered", async () => {
     const { controller, events } = setup();
     const error = new TypeError("Failed to fetch dynamically imported module");
     controller.caught(ROUTE_TEMPLATE);
@@ -142,7 +154,7 @@ describe("route error lifecycle diagnostics", () => {
       reference: FIRST_REFERENCE,
     });
 
-    controller.retryStarted(FIRST_REFERENCE, "reload-page");
+    await controller.retryStarted(FIRST_REFERENCE, "reload-page");
 
     expect(events.map(({ status }) => status)).toEqual([
       "shown",

@@ -8,6 +8,7 @@ import {
   telemetryErrorType,
 } from "@/lib/analytics/error-diagnostics";
 import { isErrorReference } from "@/lib/analytics/error-reference";
+import type { sanitizeRouteErrorLifecycleEvent } from "@/lib/analytics/posthog-route-error";
 import { WEB_ANALYTICS_EVENTS } from "@/lib/analytics/types";
 import type {
   Analytics,
@@ -105,9 +106,8 @@ const sanitizeExceptionEvent = (event: CaptureResult): CaptureResult => {
   };
 };
 
-type RouteErrorLifecycleSanitizer = (
-  event: CaptureResult,
-) => CaptureResult | null;
+type RouteErrorLifecycleSanitizer =
+  typeof sanitizeRouteErrorLifecycleEvent;
 let routeErrorLifecycleSanitizer: RouteErrorLifecycleSanitizer | undefined;
 
 const errorContextProperties = (
@@ -236,7 +236,7 @@ export const createPostHogAnalytics = (
       posthog.capture(WEB_ANALYTICS_EVENTS.guideStepSkipped, properties);
     },
     captureRouteErrorLifecycle: (properties) => {
-      import("@/lib/analytics/posthog-route-error")
+      return import("@/lib/analytics/posthog-route-error")
         .then((module) => {
           routeErrorLifecycleSanitizer =
             module.sanitizeRouteErrorLifecycleEvent;

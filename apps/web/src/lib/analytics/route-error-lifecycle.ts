@@ -23,7 +23,7 @@ export type RouteErrorLifecycleController = {
   retryStarted: (
     reference: ErrorReference,
     recovery: RouteErrorIncident["recovery"],
-  ) => void;
+  ) => Promise<void>;
   shown: (options: ShowRouteErrorOptions) => void;
   updateInspectorState: (
     inspectorState: RouteErrorIncident["inspectorState"],
@@ -36,8 +36,11 @@ export type RouteErrorLifecycleSnapshot = {
 };
 
 export const resolveCaughtRouteTemplate = (
-  matches: readonly { fullPath: string }[],
-): string => matches.at(-1)?.fullPath ?? "unknown";
+  matches: readonly { fullPath: string; status?: string }[],
+): string =>
+  matches.findLast(({ status }) => status === "error")?.fullPath ??
+  matches.at(-1)?.fullPath ??
+  "unknown";
 
 export const createRouteErrorLifecycleController = (
   analytics: RouteErrorAnalytics,
@@ -71,11 +74,12 @@ export const createRouteErrorLifecycleController = (
       type: "detached",
     });
   };
-  const run = (action: (controller: RouteErrorLifecycleController) => void) => {
+  const run = (
+    action: (controller: RouteErrorLifecycleController) => void | Promise<void>,
+  ): Promise<void> =>
     load()
       .then((controller) => (controller ? action(controller) : undefined))
       .catch(captureDispatchError);
-  };
   const runIfLoaded = (
     action: (controller: RouteErrorLifecycleController) => void,
   ) => {
@@ -86,14 +90,14 @@ export const createRouteErrorLifecycleController = (
 
   return {
     caught: (routeTemplate) => {
-      run((controller) => controller.caught(routeTemplate));
+      void run((controller) => controller.caught(routeTemplate));
     },
     routeResolved: (routeTemplate) => {
       snapshot = { ...snapshot, routeTemplate };
       runIfLoaded((controller) => controller.routeResolved(routeTemplate));
     },
     retryStarted: (reference, recovery) => {
-      run((controller) => controller.retryStarted(reference, recovery));
+      return run((controller) => controller.retryStarted(reference, recovery));
     },
     shown: (options) => {
       if (capturedReference !== options.reference) {
@@ -103,7 +107,7 @@ export const createRouteErrorLifecycleController = (
           type: "recovery",
         });
       }
-      run((controller) => controller.shown(options));
+      void run((controller) => controller.shown(options));
     },
     updateInspectorState: (inspectorState) => {
       snapshot = { ...snapshot, inspectorState };

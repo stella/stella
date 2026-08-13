@@ -250,12 +250,13 @@ const UnexpectedRouteError = ({
   }
 
   useExternalSyncEffect(
-    () =>
+    () => {
       routeErrorLifecycle.shown({
         error: routeError,
         recovery: recovery.type,
         reference: errorReference,
-      }),
+      });
+    },
     [routeErrorLifecycle, routeError, errorReference, recovery.type],
   );
 
@@ -279,9 +280,10 @@ const UnexpectedRouteError = ({
       : null;
 
   const handleRecovery = () => {
-    routeErrorLifecycle.retryStarted(errorReference, recovery.type);
-    recoverRouteError({
+    void recoverRouteError({
       error: routeError,
+      recordRetryStarted: (recoveryType) =>
+        routeErrorLifecycle.retryStarted(errorReference, recoveryType),
       reloadPage: () => window.location.reload(),
       retryRoute: retry,
     });

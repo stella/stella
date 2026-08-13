@@ -4,6 +4,7 @@ import type { Analytics, ErrorCaptureContext } from "@/lib/analytics/types";
 import { logDevError } from "@/lib/errors/utils";
 
 const noop = () => undefined;
+const noopAsync = () => Promise.resolve();
 
 const devErrorContext = (
   context: ErrorCaptureContext | undefined,
@@ -33,7 +34,7 @@ export const noopAnalytics: Analytics = {
   },
   capturePageViewed: noop,
   captureGuideStepSkipped: noop,
-  captureRouteErrorLifecycle: noop,
+  captureRouteErrorLifecycle: noopAsync,
   identifyUser: noop,
   reset: noop,
 };

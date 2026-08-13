@@ -17,7 +17,7 @@ export type Analytics = {
   captureGuideStepSkipped: (properties: GuideStepSkippedProperties) => void;
   captureRouteErrorLifecycle: (
     properties: RouteErrorLifecycleProperties,
-  ) => void;
+  ) => Promise<void>;
   identifyUser: (user: AnalyticsUserIdentity) => void;
   reset: (options?: AnalyticsResetOptions) => void;
 };
