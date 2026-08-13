@@ -11,8 +11,8 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { env } from "@/env";
-import { externalApiOrigin } from "@/lib/api-origins";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { externalApiOrigin } from "@/lib/api-origins";
 import { connectSelfHostedDesktop } from "@/lib/desktop-bridge";
 import {
   detectDesktopPlatform,

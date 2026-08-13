@@ -5,6 +5,9 @@ import { appShellNavigationLink } from "../helpers/app-shell";
 const MACOS_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
   "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36";
+const DIRECT_API_ORIGIN = new URL(
+  process.env["E2E_API_URL"] ?? "https://api-staging.stll.app",
+).origin;
 
 // The public shell is rendered on Linux and hydrated on the user's platform.
 // Emulating macOS catches ambient platform reads that Linux-only CI misses.
@@ -69,13 +72,12 @@ test("authenticated chat navigation stays same-origin and has no API preflights"
     if (url.pathname.startsWith("/api/")) {
       apiRequests.push(request.url());
     }
-    if (url.hostname === "api-staging.stll.app") {
+    if (url.origin === DIRECT_API_ORIGIN) {
       directApiRequests.push(request.url());
     }
     if (
       request.method() === "OPTIONS" &&
-      (url.pathname.startsWith("/api/") ||
-        url.hostname === "api-staging.stll.app")
+      (url.pathname.startsWith("/api/") || url.origin === DIRECT_API_ORIGIN)
     ) {
       optionsRequests.push(request.url());
     }

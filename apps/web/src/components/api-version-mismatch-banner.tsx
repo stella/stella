@@ -7,8 +7,8 @@ import * as v from "valibot";
 import Tooltip from "@/components/tooltip";
 import { env } from "@/env";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
-import { fetchWithTimeout } from "@/lib/fetch";
 import { browserApiRootUrl } from "@/lib/api-url";
+import { fetchWithTimeout } from "@/lib/fetch";
 import { compareSemver } from "@/lib/semver-compare";
 
 const FIVE_MIN_MS = 5 * 60 * 1000;

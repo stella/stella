@@ -14,8 +14,8 @@ import { ac, roles } from "@stll/permissions";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { getTranslator, useI18nStore } from "@/i18n/i18n-store";
-import { fetchWithTimeout } from "@/lib/fetch";
 import { browserAuthBaseUrl } from "@/lib/api-url";
+import { fetchWithTimeout } from "@/lib/fetch";
 import { getSignedOauthQueryFromHash } from "@/lib/oauth-provider";
 import { createSecretTokenBoundary } from "@/lib/secret-token";
 import type { SecretToken } from "@/lib/secret-token";

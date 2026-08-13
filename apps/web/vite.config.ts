@@ -23,11 +23,11 @@ const DEV_API_PROXY_PATHS = [
   "/oauth-ui",
 ] as const;
 
-export const rewriteBrowserApiPath = (path: string): string => {
-  if (path === "/api/auth" || path.startsWith("/api/auth/")) {
-    return path;
+export const rewriteBrowserApiPath = (requestPath: string): string => {
+  if (requestPath === "/api/auth" || requestPath.startsWith("/api/auth/")) {
+    return requestPath;
   }
-  return path.replace(/^\/api(?=\/|$)/u, "") || "/";
+  return requestPath.replace(/^\/api(?=\/|$)/u, "") || "/";
 };
 const APP_VERSION = readFileSync(
   path.resolve(APP_ROOT, "../../VERSION"),

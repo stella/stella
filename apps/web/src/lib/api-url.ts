@@ -3,7 +3,6 @@ import { buildVersionedApiUrl, MCP_APP_SANDBOX_PATH } from "@stll/api-contract";
 import {
   browserApiBaseUrl,
   browserApiRootUrl,
-  browserAuthBaseUrl,
   externalApiOrigin,
 } from "@/lib/api-origins";
 

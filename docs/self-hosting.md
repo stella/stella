@@ -52,13 +52,20 @@ before building from source:
 VITE_API_URL="https://api.stella.example.com"
 VITE_PUBLIC_APP_URL="https://stella.example.com"
 VITE_SELFHOST="true"
+# Optional: use when the web origin reverse-proxies /api to the API service.
+VITE_BROWSER_API_URL="https://stella.example.com/api"
 # Optional: enable "Edit in Desktop" for self-hosted DOCX editing.
 VITE_FEATURE_DESKTOP_EDITING="true"
 ```
 
-`VITE_API_URL` must point at the public API, aligned with `BETTER_AUTH_URL` on
-the API. `VITE_PUBLIC_APP_URL` should match the public web origin, aligned with
+`VITE_API_URL` must point at the public API, aligned with `PUBLIC_URL` on the
+API. `VITE_PUBLIC_APP_URL` should match the public web origin, aligned with
 `FRONTEND_URL` on the API. These values are baked into the web build.
+
+When the web origin reverse-proxies `/api`, set `VITE_BROWSER_API_URL` to that
+exact same-origin path and set API `BETTER_AUTH_URL` to the web origin. Keep
+`PUBLIC_URL` on the direct API origin so machine OAuth issuers remain stable.
+Provider callback URLs then use the web origin under `/api/auth/callback/*`.
 
 From the repository root, after `cp` / `bun install` as above, produce a
 production bundle with:
@@ -87,6 +94,7 @@ You can also build the web container from source:
 ```bash
 docker build -f apps/web/Dockerfile \
   --build-arg PUBLIC_API_URL=https://api.stella.example.com \
+  --build-arg PUBLIC_BROWSER_API_URL=https://stella.example.com/api \
   --build-arg PUBLIC_APP_URL=https://stella.example.com \
   --build-arg VITE_SELFHOST=true \
   --build-arg VITE_FEATURE_DESKTOP_EDITING=true \
@@ -98,9 +106,10 @@ docker run --detach \
   stella-web:local
 ```
 
-`PUBLIC_API_URL` maps to `VITE_API_URL`; `PUBLIC_APP_URL` maps to
-`VITE_PUBLIC_APP_URL`. Other optional web build arguments are listed in
-`apps/web/Dockerfile` and mirror `apps/web/.env.example`.
+`PUBLIC_API_URL` maps to `VITE_API_URL`; `PUBLIC_BROWSER_API_URL` maps to
+`VITE_BROWSER_API_URL`; `PUBLIC_APP_URL` maps to `VITE_PUBLIC_APP_URL`. Other
+optional web build arguments are listed in `apps/web/Dockerfile` and mirror
+`apps/web/.env.example`.
 
 ## Required Services
 

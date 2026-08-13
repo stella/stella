@@ -4,9 +4,8 @@ import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/components/toast";
 
-import { env } from "@/env";
-import { externalApiOrigin } from "@/lib/api-origins";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { externalApiOrigin } from "@/lib/api-origins";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
 import {
   DesktopBridgeIncompatibleError,

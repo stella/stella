@@ -9,8 +9,8 @@ import { buttonVariants } from "@stll/ui/components/button-variants";
 import { cn } from "@stll/ui/lib/utils";
 
 import { CopyField } from "@/components/copy-field";
-import { externalApiOrigin } from "@/lib/api-origins";
 import type { TranslationKey } from "@/i18n/types";
+import { externalApiOrigin } from "@/lib/api-origins";
 import {
   detectDesktopPlatform,
   MACOS_DMG_URL,

@@ -17,12 +17,11 @@ import { Input } from "@stll/ui/components/input";
 import { Label } from "@stll/ui/components/label";
 import { stellaToast } from "@stll/ui/components/toast";
 
-import { env } from "@/env";
+import { browserApiRootUrl } from "@/lib/api-url";
 import { authClient } from "@/lib/auth";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
-import { browserApiRootUrl } from "@/lib/api-url";
 import { pageTitle } from "@/lib/page-title";
 import { loadAuthContext } from "@/routes/-auth-context";
 

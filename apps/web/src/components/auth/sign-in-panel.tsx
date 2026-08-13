@@ -21,6 +21,7 @@ import { env } from "@/env";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { browserAuthBaseUrl } from "@/lib/api-url";
 import {
   authClient,
   HTTP_TOO_MANY_REQUESTS,
@@ -31,7 +32,6 @@ import { APIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { fetchWithTimeout } from "@/lib/fetch";
-import { browserAuthBaseUrl } from "@/lib/api-url";
 import { isAcceptInvitationRedirect } from "@/lib/redirect";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { emailSchema, toFormErrors } from "@/lib/schema";

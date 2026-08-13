@@ -20,8 +20,8 @@ if (invariantViolation !== null) {
 }
 
 const browserApiViolation = browserApiInvariantViolation({
-  browserApiUrl: env["VITE_BROWSER_API_URL"],
-  publicAppUrl: env["VITE_PUBLIC_APP_URL"],
+  browserApiUrl: env.VITE_BROWSER_API_URL,
+  publicAppUrl: env.VITE_PUBLIC_APP_URL,
 });
 if (browserApiViolation !== null) {
   panic(browserApiViolation);
