@@ -62,6 +62,11 @@ const fixedDateOnly = new Date("2026-08-13");
 const ambientComponentDate = new Date(2026, 7, 13);
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves time-zone-less datetime strings use the host time zone
 const ambientLocalDateTime = new Date("2026-08-13T12:00:00");
+declare const unknownDateInput: string;
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves opaque Date inputs cannot be assumed to be epochs
+const ambientUnknownDate = new Date(unknownDateInput);
+const fixedUtcComponents = new Date(Date.UTC(2026, 7, 13));
+const fixedDateCopy = new Date(fixedDate);
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves an explicit locale cannot substitute for an explicit time zone
 const ambientTimeZoneDate = fixedDate.toLocaleDateString("en");
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves time formatting also requires an explicit time zone
@@ -185,6 +190,7 @@ export {
   ambientTimeZoneDateTime,
   ambientTimeZoneFormatter,
   ambientTimeZoneTime,
+  ambientUnknownDate,
   ambientComponentDate,
   assertedEmptyLocaleDateFormatter,
   assertedGlobalBrowserLocale,
@@ -214,10 +220,12 @@ export {
   fixedDate,
   fixedDateOnly,
   fixedEpochDate,
+  fixedDateCopy,
   fixedLocaleDate,
   fixedLocaleNumber,
   fixedLocaleNumericVariable,
   fixedLocaleTime,
+  fixedUtcComponents,
   fixedDateFormatter,
   fixedSegmenter,
   fullyComputedGlobalRandomId,

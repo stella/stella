@@ -194,7 +194,30 @@ const staticTemplateText = (expression) => {
       : null;
 };
 
-const hasAmbientDateConstructorArguments = (argumentsList) => {
+const isDateUtcCall = (context, node) => {
+  const expression = unwrapExpression(node);
+  return (
+    expression?.type === "CallExpression" &&
+    ambientMemberName(unwrapExpression(expression.callee), "Date") === "UTC" &&
+    isUnshadowedGlobal(
+      context,
+      unwrapExpression(unwrapExpression(expression.callee)?.object),
+    )
+  );
+};
+
+const isNumericDateInput = (node) => {
+  const expression = unwrapExpression(node);
+  return (
+    (expression?.type === "Literal" && typeof expression.value === "number") ||
+    (expression?.type === "UnaryExpression" &&
+      (expression.operator === "+" || expression.operator === "-") &&
+      unwrapExpression(expression.argument)?.type === "Literal" &&
+      typeof unwrapExpression(expression.argument)?.value === "number")
+  );
+};
+
+const hasAmbientDateConstructorArguments = (context, argumentsList) => {
   if (argumentsList.length === 0 || argumentsList.length > 1) {
     return true;
   }
@@ -202,7 +225,7 @@ const hasAmbientDateConstructorArguments = (argumentsList) => {
   if (argument?.type === "Literal") {
     return typeof argument.value === "string"
       ? !isDeterministicDateString(argument.value)
-      : false;
+      : !isNumericDateInput(argument);
   }
   const templateText = staticTemplateText(argument);
   if (templateText !== null) {
@@ -219,7 +242,9 @@ const hasAmbientDateConstructorArguments = (argumentsList) => {
           : "";
     return !hasExplicitDateTimeZone(tailText);
   }
-  return false;
+  return !(
+    isDateUtcCall(context, argument) || isDateObjectReceiver(context, argument)
+  );
 };
 
 const intlConstructorMemberName = (context, node) => {
@@ -576,7 +601,7 @@ export default eslintCompatPlugin({
             if (
               isIdentifier(node.callee, "Date") &&
               isUnshadowedGlobal(context, node.callee) &&
-              hasAmbientDateConstructorArguments(node.arguments)
+              hasAmbientDateConstructorArguments(context, node.arguments)
             ) {
               context.report({ node, messageId: "publicLawAmbientState" });
               return;
@@ -588,7 +613,7 @@ export default eslintCompatPlugin({
 
             if (
               isUnshadowedGlobalThisMember(context, node.callee, "Date") &&
-              hasAmbientDateConstructorArguments(node.arguments)
+              hasAmbientDateConstructorArguments(context, node.arguments)
             ) {
               context.report({ node, messageId: "publicLawAmbientState" });
               return;

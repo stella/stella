@@ -68,6 +68,7 @@ const REVIEWED_AMBIENT_OCCURRENCES = {
   "apps/web/src/lib/auth.ts": { window: 2 },
   "apps/web/src/lib/beta-features.ts": { window: 1 },
   "apps/web/src/lib/copy-to-clipboard.ts": { navigator: 1 },
+  "apps/web/src/lib/deterministic-date.ts": { "new Date(§": 1 },
   "apps/web/src/lib/dev-store.ts": { window: 3 },
   "apps/web/src/lib/files/email-citations.ts": { window: 6 },
   "apps/web/src/lib/public-tools-github-content.ts": { "Date.now": 1 },
@@ -83,10 +84,12 @@ const REVIEWED_AMBIENT_OCCURRENCES = {
     ".getDate(": 2,
     ".getFullYear(": 2,
     ".getMonth(": 2,
+    "new Date(§": 2,
   },
   "packages/ui/src/components/date-picker-popover.tsx": {
     "Date.now": 2,
     navigator: 1,
+    "new Date(§": 2,
   },
   "packages/ui/src/components/outline-rail.tsx": { "Date.now": 2 },
   "packages/ui/src/hooks/use-mobile.ts": { window: 2 },
@@ -171,6 +174,7 @@ const REVIEWED_AMBIENT_FINGERPRINTS = {
   "apps/web/src/lib/auth.ts": ["579eebc2dfcb97ff", "66630f8cada16c2b"],
   "apps/web/src/lib/beta-features.ts": ["dc47fff329928ee2"],
   "apps/web/src/lib/copy-to-clipboard.ts": ["571723858de0cabb"],
+  "apps/web/src/lib/deterministic-date.ts": ["cb299c9f338fa29c"],
   "apps/web/src/lib/dev-store.ts": [
     "86bb1e2763b97d68",
     "86bb1e2763b97d68",
@@ -199,12 +203,16 @@ const REVIEWED_AMBIENT_FINGERPRINTS = {
     "078135f7e1507f64",
     "078135f7e1507f64",
     "453cd9dfd22ede5c",
+    "ac8743d8c4df57a0",
+    "ac8743d8c4df57a0",
     "c7dcfb94961f7578",
     "caa3e96ec0936509",
   ],
   "packages/ui/src/components/date-picker-popover.tsx": [
     "021c8cecbf818f77",
+    "66ae1e50a9793f36",
     "a1876be9f2976392",
+    "ae69dc29a54e9c23",
     "bcc30b2032e79cb0",
   ],
   "packages/ui/src/components/outline-rail.tsx": [
@@ -579,11 +587,44 @@ const maskNonExecutableLiterals = (source: string, file: string): string => {
         node.expression.name.text === "Date")
     );
   };
+  const isProvenDateInput = (node: ts.Expression): boolean => {
+    if (
+      ts.isNumericLiteral(node) ||
+      (ts.isPrefixUnaryExpression(node) && ts.isNumericLiteral(node.operand)) ||
+      ts.isNewExpression(node)
+    ) {
+      return true;
+    }
+    return (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      ts.isIdentifier(node.expression.expression) &&
+      node.expression.expression.text === "Date" &&
+      node.expression.name.text === "UTC"
+    );
+  };
   const hasExplicitDateTimeZone = (value: string): boolean =>
     /(?:Z|[+-]\d{2}(?::?\d{2})?)$/iu.test(value);
   const isDeterministicDateString = (value: string): boolean =>
     /^\d{4}-\d{2}-\d{2}$/u.test(value) || hasExplicitDateTimeZone(value);
   const visit = (node: ts.Node): void => {
+    if (
+      ts.isNewExpression(node) &&
+      isDateConstructor(node) &&
+      node.arguments?.length === 1
+    ) {
+      const argument = node.arguments[0];
+      if (
+        argument &&
+        !ts.isStringLiteral(argument) &&
+        !ts.isNoSubstitutionTemplateLiteral(argument) &&
+        !ts.isTemplateExpression(argument) &&
+        !isProvenDateInput(argument)
+      ) {
+        maskAmbientDateString(argument.getStart(sourceFile), argument.end);
+        return;
+      }
+    }
     if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
       if (
         isDateConstructor(node.parent) &&
@@ -799,6 +840,19 @@ describe("public SSR import graph", () => {
       AMBIENT_STATE_PATTERN.test(
         executableSource(
           "const date = new Date(1_786_579_200_000);",
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource("const date = new Date(value);", "fixture.ts"),
+      ),
+    ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          "const date = new Date(Date.UTC(2026, 7, 13));",
           "fixture.ts",
         ),
       ),

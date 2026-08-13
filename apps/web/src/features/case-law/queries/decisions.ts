@@ -1,6 +1,8 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import { panic } from "better-result";
 
 import { api } from "@/lib/api";
+import { parseDeterministicDate } from "@/lib/deterministic-date";
 import { unwrapEden } from "@/lib/errors/api";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
 import { assertPublicLawApiData } from "@/lib/public-law-api";
@@ -136,7 +138,9 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
             decisionType: h.decisionType,
             sourceUrl: h.sourceUrl,
             headline: h.headline,
-            createdAt: new Date(h.createdAt),
+            createdAt:
+              parseDeterministicDate(h.createdAt) ??
+              panic("Public case-law API returned an invalid createdAt"),
           })),
           facets: data.facets,
           nextCursor: data.nextCursor,
