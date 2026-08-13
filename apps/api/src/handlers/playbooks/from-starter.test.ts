@@ -11,6 +11,7 @@ import { eq, inArray } from "drizzle-orm";
 
 import { documentTypes, playbookDefinitions } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
+import { deriveAutoAsks } from "@/api/handlers/playbooks/derive-ask";
 import createPlaybookFromStarter from "@/api/handlers/playbooks/from-starter";
 import { instantiateStarterPositions } from "@/api/handlers/playbooks/instantiate-starter";
 import { STARTER_PLAYBOOKS } from "@/api/handlers/playbooks/starters";
@@ -199,6 +200,29 @@ describe("starter playbook content", () => {
         expect(position.enabled).toBe(true);
       }
     }
+  });
+
+  test("bundled starters require no AI derivation before creation", async () => {
+    let generationCalls = 0;
+    const generate = async () => {
+      generationCalls += 1;
+      return {
+        question: "Generated question",
+        contentType: "text" as const,
+      };
+    };
+
+    for (const starter of STARTER_PLAYBOOKS) {
+      // oxlint-disable-next-line no-await-in-loop -- fixed starter catalog; each payload is checked independently
+      await deriveAutoAsks(instantiateStarterPositions(starter.positions), {
+        organizationId: ids.orgA,
+        orgAIConfig: null,
+        promptCachingEnabled: false,
+        generate,
+      });
+    }
+
+    expect(generationCalls).toBe(0);
   });
 
   test("the SaaS starter demonstrates grading, exact rules, guidance, and extraction", () => {
