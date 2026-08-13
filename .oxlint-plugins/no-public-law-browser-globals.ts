@@ -69,14 +69,18 @@ const ambientMemberName = (node, objectName) => {
 const browserGlobalFromGlobalThis = (node) => {
   if (
     node?.type !== "MemberExpression" ||
-    node.computed ||
     !isIdentifier(node.object, "globalThis") ||
-    !isIdentifier(node.property) ||
-    !BROWSER_GLOBALS.has(node.property.name)
+    !(
+      (!node.computed && isIdentifier(node.property)) ||
+      (node.computed &&
+        node.property?.type === "Literal" &&
+        typeof node.property.value === "string")
+    )
   ) {
     return null;
   }
-  return node.property.name;
+  const memberName = node.computed ? node.property.value : node.property.name;
+  return BROWSER_GLOBALS.has(memberName) ? memberName : null;
 };
 
 export default eslintCompatPlugin({

@@ -37,9 +37,12 @@ type DomainFields = { document: string; navigator: () => string };
 const shorthandBrowserGlobal = { navigator };
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves globalThis cannot bypass the browser-global detector
 const globalBrowserStorage = globalThis.localStorage;
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves computed globalThis access cannot bypass the browser-global detector
+const computedGlobalBrowserStorage = globalThis["localStorage"];
 
 export {
   browserLocale,
+  computedGlobalBrowserStorage,
   dateFormatter,
   fixedDate,
   fixedDateFormatter,
