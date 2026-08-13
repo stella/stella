@@ -709,7 +709,8 @@ describe("public law sitemap", () => {
     );
 
     const providerSource = await readSource("apps/web/src/app-providers.tsx");
-    expect(providerSource).toContain("timeZone={resolveAppTimeZone()}");
+    expect(providerSource).toContain("useHydrationSafeTimeZone()");
+    expect(providerSource).toContain("timeZone={timeZone}");
   });
 
   test("case-law list keeps date-only legal dates in UTC", async () => {

@@ -4,7 +4,7 @@ import type { PropsWithChildren } from "react";
 import { HotkeysProvider } from "@tanstack/react-hotkeys";
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { useRouter } from "@tanstack/react-router";
+import { useRouter, useRouterState } from "@tanstack/react-router";
 import { IntlProvider } from "use-intl";
 
 import { ToastProvider } from "@stll/ui/components/toast";
@@ -21,7 +21,7 @@ import {
   bundledEnglishMessages,
   useI18nStore,
 } from "@/i18n/i18n-store";
-import { resolveAppTimeZone } from "@/i18n/time-zone";
+import { useHydrationSafeTimeZone } from "@/i18n/time-zone";
 import { AnalyticsProvider } from "@/lib/analytics/analytics-provider";
 import { useAnalytics } from "@/lib/analytics/provider";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
@@ -38,11 +38,12 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
   const numberingSystem = useI18nStore((s) => s.numberingSystem);
   const weekStart = useI18nStore((s) => s.weekStart);
   const hydrated = useHydrated();
+  const timeZone = useHydrationSafeTimeZone();
 
-  // window.location is safe here: the server branch never reads it, and
-  // on the client the gate only matters for the initial document load.
-  const onPublicSsrPath =
-    typeof window !== "undefined" && isPublicSsrPath(window.location.pathname);
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
+  const onPublicSsrPath = isPublicSsrPath(pathname);
 
   // Head content (the document title) renders outside this provider and
   // only re-evaluates on router invalidation; refresh it when a new
@@ -68,7 +69,7 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
   // Server-rendered public paths must skip the spinner entirely: the
   // server renders full content, so the client's first render has to
   // produce identical markup or hydration fails.
-  if (!hasLoadedOnce && typeof window !== "undefined" && !onPublicSsrPath) {
+  if (!hasLoadedOnce && !onPublicSsrPath) {
     return <DefaultPendingComponent />;
   }
 
@@ -102,12 +103,9 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
     <IntlProvider
       locale={messageLocale}
       messages={activeMessages}
-      timeZone={resolveAppTimeZone()}
+      timeZone={timeZone}
     >
-      <FormattingProvider
-        locale={formattingLocale}
-        timeZone={resolveAppTimeZone()}
-      >
+      <FormattingProvider locale={formattingLocale} timeZone={timeZone}>
         {children}
       </FormattingProvider>
     </IntlProvider>
