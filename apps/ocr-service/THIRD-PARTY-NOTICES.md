@@ -18,6 +18,10 @@ Upstream source and license texts:
 The model archive URLs and SHA-256 digests are recorded in the Dockerfile.
 The archives are distributed from PaddlePaddle's official model host.
 
+The runtime image includes NVIDIA CUDA Toolkit and cuDNN runtime components.
+Their license texts and source notices are distributed in the upstream NVIDIA
+CUDA image: https://hub.docker.com/r/nvidia/cuda
+
 The locked runtime also contains the following packages whose source
 distributions or wheels cause automated scanners to report compound licenses:
 
