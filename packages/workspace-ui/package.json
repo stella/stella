@@ -26,7 +26,7 @@
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
-    "@tanstack/react-table": "9.0.0",
+    "@tanstack/react-table": "9.1.0",
     "@types/bun": "catalog:",
     "@types/react": "catalog:react19",
     "tailwindcss": "catalog:"
