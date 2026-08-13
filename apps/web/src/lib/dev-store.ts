@@ -7,7 +7,6 @@ import { getStorageKey } from "@/consts";
 type State = {
   tanstackDevtools: boolean;
   sourceInspector: boolean;
-  chatModelId: string | null;
   reactGrab: boolean;
   publicLawPreview: boolean;
   playbooksPreview: boolean;
@@ -20,7 +19,6 @@ type State = {
 type Actions = {
   setTanstackDevtools: (value: boolean) => void;
   setSourceInspector: (value: boolean) => void;
-  setChatModelId: (value: string | null) => void;
   setReactGrab: (value: boolean) => void;
   setPublicLawPreview: (value: boolean) => void;
   setPlaybooksPreview: (value: boolean) => void;
@@ -41,7 +39,6 @@ export const useDevStore = create<State & Actions>()(
     (set) => ({
       tanstackDevtools: false,
       sourceInspector: false,
-      chatModelId: null,
       reactGrab: false,
       publicLawPreview: false,
       playbooksPreview: false,
@@ -55,9 +52,6 @@ export const useDevStore = create<State & Actions>()(
       },
       setSourceInspector: (sourceInspector) => {
         set({ sourceInspector });
-      },
-      setChatModelId: (chatModelId) => {
-        set({ chatModelId });
       },
       setReactGrab: (reactGrab) => {
         set({ reactGrab });
