@@ -267,7 +267,7 @@
       <xs:pattern value="([0-9]{1,5})\.([0-9]{1,5})"/>
     </xs:restriction>
   </xs:simpleType>
-  
+
   <xs:complexType name="ContentAppSettings">
     <xs:annotation>
       <xs:documentation>
@@ -896,7 +896,7 @@
   <xs:complexType name="Host">
     <xs:attribute name="Name" type="ShortString" use="required"/>
   </xs:complexType>
-  
+
   <xs:complexType name="Hosts">
     <xs:annotation>
       <xs:documentation>
@@ -913,7 +913,7 @@
       </xs:element>
     </xs:sequence>
   </xs:complexType>
-  
+
   <xs:complexType name="Requirements">
     <xs:annotation>
       <xs:documentation>
@@ -954,7 +954,7 @@
       <xs:element name="Method" type="Requirement"/>
     </xs:sequence>
   </xs:complexType>
-  
+
   <xs:complexType name="Requirement">
     <xs:attribute name="Name" type="LongString" use="required"/>
   </xs:complexType>

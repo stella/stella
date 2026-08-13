@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import {
+  confirmedWorkspaceId,
   filterWorkspaces,
   suggestWorkspaceId,
 } from "@/lib/workspace-selection";
@@ -32,7 +33,10 @@ export const useWorkspaceSelection = ({
     ? suggestWorkspaceId({ snapshot, workspaces })
     : null;
 
-  const selectedWorkspaceId = explicitWorkspaceId ?? suggestedWorkspaceId;
+  const selectedWorkspaceId = confirmedWorkspaceId({
+    explicitWorkspaceId,
+    suggestedWorkspaceId,
+  });
 
   const filteredWorkspaces = filterWorkspaces({ query, workspaces });
   const selectedWorkspace =

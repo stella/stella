@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
 import { DOCUMENT_UPLOAD_POLICY } from "@stll/api-contract";
-import { toSafeId } from "@stll/api/types";
+import { toSafeId } from "@stll/api-contract/safe-id";
 
 import {
   APIError,

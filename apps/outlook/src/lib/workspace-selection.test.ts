@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { toSafeId } from "@stll/api/types";
+import { toSafeId } from "@stll/api-contract/safe-id";
 
 import {
+  confirmedWorkspaceId,
   filterWorkspaces,
   suggestWorkspaceId,
 } from "@/lib/workspace-selection";
@@ -32,6 +33,27 @@ if (!acmeWorkspace) {
 }
 
 describe("suggestWorkspaceId", () => {
+  test("keeps a heuristic suggestion advisory until the user confirms it", () => {
+    const suggestedWorkspaceId = suggestWorkspaceId({
+      snapshot: snapshot({ subject: "Re: M-2026-099 closing" }),
+      workspaces,
+    });
+
+    expect(suggestedWorkspaceId).toBe("matter-globex");
+    expect(
+      confirmedWorkspaceId({
+        explicitWorkspaceId: null,
+        suggestedWorkspaceId,
+      }),
+    ).toBeNull();
+    expect(
+      confirmedWorkspaceId({
+        explicitWorkspaceId: suggestedWorkspaceId,
+        suggestedWorkspaceId,
+      }),
+    ).toBe("matter-globex");
+  });
+
   test("does not silently choose the first matter when there is no match", () => {
     expect(
       suggestWorkspaceId({
