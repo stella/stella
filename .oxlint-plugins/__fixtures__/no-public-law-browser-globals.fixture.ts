@@ -30,6 +30,10 @@ const measuredAt = performance.now();
 const capturedNow = Date.now;
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves globalThis ambient function references cannot bypass capture detection
 const capturedRandom = globalThis.Math.random;
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves ambient objects cannot be aliased before member access
+const Clock = Date;
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves globalThis ambient objects cannot be aliased either
+const RandomSource = globalThis.Math;
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals, typescript/unbound-method -- fixture proves destructuring cannot rename an ambient function out of detection
 const { now: capturedPerformanceNow } = performance;
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves ambient UUID generation is not SSR-safe
@@ -76,6 +80,7 @@ const captureShadowedPerformance = (performance: { now: () => number }) => {
   const { now } = performance;
   return now;
 };
+const captureShadowedDateObject = (Date: { now: () => number }) => Date;
 const readWrappedShadowedClock = (Date: { now: () => number } | null) =>
   // oxlint-disable-next-line typescript/no-non-null-assertion -- fixture proves a wrapped local binding remains unrelated to the ambient Date global
   Date!.now();
@@ -148,8 +153,10 @@ export {
   capturedNow,
   capturedPerformanceNow,
   capturedRandom,
+  Clock,
   captureShadowedClock,
   captureShadowedPerformance,
+  captureShadowedDateObject,
   configuredNavigator,
   computedGlobalBrowserStorage,
   computedGlobalRandomId,
@@ -180,6 +187,7 @@ export {
   pixelRatio,
   randomId,
   randomWidth,
+  RandomSource,
   readShadowedNavigator,
   readShadowedClock,
   readShadowedGlobalThis,

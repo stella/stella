@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import nodePath from "node:path";
 import ts from "typescript";
@@ -82,8 +83,121 @@ const REVIEWED_AMBIENT_OCCURRENCES = {
   "packages/ui/src/hooks/use-mobile.ts": { window: 2 },
 } as const satisfies Readonly<Record<string, Readonly<Record<string, number>>>>;
 
+const REVIEWED_AMBIENT_FINGERPRINTS = {
+  "apps/web/src/components/chat/entity-route-detect.ts": [
+    "02da8827815758b6",
+    "02da8827815758b6",
+    "02da8827815758b6",
+    "1a86257ba16903bb",
+    "45742d5a5d6db4d4",
+    "867df14c40cad09f",
+    "867df14c40cad09f",
+    "867df14c40cad09f",
+    "c0766743d18d0cd9",
+    "cc4dbebc25978b01",
+    "cc4dbebc25978b01",
+    "de4feabb7a70ae6d",
+  ],
+  "apps/web/src/components/chat/streamdown-mention-link.tsx": [
+    "67ab3bf836370464",
+  ],
+  "apps/web/src/components/inspector/inspector-broadcast.ts": [
+    "1eb6af43609ec10c",
+    "26bebede4485e1be",
+    "2f261468e42d1413",
+    "574fc58f7bffaa23",
+    "b5b26d97182c1859",
+    "b5b26d97182c1859",
+    "c924eeb2f28bc0bf",
+    "c924eeb2f28bc0bf",
+  ],
+  "apps/web/src/components/route-components.tsx": [
+    "b9cdf9298e8c6387",
+    "ef65f6c5b399769d",
+  ],
+  "apps/web/src/components/theme-provider.tsx": [
+    "0b03be8e934fcda7",
+    "19ae3b05964516c2",
+    "251d1299f27bb8a8",
+    "281d9b0f7e92b3b6",
+    "2dd5425082fdde7e",
+    "2dd5425082fdde7e",
+    "472c9e6f7453336b",
+    "472c9e6f7453336b",
+    "53b1510f9ddb6595",
+    "617f18b530aff9f4",
+    "7c18a9531bf27dc2",
+    "9ae1d6734a5a0476",
+    "9f9500ae6761f0b6",
+    "a1f2d1ef57aecace",
+    "ac04f6eec64d29da",
+    "c48dc8cddb2ff2bd",
+    "ca6b9568fc059524",
+    "ca6b9568fc059524",
+    "d55deea355762618",
+    "e5465cb93ead82c1",
+    "f81580117d252e19",
+    "f81580117d252e19",
+  ],
+  "apps/web/src/hooks/use-persisted-sidebar-open.ts": [
+    "632b8efa89f4e3bb",
+    "89daabe4e5be6774",
+  ],
+  "apps/web/src/i18n/i18n-store.ts": [
+    "0f6534bbba47403b",
+    "0f6534bbba47403b",
+    "0f6534bbba47403b",
+    "0f6534bbba47403b",
+    "0f6534bbba47403b",
+    "0f6534bbba47403b",
+    "193234c5fb352236",
+    "63c3a7d7513d0ccf",
+    "63c3a7d7513d0ccf",
+    "8598670941c277a0",
+    "f94836c0ddf05ccf",
+  ],
+  "apps/web/src/i18n/time-zone.ts": ["b2def9e3f1c8f736", "b5b26d97182c1859"],
+  "apps/web/src/lib/analytics/error-reference.ts": ["4e7ab7092ac1edbe"],
+  "apps/web/src/lib/api-request-context.ts": ["b5b26d97182c1859"],
+  "apps/web/src/lib/auth.ts": ["579eebc2dfcb97ff", "66630f8cada16c2b"],
+  "apps/web/src/lib/beta-features.ts": ["dc47fff329928ee2"],
+  "apps/web/src/lib/copy-to-clipboard.ts": ["571723858de0cabb"],
+  "apps/web/src/lib/dev-store.ts": [
+    "86bb1e2763b97d68",
+    "86bb1e2763b97d68",
+    "f8e5c9cecb805dd2",
+  ],
+  "apps/web/src/lib/files/email-citations.ts": [
+    "0177e47cfb39a2f8",
+    "271acfb57e6d0261",
+    "2a55e8cbbc0fc9fc",
+    "4d72934782583eb4",
+    "9f4e6ac64ac06ed5",
+    "a5af8f2824ffb1a4",
+  ],
+  "apps/web/src/lib/public-tools-github-content.ts": ["131aa8095e3e22fe"],
+  "apps/web/src/lib/utils.ts": [
+    "4695abe117e526ff",
+    "5b0192bfaef91349",
+    "eb4d661e61ec037a",
+  ],
+  "packages/ui/src/components/date-picker-popover.tsx": [
+    "021c8cecbf818f77",
+    "a1876be9f2976392",
+    "bcc30b2032e79cb0",
+  ],
+  "packages/ui/src/components/outline-rail.tsx": [
+    "2eae415d931d64f3",
+    "87e08895ed4a0a48",
+  ],
+  "packages/ui/src/hooks/use-mobile.ts": [
+    "2ec5b0d6f441a7e1",
+    "a64c4c690e13374e",
+  ],
+} as const satisfies Readonly<Record<string, readonly string[]>>;
+
 const AMBIENT_STATE_PATTERN =
-  /\bglobalThis\.(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|self)\b|\{[^{}]*\b(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|self)\b[^{}]*\}\s*=\s*globalThis\b|(?<![.\w])(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|self)\b(?!\s*:)|\b(?:globalThis\.)?Date\.now\b|\b(?:globalThis\.)?Math\.random\b|\b(?:globalThis\.)?performance\.now\b|\b(?:globalThis\.)?crypto\.(?:getRandomValues|randomUUID)\b|\{[^{}]*\bnow\b[^{}]*\}\s*=\s*(?:globalThis\.)?(?:Date|performance)\b|\{[^{}]*\brandom\b[^{}]*\}\s*=\s*(?:globalThis\.)?Math\b|\{[^{}]*\b(?:getRandomValues|randomUUID)\b[^{}]*\}\s*=\s*(?:globalThis\.)?crypto\b|\b(?:globalThis\.)?Date\s*\(\s*\)|\bnew\s+(?:globalThis\.)?Date(?:\s*\(\s*\)|\s*(?=[;,]))|\bnew\s+(?:globalThis\.)?Intl\.[A-Za-z]+(?:\s*\(\s*\)|\s*(?=[;,]))|\b(?:new\s+)?(?:globalThis\.)?Intl\.[A-Za-z]+\s*\(\s*(?:undefined\s*[,)]|\[\s*\]\s*[,)]|\))|\.(?:toLocaleDateString|toLocaleString|toLocaleTimeString)\s*\(\s*(?:undefined\s*[,)]|\[\s*\]\s*[,)]|\))/u;
+  /\bglobalThis\.(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|self)\b|\{[^{}]*\b(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|self)\b[^{}]*\}\s*=\s*globalThis\b|(?<![.\w])(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|self)\b(?!\s*:)|\b(?:globalThis\.)?Date\.now\b|\b(?:globalThis\.)?Math\.random\b|\b(?:globalThis\.)?performance\.now\b|\b(?:globalThis\.)?crypto\.(?:getRandomValues|randomUUID)\b|\{[^{}]*\bnow\b[^{}]*\}\s*=\s*(?:globalThis\.)?(?:Date|performance)\b|\{[^{}]*\brandom\b[^{}]*\}\s*=\s*(?:globalThis\.)?Math\b|\{[^{}]*\b(?:getRandomValues|randomUUID)\b[^{}]*\}\s*=\s*(?:globalThis\.)?crypto\b|\b(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*(?:globalThis\.)?(?:Date|Math|crypto|performance)\b(?!\s*\.)|\b(?:globalThis\.)?Date\s*\(\s*\)|\bnew\s+(?:globalThis\.)?Date(?:\s*\(\s*\)|\s*(?=[;,]))|\bnew\s+(?:globalThis\.)?Intl\.[A-Za-z]+(?:\s*\(\s*\)|\s*(?=[;,]))|\b(?:new\s+)?(?:globalThis\.)?Intl\.[A-Za-z]+\s*\(\s*(?:undefined\s*[,)]|\[\s*\]\s*[,)]|\))|\.(?:toLocaleDateString|toLocaleString|toLocaleTimeString)\s*\(\s*(?:undefined\s*[,)]|\[\s*\]\s*[,)]|\))/u;
 const CANDIDATE_SUFFIXES = ["", ".ts", ".tsx", "/index.ts", "/index.tsx"];
 const tsTranspiler = new Bun.Transpiler({ loader: "ts" });
 const tsxTranspiler = new Bun.Transpiler({ loader: "tsx" });
@@ -436,6 +550,25 @@ const ambientOccurrenceCounts = (
   );
 };
 
+const ambientOccurrenceFingerprints = (source: string): readonly string[] => {
+  const fingerprints: string[] = [];
+  const pattern = new RegExp(AMBIENT_STATE_PATTERN.source, "gu");
+  for (const match of source.matchAll(pattern)) {
+    if (match.index === undefined) {
+      continue;
+    }
+    const lineStart = source.lastIndexOf("\n", match.index) + 1;
+    const lineEnd = source.indexOf("\n", match.index + match[0].length);
+    const expression = source
+      .slice(lineStart, lineEnd === -1 ? source.length : lineEnd)
+      .trim();
+    fingerprints.push(
+      createHash("sha256").update(expression).digest("hex").slice(0, 16),
+    );
+  }
+  return fingerprints.sort(compareCodePoints);
+};
+
 const walkPublicSsrGraph = (
   entries: readonly string[],
 ): ReadonlySet<string> => {
@@ -546,6 +679,11 @@ describe("public SSR import graph", () => {
     expect(
       AMBIENT_STATE_PATTERN.test(
         executableSource("const now = Date.now;", "fixture.ts"),
+      ),
+    ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource("const Clock = Date;", "fixture.ts"),
       ),
     ).toBe(true);
     expect(
@@ -743,6 +881,22 @@ describe("public SSR import graph", () => {
     );
 
     expect(actualOccurrences).toEqual(REVIEWED_AMBIENT_OCCURRENCES);
+
+    const actualFingerprints = Object.fromEntries(
+      [...visited]
+        .map(
+          (file) =>
+            [
+              nodePath.relative(repoRoot, file),
+              ambientOccurrenceFingerprints(
+                executableSource(readFileSync(file, "utf-8"), file),
+              ),
+            ] as const,
+        )
+        .filter(([, fingerprints]) => fingerprints.length > 0)
+        .sort(([left], [right]) => compareCodePoints(left, right)),
+    );
+    expect(actualFingerprints).toEqual(REVIEWED_AMBIENT_FINGERPRINTS);
   });
 
   test("statically analyzable dynamic imports and workspace exports are covered", () => {

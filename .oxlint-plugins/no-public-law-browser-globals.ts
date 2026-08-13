@@ -185,6 +185,18 @@ const isDirectInvocationTarget = (node) => {
   );
 };
 
+const isAmbientObjectMemberHost = (node) =>
+  node.parent?.type === "MemberExpression" && node.parent.object === node;
+
+const isDirectDateInvocationTarget = (node) => {
+  const parent = node.parent;
+  return (
+    isIdentifier(node, "Date") &&
+    (parent?.type === "CallExpression" || parent?.type === "NewExpression") &&
+    parent.callee === node
+  );
+};
+
 export default eslintCompatPlugin({
   meta: { name: "no-public-law-browser-globals" },
   rules: {
@@ -208,6 +220,14 @@ export default eslintCompatPlugin({
             ) {
               context.report({ node, messageId: "publicLawBrowserGlobal" });
             }
+            if (
+              AMBIENT_FUNCTION_MEMBERS.has(node.name) &&
+              isUnshadowedGlobal(context, node) &&
+              !isAmbientObjectMemberHost(node) &&
+              !isDirectDateInvocationTarget(node)
+            ) {
+              context.report({ node, messageId: "publicLawAmbientState" });
+            }
           },
           MemberExpression(node) {
             const object = unwrapExpression(node.object);
@@ -220,6 +240,15 @@ export default eslintCompatPlugin({
             if (
               isAmbientFunctionMember(context, node) &&
               !isDirectInvocationTarget(node)
+            ) {
+              context.report({ node, messageId: "publicLawAmbientState" });
+            }
+            const memberName = staticMemberName(node);
+            if (
+              memberName &&
+              AMBIENT_FUNCTION_MEMBERS.has(memberName) &&
+              isUnshadowedGlobalThisMember(context, node, memberName) &&
+              !isAmbientObjectMemberHost(node)
             ) {
               context.report({ node, messageId: "publicLawAmbientState" });
             }
