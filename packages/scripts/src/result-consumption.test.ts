@@ -448,7 +448,7 @@ describe("Result consumption guard", () => {
         result.match({ ok: () => undefined, err: () => undefined });
         return result;
       });
-      void held;
+      held.match({ ok: () => undefined, err: () => undefined });
     `;
 
     const diagnostics = scanFixture(source);

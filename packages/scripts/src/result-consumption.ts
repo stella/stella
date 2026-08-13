@@ -449,7 +449,7 @@ const inspectDiscardedObjectEntries = ({
   retainedNode,
 }: InspectDiscardedExpressionOptions & {
   readonly object: ts.ObjectLiteralExpression;
-  readonly retainedNode?: ts.Node;
+  readonly retainedNode: ts.Node | undefined;
 }): void => {
   for (const property of object.properties) {
     if (ts.isPropertyAssignment(property)) {
