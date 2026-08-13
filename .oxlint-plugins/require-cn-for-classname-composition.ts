@@ -171,10 +171,26 @@ const isProvablyNonObject = (value: unknown): boolean => {
   return false;
 };
 
+type LogicalExpressionNode = {
+  left: unknown;
+  operator: "&&" | "??" | "||";
+  right: unknown;
+  type: "LogicalExpression";
+};
+
+const isLogicalExpression = (value: unknown): value is LogicalExpressionNode =>
+  isAstNode(value) &&
+  value.type === "LogicalExpression" &&
+  isAstNode(value.left) &&
+  isAstNode(value.right) &&
+  (value.operator === "&&" ||
+    value.operator === "||" ||
+    value.operator === "??");
+
 type LogicalOutcome = { propertyAbsent: boolean; value: unknown };
 
 const logicalOutcomes = (
-  expression: ESTree.LogicalExpression,
+  expression: LogicalExpressionNode,
 ): LogicalOutcome[] => {
   const leftDisposition = logicalDisposition(expression.left);
   if (expression.operator === "&&") {
@@ -824,7 +840,7 @@ export default eslintCompatPlugin({
             }
             if (
               expression.type === "ConditionalExpression" ||
-              expression.type === "LogicalExpression"
+              isLogicalExpression(expression)
             ) {
               const outcomes: LogicalOutcome[] =
                 expression.type === "ConditionalExpression"
@@ -1143,7 +1159,7 @@ export default eslintCompatPlugin({
               visit(expression.alternate);
               return;
             }
-            if (expression.type === "LogicalExpression") {
+            if (isLogicalExpression(expression)) {
               for (const outcome of logicalOutcomes(expression)) {
                 if (!outcome.propertyAbsent) {
                   visit(outcome.value);

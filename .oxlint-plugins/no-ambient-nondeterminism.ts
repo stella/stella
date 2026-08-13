@@ -1197,7 +1197,10 @@ const ambientCallKind = (
       )
     );
   }
-  if (expression.type === "SequenceExpression") {
+  if (
+    expression.type === "SequenceExpression" &&
+    Array.isArray(expression.expressions)
+  ) {
     return ambientCallKind(
       context,
       expression.expressions.at(-1),
@@ -1292,11 +1295,7 @@ const isAmbientDateConstructor = (
             ? resolved.values
             : [];
       return values.some((candidate) =>
-        isAmbientDateConstructor(
-          context,
-          candidate,
-          new Set(visitedBindings),
-        ),
+        isAmbientDateConstructor(context, candidate, new Set(visitedBindings)),
       );
     }
     return false;
@@ -1329,7 +1328,8 @@ const isAmbientDateConstructor = (
       )
     );
   }
-  return expression.type === "SequenceExpression"
+  return expression.type === "SequenceExpression" &&
+    Array.isArray(expression.expressions)
     ? isAmbientDateConstructor(
         context,
         expression.expressions.at(-1),

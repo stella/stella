@@ -73,9 +73,10 @@ export default eslintCompatPlugin({
         const setCalls: ESTree.CallExpression[] = [];
         const reported = new Set<Variable>();
 
-        const resolveVariable = (
-          identifier: ESTree.IdentifierReference,
-        ): Variable | null => {
+        const resolveVariable = (identifier: unknown): Variable | null => {
+          if (!isIdentifierReference(identifier)) {
+            return null;
+          }
           let scope: Scope | null = context.sourceCode.getScope(identifier);
           while (scope !== null) {
             const variable = scope.set.get(identifier.name);
