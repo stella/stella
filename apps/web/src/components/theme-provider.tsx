@@ -1,8 +1,9 @@
-import { createContext, use, useState } from "react";
+import { createContext, use, useSyncExternalStore } from "react";
 import type { PropsWithChildren } from "react";
 
 import { PALETTE_STORAGE_KEY, THEME_STORAGE_KEY } from "@/consts";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { forceReflow } from "@/lib/utils";
 
 const THEMES = ["light", "dark", "system"] as const;
@@ -10,7 +11,6 @@ type Theme = (typeof THEMES)[number];
 
 const PALETTES = ["nord", "neutral", "flexoki"] as const;
 type Palette = (typeof PALETTES)[number];
-type PreferenceStatus = "pending" | "ready";
 
 type ThemeProviderState = {
   theme: Theme;
@@ -31,6 +31,7 @@ const initialState: ThemeProviderState = {
 const ThemeProviderContext = createContext(initialState);
 
 const PALETTE_PREFIX = "palette-";
+const PREFERENCE_CHANGE_EVENT = "stella-theme-preference-change";
 
 const getStoredTheme = (): Theme => {
   if (typeof localStorage === "undefined") {
@@ -68,8 +69,42 @@ const getSystemTheme = (): "light" | "dark" => {
   return "light";
 };
 
-const resolveTheme = (theme: Theme): "light" | "dark" =>
-  theme === "system" ? getSystemTheme() : theme;
+const subscribeToPreferenceChanges = (onStoreChange: () => void) => {
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === THEME_STORAGE_KEY || event.key === PALETTE_STORAGE_KEY) {
+      onStoreChange();
+    }
+  };
+  window.addEventListener("storage", onStorage);
+  window.addEventListener(PREFERENCE_CHANGE_EVENT, onStoreChange);
+  return () => {
+    window.removeEventListener("storage", onStorage);
+    window.removeEventListener(PREFERENCE_CHANGE_EVENT, onStoreChange);
+  };
+};
+
+const subscribeToSystemTheme = (onStoreChange: () => void) => {
+  const mediaQuery = matchMedia("(prefers-color-scheme: dark)");
+  mediaQuery.addEventListener("change", onStoreChange);
+  return () => mediaQuery.removeEventListener("change", onStoreChange);
+};
+
+const useStoredTheme = (): Theme =>
+  useSyncExternalStore(
+    subscribeToPreferenceChanges,
+    getStoredTheme,
+    () => "system",
+  );
+
+const useStoredPalette = (): Palette =>
+  useSyncExternalStore(
+    subscribeToPreferenceChanges,
+    getStoredPalette,
+    () => "neutral",
+  );
+
+const useSystemTheme = (): "light" | "dark" =>
+  useSyncExternalStore(subscribeToSystemTheme, getSystemTheme, () => "light");
 
 const suppressTransitions = () => {
   const style = document.createElement("style");
@@ -81,68 +116,44 @@ const suppressTransitions = () => {
 };
 
 export const ThemeProvider = ({ children }: PropsWithChildren) => {
-  const [theme, setThemeState] = useState<Theme>("system");
-  const [palette, setPaletteState] = useState<Palette>("neutral");
-  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("light");
-  const [preferenceStatus, setPreferenceStatus] =
-    useState<PreferenceStatus>("pending");
+  const hydrated = useHydrated();
+  const theme = useStoredTheme();
+  const palette = useStoredPalette();
+  const systemTheme = useSystemTheme();
+  const resolvedTheme = theme === "system" ? systemTheme : theme;
 
   const setTheme = (next: Theme) => {
     if (typeof localStorage !== "undefined") {
       localStorage.setItem(THEME_STORAGE_KEY, next);
+      window.dispatchEvent(new Event(PREFERENCE_CHANGE_EVENT));
     }
-    setThemeState(next);
   };
 
   const setPalette = (next: Palette) => {
     if (typeof localStorage !== "undefined") {
       localStorage.setItem(PALETTE_STORAGE_KEY, next);
+      window.dispatchEvent(new Event(PREFERENCE_CHANGE_EVENT));
     }
-    setPaletteState(next);
   };
 
-  useMountEffect(() => {
-    const storedTheme = getStoredTheme();
-    setThemeState(storedTheme);
-    setPaletteState(getStoredPalette());
-    setResolvedTheme(resolveTheme(storedTheme));
-    setPreferenceStatus("ready");
-  });
-
   useExternalSyncEffect(() => {
-    if (preferenceStatus === "pending") {
+    if (!hydrated) {
       return;
     }
     const root = document.documentElement;
-
-    const updateTheme = () => {
-      const resolved = resolveTheme(theme);
-      const restore = suppressTransitions();
-      root.classList.toggle("dark", resolved === "dark");
-      // Override the inline color-scheme/background the pre-paint init script
-      // (prepaint-init.js) may have set; inline styles win over the CSS
-      // `html { color-scheme }` rule, so without this a dark->light override
-      // would leave native scrollbars and form controls painted dark.
-      root.style.setProperty("color-scheme", resolved);
-      root.style.removeProperty("background-color");
-      setResolvedTheme(resolved);
-      restore();
-    };
-
-    updateTheme();
-
-    const mq = matchMedia("(prefers-color-scheme: dark)");
-    const onChange = () => {
-      if (theme === "system") {
-        updateTheme();
-      }
-    };
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, [preferenceStatus, theme]);
+    const restore = suppressTransitions();
+    root.classList.toggle("dark", resolvedTheme === "dark");
+    // Override the inline color-scheme/background the pre-paint init script
+    // (prepaint-init.js) may have set; inline styles win over the CSS
+    // `html { color-scheme }` rule, so without this a dark->light override
+    // would leave native scrollbars and form controls painted dark.
+    root.style.setProperty("color-scheme", resolvedTheme);
+    root.style.removeProperty("background-color");
+    restore();
+  }, [hydrated, resolvedTheme]);
 
   useExternalSyncEffect(() => {
-    if (preferenceStatus === "pending") {
+    if (!hydrated) {
       return;
     }
     const root = document.documentElement;
@@ -159,28 +170,7 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
     }
 
     restore();
-  }, [palette, preferenceStatus]);
-
-  useMountEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === THEME_STORAGE_KEY) {
-        if (e.newValue === "light" || e.newValue === "dark") {
-          setThemeState(e.newValue);
-        } else {
-          setThemeState("system");
-        }
-      }
-      if (e.key === PALETTE_STORAGE_KEY) {
-        if (e.newValue === "nord" || e.newValue === "flexoki") {
-          setPaletteState(e.newValue);
-        } else {
-          setPaletteState("neutral");
-        }
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  });
+  }, [hydrated, palette]);
 
   return (
     <ThemeProviderContext
