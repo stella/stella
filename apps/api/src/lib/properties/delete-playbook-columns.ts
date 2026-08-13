@@ -29,6 +29,12 @@ export type DeletePlaybookColumnsArgs = {
   askIds: readonly SafeId<"property">[];
 };
 
+type DeletePlaybookPositionColumnsArgs = {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  playbookSourceId: string;
+};
+
 export const deletePlaybookColumns = async ({
   tx,
   workspaceId,
@@ -57,4 +63,44 @@ export const deletePlaybookColumns = async ({
         ),
       );
   }
+};
+
+/**
+ * Delete the storage pair behind one visible playbook result column.
+ *
+ * The table presents an ASK value and its verdict as one column, so deleting
+ * that column must remove both rows. Resolve the pair by the position's stable
+ * source id, then delegate to the dependency-safe ordering above.
+ */
+export const deletePlaybookPositionColumns = async ({
+  tx,
+  workspaceId,
+  playbookSourceId,
+}: DeletePlaybookPositionColumnsArgs): Promise<void> => {
+  const rows = await tx
+    .select({ id: properties.id, tool: properties.tool })
+    .from(properties)
+    .where(
+      and(
+        eq(properties.workspaceId, workspaceId),
+        eq(properties.playbookSourceId, playbookSourceId),
+      ),
+    );
+
+  const verdictIds: SafeId<"property">[] = [];
+  const askIds: SafeId<"property">[] = [];
+  for (const row of rows) {
+    if (row.tool.type === "playbook-verdict") {
+      verdictIds.push(row.id);
+    } else {
+      askIds.push(row.id);
+    }
+  }
+
+  await deletePlaybookColumns({
+    tx,
+    workspaceId,
+    verdictIds,
+    askIds,
+  });
 };

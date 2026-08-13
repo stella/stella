@@ -8,6 +8,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
+import { deletePlaybookPositionColumns } from "@/api/lib/properties/delete-playbook-columns";
 
 const config = {
   description:
@@ -37,6 +38,7 @@ const deleteProperty = createSafeHandler(
           content: properties.content,
           tool: properties.tool,
           system: properties.system,
+          playbookSourceId: properties.playbookSourceId,
         })
         .from(properties)
         .where(
@@ -73,14 +75,22 @@ const deleteProperty = createSafeHandler(
         };
       }
 
-      await tx
-        .delete(properties)
-        .where(
-          and(
-            eq(properties.id, propertyId),
-            eq(properties.workspaceId, workspaceId),
-          ),
-        );
+      if (property.playbookSourceId === null) {
+        await tx
+          .delete(properties)
+          .where(
+            and(
+              eq(properties.id, propertyId),
+              eq(properties.workspaceId, workspaceId),
+            ),
+          );
+      } else {
+        await deletePlaybookPositionColumns({
+          tx,
+          workspaceId,
+          playbookSourceId: property.playbookSourceId,
+        });
+      }
 
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.DELETE,
