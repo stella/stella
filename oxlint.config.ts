@@ -43,12 +43,12 @@ const publicSsrBrowserGlobals = [
   "visualViewport",
   "window",
 ].map((name) => ({ name, message: PUBLIC_SSR_AMBIENT_STATE_MESSAGE }));
+const publicSsrDateNowRestriction = {
+  object: "Date",
+  property: "now",
+  message: PUBLIC_SSR_AMBIENT_STATE_MESSAGE,
+};
 const publicSsrAmbientProperties = [
-  {
-    object: "Date",
-    property: "now",
-    message: PUBLIC_SSR_AMBIENT_STATE_MESSAGE,
-  },
   {
     object: "Date",
     property: "parse",
@@ -94,7 +94,11 @@ const publicSsrAmbientStateRules = {
     "error",
     { globals: publicSsrBrowserGlobals, checkGlobalObject: true },
   ],
-  "no-restricted-properties": ["error", ...publicSsrAmbientProperties],
+  "no-restricted-properties": [
+    "error",
+    publicSsrDateNowRestriction,
+    ...publicSsrAmbientProperties,
+  ],
 } satisfies NonNullable<OxlintOverride["rules"]>;
 
 const fixtureRuleOverrides = [
