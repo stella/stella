@@ -351,6 +351,20 @@ export default defineConfig(({ mode }) => {
             if (id.includes("node_modules/@tiptap")) {
               return "vendor-editor";
             }
+            // Icon and primitive libraries otherwise shatter into hundreds
+            // of sub-KB shared chunks (one per icon / primitive module),
+            // because each is shared by a different subset of route chunks.
+            // A cold page load was measured issuing ~250 asset requests,
+            // most of them these fragments; per-request overhead dominates
+            // their transfer time. Grouping trades a small amount of eager
+            // bytes (icons a given route doesn't use) for two cacheable
+            // requests.
+            if (id.includes("node_modules/lucide-react/")) {
+              return "vendor-icons";
+            }
+            if (id.includes("node_modules/@base-ui/")) {
+              return "vendor-base-ui";
+            }
             return undefined;
           },
         },
