@@ -24,7 +24,7 @@ const CSS_IMPORT_PATTERN =
 const CSS_COMMENT_PATTERN = /\/\*[\s\S]*?\*\//gu;
 const TURBO_INSTALL_PATTERN =
   /\bbun\s+install\s+-g\s+turbo@(?<version>\d+\.\d+\.\d+)\b/gu;
-const TURBO_VERSION_PATTERN = /^\^?(?<version>\d+\.\d+\.\d+)$/u;
+const TURBO_VERSION_PATTERN = /^(?<version>\d+\.\d+\.\d+)$/u;
 const BABEL_CORE_DEPENDENCY = "@babel/core";
 const BABEL_MAJOR_PATTERN = /^[~^]?(?<major>\d+)\./u;
 const EXACT_PACKAGE_VERSION_PATTERN =
@@ -617,12 +617,11 @@ const findTurboInstallPinFiles = (rootDir: string) => [
 ];
 
 const validateTurboInstallPins = (rootDir: string): WorkspaceIssue[] => {
-  const turboVersion = readRootTurboVersion(rootDir);
-  if (turboVersion === null) {
+  if (readRootTurboVersion(rootDir) === null) {
     return [
       {
         message:
-          "root package.json must define devDependencies.turbo as a concrete semver version",
+          "root package.json must define devDependencies.turbo as an exact semver version",
         path: "package.json",
       },
     ];
@@ -634,12 +633,8 @@ const validateTurboInstallPins = (rootDir: string): WorkspaceIssue[] => {
     const content = readFileSync(filePath, "utf-8");
     for (const match of content.matchAll(TURBO_INSTALL_PATTERN)) {
       const installVersion = match.groups?.["version"];
-      if (installVersion === turboVersion) {
-        continue;
-      }
-
       issues.push({
-        message: `turbo install pin must match root package.json turbo ${turboVersion}; found ${installVersion}`,
+        message: `turbo install version must derive from root package.json; found mirrored pin ${installVersion}`,
         path: `${path.relative(rootDir, filePath)}:${lineNumberForIndex(content, match.index)}`,
       });
     }

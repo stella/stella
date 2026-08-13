@@ -16,48 +16,11 @@ afterEach(() => {
 });
 
 describe("workspace hygiene", () => {
-  test("requires turbo install pins to match the root package version", () => {
+  test("rejects mirrored turbo install pins", () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
         devDependencies: {
-          turbo: "^2.10.3",
-        },
-      },
-      webPackageJson: {
-        dependencies: {},
-        name: "@stll/web",
-      },
-    });
-
-    writeFileSync(
-      path.join(rootDir, "apps/web/Dockerfile"),
-      "RUN bun install -g turbo@2.9.18\n",
-    );
-    mkdirSync(path.join(rootDir, ".github/workflows"), { recursive: true });
-    writeFileSync(
-      path.join(rootDir, ".github/workflows/ci.yml"),
-      "run: bun install -g turbo@2.9.18\n",
-    );
-
-    expect(validateWorkspaceRoot(rootDir)).toEqual([
-      {
-        message:
-          "turbo install pin must match root package.json turbo 2.10.3; found 2.9.18",
-        path: "apps/web/Dockerfile:1",
-      },
-      {
-        message:
-          "turbo install pin must match root package.json turbo 2.10.3; found 2.9.18",
-        path: ".github/workflows/ci.yml:1",
-      },
-    ]);
-  });
-
-  test("accepts turbo install pins that match the root package version", () => {
-    const rootDir = createWorkspaceRoot({
-      rootPackageJson: {
-        devDependencies: {
-          turbo: "^2.10.3",
+          turbo: "2.10.3",
         },
       },
       webPackageJson: {
@@ -70,15 +33,74 @@ describe("workspace hygiene", () => {
       path.join(rootDir, "apps/web/Dockerfile"),
       "RUN bun install -g turbo@2.10.3\n",
     );
+    mkdirSync(path.join(rootDir, ".github/workflows"), { recursive: true });
+    writeFileSync(
+      path.join(rootDir, ".github/workflows/ci.yml"),
+      "run: bun install -g turbo@2.9.18\n",
+    );
+
+    expect(validateWorkspaceRoot(rootDir)).toEqual([
+      {
+        message:
+          "turbo install version must derive from root package.json; found mirrored pin 2.10.3",
+        path: "apps/web/Dockerfile:1",
+      },
+      {
+        message:
+          "turbo install version must derive from root package.json; found mirrored pin 2.9.18",
+        path: ".github/workflows/ci.yml:1",
+      },
+    ]);
+  });
+
+  test("accepts turbo installs derived from the root package version", () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {
+        devDependencies: {
+          turbo: "2.10.3",
+        },
+      },
+      webPackageJson: {
+        dependencies: {},
+        name: "@stll/web",
+      },
+    });
+
+    writeFileSync(
+      path.join(rootDir, "apps/web/Dockerfile"),
+      'RUN bun install -g "turbo@$(bun -p \'require("./package.json").devDependencies.turbo\')"\n',
+    );
 
     expect(validateWorkspaceRoot(rootDir)).toEqual([]);
+  });
+
+  test("requires an exact root turbo version", () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {
+        devDependencies: {
+          turbo: "^2.10.3",
+        },
+      },
+      webPackageJson: {
+        dependencies: {},
+        name: "@stll/web",
+      },
+    });
+
+    expect(validateWorkspaceRoot(rootDir)).toEqual([
+      {
+        message:
+          "root package.json must define devDependencies.turbo as an exact semver version",
+        path: "package.json",
+      },
+    ]);
   });
 
   test("requires CSS package imports to be owned by the importing workspace", () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
         devDependencies: {
-          turbo: "^2.10.3",
+          turbo: "2.10.3",
         },
       },
       webPackageJson: {
@@ -105,7 +127,7 @@ describe("workspace hygiene", () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
         devDependencies: {
-          turbo: "^2.10.3",
+          turbo: "2.10.3",
         },
       },
       webPackageJson: {
@@ -128,7 +150,7 @@ describe("workspace hygiene", () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
         catalog: { "@stll/folio-core": "0.15.13" },
-        devDependencies: { turbo: "^2.10.3" },
+        devDependencies: { turbo: "2.10.3" },
       },
       webPackageJson: {
         dependencies: { "@stll/folio-core": "catalog:" },
@@ -165,7 +187,7 @@ describe("workspace hygiene", () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
         catalog: { "@stll/folio-core": "0.15.13" },
-        devDependencies: { turbo: "^2.10.3" },
+        devDependencies: { turbo: "2.10.3" },
       },
       webPackageJson: {
         dependencies: { "@stll/folio-core": "catalog:" },
@@ -189,7 +211,7 @@ describe("workspace hygiene", () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
         devDependencies: {
-          turbo: "^2.10.3",
+          turbo: "2.10.3",
         },
       },
       webPackageJson: {
@@ -213,7 +235,7 @@ describe("workspace hygiene", () => {
         name: "@stll/mobile",
       },
       rootPackageJson: {
-        devDependencies: { turbo: "^2.10.3" },
+        devDependencies: { turbo: "2.10.3" },
       },
       webPackageJson: {
         dependencies: {},
@@ -232,7 +254,7 @@ describe("workspace hygiene", () => {
         name: "@stll/mobile",
       },
       rootPackageJson: {
-        devDependencies: { turbo: "^2.10.3" },
+        devDependencies: { turbo: "2.10.3" },
       },
       webPackageJson: {
         dependencies: {},
@@ -253,7 +275,7 @@ describe("workspace hygiene", () => {
       rootPackageJson: {
         devDependencies: {
           "oxlint-tsgolint": "0.25.0",
-          turbo: "^2.10.3",
+          turbo: "2.10.3",
         },
       },
       webPackageJson: {
