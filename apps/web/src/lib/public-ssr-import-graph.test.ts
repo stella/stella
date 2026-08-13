@@ -736,15 +736,23 @@ const maskNonExecutableLiterals = (source: string, file: string): string => {
     }
     return isIntlObject(node.expression.expression.expression);
   };
-  const isAmbientFormatterCurrentTimeCall = (node: ts.Node): boolean =>
-    ts.isCallExpression(node) &&
-    ts.isPropertyAccessExpression(node.expression) &&
-    (node.expression.name.text === "format" ||
-      node.expression.name.text === "formatToParts") &&
-    (node.arguments.length === 0 ||
+  const isAmbientFormatterCurrentTimeCall = (node: ts.Node): boolean => {
+    if (
+      !ts.isCallExpression(node) ||
+      !ts.isPropertyAccessExpression(node.expression) ||
+      (node.expression.name.text !== "format" &&
+        node.expression.name.text !== "formatToParts")
+    ) {
+      return false;
+    }
+    const argument = node.arguments.at(0);
+    return (
+      argument === undefined ||
       (node.arguments.length === 1 &&
-        ts.isIdentifier(node.arguments[0]) &&
-        node.arguments[0].text === "undefined"));
+        ts.isIdentifier(argument) &&
+        argument.text === "undefined")
+    );
+  };
   const isDeterministicDateString = (value: string): boolean =>
     /^\d{4}-\d{2}-\d{2}$/u.test(value) ||
     /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})$/u.test(
