@@ -37,7 +37,7 @@ const REVIEWED_AMBIENT_OCCURRENCES = {
   },
   "apps/web/src/components/chat/streamdown-mention-link.tsx": { window: 1 },
   "apps/web/src/components/inspector/inspector-broadcast.ts": {
-    "Date.now(": 1,
+    "Date.now": 1,
     window: 7,
   },
   "apps/web/src/components/route-components.tsx": {
@@ -61,7 +61,7 @@ const REVIEWED_AMBIENT_OCCURRENCES = {
     window: 1,
   },
   "apps/web/src/lib/analytics/error-reference.ts": {
-    "crypto.getRandomValues(": 1,
+    "globalThis.crypto.getRandomValues": 1,
   },
   "apps/web/src/lib/api-request-context.ts": { window: 1 },
   "apps/web/src/lib/auth.ts": { window: 2 },
@@ -69,20 +69,21 @@ const REVIEWED_AMBIENT_OCCURRENCES = {
   "apps/web/src/lib/copy-to-clipboard.ts": { navigator: 1 },
   "apps/web/src/lib/dev-store.ts": { window: 3 },
   "apps/web/src/lib/files/email-citations.ts": { window: 6 },
+  "apps/web/src/lib/public-tools-github-content.ts": { "Date.now": 1 },
   "apps/web/src/lib/utils.ts": {
-    "Math.random(": 1,
+    "Math.random": 1,
     document: 2,
   },
   "packages/ui/src/components/date-picker-popover.tsx": {
-    "Date.now(": 2,
+    "Date.now": 2,
     navigator: 1,
   },
-  "packages/ui/src/components/outline-rail.tsx": { "Date.now(": 2 },
+  "packages/ui/src/components/outline-rail.tsx": { "Date.now": 2 },
   "packages/ui/src/hooks/use-mobile.ts": { window: 2 },
 } as const satisfies Readonly<Record<string, Readonly<Record<string, number>>>>;
 
 const AMBIENT_STATE_PATTERN =
-  /\bglobalThis\.(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|self)\b|\{[^{}]*\b(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|self)\b[^{}]*\}\s*=\s*globalThis\b|(?<![.\w])(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|self)\b(?!\s*:)|\b(?:globalThis\.)?Date\.now\s*\(|\b(?:globalThis\.)?Math\.random\s*\(|\bperformance\.now\s*\(|\bcrypto\.(?:getRandomValues|randomUUID)\s*\(|\b(?:globalThis\.)?Date\s*\(\s*\)|\bnew\s+(?:globalThis\.)?Date(?:\s*\(\s*\)|\s*(?=[;,]))|\bnew\s+(?:globalThis\.)?Intl\.[A-Za-z]+(?:\s*\(\s*\)|\s*(?=[;,]))|\b(?:new\s+)?(?:globalThis\.)?Intl\.[A-Za-z]+\s*\(\s*(?:undefined\s*[,)]|\[\s*\]\s*[,)]|\))|\.(?:toLocaleDateString|toLocaleString|toLocaleTimeString)\s*\(\s*(?:undefined\s*[,)]|\[\s*\]\s*[,)]|\))/u;
+  /\bglobalThis\.(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|self)\b|\{[^{}]*\b(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|self)\b[^{}]*\}\s*=\s*globalThis\b|(?<![.\w])(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|self)\b(?!\s*:)|\b(?:globalThis\.)?Date\.now\b|\b(?:globalThis\.)?Math\.random\b|\b(?:globalThis\.)?performance\.now\b|\b(?:globalThis\.)?crypto\.(?:getRandomValues|randomUUID)\b|\{[^{}]*\bnow\b[^{}]*\}\s*=\s*(?:globalThis\.)?(?:Date|performance)\b|\{[^{}]*\brandom\b[^{}]*\}\s*=\s*(?:globalThis\.)?Math\b|\{[^{}]*\b(?:getRandomValues|randomUUID)\b[^{}]*\}\s*=\s*(?:globalThis\.)?crypto\b|\b(?:globalThis\.)?Date\s*\(\s*\)|\bnew\s+(?:globalThis\.)?Date(?:\s*\(\s*\)|\s*(?=[;,]))|\bnew\s+(?:globalThis\.)?Intl\.[A-Za-z]+(?:\s*\(\s*\)|\s*(?=[;,]))|\b(?:new\s+)?(?:globalThis\.)?Intl\.[A-Za-z]+\s*\(\s*(?:undefined\s*[,)]|\[\s*\]\s*[,)]|\))|\.(?:toLocaleDateString|toLocaleString|toLocaleTimeString)\s*\(\s*(?:undefined\s*[,)]|\[\s*\]\s*[,)]|\))/u;
 const CANDIDATE_SUFFIXES = ["", ".ts", ".tsx", "/index.ts", "/index.tsx"];
 const tsTranspiler = new Bun.Transpiler({ loader: "ts" });
 const tsxTranspiler = new Bun.Transpiler({ loader: "tsx" });
@@ -540,6 +541,19 @@ describe("public SSR import graph", () => {
     expect(
       AMBIENT_STATE_PATTERN.test(
         executableSource("const today = new globalThis.Date();", "fixture.ts"),
+      ),
+    ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource("const now = Date.now;", "fixture.ts"),
+      ),
+    ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          "const { now: capturedNow } = performance;",
+          "fixture.ts",
+        ),
       ),
     ).toBe(true);
     expect(

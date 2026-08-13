@@ -26,6 +26,12 @@ const today = new Date();
 const randomWidth = Math.random();
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves high-resolution ambient clocks are not SSR-safe
 const measuredAt = performance.now();
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves ambient function references cannot be captured for later calls
+const capturedNow = Date.now;
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves globalThis ambient function references cannot bypass capture detection
+const capturedRandom = globalThis.Math.random;
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals, typescript/unbound-method -- fixture proves destructuring cannot rename an ambient function out of detection
+const { now: capturedPerformanceNow } = performance;
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves ambient UUID generation is not SSR-safe
 const randomId = crypto.randomUUID();
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves globalThis cannot bypass ambient randomness detection
@@ -65,6 +71,11 @@ const readShadowedNavigator = (navigator: { language: string }) =>
   navigator.language;
 const readShadowedClock = (Date: () => string) => Date;
 const readShadowedRandom = (Math: { random: () => number }) => Math.random();
+const captureShadowedClock = (Date: { now: () => number }) => Date.now;
+const captureShadowedPerformance = (performance: { now: () => number }) => {
+  const { now } = performance;
+  return now;
+};
 const readWrappedShadowedClock = (Date: { now: () => number } | null) =>
   // oxlint-disable-next-line typescript/no-non-null-assertion -- fixture proves a wrapped local binding remains unrelated to the ambient Date global
   Date!.now();
@@ -134,6 +145,11 @@ export {
   browserStorage,
   browserPath,
   browserSelf,
+  capturedNow,
+  capturedPerformanceNow,
+  capturedRandom,
+  captureShadowedClock,
+  captureShadowedPerformance,
   configuredNavigator,
   computedGlobalBrowserStorage,
   computedGlobalRandomId,

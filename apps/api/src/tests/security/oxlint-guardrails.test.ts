@@ -186,8 +186,10 @@ describe("custom oxlint guardrails", () => {
     expect(pluginSource).toContain('"sessionStorage"');
     expect(pluginSource).toContain('"matchMedia"');
     expect(pluginSource).toContain('"navigator"');
-    expect(pluginSource).toContain('memberName === "now"');
-    expect(pluginSource).toContain('randomMemberName === "random"');
+    expect(pluginSource).toContain("AMBIENT_FUNCTION_MEMBERS");
+    expect(pluginSource).toContain('["Date", new Set(["now"])]');
+    expect(pluginSource).toContain('["Math", new Set(["random"])]');
+    expect(pluginSource).toContain("isAmbientFunctionMember");
     expect(pluginSource).toContain("AMBIENT_INTL_CONSTRUCTORS");
   });
 

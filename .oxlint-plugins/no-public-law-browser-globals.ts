@@ -33,6 +33,13 @@ const AMBIENT_LOCALE_METHODS = new Set([
   "toLocaleTimeString",
 ]);
 
+const AMBIENT_FUNCTION_MEMBERS = new Map([
+  ["Date", new Set(["now"])],
+  ["Math", new Set(["random"])],
+  ["crypto", new Set(["getRandomValues", "randomUUID"])],
+  ["performance", new Set(["now"])],
+]);
+
 const isIdentifier = (node, name) =>
   node?.type === "Identifier" && (name === undefined || node.name === name);
 
@@ -141,6 +148,43 @@ const isAmbientIntlLocale = (argument) => {
 const isGlobalThisAmbientObject = (context, node, memberName) =>
   isUnshadowedGlobalThisMember(context, unwrapExpression(node), memberName);
 
+const ambientFunctionObjectName = (context, node) => {
+  const expression = unwrapExpression(node);
+  if (expression?.type === "Identifier") {
+    return AMBIENT_FUNCTION_MEMBERS.has(expression.name) &&
+      isUnshadowedGlobal(context, expression)
+      ? expression.name
+      : null;
+  }
+  const memberName = staticMemberName(expression);
+  return memberName &&
+    AMBIENT_FUNCTION_MEMBERS.has(memberName) &&
+    isUnshadowedGlobalThisMember(context, expression, memberName)
+    ? memberName
+    : null;
+};
+
+const isAmbientFunctionMember = (context, node) => {
+  if (node?.type !== "MemberExpression") {
+    return false;
+  }
+  const objectName = ambientFunctionObjectName(context, node.object);
+  const memberName = staticMemberName(node);
+  return (
+    objectName !== null &&
+    memberName !== null &&
+    AMBIENT_FUNCTION_MEMBERS.get(objectName)?.has(memberName) === true
+  );
+};
+
+const isDirectInvocationTarget = (node) => {
+  const parent = node.parent;
+  return (
+    (parent?.type === "CallExpression" || parent?.type === "NewExpression") &&
+    unwrapExpression(parent.callee) === node
+  );
+};
+
 export default eslintCompatPlugin({
   meta: { name: "no-public-law-browser-globals" },
   rules: {
@@ -173,23 +217,49 @@ export default eslintCompatPlugin({
             ) {
               context.report({ node, messageId: "publicLawBrowserGlobal" });
             }
+            if (
+              isAmbientFunctionMember(context, node) &&
+              !isDirectInvocationTarget(node)
+            ) {
+              context.report({ node, messageId: "publicLawAmbientState" });
+            }
           },
           VariableDeclarator(node) {
             const initializer = unwrapExpression(node.init);
-            if (
-              node.id.type !== "ObjectPattern" ||
-              !isIdentifier(initializer, "globalThis") ||
-              !isUnshadowedGlobal(context, initializer)
-            ) {
+            if (node.id.type !== "ObjectPattern") {
               return;
             }
 
+            if (
+              isIdentifier(initializer, "globalThis") &&
+              isUnshadowedGlobal(context, initializer)
+            ) {
+              for (const property of node.id.properties) {
+                const propertyName = staticPatternPropertyName(property);
+                if (propertyName && BROWSER_GLOBALS.has(propertyName)) {
+                  context.report({
+                    node: property,
+                    messageId: "publicLawBrowserGlobal",
+                  });
+                }
+              }
+            }
+
+            const ambientObjectName = ambientFunctionObjectName(
+              context,
+              initializer,
+            );
+            if (ambientObjectName === null) {
+              return;
+            }
+            const ambientMembers =
+              AMBIENT_FUNCTION_MEMBERS.get(ambientObjectName);
             for (const property of node.id.properties) {
               const propertyName = staticPatternPropertyName(property);
-              if (propertyName && BROWSER_GLOBALS.has(propertyName)) {
+              if (propertyName && ambientMembers?.has(propertyName)) {
                 context.report({
                   node: property,
-                  messageId: "publicLawBrowserGlobal",
+                  messageId: "publicLawAmbientState",
                 });
               }
             }
@@ -216,47 +286,9 @@ export default eslintCompatPlugin({
               return;
             }
 
-            const memberName = ambientMemberName(node.callee, "Date");
-            const randomMemberName = ambientMemberName(node.callee, "Math");
-            const performanceMemberName = ambientMemberName(
-              node.callee,
-              "performance",
-            );
-            const cryptoMemberName = ambientMemberName(node.callee, "crypto");
             const ambientObject = unwrapExpression(node.callee.object);
             const calledMemberName = staticMemberName(node.callee);
-            const globalPerformanceCall =
-              calledMemberName === "now" &&
-              isGlobalThisAmbientObject(
-                context,
-                node.callee.object,
-                "performance",
-              );
-            const globalCryptoCall =
-              (calledMemberName === "getRandomValues" ||
-                calledMemberName === "randomUUID") &&
-              isGlobalThisAmbientObject(context, node.callee.object, "crypto");
-            const globalDateCall =
-              calledMemberName === "now" &&
-              isGlobalThisAmbientObject(context, node.callee.object, "Date");
-            const globalMathCall =
-              calledMemberName === "random" &&
-              isGlobalThisAmbientObject(context, node.callee.object, "Math");
-            if (
-              (memberName === "now" &&
-                isUnshadowedGlobal(context, ambientObject)) ||
-              (randomMemberName === "random" &&
-                isUnshadowedGlobal(context, ambientObject)) ||
-              (performanceMemberName === "now" &&
-                isUnshadowedGlobal(context, ambientObject)) ||
-              ((cryptoMemberName === "getRandomValues" ||
-                cryptoMemberName === "randomUUID") &&
-                isUnshadowedGlobal(context, ambientObject)) ||
-              globalPerformanceCall ||
-              globalCryptoCall ||
-              globalDateCall ||
-              globalMathCall
-            ) {
+            if (isAmbientFunctionMember(context, node.callee)) {
               context.report({ node, messageId: "publicLawAmbientState" });
               return;
             }
