@@ -181,8 +181,8 @@ const workspaceExports = (
 
 const resolveWorkspaceImport = (specifier: string): readonly string[] => {
   const match = specifier.match(/^(?<name>@stll\/[^/]+)(?<subpath>\/.*)?$/u);
-  const name = match?.groups?.name;
-  const subpath = match?.groups?.subpath ?? "/";
+  const name = match?.groups?.["name"];
+  const subpath = match?.groups?.["subpath"] ?? "/";
   const packageInfo =
     name === undefined ? undefined : workspaceManifests.get(name);
   if (packageInfo === undefined) {

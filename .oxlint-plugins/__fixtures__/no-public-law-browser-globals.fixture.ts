@@ -64,7 +64,7 @@ const computedGlobalBrowserStorage = globalThis["localStorage"];
 const assertedGlobalBrowserLocale = (globalThis as typeof globalThis).navigator;
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves destructuring cannot rename a browser global out of detection
 const { navigator: browserNavigator } = globalThis;
-// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals, typescript/no-non-null-assertion, typescript/no-unnecessary-type-assertion -- fixture proves non-null assertions cannot bypass destructuring detection
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals, typescript/no-non-null-assertion -- fixture proves non-null assertions cannot bypass destructuring detection
 const { document: browserDocument } = globalThis!;
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals, eslint/no-useless-computed-key, typescript/no-unnecessary-type-assertion -- fixture proves computed destructuring and TS wrappers cannot bypass alias detection
 const { ["localStorage"]: browserStorage } = globalThis as typeof globalThis;
