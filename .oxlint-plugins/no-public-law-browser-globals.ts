@@ -45,6 +45,11 @@ const isNonReferenceIdentifier = (node) => {
       parent.key === node &&
       !parent.computed &&
       !parent.shorthand) ||
+    ((parent?.type === "TSPropertySignature" ||
+      parent?.type === "TSMethodSignature") &&
+      parent.key === node &&
+      !parent.computed) ||
+    (parent?.type === "TSQualifiedName" && parent.right === node) ||
     (parent?.type === "VariableDeclarator" && parent.id === node)
   );
 };
@@ -107,6 +112,15 @@ export default eslintCompatPlugin({
             }
           },
           CallExpression(node) {
+            if (
+              isIdentifier(node.callee, "Date") &&
+              isUnshadowedGlobal(context, node.callee) &&
+              node.arguments.length === 0
+            ) {
+              context.report({ node, messageId: "publicLawAmbientState" });
+              return;
+            }
+
             const memberName = ambientMemberName(node.callee, "Date");
             const randomMemberName = ambientMemberName(node.callee, "Math");
             if (

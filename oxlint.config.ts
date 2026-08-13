@@ -1713,12 +1713,6 @@ export default defineConfig({
       },
     },
     {
-      files: ["apps/web/src/routes/tools/-components/copy-button.tsx"],
-      rules: {
-        "no-public-law-browser-globals/no-public-law-browser-globals": "off",
-      },
-    },
-    {
       files: ["apps/web/src/routes/law/**/*.{ts,tsx}"],
       rules: {
         "no-raw-public-law-seo/no-raw-public-law-seo": "error",

@@ -23,16 +23,21 @@ const REVIEWED_AMBIENT_BOUNDARIES: ReadonlySet<string> = new Set([
   "apps/web/src/lib/copy-to-clipboard.ts",
   "apps/web/src/lib/dev-store.ts",
   "apps/web/src/lib/utils.ts",
-  "apps/web/src/routes/tools/-components/copy-button.tsx",
   "packages/ui/src/components/date-picker-popover.tsx",
   "packages/ui/src/components/outline-rail.tsx",
   "packages/ui/src/hooks/use-mobile.ts",
-  "packages/ui/src/hooks/use-viewport-width.ts",
 ]);
 
 const AMBIENT_STATE_PATTERN =
-  /\b(?:window|document|navigator|localStorage|sessionStorage|matchMedia)\b|\bDate\.now\s*\(|\bMath\.random\s*\(|new\s+Date\s*\(\s*\)|new\s+Intl\.[A-Za-z]+\s*\(\s*(?:undefined\s*[,)]|\))/u;
+  /\b(?:window|document|navigator|localStorage|sessionStorage|matchMedia)\b|\bDate\.now\s*\(|\bMath\.random\s*\(|\b(?:new\s+)?Date\s*\(\s*\)|\b(?:new\s+)?Intl\.[A-Za-z]+\s*\(\s*(?:undefined\s*[,)]|\))/u;
 const CANDIDATE_SUFFIXES = ["", ".ts", ".tsx", "/index.ts", "/index.tsx"];
+const tsTranspiler = new Bun.Transpiler({ loader: "ts" });
+const tsxTranspiler = new Bun.Transpiler({ loader: "tsx" });
+
+const transpileSource = (source: string, file: string): string =>
+  file.endsWith(".tsx")
+    ? tsxTranspiler.transformSync(source)
+    : tsTranspiler.transformSync(source);
 
 const collectRouteEntries = (directory: string): readonly string[] => {
   const entries: string[] = [];
@@ -79,6 +84,7 @@ const resolveStaticImport = (
     const candidate = base + suffix;
     if (
       candidate.startsWith(`${sourceRoot}${nodePath.sep}`) &&
+      /\.tsx?$/u.test(candidate) &&
       existsSync(candidate) &&
       statSync(candidate).isFile()
     ) {
@@ -88,9 +94,13 @@ const resolveStaticImport = (
   return null;
 };
 
-const collectStaticImportSpecifiers = (source: string): readonly string[] => {
+const collectStaticImportSpecifiers = (
+  source: string,
+  file: string,
+): readonly string[] => {
   const specifiers: string[] = [];
-  for (const match of source.matchAll(
+  const executable = transpileSource(source, file);
+  for (const match of executable.matchAll(
     /\bfrom\s*["'](?<specifier>[^"']+)["']/gu,
   )) {
     const specifier = match.groups?.["specifier"];
@@ -98,8 +108,8 @@ const collectStaticImportSpecifiers = (source: string): readonly string[] => {
       specifiers.push(specifier);
     }
   }
-  for (const match of source.matchAll(
-    /(?:^|[\n;])\s*import\s+["'](?<specifier>[^"']+)["']/gu,
+  for (const match of executable.matchAll(
+    /(?:^|[\n;])\s*import\s*["'](?<specifier>[^"']+)["']/gu,
   )) {
     const specifier = match.groups?.["specifier"];
     if (specifier !== undefined) {
@@ -109,10 +119,8 @@ const collectStaticImportSpecifiers = (source: string): readonly string[] => {
   return specifiers;
 };
 
-const executableSource = (source: string): string =>
-  source
-    .replace(/\/\*[\s\S]*?\*\//gu, "")
-    .replace(/\/\/[^\n]*/gu, "")
+const executableSource = (source: string, file: string): string =>
+  transpileSource(source, file)
     .replace(/"(?:\\.|[^"\\])*"/gu, '""')
     .replace(/'(?:\\.|[^'\\])*'/gu, "''");
 
@@ -130,7 +138,7 @@ const walkPublicSsrGraph = (
     visited.add(file);
 
     const source = readFileSync(file, "utf-8");
-    for (const specifier of collectStaticImportSpecifiers(source)) {
+    for (const specifier of collectStaticImportSpecifiers(source, file)) {
       const resolved = resolveStaticImport(specifier, file);
       if (resolved !== null && !visited.has(resolved)) {
         stack.push(resolved);
@@ -141,6 +149,26 @@ const walkPublicSsrGraph = (
 };
 
 describe("public SSR import graph", () => {
+  test("ambient-state scan preserves executable expressions around string content", () => {
+    const source = [
+      'const site = "https://stll.app/window";',
+      ["const label = `", "$", "{navigator.language}`;"].join(""),
+      "const openedAt = Date();",
+    ].join("\n");
+
+    expect(
+      AMBIENT_STATE_PATTERN.test(executableSource(source, "fixture.ts")),
+    ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          'const site = "https://stll.app/window";',
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(false);
+  });
+
   test("all static dependencies make ambient render state an explicit boundary", () => {
     const entries = [
       ...PUBLIC_SSR_ROOT_ENTRIES.map((path) =>
@@ -160,11 +188,16 @@ describe("public SSR import graph", () => {
     expect(relativeVisited).toContain("apps/web/src/routes/law/index.tsx");
     expect(relativeVisited).toContain("apps/web/src/components/sidebar.tsx");
     expect(relativeVisited).toContain("packages/ui/src/hooks/use-mobile.ts");
+    expect(
+      [...REVIEWED_AMBIENT_BOUNDARIES]
+        .filter((file) => !relativeVisited.includes(file))
+        .sort(),
+    ).toEqual([]);
 
     const violations = [...visited]
       .filter((file) =>
         AMBIENT_STATE_PATTERN.test(
-          executableSource(readFileSync(file, "utf-8")),
+          executableSource(readFileSync(file, "utf-8"), file),
         ),
       )
       .map((file) => nodePath.relative(repoRoot, file))
