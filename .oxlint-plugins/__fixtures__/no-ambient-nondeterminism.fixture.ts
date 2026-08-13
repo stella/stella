@@ -1,6 +1,8 @@
 // Passive regression fixture for
 // `no-ambient-nondeterminism/no-ambient-nondeterminism`.
 
+import { randomUUID, randomUUID as nodeRandomUuid } from "node:crypto";
+
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: ambient epoch time must be injected
 export const epoch = Date.now();
 
@@ -18,6 +20,21 @@ export const sample = Math.random();
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: ambient UUID generation must be injected
 export const identifier = crypto.randomUUID();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: ambient entropy must be injected
+export const randomBytes = crypto.getRandomValues(new Uint8Array(8));
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: UUIDv7 includes ambient time and entropy
+export const sortableIdentifier = Bun.randomUUIDv7();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: ambient monotonic time must be injected
+export const monotonicTime = performance.now();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: imported ambient UUID generation must be injected
+export const importedIdentifier = randomUUID();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: aliased imports retain their provenance
+export const aliasedImportedIdentifier = nodeRandomUuid();
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: explicit globalThis access is still ambient time
 export const globalEpoch = globalThis.Date.now();
@@ -37,17 +54,38 @@ export const globalSample = globalThis.Math.random();
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: explicit globalThis access is still ambient UUID generation
 export const globalIdentifier = globalThis.crypto.randomUUID();
 
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: explicit globalThis access remains ambient entropy
+export const globalRandomBytes = globalThis.crypto.getRandomValues(
+  new Uint8Array(8),
+);
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: explicit globalThis access remains ambient time and entropy
+export const globalSortableIdentifier = globalThis.Bun.randomUUIDv7();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: explicit globalThis access remains ambient monotonic time
+export const globalMonotonicTime = globalThis.performance.now();
+
 export const explicitDate = new Date("2026-08-13T00:00:00.000Z");
 
 export const withShadowedBindings = (
   Date: { (): string; now: () => number; new (): object },
   Math: { random: () => number },
-  crypto: { randomUUID: () => string },
+  Bun: { randomUUIDv7: () => string },
+  crypto: {
+    getRandomValues: (value: Uint8Array) => Uint8Array;
+    randomUUID: () => string;
+  },
+  performance: { now: () => number },
   // oxlint-disable-next-line no-shadow-restricted-names -- fixture: a shadowed globalThis binding must remain allowed
   globalThis: {
     Date: { (): string; now: () => number; new (): object };
     Math: { random: () => number };
-    crypto: { randomUUID: () => string };
+    Bun: { randomUUIDv7: () => string };
+    crypto: {
+      getRandomValues: (value: Uint8Array) => Uint8Array;
+      randomUUID: () => string;
+    };
+    performance: { now: () => number };
   },
 ) => ({
   epoch: Date.now(),
@@ -57,7 +95,10 @@ export const withShadowedBindings = (
   dateStringWithArgument: Date(0),
   instant: new Date(),
   sample: Math.random(),
+  sortableIdentifier: Bun.randomUUIDv7(),
   identifier: crypto.randomUUID(),
+  randomBytes: crypto.getRandomValues(new Uint8Array(8)),
+  monotonicTime: performance.now(),
   globalEpoch: globalThis.Date.now(),
   // oxlint-disable-next-line unicorn/new-for-builtins -- fixture: the shadowed callable is deliberately not the Date built-in
   globalDateString: globalThis.Date(),
@@ -65,5 +106,8 @@ export const withShadowedBindings = (
   globalDateStringWithArgument: globalThis.Date(0),
   globalInstant: new globalThis.Date(),
   globalSample: globalThis.Math.random(),
+  globalSortableIdentifier: globalThis.Bun.randomUUIDv7(),
   globalIdentifier: globalThis.crypto.randomUUID(),
+  globalRandomBytes: globalThis.crypto.getRandomValues(new Uint8Array(8)),
+  globalMonotonicTime: globalThis.performance.now(),
 });

@@ -169,6 +169,7 @@ const trackSurfaceForm = async ({
         source: RULE_SOURCE.LLM_PROPOSED,
         confidence: 0,
         surfaceForms: [keyPhrase],
+        updatedAt: observedAt,
       })
       .onConflictDoUpdate({
         target: [caseLawPolarityRules.pattern, caseLawPolarityRules.language],

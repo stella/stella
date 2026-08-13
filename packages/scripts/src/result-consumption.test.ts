@@ -80,9 +80,11 @@ describe("Result consumption guard", () => {
       parse().map((value) => value + 1);
       [parse(), decoratedResult()];
       await Promise.all([asyncWrapper(), Promise.resolve(parse())]);
+      await Promise.allSettled([asyncWrapper(), Promise.resolve(parse())]);
     `);
 
     expect(diagnostics.map(({ rule }) => rule)).toEqual([
+      "unused-result",
       "unused-result",
       "unused-result",
       "unused-result",
@@ -126,6 +128,7 @@ describe("Result consumption guard", () => {
       structural();
       [structural(), Promise.resolve(structural())];
       await Promise.all([Promise.resolve(structural())]);
+      await Promise.allSettled([Promise.resolve(structural())]);
     `);
 
     expect(diagnostics).toEqual([]);

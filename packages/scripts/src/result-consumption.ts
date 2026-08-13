@@ -173,6 +173,40 @@ const isBetterResultType = (
   return isBetterResultVariant(checker, type);
 };
 
+const promiseFulfilledValueType = (
+  checker: ts.TypeChecker,
+  type: ts.Type,
+): ts.Type | undefined => {
+  if (type.isUnionOrIntersection()) {
+    for (const part of type.types) {
+      const valueType = promiseFulfilledValueType(checker, part);
+      if (valueType !== undefined) {
+        return valueType;
+      }
+    }
+    return undefined;
+  }
+
+  const symbol = type.aliasSymbol ?? type.getSymbol();
+  if (
+    symbol?.getName() !== "PromiseFulfilledResult" ||
+    symbol.declarations?.some((declaration) =>
+      declaration
+        .getSourceFile()
+        .fileName.replaceAll("\\", "/")
+        .endsWith("/lib.es2020.promise.d.ts"),
+    ) !== true
+  ) {
+    return undefined;
+  }
+
+  const value = type.getProperty("value");
+  const declaration = value?.valueDeclaration ?? value?.declarations?.at(0);
+  return value === undefined || declaration === undefined
+    ? undefined
+    : checker.getTypeOfSymbolAtLocation(value, declaration);
+};
+
 const isBetterResultValueType = (
   checker: ts.TypeChecker,
   type: ts.Type,
@@ -192,6 +226,15 @@ const isBetterResultValueType = (
     awaitedType !== undefined &&
     awaitedType !== type &&
     isBetterResultValueType(checker, awaitedType, seen)
+  ) {
+    return true;
+  }
+
+  const fulfilledValueType = promiseFulfilledValueType(checker, type);
+  if (
+    fulfilledValueType !== undefined &&
+    fulfilledValueType !== type &&
+    isBetterResultValueType(checker, fulfilledValueType, seen)
   ) {
     return true;
   }

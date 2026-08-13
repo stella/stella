@@ -90,7 +90,6 @@ export default eslintCompatPlugin({
       },
       createOnce(context) {
         const reportedAttributes = new Set<unknown>();
-        const conditionalCallbackAttributes = new Set<unknown>();
 
         const resolveVariable = (identifier: unknown): Variable | null => {
           if (!isIdentifierReference(identifier)) {
@@ -144,7 +143,10 @@ export default eslintCompatPlugin({
           );
         };
 
-        const localMemberValue = (value: unknown): unknown => {
+        const localMemberValue = (
+          value: unknown,
+          visitedVariables = new Set<Variable>(),
+        ): unknown => {
           const member = unwrapClassExpression(value);
           if (!isMemberExpression(member)) {
             return null;
@@ -159,35 +161,71 @@ export default eslintCompatPlugin({
             return null;
           }
 
-          const owner = unwrapClassExpression(member.object);
-          const ownerValue = isIdentifierReference(owner)
-            ? getConstInitializer(owner)
-            : isMemberExpression(owner)
-              ? localMemberValue(owner)
-              : owner;
-          const object = unwrapClassExpression(ownerValue);
-          if (!isObjectExpression(object)) {
-            return null;
-          }
+          const resolveObject = (
+            candidate: unknown,
+          ): ESTree.ObjectExpression | null => {
+            const expression = unwrapClassExpression(candidate);
+            if (isObjectExpression(expression)) {
+              return expression;
+            }
+            if (isMemberExpression(expression)) {
+              return resolveObject(
+                localMemberValue(expression, visitedVariables),
+              );
+            }
+            if (!isIdentifierReference(expression)) {
+              return null;
+            }
+            const variable = resolveVariable(expression);
+            if (variable === null || visitedVariables.has(variable)) {
+              return null;
+            }
+            visitedVariables.add(variable);
+            return resolveObject(getConstInitializer(expression));
+          };
 
-          for (const property of object.properties) {
-            if (
-              property.type === "Property" &&
-              property.computed === false &&
-              getPropertyName(property.key) === propertyName
+          const readProperty = (object: ESTree.ObjectExpression): unknown => {
+            for (
+              let index = object.properties.length - 1;
+              index >= 0;
+              index--
             ) {
-              return property.value;
+              const property = object.properties.at(index);
+              if (property === undefined) {
+                continue;
+              }
+              if (property.type === "SpreadElement") {
+                const spreadObject = resolveObject(property.argument);
+                if (spreadObject !== null) {
+                  const spreadValue = readProperty(spreadObject);
+                  if (spreadValue !== null) {
+                    return spreadValue;
+                  }
+                }
+                continue;
+              }
+              if (
+                property.computed === false &&
+                getPropertyName(property.key) === propertyName
+              ) {
+                return property.value;
+              }
+              if (
+                property.computed === true &&
+                isStringLiteral(property.key) &&
+                property.key.value === propertyName
+              ) {
+                return property.value;
+              }
+              if (property.computed === true) {
+                return null;
+              }
             }
-            if (
-              property.type === "Property" &&
-              property.computed === true &&
-              isStringLiteral(property.key) &&
-              property.key.value === propertyName
-            ) {
-              return property.value;
-            }
-          }
-          return null;
+            return null;
+          };
+
+          const object = resolveObject(member.object);
+          return object === null ? null : readProperty(object);
         };
 
         const isCanonicalCnComposition = (
@@ -239,7 +277,10 @@ export default eslintCompatPlugin({
             return isAllowedClassValue(initializer, visitedVariables);
           }
           if (isMemberExpression(node)) {
-            const localValue = localMemberValue(node);
+            const localValue = localMemberValue(
+              node,
+              new Set(visitedVariables),
+            );
             return (
               localValue === null ||
               isAllowedClassValue(localValue, visitedVariables)
@@ -252,9 +293,53 @@ export default eslintCompatPlugin({
             return isCanonicalCn(node.callee);
           }
           if (isFunctionExpression(node)) {
-            return (
-              node.body?.type === "BlockStatement" ||
-              isAllowedClassValue(node.body, visitedVariables)
+            if (node.body?.type !== "BlockStatement") {
+              return isAllowedClassValue(node.body, visitedVariables);
+            }
+
+            let hasConditionalBranch = false;
+            const returnValues: unknown[] = [];
+            const visitBody = (candidate: unknown, isRoot = false): void => {
+              if (!isAstNode(candidate)) {
+                return;
+              }
+              if (
+                !isRoot &&
+                (candidate.type === "ArrowFunctionExpression" ||
+                  candidate.type === "FunctionExpression" ||
+                  candidate.type === "FunctionDeclaration")
+              ) {
+                return;
+              }
+              if (
+                candidate.type === "IfStatement" ||
+                candidate.type === "SwitchStatement"
+              ) {
+                hasConditionalBranch = true;
+              }
+              if (candidate.type === "ReturnStatement") {
+                returnValues.push(candidate.argument);
+                return;
+              }
+              for (const [key, child] of Object.entries(candidate)) {
+                if (key === "parent" || key === "loc" || key === "range") {
+                  continue;
+                }
+                if (Array.isArray(child)) {
+                  for (const item of child) {
+                    visitBody(item);
+                  }
+                } else {
+                  visitBody(child);
+                }
+              }
+            };
+            visitBody(node.body, true);
+
+            return returnValues.every((returnValue) =>
+              hasConditionalBranch
+                ? isCanonicalCnComposition(returnValue)
+                : isAllowedClassValue(returnValue, new Set(visitedVariables)),
             );
           }
           return false;
@@ -268,46 +353,9 @@ export default eslintCompatPlugin({
           context.report({ node, messageId: "requireCanonicalCn" });
         };
 
-        const getEnclosingClassNameAttribute = (node: unknown): unknown => {
-          if (!isAstNode(node)) {
-            return null;
-          }
-          let current = node.parent;
-          while (
-            isAstNode(current) &&
-            current.type !== "ArrowFunctionExpression" &&
-            current.type !== "FunctionExpression"
-          ) {
-            current = current.parent;
-          }
-          if (
-            !isAstNode(current) ||
-            !isAstNode(current.parent) ||
-            current.parent.type !== "JSXExpressionContainer" ||
-            !isAstNode(current.parent.parent) ||
-            !isClassNameAttribute(current.parent.parent)
-          ) {
-            return null;
-          }
-          return current.parent.parent;
-        };
-
         return {
           before() {
             reportedAttributes.clear();
-            conditionalCallbackAttributes.clear();
-          },
-          IfStatement(node) {
-            const attribute = getEnclosingClassNameAttribute(node);
-            if (attribute !== null) {
-              conditionalCallbackAttributes.add(attribute);
-            }
-          },
-          SwitchStatement(node) {
-            const attribute = getEnclosingClassNameAttribute(node);
-            if (attribute !== null) {
-              conditionalCallbackAttributes.add(attribute);
-            }
           },
           JSXAttribute(node) {
             if (
@@ -318,36 +366,8 @@ export default eslintCompatPlugin({
               return;
             }
             const expression = unwrapClassExpression(node.value.expression);
-            if (
-              isFunctionExpression(expression) &&
-              expression.type === "ArrowFunctionExpression" &&
-              expression.body?.type === "BlockStatement"
-            ) {
-              return;
-            }
-            if (
-              isFunctionExpression(expression) &&
-              expression.type === "FunctionExpression" &&
-              expression.body?.type === "BlockStatement"
-            ) {
-              return;
-            }
             if (!isAllowedClassValue(expression)) {
               report(node);
-            }
-          },
-          ReturnStatement(node) {
-            if (node.argument === null) {
-              return;
-            }
-            const attribute = getEnclosingClassNameAttribute(node);
-            if (
-              attribute !== null &&
-              ((conditionalCallbackAttributes.has(attribute) &&
-                !isCanonicalCnComposition(node.argument)) ||
-                !isAllowedClassValue(node.argument))
-            ) {
-              report(attribute);
             }
           },
         };

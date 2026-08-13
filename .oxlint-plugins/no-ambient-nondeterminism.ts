@@ -11,6 +11,10 @@
 //   new Date()
 //   Math.random()
 //   crypto.randomUUID()
+//   crypto.getRandomValues(...)
+//   Bun.randomUUIDv7()
+//   performance.now()
+//   randomUUID() imported from node:crypto
 //   globalThis.Date.now() (and the corresponding forms above)
 //
 // Explicit date construction and locally shadowed bindings remain allowed.
@@ -19,6 +23,8 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
+  getImportedName,
+  isAstNode,
   isIdentifier,
   isStringLiteral,
   unwrapExpression,
@@ -74,11 +80,56 @@ const isGlobalReference = (context: unknown, node: unknown): boolean => {
   ) {
     return true;
   }
-  if (!("getScope" in sourceCode) || typeof sourceCode.getScope !== "function") {
+  if (
+    !("getScope" in sourceCode) ||
+    typeof sourceCode.getScope !== "function"
+  ) {
     return false;
   }
   const binding = bindingFromScope(sourceCode.getScope(node), node.name);
   return binding === null || !bindingHasDefinitions(binding);
+};
+
+const isNodeCryptoRandomUuid = (context: unknown, node: unknown): boolean => {
+  if (
+    !isIdentifier(node) ||
+    typeof context !== "object" ||
+    context === null ||
+    !("sourceCode" in context) ||
+    typeof context.sourceCode !== "object" ||
+    context.sourceCode === null ||
+    !("getScope" in context.sourceCode) ||
+    typeof context.sourceCode.getScope !== "function"
+  ) {
+    return false;
+  }
+
+  const binding = bindingFromScope(
+    context.sourceCode.getScope(node),
+    node.name,
+  );
+  return (
+    typeof binding === "object" &&
+    binding !== null &&
+    "defs" in binding &&
+    Array.isArray(binding.defs) &&
+    binding.defs.some(
+      (definition) =>
+        typeof definition === "object" &&
+        definition !== null &&
+        "type" in definition &&
+        definition.type === "ImportBinding" &&
+        "node" in definition &&
+        isAstNode(definition.node) &&
+        definition.node.type === "ImportSpecifier" &&
+        getImportedName(definition.node) === "randomUUID" &&
+        "parent" in definition &&
+        isAstNode(definition.parent) &&
+        definition.parent.type === "ImportDeclaration" &&
+        isAstNode(definition.parent.source) &&
+        definition.parent.source.value === "node:crypto",
+    )
+  );
 };
 
 const staticMemberName = (node: unknown): string | null => {
@@ -115,7 +166,13 @@ const globalObjectName = (context: unknown, node: unknown): string | null => {
 
 const ambientCallKind = (context: unknown, callee: unknown): string | null => {
   const expression = unwrapExpression(callee);
-  if (expression === null || expression.type !== "MemberExpression") {
+  if (expression === null) {
+    return null;
+  }
+  if (isNodeCryptoRandomUuid(context, expression)) {
+    return "randomUUID() from node:crypto";
+  }
+  if (expression.type !== "MemberExpression") {
     return null;
   }
   const property = staticMemberName(expression);
@@ -128,6 +185,15 @@ const ambientCallKind = (context: unknown, callee: unknown): string | null => {
   }
   if (object === "crypto" && property === "randomUUID") {
     return "crypto.randomUUID()";
+  }
+  if (object === "crypto" && property === "getRandomValues") {
+    return "crypto.getRandomValues()";
+  }
+  if (object === "Bun" && property === "randomUUIDv7") {
+    return "Bun.randomUUIDv7()";
+  }
+  if (object === "performance" && property === "now") {
+    return "performance.now()";
   }
   return null;
 };
