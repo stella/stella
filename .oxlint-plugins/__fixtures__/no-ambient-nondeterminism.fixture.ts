@@ -272,10 +272,10 @@ export const callbackDateStrings = [1, 2].map(Date);
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: Array.from's mapper executes ambient functions
 export const callbackArrayFromEpochs = Array.from([1, 2], Date.now);
 
-// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: timer callbacks execute ambient function aliases
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism, typescript/strict-void-return -- fixture: timer callbacks execute ambient value-returning function aliases
 export const ambientTimer = setTimeout(directClock.now, 0);
 
-// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: imported ambient functions retain provenance in callback positions
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism, typescript/strict-void-return -- fixture: imported ambient value-returning functions retain provenance in callback positions
 export const importedAmbientTimer = setTimeout(randomUUID, 0);
 
 const localCallback = () => 0;
@@ -291,7 +291,7 @@ const customCallbackStore = {
 };
 export const customMethodStoredCallback = customCallbackStore.map(Date.now);
 
-// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: native Promise executors invoke ambient function references
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism, typescript/strict-void-return -- fixture: native Promise executors invoke ambient value-returning function references
 export const ambientPromiseExecutor = new Promise(Date.now);
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: native Promise callbacks execute ambient function references
@@ -305,13 +305,13 @@ export const ambientPromiseCallbacks = Promise.resolve(0).then(
 );
 
 const customThenableStore = {
+  // oxlint-disable-next-line unicorn/no-thenable -- fixture: a custom lookalike must not gain native Promise provenance
   then: (callback: typeof Date.now) => callback,
 };
 export const customThenableStoredCallback =
   customThenableStore.then(Date.now);
 
 export const withShadowedPromise = (
-  // oxlint-disable-next-line no-shadow-restricted-names -- fixture: a local Promise constructor must not be treated as the global built-in
   Promise: new (callback: typeof Date.now) => object,
 ) => new Promise(Date.now);
 

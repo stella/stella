@@ -274,6 +274,7 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
       <div className={equivalentMutableClass} />
       <div className={overwrittenMemberStyles.root} />
       {/* Cyclic local object graphs terminate without inventing provenance. */}
+      {/* oxlint-disable-next-line typescript/no-unnecessary-condition -- fixture: retain a cyclic optional-member resolver path */}
       <div className={cyclicStyles.self?.self?.className} />
       <div data-removed-class={_removedClassName} {...safeRestProps} />
 
