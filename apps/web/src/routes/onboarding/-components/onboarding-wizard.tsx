@@ -27,7 +27,6 @@ import type {
 import { LanguagePicker } from "@/components/language-picker";
 import { ThemePicker } from "@/components/theme-picker";
 import { useBrowserRegion } from "@/hooks/use-browser-region";
-import { useHydrated } from "@/hooks/use-hydrated";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
@@ -96,7 +95,6 @@ export const OnboardingWizard = () => {
   const t = useTranslations();
   const navigate = useNavigate();
   const analytics = useAnalytics();
-  const hydrated = useHydrated();
   const browserRegion = useBrowserRegion();
   const queryClient = useQueryClient();
   const { data: sessionData } = useQuery(sessionOptions);
@@ -124,7 +122,7 @@ export const OnboardingWizard = () => {
   }));
   const suggestedCountryCodes = getSuggestedCountryCodes({
     email: userEmail,
-    browserRegion: hydrated ? browserRegion : undefined,
+    browserRegion: browserRegion || undefined,
     detectedCountry: sessionData?.user.detectedCountry,
   });
   const [jurisdictionSuggestionApplied, setJurisdictionSuggestionApplied] =
@@ -194,7 +192,7 @@ export const OnboardingWizard = () => {
 
   const suggestedCountryCode = suggestedCountryCodes.at(0);
   useLayoutEffect(() => {
-    if (!hydrated || jurisdictionSuggestionApplied || !suggestedCountryCode) {
+    if (jurisdictionSuggestionApplied || !suggestedCountryCode) {
       return;
     }
     // eslint-disable-next-line react/react-compiler -- commit-safe one-shot latch for an async suggestion; user edits are rechecked in the functional data update below
@@ -210,7 +208,7 @@ export const OnboardingWizard = () => {
         ],
       };
     });
-  }, [hydrated, jurisdictionSuggestionApplied, suggestedCountryCode]);
+  }, [jurisdictionSuggestionApplied, suggestedCountryCode]);
 
   const continueFromJurisdiction = () => {
     setData((currentData) => ({

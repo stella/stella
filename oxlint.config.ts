@@ -1,4 +1,5 @@
 import { defineConfig } from "oxlint";
+import type { OxlintOverride } from "oxlint";
 import core from "ultracite/oxlint/core";
 import react from "ultracite/oxlint/react";
 
@@ -18,7 +19,89 @@ const fixtureRuleOverride = (file: string, rules: readonly string[]) => ({
   rules: Object.fromEntries(rules.map((rule) => [rule, "error"] as const)),
 });
 
+const PUBLIC_SSR_AMBIENT_STATE_MESSAGE =
+  "Public SSR modules must use a hydration-safe adapter with a deterministic server snapshot.";
+const publicSsrBrowserGlobals = [
+  "devicePixelRatio",
+  "document",
+  "history",
+  "innerHeight",
+  "innerWidth",
+  "localStorage",
+  "location",
+  "matchMedia",
+  "navigator",
+  "outerHeight",
+  "outerWidth",
+  "pageXOffset",
+  "pageYOffset",
+  "screen",
+  "scrollX",
+  "scrollY",
+  "self",
+  "sessionStorage",
+  "visualViewport",
+  "window",
+].map((name) => ({ name, message: PUBLIC_SSR_AMBIENT_STATE_MESSAGE }));
+const publicSsrAmbientProperties = [
+  {
+    object: "Date",
+    property: "now",
+    message: PUBLIC_SSR_AMBIENT_STATE_MESSAGE,
+  },
+  {
+    object: "Date",
+    property: "parse",
+    message: PUBLIC_SSR_AMBIENT_STATE_MESSAGE,
+  },
+  {
+    object: "Math",
+    property: "random",
+    message: PUBLIC_SSR_AMBIENT_STATE_MESSAGE,
+  },
+  {
+    object: "crypto",
+    property: "getRandomValues",
+    message: PUBLIC_SSR_AMBIENT_STATE_MESSAGE,
+  },
+  {
+    object: "crypto",
+    property: "randomUUID",
+    message: PUBLIC_SSR_AMBIENT_STATE_MESSAGE,
+  },
+  {
+    object: "performance",
+    property: "now",
+    message: PUBLIC_SSR_AMBIENT_STATE_MESSAGE,
+  },
+  ...[
+    "Collator",
+    "DateTimeFormat",
+    "DisplayNames",
+    "ListFormat",
+    "NumberFormat",
+    "PluralRules",
+    "RelativeTimeFormat",
+    "Segmenter",
+  ].map((property) => ({
+    object: "Intl",
+    property,
+    message: PUBLIC_SSR_AMBIENT_STATE_MESSAGE,
+  })),
+];
+const publicSsrAmbientStateRules = {
+  "no-restricted-globals": [
+    "error",
+    { globals: publicSsrBrowserGlobals, checkGlobalObject: true },
+  ],
+  "no-restricted-properties": ["error", ...publicSsrAmbientProperties],
+} satisfies NonNullable<OxlintOverride["rules"]>;
+
 const fixtureRuleOverrides = [
+  {
+    files: [".oxlint-plugins/__fixtures__/public-ssr-ambient-state.fixture.ts"],
+    rules: publicSsrAmbientStateRules,
+  },
   fixtureRuleOverride("auth-lifecycle.fixture.ts", [
     "auth-lifecycle/after-remove-member-revokes-artifacts",
     "auth-lifecycle/no-direct-auth-artifact-delete",
@@ -56,9 +139,6 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-physical-properties.fixture.ts", [
     "no-physical-properties/no-physical-properties",
-  ]),
-  fixtureRuleOverride("no-public-law-browser-globals.fixture.ts", [
-    "no-public-law-browser-globals/no-public-law-browser-globals",
   ]),
   fixtureRuleOverride("no-raw-api-url.fixture.ts", [
     "no-raw-api-url/no-direct-api-env",
@@ -370,7 +450,6 @@ export default defineConfig({
     "must-use-result/must-use-result": "error",
     "no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast": "error",
     "no-partial-record-satisfies/no-partial-record-satisfies": "error",
-    "no-public-law-browser-globals/no-public-law-browser-globals": "off",
     "no-raw-public-law-seo/no-raw-public-law-seo": "off",
     "public-case-law-db-boundary/public-case-law-db-boundary": "off",
     "require-contained-handler/require-contained-handler": "error",
@@ -608,7 +687,6 @@ export default defineConfig({
     "./.oxlint-plugins/no-direct-audit-log-insert.ts",
     "./.oxlint-plugins/must-use-result.ts",
     "./.oxlint-plugins/no-unvalidated-json-domain-cast.ts",
-    "./.oxlint-plugins/no-public-law-browser-globals.ts",
     "./.oxlint-plugins/no-raw-public-law-seo.ts",
     "./.oxlint-plugins/public-case-law-db-boundary.ts",
     "./.oxlint-plugins/require-contained-handler.ts",
@@ -1678,7 +1756,7 @@ export default defineConfig({
         "apps/web/src/features/case-law/**/*.{ts,tsx}",
       ],
       rules: {
-        "no-public-law-browser-globals/no-public-law-browser-globals": "error",
+        ...publicSsrAmbientStateRules,
         "no-restricted-imports": [
           "error",
           {
@@ -1709,7 +1787,7 @@ export default defineConfig({
         "apps/web/src/routes/tools/**/*.{ts,tsx}",
       ],
       rules: {
-        "no-public-law-browser-globals/no-public-law-browser-globals": "error",
+        ...publicSsrAmbientStateRules,
       },
     },
     {

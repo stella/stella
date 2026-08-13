@@ -164,35 +164,6 @@ describe("custom oxlint guardrails", () => {
     );
   });
 
-  test("public law modules cannot reference browser globals directly", () => {
-    const configSource = readRootFixture("oxlint.config.ts");
-    const pluginSource = readRootFixture(
-      ".oxlint-plugins/no-public-law-browser-globals.ts",
-    );
-
-    expect(configSource).toContain("apps/web/src/routes/law/**/*.{ts,tsx}");
-    expect(configSource).toContain("apps/web/src/routes/tools/**/*.{ts,tsx}");
-    expect(configSource).toContain("apps/web/src/components/sidebar.tsx");
-    expect(configSource).toContain(
-      "apps/web/src/features/case-law/**/*.{ts,tsx}",
-    );
-    expect(configSource).toContain(
-      "no-public-law-browser-globals/no-public-law-browser-globals",
-    );
-    expect(pluginSource).toContain("Public SSR modules must not reference");
-    expect(pluginSource).toContain('"window"');
-    expect(pluginSource).toContain('"document"');
-    expect(pluginSource).toContain('"localStorage"');
-    expect(pluginSource).toContain('"sessionStorage"');
-    expect(pluginSource).toContain('"matchMedia"');
-    expect(pluginSource).toContain('"navigator"');
-    expect(pluginSource).toContain("AMBIENT_FUNCTION_MEMBERS");
-    expect(pluginSource).toContain('["Date", new Set(["now", "parse"])]');
-    expect(pluginSource).toContain('["Math", new Set(["random"])]');
-    expect(pluginSource).toContain("isAmbientFunctionMember");
-    expect(pluginSource).toContain("AMBIENT_INTL_CONSTRUCTORS");
-  });
-
   test("matter links must declare their listing or reference affordance", () => {
     const configSource = readRootFixture("oxlint.config.ts");
     const pluginSource = readRootFixture(
