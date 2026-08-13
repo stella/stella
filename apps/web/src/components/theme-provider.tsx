@@ -10,6 +10,7 @@ type Theme = (typeof THEMES)[number];
 
 const PALETTES = ["nord", "neutral", "flexoki"] as const;
 type Palette = (typeof PALETTES)[number];
+type PreferenceStatus = "pending" | "ready";
 
 type ThemeProviderState = {
   theme: Theme;
@@ -80,11 +81,11 @@ const suppressTransitions = () => {
 };
 
 export const ThemeProvider = ({ children }: PropsWithChildren) => {
-  const [theme, setThemeState] = useState<Theme>(getStoredTheme);
-  const [palette, setPaletteState] = useState<Palette>(getStoredPalette);
-  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() =>
-    resolveTheme(theme),
-  );
+  const [theme, setThemeState] = useState<Theme>("system");
+  const [palette, setPaletteState] = useState<Palette>("neutral");
+  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("light");
+  const [preferenceStatus, setPreferenceStatus] =
+    useState<PreferenceStatus>("pending");
 
   const setTheme = (next: Theme) => {
     if (typeof localStorage !== "undefined") {
@@ -100,7 +101,18 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
     setPaletteState(next);
   };
 
+  useMountEffect(() => {
+    const storedTheme = getStoredTheme();
+    setThemeState(storedTheme);
+    setPaletteState(getStoredPalette());
+    setResolvedTheme(resolveTheme(storedTheme));
+    setPreferenceStatus("ready");
+  });
+
   useExternalSyncEffect(() => {
+    if (preferenceStatus === "pending") {
+      return;
+    }
     const root = document.documentElement;
 
     const updateTheme = () => {
@@ -127,9 +139,12 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
     };
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
-  }, [theme]);
+  }, [preferenceStatus, theme]);
 
   useExternalSyncEffect(() => {
+    if (preferenceStatus === "pending") {
+      return;
+    }
     const root = document.documentElement;
     const restore = suppressTransitions();
 
@@ -144,7 +159,7 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
     }
 
     restore();
-  }, [palette]);
+  }, [palette, preferenceStatus]);
 
   useMountEffect(() => {
     const onStorage = (e: StorageEvent) => {
