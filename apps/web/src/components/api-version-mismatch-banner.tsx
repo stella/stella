@@ -7,6 +7,7 @@ import * as v from "valibot";
 import Tooltip from "@/components/tooltip";
 import { env } from "@/env";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
+import { useLocalStorageFlag } from "@/hooks/use-local-storage-flag";
 import { browserApiRootUrl } from "@/lib/api-url";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { compareSemver } from "@/lib/semver-compare";
@@ -53,6 +54,8 @@ export const ApiVersionMismatchBanner = () => {
       return parsed.success ? parsed.output.version : null;
     },
   });
+  const dismissedKey = `${DISMISSED_KEY_PREFIX}${serverVersion ?? ""}`;
+  const isPersistedDismissal = useLocalStorageFlag(dismissedKey);
 
   if (!enabled || !serverVersion) {
     return null;
@@ -64,14 +67,10 @@ export const ApiVersionMismatchBanner = () => {
 
   // Per-version dismissal so dismissing 0.0.8 doesn't suppress
   // the banner when 0.0.9 ships.
-  const dismissedKey = `${DISMISSED_KEY_PREFIX}${serverVersion}`;
   if (dismissedVersion === serverVersion) {
     return null;
   }
-  if (
-    typeof localStorage !== "undefined" &&
-    localStorage.getItem(dismissedKey) === "1"
-  ) {
+  if (isPersistedDismissal) {
     return null;
   }
 
