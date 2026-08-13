@@ -171,18 +171,24 @@ describe("custom oxlint guardrails", () => {
     );
 
     expect(configSource).toContain("apps/web/src/routes/law/**/*.{ts,tsx}");
+    expect(configSource).toContain("apps/web/src/routes/tools/**/*.{ts,tsx}");
+    expect(configSource).toContain("apps/web/src/components/sidebar.tsx");
     expect(configSource).toContain(
       "apps/web/src/features/case-law/**/*.{ts,tsx}",
     );
     expect(configSource).toContain(
       "no-public-law-browser-globals/no-public-law-browser-globals",
     );
-    expect(pluginSource).toContain("Public law modules must be SSR-safe");
+    expect(pluginSource).toContain("Public SSR modules must not reference");
     expect(pluginSource).toContain('"window"');
     expect(pluginSource).toContain('"document"');
     expect(pluginSource).toContain('"localStorage"');
     expect(pluginSource).toContain('"sessionStorage"');
     expect(pluginSource).toContain('"matchMedia"');
+    expect(pluginSource).toContain('"navigator"');
+    expect(pluginSource).toContain('memberName === "now"');
+    expect(pluginSource).toContain('randomMemberName === "random"');
+    expect(pluginSource).toContain("AMBIENT_INTL_CONSTRUCTORS");
   });
 
   test("matter links must declare their listing or reference affordance", () => {

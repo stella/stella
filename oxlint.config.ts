@@ -1701,6 +1701,24 @@ export default defineConfig({
       },
     },
     {
+      files: [
+        "apps/web/src/app-providers.tsx",
+        "apps/web/src/components/public-workspace-shell.tsx",
+        "apps/web/src/components/sidebar.tsx",
+        "apps/web/src/routes/__root.tsx",
+        "apps/web/src/routes/tools/**/*.{ts,tsx}",
+      ],
+      rules: {
+        "no-public-law-browser-globals/no-public-law-browser-globals": "error",
+      },
+    },
+    {
+      files: ["apps/web/src/routes/tools/-components/copy-button.tsx"],
+      rules: {
+        "no-public-law-browser-globals/no-public-law-browser-globals": "off",
+      },
+    },
+    {
       files: ["apps/web/src/routes/law/**/*.{ts,tsx}"],
       rules: {
         "no-raw-public-law-seo/no-raw-public-law-seo": "error",
