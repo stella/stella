@@ -946,7 +946,7 @@
       "scope": "read"
     },
     "name": "read_document",
-    "description": "Read a document's metadata and field values by entity ID. By default returns the current version's name, kind, and field/property values. The default response also reports contentState and searchIndexState, including an actionable remediation or escalation requirement when searchable-text OCR is required. Pass version_id to inspect a specific version instead. Pass version_id and compare_with_version_id to get a plain-text line diff between two versions. Pass include_versions to also return the version history. To read the document's extracted text content, use read_content_across_matters.",
+    "description": "Read a document's metadata and field values by entity ID. By default returns the current version's name, kind, and field/property values. The default response also reports contentState and searchIndexState, including an actionable remediation or escalation requirement when document text processing is required. Pass version_id to inspect a specific version instead. Pass version_id and compare_with_version_id to get a plain-text line diff between two versions. Pass include_versions to also return the version history. To read the document's extracted text content, use read_content_across_matters.",
     "inputSchema": {
       "type": "object",
       "properties": {

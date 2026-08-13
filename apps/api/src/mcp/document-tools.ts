@@ -44,6 +44,11 @@ import { isUuid } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { selectCurrentExtractedContent } from "@/api/lib/document-content-provenance";
 import {
+  DOCUMENT_PROCESSING_FAILURE_CODE,
+  DOCUMENT_PROCESSING_KIND,
+  DOCUMENT_PROCESSING_REQUIRED_STATUS,
+} from "@/api/lib/document-processing-contract";
+import {
   entityListCursorCondition,
   entityListTimestampCursorExpr,
 } from "@/api/lib/entities/list-cursor";
@@ -537,7 +542,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       "returns the current version's name, kind, and field/property values. " +
       "The default response also reports contentState and searchIndexState, " +
       "including an actionable remediation or escalation requirement when " +
-      "searchable-text OCR is required. " +
+      "document text processing is required. " +
       "Pass version_id to inspect a specific version instead. Pass version_id " +
       "and compare_with_version_id to get a plain-text line diff between two " +
       "versions. Pass include_versions to also return the version history. To " +
@@ -1193,12 +1198,12 @@ type DocumentContentState =
     }
   | {
       status: "pending";
-      processingKind: "native-extraction" | "ocr";
+      processingKind: typeof DOCUMENT_PROCESSING_KIND;
       runId: SafeId<"documentProcessingRun"> | null;
       sourceVersionId: SafeId<"entityVersion">;
     }
   | {
-      status: "requires_ocr";
+      status: typeof DOCUMENT_PROCESSING_REQUIRED_STATUS;
       sourceVersionId: SafeId<"entityVersion">;
       remediation:
         | {
@@ -1224,10 +1229,10 @@ type DocumentContentState =
     }
   | {
       status: "failed";
-      processingKind: "native-extraction" | "ocr";
+      processingKind: typeof DOCUMENT_PROCESSING_KIND;
       runId: SafeId<"documentProcessingRun">;
       sourceVersionId: SafeId<"entityVersion">;
-      errorCode: string | null;
+      errorCode: typeof DOCUMENT_PROCESSING_FAILURE_CODE;
       retryable: true;
     }
   | {
@@ -1456,10 +1461,10 @@ const loadDocumentProcessingStates = async ({
   ) {
     contentState = {
       status: "failed",
-      processingKind: "native-extraction",
+      processingKind: DOCUMENT_PROCESSING_KIND,
       runId: nativeRun.id,
       sourceVersionId: current.currentVersionId,
-      errorCode: nativeRun.errorCode,
+      errorCode: DOCUMENT_PROCESSING_FAILURE_CODE,
       retryable: true,
     };
   } else if (!sourceFile.encrypted && sourceFile.mimeType === DOCX_MIME_TYPE) {
@@ -1482,16 +1487,16 @@ const loadDocumentProcessingStates = async ({
   ) {
     contentState = {
       status: "failed",
-      processingKind: "ocr",
+      processingKind: DOCUMENT_PROCESSING_KIND,
       runId: ocrRun.id,
       sourceVersionId: current.currentVersionId,
-      errorCode: ocrRun.errorCode,
+      errorCode: DOCUMENT_PROCESSING_FAILURE_CODE,
       retryable: true,
     };
   } else if (ocrRun?.status === "queued" || ocrRun?.status === "running") {
     contentState = {
       status: "pending",
-      processingKind: "ocr",
+      processingKind: DOCUMENT_PROCESSING_KIND,
       runId: ocrRun.id,
       sourceVersionId: current.currentVersionId,
     };
@@ -1502,7 +1507,8 @@ const loadDocumentProcessingStates = async ({
     contentState = {
       status: "unsupported",
       sourceVersionId: current.currentVersionId,
-      reason: "OCR is unavailable while the matter is not active.",
+      reason:
+        "Document processing is unavailable while the matter is not active.",
     };
   } else if (
     currentExtracted?.charCount === 0 &&
@@ -1512,7 +1518,7 @@ const loadDocumentProcessingStates = async ({
       "off"
   ) {
     contentState = {
-      status: "requires_ocr",
+      status: DOCUMENT_PROCESSING_REQUIRED_STATUS,
       sourceVersionId: current.currentVersionId,
       remediation: canQueueManualOcr
         ? {
@@ -1536,7 +1542,7 @@ const loadDocumentProcessingStates = async ({
             requiredScope: "stella:matters_write",
             requiredPermission: "entity:update",
             instruction:
-              "Ask a matter editor with stella:matters_write to invoke entities.ocr.create for this document field.",
+              "Ask a matter editor to start document processing for this field.",
           },
     };
   } else if (currentExtracted) {
@@ -1549,10 +1555,10 @@ const loadDocumentProcessingStates = async ({
   } else if (nativeRun?.status === "failed") {
     contentState = {
       status: "failed",
-      processingKind: "native-extraction",
+      processingKind: DOCUMENT_PROCESSING_KIND,
       runId: nativeRun.id,
       sourceVersionId: current.currentVersionId,
-      errorCode: nativeRun.errorCode,
+      errorCode: DOCUMENT_PROCESSING_FAILURE_CODE,
       retryable: true,
     };
   } else if (sourceFile.encrypted) {
@@ -1570,7 +1576,7 @@ const loadDocumentProcessingStates = async ({
   } else {
     contentState = {
       status: "pending",
-      processingKind: "native-extraction",
+      processingKind: DOCUMENT_PROCESSING_KIND,
       runId:
         nativeRun?.status === "queued" || nativeRun?.status === "running"
           ? nativeRun.id

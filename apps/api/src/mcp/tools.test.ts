@@ -2614,9 +2614,9 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(parseToolPayload(result)).toMatchObject({
       contentState: {
         status: "failed",
-        processingKind: "native-extraction",
+        processingKind: "document-processing",
         runId: "run_native",
-        errorCode: "processing_failed",
+        errorCode: "document_processing_failed",
         retryable: true,
       },
     });
@@ -2649,7 +2649,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(parseToolPayload(result)).toMatchObject({
       contentState: {
-        status: "requires_ocr",
+        status: "requires_processing",
         sourceVersionId: "entity_version_1",
         remediation: {
           type: "action",
@@ -2715,7 +2715,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(parseToolPayload(result)).toMatchObject({
       contentState: {
-        status: "requires_ocr",
+        status: "requires_processing",
         remediation: {
           type: "action",
           arguments: {
@@ -2768,7 +2768,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
       expect(parseToolPayload(result)).toMatchObject({
         contentState: {
-          status: "requires_ocr",
+          status: "requires_processing",
           sourceVersionId: "entity_version_1",
           remediation: {
             type: "escalation",
@@ -2807,7 +2807,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(parseToolPayload(result)).toMatchObject({
       contentState: {
-        status: "requires_ocr",
+        status: "requires_processing",
         remediation: { type: "escalation" },
       },
     });
@@ -2915,7 +2915,8 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(parseToolPayload(result)).toMatchObject({
       contentState: {
         status: "unsupported",
-        reason: "OCR is unavailable while the matter is not active.",
+        reason:
+          "Document processing is unavailable while the matter is not active.",
       },
     });
   });
@@ -3046,7 +3047,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(parseToolPayload(result)).toMatchObject({
       contentState: {
-        status: "requires_ocr",
+        status: "requires_processing",
         remediation: { type: "action" },
       },
       searchIndexState: {

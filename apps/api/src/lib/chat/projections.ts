@@ -1,6 +1,11 @@
 import * as v from "valibot";
 
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
+import {
+  DOCUMENT_PROCESSING_FAILURE_CODE,
+  DOCUMENT_PROCESSING_KIND,
+  DOCUMENT_PROCESSING_REQUIRED_STATUS,
+} from "@/api/lib/document-processing-contract";
 
 import {
   chatEntityRef,
@@ -399,6 +404,22 @@ const documentVersionEntryProjection = v.strictObject({
 const readDocumentEntityId = () =>
   chatEntityRef({ from: "inputEntity", param: "entity_id" });
 
+const documentProcessingRemediationProjection = v.variant("type", [
+  v.strictObject({
+    type: v.literal("action"),
+    tool: v.literal("invoke_capability"),
+    // Internal chat cannot invoke generic capabilities. Strip arguments
+    // defensively if this unreachable branch is ever returned.
+    arguments: strippedField(),
+  }),
+  v.strictObject({
+    type: v.literal("escalation"),
+    requiredScope: v.literal("stella:matters_write"),
+    requiredPermission: v.literal("entity:update"),
+    instruction: v.string(),
+  }),
+]);
+
 const documentContentStateProjection = v.variant("status", [
   v.strictObject({ status: v.literal("not_applicable") }),
   v.strictObject({
@@ -409,35 +430,21 @@ const documentContentStateProjection = v.variant("status", [
   }),
   v.strictObject({
     status: v.literal("pending"),
-    processingKind: v.picklist(["native-extraction", "ocr"]),
+    processingKind: v.literal(DOCUMENT_PROCESSING_KIND),
     runId: v.nullable(passthroughId()),
     sourceVersionId: passthroughId(),
   }),
   v.strictObject({
-    status: v.literal("requires_ocr"),
+    status: v.literal(DOCUMENT_PROCESSING_REQUIRED_STATUS),
     sourceVersionId: passthroughId(),
-    remediation: v.variant("type", [
-      v.strictObject({
-        type: v.literal("action"),
-        tool: v.literal("invoke_capability"),
-        // Internal chat cannot invoke generic capabilities. Strip arguments
-        // defensively if this unreachable branch is ever returned.
-        arguments: strippedField(),
-      }),
-      v.strictObject({
-        type: v.literal("escalation"),
-        requiredScope: v.literal("stella:matters_write"),
-        requiredPermission: v.literal("entity:update"),
-        instruction: v.string(),
-      }),
-    ]),
+    remediation: documentProcessingRemediationProjection,
   }),
   v.strictObject({
     status: v.literal("failed"),
-    processingKind: v.picklist(["native-extraction", "ocr"]),
+    processingKind: v.literal(DOCUMENT_PROCESSING_KIND),
     runId: passthroughId(),
     sourceVersionId: passthroughId(),
-    errorCode: v.nullable(v.string()),
+    errorCode: v.literal(DOCUMENT_PROCESSING_FAILURE_CODE),
     retryable: v.literal(true),
   }),
   v.strictObject({
