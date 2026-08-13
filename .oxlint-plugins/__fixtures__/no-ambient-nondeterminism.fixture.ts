@@ -102,8 +102,7 @@ const localCryptoModuleAlias = localCryptoModule;
 const { randomUUID: localCryptoRandomUuid } = localCryptoModule;
 
 export const localModuleIdentifier = localCryptoModule.randomUUID();
-export const localAliasedModuleIdentifier =
-  localCryptoModuleAlias.randomUUID();
+export const localAliasedModuleIdentifier = localCryptoModuleAlias.randomUUID();
 export const localDestructuredIdentifier = localCryptoRandomUuid();
 
 const localWebcryptoModule = {
@@ -114,6 +113,40 @@ const localWebcryptoModule = {
 };
 export const localWebcryptoIdentifier =
   localWebcryptoModule.webcrypto.randomUUID();
+
+const importedCryptoServices = {
+  crypto: nodeCryptoNamespace,
+  webcrypto: bareCryptoDefault.webcrypto,
+};
+
+export const containedCryptoIdentifier =
+  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: local containers retain imported crypto namespace provenance
+  importedCryptoServices.crypto.randomUUID();
+
+export const containedWebcryptoBytes =
+  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: local containers retain imported webcrypto provenance
+  importedCryptoServices.webcrypto.getRandomValues(new Uint8Array(8));
+
+const replacedCryptoServices: {
+  crypto: { randomUUID: () => string };
+} = { crypto: nodeCryptoNamespace };
+
+export const identifierBeforeCryptoReplacement =
+  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: later container writes cannot alter provenance at an earlier call
+  replacedCryptoServices.crypto.randomUUID();
+
+replacedCryptoServices.crypto = localCryptoModule;
+export const identifierAfterCryptoReplacement =
+  replacedCryptoServices.crypto.randomUUID();
+
+const installedCryptoServices = { crypto: localCryptoModule };
+export const identifierBeforeCryptoInstallation =
+  installedCryptoServices.crypto.randomUUID();
+installedCryptoServices.crypto = nodeCryptoNamespace;
+
+export const identifierAfterCryptoInstallation =
+  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: imported crypto provenance begins at the preceding container write
+  installedCryptoServices.crypto.randomUUID();
 
 const readNow = Date.now;
 const createSortableIdentifier = Bun.randomUUIDv7;
@@ -231,6 +264,67 @@ export const chainedRootIdentifier =
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: nested destructuring follows an immutable globalThis alias
 export const nestedAliasedRootEpoch = nestedAliasedRootNow();
 
+const computedDateMethod = "now";
+const computedCryptoMethod = "randomUUID";
+const chainedComputedDateMethod = computedDateMethod;
+const templateComputedDateMethod = `now`;
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: immutable computed method names retain Date provenance
+export const computedEpoch = Date[computedDateMethod]();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: immutable computed method names retain crypto provenance
+export const computedIdentifier = crypto[computedCryptoMethod]();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: chained immutable computed method aliases retain Date provenance
+export const chainedComputedEpoch = Date[chainedComputedDateMethod]();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: static template computed method names retain Date provenance
+export const templateComputedEpoch = Date[templateComputedDateMethod]();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism, typescript/dot-notation -- fixture: direct static template method names retain Date provenance
+export const directTemplateComputedEpoch = Date[`now`]();
+
+export const conditionalAmbientClock = (monotonic: boolean) =>
+  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: conditional callees retain both ambient outcomes
+  (monotonic ? performance.now : Date.now)();
+
+export const directlyAliasedConditionalAmbientClock = (monotonic: boolean) => {
+  const ambientClock = monotonic ? performance.now : Date.now;
+  return (
+    // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: immutable aliases of conditional ambient callees retain provenance
+    ambientClock()
+  );
+};
+
+export const logicalAmbientClock = (preferEpoch: boolean) =>
+  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: logical callees retain ambient outcomes
+  ((preferEpoch && Date.now) || performance.now)();
+
+class LocalDate {
+  readonly kind = "local";
+}
+
+export const conditionalAmbientConstructor = (useAmbient: boolean) =>
+  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: conditional zero-argument constructors retain an ambient Date outcome
+  new (useAmbient ? Date : LocalDate)();
+
+export const aliasedConditionalAmbientConstructor = (useAmbient: boolean) => {
+  const Constructor = useAmbient ? Date : LocalDate;
+  return (
+    // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: immutable aliases retain conditional ambient constructor provenance
+    new Constructor()
+  );
+};
+
+export const logicalAmbientConstructor = (useAmbient: boolean) =>
+  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: logical zero-argument constructors retain an ambient Date outcome
+  new ((useAmbient && Date) || LocalDate)();
+
+const observeConstructorChoice = () => undefined;
+export const sequenceAmbientConstructor = () =>
+  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism, no-sequences -- fixture: the selected sequence constructor retains ambient Date provenance
+  new (observeConstructorChoice(), Date)();
+
 const directClock = { now: Date.now };
 const spreadClock = { ...directClock };
 const nestedServices = { clock: spreadClock };
@@ -241,6 +335,75 @@ const spreadLocalClock = { ...localClock };
 export const withOpaqueClockOverride = (override: { now: () => number }) => {
   const opaqueClock = { now: Date.now, ...override };
   return opaqueClock.now();
+};
+
+const writtenAmbientClock = { now: () => 0 };
+writtenAmbientClock.now = Date.now;
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: the latest static property write retains ambient provenance
+export const writtenAmbientEpoch = writtenAmbientClock.now();
+
+const overwrittenAmbientClock = { now: Date.now };
+overwrittenAmbientClock.now = () => 0;
+export const overwrittenLocalEpoch = overwrittenAmbientClock.now();
+
+export const conditionallyOverwrittenAmbientEpoch = (useLocal: boolean) => {
+  const clock = { now: Date.now };
+  if (useLocal) {
+    clock.now = () => 0;
+  }
+  return (
+    // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: a conditional local write cannot erase an ambient initializer
+    clock.now()
+  );
+};
+
+export const conditionallyInstalledAmbientEpoch = (useAmbient: boolean) => {
+  const clock = { now: () => 0 };
+  if (useAmbient) {
+    clock.now = Date.now;
+  }
+  return (
+    // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: a conditional ambient write remains a possible invocation target
+    clock.now()
+  );
+};
+
+const nestedFunctionWriteClock = { now: Date.now };
+export const replaceNestedFunctionClock = () => {
+  nestedFunctionWriteClock.now = () => 0;
+};
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: a write inside an uncalled nested function cannot erase current ambient provenance
+export const epochBeforeNestedFunctionRuns = nestedFunctionWriteClock.now();
+
+const calledHelperWriteClock = { now: () => 0 };
+const installAmbientClock = () => {
+  calledHelperWriteClock.now = Date.now;
+};
+installAmbientClock();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: a directly invoked local helper contributes its property-write effect
+export const epochAfterCalledHelper = calledHelperWriteClock.now();
+
+const uncalledHelperWriteClock = { now: () => 0 };
+export const installUncalledAmbientClock = () => {
+  uncalledHelperWriteClock.now = Date.now;
+};
+export const epochBeforeUncalledHelper = uncalledHelperWriteClock.now();
+
+export const conditionallyCalledHelperEpoch = (install: boolean) => {
+  const clock = { now: () => 0 };
+  const installAmbient = () => {
+    clock.now = Date.now;
+  };
+  if (install) {
+    installAmbient();
+  }
+  return (
+    // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: conditional immediate helper calls retain both property outcomes
+    clock.now()
+  );
 };
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: a static object property retains ambient function provenance
@@ -278,6 +441,18 @@ export const ambientTimer = setTimeout(directClock.now, 0);
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism, typescript/strict-void-return -- fixture: imported ambient value-returning functions retain provenance in callback positions
 export const importedAmbientTimer = setTimeout(randomUUID, 0);
 
+const scheduleAmbientCallback = setTimeout;
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism, typescript/strict-void-return -- fixture: immutable callback-host aliases retain global timer provenance
+export const aliasedAmbientTimer = scheduleAmbientCallback(Date.now, 0);
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism, typescript/strict-void-return -- fixture: explicit global callback hosts retain timer provenance
+export const globalAmbientTimer = globalThis.setTimeout(Date.now, 0);
+
+export const withShadowedScheduler = (
+  setTimeout: (callback: typeof Date.now, delay: number) => unknown,
+) => setTimeout(Date.now, 0);
+
 const localCallback = () => 0;
 export const localCallbackValues = [1, 2].map(localCallback);
 
@@ -285,6 +460,16 @@ const ambientLocalCallback = () =>
   // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: locally declared callback bodies are visited at their ambient call
   Date.now();
 export const ambientLocalCallbackValues = [1, 2].map(ambientLocalCallback);
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: Function.prototype.call explicitly invokes ambient functions
+export const calledAmbientEpoch = Date.now.call(null);
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: Reflect.apply explicitly invokes ambient functions
+export const appliedAmbientEpoch = Reflect.apply(Date.now, null, []);
+
+export const withShadowedReflect = (Reflect: {
+  apply: (target: typeof Date.now) => unknown;
+}) => Reflect.apply(Date.now);
 
 const customCallbackStore = {
   map: (callback: typeof Date.now) => callback,
@@ -308,8 +493,7 @@ const customThenableStore = {
   // oxlint-disable-next-line unicorn/no-thenable -- fixture: a custom lookalike must not gain native Promise provenance
   then: (callback: typeof Date.now) => callback,
 };
-export const customThenableStoredCallback =
-  customThenableStore.then(Date.now);
+export const customThenableStoredCallback = customThenableStore.then(Date.now);
 
 export const withShadowedPromise = (
   Promise: new (callback: typeof Date.now) => object,
@@ -384,10 +568,8 @@ export const withShadowedAliases = (
 ) => {
   const { now: localNow } = Date;
   const { random: localRandom } = Math;
-  const {
-    getRandomValues: localGetRandomValues,
-    randomUUID: localRandomUuid,
-  } = crypto;
+  const { getRandomValues: localGetRandomValues, randomUUID: localRandomUuid } =
+    crypto;
   const {
     Date: { now: nestedLocalNow },
     Math: { random: nestedLocalRandom },
@@ -409,12 +591,10 @@ export const withShadowedAliases = (
   };
 };
 
-export const withShadowedNodeGlobal = (
-  global: {
-    Date: { now: () => number };
-    crypto: { randomUUID: () => string };
-  },
-) => ({ epoch: global.Date.now(), identifier: global.crypto.randomUUID() });
+export const withShadowedNodeGlobal = (global: {
+  Date: { now: () => number };
+  crypto: { randomUUID: () => string };
+}) => ({ epoch: global.Date.now(), identifier: global.crypto.randomUUID() });
 
 let mutableReadNow = Date.now;
 export const mutableAliasReference = mutableReadNow;

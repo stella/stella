@@ -69,6 +69,44 @@ describe("Result consumption guard", () => {
     ).toBe(true);
   });
 
+  test("discovers wrapper-only package script projects", () => {
+    const repositoryRoot = mkdtempSync(
+      path.join(import.meta.dir, ".result-discovery-test-"),
+    );
+    const scriptsDirectory = path.join(
+      repositoryRoot,
+      "packages/example/scripts",
+    );
+    const unconfiguredScriptsDirectory = path.join(
+      repositoryRoot,
+      "packages/unconfigured/scripts",
+    );
+    try {
+      mkdirSync(scriptsDirectory, { recursive: true });
+      mkdirSync(unconfiguredScriptsDirectory, { recursive: true });
+      writeFileSync(
+        path.join(scriptsDirectory, "fixture.ts"),
+        'import { runWrappedOperation } from "../src/wrapper";\nvoid runWrappedOperation;\n',
+      );
+      writeFileSync(
+        path.join(unconfiguredScriptsDirectory, "fixture.ts"),
+        'import { runWrappedOperation } from "../src/wrapper";\nvoid runWrappedOperation;\n',
+      );
+      writeFileSync(path.join(scriptsDirectory, "tsconfig.json"), "{}");
+
+      const configs = findResultWorkspaceConfigs(repositoryRoot);
+
+      expect(configs.has(path.join(scriptsDirectory, "tsconfig.json"))).toBe(
+        true,
+      );
+      expect(
+        configs.has(path.join(unconfiguredScriptsDirectory, "tsconfig.json")),
+      ).toBe(false);
+    } finally {
+      rmSync(repositoryRoot, { force: true, recursive: true });
+    }
+  });
+
   test("detects discarded Results through aliases, wrappers, and chains", () => {
     const diagnostics = scanFixture(`
       import { Result, type Result as BetterResult } from "better-result";
@@ -115,6 +153,14 @@ describe("Result consumption guard", () => {
       declare const consume: (value: unknown) => void;
 
       ({ direct: parse(), nested: { result: asyncWrapper() }, list: [parse()] });
+      ({ result: parse(), other: 0 }).other;
+      [asyncWrapper(), 0][1];
+      ({ result: parse(), run: () => undefined }).run();
+      [asyncWrapper(), () => undefined][1]();
+      true && parse();
+      parse() && consume("cleanup");
+      false || parse();
+      undefined ?? parse();
       (parse(), "statement tail");
       const retainedTail = (parse(), "assigned tail");
       \`discarded interpolation: \${parse()}\`;
@@ -123,6 +169,7 @@ describe("Result consumption guard", () => {
       const retainedTemplate = \`retained interpolation: \${parse()}\`;
       const retainedFinal = (0, parse());
       consume({ result: parse() });
+      ({ run: consume }).run(parse());
       void retainedTail;
       consume(retainedObject);
       consume(retainedTemplate);
@@ -136,12 +183,21 @@ describe("Result consumption guard", () => {
       "unused-result",
       "unused-result",
       "unused-result",
+      "unused-result",
+      "unused-result",
+      "unused-result",
+      "unused-result",
+      "unused-result",
+      "unused-result",
+      "unused-result",
+      "unused-result",
     ]);
   });
 
   test.each([
     "scripts/fixture.ts",
     "apps/example/scripts/fixture.ts",
+    "packages/example/scripts/fixture.ts",
     "apps/example/src/fixture.ts",
     "packages/example/src/fixture.ts",
   ])("scans production path %s", (relativeFile) => {
@@ -210,6 +266,15 @@ describe("Result consumption guard", () => {
       localErr();
       structural();
       ({ ok: localOk(), err: localErr(), structural: structural() });
+      ({ structural: structural(), other: 0 }).other;
+      [structural(), 0][1];
+      ({ structural: structural(), run: () => undefined }).run();
+      [Promise.resolve(structural()), () => undefined][1]();
+      ({ run: safeDb }).run(structural);
+      true && structural();
+      structural() && safeDb(() => 1);
+      false || structural();
+      undefined ?? structural();
       (localOk(), "statement tail");
       \`discarded interpolation: \${structural()}\`;
       [structural(), Promise.resolve(structural())];

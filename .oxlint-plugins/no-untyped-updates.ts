@@ -19,6 +19,7 @@ import {
   getPropertyName,
   isAstNode,
   isIdentifier,
+  isStringLiteral,
   unwrapExpression,
 } from "./utils.ts";
 
@@ -28,28 +29,6 @@ const isIdentifierReference = (
 
 const isObjectExpression = (node: unknown): node is ESTree.ObjectExpression =>
   isAstNode(node) && node.type === "ObjectExpression";
-
-const isBroadRecordDeclaration = (node: ESTree.VariableDeclarator): boolean => {
-  if (!isIdentifier(node.id)) {
-    return false;
-  }
-
-  const annotation = node.id.typeAnnotation?.typeAnnotation;
-  if (
-    annotation?.type !== "TSTypeReference" ||
-    !isIdentifier(annotation.typeName, "Record")
-  ) {
-    return false;
-  }
-
-  const parameters = annotation.typeArguments?.params;
-  return (
-    parameters?.length === 2 &&
-    parameters.at(0)?.type === "TSStringKeyword" &&
-    (parameters.at(1)?.type === "TSUnknownKeyword" ||
-      parameters.at(1)?.type === "TSAnyKeyword")
-  );
-};
 
 const isDrizzleUpdateSetCall = (node: ESTree.CallExpression): boolean => {
   const callee = unwrapExpression(node.callee);
@@ -90,9 +69,9 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        const broadDeclarations = new Set<ESTree.VariableDeclarator>();
+        const namedTypeAnnotations = new Map<Variable, unknown>();
         const setCalls: ESTree.CallExpression[] = [];
-        const reported = new Set<ESTree.VariableDeclarator>();
+        const reported = new Set<Variable>();
 
         const resolveVariable = (
           identifier: ESTree.IdentifierReference,
@@ -107,6 +86,204 @@ export default eslintCompatPlugin({
           }
           return null;
         };
+
+        const isBroadRecordType = (
+          node: unknown,
+          seen = new Set<Variable>(),
+        ): boolean => {
+          const annotation =
+            isAstNode(node) && node.type === "TSTypeAnnotation"
+              ? node.typeAnnotation
+              : node;
+          if (
+            !isAstNode(annotation) ||
+            annotation.type !== "TSTypeReference" ||
+            !isIdentifier(annotation.typeName)
+          ) {
+            return false;
+          }
+          if (annotation.typeName.name === "Record") {
+            const parameters = isAstNode(annotation.typeArguments)
+              ? annotation.typeArguments.params
+              : undefined;
+            return (
+              Array.isArray(parameters) &&
+              parameters.length === 2 &&
+              parameters.at(0)?.type === "TSStringKeyword" &&
+              (parameters.at(1)?.type === "TSUnknownKeyword" ||
+                parameters.at(1)?.type === "TSAnyKeyword")
+            );
+          }
+
+          const variable = resolveVariable(annotation.typeName);
+          if (variable === null || seen.has(variable)) {
+            return false;
+          }
+          const declaration = namedTypeAnnotations.get(variable);
+          if (
+            !isAstNode(declaration) ||
+            declaration.type !== "TSTypeAliasDeclaration"
+          ) {
+            return false;
+          }
+          const nextSeen = new Set(seen);
+          nextSeen.add(variable);
+          return isBroadRecordType(declaration.typeAnnotation, nextSeen);
+        };
+
+        const staticPropertyName = (property: unknown): string | null => {
+          if (
+            !isAstNode(property) ||
+            (property.type !== "Property" &&
+              property.type !== "TSPropertySignature")
+          ) {
+            return null;
+          }
+          if (property.computed !== true) {
+            return getPropertyName(property.key);
+          }
+          return isStringLiteral(property.key) ? property.key.value : null;
+        };
+
+        const propertyType = (
+          node: unknown,
+          propertyName: string,
+          seen = new Set<Variable>(),
+        ): unknown => {
+          const annotation =
+            isAstNode(node) && node.type === "TSTypeAnnotation"
+              ? node.typeAnnotation
+              : node;
+          if (!isAstNode(annotation)) {
+            return null;
+          }
+          if (
+            annotation.type === "TSTypeReference" &&
+            isIdentifierReference(annotation.typeName)
+          ) {
+            const variable = resolveVariable(annotation.typeName);
+            if (variable === null || seen.has(variable)) {
+              return null;
+            }
+            const declaration = namedTypeAnnotations.get(variable);
+            if (
+              !isAstNode(declaration) ||
+              declaration.type !== "TSTypeAliasDeclaration"
+            ) {
+              return null;
+            }
+            const nextSeen = new Set(seen);
+            nextSeen.add(variable);
+            return propertyType(
+              declaration.typeAnnotation,
+              propertyName,
+              nextSeen,
+            );
+          }
+          if (
+            annotation.type !== "TSTypeLiteral" ||
+            !Array.isArray(annotation.members)
+          ) {
+            return null;
+          }
+          for (const member of annotation.members) {
+            if (
+              isAstNode(member) &&
+              member.type === "TSPropertySignature" &&
+              staticPropertyName(member) === propertyName
+            ) {
+              return member.typeAnnotation;
+            }
+          }
+          return null;
+        };
+
+        const patternContainsVariable = (
+          pattern: unknown,
+          variable: Variable,
+        ): boolean =>
+          isAstNode(pattern) &&
+          variable.identifiers.some(
+            (identifier) =>
+              identifier.range[0] >= pattern.range[0] &&
+              identifier.range[1] <= pattern.range[1],
+          );
+
+        const isBroadBindingPattern = (
+          pattern: unknown,
+          variable: Variable,
+          inheritedType?: unknown,
+        ): boolean => {
+          if (!isAstNode(pattern)) {
+            return false;
+          }
+          if (isIdentifierReference(pattern)) {
+            const isTarget = variable.identifiers.some(
+              (identifier) =>
+                identifier.range[0] === pattern.range[0] &&
+                identifier.range[1] === pattern.range[1],
+            );
+            return (
+              isTarget &&
+              isBroadRecordType(inheritedType ?? pattern.typeAnnotation)
+            );
+          }
+          if (pattern.type === "AssignmentPattern") {
+            return isBroadBindingPattern(pattern.left, variable, inheritedType);
+          }
+          if (
+            pattern.type !== "ObjectPattern" ||
+            !Array.isArray(pattern.properties)
+          ) {
+            return false;
+          }
+          const objectType = inheritedType ?? pattern.typeAnnotation;
+          for (const property of pattern.properties) {
+            if (
+              !isAstNode(property) ||
+              property.type !== "Property" ||
+              !patternContainsVariable(property.value, variable)
+            ) {
+              continue;
+            }
+            const propertyName = staticPropertyName(property);
+            if (propertyName === null) {
+              return false;
+            }
+            return isBroadBindingPattern(
+              property.value,
+              variable,
+              propertyType(objectType, propertyName),
+            );
+          }
+          return false;
+        };
+
+        const enclosingBindingPattern = (identifier: unknown): unknown => {
+          let current = identifier;
+          while (isAstNode(current) && isAstNode(current.parent)) {
+            const parent = current.parent;
+            if (
+              parent.type !== "AssignmentPattern" &&
+              parent.type !== "ObjectPattern" &&
+              parent.type !== "ArrayPattern" &&
+              parent.type !== "Property" &&
+              parent.type !== "RestElement"
+            ) {
+              break;
+            }
+            current = parent;
+          }
+          return current;
+        };
+
+        const isBroadVariable = (variable: Variable): boolean =>
+          variable.defs.some((definition) =>
+            isBroadBindingPattern(
+              enclosingBindingPattern(definition.name),
+              variable,
+            ),
+          );
 
         const variableDeclaration = (
           identifier: ESTree.IdentifierReference,
@@ -123,7 +300,7 @@ export default eslintCompatPlugin({
         const broadSource = (
           node: unknown,
           seen = new Set<Variable>(),
-        ): ESTree.VariableDeclarator | null => {
+        ): Variable | null => {
           const expression = unwrapExpression(node);
           if (!isAstNode(expression)) {
             return null;
@@ -136,12 +313,13 @@ export default eslintCompatPlugin({
             }
             seen.add(variable);
 
+            if (isBroadVariable(variable)) {
+              return variable;
+            }
+
             const declaration = variableDeclaration(expression);
             if (declaration === null) {
               return null;
-            }
-            if (broadDeclarations.has(declaration)) {
-              return declaration;
             }
             if (!isStableAlias(declaration)) {
               return null;
@@ -166,13 +344,16 @@ export default eslintCompatPlugin({
 
         return {
           before() {
-            broadDeclarations.clear();
+            namedTypeAnnotations.clear();
             setCalls.length = 0;
             reported.clear();
           },
-          VariableDeclarator(node) {
-            if (isBroadRecordDeclaration(node)) {
-              broadDeclarations.add(node);
+          TSTypeAliasDeclaration(node) {
+            if (isIdentifierReference(node.id)) {
+              const variable = resolveVariable(node.id);
+              if (variable !== null) {
+                namedTypeAnnotations.set(variable, node);
+              }
             }
           },
           CallExpression(node) {

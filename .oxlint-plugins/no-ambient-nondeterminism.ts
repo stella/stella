@@ -221,10 +221,7 @@ const constAlias = (
       ) {
         continue;
       }
-      const propertyPath = destructuredPropertyPath(
-        declarator.id,
-        node.name,
-      );
+      const propertyPath = destructuredPropertyPath(declarator.id, node.name);
       if (propertyPath !== null && propertyPath.length > 0) {
         return {
           type: "property",
@@ -338,7 +335,47 @@ const cryptoImportKind = (
   return null;
 };
 
-const staticMemberName = (node: unknown): string | null => {
+const staticComputedMemberName = (
+  context: unknown,
+  node: unknown,
+  visitedBindings: Set<unknown>,
+): string | null => {
+  const expression = unwrapExpression(node);
+  if (expression === null) {
+    return null;
+  }
+  if (isStringLiteral(expression)) {
+    return expression.value;
+  }
+  if (
+    expression.type === "TemplateLiteral" &&
+    Array.isArray(expression.expressions) &&
+    expression.expressions.length === 0 &&
+    Array.isArray(expression.quasis)
+  ) {
+    const quasi = expression.quasis.at(0);
+    return isAstNode(quasi) &&
+      typeof quasi.value === "object" &&
+      quasi.value !== null &&
+      "cooked" in quasi.value &&
+      typeof quasi.value.cooked === "string"
+      ? quasi.value.cooked
+      : null;
+  }
+  if (!isIdentifier(expression)) {
+    return null;
+  }
+  const alias = constAlias(context, expression, visitedBindings);
+  return alias?.type === "value"
+    ? staticComputedMemberName(context, alias.value, visitedBindings)
+    : null;
+};
+
+const staticMemberName = (
+  context: unknown,
+  node: unknown,
+  visitedBindings = new Set<unknown>(),
+): string | null => {
   const expression = unwrapExpression(node);
   if (expression === null || expression.type !== "MemberExpression") {
     return null;
@@ -346,15 +383,289 @@ const staticMemberName = (node: unknown): string | null => {
   if (expression.computed === false && isIdentifier(expression.property)) {
     return expression.property.name;
   }
-  if (expression.computed === true && isStringLiteral(expression.property)) {
-    return expression.property.value;
+  return expression.computed === true
+    ? staticComputedMemberName(context, expression.property, visitedBindings)
+    : null;
+};
+
+type StaticPropertyWrite = {
+  conditional: boolean;
+  opaque: boolean;
+  position: number;
+  value: unknown;
+};
+
+const bindingScopeBlock = (binding: unknown): unknown =>
+  typeof binding === "object" &&
+  binding !== null &&
+  "scope" in binding &&
+  typeof binding.scope === "object" &&
+  binding.scope !== null &&
+  "block" in binding.scope
+    ? binding.scope.block
+    : null;
+
+const writeIsConditional = (
+  identifier: unknown,
+  boundary: unknown,
+): boolean | null => {
+  let current = identifier;
+  let conditional = false;
+  while (isAstNode(current)) {
+    const parent = current.parent;
+    if (Object.is(current, boundary) || Object.is(parent, boundary)) {
+      return conditional;
+    }
+    if (!isAstNode(parent)) {
+      return null;
+    }
+    if (
+      (parent.type === "IfStatement" && current !== parent.test) ||
+      (parent.type === "ConditionalExpression" && current !== parent.test) ||
+      parent.type === "SwitchCase" ||
+      (parent.type === "LogicalExpression" && current === parent.right) ||
+      parent.type === "ForStatement" ||
+      parent.type === "ForInStatement" ||
+      parent.type === "ForOfStatement" ||
+      parent.type === "WhileStatement" ||
+      parent.type === "DoWhileStatement" ||
+      parent.type === "CatchClause"
+    ) {
+      conditional = true;
+    }
+    if (
+      parent.type === "ArrowFunctionExpression" ||
+      parent.type === "FunctionExpression" ||
+      parent.type === "FunctionDeclaration"
+    ) {
+      return null;
+    }
+    current = parent;
   }
   return null;
+};
+
+const enclosingZeroArgumentFunction = (node: unknown): unknown => {
+  let current = node;
+  while (isAstNode(current)) {
+    const parent = current.parent;
+    if (
+      isAstNode(parent) &&
+      (parent.type === "ArrowFunctionExpression" ||
+        parent.type === "FunctionExpression" ||
+        parent.type === "FunctionDeclaration")
+    ) {
+      return Array.isArray(parent.params) && parent.params.length === 0
+        ? parent
+        : null;
+    }
+    current = parent;
+  }
+  return null;
+};
+
+const immediateHelperCallContexts = (
+  context: unknown,
+  functionNode: unknown,
+  boundary: unknown,
+  beforePosition: number,
+): Array<{ conditional: boolean; position: number }> => {
+  if (
+    !isAstNode(functionNode) ||
+    typeof context !== "object" ||
+    context === null ||
+    !("sourceCode" in context) ||
+    typeof context.sourceCode !== "object" ||
+    context.sourceCode === null ||
+    !("getScope" in context.sourceCode) ||
+    typeof context.sourceCode.getScope !== "function"
+  ) {
+    return [];
+  }
+  const bindingIdentifier =
+    functionNode.type === "FunctionDeclaration" && isIdentifier(functionNode.id)
+      ? functionNode.id
+      : isAstNode(functionNode.parent) &&
+          functionNode.parent.type === "VariableDeclarator" &&
+          functionNode.parent.init === functionNode &&
+          isIdentifier(functionNode.parent.id)
+        ? functionNode.parent.id
+        : null;
+  if (bindingIdentifier === null) {
+    return [];
+  }
+  const binding = bindingFromScope(
+    context.sourceCode.getScope(bindingIdentifier),
+    bindingIdentifier.name,
+  );
+  if (
+    typeof binding !== "object" ||
+    binding === null ||
+    !("references" in binding) ||
+    !Array.isArray(binding.references)
+  ) {
+    return [];
+  }
+  const calls: Array<{ conditional: boolean; position: number }> = [];
+  for (const reference of binding.references) {
+    if (
+      typeof reference !== "object" ||
+      reference === null ||
+      !("identifier" in reference) ||
+      !isIdentifier(reference.identifier)
+    ) {
+      continue;
+    }
+    const call = reference.identifier.parent;
+    if (
+      !isAstNode(call) ||
+      call.type !== "CallExpression" ||
+      call.callee !== reference.identifier ||
+      !Array.isArray(call.arguments) ||
+      call.arguments.length !== 0 ||
+      call.range[0] >= beforePosition
+    ) {
+      continue;
+    }
+    const conditional = writeIsConditional(reference.identifier, boundary);
+    if (conditional !== null) {
+      calls.push({ conditional, position: call.range[0] });
+    }
+  }
+  return calls;
+};
+
+const staticPropertyWrites = (
+  context: unknown,
+  binding: unknown,
+  propertyName: string,
+  beforePosition: number,
+  visitedBindings = new Set<unknown>(),
+  boundary = bindingScopeBlock(binding),
+): StaticPropertyWrite[] => {
+  if (
+    typeof binding !== "object" ||
+    binding === null ||
+    visitedBindings.has(binding) ||
+    !("references" in binding) ||
+    !Array.isArray(binding.references)
+  ) {
+    return [];
+  }
+  visitedBindings.add(binding);
+  const writes: StaticPropertyWrite[] = [];
+  for (const reference of binding.references) {
+    if (
+      typeof reference !== "object" ||
+      reference === null ||
+      !("identifier" in reference) ||
+      !isIdentifier(reference.identifier)
+    ) {
+      continue;
+    }
+    const identifier = reference.identifier;
+    const parent = identifier.parent;
+    if (
+      isAstNode(parent) &&
+      parent.type === "MemberExpression" &&
+      parent.object === identifier &&
+      staticMemberName(context, parent) === propertyName
+    ) {
+      const write = parent.parent;
+      if (
+        isAstNode(write) &&
+        ((write.type === "AssignmentExpression" && write.left === parent) ||
+          (write.type === "UpdateExpression" && write.argument === parent) ||
+          (write.type === "UnaryExpression" &&
+            write.operator === "delete" &&
+            write.argument === parent))
+      ) {
+        const directConditional =
+          write.range[0] < beforePosition
+            ? writeIsConditional(identifier, boundary)
+            : null;
+        const helperCandidate =
+          directConditional === null
+            ? enclosingZeroArgumentFunction(identifier)
+            : null;
+        const helper =
+          isAstNode(helperCandidate) &&
+          !Object.is(helperCandidate, boundary) &&
+          !Object.is(helperCandidate.body, boundary)
+            ? helperCandidate
+            : null;
+        const helperBody =
+          isAstNode(helper) && isAstNode(helper.body) ? helper.body : null;
+        const helperWriteConditional =
+          helperBody === null
+            ? null
+            : writeIsConditional(identifier, helperBody);
+        const executionContexts =
+          directConditional === null
+            ? helperWriteConditional === null
+              ? []
+              : immediateHelperCallContexts(
+                  context,
+                  helper,
+                  boundary,
+                  beforePosition,
+                ).map((call) => ({
+                  conditional: call.conditional || helperWriteConditional,
+                  position: call.position,
+                }))
+            : [
+                {
+                  conditional: directConditional,
+                  position: write.range[0],
+                },
+              ];
+        for (const execution of executionContexts) {
+          writes.push({
+            conditional: execution.conditional,
+            opaque:
+              write.type !== "AssignmentExpression" || write.operator !== "=",
+            position: execution.position,
+            value: write.type === "AssignmentExpression" ? write.right : null,
+          });
+        }
+      }
+    }
+    if (
+      isAstNode(parent) &&
+      parent.type === "VariableDeclarator" &&
+      parent.init === identifier &&
+      isIdentifier(parent.id) &&
+      typeof context === "object" &&
+      context !== null &&
+      "sourceCode" in context &&
+      typeof context.sourceCode === "object" &&
+      context.sourceCode !== null &&
+      "getScope" in context.sourceCode &&
+      typeof context.sourceCode.getScope === "function"
+    ) {
+      const aliasBinding = bindingFromScope(
+        context.sourceCode.getScope(parent.id),
+        parent.id.name,
+      );
+      writes.push(
+        ...staticPropertyWrites(
+          context,
+          aliasBinding,
+          propertyName,
+          beforePosition,
+          visitedBindings,
+          boundary,
+        ),
+      );
+    }
+  }
+  return writes.toSorted((left, right) => left.position - right.position);
 };
 
 type StaticPropertyResolution =
   | { type: "absent" }
   | { type: "found"; value: unknown }
+  | { type: "possible"; values: readonly unknown[] }
   | { type: "opaque" };
 
 const staticPropertyKey = (property: unknown): string | null => {
@@ -372,24 +683,76 @@ const resolveStaticObjectProperty = (
   object: unknown,
   propertyName: string,
   visitedBindings: Set<unknown>,
+  beforePosition = Number.POSITIVE_INFINITY,
 ): StaticPropertyResolution => {
   const expression = unwrapExpression(object);
   if (expression === null) {
     return { type: "opaque" };
   }
   if (isIdentifier(expression)) {
+    const binding =
+      typeof context === "object" &&
+      context !== null &&
+      "sourceCode" in context &&
+      typeof context.sourceCode === "object" &&
+      context.sourceCode !== null &&
+      "getScope" in context.sourceCode &&
+      typeof context.sourceCode.getScope === "function"
+        ? bindingFromScope(
+            context.sourceCode.getScope(expression),
+            expression.name,
+          )
+        : null;
+    const propertyWrites = staticPropertyWrites(
+      context,
+      binding,
+      propertyName,
+      beforePosition,
+    );
     const alias = constAlias(context, expression, visitedBindings);
-    return alias?.type === "value"
-      ? resolveStaticObjectProperty(
-          context,
-          alias.value,
-          propertyName,
-          visitedBindings,
-        )
-      : { type: "opaque" };
+    const lastUnconditionalWrite = propertyWrites.findLast(
+      (write) => !write.conditional && !write.opaque,
+    );
+    const basePosition = lastUnconditionalWrite?.position ?? -1;
+    if (
+      propertyWrites.some(
+        (write) => write.position > basePosition && write.opaque,
+      )
+    ) {
+      return { type: "opaque" };
+    }
+    const baseResolution =
+      lastUnconditionalWrite === undefined && alias?.type === "value"
+        ? resolveStaticObjectProperty(
+            context,
+            alias.value,
+            propertyName,
+            visitedBindings,
+            beforePosition,
+          )
+        : lastUnconditionalWrite === undefined
+          ? { type: "opaque" as const }
+          : { type: "found" as const, value: lastUnconditionalWrite.value };
+    const conditionalWrites = propertyWrites.filter(
+      (write) =>
+        write.position > basePosition && write.conditional && !write.opaque,
+    );
+    if (conditionalWrites.length === 0 || baseResolution.type === "opaque") {
+      return baseResolution;
+    }
+    const baseValues =
+      baseResolution.type === "possible"
+        ? baseResolution.values
+        : baseResolution.type === "found"
+          ? [baseResolution.value]
+          : [];
+    return {
+      type: "possible",
+      values: [...baseValues, ...conditionalWrites.map((write) => write.value)],
+    };
   }
   if (expression.type === "MemberExpression") {
-    const parentProperty = staticMemberName(expression);
+    const parentProperty = staticMemberName(context, expression);
     if (parentProperty === null) {
       return { type: "opaque" };
     }
@@ -398,15 +761,42 @@ const resolveStaticObjectProperty = (
       expression.object,
       parentProperty,
       new Set(visitedBindings),
+      beforePosition,
     );
-    return parent.type === "found"
-      ? resolveStaticObjectProperty(
-          context,
-          parent.value,
-          propertyName,
-          visitedBindings,
-        )
-      : parent;
+    if (parent.type === "found") {
+      return resolveStaticObjectProperty(
+        context,
+        parent.value,
+        propertyName,
+        visitedBindings,
+        beforePosition,
+      );
+    }
+    if (parent.type !== "possible") {
+      return parent;
+    }
+    const branches = parent.values.map((value) =>
+      resolveStaticObjectProperty(
+        context,
+        value,
+        propertyName,
+        new Set(visitedBindings),
+        beforePosition,
+      ),
+    );
+    if (branches.some((branch) => branch.type === "opaque")) {
+      return { type: "opaque" };
+    }
+    return {
+      type: "possible",
+      values: branches.flatMap((branch) =>
+        branch.type === "possible"
+          ? branch.values
+          : branch.type === "found"
+            ? [branch.value]
+            : [],
+      ),
+    };
   }
   if (
     expression.type !== "ObjectExpression" ||
@@ -424,6 +814,7 @@ const resolveStaticObjectProperty = (
         property.argument,
         propertyName,
         new Set(visitedBindings),
+        beforePosition,
       );
       if (spread.type !== "absent") {
         return spread;
@@ -449,21 +840,53 @@ const resolveStaticObjectPath = (
   object: unknown,
   propertyPath: readonly string[],
   visitedBindings: Set<unknown>,
+  beforePosition = Number.POSITIVE_INFINITY,
 ): StaticPropertyResolution => {
-  let current = object;
-  for (const propertyName of propertyPath) {
-    const resolved = resolveStaticObjectProperty(
-      context,
-      current,
-      propertyName,
-      visitedBindings,
-    );
-    if (resolved.type !== "found") {
-      return resolved;
-    }
-    current = resolved.value;
+  const propertyName = propertyPath.at(0);
+  if (propertyName === undefined) {
+    return { type: "found", value: object };
   }
-  return { type: "found", value: current };
+  const resolved = resolveStaticObjectProperty(
+    context,
+    object,
+    propertyName,
+    visitedBindings,
+    beforePosition,
+  );
+  if (resolved.type === "found") {
+    return resolveStaticObjectPath(
+      context,
+      resolved.value,
+      propertyPath.slice(1),
+      visitedBindings,
+      beforePosition,
+    );
+  }
+  if (resolved.type !== "possible") {
+    return resolved;
+  }
+  const branches = resolved.values.map((value) =>
+    resolveStaticObjectPath(
+      context,
+      value,
+      propertyPath.slice(1),
+      new Set(visitedBindings),
+      beforePosition,
+    ),
+  );
+  if (branches.some((branch) => branch.type === "opaque")) {
+    return { type: "opaque" };
+  }
+  return {
+    type: "possible",
+    values: branches.flatMap((branch) =>
+      branch.type === "possible"
+        ? branch.values
+        : branch.type === "found"
+          ? [branch.value]
+          : [],
+    ),
+  };
 };
 
 const globalObjectName = (
@@ -488,7 +911,7 @@ const globalObjectName = (
     }
     return alias.propertyPath.length === 1 &&
       globalObjectName(context, alias.object, visitedBindings) === "globalThis"
-      ? alias.propertyPath.at(0) ?? null
+      ? (alias.propertyPath.at(0) ?? null)
       : null;
   }
   if (expression.type !== "MemberExpression") {
@@ -500,7 +923,7 @@ const globalObjectName = (
   ) {
     return null;
   }
-  return staticMemberName(expression);
+  return staticMemberName(context, expression, visitedBindings);
 };
 
 const ambientMemberKind = (
@@ -534,6 +957,7 @@ const cryptoObjectKind = (
   context: unknown,
   node: unknown,
   visitedBindings: Set<unknown>,
+  beforePosition: number,
 ): CryptoObjectKind | null => {
   const expression = unwrapExpression(node);
   if (isIdentifier(expression)) {
@@ -543,7 +967,12 @@ const cryptoObjectKind = (
     }
     const alias = constAlias(context, expression, visitedBindings);
     if (alias?.type === "value") {
-      return cryptoObjectKind(context, alias.value, visitedBindings);
+      return cryptoObjectKind(
+        context,
+        alias.value,
+        visitedBindings,
+        beforePosition,
+      );
     }
     if (
       alias?.type === "property" &&
@@ -553,19 +982,50 @@ const cryptoObjectKind = (
         context,
         alias.object,
         new Set(visitedBindings),
+        beforePosition,
       ) === "module"
     ) {
       return "webcrypto";
     }
     return null;
   }
+  if (expression?.type === "MemberExpression") {
+    const propertyName = staticMemberName(context, expression);
+    if (propertyName !== null) {
+      const localProperty = resolveStaticObjectProperty(
+        context,
+        expression.object,
+        propertyName,
+        new Set(visitedBindings),
+        beforePosition,
+      );
+      if (localProperty.type === "found" || localProperty.type === "possible") {
+        const values =
+          localProperty.type === "found"
+            ? [localProperty.value]
+            : localProperty.values;
+        for (const value of values) {
+          const localKind = cryptoObjectKind(
+            context,
+            value,
+            new Set(visitedBindings),
+            beforePosition,
+          );
+          if (localKind !== null) {
+            return localKind;
+          }
+        }
+      }
+    }
+  }
   if (
     expression?.type === "MemberExpression" &&
-    staticMemberName(expression) === "webcrypto" &&
+    staticMemberName(context, expression) === "webcrypto" &&
     cryptoObjectKind(
       context,
       expression.object,
       new Set(visitedBindings),
+      beforePosition,
     ) === "module"
   ) {
     return "webcrypto";
@@ -578,8 +1038,14 @@ const importedCryptoMemberKind = (
   object: unknown,
   propertyName: string | null,
   visitedBindings: Set<unknown>,
+  beforePosition: number,
 ): string | null => {
-  const objectKind = cryptoObjectKind(context, object, visitedBindings);
+  const objectKind = cryptoObjectKind(
+    context,
+    object,
+    visitedBindings,
+    beforePosition,
+  );
   if (objectKind === "module" && propertyName === "randomUUID") {
     return "randomUUID() from crypto";
   }
@@ -597,11 +1063,13 @@ const ambientPropertyPathKind = (
   object: unknown,
   propertyPath: readonly string[],
   visitedBindings: Set<unknown>,
+  beforePosition: number,
 ): string | null => {
   const importedObjectKind = cryptoObjectKind(
     context,
     object,
     new Set(visitedBindings),
+    beforePosition,
   );
   if (propertyPath.length === 1) {
     const importedKind = importedCryptoMemberKind(
@@ -609,6 +1077,7 @@ const ambientPropertyPathKind = (
       object,
       propertyPath.at(0) ?? null,
       new Set(visitedBindings),
+      beforePosition,
     );
     if (importedKind !== null) {
       return importedKind;
@@ -628,15 +1097,23 @@ const ambientPropertyPathKind = (
     object,
     propertyPath,
     new Set(visitedBindings),
+    beforePosition,
   );
-  if (localProperty.type === "found") {
-    const localKind = ambientCallKind(
-      context,
-      localProperty.value,
-      new Set(visitedBindings),
-    );
-    if (localKind !== null) {
-      return localKind;
+  if (localProperty.type === "found" || localProperty.type === "possible") {
+    const values =
+      localProperty.type === "found"
+        ? [localProperty.value]
+        : localProperty.values;
+    for (const value of values) {
+      const localKind = ambientCallKind(
+        context,
+        value,
+        new Set(visitedBindings),
+        beforePosition,
+      );
+      if (localKind !== null) {
+        return localKind;
+      }
     }
   }
   const objectName = globalObjectName(context, object, visitedBindings);
@@ -655,18 +1132,28 @@ const ambientCallKind = (
   context: unknown,
   callee: unknown,
   visitedBindings = new Set<unknown>(),
+  beforePosition = Number.POSITIVE_INFINITY,
 ): string | null => {
   const expression = unwrapExpression(callee);
   if (expression === null) {
     return null;
   }
+  const invocationPosition =
+    beforePosition === Number.POSITIVE_INFINITY
+      ? expression.range[0]
+      : beforePosition;
   if (cryptoImportKind(context, expression) === "randomUUID") {
     return "randomUUID() from crypto";
   }
   if (isIdentifier(expression)) {
     const alias = constAlias(context, expression, visitedBindings);
     if (alias?.type === "value") {
-      return ambientCallKind(context, alias.value, visitedBindings);
+      return ambientCallKind(
+        context,
+        alias.value,
+        visitedBindings,
+        invocationPosition,
+      );
     }
     if (alias?.type === "property") {
       return ambientPropertyPathKind(
@@ -674,18 +1161,60 @@ const ambientCallKind = (
         alias.object,
         alias.propertyPath,
         visitedBindings,
+        invocationPosition,
       );
     }
+  }
+  if (expression.type === "ConditionalExpression") {
+    return (
+      ambientCallKind(
+        context,
+        expression.consequent,
+        new Set(visitedBindings),
+        invocationPosition,
+      ) ??
+      ambientCallKind(
+        context,
+        expression.alternate,
+        new Set(visitedBindings),
+        invocationPosition,
+      )
+    );
+  }
+  if (expression.type === "LogicalExpression") {
+    return (
+      ambientCallKind(
+        context,
+        expression.left,
+        new Set(visitedBindings),
+        invocationPosition,
+      ) ??
+      ambientCallKind(
+        context,
+        expression.right,
+        new Set(visitedBindings),
+        invocationPosition,
+      )
+    );
+  }
+  if (expression.type === "SequenceExpression") {
+    return ambientCallKind(
+      context,
+      expression.expressions.at(-1),
+      new Set(visitedBindings),
+      invocationPosition,
+    );
   }
   if (expression.type !== "MemberExpression") {
     return null;
   }
-  const propertyName = staticMemberName(expression);
+  const propertyName = staticMemberName(context, expression);
   const importedKind = importedCryptoMemberKind(
     context,
     expression.object,
     propertyName,
     new Set(visitedBindings),
+    invocationPosition,
   );
   if (importedKind !== null) {
     return importedKind;
@@ -696,15 +1225,23 @@ const ambientCallKind = (
       expression.object,
       propertyName,
       new Set(visitedBindings),
+      invocationPosition,
     );
-    if (localProperty.type === "found") {
-      const localKind = ambientCallKind(
-        context,
-        localProperty.value,
-        new Set(visitedBindings),
-      );
-      if (localKind !== null) {
-        return localKind;
+    if (localProperty.type === "found" || localProperty.type === "possible") {
+      const values =
+        localProperty.type === "found"
+          ? [localProperty.value]
+          : localProperty.values;
+      for (const value of values) {
+        const localKind = ambientCallKind(
+          context,
+          value,
+          new Set(visitedBindings),
+          invocationPosition,
+        );
+        if (localKind !== null) {
+          return localKind;
+        }
       }
     }
   }
@@ -720,6 +1257,114 @@ const ambientFunctionKind = (
 ): string | null =>
   ambientCallKind(context, expression) ??
   (globalObjectName(context, expression) === "Date" ? "Date(...)" : null);
+
+const isAmbientDateConstructor = (
+  context: unknown,
+  value: unknown,
+  visitedBindings = new Set<unknown>(),
+): boolean => {
+  const expression = unwrapExpression(value);
+  if (expression === null) {
+    return false;
+  }
+  if (
+    globalObjectName(context, expression, new Set(visitedBindings)) === "Date"
+  ) {
+    return true;
+  }
+  if (isIdentifier(expression)) {
+    const alias = constAlias(context, expression, visitedBindings);
+    if (alias?.type === "value") {
+      return isAmbientDateConstructor(context, alias.value, visitedBindings);
+    }
+    if (alias?.type === "property") {
+      const resolved = resolveStaticObjectPath(
+        context,
+        alias.object,
+        alias.propertyPath,
+        visitedBindings,
+        expression.range[0],
+      );
+      const values =
+        resolved.type === "found"
+          ? [resolved.value]
+          : resolved.type === "possible"
+            ? resolved.values
+            : [];
+      return values.some((candidate) =>
+        isAmbientDateConstructor(
+          context,
+          candidate,
+          new Set(visitedBindings),
+        ),
+      );
+    }
+    return false;
+  }
+  if (expression.type === "ConditionalExpression") {
+    return (
+      isAmbientDateConstructor(
+        context,
+        expression.consequent,
+        new Set(visitedBindings),
+      ) ||
+      isAmbientDateConstructor(
+        context,
+        expression.alternate,
+        new Set(visitedBindings),
+      )
+    );
+  }
+  if (expression.type === "LogicalExpression") {
+    return (
+      isAmbientDateConstructor(
+        context,
+        expression.left,
+        new Set(visitedBindings),
+      ) ||
+      isAmbientDateConstructor(
+        context,
+        expression.right,
+        new Set(visitedBindings),
+      )
+    );
+  }
+  return expression.type === "SequenceExpression"
+    ? isAmbientDateConstructor(
+        context,
+        expression.expressions.at(-1),
+        new Set(visitedBindings),
+      )
+    : false;
+};
+
+const explicitInvocationKind = (
+  context: unknown,
+  node: unknown,
+): string | null => {
+  if (
+    !isAstNode(node) ||
+    node.type !== "CallExpression" ||
+    !Array.isArray(node.arguments)
+  ) {
+    return null;
+  }
+  const callee = unwrapExpression(node.callee);
+  if (callee?.type !== "MemberExpression") {
+    return null;
+  }
+  const method = staticMemberName(context, callee);
+  if (method === "call" || method === "apply") {
+    const targetKind = ambientFunctionKind(context, callee.object);
+    if (targetKind !== null) {
+      return targetKind;
+    }
+  }
+  return method === "apply" &&
+    globalObjectName(context, callee.object) === "Reflect"
+    ? ambientFunctionKind(context, node.arguments.at(0))
+    : null;
+};
 
 const isProvableArray = (
   context: unknown,
@@ -747,7 +1392,7 @@ const isProvableArray = (
   if (callee?.type !== "MemberExpression") {
     return false;
   }
-  const method = staticMemberName(callee);
+  const method = staticMemberName(context, callee);
   if (
     (method === "from" || method === "of") &&
     globalObjectName(context, callee.object) === "Array"
@@ -787,7 +1432,7 @@ const isProvablePromise = (
   if (callee?.type !== "MemberExpression") {
     return false;
   }
-  const method = staticMemberName(callee);
+  const method = staticMemberName(context, callee);
   if (
     method !== null &&
     PROMISE_STATIC_METHODS.has(method) &&
@@ -814,17 +1459,17 @@ const callbackArgumentsForCall = (
     return [];
   }
   const callee = unwrapExpression(node.callee);
+  const callbackHost = globalObjectName(context, callee);
   if (
-    isIdentifier(callee) &&
-    isGlobalReference(context, callee) &&
-    FIRST_ARGUMENT_CALLBACK_GLOBALS.has(callee.name)
+    callbackHost !== null &&
+    FIRST_ARGUMENT_CALLBACK_GLOBALS.has(callbackHost)
   ) {
     return node.arguments.length > 0 ? [node.arguments.at(0)] : [];
   }
   if (callee?.type !== "MemberExpression") {
     return [];
   }
-  const propertyName = staticMemberName(callee);
+  const propertyName = staticMemberName(context, callee);
   if (
     propertyName === "from" &&
     globalObjectName(context, callee.object) === "Array"
@@ -876,6 +1521,15 @@ export default eslintCompatPlugin({
               });
               return;
             }
+            const invocationKind = explicitInvocationKind(context, node);
+            if (invocationKind !== null) {
+              context.report({
+                node,
+                messageId: "ambientNondeterminism",
+                data: { kind: `${invocationKind} invocation` },
+              });
+              return;
+            }
             for (const callback of callbackArgumentsForCall(context, node)) {
               const callbackKind = ambientFunctionKind(context, callback);
               if (callbackKind === null || !isAstNode(callback)) {
@@ -892,7 +1546,7 @@ export default eslintCompatPlugin({
             const isAmbientDate =
               Array.isArray(node.arguments) &&
               node.arguments.length === 0 &&
-              globalObjectName(context, node.callee) === "Date";
+              isAmbientDateConstructor(context, node.callee);
             if (isAmbientDate) {
               context.report({
                 node,

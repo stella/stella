@@ -9,7 +9,7 @@ const RESULT_VARIANT_STATUS = new Map([
   ["Ok", "ok"],
 ]);
 const PRODUCT_SOURCE_PATTERN =
-  /^(?:(?:apps|packages)\/[^/]+\/src\/.*|apps\/[^/]+\/scripts\/.*|scripts\/.*)\.tsx?$/u;
+  /^(?:(?:apps|packages)\/[^/]+\/(?:src|scripts)\/.*|scripts\/.*)\.tsx?$/u;
 const TEST_FILE_PATTERN =
   /(?:\.test\.|\.spec\.|\/tests\/|\/__tests__\/|\/e2e\/)/u;
 const GENERATED_OR_EXTERNAL_PATTERN =
@@ -134,6 +134,12 @@ const isCommaExpression = (node: ts.Node): node is ts.BinaryExpression =>
   ts.isBinaryExpression(node) &&
   node.operatorToken.kind === ts.SyntaxKind.CommaToken;
 
+const isLogicalExpression = (node: ts.Node): node is ts.BinaryExpression =>
+  ts.isBinaryExpression(node) &&
+  (node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ||
+    node.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
+    node.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken);
+
 const unwrapDiscardedExpression = (
   expression: ts.Expression,
 ): ts.Expression => {
@@ -170,6 +176,20 @@ const inspectDiscardedExpression = ({
   }
 
   if (isCommaExpression(expression)) {
+    inspectDiscardedExpression({
+      checker,
+      expression: expression.left,
+      report,
+    });
+    inspectDiscardedExpression({
+      checker,
+      expression: expression.right,
+      report,
+    });
+    return;
+  }
+
+  if (isLogicalExpression(expression)) {
     inspectDiscardedExpression({
       checker,
       expression: expression.left,
@@ -245,9 +265,57 @@ const inspectDiscardedExpression = ({
     return;
   }
 
+  if (
+    ts.isPropertyAccessExpression(expression) ||
+    ts.isElementAccessExpression(expression)
+  ) {
+    inspectDiscardedExpression({
+      checker,
+      expression: expression.expression,
+      report,
+    });
+    return;
+  }
+
+  if (ts.isCallExpression(expression)) {
+    const callee = unwrapDiscardedExpression(expression.expression);
+    if (
+      ts.isPropertyAccessExpression(callee) ||
+      ts.isElementAccessExpression(callee)
+    ) {
+      const selectedHost = inlineContainerSelectionHost(callee.expression);
+      if (selectedHost !== null) {
+        inspectDiscardedExpression({
+          checker,
+          expression: selectedHost,
+          report,
+        });
+      }
+    }
+  }
+
   if (isBetterResultValueType(checker, checker.getTypeAtLocation(expression))) {
     report(expression);
   }
+};
+
+const inlineContainerSelectionHost = (
+  candidate: ts.Expression,
+): ts.Expression | null => {
+  const expression = unwrapDiscardedExpression(candidate);
+  if (
+    ts.isObjectLiteralExpression(expression) ||
+    ts.isArrayLiteralExpression(expression)
+  ) {
+    return expression;
+  }
+  if (
+    ts.isPropertyAccessExpression(expression) ||
+    ts.isElementAccessExpression(expression)
+  ) {
+    return inlineContainerSelectionHost(expression.expression);
+  }
+  return null;
 };
 
 const isBetterResultVariant = (
@@ -547,7 +615,7 @@ const workspaceConfig = (
     return null;
   }
 
-  if (parent === "apps" && directory === "scripts") {
+  if (directory === "scripts") {
     const scriptsConfig = path.join(
       repositoryRoot,
       parent,
@@ -586,24 +654,32 @@ export const findResultWorkspaceConfigs = (
 ): Map<string, undefined> => {
   const configs = new Map<string, undefined>();
 
-  const addConfigWhenDirectoryImportsResult = (directory: string): void => {
+  const addDirectoryConfig = (
+    directory: string,
+    requireResultImport: boolean,
+  ): void => {
     if (!ts.sys.directoryExists(directory)) {
       return;
     }
 
-    const importsResult = ts.sys
+    const eligibleSourceFiles = ts.sys
       .readDirectory(directory, [".ts", ".tsx"])
-      .some((sourceFile) => {
+      .filter((sourceFile) => {
         const relative = path
           .relative(repositoryRoot, sourceFile)
           .replaceAll(path.sep, "/");
-        if (!isProductSourcePath(relative)) {
-          return false;
-        }
+        return isProductSourcePath(relative);
+      });
+    if (eligibleSourceFiles.length === 0) {
+      return;
+    }
+    if (
+      requireResultImport &&
+      !eligibleSourceFiles.some((sourceFile) => {
         const source = ts.sys.readFile(sourceFile);
         return source !== undefined && RESULT_IMPORT_PATTERN.test(source);
-      });
-    if (!importsResult) {
+      })
+    ) {
       return;
     }
 
@@ -616,18 +692,14 @@ export const findResultWorkspaceConfigs = (
     }
   };
 
-  addConfigWhenDirectoryImportsResult(path.join(repositoryRoot, "scripts"));
+  addDirectoryConfig(path.join(repositoryRoot, "scripts"), false);
 
   for (const parent of ["apps", "packages"]) {
     const parentDirectory = path.join(repositoryRoot, parent);
     for (const workspace of ts.sys.getDirectories(parentDirectory)) {
       const workspaceDirectory = path.join(parentDirectory, workspace);
-      addConfigWhenDirectoryImportsResult(path.join(workspaceDirectory, "src"));
-      if (parent === "apps") {
-        addConfigWhenDirectoryImportsResult(
-          path.join(workspaceDirectory, "scripts"),
-        );
-      }
+      addDirectoryConfig(path.join(workspaceDirectory, "src"), true);
+      addDirectoryConfig(path.join(workspaceDirectory, "scripts"), false);
     }
   }
   return configs;

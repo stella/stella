@@ -80,6 +80,137 @@ const isStaticLiteral = (node: unknown): boolean =>
     node.type === "RegExpLiteral" ||
     node.type === "StringLiteral");
 
+type LogicalDisposition = "falsy" | "nullish" | "truthy" | "unknown";
+
+const logicalDisposition = (value: unknown): LogicalDisposition => {
+  const expression = unwrapClassExpression(value);
+  if (expression === null) {
+    return "unknown";
+  }
+  if (
+    expression.type === "Literal" ||
+    expression.type === "BigIntLiteral" ||
+    expression.type === "BooleanLiteral" ||
+    expression.type === "NullLiteral" ||
+    expression.type === "NumericLiteral" ||
+    expression.type === "StringLiteral"
+  ) {
+    if (!("value" in expression) || expression.value === null) {
+      return "nullish";
+    }
+    return expression.value ? "truthy" : "falsy";
+  }
+  if (isTemplateLiteral(expression) && expression.expressions.length === 0) {
+    const quasi = expression.quasis.at(0);
+    return (quasi?.value.cooked ?? quasi?.value.raw ?? "") === ""
+      ? "falsy"
+      : "truthy";
+  }
+  if (
+    expression.type === "ObjectExpression" ||
+    expression.type === "ArrayExpression" ||
+    isFunction(expression)
+  ) {
+    return "truthy";
+  }
+  if (expression.type === "UnaryExpression") {
+    if (expression.operator === "void") {
+      return "nullish";
+    }
+    if (expression.operator === "typeof") {
+      return "truthy";
+    }
+    if (expression.operator === "!") {
+      const argumentDisposition = logicalDisposition(expression.argument);
+      if (argumentDisposition === "truthy") {
+        return "falsy";
+      }
+      if (
+        argumentDisposition === "falsy" ||
+        argumentDisposition === "nullish"
+      ) {
+        return "truthy";
+      }
+    }
+  }
+  if (
+    expression.type === "SequenceExpression" &&
+    Array.isArray(expression.expressions)
+  ) {
+    return logicalDisposition(expression.expressions.at(-1));
+  }
+  return "unknown";
+};
+
+const isProvablyNonObject = (value: unknown): boolean => {
+  const expression = unwrapClassExpression(value);
+  if (expression === null) {
+    return false;
+  }
+  if (
+    (expression.type === "Literal" &&
+      (expression.value === null || typeof expression.value !== "object")) ||
+    expression.type === "BigIntLiteral" ||
+    expression.type === "BooleanLiteral" ||
+    expression.type === "NullLiteral" ||
+    expression.type === "NumericLiteral" ||
+    expression.type === "StringLiteral" ||
+    expression.type === "TemplateLiteral" ||
+    expression.type === "BinaryExpression" ||
+    expression.type === "UnaryExpression" ||
+    expression.type === "UpdateExpression"
+  ) {
+    return true;
+  }
+  if (
+    expression.type === "SequenceExpression" &&
+    Array.isArray(expression.expressions)
+  ) {
+    return isProvablyNonObject(expression.expressions.at(-1));
+  }
+  return false;
+};
+
+type LogicalOutcome = { propertyAbsent: boolean; value: unknown };
+
+const logicalOutcomes = (
+  expression: ESTree.LogicalExpression,
+): LogicalOutcome[] => {
+  const leftDisposition = logicalDisposition(expression.left);
+  if (expression.operator === "&&") {
+    if (leftDisposition === "truthy") {
+      return [{ propertyAbsent: false, value: expression.right }];
+    }
+    if (leftDisposition === "falsy" || leftDisposition === "nullish") {
+      return [{ propertyAbsent: true, value: expression.left }];
+    }
+    return [
+      { propertyAbsent: true, value: expression.left },
+      { propertyAbsent: false, value: expression.right },
+    ];
+  }
+  if (expression.operator === "||") {
+    if (leftDisposition === "truthy") {
+      return [{ propertyAbsent: false, value: expression.left }];
+    }
+    if (leftDisposition === "falsy" || leftDisposition === "nullish") {
+      return [{ propertyAbsent: false, value: expression.right }];
+    }
+  }
+  if (expression.operator === "??") {
+    if (leftDisposition === "nullish") {
+      return [{ propertyAbsent: false, value: expression.right }];
+    }
+    if (leftDisposition === "truthy" || leftDisposition === "falsy") {
+      return [{ propertyAbsent: false, value: expression.left }];
+    }
+  }
+  return [
+    { propertyAbsent: false, value: expression.left },
+    { propertyAbsent: false, value: expression.right },
+  ];
+};
+
 export default eslintCompatPlugin({
   meta: { name: "require-cn-for-classname-composition" },
   rules: {
@@ -142,6 +273,7 @@ export default eslintCompatPlugin({
         const staticPropertyName = (
           property: unknown,
           computed = false,
+          visitedVariables = new Set<Variable>(),
         ): string | null => {
           if (!computed) {
             const named = getPropertyName(property);
@@ -149,12 +281,46 @@ export default eslintCompatPlugin({
               return named;
             }
           }
-          return isAstNode(property) &&
-            property.type === "Literal" &&
-            (typeof property.value === "string" ||
-              typeof property.value === "number")
-            ? String(property.value)
-            : null;
+          const expression = unwrapClassExpression(property);
+          if (
+            isAstNode(expression) &&
+            expression.type === "Literal" &&
+            (typeof expression.value === "string" ||
+              typeof expression.value === "number")
+          ) {
+            return String(expression.value);
+          }
+          if (
+            isTemplateLiteral(expression) &&
+            expression.expressions.length === 0
+          ) {
+            const quasi = expression.quasis.at(0);
+            return quasi?.value.cooked ?? quasi?.value.raw ?? "";
+          }
+          if (!isIdentifier(expression)) {
+            return null;
+          }
+          const variable = resolveVariable(expression);
+          if (variable === null || visitedVariables.has(variable)) {
+            return null;
+          }
+          for (const definition of variable.defs) {
+            if (
+              definition.type !== "Variable" ||
+              !isAstNode(definition.node) ||
+              definition.node.type !== "VariableDeclarator" ||
+              !isIdentifier(definition.node.id) ||
+              !isAstNode(definition.parent) ||
+              definition.parent.type !== "VariableDeclaration" ||
+              definition.parent.kind !== "const"
+            ) {
+              continue;
+            }
+            const nextVisited = new Set(visitedVariables);
+            nextVisited.add(variable);
+            return staticPropertyName(definition.node.init, true, nextVisited);
+          }
+          return null;
         };
 
         type LocalResolution =
@@ -173,6 +339,16 @@ export default eslintCompatPlugin({
           values: readonly unknown[];
         };
 
+        type LocalAbsentValue = { type: "LocalAbsentValue" };
+        type LocalOpaqueValue = { type: "LocalOpaqueValue" };
+
+        const LOCAL_ABSENT_VALUE: LocalAbsentValue = {
+          type: "LocalAbsentValue",
+        };
+        const LOCAL_OPAQUE_VALUE: LocalOpaqueValue = {
+          type: "LocalOpaqueValue",
+        };
+
         const isLocalObjectRestValue = (
           value: unknown,
         ): value is LocalObjectRestValue =>
@@ -188,6 +364,89 @@ export default eslintCompatPlugin({
           value !== null &&
           "type" in value &&
           value.type === "LocalPossibleValues";
+
+        const isLocalAbsentValue = (
+          value: unknown,
+        ): value is LocalAbsentValue => value === LOCAL_ABSENT_VALUE;
+
+        const isLocalOpaqueValue = (
+          value: unknown,
+        ): value is LocalOpaqueValue => value === LOCAL_OPAQUE_VALUE;
+
+        const possibleValues = (value: unknown): readonly unknown[] =>
+          isLocalPossibleValues(value) ? value.values : [value];
+
+        const resolutionValues = (
+          resolution: LocalResolution,
+        ): readonly unknown[] | null => {
+          if (resolution.type === "opaque") {
+            return null;
+          }
+          if (resolution.type === "absent") {
+            return [LOCAL_ABSENT_VALUE];
+          }
+          return possibleValues(resolution.value);
+        };
+
+        const resolutionFromValues = (
+          values: readonly unknown[],
+        ): LocalResolution => {
+          const flattened = values.flatMap((value) => possibleValues(value));
+          if (flattened.every(isLocalAbsentValue)) {
+            return { type: "absent" };
+          }
+          return {
+            type: "found",
+            value: {
+              type: "LocalPossibleValues",
+              values: flattened,
+            } satisfies LocalPossibleValues,
+          };
+        };
+
+        const overlayResolution = (
+          base: LocalResolution,
+          override: LocalResolution,
+        ): LocalResolution => {
+          if (override.type === "opaque") {
+            return override;
+          }
+          if (override.type === "absent") {
+            return base;
+          }
+          const overrideValues = possibleValues(override.value);
+          if (!overrideValues.some(isLocalAbsentValue)) {
+            return override;
+          }
+          const baseValues = resolutionValues(base);
+          if (baseValues === null) {
+            return { type: "opaque" };
+          }
+          return resolutionFromValues(
+            overrideValues.flatMap((value) =>
+              isLocalAbsentValue(value) ? baseValues : [value],
+            ),
+          );
+        };
+
+        const isProvablyUndefined = (value: unknown): boolean => {
+          if (isLocalAbsentValue(value)) {
+            return true;
+          }
+          const expression = unwrapClassExpression(value);
+          if (
+            isAstNode(expression) &&
+            expression.type === "UnaryExpression" &&
+            expression.operator === "void"
+          ) {
+            return true;
+          }
+          if (!isIdentifier(expression) || expression.name !== "undefined") {
+            return false;
+          }
+          const variable = resolveVariable(expression);
+          return variable === null || variable.defs.length === 0;
+        };
 
         const controlFlowContext = (
           node: unknown,
@@ -210,6 +469,7 @@ export default eslintCompatPlugin({
               parent.type === "SwitchCase" ||
               (parent.type === "LogicalExpression" &&
                 current === parent.right) ||
+              (parent.type === "CatchClause" && current === parent.body) ||
               parent.type === "ForStatement" ||
               parent.type === "ForInStatement" ||
               parent.type === "ForOfStatement" ||
@@ -230,6 +490,64 @@ export default eslintCompatPlugin({
           return null;
         };
 
+        const constAliasFromReference = (
+          identifier: unknown,
+        ): Variable | null => {
+          if (!isIdentifier(identifier)) {
+            return null;
+          }
+          let current: unknown = identifier;
+          while (isAstNode(current)) {
+            const parent = current.parent;
+            if (
+              isAstNode(parent) &&
+              (parent.type === "ParenthesizedExpression" ||
+                parent.type === "TSAsExpression" ||
+                parent.type === "TSSatisfiesExpression" ||
+                parent.type === "TSNonNullExpression" ||
+                parent.type === "TSTypeAssertion") &&
+              parent.expression === current
+            ) {
+              current = parent;
+              continue;
+            }
+            if (
+              !isAstNode(parent) ||
+              parent.type !== "VariableDeclarator" ||
+              parent.init !== current ||
+              !isIdentifier(parent.id) ||
+              !isAstNode(parent.parent) ||
+              parent.parent.type !== "VariableDeclaration" ||
+              parent.parent.kind !== "const"
+            ) {
+              return null;
+            }
+            return resolveVariable(parent.id);
+          }
+          return null;
+        };
+
+        const stableObjectAliases = (
+          variable: Variable,
+          readPosition: number,
+          visited = new Set<Variable>(),
+        ): Set<Variable> => {
+          if (visited.has(variable)) {
+            return visited;
+          }
+          visited.add(variable);
+          for (const reference of variable.references) {
+            if (reference.identifier.range[0] >= readPosition) {
+              continue;
+            }
+            const alias = constAliasFromReference(reference.identifier);
+            if (alias !== null) {
+              stableObjectAliases(alias, readPosition, visited);
+            }
+          }
+          return visited;
+        };
+
         type LocalValueResolver = {
           memberValue: (
             value: unknown,
@@ -240,6 +558,7 @@ export default eslintCompatPlugin({
             source: unknown,
             target: Variable,
             visitedVariables: Set<Variable>,
+            readPosition: number,
           ) => unknown;
           propertyValue: (
             source: unknown,
@@ -279,7 +598,13 @@ export default eslintCompatPlugin({
               member.range[0],
             );
           },
-          patternValue(pattern, source, target, visitedVariables) {
+          patternValue(
+            pattern,
+            source,
+            target,
+            visitedVariables,
+            readPosition,
+          ) {
             if (!isAstNode(pattern)) {
               return null;
             }
@@ -291,12 +616,51 @@ export default eslintCompatPlugin({
                 : null;
             }
             if (pattern.type === "AssignmentPattern") {
+              if (isLocalPossibleValues(source)) {
+                return {
+                  type: "LocalPossibleValues",
+                  values: source.values.flatMap((possibleValue) =>
+                    possibleValues(
+                      this.patternValue(
+                        pattern,
+                        possibleValue,
+                        target,
+                        new Set(visitedVariables),
+                        readPosition,
+                      ),
+                    ),
+                  ),
+                } satisfies LocalPossibleValues;
+              }
+              if (isProvablyUndefined(source)) {
+                return this.patternValue(
+                  pattern.left,
+                  pattern.right,
+                  target,
+                  visitedVariables,
+                  readPosition,
+                );
+              }
               const selected = this.patternValue(
                 pattern.left,
                 source,
                 target,
                 visitedVariables,
+                readPosition,
               );
+              if (isLocalOpaqueValue(source)) {
+                const fallback = this.patternValue(
+                  pattern.left,
+                  pattern.right,
+                  target,
+                  visitedVariables,
+                  readPosition,
+                );
+                return {
+                  type: "LocalPossibleValues",
+                  values: [selected, fallback],
+                } satisfies LocalPossibleValues;
+              }
               return (
                 selected ??
                 this.patternValue(
@@ -304,6 +668,7 @@ export default eslintCompatPlugin({
                   pattern.right,
                   target,
                   visitedVariables,
+                  readPosition,
                 )
               );
             }
@@ -359,15 +724,24 @@ export default eslintCompatPlugin({
                 if (propertyName === null) {
                   return null;
                 }
+                const propertyResolution = this.propertyResolution(
+                  source,
+                  propertyName,
+                  new Set(visitedVariables),
+                  readPosition,
+                );
+                const propertyValue =
+                  propertyResolution.type === "found"
+                    ? propertyResolution.value
+                    : propertyResolution.type === "absent"
+                      ? LOCAL_ABSENT_VALUE
+                      : LOCAL_OPAQUE_VALUE;
                 return this.patternValue(
                   property.value,
-                  this.propertyValue(
-                    source,
-                    propertyName,
-                    new Set(visitedVariables),
-                  ),
+                  propertyValue,
                   target,
                   visitedVariables,
+                  readPosition,
                 );
               }
               return null;
@@ -386,15 +760,22 @@ export default eslintCompatPlugin({
                     identifier.range[1] <= element.range[1],
                 );
                 if (containsTarget) {
+                  const propertyResolution = this.propertyResolution(
+                    source,
+                    String(index),
+                    new Set(visitedVariables),
+                    readPosition,
+                  );
                   return this.patternValue(
                     element,
-                    this.propertyValue(
-                      source,
-                      String(index),
-                      new Set(visitedVariables),
-                    ),
+                    propertyResolution.type === "found"
+                      ? propertyResolution.value
+                      : propertyResolution.type === "absent"
+                        ? LOCAL_ABSENT_VALUE
+                        : LOCAL_OPAQUE_VALUE,
                     target,
                     visitedVariables,
+                    readPosition,
                   );
                 }
               }
@@ -421,6 +802,12 @@ export default eslintCompatPlugin({
             visitedVariables = new Set(),
             readPosition = Number.POSITIVE_INFINITY,
           ) {
+            if (isLocalAbsentValue(source)) {
+              return { type: "absent" };
+            }
+            if (isLocalOpaqueValue(source)) {
+              return { type: "opaque" };
+            }
             if (isLocalObjectRestValue(source)) {
               return source.excludedProperties.has(propertyName)
                 ? { type: "absent" }
@@ -434,6 +821,54 @@ export default eslintCompatPlugin({
             const expression = unwrapClassExpression(source);
             if (expression === null) {
               return { type: "opaque" };
+            }
+            if (
+              expression.type === "ConditionalExpression" ||
+              expression.type === "LogicalExpression"
+            ) {
+              const outcomes: LogicalOutcome[] =
+                expression.type === "ConditionalExpression"
+                  ? [
+                      {
+                        propertyAbsent: false,
+                        value: expression.consequent,
+                      },
+                      {
+                        propertyAbsent: false,
+                        value: expression.alternate,
+                      },
+                    ]
+                  : logicalOutcomes(expression);
+              const resolutions = outcomes.map((outcome) =>
+                outcome.propertyAbsent || isProvablyNonObject(outcome.value)
+                  ? { type: "absent" as const }
+                  : this.propertyResolution(
+                      outcome.value,
+                      propertyName,
+                      new Set(visitedVariables),
+                      readPosition,
+                    ),
+              );
+              if (resolutions.some((result) => result.type === "opaque")) {
+                return { type: "opaque" };
+              }
+              if (resolutions.every((result) => result.type === "absent")) {
+                return { type: "absent" };
+              }
+              return {
+                type: "found",
+                value: {
+                  type: "LocalPossibleValues",
+                  values: resolutions.flatMap((result) => {
+                    if (result.type !== "found") {
+                      return [LOCAL_ABSENT_VALUE];
+                    }
+                    return isLocalPossibleValues(result.value)
+                      ? result.value.values
+                      : [result.value];
+                  }),
+                } satisfies LocalPossibleValues,
+              };
             }
             if (isIdentifier(expression)) {
               const variable = resolveVariable(expression);
@@ -450,59 +885,64 @@ export default eslintCompatPlugin({
                 position: number;
                 value: unknown;
               }> = [];
-              for (const reference of variable.references) {
-                if (reference.identifier.range[0] >= readPosition) {
-                  continue;
+              for (const ownerVariable of stableObjectAliases(
+                variable,
+                readPosition,
+              )) {
+                for (const reference of ownerVariable.references) {
+                  if (reference.identifier.range[0] >= readPosition) {
+                    continue;
+                  }
+                  const member = reference.identifier.parent;
+                  if (
+                    !isMemberExpression(member) ||
+                    member.object !== reference.identifier
+                  ) {
+                    continue;
+                  }
+                  const owner = member.parent;
+                  const isAssignment =
+                    isAstNode(owner) &&
+                    owner.type === "AssignmentExpression" &&
+                    owner.left === member;
+                  const isUpdate =
+                    isAstNode(owner) &&
+                    ((owner.type === "UpdateExpression" &&
+                      owner.argument === member) ||
+                      (owner.type === "UnaryExpression" &&
+                        owner.operator === "delete" &&
+                        owner.argument === member));
+                  if (!isAssignment && !isUpdate) {
+                    continue;
+                  }
+                  const writtenProperty = staticPropertyName(
+                    member.property,
+                    member.computed,
+                  );
+                  if (
+                    writtenProperty !== null &&
+                    writtenProperty !== propertyName
+                  ) {
+                    continue;
+                  }
+                  const writeContext = controlFlowContext(
+                    reference.identifier,
+                    variable.scope.block,
+                  );
+                  if (writeContext === null) {
+                    continue;
+                  }
+                  memberWrites.push({
+                    context: writeContext,
+                    opaque:
+                      writtenProperty === null ||
+                      !isAssignment ||
+                      owner.operator !== "=" ||
+                      !isAstNode(owner.right),
+                    position: reference.identifier.range[0],
+                    value: isAssignment ? owner.right : null,
+                  });
                 }
-                const member = reference.identifier.parent;
-                if (
-                  !isMemberExpression(member) ||
-                  member.object !== reference.identifier
-                ) {
-                  continue;
-                }
-                const owner = member.parent;
-                const isAssignment =
-                  isAstNode(owner) &&
-                  owner.type === "AssignmentExpression" &&
-                  owner.left === member;
-                const isUpdate =
-                  isAstNode(owner) &&
-                  ((owner.type === "UpdateExpression" &&
-                    owner.argument === member) ||
-                    (owner.type === "UnaryExpression" &&
-                      owner.operator === "delete" &&
-                      owner.argument === member));
-                if (!isAssignment && !isUpdate) {
-                  continue;
-                }
-                const writtenProperty = staticPropertyName(
-                  member.property,
-                  member.computed,
-                );
-                if (
-                  writtenProperty !== null &&
-                  writtenProperty !== propertyName
-                ) {
-                  continue;
-                }
-                const writeContext = controlFlowContext(
-                  reference.identifier,
-                  variable.scope.block,
-                );
-                if (writeContext === null) {
-                  continue;
-                }
-                memberWrites.push({
-                  context: writeContext,
-                  opaque:
-                    writtenProperty === null ||
-                    !isAssignment ||
-                    owner.operator !== "=" ||
-                    !isAstNode(owner.right),
-                  position: reference.identifier.range[0],
-                  value: isAssignment ? owner.right : null,
-                });
               }
               memberWrites.sort(
                 (left, right) => left.position - right.position,
@@ -552,7 +992,7 @@ export default eslintCompatPlugin({
                   values: [
                     baseResolution.type === "found"
                       ? baseResolution.value
-                      : null,
+                      : LOCAL_ABSENT_VALUE,
                     ...conditionalWrites.map((write) => write.value),
                   ],
                 } satisfies LocalPossibleValues,
@@ -587,25 +1027,19 @@ export default eslintCompatPlugin({
             if (!isObjectExpression(expression)) {
               return { type: "opaque" };
             }
-            for (
-              let index = expression.properties.length - 1;
-              index >= 0;
-              index--
-            ) {
-              const property = expression.properties.at(index);
-              if (property === undefined) {
-                continue;
-              }
+            let objectResolution: LocalResolution = { type: "absent" };
+            for (const property of expression.properties) {
               if (property.type === "SpreadElement") {
                 const spreadResolution = this.propertyResolution(
                   property.argument,
                   propertyName,
                   new Set(visitedVariables),
-                  readPosition,
+                  property.range[1],
                 );
-                if (spreadResolution.type !== "absent") {
-                  return spreadResolution;
-                }
+                objectResolution = overlayResolution(
+                  objectResolution,
+                  spreadResolution,
+                );
                 continue;
               }
               const candidateName = staticPropertyName(
@@ -613,13 +1047,17 @@ export default eslintCompatPlugin({
                 property.computed,
               );
               if (candidateName === propertyName) {
-                return { type: "found", value: property.value };
+                objectResolution = {
+                  type: "found",
+                  value: property.value,
+                };
+                continue;
               }
               if (property.computed === true && candidateName === null) {
-                return { type: "opaque" };
+                objectResolution = { type: "opaque" };
               }
             }
-            return { type: "absent" };
+            return objectResolution;
           },
           stableValue(identifier, visitedVariables = new Set()) {
             const variable = resolveVariable(identifier);
@@ -654,6 +1092,7 @@ export default eslintCompatPlugin({
                   definition.node.init,
                   variable,
                   visitedVariables,
+                  definition.node.range[1],
                 );
               }
             }
@@ -666,10 +1105,135 @@ export default eslintCompatPlugin({
           visitedVariables = new Set<Variable>(),
         ): unknown => localValueResolver.memberValue(value, visitedVariables);
 
+        const isClassNamePropertyName = (propertyName: string): boolean =>
+          propertyName === "className" || propertyName.endsWith("ClassName");
+
+        const localSpreadClassNameProperties = (
+          value: unknown,
+          readPosition: number,
+          visitedVariables = new Set<Variable>(),
+        ): Set<string> => {
+          const propertyNames = new Set<string>(["className"]);
+          const visit = (candidate: unknown): void => {
+            if (isLocalObjectRestValue(candidate)) {
+              const restProperties = localSpreadClassNameProperties(
+                candidate.source,
+                readPosition,
+                new Set(visitedVariables),
+              );
+              for (const propertyName of restProperties) {
+                if (!candidate.excludedProperties.has(propertyName)) {
+                  propertyNames.add(propertyName);
+                }
+              }
+              return;
+            }
+            if (isLocalPossibleValues(candidate)) {
+              for (const possibleValue of candidate.values) {
+                visit(possibleValue);
+              }
+              return;
+            }
+            const expression = unwrapClassExpression(candidate);
+            if (expression === null) {
+              return;
+            }
+            if (expression.type === "ConditionalExpression") {
+              visit(expression.consequent);
+              visit(expression.alternate);
+              return;
+            }
+            if (expression.type === "LogicalExpression") {
+              for (const outcome of logicalOutcomes(expression)) {
+                if (!outcome.propertyAbsent) {
+                  visit(outcome.value);
+                }
+              }
+              return;
+            }
+            if (isObjectExpression(expression)) {
+              for (const property of expression.properties) {
+                if (property.type === "SpreadElement") {
+                  visit(property.argument);
+                  continue;
+                }
+                const propertyName = staticPropertyName(
+                  property.key,
+                  property.computed,
+                );
+                if (
+                  propertyName !== null &&
+                  isClassNamePropertyName(propertyName)
+                ) {
+                  propertyNames.add(propertyName);
+                }
+              }
+              return;
+            }
+            if (isMemberExpression(expression)) {
+              const memberValue = localValueResolver.memberValue(
+                expression,
+                new Set(visitedVariables),
+              );
+              if (memberValue !== null) {
+                visit(memberValue);
+              }
+              return;
+            }
+            if (!isIdentifier(expression)) {
+              return;
+            }
+            const variable = resolveVariable(expression);
+            if (variable === null || visitedVariables.has(variable)) {
+              return;
+            }
+            visitedVariables.add(variable);
+            for (const ownerVariable of stableObjectAliases(
+              variable,
+              readPosition,
+            )) {
+              for (const reference of ownerVariable.references) {
+                if (reference.identifier.range[0] >= readPosition) {
+                  continue;
+                }
+                const member = reference.identifier.parent;
+                if (
+                  !isMemberExpression(member) ||
+                  member.object !== reference.identifier
+                ) {
+                  continue;
+                }
+                const propertyName = staticPropertyName(
+                  member.property,
+                  member.computed,
+                );
+                if (
+                  propertyName !== null &&
+                  isClassNamePropertyName(propertyName)
+                ) {
+                  propertyNames.add(propertyName);
+                }
+              }
+            }
+            const stableValue = localValueResolver.stableValue(
+              expression,
+              new Set(visitedVariables),
+            );
+            if (stableValue !== null) {
+              visit(stableValue);
+            }
+          };
+          visit(value);
+          return propertyNames;
+        };
+
         const isCanonicalCnComposition = (
           value: unknown,
           visitedVariables = new Set<Variable>(),
         ): boolean => {
+          if (isLocalAbsentValue(value) || isLocalOpaqueValue(value)) {
+            return false;
+          }
           if (isLocalPossibleValues(value)) {
             return value.values.every((possibleValue) =>
               isCanonicalCnComposition(
@@ -715,6 +1279,9 @@ export default eslintCompatPlugin({
           value: unknown,
           visitedVariables = new Set<Variable>(),
         ): string | null => {
+          if (isLocalAbsentValue(value) || isLocalOpaqueValue(value)) {
+            return null;
+          }
           if (isLocalPossibleValues(value)) {
             const staticValues = value.values.map((possibleValue) =>
               staticClassValue(possibleValue, new Set(visitedVariables)),
@@ -779,6 +1346,7 @@ export default eslintCompatPlugin({
               parent.type === "SwitchCase" ||
               (parent.type === "LogicalExpression" &&
                 current === parent.right) ||
+              (parent.type === "CatchClause" && current === parent.body) ||
               parent.type === "ForStatement" ||
               parent.type === "ForInStatement" ||
               parent.type === "ForOfStatement" ||
@@ -868,6 +1436,7 @@ export default eslintCompatPlugin({
               parent.type === "SwitchCase" ||
               (parent.type === "LogicalExpression" &&
                 current === parent.right) ||
+              (parent.type === "CatchClause" && current === parent.body) ||
               parent.type === "ForStatement" ||
               parent.type === "ForInStatement" ||
               parent.type === "ForOfStatement" ||
@@ -944,13 +1513,101 @@ export default eslintCompatPlugin({
           ];
         };
 
+        const canCompleteNormally = (statement: unknown): boolean => {
+          if (!isAstNode(statement)) {
+            return true;
+          }
+          if (
+            statement.type === "ReturnStatement" ||
+            statement.type === "ThrowStatement" ||
+            statement.type === "BreakStatement" ||
+            statement.type === "ContinueStatement"
+          ) {
+            return false;
+          }
+          if (
+            statement.type === "BlockStatement" &&
+            Array.isArray(statement.body)
+          ) {
+            let reachable = true;
+            for (const child of statement.body) {
+              if (!reachable) {
+                break;
+              }
+              reachable = canCompleteNormally(child);
+            }
+            return reachable;
+          }
+          if (statement.type === "IfStatement") {
+            return (
+              statement.alternate == null ||
+              canCompleteNormally(statement.consequent) ||
+              canCompleteNormally(statement.alternate)
+            );
+          }
+          if (
+            statement.type === "SwitchStatement" &&
+            Array.isArray(statement.cases)
+          ) {
+            const cases = statement.cases.filter(isAstNode);
+            if (!cases.some((switchCase) => switchCase.test == null)) {
+              return true;
+            }
+            const caseCanComplete = (startIndex: number): boolean => {
+              for (let index = startIndex; index < cases.length; index++) {
+                const switchCase = cases.at(index);
+                if (
+                  switchCase === undefined ||
+                  !Array.isArray(switchCase.consequent)
+                ) {
+                  return true;
+                }
+                for (const consequent of switchCase.consequent) {
+                  if (
+                    isAstNode(consequent) &&
+                    consequent.type === "BreakStatement"
+                  ) {
+                    return true;
+                  }
+                  if (!canCompleteNormally(consequent)) {
+                    return false;
+                  }
+                }
+              }
+              return true;
+            };
+            return cases.some((_, index) => caseCanComplete(index));
+          }
+          if (statement.type === "TryStatement") {
+            if (
+              statement.finalizer != null &&
+              !canCompleteNormally(statement.finalizer)
+            ) {
+              return false;
+            }
+            return (
+              canCompleteNormally(statement.block) ||
+              (isAstNode(statement.handler) &&
+                canCompleteNormally(statement.handler.body))
+            );
+          }
+          return true;
+        };
+
         const isAllowedClassValue = (
           value: unknown,
           visitedVariables = new Set<Variable>(),
         ): boolean => {
+          if (isLocalAbsentValue(value) || isLocalOpaqueValue(value)) {
+            return true;
+          }
           if (isLocalPossibleValues(value)) {
+            const presentValues = value.values.filter(
+              (possibleValue) => !isLocalAbsentValue(possibleValue),
+            );
             if (
-              value.values.every((possibleValue) =>
+              presentValues.length > 0 &&
+              presentValues.every((possibleValue) =>
                 isCanonicalCnComposition(possibleValue),
               )
             ) {
@@ -1084,9 +1741,17 @@ export default eslintCompatPlugin({
               const writes = writtenValues(returnValue, node);
               return writes ?? [returnValue];
             });
-            const allCanonical = possibleValues.every((returnValue) =>
-              isCanonicalCnComposition(returnValue),
+            if (canCompleteNormally(node.body)) {
+              possibleValues.push(LOCAL_ABSENT_VALUE);
+            }
+            const presentValues = possibleValues.filter(
+              (returnValue) => !isLocalAbsentValue(returnValue),
             );
+            const allCanonical =
+              presentValues.length > 0 &&
+              presentValues.every((returnValue) =>
+                isCanonicalCnComposition(returnValue),
+              );
             if (allCanonical) {
               return true;
             }
@@ -1123,16 +1788,27 @@ export default eslintCompatPlugin({
           context.report({ node, messageId: "requireCanonicalCn" });
         };
 
-        const reportLocalSpreadClassName = (
+        const reportLocalSpreadClassNames = (
           spread: unknown,
           owner: unknown,
         ) => {
-          const className = localValueResolver.propertyValue(
+          const readPosition = isAstNode(owner)
+            ? owner.range[0]
+            : Number.POSITIVE_INFINITY;
+          for (const propertyName of localSpreadClassNameProperties(
             spread,
-            "className",
-          );
-          if (className !== null && !isAllowedClassValue(className)) {
-            report(owner);
+            readPosition,
+          )) {
+            const className = localValueResolver.propertyValue(
+              spread,
+              propertyName,
+              new Set(),
+              readPosition,
+            );
+            if (className !== null && !isAllowedClassValue(className)) {
+              report(owner);
+              return;
+            }
           }
         };
 
@@ -1155,11 +1831,8 @@ export default eslintCompatPlugin({
           },
           JSXSpreadAttribute(node) {
             const argument = unwrapClassExpression(node.argument);
-            if (isObjectExpression(argument)) {
-              reportLocalSpreadClassName(argument, node);
-              return;
-            }
             if (!isIdentifier(argument)) {
+              reportLocalSpreadClassNames(argument, node);
               return;
             }
             const variable = resolveVariable(argument);
@@ -1168,7 +1841,7 @@ export default eslintCompatPlugin({
             }
             const stableValue = localValueResolver.stableValue(argument);
             if (stableValue !== null) {
-              reportLocalSpreadClassName(stableValue, node);
+              reportLocalSpreadClassNames(argument, node);
               return;
             }
             const mutableValues = mutableLocalValues(argument, variable);
@@ -1176,7 +1849,7 @@ export default eslintCompatPlugin({
               return;
             }
             for (const mutableValue of mutableValues) {
-              reportLocalSpreadClassName(mutableValue, node);
+              reportLocalSpreadClassNames(mutableValue, node);
             }
           },
         };
