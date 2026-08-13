@@ -48,10 +48,7 @@ export const scanResultConsumption = ({
         const discarded = unwrapDiscardedExpression(node.expression);
         if (
           !isAssignmentExpression(discarded) &&
-          isBetterResultValueType(
-            checker,
-            checker.getTypeAtLocation(discarded),
-          )
+          isBetterResultValueType(checker, checker.getTypeAtLocation(discarded))
         ) {
           diagnostics.push(
             createDiagnostic({

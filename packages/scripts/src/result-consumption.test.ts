@@ -144,9 +144,7 @@ describe("Result consumption guard", () => {
       void Result;
     `);
 
-    expect(diagnostics.map(({ rule }) => rule)).toEqual([
-      "unused-result",
-    ]);
+    expect(diagnostics.map(({ rule }) => rule)).toEqual(["unused-result"]);
   });
 
   test("detects discarded awaited and nullable Results", () => {
