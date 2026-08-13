@@ -1911,7 +1911,8 @@ const AssistantTextPart = ({
         : undefined,
     [restorationPairs],
   );
-  const classNamePatch = className === undefined ? {} : { className };
+  const classNamePatch =
+    className === undefined ? {} : { className: cn(className) };
   if (rehypePlugins === undefined) {
     return (
       <MessageResponse
