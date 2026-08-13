@@ -6,6 +6,7 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 
 import { useFormatter } from "@/i18n/formatting-context";
 import { createCaseLawDecisionRouteParams } from "@/lib/case-law-route";
+import { parseDeterministicDate } from "@/lib/deterministic-date";
 
 // Stable keys so loading rows never fall back to array-index keys.
 const SKELETON_ROW_KEYS = ["a", "b", "c", "d", "e", "f", "g", "h"] as const;
@@ -203,8 +204,8 @@ const formatDecisionDate = (
   if (value === null) {
     return "\u2014";
   }
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) {
+  const date = parseDeterministicDate(value);
+  if (date === null) {
     return "\u2014";
   }
   return format.dateTime(date, {

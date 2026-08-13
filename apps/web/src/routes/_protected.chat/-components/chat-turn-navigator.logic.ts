@@ -4,10 +4,8 @@ import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 const PROMPT_PREVIEW_LENGTH = 180;
 const RESPONSE_PREVIEW_LENGTH = 280;
 const PREVIEW_SOURCE_LENGTH_MULTIPLIER = 4;
+const MAX_PREVIEW_SOURCE_CODE_UNITS = 8192;
 const MAX_NAVIGATION_ITEMS = 10;
-const PREVIEW_SEGMENTER = new Intl.Segmenter(undefined, {
-  granularity: "grapheme",
-});
 const WHITESPACE_SEGMENT = /^\s+$/u;
 const MARKDOWN_FENCE = /^[ \t]{0,3}(?:```|~~~)[^\n]*$/gmu;
 const MARKDOWN_HEADING = /^\s{0,3}#{1,6}\s+/gmu;
@@ -33,8 +31,15 @@ export type ChatTurnNavigationItem = {
 const getMessageTextParts = (message: PersistedChatMessage): string[] => {
   const textParts: string[] = [];
   for (const part of message.parts) {
-    if (part.type === "text" && part.content.trim()) {
-      textParts.push(part.content);
+    if (part.type !== "text") {
+      continue;
+    }
+    const boundedContent = part.content.slice(
+      0,
+      MAX_PREVIEW_SOURCE_CODE_UNITS + 1,
+    );
+    if (boundedContent.trim()) {
+      textParts.push(boundedContent);
     }
   }
   return textParts;
@@ -128,9 +133,45 @@ const stripMarkdownLinkDestinations = (value: string): string => {
   return output;
 };
 
-const markdownToPreviewText = (value: string, previewLength: number): string =>
+const takeGraphemePrefix = (
+  value: string,
+  length: number,
+  segmenter: Intl.Segmenter,
+): string => {
+  const sourceWasTruncated = value.length > MAX_PREVIEW_SOURCE_CODE_UNITS;
+  const boundedValue = sourceWasTruncated
+    ? value.slice(0, MAX_PREVIEW_SOURCE_CODE_UNITS)
+    : value;
+  let end = 0;
+  let count = 0;
+  let pendingEnd: number | null = null;
+  for (const { index, segment } of segmenter.segment(boundedValue)) {
+    if (pendingEnd !== null) {
+      end = pendingEnd;
+      count += 1;
+    }
+    if (count >= length) {
+      break;
+    }
+    pendingEnd = index + segment.length;
+  }
+  if (!sourceWasTruncated && count < length && pendingEnd !== null) {
+    end = pendingEnd;
+  }
+  return boundedValue.slice(0, end);
+};
+
+const markdownToPreviewText = (
+  value: string,
+  previewLength: number,
+  segmenter: Intl.Segmenter,
+): string =>
   stripMarkdownLinkDestinations(
-    value.slice(0, previewLength * PREVIEW_SOURCE_LENGTH_MULTIPLIER),
+    takeGraphemePrefix(
+      value,
+      previewLength * PREVIEW_SOURCE_LENGTH_MULTIPLIER,
+      segmenter,
+    ),
   )
     .replace(MARKDOWN_FENCE, "")
     .replace(MARKDOWN_HEADING, "")
@@ -144,12 +185,16 @@ const markdownToPreviewText = (value: string, previewLength: number): string =>
     .replace(MARKDOWN_INLINE_CODE, "$2")
     .replace(MARKDOWN_ESCAPE, "$1");
 
-const buildPreview = (values: readonly string[], length: number): string => {
+const buildPreview = (
+  values: readonly string[],
+  length: number,
+  segmenter: Intl.Segmenter,
+): string => {
   const output: string[] = [];
   let pendingSpace = false;
 
   for (const value of values) {
-    for (const { segment } of PREVIEW_SEGMENTER.segment(value)) {
+    for (const { segment } of segmenter.segment(value)) {
       if (WHITESPACE_SEGMENT.test(segment)) {
         pendingSpace = output.length > 0;
         continue;
@@ -172,12 +217,20 @@ const buildPreview = (values: readonly string[], length: number): string => {
   return output.join("");
 };
 
-export const buildChatTurnNavigationItems = (
-  messages: readonly PersistedChatMessage[],
-  toUserPlainText: (value: string) => string,
-): ChatTurnNavigationItem[] => {
+type BuildChatTurnNavigationItemsOptions = {
+  locale: string;
+  messages: readonly PersistedChatMessage[];
+  toUserPlainText: (value: string) => string;
+};
+
+export const buildChatTurnNavigationItems = ({
+  locale,
+  messages,
+  toUserPlainText,
+}: BuildChatTurnNavigationItemsOptions): ChatTurnNavigationItem[] => {
   const items: ChatTurnNavigationItem[] = [];
   const turns = buildMessageTurns(messages);
+  const segmenter = new Intl.Segmenter(locale, { granularity: "grapheme" });
 
   for (
     let index = turns.length - 1;
@@ -196,15 +249,24 @@ export const buildChatTurnNavigationItems = (
       ({ message }) => message.role === "assistant",
     )?.message;
     const userTextParts = getMessageTextParts(turn.header).map((value) =>
-      markdownToPreviewText(toUserPlainText(value), PROMPT_PREVIEW_LENGTH),
+      markdownToPreviewText(
+        toUserPlainText(value),
+        PROMPT_PREVIEW_LENGTH,
+        segmenter,
+      ),
     );
-    const userPreview = buildPreview(userTextParts, PROMPT_PREVIEW_LENGTH);
+    const userPreview = buildPreview(
+      userTextParts,
+      PROMPT_PREVIEW_LENGTH,
+      segmenter,
+    );
     const assistantPreview = assistantMessage
       ? buildPreview(
           getMessageTextParts(assistantMessage).map((value) =>
-            markdownToPreviewText(value, RESPONSE_PREVIEW_LENGTH),
+            markdownToPreviewText(value, RESPONSE_PREVIEW_LENGTH, segmenter),
           ),
           RESPONSE_PREVIEW_LENGTH,
+          segmenter,
         )
       : "";
 

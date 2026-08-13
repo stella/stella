@@ -24,6 +24,15 @@ test("anonymous visitors can search and browse by legal task", async ({
   page,
 }) => {
   await context.clearCookies();
+  const pageErrors: string[] = [];
+  const hydrationErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  page.on("console", (message) => {
+    const text = message.text();
+    if (message.type() === "error" && /hydrated|hydration/iu.test(text)) {
+      hydrationErrors.push(text);
+    }
+  });
   await page.goto("/tools", {
     timeout: PUBLIC_SSR_TIMEOUT_MS,
     waitUntil: "domcontentloaded",
@@ -60,4 +69,6 @@ test("anonymous visitors can search and browse by legal task", async ({
     page.getByRole("link", { name: /Contract Review/u }),
   ).toBeVisible();
   await expect(page.getByText("1 result", { exact: true })).toBeVisible();
+  expect(pageErrors).toEqual([]);
+  expect(hydrationErrors).toEqual([]);
 });

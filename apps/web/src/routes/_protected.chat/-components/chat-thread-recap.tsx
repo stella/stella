@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { chatThreadRecapOptions } from "@/features/chat/queries";
+import { useMountEffect } from "@/hooks/use-effect";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 
 // Mirrors RECAP_STALENESS_THRESHOLD_MS in
@@ -47,9 +48,13 @@ export const ChatThreadRecap = ({
   // so the staleness check stays pure and is evaluated at thread-open
   // time. The component is keyed by threadId at the call site, so both
   // re-capture per thread.
-  const [openedAt] = useState(() => Date.now());
+  const [openedAt, setOpenedAt] = useState<number | null>(null);
+  useMountEffect(() => {
+    setOpenedAt(Date.now());
+  });
   const [openedOnMessageId] = useState(() => lastMessageId);
   const isStale =
+    openedAt !== null &&
     lastActivityAt !== null &&
     openedAt - new Date(lastActivityAt).getTime() >
       RECAP_STALENESS_THRESHOLD_MS;

@@ -26,6 +26,7 @@ import type {
 } from "@/components/ai-config-role-models.logic";
 import { LanguagePicker } from "@/components/language-picker";
 import { ThemePicker } from "@/components/theme-picker";
+import { useBrowserRegion } from "@/hooks/use-browser-region";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
@@ -94,6 +95,7 @@ export const OnboardingWizard = () => {
   const t = useTranslations();
   const navigate = useNavigate();
   const analytics = useAnalytics();
+  const browserRegion = useBrowserRegion();
   const queryClient = useQueryClient();
   const { data: sessionData } = useQuery(sessionOptions);
   const { data: nativeToolDeployAvailability } = useQuery(
@@ -118,11 +120,9 @@ export const OnboardingWizard = () => {
     aiProviders: [createProviderCredentialDraft()],
     aiRoleModels: createDefaultRoleModels(),
   }));
-  const navigatorLocale =
-    typeof navigator === "undefined" ? "en" : navigator.language || "en";
   const suggestedCountryCodes = getSuggestedCountryCodes({
     email: userEmail,
-    locale: navigatorLocale,
+    browserRegion: browserRegion || undefined,
     detectedCountry: sessionData?.user.detectedCountry,
   });
   const [jurisdictionSuggestionApplied, setJurisdictionSuggestionApplied] =

@@ -9,6 +9,7 @@ import { DAY_IN_MS } from "@stll/time";
 import Tooltip from "@/components/tooltip";
 import { env } from "@/env";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
+import { useLocalStorageFlag } from "@/hooks/use-local-storage-flag";
 import { logDevError } from "@/lib/errors/utils";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { sanitizeHref } from "@/lib/sanitize-href";
@@ -62,12 +63,14 @@ export const SelfhostUpdateBanner = () => {
       }
     },
   });
+  const latestVersion = release ? stripPrefix(release.tag_name) : "";
+  const dismissedKey = `${DISMISSED_KEY_PREFIX}${latestVersion}`;
+  const isPersistedDismissal = useLocalStorageFlag(dismissedKey);
 
   if (!enabled || !release || release.draft) {
     return null;
   }
 
-  const latestVersion = stripPrefix(release.tag_name);
   if (compareSemver(latestVersion, installedVersion) <= 0) {
     return null;
   }
@@ -75,14 +78,10 @@ export const SelfhostUpdateBanner = () => {
   // Per-version dismissal: dismissing v0.0.2 doesn't suppress the
   // banner for v0.0.3 later. Stored in localStorage so it survives
   // tab refreshes within the same install.
-  const dismissedKey = `${DISMISSED_KEY_PREFIX}${latestVersion}`;
   if (dismissedVersion === latestVersion) {
     return null;
   }
-  if (
-    typeof localStorage !== "undefined" &&
-    localStorage.getItem(dismissedKey) === "1"
-  ) {
+  if (isPersistedDismissal) {
     return null;
   }
 

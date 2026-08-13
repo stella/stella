@@ -29,6 +29,7 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { optionalArray } from "@/lib/arrays";
@@ -58,6 +59,7 @@ export const Route = createFileRoute("/auth/organization")({
   validateSearch: searchSchema,
   beforeLoad: ({ context, location, search }) => {
     const bridgedQuery = getSignedOauthQueryFromHash(location.hash);
+    const isOauthPostLoginFromSearch = hasSignedOauthQuery(location.searchStr);
 
     if (!context.session) {
       if (bridgedQuery) {
@@ -77,7 +79,7 @@ export const Route = createFileRoute("/auth/organization")({
     }
 
     const isOauthPostLogin =
-      bridgedQuery !== null || hasSignedOauthQuery(location.searchStr);
+      bridgedQuery !== null || isOauthPostLoginFromSearch;
 
     if (
       !isOauthPostLogin &&
@@ -86,6 +88,8 @@ export const Route = createFileRoute("/auth/organization")({
     ) {
       throw redirect({ to: search.redirectTo ?? "/", replace: true });
     }
+
+    return { isOauthPostLoginFromSearch };
   },
   component: Organization,
 });
@@ -93,16 +97,19 @@ export const Route = createFileRoute("/auth/organization")({
 function Organization() {
   const { data: organizations, isPending } = authClient.useListOrganizations();
   const hasOrganizations = (organizations?.length ?? 0) > 0;
+  const hydrated = useHydrated();
+  const isOauthPostLoginFromSearch = Route.useRouteContext({
+    select: (context) => context.isOauthPostLoginFromSearch,
+  });
   const isOauthPostLogin =
-    typeof window !== "undefined" &&
-    (getSignedOauthQueryFromHash(window.location.hash) !== null ||
-      hasSignedOauthQuery(window.location.search));
+    isOauthPostLoginFromSearch ||
+    (hydrated && getSignedOauthQueryFromHash(window.location.hash) !== null);
 
-  if (!isPending && !hasOrganizations && !isOauthPostLogin) {
+  if (hydrated && !isPending && !hasOrganizations && !isOauthPostLogin) {
     return <Navigate replace to="/onboarding" />;
   }
 
-  if (isPending || (!hasOrganizations && !isOauthPostLogin)) {
+  if (!hydrated || isPending || (!hasOrganizations && !isOauthPostLogin)) {
     return (
       <Frame className="w-full max-w-sm">
         <FrameHeader>

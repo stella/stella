@@ -1,3 +1,4 @@
+import { parseDeterministicDate } from "@/lib/deterministic-date";
 import { isPublicLawCrawlAllowed } from "@/lib/public-law-launch";
 import {
   createPublicCanonicalUrl,
@@ -50,8 +51,7 @@ const dateToIsoDate = (value: Date | string | null): string | null => {
     return raw;
   }
 
-  const date = new Date(raw);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+  return parseDeterministicDate(raw)?.toISOString().slice(0, 10) ?? null;
 };
 
 const absoluteUrlOrNull = (value: string | null | undefined): string | null => {

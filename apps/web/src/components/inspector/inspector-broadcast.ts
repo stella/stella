@@ -111,8 +111,10 @@ const compareInspectorBroadcastClocks = (
   if (left.updatedAt !== right.updatedAt) {
     return left.updatedAt - right.updatedAt;
   }
-  // oxlint-disable-next-line require-cached-collator/require-cached-collator -- senderId is an opaque clock tiebreaker, not display text
-  return left.senderId.localeCompare(right.senderId);
+  if (left.senderId < right.senderId) {
+    return -1;
+  }
+  return left.senderId > right.senderId ? 1 : 0;
 };
 
 const getNextInspectorBroadcastClock = (

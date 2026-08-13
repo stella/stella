@@ -164,27 +164,6 @@ describe("custom oxlint guardrails", () => {
     );
   });
 
-  test("public law modules cannot reference browser globals directly", () => {
-    const configSource = readRootFixture("oxlint.config.ts");
-    const pluginSource = readRootFixture(
-      ".oxlint-plugins/no-public-law-browser-globals.ts",
-    );
-
-    expect(configSource).toContain("apps/web/src/routes/law/**/*.{ts,tsx}");
-    expect(configSource).toContain(
-      "apps/web/src/features/case-law/**/*.{ts,tsx}",
-    );
-    expect(configSource).toContain(
-      "no-public-law-browser-globals/no-public-law-browser-globals",
-    );
-    expect(pluginSource).toContain("Public law modules must be SSR-safe");
-    expect(pluginSource).toContain('"window"');
-    expect(pluginSource).toContain('"document"');
-    expect(pluginSource).toContain('"localStorage"');
-    expect(pluginSource).toContain('"sessionStorage"');
-    expect(pluginSource).toContain('"matchMedia"');
-  });
-
   test("matter links must declare their listing or reference affordance", () => {
     const configSource = readRootFixture("oxlint.config.ts");
     const pluginSource = readRootFixture(

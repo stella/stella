@@ -11,11 +11,11 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { env } from "@/env";
+import { useHydrationSafeDesktopPlatform } from "@/hooks/use-hydration-safe-desktop-platform";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { externalApiOrigin } from "@/lib/api-origins";
 import { connectSelfHostedDesktop } from "@/lib/desktop-bridge";
 import {
-  detectDesktopPlatform,
   MACOS_DMG_URL,
   WINDOWS_EXE_URL,
   WINDOWS_MSI_URL,
@@ -30,11 +30,7 @@ export const Route = createFileRoute("/_protected/settings/account/desktop")({
 
 function DesktopPage() {
   const t = useTranslations();
-  const platform = detectDesktopPlatform();
-  const webOrigin =
-    typeof window === "undefined"
-      ? env.VITE_PUBLIC_APP_URL
-      : window.location.origin;
+  const platform = useHydrationSafeDesktopPlatform();
   const [selfHostConnectStatus, setSelfHostConnectStatus] = useState<
     "idle" | "connecting" | "connected" | "error"
   >("idle");
@@ -52,7 +48,7 @@ function DesktopPage() {
     try {
       await connectSelfHostedDesktop({
         apiBaseUrl: externalApiOrigin(),
-        webOrigin,
+        webOrigin: window.location.origin,
       });
       setSelfHostConnectStatus("connected");
       stellaToast.add({

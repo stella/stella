@@ -9,10 +9,6 @@ const DIRECT_API_ORIGIN = new URL(
   process.env["E2E_API_URL"] ?? "https://api-staging.stll.app",
 ).origin;
 
-// The public shell is rendered on Linux and hydrated on the user's platform.
-// Emulating macOS catches ambient platform reads that Linux-only CI misses.
-test.use({ userAgent: MACOS_USER_AGENT });
-
 // The smoke user mirrors the production default state: org owner,
 // no usage entitlement row, no AI provider config. Regressions that
 // only appear in that state must fail here, not in front of a user.
@@ -96,69 +92,116 @@ test("authenticated chat navigation stays same-origin and has no API preflights"
   expect(optionsRequests).toEqual([]);
 });
 
-test("server-rendered public law decisions stay stable after hydration", async ({
-  page,
-}) => {
-  // A persisted non-English locale is the harder hydration case: the
-  // client holds translated messages before hydrating against the
-  // server's English markup. The bug class this guards against only
-  // reproduced with a non-default locale.
-  // String form: the e2e tsconfig has no DOM lib, so a function body
-  // referencing browser globals would not typecheck in this context.
-  await page.addInitScript({
-    content: `window.localStorage.setItem(
-      "stella-i18n",
-      JSON.stringify({ state: { lang: "cs" }, version: 0 }),
-    );`,
+test.describe("public hydration", () => {
+  // The public shell is rendered on Linux and hydrated on the user's platform.
+  // Emulating macOS catches ambient platform reads that Linux-only CI misses.
+  test.use({
+    locale: "pt-PT",
+    timezoneId: "America/Los_Angeles",
+    userAgent: MACOS_USER_AGENT,
   });
 
-  // Hydration mismatches surface as pageerrors (React #418 + a router
-  // invariant) and end in the error boundary; collect them explicitly
-  // so the failure names the real exception instead of a timeout.
-  const pageErrors: string[] = [];
-  const failedAssets: string[] = [];
-  page.on("pageerror", (error) => {
-    pageErrors.push(error.message);
+  test("server-rendered public law decisions stay stable after hydration", async ({
+    page,
+  }) => {
+    const fixedBrowserDate = new Date();
+    fixedBrowserDate.setUTCHours(2, 0, 0, 0);
+    const expectedToday = new Date(fixedBrowserDate.getTime() - 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    await page.clock.setFixedTime(fixedBrowserDate);
+
+    // A persisted non-English locale is the harder hydration case: the
+    // client holds translated messages before hydrating against the
+    // server's English markup. The bug class this guards against only
+    // reproduced with a non-default locale.
+    // String form: the e2e tsconfig has no DOM lib, so a function body
+    // referencing browser globals would not typecheck in this context.
+    await page.addInitScript({
+      content: `window.localStorage.setItem("sidebar_state", "collapsed");
+      window.localStorage.setItem("stella-ui-theme", "light");
+      window.localStorage.setItem("stella-ui-palette", "flexoki");
+      window.localStorage.setItem(
+        "stella-i18n",
+        JSON.stringify({ state: { lang: "cs" }, version: 0 }),
+      );`,
+    });
+
+    // Hydration mismatches surface as pageerrors (React #418 + a router
+    // invariant) and end in the error boundary; collect them explicitly
+    // so the failure names the real exception instead of a timeout.
+    const pageErrors: string[] = [];
+    const hydrationConsoleErrors: string[] = [];
+    const failedAssets: string[] = [];
+    page.on("pageerror", (error) => {
+      pageErrors.push(error.message);
+    });
+    page.on("console", (message) => {
+      const text = message.text();
+      const normalizedText = text.toLowerCase();
+      if (
+        message.type() === "error" &&
+        (normalizedText.includes("hydrated") ||
+          normalizedText.includes("hydration"))
+      ) {
+        hydrationConsoleErrors.push(text);
+      }
+    });
+    page.on("response", (response) => {
+      if (response.status() >= 400 && response.url().includes("/assets/")) {
+        failedAssets.push(response.url());
+      }
+    });
+
+    await page.goto("/law/cases", { waitUntil: "commit" });
+    // Scoped to the decisions table: the shell sidebar also carries a
+    // /law/cases nav link that a page-wide href filter could match.
+    const firstDecision = page
+      .getByRole("table")
+      .locator('a[href*="/cases/"]')
+      .first();
+
+    await expect(firstDecision).toBeVisible();
+    const datePickerTrigger = page
+      .getByRole("button", { name: /select date|vybrat datum/iu })
+      .first();
+    await datePickerTrigger.click();
+    await expect(
+      page.locator('[role="gridcell"][aria-current="date"]'),
+    ).toHaveAttribute("data-date", expectedToday);
+    await page.keyboard.press("Escape");
+    await firstDecision.click();
+    await expect(page).toHaveURL(/\/law\/[a-z]{2,3}\/cases\//u);
+
+    // Force a full server-rendered load of the decision page: client-side
+    // navigation alone would never exercise the hydration path that broke.
+    await page.reload({ waitUntil: "commit" });
+
+    await expect(page.locator("article").first()).toBeVisible();
+    // Imported judgments are self-contained articles and may carry their own h1.
+    // Assert the app-owned page title without constraining source-document markup.
+    const decisionTitle = page.locator('h1[data-slot="decision-title"]');
+    await expect(decisionTitle).toHaveCount(1);
+    await expect(decisionTitle).toHaveText(/\S/u);
+    const routeErrorTitle = page.locator("#route-error-title");
+    const inspector = page.locator('[data-side="right"]');
+    await expect(routeErrorTitle).toHaveCount(0);
+    await expect(inspector).toHaveAttribute("data-state", "expanded");
+    await expect(page.locator('[data-slot="sidebar"]').first()).toHaveAttribute(
+      "data-state",
+      "collapsed",
+    );
+    await expect(page.locator("html")).toHaveClass(/\bpalette-flexoki\b/u);
+    await expect(page.locator("html")).not.toHaveClass(/\bdark\b/u);
+
+    // Authentication resolution and the lazy inspector graph settle after the
+    // decision body appears. Keep observing long enough to catch a delayed
+    // remount, stale-chunk retry, or cross-tab store reconciliation.
+    await page.waitForTimeout(5000);
+    await expect(routeErrorTitle).toHaveCount(0);
+    await expect(inspector).toHaveAttribute("data-state", "expanded");
+    expect(pageErrors).toEqual([]);
+    expect(hydrationConsoleErrors).toEqual([]);
+    expect(failedAssets).toEqual([]);
   });
-  page.on("response", (response) => {
-    if (response.status() >= 400 && response.url().includes("/assets/")) {
-      failedAssets.push(response.url());
-    }
-  });
-
-  await page.goto("/law/cases", { waitUntil: "commit" });
-  // Scoped to the decisions table: the shell sidebar also carries a
-  // /law/cases nav link that a page-wide href filter could match.
-  const firstDecision = page
-    .getByRole("table")
-    .locator('a[href*="/cases/"]')
-    .first();
-
-  await expect(firstDecision).toBeVisible();
-  await firstDecision.click();
-  await expect(page).toHaveURL(/\/law\/[a-z]{2,3}\/cases\//u);
-
-  // Force a full server-rendered load of the decision page: client-side
-  // navigation alone would never exercise the hydration path that broke.
-  await page.reload({ waitUntil: "commit" });
-
-  await expect(page.locator("article").first()).toBeVisible();
-  // Imported judgments are self-contained articles and may carry their own h1.
-  // Assert the app-owned page title without constraining source-document markup.
-  const decisionTitle = page.locator('h1[data-slot="decision-title"]');
-  await expect(decisionTitle).toHaveCount(1);
-  await expect(decisionTitle).toHaveText(/\S/u);
-  const routeErrorTitle = page.locator("#route-error-title");
-  const inspector = page.locator('[data-side="right"]');
-  await expect(routeErrorTitle).toHaveCount(0);
-  await expect(inspector).toHaveAttribute("data-state", "expanded");
-
-  // Authentication resolution and the lazy inspector graph settle after the
-  // decision body appears. Keep observing long enough to catch a delayed
-  // remount, stale-chunk retry, or cross-tab store reconciliation.
-  await page.waitForTimeout(5000);
-  await expect(routeErrorTitle).toHaveCount(0);
-  await expect(inspector).toHaveAttribute("data-state", "expanded");
-  expect(pageErrors).toEqual([]);
-  expect(failedAssets).toEqual([]);
 });

@@ -559,7 +559,7 @@ describe("public law sitemap", () => {
     expect(isPublicSsrPath("/workspaces/workspace-id")).toBe(false);
     expect(isPublicSsrPath("/")).toBe(false);
     expect(source).toContain(
-      "ssr: ({ location }) => isPublicSsrPath(location.pathname)",
+      "ssr: ({ location: routeLocation }) => isPublicSsrPath(routeLocation.pathname)",
     );
     expect(source).toContain("shellComponent: RootDocument");
   });
@@ -707,9 +707,14 @@ describe("public law sitemap", () => {
     expect(timeZoneSource).toContain(
       "Intl.DateTimeFormat().resolvedOptions().timeZone",
     );
+    expect(timeZoneSource).toContain('globalThis.addEventListener("focus"');
+    expect(timeZoneSource).toContain('globalThis.removeEventListener("focus"');
 
     const providerSource = await readSource("apps/web/src/app-providers.tsx");
-    expect(providerSource).toContain("timeZone={resolveAppTimeZone()}");
+    expect(providerSource).toContain(
+      "useHydrationSafeTimeZone(synchronizeFormatterTimeZone)",
+    );
+    expect(providerSource).toContain("timeZone={timeZone}");
   });
 
   test("case-law list keeps date-only legal dates in UTC", async () => {

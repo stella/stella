@@ -53,8 +53,6 @@ export const COUNTRY_POINTS: readonly CountryPoint[] = COUNTRY_CODES.map(
   },
 );
 
-const LOCALE_REGION_PATTERN = /[-_](?<region>[A-Za-z]{2})\b/u;
-
 const countryCodeFromEmailTld = (
   emailTld: string | undefined,
 ): CountryCode | undefined => {
@@ -91,11 +89,12 @@ export const countryName = (
 
 export const suggestedCountryCodes = ({
   email,
-  locale,
+  browserRegion,
   detectedCountry,
 }: {
   email: string;
-  locale: string;
+  /** Region subtag detected from the browser's own locale preferences. */
+  browserRegion?: string | undefined;
   /**
    * Country recorded server-side at signup from the edge's geo header.
    * Ranked above the locale and email heuristics because it reflects
@@ -104,16 +103,14 @@ export const suggestedCountryCodes = ({
   detectedCountry?: string | null | undefined;
 }): CountryCode[] => {
   const suggestions: string[] = [];
-  const regionFromLocale =
-    LOCALE_REGION_PATTERN.exec(locale)?.groups?.["region"];
   const emailTld = email.split(".").at(-1)?.toLowerCase();
 
   if (detectedCountry) {
     suggestions.push(detectedCountry.toUpperCase());
   }
 
-  if (regionFromLocale) {
-    suggestions.push(regionFromLocale.toUpperCase());
+  if (browserRegion) {
+    suggestions.push(browserRegion.toUpperCase());
   }
 
   const countryCodeFromEmail = countryCodeFromEmailTld(emailTld);

@@ -14,18 +14,22 @@ const textMessage = (
   role,
 });
 
+const buildItems = (messages: readonly PersistedChatMessage[]) =>
+  buildChatTurnNavigationItems({
+    locale: "en",
+    messages,
+    toUserPlainText: userMessageFallbackText,
+  });
+
 describe("chat turn navigation items", () => {
   test("pairs each user prompt with the start of its assistant response", () => {
-    const items = buildChatTurnNavigationItems(
-      [
-        textMessage("orphan", "assistant", "Earlier response"),
-        textMessage("user-1", "user", "<p>Review the filing</p>"),
-        textMessage("system-1", "system", "Internal status"),
-        textMessage("assistant-1", "assistant", "The filing is complete."),
-        textMessage("user-2", "user", "Check the deadline"),
-      ],
-      userMessageFallbackText,
-    );
+    const items = buildItems([
+      textMessage("orphan", "assistant", "Earlier response"),
+      textMessage("user-1", "user", "<p>Review the filing</p>"),
+      textMessage("system-1", "system", "Internal status"),
+      textMessage("assistant-1", "assistant", "The filing is complete."),
+      textMessage("user-2", "user", "Check the deadline"),
+    ]);
 
     expect(items).toEqual([
       {
@@ -60,13 +64,10 @@ describe("chat turn navigation items", () => {
       role: "user",
     };
 
-    const [item] = buildChatTurnNavigationItems(
-      [
-        fileOnlyMessage,
-        textMessage("assistant-files", "assistant", longResponse),
-      ],
-      userMessageFallbackText,
-    );
+    const [item] = buildItems([
+      fileOnlyMessage,
+      textMessage("assistant-files", "assistant", longResponse),
+    ]);
 
     expect(item?.userPreview).toBeNull();
     expect(item?.userAttachmentCount).toBe(1);
@@ -76,21 +77,18 @@ describe("chat turn navigation items", () => {
 
   test("uses plain display text before bounding Markdown previews", () => {
     const longDestination = `https://example.com/${"path/".repeat(80)}`;
-    const [item] = buildChatTurnNavigationItems(
-      [
-        textMessage(
-          "user-markdown",
-          "user",
-          `# Review **the [filing](${longDestination})** in case_file_v2`,
-        ),
-        textMessage(
-          "assistant-markdown",
-          "assistant",
-          `See [the **short answer**](${longDestination}) and _section 4_ in annex_file_2.`,
-        ),
-      ],
-      userMessageFallbackText,
-    );
+    const [item] = buildItems([
+      textMessage(
+        "user-markdown",
+        "user",
+        `# Review **the [filing](${longDestination})** in case_file_v2`,
+      ),
+      textMessage(
+        "assistant-markdown",
+        "assistant",
+        `See [the **short answer**](${longDestination}) and _section 4_ in annex_file_2.`,
+      ),
+    ]);
 
     expect(item?.userPreview).toBe("Review the filing in case_file_v2");
     expect(item?.assistantPreview).toBe(
@@ -107,10 +105,7 @@ describe("chat turn navigation items", () => {
       ];
     }).flat();
 
-    const items = buildChatTurnNavigationItems(
-      messages,
-      userMessageFallbackText,
-    );
+    const items = buildItems(messages);
 
     expect(items).toHaveLength(10);
     expect(items.map(({ id }) => id)).toEqual([
@@ -125,5 +120,23 @@ describe("chat turn navigation items", () => {
       "user-11",
       "user-12",
     ]);
+  });
+
+  test("never splits grapheme clusters while bounding previews", () => {
+    const emoji = "👩‍⚖️";
+    const [item] = buildItems([
+      textMessage("user-emoji", "user", emoji.repeat(181)),
+    ]);
+
+    expect(item?.userPreview).toBe(`${emoji.repeat(180)}…`);
+  });
+
+  test("drops an oversized grapheme before preview processing", () => {
+    const oversizedGrapheme = `a${"\u0301".repeat(20_000)}`;
+    const [item] = buildItems([
+      textMessage("user-oversized-grapheme", "user", oversizedGrapheme),
+    ]);
+
+    expect(item?.userPreview).toBeNull();
   });
 });

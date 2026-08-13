@@ -29,7 +29,7 @@ export function CopyButton({
       return;
     }
     setCopied(true);
-    window.setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (

@@ -1,10 +1,10 @@
-import { useRef, useSyncExternalStore } from "react";
+import { useRef } from "react";
 import type { PropsWithChildren } from "react";
 
 import { HotkeysProvider } from "@tanstack/react-hotkeys";
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
-import { useRouter } from "@tanstack/react-router";
+import { useRouter, useRouterState } from "@tanstack/react-router";
 import { IntlProvider } from "use-intl";
 
 import { ToastProvider } from "@stll/ui/components/toast";
@@ -14,34 +14,20 @@ import { DefaultPendingComponent } from "@/components/route-components";
 import { ThemeProvider } from "@/components/theme-provider";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import {
   buildFormattingLocale,
   bundledEnglishMessages,
+  synchronizeFormatterTimeZone,
   useI18nStore,
 } from "@/i18n/i18n-store";
-import { resolveAppTimeZone } from "@/i18n/time-zone";
+import { useHydrationSafeTimeZone } from "@/i18n/time-zone";
 import { AnalyticsProvider } from "@/lib/analytics/analytics-provider";
 import { useAnalytics } from "@/lib/analytics/provider";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
-
-const noopSubscribe = () => () => undefined;
-
-/**
- * False during server render AND the client's hydration pass, true
- * immediately after. The canonical hydration-safe two-phase signal:
- * useSyncExternalStore serves getServerSnapshot to both sides of
- * hydration, so flipping to true afterwards is an ordinary update, not
- * a markup mismatch.
- */
-const useHydrated = (): boolean =>
-  useSyncExternalStore(
-    noopSubscribe,
-    () => true,
-    () => false,
-  );
 
 const I18nProvider = ({ children }: PropsWithChildren) => {
   const locale = useI18nStore((s) => s.loadedLang);
@@ -53,11 +39,12 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
   const numberingSystem = useI18nStore((s) => s.numberingSystem);
   const weekStart = useI18nStore((s) => s.weekStart);
   const hydrated = useHydrated();
+  const timeZone = useHydrationSafeTimeZone(synchronizeFormatterTimeZone);
 
-  // window.location is safe here: the server branch never reads it, and
-  // on the client the gate only matters for the initial document load.
-  const onPublicSsrPath =
-    typeof window !== "undefined" && isPublicSsrPath(window.location.pathname);
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
+  const onPublicSsrPath = isPublicSsrPath(pathname);
 
   // Head content (the document title) renders outside this provider and
   // only re-evaluates on router invalidation; refresh it when a new
@@ -83,7 +70,7 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
   // Server-rendered public paths must skip the spinner entirely: the
   // server renders full content, so the client's first render has to
   // produce identical markup or hydration fails.
-  if (!hasLoadedOnce && typeof window !== "undefined" && !onPublicSsrPath) {
+  if (!hasLoadedOnce && !onPublicSsrPath) {
     return <DefaultPendingComponent />;
   }
 
@@ -117,12 +104,9 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
     <IntlProvider
       locale={messageLocale}
       messages={activeMessages}
-      timeZone={resolveAppTimeZone()}
+      timeZone={timeZone}
     >
-      <FormattingProvider
-        locale={formattingLocale}
-        timeZone={resolveAppTimeZone()}
-      >
+      <FormattingProvider locale={formattingLocale} timeZone={timeZone}>
         {children}
       </FormattingProvider>
     </IntlProvider>
