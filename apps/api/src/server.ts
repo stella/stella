@@ -127,6 +127,7 @@ import {
 } from "@/api/lib/observability/request-context";
 import { emitRequestDurationMetric } from "@/api/lib/observability/request-metrics";
 import { runWithRequestScope } from "@/api/lib/observability/request-scope";
+import { resolveResponseStatus } from "@/api/lib/observability/response-status";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 import {
   isCorpusS3Stale,
@@ -401,7 +402,7 @@ const api = new Elysia()
     }
     return httpError("Internal server error");
   })
-  .onAfterHandle(async ({ request, route, set }) => {
+  .onAfterHandle(async ({ request, responseValue, route, set }) => {
     delete set.headers["X-Powered-By"];
     setDbQueryCountHeader(set);
 
@@ -410,7 +411,10 @@ const api = new Elysia()
 
     if (shouldLogRequest(path) && reqCtx) {
       const durationMs = performance.now() - reqCtx.startTime;
-      const statusCode = typeof set.status === "number" ? set.status : 200;
+      const statusCode = resolveResponseStatus({
+        response: responseValue,
+        set,
+      });
       const details = buildRequestLogDetails({
         durationMs,
         request,
