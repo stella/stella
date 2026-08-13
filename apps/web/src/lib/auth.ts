@@ -13,6 +13,11 @@ import { Result } from "better-result";
 import { ac, roles } from "@stll/permissions";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import {
+  discardBootPrefetch,
+  resolveRequestMethod,
+  takeBootPrefetch,
+} from "@/boot-prefetch";
 import { getTranslator, useI18nStore } from "@/i18n/i18n-store";
 import { browserAuthBaseUrl } from "@/lib/api-url";
 import { fetchWithTimeout } from "@/lib/fetch";
@@ -51,6 +56,18 @@ const sessionRevocationTokenBoundary = createSecretTokenBoundary(
 const defineBetterAuthClientPlugin = <TPlugin extends BetterAuthClientPlugin>(
   plugin: TPlugin,
 ): TPlugin => plugin;
+
+/** Pathname of a fetch input, tolerant of relative URLs (resolved against a
+ *  placeholder origin: only the path is consumed). */
+const requestPathname = (input: string | URL | Request): string => {
+  if (typeof input === "string") {
+    return new URL(input, "http://relative.invalid").pathname;
+  }
+  if (input instanceof URL) {
+    return input.pathname;
+  }
+  return new URL(input.url, "http://relative.invalid").pathname;
+};
 
 const withOauthQueryFromHash = (ctx: {
   body?: unknown;
@@ -128,15 +145,29 @@ export const authClient = createAuthClient({
   baseURL: browserAuthBaseUrl(),
   plugins: authClientPlugins,
   fetchOptions: {
-    // `async`/`await` look redundant around a call that already returns a
-    // promise, but `promise-function-async` is type-aware and rejects the
-    // bare arrow form here.
-    customFetchImpl: async (input, init) =>
-      await fetchWithTimeout(input, {
+    customFetchImpl: async (input, init) => {
+      const method = resolveRequestMethod(input, init);
+      if (method === "GET") {
+        // Serve the boot-time prefetch (see `boot-prefetch.ts`) for the
+        // first session/role read so route entry does not wait for the main
+        // graph to boot before these leave the browser. Consume-once + TTL +
+        // the mutation fence below keep a stale response from ever
+        // satisfying a post-auth-change read.
+        const prefetched = await takeBootPrefetch(requestPathname(input));
+        if (prefetched !== null) {
+          return prefetched;
+        }
+      } else {
+        // Any auth mutation (sign-in/out, org switch, 2FA) invalidates
+        // whatever the boot prefetch captured before it.
+        discardBootPrefetch();
+      }
+      return await fetchWithTimeout(input, {
         ...init,
         signal: init?.signal ?? undefined,
         timeoutMs: AUTH_REQUEST_TIMEOUT_MS,
-      }),
+      });
+    },
     headers: {
       get "Accept-Language"() {
         return useI18nStore.getState().lang;
