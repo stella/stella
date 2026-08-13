@@ -1,7 +1,7 @@
 import { useState, useTransition } from "react";
 
 import { CancelledError, useQueryClient } from "@tanstack/react-query";
-import { Link, Navigate, useRouter } from "@tanstack/react-router";
+import { Link, Navigate } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
 import { CopyIcon, MailIcon, RefreshCcwIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -25,6 +25,7 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useSignOut } from "@/hooks/use-sign-out";
 import { createErrorReference } from "@/lib/analytics/error-reference";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-context";
 import { detached } from "@/lib/detached";
 import { isMemberError, isUnauthorizedError } from "@/lib/errors/auth";
 import { sanitizeHref } from "@/lib/sanitize-href";
@@ -221,7 +222,7 @@ const UnexpectedRouteError = ({
   retry,
 }: UnexpectedRouteErrorProps) => {
   const analytics = useAnalytics();
-  const routeErrorLifecycle = useRouter().options.context.routeErrorLifecycle;
+  const routeErrorLifecycle = useRouteErrorLifecycle();
   const t = useTranslations();
   const [errorReference] = useState(createErrorReference);
   const recovery = resolveRouteErrorRecovery(routeError);

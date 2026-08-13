@@ -1,7 +1,7 @@
 import { useRef } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useRouter } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import {
   FileTextIcon,
   MessageSquareIcon,
@@ -34,6 +34,7 @@ import { MatterIcon } from "@/components/matter-icon";
 import Tooltip from "@/components/tooltip";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import {
   SIDE_RAIL_CONTAINER_CLASS,
@@ -53,7 +54,7 @@ export const InspectorRail = ({
   tabs,
   workspaceId,
 }: InspectorRailProps) => {
-  const routeErrorLifecycle = useRouter().options.context.routeErrorLifecycle;
+  const routeErrorLifecycle = useRouteErrorLifecycle();
   const t = useTranslations();
   const inspectorState = inspectorDiagnosticState(tabs.length, minimized);
   useExternalSyncEffect(() => {
