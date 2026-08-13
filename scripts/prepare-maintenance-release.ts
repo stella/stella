@@ -23,7 +23,7 @@ const REASON_FLAG = "--reason";
 const DEFAULT_REVIEW_REASON = "Patch release, UX diff negligible";
 const STABLE_VERSION_PATTERN = /^(\d+)\.(\d+)\.(\d+)$/u;
 const MAINTENANCE_CHANGELOG =
-  "# Maintenance release\n\nstella includes reliability and maintenance improvements.\n";
+  "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n";
 
 type StableVersion = {
   major: number;

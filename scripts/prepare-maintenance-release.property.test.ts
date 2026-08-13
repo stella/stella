@@ -107,7 +107,7 @@ describe("maintenance release preparation", () => {
     expect(
       readFileSync(nodePath.join(root, "docs/changelog/v1.2.4.md"), "utf-8"),
     ).toBe(
-      "# Maintenance release\n\nstella includes reliability and maintenance improvements.\n",
+      "# Maintenance release\n\nStella includes reliability and maintenance improvements.\n",
     );
     const releaseDates: unknown = JSON.parse(
       readFileSync(
