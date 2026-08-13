@@ -220,7 +220,10 @@ const trackSurfaceForm = async ({
             ELSE ${caseLawPolarityRules.confidence}
           END
         `,
-          updatedAt: observedAt,
+          updatedAt: sql`GREATEST(
+            ${caseLawPolarityRules.updatedAt},
+            ${observedAt}
+          )`,
         },
       });
   });
