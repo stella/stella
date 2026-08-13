@@ -167,6 +167,10 @@ const buildStsClient = async (): Promise<CachedStsClient> => {
  * resolution. Recycled every 50 minutes so STS session tokens are
  * refreshed before they expire — mirrors Bun's `getS3()` lifecycle
  * so both clients share the same credential horizon.
+ *
+ * A failed build clears the slot: credential resolution reaches the
+ * network, so caching its rejection would replay one transient
+ * failure to every later caller for the life of the process.
  */
 const getAwsS3Client = async (): Promise<AwsS3Client> => {
   if (_clientPromise) {
@@ -175,7 +179,10 @@ const getAwsS3Client = async (): Promise<AwsS3Client> => {
       return cached.client;
     }
   }
-  _clientPromise = buildAwsS3Client();
+  _clientPromise = buildAwsS3Client().catch((error: unknown) => {
+    _clientPromise = null;
+    throw error;
+  });
   const built = await _clientPromise;
   return built.client;
 };
