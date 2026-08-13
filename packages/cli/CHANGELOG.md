@@ -1,5 +1,35 @@
 # @stll/cli
 
+## 0.6.0
+
+### Minor Changes
+
+- [#1939](https://github.com/stella/stella/pull/1939) [`772d79e`](https://github.com/stella/stella/commit/772d79e72739167c1b9deddb1d4a8214f8da2cae) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Describe each capability's file transport as a single disposition instead of two independent booleans. `list_capabilities` and `describe_capability` now carry a `transport` object naming the file field, whether it is required, the media types each leg accepts, and where the work can be done when the generic path cannot carry it; the `requiresFileInput` and `returnsFileResponse` fields are removed, with no compatibility aliases. A capability whose file input is optional now generates a command with the file field withheld, rather than being suppressed outright.
+
+- [#1941](https://github.com/stella/stella/pull/1941) [`741fc94`](https://github.com/stella/stella/commit/741fc94b32ed60712f821c1b26964db65a1d2434) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Remove the synchronous `playbooks.review` capability. Document reviews now run as durable background runs; the review result is available through the document review run endpoints instead of a single blocking call.
+
+### Patch Changes
+
+- [#2014](https://github.com/stella/stella/pull/2014) [`1e00283`](https://github.com/stella/stella/commit/1e00283a0a6b2c82c9aa40a0bd73c4cee696f088) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Allow `playbooks.from-starter` to select the bundled SaaS agreement starter.
+
+- [#1936](https://github.com/stella/stella/pull/1936) [`b5a39f0`](https://github.com/stella/stella/commit/b5a39f02b8da219af37e27f361b057ee68d8210e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Ship every capability's full input schema. Three view capabilities previously exceeded the export byte cap and shipped with no schema at all, so `views.create`, `views.update` and `view-templates.create` had no typed flags and no local `--input` validation; schemas are now `$defs`-compacted instead of dropped, and the generated route map shrinks from 4.47 MB to 1.66 MB.
+
+- [#2006](https://github.com/stella/stella/pull/2006) [`e8a7695`](https://github.com/stella/stella/commit/e8a76955b6b10e20fe42ff894f73851d2d3964a3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Describe the remaining 237 capabilities, so every command the CLI generates now ships a `--help` brief written from its handler: what the operation does, the scope it acts in, when it skips or refuses, and the distinctions that separate it from its neighbours (list versus read-window, update versus upsert, the export formats' differing constraints).
+
+- [#1930](https://github.com/stella/stella/pull/1930) [`b9441e7`](https://github.com/stella/stella/commit/b9441e796ccbabd1a371ca2d9b6ef793c9836546) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Describe the 31 destructive capabilities: what each one destroys, its scope, whether it can be undone, and when it skips or refuses. The prose reaches the generated command's `--help` brief and the shipped capability catalog.
+
+- [#1920](https://github.com/stella/stella/pull/1920) [`fd9a1d1`](https://github.com/stella/stella/commit/fd9a1d19c1b809c2ab54b1158462ea1f5c7aec11) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose the document review endpoints (reference sources, topic proposal, reference comparison) in the generated capability catalog and route map.
+
+- [#2058](https://github.com/stella/stella/pull/2058) [`d536ff4`](https://github.com/stella/stella/commit/d536ff41ac40f4cd75b52e1dd29fba88f97ddabc) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose bundled starter creation and recent Playbooks through the generated CLI capability surface.
+
+- [#2043](https://github.com/stella/stella/pull/2043) [`df95bcf`](https://github.com/stella/stella/commit/df95bcf9b24b55a9b1f1002d75e08f6655a49117) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Describe document text processing with one implementation-neutral state in the generated MCP registry.
+
+- [#1908](https://github.com/stella/stella/pull/1908) [`f7151cc`](https://github.com/stella/stella/commit/f7151cca6561a9687b4d985ee5e6980705ff71ef) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Carry the playbook concurrency tokens in the generated catalog and route map. `playbooks.approve` now requires `--expected-updated-at` (the `updatedAt` read with the definition) and refuses to snapshot a definition that changed since; `playbooks.update` accepts the same flag optionally and refuses a stale overwrite when it is given. Both commands return the definition's new `updatedAt` for the next call.
+
+- [#1970](https://github.com/stella/stella/pull/1970) [`685369e`](https://github.com/stella/stella/commit/685369e49dec8b7f0779c8a6c61e61aa873bbf0c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The playbook run capability accepts a `projection` choice: materialize table columns as before, or record review findings only.
+
+- [#1890](https://github.com/stella/stella/pull/1890) [`434b661`](https://github.com/stella/stella/commit/434b6610b1135f2a2c75d384982aa05c32ceae94) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep file-returning template capabilities describe-only in the generated CLI catalog.
+
 ## 0.5.0
 
 ### Minor Changes
