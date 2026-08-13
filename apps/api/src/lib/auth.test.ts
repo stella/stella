@@ -22,6 +22,7 @@ import {
   runEmailOtpRequestOnResponseSchedule,
   resolveMemberAuthorization,
   resolveWorkspaceRealtimeAudience,
+  SESSION_COOKIE_CACHE_MAX_AGE_SECONDS,
   TWO_FACTOR_MANAGE_PATHS,
   withStellaTwoFactorSignInGate,
 } from "@/api/lib/auth";
@@ -734,5 +735,20 @@ describe("session freshness", () => {
     // disabled. If it were re-exposed, relaxing freshAge would let an old
     // session unlink a provider. Keep these two decisions coupled.
     expect(getAuth().options.disabledPaths).toContain("/unlink-account");
+  });
+
+  test("session cookie cache stays enabled with its pinned revocation window", () => {
+    // The cookie cache is what keeps `getSession` off the database for the
+    // huge majority of API requests (see the `cookieCache` comment in
+    // auth.ts). Its `maxAge` is also the upper bound on how long a REVOKED
+    // session's already-issued cookie keeps working, so the window is a
+    // security decision, not a tuning knob: widen it deliberately, in both
+    // this test and the SESSION_COOKIE_CACHE_MAX_AGE_SECONDS constant,
+    // never by dependency-default drift (better-auth defaults to 300s).
+    expect(getAuth().options.session.cookieCache).toEqual({
+      enabled: true,
+      maxAge: SESSION_COOKIE_CACHE_MAX_AGE_SECONDS,
+    });
+    expect(SESSION_COOKIE_CACHE_MAX_AGE_SECONDS).toBe(60);
   });
 });

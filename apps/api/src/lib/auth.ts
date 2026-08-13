@@ -415,6 +415,14 @@ const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
 /** How often the session expiry is refreshed, in seconds (1 day). */
 const SESSION_UPDATE_AGE_SECONDS = 60 * 60 * 24;
 
+/**
+ * How long the signed session-cookie snapshot may satisfy `getSession`
+ * without touching the database. Bounds revocation latency: a revoked
+ * session's already-issued cookie stays valid for at most this long.
+ * Exported for the pinning invariant in `auth.test.ts`.
+ */
+export const SESSION_COOKIE_CACHE_MAX_AGE_SECONDS = 60;
+
 const { cookiePrefix, useSecureCookies } = authCookiePolicy();
 
 /**
@@ -763,6 +771,27 @@ const createAuth = () => {
       expiresIn: SESSION_LIFETIME_SECONDS,
       updateAge: SESSION_UPDATE_AGE_SECONDS,
       storeSessionInDatabase: true,
+      // Short-lived signed cookie cache for session resolution. Every API
+      // request runs `getSession` through `sessionAuthMacro` /
+      // `getSessionAndMemberAuthorization`, and without this cache each of
+      // those pays two session/user reads on the primary database — the
+      // single largest per-request DB cost in the network baseline's
+      // `x-db-queries` budgets. With the cache, a request whose signed
+      // cookie snapshot is younger than `maxAge` skips those reads
+      // entirely; the HMAC signature keeps the payload tamper-evident.
+      //
+      // Deliberate trade-off, kept narrow: a revoked session stays usable
+      // for up to SESSION_COOKIE_CACHE_MAX_AGE_SECONDS after revocation on
+      // clients that still hold the cached cookie. Authorization is NOT
+      // cached — member role and workspace access run live per request
+      // (`resolveMemberAuthorization`), so role demotion and workspace
+      // removal take effect immediately; only the identity snapshot rides
+      // the cache. Change the window deliberately: the `auth.test.ts`
+      // invariant pins it.
+      cookieCache: {
+        enabled: true,
+        maxAge: SESSION_COOKIE_CACHE_MAX_AGE_SECONDS,
+      },
       // Disable Better Auth's session-freshness gate. It defaults to 1 day
       // (`create-context.mjs`: `freshAge ?? 3600 * 24`) and compares against
       // `session.createdAt`, which `updateAge` never refreshes — so every

@@ -16,12 +16,11 @@ import {
   agentAuthConfirmRoute,
   agentAuthRoute,
 } from "@/api/handlers/agent-auth/routes";
-import { getAuth } from "@/api/lib/auth";
-import { readDevOtp } from "@/api/lib/dev-otp-store";
 import {
   getMcpResourceUrl,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
 } from "@/api/mcp/constants";
+import { createHumanSession as createHumanSessionWithJar } from "@/api/tests/helpers/human-session";
 import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
@@ -95,45 +94,12 @@ afterAll(async () => {
   await releaseAgentAuthTestDb();
 });
 
-/** Create a verified user, an org, and an active session cookie. */
-const createHumanSession = async () => {
-  const auth = getAuth();
-  const email = `agent-test-${Bun.randomUUIDv7()}@stella.dev`;
-  await auth.api.sendVerificationOTP({ body: { email, type: "sign-in" } });
-  const otp = readDevOtp(email);
-  if (!otp) {
-    throw new Error("dev OTP not stashed; is env.isDev true under test?");
-  }
-  const signInRes = await auth.api.signInEmailOTP({
-    body: { email, otp },
-    asResponse: true,
+const createHumanSession = async () =>
+  await createHumanSessionWithJar({
+    email: `agent-test-${Bun.randomUUIDv7()}@stella.dev`,
+    orgName: "Agent Test Org",
+    orgSlugPrefix: "agent-test",
   });
-  const cookieHeader = (signInRes.headers.get("set-cookie") ?? "")
-    .split(",")
-    .map((part) => part.split(";").at(0)?.trim() ?? "")
-    .filter((part) => part.length > 0)
-    .join("; ");
-
-  const headers = new Headers({ cookie: cookieHeader });
-  const org = await auth.api.createOrganization({
-    body: { name: "Agent Test Org", slug: `agent-test-${Bun.randomUUIDv7()}` },
-    headers,
-  });
-  await auth.api.setActiveOrganization({
-    body: { organizationId: org.id },
-    headers,
-  });
-  const session = await auth.api.getSession({ headers });
-  if (!session?.user || !session.session.activeOrganizationId) {
-    throw new Error("session not active for org");
-  }
-  return {
-    cookieHeader,
-    email,
-    userId: session.user.id,
-    organizationId: session.session.activeOrganizationId,
-  };
-};
 
 describe("agent-auth service_auth flow", () => {
   test("registration returns an RFC 8628 ceremony shape", async () => {
