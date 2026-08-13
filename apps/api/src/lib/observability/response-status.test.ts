@@ -13,6 +13,7 @@ import { resolveResponseStatus } from "@/api/lib/observability/response-status";
 const EXPECTED_STATUS_BY_PATH = {
   "/implicit-ok": 200,
   "/set-status": 202,
+  "/set-status-named": 202,
   "/status-helper-4xx": 403,
   "/status-helper-5xx": 500,
   "/status-helper-named": 404,
@@ -33,6 +34,10 @@ describe("resolveResponseStatus", () => {
       .get("/implicit-ok", () => ({ ok: true }))
       .get("/set-status", ({ set }) => {
         set.status = 202;
+        return { queued: true };
+      })
+      .get("/set-status-named", ({ set }) => {
+        set.status = "Accepted";
         return { queued: true };
       })
       .get("/status-helper-4xx", () => status(403, { code: "forbidden" }))

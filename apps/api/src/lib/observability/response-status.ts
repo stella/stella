@@ -1,4 +1,4 @@
-import type { Context } from "elysia";
+import { StatusMap, type Context } from "elysia";
 import { ElysiaCustomStatusResponse } from "elysia/error";
 
 const DEFAULT_RESPONSE_STATUS = 200;
@@ -37,5 +37,13 @@ export const resolveResponseStatus = ({
     return response.status;
   }
 
-  return typeof set.status === "number" ? set.status : DEFAULT_RESPONSE_STATUS;
+  if (typeof set.status === "number") {
+    return set.status;
+  }
+
+  if (typeof set.status === "string") {
+    return StatusMap[set.status];
+  }
+
+  return DEFAULT_RESPONSE_STATUS;
 };
