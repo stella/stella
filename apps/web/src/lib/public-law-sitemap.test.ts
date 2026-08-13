@@ -559,7 +559,7 @@ describe("public law sitemap", () => {
     expect(isPublicSsrPath("/workspaces/workspace-id")).toBe(false);
     expect(isPublicSsrPath("/")).toBe(false);
     expect(source).toContain(
-      "ssr: ({ location }) => isPublicSsrPath(location.pathname)",
+      "ssr: ({ location: routeLocation }) => isPublicSsrPath(routeLocation.pathname)",
     );
     expect(source).toContain("shellComponent: RootDocument");
   });
