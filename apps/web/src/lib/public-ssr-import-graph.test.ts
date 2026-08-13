@@ -30,7 +30,7 @@ const REVIEWED_AMBIENT_BOUNDARIES: ReadonlySet<string> = new Set([
 ]);
 
 const AMBIENT_STATE_PATTERN =
-  /(?<![.\w])(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio)\b(?!\s*:)|\bDate\.now\s*\(|\bMath\.random\s*\(|\bperformance\.now\s*\(|\bcrypto\.(?:getRandomValues|randomUUID)\s*\(|\b(?:new\s+)?Date\s*\(\s*\)|\b(?:new\s+)?Intl\.[A-Za-z]+\s*\(\s*(?:undefined\s*[,)]|\))/u;
+  /\bglobalThis\.(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio)\b|(?<![.\w])(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio)\b(?!\s*:)|\bDate\.now\s*\(|\bMath\.random\s*\(|\bperformance\.now\s*\(|\bcrypto\.(?:getRandomValues|randomUUID)\s*\(|\b(?:new\s+)?Date\s*\(\s*\)|\b(?:new\s+)?Intl\.[A-Za-z]+\s*\(\s*(?:undefined\s*[,)]|\))/u;
 const CANDIDATE_SUFFIXES = ["", ".ts", ".tsx", "/index.ts", "/index.tsx"];
 const tsTranspiler = new Bun.Transpiler({ loader: "ts" });
 const tsxTranspiler = new Bun.Transpiler({ loader: "tsx" });
@@ -174,6 +174,14 @@ describe("public SSR import graph", () => {
       AMBIENT_STATE_PATTERN.test(
         executableSource(
           'const randomId = crypto["randomUUID"]();',
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          'const saved = globalThis["localStorage"];',
           "fixture.ts",
         ),
       ),
