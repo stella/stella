@@ -49,9 +49,7 @@ export const Route = createRootRouteWithContext<{
     ],
   }),
   pendingComponent: () => <DefaultPendingComponent className="h-dvh" />,
-  errorComponent: (props) => (
-    <DefaultErrorComponent className="h-dvh" {...props} />
-  ),
+  errorComponent: RootErrorComponent,
 });
 
 function RootComponent() {
@@ -59,24 +57,37 @@ function RootComponent() {
     select: (context) => ({
       analyticsValue: context.analyticsValue,
       queryClient: context.queryClient,
+      routeErrorLifecycle: context.routeErrorLifecycle,
     }),
   });
 
   return (
-    <AppProviders
-      analyticsValue={appContext.analyticsValue}
-      queryClient={appContext.queryClient}
-    >
-      <RootApp />
-    </AppProviders>
+    <RouteErrorLifecycleProvider controller={appContext.routeErrorLifecycle}>
+      <AppProviders
+        analyticsValue={appContext.analyticsValue}
+        queryClient={appContext.queryClient}
+      >
+        <RootApp />
+      </AppProviders>
+    </RouteErrorLifecycleProvider>
   );
 }
 
-function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
+function RootErrorComponent(
+  props: Parameters<typeof DefaultErrorComponent>[0],
+) {
   const routeErrorLifecycle = Route.useRouteContext({
     select: (context) => context.routeErrorLifecycle,
   });
 
+  return (
+    <RouteErrorLifecycleProvider controller={routeErrorLifecycle}>
+      <DefaultErrorComponent className="h-dvh" {...props} />
+    </RouteErrorLifecycleProvider>
+  );
+}
+
+function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
   return (
     // prepaint-init.js mutates the html element's class, and for RTL
     // locales its lang/dir, before React hydrates the document, so the
@@ -92,9 +103,7 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
         <script src="/prepaint-init.js" />
       </head>
       <body>
-        <RouteErrorLifecycleProvider controller={routeErrorLifecycle}>
-          {children}
-        </RouteErrorLifecycleProvider>
+        {children}
         <Scripts />
       </body>
     </html>
