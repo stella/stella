@@ -11,7 +11,7 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
 export const useSignOut = () => {
   const analytics = useAnalytics();
-  const location = useLocation();
+  const routeLocation = useLocation();
   const navigate = useNavigate();
   const t = useTranslations();
 
@@ -34,7 +34,7 @@ export const useSignOut = () => {
 
       await navigate({
         to: "/auth",
-        search: { redirectTo: location.pathname },
+        search: { redirectTo: routeLocation.pathname },
         reloadDocument: true,
       });
     },

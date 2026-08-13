@@ -21,7 +21,9 @@ import { sanitizeHref } from "@/lib/sanitize-href";
 
 export const FeedbackDialog = ({ userEmail }: Props) => {
   const t = useTranslations();
-  const route = useLocation({ select: (location) => location.pathname });
+  const route = useLocation({
+    select: (routeLocation) => routeLocation.pathname,
+  });
   const mailto = buildFeedbackMailto({
     recipient: env.VITE_FEEDBACK_EMAIL_TO,
     route,

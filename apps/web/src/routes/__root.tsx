@@ -32,7 +32,7 @@ export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
   routeErrorLifecycle: RouteErrorLifecycleController;
 }>()({
-  ssr: ({ location }) => isPublicSsrPath(location.pathname),
+  ssr: ({ location: routeLocation }) => isPublicSsrPath(routeLocation.pathname),
   shellComponent: RootDocument,
   component: RootComponent,
   // Document head management via route `head` option.

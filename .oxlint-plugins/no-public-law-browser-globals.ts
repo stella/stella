@@ -89,9 +89,11 @@ const browserGlobalFromGlobalThis = (node) => {
 
 const isUnshadowedGlobalThisMember = (context, node, memberName) =>
   node?.type === "MemberExpression" &&
-  !node.computed &&
   isIdentifier(node.object, "globalThis") &&
-  isIdentifier(node.property, memberName) &&
+  ((!node.computed && isIdentifier(node.property, memberName)) ||
+    (node.computed &&
+      node.property?.type === "Literal" &&
+      node.property.value === memberName)) &&
   isUnshadowedGlobal(context, node.object);
 
 export default eslintCompatPlugin({
