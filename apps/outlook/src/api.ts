@@ -4,8 +4,8 @@ import {
   DOCUMENT_UPLOAD_POLICY,
   type OutlookIngestionDiagnostic,
 } from "@stll/api-contract";
+import { toSafeId } from "@stll/api-contract/safe-id";
 import type { SafeId } from "@stll/api/types";
-import { toSafeId } from "@stll/api/types";
 
 import type {
   AbortingEmailUpload,
@@ -245,6 +245,7 @@ export const reserveEmailUpload = async ({
     skippedAttachments: attachments
       .filter((attachment) => attachment.type === "skipped")
       .map((attachment) => attachment.reason),
+    sourceItemInstanceKey: snapshot.itemInstanceKey,
     type: "reserved",
     uploadId: presign.data.uploadId,
     url: presign.data.url,
@@ -267,6 +268,7 @@ export const uploadReservedEmail = async (
       "abort",
       "in_progress",
     ),
+    sourceItemInstanceKey: upload.sourceItemInstanceKey,
     type: "aborting",
     uploadId: upload.uploadId,
     workspaceId: upload.workspaceId,
@@ -289,6 +291,7 @@ export const uploadReservedEmail = async (
       "in_progress",
     ),
     skippedAttachments: upload.skippedAttachments,
+    sourceItemInstanceKey: upload.sourceItemInstanceKey,
     type: "finalizing",
     uploadId: upload.uploadId,
     workspaceId: upload.workspaceId,

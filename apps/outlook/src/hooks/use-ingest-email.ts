@@ -19,7 +19,9 @@ import {
   type IngestEmailResult,
   type IngestState,
   isIngestActive,
+  isLatestSnapshotForSave,
   type PendingEmailUpload,
+  pendingUploadMatchesSnapshot,
   type ReservedEmailUpload,
   transitionIngestState,
   type UploadingEmailUpload,
@@ -57,6 +59,7 @@ type PendingEmailUploadStore = {
 type UseIngestEmailOptions = PendingEmailUploadStore & {
   attachmentErrorFallback: string;
   errorFallback: string;
+  previousEmailSaveCompleted: string;
 };
 
 const selectedAttachments = (
@@ -86,6 +89,7 @@ const withDiagnostic = (
         eml: pending.eml,
         headers: pending.headers,
         skippedAttachments: pending.skippedAttachments,
+        sourceItemInstanceKey: pending.sourceItemInstanceKey,
         type: "reserved",
         uploadId: pending.uploadId,
         url: pending.url,
@@ -97,6 +101,7 @@ const withDiagnostic = (
         eml: pending.eml,
         headers: pending.headers,
         skippedAttachments: pending.skippedAttachments,
+        sourceItemInstanceKey: pending.sourceItemInstanceKey,
         type: "uploading",
         uploadId: pending.uploadId,
         url: pending.url,
@@ -106,6 +111,7 @@ const withDiagnostic = (
       return {
         diagnostic,
         skippedAttachments: pending.skippedAttachments,
+        sourceItemInstanceKey: pending.sourceItemInstanceKey,
         type: "finalizing",
         uploadId: pending.uploadId,
         workspaceId: pending.workspaceId,
@@ -113,6 +119,7 @@ const withDiagnostic = (
     case "aborting":
       return {
         diagnostic,
+        sourceItemInstanceKey: pending.sourceItemInstanceKey,
         type: "aborting",
         uploadId: pending.uploadId,
         workspaceId: pending.workspaceId,
@@ -131,6 +138,7 @@ const toUploading = (reserved: ReservedEmailUpload): UploadingEmailUpload => ({
   eml: reserved.eml,
   headers: reserved.headers,
   skippedAttachments: reserved.skippedAttachments,
+  sourceItemInstanceKey: reserved.sourceItemInstanceKey,
   type: "uploading",
   uploadId: reserved.uploadId,
   url: reserved.url,
@@ -145,6 +153,7 @@ const toFinalizing = (pending: PendingEmailUpload): FinalizingEmailUpload => ({
   ),
   skippedAttachments:
     pending.type === "aborting" ? [] : pending.skippedAttachments,
+  sourceItemInstanceKey: pending.sourceItemInstanceKey,
   type: "finalizing",
   uploadId: pending.uploadId,
   workspaceId: pending.workspaceId,
@@ -156,6 +165,7 @@ const toAborting = (pending: PendingEmailUpload): AbortingEmailUpload => ({
     "abort",
     "in_progress",
   ),
+  sourceItemInstanceKey: pending.sourceItemInstanceKey,
   type: "aborting",
   uploadId: pending.uploadId,
   workspaceId: pending.workspaceId,
@@ -193,6 +203,7 @@ export const useIngestEmail = ({
   attachmentErrorFallback,
   errorFallback,
   getPendingEmailUpload,
+  previousEmailSaveCompleted,
   setPendingEmailUpload,
 }: UseIngestEmailOptions): UseIngestEmail => {
   const [state, setState] = useState<IngestState>({ type: "idle" });
@@ -298,8 +309,15 @@ export const useIngestEmail = ({
     const result = await Result.tryPromise({
       try: async () => {
         const pendingUpload = getPendingEmailUpload();
+        const pendingMatchesSnapshot = pendingUpload
+          ? pendingUploadMatchesSnapshot(
+              pendingUpload,
+              snapshot.itemInstanceKey,
+            )
+          : false;
         if (
           pendingUpload &&
+          pendingMatchesSnapshot &&
           pendingUpload.type !== "aborting" &&
           pendingUpload.workspaceId !== workspaceId
         ) {
@@ -308,6 +326,13 @@ export const useIngestEmail = ({
         if (pendingUpload) {
           const resumed = await resumePending(pendingUpload);
           if (resumed) {
+            if (!pendingMatchesSnapshot) {
+              setPendingEmailUpload(null);
+              throw new APIError({
+                message: previousEmailSaveCompleted,
+                status: 422,
+              });
+            }
             return resumed;
           }
           transition({
@@ -337,7 +362,13 @@ export const useIngestEmail = ({
           items: attachments,
           map: downloadAttachment,
         });
-        if (!isCurrent(latest.itemInstanceKey)) {
+        if (
+          !isLatestSnapshotForSave({
+            initialItemInstanceKey: snapshot.itemInstanceKey,
+            latestIsCurrent: isCurrent(latest.itemInstanceKey),
+            latestItemInstanceKey: latest.itemInstanceKey,
+          })
+        ) {
           throw new APIError({ message: errorFallback, status: 409 });
         }
         const reserved = await reserveEmailUpload({

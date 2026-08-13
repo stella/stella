@@ -120,7 +120,7 @@ const AttachmentRow = ({
   isSelected: boolean;
   onToggle: (attachmentId: string) => void;
 }) => (
-  <label className="border-input bg-popover flex min-h-10 items-center gap-2 rounded-lg border px-3 py-2">
+  <label className="border-input bg-popover flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2">
     <Checkbox
       checked={isSelected}
       onCheckedChange={() => onToggle(attachment.id)}

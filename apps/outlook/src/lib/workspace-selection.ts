@@ -46,6 +46,13 @@ export const filterWorkspaces = ({
   );
 };
 
+export const confirmedWorkspaceId = ({
+  explicitWorkspaceId,
+}: {
+  explicitWorkspaceId: string | null;
+  suggestedWorkspaceId: string | null;
+}): string | null => explicitWorkspaceId;
+
 export const suggestWorkspaceId = ({
   snapshot,
   workspaces,
