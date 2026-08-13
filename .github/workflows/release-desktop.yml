@@ -605,7 +605,7 @@ jobs:
     # platform finishes so a partial matrix doesn't ship a manifest
     # that promises an installer that doesn't exist.
     needs: [resolve, build, verify-production]
-    if: ${{ always() && needs.resolve.outputs.should_build == 'true' && (needs.resolve.outputs.channel != 'prod' || needs.verify-production.result == 'success') }}
+    if: ${{ always() && needs.resolve.outputs.should_build == 'true' && needs.build.result == 'success' && (needs.resolve.outputs.channel != 'prod' || needs.verify-production.result == 'success') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -713,7 +713,7 @@ jobs:
     needs: resolve
     if: ${{ needs.resolve.outputs.should_build == 'false' && needs.resolve.outputs.channel == 'prod' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       contents: write # download from / upload to / edit GitHub Releases
     env:

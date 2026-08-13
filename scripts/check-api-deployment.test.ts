@@ -237,12 +237,14 @@ describe("API deployment health receipt", () => {
     expect(desktopManifest).toContain(
       "needs.verify-production.result == 'success'",
     );
+    expect(desktopManifest).toContain("needs.build.result == 'success'");
     expect(desktopManifest).not.toContain("gh release edit");
     expect(desktopPromote).toContain("needs.manifest.result == 'success'");
     expect(desktopPromote).toContain('gh release edit "$RELEASE_REF" --latest');
     expect(
       desktopCarry.indexOf("Verify production serves the release commit"),
     ).toBeGreaterThan(desktopCarry.indexOf('gh release upload "$RELEASE_REF"'));
+    expect(desktopCarry).toContain("timeout-minutes: 15");
     expect(desktopCarry.indexOf("Promote release to latest")).toBeGreaterThan(
       desktopCarry.indexOf("Verify production web serves the release commit"),
     );
