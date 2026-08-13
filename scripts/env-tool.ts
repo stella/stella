@@ -1102,7 +1102,7 @@ const main = async () => {
     const buildArgsValid = checkWebBuildArgs();
     const artifactsValid = buildArgsValid && checkEnvironmentArtifacts();
     const auditValid = await auditEnvironment();
-    if (!(artifactsValid && buildArgsValid && auditValid)) {
+    if (!(artifactsValid && auditValid)) {
       process.exitCode = 1;
     }
     return;
