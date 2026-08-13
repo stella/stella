@@ -80,11 +80,9 @@ export const classifyCitation = async ({
         observedAt,
         ruleId: ruleMatch.ruleId,
         scopedDb,
-      }).catch(
-        (error: unknown) => {
-          captureError(error, { ruleId: ruleMatch.ruleId });
-        },
-      );
+      }).catch((error: unknown) => {
+        captureError(error, { ruleId: ruleMatch.ruleId });
+      });
     }
     return {
       polarity: ruleMatch.polarity,
@@ -121,11 +119,9 @@ export const classifyCitation = async ({
       observedAt,
       polarity,
       scopedDb,
-    }).catch(
-      (error: unknown) => {
-        captureError(error, { language, polarity });
-      },
-    );
+    }).catch((error: unknown) => {
+      captureError(error, { language, polarity });
+    });
   }
 
   return { polarity, ruleId: null, source: "llm" };
