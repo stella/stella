@@ -23,6 +23,7 @@ import {
   parseWebBuildContract,
   renderApiEnvExample,
   renderCollabEnvExample,
+  renderWebBuildContract,
   renderWebEnvExample,
   resolveDoctorMode,
   resolveDoctorProcessEnvironment,
@@ -735,6 +736,41 @@ describe("web container build arguments", () => {
         dockerfile,
       }),
     ).toEqual([]);
+  });
+
+  test("derive the deployment contract from schema exports", () => {
+    const contract = JSON.parse(
+      renderWebBuildContract({
+        clientKeys: ["VITE_SECOND", "VITE_FIRST"],
+        dockerfile: builderStage({
+          declarations: ["FIRST_INPUT", "VITE_SECOND"],
+          exports: [
+            ["VITE_FIRST", reference("FIRST_INPUT")],
+            ["VITE_SECOND", reference("VITE_SECOND")],
+          ],
+        }),
+      }),
+    );
+
+    expect(contract).toEqual({
+      version: 1,
+      variables: {
+        VITE_FIRST: "FIRST_INPUT",
+        VITE_SECOND: "VITE_SECOND",
+      },
+    });
+  });
+
+  test("reject an indirect deployment mapping", () => {
+    expect(() =>
+      renderWebBuildContract({
+        clientKeys: ["VITE_EXAMPLE"],
+        dockerfile: builderStage({
+          declarations: ["EXAMPLE_INPUT"],
+          exports: [["VITE_EXAMPLE", `prefix-${reference("EXAMPLE_INPUT")}`]],
+        }),
+      }),
+    ).toThrow();
   });
 
   test("report a schema key the build command never exports", () => {
