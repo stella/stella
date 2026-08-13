@@ -24,6 +24,7 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useSignOut } from "@/hooks/use-sign-out";
 import { createErrorReference } from "@/lib/analytics/error-reference";
+import type { ErrorReference } from "@/lib/analytics/error-reference";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-context";
 import { detached } from "@/lib/detached";
@@ -40,6 +41,7 @@ type DefaultErrorComponentProps = ErrorComponentProps & {
  *  remounts (which re-create the component instance). */
 const AUTO_RETRY_LIMIT = 5;
 const AUTO_RETRY_DELAY_MS = 3000;
+const PENDING_ERROR_REFERENCE = "—";
 let networkRetryCount = 0;
 
 type UseNetworkRetryOptions = {
@@ -224,7 +226,10 @@ const UnexpectedRouteError = ({
   const analytics = useAnalytics();
   const routeErrorLifecycle = useRouteErrorLifecycle();
   const t = useTranslations();
-  const [errorReference] = useState(createErrorReference);
+  const [errorReference, setErrorReference] = useState<ErrorReference | null>(
+    null,
+  );
+  const visibleErrorReference = errorReference ?? PENDING_ERROR_REFERENCE;
   const recovery = resolveRouteErrorRecovery(routeError);
   const support = resolveRouteErrorSupport({
     deployment: env.VITE_SELFHOST ? "selfHosted" : "hosted",
@@ -247,7 +252,14 @@ const UnexpectedRouteError = ({
     }
   }
 
+  useMountEffect(() => {
+    setErrorReference(createErrorReference());
+  });
+
   useExternalSyncEffect(() => {
+    if (errorReference === null) {
+      return;
+    }
     routeErrorLifecycle.shown({
       error: routeError,
       recovery: recovery.type,
@@ -256,6 +268,9 @@ const UnexpectedRouteError = ({
   }, [routeErrorLifecycle, routeError, errorReference, recovery.type]);
 
   const handleCopyReference = async () => {
+    if (errorReference === null) {
+      return;
+    }
     try {
       await navigator.clipboard.writeText(errorReference);
       stellaToast.add({ title: t("common.copied"), type: "success" });
@@ -266,11 +281,15 @@ const UnexpectedRouteError = ({
   };
 
   const reportHref =
-    support.type === "report"
+    support.type === "report" && errorReference !== null
       ? buildErrorReportMailto({
           recipient: support.recipient,
-          subject: t("routeError.reportSubject", { reference: errorReference }),
-          body: t("routeError.reportBody", { reference: errorReference }),
+          subject: t("routeError.reportSubject", {
+            reference: errorReference,
+          }),
+          body: t("routeError.reportBody", {
+            reference: errorReference,
+          }),
         })
       : null;
 
@@ -352,11 +371,12 @@ const UnexpectedRouteError = ({
               {t("routeError.reference")}
             </span>
             <bdi className="text-foreground truncate font-mono text-sm">
-              {errorReference}
+              {visibleErrorReference}
             </bdi>
           </div>
           <Button
             aria-label={t("routeError.copyReference")}
+            disabled={errorReference === null}
             onClick={() => {
               detached(handleCopyReference(), "route-error.copy-reference");
             }}
