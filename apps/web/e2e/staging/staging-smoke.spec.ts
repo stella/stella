@@ -11,7 +11,11 @@ const DIRECT_API_ORIGIN = new URL(
 
 // The public shell is rendered on Linux and hydrated on the user's platform.
 // Emulating macOS catches ambient platform reads that Linux-only CI misses.
-test.use({ locale: "pt-PT", userAgent: MACOS_USER_AGENT });
+test.use({
+  locale: "pt-PT",
+  timezoneId: "America/Los_Angeles",
+  userAgent: MACOS_USER_AGENT,
+});
 
 // The smoke user mirrors the production default state: org owner,
 // no usage entitlement row, no AI provider config. Regressions that
@@ -100,8 +104,10 @@ test("server-rendered public law decisions stay stable after hydration", async (
   page,
 }) => {
   const fixedBrowserDate = new Date();
-  fixedBrowserDate.setUTCHours(12, 0, 0, 0);
-  const expectedToday = fixedBrowserDate.toISOString().slice(0, 10);
+  fixedBrowserDate.setUTCHours(2, 0, 0, 0);
+  const expectedToday = new Date(fixedBrowserDate.getTime() - 86_400_000)
+    .toISOString()
+    .slice(0, 10);
   await page.clock.setFixedTime(fixedBrowserDate);
 
   // A persisted non-English locale is the harder hydration case: the

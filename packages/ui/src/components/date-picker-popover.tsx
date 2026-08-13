@@ -23,8 +23,8 @@ import { cn } from "@stll/ui/lib/utils";
 import { getLocaleWeekInfo, getWeekendDays } from "@stll/ui/lib/week";
 
 import {
-  millisecondsUntilNextUtcDate,
-  utcDateFromTimestamp,
+  localDateFromTimestamp,
+  millisecondsUntilNextLocalDate,
 } from "./date-picker-popover.logic";
 
 // ---------------------------------------------------------------------------
@@ -43,14 +43,14 @@ type CalendarWeekday = {
   label: string;
 };
 
-const toISODate = (date: Date): string => utcDateFromTimestamp(date.getTime());
+const toISODate = (date: Date): string => date.toISOString().slice(0, 10);
 const HYDRATION_DATE = "1970-01-01";
 const HYDRATION_LOCALE = "en";
 const noopSubscribe = (_onStoreChange: () => void) => () => undefined;
 
-const getUtcToday = (): string => utcDateFromTimestamp(Date.now());
+const getLocalToday = (): string => localDateFromTimestamp(Date.now());
 
-const subscribeToUtcDate = (onStoreChange: () => void) => {
+const subscribeToLocalDate = (onStoreChange: () => void) => {
   let active = true;
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const scheduleNextDate = () => {
@@ -59,7 +59,7 @@ const subscribeToUtcDate = (onStoreChange: () => void) => {
       if (active) {
         scheduleNextDate();
       }
-    }, millisecondsUntilNextUtcDate(Date.now()));
+    }, millisecondsUntilNextLocalDate(Date.now()));
   };
   scheduleNextDate();
   return () => {
@@ -71,7 +71,11 @@ const subscribeToUtcDate = (onStoreChange: () => void) => {
 };
 
 const useHydrationSafeToday = (): string =>
-  useSyncExternalStore(subscribeToUtcDate, getUtcToday, () => HYDRATION_DATE);
+  useSyncExternalStore(
+    subscribeToLocalDate,
+    getLocalToday,
+    () => HYDRATION_DATE,
+  );
 
 const useHydrationSafeBrowserLocale = (): string =>
   useSyncExternalStore(
