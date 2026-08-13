@@ -402,7 +402,14 @@ const inspectDiscardedContainerSelection = ({
   readonly selectionOverride?: ContainerSelection;
 }): void => {
   const host = unwrapDiscardedExpression(expression.expression);
-  const selection = selectionOverride ?? containerSelection(expression);
+  const parentAtSelection = ts.isCallExpression(expression.parent)
+    ? inlineArrayAtSelection(expression.parent)
+    : null;
+  const selection =
+    selectionOverride ??
+    (parentAtSelection?.callee === expression
+      ? { kind: "index", value: parentAtSelection.index }
+      : containerSelection(expression));
   if (ts.isObjectLiteralExpression(host)) {
     if (selection.kind === "unknown") {
       return;

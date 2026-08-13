@@ -26,6 +26,8 @@ function declaredCanonicalClass({ selected }: { selected: boolean }) {
 }
 
 const MatterRow = ({ active, className, status }: MatterRowProps) => {
+  // oxlint-disable-next-line no-var -- fixture: var bindings must not launder dynamic class composition
+  var mutableWrittenClass = "bg-background";
   const conditionalClasses = active ? "bg-muted" : "bg-background";
   const indirectClasses = conditionalClasses satisfies string;
   const canonicalClasses = cn("rounded-md", active && "ring-1");
@@ -110,8 +112,6 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
     destructuredStyles;
   // oxlint-disable-next-line prefer-const -- fixture: mutable declarations must not launder a dynamic initializer
   let mutableInitializerClass = active ? "bg-muted" : "bg-background";
-  // oxlint-disable-next-line no-var -- fixture: var bindings must not launder dynamic class composition
-  var mutableWrittenClass = "bg-background";
   if (active) {
     mutableWrittenClass = "bg-muted";
   }
@@ -303,6 +303,7 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
     legacyClassNames("immediate-caught-try-fallback");
   }
   let unreachableCatchWriteClass = conditionalClasses;
+  legacyClassNames(unreachableCatchWriteClass);
   try {
     unreachableCatchWriteClass = "rounded-md";
   } catch {
@@ -472,6 +473,7 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
   };
   const unreachableCatchAssignedClass = () => {
     let result = conditionalClasses;
+    legacyClassNames(result);
     try {
       result = "rounded-md";
     } catch {

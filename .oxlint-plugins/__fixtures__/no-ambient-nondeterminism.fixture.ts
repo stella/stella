@@ -64,7 +64,11 @@ export const bareImportedRandomBytes = bareRandomBytes(8);
 
 export const nodeImportedRandomFill =
   // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: named randomFill consumes ambient entropy
-  nodeRandomFill(new Uint8Array(8), () => undefined);
+  nodeRandomFill(new Uint8Array(8), (error) => {
+    if (error !== null) {
+      throw error;
+    }
+  });
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: named randomFillSync consumes ambient entropy
 export const nodeImportedRandomFillSync = nodeRandomFillSync(new Uint8Array(8));
@@ -198,7 +202,9 @@ const { now: defaultedDateNow = Date.now } = optionalClock;
 const optionalServices: { clock?: { now: () => number } } = {};
 const { clock: { now: nestedDefaultedDateNow } = { now: Date.now } } =
   optionalServices;
-const presentServices = { clock: { now: () => 0 } };
+const presentServices: { clock?: { now: () => number } } = {
+  clock: { now: () => 0 },
+};
 const { clock: { now: nestedPresentNow } = { now: Date.now } } =
   presentServices;
 const emptyNestedClockOptions: { clock?: { now?: () => number } } = {};
@@ -206,7 +212,7 @@ const { clock: { now: outerDefaultedLocalNow = Date.now } = { now: () => 0 } } =
   emptyNestedClockOptions;
 const { clock: { now: innerDefaultedAmbientNow = Date.now } = {} } =
   emptyNestedClockOptions;
-const localPresentClock = { now: () => 0 };
+const localPresentClock: { now?: () => number } = { now: () => 0 };
 const { now: localPresentNow = Date.now } = localPresentClock;
 const [arrayDestructuredDateNow] = [Date.now];
 const [arrayDestructuredMathRandom] = [Math.random];
@@ -239,7 +245,13 @@ export const directlyBoundEpoch = Date.now.bind(null)();
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism, typescript/strict-void-return -- fixture: scheduling a bound ambient function executes the retained clock provenance
 export const boundAmbientTimer = setTimeout(Date.now.bind(null), 0);
 
-const localBoundClock = (() => 0).bind(null);
+const localClock = {
+  epoch: 0,
+  read() {
+    return this.epoch;
+  },
+};
+const localBoundClock = localClock.read.bind(localClock);
 export const localBoundEpoch = localBoundClock();
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: bound Date constructors retain ambient zero-argument construction
@@ -252,7 +264,9 @@ export const aliasedBoundInstant = new BoundAmbientDate();
 const BoundExplicitDate = Date.bind(null, 0);
 export const explicitBoundInstant = new BoundExplicitDate();
 
-class LocalBoundConstructor {}
+class LocalBoundConstructor {
+  readonly kind = "local";
+}
 const BoundLocalDate = LocalBoundConstructor.bind(null);
 export const localBoundInstant = new BoundLocalDate();
 
@@ -296,8 +310,12 @@ const nestedOptionalConstructors: {
 const { constructors: { Date: nestedDefaultedDateConstructor } = { Date } } =
   nestedOptionalConstructors;
 const [arrayDefaultedDateConstructor = Date] = [];
-class LocalDefaultDate {}
-const presentConstructors = { Date: LocalDefaultDate };
+class LocalDefaultDate {
+  readonly kind = "local";
+}
+const presentConstructors: { Date?: typeof LocalDefaultDate } = {
+  Date: LocalDefaultDate,
+};
 const { Date: presentDateConstructor = Date } = presentConstructors;
 const emptyNestedConstructorOptions: {
   constructors?: { Date?: DateConstructor };
@@ -313,19 +331,19 @@ const { constructors: { Date: innerDefaultedAmbientConstructor = Date } = {} } =
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: ambient constructor defaults retain provenance
 export const defaultedConstructorInstant = new defaultedDateConstructor();
 
-// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: nested ambient constructor defaults retain provenance
 export const nestedDefaultedConstructorInstant =
+  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: nested ambient constructor defaults retain provenance
   new nestedDefaultedDateConstructor();
 
-// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: array ambient constructor defaults retain provenance
 export const arrayDefaultedConstructorInstant =
+  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: array ambient constructor defaults retain provenance
   new arrayDefaultedDateConstructor();
 
 export const presentConstructorInstant = new presentDateConstructor();
 export const outerDefaultedLocalInstant = new outerDefaultedLocalConstructor();
 
-// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: the inner ambient default applies after an empty outer default
 export const innerDefaultedAmbientInstant =
+  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: the inner ambient default applies after an empty outer default
   new innerDefaultedAmbientConstructor();
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: destructuring cannot erase Math.random provenance
@@ -526,8 +544,8 @@ const destructuredAliasWrittenServices = { clock: { now: () => 0 } };
 const { clock: destructuredClockAlias } = destructuredAliasWrittenServices;
 destructuredClockAlias.now = Date.now;
 
-// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: destructured stable container aliases retain nested write provenance
 export const destructuredAliasWrittenEpoch =
+  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: destructured stable container aliases retain nested write provenance
   destructuredAliasWrittenServices.clock.now();
 
 type ClockContainer = { now: () => number };
@@ -575,6 +593,7 @@ export const replacedNestedEpoch = replacedNestedServices.clock.now();
 const mutableAliasOriginClock = { now: () => 0 };
 const mutableAliasLocalClock = { now: () => 0 };
 let mutableClockAlias = mutableAliasOriginClock;
+export const mutableAliasInitialEpoch = mutableClockAlias.now();
 mutableClockAlias = mutableAliasLocalClock;
 mutableClockAlias.now = Date.now;
 export const mutableAliasOriginEpoch = mutableAliasOriginClock.now();

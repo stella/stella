@@ -1582,19 +1582,27 @@ const ambientPropertyPathKind = (
   ) {
     return `webcrypto.${propertyPath.at(1)}() from crypto`;
   }
-  const localProperty = resolveStaticObjectPath(
-    context,
-    object,
-    propertyPath,
-    new Set(visitedBindings),
-    beforePosition,
-  );
-  if (localProperty.type === "found" || localProperty.type === "possible") {
-    const values =
-      localProperty.type === "found"
-        ? [localProperty.value]
-        : localProperty.values;
-    for (const value of values) {
+  const localValues =
+    defaults.length === 0
+      ? staticResolutionValues(
+          resolveStaticObjectPath(
+            context,
+            object,
+            propertyPath,
+            new Set(visitedBindings),
+            beforePosition,
+          ),
+        )
+      : destructuredAliasOutcomes(
+          context,
+          object,
+          propertyPath,
+          defaults,
+          new Set(visitedBindings),
+          beforePosition,
+        );
+  if (localValues !== null) {
+    for (const value of localValues) {
       const localKind = ambientCallKind(
         context,
         value,
@@ -1603,6 +1611,11 @@ const ambientPropertyPathKind = (
       );
       if (localKind !== null) {
         return localKind;
+      }
+      if (
+        globalObjectName(context, value, new Set(visitedBindings)) === "Date"
+      ) {
+        return "Date(...)";
       }
     }
   }
@@ -1619,31 +1632,6 @@ const ambientPropertyPathKind = (
       : null;
   if (globalKind !== null) {
     return globalKind;
-  }
-  if (defaults.length > 0) {
-    for (const outcome of destructuredAliasOutcomes(
-      context,
-      object,
-      propertyPath,
-      defaults,
-      new Set(visitedBindings),
-      beforePosition,
-    )) {
-      const fallbackKind = ambientCallKind(
-        context,
-        outcome,
-        new Set(visitedBindings),
-        beforePosition,
-      );
-      if (fallbackKind !== null) {
-        return fallbackKind;
-      }
-      if (
-        globalObjectName(context, outcome, new Set(visitedBindings)) === "Date"
-      ) {
-        return "Date(...)";
-      }
-    }
   }
   return null;
 };

@@ -44,6 +44,28 @@ const scanFixture = (source: string, relativeFile?: string) => {
   }
 };
 
+const diagnosticLocations = (
+  diagnostics: readonly {
+    readonly column: number;
+    readonly line: number;
+  }[],
+): string[] => diagnostics.map(({ column, line }) => `${line}:${column}`);
+
+const sourceLocations = (
+  source: string,
+  producerSuffixes: string[],
+): string[] => {
+  let searchFrom = 0;
+  return producerSuffixes.map((suffix) => {
+    const index = source.indexOf(suffix, searchFrom);
+    expect(index).toBeGreaterThanOrEqual(0);
+    searchFrom = index + 1;
+    const line = source.slice(0, index).split("\n").length;
+    const previousNewline = source.lastIndexOf("\n", index - 1);
+    return `${line}:${index - previousNewline}`;
+  });
+};
+
 describe("Result consumption guard", () => {
   test("discovers source, root-script, and app-script projects", () => {
     const repositoryRoot = path.resolve(import.meta.dir, "../../..");
@@ -108,7 +130,7 @@ describe("Result consumption guard", () => {
   });
 
   test("detects discarded Results through aliases, wrappers, and chains", () => {
-    const diagnostics = scanFixture(`
+    const source = `
       import { Result, type Result as BetterResult } from "better-result";
 
       const parse = (): BetterResult<number, string> => Result.ok(1);
@@ -128,22 +150,27 @@ describe("Result consumption guard", () => {
       [parse(), decoratedResult()];
       await Promise.all([asyncWrapper(), Promise.resolve(parse())]);
       await Promise.allSettled([asyncWrapper(), Promise.resolve(parse())]);
-    `);
+    `;
+    const diagnostics = scanFixture(source);
 
-    expect(diagnostics.map(({ rule }) => rule)).toEqual([
-      "unused-result",
-      "unused-result",
-      "unused-result",
-      "unused-result",
-      "unused-result",
-      "unused-result",
-      "unused-result",
-      "unused-result",
-    ]);
+    const expectedProducers = [
+      "parseAlias();",
+      "parseWrapper();",
+      "asyncWrapper();",
+      "decoratedResult();",
+      "parse().map((value) => value + 1);",
+      "parse(), decoratedResult()];",
+      "decoratedResult()];",
+      "await Promise.all([asyncWrapper(), Promise.resolve(parse())]);",
+      "await Promise.allSettled([asyncWrapper(), Promise.resolve(parse())]);",
+    ];
+    expect(diagnosticLocations(diagnostics)).toEqual(
+      sourceLocations(source, expectedProducers),
+    );
   });
 
   test("detects Results nested in discarded statement containers", () => {
-    const diagnostics = scanFixture(`
+    const source = `
       import { Result, type Result as BetterResult } from "better-result";
 
       const parse = (): BetterResult<number, string> => Result.ok(1);
@@ -185,31 +212,35 @@ describe("Result consumption guard", () => {
       consume(retainedIndexSelection);
       consume(retainedAtSelection);
       consume(retainedStringSelection);
-    `);
+    `;
+    const diagnostics = scanFixture(source);
 
-    expect(diagnostics.map(({ rule }) => rule)).toEqual([
-      "unused-result",
-      "unused-result",
-      "unused-result",
-      "unused-result",
-      "unused-result",
-      "unused-result",
-      "unused-result",
-      "unused-result",
-      "unused-result",
-      "unused-result",
-      "unused-result",
-      "unused-result",
-      "unused-result",
-      "unused-result",
-      "unused-result",
-      "unused-result",
-      "unused-result",
-      "unused-result",
-      "unused-result",
-      "unused-result",
-      "unused-result",
-    ]);
+    const expectedProducers = [
+      "parse(), nested: { result: asyncWrapper() }, list: [parse()] });",
+      "asyncWrapper() }, list: [parse()] });",
+      "parse()] });",
+      "parse(), other: 0 }).other;",
+      "asyncWrapper(), 0][1];",
+      "parse(), run: () => undefined }).run();",
+      "asyncWrapper(), () => undefined][1]();",
+      "parse(), other: 0 }).other;",
+      "asyncWrapper(), 0][1];",
+      "asyncWrapper()].at(0);",
+      'asyncWrapper()]["0"];',
+      "held.result;",
+      "parse();",
+      'parse() && consume("cleanup");',
+      "parse();",
+      "parse();",
+      "parse() : undefined;",
+      "parse();",
+      'parse(), "statement tail");',
+      'parse(), "assigned tail");',
+      "parse()}`;",
+    ];
+    expect(diagnosticLocations(diagnostics)).toEqual(
+      sourceLocations(source, expectedProducers),
+    );
   });
 
   test.each([
