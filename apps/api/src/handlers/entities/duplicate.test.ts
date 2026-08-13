@@ -18,11 +18,21 @@ import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 // split from here. Only the durable extraction request itself is replaced.
 const realProcessExtraction =
   await import("@/api/lib/search/process-extraction");
-const processExtractionMock = mock(async (_entityId: string) => undefined);
+const requestNativeExtractionRunsMock = mock(
+  async ({ requests }: { requests: readonly unknown[] }) =>
+    requests.map((_, index) =>
+      toSafeId<"documentProcessingRun">(`run_${index}`),
+    ),
+);
 void mock.module("@/api/lib/search/process-extraction", () => ({
   ...realProcessExtraction,
-  processExtraction: processExtractionMock,
   requestNativeExtractionRun: mock(async () => null),
+  requestNativeExtractionRuns: requestNativeExtractionRunsMock,
+}));
+
+const enqueueDocumentProcessingRunMock = mock(async () => undefined);
+void mock.module("@/api/lib/document-processing-enqueue", () => ({
+  enqueueDocumentProcessingRun: enqueueDocumentProcessingRunMock,
 }));
 
 const enqueueEntitySearchRepairsMock = mock(
@@ -220,7 +230,8 @@ const createContext = ({
 describe("duplicate entity", () => {
   test("duplicates folder trees instead of rejecting folders", async () => {
     copyObjectMock.mockClear();
-    processExtractionMock.mockClear();
+    requestNativeExtractionRunsMock.mockClear();
+    enqueueDocumentProcessingRunMock.mockClear();
     enqueueEntitySearchRepairsMock.mockClear();
     flushEntitySearchRepairsMock.mockClear();
 
@@ -336,7 +347,8 @@ describe("duplicate entity", () => {
     // The DOCX copy is indexed by the extraction run that reads it; the two
     // folder copies have no such run, so their marks are written inside the
     // copy transaction and only flushed afterwards.
-    expect(processExtractionMock.mock.calls).toEqual([[documentDuplicate.id]]);
+    expect(requestNativeExtractionRunsMock).toHaveBeenCalledTimes(1);
+    expect(enqueueDocumentProcessingRunMock.mock.calls).toEqual([["run_0"]]);
     expect(enqueueEntitySearchRepairsMock).toHaveBeenCalledTimes(1);
     expect(enqueueEntitySearchRepairsMock.mock.calls.at(0)?.at(1)).toEqual([
       rootDuplicate.id,
@@ -346,7 +358,8 @@ describe("duplicate entity", () => {
   });
 
   test("returns every object copied for an aborted duplicate", async () => {
-    processExtractionMock.mockClear();
+    requestNativeExtractionRunsMock.mockClear();
+    enqueueDocumentProcessingRunMock.mockClear();
     enqueueEntitySearchRepairsMock.mockClear();
     flushEntitySearchRepairsMock.mockClear();
     copyObjectMock.mockClear();
@@ -415,6 +428,6 @@ describe("duplicate entity", () => {
     // Nothing is indexed for copies that no longer exist.
     expect(enqueueEntitySearchRepairsMock).not.toHaveBeenCalled();
     expect(flushEntitySearchRepairsMock).not.toHaveBeenCalled();
-    expect(processExtractionMock).not.toHaveBeenCalled();
+    expect(enqueueDocumentProcessingRunMock).not.toHaveBeenCalled();
   });
 });

@@ -20,16 +20,14 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
 import { LIMITS } from "@/api/lib/limits";
-import {
-  processExtraction,
-  SEARCH_INDEX_OWNER,
-} from "@/api/lib/search/process-extraction";
+import { SEARCH_INDEX_OWNER } from "@/api/lib/search/process-extraction";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
 const duplicateEntityBodySchema = t.Object({
@@ -163,6 +161,7 @@ const duplicateEntityHandler = async function* ({
   const txResultResult = await safeDb(
     async (tx) =>
       await copyEntities({
+        organizationId,
         tx,
         targetWorkspaceId: workspaceId,
         targetParentId: source.parentId,
@@ -191,10 +190,8 @@ const duplicateEntityHandler = async function* ({
     txResult.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
   ).catch(captureError);
 
-  for (const entityId of txResult.entityIdsBySearchIndexOwner[
-    SEARCH_INDEX_OWNER.durableExtraction
-  ]) {
-    processExtraction(entityId).catch(captureError);
+  for (const runId of txResult.nativeExtractionRunIds) {
+    enqueueDocumentProcessingRun(runId).catch(captureError);
   }
 
   // The copies reference fresh file IDs, so each needs its own

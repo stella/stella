@@ -22,6 +22,7 @@ export const REVIEWED_VERSION_MUTATION_OWNERS = {
   ],
   "handlers/entities/copy-utils.ts": [
     VERSION_WRITE_CAPABILITY.INSERT_VERSION_ROW,
+    VERSION_WRITE_CAPABILITY.REQUEST_NATIVE_EXTRACTION,
     VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION,
   ],
   "handlers/entities/create.ts": [
@@ -66,6 +67,7 @@ export const REVIEWED_VERSION_MUTATION_OWNERS = {
   ],
   "handlers/workspaces/duplicate.ts": [
     VERSION_WRITE_CAPABILITY.INSERT_VERSION_ROW,
+    VERSION_WRITE_CAPABILITY.REQUEST_NATIVE_EXTRACTION,
     VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION,
   ],
   "lib/entities/create-from-buffer.ts": [

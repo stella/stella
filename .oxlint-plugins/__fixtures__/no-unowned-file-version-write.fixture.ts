@@ -11,7 +11,10 @@ import {
   // oxlint-disable-next-line no-unowned-file-version-write/no-unowned-file-version-write -- fixture: version numbering outside a reviewed owner must be rejected
   nextEntityVersionNumber,
 } from "@/api/lib/entity-versions/version-utils";
-import { requestNativeExtractionRun } from "@/api/lib/search/process-extraction";
+import {
+  requestNativeExtractionRun,
+  requestNativeExtractionRuns,
+} from "@/api/lib/search/process-extraction";
 
 import * as relativeSchema from "../../apps/api/src/db/schema.ts";
 import * as relativeVersionUtils from "../../apps/api/src/lib/entity-versions/version-utils.ts";
@@ -73,3 +76,9 @@ declare const extractionRequest: Parameters<
 >[0];
 // oxlint-disable-next-line no-unowned-file-version-write/no-unowned-file-version-write -- fixture: durable extraction requests outside a reviewed source writer must be rejected
 await requestNativeExtractionRun(extractionRequest);
+
+declare const extractionRequests: Parameters<
+  typeof requestNativeExtractionRuns
+>[0];
+// oxlint-disable-next-line no-unowned-file-version-write/no-unowned-file-version-write -- fixture: batched durable extraction requests outside a reviewed source writer must be rejected
+await requestNativeExtractionRuns(extractionRequests);

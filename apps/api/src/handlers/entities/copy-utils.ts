@@ -26,10 +26,14 @@ import { LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
 import { copyObject } from "@/api/lib/s3-presign";
 import {
+  nativeExtractionRunRequestForFields,
+  requestNativeExtractionRuns,
   SEARCH_INDEX_OWNER,
-  searchIndexOwnerForFields,
 } from "@/api/lib/search/process-extraction";
-import type { SearchIndexOwner } from "@/api/lib/search/process-extraction";
+import type {
+  NativeExtractionRunRequest,
+  SearchIndexOwner,
+} from "@/api/lib/search/process-extraction";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
 export type EntityFieldSnapshot = {
@@ -468,15 +472,18 @@ export type CopyEntitiesResult = {
    * The copies grouped by which mechanism writes their search projection.
    * `search-mark` copies already carry a dirty mark committed with this
    * transaction; the caller only flushes it. `durable-extraction` copies are
-   * indexed by the run the caller requests for them.
+   * indexed by the run committed with the copy.
    */
   entityIdsBySearchIndexOwner: Record<SearchIndexOwner, SafeId<"entity">[]>;
+  /** Newly created runs to hand to the queue after this transaction commits. */
+  nativeExtractionRunIds: SafeId<"documentProcessingRun">[];
   copiedEntities: CopiedEntity[];
   /** File fields that may need PDF derivative generation. */
   fileFields: CopiedFileField[];
 };
 
 type CopyEntitiesProps = {
+  organizationId: SafeId<"organization">;
   tx: Transaction;
   targetWorkspaceId: SafeId<"workspace">;
   targetParentId: SafeId<"entity"> | null;
@@ -516,6 +523,7 @@ type CopyEntitiesProps = {
  * `transactionAbortError` and answer with it unchanged.
  */
 export const copyEntities = async ({
+  organizationId,
   tx,
   targetWorkspaceId,
   targetParentId,
@@ -592,6 +600,7 @@ export const copyEntities = async ({
     [SEARCH_INDEX_OWNER.durableExtraction]: [],
     [SEARCH_INDEX_OWNER.searchMark]: [],
   };
+  const nativeExtractionRequests: NativeExtractionRunRequest[] = [];
   const fileFields: CopiedFileField[] = [];
 
   for (const source of sourceEntities) {
@@ -691,9 +700,22 @@ export const copyEntities = async ({
     }
 
     idMap.set(source.id, newEntityId);
-    // The field ids above are minted in insertion order, so the copy resolves
-    // the same extraction source `processExtraction` will resolve for it.
-    copiedEntityIds[searchIndexOwnerForFields(fieldInserts)].push(newEntityId);
+    // The field ids above are minted in insertion order, so this derives the
+    // same source the post-commit processor would select without re-reading
+    // each copied entity.
+    const extractionRequest = nativeExtractionRunRequestForFields({
+      entityId: newEntityId,
+      entityVersionId: newVersionId,
+      fields: fieldInserts,
+      organizationId,
+      workspaceId: targetWorkspaceId,
+    });
+    if (extractionRequest === null) {
+      copiedEntityIds[SEARCH_INDEX_OWNER.searchMark].push(newEntityId);
+    } else {
+      copiedEntityIds[SEARCH_INDEX_OWNER.durableExtraction].push(newEntityId);
+      nativeExtractionRequests.push(extractionRequest);
+    }
     copiedEntities.push({
       sourceId: source.id,
       entityId: newEntityId,
@@ -744,11 +766,16 @@ export const copyEntities = async ({
     tx,
     copiedEntityIds[SEARCH_INDEX_OWNER.searchMark],
   );
+  const nativeExtractionRunIds = await requestNativeExtractionRuns({
+    requests: nativeExtractionRequests,
+    tx,
+  });
 
   return {
     entityId: rootEntityId,
     entityIdsBySearchIndexOwner: copiedEntityIds,
     copiedEntities,
     fileFields,
+    nativeExtractionRunIds,
   };
 };

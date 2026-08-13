@@ -432,7 +432,8 @@ type ExtractionEntity = NonNullable<
   Awaited<ReturnType<typeof readExtractionEntity>>
 >;
 
-type NativeExtractionRunSource = {
+export type NativeExtractionRunRequest = {
+  entityId: SafeId<"entity">;
   entityVersionId: SafeId<"entityVersion">;
   fieldId: SafeId<"field">;
   fileField: Extract<FieldContent, { type: "file" }>;
@@ -440,51 +441,121 @@ type NativeExtractionRunSource = {
   workspaceId: SafeId<"workspace">;
 };
 
-/** `null` when a search mark, not a durable run, owns this projection. */
-const resolveNativeExtractionSource = (
-  entity: ExtractionEntity,
-  filePropertyId?: SafeId<"property">,
-): NativeExtractionRunSource | null => {
-  const workspace = entity.workspace ?? panic("Entity has no workspace");
-  const version =
-    entity.currentVersion ?? panic("Entity has no currentVersion");
-  const fileFieldRow = findExtractionFileFieldRow(
-    version.fields,
-    filePropertyId,
-  );
+type NativeExtractionRunRequestForFieldsOptions = {
+  entityId: SafeId<"entity">;
+  entityVersionId: SafeId<"entityVersion">;
+  fields: readonly {
+    content: FieldContent;
+    id: SafeId<"field">;
+    propertyId?: SafeId<"property"> | undefined;
+  }[];
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+  filePropertyId?: SafeId<"property"> | undefined;
+};
+
+type NativeExtractionRunRequestForFieldsResult =
+  | NativeExtractionRunRequest
+  | null;
+
+/**
+ * Derive the exact immutable source identity from fields a transaction has
+ * persisted in stable creation order. A null result means the search-repair
+ * queue, not a document-processing run, owns the projection.
+ */
+export const nativeExtractionRunRequestForFields = ({
+  entityId,
+  entityVersionId,
+  fields,
+  organizationId,
+  workspaceId,
+  filePropertyId,
+}: NativeExtractionRunRequestForFieldsOptions): NativeExtractionRunRequestForFieldsResult => {
+  const fileFieldRow = findExtractionFileFieldRow(fields, filePropertyId);
   if (
     !fileFieldRow ||
     fileFieldRow.content.type !== "file" ||
-    searchIndexOwnerForFields(version.fields, filePropertyId) ===
+    searchIndexOwnerForFields(fields, filePropertyId) ===
       SEARCH_INDEX_OWNER.searchMark
   ) {
     return null;
   }
   return {
-    entityVersionId: version.id,
+    entityId,
+    entityVersionId,
     fieldId: fileFieldRow.id,
     fileField: fileFieldRow.content,
-    organizationId: toSafeId<"organization">(workspace.organizationId),
-    workspaceId: toSafeId<"workspace">(workspace.id),
+    organizationId,
+    workspaceId,
   };
 };
 
-const nativeExtractionRunValues = (
+/** `null` when a search mark, not a durable run, owns this projection. */
+const resolveNativeExtractionSource = (
   entityId: SafeId<"entity">,
-  source: NativeExtractionRunSource,
-) =>
+  entity: ExtractionEntity,
+  filePropertyId?: SafeId<"property">,
+): NativeExtractionRunRequest | null => {
+  const workspace = entity.workspace ?? panic("Entity has no workspace");
+  const version =
+    entity.currentVersion ?? panic("Entity has no currentVersion");
+  return nativeExtractionRunRequestForFields({
+    entityId,
+    entityVersionId: version.id,
+    fields: version.fields,
+    filePropertyId,
+    organizationId: toSafeId<"organization">(workspace.organizationId),
+    workspaceId: toSafeId<"workspace">(workspace.id),
+  });
+};
+
+const nativeExtractionRunValues = (request: NativeExtractionRunRequest) =>
   ({
     id: createSafeId<"documentProcessingRun">(),
     ...SCOPED_NATIVE_EXTRACTION_ENQUEUE,
-    entityId,
-    entityVersionId: source.entityVersionId,
-    fieldId: source.fieldId,
-    organizationId: source.organizationId,
+    entityId: request.entityId,
+    entityVersionId: request.entityVersionId,
+    fieldId: request.fieldId,
+    organizationId: request.organizationId,
     processorVersion: DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION,
-    sourceFileId: source.fileField.id,
-    sourceSha256Hex: source.fileField.sha256Hex,
-    workspaceId: source.workspaceId,
+    sourceFileId: request.fileField.id,
+    sourceSha256Hex: request.fileField.sha256Hex,
+    workspaceId: request.workspaceId,
   }) satisfies typeof documentProcessingRuns.$inferInsert;
+
+// 250 rows keep the insert well below PostgreSQL's bound-parameter ceiling
+// while reducing a whole-matter copy from one request query per document to a
+// small, bounded number of statements.
+const NATIVE_EXTRACTION_RUN_INSERT_BATCH_SIZE = 250;
+
+/** Insert immutable-source requests in bounded batches on one transaction. */
+export const requestNativeExtractionRuns = async ({
+  requests,
+  tx,
+}: {
+  requests: readonly NativeExtractionRunRequest[];
+  tx: Transaction;
+}): Promise<SafeId<"documentProcessingRun">[]> => {
+  const insertedRunIds: SafeId<"documentProcessingRun">[] = [];
+  const insertFrom = async (start: number): Promise<void> => {
+    if (start >= requests.length) {
+      return;
+    }
+    const inserted = await tx
+      .insert(documentProcessingRuns)
+      .values(
+        requests
+          .slice(start, start + NATIVE_EXTRACTION_RUN_INSERT_BATCH_SIZE)
+          .map(nativeExtractionRunValues),
+      )
+      .onConflictDoNothing({ target: NATIVE_EXTRACTION_SOURCE_TARGET })
+      .returning({ id: documentProcessingRuns.id });
+    insertedRunIds.push(...inserted.map(({ id }) => id));
+    await insertFrom(start + NATIVE_EXTRACTION_RUN_INSERT_BATCH_SIZE);
+  };
+  await insertFrom(0);
+  return insertedRunIds;
+};
 
 /**
  * Commit the durable extraction request with the mutation that creates its
@@ -494,8 +565,9 @@ const nativeExtractionRunValues = (
  * admits for a scoped transaction: a queued, unattributed, upload-sourced
  * native-extraction request for a workspace the transaction already holds.
  * Everything after the insert (queue handoff, retries, state transitions)
- * remains root-writer work, so callers still run `processExtraction` after the
- * commit to accelerate what this row already guarantees.
+ * remains root-writer work. Callers enqueue the returned run id after commit,
+ * or call `processExtraction` when they do not retain it, to accelerate what
+ * this row already guarantees.
  *
  * Returns the run id this transaction created, or `null` when the entity needs
  * no durable extraction or an equivalent run already exists.
@@ -513,16 +585,19 @@ export const requestNativeExtractionRun = async ({
   if (!entity) {
     return null;
   }
-  const source = resolveNativeExtractionSource(entity, filePropertyId);
+  const source = resolveNativeExtractionSource(
+    entityId,
+    entity,
+    filePropertyId,
+  );
   if (!source) {
     return null;
   }
-  const inserted = await tx
-    .insert(documentProcessingRuns)
-    .values(nativeExtractionRunValues(entityId, source))
-    .onConflictDoNothing({ target: NATIVE_EXTRACTION_SOURCE_TARGET })
-    .returning({ id: documentProcessingRuns.id });
-  return inserted.at(0)?.id ?? null;
+  const inserted = await requestNativeExtractionRuns({
+    requests: [source],
+    tx,
+  });
+  return inserted.at(0) ?? null;
 };
 
 /**
@@ -543,7 +618,11 @@ export const processExtraction = async (
     return;
   }
 
-  const source = resolveNativeExtractionSource(entity, options?.filePropertyId);
+  const source = resolveNativeExtractionSource(
+    entityId,
+    entity,
+    options?.filePropertyId,
+  );
   if (!source) {
     await getSearchProvider().indexEntity(entityId);
     return;
@@ -553,7 +632,7 @@ export const processExtraction = async (
     source;
   const inserted = await rootDb
     .insert(documentProcessingRuns)
-    .values(nativeExtractionRunValues(entityId, source))
+    .values(nativeExtractionRunValues(source))
     .onConflictDoNothing({ target: NATIVE_EXTRACTION_SOURCE_TARGET })
     .returning({ id: documentProcessingRuns.id });
   const created = inserted.at(0);
