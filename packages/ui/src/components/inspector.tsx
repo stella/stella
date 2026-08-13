@@ -1,13 +1,14 @@
 import type * as React from "react";
 
+import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/components/tabs";
 import { cn } from "@stll/ui/lib/utils";
 
 type InspectorProps = React.ComponentProps<"aside">;
 
 /**
  * App-agnostic right-side inspector chrome. The inspector itself owns the
- * viewport height; only {@link InspectorContent} scrolls, keeping the header
- * and tabs reachable while inspecting long records.
+ * viewport height; only its content or active tab panel scrolls, keeping the
+ * header and tabs reachable while inspecting long records.
  */
 const Inspector = ({ className, ...props }: InspectorProps) => (
   <aside
@@ -84,39 +85,54 @@ const InspectorActions = ({
 const InspectorTabs = ({
   className,
   ...props
-}: React.ComponentProps<"div">) => (
-  <div
-    className={cn(
-      "bg-background flex h-11 shrink-0 items-end gap-1 border-b px-3",
-      className,
-    )}
+}: React.ComponentProps<typeof Tabs>) => (
+  <Tabs
+    className={cn("min-h-0 flex-1 gap-0 overflow-hidden", className)}
     data-slot="inspector-tabs"
-    role="tablist"
     {...props}
   />
 );
 
-type InspectorTabProps = Omit<React.ComponentProps<"button">, "type"> & {
-  active?: boolean;
-};
-
-const InspectorTab = ({
-  active = false,
+const InspectorTabList = ({
   className,
   ...props
-}: InspectorTabProps) => (
-  <button
-    aria-selected={active}
+}: Omit<React.ComponentProps<typeof TabsList>, "variant">) => (
+  <TabsList
     className={cn(
-      "text-muted-foreground hover:text-foreground focus-visible:ring-ring flex h-11 items-center gap-1.5 border-b-2 border-transparent px-2 text-xs font-medium outline-none focus-visible:ring-2",
-      active && "border-primary text-foreground",
+      "bg-background h-11 w-full shrink-0 justify-start gap-1 border-b px-3 py-0",
       className,
     )}
-    data-active={active ? "" : undefined}
-    data-slot="inspector-tab"
-    role="tab"
+    data-slot="inspector-tab-list"
+    variant="underline"
     {...props}
-    type="button"
+  />
+);
+
+const InspectorTab = ({
+  className,
+  ...props
+}: React.ComponentProps<typeof TabsTab>) => (
+  <TabsTab
+    className={cn(
+      "h-11 grow-0 rounded-none px-2 text-xs sm:h-11 sm:text-xs",
+      className,
+    )}
+    data-slot="inspector-tab"
+    {...props}
+  />
+);
+
+const InspectorTabPanel = ({
+  className,
+  ...props
+}: React.ComponentProps<typeof TabsPanel>) => (
+  <TabsPanel
+    className={cn(
+      "min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain",
+      className,
+    )}
+    data-slot="inspector-tab-panel"
+    {...props}
   />
 );
 
@@ -223,6 +239,8 @@ export {
   InspectorSection,
   InspectorSectionTitle,
   InspectorTab,
+  InspectorTabList,
+  InspectorTabPanel,
   InspectorTabs,
   InspectorTitle,
 };
