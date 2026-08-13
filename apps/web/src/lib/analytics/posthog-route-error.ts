@@ -1,6 +1,7 @@
 import type { CaptureResult, PostHog } from "posthog-js";
 
 import { isErrorReference } from "@/lib/analytics/error-reference";
+import { pickIngestionRequired } from "@/lib/analytics/posthog-ingestion";
 import { WEB_ANALYTICS_EVENTS } from "@/lib/analytics/types";
 import type { RouteErrorLifecycleProperties } from "@/lib/analytics/types";
 
@@ -19,7 +20,6 @@ export const sanitizeRouteErrorLifecycleEvent = (
   event: CaptureResult,
 ): CaptureResult | null => {
   const properties: Record<string, unknown> = event.properties;
-  const distinctId = properties["$distinct_id"];
   const sessionId = properties["$session_id"];
   const appCommit = properties["app_commit"];
   const appVersion = properties["app_version"];
@@ -46,7 +46,7 @@ export const sanitizeRouteErrorLifecycleEvent = (
   return {
     ...event,
     properties: {
-      ...(typeof distinctId === "string" ? { $distinct_id: distinctId } : {}),
+      ...pickIngestionRequired(properties),
       ...(matches(sessionId, OPAQUE_SESSION_ID_PATTERN)
         ? { $session_id: sessionId }
         : {}),

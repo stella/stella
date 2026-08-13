@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { INGESTION_REQUIRED_KEYS } from "@/lib/analytics/posthog-ingestion";
 import { WEB_ANALYTICS_EVENTS } from "@/lib/analytics/types";
 
 type CapturedBrowserEvent = {
@@ -177,7 +178,7 @@ describe("PostHog browser analytics adapter", () => {
     });
   });
 
-  test("keeps real exception types without messages or stacks", () => {
+  test("keeps real exception types and frames without messages", () => {
     createPostHogAnalytics("phc_test", "https://posthog.test");
 
     const event = {
@@ -195,10 +196,71 @@ describe("PostHog browser analytics adapter", () => {
     expect(initOptions?.before_send(event)).toEqual({
       event: WEB_ANALYTICS_EVENTS.exception,
       properties: {
-        $exception_list: [{ type: "TypeError", value: "" }],
+        $exception_list: [
+          {
+            type: "TypeError",
+            value: "",
+            stacktrace: {
+              type: "raw",
+              frames: [{ filename: "app.js", lineno: 42 }],
+            },
+          },
+        ],
         $exception_type: "TypeError",
       },
     });
+  });
+
+  test("keeps only structural stack frame fields", () => {
+    createPostHogAnalytics("phc_test", "https://posthog.test");
+
+    const sanitized = initOptions?.before_send({
+      event: WEB_ANALYTICS_EVENTS.exception,
+      properties: {
+        $exception_list: [
+          {
+            type: "TypeError",
+            value: "Client Smith v Example failed",
+            stacktrace: {
+              type: "raw",
+              frames: [
+                {
+                  platform: "web:javascript",
+                  filename:
+                    "https://my.stll.app/assets/app.js?token=private-token",
+                  function: "renderMatter",
+                  in_app: true,
+                  lineno: 42,
+                  colno: 7,
+                  context_line: "const title = matter.clientName;",
+                  vars: { clientName: "Smith" },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    });
+
+    expect(sanitized?.properties?.["$exception_list"]).toEqual([
+      {
+        type: "TypeError",
+        value: "",
+        stacktrace: {
+          type: "raw",
+          frames: [
+            {
+              platform: "web:javascript",
+              filename: "https://my.stll.app/assets/app.js",
+              function: "renderMatter",
+              in_app: true,
+              lineno: 42,
+              colno: 7,
+            },
+          ],
+        },
+      },
+    ]);
   });
 
   test("captureError ignores null and undefined", () => {
@@ -211,7 +273,7 @@ describe("PostHog browser analytics adapter", () => {
     expect(captureExceptionMock).not.toHaveBeenCalled();
   });
 
-  test("captureError sends only a structural error type", () => {
+  test("captureError sends the error type and a message-free stack", () => {
     const { analytics } = createPostHogAnalytics(
       "phc_test",
       "https://posthog.test",
@@ -226,7 +288,120 @@ describe("PostHog browser analytics adapter", () => {
     if (!(captured instanceof Error)) {
       throw new TypeError("Expected a redacted Error");
     }
-    expect(captured.stack).toBeUndefined();
+    expect(captured.stack).toStartWith("TypeError:\n");
+    expect(captured.stack).not.toContain("Privileged document name");
+    expect(captured.stack).toContain("    at ");
+  });
+
+  test("captureError survives a cyclic cause chain", () => {
+    const { analytics } = createPostHogAnalytics(
+      "phc_test",
+      "https://posthog.test",
+    );
+    const first = new Error("Privileged first");
+    const second = new Error("Privileged second", { cause: first });
+    first.cause = second;
+    analytics.captureError(second);
+    expect(captureExceptionMock.mock.calls.at(-1)?.[0]).toBeInstanceOf(Error);
+  });
+
+  test("drops frame function names that are not symbol-shaped", () => {
+    createPostHogAnalytics("phc_test", "https://posthog.test");
+    const sanitized = initOptions?.before_send({
+      event: WEB_ANALYTICS_EVENTS.exception,
+      properties: {
+        $exception_list: [
+          {
+            type: "TypeError",
+            value: "boom",
+            stacktrace: {
+              frames: [
+                { filename: "app.js", function: "Client Smith", lineno: 1 },
+                { filename: "app.js", function: "renderMatter", lineno: 2 },
+              ],
+            },
+          },
+        ],
+      },
+    });
+
+    expect(sanitized?.properties?.["$exception_list"]).toEqual([
+      {
+        type: "TypeError",
+        value: "",
+        stacktrace: {
+          type: "raw",
+          frames: [
+            { filename: "app.js", lineno: 1 },
+            { filename: "app.js", function: "renderMatter", lineno: 2 },
+          ],
+        },
+      },
+    ]);
+  });
+
+  test("captureError keeps the stack of the deepest cause", () => {
+    const { analytics } = createPostHogAnalytics(
+      "phc_test",
+      "https://posthog.test",
+    );
+    const original = new RangeError("Privileged original message");
+    const wrapper = new Error("Privileged wrapper message", {
+      cause: original,
+    });
+    wrapper.name = "ClientTelemetryError";
+    // Distinguishable stacks: the wrapper's own stack must not win.
+    wrapper.stack = "Error: Privileged wrapper message\n    at boundary";
+    original.stack =
+      "RangeError: Privileged original message\n    at failureSite";
+    analytics.captureError(wrapper);
+
+    const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
+    if (!(captured instanceof Error)) {
+      throw new TypeError("Expected a redacted Error");
+    }
+    expect(captured.name).toBe("ClientTelemetryError");
+    expect(captured.stack).toBe("ClientTelemetryError:\n    at failureSite");
+  });
+
+  test("captureError attaches the telemetry area slug and nothing free-form", () => {
+    const { analytics } = createPostHogAnalytics(
+      "phc_test",
+      "https://posthog.test",
+    );
+    const boundaryError = new Error("Privileged message");
+    Object.assign(boundaryError, { area: "pdf-viewer" });
+    analytics.captureError(boundaryError);
+    expect(captureExceptionMock.mock.calls.at(-1)?.[1]).toEqual({
+      area: "pdf-viewer",
+    });
+
+    const freeFormError = new Error("Privileged message");
+    Object.assign(freeFormError, { area: "Client Smith v Example" });
+    analytics.captureError(freeFormError);
+    expect(captureExceptionMock.mock.calls.at(-1)?.[1]).toEqual({});
+  });
+
+  test("sanitizer keeps only slug-shaped area properties", () => {
+    createPostHogAnalytics("phc_test", "https://posthog.test");
+
+    const sanitizedSlug = initOptions?.before_send({
+      event: WEB_ANALYTICS_EVENTS.exception,
+      properties: {
+        area: "pdf-viewer",
+        $exception_list: [{ type: "Error", value: "boom" }],
+      },
+    });
+    expect(sanitizedSlug?.properties?.["area"]).toBe("pdf-viewer");
+
+    const sanitizedFreeForm = initOptions?.before_send({
+      event: WEB_ANALYTICS_EVENTS.exception,
+      properties: {
+        area: "Client Smith v Example",
+        $exception_list: [{ type: "Error", value: "boom" }],
+      },
+    });
+    expect(sanitizedFreeForm?.properties).not.toContainKey("area");
   });
 
   test("captureError correlates a recovery reference without error details", () => {
@@ -316,7 +491,7 @@ describe("PostHog browser analytics adapter", () => {
         properties: {
           $current_url:
             "https://staging.stll.app/workspaces/private-matter?document=secret#selection",
-          $distinct_id: "user_123",
+          distinct_id: "user_123",
           $pathname: "/workspaces/private-matter",
           $referrer: "https://mail.example.test/client-name",
           $raw_user_agent: "private browser fingerprint",
@@ -338,7 +513,7 @@ describe("PostHog browser analytics adapter", () => {
     ).toEqual({
       event: WEB_ANALYTICS_EVENTS.routeErrorRecovery,
       properties: {
-        $distinct_id: "user_123",
+        distinct_id: "user_123",
         $session_id: "018f9f0e-7b42-7cc8-9a5d-42db46f6842d",
         app_commit: "abc123",
         app_version: "test",
@@ -374,17 +549,21 @@ describe("PostHog browser analytics adapter", () => {
     ).toBeNull();
   });
 
-  test("before_send strips exception messages and stack frames", () => {
+  test("before_send strips exception messages and envelope noise", () => {
     createPostHogAnalytics("phc_test", "https://posthog.test");
     const sanitized = initOptions?.before_send({
       event: WEB_ANALYTICS_EVENTS.exception,
       properties: {
-        $distinct_id: "user_123",
+        token: "phc_test",
+        distinct_id: "018f9f0e-7b42-7cc8-9a5d-42db46f6842d",
+        $current_url: "https://my.stll.app/workspaces/private-matter#selection",
         $exception_list: [
           {
             type: "TypeError",
             value: "Privileged document name",
-            stacktrace: { frames: [{ filename: "/matters/secret" }] },
+            stacktrace: {
+              frames: [{ filename: "https://my.stll.app/assets/app.js" }],
+            },
           },
         ],
       },
@@ -393,11 +572,78 @@ describe("PostHog browser analytics adapter", () => {
     expect(sanitized).toEqual({
       event: WEB_ANALYTICS_EVENTS.exception,
       properties: {
-        $distinct_id: "user_123",
-        $exception_list: [{ type: "TypeError", value: "" }],
+        token: "phc_test",
+        distinct_id: "018f9f0e-7b42-7cc8-9a5d-42db46f6842d",
+        $exception_list: [
+          {
+            type: "TypeError",
+            value: "",
+            stacktrace: {
+              type: "raw",
+              frames: [{ filename: "https://my.stll.app/assets/app.js" }],
+            },
+          },
+        ],
         $exception_type: "TypeError",
       },
     });
+  });
+
+  // posthog-js drops any event whose ingestion-required property was
+  // removed by `before_send`, so a sanitizer stripping one of these keys
+  // silently disables the whole telemetry stream. Assert both directions:
+  // every declared key survives both sanitizers, and nothing else from the
+  // envelope leaks through the exception sanitizer.
+  test("sanitizers preserve every posthog ingestion-required property", () => {
+    createPostHogAnalytics("phc_test", "https://posthog.test");
+    // Independent restatement of the posthog-js contract (its
+    // properties-required-for-ingestion set). If `INGESTION_REQUIRED_KEYS`
+    // drifts from this literal, the guard fails instead of mirroring the
+    // mistake.
+    const requiredBySdk = ["token", "distinct_id", "$cookieless_mode"];
+    expect(requiredBySdk).toEqual([...INGESTION_REQUIRED_KEYS]);
+    const envelope = {
+      token: "phc_test",
+      distinct_id: "018f9f0e-7b42-7cc8-9a5d-42db46f6842d",
+      $cookieless_mode: true,
+      $session_id: "018f9f0e-7b42-7cc8-9a5d-42db46f6842d",
+      $lib: "web",
+      $current_url: "https://my.stll.app/workspaces/private-matter",
+    };
+
+    const exception = initOptions?.before_send({
+      event: WEB_ANALYTICS_EVENTS.exception,
+      properties: {
+        ...envelope,
+        $exception_list: [{ type: "TypeError", value: "Private matter" }],
+      },
+    });
+    for (const key of INGESTION_REQUIRED_KEYS) {
+      expect(exception?.properties?.[key]).toEqual(envelope[key]);
+    }
+    expect(exception?.properties).not.toContainKeys([
+      "$session_id",
+      "$lib",
+      "$current_url",
+    ]);
+
+    const routeError = sanitizeRouteErrorLifecycleEvent({
+      event: WEB_ANALYTICS_EVENTS.routeErrorRecovery,
+      properties: {
+        ...envelope,
+        error_reference: "ERR-DEAD-BEEF-1234",
+        error_fingerprint: "ERRFP-1234ABCD",
+        incident_reference: "ERR-DEAD-BEEF-1234",
+        inspector_state: "open",
+        recovery: "retry-route",
+        route_template: "/law/$country/cases/$court/$slug",
+        status: "shown",
+      },
+      uuid: "route-error-envelope-event",
+    });
+    for (const key of INGESTION_REQUIRED_KEYS) {
+      expect(routeError?.properties[key]).toEqual(envelope[key]);
+    }
   });
 
   test("before_send keeps only valid opaque recovery references", () => {
