@@ -21320,7 +21320,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "playbooks", "from-starter"],
                 capabilityId: "playbooks.from-starter",
                 description:
-                  "Create a playbook from one of the bundled starter playbooks, cloning its positions with fresh ids and otherwise taking exactly the path playbooks.create takes, including validation, the per-organization limit, and the draft status. Browse the available starters with playbooks.list-starters.",
+                  "Create or reopen the organization's playbook from a bundled starter, cloning its positions with fresh ids on first use and otherwise taking exactly the path playbooks.create takes, including validation, the per-organization limit, and the draft status. Repeated use of one starter returns the existing playbook instead of creating a copy. Browse the starters with playbooks.list-starters.",
                 access: "write",
                 flags: [
                   {

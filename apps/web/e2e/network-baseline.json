@@ -578,6 +578,8 @@
       "GET /v1/chat/threads",
       "GET /v1/organization-settings/ai-availability",
       "GET /v1/playbooks",
+      "GET /v1/playbooks/recent",
+      "GET /v1/playbooks/starters",
       "GET /v1/workspaces/navigation"
     ],
     "requestCounts": {
@@ -588,6 +590,8 @@
       "GET /v1/chat/threads": 1,
       "GET /v1/organization-settings/ai-availability": 1,
       "GET /v1/playbooks": 1,
+      "GET /v1/playbooks/recent": 1,
+      "GET /v1/playbooks/starters": 1,
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
@@ -598,6 +602,8 @@
       "GET /v1/chat/threads": 6,
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/playbooks": 6,
+      "GET /v1/playbooks/recent": 6,
+      "GET /v1/playbooks/starters": 4,
       "GET /v1/workspaces/navigation": 6
     },
     "responseSizes": {
@@ -608,6 +614,8 @@
       "GET /v1/chat/threads": 4096,
       "GET /v1/organization-settings/ai-availability": 1024,
       "GET /v1/playbooks": 1024,
+      "GET /v1/playbooks/recent": 1024,
+      "GET /v1/playbooks/starters": 2048,
       "GET /v1/workspaces/navigation": 20480
     }
   },
