@@ -477,6 +477,7 @@
     "extractingContent": "Tartalom kinyerése...",
     "filePlaceholder": "Csevegés erről: {fileName}",
     "filePlaceholderAction": "Csevegés erről:",
+    "fileThreadRebound": "A fájlhoz tartozó csevegés már elindult egy másik munkamenetben. Az üzenete megmaradt; küldje el újra.",
     "fileTooLarge": "A fájl meghaladja a {maxSize} korlátot",
     "focusSuggestion": "Javaslat fókuszálása: {topic}",
     "folioCitationFallback": "o. {n}",

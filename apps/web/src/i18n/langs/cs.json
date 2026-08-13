@@ -477,6 +477,7 @@
     "extractingContent": "Extrahování obsahu...",
     "filePlaceholder": "Chatovat o {fileName}",
     "filePlaceholderAction": "Chatovat o",
+    "fileThreadRebound": "Chat k tomuto souboru už byl zahájen v jiné relaci. Vaše zpráva zůstala zachována; odešlete ji znovu.",
     "fileTooLarge": "Soubor překračuje limit {maxSize}",
     "focusSuggestion": "Zaměřit návrh: {topic}",
     "folioCitationFallback": "str. {n}",

@@ -12,7 +12,7 @@ export type FileThreadLookupInput = {
   workspaceId: SafeId<"workspace">;
 };
 
-export const lockFileChatThreadMapping = async (
+const fileChatThreadMappingQuery = (
   tx: Transaction,
   {
     entityId,
@@ -22,31 +22,47 @@ export const lockFileChatThreadMapping = async (
     workspaceId,
   }: FileThreadLookupInput,
 ) =>
+  tx
+    .select({
+      id: fileChatThreads.id,
+      mappedChatThreadId: fileChatThreads.chatThreadId,
+      thread: {
+        id: chatThreads.id,
+        chatModel: chatThreads.chatModel,
+        chatReasoningEffort: chatThreads.chatReasoningEffort,
+        contextMatterIds: chatThreads.contextMatterIds,
+        usedAnonymization: chatThreads.usedAnonymization,
+        webSearchEnabled: chatThreads.webSearchEnabled,
+      },
+    })
+    .from(fileChatThreads)
+    .leftJoin(chatThreads, eq(fileChatThreads.chatThreadId, chatThreads.id))
+    .where(
+      and(
+        eq(fileChatThreads.entityId, entityId),
+        eq(fileChatThreads.fieldId, fieldId),
+        eq(fileChatThreads.organizationId, organizationId),
+        eq(fileChatThreads.userId, userId),
+        eq(fileChatThreads.workspaceId, workspaceId),
+      ),
+    )
+    .limit(1);
+
+/** Row-locking variant for the materializing POST: fences the unique mapping
+ *  slot for the duration of its transaction. */
+export const lockFileChatThreadMapping = async (
+  tx: Transaction,
+  input: FileThreadLookupInput,
+) =>
   (
-    await tx
-      .select({
-        id: fileChatThreads.id,
-        mappedChatThreadId: fileChatThreads.chatThreadId,
-        thread: {
-          id: chatThreads.id,
-          chatModel: chatThreads.chatModel,
-          chatReasoningEffort: chatThreads.chatReasoningEffort,
-          contextMatterIds: chatThreads.contextMatterIds,
-          usedAnonymization: chatThreads.usedAnonymization,
-          webSearchEnabled: chatThreads.webSearchEnabled,
-        },
-      })
-      .from(fileChatThreads)
-      .leftJoin(chatThreads, eq(fileChatThreads.chatThreadId, chatThreads.id))
-      .where(
-        and(
-          eq(fileChatThreads.entityId, entityId),
-          eq(fileChatThreads.fieldId, fieldId),
-          eq(fileChatThreads.organizationId, organizationId),
-          eq(fileChatThreads.userId, userId),
-          eq(fileChatThreads.workspaceId, workspaceId),
-        ),
-      )
-      .limit(1)
-      .for("update", { of: fileChatThreads })
+    await fileChatThreadMappingQuery(tx, input).for("update", {
+      of: fileChatThreads,
+    })
   ).at(0);
+
+/** Lock-free variant for the read-only GET: same shape, no row lock, so a
+ *  document open never contends with a concurrent materialization. */
+export const readFileChatThreadMapping = async (
+  tx: Transaction,
+  input: FileThreadLookupInput,
+) => (await fileChatThreadMappingQuery(tx, input)).at(0);

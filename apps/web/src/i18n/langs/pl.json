@@ -477,6 +477,7 @@
     "extractingContent": "Wyodrębnianie treści...",
     "filePlaceholder": "Czat o {fileName}",
     "filePlaceholderAction": "Czat o",
+    "fileThreadRebound": "Czat dotyczący tego pliku został już rozpoczęty w innej sesji. Twoja wiadomość została zachowana; wyślij ją ponownie.",
     "fileTooLarge": "Plik przekracza limit {maxSize}",
     "focusSuggestion": "Ustaw fokus na sugestii: {topic}",
     "folioCitationFallback": "s. {n}",

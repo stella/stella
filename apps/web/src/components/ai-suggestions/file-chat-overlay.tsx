@@ -122,6 +122,7 @@ import {
   chatThreadSuggestedPromptsOptions,
   chatThreadTitleOptions,
   fileChatThreadOptions,
+  materializeFileChatThread,
 } from "@/features/chat/queries";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -134,7 +135,7 @@ import {
   getChatSendMode,
   useChatAnonymized,
 } from "@/lib/chat-anonymized-store";
-import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
+import { useChatDraftStore, useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import {
   type DocxEditSafety,
   docxEditRepresentationForSelection,
@@ -1011,31 +1012,56 @@ const ResolvedFileChatOverlay = ({
   workspaceId,
 }: ResolvedFileChatOverlayProps) => {
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const { data: chatThreadId } = useSuspenseQuery(
-    fileChatThreadOptions({
-      activeOrganizationId,
-      key: {
-        entityId: activeFile.entityId,
-        fieldId: activeFile.fileFieldId,
-        workspaceId,
-      },
-      // Must match FileChatOverlayInner's own `hasDocxEditSurface` below
-      // (same `docxEditorRef` prop, and `activeFile` is always defined
-      // here) so the cache entry this query seeds lands under the same
-      // key that overlay's chatThreadOptions lookup will use.
-      hasDocxEditSurface: docxEditorRef !== undefined,
-    }),
+  const queryClient = useQueryClient();
+  const fileThreadKey = {
+    entityId: activeFile.entityId,
+    fieldId: activeFile.fileFieldId,
+    workspaceId,
+  };
+  // Must match FileChatOverlayInner's own `hasDocxEditSurface` below
+  // (same `docxEditorRef` prop, and `activeFile` is always defined
+  // here) so the cache entry this query seeds lands under the same
+  // key that overlay's chatThreadOptions lookup will use.
+  const hasDocxEditSurface = docxEditorRef !== undefined;
+  const threadOptions = fileChatThreadOptions({
+    activeOrganizationId,
+    key: fileThreadKey,
+    hasDocxEditSurface,
+  });
+  const { data: fileThreadBinding } = useSuspenseQuery(threadOptions);
+
+  // First-send gate: persists the thread (row + file mapping) the read-only
+  // lookup above deliberately did not create. Reads the cache instead of the
+  // captured binding so a second submit after a failed send does not repeat
+  // the POST once materialization has succeeded.
+  const ensureFileThreadPersisted = useLatestCallback(
+    async (): Promise<ChatThreadId> => {
+      const current = queryClient.getQueryData(threadOptions.queryKey);
+      const binding = current ?? fileThreadBinding;
+      if (binding.threadExists) {
+        return binding.threadId;
+      }
+      const materialized = await materializeFileChatThread({
+        activeOrganizationId,
+        client: queryClient,
+        draftThreadId: binding.threadId,
+        hasDocxEditSurface,
+        key: fileThreadKey,
+      });
+      return materialized.threadId;
+    },
   );
 
   return (
     <FileChatOverlayInner
       activeFile={activeFile}
-      chatThreadId={chatThreadId}
+      chatThreadId={fileThreadBinding.threadId}
       draftPersistence={draftPersistence}
       docxComments={docxComments}
       docxEditable={docxEditable}
       docxEditSafety={docxEditSafety}
       docxEditorRef={docxEditorRef}
+      ensureFileThreadPersisted={ensureFileThreadPersisted}
       onDocxCommentsChange={onDocxCommentsChange}
       onNewThread={onNewThread}
       requestDocxEditMode={requestDocxEditMode}
@@ -1046,6 +1072,11 @@ const ResolvedFileChatOverlay = ({
 
 type FileChatOverlayInnerProps = Omit<FileChatOverlayProps, "chatThreadId"> & {
   chatThreadId: ChatThreadId;
+  /** Present only for workspace-file overlays: persists the file's thread
+   *  before the first message is sent (see `materializeFileChatThread`).
+   *  Resolves with the persisted thread id, which is normally the mounted
+   *  draft id itself. */
+  ensureFileThreadPersisted?: (() => Promise<ChatThreadId>) | undefined;
 };
 
 const FileChatOverlayInner = ({
@@ -1059,6 +1090,7 @@ const FileChatOverlayInner = ({
   docxEditSafety,
   docxEditorRef,
   docxComments,
+  ensureFileThreadPersisted,
   onDocxCommentsChange,
   onActiveDraftChatBound,
   onNewThread,
@@ -1547,6 +1579,48 @@ const FileChatOverlayInner = ({
         // abort so the request can't run against the previous thread model.
         if (Result.isError(await modelSelection.awaitPendingSelection())) {
           return;
+        }
+
+        // A workspace-file overlay mounts on a lookup that deliberately
+        // creates nothing; the thread (row + file mapping) is persisted here,
+        // on the first real message. The persisted id normally IS the
+        // mounted draft id; a different id means another session
+        // materialized this file's thread first, the caches have been
+        // rebound to it, and the preserved throw keeps the typed draft in
+        // the composer for a retry against the rebound thread.
+        if (ensureFileThreadPersisted !== undefined) {
+          const persistedThreadId = await ensureFileThreadPersisted();
+          if (persistedThreadId !== threadRef.threadId) {
+            // The composer draft is keyed by thread id, so it must follow
+            // the rebind or the preserved throw would strand it under the
+            // dead draft id.
+            const draftStore = useChatDraftStore.getState();
+            const draftKey = getChatThreadKey(threadRef);
+            const draft = draftStore.getDraft(draftKey);
+            if (draft !== null) {
+              draftStore.setDraft(
+                getChatThreadKey(
+                  threadRef.scope === "workspace"
+                    ? {
+                        scope: "workspace",
+                        threadId: persistedThreadId,
+                        workspaceId: threadRef.workspaceId,
+                      }
+                    : { scope: "global", threadId: persistedThreadId },
+                ),
+                draft,
+              );
+              draftStore.clearDraft(draftKey);
+            }
+            stellaToast.add({
+              title: t("chat.fileThreadRebound"),
+              type: "info",
+            });
+            throw new ChatSubmitPreservedError({
+              message:
+                "File thread rebound to a concurrently created thread; draft preserved for retry",
+            });
+          }
         }
 
         // Always pop the thread open on send, even if the user

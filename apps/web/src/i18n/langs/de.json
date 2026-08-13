@@ -477,6 +477,7 @@
     "extractingContent": "Inhalt wird extrahiert...",
     "filePlaceholder": "Chat über {fileName}",
     "filePlaceholderAction": "Chat über",
+    "fileThreadRebound": "Der Chat zu dieser Datei wurde bereits in einer anderen Sitzung gestartet. Ihre Nachricht wurde beibehalten; senden Sie sie erneut.",
     "fileTooLarge": "Datei überschreitet das Limit von {maxSize}",
     "focusSuggestion": "Vorschlag fokussieren: {topic}",
     "folioCitationFallback": "S. {n}",

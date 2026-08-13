@@ -477,6 +477,7 @@
     "extractingContent": "Extraindo conteúdo...",
     "filePlaceholder": "Conversar sobre {fileName}",
     "filePlaceholderAction": "Conversar sobre",
+    "fileThreadRebound": "O chat deste arquivo já foi iniciado em outra sessão. Sua mensagem foi mantida; envie novamente.",
     "fileTooLarge": "O arquivo excede o limite {maxSize}",
     "focusSuggestion": "Focar sugestão: {topic}",
     "folioCitationFallback": "pág. {n}",

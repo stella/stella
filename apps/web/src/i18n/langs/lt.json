@@ -477,6 +477,7 @@
     "extractingContent": "Turinio ištraukimas...",
     "filePlaceholder": "Kalbėtis apie {fileName}",
     "filePlaceholderAction": "Kalbėtis apie",
+    "fileThreadRebound": "Šio failo pokalbis jau pradėtas kitoje sesijoje. Jūsų žinutė išsaugota; išsiųskite ją dar kartą.",
     "fileTooLarge": "Failas viršija {maxSize} limitą",
     "focusSuggestion": "Fokusuoti pasiūlymą: {topic}",
     "folioCitationFallback": "{n} p.",
