@@ -155,9 +155,61 @@ const hasExplicitTimeZone = (argument) => {
   return (
     expression?.type === "ObjectExpression" &&
     Array.isArray(expression.properties) &&
-    expression.properties.some(
-      (property) => staticPatternPropertyName(property) === "timeZone",
-    )
+    expression.properties.some((property) => {
+      if (
+        property?.type !== "Property" ||
+        staticPatternPropertyName(property) !== "timeZone"
+      ) {
+        return false;
+      }
+      const value = unwrapExpression(property.value);
+      return (
+        value?.type === "Literal" &&
+        typeof value.value === "string" &&
+        value.value.length > 0
+      );
+    })
+  );
+};
+
+const findVariable = (context, node) => {
+  if (!isIdentifier(node, undefined)) {
+    return null;
+  }
+  let scope = context.sourceCode.getScope(node);
+  while (scope) {
+    const variable = scope.variables.find(({ name }) => name === node.name);
+    if (variable) {
+      return variable;
+    }
+    scope = scope.upper;
+  }
+  return null;
+};
+
+const isDateObjectReceiver = (context, node, visited = new Set()) => {
+  const expression = unwrapExpression(node);
+  if (expression?.type === "NewExpression") {
+    const callee = unwrapExpression(expression.callee);
+    return (
+      (isIdentifier(callee, "Date") && isUnshadowedGlobal(context, callee)) ||
+      isUnshadowedGlobalThisMember(context, callee, "Date")
+    );
+  }
+  if (!isIdentifier(expression, undefined)) {
+    return false;
+  }
+  const variable = findVariable(context, expression);
+  if (!variable || visited.has(variable)) {
+    return false;
+  }
+  visited.add(variable);
+  const declarator = variable.defs.find(
+    ({ node: definition }) => definition?.type === "VariableDeclarator",
+  )?.node;
+  return (
+    declarator?.type === "VariableDeclarator" &&
+    isDateObjectReceiver(context, declarator.init, visited)
   );
 };
 
@@ -366,7 +418,9 @@ export default eslintCompatPlugin({
               calledMemberName &&
               AMBIENT_LOCALE_METHODS.has(calledMemberName) &&
               (isAmbientIntlLocale(node.arguments.at(0)) ||
-                (TIME_ZONE_SENSITIVE_LOCALE_METHODS.has(calledMemberName) &&
+                ((TIME_ZONE_SENSITIVE_LOCALE_METHODS.has(calledMemberName) ||
+                  (calledMemberName === "toLocaleString" &&
+                    isDateObjectReceiver(context, node.callee.object))) &&
                   !hasExplicitTimeZone(node.arguments.at(1))))
             ) {
               context.report({ node, messageId: "publicLawAmbientState" });

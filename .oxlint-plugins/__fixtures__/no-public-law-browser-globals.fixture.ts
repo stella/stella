@@ -60,8 +60,14 @@ const fixedDate = new Date("2026-08-13T00:00:00Z");
 const ambientTimeZoneDate = fixedDate.toLocaleDateString("en");
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves time formatting also requires an explicit time zone
 const ambientTimeZoneTime = fixedDate.toLocaleTimeString("en");
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves Date toLocaleString requires an explicit time zone too
+const ambientTimeZoneDateTime = fixedDate.toLocaleString("en");
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves DateTimeFormat requires both locale and time zone
 const ambientTimeZoneFormatter = Intl.DateTimeFormat("en");
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves an undefined time zone still falls back to ambient host state
+const undefinedTimeZoneFormatter = Intl.DateTimeFormat("en", {
+  timeZone: undefined,
+});
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves an omitted prototype locale is ambient
 const ambientLocaleDate = fixedDate.toLocaleDateString();
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves undefined prototype locales are ambient
@@ -77,6 +83,8 @@ const fixedLocaleTime = fixedDate.toLocaleTimeString(["en"], {
   timeZone: "UTC",
 });
 const fixedLocaleNumber = (42).toLocaleString("en");
+const numericAmount = 42;
+const fixedLocaleNumericVariable = numericAmount.toLocaleString("en");
 const fixedSegmenter = new Intl.Segmenter("en", { granularity: "grapheme" });
 const fixedDateFormatter = Intl.DateTimeFormat("en", {
   dateStyle: "long",
@@ -155,6 +163,7 @@ export {
   ambientLocaleNumber,
   ambientLocaleTime,
   ambientTimeZoneDate,
+  ambientTimeZoneDateTime,
   ambientTimeZoneFormatter,
   ambientTimeZoneTime,
   assertedEmptyLocaleDateFormatter,
@@ -185,6 +194,7 @@ export {
   fixedDate,
   fixedLocaleDate,
   fixedLocaleNumber,
+  fixedLocaleNumericVariable,
   fixedLocaleTime,
   fixedDateFormatter,
   fixedSegmenter,
@@ -215,6 +225,7 @@ export {
   serializedFilter,
   serverRequestUrl,
   today,
+  undefinedTimeZoneFormatter,
   viewportWidth,
 };
 

@@ -197,7 +197,7 @@ const REVIEWED_AMBIENT_FINGERPRINTS = {
 } as const satisfies Readonly<Record<string, readonly string[]>>;
 
 const AMBIENT_STATE_PATTERN =
-  /\bglobalThis\.(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|self)\b|\{[^{}]*\b(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|self)\b[^{}]*\}\s*=\s*globalThis\b|\b(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*globalThis\b(?!\s*\.)|(?<![.\w])(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|self)\b(?!\s*:)|\b(?:globalThis\.)?Date\.now\b|\b(?:globalThis\.)?Math\.random\b|\b(?:globalThis\.)?performance\.now\b|\b(?:globalThis\.)?crypto\.(?:getRandomValues|randomUUID)\b|\{[^{}]*\bnow\b[^{}]*\}\s*=\s*(?:globalThis\.)?(?:Date|performance)\b|\{[^{}]*\brandom\b[^{}]*\}\s*=\s*(?:globalThis\.)?Math\b|\{[^{}]*\b(?:getRandomValues|randomUUID)\b[^{}]*\}\s*=\s*(?:globalThis\.)?crypto\b|\b(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*(?:globalThis\.)?(?:Date|Math|crypto|performance)\b(?!\s*\.)|\b(?:globalThis\.)?Date\s*\(\s*\)|\bnew\s+(?:globalThis\.)?Date(?:\s*\(\s*\)|\s*(?=[;,]))|\bnew\s+(?:globalThis\.)?Intl\.[A-Za-z]+(?:\s*\(\s*\)|\s*(?=[;,]))|\b(?:new\s+)?(?:globalThis\.)?Intl\.[A-Za-z]+\s*\(\s*(?:undefined\s*[,)]|\[\s*\]\s*[,)]|\))|\b(?:new\s+)?(?:globalThis\.)?Intl\.DateTimeFormat\s*\((?:(?!\btimeZone\s*:)[^;])*\)|\.(?:toLocaleDateString|toLocaleTimeString)\s*\((?:(?!\btimeZone\s*:)[^;])*\)|\.(?:toLocaleDateString|toLocaleString|toLocaleTimeString)\s*\(\s*(?:undefined\s*[,)]|\[\s*\]\s*[,)]|\))/u;
+  /\bglobalThis\.(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|self)\b|\{[^{}]*\b(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|self)\b[^{}]*\}\s*=\s*globalThis\b|\b(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*globalThis\b(?!\s*\.)|(?<![.\w])(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|self)\b(?!\s*:)|\b(?:globalThis\.)?Date\.now\b|\b(?:globalThis\.)?Math\.random\b|\b(?:globalThis\.)?performance\.now\b|\b(?:globalThis\.)?crypto\.(?:getRandomValues|randomUUID)\b|\{[^{}]*\bnow\b[^{}]*\}\s*=\s*(?:globalThis\.)?(?:Date|performance)\b|\{[^{}]*\brandom\b[^{}]*\}\s*=\s*(?:globalThis\.)?Math\b|\{[^{}]*\b(?:getRandomValues|randomUUID)\b[^{}]*\}\s*=\s*(?:globalThis\.)?crypto\b|\b(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*(?:globalThis\.)?(?:Date|Math|crypto|performance)\b(?!\s*\.)|\b(?:globalThis\.)?Date\s*\(\s*\)|\bnew\s+(?:globalThis\.)?Date(?:\s*\(\s*\)|\s*(?=[;,]))|\bnew\s+(?:globalThis\.)?Intl\.[A-Za-z]+(?:\s*\(\s*\)|\s*(?=[;,]))|\b(?:new\s+)?(?:globalThis\.)?Intl\.[A-Za-z]+\s*\(\s*(?:undefined\s*[,)]|\[\s*\]\s*[,)]|\))|\b(?:new\s+)?(?:globalThis\.)?Intl\.DateTimeFormat\s*\((?:(?!\btimeZone\s*:\s*0\b)[^;])*\)|\.(?:toLocaleDateString|toLocaleTimeString)\s*\((?:(?!\btimeZone\s*:\s*0\b)[^;])*\)|\bnew\s+(?:globalThis\.)?Date\b[^;]*?\.toLocaleString\s*\((?:(?!\btimeZone\s*:\s*0\b)[^;])*\)|\b(?:const|let|var)\s+(?<dateToLocaleStringReceiver>[A-Za-z_$][\w$]*)\s*=\s*new\s+(?:globalThis\.)?Date\b[^;]*;[\s\S]*?\k<dateToLocaleStringReceiver>\.toLocaleString\s*\((?:(?!\btimeZone\s*:\s*0\b)[^;])*\)|\.(?:toLocaleDateString|toLocaleString|toLocaleTimeString)\s*\(\s*(?:undefined\s*[,)]|\[\s*\]\s*[,)]|\))/u;
 const CANDIDATE_SUFFIXES = ["", ".ts", ".tsx", "/index.ts", "/index.tsx"];
 const tsTranspiler = new Bun.Transpiler({ loader: "ts" });
 const tsxTranspiler = new Bun.Transpiler({ loader: "tsx" });
@@ -755,6 +755,30 @@ describe("public SSR import graph", () => {
     expect(
       AMBIENT_STATE_PATTERN.test(
         executableSource(
+          'const fixedDate = new Date("2026-08-13T00:00:00Z"); const label = fixedDate.toLocaleString("en");',
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          'const label = (42).toLocaleString("en");',
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          'const amount = 42; const label = amount.toLocaleString("en");',
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
           'const label = fixedDate.toLocaleDateString("en", { timeZone: "UTC" });',
           "fixture.ts",
         ),
@@ -776,6 +800,14 @@ describe("public SSR import graph", () => {
         ),
       ),
     ).toBe(false);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          'const formatter = Intl.DateTimeFormat("en", { timeZone: undefined });',
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(true);
     expect(
       AMBIENT_STATE_PATTERN.test(
         executableSource(
