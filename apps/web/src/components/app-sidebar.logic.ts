@@ -10,6 +10,40 @@ export const resolveSidebarWorkspaceId = ({
   workspaceId: string | undefined;
 }): string | undefined => workspaceId ?? chatWorkspaceId;
 
+type MatterNavigationIdentity = {
+  // Optional while API and web revisions overlap during a rolling deploy.
+  // Remove once defaultViewId is part of the minimum supported API contract.
+  defaultViewId?: string | null;
+  id: string;
+};
+
+export type MatterNavigationTarget =
+  | {
+      params: { viewId: string; workspaceId: string };
+      to: "/workspaces/$workspaceId/$viewId";
+    }
+  | {
+      params: { workspaceId: string };
+      to: "/workspaces/$workspaceId";
+    };
+
+export const resolveMatterNavigationTarget = ({
+  defaultViewId,
+  id,
+}: MatterNavigationIdentity): MatterNavigationTarget => {
+  if (defaultViewId === null || defaultViewId === undefined) {
+    return {
+      params: { workspaceId: id },
+      to: "/workspaces/$workspaceId",
+    };
+  }
+
+  return {
+    params: { viewId: defaultViewId, workspaceId: id },
+    to: "/workspaces/$workspaceId/$viewId",
+  };
+};
+
 export const resolveAutomaticExpandedMatterId = ({
   activeMatterIsVisible,
   activeWorkspaceId,

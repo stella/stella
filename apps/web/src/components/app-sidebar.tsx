@@ -59,6 +59,7 @@ import {
   matterActivityIsKnownEmpty,
   resolveEntityActivityDestination,
   resolveAutomaticExpandedMatterId,
+  resolveMatterNavigationTarget,
   resolveSidebarWorkspaceId,
   selectRecentWorkspaces,
 } from "@/components/app-sidebar.logic";
@@ -375,10 +376,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     ),
     onClick: () => {
       detached(
-        navigate({
-          to: "/workspaces/$workspaceId",
-          params: { workspaceId: ws.id },
-        }),
+        navigate(resolveMatterNavigationTarget(ws)),
         "app-sidebar.navigate",
       );
     },
@@ -493,10 +491,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     ...pinned.slice(0, 3).map((ws): NavTarget => ({
       action: () => {
         detached(
-          navigate({
-            to: "/workspaces/$workspaceId",
-            params: { workspaceId: ws.id },
-          }),
+          navigate(resolveMatterNavigationTarget(ws)),
           "app-sidebar.navigate",
         );
       },
@@ -676,6 +671,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
                   {pinned.map((ws, i) => (
                     <MatterItem
                       activeOrganizationId={user.activeOrganizationId}
+                      isActive={activeWorkspaceId === ws.id}
                       isExpanded={!isCollapsed && expandedMatterId === ws.id}
                       isPinned
                       key={ws.id}
@@ -706,6 +702,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
                   {recents.map((ws) => (
                     <MatterItem
                       activeOrganizationId={user.activeOrganizationId}
+                      isActive={activeWorkspaceId === ws.id}
                       isExpanded={!isCollapsed && expandedMatterId === ws.id}
                       key={ws.id}
                       onDeleted={handleMatterDeleted}
@@ -770,6 +767,7 @@ type MatterExpansion =
  * accept this type so `MatterIcon` always has a color.
  */
 type MatterIdentity = {
+  defaultViewId?: string | null;
   id: string;
   name: string;
   color: string | null;
@@ -889,6 +887,7 @@ type MatterItemProps = {
     client?: { id: string; displayName: string } | null;
     lastActivityAt: Date;
   };
+  isActive: boolean;
   isPinned?: boolean;
   isExpanded: boolean;
   onExpandedChange: () => void;
@@ -965,6 +964,7 @@ const toCopyToMatterEntities = (raw: unknown): CopyToMatterEntity[] => {
 const MatterItem = ({
   activeOrganizationId,
   workspace: ws,
+  isActive,
   isExpanded,
   isPinned: _isPinnedProp,
   onTogglePin,
@@ -1136,6 +1136,7 @@ const MatterItem = ({
   }, [ws.id, canDrag, handleReorder, handleEntityDrop]);
 
   const relTime = formatRelativeTime(ws.lastActivityAt);
+  const navigationTarget = resolveMatterNavigationTarget(ws);
 
   const startRename = () => {
     setMenuOpen(false);
@@ -1254,11 +1255,7 @@ const MatterItem = ({
             .filter(Boolean)
             .join(" — ")}
         >
-          <Link
-            activeProps={{ "data-active": true }}
-            params={{ workspaceId: ws.id }}
-            to="/workspaces/$workspaceId"
-          >
+          <Link data-active={isActive || undefined} {...navigationTarget}>
             <MatterIcon
               className="size-4 shrink-0"
               matter={{ id: ws.id, color: ws.color }}

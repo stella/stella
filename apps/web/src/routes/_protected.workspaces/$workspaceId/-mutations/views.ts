@@ -13,7 +13,7 @@ import type {
 import { propertiesKeys } from "@/lib/workspaces/queries/properties";
 import { viewsKeys } from "@/lib/workspaces/queries/views";
 
-import { viewOrderCache } from "./views.logic";
+import { invalidateViewDerivedQueries, viewOrderCache } from "./views.logic";
 
 type CreateViewVars = {
   id: string;
@@ -34,26 +34,21 @@ export const useCreateView = (workspaceId: string) => {
       return unwrapEden(response);
     },
     onSuccess: async (_data, variables) => {
-      const invalidations = [
-        queryClient.invalidateQueries({
-          queryKey: viewsKeys.all(workspaceId),
-        }),
-      ];
-      // Applying a template can create properties in this matter.
-      // Without invalidating, the table renders with a stale property
-      // list and TanStack silently strips the new column IDs from the
-      // newly-created view's columnOrder on the next layout update.
-      if (
-        variables.templateProperties &&
+      await Promise.all([
+        invalidateViewDerivedQueries({ queryClient, workspaceId }),
+        // Applying a template can create properties in this matter.
+        // Without invalidating, the table renders with a stale property
+        // list and TanStack silently strips the new column IDs from the
+        // newly-created view's columnOrder on the next layout update.
+        ...(variables.templateProperties &&
         variables.templateProperties.length > 0
-      ) {
-        invalidations.push(
-          queryClient.invalidateQueries({
-            queryKey: propertiesKeys.all(workspaceId),
-          }),
-        );
-      }
-      await Promise.all(invalidations);
+          ? [
+              queryClient.invalidateQueries({
+                queryKey: propertiesKeys.all(workspaceId),
+              }),
+            ]
+          : []),
+      ]);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -194,9 +189,7 @@ export const useDeleteView = (workspaceId: string) => {
       return unwrapEden(response);
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: viewsKeys.all(workspaceId),
-      });
+      await invalidateViewDerivedQueries({ queryClient, workspaceId });
     },
     onError: (error) => {
       analytics.captureError(error);

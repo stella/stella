@@ -12,6 +12,9 @@ type ReadWorkspaceNavigationContext = Parameters<
 
 const workspaceRows = [
   {
+    defaultViewId: toSafeId<"workspaceView">(
+      "019c0c90-0000-7000-8000-000000000103",
+    ),
     id: toSafeId<"workspace">("019c0c90-0000-7000-8000-000000000003"),
     name: "Appeal",
     reference: "MAT-003",
@@ -24,6 +27,9 @@ const workspaceRows = [
     clientDisplayName: null,
   },
   {
+    defaultViewId: toSafeId<"workspaceView">(
+      "019c0c90-0000-7000-8000-000000000102",
+    ),
     id: toSafeId<"workspace">("019c0c90-0000-7000-8000-000000000002"),
     name: "Merger",
     reference: "MAT-002",
@@ -36,6 +42,7 @@ const workspaceRows = [
     clientDisplayName: "Northwind Holdings",
   },
   {
+    defaultViewId: null,
     id: toSafeId<"workspace">("019c0c90-0000-7000-8000-000000000001"),
     name: "Investigation",
     reference: "MAT-001",
@@ -57,16 +64,17 @@ const createContext = ({
   rows?: typeof workspaceRows;
 }) => {
   const limit = mock(async () => rows);
-  const { safeDb, scopedDb } = createScopedDbMock({
-    select: () => ({
-      from: () => ({
-        leftJoin: () => ({
-          where: () => ({
-            orderBy: () => ({ limit }),
-          }),
+  const select = mock((_selection?: unknown) => ({
+    from: () => ({
+      leftJoin: () => ({
+        where: () => ({
+          orderBy: () => ({ limit }),
         }),
       }),
     }),
+  }));
+  const { safeDb, scopedDb } = createScopedDbMock({
+    select,
   });
 
   return {
@@ -82,21 +90,29 @@ const createContext = ({
       user: { id: toSafeId<"user">("user_test123") },
     }),
     limit,
+    select,
   };
 };
 
 describe("workspace navigation pagination", () => {
   test("returns a cursor page while preserving active navigation fields", async () => {
-    const { context, limit } = createContext({
+    const { context, limit, select } = createContext({
       query: { limit: 2, statusScope: "active-and-archived" },
     });
 
     const result = await readWorkspaceNavigation.handler(context);
 
     expect(limit).toHaveBeenCalledWith(3);
+    expect(select).toHaveBeenCalledWith(
+      expect.objectContaining({ defaultViewId: expect.anything() }),
+    );
     expect(result).toEqual({
       items: [
-        expect.objectContaining({ name: "Appeal", status: "archived" }),
+        expect.objectContaining({
+          defaultViewId: "019c0c90-0000-7000-8000-000000000103",
+          name: "Appeal",
+          status: "archived",
+        }),
         expect.objectContaining({
           client: {
             id: "019c0c90-0000-7000-8000-000000000010",

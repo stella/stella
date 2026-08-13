@@ -1,7 +1,21 @@
 import type { QueryClient } from "@tanstack/react-query";
 
 import type { WorkspaceView } from "@/lib/types";
+import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import { viewsKeys } from "@/lib/workspaces/queries/views";
+
+export const invalidateViewDerivedQueries = async ({
+  queryClient,
+  workspaceId,
+}: ViewOrderCacheOptions) =>
+  await Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: viewsKeys.all(workspaceId),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: workspacesKeys.navigationAll(),
+    }),
+  ]);
 
 /**
  * Returns the cached view list in `viewIds` order, or `current` unchanged when
@@ -91,9 +105,7 @@ export const viewOrderCache = ({
     },
 
     settle: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: viewsKeys.all(workspaceId),
-      });
+      await invalidateViewDerivedQueries({ queryClient, workspaceId });
     },
   };
 };
