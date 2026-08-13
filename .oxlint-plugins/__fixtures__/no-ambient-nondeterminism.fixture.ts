@@ -1,16 +1,16 @@
 // Passive regression fixture for
 // `no-ambient-nondeterminism/no-ambient-nondeterminism`.
 
+// oxlint-disable-next-line unicorn/prefer-node-protocol -- fixture: bare crypto import provenance must remain covered
 import bareCryptoDefault, {
   randomUUID as bareRandomUuid,
 } from "crypto";
-// oxlint-disable-next-line import/no-duplicates -- fixture: namespace and default import provenance both need coverage
+// oxlint-disable-next-line unicorn/prefer-node-protocol -- fixture: bare crypto namespace provenance must remain covered
 import * as bareCryptoNamespace from "crypto";
 import nodeCryptoDefault, {
   randomUUID,
   randomUUID as nodeRandomUuid,
 } from "node:crypto";
-// oxlint-disable-next-line import/no-duplicates -- fixture: namespace and named/default import provenance both need coverage
 import * as nodeCryptoNamespace from "node:crypto";
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: ambient epoch time must be injected
