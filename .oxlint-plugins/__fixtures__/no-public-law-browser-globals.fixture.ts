@@ -30,6 +30,10 @@ const randomId = crypto.randomUUID();
 const globalRandomBytes = globalThis.crypto.getRandomValues(new Uint8Array(8));
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals, typescript/dot-notation -- fixture proves computed globalThis crypto access cannot bypass ambient randomness detection
 const computedGlobalRandomId = globalThis["crypto"].randomUUID();
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals, typescript/dot-notation -- fixture proves a computed ambient method cannot bypass the detector
+const computedRandomId = crypto["randomUUID"]();
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals, typescript/dot-notation -- fixture proves a fully computed globalThis call cannot bypass the detector
+const fullyComputedGlobalRandomId = globalThis["crypto"]["randomUUID"]();
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves implicit Intl locales are not SSR-safe
 const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves call-form Intl constructors also need an explicit locale
@@ -57,10 +61,12 @@ export {
   browserPath,
   computedGlobalBrowserStorage,
   computedGlobalRandomId,
+  computedRandomId,
   dateFormatter,
   fixedDate,
   fixedDateFormatter,
   fixedSegmenter,
+  fullyComputedGlobalRandomId,
   globalBrowserStorage,
   globalRandomBytes,
   measuredAt,

@@ -294,6 +294,9 @@ const UnexpectedRouteError = ({
       : null;
 
   const handleRecovery = () => {
+    if (errorReference === null) {
+      return;
+    }
     detached(
       recoverRouteError({
         error: routeError,
@@ -344,7 +347,11 @@ const UnexpectedRouteError = ({
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button loading={isPending} onClick={handleRecovery}>
+          <Button
+            disabled={errorReference === null}
+            loading={isPending}
+            onClick={handleRecovery}
+          >
             <RefreshCcwIcon /> {t("common.tryAgain")}
           </Button>
           <Button render={<Link from="/" to="/workspaces" />} variant="outline">

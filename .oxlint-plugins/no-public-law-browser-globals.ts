@@ -58,42 +58,46 @@ const isNonReferenceIdentifier = (node) => {
   );
 };
 
+const staticMemberName = (node) => {
+  if (node?.type !== "MemberExpression") {
+    return null;
+  }
+  if (!node.computed && isIdentifier(node.property)) {
+    return node.property.name;
+  }
+  return node.computed &&
+    node.property?.type === "Literal" &&
+    typeof node.property.value === "string"
+    ? node.property.value
+    : null;
+};
+
 const ambientMemberName = (node, objectName) => {
   if (
     node?.type !== "MemberExpression" ||
-    node.computed ||
-    !isIdentifier(node.object, objectName) ||
-    !isIdentifier(node.property)
+    !isIdentifier(node.object, objectName)
   ) {
     return null;
   }
-  return node.property.name;
+  return staticMemberName(node);
 };
 
 const browserGlobalFromGlobalThis = (node) => {
   if (
     node?.type !== "MemberExpression" ||
     !isIdentifier(node.object, "globalThis") ||
-    !(
-      (!node.computed && isIdentifier(node.property)) ||
-      (node.computed &&
-        node.property?.type === "Literal" &&
-        typeof node.property.value === "string")
-    )
+    staticMemberName(node) === null
   ) {
     return null;
   }
-  const memberName = node.computed ? node.property.value : node.property.name;
+  const memberName = staticMemberName(node);
   return BROWSER_GLOBALS.has(memberName) ? memberName : null;
 };
 
 const isUnshadowedGlobalThisMember = (context, node, memberName) =>
   node?.type === "MemberExpression" &&
   isIdentifier(node.object, "globalThis") &&
-  ((!node.computed && isIdentifier(node.property, memberName)) ||
-    (node.computed &&
-      node.property?.type === "Literal" &&
-      node.property.value === memberName)) &&
+  staticMemberName(node) === memberName &&
   isUnshadowedGlobal(context, node.object);
 
 export default eslintCompatPlugin({
@@ -145,12 +149,7 @@ export default eslintCompatPlugin({
               "performance",
             );
             const cryptoMemberName = ambientMemberName(node.callee, "crypto");
-            const calledMemberName =
-              node.callee?.type === "MemberExpression" &&
-              !node.callee.computed &&
-              isIdentifier(node.callee.property)
-                ? node.callee.property.name
-                : null;
+            const calledMemberName = staticMemberName(node.callee);
             const globalPerformanceCall =
               calledMemberName === "now" &&
               isUnshadowedGlobalThisMember(

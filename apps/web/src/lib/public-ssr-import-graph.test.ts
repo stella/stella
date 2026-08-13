@@ -122,6 +122,7 @@ const collectStaticImportSpecifiers = (
 
 const executableSource = (source: string, file: string): string =>
   transpileSource(source, file)
+    .replace(/\[\s*["'](?<member>[A-Za-z_$][\w$]*)["']\s*\]/gu, ".$<member>")
     .replace(/"(?:\\.|[^"\\])*"/gu, '""')
     .replace(/'(?:\\.|[^'\\])*'/gu, "''");
 
@@ -155,6 +156,7 @@ describe("public SSR import graph", () => {
       'const site = "https://stll.app/window";',
       ["const label = `", "$", "{navigator.language}`;"].join(""),
       "const openedAt = Date();",
+      'const randomId = crypto["randomUUID"]();',
     ].join("\n");
 
     expect(
@@ -168,6 +170,14 @@ describe("public SSR import graph", () => {
         ),
       ),
     ).toBe(false);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          'const randomId = crypto["randomUUID"]();',
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(true);
   });
 
   test("all static dependencies make ambient render state an explicit boundary", () => {
