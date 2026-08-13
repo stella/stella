@@ -835,12 +835,7 @@ export const FileTabPanel = ({
   );
 
   const viewerErrorFallback = ({ reset }: { reset: () => void }) => (
-    <InspectorPdfErrorFallback
-      onClose={() => {
-        handleCloseTab(tab.id);
-      }}
-      onRetry={reset}
-    />
+    <InspectorPdfErrorFallback onRetry={reset} />
   );
 
   const handleViewerError = () => {
@@ -1308,26 +1303,24 @@ export const FileTabPanel = ({
           {sidepeekContent}
         </>
       ) : (
-        <MeasuredPdfProvider
-          active={isActive}
-          fallback={{
-            suspense: <PeekSuspenseFallback />,
-            error: (
-              <InspectorPdfErrorFallback
-                onClose={() => {
-                  handleCloseTab(tab.id);
-                }}
-              />
-            ),
-          }}
-          fieldId={tab.id}
-          initialScaleOffset={scaleOffsets.get(tab.id) ?? 0}
-          onError={handleViewerError}
-        >
+        <>
           {contextBar}
           {facetBar}
-          {sidepeekContent}
-        </MeasuredPdfProvider>
+          <div className="min-h-0 min-w-0 flex-1">
+            <MeasuredPdfProvider
+              active={isActive}
+              fallback={{
+                suspense: <PeekSuspenseFallback />,
+                error: <InspectorPdfErrorFallback />,
+              }}
+              fieldId={tab.id}
+              initialScaleOffset={scaleOffsets.get(tab.id) ?? 0}
+              onError={handleViewerError}
+            >
+              {sidepeekContent}
+            </MeasuredPdfProvider>
+          </div>
+        </>
       )}
     </div>
   );
