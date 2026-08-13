@@ -96,6 +96,13 @@ export type StellaSandboxInput = StellaSandboxBaseInput & StellaSandboxMcpInput;
 const MCP_TOKEN_SECRET = "STELLA_MCP_TOKEN";
 
 /**
+ * Stable virtual root shared with harness-specific configuration. Keep this
+ * explicit: a source-less workspace has no repository root from which Codex
+ * could safely discover project-local configuration.
+ */
+export const STELLA_WORKSPACE_ROOT = "/workspace";
+
+/**
  * Build the stella sandbox definition for one run. The result is passed to
  * `withSandbox()` as `chat()` middleware. Only the provider differs between
  * engines; the workspace, MCP binding, and policy are identical, so a run
@@ -144,6 +151,7 @@ export const defineStellaSandbox = (
     // No repo: a stella agent run operates on workspace data via MCP tools,
     // not a checked-out tree.
     source: { type: "none" },
+    root: STELLA_WORKSPACE_ROOT,
     instructions: input.instructions,
     ...mcpWorkspace,
   });

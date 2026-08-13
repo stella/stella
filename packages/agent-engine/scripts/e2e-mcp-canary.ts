@@ -52,6 +52,11 @@ const fail = (message: string, cause?: unknown): never => {
   });
 };
 
+const asCanaryError = (failure: unknown, message: string): Error =>
+  failure instanceof Error
+    ? failure
+    : new AgentSandboxCanaryError({ message, cause: failure });
+
 type CanaryAssertion = (
   condition: unknown,
   message: string,
@@ -288,6 +293,9 @@ const runHarness = async (token: string, serverUrl: string): Promise<void> => {
 
   let finalText = "";
   for await (const chunk of stream) {
+    if (chunk.type === EventType.RUN_ERROR) {
+      fail(`canary harness failed: ${chunk.message}`);
+    }
     if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
       finalText += chunk.delta;
       if (finalText.length > 1024) {
@@ -434,7 +442,13 @@ const main = async (): Promise<void> => {
   } catch (error) {
     cleanupFailure ??= error;
   }
-  if (runFailure !== undefined || cleanupFailure !== undefined) {
+  if (runFailure !== undefined && cleanupFailure === undefined) {
+    throw asCanaryError(runFailure, "agent sandbox canary failed");
+  }
+  if (runFailure === undefined && cleanupFailure !== undefined) {
+    throw asCanaryError(cleanupFailure, "agent sandbox canary cleanup failed");
+  }
+  if (runFailure !== undefined && cleanupFailure !== undefined) {
     fail("agent sandbox canary or its cleanup failed", {
       runFailure,
       cleanupFailure,

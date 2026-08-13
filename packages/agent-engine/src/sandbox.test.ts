@@ -9,6 +9,8 @@ import {
   type StellaSandboxInput,
   type StellaSandboxRunInput,
 } from "./index";
+import { buildCodexAdapterConfig } from "./run";
+import { STELLA_WORKSPACE_ROOT } from "./sandbox";
 
 const baseInput = {
   runId: "run_123",
@@ -31,6 +33,11 @@ const baseRunInput = {
   harnessApiKey: "sk-test",
 } as const satisfies StellaSandboxRunInput;
 
+const CANARY_WORKFLOW_URL = new URL(
+  "../../../.github/workflows/agent-sandbox-canary.yml",
+  import.meta.url,
+);
+
 describe("engine/harness guards", () => {
   test("accepts known engines and rejects others", () => {
     expect(isAgentEngine("cloud")).toBe(true);
@@ -45,11 +52,23 @@ describe("engine/harness guards", () => {
   });
 });
 
+describe("agent sandbox canary workflow", () => {
+  test("runs nightly on the protected default branch", async () => {
+    const workflow = await Bun.file(CANARY_WORKFLOW_URL).text();
+
+    expect(workflow).toContain('    - cron: "43 4 * * *"');
+    expect(workflow).toContain(
+      "if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
+    );
+  });
+});
+
 describe("defineStellaSandbox", () => {
   test("builds a definition keyed by the run id", () => {
     const definition = defineStellaSandbox(baseInput);
     expect(definition.id).toBe("run_123");
     expect(definition.workspace?.source).toEqual({ type: "none" });
+    expect(definition.workspace?.root).toBe(STELLA_WORKSPACE_ROOT);
   });
 
   test("denies network by default so egress only flows through the MCP bridge", () => {
@@ -124,6 +143,16 @@ describe("bun docker provider capabilities", () => {
 });
 
 describe("resolveStellaSandboxRun", () => {
+  test("loads projected MCP configuration for a source-less workspace", () => {
+    const config = buildCodexAdapterConfig(baseRunInput);
+
+    expect(config.env).toEqual({
+      CODEX_HOME: `${STELLA_WORKSPACE_ROOT}/.codex`,
+      STELLA_HARNESS_KEY: "sk-test",
+    });
+    expect(JSON.stringify(config.config)).not.toContain(baseRunInput.mcp.token);
+  });
+
   test("pairs a codex adapter with sandbox middleware", () => {
     const { adapter, middleware } = resolveStellaSandboxRun(baseRunInput);
     expect(adapter.name).toBe("codex");
