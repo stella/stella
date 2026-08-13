@@ -56,6 +56,13 @@ const fullyComputedGlobalRandomId = globalThis["crypto"]["randomUUID"]();
 const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves call-form Intl constructors also need an explicit locale
 const dateFormatter = Intl.DateTimeFormat(undefined, { dateStyle: "long" });
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves ICU capability queries are ambient across runtimes
+const supportedTimeZones = Intl.supportedValuesOf("timeZone");
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves constructor locale capability queries are ambient too
+const supportedDateLocales = globalThis.Intl.DateTimeFormat.supportedLocalesOf([
+  "en",
+  "tr",
+]);
 
 const serverRequestUrl = new URL("https://example.test/law/cases");
 const serializedFilter = JSON.stringify({ court: "supreme" });
@@ -298,6 +305,8 @@ export {
   shorthandBrowserGlobal,
   serializedFilter,
   serverRequestUrl,
+  supportedDateLocales,
+  supportedTimeZones,
   today,
   undefinedTimeZoneFormatter,
   viewportWidth,

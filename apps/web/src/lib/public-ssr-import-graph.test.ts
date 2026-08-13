@@ -235,6 +235,7 @@ const AMBIENT_DATE_STRING_SENTINEL = "§";
 const AMBIENT_STRING_LOCALE_CALL_SENTINEL = "¤";
 const AMBIENT_UNKNOWN_TO_LOCALE_STRING_SENTINEL = "¶";
 const BARE_GLOBAL_THIS_SENTINEL = "※";
+const INTL_CAPABILITY_CALL_SENTINEL = "◊";
 
 const ambientStatePatterns = [
   new RegExp(`\\bglobalThis\\.(?:${BROWSER_GLOBAL_NAMES})\\b`, "u"),
@@ -252,6 +253,7 @@ const ambientStatePatterns = [
   new RegExp(AMBIENT_STRING_LOCALE_CALL_SENTINEL, "u"),
   new RegExp(AMBIENT_UNKNOWN_TO_LOCALE_STRING_SENTINEL, "u"),
   new RegExp(BARE_GLOBAL_THIS_SENTINEL, "u"),
+  new RegExp(INTL_CAPABILITY_CALL_SENTINEL, "u"),
   /\b(?:globalThis\.)?Math\.random\b/u,
   /\b(?:globalThis\.)?performance\.now\b/u,
   /\b(?:globalThis\.)?crypto\.(?:getRandomValues|randomUUID)\b/u,
@@ -593,6 +595,10 @@ const maskNonExecutableLiterals = (source: string, file: string): string => {
     maskRange(start, end);
     masked[start] = AMBIENT_UNKNOWN_TO_LOCALE_STRING_SENTINEL;
   };
+  const maskIntlCapabilityCall = (start: number, end: number): void => {
+    maskRange(start, end);
+    masked[start] = INTL_CAPABILITY_CALL_SENTINEL;
+  };
   const isDateConstructor = (node: ts.Node | undefined): boolean => {
     if (!node || !ts.isNewExpression(node)) {
       return false;
@@ -722,11 +728,39 @@ const maskNonExecutableLiterals = (source: string, file: string): string => {
       ) && !(ts.isVariableDeclaration(parent) && parent.initializer === node)
     );
   };
+  const isIntlObject = (node: ts.Expression): boolean =>
+    (ts.isIdentifier(node) && node.text === "Intl") ||
+    (ts.isPropertyAccessExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "globalThis" &&
+      node.name.text === "Intl");
+  const isIntlCapabilityCall = (node: ts.Node): boolean => {
+    if (
+      !ts.isCallExpression(node) ||
+      !ts.isPropertyAccessExpression(node.expression)
+    ) {
+      return false;
+    }
+    if (node.expression.name.text === "supportedValuesOf") {
+      return isIntlObject(node.expression.expression);
+    }
+    if (
+      node.expression.name.text !== "supportedLocalesOf" ||
+      !ts.isPropertyAccessExpression(node.expression.expression)
+    ) {
+      return false;
+    }
+    return isIntlObject(node.expression.expression.expression);
+  };
   const hasExplicitDateTimeZone = (value: string): boolean =>
     /(?:Z|[+-]\d{2}(?::?\d{2})?)$/iu.test(value);
   const isDeterministicDateString = (value: string): boolean =>
     /^\d{4}-\d{2}-\d{2}$/u.test(value) || hasExplicitDateTimeZone(value);
   const visit = (node: ts.Node): void => {
+    if (isIntlCapabilityCall(node)) {
+      maskIntlCapabilityCall(node.getStart(sourceFile), node.end);
+      return;
+    }
     if (isBareGlobalThis(node)) {
       masked[node.getStart(sourceFile)] = BARE_GLOBAL_THIS_SENTINEL;
       return;
@@ -915,6 +949,22 @@ describe("public SSR import graph", () => {
           ["const label = `prefix ", "$", "{navigator.language} suffix`;"].join(
             "",
           ),
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          'const zones = Intl.supportedValuesOf("timeZone");',
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          'const locales = globalThis.Intl.DateTimeFormat.supportedLocalesOf(["en"]);',
           "fixture.ts",
         ),
       ),

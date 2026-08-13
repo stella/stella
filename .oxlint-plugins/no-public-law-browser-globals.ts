@@ -331,6 +331,21 @@ const intlConstructorMemberName = (context, node) => {
     : null;
 };
 
+const isIntlCapabilityCall = (context, node) => {
+  const callee = unwrapExpression(node?.callee);
+  if (callee?.type !== "MemberExpression") {
+    return false;
+  }
+  const methodName = staticMemberName(callee);
+  if (methodName === "supportedValuesOf") {
+    return isUnshadowedIntlObject(context, callee.object);
+  }
+  return (
+    methodName === "supportedLocalesOf" &&
+    intlConstructorMemberName(context, callee.object) !== null
+  );
+};
+
 const isUnshadowedIntlObject = (context, node) => {
   const expression = unwrapExpression(node);
   return (
@@ -644,6 +659,10 @@ export default eslintCompatPlugin({
             }
           },
           CallExpression(node) {
+            if (isIntlCapabilityCall(context, node)) {
+              context.report({ node, messageId: "publicLawAmbientState" });
+              return;
+            }
             if (
               isIdentifier(node.callee, "Date") &&
               isUnshadowedGlobal(context, node.callee)

@@ -21,6 +21,11 @@ describe("date picker clock", () => {
     );
     expect(source).toContain('globalThis.addEventListener("focus"');
     expect(source).toContain('globalThis.removeEventListener("focus"');
+    expect(
+      source.match(/globalThis\.addEventListener\("focus"/gu),
+    ).toHaveLength(1);
+    expect(source).toContain("if (localDateListeners.size === 1)");
+    expect(source).toContain("if (localDateListeners.size === 0)");
   });
 
   test("derives the browser-local date on both sides of midnight", () => {

@@ -52,31 +52,56 @@ const noopSubscribe = (_onStoreChange: () => void) => () => undefined;
 
 const getLocalToday = (): string => localDateFromTimestamp(Date.now());
 
-const subscribeToLocalDate = (onStoreChange: () => void) => {
-  let active = true;
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  const scheduleNextDate = () => {
-    if (timeoutId !== undefined) {
-      clearTimeout(timeoutId);
+const localDateListeners = new Set<() => void>();
+let localDateTimeoutId: ReturnType<typeof setTimeout> | undefined;
+
+const notifyLocalDateListeners = () => {
+  for (const listener of localDateListeners) {
+    listener();
+  }
+};
+
+const scheduleNextLocalDate = () => {
+  if (localDateTimeoutId !== undefined) {
+    clearTimeout(localDateTimeoutId);
+  }
+  localDateTimeoutId = setTimeout(() => {
+    notifyLocalDateListeners();
+    if (localDateListeners.size > 0) {
+      scheduleNextLocalDate();
     }
-    timeoutId = setTimeout(() => {
-      onStoreChange();
-      if (active) {
-        scheduleNextDate();
-      }
-    }, millisecondsUntilNextLocalDate(Date.now()));
-  };
-  const refreshEnvironment = () => {
-    onStoreChange();
-    scheduleNextDate();
-  };
-  scheduleNextDate();
-  globalThis.addEventListener("focus", refreshEnvironment);
+  }, millisecondsUntilNextLocalDate(Date.now()));
+};
+
+const refreshLocalDateEnvironment = () => {
+  notifyLocalDateListeners();
+  if (localDateListeners.size > 0) {
+    scheduleNextLocalDate();
+  }
+};
+
+const startLocalDateSubscription = () => {
+  scheduleNextLocalDate();
+  globalThis.addEventListener("focus", refreshLocalDateEnvironment);
+};
+
+const stopLocalDateSubscription = () => {
+  globalThis.removeEventListener("focus", refreshLocalDateEnvironment);
+  if (localDateTimeoutId !== undefined) {
+    clearTimeout(localDateTimeoutId);
+    localDateTimeoutId = undefined;
+  }
+};
+
+const subscribeToLocalDate = (onStoreChange: () => void) => {
+  localDateListeners.add(onStoreChange);
+  if (localDateListeners.size === 1) {
+    startLocalDateSubscription();
+  }
   return () => {
-    active = false;
-    globalThis.removeEventListener("focus", refreshEnvironment);
-    if (timeoutId !== undefined) {
-      clearTimeout(timeoutId);
+    localDateListeners.delete(onStoreChange);
+    if (localDateListeners.size === 0) {
+      stopLocalDateSubscription();
     }
   };
 };
