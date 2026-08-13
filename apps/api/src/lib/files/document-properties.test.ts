@@ -60,7 +60,8 @@ const CORE_XML = [
   '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
   '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"',
   ' xmlns:dc="http://purl.org/dc/elements/1.1/"',
-  ' xmlns:dcterms="http://purl.org/dc/terms/">',
+  ' xmlns:dcterms="http://purl.org/dc/terms/"',
+  ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">',
   "<dc:title>Series Seed SANE</dc:title>",
   "<dc:creator>Jane Novak &amp; Co.</dc:creator>",
   "<cp:lastModifiedBy>tomas</cp:lastModifiedBy>",
@@ -339,7 +340,7 @@ describe("scrubDocumentProperties", () => {
     assertNoTrace(result, ["Jane Novak", "Nov&#225;k Legal"]);
   });
 
-  it("scrubs collaboration authors and dates across Word XML parts", async () => {
+  it("keeps typed OOXML metadata schema-valid while removing its values", async () => {
     const comments =
       '<x:comments xmlns:x="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
       '<x:comment x:author="Jane Novak" x:initials="JN" x:date="2024-01-01T00:00:00Z"/></x:comments>';
@@ -353,6 +354,17 @@ describe("scrubDocumentProperties", () => {
     );
 
     assertNoTrace(result, ["Jane Novak", "JN", "2024-01-01T00:00:00Z"]);
+    const archive = await new JSZip().loadAsync(result);
+    const core = await archive.file("docProps/core.xml")?.async("string");
+    const scrubbedComments = await archive
+      .file("word/comments.xml")
+      ?.async("string");
+
+    expect(core).not.toMatch(
+      /<(?:cp:revision|cp:lastPrinted|dcterms:(?:created|modified))\b/u,
+    );
+    expect(scrubbedComments).toContain('x:author=""');
+    expect(scrubbedComments).not.toMatch(/x:(?:date|initials)=/u);
   });
 
   it("clears the OpenDocument meta part, statistics included", async () => {

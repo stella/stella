@@ -434,7 +434,7 @@ const WORD_2012_NS = "http://schemas.microsoft.com/office/word/2012/wordml";
 
 type XmlElement = { namespace: string; localName: string };
 
-const OOXML_CORE_CLEARED = [
+const OOXML_CORE_TEXT_CLEARED = [
   { namespace: DC_NS, localName: "title" },
   { namespace: DC_NS, localName: "subject" },
   { namespace: DC_NS, localName: "creator" },
@@ -443,6 +443,13 @@ const OOXML_CORE_CLEARED = [
   { namespace: OOXML_CORE_NS, localName: "category" },
   { namespace: OOXML_CORE_NS, localName: "contentStatus" },
   { namespace: OOXML_CORE_NS, localName: "lastModifiedBy" },
+] as const satisfies readonly XmlElement[];
+
+/**
+ * Typed properties cannot be represented by an empty element. Remove them so
+ * the package does not retain an invalid date or revision lexical value.
+ */
+const OOXML_CORE_REMOVED = [
   { namespace: OOXML_CORE_NS, localName: "revision" },
   { namespace: OOXML_CORE_NS, localName: "lastPrinted" },
   { namespace: DCTERMS_NS, localName: "created" },
@@ -604,7 +611,10 @@ const scrubZipArchive = async (
   await prepare?.(archive);
   return {
     status: "scrubbed",
-    bytes: await archive.zip.generateAsync({ type: "uint8array" }),
+    bytes: await archive.zip.generateAsync({
+      type: "uint8array",
+      compression: "DEFLATE",
+    }),
   };
 };
 
@@ -621,17 +631,69 @@ const scrubCustomProperties = (xml: string): string =>
     },
   );
 
+type CollaborationAttributePolicies = {
+  author: "clear";
+  date: "remove";
+  initials: "remove";
+  providerId: "remove";
+  userId: "remove";
+};
+
+/**
+ * A closed policy keeps schema-required authors present while making it
+ * impossible to blank typed or optional collaboration attributes.
+ */
+const COLLABORATION_ATTRIBUTE_POLICIES = {
+  author: "clear",
+  date: "remove",
+  initials: "remove",
+  userId: "remove",
+  providerId: "remove",
+} as const satisfies CollaborationAttributePolicies;
+
+const removeNamespacedAttribute = (
+  xml: string,
+  element: XmlElement,
+): string => {
+  let scrubbed = xml;
+  for (const name of qualifiedNames(xml, element)) {
+    const regex = new RegExp(
+      `\\s${name}\\s*=\\s*(?<quote>["'])[^"']*\\k<quote>`,
+      "gu",
+    );
+    scrubbed = scrubbed.replace(regex, "");
+  }
+  return scrubbed;
+};
+
+const clearNamespacedAttribute = (xml: string, element: XmlElement): string => {
+  let scrubbed = xml;
+  for (const name of qualifiedNames(xml, element)) {
+    const regex = new RegExp(
+      `(?<prefix>\\s${name}\\s*=\\s*)(?<quote>["'])[^"']*\\k<quote>`,
+      "gu",
+    );
+    scrubbed = scrubbed.replace(regex, '$<prefix>""');
+  }
+  return scrubbed;
+};
+
 const scrubCollaborationAttributes = (xml: string): string => {
   let scrubbed = xml;
-  const attributeNames = ["author", "date", "initials", "userId", "providerId"];
   for (const namespace of [WORD_MAIN_NS, WORD_2012_NS]) {
-    for (const localName of attributeNames) {
-      for (const name of qualifiedNames(xml, { namespace, localName })) {
-        const regex = new RegExp(
-          `(?<prefix>\\s${name}\\s*=\\s*)(?<quote>["'])[^"']*\\k<quote>`,
-          "gu",
-        );
-        scrubbed = scrubbed.replace(regex, '$<prefix>""');
+    for (const [localName, action] of Object.entries(
+      COLLABORATION_ATTRIBUTE_POLICIES,
+    )) {
+      const element = { namespace, localName };
+      switch (action) {
+        case "clear":
+          scrubbed = clearNamespacedAttribute(scrubbed, element);
+          break;
+        case "remove":
+          scrubbed = removeNamespacedAttribute(scrubbed, element);
+          break;
+        default:
+          action satisfies never;
       }
     }
   }
@@ -659,7 +721,11 @@ const scrubOoxml = async (
             message: "Invalid OOXML core properties root",
           });
         }
-        return clearNamespacedElements(xml, OOXML_CORE_CLEARED);
+        let scrubbed = clearNamespacedElements(xml, OOXML_CORE_TEXT_CLEARED);
+        for (const element of OOXML_CORE_REMOVED) {
+          scrubbed = removeNamespacedElements(scrubbed, element);
+        }
+        return scrubbed;
       },
       propertyEntry: true,
       required: true,
