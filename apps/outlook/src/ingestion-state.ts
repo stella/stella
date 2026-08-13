@@ -13,6 +13,7 @@ export type IngestEmailResult = {
 
 type PendingEmailUploadIdentity = {
   diagnostic: OutlookIngestionDiagnostic;
+  sourceItemInstanceKey: string;
   uploadId: SafeId<"pendingUpload">;
   workspaceId: SafeId<"workspace">;
 };
@@ -133,3 +134,19 @@ export const isIngestActive = (state: IngestState): boolean =>
 export const ingestTransitionTargets = (
   type: IngestStateType,
 ): readonly IngestStateType[] => ALLOWED_INGEST_TRANSITIONS[type];
+
+export const isLatestSnapshotForSave = ({
+  initialItemInstanceKey,
+  latestIsCurrent,
+  latestItemInstanceKey,
+}: {
+  initialItemInstanceKey: string;
+  latestIsCurrent: boolean;
+  latestItemInstanceKey: string;
+}): boolean =>
+  latestIsCurrent && latestItemInstanceKey === initialItemInstanceKey;
+
+export const pendingUploadMatchesSnapshot = (
+  pending: { sourceItemInstanceKey: string },
+  itemInstanceKey: string,
+): boolean => pending.sourceItemInstanceKey === itemInstanceKey;

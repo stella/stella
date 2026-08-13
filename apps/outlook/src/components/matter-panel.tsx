@@ -89,7 +89,7 @@ const MatterList = ({
 
   return (
     <ScrollArea className="max-h-44">
-      <div className="grid gap-2 pr-0.5">
+      <div className="grid gap-2 pe-0.5">
         {workspaces.slice(0, MAX_VISIBLE_MATTERS).map((workspace) => (
           <MatterOption
             isSelected={selectedWorkspaceId === workspace.id}
@@ -126,7 +126,7 @@ const MatterOption = ({
     <button
       aria-pressed={isSelected}
       className={cn(
-        "border-input bg-popover hover:bg-accent/50 flex min-h-12 w-full items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-left",
+        "border-input bg-popover hover:bg-accent/50 flex min-h-12 w-full items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-start",
         isSelected && "border-ring bg-accent/50",
       )}
       onClick={() => onSelect(workspace.id)}

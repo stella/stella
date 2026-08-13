@@ -16,7 +16,7 @@ type SignInPanelProps = {
 };
 
 export const SignInPanel = ({ onSignIn, signInState, t }: SignInPanelProps) => (
-  <div className="min-h-screen">
+  <div className="min-h-dvh">
     <AppHeader subtitle={t("handoffDescription")} title={t("handoffTitle")} />
     <div className="flex flex-col gap-4 p-4">
       <Button

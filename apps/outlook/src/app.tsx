@@ -95,7 +95,7 @@ const AuthedApp = ({ t }: { t: Translate }) => {
   const snapshot = loadState.type === "ready" ? loadState.snapshot : null;
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-dvh">
       <AppHeader
         action={
           <Button
@@ -176,6 +176,7 @@ const MessageApp = ({
     attachmentErrorFallback: t("attachmentReadError"),
     errorFallback: t("saveErrorFallback"),
     getPendingEmailUpload,
+    previousEmailSaveCompleted: t("previousEmailSaveCompleted"),
     setPendingEmailUpload,
   });
 

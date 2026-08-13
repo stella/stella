@@ -337,7 +337,7 @@
       </xs:annotation>
     </xs:attribute>
   </xs:complexType>
-  
+
   <xs:complexType name="MobileUIControl" abstract="true" odoc:omit="true">
     <xs:annotation>
       <xs:documentation>
@@ -721,7 +721,7 @@
       </xs:extension>
     </xs:complexContent>
   </xs:complexType>
-  
+
   <xs:complexType name="CommandSurface">
     <xs:annotation>
       <xs:documentation>Specifies the ways the app exposes functionality through the user interface of a Module Extension Point.</xs:documentation>
@@ -730,7 +730,7 @@
       <xs:element name="CustomTab" type="CustomTab" minOccurs="1" maxOccurs="unbounded" />
     </xs:sequence>
   </xs:complexType>
-  
+
   <xs:complexType name="Module">
     <xs:annotation>
       <xs:documentation>The app exposes functionality in the Add-ins Module to show a large HTML source with CommandSurfaces.</xs:documentation>

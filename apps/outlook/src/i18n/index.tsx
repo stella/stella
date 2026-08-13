@@ -73,7 +73,7 @@ const messages = {
     noIssuesFound: "No issues found",
     noMatterSelected: "No matter selected",
     noMatterSelectedDescription:
-      "Choose the matter before saving or relying on matter context.",
+      "Choose and confirm the matter before saving this email.",
     noMatterResults: "No matters matched.",
     openStella: "Open stella",
     openSavedEmail: "Open saved email",
@@ -81,6 +81,8 @@ const messages = {
     possibleMissingAttachment: "Possible missing attachment",
     possibleMissingAttachmentDescription:
       "The email mentions an attachment, but Outlook reports none.",
+    previousEmailSaveCompleted:
+      "The previous email save finished. Review this email and save it separately.",
     readMode: "Read mode",
     refresh: "Refresh",
     saveButtonLabel: "Save to matter: {matterName}",
