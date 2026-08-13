@@ -56,6 +56,9 @@ const subscribeToLocalDate = (onStoreChange: () => void) => {
   let active = true;
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const scheduleNextDate = () => {
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
     timeoutId = setTimeout(() => {
       onStoreChange();
       if (active) {
@@ -63,9 +66,15 @@ const subscribeToLocalDate = (onStoreChange: () => void) => {
       }
     }, millisecondsUntilNextLocalDate(Date.now()));
   };
+  const refreshEnvironment = () => {
+    onStoreChange();
+    scheduleNextDate();
+  };
   scheduleNextDate();
+  globalThis.addEventListener("focus", refreshEnvironment);
   return () => {
     active = false;
+    globalThis.removeEventListener("focus", refreshEnvironment);
     if (timeoutId !== undefined) {
       clearTimeout(timeoutId);
     }

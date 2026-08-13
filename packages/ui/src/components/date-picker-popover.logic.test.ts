@@ -19,6 +19,8 @@ describe("date picker clock", () => {
     expect(source).toContain(
       "<DatePickerPopoverContent {...props} locale={locale} today={today} />",
     );
+    expect(source).toContain('globalThis.addEventListener("focus"');
+    expect(source).toContain('globalThis.removeEventListener("focus"');
   });
 
   test("derives the browser-local date on both sides of midnight", () => {
