@@ -35,6 +35,15 @@ describe("web container platform boundary", () => {
     expect(resolvePlatform("runner")).toBe("$TARGETPLATFORM");
     const productionDependencies = stagesByName.get("deps-prod")?.body;
     expect(productionDependencies).toContain("ARG TARGETARCH");
+    const architectureMapping = Object.fromEntries(
+      [
+        ...(productionDependencies?.matchAll(
+          /\b([a-z0-9_]+)\)\s+target_cpu=([a-z0-9_]+)\s+;;/gu,
+        ) ?? []),
+      ].map((match) => [match.at(1), match.at(2)]),
+    );
+    expect(architectureMapping).toEqual({ amd64: "x64", arm64: "arm64" });
+    expect(productionDependencies).toMatch(/\*\).*?\bexit 1\s+;;/su);
     expect(productionDependencies).toContain(
       "bun install --filter @stll/web --production",
     );
