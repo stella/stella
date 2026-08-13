@@ -130,9 +130,7 @@ const isProductSourceFile = (
   return isProductSourcePath(relative.replaceAll(path.sep, "/"));
 };
 
-const isCommaExpression = (
-  node: ts.Node,
-): node is ts.BinaryExpression =>
+const isCommaExpression = (node: ts.Node): node is ts.BinaryExpression =>
   ts.isBinaryExpression(node) &&
   node.operatorToken.kind === ts.SyntaxKind.CommaToken;
 
@@ -545,10 +543,7 @@ const workspaceConfig = (
     const config = path.join(repositoryRoot, "scripts", "tsconfig.json");
     return ts.sys.fileExists(config) ? config : null;
   }
-  if (
-    (parent !== "apps" && parent !== "packages") ||
-    workspace === undefined
-  ) {
+  if ((parent !== "apps" && parent !== "packages") || workspace === undefined) {
     return null;
   }
 
@@ -627,9 +622,7 @@ export const findResultWorkspaceConfigs = (
     const parentDirectory = path.join(repositoryRoot, parent);
     for (const workspace of ts.sys.getDirectories(parentDirectory)) {
       const workspaceDirectory = path.join(parentDirectory, workspace);
-      addConfigWhenDirectoryImportsResult(
-        path.join(workspaceDirectory, "src"),
-      );
+      addConfigWhenDirectoryImportsResult(path.join(workspaceDirectory, "src"));
       if (parent === "apps") {
         addConfigWhenDirectoryImportsResult(
           path.join(workspaceDirectory, "scripts"),

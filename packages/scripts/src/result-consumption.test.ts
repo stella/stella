@@ -56,9 +56,7 @@ describe("Result consumption guard", () => {
       configs.has(path.join(repositoryRoot, "apps/api/tsconfig.json")),
     ).toBe(true);
     expect(
-      configs.has(
-        path.join(repositoryRoot, "apps/api/scripts/tsconfig.json"),
-      ),
+      configs.has(path.join(repositoryRoot, "apps/api/scripts/tsconfig.json")),
     ).toBe(true);
     expect(
       configs.has(path.join(repositoryRoot, "apps/landing/tsconfig.json")),
