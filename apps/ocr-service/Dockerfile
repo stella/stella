@@ -1,7 +1,8 @@
-# Pin the complete multi-architecture manifest for Python 3.12 slim Bookworm.
-# PaddlePaddle's CUDA 12.6 wheel is currently published for amd64 Linux only;
-# the build guard below rejects an architecture that cannot run it.
-FROM python:3.12-slim-bookworm@sha256:4766d8b510c428e595d74b9cc5bbb2fae8e26316fffb4adc89908d79aacd58a2 AS builder
+# Pin the complete CUDA 12.6 and cuDNN runtime closure. The NVIDIA container
+# runtime supplies the host driver, not toolkit libraries such as libnvrtc.
+FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04@sha256:8aef630a54bc5c5146ae5ce68e6af5caa3df0fb690bb91544175c91f307e4356 AS cuda-runtime
+
+FROM cuda-runtime AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:0.12.2@sha256:069a51314a7bb6031777a9273205fe1b0b19e914ef418207d1338b268df641dd /uv /uvx /bin/
 
@@ -20,7 +21,11 @@ ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 RUN test "${TARGETARCH}" = "amd64"
 
 RUN apt-get update \
-    && apt-get install --yes --no-install-recommends ca-certificates curl \
+    && apt-get install --yes --no-install-recommends \
+      ca-certificates \
+      curl \
+      python3 \
+      python3-venv \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /tmp/ocr-service
@@ -54,7 +59,7 @@ RUN set -eux; \
     rm -rf \
       /tmp/models
 
-FROM python:3.12-slim-bookworm@sha256:4766d8b510c428e595d74b9cc5bbb2fae8e26316fffb4adc89908d79aacd58a2 AS runtime
+FROM cuda-runtime AS runtime
 
 ENV HOME=/tmp/stella/home \
     HF_HUB_OFFLINE=1 \
@@ -72,6 +77,7 @@ RUN apt-get update \
       libgl1 \
       libglib2.0-0 \
       libgomp1 \
+      python3 \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system --gid 1001 stella \
     && useradd \
@@ -86,6 +92,10 @@ COPY --from=builder /opt/stella/models /opt/stella/models
 COPY apps/ocr-service/pipeline.yaml /opt/stella/pipeline.yaml
 COPY apps/ocr-service/healthcheck.py /opt/stella/healthcheck.py
 COPY apps/ocr-service/THIRD-PARTY-NOTICES.md /opt/stella/THIRD-PARTY-NOTICES.md
+
+# Exercise the native runtime closure during the image build. This imports
+# libpaddle and fails if any CUDA or cuDNN shared library is absent.
+RUN python -c "import paddle; assert paddle.device.is_compiled_with_cuda()"
 
 WORKDIR /opt/stella
 USER stella
