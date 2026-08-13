@@ -62,7 +62,7 @@ const staticMemberName = (node) => {
   if (node?.type !== "MemberExpression") {
     return null;
   }
-  if (!node.computed && isIdentifier(node.property)) {
+  if (!node.computed && node.property?.type === "Identifier") {
     return node.property.name;
   }
   return node.computed &&
@@ -142,6 +142,10 @@ export default eslintCompatPlugin({
               return;
             }
 
+            if (node.callee.type !== "MemberExpression") {
+              return;
+            }
+
             const memberName = ambientMemberName(node.callee, "Date");
             const randomMemberName = ambientMemberName(node.callee, "Math");
             const performanceMemberName = ambientMemberName(
@@ -200,6 +204,10 @@ export default eslintCompatPlugin({
               node.arguments.length === 0
             ) {
               context.report({ node, messageId: "publicLawAmbientState" });
+              return;
+            }
+
+            if (node.callee.type !== "MemberExpression") {
               return;
             }
 
