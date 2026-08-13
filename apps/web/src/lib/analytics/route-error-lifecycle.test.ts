@@ -22,9 +22,8 @@ const setup = () => {
     captureError: mock((error, context) => {
       errors.push({ context, error });
     }),
-    captureRouteErrorLifecycle: mock((properties) => {
+    captureRouteErrorLifecycle: mock(async (properties) => {
       events.push(properties);
-      return Promise.resolve();
     }),
   } satisfies Pick<Analytics, "captureError" | "captureRouteErrorLifecycle">;
 

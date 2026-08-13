@@ -1,7 +1,7 @@
 import { useRef } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useRouteContext } from "@tanstack/react-router";
+import { useNavigate, useRouter } from "@tanstack/react-router";
 import {
   FileTextIcon,
   MessageSquareIcon,
@@ -53,15 +53,12 @@ export const InspectorRail = ({
   tabs,
   workspaceId,
 }: InspectorRailProps) => {
-  const routeErrorLifecycle = useRouteContext({
-    select: (context) => context.routeErrorLifecycle,
-    strict: false,
-  });
+  const routeErrorLifecycle = useRouter().options.context.routeErrorLifecycle;
   const t = useTranslations();
   const inspectorState = inspectorDiagnosticState(tabs.length, minimized);
   useExternalSyncEffect(() => {
-    routeErrorLifecycle?.updateInspectorState(inspectorState);
-    return () => routeErrorLifecycle?.updateInspectorState("unavailable");
+    routeErrorLifecycle.updateInspectorState(inspectorState);
+    return () => routeErrorLifecycle.updateInspectorState("unavailable");
   }, [routeErrorLifecycle, inspectorState]);
   const activeTab = tabs.find((tab) => tab.id === activeId);
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;

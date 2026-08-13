@@ -7,6 +7,7 @@ import type {
   ShowRouteErrorOptions,
 } from "@/lib/analytics/route-error-lifecycle";
 import type { RouteErrorLifecycleProperties } from "@/lib/analytics/types";
+import { detached } from "@/lib/detached";
 
 type RouteErrorLifecycleState =
   | { type: "idle" }
@@ -63,7 +64,10 @@ export const createLoadedRouteErrorLifecycleController = (
       routeTemplate,
     };
     state = { incident, type: "visible" };
-    void capture(incident, priorIncident ? "recurred" : "shown");
+    detached(
+      capture(incident, priorIncident ? "recurred" : "shown"),
+      "route-error.capture",
+    );
   };
 
   const retryStarted: RouteErrorLifecycleController["retryStarted"] = async (

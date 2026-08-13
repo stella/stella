@@ -3,6 +3,7 @@ import type {
   Analytics,
   RouteErrorLifecycleProperties,
 } from "@/lib/analytics/types";
+import { detached } from "@/lib/detached";
 
 export type RouteErrorAnalytics = Pick<
   Analytics,
@@ -74,11 +75,15 @@ export const createRouteErrorLifecycleController = (
       type: "detached",
     });
   };
-  const run = (
+  const run = async (
     action: (controller: RouteErrorLifecycleController) => void | Promise<void>,
   ): Promise<void> =>
     load()
-      .then((controller) => (controller ? action(controller) : undefined))
+      .then(async (controller) => {
+        if (controller) {
+          await action(controller);
+        }
+      })
       .catch(captureDispatchError);
   const runIfLoaded = (
     action: (controller: RouteErrorLifecycleController) => void,
@@ -90,15 +95,19 @@ export const createRouteErrorLifecycleController = (
 
   return {
     caught: (routeTemplate) => {
-      void run((controller) => controller.caught(routeTemplate));
+      detached(
+        run((controller) => controller.caught(routeTemplate)),
+        "route-error.caught",
+      );
     },
     routeResolved: (routeTemplate) => {
       snapshot = { ...snapshot, routeTemplate };
       runIfLoaded((controller) => controller.routeResolved(routeTemplate));
     },
-    retryStarted: (reference, recovery) => {
-      return run((controller) => controller.retryStarted(reference, recovery));
-    },
+    retryStarted: async (reference, recovery) =>
+      run(async (controller) => {
+        await controller.retryStarted(reference, recovery);
+      }),
     shown: (options) => {
       if (capturedReference !== options.reference) {
         capturedReference = options.reference;
@@ -107,7 +116,10 @@ export const createRouteErrorLifecycleController = (
           type: "recovery",
         });
       }
-      void run((controller) => controller.shown(options));
+      detached(
+        run((controller) => controller.shown(options)),
+        "route-error.shown",
+      );
     },
     updateInspectorState: (inspectorState) => {
       snapshot = { ...snapshot, inspectorState };

@@ -1,7 +1,7 @@
 import { useState, useTransition } from "react";
 
 import { CancelledError, useQueryClient } from "@tanstack/react-query";
-import { Link, Navigate, useRouteContext } from "@tanstack/react-router";
+import { Link, Navigate, useRouter } from "@tanstack/react-router";
 import type { ErrorComponentProps } from "@tanstack/react-router";
 import { CopyIcon, MailIcon, RefreshCcwIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -221,10 +221,7 @@ const UnexpectedRouteError = ({
   retry,
 }: UnexpectedRouteErrorProps) => {
   const analytics = useAnalytics();
-  const routeErrorLifecycle = useRouteContext({
-    from: "__root__",
-    select: (context) => context.routeErrorLifecycle,
-  });
+  const routeErrorLifecycle = useRouter().options.context.routeErrorLifecycle;
   const t = useTranslations();
   const [errorReference] = useState(createErrorReference);
   const recovery = resolveRouteErrorRecovery(routeError);
@@ -249,16 +246,13 @@ const UnexpectedRouteError = ({
     }
   }
 
-  useExternalSyncEffect(
-    () => {
-      routeErrorLifecycle.shown({
-        error: routeError,
-        recovery: recovery.type,
-        reference: errorReference,
-      });
-    },
-    [routeErrorLifecycle, routeError, errorReference, recovery.type],
-  );
+  useExternalSyncEffect(() => {
+    routeErrorLifecycle.shown({
+      error: routeError,
+      recovery: recovery.type,
+      reference: errorReference,
+    });
+  }, [routeErrorLifecycle, routeError, errorReference, recovery.type]);
 
   const handleCopyReference = async () => {
     try {
@@ -280,13 +274,16 @@ const UnexpectedRouteError = ({
       : null;
 
   const handleRecovery = () => {
-    void recoverRouteError({
-      error: routeError,
-      recordRetryStarted: (recoveryType) =>
-        routeErrorLifecycle.retryStarted(errorReference, recoveryType),
-      reloadPage: () => window.location.reload(),
-      retryRoute: retry,
-    });
+    detached(
+      recoverRouteError({
+        error: routeError,
+        recordRetryStarted: async (recoveryType) =>
+          routeErrorLifecycle.retryStarted(errorReference, recoveryType),
+        reloadPage: () => window.location.reload(),
+        retryRoute: retry,
+      }),
+      "route-error.recover",
+    );
   };
 
   return (

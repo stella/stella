@@ -106,8 +106,7 @@ const sanitizeExceptionEvent = (event: CaptureResult): CaptureResult => {
   };
 };
 
-type RouteErrorLifecycleSanitizer =
-  typeof sanitizeRouteErrorLifecycleEvent;
+type RouteErrorLifecycleSanitizer = typeof sanitizeRouteErrorLifecycleEvent;
 let routeErrorLifecycleSanitizer: RouteErrorLifecycleSanitizer | undefined;
 
 const errorContextProperties = (
@@ -235,8 +234,8 @@ export const createPostHogAnalytics = (
     captureGuideStepSkipped: (properties) => {
       posthog.capture(WEB_ANALYTICS_EVENTS.guideStepSkipped, properties);
     },
-    captureRouteErrorLifecycle: (properties) => {
-      return import("@/lib/analytics/posthog-route-error")
+    captureRouteErrorLifecycle: async (properties) =>
+      import("@/lib/analytics/posthog-route-error")
         .then((module) => {
           routeErrorLifecycleSanitizer =
             module.sanitizeRouteErrorLifecycleEvent;
@@ -247,8 +246,7 @@ export const createPostHogAnalytics = (
             operation: "posthog.route-error-lifecycle",
             type: "detached",
           });
-        });
-    },
+        }),
     identifyUser: (user) => {
       const distinctId = posthog.get_distinct_id();
 

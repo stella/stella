@@ -34,7 +34,7 @@ describe("route error recovery", () => {
       error: new TypeError(
         "Failed to fetch dynamically imported module: https://example.test/chunk.js",
       ),
-      recordRetryStarted: () =>
+      recordRetryStarted: async () =>
         new Promise<void>((resolve) => {
           actions.push("record");
           finishRecording = resolve;
@@ -58,9 +58,8 @@ describe("route error recovery", () => {
 
     await recoverRouteError({
       error: new TypeError("Cannot read properties of null"),
-      recordRetryStarted: () => {
+      recordRetryStarted: async () => {
         actions.push("record");
-        return Promise.resolve();
       },
       reloadPage: () => {
         actions.push("reload");
