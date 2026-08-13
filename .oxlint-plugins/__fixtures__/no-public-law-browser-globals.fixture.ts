@@ -28,7 +28,7 @@ const measuredAt = performance.now();
 const randomId = crypto.randomUUID();
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves globalThis cannot bypass ambient randomness detection
 const globalRandomBytes = globalThis.crypto.getRandomValues(new Uint8Array(8));
-// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves computed globalThis crypto access cannot bypass ambient randomness detection
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals, typescript/dot-notation -- fixture proves computed globalThis crypto access cannot bypass ambient randomness detection
 const computedGlobalRandomId = globalThis["crypto"].randomUUID();
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves implicit Intl locales are not SSR-safe
 const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
@@ -49,7 +49,7 @@ type DomainFields = { document: string; navigator: () => string };
 const shorthandBrowserGlobal = { navigator };
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves globalThis cannot bypass the browser-global detector
 const globalBrowserStorage = globalThis.localStorage;
-// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves computed globalThis access cannot bypass the browser-global detector
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals, typescript/dot-notation -- fixture proves computed globalThis access cannot bypass the browser-global detector
 const computedGlobalBrowserStorage = globalThis["localStorage"];
 
 export {

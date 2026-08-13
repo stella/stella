@@ -5,7 +5,6 @@ const PROMPT_PREVIEW_LENGTH = 180;
 const RESPONSE_PREVIEW_LENGTH = 280;
 const PREVIEW_SOURCE_LENGTH_MULTIPLIER = 4;
 const MAX_NAVIGATION_ITEMS = 10;
-const previewSegmenters = new Map<string, Intl.Segmenter>();
 const WHITESPACE_SEGMENT = /^\s+$/u;
 const MARKDOWN_FENCE = /^[ \t]{0,3}(?:```|~~~)[^\n]*$/gmu;
 const MARKDOWN_HEADING = /^\s{0,3}#{1,6}\s+/gmu;
@@ -20,16 +19,6 @@ const MARKDOWN_UNDERSCORE_EMPHASIS =
 const MARKDOWN_STRIKETHROUGH = /(~~)(\S(?:[\s\S]*?\S)?)\1/gu;
 const MARKDOWN_INLINE_CODE = /(`+)([\s\S]*?)\1/gu;
 const MARKDOWN_ESCAPE = /\\([!#()*+\-.>[\]\\_`{|}~])/gu;
-
-const getPreviewSegmenter = (locale: string): Intl.Segmenter => {
-  const cached = previewSegmenters.get(locale);
-  if (cached) {
-    return cached;
-  }
-  const segmenter = new Intl.Segmenter(locale, { granularity: "grapheme" });
-  previewSegmenters.set(locale, segmenter);
-  return segmenter;
-};
 
 export type ChatTurnNavigationItem = {
   assistantPreview: string | null;
@@ -222,7 +211,7 @@ export const buildChatTurnNavigationItems = ({
 }: BuildChatTurnNavigationItemsOptions): ChatTurnNavigationItem[] => {
   const items: ChatTurnNavigationItem[] = [];
   const turns = buildMessageTurns(messages);
-  const segmenter = getPreviewSegmenter(locale);
+  const segmenter = new Intl.Segmenter(locale, { granularity: "grapheme" });
 
   for (
     let index = turns.length - 1;
