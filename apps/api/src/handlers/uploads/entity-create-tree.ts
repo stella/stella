@@ -335,6 +335,7 @@ const prepareSignedFiles = async ({
         new HandlerError({
           status: 500,
           message: "Failed to issue upload URL",
+          cause: presign.error,
         }),
       );
     }
