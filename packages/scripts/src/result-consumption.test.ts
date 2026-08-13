@@ -124,9 +124,9 @@ describe("Result consumption guard", () => {
       const retainedFinal = (0, parse());
       consume({ result: parse() });
       void retainedTail;
-      void retainedObject;
-      void retainedTemplate;
-      void retainedFinal;
+      consume(retainedObject);
+      consume(retainedTemplate);
+      consume(retainedFinal);
     `);
 
     expect(diagnostics.map(({ rule }) => rule)).toEqual([

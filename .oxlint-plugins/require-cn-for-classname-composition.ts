@@ -307,7 +307,10 @@ export default eslintCompatPlugin({
                 )
               );
             }
-            if (pattern.type === "ObjectPattern") {
+            if (
+              pattern.type === "ObjectPattern" &&
+              Array.isArray(pattern.properties)
+            ) {
               for (const property of pattern.properties) {
                 if (property.type === "RestElement") {
                   const containsTarget = target.identifiers.some(
@@ -369,7 +372,10 @@ export default eslintCompatPlugin({
               }
               return null;
             }
-            if (pattern.type === "ArrayPattern") {
+            if (
+              pattern.type === "ArrayPattern" &&
+              Array.isArray(pattern.elements)
+            ) {
               for (const [index, element] of pattern.elements.entries()) {
                 if (!isAstNode(element)) {
                   continue;
@@ -503,8 +509,7 @@ export default eslintCompatPlugin({
               );
 
               const lastUnconditionalWrite = memberWrites.findLast(
-                (write) =>
-                  write.context === "unconditional" && !write.opaque,
+                (write) => write.context === "unconditional" && !write.opaque,
               );
               const baseResolution =
                 lastUnconditionalWrite === undefined
@@ -567,7 +572,10 @@ export default eslintCompatPlugin({
                     readPosition,
                   );
             }
-            if (expression.type === "ArrayExpression") {
+            if (
+              expression.type === "ArrayExpression" &&
+              Array.isArray(expression.elements)
+            ) {
               if (!/^(?:0|[1-9]\d*)$/.test(propertyName)) {
                 return { type: "absent" };
               }
@@ -656,8 +664,7 @@ export default eslintCompatPlugin({
         const localMemberValue = (
           value: unknown,
           visitedVariables = new Set<Variable>(),
-        ): unknown =>
-          localValueResolver.memberValue(value, visitedVariables);
+        ): unknown => localValueResolver.memberValue(value, visitedVariables);
 
         const isCanonicalCnComposition = (
           value: unknown,
@@ -846,8 +853,8 @@ export default eslintCompatPlugin({
           while (isAstNode(current)) {
             const parent = current.parent;
             if (
-              current === variable.scope.block ||
-              parent === variable.scope.block
+              Object.is(current, variable.scope.block) ||
+              Object.is(parent, variable.scope.block)
             ) {
               return conditional ? "conditional" : "unconditional";
             }
@@ -957,10 +964,7 @@ export default eslintCompatPlugin({
                 continue;
               }
               if (
-                !isAllowedClassValue(
-                  possibleValue,
-                  new Set(visitedVariables),
-                )
+                !isAllowedClassValue(possibleValue, new Set(visitedVariables))
               ) {
                 return false;
               }
@@ -1095,10 +1099,7 @@ export default eslintCompatPlugin({
                 continue;
               }
               if (
-                !isAllowedClassValue(
-                  returnValue,
-                  new Set(visitedVariables),
-                )
+                !isAllowedClassValue(returnValue, new Set(visitedVariables))
               ) {
                 return false;
               }
