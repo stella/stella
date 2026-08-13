@@ -29,7 +29,9 @@ import {
   remapNodePropertyIds,
 } from "@/api/lib/conditions/ast-utils";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
-import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
+import {
+  handoffCommittedDocumentProcessingRuns,
+} from "@/api/lib/document-processing-handoff";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
@@ -941,9 +943,9 @@ const duplicateWorkspace = createSafeHandler(
       txResult.value.entityIds[SEARCH_INDEX_OWNER.searchMark],
     ).catch(captureError);
 
-    for (const runId of txResult.value.nativeExtractionRunIds) {
-      enqueueDocumentProcessingRun(runId).catch(captureError);
-    }
+    handoffCommittedDocumentProcessingRuns({
+      runIds: txResult.value.nativeExtractionRunIds,
+    }).catch(captureError);
 
     return Result.ok({ workspaceId: txResult.value.workspaceId });
   },

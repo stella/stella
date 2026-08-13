@@ -473,8 +473,7 @@ export const nativeExtractionRunRequestForFields = ({
   if (
     !fileFieldRow ||
     fileFieldRow.content.type !== "file" ||
-    searchIndexOwnerForFields(fields, filePropertyId) ===
-      SEARCH_INDEX_OWNER.searchMark
+    !requiresDurableNativeExtraction(fileFieldRow.content)
   ) {
     return null;
   }
