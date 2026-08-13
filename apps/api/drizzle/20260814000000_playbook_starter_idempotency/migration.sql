@@ -22,6 +22,8 @@ CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "playbook_definitions_org_starter
   ON "playbook_definitions" ("organization_id", "starter_id")
   WHERE "starter_id" IS NOT NULL;
 --> statement-breakpoint
+REINDEX INDEX CONCURRENTLY "playbook_definitions_org_starter_id_uidx";
+--> statement-breakpoint
 
 SET statement_timeout = '5s';
 --> statement-breakpoint
