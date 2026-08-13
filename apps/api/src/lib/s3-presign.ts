@@ -179,11 +179,14 @@ const getAwsS3Client = async (): Promise<AwsS3Client> => {
       return cached.client;
     }
   }
-  _clientPromise = buildAwsS3Client().catch((error: unknown) => {
-    _clientPromise = null;
+  const nextPromise = buildAwsS3Client().catch((error: unknown) => {
+    if (_clientPromise === nextPromise) {
+      _clientPromise = null;
+    }
     throw error;
   });
-  const built = await _clientPromise;
+  _clientPromise = nextPromise;
+  const built = await nextPromise;
   return built.client;
 };
 
@@ -195,11 +198,14 @@ const getStsClient = async (): Promise<STSClient> => {
     }
   }
 
-  _stsClientPromise = buildStsClient().catch((error: unknown) => {
-    _stsClientPromise = null;
+  const nextPromise = buildStsClient().catch((error: unknown) => {
+    if (_stsClientPromise === nextPromise) {
+      _stsClientPromise = null;
+    }
     throw error;
   });
-  const built = await _stsClientPromise;
+  _stsClientPromise = nextPromise;
+  const built = await nextPromise;
   return built.client;
 };
 
