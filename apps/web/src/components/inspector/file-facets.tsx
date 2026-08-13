@@ -13,7 +13,6 @@ import type {
   FileTab,
 } from "@/components/inspector/inspector-store-types";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
 import { DOCX_MIME, isEmailFile } from "@/lib/consts";
 import { entityVersionsOptions } from "@/lib/workspaces/queries/entity-versions";
 
@@ -103,15 +102,7 @@ export const TabFacetBar = ({
   );
   const isDocx = mimeType === DOCX_MIME;
   const isEmail = isEmailFile({ fileName, mimeType });
-  const playbooksEnabled = usePlaybooksPreviewEnabled();
-
   const { facets, disabledFacets } = useMemo(() => {
-    // Playbook review is gated behind the preview flag; drop the chip entirely
-    // when it is off so the flagged-off review UI and its APIs aren't reachable
-    // from the inspector.
-    const gated = playbooksEnabled
-      ? baseFacets
-      : baseFacets.filter((f) => f !== "playbook");
     // The chat-suggestions and playbook-review surfaces are
     // DOCX-only (they need folio block ids to target). Drop both on
     // non-DOCX tabs. The playbook chip stays enabled on DOCX even
@@ -120,7 +111,7 @@ export const TabFacetBar = ({
     // chat queues a proposal.
     if (!isDocx) {
       return {
-        facets: gated.filter(
+        facets: baseFacets.filter(
           (f) =>
             f !== "suggestions" &&
             f !== "playbook" &&
@@ -131,15 +122,15 @@ export const TabFacetBar = ({
     }
     if (suggestionCount === 0) {
       return {
-        facets: gated.filter((f) => isEmail || f !== "attachments"),
+        facets: baseFacets.filter((f) => isEmail || f !== "attachments"),
         disabledFacets: new Set<Facet>(["suggestions"]),
       };
     }
     return {
-      facets: gated.filter((f) => isEmail || f !== "attachments"),
+      facets: baseFacets.filter((f) => isEmail || f !== "attachments"),
       disabledFacets: undefined,
     };
-  }, [baseFacets, isDocx, isEmail, suggestionCount, playbooksEnabled]);
+  }, [baseFacets, isDocx, isEmail, suggestionCount]);
 
   const labels: Record<Facet, string> = {
     preview: t("common.preview"),

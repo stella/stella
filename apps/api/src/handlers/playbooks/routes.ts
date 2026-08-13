@@ -8,6 +8,7 @@ import getPlaybookDefinition from "@/api/handlers/playbooks/get";
 import listPlaybookDefinitions from "@/api/handlers/playbooks/list";
 import listStarterPlaybooks from "@/api/handlers/playbooks/list-starters";
 import listPlaybookVersions from "@/api/handlers/playbooks/list-versions";
+import listRecentPlaybooks from "@/api/handlers/playbooks/recent/list";
 import restorePlaybookVersion from "@/api/handlers/playbooks/restore-version";
 import updatePlaybookDefinition from "@/api/handlers/playbooks/update";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
@@ -26,11 +27,14 @@ export const playbooksRoute = new Elysia({
     body: createPlaybookDefinition.config.body,
     permissions: createPlaybookDefinition.config.permissions,
   })
-  // Registered ahead of the `:playbookId` param routes so the static
-  // `/starters` and `/from-starter` paths are never swallowed by the
-  // dynamic segment.
+  // Registered ahead of the `:playbookId` param routes so static paths are
+  // never swallowed by the dynamic segment.
   .get("/starters", listStarterPlaybooks.handler, {
     permissions: listStarterPlaybooks.config.permissions,
+  })
+  .get("/recent", listRecentPlaybooks.handler, {
+    permissions: listRecentPlaybooks.config.permissions,
+    query: listRecentPlaybooks.config.query,
   })
   .post("/from-starter", createPlaybookFromStarter.handler, {
     body: createPlaybookFromStarter.config.body,

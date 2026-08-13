@@ -2158,6 +2158,7 @@ type Messages = {
       "addPosition": "Add position";
       "addRule": "Rule";
       "advanced": "Change how this works";
+      "all": "All playbooks";
       "approval": {
         "approve": "Approve";
         "approveFailed": "Failed to approve playbook";
@@ -2224,12 +2225,14 @@ type Messages = {
       "gradedNeedsContent": "Add at least one rule, fallback entry, or ideal language.";
       "guidanceLabel": "Add review instructions";
       "guidancePlaceholder": "Add an exception or instruction not covered by the rules above.";
+      "homeDescription": "Set your review standards once, then apply them consistently to every document.";
       "idealFromClause": "From clause library";
       "idealInline": "Inline text";
       "idealInlinePlaceholder": "Paste the ideal wording…";
       "idealLanguage": "Ideal language";
       "issueLabel": "Issue";
       "issuePlaceholder": "e.g. Limitation of liability";
+      "lastUsed": "Last used {date}";
       "loadFailed": "Failed to load playbooks";
       "loading": "Loading playbooks…";
       "manageTypes": "Manage types…";
@@ -2251,6 +2254,8 @@ type Messages = {
       "outline": "Outline";
       "positionOfTotal": "Position {index} of {total}";
       "positions": "Positions";
+      "recent": "Recently used";
+      "recommended": "Recommended starters";
       "redLinePlaceholder": "Wording that is never acceptable";
       "removeCheck": "Remove check";
       "removeIdeal": "Remove ideal language";
@@ -2306,8 +2311,8 @@ type Messages = {
         "addedToast": "Playbook added";
         "browseButton": "Browse starter playbooks";
         "positionCount": "{count, plural, one {# position} other {# positions}}";
-        "subtitle": "Ready-made playbooks you can add and then tailor to your standards.";
         "title": "Starter playbooks";
+        "useStarter": "Use this starter";
       };
       "switchToAuto": "Generate question and format automatically";
       "switchToManual": "Customize question and answer format";
@@ -2319,6 +2324,7 @@ type Messages = {
       "unsavedChanges": "Unsaved changes";
       "untitledPosition": "Untitled position";
       "updated": "Playbook updated";
+      "updatedAt": "Updated {date}";
       "verdict": {
         "compliant": "Compliant";
         "deviation": "Deviation";

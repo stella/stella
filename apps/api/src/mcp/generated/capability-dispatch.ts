@@ -504,6 +504,9 @@ export const CAPABILITY_DISPATCH = {
   "playbooks.list-versions": {
     load: async () => await import("@/api/handlers/playbooks/list-versions"),
   },
+  "playbooks.recent.list": {
+    load: async () => await import("@/api/handlers/playbooks/recent/list"),
+  },
   "playbooks.restore-version": {
     load: async () => await import("@/api/handlers/playbooks/restore-version"),
   },

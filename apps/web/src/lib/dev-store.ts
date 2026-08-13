@@ -9,7 +9,6 @@ type State = {
   sourceInspector: boolean;
   reactGrab: boolean;
   publicLawPreview: boolean;
-  playbooksPreview: boolean;
   workflowsPreview: boolean;
   guidesPreview: boolean;
   timeBillingPreview: boolean;
@@ -21,7 +20,6 @@ type Actions = {
   setSourceInspector: (value: boolean) => void;
   setReactGrab: (value: boolean) => void;
   setPublicLawPreview: (value: boolean) => void;
-  setPlaybooksPreview: (value: boolean) => void;
   setWorkflowsPreview: (value: boolean) => void;
   setGuidesPreview: (value: boolean) => void;
   setTimeBillingPreview: (value: boolean) => void;
@@ -41,7 +39,6 @@ export const useDevStore = create<State & Actions>()(
       sourceInspector: false,
       reactGrab: false,
       publicLawPreview: false,
-      playbooksPreview: false,
       workflowsPreview: false,
       guidesPreview: false,
       timeBillingPreview: false,
@@ -58,9 +55,6 @@ export const useDevStore = create<State & Actions>()(
       },
       setPublicLawPreview: (publicLawPreview) => {
         set({ publicLawPreview });
-      },
-      setPlaybooksPreview: (playbooksPreview) => {
-        set({ playbooksPreview });
       },
       setWorkflowsPreview: (workflowsPreview) => {
         set({ workflowsPreview });

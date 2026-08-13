@@ -74,7 +74,6 @@ import {
 } from "@/components/pdf/peek/peek-pdf-viewer";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import Tooltip from "@/components/tooltip";
-import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import {
@@ -201,7 +200,6 @@ export const FileTabPanel = ({
   const replaceFileFieldId = useInspectorTabsStore((s) => s.replaceFileFieldId);
   const setFileFacet = useInspectorTabsStore((s) => s.setFileFacet);
   const requestDocxEdit = useInspectorCommandStore((s) => s.requestDocxEdit);
-  const playbooksEnabled = usePlaybooksPreviewEnabled();
   const isActive = tab.id === activeId;
   const isNativeDocxDisplay = tab.mimeType === DOCX_MIME;
   const nativePreviewKind = getFileTabNativePreviewKind({
@@ -623,7 +621,7 @@ export const FileTabPanel = ({
               workspaceId={tab.workspaceId}
             />
           )}
-          {playbooksEnabled && tab.facet === "playbook" && (
+          {tab.facet === "playbook" && (
             <PlaybookFacet
               entityId={tab.entityId}
               fileFieldId={tab.id}
@@ -1235,7 +1233,7 @@ export const FileTabPanel = ({
                 : {})}
             />
           )}
-          {playbooksEnabled && sidepeekFacet === "playbook" && (
+          {sidepeekFacet === "playbook" && (
             <PlaybookFacet
               entityId={tab.entityId}
               fileFieldId={tab.id}

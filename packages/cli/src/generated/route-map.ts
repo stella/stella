@@ -21538,6 +21538,51 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            "recent-list": {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "playbooks", "recent-list"],
+                capabilityId: "playbooks.recent.list",
+                description:
+                  "List the current user's recently used playbooks in the active organization.",
+                access: "read",
+                flags: [],
+                inputOnly: ["query.limit"],
+                paginated: false,
+                destructive: false,
+                scope: "read",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    query: {
+                      type: "object",
+                      properties: {
+                        limit: {
+                          minimum: 1,
+                          maximum: 10,
+                          description: "Max recently used playbooks to return",
+                          anyOf: [
+                            {
+                              format: "integer",
+                              default: 0,
+                              type: "string",
+                            },
+                            {
+                              minimum: 1,
+                              maximum: 10,
+                              description:
+                                "Max recently used playbooks to return",
+                              type: "integer",
+                            },
+                          ],
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             "restore-version": {
               kind: "capability-leaf",
               spec: {

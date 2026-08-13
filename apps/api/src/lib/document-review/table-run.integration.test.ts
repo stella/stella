@@ -330,6 +330,7 @@ describe("opening runs for a files table", () => {
         entityVersionId: documentReviewRuns.entityVersionId,
         fileFieldId: documentReviewRuns.fileFieldId,
         contentSha256: documentReviewRuns.contentSha256,
+        playbookDefinitionId: documentReviewRuns.playbookDefinitionId,
         status: documentReviewRuns.status,
         executor: documentReviewRuns.executor,
         total: documentReviewRuns.total,
@@ -343,6 +344,7 @@ describe("opening runs for a files table", () => {
         entityVersionId: ids.entityVersionA1,
         fileFieldId: ids.fileFieldA1,
         contentSha256: FIXTURE_CONTENT_SHA256,
+        playbookDefinitionId: definitionId,
         // Unprojected: the review queue owns it, so it waits to be claimed.
         status: "queued",
         executor: "worker",

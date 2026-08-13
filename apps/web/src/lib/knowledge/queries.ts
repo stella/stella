@@ -157,6 +157,11 @@ export const knowledgeKeys = {
       "list",
       { limit },
     ],
+    recent: (organizationId: string, { limit }: PlaybooksPageKey) => [
+      ...knowledgeKeys.playbooks.all(organizationId),
+      "recent",
+      { limit },
+    ],
     detail: (organizationId: string, playbookId: string) => [
       ...knowledgeKeys.playbooks.all(organizationId),
       playbookId,
@@ -566,6 +571,7 @@ export const clauseDetailOptions = (organizationId: string, clauseId: string) =>
 // every playbook; pickers that launch a playbook (review facet, files-table run
 // menu) need them all selectable rather than the first default page.
 export const PLAYBOOK_PICKER_LIMIT = 100;
+export const RECENT_PLAYBOOKS_LIMIT = 4;
 
 export const playbooksOptions = (
   organizationId: string,
@@ -576,6 +582,22 @@ export const playbooksOptions = (
     queryFn: async ({ signal }) => {
       const response = await api.playbooks.get({
         query: { limit },
+        fetch: { signal },
+      });
+
+      return unwrapEden(response);
+    },
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  });
+
+export const recentPlaybooksOptions = (organizationId: string) =>
+  queryOptions({
+    queryKey: knowledgeKeys.playbooks.recent(organizationId, {
+      limit: RECENT_PLAYBOOKS_LIMIT,
+    }),
+    queryFn: async ({ signal }) => {
+      const response = await api.playbooks.recent.get({
+        query: { limit: RECENT_PLAYBOOKS_LIMIT },
         fetch: { signal },
       });
 

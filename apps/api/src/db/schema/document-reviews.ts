@@ -88,6 +88,11 @@ export const documentReviewRuns = p.pgTable(
     fileFieldId: safeUuid<"field">("file_field_id").notNull(),
     entityVersionId: safeUuid<"entityVersion">("entity_version_id").notNull(),
     contentSha256: p.varchar("content_sha256", { length: 64 }).notNull(),
+    // Query projection for per-user recent playbooks. Deliberately no foreign
+    // key: a deleted playbook must not erase or invalidate review history.
+    playbookDefinitionId: safeUuid<"playbookDefinition">(
+      "playbook_definition_id",
+    ),
     basis: jsonb().$type<DocumentReviewRunBasis>().notNull(),
     // The confirmed topic list exactly as the reviewer approved it. Capped by
     // the request schema (`DOCUMENT_REVIEW_LIMITS.topicsMax`).
@@ -132,6 +137,16 @@ export const documentReviewRuns = p.pgTable(
         table.createdAt.desc(),
         table.id.desc(),
       ),
+    p
+      .index("document_review_runs_org_user_playbook_created_idx")
+      .on(
+        table.organizationId,
+        table.requestedBy,
+        table.playbookDefinitionId,
+        table.createdAt.desc(),
+        table.id.desc(),
+      )
+      .where(sql`${table.playbookDefinitionId} IS NOT NULL`),
     // At most one unfinished run per document. The endpoint answers 409 before
     // reaching here; this index is what makes a lost race impossible rather
     // than unlikely.
