@@ -2,6 +2,7 @@ import * as v from "valibot";
 
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
 import {
+  DOCUMENT_PROCESSING_FAILURE_CODE,
   DOCUMENT_PROCESSING_KIND,
   DOCUMENT_PROCESSING_REQUIRED_STATUS,
 } from "@/api/lib/document-processing-contract";
@@ -403,15 +404,6 @@ const documentVersionEntryProjection = v.strictObject({
 const readDocumentEntityId = () =>
   chatEntityRef({ from: "inputEntity", param: "entity_id" });
 
-// Stored tool results can predate the implementation-neutral MCP state. Keep
-// accepting their former discriminator values so historical chats still load;
-// document-tools.ts emits only the generic values for new results.
-const documentProcessingKindProjection = v.picklist([
-  DOCUMENT_PROCESSING_KIND,
-  "native-extraction",
-  "ocr",
-]);
-
 const documentProcessingRemediationProjection = v.variant("type", [
   v.strictObject({
     type: v.literal("action"),
@@ -438,7 +430,7 @@ const documentContentStateProjection = v.variant("status", [
   }),
   v.strictObject({
     status: v.literal("pending"),
-    processingKind: documentProcessingKindProjection,
+    processingKind: v.literal(DOCUMENT_PROCESSING_KIND),
     runId: v.nullable(passthroughId()),
     sourceVersionId: passthroughId(),
   }),
@@ -448,16 +440,11 @@ const documentContentStateProjection = v.variant("status", [
     remediation: documentProcessingRemediationProjection,
   }),
   v.strictObject({
-    status: v.literal("requires_ocr"),
-    sourceVersionId: passthroughId(),
-    remediation: documentProcessingRemediationProjection,
-  }),
-  v.strictObject({
     status: v.literal("failed"),
-    processingKind: documentProcessingKindProjection,
+    processingKind: v.literal(DOCUMENT_PROCESSING_KIND),
     runId: passthroughId(),
     sourceVersionId: passthroughId(),
-    errorCode: v.nullable(v.string()),
+    errorCode: v.literal(DOCUMENT_PROCESSING_FAILURE_CODE),
     retryable: v.literal(true),
   }),
   v.strictObject({
