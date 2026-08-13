@@ -680,6 +680,7 @@ type CycleBounds = {
 };
 
 type CycleAttempt =
+  | { type: "drained" }
   | { type: "lease_busy" }
   | { cycle: CycleResult; type: "ran" };
 
@@ -760,6 +761,10 @@ const runOneCycle = async (
     } catch (error) {
       logError(`[${adapterKey}] Failed to release source lease:`, error);
     }
+  }
+
+  if (drainController.signal.aborted) {
+    return { type: "drained" };
   }
 
   const durationMs = Math.round(performance.now() - t0);
@@ -880,6 +885,8 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
         // This is neither source progress nor a failure; retry promptly without
         // mutating the source's accumulated health or cadence evidence.
         leaseBusy = true;
+      } else if (attempt.type === "drained") {
+        return;
       } else {
         const { cycle } = attempt;
         const { outcome } = cycle;
@@ -1005,6 +1012,8 @@ export const runCaseLawIngest = async (
     return 64;
   }
 
+  drainOnSigterm();
+
   // Single adapter: run once and exit (useful for debugging and for
   // bounded staging sample runs).
   if (filterKey) {
@@ -1020,11 +1029,14 @@ export const runCaseLawIngest = async (
     // apps/api/src/lib/s3.ts), no shared state. runOneCycle depends on
     // both completing first, so it stays sequential after.
     await Promise.all([refreshS3(), refreshCorpusS3()]);
+    if (isDraining()) {
+      return 0;
+    }
     const attempt = await runOneCycle(match.adapterKey, match.name, {
       maxPages,
       maxDecisions,
     });
-    if (attempt.type === "lease_busy") {
+    if (attempt.type === "lease_busy" || attempt.type === "drained") {
       return 0;
     }
     return attempt.cycle.outcome === CYCLE_OUTCOME.COMPLETED ? 0 : 1;
@@ -1037,7 +1049,6 @@ export const runCaseLawIngest = async (
 
   // All adapters: independent concurrent loops.
   daemonMode = true;
-  drainOnSigterm();
   logInfo("Ingestion daemon started.");
   startEventLoopWatchdog();
   await refreshS3();
