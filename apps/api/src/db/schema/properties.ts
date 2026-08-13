@@ -4,6 +4,7 @@ import type { PlaybookVersionSource } from "@/api/lib/workflow/playbook-position
 import {
   PROPERTY_ROLES,
   PROPERTY_STATUSES,
+  isNotNull,
   jsonb,
   orgPolicies,
   organization,
@@ -147,6 +148,10 @@ export const playbookDefinitions = p.pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     name: p.varchar({ length: 256 }).notNull(),
+    // Stable bundled-starter provenance. Null for authored/imported playbooks;
+    // unique per organization so retries and repeated card clicks converge on
+    // the same editable definition even after the user renames it.
+    starterId: p.varchar("starter_id", { length: 64 }),
     description: p.text(),
     scope: jsonb().$type<PlaybookScope>(),
     positions: jsonb().$type<PlaybookPositions>().notNull(),
@@ -175,6 +180,10 @@ export const playbookDefinitions = p.pgTable(
     p
       .index("playbook_definitions_org_created_at_idx")
       .on(table.organizationId, table.createdAt),
+    p
+      .uniqueIndex("playbook_definitions_org_starter_id_uidx")
+      .on(table.organizationId, table.starterId)
+      .where(isNotNull(table.starterId)),
     p
       .unique("playbook_definitions_id_org_unq")
       .on(table.id, table.organizationId),

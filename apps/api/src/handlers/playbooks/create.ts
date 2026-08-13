@@ -32,6 +32,7 @@ const createPlaybookDefinition = createSafeRootHandler(
       promptCachingEnabled,
       recordAuditEvent,
       body,
+      origin: { type: "authored" },
     });
   },
 );

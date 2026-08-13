@@ -37,20 +37,22 @@ export const PlaybookStarterCards = ({
   const create = useMutation({
     mutationFn: async (starterId: StarterId) => {
       const response = await api.playbooks["from-starter"].post({ starterId });
-      return unwrapEden(response).id;
+      return unwrapEden(response);
     },
-    onSuccess: (playbookId) => {
+    onSuccess: ({ id, outcome }) => {
       detached(
         queryClient.invalidateQueries({
           queryKey: knowledgeKeys.playbooks.all(organizationId),
         }),
         "playbook-starter-cards.invalidate",
       );
-      stellaToast.add({
-        title: t("knowledge.playbooks.starters.addedToast"),
-        type: "success",
-      });
-      onCreated(playbookId);
+      if (outcome === "created") {
+        stellaToast.add({
+          title: t("knowledge.playbooks.starters.addedToast"),
+          type: "success",
+        });
+      }
+      onCreated(id);
     },
     onError: (error) => {
       stellaToast.add({

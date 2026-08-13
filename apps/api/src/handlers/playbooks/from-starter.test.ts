@@ -7,7 +7,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { documentTypes, playbookDefinitions } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
@@ -115,12 +115,22 @@ const getStatusCode = (result: unknown): number | null => {
 
 const asCreatedPlaybook = (
   result: unknown,
-): { id: SafeId<"playbookDefinition"> } => {
+): {
+  id: SafeId<"playbookDefinition">;
+  outcome: "created" | "existing";
+} => {
   expect(getStatusCode(result)).toBeNull();
-  if (!isRecord(result) || typeof result["id"] !== "string") {
-    throw new Error("Expected a created-playbook payload ({ id })");
+  if (
+    !isRecord(result) ||
+    typeof result["id"] !== "string" ||
+    (result["outcome"] !== "created" && result["outcome"] !== "existing")
+  ) {
+    throw new Error("Expected a created-playbook payload ({ id, outcome })");
   }
-  return { id: toSafeId<"playbookDefinition">(result["id"]) };
+  return {
+    id: toSafeId<"playbookDefinition">(result["id"]),
+    outcome: result["outcome"],
+  };
 };
 
 // Every id a stored playbook's positions carry: the position `sourceId` and
@@ -166,12 +176,14 @@ beforeAll(async () => {
   // `ensureDefaultDocumentTypes` helper is typed against the Bun SQL
   // production driver, not the pglite test harness).
   await testDb.insert(documentTypes).values(
-    STARTER_PLAYBOOKS.map((starter, index) => ({
-      organizationId: ids.orgA,
-      key: starter.documentTypeKey,
-      label: starter.documentTypeKey,
-      sortOrder: index,
-    })),
+    [ids.orgA, ids.orgB].flatMap((organizationId) =>
+      STARTER_PLAYBOOKS.map((starter, index) => ({
+        organizationId,
+        key: starter.documentTypeKey,
+        label: starter.documentTypeKey,
+        sortOrder: index,
+      })),
+    ),
   );
 });
 
@@ -315,7 +327,7 @@ describe("POST /playbooks/from-starter", () => {
     expect(new Set(producedIds).size).toBe(producedIds.length);
   });
 
-  test("two instantiations of the same starter share no ids", async () => {
+  test("repeated use of one starter reopens the same playbook", async () => {
     const context = createOrgContext(ids.orgA, ids.userA1);
 
     const first = asCreatedPlaybook(
@@ -329,28 +341,63 @@ describe("POST /playbooks/from-starter", () => {
       }),
     );
 
-    expect(first.id).not.toBe(second.id);
+    expect(first).toMatchObject({ outcome: "created" });
+    expect(second).toEqual({ id: first.id, outcome: "existing" });
 
     const rows = await testDb
       .select({
         id: playbookDefinitions.id,
-        positions: playbookDefinitions.positions,
       })
       .from(playbookDefinitions)
-      .where(inArray(playbookDefinitions.id, [first.id, second.id]));
+      .where(
+        and(
+          eq(playbookDefinitions.organizationId, ids.orgA),
+          eq(playbookDefinitions.starterId, "dpa"),
+        ),
+      );
+    expect(rows).toEqual([{ id: first.id }]);
+  });
 
-    const firstRow = rows.find((row) => row.id === first.id);
-    const secondRow = rows.find((row) => row.id === second.id);
-    if (!firstRow || !secondRow) {
-      throw new Error("Expected both instantiated playbook rows to exist");
-    }
+  test("concurrent use of one starter converges on one playbook", async () => {
+    const context = createOrgContext(ids.orgA, ids.userA1);
+    const results = await Promise.all(
+      Array.from({ length: 4 }, async () =>
+        asCreatedPlaybook(
+          await runHandler(createPlaybookFromStarter, context, {
+            body: { starterId: "msa" },
+          }),
+        ),
+      ),
+    );
 
-    const firstIds = new Set(collectAllIds(firstRow.positions));
-    const secondIds = collectAllIds(secondRow.positions);
+    expect(new Set(results.map(({ id }) => id)).size).toBe(1);
+    expect(results.filter(({ outcome }) => outcome === "created")).toHaveLength(
+      1,
+    );
+    expect(
+      results.filter(({ outcome }) => outcome === "existing"),
+    ).toHaveLength(3);
+  });
 
-    for (const id of secondIds) {
-      expect(firstIds.has(id)).toBe(false);
-    }
+  test("the same starter remains independent across organizations", async () => {
+    const first = asCreatedPlaybook(
+      await runHandler(
+        createPlaybookFromStarter,
+        createOrgContext(ids.orgA, ids.userA1),
+        { body: { starterId: "saas" } },
+      ),
+    );
+    const second = asCreatedPlaybook(
+      await runHandler(
+        createPlaybookFromStarter,
+        createOrgContext(ids.orgB, ids.userB1),
+        { body: { starterId: "saas" } },
+      ),
+    );
+
+    expect(first.outcome).toBe("created");
+    expect(second.outcome).toBe("created");
+    expect(first.id).not.toBe(second.id);
   });
 
   test("an unknown starterId is rejected", async () => {
