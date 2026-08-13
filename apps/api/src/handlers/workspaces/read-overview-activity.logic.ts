@@ -1,9 +1,16 @@
+import type { MatterActivityFilters } from "@stll/api-contract/matter-activity";
+
 import {
   type AuditAction,
   AUDIT_RESOURCE_TYPE,
   type AuditActivityCategory,
 } from "@/api/lib/audit-log";
 import { isUuid } from "@/api/lib/custom-schema";
+import type { TimestampIdCursorCodec } from "@/api/lib/db-pagination";
+import {
+  decodePaginationCursor,
+  encodePaginationCursor,
+} from "@/api/lib/pagination";
 import {
   brandPersistedEntityVersionId,
   brandPersistedFieldId,
@@ -15,6 +22,44 @@ export type FieldAuditResource =
       type: "cell";
       entityVersionId: ReturnType<typeof brandPersistedEntityVersionId>;
     };
+
+export const matterActivityFilterKey = ({
+  action,
+  actorId,
+  category,
+  from,
+  toExclusive,
+}: MatterActivityFilters): string =>
+  encodePaginationCursor([category, action, actorId, from, toExclusive]);
+
+export const bindActivityCursorToFilters = <Id>({
+  codec,
+  filters,
+}: {
+  codec: TimestampIdCursorCodec<Id>;
+  filters: MatterActivityFilters;
+}): TimestampIdCursorCodec<Id> => {
+  const filterKey = matterActivityFilterKey(filters);
+  return {
+    cursorValue: codec.cursorValue,
+    keysetAfter: codec.keysetAfter,
+    encode: (timestampValue, id) =>
+      encodePaginationCursor([codec.encode(timestampValue, id), filterKey]),
+    decode: (cursor) => {
+      const parts = decodePaginationCursor(cursor);
+      const innerCursor = parts?.at(0);
+      const cursorFilterKey = parts?.at(1);
+      if (
+        parts?.length !== 2 ||
+        typeof innerCursor !== "string" ||
+        cursorFilterKey !== filterKey
+      ) {
+        return null;
+      }
+      return codec.decode(innerCursor);
+    },
+  };
+};
 
 export const parseFieldAuditResourceId = (
   resourceId: string,

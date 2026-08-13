@@ -1,15 +1,38 @@
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/lib/safe-id";
-import type { MatterActivityItem } from "@/lib/workspaces/queries";
+import {
+  DEFAULT_MATTER_ACTIVITY_FILTERS,
+  type MatterActivityItem,
+} from "@/lib/workspaces/queries";
 
 import {
   activityDayKey,
   expandActivityGroupsForList,
   groupActivityItems,
-  resolveVisibleActivityTriggerType,
+  matterActivityExportResponse,
   resolveSelectedActivityGroup,
+  resolveVisibleActivityTriggerType,
+  toMatterActivityDateRange,
 } from "./activity-panel.logic";
+
+describe("toMatterActivityDateRange", () => {
+  test("uses local calendar boundaries and an exclusive end day", () => {
+    const range = toMatterActivityDateRange({
+      from: "2026-08-01",
+      to: "2026-08-13",
+    });
+    expect(new Date(range.from ?? "").getDate()).toBe(1);
+    expect(new Date(range.toExclusive ?? "").getDate()).toBe(14);
+  });
+
+  test("preserves open date bounds", () => {
+    expect(toMatterActivityDateRange({ from: null, to: null })).toEqual({
+      from: null,
+      toExclusive: null,
+    });
+  });
+});
 
 const LOCAL_NOON = new Date(2026, 6, 30, 12).getTime();
 const LOCAL_MIDNIGHT = new Date(2026, 6, 31).getTime();
@@ -55,6 +78,60 @@ const item = (
     type: "user_dispatch",
     user: null,
   },
+});
+
+describe("matter activity export", () => {
+  test("neutralizes every spreadsheet formula prefix in streamed CSV", async () => {
+    const prefixes = ["=", "+", "-", "@", "\t", "\r", "\n"];
+    await Promise.all(
+      prefixes.map(async (prefix) => {
+        const exportedItem = item(prefix, {
+          performer: { name: `${prefix}2+2`, type: "agent" },
+          runId: null,
+        });
+        exportedItem.target.name = `${prefix}SUM(A1:A2)`;
+        const response = matterActivityExportResponse({
+          exportedAt: "2026-08-13T10:00:00.000Z",
+          filters: DEFAULT_MATTER_ACTIVITY_FILTERS,
+          format: "csv",
+          items: [exportedItem],
+        });
+
+        const csv = await response.text();
+        expect(response.headers.get("Content-Type")).toBe(
+          "text/csv; charset=utf-8",
+        );
+        expect(csv).toContain(`"\t${prefix}2+2"`);
+        expect(csv).toContain(`"\t${prefix}SUM(A1:A2)"`);
+      }),
+    );
+  });
+
+  test("keeps a versioned lossless JSON envelope", async () => {
+    const exportedItem = item("exported", { runId: "run-a" });
+    const exportedAt = "2026-08-13T10:00:00.000Z";
+    const filters = {
+      ...DEFAULT_MATTER_ACTIVITY_FILTERS,
+      action: "update",
+      actorId: "user-1",
+    } as const;
+    const response = matterActivityExportResponse({
+      exportedAt,
+      filters,
+      format: "json",
+      items: [exportedItem],
+    });
+
+    expect(response.headers.get("Content-Type")).toBe(
+      "application/json; charset=utf-8",
+    );
+    expect(await response.json()).toEqual({
+      version: 1,
+      exportedAt,
+      filters,
+      items: [exportedItem],
+    });
+  });
 });
 
 describe("activity provenance", () => {

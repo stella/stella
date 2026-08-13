@@ -3,9 +3,11 @@ import {
   and,
   desc,
   eq,
+  gte,
   inArray,
   isNotNull,
   isNull,
+  lt,
   ne,
   or,
   sql,
@@ -13,6 +15,12 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { t } from "elysia";
+
+import type {
+  MATTER_ACTIVITY_CATEGORIES,
+  MatterActivityAction,
+  MatterActivityFilters,
+} from "@stll/api-contract/matter-activity";
 
 // eslint-disable-next-line security-guards/no-unscoped-user-query -- actor and affected-user IDs come only from audit rows already scoped to this authorized organization and workspace; a membership join would erase retained attribution after account deletion.
 import { user } from "@/api/db/auth-schema";
@@ -26,6 +34,7 @@ import {
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { tUserId } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -37,21 +46,12 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 
 import {
+  bindActivityCursorToFilters,
   parseFieldAuditResourceId,
   resolveActivityAction,
   resolveActivityCategory,
   resolveActivityRunId,
 } from "./read-overview-activity.logic";
-
-const ACTIVITY_FILTERS = [
-  "all",
-  "documents",
-  "tasks",
-  "matter",
-  "team",
-  "court",
-  "automation",
-] as const;
 
 const versionSnapshotAuditLogs = alias(
   auditLogs,
@@ -86,7 +86,10 @@ const LEGACY_VISIBLE_RESOURCE_TYPES = [
   AUDIT_RESOURCE_TYPE.FLOW_RUN,
 ] as const;
 
-type ActivityCategory = Exclude<(typeof ACTIVITY_FILTERS)[number], "all">;
+type ActivityCategory = Exclude<
+  (typeof MATTER_ACTIVITY_CATEGORIES)[number],
+  "all"
+>;
 
 const legacyEntityKind = () =>
   sql<string>`coalesce(
@@ -362,6 +365,41 @@ const legacyCategoryCondition = (category: ActivityCategory): SQL => {
   }
 };
 
+const relationshipChange = () => sql<"add" | "remove" | null>`case
+  when ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.WORKSPACE}
+    and ${auditLogs.changes} ? 'membersAdded'
+    then 'add'
+  when ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.WORKSPACE}
+    and ${auditLogs.changes} ? 'membersRemoved'
+    then 'remove'
+  when ${auditLogs.resourceType} in (
+    ${AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER},
+    ${AUDIT_RESOURCE_TYPE.WORKSPACE_CONTACT},
+    ${AUDIT_RESOURCE_TYPE.CASE_LAW_MATTER_LINK}
+  ) and ${auditLogs.action} = ${AUDIT_ACTION.CREATE}
+    then 'add'
+  when ${auditLogs.resourceType} in (
+    ${AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER},
+    ${AUDIT_RESOURCE_TYPE.WORKSPACE_CONTACT},
+    ${AUDIT_RESOURCE_TYPE.CASE_LAW_MATTER_LINK}
+  ) and ${auditLogs.action} = ${AUDIT_ACTION.DELETE}
+    then 'remove'
+  else null
+end`;
+
+const activityActionCondition = (action: MatterActivityAction): SQL => {
+  if (action === "add" || action === "remove") {
+    return sql`${relationshipChange()} = ${action}`;
+  }
+  if (action === "all") {
+    return sql`true`;
+  }
+  return (
+    and(eq(auditLogs.action, action), isNull(relationshipChange())) ??
+    sql`false`
+  );
+};
+
 const activityCursor = createTimestampIdCursorCodec({
   column: auditLogs.createdAt,
   brandId: brandPersistedAuditLogId,
@@ -382,6 +420,22 @@ const config = {
         t.Literal("automation"),
       ]),
     ),
+    action: t.Optional(
+      t.Union([
+        t.Literal("all"),
+        t.Literal("create"),
+        t.Literal("update"),
+        t.Literal("delete"),
+        t.Literal("execute"),
+        t.Literal("cancel"),
+        t.Literal("review"),
+        t.Literal("add"),
+        t.Literal("remove"),
+      ]),
+    ),
+    actorId: t.Optional(tUserId),
+    from: t.Optional(t.String({ format: "date-time" })),
+    toExclusive: t.Optional(t.String({ format: "date-time" })),
     cursor: t.Optional(t.String({ maxLength: 512 })),
     limit: t.Optional(
       t.Integer({
@@ -415,7 +469,30 @@ type EntityTarget = Omit<ActivityTarget, "kind"> & {
 const readOverviewActivity = createSafeHandler(
   config,
   async function* ({ query, safeDb, session, workspaceId }) {
-    const cursor = query.cursor ? activityCursor.decode(query.cursor) : null;
+    const filters = {
+      action: query.action ?? "all",
+      actorId: query.actorId ?? null,
+      category: query.category ?? "all",
+      from: query.from ?? null,
+      toExclusive: query.toExclusive ?? null,
+    } satisfies MatterActivityFilters;
+    const fromDate = filters.from === null ? null : new Date(filters.from);
+    const toExclusiveDate =
+      filters.toExclusive === null ? null : new Date(filters.toExclusive);
+    if (
+      fromDate !== null &&
+      toExclusiveDate !== null &&
+      fromDate >= toExclusiveDate
+    ) {
+      return Result.err(
+        new HandlerError({ status: 400, message: "Invalid date range" }),
+      );
+    }
+    const filteredCursor = bindActivityCursorToFilters({
+      codec: activityCursor,
+      filters,
+    });
+    const cursor = query.cursor ? filteredCursor.decode(query.cursor) : null;
     if (query.cursor !== undefined && cursor === null) {
       return Result.err(
         new HandlerError({ status: 400, message: "Invalid cursor" }),
@@ -448,7 +525,27 @@ const readOverviewActivity = createSafeHandler(
       ),
     ];
 
-    if (query.category === "automation") {
+    if (filters.action !== "all") {
+      conditions.push(activityActionCondition(filters.action));
+    }
+    if (filters.actorId !== null) {
+      conditions.push(
+        and(
+          eq(auditLogs.performerType, "user"),
+          sql`coalesce(${auditLogs.performerId}, ${auditLogs.userId}) = ${filters.actorId}`,
+        ) ?? sql`false`,
+      );
+    }
+    if (fromDate !== null) {
+      // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- caller-supplied filter bound, never round-tripped through the database
+      conditions.push(gte(auditLogs.createdAt, fromDate));
+    }
+    if (toExclusiveDate !== null) {
+      // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- caller-supplied filter bound, never round-tripped through the database
+      conditions.push(lt(auditLogs.createdAt, toExclusiveDate));
+    }
+
+    if (filters.category === "automation") {
       conditions.push(
         or(
           eq(auditLogs.activityCategory, "automation"),
@@ -459,17 +556,17 @@ const readOverviewActivity = createSafeHandler(
           ),
         ),
       );
-    } else if (query.category && query.category !== "all") {
-      const legacyCondition = legacyCategoryCondition(query.category);
+    } else if (filters.category !== "all") {
+      const legacyCondition = legacyCategoryCondition(filters.category);
       const storedOrLegacyCategory = or(
-        eq(auditLogs.activityCategory, query.category),
+        eq(auditLogs.activityCategory, filters.category),
         and(isNull(auditLogs.activityCategory), legacyCondition),
       );
-      if (query.category === "tasks") {
+      if (filters.category === "tasks") {
         conditions.push(
           or(storedOrLegacyCategory, taskEntityResourceCondition()),
         );
-      } else if (query.category === "documents") {
+      } else if (filters.category === "documents") {
         conditions.push(
           and(
             storedOrLegacyCategory,
@@ -481,7 +578,7 @@ const readOverviewActivity = createSafeHandler(
       }
     }
     if (cursor) {
-      const cursorCondition = activityCursor.keysetAfter({
+      const cursorCondition = filteredCursor.keysetAfter({
         cursor,
         idColumn: auditLogs.id,
         direction: "descending",
@@ -515,27 +612,7 @@ const readOverviewActivity = createSafeHandler(
             performerType: auditLogs.performerType,
             resourceId: auditLogs.resourceId,
             resourceType: auditLogs.resourceType,
-            relationshipChange: sql<"add" | "remove" | null>`case
-              when ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.WORKSPACE}
-                and ${auditLogs.changes} ? 'membersAdded'
-                then 'add'
-              when ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.WORKSPACE}
-                and ${auditLogs.changes} ? 'membersRemoved'
-                then 'remove'
-              when ${auditLogs.resourceType} in (
-                ${AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER},
-                ${AUDIT_RESOURCE_TYPE.WORKSPACE_CONTACT},
-                ${AUDIT_RESOURCE_TYPE.CASE_LAW_MATTER_LINK}
-              ) and ${auditLogs.action} = ${AUDIT_ACTION.CREATE}
-                then 'add'
-              when ${auditLogs.resourceType} in (
-                ${AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER},
-                ${AUDIT_RESOURCE_TYPE.WORKSPACE_CONTACT},
-                ${AUDIT_RESOURCE_TYPE.CASE_LAW_MATTER_LINK}
-              ) and ${auditLogs.action} = ${AUDIT_ACTION.DELETE}
-                then 'remove'
-              else null
-            end`,
+            relationshipChange: relationshipChange(),
             runId: auditLogs.runId,
             triggerSource: auditLogs.triggerSource,
             triggerType: auditLogs.triggerType,
@@ -729,10 +806,10 @@ const readOverviewActivity = createSafeHandler(
       rows: result.rows,
       limit,
       cursorForItem: (item) =>
-        activityCursor.encode(item.createdAtCursor, item.id),
+        filteredCursor.encode(item.createdAtCursor, item.id),
     });
 
-    return Result.ok({
+    const payload = {
       items: page.items.map((row) => {
         const performerId = row.performerId ?? row.userId;
         const category = resolveActivityCategory({
@@ -801,7 +878,9 @@ const readOverviewActivity = createSafeHandler(
       }),
       limit: page.limit,
       nextCursor: page.nextCursor,
-    });
+    };
+
+    return Result.ok(payload);
   },
 );
 

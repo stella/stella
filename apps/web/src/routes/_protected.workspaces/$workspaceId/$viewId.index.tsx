@@ -7,6 +7,7 @@ import {
 } from "@/lib/react-query";
 import type { ViewLayout, ViewLayoutType, WorkspaceView } from "@/lib/types";
 import {
+  DEFAULT_MATTER_ACTIVITY_FILTERS,
   overviewActivityOptions,
   overviewOptions,
 } from "@/lib/workspaces/queries";
@@ -84,7 +85,7 @@ export const Route = createFileRoute(
             queryClient,
             overviewActivityOptions({
               activeOrganizationId: context.user.activeOrganizationId,
-              category: "all",
+              filters: DEFAULT_MATTER_ACTIVITY_FILTERS,
               workspaceId,
             }),
           ),

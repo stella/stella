@@ -1,9 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
+import type { MatterActivityFilters } from "@stll/api-contract/matter-activity";
+
+import { auditLogs } from "@/api/db/schema";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
+import { brandPersistedAuditLogId } from "@/api/lib/safe-id-boundaries";
 
 import {
+  bindActivityCursorToFilters,
   legacyActivityCategory,
   parseFieldAuditResourceId,
   resolveActivityAction,
@@ -127,5 +133,48 @@ describe("resolveActivityAction", () => {
     expect(
       resolveActivityAction({ action: "delete", relationshipChange: null }),
     ).toBe("delete");
+  });
+});
+
+const defaultFilters = {
+  action: "all",
+  actorId: null,
+  category: "all",
+  from: null,
+  toExclusive: null,
+} as const satisfies MatterActivityFilters;
+
+describe("activity filter cursors", () => {
+  const codec = createTimestampIdCursorCodec({
+    column: auditLogs.createdAt,
+    brandId: brandPersistedAuditLogId,
+  });
+  const auditLogId = "00000000-0000-0000-0000-000000000004";
+  const timestamp = "2026-08-13T09:10:11.123456Z";
+
+  test("round-trips only under the exact filter identity", () => {
+    const cursor = bindActivityCursorToFilters({
+      codec,
+      filters: defaultFilters,
+    }).encode(timestamp, auditLogId);
+    expect(
+      bindActivityCursorToFilters({
+        codec,
+        filters: defaultFilters,
+      }).decode(cursor),
+    ).not.toBeNull();
+
+    const changedFilters: MatterActivityFilters[] = [
+      { ...defaultFilters, action: "update" },
+      { ...defaultFilters, actorId: "user-1" },
+      { ...defaultFilters, category: "documents" },
+      { ...defaultFilters, from: "2026-08-01T00:00:00.000Z" },
+      { ...defaultFilters, toExclusive: "2026-09-01T00:00:00.000Z" },
+    ];
+    for (const filters of changedFilters) {
+      expect(
+        bindActivityCursorToFilters({ codec, filters }).decode(cursor),
+      ).toBeNull();
+    }
   });
 });

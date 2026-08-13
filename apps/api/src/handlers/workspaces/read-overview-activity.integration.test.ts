@@ -43,10 +43,12 @@ let ids: TestIds;
 const seededAuditLogIds: SafeId<"auditLog">[] = [];
 
 let activityInOwnMatter: SafeId<"auditLog">;
+let createdActivityInOwnMatter: SafeId<"auditLog">;
 let activityInSiblingMatter: SafeId<"auditLog">;
 let activityInOtherOrganization: SafeId<"auditLog">;
 
 type SeedActivityOptions = {
+  action?: typeof AUDIT_ACTION.CREATE | typeof AUDIT_ACTION.UPDATE;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
@@ -54,6 +56,7 @@ type SeedActivityOptions = {
 
 /** Write one document-category entry through the canonical recorder. */
 const seedActivity = async ({
+  action = AUDIT_ACTION.UPDATE,
   organizationId,
   workspaceId,
   userId,
@@ -69,7 +72,7 @@ const seedActivity = async ({
     },
   });
   await recorder(asTestRaw<Transaction>(testDb), {
-    action: AUDIT_ACTION.UPDATE,
+    action,
     resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
     resourceId,
   });
@@ -107,6 +110,12 @@ beforeAll(async () => {
     workspaceId: ids.wsA1,
     userId: ids.userA1,
   });
+  createdActivityInOwnMatter = await seedActivity({
+    action: AUDIT_ACTION.CREATE,
+    organizationId: ids.orgA,
+    workspaceId: ids.wsA1,
+    userId: ids.userA1,
+  });
   // Same organization, a matter the reader is not looking at, edited by a
   // colleague who works only there.
   activityInSiblingMatter = await seedActivity({
@@ -128,11 +137,17 @@ afterAll(async () => {
   await releaseRlsFixture();
 });
 
-const readActivityOfWorkspaceA1 = async (): Promise<ActivityItem[]> => {
+type ActivityQuery = Parameters<
+  typeof readOverviewActivity.handler
+>[0]["query"];
+
+const readActivityOfWorkspaceA1 = async (
+  query: ActivityQuery = {},
+): Promise<ActivityItem[]> => {
   const result = await readOverviewActivity.handler(
     asTestRaw<Parameters<typeof readOverviewActivity.handler>[0]>({
       memberRole: { role: "owner" },
-      query: {},
+      query,
       safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
@@ -150,6 +165,32 @@ describe("matter overview activity", () => {
     expect(
       items.find((item) => item.id === activityInOwnMatter)?.performer,
     ).toMatchObject({ id: ids.userA1, name: "User A1" });
+  });
+
+  test("composes action, actor, category, and date filters on the server", async () => {
+    const items = await readActivityOfWorkspaceA1({
+      action: "update",
+      actorId: ids.userA1,
+      category: "documents",
+      from: "2020-01-01T00:00:00.000Z",
+      toExclusive: "2099-01-01T00:00:00.000Z",
+    });
+
+    expect(items.map((item) => item.id)).toContain(activityInOwnMatter);
+    expect(items.map((item) => item.id)).not.toContain(
+      createdActivityInOwnMatter,
+    );
+    for (const { performer } of items) {
+      expect(performer.id).toBe(ids.userA1);
+    }
+  });
+
+  test("applies date bounds before pagination", async () => {
+    const items = await readActivityOfWorkspaceA1({
+      from: "2099-01-01T00:00:00.000Z",
+    });
+
+    expect(items).toEqual([]);
   });
 
   test("a sibling matter's entry and its actor never appear", async () => {

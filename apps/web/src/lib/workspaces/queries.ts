@@ -11,14 +11,18 @@ import {
 import type { WorkspaceNavigationItem } from "@/lib/memory-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import {
-  type MatterActivityCategory,
+  type MatterActivityFilters,
   type WorkspaceActivityKey,
   workspacesKeys,
 } from "@/lib/workspaces/queries.logic";
 
 export {
+  DEFAULT_MATTER_ACTIVITY_FILTERS,
+  MATTER_ACTIVITY_ACTIONS,
   MATTER_ACTIVITY_CATEGORIES,
+  type MatterActivityAction,
   type MatterActivityCategory,
+  type MatterActivityFilters,
   workspacesKeys,
 } from "@/lib/workspaces/queries.logic";
 
@@ -29,25 +33,36 @@ type WorkspaceActivityOptions = {
 
 const WORKSPACE_ACTIVITY_PAGE_SIZE = 3;
 const MATTER_ACTIVITY_PAGE_SIZE = 15;
+const MATTER_ACTIVITY_EXPORT_LIMIT = 10_000;
+const MATTER_ACTIVITY_EXPORT_PAGE_SIZE = 50;
+const MATTER_ACTIVITY_EXPORT_PAGE_LIMIT =
+  Math.ceil(MATTER_ACTIVITY_EXPORT_LIMIT / MATTER_ACTIVITY_EXPORT_PAGE_SIZE) +
+  1;
 
 type ReadOverviewActivityOptions = {
-  category: MatterActivityCategory;
   cursor?: string;
+  filters: MatterActivityFilters;
+  limit?: number;
   signal?: AbortSignal;
   workspaceId: string;
 };
 
 const readOverviewActivity = async ({
-  category,
   cursor,
+  filters,
+  limit = MATTER_ACTIVITY_PAGE_SIZE,
   signal,
   workspaceId,
 }: ReadOverviewActivityOptions) => {
   const response = await api.workspaces({ workspaceId }).overview.activity.get({
     ...(signal ? { fetch: { signal } } : {}),
     query: {
-      category,
-      limit: MATTER_ACTIVITY_PAGE_SIZE,
+      action: filters.action,
+      actorId: filters.actorId ?? undefined,
+      category: filters.category,
+      from: filters.from ?? undefined,
+      limit,
+      toExclusive: filters.toExclusive ?? undefined,
       ...(cursor ? { cursor } : {}),
     },
   });
@@ -57,6 +72,63 @@ const readOverviewActivity = async ({
 export type MatterActivityItem = Awaited<
   ReturnType<typeof readOverviewActivity>
 >["items"][number];
+
+type CollectOverviewActivityOptions = {
+  cursor?: string;
+  filters: MatterActivityFilters;
+  items: MatterActivityItem[];
+  pageCount: number;
+  workspaceId: string;
+};
+
+const collectOverviewActivity = async ({
+  cursor,
+  filters,
+  items,
+  pageCount,
+  workspaceId,
+}: CollectOverviewActivityOptions): Promise<
+  { type: "complete"; items: MatterActivityItem[] } | { type: "tooLarge" }
+> => {
+  if (pageCount >= MATTER_ACTIVITY_EXPORT_PAGE_LIMIT) {
+    return { type: "tooLarge" };
+  }
+  const page = await readOverviewActivity({
+    cursor,
+    filters,
+    limit: MATTER_ACTIVITY_EXPORT_PAGE_SIZE,
+    workspaceId,
+  });
+  if (items.length + page.items.length > MATTER_ACTIVITY_EXPORT_LIMIT) {
+    return { type: "tooLarge" };
+  }
+  items.push(...page.items);
+  if (page.nextCursor === null) {
+    return { items, type: "complete" };
+  }
+
+  return await collectOverviewActivity({
+    cursor: page.nextCursor,
+    filters,
+    items,
+    pageCount: pageCount + 1,
+    workspaceId,
+  });
+};
+
+export const exportOverviewActivity = async ({
+  filters,
+  workspaceId,
+}: {
+  filters: MatterActivityFilters;
+  workspaceId: string;
+}) =>
+  await collectOverviewActivity({
+    filters,
+    items: [],
+    pageCount: 0,
+    workspaceId,
+  });
 
 const getInitialWorkspaceActivityCursor = (): string | undefined => undefined;
 
@@ -169,23 +241,23 @@ export const overviewOptions = (workspaceId: string) =>
 
 export const overviewActivityOptions = ({
   activeOrganizationId,
-  category,
+  filters,
   workspaceId,
 }: {
   activeOrganizationId: string;
-  category: MatterActivityCategory;
+  filters: MatterActivityFilters;
   workspaceId: string;
 }) =>
   infiniteQueryOptions({
     queryKey: workspacesKeys.overviewActivity(
       activeOrganizationId,
       workspaceId,
-      category,
+      filters,
     ),
     queryFn: async ({ pageParam, signal }) =>
       await readOverviewActivity({
-        category,
         ...(pageParam ? { cursor: pageParam } : {}),
+        filters,
         signal,
         workspaceId,
       }),

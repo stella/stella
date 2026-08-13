@@ -2,7 +2,9 @@ import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
 import {
+  DEFAULT_MATTER_ACTIVITY_FILTERS,
   invalidateWorkspaceActivity,
+  type MatterActivityFilters,
   workspacesKeys,
 } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
@@ -19,7 +21,7 @@ describe("workspace activity invalidation", () => {
     const overviewKey = workspacesKeys.overviewActivity(
       "organization-a",
       "workspace-a",
-      "all",
+      DEFAULT_MATTER_ACTIVITY_FILTERS,
     );
     queryClient.setQueryData(targetKey, { pages: [] });
     queryClient.setQueryData(otherKey, { pages: [] });
@@ -44,5 +46,36 @@ describe("workspace activity invalidation", () => {
     });
 
     expect(queryClient.getQueryState(activityKey)?.isInvalidated).toBe(true);
+  });
+
+  test("isolates every server filter in the overview cache key", () => {
+    const original = workspacesKeys.overviewActivity(
+      "organization-a",
+      "workspace-a",
+      DEFAULT_MATTER_ACTIVITY_FILTERS,
+    );
+    const variants: MatterActivityFilters[] = [
+      { ...DEFAULT_MATTER_ACTIVITY_FILTERS, action: "update" },
+      { ...DEFAULT_MATTER_ACTIVITY_FILTERS, actorId: "user-a" },
+      { ...DEFAULT_MATTER_ACTIVITY_FILTERS, category: "documents" },
+      {
+        ...DEFAULT_MATTER_ACTIVITY_FILTERS,
+        from: "2026-08-01T00:00:00.000Z",
+      },
+      {
+        ...DEFAULT_MATTER_ACTIVITY_FILTERS,
+        toExclusive: "2026-09-01T00:00:00.000Z",
+      },
+    ];
+
+    for (const filters of variants) {
+      expect(
+        workspacesKeys.overviewActivity(
+          "organization-a",
+          "workspace-a",
+          filters,
+        ),
+      ).not.toEqual(original);
+    }
   });
 });
