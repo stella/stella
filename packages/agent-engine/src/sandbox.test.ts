@@ -37,6 +37,10 @@ const CANARY_WORKFLOW_URL = new URL(
   "../../../.github/workflows/agent-sandbox-canary.yml",
   import.meta.url,
 );
+const SCHEDULED_ALERTS_WORKFLOW_URL = new URL(
+  "../../../.github/workflows/scheduled-run-alerts.yml",
+  import.meta.url,
+);
 
 describe("engine/harness guards", () => {
   test("accepts known engines and rejects others", () => {
@@ -54,12 +58,23 @@ describe("engine/harness guards", () => {
 
 describe("agent sandbox canary workflow", () => {
   test("runs nightly on the protected default branch", async () => {
-    const workflow = await Bun.file(CANARY_WORKFLOW_URL).text();
+    const [workflow, scheduledAlertsWorkflow] = await Promise.all([
+      Bun.file(CANARY_WORKFLOW_URL).text(),
+      Bun.file(SCHEDULED_ALERTS_WORKFLOW_URL).text(),
+    ]);
+    const workflowName = /^name: (?<name>.+)$/mu.exec(workflow)?.groups?.[
+      "name"
+    ];
 
+    expect(workflowName).toBe("Agent sandbox canary");
     expect(workflow).toContain('    - cron: "43 4 * * *"');
     expect(workflow).toContain(
       "if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
     );
+    expect(workflow).toContain(
+      `group: agent-sandbox-canary-\${{ github.ref }}`,
+    );
+    expect(scheduledAlertsWorkflow).toContain(`      - ${workflowName}`);
   });
 });
 

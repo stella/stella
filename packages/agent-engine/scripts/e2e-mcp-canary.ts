@@ -46,6 +46,8 @@ class AgentSandboxCanaryError extends TaggedError("AgentSandboxCanaryError")<{
   cause?: unknown;
 }> {}
 
+type CanaryOutcome = { status: "ok" } | { status: "failed"; error: unknown };
+
 const fail = (message: string, cause?: unknown): never => {
   throw new AgentSandboxCanaryError({
     message,
@@ -53,7 +55,7 @@ const fail = (message: string, cause?: unknown): never => {
   });
 };
 
-const asCanaryError = (failure: unknown, message: string): Error =>
+const asCanaryError = (failure: unknown, message: string) =>
   failure instanceof Error
     ? failure
     : new AgentSandboxCanaryError({ message, cause: failure });
@@ -69,7 +71,7 @@ const assertCanary: CanaryAssertion = (condition, message) => {
   }
 };
 
-const consumeHarnessChunk = (chunk: StreamChunk, text: string): string => {
+const consumeHarnessChunk = (chunk: StreamChunk, text: string) => {
   switch (chunk.type) {
     case EventType.RUN_ERROR:
       return fail(`canary harness failed: ${chunk.message}`);
@@ -412,7 +414,7 @@ const main = async (): Promise<void> => {
   );
   const containerName = `stella-agent-mcp-canary-${randomUUID().slice(0, 8)}`;
   let serverStarted = false;
-  let runFailure: unknown;
+  let runOutcome: CanaryOutcome = { status: "ok" };
 
   try {
     const serverPath = await compileServer(tempDirectory);
@@ -455,36 +457,55 @@ const main = async (): Promise<void> => {
     ]);
     assertState(JSON.parse(stateResult.stdout));
   } catch (error) {
-    runFailure = error;
+    runOutcome = { status: "failed", error };
   }
 
-  let cleanupFailure: unknown;
+  let cleanupOutcome: CanaryOutcome = { status: "ok" };
   if (serverStarted) {
     const cleanup = await docker(["rm", "--force", containerName], {
       allowFailure: true,
     });
     if (cleanup.exitCode !== 0) {
-      cleanupFailure = new AgentSandboxCanaryError({
-        message: "could not remove the MCP canary service container",
-      });
+      cleanupOutcome = {
+        status: "failed",
+        error: new AgentSandboxCanaryError({
+          message: "could not remove the MCP canary service container",
+        }),
+      };
     }
   }
   try {
     await rm(tempDirectory, { recursive: true, force: true });
   } catch (error) {
-    cleanupFailure ??= error;
+    if (cleanupOutcome.status === "ok") {
+      cleanupOutcome = { status: "failed", error };
+    } else {
+      cleanupOutcome = {
+        status: "failed",
+        error: new AgentSandboxCanaryError({
+          message: "multiple agent sandbox canary cleanup operations failed",
+          cause: {
+            containerRemovalFailure: cleanupOutcome.error,
+            temporaryDirectoryRemovalFailure: error,
+          },
+        }),
+      };
+    }
   }
-  if (runFailure !== undefined && cleanupFailure === undefined) {
-    throw asCanaryError(runFailure, "agent sandbox canary failed");
-  }
-  if (runFailure === undefined && cleanupFailure !== undefined) {
-    throw asCanaryError(cleanupFailure, "agent sandbox canary cleanup failed");
-  }
-  if (runFailure !== undefined && cleanupFailure !== undefined) {
+  if (runOutcome.status === "failed") {
+    if (cleanupOutcome.status === "ok") {
+      throw asCanaryError(runOutcome.error, "agent sandbox canary failed");
+    }
     fail("agent sandbox canary or its cleanup failed", {
-      runFailure,
-      cleanupFailure,
+      runFailure: runOutcome.error,
+      cleanupFailure: cleanupOutcome.error,
     });
+  }
+  if (cleanupOutcome.status === "failed") {
+    throw asCanaryError(
+      cleanupOutcome.error,
+      "agent sandbox canary cleanup failed",
+    );
   }
   console.log(
     "e2e-mcp-canary: OK; real Codex completed authenticated read/write/deny with exact audit attribution and no tripwire call.",

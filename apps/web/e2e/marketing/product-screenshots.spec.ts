@@ -15,9 +15,6 @@ const SUPPLIER_AGREEMENT_FIELD_ID = "3f985a8b-26be-5a07-89d3-2a05acb94354";
 // the video recorder's resolveMarketingViewRoutes, so the agent screenshot
 // never lands on the empty /chat/new composer.
 const MARKETING_AGENT_THREAD_TITLE = "Project Atlas · Change-of-control review";
-// One of the four default slash-command skills installed below. Its visible
-// card is the readiness marker for the empty inspector chat in law captures.
-const MARKETING_DEFAULT_SKILL_NAME = "Compare versions";
 // The org that owns every seeded marketing workspace (AKVIZICE/EXPORT_REVIEW/
 // Meridian). Fixed id from seed-utils' DEFAULT_ORG_ID ("Harbrook & Partners",
 // apps/api/scripts/seed-test-user.ts), seeded by
@@ -138,6 +135,9 @@ test("capture landing product screenshots", async ({
   await expect(page.locator("main").first()).toBeVisible({
     timeout: COLD_COMPILE_TIMEOUT,
   });
+  await expect(page.getByText("Case Law").first()).toBeVisible({
+    timeout: COLD_COMPILE_TIMEOUT,
+  });
 
   // Resolved once (not per capture/theme): only needed when the "agent"
   // capture is actually part of this run.
@@ -229,15 +229,6 @@ test("capture landing product screenshots", async ({
         // so the breadcrumb remains in frame without undoing the reader scroll.
         // eslint-disable-next-line no-await-in-loop -- see above
         await page.evaluate(() => window.scrollTo({ left: 0, top: 0 }));
-        // Default skills are seeded during authentication below. Wait for one
-        // stable card so the screenshot cannot race the inspector skills query.
-        // eslint-disable-next-line no-await-in-loop -- see above
-        await expect(
-          page
-            .locator('[data-side="right"]')
-            .getByText(MARKETING_DEFAULT_SKILL_NAME, { exact: true })
-            .first(),
-        ).toBeVisible();
       }
       if ("prepare" in capture && capture.prepare === "open-files") {
         // eslint-disable-next-line no-await-in-loop -- see above
@@ -405,14 +396,4 @@ const authenticateMarketingSession = async (request: APIRequestContext) => {
     },
   );
   expect(setActiveResponse.ok(), await setActiveResponse.text()).toBe(true);
-
-  // Fresh CI databases do not visit Knowledge > Tools, which normally installs
-  // the default slash-command skills. Seed them explicitly so clean-database
-  // captures use the intended empty-inspector product state. The endpoint is
-  // idempotent and preserves an existing authored skill set.
-  const seedSkillsResponse = await request.post(
-    `${apiBaseURL}/v1/skills/seed`,
-    { data: {}, headers: { origin: webOrigin } },
-  );
-  expect(seedSkillsResponse.ok(), await seedSkillsResponse.text()).toBe(true);
 };

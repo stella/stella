@@ -9,7 +9,7 @@ on:
 permissions: {}
 
 concurrency:
-  group: agent-sandbox-canary
+  group: agent-sandbox-canary-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
