@@ -4,6 +4,10 @@
 
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves direct DOM access is not SSR-safe
 const viewportWidth = window.innerWidth;
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves unqualified viewport width is browser-only
+const bareViewportWidth = innerWidth;
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves unqualified viewport height is browser-only
+const bareViewportHeight = innerHeight;
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves browser storage is not SSR-safe
 const savedFilter = localStorage.getItem("case-law-filter");
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves media queries are browser-only
@@ -65,6 +69,12 @@ const ambientLocalDateTime = new Date("2026-08-13T12:00:00");
 declare const unknownDateInput: string;
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves opaque Date inputs cannot be assumed to be epochs
 const ambientUnknownDate = new Date(unknownDateInput);
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves Date.parse cannot consume local-time strings during SSR
+const ambientParsedLocalDateTime = Date.parse("2026-08-13T12:00:00");
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves Date.parse cannot assume an opaque input is zoned
+const ambientParsedUnknownDate = globalThis.Date.parse(unknownDateInput);
+const fixedParsedDate = Date.parse("2026-08-13");
+const fixedParsedInstant = globalThis.Date.parse("2026-08-13T12:00:00Z");
 const fixedUtcComponents = new Date(Date.UTC(2026, 7, 13));
 const fixedDateCopy = new Date(fixedDate);
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves an explicit locale cannot substitute for an explicit time zone
@@ -111,6 +121,7 @@ const fixedDateFormatter = Intl.DateTimeFormat("en", {
 });
 const readShadowedNavigator = (navigator: { language: string }) =>
   navigator.language;
+const readShadowedViewport = (innerWidth: number) => innerWidth;
 const readShadowedClock = (Date: () => string) => Date;
 const readShadowedRandom = (Math: { random: () => number }) => Math.random();
 const captureShadowedClock = (Date: { now: () => number }) => Date.now;
@@ -186,6 +197,8 @@ export {
   ambientLocalDateTime,
   ambientLocalDateString,
   ambientLocalYear,
+  ambientParsedLocalDateTime,
+  ambientParsedUnknownDate,
   ambientTimeZoneDate,
   ambientTimeZoneDateTime,
   ambientTimeZoneFormatter,
@@ -194,6 +207,8 @@ export {
   ambientComponentDate,
   assertedEmptyLocaleDateFormatter,
   assertedGlobalBrowserLocale,
+  bareViewportHeight,
+  bareViewportWidth,
   browserDocument,
   browserLocale,
   browserNavigator,
@@ -225,6 +240,8 @@ export {
   fixedLocaleNumber,
   fixedLocaleNumericVariable,
   fixedLocaleTime,
+  fixedParsedDate,
+  fixedParsedInstant,
   fixedUtcComponents,
   fixedDateFormatter,
   fixedSegmenter,
@@ -248,6 +265,7 @@ export {
   readShadowedClock,
   readShadowedGlobalThis,
   readShadowedRandom,
+  readShadowedViewport,
   readWrappedShadowedClock,
   savedFilter,
   segmenter,

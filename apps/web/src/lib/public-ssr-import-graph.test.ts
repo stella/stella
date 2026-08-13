@@ -226,7 +226,7 @@ const REVIEWED_AMBIENT_FINGERPRINTS = {
 } as const satisfies Readonly<Record<string, readonly string[]>>;
 
 const BROWSER_GLOBAL_NAMES =
-  "window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|self";
+  "window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|innerHeight|innerWidth|outerHeight|outerWidth|pageXOffset|pageYOffset|scrollX|scrollY|visualViewport|self";
 const INTL_CONSTRUCTOR_NAMES =
   "Collator|DateTimeFormat|DisplayNames|ListFormat|NumberFormat|PluralRules|RelativeTimeFormat|Segmenter";
 const LOCAL_TIME_DATE_METHOD_NAMES =
@@ -242,6 +242,10 @@ const ambientStatePatterns = [
   /\b(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*globalThis\b(?!\s*\.)/u,
   new RegExp(`(?<![.\\w])(?:${BROWSER_GLOBAL_NAMES})\\b(?!\\s*:)`, "u"),
   /\b(?:globalThis\.)?Date\.now\b/u,
+  new RegExp(
+    `\\b(?:globalThis\\.)?Date\\.parse\\s*\\(\\s*${AMBIENT_DATE_STRING_SENTINEL}`,
+    "u",
+  ),
   /\b(?:globalThis\.)?Math\.random\b/u,
   /\b(?:globalThis\.)?performance\.now\b/u,
   /\b(?:globalThis\.)?crypto\.(?:getRandomValues|randomUUID)\b/u,
@@ -587,6 +591,24 @@ const maskNonExecutableLiterals = (source: string, file: string): string => {
         node.expression.name.text === "Date")
     );
   };
+  const isDateParseCall = (node: ts.Node | undefined): boolean => {
+    if (
+      !node ||
+      !ts.isCallExpression(node) ||
+      !ts.isPropertyAccessExpression(node.expression) ||
+      node.expression.name.text !== "parse"
+    ) {
+      return false;
+    }
+    const receiver = node.expression.expression;
+    return (
+      (ts.isIdentifier(receiver) && receiver.text === "Date") ||
+      (ts.isPropertyAccessExpression(receiver) &&
+        ts.isIdentifier(receiver.expression) &&
+        receiver.expression.text === "globalThis" &&
+        receiver.name.text === "Date")
+    );
+  };
   const isProvenDateInput = (node: ts.Expression): boolean => {
     if (
       ts.isNumericLiteral(node) ||
@@ -625,9 +647,21 @@ const maskNonExecutableLiterals = (source: string, file: string): string => {
         return;
       }
     }
+    if (isDateParseCall(node) && node.arguments.length === 1) {
+      const argument = node.arguments[0];
+      if (
+        argument &&
+        !ts.isStringLiteral(argument) &&
+        !ts.isNoSubstitutionTemplateLiteral(argument) &&
+        !ts.isTemplateExpression(argument)
+      ) {
+        maskAmbientDateString(argument.getStart(sourceFile), argument.end);
+        return;
+      }
+    }
     if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
       if (
-        isDateConstructor(node.parent) &&
+        (isDateConstructor(node.parent) || isDateParseCall(node.parent)) &&
         !isDeterministicDateString(node.text)
       ) {
         maskAmbientDateString(node.getStart(sourceFile), node.end);
@@ -642,7 +676,7 @@ const maskNonExecutableLiterals = (source: string, file: string): string => {
     }
     if (ts.isTemplateExpression(node)) {
       if (
-        isDateConstructor(node.parent) &&
+        (isDateConstructor(node.parent) || isDateParseCall(node.parent)) &&
         !hasExplicitDateTimeZone(node.templateSpans.at(-1)?.literal.text ?? "")
       ) {
         maskAmbientDateString(node.getStart(sourceFile), node.end);
@@ -803,6 +837,32 @@ describe("public SSR import graph", () => {
     expect(
       AMBIENT_STATE_PATTERN.test(
         executableSource("const now = Date?.now();", "fixture.ts"),
+      ),
+    ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          'const parsed = Date.parse("2026-08-13T12:00:00");',
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource("const parsed = Date.parse(value);", "fixture.ts"),
+      ),
+    ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          'const parsed = globalThis.Date.parse("2026-08-13T12:00:00Z");',
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource("const width = innerWidth;", "fixture.ts"),
       ),
     ).toBe(true);
     expect(

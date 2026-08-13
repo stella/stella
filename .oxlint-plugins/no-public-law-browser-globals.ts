@@ -6,13 +6,22 @@ const BROWSER_GLOBALS = new Set([
   "devicePixelRatio",
   "document",
   "history",
+  "innerHeight",
+  "innerWidth",
   "localStorage",
   "location",
   "matchMedia",
   "navigator",
+  "outerHeight",
+  "outerWidth",
+  "pageXOffset",
+  "pageYOffset",
   "screen",
   "self",
   "sessionStorage",
+  "scrollX",
+  "scrollY",
+  "visualViewport",
   "window",
 ]);
 
@@ -61,7 +70,7 @@ const LOCAL_TIME_DATE_METHODS = new Set([
 ]);
 
 const AMBIENT_FUNCTION_MEMBERS = new Map([
-  ["Date", new Set(["now"])],
+  ["Date", new Set(["now", "parse"])],
   ["Math", new Set(["random"])],
   ["crypto", new Set(["getRandomValues", "randomUUID"])],
   ["performance", new Set(["now"])],
@@ -245,6 +254,35 @@ const hasAmbientDateConstructorArguments = (context, argumentsList) => {
   return !(
     isDateUtcCall(context, argument) || isDateObjectReceiver(context, argument)
   );
+};
+
+const hasAmbientDateParseArguments = (argumentsList) => {
+  if (argumentsList.length !== 1) {
+    return true;
+  }
+  const argument = unwrapExpression(argumentsList.at(0));
+  if (argument?.type === "Literal") {
+    return (
+      typeof argument.value !== "string" ||
+      !isDeterministicDateString(argument.value)
+    );
+  }
+  const templateText = staticTemplateText(argument);
+  if (templateText !== null) {
+    return !isDeterministicDateString(templateText);
+  }
+  if (argument?.type !== "TemplateLiteral") {
+    return true;
+  }
+  const quasis = Array.isArray(argument.quasis) ? argument.quasis : [];
+  const tail = quasis.at(-1)?.value;
+  const tailText =
+    typeof tail?.cooked === "string"
+      ? tail.cooked
+      : typeof tail?.raw === "string"
+        ? tail.raw
+        : "";
+  return !hasExplicitDateTimeZone(tailText);
 };
 
 const intlConstructorMemberName = (context, node) => {
@@ -551,6 +589,15 @@ export default eslintCompatPlugin({
 
             const ambientObject = unwrapExpression(node.callee.object);
             const calledMemberName = staticMemberName(node.callee);
+            if (
+              calledMemberName === "parse" &&
+              ambientFunctionObjectName(context, node.callee.object) === "Date"
+            ) {
+              if (hasAmbientDateParseArguments(node.arguments)) {
+                context.report({ node, messageId: "publicLawAmbientState" });
+              }
+              return;
+            }
             if (isAmbientFunctionMember(context, node.callee)) {
               context.report({ node, messageId: "publicLawAmbientState" });
               return;
