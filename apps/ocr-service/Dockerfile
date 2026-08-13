@@ -100,7 +100,7 @@ RUN set -eux; \
     libpaddle="$(find /opt/stella/venv -path '*/paddle/base/libpaddle.so' -print -quit)"; \
     test -n "${libpaddle}"; \
     ldd "${libpaddle}"; \
-    missing="$(ldd "${libpaddle}" | awk '/=> not found/ { print $1 }')"; \
+    missing="$(ldd "${libpaddle}" | awk '/=> not found/ { print $1 }' | sort -u)"; \
     test "${missing}" = "libcuda.so.1"
 
 WORKDIR /opt/stella
