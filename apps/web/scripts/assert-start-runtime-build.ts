@@ -1,9 +1,15 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  referencedAssetPath,
+  resolveSourceWorkerEntry,
+  SOURCE_WORKER_FILE_GLOB,
+  workerSourceSpecifiers,
+} from "./runtime-asset-contracts";
+
 const WEB_ROOT_URL = new URL("../", import.meta.url);
 const WEB_ROOT_PATH = fileURLToPath(WEB_ROOT_URL);
-const CLIENT_ROOT_PATH = fileURLToPath(new URL("dist/client/", WEB_ROOT_URL));
 
 type RuntimeAssetContract = {
   expectedCount: number;
@@ -92,29 +98,18 @@ const isNonEmptyFile = async (relativePath: string): Promise<boolean> => {
   return (await file.exists()) && file.size > 0;
 };
 
-const toWebRelativePath = (url: URL): string =>
-  path.relative(WEB_ROOT_PATH, fileURLToPath(url));
-
 const discoverSourceWorkerEntries = async (): Promise<Set<string>> => {
-  const sourceFiles = new Bun.Glob("src/**/*.{ts,tsx}");
+  const sourceFiles = new Bun.Glob(SOURCE_WORKER_FILE_GLOB);
   const entries = new Set<string>();
-  const directWorkerPattern =
-    /new Worker\s*\(\s*new URL\(\s*["']([^"']+\.ts)["']\s*,\s*import\.meta\.url\s*\)/gu;
-  const workerUrlImportPattern = /from\s*["']([^"']+)\?worker&url["']/gu;
 
   for await (const sourcePath of sourceFiles.scan({ cwd: WEB_ROOT_PATH })) {
     const sourceUrl = new URL(sourcePath, WEB_ROOT_URL);
     const source = await Bun.file(sourceUrl).text();
-    for (const pattern of [directWorkerPattern, workerUrlImportPattern]) {
-      pattern.lastIndex = 0;
-      for (const match of source.matchAll(pattern)) {
-        const specifier = match[1];
-        if (specifier !== undefined) {
-          const sourceSpecifier = specifier.endsWith(".ts")
-            ? specifier
-            : `${specifier}.ts`;
-          entries.add(toWebRelativePath(new URL(sourceSpecifier, sourceUrl)));
-        }
+    for (const specifier of workerSourceSpecifiers(source)) {
+      // oxlint-disable-next-line no-await-in-loop -- ordered source discovery resolves extensionless Vite imports against the filesystem
+      const entry = await resolveSourceWorkerEntry(specifier, sourceUrl);
+      if (entry !== undefined) {
+        entries.add(entry);
       }
     }
   }
@@ -126,27 +121,6 @@ const assetReferencePatterns = [
   /(?:from\s*|import\s*\(\s*|import\s*)["'`]([^"'`]+)["'`]/gu,
   /new URL\(\s*(["'`])([^"'`]+)\1\s*,[^)]{0,64}import\.meta\.url\s*\)/gu,
 ] as const;
-
-const referencedAssetPath = (
-  emittedPath: string,
-  reference: string,
-): string | undefined => {
-  const cleanReference = reference.split(/[?#]/u).at(0);
-  if (cleanReference === undefined || !/\.(?:js|wasm)$/u.test(cleanReference)) {
-    return undefined;
-  }
-
-  const targetUrl = cleanReference.startsWith("/")
-    ? new URL(`dist/client${cleanReference}`, WEB_ROOT_URL)
-    : new URL(cleanReference, new URL(emittedPath, WEB_ROOT_URL));
-  const targetPath = fileURLToPath(targetUrl);
-  const relativeToClient = path.relative(CLIENT_ROOT_PATH, targetPath);
-  if (relativeToClient.startsWith("..") || path.isAbsolute(relativeToClient)) {
-    return undefined;
-  }
-
-  return toWebRelativePath(targetUrl);
-};
 
 const requiredFiles = [
   "dist/server/server.js",

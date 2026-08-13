@@ -117,25 +117,20 @@ const runtimeAssetPlugins = (): PluginOption[] => [
 
 const pdfjsWorkerModuleContractPlugin = (): Plugin => ({
   name: "stella-pdfjs-worker-module-contract",
-  generateBundle(_, bundle) {
-    for (const output of Object.values(bundle)) {
-      if (
-        output.type !== "chunk" ||
-        !output.isEntry ||
-        !output.facadeModuleId
-          ?.replaceAll("\\", "/")
-          .endsWith("/src/lib/pdf/pdfjs-worker.ts")
-      ) {
-        continue;
-      }
-
-      // Vite deliberately strips exports from worker entries. PDF.js also
-      // imports workerSrc as an ES module for its same-thread recovery path,
-      // so restore that public contract from the handler the upstream worker
-      // registers while evaluating.
-      output.code +=
-        "\nexport const WorkerMessageHandler = globalThis.pdfjsWorker.WorkerMessageHandler;\n";
+  renderChunk(code, chunk) {
+    if (
+      !chunk.isEntry ||
+      !chunk.facadeModuleId
+        ?.replaceAll("\\", "/")
+        .endsWith("/src/lib/pdf/pdfjs-worker.ts")
+    ) {
+      return null;
     }
+
+    // Vite deliberately strips exports from worker entries. PDF.js also
+    // imports workerSrc as an ES module for its same-thread recovery path,
+    // so restore that public contract before Rollup hashes the emitted chunk.
+    return `${code}\nexport { WorkerMessageHandler };\n`;
   },
 });
 
