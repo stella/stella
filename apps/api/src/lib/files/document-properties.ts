@@ -631,26 +631,36 @@ const scrubCustomProperties = (xml: string): string =>
     },
   );
 
-type CollaborationAttributePolicies = {
-  author: "anonymize";
-  date: "remove";
-  initials: "clear";
-  providerId: "remove";
-  userId: "remove";
-};
-
 const ANONYMIZED_COLLABORATION_AUTHOR = "Author";
+const ANONYMIZED_COLLABORATION_INITIALS = "A";
+
+type CollaborationAttributePolicies = {
+  author: {
+    replacement: typeof ANONYMIZED_COLLABORATION_AUTHOR;
+    type: "replace";
+  };
+  date: { type: "remove" };
+  initials: {
+    replacement: typeof ANONYMIZED_COLLABORATION_INITIALS;
+    type: "replace";
+  };
+  providerId: { type: "remove" };
+  userId: { type: "remove" };
+};
 
 /**
  * A closed policy keeps schema-required author attributes usable while making
  * it impossible to preserve typed or optional collaboration attributes.
  */
 const COLLABORATION_ATTRIBUTE_POLICIES = {
-  author: "anonymize",
-  date: "remove",
-  initials: "clear",
-  userId: "remove",
-  providerId: "remove",
+  author: { replacement: ANONYMIZED_COLLABORATION_AUTHOR, type: "replace" },
+  date: { type: "remove" },
+  initials: {
+    replacement: ANONYMIZED_COLLABORATION_INITIALS,
+    type: "replace",
+  },
+  userId: { type: "remove" },
+  providerId: { type: "remove" },
 } as const satisfies CollaborationAttributePolicies;
 
 const removeNamespacedAttribute = (
@@ -670,7 +680,9 @@ const removeNamespacedAttribute = (
 
 type ReplaceNamespacedAttributeOptions = {
   element: XmlElement;
-  replacement: "" | typeof ANONYMIZED_COLLABORATION_AUTHOR;
+  replacement:
+    | typeof ANONYMIZED_COLLABORATION_AUTHOR
+    | typeof ANONYMIZED_COLLABORATION_INITIALS;
   xml: string;
 };
 
@@ -697,18 +709,11 @@ const scrubCollaborationAttributes = (xml: string): string => {
       COLLABORATION_ATTRIBUTE_POLICIES,
     )) {
       const element = { namespace, localName };
-      switch (action) {
-        case "anonymize":
+      switch (action.type) {
+        case "replace":
           scrubbed = replaceNamespacedAttribute({
             element,
-            replacement: ANONYMIZED_COLLABORATION_AUTHOR,
-            xml: scrubbed,
-          });
-          break;
-        case "clear":
-          scrubbed = replaceNamespacedAttribute({
-            element,
-            replacement: "",
+            replacement: action.replacement,
             xml: scrubbed,
           });
           break;

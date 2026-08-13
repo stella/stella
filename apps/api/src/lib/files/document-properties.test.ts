@@ -373,7 +373,7 @@ describe("scrubDocumentProperties", () => {
       /<(?:cp:revision|cp:lastPrinted|dcterms:(?:created|modified))\b/u,
     );
     expect(scrubbedComments).toContain('x:author="Author"');
-    expect(scrubbedComments).toContain('x:initials=""');
+    expect(scrubbedComments).toContain('x:initials="A"');
     expect(scrubbedComments).not.toMatch(/x:date=/u);
     expect(scrubbedDocument?.match(/w:author="Author"/gu)).toHaveLength(2);
     expect(scrubbedDocument).not.toMatch(/w:date=/u);
