@@ -38,7 +38,9 @@ const isTemplateLiteral = (node: unknown): node is ESTree.TemplateLiteral =>
 
 const isFunctionExpression = (
   node: unknown,
-): node is ESTree.ArrowFunctionExpression | ESTree.FunctionExpression =>
+): node is
+  | ESTree.ArrowFunctionExpression
+  | (ESTree.Function & { type: "FunctionExpression" }) =>
   isAstNode(node) &&
   (node.type === "ArrowFunctionExpression" ||
     node.type === "FunctionExpression");
