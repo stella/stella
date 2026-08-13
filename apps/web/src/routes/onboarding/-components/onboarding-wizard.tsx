@@ -26,6 +26,8 @@ import type {
 } from "@/components/ai-config-role-models.logic";
 import { LanguagePicker } from "@/components/language-picker";
 import { ThemePicker } from "@/components/theme-picker";
+import { useHydrated } from "@/hooks/use-hydrated";
+import { useLocale } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
@@ -94,6 +96,8 @@ export const OnboardingWizard = () => {
   const t = useTranslations();
   const navigate = useNavigate();
   const analytics = useAnalytics();
+  const hydrated = useHydrated();
+  const locale = useLocale();
   const queryClient = useQueryClient();
   const { data: sessionData } = useQuery(sessionOptions);
   const { data: nativeToolDeployAvailability } = useQuery(
@@ -118,11 +122,9 @@ export const OnboardingWizard = () => {
     aiProviders: [createProviderCredentialDraft()],
     aiRoleModels: createDefaultRoleModels(),
   }));
-  const navigatorLocale =
-    typeof navigator === "undefined" ? "en" : navigator.language || "en";
   const suggestedCountryCodes = getSuggestedCountryCodes({
     email: userEmail,
-    locale: navigatorLocale,
+    locale,
     detectedCountry: sessionData?.user.detectedCountry,
   });
   const [jurisdictionSuggestionApplied, setJurisdictionSuggestionApplied] =
@@ -192,7 +194,7 @@ export const OnboardingWizard = () => {
 
   const suggestedCountryCode = suggestedCountryCodes.at(0);
   useLayoutEffect(() => {
-    if (jurisdictionSuggestionApplied || !suggestedCountryCode) {
+    if (!hydrated || jurisdictionSuggestionApplied || !suggestedCountryCode) {
       return;
     }
     // eslint-disable-next-line react/react-compiler -- commit-safe one-shot latch for an async suggestion; user edits are rechecked in the functional data update below
@@ -208,7 +210,7 @@ export const OnboardingWizard = () => {
         ],
       };
     });
-  }, [jurisdictionSuggestionApplied, suggestedCountryCode]);
+  }, [hydrated, jurisdictionSuggestionApplied, suggestedCountryCode]);
 
   const continueFromJurisdiction = () => {
     setData((currentData) => ({
