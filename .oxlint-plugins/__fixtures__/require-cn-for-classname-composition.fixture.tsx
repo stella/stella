@@ -38,7 +38,7 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
       <div className={`rounded-md ${className}`} />
 
       {/* String concatenation — MUST flag. */}
-      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition, prefer-template -- fixture: concatenation is one of the rejected composition shapes */}
       <div className={"rounded-md " + className} />
 
       {/* A non-canonical composition helper — MUST flag. */}
@@ -46,7 +46,7 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
       <div className={legacyClassNames("rounded-md", active && "ring-1")} />
 
       {/* Const indirection through a TypeScript wrapper — MUST flag. */}
-      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition, typescript/no-unnecessary-type-assertion -- fixture: the rule must follow TypeScript expression wrappers */}
       <div className={indirectClasses as string} />
 
       {/* Callback branch composition — MUST flag. */}
@@ -59,7 +59,7 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
       }} />
 
       {/* Switch-branch composition — MUST flag. */}
-      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition, typescript/consistent-return -- fixture: every union member is covered by the switch */}
       <StatusSlot className={({ status: slotStatus }) => {
         switch (slotStatus) {
           case "open":
@@ -95,6 +95,7 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
 };
 
 const ShadowedCn = ({ active }: { active: boolean }) => {
+  // oxlint-disable-next-line no-shadow -- fixture: a local namesake must not satisfy the canonical-import check
   const cn = (...values: unknown[]) => values.filter(Boolean).join(" ");
 
   return (
