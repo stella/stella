@@ -14,6 +14,17 @@ type MatterRowProps = {
 const legacyClassNames = (...values: unknown[]) =>
   values.filter(Boolean).join(" ");
 
+function declaredDynamicClass({ selected }: { selected: boolean }) {
+  if (selected) {
+    return "bg-muted";
+  }
+  return "bg-background";
+}
+
+function declaredCanonicalClass({ selected }: { selected: boolean }) {
+  return cn("rounded-md", selected && "ring-1");
+}
+
 const MatterRow = ({ active, className, status }: MatterRowProps) => {
   const conditionalClasses = active ? "bg-muted" : "bg-background";
   const indirectClasses = conditionalClasses satisfies string;
@@ -37,6 +48,69 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
     active: "bg-muted",
     inactive: "bg-background",
   };
+  const callbackCanonicalStyles = {
+    selected: cn("rounded-md", "ring-1"),
+    unselected: mergeClasses("rounded-md", "opacity-60"),
+  };
+  const tupleClasses = [
+    active ? "bg-muted" : "bg-background",
+    "rounded-md",
+  ] as const;
+  const destructuredStyles = {
+    root: active ? "bg-muted" : "bg-background",
+    merged: cn("rounded-md", active && "ring-1"),
+  };
+  const {
+    root: destructuredDynamicClass,
+    merged: destructuredCanonicalClass,
+  } = destructuredStyles;
+  // oxlint-disable-next-line prefer-const -- fixture: mutable declarations must not launder a dynamic initializer
+  let mutableInitializerClass = active ? "bg-muted" : "bg-background";
+  // oxlint-disable-next-line no-var -- fixture: var bindings must not launder dynamic class composition
+  var mutableWrittenClass = "bg-background";
+  if (active) {
+    mutableWrittenClass = "bg-muted";
+  }
+  let equivalentMutableClass = "rounded-md";
+  if (active) {
+    equivalentMutableClass = `rounded-md`;
+  }
+  let canonicalMutableClass = cn("rounded-md", className);
+  if (active) {
+    canonicalMutableClass = mergeClasses("rounded-md", "ring-1");
+  }
+  const dynamicSpreadProps = {
+    className: active ? "bg-muted" : "bg-background",
+  };
+  const canonicalSpreadProps = {
+    className: cn("rounded-md", active && "ring-1"),
+  };
+  const restSourceProps = {
+    className: active ? "bg-muted" : "bg-background",
+    id: "matter-row",
+  };
+  const { id: _restId, ...dynamicRestProps } = restSourceProps;
+  const { className: _removedClassName, ...safeRestProps } = restSourceProps;
+  const memberMutationStyles = { root: "rounded-md" };
+  if (active) {
+    memberMutationStyles.root = "bg-muted";
+  }
+  const overwrittenMemberStyles = {
+    root: active ? "bg-muted" : "bg-background",
+  };
+  overwrittenMemberStyles.root = "rounded-md";
+  const canonicalMemberMutationStyles = {
+    root: cn("rounded-md", className),
+  };
+  if (active) {
+    canonicalMemberMutationStyles.root = mergeClasses(
+      "rounded-md",
+      "ring-1",
+    );
+  }
+  type CyclicStyles = { className: string; self?: CyclicStyles };
+  const cyclicStyles: CyclicStyles = { className: "rounded-md" };
+  cyclicStyles.self = cyclicStyles;
   const extractedRowClass = ({ selected }: { selected: boolean }) => {
     if (selected) {
       return "bg-muted";
@@ -111,6 +185,12 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
     }
     return callbackStyles.inactive;
   };
+  const canonicalMemberClass = ({ selected }: { selected: boolean }) => {
+    if (selected) {
+      return callbackCanonicalStyles.selected;
+    }
+    return callbackCanonicalStyles.unselected;
+  };
   const unrelatedControlFlowClass = ({ selected }: { selected: boolean }) => {
     if (selected) {
       legacyClassNames("selected");
@@ -152,6 +232,28 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
       {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
       <div className={spreadStyles.root} />
 
+      {/* Mutable local values and writes — MUST flag. */}
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      <div className={mutableInitializerClass} />
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      <div className={mutableWrittenClass} />
+
+      {/* Destructured and numeric-member laundering — MUST flag. */}
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      <div className={destructuredDynamicClass} />
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      <div className={tupleClasses[0]} />
+
+      {/* Locally owned spread className composition — MUST flag. */}
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      <div {...dynamicSpreadProps} />
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      <div data-rest-id={_restId} {...dynamicRestProps} />
+
+      {/* Conditional local member writes — MUST flag. */}
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      <div className={memberMutationStyles.root} />
+
       {/* Extracted block and switch callback composition — MUST flag. */}
       {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
       <FixtureSlot className={extractedRowClass} />
@@ -159,6 +261,8 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
       <FixtureSlot className={extractedDynamicClass} />
       {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
       <StatusSlot className={extractedStatusClass} />
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      <FixtureSlot className={declaredDynamicClass} />
 
       {/* Static and pass-through values — MUST NOT flag. */}
       <div className="rounded-md" />
@@ -166,15 +270,27 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
       <div className={className} />
       <div className={styleMap[status]} />
       <div className={localStyles.static} />
+      <div className={tupleClasses[1]} />
+      <div className={equivalentMutableClass} />
+      <div className={overwrittenMemberStyles.root} />
+      {/* Cyclic local object graphs terminate without inventing provenance. */}
+      <div className={cyclicStyles.self?.self?.className} />
+      <div data-removed-class={_removedClassName} {...safeRestProps} />
 
       {/* Canonical direct, aliased, and const-indirected calls — MUST NOT flag. */}
       <div className={cn("rounded-md", active && "ring-1")} />
       <div className={mergeClasses("rounded-md", className)} />
       <div className={canonicalClasses} />
       <div className={canonicalAliasClasses satisfies string} />
+      <div className={destructuredCanonicalClass} />
+      <div className={canonicalMutableClass} />
+      <div {...canonicalSpreadProps} />
+      <div className={canonicalMemberMutationStyles.root} />
 
       {/* Conditional callbacks remain valid when every branch uses cn(). */}
       <FixtureSlot className={canonicalRowClass} />
+      <FixtureSlot className={canonicalMemberClass} />
+      <FixtureSlot className={declaredCanonicalClass} />
 
       {/* A conditionally assigned returned value is composition: MUST flag. */}
       {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
@@ -196,6 +312,11 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
       <FixtureSlot className={unrelatedControlFlowClass} />
 
       <ShadowedCn active={active} />
+      <ExternalSpread className={className} />
+      <ExternalTuple classes={[className]} />
+      <ExternalMember styles={localStyles} />
+      <OpaqueSpreadBoundary active={active} className={className} />
+      <ReassignedDeclarationBoundary className={canonicalRowClass} />
     </div>
   );
 };
@@ -224,5 +345,53 @@ const StatusSlot = ({
 }: {
   className: (state: { status: "open" | "closed" }) => string;
 }) => null;
+
+const ExternalSpread = (props: { className?: string }) => <div {...props} />;
+
+const ExternalTuple = ({ classes }: { classes: (string | undefined)[] }) => (
+  <div className={classes[0]} />
+);
+
+const ExternalMember = ({
+  styles,
+}: {
+  styles: { root: string };
+}) => <div className={styles.root} />;
+
+const OpaqueSpreadBoundary = ({
+  active,
+  ...externalProps
+}: {
+  active: boolean;
+  className?: string;
+}) => {
+  const opaqueRightmostSpread = {
+    className: active ? "bg-muted" : "bg-background",
+    ...externalProps,
+  };
+  const dynamicRightmostProperty = {
+    ...externalProps,
+    className: active ? "bg-muted" : "bg-background",
+  };
+  return (
+    <div {...opaqueRightmostSpread}>
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      <div {...dynamicRightmostProperty} />
+    </div>
+  );
+};
+
+const ReassignedDeclarationBoundary = ({
+  className,
+}: {
+  className: (state: { selected: boolean }) => string;
+}) => {
+  function localClassName({ selected }: { selected: boolean }) {
+    return selected ? "bg-muted" : "bg-background";
+  }
+  // oxlint-disable-next-line no-func-assign -- fixture: writable declarations must stop resolving to their original body
+  localClassName = className;
+  return <FixtureSlot className={localClassName} />;
+};
 
 export const __requireCnForClassnameCompositionFixture = MatterRow;

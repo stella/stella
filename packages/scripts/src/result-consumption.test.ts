@@ -10,14 +10,14 @@ import {
 
 const createFixtureProgram = (
   source: string,
+  relativeFile = "packages/example/src/fixture.ts",
 ): {
   readonly directory: string;
   readonly program: ts.Program;
 } => {
   const directory = mkdtempSync(path.join(import.meta.dir, ".result-test-"));
-  const sourceDirectory = path.join(directory, "src");
-  mkdirSync(sourceDirectory);
-  const file = path.join(sourceDirectory, "fixture.ts");
+  const file = path.join(directory, relativeFile);
+  mkdirSync(path.dirname(file), { recursive: true });
   writeFileSync(file, source);
 
   return {
@@ -35,8 +35,8 @@ const createFixtureProgram = (
   };
 };
 
-const scanFixture = (source: string) => {
-  const { directory, program } = createFixtureProgram(source);
+const scanFixture = (source: string, relativeFile?: string) => {
+  const { directory, program } = createFixtureProgram(source, relativeFile);
   try {
     return scanResultConsumption({ program, repositoryRoot: directory });
   } finally {
@@ -45,12 +45,23 @@ const scanFixture = (source: string) => {
 };
 
 describe("Result consumption guard", () => {
-  test("discovers workspaces that import Result", () => {
+  test("discovers source, root-script, and app-script projects", () => {
     const repositoryRoot = path.resolve(import.meta.dir, "../../..");
     const configs = findResultWorkspaceConfigs(repositoryRoot);
 
     expect(
+      configs.has(path.join(repositoryRoot, "scripts/tsconfig.json")),
+    ).toBe(true);
+    expect(
       configs.has(path.join(repositoryRoot, "apps/api/tsconfig.json")),
+    ).toBe(true);
+    expect(
+      configs.has(
+        path.join(repositoryRoot, "apps/api/scripts/tsconfig.json"),
+      ),
+    ).toBe(true);
+    expect(
+      configs.has(path.join(repositoryRoot, "apps/landing/tsconfig.json")),
     ).toBe(true);
     expect(
       configs.has(path.join(repositoryRoot, "apps/web/tsconfig.json")),
@@ -92,7 +103,81 @@ describe("Result consumption guard", () => {
       "unused-result",
       "unused-result",
       "unused-result",
+      "unused-result",
     ]);
+  });
+
+  test("detects Results nested in discarded statement containers", () => {
+    const diagnostics = scanFixture(`
+      import { Result, type Result as BetterResult } from "better-result";
+
+      const parse = (): BetterResult<number, string> => Result.ok(1);
+      const asyncWrapper = async (): Promise<BetterResult<number, string>> =>
+        parse();
+      declare const consume: (value: unknown) => void;
+
+      ({ direct: parse(), nested: { result: asyncWrapper() }, list: [parse()] });
+      (parse(), "statement tail");
+      const retainedTail = (parse(), "assigned tail");
+      `discarded interpolation: \${parse()}`;
+
+      const retainedObject = { result: parse() };
+      const retainedTemplate = `retained interpolation: \${parse()}`;
+      const retainedFinal = (0, parse());
+      consume({ result: parse() });
+      void retainedTail;
+      void retainedObject;
+      void retainedTemplate;
+      void retainedFinal;
+    `);
+
+    expect(diagnostics.map(({ rule }) => rule)).toEqual([
+      "unused-result",
+      "unused-result",
+      "unused-result",
+      "unused-result",
+      "unused-result",
+      "unused-result",
+    ]);
+  });
+
+  test.each([
+    "scripts/fixture.ts",
+    "apps/example/scripts/fixture.ts",
+    "apps/example/src/fixture.ts",
+    "packages/example/src/fixture.ts",
+  ])("scans production path %s", (relativeFile) => {
+    const diagnostics = scanFixture(
+      `
+        import { Result, type Result as BetterResult } from "better-result";
+        declare const parse: () => BetterResult<number, string>;
+        parse();
+        void Result;
+      `,
+      relativeFile,
+    );
+
+    expect(diagnostics.map(({ rule }) => rule)).toEqual(["unused-result"]);
+  });
+
+  test.each([
+    "scripts/fixture.test.ts",
+    "scripts/generated/fixture.ts",
+    "apps/example/scripts/fixture.gen.ts",
+    "apps/example/scripts/node_modules/library/fixture.ts",
+    "apps/example/src/__tests__/fixture.ts",
+  ])("excludes non-production path %s", (relativeFile) => {
+    const diagnostics = scanFixture(
+      `
+        import { Result, type Result as BetterResult } from "better-result";
+        declare const parse: () => BetterResult<number, string>;
+        parse();
+        void Result;
+      `,
+      relativeFile,
+    );
+
+    expect(diagnostics).toEqual([]);
   });
 
   test("ignores callee-name and structural Result lookalikes", () => {
@@ -126,6 +211,9 @@ describe("Result consumption guard", () => {
       localOk();
       localErr();
       structural();
+      ({ ok: localOk(), err: localErr(), structural: structural() });
+      (localOk(), "statement tail");
+      `discarded interpolation: \${structural()}`;
       [structural(), Promise.resolve(structural())];
       await Promise.all([Promise.resolve(structural())]);
       await Promise.allSettled([Promise.resolve(structural())]);

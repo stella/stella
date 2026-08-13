@@ -15,12 +15,18 @@
 //   Bun.randomUUIDv7()
 //   performance.now()
 //   randomUUID() imported from crypto or node:crypto
+//   webcrypto randomness imported from crypto or node:crypto
 //   globalThis.Date.now() (and the corresponding forms above)
 //
 // Immutable identifier aliases, object-destructured method aliases, and
-// aliases of globalThis retain provenance. Explicit date construction,
-// mutable aliases, and locally shadowed bindings remain allowed. Alias walks
-// track visited bindings so malformed or cyclic declarations terminate.
+// aliases of globalThis retain provenance. Static object properties and
+// spreads are resolved at execution sites. Passing an ambient function to a
+// statically proven built-in callback position is execution; merely storing
+// the reference is not. Calls inside locally declared callback bodies are
+// visited directly.
+// Explicit date construction, mutable aliases, and locally shadowed bindings
+// remain allowed. Alias walks track visited bindings so malformed or cyclic
+// declarations terminate.
 // Adapted from https://github.com/typeonce-dev/ai-automation
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
@@ -35,6 +41,49 @@ import {
 
 const RULE_NAME = "no-ambient-nondeterminism";
 const CRYPTO_MODULES = new Set(["crypto", "node:crypto"]);
+const ARRAY_CALLBACK_METHODS = new Set([
+  "every",
+  "filter",
+  "find",
+  "findIndex",
+  "findLast",
+  "findLastIndex",
+  "flatMap",
+  "forEach",
+  "map",
+  "reduce",
+  "reduceRight",
+  "some",
+  "sort",
+  "toSorted",
+]);
+const ARRAY_RESULT_METHODS = new Set([
+  "concat",
+  "filter",
+  "flat",
+  "flatMap",
+  "map",
+  "slice",
+  "toReversed",
+  "toSorted",
+  "toSpliced",
+  "with",
+]);
+const PROMISE_CALLBACK_METHODS = new Set(["catch", "finally", "then"]);
+const PROMISE_STATIC_METHODS = new Set([
+  "all",
+  "allSettled",
+  "any",
+  "race",
+  "reject",
+  "resolve",
+]);
+const FIRST_ARGUMENT_CALLBACK_GLOBALS = new Set([
+  "queueMicrotask",
+  "setImmediate",
+  "setInterval",
+  "setTimeout",
+]);
 
 const bindingFromScope = (initialScope: unknown, name: string): unknown => {
   let scope = initialScope;
@@ -219,7 +268,7 @@ const isGlobalReference = (context: unknown, node: unknown): boolean => {
   return binding === null || !bindingHasDefinitions(binding);
 };
 
-type CryptoImportKind = "module" | "randomUUID";
+type CryptoImportKind = "module" | "randomUUID" | "webcrypto";
 
 const cryptoImportKind = (
   context: unknown,
@@ -274,6 +323,12 @@ const cryptoImportKind = (
       return "randomUUID";
     }
     if (
+      definition.node.type === "ImportSpecifier" &&
+      getImportedName(definition.node) === "webcrypto"
+    ) {
+      return "webcrypto";
+    }
+    if (
       definition.node.type === "ImportNamespaceSpecifier" ||
       definition.node.type === "ImportDefaultSpecifier"
     ) {
@@ -297,6 +352,120 @@ const staticMemberName = (node: unknown): string | null => {
   return null;
 };
 
+type StaticPropertyResolution =
+  | { type: "absent" }
+  | { type: "found"; value: unknown }
+  | { type: "opaque" };
+
+const staticPropertyKey = (property: unknown): string | null => {
+  if (!isAstNode(property) || property.type !== "Property") {
+    return null;
+  }
+  if (property.computed === false && isIdentifier(property.key)) {
+    return property.key.name;
+  }
+  return isStringLiteral(property.key) ? property.key.value : null;
+};
+
+const resolveStaticObjectProperty = (
+  context: unknown,
+  object: unknown,
+  propertyName: string,
+  visitedBindings: Set<unknown>,
+): StaticPropertyResolution => {
+  const expression = unwrapExpression(object);
+  if (expression === null) {
+    return { type: "opaque" };
+  }
+  if (isIdentifier(expression)) {
+    const alias = constAlias(context, expression, visitedBindings);
+    return alias?.type === "value"
+      ? resolveStaticObjectProperty(
+          context,
+          alias.value,
+          propertyName,
+          visitedBindings,
+        )
+      : { type: "opaque" };
+  }
+  if (expression.type === "MemberExpression") {
+    const parentProperty = staticMemberName(expression);
+    if (parentProperty === null) {
+      return { type: "opaque" };
+    }
+    const parent = resolveStaticObjectProperty(
+      context,
+      expression.object,
+      parentProperty,
+      new Set(visitedBindings),
+    );
+    return parent.type === "found"
+      ? resolveStaticObjectProperty(
+          context,
+          parent.value,
+          propertyName,
+          visitedBindings,
+        )
+      : parent;
+  }
+  if (
+    expression.type !== "ObjectExpression" ||
+    !Array.isArray(expression.properties)
+  ) {
+    return { type: "opaque" };
+  }
+  for (const property of expression.properties.toReversed()) {
+    if (!isAstNode(property)) {
+      return { type: "opaque" };
+    }
+    if (property.type === "SpreadElement") {
+      const spread = resolveStaticObjectProperty(
+        context,
+        property.argument,
+        propertyName,
+        new Set(visitedBindings),
+      );
+      if (spread.type !== "absent") {
+        return spread;
+      }
+      continue;
+    }
+    if (property.type !== "Property") {
+      return { type: "opaque" };
+    }
+    const key = staticPropertyKey(property);
+    if (key === null) {
+      return { type: "opaque" };
+    }
+    if (key === propertyName) {
+      return { type: "found", value: property.value };
+    }
+  }
+  return { type: "absent" };
+};
+
+const resolveStaticObjectPath = (
+  context: unknown,
+  object: unknown,
+  propertyPath: readonly string[],
+  visitedBindings: Set<unknown>,
+): StaticPropertyResolution => {
+  let current = object;
+  for (const propertyName of propertyPath) {
+    const resolved = resolveStaticObjectProperty(
+      context,
+      current,
+      propertyName,
+      visitedBindings,
+    );
+    if (resolved.type !== "found") {
+      return resolved;
+    }
+    current = resolved.value;
+  }
+  return { type: "found", value: current };
+};
+
 const globalObjectName = (
   context: unknown,
   node: unknown,
@@ -308,7 +477,7 @@ const globalObjectName = (
   }
   if (isIdentifier(expression)) {
     if (isGlobalReference(context, expression)) {
-      return expression.name;
+      return expression.name === "global" ? "globalThis" : expression.name;
     }
     const alias = constAlias(context, expression, visitedBindings);
     if (alias === null) {
@@ -359,23 +528,68 @@ const ambientMemberKind = (
   return null;
 };
 
-const isCryptoModuleReference = (
+type CryptoObjectKind = "module" | "webcrypto";
+
+const cryptoObjectKind = (
   context: unknown,
   node: unknown,
   visitedBindings: Set<unknown>,
-): boolean => {
+): CryptoObjectKind | null => {
   const expression = unwrapExpression(node);
-  if (!isIdentifier(expression)) {
-    return false;
+  if (isIdentifier(expression)) {
+    const importKind = cryptoImportKind(context, expression);
+    if (importKind === "module" || importKind === "webcrypto") {
+      return importKind;
+    }
+    const alias = constAlias(context, expression, visitedBindings);
+    if (alias?.type === "value") {
+      return cryptoObjectKind(context, alias.value, visitedBindings);
+    }
+    if (
+      alias?.type === "property" &&
+      alias.propertyPath.length === 1 &&
+      alias.propertyPath.at(0) === "webcrypto" &&
+      cryptoObjectKind(
+        context,
+        alias.object,
+        new Set(visitedBindings),
+      ) === "module"
+    ) {
+      return "webcrypto";
+    }
+    return null;
   }
-  if (cryptoImportKind(context, expression) === "module") {
-    return true;
+  if (
+    expression?.type === "MemberExpression" &&
+    staticMemberName(expression) === "webcrypto" &&
+    cryptoObjectKind(
+      context,
+      expression.object,
+      new Set(visitedBindings),
+    ) === "module"
+  ) {
+    return "webcrypto";
   }
-  const alias = constAlias(context, expression, visitedBindings);
-  return (
-    alias?.type === "value" &&
-    isCryptoModuleReference(context, alias.value, visitedBindings)
-  );
+  return null;
+};
+
+const importedCryptoMemberKind = (
+  context: unknown,
+  object: unknown,
+  propertyName: string | null,
+  visitedBindings: Set<unknown>,
+): string | null => {
+  const objectKind = cryptoObjectKind(context, object, visitedBindings);
+  if (objectKind === "module" && propertyName === "randomUUID") {
+    return "randomUUID() from crypto";
+  }
+  if (
+    objectKind === "webcrypto" &&
+    (propertyName === "randomUUID" || propertyName === "getRandomValues")
+  ) {
+    return `webcrypto.${propertyName}() from crypto`;
+  }
+  return null;
 };
 
 const ambientPropertyPathKind = (
@@ -384,12 +598,46 @@ const ambientPropertyPathKind = (
   propertyPath: readonly string[],
   visitedBindings: Set<unknown>,
 ): string | null => {
+  const importedObjectKind = cryptoObjectKind(
+    context,
+    object,
+    new Set(visitedBindings),
+  );
+  if (propertyPath.length === 1) {
+    const importedKind = importedCryptoMemberKind(
+      context,
+      object,
+      propertyPath.at(0) ?? null,
+      new Set(visitedBindings),
+    );
+    if (importedKind !== null) {
+      return importedKind;
+    }
+  }
   if (
-    propertyPath.length === 1 &&
-    propertyPath.at(0) === "randomUUID" &&
-    isCryptoModuleReference(context, object, new Set(visitedBindings))
+    importedObjectKind === "module" &&
+    propertyPath.length === 2 &&
+    propertyPath.at(0) === "webcrypto" &&
+    (propertyPath.at(1) === "randomUUID" ||
+      propertyPath.at(1) === "getRandomValues")
   ) {
-    return "randomUUID() from crypto";
+    return `webcrypto.${propertyPath.at(1)}() from crypto`;
+  }
+  const localProperty = resolveStaticObjectPath(
+    context,
+    object,
+    propertyPath,
+    new Set(visitedBindings),
+  );
+  if (localProperty.type === "found") {
+    const localKind = ambientCallKind(
+      context,
+      localProperty.value,
+      new Set(visitedBindings),
+    );
+    if (localKind !== null) {
+      return localKind;
+    }
   }
   const objectName = globalObjectName(context, object, visitedBindings);
   const fullPath =
@@ -432,20 +680,169 @@ const ambientCallKind = (
   if (expression.type !== "MemberExpression") {
     return null;
   }
-  if (
-    staticMemberName(expression) === "randomUUID" &&
-    isCryptoModuleReference(
+  const propertyName = staticMemberName(expression);
+  const importedKind = importedCryptoMemberKind(
+    context,
+    expression.object,
+    propertyName,
+    new Set(visitedBindings),
+  );
+  if (importedKind !== null) {
+    return importedKind;
+  }
+  if (propertyName !== null) {
+    const localProperty = resolveStaticObjectProperty(
       context,
       expression.object,
+      propertyName,
       new Set(visitedBindings),
-    )
-  ) {
-    return "randomUUID() from crypto";
+    );
+    if (localProperty.type === "found") {
+      const localKind = ambientCallKind(
+        context,
+        localProperty.value,
+        new Set(visitedBindings),
+      );
+      if (localKind !== null) {
+        return localKind;
+      }
+    }
   }
   return ambientMemberKind(
     globalObjectName(context, expression.object, visitedBindings),
-    staticMemberName(expression),
+    propertyName,
   );
+};
+
+const ambientFunctionKind = (
+  context: unknown,
+  expression: unknown,
+): string | null =>
+  ambientCallKind(context, expression) ??
+  (globalObjectName(context, expression) === "Date" ? "Date(...)" : null);
+
+const isProvableArray = (
+  context: unknown,
+  value: unknown,
+  visitedBindings = new Set<unknown>(),
+): boolean => {
+  const expression = unwrapExpression(value);
+  if (expression === null) {
+    return false;
+  }
+  if (expression.type === "ArrayExpression") {
+    return true;
+  }
+  if (isIdentifier(expression)) {
+    const alias = constAlias(context, expression, visitedBindings);
+    return (
+      alias?.type === "value" &&
+      isProvableArray(context, alias.value, visitedBindings)
+    );
+  }
+  if (expression.type !== "CallExpression") {
+    return false;
+  }
+  const callee = unwrapExpression(expression.callee);
+  if (callee?.type !== "MemberExpression") {
+    return false;
+  }
+  const method = staticMemberName(callee);
+  if (
+    (method === "from" || method === "of") &&
+    globalObjectName(context, callee.object) === "Array"
+  ) {
+    return true;
+  }
+  return (
+    method !== null &&
+    ARRAY_RESULT_METHODS.has(method) &&
+    isProvableArray(context, callee.object, visitedBindings)
+  );
+};
+
+const isProvablePromise = (
+  context: unknown,
+  value: unknown,
+  visitedBindings = new Set<unknown>(),
+): boolean => {
+  const expression = unwrapExpression(value);
+  if (expression === null) {
+    return false;
+  }
+  if (isIdentifier(expression)) {
+    const alias = constAlias(context, expression, visitedBindings);
+    return (
+      alias?.type === "value" &&
+      isProvablePromise(context, alias.value, visitedBindings)
+    );
+  }
+  if (expression.type === "NewExpression") {
+    return globalObjectName(context, expression.callee) === "Promise";
+  }
+  if (expression.type !== "CallExpression") {
+    return false;
+  }
+  const callee = unwrapExpression(expression.callee);
+  if (callee?.type !== "MemberExpression") {
+    return false;
+  }
+  const method = staticMemberName(callee);
+  if (
+    method !== null &&
+    PROMISE_STATIC_METHODS.has(method) &&
+    globalObjectName(context, callee.object) === "Promise"
+  ) {
+    return true;
+  }
+  return (
+    method !== null &&
+    PROMISE_CALLBACK_METHODS.has(method) &&
+    isProvablePromise(context, callee.object, visitedBindings)
+  );
+};
+
+const callbackArgumentsForCall = (
+  context: unknown,
+  node: unknown,
+): readonly unknown[] => {
+  if (
+    !isAstNode(node) ||
+    node.type !== "CallExpression" ||
+    !Array.isArray(node.arguments)
+  ) {
+    return [];
+  }
+  const callee = unwrapExpression(node.callee);
+  if (
+    isIdentifier(callee) &&
+    isGlobalReference(context, callee) &&
+    FIRST_ARGUMENT_CALLBACK_GLOBALS.has(callee.name)
+  ) {
+    return node.arguments.length > 0 ? [node.arguments.at(0)] : [];
+  }
+  if (callee?.type !== "MemberExpression") {
+    return [];
+  }
+  const propertyName = staticMemberName(callee);
+  if (
+    propertyName === "from" &&
+    globalObjectName(context, callee.object) === "Array"
+  ) {
+    return node.arguments.length > 1 ? [node.arguments.at(1)] : [];
+  }
+  const hasProvableCallback =
+    propertyName !== null &&
+    ((ARRAY_CALLBACK_METHODS.has(propertyName) &&
+      isProvableArray(context, callee.object)) ||
+      (PROMISE_CALLBACK_METHODS.has(propertyName) &&
+        isProvablePromise(context, callee.object)));
+  if (!hasProvableCallback || node.arguments.length === 0) {
+    return [];
+  }
+  return propertyName === "then" && node.arguments.length > 1
+    ? [node.arguments.at(0), node.arguments.at(1)]
+    : [node.arguments.at(0)];
 };
 
 export default eslintCompatPlugin({
@@ -477,21 +874,49 @@ export default eslintCompatPlugin({
                 messageId: "ambientNondeterminism",
                 data: { kind: "Date(...)" },
               });
+              return;
+            }
+            for (const callback of callbackArgumentsForCall(context, node)) {
+              const callbackKind = ambientFunctionKind(context, callback);
+              if (callbackKind === null || !isAstNode(callback)) {
+                continue;
+              }
+              context.report({
+                node: callback,
+                messageId: "ambientNondeterminism",
+                data: { kind: `${callbackKind} callback` },
+              });
             }
           },
           NewExpression(node) {
+            const isAmbientDate =
+              Array.isArray(node.arguments) &&
+              node.arguments.length === 0 &&
+              globalObjectName(context, node.callee) === "Date";
+            if (isAmbientDate) {
+              context.report({
+                node,
+                messageId: "ambientNondeterminism",
+                data: { kind: "new Date()" },
+              });
+              return;
+            }
             if (
               !Array.isArray(node.arguments) ||
-              node.arguments.length !== 0 ||
-              globalObjectName(context, node.callee) !== "Date"
+              node.arguments.length === 0 ||
+              globalObjectName(context, node.callee) !== "Promise"
             ) {
               return;
             }
-            context.report({
-              node,
-              messageId: "ambientNondeterminism",
-              data: { kind: "new Date()" },
-            });
+            const callback = node.arguments.at(0);
+            const callbackKind = ambientFunctionKind(context, callback);
+            if (callbackKind !== null && isAstNode(callback)) {
+              context.report({
+                node: callback,
+                messageId: "ambientNondeterminism",
+                data: { kind: `${callbackKind} callback` },
+              });
+            }
           },
         };
       },

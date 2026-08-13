@@ -1,15 +1,17 @@
 // Passive regression fixture for
 // `no-ambient-nondeterminism/no-ambient-nondeterminism`.
 
-/* oxlint-disable unicorn/prefer-node-protocol -- fixture: bare crypto import provenance must remain covered */
+/* oxlint-disable unicorn/prefer-node-protocol -- fixture: every supported bare crypto import form must retain provenance */
 import bareCryptoDefault, {
   randomUUID as bareRandomUuid,
+  webcrypto as bareWebcrypto,
 } from "crypto";
 import * as bareCryptoNamespace from "crypto";
 /* oxlint-enable unicorn/prefer-node-protocol */
 import nodeCryptoDefault, {
   randomUUID,
   randomUUID as nodeRandomUuid,
+  webcrypto as nodeWebcrypto,
 } from "node:crypto";
 import * as nodeCryptoNamespace from "node:crypto";
 
@@ -61,6 +63,40 @@ export const nodeDefaultIdentifier = nodeCryptoDefault.randomUUID();
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: bare crypto default imports retain ambient provenance
 export const bareDefaultIdentifier = bareCryptoDefault.randomUUID();
 
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: named node:crypto webcrypto imports retain randomUUID provenance
+export const nodeWebcryptoIdentifier = nodeWebcrypto.randomUUID();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: named bare crypto webcrypto imports retain getRandomValues provenance
+export const bareWebcryptoBytes = bareWebcrypto.getRandomValues(
+  new Uint8Array(8),
+);
+
+export const nodeNamespaceWebcryptoIdentifier =
+  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: node:crypto namespace webcrypto retains randomUUID provenance
+  nodeCryptoNamespace.webcrypto.randomUUID();
+
+export const bareDefaultWebcryptoBytes =
+  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: bare crypto default webcrypto retains getRandomValues provenance
+  bareCryptoDefault.webcrypto.getRandomValues(new Uint8Array(8));
+
+export const bareNamespaceWebcryptoBytes =
+  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: bare crypto namespace webcrypto retains getRandomValues provenance
+  bareCryptoNamespace.webcrypto.getRandomValues(new Uint8Array(8));
+
+export const nodeDefaultWebcryptoIdentifier =
+  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: node:crypto default webcrypto retains randomUUID provenance
+  nodeCryptoDefault.webcrypto.randomUUID();
+
+/* oxlint-disable typescript/unbound-method -- fixture: destructured imported webcrypto methods are the rejected API surface */
+const {
+  webcrypto: { randomUUID: destructuredNodeWebcryptoRandomUuid },
+} = nodeCryptoNamespace;
+/* oxlint-enable typescript/unbound-method */
+
+export const destructuredNodeWebcryptoIdentifier =
+  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: nested destructuring retains imported webcrypto provenance
+  destructuredNodeWebcryptoRandomUuid();
+
 const localCryptoModule = { randomUUID: () => "local" };
 const localCryptoModuleAlias = localCryptoModule;
 const { randomUUID: localCryptoRandomUuid } = localCryptoModule;
@@ -69,6 +105,15 @@ export const localModuleIdentifier = localCryptoModule.randomUUID();
 export const localAliasedModuleIdentifier =
   localCryptoModuleAlias.randomUUID();
 export const localDestructuredIdentifier = localCryptoRandomUuid();
+
+const localWebcryptoModule = {
+  webcrypto: {
+    getRandomValues: (value: Uint8Array) => value,
+    randomUUID: () => "local",
+  },
+};
+export const localWebcryptoIdentifier =
+  localWebcryptoModule.webcrypto.randomUUID();
 
 const readNow = Date.now;
 const createSortableIdentifier = Bun.randomUUIDv7;
@@ -156,6 +201,12 @@ export const globalSortableIdentifier = globalThis.Bun.randomUUIDv7();
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: explicit globalThis access remains ambient monotonic time
 export const globalMonotonicTime = globalThis.performance.now();
 
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: Node's global alias is the same ambient host as globalThis
+export const nodeGlobalEpoch = global.Date.now();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: Node's global alias preserves nested crypto provenance
+export const nodeGlobalIdentifier = global.crypto.randomUUID();
+
 const ambientRoot = globalThis;
 const secondAmbientRoot = ambientRoot;
 /* oxlint-disable typescript/unbound-method -- fixture: nested global method aliases are the rejected API surface */
@@ -179,6 +230,90 @@ export const chainedRootIdentifier =
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: nested destructuring follows an immutable globalThis alias
 export const nestedAliasedRootEpoch = nestedAliasedRootNow();
+
+const directClock = { now: Date.now };
+const spreadClock = { ...directClock };
+const nestedServices = { clock: spreadClock };
+const overriddenClock = { ...directClock, now: () => 0 };
+const localClock = { now: () => 0 };
+const spreadLocalClock = { ...localClock };
+
+export const withOpaqueClockOverride = (override: { now: () => number }) => {
+  const opaqueClock = { now: Date.now, ...override };
+  return opaqueClock.now();
+};
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: a static object property retains ambient function provenance
+export const objectPropertyEpoch = directClock.now();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: an immutable object spread retains ambient function provenance
+export const spreadObjectEpoch = spreadClock.now();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: nested static object properties retain ambient provenance
+export const nestedObjectEpoch = nestedServices.clock.now();
+
+export const overriddenSpreadEpoch = overriddenClock.now();
+export const localObjectEpoch = spreadLocalClock.now();
+
+// Mere storage does not execute ambient nondeterminism.
+export const storedAmbientFunction = Date.now;
+
+const callbackValues = [1, 2] as const;
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: Array callbacks execute ambient functions
+export const callbackEpochs = [1, 2].map(Date.now);
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: immutable aliases of array literals remain provable built-ins
+export const aliasedArrayCallbackEpochs = callbackValues.map(Date.now);
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: passing Date itself to a callback executes ambient current-time reads
+export const callbackDateStrings = [1, 2].map(Date);
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: Array.from's mapper executes ambient functions
+export const callbackArrayFromEpochs = Array.from([1, 2], Date.now);
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: timer callbacks execute ambient function aliases
+export const ambientTimer = setTimeout(directClock.now, 0);
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: imported ambient functions retain provenance in callback positions
+export const importedAmbientTimer = setTimeout(randomUUID, 0);
+
+const localCallback = () => 0;
+export const localCallbackValues = [1, 2].map(localCallback);
+
+const ambientLocalCallback = () =>
+  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: locally declared callback bodies are visited at their ambient call
+  Date.now();
+export const ambientLocalCallbackValues = [1, 2].map(ambientLocalCallback);
+
+const customCallbackStore = {
+  map: (callback: typeof Date.now) => callback,
+};
+export const customMethodStoredCallback = customCallbackStore.map(Date.now);
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: native Promise executors invoke ambient function references
+export const ambientPromiseExecutor = new Promise(Date.now);
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: native Promise callbacks execute ambient function references
+export const ambientPromiseCallback = Promise.resolve(0).then(Date.now);
+
+export const ambientPromiseCallbacks = Promise.resolve(0).then(
+  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: native Promise fulfillment callbacks execute ambient function references
+  Date.now,
+  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: native Promise rejection callbacks execute ambient function references
+  randomUUID,
+);
+
+const customThenableStore = {
+  then: (callback: typeof Date.now) => callback,
+};
+export const customThenableStoredCallback =
+  customThenableStore.then(Date.now);
+
+export const withShadowedPromise = (
+  // oxlint-disable-next-line no-shadow-restricted-names -- fixture: a local Promise constructor must not be treated as the global built-in
+  Promise: new (callback: typeof Date.now) => object,
+) => new Promise(Date.now);
 
 export const explicitDate = new Date("2026-08-13T00:00:00.000Z");
 
@@ -230,6 +365,7 @@ export const withShadowedBindings = (
   globalIdentifier: globalThis.crypto.randomUUID(),
   globalRandomBytes: globalThis.crypto.getRandomValues(new Uint8Array(8)),
   globalMonotonicTime: globalThis.performance.now(),
+  callbackEpochs: [1, 2].map(Date.now),
 });
 
 export const withShadowedAliases = (
@@ -272,6 +408,13 @@ export const withShadowedAliases = (
     nestedIdentifier: nestedLocalRandomUuid(),
   };
 };
+
+export const withShadowedNodeGlobal = (
+  global: {
+    Date: { now: () => number };
+    crypto: { randomUUID: () => string };
+  },
+) => ({ epoch: global.Date.now(), identifier: global.crypto.randomUUID() });
 
 let mutableReadNow = Date.now;
 export const mutableAliasReference = mutableReadNow;

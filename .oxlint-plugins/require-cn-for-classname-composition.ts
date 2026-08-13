@@ -36,14 +36,17 @@ const isObjectExpression = (node: unknown): node is ESTree.ObjectExpression =>
 const isTemplateLiteral = (node: unknown): node is ESTree.TemplateLiteral =>
   isAstNode(node) && node.type === "TemplateLiteral";
 
-const isFunctionExpression = (
+const isFunction = (
   node: unknown,
 ): node is
   | ESTree.ArrowFunctionExpression
-  | (ESTree.Function & { type: "FunctionExpression" }) =>
+  | (ESTree.Function & {
+      type: "FunctionDeclaration" | "FunctionExpression";
+    }) =>
   isAstNode(node) &&
   (node.type === "ArrowFunctionExpression" ||
-    node.type === "FunctionExpression");
+    node.type === "FunctionExpression" ||
+    node.type === "FunctionDeclaration");
 
 const isClassNameAttribute = (node: unknown): boolean =>
   isAstNode(node) &&
@@ -106,26 +109,6 @@ export default eslintCompatPlugin({
           return null;
         };
 
-        const getConstInitializer = (identifier: unknown): unknown => {
-          const variable = resolveVariable(identifier);
-          if (variable === null) {
-            return null;
-          }
-          for (const definition of variable.defs) {
-            if (
-              definition.type === "Variable" &&
-              isAstNode(definition.node) &&
-              definition.node.type === "VariableDeclarator" &&
-              isAstNode(definition.parent) &&
-              definition.parent.type === "VariableDeclaration" &&
-              definition.parent.kind === "const"
-            ) {
-              return definition.node.init;
-            }
-          }
-          return null;
-        };
-
         const getVariableInitializer = (variable: Variable): unknown => {
           for (const definition of variable.defs) {
             if (
@@ -156,101 +139,552 @@ export default eslintCompatPlugin({
           );
         };
 
-        const localMemberValue = (
-          value: unknown,
-          visitedVariables = new Set<Variable>(),
-        ): unknown => {
-          const member = unwrapClassExpression(value);
-          if (!isMemberExpression(member)) {
-            return null;
-          }
-          const propertyName =
-            member.computed === false
-              ? getPropertyName(member.property)
-              : isStringLiteral(member.property)
-                ? member.property.value
-                : null;
-          if (propertyName === null) {
-            return null;
-          }
-
-          const resolveObject = (
-            candidate: unknown,
-          ): ESTree.ObjectExpression | null => {
-            const expression = unwrapClassExpression(candidate);
-            if (isObjectExpression(expression)) {
-              return expression;
+        const staticPropertyName = (
+          property: unknown,
+          computed = false,
+        ): string | null => {
+          if (!computed) {
+            const named = getPropertyName(property);
+            if (named !== null) {
+              return named;
             }
-            if (isMemberExpression(expression)) {
-              return resolveObject(
-                localMemberValue(expression, visitedVariables),
+          }
+          return isAstNode(property) &&
+            property.type === "Literal" &&
+            (typeof property.value === "string" ||
+              typeof property.value === "number")
+            ? String(property.value)
+            : null;
+        };
+
+        type LocalResolution =
+          | { type: "absent" }
+          | { type: "found"; value: unknown }
+          | { type: "opaque" };
+
+        type LocalObjectRestValue = {
+          type: "LocalObjectRestValue";
+          excludedProperties: ReadonlySet<string>;
+          source: unknown;
+        };
+
+        type LocalPossibleValues = {
+          type: "LocalPossibleValues";
+          values: readonly unknown[];
+        };
+
+        const isLocalObjectRestValue = (
+          value: unknown,
+        ): value is LocalObjectRestValue =>
+          typeof value === "object" &&
+          value !== null &&
+          "type" in value &&
+          value.type === "LocalObjectRestValue";
+
+        const isLocalPossibleValues = (
+          value: unknown,
+        ): value is LocalPossibleValues =>
+          typeof value === "object" &&
+          value !== null &&
+          "type" in value &&
+          value.type === "LocalPossibleValues";
+
+        const controlFlowContext = (
+          node: unknown,
+          boundary: unknown,
+        ): "conditional" | "unconditional" | null => {
+          let current = node;
+          let conditional = false;
+          while (isAstNode(current)) {
+            const parent = current.parent;
+            if (current === boundary || parent === boundary) {
+              return conditional ? "conditional" : "unconditional";
+            }
+            if (!isAstNode(parent)) {
+              return null;
+            }
+            if (
+              (parent.type === "IfStatement" && current !== parent.test) ||
+              (parent.type === "ConditionalExpression" &&
+                current !== parent.test) ||
+              parent.type === "SwitchCase" ||
+              (parent.type === "LogicalExpression" &&
+                current === parent.right) ||
+              parent.type === "ForStatement" ||
+              parent.type === "ForInStatement" ||
+              parent.type === "ForOfStatement" ||
+              parent.type === "WhileStatement" ||
+              parent.type === "DoWhileStatement"
+            ) {
+              conditional = true;
+            }
+            if (
+              parent.type === "ArrowFunctionExpression" ||
+              parent.type === "FunctionExpression" ||
+              parent.type === "FunctionDeclaration"
+            ) {
+              return null;
+            }
+            current = parent;
+          }
+          return null;
+        };
+
+        type LocalValueResolver = {
+          memberValue: (
+            value: unknown,
+            visitedVariables?: Set<Variable>,
+          ) => unknown;
+          patternValue: (
+            pattern: unknown,
+            source: unknown,
+            target: Variable,
+            visitedVariables: Set<Variable>,
+          ) => unknown;
+          propertyValue: (
+            source: unknown,
+            propertyName: string,
+            visitedVariables?: Set<Variable>,
+            readPosition?: number,
+          ) => unknown;
+          propertyResolution: (
+            source: unknown,
+            propertyName: string,
+            visitedVariables?: Set<Variable>,
+            readPosition?: number,
+          ) => LocalResolution;
+          stableValue: (
+            identifier: unknown,
+            visitedVariables?: Set<Variable>,
+          ) => unknown;
+        };
+
+        const localValueResolver: LocalValueResolver = {
+          memberValue(value, visitedVariables = new Set()) {
+            const member = unwrapClassExpression(value);
+            if (!isMemberExpression(member)) {
+              return null;
+            }
+            const propertyName = staticPropertyName(
+              member.property,
+              member.computed,
+            );
+            if (propertyName === null) {
+              return null;
+            }
+            return this.propertyValue(
+              member.object,
+              propertyName,
+              visitedVariables,
+              member.range[0],
+            );
+          },
+          patternValue(pattern, source, target, visitedVariables) {
+            if (!isAstNode(pattern)) {
+              return null;
+            }
+            if (isIdentifier(pattern)) {
+              return target.identifiers.some(
+                (identifier) => identifier.range[0] === pattern.range[0],
+              )
+                ? source
+                : null;
+            }
+            if (pattern.type === "AssignmentPattern") {
+              const selected = this.patternValue(
+                pattern.left,
+                source,
+                target,
+                visitedVariables,
+              );
+              return (
+                selected ??
+                this.patternValue(
+                  pattern.left,
+                  pattern.right,
+                  target,
+                  visitedVariables,
+                )
               );
             }
-            if (!isIdentifierReference(expression)) {
+            if (pattern.type === "ObjectPattern") {
+              for (const property of pattern.properties) {
+                if (property.type === "RestElement") {
+                  const containsTarget = target.identifiers.some(
+                    (identifier) =>
+                      identifier.range[0] >= property.argument.range[0] &&
+                      identifier.range[1] <= property.argument.range[1],
+                  );
+                  if (!containsTarget) {
+                    continue;
+                  }
+                  const excludedProperties = new Set<string>();
+                  for (const sibling of pattern.properties) {
+                    if (sibling.type === "RestElement") {
+                      continue;
+                    }
+                    const siblingName = staticPropertyName(
+                      sibling.key,
+                      sibling.computed,
+                    );
+                    if (siblingName === null) {
+                      return null;
+                    }
+                    excludedProperties.add(siblingName);
+                  }
+                  return {
+                    type: "LocalObjectRestValue",
+                    excludedProperties,
+                    source,
+                  } satisfies LocalObjectRestValue;
+                }
+                if (!isAstNode(property.value)) {
+                  continue;
+                }
+                const containsTarget = target.identifiers.some(
+                  (identifier) =>
+                    identifier.range[0] >= property.value.range[0] &&
+                    identifier.range[1] <= property.value.range[1],
+                );
+                if (!containsTarget) {
+                  continue;
+                }
+                const propertyName = staticPropertyName(
+                  property.key,
+                  property.computed,
+                );
+                if (propertyName === null) {
+                  return null;
+                }
+                return this.patternValue(
+                  property.value,
+                  this.propertyValue(
+                    source,
+                    propertyName,
+                    new Set(visitedVariables),
+                  ),
+                  target,
+                  visitedVariables,
+                );
+              }
               return null;
             }
-            const variable = resolveVariable(expression);
-            if (variable === null || visitedVariables.has(variable)) {
-              return null;
+            if (pattern.type === "ArrayPattern") {
+              for (const [index, element] of pattern.elements.entries()) {
+                if (!isAstNode(element)) {
+                  continue;
+                }
+                const containsTarget = target.identifiers.some(
+                  (identifier) =>
+                    identifier.range[0] >= element.range[0] &&
+                    identifier.range[1] <= element.range[1],
+                );
+                if (containsTarget) {
+                  return this.patternValue(
+                    element,
+                    this.propertyValue(
+                      source,
+                      String(index),
+                      new Set(visitedVariables),
+                    ),
+                    target,
+                    visitedVariables,
+                  );
+                }
+              }
             }
-            visitedVariables.add(variable);
-            return resolveObject(getConstInitializer(expression));
-          };
+            return null;
+          },
+          propertyValue(
+            source,
+            propertyName,
+            visitedVariables = new Set(),
+            readPosition,
+          ) {
+            const resolution = this.propertyResolution(
+              source,
+              propertyName,
+              visitedVariables,
+              readPosition,
+            );
+            return resolution.type === "found" ? resolution.value : null;
+          },
+          propertyResolution(
+            source,
+            propertyName,
+            visitedVariables = new Set(),
+            readPosition = Number.POSITIVE_INFINITY,
+          ) {
+            if (isLocalObjectRestValue(source)) {
+              return source.excludedProperties.has(propertyName)
+                ? { type: "absent" }
+                : this.propertyResolution(
+                    source.source,
+                    propertyName,
+                    visitedVariables,
+                    readPosition,
+                  );
+            }
+            const expression = unwrapClassExpression(source);
+            if (expression === null) {
+              return { type: "opaque" };
+            }
+            if (isIdentifier(expression)) {
+              const variable = resolveVariable(expression);
+              if (variable === null || visitedVariables.has(variable)) {
+                return { type: "opaque" };
+              }
+              const stableValue = this.stableValue(
+                expression,
+                visitedVariables,
+              );
+              const memberWrites: Array<{
+                context: "conditional" | "unconditional";
+                opaque: boolean;
+                position: number;
+                value: unknown;
+              }> = [];
+              for (const reference of variable.references) {
+                if (reference.identifier.range[0] >= readPosition) {
+                  continue;
+                }
+                const member = reference.identifier.parent;
+                if (
+                  !isMemberExpression(member) ||
+                  member.object !== reference.identifier
+                ) {
+                  continue;
+                }
+                const owner = member.parent;
+                const isAssignment =
+                  isAstNode(owner) &&
+                  owner.type === "AssignmentExpression" &&
+                  owner.left === member;
+                const isUpdate =
+                  isAstNode(owner) &&
+                  ((owner.type === "UpdateExpression" &&
+                    owner.argument === member) ||
+                    (owner.type === "UnaryExpression" &&
+                      owner.operator === "delete" &&
+                      owner.argument === member));
+                if (!isAssignment && !isUpdate) {
+                  continue;
+                }
+                const writtenProperty = staticPropertyName(
+                  member.property,
+                  member.computed,
+                );
+                if (
+                  writtenProperty !== null &&
+                  writtenProperty !== propertyName
+                ) {
+                  continue;
+                }
+                const writeContext = controlFlowContext(
+                  reference.identifier,
+                  variable.scope.block,
+                );
+                if (writeContext === null) {
+                  continue;
+                }
+                memberWrites.push({
+                  context: writeContext,
+                  opaque:
+                    writtenProperty === null ||
+                    !isAssignment ||
+                    owner.operator !== "=" ||
+                    !isAstNode(owner.right),
+                  position: reference.identifier.range[0],
+                  value: isAssignment ? owner.right : null,
+                });
+              }
+              memberWrites.sort(
+                (left, right) => left.position - right.position,
+              );
 
-          const readProperty = (object: ESTree.ObjectExpression): unknown => {
+              const lastUnconditionalWrite = memberWrites.findLast(
+                (write) =>
+                  write.context === "unconditional" && !write.opaque,
+              );
+              const baseResolution =
+                lastUnconditionalWrite === undefined
+                  ? stableValue === null
+                    ? { type: "opaque" as const }
+                    : this.propertyResolution(
+                        stableValue,
+                        propertyName,
+                        new Set([...visitedVariables, variable]),
+                        readPosition,
+                      )
+                  : {
+                      type: "found" as const,
+                      value: lastUnconditionalWrite.value,
+                    };
+              const basePosition = lastUnconditionalWrite?.position ?? -1;
+              if (
+                memberWrites.some(
+                  (write) => write.position > basePosition && write.opaque,
+                )
+              ) {
+                return { type: "opaque" };
+              }
+              const conditionalWrites = memberWrites.filter(
+                (write) =>
+                  write.position > basePosition &&
+                  write.context === "conditional" &&
+                  !write.opaque,
+              );
+              if (conditionalWrites.length === 0) {
+                return baseResolution;
+              }
+              if (baseResolution.type === "opaque") {
+                return baseResolution;
+              }
+              return {
+                type: "found",
+                value: {
+                  type: "LocalPossibleValues",
+                  values: [
+                    baseResolution.type === "found"
+                      ? baseResolution.value
+                      : null,
+                    ...conditionalWrites.map((write) => write.value),
+                  ],
+                } satisfies LocalPossibleValues,
+              };
+            }
+            if (isMemberExpression(expression)) {
+              const memberValue = this.memberValue(
+                expression,
+                visitedVariables,
+              );
+              return memberValue === null
+                ? { type: "opaque" }
+                : this.propertyResolution(
+                    memberValue,
+                    propertyName,
+                    visitedVariables,
+                    readPosition,
+                  );
+            }
+            if (expression.type === "ArrayExpression") {
+              if (!/^(?:0|[1-9]\d*)$/.test(propertyName)) {
+                return { type: "absent" };
+              }
+              const element = expression.elements.at(Number(propertyName));
+              return isAstNode(element) && element.type !== "SpreadElement"
+                ? { type: "found", value: element }
+                : { type: "absent" };
+            }
+            if (!isObjectExpression(expression)) {
+              return { type: "opaque" };
+            }
             for (
-              let index = object.properties.length - 1;
+              let index = expression.properties.length - 1;
               index >= 0;
               index--
             ) {
-              const property = object.properties.at(index);
+              const property = expression.properties.at(index);
               if (property === undefined) {
                 continue;
               }
               if (property.type === "SpreadElement") {
-                const spreadObject = resolveObject(property.argument);
-                if (spreadObject !== null) {
-                  const spreadValue = readProperty(spreadObject);
-                  if (spreadValue !== null) {
-                    return spreadValue;
-                  }
+                const spreadResolution = this.propertyResolution(
+                  property.argument,
+                  propertyName,
+                  new Set(visitedVariables),
+                  readPosition,
+                );
+                if (spreadResolution.type !== "absent") {
+                  return spreadResolution;
                 }
                 continue;
               }
+              const candidateName = staticPropertyName(
+                property.key,
+                property.computed,
+              );
+              if (candidateName === propertyName) {
+                return { type: "found", value: property.value };
+              }
+              if (property.computed === true && candidateName === null) {
+                return { type: "opaque" };
+              }
+            }
+            return { type: "absent" };
+          },
+          stableValue(identifier, visitedVariables = new Set()) {
+            const variable = resolveVariable(identifier);
+            if (variable === null) {
+              return null;
+            }
+            for (const definition of variable.defs) {
               if (
-                property.computed === false &&
-                getPropertyName(property.key) === propertyName
+                definition.type === "FunctionName" &&
+                isFunction(definition.node)
               ) {
-                return property.value;
+                const reference = unwrapClassExpression(identifier);
+                const wasReassigned =
+                  isIdentifier(reference) &&
+                  variable.references.some(
+                    (candidate) =>
+                      candidate.isWrite() &&
+                      candidate.identifier.range[0] < reference.range[0],
+                  );
+                return wasReassigned ? null : definition.node;
               }
               if (
-                property.computed === true &&
-                isStringLiteral(property.key) &&
-                property.key.value === propertyName
+                definition.type === "Variable" &&
+                isAstNode(definition.node) &&
+                definition.node.type === "VariableDeclarator" &&
+                isAstNode(definition.parent) &&
+                definition.parent.type === "VariableDeclaration" &&
+                definition.parent.kind === "const"
               ) {
-                return property.value;
-              }
-              if (property.computed === true) {
-                return null;
+                return this.patternValue(
+                  definition.node.id,
+                  definition.node.init,
+                  variable,
+                  visitedVariables,
+                );
               }
             }
             return null;
-          };
-
-          const object = resolveObject(member.object);
-          return object === null ? null : readProperty(object);
+          },
         };
+
+        const localMemberValue = (
+          value: unknown,
+          visitedVariables = new Set<Variable>(),
+        ): unknown =>
+          localValueResolver.memberValue(value, visitedVariables);
 
         const isCanonicalCnComposition = (
           value: unknown,
           visitedVariables = new Set<Variable>(),
         ): boolean => {
+          if (isLocalPossibleValues(value)) {
+            return value.values.every((possibleValue) =>
+              isCanonicalCnComposition(
+                possibleValue,
+                new Set(visitedVariables),
+              ),
+            );
+          }
           const node = unwrapClassExpression(value);
           if (node === null) {
             return false;
           }
           if (node.type === "CallExpression") {
             return isCanonicalCn(node.callee);
+          }
+          if (isMemberExpression(node)) {
+            const memberVariables = new Set(visitedVariables);
+            const localValue = localMemberValue(node, memberVariables);
+            return (
+              localValue !== null &&
+              isCanonicalCnComposition(localValue, memberVariables)
+            );
           }
           if (!isIdentifier(node)) {
             return false;
@@ -259,17 +693,31 @@ export default eslintCompatPlugin({
           if (variable === null || visitedVariables.has(variable)) {
             return false;
           }
-          visitedVariables.add(variable);
-          return isCanonicalCnComposition(
-            getConstInitializer(node),
+          const stableValue = localValueResolver.stableValue(
+            node,
             visitedVariables,
           );
+          if (stableValue === null) {
+            return false;
+          }
+          visitedVariables.add(variable);
+          return isCanonicalCnComposition(stableValue, visitedVariables);
         };
 
         const staticClassValue = (
           value: unknown,
           visitedVariables = new Set<Variable>(),
         ): string | null => {
+          if (isLocalPossibleValues(value)) {
+            const staticValues = value.values.map((possibleValue) =>
+              staticClassValue(possibleValue, new Set(visitedVariables)),
+            );
+            return staticValues.every(
+              (staticValue): staticValue is string => staticValue !== null,
+            ) && new Set(staticValues).size === 1
+              ? (staticValues.at(0) ?? null)
+              : null;
+          }
           const node = unwrapClassExpression(value);
           if (isStringLiteral(node)) {
             return node.value;
@@ -292,7 +740,10 @@ export default eslintCompatPlugin({
           if (variable === null || visitedVariables.has(variable)) {
             return null;
           }
-          const initializer = getConstInitializer(node);
+          const initializer = localValueResolver.stableValue(
+            node,
+            visitedVariables,
+          );
           if (initializer === null) {
             return null;
           }
@@ -386,10 +837,142 @@ export default eslintCompatPlugin({
           ];
         };
 
+        const writeContextInVariableScope = (
+          identifier: unknown,
+          variable: Variable,
+        ): "conditional" | "unconditional" | null => {
+          let current = identifier;
+          let conditional = false;
+          while (isAstNode(current)) {
+            const parent = current.parent;
+            if (
+              current === variable.scope.block ||
+              parent === variable.scope.block
+            ) {
+              return conditional ? "conditional" : "unconditional";
+            }
+            if (!isAstNode(parent)) {
+              return null;
+            }
+            if (
+              (parent.type === "IfStatement" && current !== parent.test) ||
+              (parent.type === "ConditionalExpression" &&
+                current !== parent.test) ||
+              parent.type === "SwitchCase" ||
+              (parent.type === "LogicalExpression" &&
+                current === parent.right) ||
+              parent.type === "ForStatement" ||
+              parent.type === "ForInStatement" ||
+              parent.type === "ForOfStatement" ||
+              parent.type === "WhileStatement" ||
+              parent.type === "DoWhileStatement"
+            ) {
+              conditional = true;
+            }
+            if (
+              parent.type === "ArrowFunctionExpression" ||
+              parent.type === "FunctionExpression" ||
+              parent.type === "FunctionDeclaration"
+            ) {
+              return null;
+            }
+            current = parent;
+          }
+          return null;
+        };
+
+        const mutableLocalValues = (
+          identifier: unknown,
+          variable: Variable,
+        ): unknown[] | null => {
+          const node = unwrapClassExpression(identifier);
+          if (!isIdentifier(node)) {
+            return null;
+          }
+          const definition = variable.defs.find(
+            (candidate) =>
+              candidate.type === "Variable" &&
+              isAstNode(candidate.node) &&
+              candidate.node.type === "VariableDeclarator" &&
+              isAstNode(candidate.parent) &&
+              candidate.parent.type === "VariableDeclaration" &&
+              candidate.parent.kind !== "const",
+          );
+          if (
+            definition === undefined ||
+            !isAstNode(definition.node) ||
+            definition.node.type !== "VariableDeclarator"
+          ) {
+            return null;
+          }
+          const writes = variable.references.filter(
+            (reference) =>
+              reference.init !== true &&
+              reference.isWrite() &&
+              reference.identifier.range[0] < node.range[0] &&
+              writeContextInVariableScope(reference.identifier, variable) !==
+                null,
+          );
+          const lastUnconditionalWrite = writes.findLast(
+            (reference) =>
+              writeContextInVariableScope(reference.identifier, variable) ===
+              "unconditional",
+          );
+          const baseValue =
+            lastUnconditionalWrite?.writeExpr ?? definition.node.init;
+          const basePosition =
+            lastUnconditionalWrite?.identifier.range[0] ?? -1;
+          return [
+            baseValue,
+            ...writes
+              .filter(
+                (reference) =>
+                  reference.identifier.range[0] > basePosition &&
+                  writeContextInVariableScope(
+                    reference.identifier,
+                    variable,
+                  ) === "conditional",
+              )
+              .map((reference) => reference.writeExpr),
+          ];
+        };
+
         const isAllowedClassValue = (
           value: unknown,
           visitedVariables = new Set<Variable>(),
         ): boolean => {
+          if (isLocalPossibleValues(value)) {
+            if (
+              value.values.every((possibleValue) =>
+                isCanonicalCnComposition(possibleValue),
+              )
+            ) {
+              return true;
+            }
+            const valueKinds = new Set<string>();
+            for (const possibleValue of value.values) {
+              const staticValue = staticClassValue(possibleValue);
+              if (staticValue !== null) {
+                valueKinds.add(`static:${staticValue}`);
+                continue;
+              }
+              if (
+                !isAllowedClassValue(
+                  possibleValue,
+                  new Set(visitedVariables),
+                )
+              ) {
+                return false;
+              }
+              const possibleNode = unwrapClassExpression(possibleValue);
+              valueKinds.add(
+                isAstNode(possibleNode)
+                  ? `dynamic:${context.sourceCode.getText(possibleNode)}`
+                  : "dynamic:unknown",
+              );
+            }
+            return valueKinds.size <= 1;
+          }
           const node = unwrapClassExpression(value);
           if (node === null || isStaticLiteral(node)) {
             return true;
@@ -399,24 +982,55 @@ export default eslintCompatPlugin({
             if (variable === null) {
               return true;
             }
-            const initializer = getConstInitializer(node);
-            if (initializer === null) {
-              return true;
-            }
             if (visitedVariables.has(variable)) {
               return true;
             }
-            visitedVariables.add(variable);
-            return isAllowedClassValue(initializer, visitedVariables);
+            const stableValue = localValueResolver.stableValue(
+              node,
+              visitedVariables,
+            );
+            if (stableValue !== null) {
+              visitedVariables.add(variable);
+              return isAllowedClassValue(stableValue, visitedVariables);
+            }
+            const mutableValues = mutableLocalValues(node, variable);
+            if (mutableValues === null) {
+              return true;
+            }
+            if (
+              mutableValues.every((mutableValue) =>
+                isCanonicalCnComposition(mutableValue),
+              )
+            ) {
+              return true;
+            }
+            const valueKinds = new Set<string>();
+            for (const mutableValue of mutableValues) {
+              const staticValue = staticClassValue(mutableValue);
+              if (staticValue !== null) {
+                valueKinds.add(`static:${staticValue}`);
+                continue;
+              }
+              const nextVisited = new Set(visitedVariables);
+              nextVisited.add(variable);
+              if (!isAllowedClassValue(mutableValue, nextVisited)) {
+                return false;
+              }
+              const mutableNode = unwrapClassExpression(mutableValue);
+              valueKinds.add(
+                isAstNode(mutableNode)
+                  ? `dynamic:${context.sourceCode.getText(mutableNode)}`
+                  : "dynamic:unknown",
+              );
+            }
+            return valueKinds.size <= 1;
           }
           if (isMemberExpression(node)) {
-            const localValue = localMemberValue(
-              node,
-              new Set(visitedVariables),
-            );
+            const memberVariables = new Set(visitedVariables);
+            const localValue = localMemberValue(node, memberVariables);
             return (
               localValue === null ||
-              isAllowedClassValue(localValue, visitedVariables)
+              isAllowedClassValue(localValue, memberVariables)
             );
           }
           if (isTemplateLiteral(node)) {
@@ -425,7 +1039,7 @@ export default eslintCompatPlugin({
           if (node.type === "CallExpression") {
             return isCanonicalCn(node.callee);
           }
-          if (isFunctionExpression(node)) {
+          if (isFunction(node)) {
             if (node.body?.type !== "BlockStatement") {
               return isAllowedClassValue(node.body, visitedVariables);
             }
@@ -508,6 +1122,19 @@ export default eslintCompatPlugin({
           context.report({ node, messageId: "requireCanonicalCn" });
         };
 
+        const reportLocalSpreadClassName = (
+          spread: unknown,
+          owner: unknown,
+        ) => {
+          const className = localValueResolver.propertyValue(
+            spread,
+            "className",
+          );
+          if (className !== null && !isAllowedClassValue(className)) {
+            report(owner);
+          }
+        };
+
         return {
           before() {
             reportedAttributes.clear();
@@ -523,6 +1150,32 @@ export default eslintCompatPlugin({
             const expression = unwrapClassExpression(node.value.expression);
             if (!isAllowedClassValue(expression)) {
               report(node);
+            }
+          },
+          JSXSpreadAttribute(node) {
+            const argument = unwrapClassExpression(node.argument);
+            if (isObjectExpression(argument)) {
+              reportLocalSpreadClassName(argument, node);
+              return;
+            }
+            if (!isIdentifier(argument)) {
+              return;
+            }
+            const variable = resolveVariable(argument);
+            if (variable === null) {
+              return;
+            }
+            const stableValue = localValueResolver.stableValue(argument);
+            if (stableValue !== null) {
+              reportLocalSpreadClassName(stableValue, node);
+              return;
+            }
+            const mutableValues = mutableLocalValues(argument, variable);
+            if (mutableValues === null) {
+              return;
+            }
+            for (const mutableValue of mutableValues) {
+              reportLocalSpreadClassName(mutableValue, node);
             }
           },
         };
