@@ -92,9 +92,7 @@ const ContextMenuActionItem = ({ action }: { action: ContextMenuAction }) => {
     <>
       {separator}
       <MenuItem
-        className={cn(
-          action.variant === "destructive" && "text-destructive",
-        )}
+        className={cn(action.variant === "destructive" && "text-destructive")}
         disabled={action.disabled === true}
         onClick={action.onClick}
       >

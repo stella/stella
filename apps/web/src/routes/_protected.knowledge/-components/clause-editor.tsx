@@ -620,9 +620,7 @@ export const ClauseEditor = ({
         <div className="bg-border mx-1 h-4 w-px" />
         <Button
           aria-label={t("folio.bold")}
-          className={cn(
-            editorReady && editor.isActive("bold") && "bg-muted",
-          )}
+          className={cn(editorReady && editor.isActive("bold") && "bg-muted")}
           disabled={!editorReady || editingLocked}
           onClick={toggleBold}
           size="icon-xs"
@@ -633,9 +631,7 @@ export const ClauseEditor = ({
         </Button>
         <Button
           aria-label={t("folio.italic")}
-          className={cn(
-            editorReady && editor.isActive("italic") && "bg-muted",
-          )}
+          className={cn(editorReady && editor.isActive("italic") && "bg-muted")}
           disabled={!editorReady || editingLocked}
           onClick={toggleItalic}
           size="icon-xs"

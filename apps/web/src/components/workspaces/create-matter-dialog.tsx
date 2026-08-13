@@ -449,9 +449,7 @@ const CreateMatterDialogBody = ({
         <section>
           <Field invalid={nameInvalid}>
             <FieldLabel
-              className={cn(
-                nameInvalid && "text-destructive-foreground",
-              )}
+              className={cn(nameInvalid && "text-destructive-foreground")}
             >
               {t("common.name")}
             </FieldLabel>

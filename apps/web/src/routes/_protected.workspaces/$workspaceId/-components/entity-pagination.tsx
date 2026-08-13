@@ -66,9 +66,7 @@ export const EntityPagination = ({
           <PaginationPrevious
             aria-disabled={page === 1}
             className={cn(
-              page === 1
-                ? "pointer-events-none opacity-50"
-                : "cursor-pointer",
+              page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer",
             )}
             onClick={() => {
               if (page > 1) {

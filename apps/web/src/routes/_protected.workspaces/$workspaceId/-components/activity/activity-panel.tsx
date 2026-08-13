@@ -476,7 +476,10 @@ const ActivityTimelineSkeleton = () => (
           </span>
           <span className="py-3 ps-3 pe-4">
             <span
-              className={cn("bg-muted block h-3 animate-pulse rounded-sm", width)}
+              className={cn(
+                "bg-muted block h-3 animate-pulse rounded-sm",
+                width,
+              )}
             />
             <span className="bg-muted mt-3 block h-3 w-40 animate-pulse rounded-sm" />
           </span>
@@ -1179,9 +1182,7 @@ const ActivityTriplet = ({ detail, group, size }: ActivityTripletProps) => {
   return (
     <span
       className={cn(
-        compact
-          ? "min-w-0 text-[13px] leading-5"
-          : "min-w-0 text-sm leading-5",
+        compact ? "min-w-0 text-[13px] leading-5" : "min-w-0 text-sm leading-5",
       )}
     >
       <span className="block min-h-5 font-medium">

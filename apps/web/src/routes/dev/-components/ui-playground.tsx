@@ -688,9 +688,11 @@ export function UiPlayground() {
                     <AlertDialogTrigger
                       render={
                         <span
-                          className={cn(buttonVariants({
-                            variant: "destructive-outline",
-                          }))}
+                          className={cn(
+                            buttonVariants({
+                              variant: "destructive-outline",
+                            }),
+                          )}
                         />
                       }
                     >
@@ -726,9 +728,11 @@ export function UiPlayground() {
                     <AlertDialogTrigger
                       render={
                         <span
-                          className={cn(buttonVariants({
-                            variant: "destructive-outline",
-                          }))}
+                          className={cn(
+                            buttonVariants({
+                              variant: "destructive-outline",
+                            }),
+                          )}
                         />
                       }
                     >

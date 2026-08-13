@@ -69,7 +69,9 @@ const NavItem = ({
   <div
     className={cn(
       "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm",
-      active ? "bg-accent text-foreground font-medium" : "text-muted-foreground"
+      active
+        ? "bg-accent text-foreground font-medium"
+        : "text-muted-foreground",
     )}
   >
     <Icon className="size-4" />

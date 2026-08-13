@@ -1,10 +1,11 @@
+import { cn } from "@stll/ui/lib/utils";
+
 import { CONDITIONAL_KINDS } from "@/routes/_protected.knowledge/-components/directive-kinds";
 import type { BlockDirectiveKind } from "@/routes/_protected.knowledge/-components/directive-kinds";
 import {
   DirectiveLabel,
   HighlightedText,
 } from "@/routes/_protected.knowledge/-components/paragraph-rendering";
-import { cn } from "@stll/ui/lib/utils";
 
 // ── Types ────────────────────────────────────────────
 

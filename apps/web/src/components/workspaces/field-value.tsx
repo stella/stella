@@ -113,7 +113,9 @@ export const IntFieldValue = ({
   const fallback = `${format.number(content.value)} ${content.currency}`;
 
   if (!content.currency) {
-    return <span className={cn(className)}>{format.number(content.value)}</span>;
+    return (
+      <span className={cn(className)}>{format.number(content.value)}</span>
+    );
   }
 
   const formattedResult = Result.try(() =>
