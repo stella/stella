@@ -1178,42 +1178,49 @@ const OutlineRail = ({
       aria-label={t("knowledge.playbooks.outline")}
       className="sticky top-6 hidden h-fit w-48 shrink-0 lg:block"
     >
-      <p className="text-muted-foreground mb-2 text-[11px] font-medium tracking-[0.08em] uppercase">
+      <p className="text-foreground-label mb-2 px-2 text-xs font-semibold">
         {t("knowledge.playbooks.outline")}
       </p>
       <ol className="space-y-0.5">
-        {positions.map((position, index) => (
-          <li key={position.sourceId}>
-            <Button
-              className={cn(
-                "hover:bg-muted h-auto w-full items-baseline justify-start px-2 py-1 text-start font-normal",
-                !position.enabled && "opacity-50",
-              )}
-              onClick={() => onJump(position.sourceId)}
-              size="xs"
-              variant="ghost"
-            >
-              <span className="text-muted-foreground shrink-0 text-[11px] tabular-nums">
-                {String(index + 1).padStart(2, "0")}
-              </span>
-              <span
-                className="text-muted-foreground min-w-0 flex-1 truncate text-[13px]"
-                dir="auto"
+        {positions.map((position, index) => {
+          const issue = position.issue.trim();
+          return (
+            <li key={position.sourceId}>
+              <Button
+                className={cn(
+                  "hover:bg-muted h-8 w-full items-center justify-start rounded-md px-2 text-start font-normal focus-visible:ring-offset-0 focus-visible:ring-inset sm:h-8",
+                  !position.enabled && "opacity-50",
+                )}
+                onClick={() => onJump(position.sourceId)}
+                size="xs"
+                variant="ghost"
               >
-                {position.issue.trim() ||
-                  t("knowledge.playbooks.untitledPosition")}
-              </span>
-              {position.mode === "graded" && (
+                <span className="text-foreground-ghost w-5 shrink-0 text-[10px] font-semibold tracking-[0.04em] tabular-nums">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
                 <span
-                  className="size-1.5 shrink-0 self-center rounded-full"
-                  style={{
-                    backgroundColor: `var(${SEVERITY_DOT_VAR[position.severity]})`,
-                  }}
-                />
-              )}
-            </Button>
-          </li>
-        ))}
+                  className={cn(
+                    "min-w-0 flex-1 truncate text-sm leading-5",
+                    issue
+                      ? "text-foreground font-medium"
+                      : "text-muted-foreground italic",
+                  )}
+                  dir="auto"
+                >
+                  {issue || t("knowledge.playbooks.untitledPosition")}
+                </span>
+                {position.mode === "graded" && (
+                  <span
+                    className="size-2 shrink-0 rounded-full"
+                    style={{
+                      backgroundColor: `var(${SEVERITY_DOT_VAR[position.severity]})`,
+                    }}
+                  />
+                )}
+              </Button>
+            </li>
+          );
+        })}
       </ol>
     </nav>
   );

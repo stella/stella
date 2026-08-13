@@ -2146,7 +2146,7 @@
       "whatIsAnMcpServer": "Kas ir MCP serveris?"
     },
     "playbooks": {
-      "addCheck": "Pievienot pārbaudi",
+      "addCheck": "Pievienot precīzu kārtulu",
       "addExtractPosition": "Tikai izvilkt",
       "addExtractPositionHint": "Nofiksē vērtību, bez vērtējuma",
       "addGradedPosition": "Novērtēta pozīcija",
@@ -2154,7 +2154,7 @@
       "addOption": "Pievienot iespēju",
       "addPosition": "Pievienot pozīciju",
       "addRule": "Noteikums",
-      "advanced": "Papildu",
+      "advanced": "Mainīt darbību",
       "approval": {
         "approve": "Apstiprināt",
         "approveFailed": "Neizdevās apstiprināt pārbaudes ceļvedi",
@@ -2167,11 +2167,11 @@
       "askContentLabel": "Atbildes tips",
       "askQuestionLabel": "Jautājums",
       "askQuestionPlaceholder": "Kas mums jānolasa no katra dokumenta? Atstājiet tukšu manuālai ievadei.",
-      "check": "Pārbaude",
-      "checkHint": "Vērtē ar deterministisku noteikumu, nevis ar MI.",
+      "check": "Izmantot precīzu noteikumu MI vietā",
+      "checkHint": "Izmērāmiem nosacījumiem, piemēram: maksājuma termiņš ≤ 30 dienas.",
       "checkKind": {
-        "constraint": "Vērtības ierobežojums",
-        "presence": "Esamība"
+        "constraint": "Pārbaudīt atbildi pēc nosacījuma",
+        "presence": "Pieprasīt vai aizliegt atbildi"
       },
       "clausePlaceholder": "Meklēt klauzulas…",
       "clauseSearchEmpty": "Klauzulas nav atrastas",
@@ -2182,19 +2182,21 @@
         "singleSelect": "Viena izvēle",
         "text": "Teksts"
       },
-      "convertToExtract": "Pārveidot par tikai izvilkšanu",
+      "convertToExtract": "Tikai izgūt atbildi",
       "convertToExtractDescription": "Tas noņems šīs pozīcijas pakāpju sistēmu un vērtējumu. To nevar atsaukt.",
       "convertToExtractTitle": "Pārveidot par tikai izvilkšanu?",
-      "convertToGraded": "Pārveidot par novērtētu",
+      "convertToGraded": "Pievienot vērtēšanas noteikumus",
       "createPlaybook": "Jauns pārbaudes ceļvedis",
       "created": "Pārbaudes ceļvedis izveidots",
+      "customizeAnswer": "Mainīt izgūto atbildi",
+      "customizeAnswerHint": "Rediģēt jautājumu vai atbildes formātu.",
       "deleteFailed": "Neizdevās izdzēst pārbaudes ceļvedi",
       "deletePlaybook": "Dzēst pārbaudes ceļvedi",
       "deletePosition": "Dzēst pozīciju",
       "deleted": "Pārbaudes ceļvedis izdzēsts",
-      "derivedAutomatically": "Jautājums un atbildes tips tiek atvasināti automātiski, kad saglabājat.",
-      "derivedQuestion": "Atvasināts jautājums",
-      "derivedType": "Atvasināts tips",
+      "derivedAutomatically": "Izgūšanas jautājums un atbildes formāts tiek izveidoti no šīs pozīcijas. Nekas nav jāiestata.",
+      "derivedQuestion": "Izgūšanas jautājums",
+      "derivedType": "Atbildes formāts",
       "descriptionPlaceholder": "Ko šis pārbaudes ceļvedis pārbauda?",
       "disabledBadge": "Izslēgts — tiek izlaista pārbaudēs",
       "discardChanges": "Atmest izmaiņas",
@@ -2207,7 +2209,8 @@
       "entryRank": "#{index}",
       "expandPosition": "Izvērst pozīciju",
       "expectation": {
-        "restricted": "Aizliegts"
+        "required": "Atbildei jābūt norādītai",
+        "restricted": "Atbilde nedrīkst būt norādīta"
       },
       "extractOnlyBadge": "Tikai izvilkt",
       "extractOnlyDescription": "Bez vērtējuma — vērtība tiek saglabāta tabulā.",
@@ -2216,8 +2219,8 @@
       "extractionManual": "Manuāli",
       "fixErrorsBeforeSaving": "Pirms saglabāšanas izlabojiet iezīmētos laukus.",
       "gradedNeedsContent": "Pievienojiet vismaz vienu noteikumu, alternatīvu ierakstu vai ideālu formulējumu.",
-      "guidanceLabel": "Norādījumi",
-      "guidancePlaceholder": "Piezīmes pārbaudītājiem (neobligāti)",
+      "guidanceLabel": "Pievienot pārskatīšanas norādījumus",
+      "guidancePlaceholder": "Pievienojiet izņēmumu vai norādījumu, ko neaptver iepriekš minētie noteikumi.",
       "idealFromClause": "No klauzulu bibliotēkas",
       "idealInline": "Ievadīts teksts",
       "idealInlinePlaceholder": "Ielīmējiet ideālo formulējumu…",
@@ -2303,8 +2306,8 @@
         "subtitle": "Gatavi pārbaudes ceļveži, ko varat pievienot un pēc tam pielāgot saviem standartiem.",
         "title": "Sākuma pārbaudes ceļveži"
       },
-      "switchToAuto": "Atpakaļ uz automātisko režīmu",
-      "switchToManual": "Pārslēgt uz manuālo režīmu",
+      "switchToAuto": "Automātiski izveidot jautājumu un formātu",
+      "switchToManual": "Pielāgot jautājumu un atbildes formātu",
       "tier": {
         "acceptable": "Pieņemams",
         "fallback": "Alternatīva",

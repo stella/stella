@@ -1,3 +1,6 @@
+import { panic } from "better-result";
+
+import { remapNodePropertyIds } from "@/api/lib/conditions/ast-utils";
 import type {
   PlaybookPositions,
   Position,
@@ -11,19 +14,50 @@ import type {
 // finding citations, and DnD reorder all key off these ids as stable identity.
 export const instantiateStarterPositions = (
   positions: PlaybookPositions,
-): PlaybookPositions => ({
-  version: 2,
-  items: positions.items.map(regeneratePositionIds),
-});
+): PlaybookPositions => {
+  const sourceIdMap = new Map(
+    positions.items.map((position) => [position.sourceId, Bun.randomUUIDv7()]),
+  );
 
-const regeneratePositionIds = (position: Position): Position => {
+  return {
+    version: 2,
+    items: positions.items.map((position) =>
+      regeneratePositionIds(position, sourceIdMap),
+    ),
+  };
+};
+
+const regeneratePositionIds = (
+  position: Position,
+  sourceIdMap: ReadonlyMap<string, string>,
+): Position => {
+  const sourceId =
+    sourceIdMap.get(position.sourceId) ??
+    panic("Starter position source id was not regenerated");
+
   if (position.mode === "extract") {
-    return { ...position, sourceId: Bun.randomUUIDv7() };
+    return { ...position, sourceId };
+  }
+
+  const regenerated = {
+    ...position,
+    sourceId,
+    tiers: regenerateTierIds(position.tiers),
+  };
+  if (position.check?.kind !== "constraint") {
+    return regenerated;
   }
   return {
-    ...position,
-    sourceId: Bun.randomUUIDv7(),
-    tiers: regenerateTierIds(position.tiers),
+    ...regenerated,
+    check: {
+      ...position.check,
+      condition: remapNodePropertyIds(
+        position.check.condition,
+        (id) =>
+          sourceIdMap.get(id) ??
+          panic("Starter constraint references an unknown position"),
+      ),
+    },
   };
 };
 

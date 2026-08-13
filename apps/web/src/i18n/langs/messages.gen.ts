@@ -2149,7 +2149,7 @@ type Messages = {
       "whatIsAnMcpServer": "What is an MCP server?";
     };
     "playbooks": {
-      "addCheck": "Add a check";
+      "addCheck": "Add exact rule";
       "addExtractPosition": "Extract only";
       "addExtractPositionHint": "Capture a value, no grading";
       "addGradedPosition": "Graded position";
@@ -2157,7 +2157,7 @@ type Messages = {
       "addOption": "Add option";
       "addPosition": "Add position";
       "addRule": "Rule";
-      "advanced": "Advanced";
+      "advanced": "Change how this works";
       "approval": {
         "approve": "Approve";
         "approveFailed": "Failed to approve playbook";
@@ -2170,11 +2170,11 @@ type Messages = {
       "askContentLabel": "Answer type";
       "askQuestionLabel": "Question";
       "askQuestionPlaceholder": "What should we read from each document? Leave empty for manual input.";
-      "check": "Check";
-      "checkHint": "Grade with a deterministic rule instead of the AI.";
+      "check": "Use an exact rule instead of AI";
+      "checkHint": "For measurable conditions, such as payment term ≤ 30 days.";
       "checkKind": {
-        "constraint": "Value constraint";
-        "presence": "Presence";
+        "constraint": "Test the answer against a condition";
+        "presence": "Require or forbid an answer";
       };
       "clausePlaceholder": "Search clauses…";
       "clauseSearchEmpty": "No clauses found";
@@ -2185,19 +2185,21 @@ type Messages = {
         "singleSelect": "Single select";
         "text": "Text";
       };
-      "convertToExtract": "Convert to extract only";
+      "convertToExtract": "Only extract an answer";
       "convertToExtractDescription": "This removes the tier ladder and grading for this position. This can't be undone.";
       "convertToExtractTitle": "Convert to extract only?";
-      "convertToGraded": "Convert to graded";
+      "convertToGraded": "Add grading rules";
       "createPlaybook": "New playbook";
       "created": "Playbook created";
+      "customizeAnswer": "Change extracted answer";
+      "customizeAnswerHint": "Edit the question or answer format.";
       "deleteFailed": "Failed to delete playbook";
       "deletePlaybook": "Delete playbook";
       "deletePosition": "Delete position";
       "deleted": "Playbook deleted";
-      "derivedAutomatically": "The question and answer type are derived automatically when you save.";
-      "derivedQuestion": "Derived question";
-      "derivedType": "Derived type";
+      "derivedAutomatically": "The extraction question and answer format are generated from this position. No setup is needed.";
+      "derivedQuestion": "Extraction question";
+      "derivedType": "Answer format";
       "descriptionPlaceholder": "What does this playbook check?";
       "disabledBadge": "Off — skipped in runs";
       "discardChanges": "Discard changes";
@@ -2210,7 +2212,8 @@ type Messages = {
       "entryRank": "#{index}";
       "expandPosition": "Expand position";
       "expectation": {
-        "restricted": "Restricted";
+        "required": "Answer must be present";
+        "restricted": "Answer must be absent";
       };
       "extractOnlyBadge": "Extract only";
       "extractOnlyDescription": "No grading — captures the value into the table.";
@@ -2219,8 +2222,8 @@ type Messages = {
       "extractionManual": "Manual";
       "fixErrorsBeforeSaving": "Fix the highlighted fields before saving.";
       "gradedNeedsContent": "Add at least one rule, fallback entry, or ideal language.";
-      "guidanceLabel": "Guidance";
-      "guidancePlaceholder": "Notes for reviewers (optional)";
+      "guidanceLabel": "Add review instructions";
+      "guidancePlaceholder": "Add an exception or instruction not covered by the rules above.";
       "idealFromClause": "From clause library";
       "idealInline": "Inline text";
       "idealInlinePlaceholder": "Paste the ideal wording…";
@@ -2306,8 +2309,8 @@ type Messages = {
         "subtitle": "Ready-made playbooks you can add and then tailor to your standards.";
         "title": "Starter playbooks";
       };
-      "switchToAuto": "Back to automatic";
-      "switchToManual": "Switch to manual";
+      "switchToAuto": "Generate question and format automatically";
+      "switchToManual": "Customize question and answer format";
       "tier": {
         "acceptable": "Acceptable";
         "fallback": "Fallback";

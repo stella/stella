@@ -2146,7 +2146,7 @@
       "whatIsAnMcpServer": "Co je MCP server?"
     },
     "playbooks": {
-      "addCheck": "Přidat kontrolu",
+      "addCheck": "Přidat přesné pravidlo",
       "addExtractPosition": "Pouze extrakce",
       "addExtractPositionHint": "Zachytí hodnotu, bez hodnocení",
       "addGradedPosition": "Hodnocená pozice",
@@ -2154,7 +2154,7 @@
       "addOption": "Přidat možnost",
       "addPosition": "Přidat pozici",
       "addRule": "Pravidlo",
-      "advanced": "Pokročilé",
+      "advanced": "Změnit, jak to funguje",
       "approval": {
         "approve": "Schválit",
         "approveFailed": "Playbook se nepodařilo schválit",
@@ -2167,11 +2167,11 @@
       "askContentLabel": "Typ odpovědi",
       "askQuestionLabel": "Otázka",
       "askQuestionPlaceholder": "Co se má z každého dokumentu vyčíst? Ponechte prázdné pro ruční zadání.",
-      "check": "Kontrola",
-      "checkHint": "Ohodnoťte pomocí deterministického pravidla místo AI.",
+      "check": "Použít přesné pravidlo místo AI",
+      "checkHint": "Pro měřitelné podmínky, například: splatnost ≤ 30 dnů.",
       "checkKind": {
-        "constraint": "Omezení hodnoty",
-        "presence": "Přítomnost"
+        "constraint": "Ověřit odpověď podle podmínky",
+        "presence": "Vyžadovat nebo zakázat odpověď"
       },
       "clausePlaceholder": "Hledat vzorová ustanovení…",
       "clauseSearchEmpty": "Nenalezena žádná vzorová ustanovení",
@@ -2182,19 +2182,21 @@
         "singleSelect": "Jednoduchý výběr",
         "text": "Volný text"
       },
-      "convertToExtract": "Převést pouze na extrakci",
+      "convertToExtract": "Pouze získávat odpověď",
       "convertToExtractDescription": "Odstraní se tím stupně hodnocení i samotné hodnocení této pozice. Tuto akci nelze vrátit zpět.",
       "convertToExtractTitle": "Převést pouze na extrakci?",
-      "convertToGraded": "Převést na hodnocenou pozici",
+      "convertToGraded": "Přidat pravidla hodnocení",
       "createPlaybook": "Nový playbook",
       "created": "Playbook vytvořen",
+      "customizeAnswer": "Změnit získávanou odpověď",
+      "customizeAnswerHint": "Upravit otázku nebo formát odpovědi.",
       "deleteFailed": "Playbook se nepodařilo smazat",
       "deletePlaybook": "Smazat playbook",
       "deletePosition": "Smazat pozici",
       "deleted": "Playbook smazán",
-      "derivedAutomatically": "Otázka a typ odpovědi se při uložení odvodí automaticky.",
-      "derivedQuestion": "Odvozená otázka",
-      "derivedType": "Odvozený typ",
+      "derivedAutomatically": "Otázka a formát odpovědi se vygenerují z této pozice. Není třeba nic nastavovat.",
+      "derivedQuestion": "Otázka pro získání odpovědi",
+      "derivedType": "Formát odpovědi",
       "descriptionPlaceholder": "Co tento playbook kontroluje?",
       "disabledBadge": "Vypnuto — při spuštění se přeskočí",
       "discardChanges": "Zahodit změny",
@@ -2207,7 +2209,8 @@
       "entryRank": "#{index}",
       "expandPosition": "Rozbalit pozici",
       "expectation": {
-        "restricted": "Zakázané"
+        "required": "Odpověď musí být uvedena",
+        "restricted": "Odpověď nesmí být uvedena"
       },
       "extractOnlyBadge": "Pouze extrakce",
       "extractOnlyDescription": "Bez hodnocení — hodnota se zapíše do tabulky.",
@@ -2216,8 +2219,8 @@
       "extractionManual": "Ruční",
       "fixErrorsBeforeSaving": "Před uložením opravte zvýrazněná pole.",
       "gradedNeedsContent": "Přidejte alespoň jedno pravidlo, náhradní záznam nebo ideální znění.",
-      "guidanceLabel": "Pokyny",
-      "guidancePlaceholder": "Poznámky pro posuzovatele (volitelné)",
+      "guidanceLabel": "Přidat pokyny ke kontrole",
+      "guidancePlaceholder": "Přidejte výjimku nebo pokyn, který pravidla výše nepokrývají.",
       "idealFromClause": "Z knihovny ustanovení",
       "idealInline": "Vlastní text",
       "idealInlinePlaceholder": "Vložte ideální znění…",
@@ -2303,8 +2306,8 @@
         "subtitle": "Hotové playbooky, které můžete přidat a upravit podle svých standardů.",
         "title": "Úvodní playbooky"
       },
-      "switchToAuto": "Zpět na automatický režim",
-      "switchToManual": "Přepnout na ruční zadání",
+      "switchToAuto": "Generovat otázku a formát automaticky",
+      "switchToManual": "Upravit otázku a formát odpovědi",
       "tier": {
         "acceptable": "Přijatelné",
         "fallback": "Náhradní",

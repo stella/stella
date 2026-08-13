@@ -12,10 +12,12 @@ import { eq, inArray } from "drizzle-orm";
 import { documentTypes, playbookDefinitions } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import createPlaybookFromStarter from "@/api/handlers/playbooks/from-starter";
+import { instantiateStarterPositions } from "@/api/handlers/playbooks/instantiate-starter";
 import { STARTER_PLAYBOOKS } from "@/api/handlers/playbooks/starters";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { collectNodePropertyIds } from "@/api/lib/conditions/ast-utils";
 import { isUuid } from "@/api/lib/custom-schema";
 import type { PlaybookPositions } from "@/api/lib/workflow/playbook-positions";
 import { assertPositionsValid } from "@/api/lib/workflow/playbook-positions-validation";
@@ -157,7 +159,7 @@ beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
-  // The starters scope to "nda"/"dpa"/"msa" document types; the create path
+  // Starters scope to their matching document types; the create path
   // rejects an unknown documentTypeKey, so seed exactly the keys the starters
   // reference directly against the test driver (the production
   // `ensureDefaultDocumentTypes` helper is typed against the Bun SQL
@@ -179,7 +181,7 @@ afterAll(async () => {
 describe("starter playbook content", () => {
   test("every starter's authored positions pass assertPositionsValid", async () => {
     for (const starter of STARTER_PLAYBOOKS) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential validation over a fixed, small (3-item) starter list
+      // oxlint-disable-next-line no-await-in-loop -- sequential validation over a fixed, small starter list
       const result = await assertPositionsValid({
         safeDb: createScopedDbMock(noDbTx).safeDb,
         organizationId: ids.orgA,
@@ -189,14 +191,69 @@ describe("starter playbook content", () => {
     }
   });
 
-  test("each starter has 6-8 graded positions", () => {
+  test("each starter has 6-8 enabled positions", () => {
     for (const starter of STARTER_PLAYBOOKS) {
       expect(starter.positions.items.length).toBeGreaterThanOrEqual(6);
       expect(starter.positions.items.length).toBeLessThanOrEqual(8);
       for (const position of starter.positions.items) {
-        expect(position.mode).toBe("graded");
+        expect(position.enabled).toBe(true);
       }
     }
+  });
+
+  test("the SaaS starter demonstrates grading, exact rules, guidance, and extraction", () => {
+    const starter = STARTER_PLAYBOOKS.find(
+      (candidate) => candidate.starterId === "saas",
+    );
+    if (!starter) {
+      throw new Error("expected the saas starter to exist");
+    }
+
+    expect(
+      starter.positions.items.some((position) => position.mode === "extract"),
+    ).toBe(true);
+    expect(
+      starter.positions.items.some((position) => position.mode === "graded"),
+    ).toBe(true);
+    expect(
+      starter.positions.items.some(
+        (position) =>
+          position.mode === "graded" && position.check?.kind === "constraint",
+      ),
+    ).toBe(true);
+    expect(
+      starter.positions.items.some(
+        (position) => position.guidance !== undefined,
+      ),
+    ).toBe(true);
+  });
+
+  test("instantiation remaps property references inside exact rules", () => {
+    const starter = STARTER_PLAYBOOKS.find(
+      (candidate) => candidate.starterId === "saas",
+    );
+    if (!starter) {
+      throw new Error("expected the saas starter to exist");
+    }
+    const source = starter.positions.items.find(
+      (position) =>
+        position.mode === "graded" && position.check?.kind === "constraint",
+    );
+    if (source?.mode !== "graded" || source.check?.kind !== "constraint") {
+      throw new Error("expected the saas starter to include an exact rule");
+    }
+
+    const instantiated = instantiateStarterPositions(starter.positions);
+    const produced = instantiated.items.find(
+      (position) => position.issue === source.issue,
+    );
+    if (produced?.mode !== "graded" || produced.check?.kind !== "constraint") {
+      throw new Error("expected the instantiated exact rule to exist");
+    }
+
+    const referencedIds = new Set<string>();
+    collectNodePropertyIds(produced.check.condition, referencedIds);
+    expect(referencedIds).toEqual(new Set([produced.sourceId]));
   });
 });
 

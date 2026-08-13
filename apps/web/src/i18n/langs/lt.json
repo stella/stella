@@ -2146,7 +2146,7 @@
       "whatIsAnMcpServer": "Kas yra MCP serveris?"
     },
     "playbooks": {
-      "addCheck": "Pridėti patikrą",
+      "addCheck": "Pridėti tikslią taisyklę",
       "addExtractPosition": "Tik ištraukti",
       "addExtractPositionHint": "Užfiksuoja reikšmę, be vertinimo",
       "addGradedPosition": "Įvertinama pozicija",
@@ -2154,7 +2154,7 @@
       "addOption": "Pridėti parinktį",
       "addPosition": "Pridėti poziciją",
       "addRule": "Taisyklė",
-      "advanced": "Išplėstinis",
+      "advanced": "Keisti veikimą",
       "approval": {
         "approve": "Patvirtinti",
         "approveFailed": "Nepavyko patvirtinti peržiūros vadovo",
@@ -2167,11 +2167,11 @@
       "askContentLabel": "Atsakymo tipas",
       "askQuestionLabel": "Klausimas",
       "askQuestionPlaceholder": "Ką turėtume nuskaityti iš kiekvieno dokumento? Palikite tuščią, jei norite įvesti rankiniu būdu.",
-      "check": "Patikra",
-      "checkHint": "Vertinkite pagal determinuotą taisyklę, o ne DI.",
+      "check": "Naudoti tikslią taisyklę vietoje DI",
+      "checkHint": "Išmatuojamoms sąlygoms, pavyzdžiui: mokėjimo terminas ≤ 30 dienų.",
       "checkKind": {
-        "constraint": "Reikšmės apribojimas",
-        "presence": "Buvimas"
+        "constraint": "Tikrinti atsakymą pagal sąlygą",
+        "presence": "Reikalauti arba drausti atsakymą"
       },
       "clausePlaceholder": "Ieškoti sąlygų…",
       "clauseSearchEmpty": "Sąlygų nerasta",
@@ -2182,19 +2182,21 @@
         "singleSelect": "Vienas pasirinkimas",
         "text": "Tekstas"
       },
-      "convertToExtract": "Konvertuoti į tik ištraukimą",
+      "convertToExtract": "Tik išgauti atsakymą",
       "convertToExtractDescription": "Tai pašalins šios pozicijos pakopų sistemą ir vertinimą. Šio veiksmo atšaukti negalima.",
       "convertToExtractTitle": "Konvertuoti į tik ištraukimą?",
-      "convertToGraded": "Konvertuoti į įvertinamą",
+      "convertToGraded": "Pridėti vertinimo taisykles",
       "createPlaybook": "Naujas peržiūros vadovas",
       "created": "Peržiūros vadovas sukurtas",
+      "customizeAnswer": "Keisti išgaunamą atsakymą",
+      "customizeAnswerHint": "Redaguoti klausimą arba atsakymo formatą.",
       "deleteFailed": "Nepavyko ištrinti peržiūros vadovo",
       "deletePlaybook": "Ištrinti peržiūros vadovą",
       "deletePosition": "Ištrinti poziciją",
       "deleted": "Peržiūros vadovas ištrintas",
-      "derivedAutomatically": "Klausimas ir atsakymo tipas išvedami automatiškai, kai išsaugote.",
-      "derivedQuestion": "Išvestas klausimas",
-      "derivedType": "Išvestas tipas",
+      "derivedAutomatically": "Išgavimo klausimas ir atsakymo formatas sukuriami pagal šią poziciją. Nieko nustatyti nereikia.",
+      "derivedQuestion": "Išgavimo klausimas",
+      "derivedType": "Atsakymo formatas",
       "descriptionPlaceholder": "Ką tikrina šis peržiūros vadovas?",
       "disabledBadge": "Išjungta — praleidžiama peržiūrose",
       "discardChanges": "Atmesti pakeitimus",
@@ -2207,7 +2209,8 @@
       "entryRank": "#{index}",
       "expandPosition": "Išskleisti poziciją",
       "expectation": {
-        "restricted": "Draudžiama"
+        "required": "Atsakymas turi būti pateiktas",
+        "restricted": "Atsakymo neturi būti"
       },
       "extractOnlyBadge": "Tik ištraukti",
       "extractOnlyDescription": "Be vertinimo — reikšmė užfiksuojama lentelėje.",
@@ -2216,8 +2219,8 @@
       "extractionManual": "Rankiniu būdu",
       "fixErrorsBeforeSaving": "Prieš išsaugodami ištaisykite paryškintus laukus.",
       "gradedNeedsContent": "Pridėkite bent vieną taisyklę, alternatyvų įrašą arba idealią formuluotę.",
-      "guidanceLabel": "Gairės",
-      "guidancePlaceholder": "Pastabos vertintojams (neprivaloma)",
+      "guidanceLabel": "Pridėti peržiūros nurodymus",
+      "guidancePlaceholder": "Pridėkite išimtį ar nurodymą, kurio neapima pirmiau pateiktos taisyklės.",
       "idealFromClause": "Iš sąlygų bibliotekos",
       "idealInline": "Įvestas tekstas",
       "idealInlinePlaceholder": "Įklijuokite idealią formuluotę…",
@@ -2303,8 +2306,8 @@
         "subtitle": "Parengti peržiūros vadovai, kuriuos galite pridėti ir pritaikyti savo standartams.",
         "title": "Parengti peržiūros vadovai"
       },
-      "switchToAuto": "Grįžti į automatinį režimą",
-      "switchToManual": "Perjungti į rankinį režimą",
+      "switchToAuto": "Automatiškai sukurti klausimą ir formatą",
+      "switchToManual": "Tinkinti klausimą ir atsakymo formatą",
       "tier": {
         "acceptable": "Priimtina",
         "fallback": "Alternatyva",
