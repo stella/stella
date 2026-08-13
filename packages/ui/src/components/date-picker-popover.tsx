@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useId, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 
@@ -32,6 +39,23 @@ type CalendarWeekday = {
 };
 
 const toISODate = (d: Date): string => d.toISOString().slice(0, 10);
+const HYDRATION_DATE = "1970-01-01";
+const HYDRATION_LOCALE = "en";
+const noopSubscribe = (_onStoreChange: () => void) => () => undefined;
+
+const useHydrationSafeToday = (): string =>
+  useSyncExternalStore(
+    noopSubscribe,
+    () => toISODate(new Date()),
+    () => HYDRATION_DATE,
+  );
+
+const useHydrationSafeBrowserLocale = (): string =>
+  useSyncExternalStore(
+    noopSubscribe,
+    () => navigator.language || HYDRATION_LOCALE,
+    () => HYDRATION_LOCALE,
+  );
 
 const getFirstDayOfWeek = (locale: string): number => {
   const info = getLocaleWeekInfo(locale);
@@ -47,8 +71,8 @@ const getMonthDays = (
   month: number,
   firstDow: number,
   weekendDays: ReadonlySet<number>,
+  today: string,
 ): CalendarDay[] => {
-  const today = toISODate(new Date());
   const days: CalendarDay[] = [];
   const first = new Date(Date.UTC(year, month, 1));
   const rawDow = first.getUTCDay();
@@ -219,12 +243,17 @@ type DatePickerPopoverProps = {
   layer?: OverlayLayer;
 };
 
-const DatePickerPopover = ({
+type DatePickerPopoverContentProps = Omit<DatePickerPopoverProps, "locale"> & {
+  locale: string;
+  today: string;
+};
+
+const DatePickerPopoverContent = ({
   id,
   labelledBy,
   value: rawValue,
   onChange,
-  locale: localeProp,
+  locale,
   isOverdue = false,
   showIcon = true,
   placeholderLabel,
@@ -237,8 +266,8 @@ const DatePickerPopover = ({
   maxDate,
   isDateDisabled,
   layer = "default",
-}: DatePickerPopoverProps) => {
-  const locale = localeProp ?? navigator.language;
+  today,
+}: DatePickerPopoverContentProps) => {
   const value = normalizeDate(rawValue);
   const displayValueId = useId();
   const todayLabel = todayLabelProp ?? deriveTodayLabel(locale);
@@ -246,19 +275,19 @@ const DatePickerPopover = ({
   const weekendDays = useMemo(() => getWeekendDays(locale), [locale]);
 
   const [viewYear, setViewYear] = useState(() => {
-    const d = value ? new Date(`${value}T00:00:00Z`) : new Date();
+    const d = new Date(`${value || today}T00:00:00Z`);
     return d.getUTCFullYear();
   });
   const [viewMonth, setViewMonth] = useState(() => {
-    const d = value ? new Date(`${value}T00:00:00Z`) : new Date();
+    const d = new Date(`${value || today}T00:00:00Z`);
     return d.getUTCMonth();
   });
   const [view, setView] = useState<PickerView>("days");
   const [decadeBase, setDecadeBase] = useState(() => decadeStart(viewYear));
 
   const days = useMemo(
-    () => getMonthDays(viewYear, viewMonth, firstDow, weekendDays),
-    [viewYear, viewMonth, firstDow, weekendDays],
+    () => getMonthDays(viewYear, viewMonth, firstDow, weekendDays, today),
+    [viewYear, viewMonth, firstDow, weekendDays, today],
   );
   const weekdays = useMemo(
     () => getWeekdayLabels(locale, firstDow, weekendDays),
@@ -669,6 +698,7 @@ const DatePickerPopover = ({
               currentYear={selectedYear}
               locale={locale}
               onSelect={handleMonthSelect}
+              today={today}
               viewYear={viewYear}
             />
           )}
@@ -679,6 +709,7 @@ const DatePickerPopover = ({
               currentYear={selectedYear}
               decadeBase={decadeBase}
               onSelect={handleYearSelect}
+              today={today}
             />
           )}
 
@@ -687,9 +718,9 @@ const DatePickerPopover = ({
             <Button
               className="flex-1"
               onClick={() => {
-                const today = new Date();
-                setViewYear(today.getUTCFullYear());
-                setViewMonth(today.getUTCMonth());
+                const todayDate = new Date(`${today}T00:00:00Z`);
+                setViewYear(todayDate.getUTCFullYear());
+                setViewMonth(todayDate.getUTCMonth());
                 setView("days");
               }}
               size="xs"
@@ -714,6 +745,21 @@ const DatePickerPopover = ({
   );
 };
 
+const DatePickerPopover = (props: DatePickerPopoverProps) => {
+  const browserLocale = useHydrationSafeBrowserLocale();
+  const today = useHydrationSafeToday();
+  const locale = props.locale ?? browserLocale;
+
+  return (
+    <DatePickerPopoverContent
+      key={`${locale}:${today}`}
+      {...props}
+      locale={locale}
+      today={today}
+    />
+  );
+};
+
 export { DatePickerPopover };
 export type { DatePickerPopoverProps };
 
@@ -731,15 +777,17 @@ const MonthGrid = ({
   currentMonth,
   currentYear,
   onSelect,
+  today,
 }: {
   locale: string;
   viewYear: number;
   currentMonth: number | null;
   currentYear: number | null;
   onSelect: (month: number) => void;
+  today: string;
 }) => {
   const labels = useMemo(() => getMonthLabels(locale, "short"), [locale]);
-  const now = new Date();
+  const now = new Date(`${today}T00:00:00Z`);
   const todayMonth = now.getUTCMonth();
   const todayYear = now.getUTCFullYear();
 
@@ -805,12 +853,14 @@ const YearGrid = ({
   decadeBase,
   currentYear,
   onSelect,
+  today,
 }: {
   decadeBase: number;
   currentYear: number | null;
   onSelect: (year: number) => void;
+  today: string;
 }) => {
-  const todayYear = new Date().getUTCFullYear();
+  const todayYear = new Date(`${today}T00:00:00Z`).getUTCFullYear();
   // Show decade - 1 through decade + 10 (12 items)
   const startYear = decadeBase - 1;
 
