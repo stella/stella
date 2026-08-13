@@ -172,6 +172,56 @@ const isAmbientIntlLocale = (argument) => {
   );
 };
 
+const hasExplicitDateTimeZone = (value) =>
+  /(?:Z|[+-]\d{2}(?::?\d{2})?)$/iu.test(value);
+
+const isDeterministicDateString = (value) =>
+  /^\d{4}-\d{2}-\d{2}$/u.test(value) || hasExplicitDateTimeZone(value);
+
+const staticTemplateText = (expression) => {
+  if (
+    expression?.type !== "TemplateLiteral" ||
+    expression.expressions?.length !== 0 ||
+    expression.quasis?.length !== 1
+  ) {
+    return null;
+  }
+  const value = expression.quasis.at(0)?.value;
+  return typeof value?.cooked === "string"
+    ? value.cooked
+    : typeof value?.raw === "string"
+      ? value.raw
+      : null;
+};
+
+const hasAmbientDateConstructorArguments = (argumentsList) => {
+  if (argumentsList.length === 0 || argumentsList.length > 1) {
+    return true;
+  }
+  const argument = unwrapExpression(argumentsList.at(0));
+  if (argument?.type === "Literal") {
+    return typeof argument.value === "string"
+      ? !isDeterministicDateString(argument.value)
+      : false;
+  }
+  const templateText = staticTemplateText(argument);
+  if (templateText !== null) {
+    return !isDeterministicDateString(templateText);
+  }
+  if (argument?.type === "TemplateLiteral") {
+    const quasis = Array.isArray(argument.quasis) ? argument.quasis : [];
+    const tail = quasis.at(-1)?.value;
+    const tailText =
+      typeof tail?.cooked === "string"
+        ? tail.cooked
+        : typeof tail?.raw === "string"
+          ? tail.raw
+          : "";
+    return !hasExplicitDateTimeZone(tailText);
+  }
+  return false;
+};
+
 const intlConstructorMemberName = (context, node) => {
   const expression = unwrapExpression(node);
   if (expression?.type !== "MemberExpression") {
@@ -459,8 +509,7 @@ export default eslintCompatPlugin({
           CallExpression(node) {
             if (
               isIdentifier(node.callee, "Date") &&
-              isUnshadowedGlobal(context, node.callee) &&
-              node.arguments.length === 0
+              isUnshadowedGlobal(context, node.callee)
             ) {
               context.report({ node, messageId: "publicLawAmbientState" });
               return;
@@ -470,10 +519,7 @@ export default eslintCompatPlugin({
               return;
             }
 
-            if (
-              isUnshadowedGlobalThisMember(context, node.callee, "Date") &&
-              node.arguments.length === 0
-            ) {
+            if (isUnshadowedGlobalThisMember(context, node.callee, "Date")) {
               context.report({ node, messageId: "publicLawAmbientState" });
               return;
             }
@@ -530,7 +576,7 @@ export default eslintCompatPlugin({
             if (
               isIdentifier(node.callee, "Date") &&
               isUnshadowedGlobal(context, node.callee) &&
-              node.arguments.length === 0
+              hasAmbientDateConstructorArguments(node.arguments)
             ) {
               context.report({ node, messageId: "publicLawAmbientState" });
               return;
@@ -542,7 +588,7 @@ export default eslintCompatPlugin({
 
             if (
               isUnshadowedGlobalThisMember(context, node.callee, "Date") &&
-              node.arguments.length === 0
+              hasAmbientDateConstructorArguments(node.arguments)
             ) {
               context.report({ node, messageId: "publicLawAmbientState" });
               return;

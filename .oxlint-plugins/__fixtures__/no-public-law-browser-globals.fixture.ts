@@ -56,6 +56,12 @@ const dateFormatter = Intl.DateTimeFormat(undefined, { dateStyle: "long" });
 const serverRequestUrl = new URL("https://example.test/law/cases");
 const serializedFilter = JSON.stringify({ court: "supreme" });
 const fixedDate = new Date("2026-08-13T00:00:00Z");
+const fixedEpochDate = new Date(1_786_579_200_000);
+const fixedDateOnly = new Date("2026-08-13");
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves component Date constructors use the host time zone
+const ambientComponentDate = new Date(2026, 7, 13);
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves time-zone-less datetime strings use the host time zone
+const ambientLocalDateTime = new Date("2026-08-13T12:00:00");
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves an explicit locale cannot substitute for an explicit time zone
 const ambientTimeZoneDate = fixedDate.toLocaleDateString("en");
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves time formatting also requires an explicit time zone
@@ -172,12 +178,14 @@ export {
   ambientLocaleDate,
   ambientLocaleNumber,
   ambientLocaleTime,
+  ambientLocalDateTime,
   ambientLocalDateString,
   ambientLocalYear,
   ambientTimeZoneDate,
   ambientTimeZoneDateTime,
   ambientTimeZoneFormatter,
   ambientTimeZoneTime,
+  ambientComponentDate,
   assertedEmptyLocaleDateFormatter,
   assertedGlobalBrowserLocale,
   browserDocument,
@@ -204,6 +212,8 @@ export {
   explicitLocaleListDateFormatter,
   explicitLocaleListSegmenter,
   fixedDate,
+  fixedDateOnly,
+  fixedEpochDate,
   fixedLocaleDate,
   fixedLocaleNumber,
   fixedLocaleNumericVariable,

@@ -223,6 +223,7 @@ const INTL_CONSTRUCTOR_NAMES =
   "Collator|DateTimeFormat|DisplayNames|ListFormat|NumberFormat|PluralRules|RelativeTimeFormat|Segmenter";
 const LOCAL_TIME_DATE_METHOD_NAMES =
   "getDate|getDay|getFullYear|getHours|getMinutes|getMonth|getSeconds|getTimezoneOffset|getYear|setDate|setFullYear|setHours|setMinutes|setMonth|setSeconds|setYear|toDateString|toTimeString";
+const AMBIENT_DATE_STRING_SENTINEL = "§";
 
 const ambientStatePatterns = [
   new RegExp(`\\bglobalThis\\.(?:${BROWSER_GLOBAL_NAMES})\\b`, "u"),
@@ -242,6 +243,11 @@ const ambientStatePatterns = [
   /\b(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*(?:globalThis\.)?(?:Date|Math|crypto|performance)\b(?!\s*\.)/u,
   /\b(?:globalThis\.)?Date\s*\(\s*\)/u,
   /\bnew\s+(?:globalThis\.)?Date(?:\s*\(\s*\)|\s*(?=[;,]))/u,
+  /\bnew\s+(?:globalThis\.)?Date\s*\(\s*(?:-?\d[\d_]*(?:\.\d+)?|[A-Za-z_$][\w$]*)\s*,/u,
+  new RegExp(
+    `\\bnew\\s+(?:globalThis\\.)?Date\\s*\\(\\s*${AMBIENT_DATE_STRING_SENTINEL}`,
+    "u",
+  ),
   /\bnew\s+(?:globalThis\.)?Intl\.[A-Za-z]+(?:\s*\(\s*\)|\s*(?=[;,]))/u,
   /\b(?:new\s+)?(?:globalThis\.)?Intl\.[A-Za-z]+\s*\(\s*(?:undefined\s*[,)]|\[\s*\]\s*[,)]|\))/u,
   /\b(?:new\s+)?(?:globalThis\.)?Intl\.DateTimeFormat\s*\((?:(?!\btimeZone\s*:\s*0\b)[^;])*\)/u,
@@ -557,16 +563,50 @@ const maskNonExecutableLiterals = (source: string, file: string): string => {
     maskRange(start, end);
     masked[start] = "0";
   };
+  const maskAmbientDateString = (start: number, end: number): void => {
+    maskRange(start, end);
+    masked[start] = AMBIENT_DATE_STRING_SENTINEL;
+  };
+  const isDateConstructor = (node: ts.Node | undefined): boolean => {
+    if (!node || !ts.isNewExpression(node)) {
+      return false;
+    }
+    return (
+      (ts.isIdentifier(node.expression) && node.expression.text === "Date") ||
+      (ts.isPropertyAccessExpression(node.expression) &&
+        ts.isIdentifier(node.expression.expression) &&
+        node.expression.expression.text === "globalThis" &&
+        node.expression.name.text === "Date")
+    );
+  };
+  const hasExplicitDateTimeZone = (value: string): boolean =>
+    /(?:Z|[+-]\d{2}(?::?\d{2})?)$/iu.test(value);
+  const isDeterministicDateString = (value: string): boolean =>
+    /^\d{4}-\d{2}-\d{2}$/u.test(value) || hasExplicitDateTimeZone(value);
   const visit = (node: ts.Node): void => {
-    if (
-      ts.isStringLiteral(node) ||
-      ts.isNoSubstitutionTemplateLiteral(node) ||
-      ts.isRegularExpressionLiteral(node)
-    ) {
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+      if (
+        isDateConstructor(node.parent) &&
+        !isDeterministicDateString(node.text)
+      ) {
+        maskAmbientDateString(node.getStart(sourceFile), node.end);
+        return;
+      }
+      maskLiteral(node.getStart(sourceFile), node.end);
+      return;
+    }
+    if (ts.isRegularExpressionLiteral(node)) {
       maskLiteral(node.getStart(sourceFile), node.end);
       return;
     }
     if (ts.isTemplateExpression(node)) {
+      if (
+        isDateConstructor(node.parent) &&
+        !hasExplicitDateTimeZone(node.templateSpans.at(-1)?.literal.text ?? "")
+      ) {
+        maskAmbientDateString(node.getStart(sourceFile), node.end);
+        return;
+      }
       maskRange(node.getStart(sourceFile), node.head.end);
       for (const span of node.templateSpans) {
         visit(span.expression);
@@ -729,6 +769,40 @@ describe("public SSR import graph", () => {
         executableSource("const today = new Date();", "fixture.ts"),
       ),
     ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource("const date = new Date(2026, 7, 13);", "fixture.ts"),
+      ),
+    ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          'const date = new Date("2026-08-13T12:00:00");',
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          'const date = new Date("2026-08-13T12:00:00Z");',
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource('const date = new Date("2026-08-13");', "fixture.ts"),
+      ),
+    ).toBe(false);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          "const date = new Date(1_786_579_200_000);",
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(false);
     expect(
       AMBIENT_STATE_PATTERN.test(
         executableSource("const label = globalThis.Date();", "fixture.ts"),
