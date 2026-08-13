@@ -33,6 +33,11 @@ const AMBIENT_LOCALE_METHODS = new Set([
   "toLocaleTimeString",
 ]);
 
+const TIME_ZONE_SENSITIVE_LOCALE_METHODS = new Set([
+  "toLocaleDateString",
+  "toLocaleTimeString",
+]);
+
 const AMBIENT_FUNCTION_MEMBERS = new Map([
   ["Date", new Set(["now"])],
   ["Math", new Set(["random"])],
@@ -145,6 +150,17 @@ const isAmbientIntlLocale = (argument) => {
   );
 };
 
+const hasExplicitTimeZone = (argument) => {
+  const expression = unwrapExpression(argument);
+  return (
+    expression?.type === "ObjectExpression" &&
+    Array.isArray(expression.properties) &&
+    expression.properties.some(
+      (property) => staticPatternPropertyName(property) === "timeZone",
+    )
+  );
+};
+
 const isGlobalThisAmbientObject = (context, node, memberName) =>
   isUnshadowedGlobalThisMember(context, unwrapExpression(node), memberName);
 
@@ -188,18 +204,6 @@ const isDirectInvocationTarget = (node) => {
   );
 };
 
-const isAmbientObjectMemberHost = (node) =>
-  node.parent?.type === "MemberExpression" && node.parent.object === node;
-
-const isDirectDateInvocationTarget = (node) => {
-  const parent = node.parent;
-  return (
-    isIdentifier(node, "Date") &&
-    (parent?.type === "CallExpression" || parent?.type === "NewExpression") &&
-    parent.callee === node
-  );
-};
-
 export default eslintCompatPlugin({
   meta: { name: "no-public-law-browser-globals" },
   rules: {
@@ -223,14 +227,6 @@ export default eslintCompatPlugin({
             ) {
               context.report({ node, messageId: "publicLawBrowserGlobal" });
             }
-            if (
-              AMBIENT_FUNCTION_MEMBERS.has(node.name) &&
-              isUnshadowedGlobal(context, node) &&
-              !isAmbientObjectMemberHost(node) &&
-              !isDirectDateInvocationTarget(node)
-            ) {
-              context.report({ node, messageId: "publicLawAmbientState" });
-            }
           },
           MemberExpression(node) {
             const object = unwrapExpression(node.object);
@@ -251,13 +247,34 @@ export default eslintCompatPlugin({
               memberName &&
               AMBIENT_FUNCTION_MEMBERS.has(memberName) &&
               isUnshadowedGlobalThisMember(context, node, memberName) &&
-              !isAmbientObjectMemberHost(node)
+              !(
+                node.parent?.type === "MemberExpression" &&
+                node.parent.object === node
+              )
             ) {
               context.report({ node, messageId: "publicLawAmbientState" });
             }
           },
           VariableDeclarator(node) {
             const initializer = unwrapExpression(node.init);
+            if (node.id.type === "Identifier") {
+              if (ambientFunctionObjectName(context, initializer) !== null) {
+                context.report({
+                  node: initializer ?? node,
+                  messageId: "publicLawAmbientState",
+                });
+              }
+              if (
+                isIdentifier(initializer, "globalThis") &&
+                isUnshadowedGlobal(context, initializer)
+              ) {
+                context.report({
+                  node: initializer ?? node,
+                  messageId: "publicLawBrowserGlobal",
+                });
+              }
+              return;
+            }
             if (node.id.type !== "ObjectPattern") {
               return;
             }
@@ -296,6 +313,24 @@ export default eslintCompatPlugin({
               }
             }
           },
+          AssignmentExpression(node) {
+            const right = unwrapExpression(node.right);
+            if (ambientFunctionObjectName(context, right) !== null) {
+              context.report({
+                node: right ?? node,
+                messageId: "publicLawAmbientState",
+              });
+            }
+            if (
+              isIdentifier(right, "globalThis") &&
+              isUnshadowedGlobal(context, right)
+            ) {
+              context.report({
+                node: right ?? node,
+                messageId: "publicLawBrowserGlobal",
+              });
+            }
+          },
           CallExpression(node) {
             if (
               isIdentifier(node.callee, "Date") &&
@@ -330,7 +365,9 @@ export default eslintCompatPlugin({
             if (
               calledMemberName &&
               AMBIENT_LOCALE_METHODS.has(calledMemberName) &&
-              isAmbientIntlLocale(node.arguments.at(0))
+              (isAmbientIntlLocale(node.arguments.at(0)) ||
+                (TIME_ZONE_SENSITIVE_LOCALE_METHODS.has(calledMemberName) &&
+                  !hasExplicitTimeZone(node.arguments.at(1))))
             ) {
               context.report({ node, messageId: "publicLawAmbientState" });
               return;
@@ -346,7 +383,10 @@ export default eslintCompatPlugin({
                     node.callee.object,
                     "Intl",
                   ))) &&
-              isAmbientIntlLocale(node.arguments.at(0))
+              (isAmbientIntlLocale(node.arguments.at(0)) ||
+                ((intlName === "DateTimeFormat" ||
+                  globalIntlName === "DateTimeFormat") &&
+                  !hasExplicitTimeZone(node.arguments.at(1))))
             ) {
               context.report({ node, messageId: "publicLawAmbientState" });
             }
@@ -387,7 +427,10 @@ export default eslintCompatPlugin({
                     node.callee.object,
                     "Intl",
                   ))) &&
-              isAmbientIntlLocale(node.arguments.at(0))
+              (isAmbientIntlLocale(node.arguments.at(0)) ||
+                ((intlName === "DateTimeFormat" ||
+                  globalIntlName === "DateTimeFormat") &&
+                  !hasExplicitTimeZone(node.arguments.at(1))))
             ) {
               context.report({ node, messageId: "publicLawAmbientState" });
             }

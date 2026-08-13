@@ -34,6 +34,8 @@ const capturedRandom = globalThis.Math.random;
 const Clock = Date;
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves globalThis ambient objects cannot be aliased either
 const RandomSource = globalThis.Math;
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves the global object cannot be aliased before browser-global access
+const browserRoot = globalThis;
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals, typescript/unbound-method -- fixture proves destructuring cannot rename an ambient function out of detection
 const { now: capturedPerformanceNow } = performance;
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves ambient UUID generation is not SSR-safe
@@ -54,6 +56,12 @@ const dateFormatter = Intl.DateTimeFormat(undefined, { dateStyle: "long" });
 const serverRequestUrl = new URL("https://example.test/law/cases");
 const serializedFilter = JSON.stringify({ court: "supreme" });
 const fixedDate = new Date("2026-08-13T00:00:00Z");
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves an explicit locale cannot substitute for an explicit time zone
+const ambientTimeZoneDate = fixedDate.toLocaleDateString("en");
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves time formatting also requires an explicit time zone
+const ambientTimeZoneTime = fixedDate.toLocaleTimeString("en");
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves DateTimeFormat requires both locale and time zone
+const ambientTimeZoneFormatter = Intl.DateTimeFormat("en");
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves an omitted prototype locale is ambient
 const ambientLocaleDate = fixedDate.toLocaleDateString();
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves undefined prototype locales are ambient
@@ -70,7 +78,10 @@ const fixedLocaleTime = fixedDate.toLocaleTimeString(["en"], {
 });
 const fixedLocaleNumber = (42).toLocaleString("en");
 const fixedSegmenter = new Intl.Segmenter("en", { granularity: "grapheme" });
-const fixedDateFormatter = Intl.DateTimeFormat("en", { dateStyle: "long" });
+const fixedDateFormatter = Intl.DateTimeFormat("en", {
+  dateStyle: "long",
+  timeZone: "UTC",
+});
 const readShadowedNavigator = (navigator: { language: string }) =>
   navigator.language;
 const readShadowedClock = (Date: () => string) => Date;
@@ -127,6 +138,7 @@ const explicitLocaleListSegmenter = new Intl.Segmenter(["en"], {
 });
 const explicitLocaleListDateFormatter = Intl.DateTimeFormat(["en"], {
   dateStyle: "long",
+  timeZone: "UTC",
 });
 const runtimeState = { navigator: { language: "en" } };
 const { navigator: configuredNavigator } = runtimeState;
@@ -142,6 +154,9 @@ export {
   ambientLocaleDate,
   ambientLocaleNumber,
   ambientLocaleTime,
+  ambientTimeZoneDate,
+  ambientTimeZoneFormatter,
+  ambientTimeZoneTime,
   assertedEmptyLocaleDateFormatter,
   assertedGlobalBrowserLocale,
   browserDocument,
@@ -149,6 +164,7 @@ export {
   browserNavigator,
   browserStorage,
   browserPath,
+  browserRoot,
   browserSelf,
   capturedNow,
   capturedPerformanceNow,
