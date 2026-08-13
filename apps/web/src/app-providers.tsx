@@ -1,4 +1,4 @@
-import { useRef, useSyncExternalStore } from "react";
+import { useRef } from "react";
 import type { PropsWithChildren } from "react";
 
 import { HotkeysProvider } from "@tanstack/react-hotkeys";
@@ -14,6 +14,7 @@ import { DefaultPendingComponent } from "@/components/route-components";
 import { ThemeProvider } from "@/components/theme-provider";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import {
   buildFormattingLocale,
@@ -26,22 +27,6 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
-
-const noopSubscribe = () => () => undefined;
-
-/**
- * False during server render AND the client's hydration pass, true
- * immediately after. The canonical hydration-safe two-phase signal:
- * useSyncExternalStore serves getServerSnapshot to both sides of
- * hydration, so flipping to true afterwards is an ordinary update, not
- * a markup mismatch.
- */
-const useHydrated = (): boolean =>
-  useSyncExternalStore(
-    noopSubscribe,
-    () => true,
-    () => false,
-  );
 
 const I18nProvider = ({ children }: PropsWithChildren) => {
   const locale = useI18nStore((s) => s.loadedLang);
