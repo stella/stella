@@ -41,7 +41,10 @@ const isNonReferenceIdentifier = (node) => {
     (parent?.type === "MemberExpression" &&
       parent.property === node &&
       !parent.computed) ||
-    (parent?.type === "Property" && parent.key === node && !parent.computed) ||
+    (parent?.type === "Property" &&
+      parent.key === node &&
+      !parent.computed &&
+      !parent.shorthand) ||
     (parent?.type === "VariableDeclarator" && parent.id === node)
   );
 };
@@ -52,6 +55,19 @@ const ambientMemberName = (node, objectName) => {
     node.computed ||
     !isIdentifier(node.object, objectName) ||
     !isIdentifier(node.property)
+  ) {
+    return null;
+  }
+  return node.property.name;
+};
+
+const browserGlobalFromGlobalThis = (node) => {
+  if (
+    node?.type !== "MemberExpression" ||
+    node.computed ||
+    !isIdentifier(node.object, "globalThis") ||
+    !isIdentifier(node.property) ||
+    !BROWSER_GLOBALS.has(node.property.name)
   ) {
     return null;
   }
@@ -78,6 +94,14 @@ export default eslintCompatPlugin({
               BROWSER_GLOBALS.has(node.name) &&
               !isNonReferenceIdentifier(node) &&
               isUnshadowedGlobal(context, node)
+            ) {
+              context.report({ node, messageId: "publicLawBrowserGlobal" });
+            }
+          },
+          MemberExpression(node) {
+            if (
+              browserGlobalFromGlobalThis(node) &&
+              isUnshadowedGlobal(context, node.object)
             ) {
               context.report({ node, messageId: "publicLawBrowserGlobal" });
             }

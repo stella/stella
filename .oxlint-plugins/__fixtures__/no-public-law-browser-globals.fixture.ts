@@ -24,17 +24,23 @@ const fixedDate = new Date("2026-08-13T00:00:00Z");
 const fixedSegmenter = new Intl.Segmenter("en", { granularity: "grapheme" });
 const readShadowedNavigator = (navigator: { language: string }) =>
   navigator.language;
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves shorthand values remain real browser-global references
+const shorthandBrowserGlobal = { navigator };
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves globalThis cannot bypass the browser-global detector
+const globalBrowserStorage = globalThis.localStorage;
 
 export {
   browserLocale,
   fixedDate,
   fixedSegmenter,
+  globalBrowserStorage,
   openedAt,
   prefersDark,
   randomWidth,
   readShadowedNavigator,
   savedFilter,
   segmenter,
+  shorthandBrowserGlobal,
   serializedFilter,
   serverRequestUrl,
   today,
