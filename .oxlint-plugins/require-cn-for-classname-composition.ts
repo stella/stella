@@ -6,6 +6,7 @@
 
 import {
   eslintCompatPlugin,
+  type ESTree,
   type Scope,
   type Variable,
 } from "@oxlint/plugins";
@@ -21,6 +22,26 @@ import {
 
 const CANONICAL_CN_MODULE = "@stll/ui/lib/utils";
 const CANONICAL_CN_EXPORT = "cn";
+
+const isIdentifierReference = (
+  node: unknown,
+): node is ESTree.IdentifierReference => isIdentifier(node);
+
+const isMemberExpression = (node: unknown): node is ESTree.MemberExpression =>
+  isAstNode(node) && node.type === "MemberExpression";
+
+const isObjectExpression = (node: unknown): node is ESTree.ObjectExpression =>
+  isAstNode(node) && node.type === "ObjectExpression";
+
+const isTemplateLiteral = (node: unknown): node is ESTree.TemplateLiteral =>
+  isAstNode(node) && node.type === "TemplateLiteral";
+
+const isFunctionExpression = (
+  node: unknown,
+): node is ESTree.ArrowFunctionExpression | ESTree.FunctionExpression =>
+  isAstNode(node) &&
+  (node.type === "ArrowFunctionExpression" ||
+    node.type === "FunctionExpression");
 
 const isClassNameAttribute = (node: unknown): boolean =>
   isAstNode(node) &&
@@ -70,7 +91,7 @@ export default eslintCompatPlugin({
         const conditionalCallbackAttributes = new Set<unknown>();
 
         const resolveVariable = (identifier: unknown): Variable | null => {
-          if (!isIdentifier(identifier)) {
+          if (!isIdentifierReference(identifier)) {
             return null;
           }
           let scope: Scope | null = context.sourceCode.getScope(identifier);
@@ -123,7 +144,7 @@ export default eslintCompatPlugin({
 
         const localMemberValue = (value: unknown): unknown => {
           const member = unwrapClassExpression(value);
-          if (member?.type !== "MemberExpression") {
+          if (!isMemberExpression(member)) {
             return null;
           }
           const propertyName =
@@ -137,13 +158,13 @@ export default eslintCompatPlugin({
           }
 
           const owner = unwrapClassExpression(member.object);
-          const ownerValue = isIdentifier(owner)
+          const ownerValue = isIdentifierReference(owner)
             ? getConstInitializer(owner)
-            : owner?.type === "MemberExpression"
+            : isMemberExpression(owner)
               ? localMemberValue(owner)
               : owner;
           const object = unwrapClassExpression(ownerValue);
-          if (object?.type !== "ObjectExpression") {
+          if (!isObjectExpression(object)) {
             return null;
           }
 
@@ -215,23 +236,20 @@ export default eslintCompatPlugin({
             visitedVariables.add(variable);
             return isAllowedClassValue(initializer, visitedVariables);
           }
-          if (node.type === "MemberExpression") {
+          if (isMemberExpression(node)) {
             const localValue = localMemberValue(node);
             return (
               localValue === null ||
               isAllowedClassValue(localValue, visitedVariables)
             );
           }
-          if (node.type === "TemplateLiteral") {
+          if (isTemplateLiteral(node)) {
             return node.expressions.length === 0;
           }
           if (node.type === "CallExpression") {
             return isCanonicalCn(node.callee);
           }
-          if (
-            node.type === "ArrowFunctionExpression" ||
-            node.type === "FunctionExpression"
-          ) {
+          if (isFunctionExpression(node)) {
             return (
               node.body?.type === "BlockStatement" ||
               isAllowedClassValue(node.body, visitedVariables)
@@ -248,9 +266,7 @@ export default eslintCompatPlugin({
           context.report({ node, messageId: "requireCanonicalCn" });
         };
 
-        const getEnclosingClassNameAttribute = (
-          node: unknown,
-        ): unknown => {
+        const getEnclosingClassNameAttribute = (node: unknown): unknown => {
           if (!isAstNode(node)) {
             return null;
           }
@@ -301,13 +317,15 @@ export default eslintCompatPlugin({
             }
             const expression = unwrapClassExpression(node.value.expression);
             if (
-              expression?.type === "ArrowFunctionExpression" &&
+              isFunctionExpression(expression) &&
+              expression.type === "ArrowFunctionExpression" &&
               expression.body?.type === "BlockStatement"
             ) {
               return;
             }
             if (
-              expression?.type === "FunctionExpression" &&
+              isFunctionExpression(expression) &&
+              expression.type === "FunctionExpression" &&
               expression.body?.type === "BlockStatement"
             ) {
               return;

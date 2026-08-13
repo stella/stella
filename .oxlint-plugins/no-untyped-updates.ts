@@ -22,9 +22,14 @@ import {
   unwrapExpression,
 } from "./utils.ts";
 
-const isBroadRecordDeclaration = (
-  node: ESTree.VariableDeclarator,
-): boolean => {
+const isIdentifierReference = (
+  node: unknown,
+): node is ESTree.IdentifierReference => isIdentifier(node);
+
+const isObjectExpression = (node: unknown): node is ESTree.ObjectExpression =>
+  isAstNode(node) && node.type === "ObjectExpression";
+
+const isBroadRecordDeclaration = (node: ESTree.VariableDeclarator): boolean => {
   if (!isIdentifier(node.id)) {
     return false;
   }
@@ -124,7 +129,7 @@ export default eslintCompatPlugin({
             return null;
           }
 
-          if (isIdentifier(expression)) {
+          if (isIdentifierReference(expression)) {
             const variable = resolveVariable(expression);
             if (variable === null || seen.has(variable)) {
               return null;
@@ -144,7 +149,7 @@ export default eslintCompatPlugin({
             return broadSource(declaration.init, seen);
           }
 
-          if (expression.type === "ObjectExpression") {
+          if (isObjectExpression(expression)) {
             for (const property of expression.properties) {
               if (property.type !== "SpreadElement") {
                 continue;
