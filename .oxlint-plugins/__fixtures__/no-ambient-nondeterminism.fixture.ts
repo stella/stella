@@ -285,10 +285,11 @@ export const templateComputedEpoch = Date[templateComputedDateMethod]();
 export const directTemplateComputedEpoch = Date[`now`]();
 
 export const conditionalAmbientClock = (monotonic: boolean) =>
-  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: conditional callees retain both ambient outcomes
+  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism, typescript/unbound-method -- fixture: conditional callees retain both ambient outcomes
   (monotonic ? performance.now : Date.now)();
 
 export const directlyAliasedConditionalAmbientClock = (monotonic: boolean) => {
+  // oxlint-disable-next-line typescript/unbound-method -- fixture: the alias deliberately stores either ambient unbound method
   const ambientClock = monotonic ? performance.now : Date.now;
   return (
     // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: immutable aliases of conditional ambient callees retain provenance
@@ -296,9 +297,9 @@ export const directlyAliasedConditionalAmbientClock = (monotonic: boolean) => {
   );
 };
 
-export const logicalAmbientClock = (preferEpoch: boolean) =>
+export const logicalAmbientClock = (providedClock?: () => number) =>
   // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: logical callees retain ambient outcomes
-  ((preferEpoch && Date.now) || performance.now)();
+  (providedClock || Date.now)();
 
 class LocalDate {
   readonly kind = "local";
@@ -316,13 +317,13 @@ export const aliasedConditionalAmbientConstructor = (useAmbient: boolean) => {
   );
 };
 
-export const logicalAmbientConstructor = (useAmbient: boolean) =>
+export const logicalAmbientConstructor = (Constructor?: typeof LocalDate) =>
   // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: logical zero-argument constructors retain an ambient Date outcome
-  new ((useAmbient && Date) || LocalDate)();
+  new (Constructor || Date)();
 
 const observeConstructorChoice = () => undefined;
 export const sequenceAmbientConstructor = () =>
-  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism, no-sequences -- fixture: the selected sequence constructor retains ambient Date provenance
+  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: the selected sequence constructor retains ambient Date provenance
   new (observeConstructorChoice(), Date)();
 
 const directClock = { now: Date.now };

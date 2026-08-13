@@ -90,10 +90,10 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
     ? { className: cn("rounded-md", "ring-1") }
     : { className: mergeClasses("rounded-md", "opacity-60") };
   const logicalSpreadProps = active && {
-    className: active ? "bg-muted" : "bg-background",
+    className: status === "closed" ? "bg-muted" : "bg-background",
   };
   const canonicalLogicalSpreadProps = active && {
-    className: cn("rounded-md", active && "ring-1"),
+    className: cn("rounded-md", status === "closed" && "ring-1"),
   };
   const partialOverrideSpreadProps = {
     className: active ? "bg-muted" : "bg-background",
@@ -572,6 +572,7 @@ const OpaqueSpreadBoundary = ({
     ...externalProps,
     className: active ? "bg-muted" : "bg-background",
   };
+  // oxlint-disable-next-line typescript/prefer-nullish-coalescing -- fixture: logical-or object provenance must remain opaque when the left branch is external
   const opaqueLogicalSpread = opaqueProps || {
     className: active ? "bg-muted" : "bg-background",
   };
