@@ -35,6 +35,25 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
     }
     return "bg-background";
   };
+  // oxlint-disable-next-line typescript/consistent-return -- fixture: every union member is covered by the switch
+  const extractedStatusClass = ({
+    slotStatus,
+  }: {
+    slotStatus: "open" | "closed";
+  }) => {
+    switch (slotStatus) {
+      case "open":
+        return "font-medium";
+      case "closed":
+        return "opacity-60";
+    }
+  };
+  const canonicalRowClass = ({ selected }: { selected: boolean }) => {
+    if (selected) {
+      return cn("rounded-md", className);
+    }
+    return mergeClasses("rounded-md", "opacity-60");
+  };
 
   return (
     <div>
@@ -70,33 +89,11 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
       {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
       <div className={spreadStyles.root} />
 
-      {/* Callback branch composition — MUST flag. */}
-      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
-      <FixtureSlot
-        className={({ selected }) => {
-          if (selected) {
-            return "bg-muted";
-          }
-          return "bg-background";
-        }}
-      />
-
-      {/* Switch-branch composition — MUST flag. */}
-      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition, typescript/consistent-return -- fixture: every union member is covered by the switch */}
-      <StatusSlot
-        className={({ status: slotStatus }) => {
-          switch (slotStatus) {
-            case "open":
-              return "font-medium";
-            case "closed":
-              return "opacity-60";
-          }
-        }}
-      />
-
-      {/* Extracted block callback composition — MUST flag. */}
+      {/* Extracted block and switch callback composition — MUST flag. */}
       {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
       <FixtureSlot className={extractedRowClass} />
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      <StatusSlot className={extractedStatusClass} />
 
       {/* Static and pass-through values — MUST NOT flag. */}
       <div className="rounded-md" />
@@ -112,14 +109,7 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
       <div className={canonicalAliasClasses satisfies string} />
 
       {/* Conditional callbacks remain valid when every branch uses cn(). */}
-      <FixtureSlot
-        className={({ selected }) => {
-          if (selected) {
-            return cn("rounded-md", className);
-          }
-          return mergeClasses("rounded-md", "opacity-60");
-        }}
-      />
+      <FixtureSlot className={canonicalRowClass} />
 
       <ShadowedCn active={active} />
     </div>
