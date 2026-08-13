@@ -44,6 +44,11 @@ import { isUuid } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { selectCurrentExtractedContent } from "@/api/lib/document-content-provenance";
 import {
+  DOCUMENT_PROCESSING_FAILURE_CODE,
+  DOCUMENT_PROCESSING_KIND,
+  DOCUMENT_PROCESSING_REQUIRED_STATUS,
+} from "@/api/lib/document-processing-contract";
+import {
   entityListCursorCondition,
   entityListTimestampCursorExpr,
 } from "@/api/lib/entities/list-cursor";
@@ -1183,8 +1188,6 @@ type CurrentDocumentForState = {
   }[];
 };
 
-const DOCUMENT_PROCESSING_FAILURE_CODE = "document_processing_failed";
-
 type DocumentContentState =
   | { status: "not_applicable" }
   | {
@@ -1195,12 +1198,12 @@ type DocumentContentState =
     }
   | {
       status: "pending";
-      processingKind: "document-processing";
+      processingKind: typeof DOCUMENT_PROCESSING_KIND;
       runId: SafeId<"documentProcessingRun"> | null;
       sourceVersionId: SafeId<"entityVersion">;
     }
   | {
-      status: "requires_processing";
+      status: typeof DOCUMENT_PROCESSING_REQUIRED_STATUS;
       sourceVersionId: SafeId<"entityVersion">;
       remediation:
         | {
@@ -1226,7 +1229,7 @@ type DocumentContentState =
     }
   | {
       status: "failed";
-      processingKind: "document-processing";
+      processingKind: typeof DOCUMENT_PROCESSING_KIND;
       runId: SafeId<"documentProcessingRun">;
       sourceVersionId: SafeId<"entityVersion">;
       errorCode: typeof DOCUMENT_PROCESSING_FAILURE_CODE;
@@ -1458,7 +1461,7 @@ const loadDocumentProcessingStates = async ({
   ) {
     contentState = {
       status: "failed",
-      processingKind: "document-processing",
+      processingKind: DOCUMENT_PROCESSING_KIND,
       runId: nativeRun.id,
       sourceVersionId: current.currentVersionId,
       errorCode: DOCUMENT_PROCESSING_FAILURE_CODE,
@@ -1484,7 +1487,7 @@ const loadDocumentProcessingStates = async ({
   ) {
     contentState = {
       status: "failed",
-      processingKind: "document-processing",
+      processingKind: DOCUMENT_PROCESSING_KIND,
       runId: ocrRun.id,
       sourceVersionId: current.currentVersionId,
       errorCode: DOCUMENT_PROCESSING_FAILURE_CODE,
@@ -1493,7 +1496,7 @@ const loadDocumentProcessingStates = async ({
   } else if (ocrRun?.status === "queued" || ocrRun?.status === "running") {
     contentState = {
       status: "pending",
-      processingKind: "document-processing",
+      processingKind: DOCUMENT_PROCESSING_KIND,
       runId: ocrRun.id,
       sourceVersionId: current.currentVersionId,
     };
@@ -1515,7 +1518,7 @@ const loadDocumentProcessingStates = async ({
       "off"
   ) {
     contentState = {
-      status: "requires_processing",
+      status: DOCUMENT_PROCESSING_REQUIRED_STATUS,
       sourceVersionId: current.currentVersionId,
       remediation: canQueueManualOcr
         ? {
@@ -1552,7 +1555,7 @@ const loadDocumentProcessingStates = async ({
   } else if (nativeRun?.status === "failed") {
     contentState = {
       status: "failed",
-      processingKind: "document-processing",
+      processingKind: DOCUMENT_PROCESSING_KIND,
       runId: nativeRun.id,
       sourceVersionId: current.currentVersionId,
       errorCode: DOCUMENT_PROCESSING_FAILURE_CODE,
@@ -1573,7 +1576,7 @@ const loadDocumentProcessingStates = async ({
   } else {
     contentState = {
       status: "pending",
-      processingKind: "document-processing",
+      processingKind: DOCUMENT_PROCESSING_KIND,
       runId:
         nativeRun?.status === "queued" || nativeRun?.status === "running"
           ? nativeRun.id

@@ -1,6 +1,10 @@
 import * as v from "valibot";
 
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
+import {
+  DOCUMENT_PROCESSING_KIND,
+  DOCUMENT_PROCESSING_REQUIRED_STATUS,
+} from "@/api/lib/document-processing-contract";
 
 import {
   chatEntityRef,
@@ -403,7 +407,7 @@ const readDocumentEntityId = () =>
 // accepting their former discriminator values so historical chats still load;
 // document-tools.ts emits only the generic values for new results.
 const documentProcessingKindProjection = v.picklist([
-  "document-processing",
+  DOCUMENT_PROCESSING_KIND,
   "native-extraction",
   "ocr",
 ]);
@@ -439,7 +443,7 @@ const documentContentStateProjection = v.variant("status", [
     sourceVersionId: passthroughId(),
   }),
   v.strictObject({
-    status: v.literal("requires_processing"),
+    status: v.literal(DOCUMENT_PROCESSING_REQUIRED_STATUS),
     sourceVersionId: passthroughId(),
     remediation: documentProcessingRemediationProjection,
   }),
