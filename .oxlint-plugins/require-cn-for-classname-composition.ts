@@ -30,8 +30,20 @@ const isIdentifierReference = (
 const isMemberExpression = (node: unknown): node is ESTree.MemberExpression =>
   isAstNode(node) && node.type === "MemberExpression";
 
+const isAssignmentExpression = (
+  node: unknown,
+): node is ESTree.AssignmentExpression =>
+  isAstNode(node) && node.type === "AssignmentExpression";
+
 const isObjectExpression = (node: unknown): node is ESTree.ObjectExpression =>
   isAstNode(node) && node.type === "ObjectExpression";
+
+const arrayExpressionElements = (node: unknown): readonly unknown[] | null =>
+  isAstNode(node) &&
+  node.type === "ArrayExpression" &&
+  Array.isArray(node.elements)
+    ? node.elements
+    : null;
 
 const isTemplateLiteral = (node: unknown): node is ESTree.TemplateLiteral =>
   isAstNode(node) && node.type === "TemplateLiteral";
@@ -478,8 +490,7 @@ export default eslintCompatPlugin({
           if (
             !isAstNode(statement) ||
             statement.type !== "ExpressionStatement" ||
-            !isAstNode(statement.expression) ||
-            statement.expression.type !== "AssignmentExpression" ||
+            !isAssignmentExpression(statement.expression) ||
             statement.expression.operator !== "=" ||
             !isIdentifier(statement.expression.left)
           ) {
@@ -698,7 +709,10 @@ export default eslintCompatPlugin({
               current = parent;
               continue;
             }
-            if (isMemberExpression(parent) && parent.object === current) {
+            if (
+              isMemberExpression(parent) &&
+              Object.is(parent.object, current)
+            ) {
               const propertyName = staticPropertyName(
                 parent.property,
                 parent.computed,
@@ -789,20 +803,23 @@ export default eslintCompatPlugin({
                   }
                   let owner: unknown = candidateReference.identifier;
                   const writtenPath: string[] = [];
-                  while (
-                    isAstNode(owner) &&
-                    isMemberExpression(owner.parent) &&
-                    owner.parent.object === owner
-                  ) {
+                  while (isAstNode(owner)) {
+                    const parent = owner.parent;
+                    if (
+                      !isMemberExpression(parent) ||
+                      !Object.is(parent.object, owner)
+                    ) {
+                      break;
+                    }
                     const propertyName = staticPropertyName(
-                      owner.parent.property,
-                      owner.parent.computed,
+                      parent.property,
+                      parent.computed,
                     );
                     if (propertyName === null) {
                       return earliest;
                     }
                     writtenPath.push(propertyName);
-                    owner = owner.parent;
+                    owner = parent;
                   }
                   if (
                     writtenPath.length === 0 ||
@@ -921,9 +938,10 @@ export default eslintCompatPlugin({
                   visitedVariables,
                 );
           }
-          if (expression.type === "ArrayExpression") {
+          const elements = arrayExpressionElements(expression);
+          if (elements !== null) {
             if (
-              expression.elements.some(
+              elements.some(
                 (element) =>
                   isAstNode(element) && element.type === "SpreadElement",
               )
@@ -932,7 +950,7 @@ export default eslintCompatPlugin({
             }
             return {
               names: new Set(
-                expression.elements.flatMap((element, index) =>
+                elements.flatMap((element, index) =>
                   isAstNode(element) && element.type !== "SpreadElement"
                     ? [String(index)]
                     : [],
@@ -1093,11 +1111,12 @@ export default eslintCompatPlugin({
                 }) satisfies LocalPossibleValues,
             );
           }
-          if (expression.type !== "ArrayExpression") {
+          const elements = arrayExpressionElements(expression);
+          if (elements === null) {
             return null;
           }
           const values: unknown[] = [];
-          for (const element of expression.elements) {
+          for (const element of elements) {
             if (!isAstNode(element)) {
               values.push(LOCAL_ABSENT_VALUE);
               continue;
@@ -1303,10 +1322,10 @@ export default eslintCompatPlugin({
             if (stableValue === null) {
               return null;
             }
-            const stableExpression = unwrapClassExpression(stableValue);
+            const stableElements = arrayExpressionElements(stableValue);
             if (
-              stableExpression?.type === "ArrayExpression" &&
-              stableExpression.elements.some(
+              stableElements !== null &&
+              stableElements.some(
                 (element) =>
                   isAstNode(element) && element.type === "SpreadElement",
               )
@@ -1319,7 +1338,7 @@ export default eslintCompatPlugin({
                 return null;
               }
               const writes = localPropertyWrites(variable, readPosition);
-              const propertyNames =
+              const propertyNames: Set<string> =
                 selectedPropertyNames === undefined
                   ? new Set(flattenedValues.map((_, index) => String(index)))
                   : new Set(selectedPropertyNames);
@@ -1347,7 +1366,7 @@ export default eslintCompatPlugin({
                   lastUnconditionalWrite?.value ??
                   flattenedValues.at(index) ??
                   LOCAL_ABSENT_VALUE;
-                const possibleValues = [baseValue];
+                const possibleValues: unknown[] = [baseValue];
                 possibleValues.push(
                   ...propertyWrites
                     .filter(
@@ -1510,12 +1529,15 @@ export default eslintCompatPlugin({
                 }
                 let owner: unknown = reference.identifier;
                 const writtenPath: string[] = [];
-                while (
-                  isAstNode(owner) &&
-                  isMemberExpression(owner.parent) &&
-                  owner.parent.object === owner
-                ) {
-                  const nextMember = owner.parent;
+                while (isAstNode(owner)) {
+                  const parent = owner.parent;
+                  if (
+                    !isMemberExpression(parent) ||
+                    !Object.is(parent.object, owner)
+                  ) {
+                    break;
+                  }
+                  const nextMember = parent;
                   const nextProperty = staticPropertyName(
                     nextMember.property,
                     nextMember.computed,

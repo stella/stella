@@ -656,11 +656,11 @@ const staticMemberPathFromRoot = (
 ): { member: unknown; propertyPath: readonly string[] } | null => {
   let current = root;
   const propertyPath: string[] = [];
-  while (
-    isAstNode(current.parent) &&
-    current.parent.type === "MemberExpression"
-  ) {
+  while (isAstNode(current)) {
     const member = current.parent;
+    if (!isAstNode(member) || member.type !== "MemberExpression") {
+      break;
+    }
     if (member.object !== current) {
       break;
     }

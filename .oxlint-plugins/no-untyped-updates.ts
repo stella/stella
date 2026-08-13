@@ -30,6 +30,9 @@ const isIdentifierReference = (
 const isObjectExpression = (node: unknown): node is ESTree.ObjectExpression =>
   isAstNode(node) && node.type === "ObjectExpression";
 
+const isCallExpression = (node: unknown): node is ESTree.CallExpression =>
+  isAstNode(node) && node.type === "CallExpression";
+
 const updateReceiver = (node: ESTree.CallExpression): unknown => {
   const callee = unwrapExpression(node.callee);
   if (
@@ -40,7 +43,7 @@ const updateReceiver = (node: ESTree.CallExpression): unknown => {
   }
 
   const updateCall = unwrapExpression(callee.object);
-  if (updateCall?.type !== "CallExpression") {
+  if (!isCallExpression(updateCall)) {
     return null;
   }
 
@@ -63,7 +66,7 @@ const updateTarget = (node: ESTree.CallExpression): unknown => {
     return null;
   }
   const updateCall = unwrapExpression(callee.object);
-  return updateCall?.type === "CallExpression"
+  return isCallExpression(updateCall)
     ? (updateCall.arguments.at(0) ?? null)
     : null;
 };
