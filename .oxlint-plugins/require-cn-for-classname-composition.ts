@@ -126,6 +126,19 @@ export default eslintCompatPlugin({
           return null;
         };
 
+        const getVariableInitializer = (variable: Variable): unknown => {
+          for (const definition of variable.defs) {
+            if (
+              definition.type === "Variable" &&
+              isAstNode(definition.node) &&
+              definition.node.type === "VariableDeclarator"
+            ) {
+              return definition.node.init;
+            }
+          }
+          return null;
+        };
+
         const isCanonicalCn = (identifier: unknown): boolean => {
           const variable = resolveVariable(identifier);
           return (
@@ -253,6 +266,100 @@ export default eslintCompatPlugin({
           );
         };
 
+        const staticClassValue = (
+          value: unknown,
+          visitedVariables = new Set<Variable>(),
+        ): string | null => {
+          const node = unwrapClassExpression(value);
+          if (isStringLiteral(node)) {
+            return node.value;
+          }
+          if (isTemplateLiteral(node) && node.expressions.length === 0) {
+            const quasi = node.quasis.at(0);
+            return quasi?.value.cooked ?? quasi?.value.raw ?? "";
+          }
+          if (!isIdentifier(node)) {
+            return null;
+          }
+          const variable = resolveVariable(node);
+          if (variable === null || visitedVariables.has(variable)) {
+            return null;
+          }
+          const initializer = getConstInitializer(node);
+          if (initializer === null) {
+            return null;
+          }
+          visitedVariables.add(variable);
+          return staticClassValue(initializer, visitedVariables);
+        };
+
+        const isConditionalWriteInside = (
+          identifier: unknown,
+          callback: ESTree.ArrowFunctionExpression | ESTree.Function,
+        ): boolean => {
+          let current = identifier;
+          while (isAstNode(current)) {
+            const parent = current.parent;
+            if (parent === callback.body) {
+              return false;
+            }
+            if (!isAstNode(parent)) {
+              return false;
+            }
+            if (
+              (parent.type === "IfStatement" && current !== parent.test) ||
+              (parent.type === "ConditionalExpression" &&
+                current !== parent.test) ||
+              parent.type === "SwitchCase" ||
+              (parent.type === "LogicalExpression" &&
+                current === parent.right) ||
+              parent.type === "ForStatement" ||
+              parent.type === "ForInStatement" ||
+              parent.type === "ForOfStatement" ||
+              parent.type === "WhileStatement" ||
+              parent.type === "DoWhileStatement"
+            ) {
+              return true;
+            }
+            if (
+              parent.type === "ArrowFunctionExpression" ||
+              parent.type === "FunctionExpression" ||
+              parent.type === "FunctionDeclaration"
+            ) {
+              return false;
+            }
+            current = parent;
+          }
+          return false;
+        };
+
+        const conditionalWriteValues = (
+          value: unknown,
+          callback: ESTree.ArrowFunctionExpression | ESTree.Function,
+        ): unknown[] | null => {
+          const node = unwrapClassExpression(value);
+          if (!isIdentifier(node)) {
+            return null;
+          }
+          const variable = resolveVariable(node);
+          if (variable === null) {
+            return null;
+          }
+          const writes = variable.references.filter(
+            (reference) =>
+              reference.init !== true &&
+              reference.isWrite() &&
+              isConditionalWriteInside(reference.identifier, callback),
+          );
+          if (writes.length === 0) {
+            return null;
+          }
+          return [
+            getVariableInitializer(variable),
+            ...writes.map((reference) => reference.writeExpr),
+          ];
+        };
+
         const isAllowedClassValue = (
           value: unknown,
           visitedVariables = new Set<Variable>(),
@@ -329,36 +436,40 @@ export default eslintCompatPlugin({
             };
             visitBody(node.body, true);
 
-            const returnKinds = new Set(
-              returnValues.map((returnValue) => {
-                if (returnValue === null) {
-                  return "empty";
-                }
-                if (isCanonicalCnComposition(returnValue)) {
-                  return "canonical";
-                }
-                const returned = unwrapClassExpression(returnValue);
-                if (isStringLiteral(returned)) {
-                  return `static:${returned.value}`;
-                }
-                if (
-                  isTemplateLiteral(returned) &&
-                  returned.expressions.length === 0
-                ) {
-                  return `static:${context.sourceCode.getText(returned)}`;
-                }
-                return isAstNode(returned)
-                  ? `dynamic:${context.sourceCode.getText(returned)}`
-                  : "dynamic:unknown";
-              }),
+            const possibleValues = returnValues.flatMap((returnValue) => {
+              const writes = conditionalWriteValues(returnValue, node);
+              return writes ?? [returnValue];
+            });
+            const allCanonical = possibleValues.every((returnValue) =>
+              isCanonicalCnComposition(returnValue),
             );
-            const selectsClassValue = returnKinds.size > 1;
+            if (allCanonical) {
+              return true;
+            }
 
-            return returnValues.every((returnValue) =>
-              selectsClassValue
-                ? isCanonicalCnComposition(returnValue)
-                : isAllowedClassValue(returnValue, new Set(visitedVariables)),
-            );
+            const returnKinds = new Set<string>();
+            for (const returnValue of possibleValues) {
+              const staticValue = staticClassValue(returnValue);
+              if (staticValue !== null) {
+                returnKinds.add(`static:${staticValue}`);
+                continue;
+              }
+              if (
+                !isAllowedClassValue(
+                  returnValue,
+                  new Set(visitedVariables),
+                )
+              ) {
+                return false;
+              }
+              const returned = unwrapClassExpression(returnValue);
+              returnKinds.add(
+                isAstNode(returned)
+                  ? `dynamic:${context.sourceCode.getText(returned)}`
+                  : "dynamic:unknown",
+              );
+            }
+            return returnKinds.size <= 1;
           }
           return false;
         };

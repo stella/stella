@@ -39,6 +39,13 @@ export const aliasedImportedIdentifier = nodeRandomUuid();
 const readNow = Date.now;
 const createSortableIdentifier = Bun.randomUUIDv7;
 const createImportedIdentifier = randomUUID;
+const { now: destructuredDateNow } = Date;
+const { now: destructuredDateNowWithFallback = () => 0 } = Date;
+const { random: destructuredMathRandom } = Math;
+const {
+  getRandomValues: destructuredGetRandomValues,
+  randomUUID: destructuredRandomUuid,
+} = crypto;
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: stable aliases retain ambient provenance
 export const aliasedEpoch = readNow();
@@ -48,6 +55,24 @@ export const aliasedSortableIdentifier = createSortableIdentifier();
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: stable imported aliases retain ambient provenance
 export const twiceAliasedImportedIdentifier = createImportedIdentifier();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: destructuring cannot erase Date.now provenance
+export const destructuredEpoch = destructuredDateNow();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: a destructuring default does not erase the selected global property
+export const destructuredEpochWithFallback =
+  destructuredDateNowWithFallback();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: destructuring cannot erase Math.random provenance
+export const destructuredSample = destructuredMathRandom();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: destructuring cannot erase crypto.randomUUID provenance
+export const destructuredIdentifier = destructuredRandomUuid();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: destructuring cannot erase crypto.getRandomValues provenance
+export const destructuredRandomBytes = destructuredGetRandomValues(
+  new Uint8Array(8),
+);
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: explicit globalThis access is still ambient time
 export const globalEpoch = globalThis.Date.now();
@@ -77,6 +102,22 @@ export const globalSortableIdentifier = globalThis.Bun.randomUUIDv7();
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: explicit globalThis access remains ambient monotonic time
 export const globalMonotonicTime = globalThis.performance.now();
+
+const ambientRoot = globalThis;
+const secondAmbientRoot = ambientRoot;
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: a stable globalThis alias cannot hide Date.now
+export const rootAliasedEpoch = ambientRoot.Date.now();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: a stable globalThis alias cannot hide implicit date construction
+export const rootAliasedInstant = new ambientRoot.Date();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: chained globalThis aliases retain Math provenance
+export const chainedRootSample = secondAmbientRoot.Math.random();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: chained globalThis aliases retain crypto provenance
+export const chainedRootIdentifier =
+  secondAmbientRoot.crypto.randomUUID();
 
 export const explicitDate = new Date("2026-08-13T00:00:00.000Z");
 
@@ -129,3 +170,49 @@ export const withShadowedBindings = (
   globalRandomBytes: globalThis.crypto.getRandomValues(new Uint8Array(8)),
   globalMonotonicTime: globalThis.performance.now(),
 });
+
+export const withShadowedAliases = (
+  Date: { now: () => number },
+  Math: { random: () => number },
+  crypto: {
+    getRandomValues: (value: Uint8Array) => Uint8Array;
+    randomUUID: () => string;
+  },
+  // oxlint-disable-next-line no-shadow-restricted-names -- fixture: aliases of a shadowed globalThis binding must remain allowed
+  globalThis: {
+    Date: { now: () => number; new (): object };
+    Math: { random: () => number };
+    crypto: { randomUUID: () => string };
+  },
+) => {
+  const { now: localNow } = Date;
+  const { random: localRandom } = Math;
+  const {
+    getRandomValues: localGetRandomValues,
+    randomUUID: localRandomUuid,
+  } = crypto;
+  const localRoot = globalThis;
+  return {
+    epoch: localNow(),
+    sample: localRandom(),
+    identifier: localRandomUuid(),
+    randomBytes: localGetRandomValues(new Uint8Array(8)),
+    rootEpoch: localRoot.Date.now(),
+    rootInstant: new localRoot.Date(),
+    rootSample: localRoot.Math.random(),
+    rootIdentifier: localRoot.crypto.randomUUID(),
+  };
+};
+
+let mutableReadNow = Date.now;
+mutableReadNow = () => 0;
+export const mutableAliasResult = mutableReadNow();
+
+let mutableRoot = globalThis;
+mutableRoot = {
+  ...globalThis,
+  Date: class extends Date {
+    static override now = () => 0;
+  },
+};
+export const mutableRootResult = mutableRoot.Date.now();

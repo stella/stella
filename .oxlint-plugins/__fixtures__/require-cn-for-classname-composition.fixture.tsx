@@ -29,6 +29,8 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
   };
   const aliasedStyles = localStyles;
   const spreadStyles = { ...aliasedStyles };
+  const staticRowClass = "rounded-md";
+  const staticRowClassAlias = staticRowClass;
   const extractedRowClass = ({ selected }: { selected: boolean }) => {
     if (selected) {
       return "bg-muted";
@@ -63,6 +65,31 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
   const guardedStaticClass = ({ selected }: { selected: boolean }) => {
     if (selected) {
       return "rounded-md";
+    }
+    return "rounded-md";
+  };
+  const conditionallyAssignedClass = ({ selected }: { selected: boolean }) => {
+    let result = "bg-background";
+    if (selected) {
+      result = "bg-muted";
+    }
+    return result;
+  };
+  const equivalentLiteralClass = ({ selected }: { selected: boolean }) => {
+    if (selected) {
+      return "rounded-md";
+    }
+    return `rounded-md`;
+  };
+  const equivalentAliasClass = ({ selected }: { selected: boolean }) => {
+    if (selected) {
+      return staticRowClassAlias;
+    }
+    return "rounded-md";
+  };
+  const unrelatedControlFlowClass = ({ selected }: { selected: boolean }) => {
+    if (selected) {
+      legacyClassNames("selected");
     }
     return "rounded-md";
   };
@@ -125,8 +152,17 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
       {/* Conditional callbacks remain valid when every branch uses cn(). */}
       <FixtureSlot className={canonicalRowClass} />
 
-      {/* Control flow returning one static value is not composition. */}
+      {/* A conditionally assigned returned value is composition: MUST flag. */}
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      <FixtureSlot className={conditionallyAssignedClass} />
+
+      {/* Equivalent static returns are not composition. */}
       <FixtureSlot className={guardedStaticClass} />
+      <FixtureSlot className={equivalentLiteralClass} />
+      <FixtureSlot className={equivalentAliasClass} />
+
+      {/* Unrelated control flow with one static return is not composition. */}
+      <FixtureSlot className={unrelatedControlFlowClass} />
 
       <ShadowedCn active={active} />
     </div>

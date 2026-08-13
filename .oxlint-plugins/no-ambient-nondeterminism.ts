@@ -17,7 +17,10 @@
 //   randomUUID() imported from node:crypto
 //   globalThis.Date.now() (and the corresponding forms above)
 //
-// Explicit date construction and locally shadowed bindings remain allowed.
+// Immutable identifier aliases, object-destructured method aliases, and
+// aliases of globalThis retain provenance. Explicit date construction,
+// mutable aliases, and locally shadowed bindings remain allowed. Alias walks
+// track visited bindings so malformed or cyclic declarations terminate.
 // Adapted from https://github.com/typeonce-dev/ai-automation
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
@@ -59,11 +62,15 @@ const bindingHasDefinitions = (binding: unknown): boolean =>
   Array.isArray(binding.defs) &&
   binding.defs.length > 0;
 
-const constInitializer = (
+type ConstAlias =
+  | { type: "property"; object: unknown; propertyName: string }
+  | { type: "value"; value: unknown };
+
+const constAlias = (
   context: unknown,
   node: unknown,
   visitedBindings: Set<unknown>,
-): unknown => {
+): ConstAlias | null => {
   if (
     !isIdentifier(node) ||
     typeof context !== "object" ||
@@ -106,7 +113,46 @@ const constInitializer = (
       definition.parent.type === "VariableDeclaration" &&
       definition.parent.kind === "const"
     ) {
-      return definition.node.init;
+      const declarator = definition.node;
+      if (isIdentifier(declarator.id, node.name)) {
+        return { type: "value", value: declarator.init };
+      }
+      if (
+        !isAstNode(declarator.id) ||
+        declarator.id.type !== "ObjectPattern" ||
+        !Array.isArray(declarator.id.properties)
+      ) {
+        continue;
+      }
+      for (const property of declarator.id.properties) {
+        if (!isAstNode(property) || property.type !== "Property") {
+          continue;
+        }
+        let target = unwrapExpression(property.value);
+        if (target?.type === "AssignmentPattern") {
+          target = unwrapExpression(target.left);
+        }
+        if (!isIdentifier(target, node.name)) {
+          continue;
+        }
+        const propertyName =
+          property.computed === false
+            ? isIdentifier(property.key)
+              ? property.key.name
+              : isStringLiteral(property.key)
+                ? property.key.value
+                : null
+            : isStringLiteral(property.key)
+              ? property.key.value
+              : null;
+        if (propertyName !== null) {
+          return {
+            type: "property",
+            object: declarator.init,
+            propertyName,
+          };
+        }
+      }
     }
   }
   return null;
@@ -212,44 +258,34 @@ const globalObjectName = (
     if (isGlobalReference(context, expression)) {
       return expression.name;
     }
-    const initializer = constInitializer(context, expression, visitedBindings);
-    return initializer === null
-      ? null
-      : globalObjectName(context, initializer, visitedBindings);
+    const alias = constAlias(context, expression, visitedBindings);
+    if (alias === null) {
+      return null;
+    }
+    if (alias.type === "value") {
+      return globalObjectName(context, alias.value, visitedBindings);
+    }
+    return globalObjectName(context, alias.object, visitedBindings) ===
+      "globalThis"
+      ? alias.propertyName
+      : null;
   }
   if (expression.type !== "MemberExpression") {
     return null;
   }
-  const host = unwrapExpression(expression.object);
-  if (!isIdentifier(host, "globalThis") || !isGlobalReference(context, host)) {
+  if (
+    globalObjectName(context, expression.object, visitedBindings) !==
+    "globalThis"
+  ) {
     return null;
   }
   return staticMemberName(expression);
 };
 
-const ambientCallKind = (
-  context: unknown,
-  callee: unknown,
-  visitedBindings = new Set<unknown>(),
+const ambientMemberKind = (
+  object: string | null,
+  property: string | null,
 ): string | null => {
-  const expression = unwrapExpression(callee);
-  if (expression === null) {
-    return null;
-  }
-  if (isNodeCryptoRandomUuid(context, expression)) {
-    return "randomUUID() from node:crypto";
-  }
-  if (isIdentifier(expression)) {
-    const initializer = constInitializer(context, expression, visitedBindings);
-    if (initializer !== null) {
-      return ambientCallKind(context, initializer, visitedBindings);
-    }
-  }
-  if (expression.type !== "MemberExpression") {
-    return null;
-  }
-  const property = staticMemberName(expression);
-  const object = globalObjectName(context, expression.object);
   if (object === "Date" && property === "now") {
     return "Date.now()";
   }
@@ -269,6 +305,39 @@ const ambientCallKind = (
     return "performance.now()";
   }
   return null;
+};
+
+const ambientCallKind = (
+  context: unknown,
+  callee: unknown,
+  visitedBindings = new Set<unknown>(),
+): string | null => {
+  const expression = unwrapExpression(callee);
+  if (expression === null) {
+    return null;
+  }
+  if (isNodeCryptoRandomUuid(context, expression)) {
+    return "randomUUID() from node:crypto";
+  }
+  if (isIdentifier(expression)) {
+    const alias = constAlias(context, expression, visitedBindings);
+    if (alias?.type === "value") {
+      return ambientCallKind(context, alias.value, visitedBindings);
+    }
+    if (alias?.type === "property") {
+      return ambientMemberKind(
+        globalObjectName(context, alias.object, visitedBindings),
+        alias.propertyName,
+      );
+    }
+  }
+  if (expression.type !== "MemberExpression") {
+    return null;
+  }
+  return ambientMemberKind(
+    globalObjectName(context, expression.object, visitedBindings),
+    staticMemberName(expression),
+  );
 };
 
 export default eslintCompatPlugin({
