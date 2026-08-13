@@ -19,6 +19,7 @@ import { FormattingProvider } from "@/i18n/formatting-context";
 import {
   buildFormattingLocale,
   bundledEnglishMessages,
+  synchronizeFormatterTimeZone,
   useI18nStore,
 } from "@/i18n/i18n-store";
 import { useHydrationSafeTimeZone } from "@/i18n/time-zone";
@@ -38,7 +39,7 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
   const numberingSystem = useI18nStore((s) => s.numberingSystem);
   const weekStart = useI18nStore((s) => s.weekStart);
   const hydrated = useHydrated();
-  const timeZone = useHydrationSafeTimeZone();
+  const timeZone = useHydrationSafeTimeZone(synchronizeFormatterTimeZone);
 
   const pathname = useRouterState({
     select: (state) => state.location.pathname,

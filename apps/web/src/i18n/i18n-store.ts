@@ -282,6 +282,8 @@ let formatter = createFormatter({
   locale: "en",
   timeZone: SERVER_I18N_TIME_ZONE,
 });
+let formatterLocale = "en";
+let formatterTimeZone = SERVER_I18N_TIME_ZONE;
 
 export const getFormatter = () => formatter;
 
@@ -322,11 +324,23 @@ const setDocumentLanguage = (lang: SupportedLanguage): void => {
   document.documentElement.dir = getLangDir(lang);
 };
 
-const refreshFormatter = (formattingLocale: string): void => {
+const refreshFormatter = (
+  formattingLocale: string,
+  timeZone = resolveAppTimeZone(),
+): void => {
+  formatterLocale = formattingLocale;
+  formatterTimeZone = timeZone;
   formatter = createFormatter({
     locale: formattingLocale,
-    timeZone: resolveAppTimeZone(),
+    timeZone,
   });
+};
+
+export const synchronizeFormatterTimeZone = (timeZone: string): void => {
+  if (formatterTimeZone === timeZone) {
+    return;
+  }
+  refreshFormatter(formatterLocale, timeZone);
 };
 
 type ApplyMessagesArgs = {

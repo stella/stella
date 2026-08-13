@@ -707,9 +707,13 @@ describe("public law sitemap", () => {
     expect(timeZoneSource).toContain(
       "Intl.DateTimeFormat().resolvedOptions().timeZone",
     );
+    expect(timeZoneSource).toContain('globalThis.addEventListener("focus"');
+    expect(timeZoneSource).toContain('globalThis.removeEventListener("focus"');
 
     const providerSource = await readSource("apps/web/src/app-providers.tsx");
-    expect(providerSource).toContain("useHydrationSafeTimeZone()");
+    expect(providerSource).toContain(
+      "useHydrationSafeTimeZone(synchronizeFormatterTimeZone)",
+    );
     expect(providerSource).toContain("timeZone={timeZone}");
   });
 

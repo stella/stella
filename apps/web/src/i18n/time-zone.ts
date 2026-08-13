@@ -1,8 +1,11 @@
-import { useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 export const SERVER_I18N_TIME_ZONE = "UTC";
 
-const subscribeToTimeZone = (_onStoreChange: () => void) => () => undefined;
+const subscribeToTimeZone = (onStoreChange: () => void) => {
+  globalThis.addEventListener("focus", onStoreChange);
+  return () => globalThis.removeEventListener("focus", onStoreChange);
+};
 
 /**
  * The IANA time zone used for date/time formatting. The server has no
@@ -18,9 +21,20 @@ export const resolveAppTimeZone = (): string => {
 };
 
 /** Keeps UTC through hydration, then switches formatters to the browser zone. */
-export const useHydrationSafeTimeZone = (): string =>
-  useSyncExternalStore(
-    subscribeToTimeZone,
+export const useHydrationSafeTimeZone = (
+  synchronizeFormatter: (timeZone: string) => void,
+): string => {
+  const subscribe = useCallback(
+    (onStoreChange: () => void) =>
+      subscribeToTimeZone(() => {
+        synchronizeFormatter(resolveAppTimeZone());
+        onStoreChange();
+      }),
+    [synchronizeFormatter],
+  );
+  return useSyncExternalStore(
+    subscribe,
     resolveAppTimeZone,
     () => SERVER_I18N_TIME_ZONE,
   );
+};
