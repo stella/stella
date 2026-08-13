@@ -33,7 +33,10 @@ void mock.module("@/api/lib/search/process-extraction", () => ({
 const enqueueDocumentProcessingRunMock = mock(
   async (_runId: SafeId<"documentProcessingRun">) => undefined,
 );
+const realDocumentProcessingEnqueue =
+  await import("@/api/lib/document-processing-enqueue");
 void mock.module("@/api/lib/document-processing-enqueue", () => ({
+  ...realDocumentProcessingEnqueue,
   enqueueDocumentProcessingRun: enqueueDocumentProcessingRunMock,
 }));
 
