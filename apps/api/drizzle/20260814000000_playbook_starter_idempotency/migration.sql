@@ -15,12 +15,10 @@ SET statement_timeout = 0;
 SET lock_timeout = 0;
 --> statement-breakpoint
 
--- stella-migration-safety: reviewed destructive-change - only an invalid
--- index left by a cancelled attempt at this migration is removed before retry.
-DROP INDEX CONCURRENTLY IF EXISTS "playbook_definitions_org_starter_id_uidx";
---> statement-breakpoint
--- squawk-ignore prefer-robust-stmts
-CREATE UNIQUE INDEX CONCURRENTLY "playbook_definitions_org_starter_id_uidx"
+-- The migration runner validates this index after the ledger update and
+-- concurrently repairs an interrupted INVALID build. IF NOT EXISTS preserves
+-- an already-valid uniqueness boundary across retries.
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "playbook_definitions_org_starter_id_uidx"
   ON "playbook_definitions" ("organization_id", "starter_id")
   WHERE "starter_id" IS NOT NULL;
 --> statement-breakpoint
