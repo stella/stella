@@ -82,6 +82,7 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
     return result;
   };
   const ternaryAssignedClass = ({ selected }: { selected: boolean }) => {
+    // oxlint-disable-next-line prefer-const -- fixture: a separate top-level assignment is the laundering shape under test
     let result: string;
     result = selected ? "bg-muted" : "bg-background";
     return result;

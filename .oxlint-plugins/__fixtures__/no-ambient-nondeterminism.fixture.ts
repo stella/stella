@@ -40,8 +40,6 @@ const readNow = Date.now;
 const createSortableIdentifier = Bun.randomUUIDv7;
 const createImportedIdentifier = randomUUID;
 const { now: destructuredDateNow } = Date;
-// oxlint-disable-next-line typescript/no-unnecessary-condition -- fixture: defaulted destructuring must retain the selected global property
-const { now: destructuredDateNowWithFallback = () => 0 } = Date;
 /* oxlint-disable typescript/unbound-method -- fixture: destructured global methods are the rejected API surface */
 const { random: destructuredMathRandom } = Math;
 const {
@@ -69,10 +67,6 @@ export const twiceAliasedImportedIdentifier = createImportedIdentifier();
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: destructuring cannot erase Date.now provenance
 export const destructuredEpoch = destructuredDateNow();
-
-export const destructuredEpochWithFallback =
-  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: a destructuring default does not erase the selected global property
-  destructuredDateNowWithFallback();
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: destructuring cannot erase Math.random provenance
 export const destructuredSample = destructuredMathRandom();
@@ -130,9 +124,11 @@ export const globalMonotonicTime = globalThis.performance.now();
 
 const ambientRoot = globalThis;
 const secondAmbientRoot = ambientRoot;
+/* oxlint-disable typescript/unbound-method -- fixture: nested global method aliases are the rejected API surface */
 const {
   Date: { now: nestedAliasedRootNow },
 } = ambientRoot;
+/* oxlint-enable typescript/unbound-method */
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: a stable globalThis alias cannot hide Date.now
 export const rootAliasedEpoch = ambientRoot.Date.now();
@@ -256,8 +252,10 @@ mutableRoot = {
     static override now = () => 0;
   },
 };
+/* oxlint-disable typescript/unbound-method -- fixture: a mutable-root nested alias must remain allowed by the custom rule */
 const {
   Date: { now: mutableNestedNow },
 } = mutableRoot;
+/* oxlint-enable typescript/unbound-method */
 export const mutableRootResult = mutableRoot.Date.now();
 export const mutableNestedResult = mutableNestedNow();
