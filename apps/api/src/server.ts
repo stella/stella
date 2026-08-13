@@ -93,6 +93,7 @@ import { initAccountDeletionCleanupWorker } from "@/api/lib/account-deletion-cle
 import { captureRequestError } from "@/api/lib/analytics/capture";
 import { getAnalytics } from "@/api/lib/analytics/client";
 import { getAuth, resolveWorkspaceRealtimeAudience } from "@/api/lib/auth";
+import { shouldRejectBrowserMutation } from "@/api/lib/browser-origin-guard";
 import {
   resolveClientIp,
   resolveSignupRateLimitClientIp,
@@ -197,6 +198,23 @@ const setDbQueryCountHeader = (set: Context["set"]) => {
 
 const shouldLogRequest = (path: string): boolean => !HEALTH_PATHS.has(path);
 
+const allowedBrowserOrigins = (): (string | RegExp)[] => {
+  const origins: (string | RegExp)[] = frontendOrigins({
+    frontendUrl: env.FRONTEND_URL,
+    isDev: env.isDev,
+  });
+  if (env.isDev) {
+    origins.push(/^chrome-extension:\/\//u);
+    origins.push(...DEV_INSPECTOR_ORIGINS);
+  }
+  if (env.EXTENSION_ORIGIN) {
+    origins.push(env.EXTENSION_ORIGIN);
+  }
+  return origins;
+};
+
+const ALLOWED_BROWSER_ORIGINS = allowedBrowserOrigins();
+
 const getRouteName = (route: string | undefined): string =>
   route ?? "unmatched";
 
@@ -293,6 +311,18 @@ const api = new Elysia()
       set.headers[REQUEST_ID_HEADER] = requestId;
     }
 
+    if (
+      shouldRejectBrowserMutation({
+        allowedOrigins: ALLOWED_BROWSER_ORIGINS,
+        method: request.method,
+        origin: request.headers.get("origin"),
+        secFetchSite: request.headers.get("sec-fetch-site"),
+      })
+    ) {
+      set.status = 403;
+      return httpError("Untrusted browser origin");
+    }
+
     const interceptedResponse = await securityCanaryInterceptor(context);
     if (interceptedResponse) {
       return interceptedResponse;
@@ -302,20 +332,7 @@ const api = new Elysia()
   })
   .use(
     cors({
-      origin: (() => {
-        const origins: (string | RegExp)[] = frontendOrigins({
-          frontendUrl: env.FRONTEND_URL,
-          isDev: env.isDev,
-        });
-        if (env.isDev) {
-          origins.push(/^chrome-extension:\/\//u);
-          origins.push(...DEV_INSPECTOR_ORIGINS);
-        }
-        if (env.EXTENSION_ORIGIN) {
-          origins.push(env.EXTENSION_ORIGIN);
-        }
-        return origins;
-      })(),
+      origin: ALLOWED_BROWSER_ORIGINS,
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       credentials: true,
       allowedHeaders: [

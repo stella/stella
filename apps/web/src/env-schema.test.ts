@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { envWebClientSchema } from "@/env-schema";
+import { browserApiInvariantViolation, envWebClientSchema } from "@/env-schema";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
 describe("desktop release URL boundary", () => {
@@ -25,5 +25,45 @@ describe("desktop release URL boundary", () => {
         expect(sanitizeHref(value)).toBe(value);
       }
     }
+  });
+});
+
+describe("browser API URL boundary", () => {
+  const app = "https://app.example.com";
+
+  test("requires the exact same-origin /api path", () => {
+    expect(
+      browserApiInvariantViolation({
+        browserApiUrl: "https://app.example.com/api",
+        publicAppUrl: app,
+      }),
+    ).toBeNull();
+    expect(
+      browserApiInvariantViolation({
+        browserApiUrl: "https://api.example.com/api",
+        publicAppUrl: app,
+      }),
+    ).not.toBeNull();
+    expect(
+      browserApiInvariantViolation({
+        browserApiUrl: "https://app.example.com/api/",
+        publicAppUrl: app,
+      }),
+    ).not.toBeNull();
+    expect(
+      browserApiInvariantViolation({
+        browserApiUrl: "https://app.example.com/api?x=1",
+        publicAppUrl: app,
+      }),
+    ).not.toBeNull();
+  });
+
+  test("allows the feature to remain disabled", () => {
+    expect(
+      browserApiInvariantViolation({
+        browserApiUrl: undefined,
+        publicAppUrl: app,
+      }),
+    ).toBeNull();
   });
 });

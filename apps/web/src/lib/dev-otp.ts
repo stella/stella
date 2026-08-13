@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import { env } from "@/env";
+import { browserApiRootUrl } from "@/lib/api-url";
 import { fetchWithTimeout } from "@/lib/fetch";
 
 const devOtpSchema = v.object({ otp: v.string() });
@@ -18,7 +18,7 @@ export const fetchDevOtp = async (email: string): Promise<string | null> => {
   }
 
   const result = await Result.tryPromise(async () => {
-    const url = new URL("/dev-public/last-otp", env.VITE_API_URL);
+    const url = new URL(browserApiRootUrl("/dev-public/last-otp"));
     url.searchParams.set("email", email);
     const response = await fetchWithTimeout(url, {
       credentials: "include",

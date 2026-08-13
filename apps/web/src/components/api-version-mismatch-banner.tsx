@@ -7,6 +7,7 @@ import * as v from "valibot";
 import Tooltip from "@/components/tooltip";
 import { env } from "@/env";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
+import { browserApiRootUrl } from "@/lib/api-url";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { compareSemver } from "@/lib/semver-compare";
 
@@ -39,7 +40,7 @@ export const ApiVersionMismatchBanner = () => {
     refetchIntervalInBackground: false,
     retry: false,
     queryFn: async ({ signal }): Promise<string | null> => {
-      const response = await fetchWithTimeout(`${env.VITE_API_URL}/health`, {
+      const response = await fetchWithTimeout(browserApiRootUrl("/health"), {
         cache: "no-store",
         signal,
         timeoutMs: 8000,

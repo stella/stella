@@ -1,6 +1,10 @@
 import { buildVersionedApiUrl, MCP_APP_SANDBOX_PATH } from "@stll/api-contract";
 
-import { env } from "@/env";
+import {
+  browserApiBaseUrl,
+  browserApiRootUrl,
+  externalApiOrigin,
+} from "@/lib/api-origins";
 
 /**
  * Builds an absolute URL for a versioned (`/v1`) API route.
@@ -12,12 +16,24 @@ import { env } from "@/env";
  * recursive web type surface; those calls must still route through here so
  * the API origin and the `/v1` version prefix have a single home.
  *
- * A hand-written relative path (e.g. `/api/...`) silently resolves against
- * the web origin and hits the SPA fallback (`200` + `index.html`) instead
- * of the API.
+ * Browser calls intentionally resolve through the web origin's `/api` edge
+ * mount; direct external URLs remain available through externalApiUrl().
  */
-export const apiUrl = (path: `/${string}`): string =>
-  buildVersionedApiUrl(env.VITE_API_URL, path);
+export const externalApiUrl = (path: `/${string}`): string =>
+  buildVersionedApiUrl(externalApiOrigin(), path);
 
+export const browserApiUrl = (path: `/${string}`): string =>
+  buildVersionedApiUrl(browserApiBaseUrl(), path);
+
+/** Browser API URL used by the app's REST, stream, and download calls. */
+export const apiUrl = (path: `/${string}`): string => browserApiUrl(path);
+
+/** Better Auth expects the origin and appends `/api/auth` itself. */
 export const mcpAppSandboxUrl = (): URL =>
-  new URL(MCP_APP_SANDBOX_PATH, env.VITE_API_URL);
+  new URL(browserApiRootUrl(MCP_APP_SANDBOX_PATH));
+
+export {
+  browserApiBaseUrl,
+  browserApiRootUrl,
+  browserAuthBaseUrl,
+} from "@/lib/api-origins";

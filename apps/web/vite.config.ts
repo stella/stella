@@ -22,6 +22,13 @@ const DEV_API_PROXY_PATHS = [
   "/dev-public",
   "/oauth-ui",
 ] as const;
+
+export const rewriteBrowserApiPath = (requestPath: string): string => {
+  if (requestPath === "/api/auth" || requestPath.startsWith("/api/auth/")) {
+    return requestPath;
+  }
+  return requestPath.replace(/^\/api(?=\/|$)/u, "") || "/";
+};
 const APP_VERSION = readFileSync(
   path.resolve(APP_ROOT, "../../VERSION"),
   "utf-8",
@@ -229,6 +236,11 @@ export default defineConfig(({ mode }) => {
                 {
                   changeOrigin: true,
                   target: devApiProxyTarget,
+                  ...(route === "/api"
+                    ? {
+                        rewrite: rewriteBrowserApiPath,
+                      }
+                    : {}),
                 },
               ]),
             ),

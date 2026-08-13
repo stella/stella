@@ -9,8 +9,8 @@ import { buttonVariants } from "@stll/ui/components/button-variants";
 import { cn } from "@stll/ui/lib/utils";
 
 import { CopyField } from "@/components/copy-field";
-import { env } from "@/env";
 import type { TranslationKey } from "@/i18n/types";
+import { externalApiOrigin } from "@/lib/api-origins";
 import {
   detectDesktopPlatform,
   MACOS_DMG_URL,
@@ -184,7 +184,7 @@ const TargetCard = ({
 
 const CLI_INSTALL_COMMAND = "npm i -g @stll/cli";
 
-const apiOrigin = () => env.VITE_API_URL.replace(/\/$/u, "");
+const apiOrigin = () => externalApiOrigin().replace(/\/$/u, "");
 
 const SetupPanel = ({
   title,

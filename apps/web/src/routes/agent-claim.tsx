@@ -17,7 +17,7 @@ import { Input } from "@stll/ui/components/input";
 import { Label } from "@stll/ui/components/label";
 import { stellaToast } from "@stll/ui/components/toast";
 
-import { env } from "@/env";
+import { browserApiRootUrl } from "@/lib/api-url";
 import { authClient } from "@/lib/auth";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
@@ -193,7 +193,7 @@ type ConfirmResult =
 // sent via `credentials: "include"`.
 const confirmAgentClaim = async (userCode: string): Promise<ConfirmResult> => {
   const response = await fetchWithTimeout(
-    `${env.VITE_API_URL}/agent/identity/confirm`,
+    browserApiRootUrl("/agent/identity/confirm"),
     {
       method: "POST",
       credentials: "include",

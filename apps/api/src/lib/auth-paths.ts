@@ -18,11 +18,13 @@ export const OPENID_CONFIGURATION_DISCOVERY_PATH =
 
 const withTrailingSlash = (url: string) => `${url.replace(/\/$/u, "")}/`;
 
-export const getAuthIssuerUrl = () =>
-  new URL(
-    AUTH_API_PATH.slice(1),
-    withTrailingSlash(env.BETTER_AUTH_URL),
-  ).toString();
+const authBaseUrl = (origin: string) =>
+  new URL(AUTH_API_PATH.slice(1), withTrailingSlash(origin)).toString();
 
+/** Stable machine-token issuer, independent of the browser auth transport. */
+export const getAuthIssuerUrl = () =>
+  authBaseUrl(env.PUBLIC_URL ?? env.BETTER_AUTH_URL);
+
+/** Active auth transport used for browser callbacks and JWKS discovery. */
 export const getAuthEndpointUrl = (path: string) =>
-  new URL(path, withTrailingSlash(getAuthIssuerUrl())).toString();
+  new URL(path, withTrailingSlash(authBaseUrl(env.BETTER_AUTH_URL))).toString();

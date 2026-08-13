@@ -12,6 +12,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { env } from "@/env";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { externalApiOrigin } from "@/lib/api-origins";
 import { connectSelfHostedDesktop } from "@/lib/desktop-bridge";
 import {
   detectDesktopPlatform,
@@ -50,7 +51,7 @@ function DesktopPage() {
     setSelfHostConnectStatus("connecting");
     try {
       await connectSelfHostedDesktop({
-        apiBaseUrl: env.VITE_API_URL,
+        apiBaseUrl: externalApiOrigin(),
         webOrigin,
       });
       setSelfHostConnectStatus("connected");

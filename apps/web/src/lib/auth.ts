@@ -13,8 +13,8 @@ import { Result } from "better-result";
 import { ac, roles } from "@stll/permissions";
 import { stellaToast } from "@stll/ui/components/toast";
 
-import { env } from "@/env";
 import { getTranslator, useI18nStore } from "@/i18n/i18n-store";
+import { browserAuthBaseUrl } from "@/lib/api-url";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { getSignedOauthQueryFromHash } from "@/lib/oauth-provider";
 import { createSecretTokenBoundary } from "@/lib/secret-token";
@@ -125,7 +125,7 @@ const authClientPlugins = [
 ];
 
 export const authClient = createAuthClient({
-  baseURL: env.VITE_API_URL,
+  baseURL: browserAuthBaseUrl(),
   plugins: authClientPlugins,
   fetchOptions: {
     // `async`/`await` look redundant around a call that already returns a

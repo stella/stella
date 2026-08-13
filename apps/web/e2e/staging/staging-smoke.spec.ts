@@ -5,6 +5,9 @@ import { appShellNavigationLink } from "../helpers/app-shell";
 const MACOS_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
   "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36";
+const DIRECT_API_ORIGIN = new URL(
+  process.env["E2E_API_URL"] ?? "https://api-staging.stll.app",
+).origin;
 
 // The public shell is rendered on Linux and hydrated on the user's platform.
 // Emulating macOS catches ambient platform reads that Linux-only CI misses.
@@ -56,6 +59,41 @@ test("chat thread page renders for an entitlement-less owner", async ({
     .getByRole("heading", { name: "Connect AI provider" })
     .first();
   await expect(composer.or(aiKeyGate)).toBeVisible();
+});
+
+test("authenticated chat navigation stays same-origin and has no API preflights", async ({
+  page,
+}) => {
+  const apiRequests: string[] = [];
+  const optionsRequests: string[] = [];
+  const directApiRequests: string[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname.startsWith("/api/")) {
+      apiRequests.push(request.url());
+    }
+    if (url.origin === DIRECT_API_ORIGIN) {
+      directApiRequests.push(request.url());
+    }
+    if (
+      request.method() === "OPTIONS" &&
+      (url.pathname.startsWith("/api/") || url.origin === DIRECT_API_ORIGIN)
+    ) {
+      optionsRequests.push(request.url());
+    }
+  });
+
+  await page.goto("/chat", { waitUntil: "commit" });
+  await expect(
+    page.getByRole("textbox", { name: /type your question/iu }),
+  ).toBeVisible();
+  expect(apiRequests.length).toBeGreaterThan(0);
+  const pageOrigin = new URL(page.url()).origin;
+  expect(apiRequests.every((url) => new URL(url).origin === pageOrigin)).toBe(
+    true,
+  );
+  expect(directApiRequests).toEqual([]);
+  expect(optionsRequests).toEqual([]);
 });
 
 test("server-rendered public law decisions stay stable after hydration", async ({

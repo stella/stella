@@ -21,6 +21,7 @@ import { env } from "@/env";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { browserAuthBaseUrl } from "@/lib/api-url";
 import {
   authClient,
   HTTP_TOO_MANY_REQUESTS,
@@ -638,7 +639,7 @@ const signUpWithSelfhostBootstrap = async (
   let response: Response;
   try {
     response = await fetchWithTimeout(
-      `${env.VITE_API_URL}${BETTER_AUTH_SIGN_UP_EMAIL_PATH}`,
+      `${browserAuthBaseUrl()}${BETTER_AUTH_SIGN_UP_EMAIL_PATH}`,
       {
         method: "POST",
         credentials: "include",

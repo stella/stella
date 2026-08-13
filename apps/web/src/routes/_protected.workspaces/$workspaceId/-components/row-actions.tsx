@@ -67,9 +67,9 @@ import {
 import { useEntitiesCountLimit } from "@/components/workspaces/hooks/use-limits";
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { PDF_MIME_TYPE } from "@/consts";
-import { env } from "@/env";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { externalApiOrigin } from "@/lib/api-origins";
 import { apiUrl } from "@/lib/api-url";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
 import {
@@ -441,7 +441,7 @@ export const RowActions = ({
       const linkedAccount = await getFreshLinkedAccount();
 
       const desktopInput = {
-        apiBaseUrl: env.VITE_API_URL,
+        apiBaseUrl: externalApiOrigin(),
         entityId: file.entityId,
         linkedAccount,
         propertyId: file.propertyId,
@@ -491,7 +491,7 @@ export const RowActions = ({
     const linkedAccount = await getFreshLinkedAccount();
 
     const openResult = await openFileInDesktop({
-      apiBaseUrl: env.VITE_API_URL,
+      apiBaseUrl: externalApiOrigin(),
       entityId: file.entityId,
       force: true,
       linkedAccount,

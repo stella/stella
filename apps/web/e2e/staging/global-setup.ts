@@ -249,21 +249,19 @@ const globalSetup = async (): Promise<void> => {
   }
   const session = (await response.json()) as SmokeSession;
 
-  // The session cookie is host-only on the API origin (better-auth
-  // runs on the API host; no cross-subdomain cookie config). The
-  // SPA sends it via credentialed cross-origin fetches, which needs
-  // SameSite=None.
+  // Browser sessions are host-only on the web origin. The API hostname stays
+  // public for non-browser clients, but the SPA never sends its cookie there.
   const storageState = {
     cookies: [
       {
         name: session.cookieName,
         value: session.cookieValue,
-        domain: new URL(API_URL).hostname,
+        domain: new URL(WEB_URL).hostname,
         path: "/",
         expires: Math.floor(new Date(session.expiresAt).getTime() / 1000),
         httpOnly: true,
         secure: true,
-        sameSite: "None" as const,
+        sameSite: "Lax" as const,
       },
     ],
     origins: [],
