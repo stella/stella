@@ -11,8 +11,8 @@ import type {
 //
 // `sourceId` and every tier-rule/fallback-entry `id` below are FIXED
 // placeholders (distinct only within their own playbook): `from-starter.ts`
-// clones this constant and replaces every one of them with a fresh
-// a new UUID before the playbook is created, so no instantiated
+// clones this constant and replaces every one of them with a new UUID before
+// the playbook is created, so no instantiated
 // org ever ends up with two playbooks (or two positions) sharing an id.
 
 export const STARTER_PLAYBOOK_IDS = ["nda", "dpa", "msa", "saas"] as const;
@@ -49,26 +49,40 @@ type StarterNegotiationInput = {
   escalation: string;
 };
 
+type StarterAskInput = {
+  question: string;
+  content: { version: 1; type: "int" | "text" };
+};
+
+type StarterNumericAskInput = {
+  question: string;
+  content: { version: 1; type: "int" };
+};
+
 type StarterPositionInput = {
   issue: string;
   severity: PositionSeverity;
-  ask?: {
-    question: string;
-    content: { version: 1; type: "int" | "text" };
-  };
-  evaluation?: { type: "maximum"; value: number };
   guidance?: string;
   tiers: StarterTierInput;
   negotiation: StarterNegotiationInput;
-};
+} & (
+  | { ask?: StarterAskInput; evaluation?: never }
+  | {
+      ask: StarterNumericAskInput;
+      evaluation: { type: "maximum"; value: number };
+    }
+);
 
 type StarterExtractPositionInput = {
   issue: string;
-  ask: {
-    question: string;
-    content: { version: 1; type: "int" | "text" };
-  };
+  ask: StarterAskInput;
   guidance?: string;
+};
+
+const createIdAllocator = (prefix: number, counter: { next: number }) => () => {
+  const id = placeholderId(prefix, counter.next);
+  counter.next += 1;
+  return id;
 };
 
 const buildMaximumCheck = (
@@ -93,11 +107,7 @@ const buildGradedPosition = (
   counter: { next: number },
   input: StarterPositionInput,
 ): PlaybookPositions["items"][number] => {
-  const nextId = (): string => {
-    const id = placeholderId(prefix, counter.next);
-    counter.next += 1;
-    return id;
-  };
+  const nextId = createIdAllocator(prefix, counter);
 
   const sourceId = nextId();
   const check =
@@ -148,8 +158,9 @@ const buildExtractPosition = (
   counter: { next: number },
   input: StarterExtractPositionInput,
 ): PlaybookPositions["items"][number] => {
+  const nextId = createIdAllocator(prefix, counter);
   const position = {
-    sourceId: placeholderId(prefix, counter.next++),
+    sourceId: nextId(),
     issue: input.issue,
     ask: input.ask,
     enabled: true,

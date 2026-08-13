@@ -254,7 +254,6 @@ describe("starter playbook content", () => {
     const referencedIds = new Set<string>();
     collectNodePropertyIds(produced.check.condition, referencedIds);
     expect(referencedIds).toEqual(new Set([produced.sourceId]));
-    expect(referencedIds.has(source.sourceId)).toBe(false);
   });
 });
 

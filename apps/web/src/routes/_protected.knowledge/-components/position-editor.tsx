@@ -1221,19 +1221,31 @@ const NegotiationSection = ({
 
 // ── Graded footer: optional setup changes ─────────────
 
-type GradedSettingsView = "extraction" | "guidance" | "check" | null;
+const POSITION_SETTINGS_VIEW = {
+  check: "check",
+  extraction: "extraction",
+  guidance: "guidance",
+} as const;
+
+type PositionSettingsView =
+  (typeof POSITION_SETTINGS_VIEW)[keyof typeof POSITION_SETTINGS_VIEW];
+type GradedSettingsView = PositionSettingsView | null;
+type ExtractSettingsView = Exclude<
+  PositionSettingsView,
+  typeof POSITION_SETTINGS_VIEW.check
+> | null;
 
 const initialGradedSettingsView = (
   position: GradedPosition,
 ): GradedSettingsView => {
   if (position.check !== undefined) {
-    return "check";
+    return POSITION_SETTINGS_VIEW.check;
   }
   if ((position.guidance?.trim() ?? "") !== "") {
-    return "guidance";
+    return POSITION_SETTINGS_VIEW.guidance;
   }
   if (position.ask.mode === "manual") {
-    return "extraction";
+    return POSITION_SETTINGS_VIEW.extraction;
   }
   return null;
 };
@@ -1259,7 +1271,7 @@ const GradedFooter = ({
         check: { kind: "presence", expectation: "required" },
       });
     }
-    setSettingsView("check");
+    setSettingsView(POSITION_SETTINGS_VIEW.check);
   };
 
   return (
@@ -1271,7 +1283,9 @@ const GradedFooter = ({
           {t("knowledge.playbooks.advanced")}
         </MenuTrigger>
         <MenuPopup align="start" className="w-72">
-          <MenuItem onClick={() => setSettingsView("extraction")}>
+          <MenuItem
+            onClick={() => setSettingsView(POSITION_SETTINGS_VIEW.extraction)}
+          >
             <div className="flex flex-col">
               <span>{t("knowledge.playbooks.customizeAnswer")}</span>
               <span className="text-muted-foreground text-xs">
@@ -1279,7 +1293,9 @@ const GradedFooter = ({
               </span>
             </div>
           </MenuItem>
-          <MenuItem onClick={() => setSettingsView("guidance")}>
+          <MenuItem
+            onClick={() => setSettingsView(POSITION_SETTINGS_VIEW.guidance)}
+          >
             <div className="flex flex-col">
               <span>{t("knowledge.playbooks.guidanceLabel")}</span>
               <span className="text-muted-foreground text-xs text-pretty">
@@ -1319,13 +1335,13 @@ const GradedFooter = ({
           >
             <XIcon />
           </Button>
-          {settingsView === "extraction" && (
+          {settingsView === POSITION_SETTINGS_VIEW.extraction && (
             <ExtractionAdvanced onChange={onChange} position={position} />
           )}
-          {settingsView === "check" && (
+          {settingsView === POSITION_SETTINGS_VIEW.check && (
             <CheckEditor onChange={onChange} position={position} />
           )}
-          {settingsView === "guidance" && (
+          {settingsView === POSITION_SETTINGS_VIEW.guidance && (
             <GuidanceField onChange={onChange} position={position} />
           )}
         </div>
@@ -1629,9 +1645,11 @@ const ExtractBody = ({
   onConvertMode: () => void;
 }) => {
   const t = useTranslations();
-  const [settingsView, setSettingsView] = useState<
-    "extraction" | "guidance" | null
-  >(() => ((position.guidance?.trim() ?? "") !== "" ? "guidance" : null));
+  const [settingsView, setSettingsView] = useState<ExtractSettingsView>(() =>
+    (position.guidance?.trim() ?? "") !== ""
+      ? POSITION_SETTINGS_VIEW.guidance
+      : null,
+  );
 
   return (
     <div className="space-y-3">
@@ -1646,7 +1664,9 @@ const ExtractBody = ({
             {t("knowledge.playbooks.advanced")}
           </MenuTrigger>
           <MenuPopup align="start" className="w-72">
-            <MenuItem onClick={() => setSettingsView("extraction")}>
+            <MenuItem
+              onClick={() => setSettingsView(POSITION_SETTINGS_VIEW.extraction)}
+            >
               <div className="flex flex-col">
                 <span>{t("knowledge.playbooks.customizeAnswer")}</span>
                 <span className="text-muted-foreground text-xs">
@@ -1654,7 +1674,9 @@ const ExtractBody = ({
                 </span>
               </div>
             </MenuItem>
-            <MenuItem onClick={() => setSettingsView("guidance")}>
+            <MenuItem
+              onClick={() => setSettingsView(POSITION_SETTINGS_VIEW.guidance)}
+            >
               <div className="flex flex-col">
                 <span>{t("knowledge.playbooks.guidanceLabel")}</span>
                 <span className="text-muted-foreground text-xs text-pretty">
@@ -1687,7 +1709,7 @@ const ExtractBody = ({
           >
             <XIcon />
           </Button>
-          {settingsView === "extraction" && (
+          {settingsView === POSITION_SETTINGS_VIEW.extraction && (
             <AskContentEditor
               content={position.ask.content}
               onChangeContent={(content) =>
@@ -1700,7 +1722,7 @@ const ExtractBody = ({
               sourceId={position.sourceId}
             />
           )}
-          {settingsView === "guidance" && (
+          {settingsView === POSITION_SETTINGS_VIEW.guidance && (
             <GuidanceField onChange={onChange} position={position} />
           )}
         </div>
