@@ -3,7 +3,7 @@ import { useTranslations } from "use-intl";
 
 import { Skeleton } from "@stll/ui/components/skeleton";
 
-import { env } from "@/env";
+import { externalApiOrigin } from "@/lib/api-origins";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { CliCard } from "@/routes/_protected.settings/-components/account/cli-card";
 import {
@@ -35,8 +35,8 @@ function ConnectionsPage() {
         description={t("settings.connections.description")}
         title={t("settings.connections.title")}
       />
-      <McpServerCard apiOrigin={env.VITE_API_URL} />
-      <CliCard apiOrigin={env.VITE_API_URL} />
+      <McpServerCard apiOrigin={externalApiOrigin()} />
+      <CliCard apiOrigin={externalApiOrigin()} />
       <ConnectedAppsCard />
     </>
   );
@@ -52,8 +52,8 @@ function ConnectionsPagePending() {
         <Skeleton className="h-7 w-32" />
         <Skeleton className="h-4 w-80 max-w-full" />
       </header>
-      <McpServerCard apiOrigin={env.VITE_API_URL} />
-      <CliCard apiOrigin={env.VITE_API_URL} />
+      <McpServerCard apiOrigin={externalApiOrigin()} />
+      <CliCard apiOrigin={externalApiOrigin()} />
       <ConnectedAppsCardSkeleton />
     </>
   );

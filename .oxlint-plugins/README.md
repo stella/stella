@@ -32,7 +32,7 @@ runtime validation, or integration tests.
 - [`no-object-url-leak`](./no-object-url-leak.ts) (`no-object-url-leak`): follows locally owned `URL.createObjectURL` values and requires matching revocation.
 - [`no-path-prefix-containment`](./no-path-prefix-containment.ts) (`no-path-prefix-containment`): rejects filesystem containment checks based on a bare string prefix, which also accepts sibling paths.
 - [`no-public-law-browser-globals`](./no-public-law-browser-globals.ts) (`no-public-law-browser-globals`): keeps public-law shared code free of browser globals so it remains portable across runtimes.
-- [`no-raw-api-url`](./no-raw-api-url.ts) (`no-raw-api-url`): requires the Eden client or `apiUrl()` instead of hand-built API origins and version paths.
+- [`no-raw-api-url`](./no-raw-api-url.ts) (`no-direct-api-env`, `no-raw-api-url`): confines the browser and external API bases to one resolver and rejects hand-written API request paths, preventing same-origin routing from drifting back to direct cross-origin calls.
 - [`no-raw-error-logging`](./no-raw-error-logging.ts) (`no-raw-error-logging`): keeps raw messages, stacks, causes, and stringified errors out of production logs.
 - [`no-raw-resource-uri`](./no-raw-resource-uri.ts) (`no-raw-resource-uri`, `require-rfc3986-resource-encoding`): centralizes resource URI construction and requires RFC 3986 encoding where path segments are composed.
 - [`no-raw-user-avatar-primitive`](./no-raw-user-avatar-primitive.ts) (`no-raw-user-avatar-primitive`): requires the owned avatar primitive so identity fallback and accessibility behavior remain consistent.

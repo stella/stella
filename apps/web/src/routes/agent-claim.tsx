@@ -22,6 +22,7 @@ import { authClient } from "@/lib/auth";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
+import { browserApiRootUrl } from "@/lib/api-url";
 import { pageTitle } from "@/lib/page-title";
 import { loadAuthContext } from "@/routes/-auth-context";
 
@@ -193,7 +194,7 @@ type ConfirmResult =
 // sent via `credentials: "include"`.
 const confirmAgentClaim = async (userCode: string): Promise<ConfirmResult> => {
   const response = await fetchWithTimeout(
-    `${env.VITE_API_URL}/agent/identity/confirm`,
+    browserApiRootUrl("/agent/identity/confirm"),
     {
       method: "POST",
       credentials: "include",

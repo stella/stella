@@ -1,10 +1,12 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
-// Ban hand-written API URL strings in fetch() / new Request() / new URL().
+// Ban hand-written API URL strings in fetch() / new Request() / new URL(),
+// and confine the two deployment API bases to their owning resolver.
 //
-// Bug class: a relative path like `fetch("/api/entities/...")` resolves
-// against the *web* origin, not the API. There is no `/api` dev proxy, so
-// the Vite SPA fallback answers `200` + index.html; the caller then treats
-// HTML as the response body. The failure is silent — `response.ok` is true.
+// The browser API is deliberately routed through the web origin's `/api`
+// prefix. The separately advertised API origin remains public for desktop,
+// CLI, MCP, and integrations. A browser call that reaches directly for
+// `env.VITE_API_URL` silently restores CORS preflights; a hand-written `/api`
+// path bypasses the prefix/rewrite contract and can drift from it.
 //
 // Hardcoding `${env.VITE_API_URL}/v1/...` is the same latent bug a step
 // removed: the API origin and the `/v1` version prefix get re-typed at
@@ -13,7 +15,8 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // Allowed:
 //   - apiUrl(`/entities/...`) from `@/lib/api-url` (owns origin + `/v1`)
 //   - the Eden treaty client (`@/lib/api`) — compile-time route checking
-//   - `${env.VITE_API_URL}/health` and other unversioned, non-`/v1` paths
+//   - browserApiUrl()/browserApiBaseUrl from `@/lib/api-origins`
+//   - externalApiUrl()/externalApiOrigin for explicit non-browser handoffs
 //   - other service bases (e.g. `${DESKTOP_BRIDGE_URL}/v1/...`)
 //
 // Flagged (first argument of fetch / new Request / new URL):
@@ -21,7 +24,14 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 //   - a template literal starting with `/api` or `/v1`
 //   - a template literal starting with `${env.VITE_API_URL}` then `/v1`
 
-import { isIdentifier, isMemberAccess, isStringLiteral } from "./utils.ts";
+import {
+  filenameForContext,
+  getPropertyName,
+  isAstNode,
+  isIdentifier,
+  isMemberAccess,
+  isStringLiteral,
+} from "./utils.ts";
 
 // `/api...` or `/v1...` — a relative path that must not be fetched
 // directly, or a versioned path that belongs behind apiUrl().
@@ -30,11 +40,17 @@ const V1_PATH = /^\/v1(?:\/|$)/u;
 
 type AstNode = Record<string, unknown> & { type: string };
 
-const isAstNode = (value: unknown): value is AstNode =>
-  typeof value === "object" &&
-  value !== null &&
-  "type" in value &&
-  typeof (value as { type: unknown }).type === "string";
+const API_ENV_KEYS = ["VITE_API_URL", "VITE_BROWSER_API_URL"] as const;
+const API_ENV_OWNERS = [
+  "apps/web/src/env.ts",
+  "apps/web/src/lib/api-origins.ts",
+] as const;
+
+const isDirectApiEnvAccess = (node: unknown): boolean =>
+  isAstNode(node) &&
+  node.type === "MemberExpression" &&
+  isIdentifier(node.object, "env") &&
+  API_ENV_KEYS.some((key) => getPropertyName(node.property) === key);
 
 // Raw text of a TemplateLiteral quasi (the static chunk between `${}`
 // holes) at `index`. Returns null when the index or node shape is off.
@@ -84,14 +100,37 @@ const isHandWrittenApiUrl = (arg: unknown): boolean => {
 export default eslintCompatPlugin({
   meta: { name: "no-raw-api-url" },
   rules: {
+    "no-direct-api-env": {
+      meta: {
+        type: "problem",
+        messages: {
+          directApiEnv:
+            "Read API deployment bases through '@/lib/api-origins'. The " +
+            "browser and externally advertised API endpoints have different " +
+            "security and transport contracts.",
+        },
+      },
+      createOnce(context) {
+        return {
+          before() {
+            const filename = filenameForContext(context);
+            return !API_ENV_OWNERS.some((owner) => filename.endsWith(owner));
+          },
+          MemberExpression(node: unknown) {
+            if (isDirectApiEnvAccess(node)) {
+              context.report({ node, messageId: "directApiEnv" });
+            }
+          },
+        };
+      },
+    },
     "no-raw-api-url": {
       meta: {
         type: "problem",
         messages: {
           rawApiUrl:
-            "Build API URLs with apiUrl() from '@/lib/api-url', or call " +
-            "the Eden client ('@/lib/api'). A relative path such as " +
-            "'/api/...' resolves against the web origin, not the API.",
+            "Build API URLs with apiUrl()/browserApiUrl() or call the Eden " +
+            "client. The shared resolver owns the same-origin `/api` prefix.",
         },
       },
       createOnce(context) {

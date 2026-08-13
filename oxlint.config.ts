@@ -61,6 +61,7 @@ const fixtureRuleOverrides = [
     "no-public-law-browser-globals/no-public-law-browser-globals",
   ]),
   fixtureRuleOverride("no-raw-api-url.fixture.ts", [
+    "no-raw-api-url/no-direct-api-env",
     "no-raw-api-url/no-raw-api-url",
   ]),
   fixtureRuleOverride("no-raw-resource-uri.fixture.ts", [
@@ -1544,6 +1545,7 @@ export default defineConfig({
             ],
           },
         ],
+        "no-raw-api-url/no-direct-api-env": "error",
         "no-raw-api-url/no-raw-api-url": "error",
         // Catch raw JSX copy across product UI. Use narrow disables only for
         // non-user-facing literals such as technical fixtures or brand marks.

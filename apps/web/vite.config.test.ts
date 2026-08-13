@@ -1,9 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import type { ConfigEnv, UserConfig } from "vite";
 
-import config from "./vite.config";
+import config, { rewriteBrowserApiPath } from "./vite.config";
 
 describe("vite config", () => {
+  test("matches the deployed browser API prefix contract", () => {
+    expect(rewriteBrowserApiPath("/api/v1/me")).toBe("/v1/me");
+    expect(rewriteBrowserApiPath("/api/health")).toBe("/health");
+    expect(rewriteBrowserApiPath("/api/auth/get-session")).toBe(
+      "/api/auth/get-session",
+    );
+  });
+
   test("includes the expected plugins", async () => {
     const resolvedConfig = resolveConfig("test");
     const plugins = await collectNamedPlugins(resolvedConfig.plugins ?? []);
@@ -30,6 +38,7 @@ describe("vite config", () => {
         "/api": {
           changeOrigin: true,
           target: "http://localhost:3001",
+          rewrite: expect.any(Function),
         },
         "/dev-public": {
           changeOrigin: true,

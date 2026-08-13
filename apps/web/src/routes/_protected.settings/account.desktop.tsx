@@ -11,6 +11,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { env } from "@/env";
+import { externalApiOrigin } from "@/lib/api-origins";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { connectSelfHostedDesktop } from "@/lib/desktop-bridge";
 import {
@@ -50,7 +51,7 @@ function DesktopPage() {
     setSelfHostConnectStatus("connecting");
     try {
       await connectSelfHostedDesktop({
-        apiBaseUrl: env.VITE_API_URL,
+        apiBaseUrl: externalApiOrigin(),
         webOrigin,
       });
       setSelfHostConnectStatus("connected");

@@ -24,6 +24,7 @@ export const envWebClientSchema = {
     "false",
   ),
   VITE_API_URL: v.pipe(v.string(), v.url()),
+  VITE_BROWSER_API_URL: v.optional(v.pipe(v.string(), v.url())),
   VITE_PUBLIC_APP_URL: v.optional(
     v.pipe(v.string(), v.url()),
     "http://localhost:3000",
@@ -108,6 +109,27 @@ export const envWebInvariantViolation = ({
   }
   if (VITE_PUBLIC_TOOLS_INDEXING_ENABLED && !VITE_PUBLIC_TOOLS_ENABLED) {
     return "VITE_PUBLIC_TOOLS_INDEXING_ENABLED requires VITE_PUBLIC_TOOLS_ENABLED.";
+  }
+  return null;
+};
+
+export const browserApiInvariantViolation = ({
+  browserApiUrl,
+  publicAppUrl,
+}: {
+  browserApiUrl: string | undefined;
+  publicAppUrl: string;
+}): string | null => {
+  if (browserApiUrl === undefined) {
+    return null;
+  }
+  const browser = new URL(browserApiUrl);
+  const app = new URL(publicAppUrl);
+  if (browser.origin !== app.origin) {
+    return "VITE_BROWSER_API_URL must share the VITE_PUBLIC_APP_URL origin.";
+  }
+  if (browser.pathname !== "/api" || browser.search || browser.hash) {
+    return "VITE_BROWSER_API_URL must be the exact /api path without query or hash.";
   }
   return null;
 };

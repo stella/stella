@@ -40,6 +40,7 @@ import type { AuditExecutionContext } from "@/api/lib/audit-log";
 import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
 import { authCookiePolicy } from "@/api/lib/auth-cookie-name";
 import {
+  getAuthIssuerUrl,
   OAUTH_UI_CONSENT_PATH,
   OAUTH_UI_LOGIN_PATH,
   OAUTH_UI_ORGANIZATION_PATH,
@@ -884,7 +885,13 @@ const createAuth = () => {
       // verification (mcp/auth.ts) hits the `/jwks` endpoint via its own
       // client, unaffected by this flag. better-auth recommends disabling
       // it when running alongside an oauth provider plugin.
-      jwt({ disableSettingJwtHeader: true }),
+      jwt({
+        disableSettingJwtHeader: true,
+        // Browser auth is mounted on the web origin, but machine clients use
+        // the stable public API issuer. Keep existing MCP/CLI tokens valid
+        // across the browser transport cutover.
+        jwt: { issuer: getAuthIssuerUrl() },
+      }),
       lastLoginMethod(),
       // Machine (CI / agent / CLI) credentials. Lifecycle runs through the
       // org-scoped handlers in `handlers/api-keys/`, which is where the

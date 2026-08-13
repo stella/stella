@@ -31,6 +31,7 @@ import { APIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { fetchWithTimeout } from "@/lib/fetch";
+import { browserAuthBaseUrl } from "@/lib/api-url";
 import { isAcceptInvitationRedirect } from "@/lib/redirect";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { emailSchema, toFormErrors } from "@/lib/schema";
@@ -638,7 +639,7 @@ const signUpWithSelfhostBootstrap = async (
   let response: Response;
   try {
     response = await fetchWithTimeout(
-      `${env.VITE_API_URL}${BETTER_AUTH_SIGN_UP_EMAIL_PATH}`,
+      `${browserAuthBaseUrl()}${BETTER_AUTH_SIGN_UP_EMAIL_PATH}`,
       {
         method: "POST",
         credentials: "include",

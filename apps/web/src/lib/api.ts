@@ -1,11 +1,11 @@
 import { createStellaEdenClient } from "@stll/api-client";
 import type { MemoriesAPI, WebAPI } from "@stll/api/types";
 
-import { env } from "@/env";
 import {
   getApiRequestHeaders,
   waitForSimulatedApiDelay,
 } from "@/lib/api-request-context";
+import { browserApiBaseUrl } from "@/lib/api-url";
 
 const clientOptions = {
   async onRequest() {
@@ -14,9 +14,9 @@ const clientOptions = {
   headers: getApiRequestHeaders,
 };
 
-const eden = createStellaEdenClient<WebAPI>(env.VITE_API_URL, clientOptions);
+const eden = createStellaEdenClient<WebAPI>(browserApiBaseUrl(), clientOptions);
 const memoriesEden = createStellaEdenClient<MemoriesAPI>(
-  env.VITE_API_URL,
+  browserApiBaseUrl(),
   clientOptions,
 );
 

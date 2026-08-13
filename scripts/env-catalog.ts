@@ -202,6 +202,7 @@ const EXAMPLE_VALUES: Record<string, string> = {
   TRANSACTIONAL_EMAIL_FROM: "noreply@example.com",
   USE_MOCK_AI: "true",
   VITE_API_URL: "http://localhost:3001",
+  VITE_BROWSER_API_URL: "http://localhost:3000/api",
   VITE_COLLAB_URL: "ws://localhost:3002",
   VITE_FEEDBACK_EMAIL_TO: "ops@example.com",
   VITE_POSTHOG_KEY: "phc_",
@@ -349,6 +350,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   USE_MOCK_AI:
     "Return canned AI responses in local development and tests. Deployed runtimes reject this setting.",
   VITE_API_URL: "API base URL used by the SPA for Eden treaty requests.",
+  VITE_BROWSER_API_URL:
+    "Same-origin browser API mount. Must be the exact /api path on VITE_PUBLIC_APP_URL; unset uses VITE_API_URL.",
   VITE_AUTH_GOOGLE:
     "Show Google login only when the API has matching OAuth credentials.",
   VITE_AUTH_MICROSOFT:
@@ -614,6 +617,7 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
   "GOTENBERG_API_BASIC_AUTH_USERNAME",
   "PUBLIC_API_URL",
   "PUBLIC_APP_URL",
+  "PUBLIC_BROWSER_API_URL",
   "PUBLIC_FEEDBACK_EMAIL_TO",
   "PUBLIC_GOOGLE_LOGIN_ENABLED",
   "PUBLIC_LAW_ENABLED",

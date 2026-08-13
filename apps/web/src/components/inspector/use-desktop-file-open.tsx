@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { env } from "@/env";
+import { externalApiOrigin } from "@/lib/api-origins";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
 import {
@@ -40,7 +41,7 @@ export const useDesktopFileOpen = (target: DesktopOpenTarget | null) => {
     try {
       const linkedAccount = await getFreshLinkedAccount();
       const openResult = await openFileInDesktop({
-        apiBaseUrl: env.VITE_API_URL,
+        apiBaseUrl: externalApiOrigin(),
         entityId: target.entityId,
         linkedAccount,
         propertyId: target.propertyId,
