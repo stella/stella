@@ -4,7 +4,9 @@ import type { Analytics, ErrorCaptureContext } from "@/lib/analytics/types";
 import { logDevError } from "@/lib/errors/utils";
 
 const noop = () => undefined;
-const noopAsync = async () => undefined;
+const noopAsync = async () => {
+  await Promise.resolve();
+};
 
 const devErrorContext = (
   context: ErrorCaptureContext | undefined,

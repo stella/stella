@@ -77,14 +77,13 @@ export const createRouteErrorLifecycleController = (
   };
   const run = async (
     action: (controller: RouteErrorLifecycleController) => void | Promise<void>,
-  ): Promise<void> =>
-    load()
-      .then(async (controller) => {
-        if (controller) {
-          await action(controller);
-        }
-      })
-      .catch(captureDispatchError);
+  ): Promise<void> => {
+    const controller = await load();
+    if (!controller) {
+      return;
+    }
+    await Promise.resolve(action(controller)).catch(captureDispatchError);
+  };
   const runIfLoaded = (
     action: (controller: RouteErrorLifecycleController) => void,
   ) => {
