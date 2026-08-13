@@ -180,7 +180,7 @@ const workspaceExports = (
 };
 
 const resolveWorkspaceImport = (specifier: string): readonly string[] => {
-  const match = specifier.match(/^(?<name>@stll\/[^/]+)(?<subpath>\/.*)?$/u);
+  const match = /^(?<name>@stll\/[^/]+)(?<subpath>\/.*)?$/u.exec(specifier);
   const name = match?.groups?.["name"];
   const subpath = match?.groups?.["subpath"] ?? "/";
   const packageInfo =
@@ -607,7 +607,7 @@ describe("public SSR import graph", () => {
       ),
     );
     for (const specifier of workspaceImports) {
-      const packageName = specifier.match(/^(@stll\/[^/]+)/u)?.[1];
+      const packageName = /^(@stll\/[^/]+)/u.exec(specifier)?.[1];
       if (!workspaceManifests.has(packageName ?? "")) {
         continue;
       }
