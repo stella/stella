@@ -4,11 +4,40 @@ import {
   matterActivityIsKnownEmpty,
   resolveEntityActivityDestination,
   resolveAutomaticExpandedMatterId,
+  resolveMatterNavigationTarget,
   resolveSidebarWorkspaceId,
   selectRecentWorkspaces,
 } from "@/components/app-sidebar.logic";
 
 describe("sidebar matter context", () => {
+  test("opens a matter at its default view without an intermediate redirect", () => {
+    expect(
+      resolveMatterNavigationTarget({
+        defaultViewId: "view-1",
+        id: "matter-1",
+      }),
+    ).toEqual({
+      params: { viewId: "view-1", workspaceId: "matter-1" },
+      to: "/workspaces/$workspaceId/$viewId",
+    });
+  });
+
+  test("keeps the bare matter route as the no-view fallback", () => {
+    expect(
+      resolveMatterNavigationTarget({
+        defaultViewId: null,
+        id: "matter-1",
+      }),
+    ).toEqual({
+      params: { workspaceId: "matter-1" },
+      to: "/workspaces/$workspaceId",
+    });
+    expect(resolveMatterNavigationTarget({ id: "matter-1" })).toEqual({
+      params: { workspaceId: "matter-1" },
+      to: "/workspaces/$workspaceId",
+    });
+  });
+
   test("uses the matter from a workspace chat route", () => {
     expect(
       resolveSidebarWorkspaceId({

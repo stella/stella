@@ -38,6 +38,7 @@ import { workflowOptions } from "@/lib/workspaces/queries/workspace";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
 import { ReportExportTracker } from "@/routes/_protected.workspaces/$workspaceId/-components/view/report-export-tracker";
 import { WorkspaceDropZone } from "@/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone";
+import { loadWorkspaceRouteQueries } from "@/routes/_protected.workspaces/$workspaceId/-route-loader.logic";
 
 const EXTRACTION_PREVIEW_CLIENT_TTL_MS = 5 * 60 * 1000;
 const ACTIVITY_INVALIDATION_DEBOUNCE_MS = 1000;
@@ -64,36 +65,41 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
     const wsId = params.workspaceId;
     const qc = context.queryClient;
 
-    // Only block on workspace name (breadcrumb). Everything else
-    // is prefetched — components use useSuspenseQuery which resolves
-    // from cache or shows granular loading states.
-    const workspace = await loadWorkspaceOrRedirect(qc, wsId);
-
     const onPrefetchError = (error: unknown) => {
       getAnalytics().captureError(error);
     };
-    detached(
-      prefetchRouteQuery(
-        qc,
-        workflowOptions({ key: { workspaceId: wsId } }),
-        onPrefetchError,
-      ),
-      "workspaces.prefetch",
-    );
-    detached(
-      prefetchRouteQuery(qc, viewsOptions(wsId), onPrefetchError),
-      "workspaces.prefetch",
-    );
-    detached(
-      prefetchRouteQuery(qc, overviewOptions(wsId), onPrefetchError),
-      "workspaces.prefetch",
-    );
-    detached(
-      prefetchRouteQuery(qc, propertiesOptions(wsId), onPrefetchError),
-      "workspaces.prefetch",
-    );
 
-    return workspace;
+    // Only the workspace name blocks the breadcrumb. Start every independent
+    // metadata request before awaiting it so they share the first network round.
+    return await loadWorkspaceRouteQueries({
+      loadWorkspace: async () => await loadWorkspaceOrRedirect(qc, wsId),
+      startPrefetches: [
+        () =>
+          detached(
+            prefetchRouteQuery(
+              qc,
+              workflowOptions({ key: { workspaceId: wsId } }),
+              onPrefetchError,
+            ),
+            "workspaces.prefetch",
+          ),
+        () =>
+          detached(
+            prefetchRouteQuery(qc, viewsOptions(wsId), onPrefetchError),
+            "workspaces.prefetch",
+          ),
+        () =>
+          detached(
+            prefetchRouteQuery(qc, overviewOptions(wsId), onPrefetchError),
+            "workspaces.prefetch",
+          ),
+        () =>
+          detached(
+            prefetchRouteQuery(qc, propertiesOptions(wsId), onPrefetchError),
+            "workspaces.prefetch",
+          ),
+      ],
+    });
   },
   head: ({ loaderData }) => ({
     meta: [

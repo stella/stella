@@ -59,6 +59,7 @@ import {
   matterActivityIsKnownEmpty,
   resolveEntityActivityDestination,
   resolveAutomaticExpandedMatterId,
+  resolveMatterNavigationTarget,
   resolveSidebarWorkspaceId,
   selectRecentWorkspaces,
 } from "@/components/app-sidebar.logic";
@@ -375,10 +376,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     ),
     onClick: () => {
       detached(
-        navigate({
-          to: "/workspaces/$workspaceId",
-          params: { workspaceId: ws.id },
-        }),
+        navigate(resolveMatterNavigationTarget(ws)),
         "app-sidebar.navigate",
       );
     },
@@ -493,10 +491,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     ...pinned.slice(0, 3).map((ws): NavTarget => ({
       action: () => {
         detached(
-          navigate({
-            to: "/workspaces/$workspaceId",
-            params: { workspaceId: ws.id },
-          }),
+          navigate(resolveMatterNavigationTarget(ws)),
           "app-sidebar.navigate",
         );
       },
@@ -770,6 +765,7 @@ type MatterExpansion =
  * accept this type so `MatterIcon` always has a color.
  */
 type MatterIdentity = {
+  defaultViewId?: string | null;
   id: string;
   name: string;
   color: string | null;
@@ -1136,6 +1132,7 @@ const MatterItem = ({
   }, [ws.id, canDrag, handleReorder, handleEntityDrop]);
 
   const relTime = formatRelativeTime(ws.lastActivityAt);
+  const navigationTarget = resolveMatterNavigationTarget(ws);
 
   const startRename = () => {
     setMenuOpen(false);
@@ -1254,11 +1251,7 @@ const MatterItem = ({
             .filter(Boolean)
             .join(" — ")}
         >
-          <Link
-            activeProps={{ "data-active": true }}
-            params={{ workspaceId: ws.id }}
-            to="/workspaces/$workspaceId"
-          >
+          <Link activeProps={{ "data-active": true }} {...navigationTarget}>
             <MatterIcon
               className="size-4 shrink-0"
               matter={{ id: ws.id, color: ws.color }}

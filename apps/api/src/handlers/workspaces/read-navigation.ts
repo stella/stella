@@ -1,8 +1,8 @@
 import { Result } from "better-result";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 
-import { contacts, workspaces } from "@/api/db/schema";
+import { contacts, workspaces, workspaceViews } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
@@ -84,6 +84,13 @@ const readWorkspaceNavigation = createSafeRootHandler(
       safeDb((tx) =>
         tx
           .select({
+            defaultViewId: sql<typeof workspaceViews.$inferSelect.id | null>`(
+              select ${workspaceViews.id}
+              from ${workspaceViews}
+              where ${workspaceViews.workspaceId} = ${workspaces.id}
+              order by ${workspaceViews.position}, ${workspaceViews.id}
+              limit 1
+            )`.as("default_view_id"),
             id: workspaces.id,
             name: workspaces.name,
             reference: workspaces.reference,
