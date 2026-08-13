@@ -174,8 +174,6 @@ const COLLECTION_CALLBACK_METHODS = new Set([
   "flatMap",
   "forEach",
   "map",
-  "reduce",
-  "reduceRight",
 ]);
 
 const unwrapDiscardedExpression = (
@@ -409,6 +407,88 @@ const propertyName = (property: ts.ObjectLiteralElementLike): string | null => {
   return ts.isNumericLiteral(name) ? name.text : null;
 };
 
+type StaticObjectProvider =
+  | { readonly kind: "absent" }
+  | { readonly kind: "found"; readonly node: ts.Node }
+  | { readonly kind: "opaque" };
+
+const staticObjectProvider = (
+  object: ts.ObjectLiteralExpression,
+  selectedName: string,
+): StaticObjectProvider => {
+  for (const property of object.properties.toReversed()) {
+    if (ts.isSpreadAssignment(property)) {
+      const spread = unwrapDiscardedExpression(property.expression);
+      if (!ts.isObjectLiteralExpression(spread)) {
+        return { kind: "opaque" };
+      }
+      const nested = staticObjectProvider(spread, selectedName);
+      if (nested.kind !== "absent") {
+        return nested;
+      }
+      continue;
+    }
+    if (propertyName(property) !== selectedName) {
+      continue;
+    }
+    if (ts.isPropertyAssignment(property)) {
+      return { kind: "found", node: property.initializer };
+    }
+    if (ts.isShorthandPropertyAssignment(property)) {
+      return { kind: "found", node: property.name };
+    }
+    return { kind: "found", node: property };
+  }
+  return { kind: "absent" };
+};
+
+const inspectDiscardedObjectEntries = ({
+  checker,
+  object,
+  report,
+  retainedNode,
+}: InspectDiscardedExpressionOptions & {
+  readonly object: ts.ObjectLiteralExpression;
+  readonly retainedNode?: ts.Node;
+}): void => {
+  for (const property of object.properties) {
+    if (ts.isPropertyAssignment(property)) {
+      if (property.initializer !== retainedNode) {
+        inspectDiscardedExpression({
+          checker,
+          expression: property.initializer,
+          report,
+        });
+      }
+    } else if (ts.isShorthandPropertyAssignment(property)) {
+      if (property.name !== retainedNode) {
+        inspectDiscardedExpression({
+          checker,
+          expression: property.name,
+          report,
+        });
+      }
+    } else if (ts.isSpreadAssignment(property)) {
+      const spread = unwrapDiscardedExpression(property.expression);
+      if (ts.isObjectLiteralExpression(spread)) {
+        inspectDiscardedObjectEntries({
+          checker,
+          expression: spread,
+          object: spread,
+          report,
+          retainedNode,
+        });
+      } else {
+        inspectDiscardedExpression({
+          checker,
+          expression: property.expression,
+          report,
+        });
+      }
+    }
+  }
+};
+
 const inspectDiscardedContainerSelection = ({
   checker,
   expression,
@@ -435,30 +515,20 @@ const inspectDiscardedContainerSelection = ({
     }
     const selectedName =
       selection.kind === "unknown" ? null : String(selection.value);
-    for (const property of host.properties) {
-      if (!includeSelected && propertyName(property) === selectedName) {
-        continue;
-      }
-      if (ts.isPropertyAssignment(property)) {
-        inspectDiscardedExpression({
-          checker,
-          expression: property.initializer,
-          report,
-        });
-      } else if (ts.isShorthandPropertyAssignment(property)) {
-        inspectDiscardedExpression({
-          checker,
-          expression: property.name,
-          report,
-        });
-      } else if (ts.isSpreadAssignment(property)) {
-        inspectDiscardedExpression({
-          checker,
-          expression: property.expression,
-          report,
-        });
-      }
+    const provider =
+      includeSelected || selectedName === null
+        ? { kind: "absent" as const }
+        : staticObjectProvider(host, selectedName);
+    if (provider.kind === "opaque") {
+      return true;
     }
+    inspectDiscardedObjectEntries({
+      checker,
+      expression: host,
+      object: host,
+      report,
+      retainedNode: provider.kind === "found" ? provider.node : undefined,
+    });
     return true;
   }
   if (!ts.isArrayLiteralExpression(host)) {
@@ -561,9 +631,7 @@ const isCollectionCallbackInvocation = (
   if (!ts.isArrowFunction(callback) && !ts.isFunctionExpression(callback)) {
     return false;
   }
-  const elementParameterIndex =
-    selection.value === "reduce" || selection.value === "reduceRight" ? 1 : 0;
-  const parameter = callback.parameters.at(elementParameterIndex)?.name;
+  const parameter = callback.parameters.at(0)?.name;
   if (parameter === undefined || !ts.isIdentifier(parameter)) {
     return false;
   }

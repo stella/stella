@@ -436,6 +436,50 @@ describe("Result consumption guard", () => {
     ]);
   });
 
+  test("does not treat reducers as proof that every Result is consumed", () => {
+    const source = `
+      import { Result, type Result as BetterResult } from "better-result";
+
+      const parse = (): BetterResult<number, string> => Result.ok(1);
+      const held = [
+        parse(), // initial accumulator Result
+        parse(), // element Result
+      ].reduce((accumulator, result) => {
+        result.match({ ok: () => undefined, err: () => undefined });
+        return result;
+      });
+      void held;
+    `;
+
+    const diagnostics = scanFixture(source);
+
+    expect(diagnosticLocations(diagnostics)).toEqual(
+      sourceLocations(source, [
+        "parse(), // initial accumulator Result",
+        "parse(), // element Result",
+      ]),
+    );
+  });
+
+  test("preserves Results selected through static object spreads", () => {
+    const source = `
+      import { Result, type Result as BetterResult } from "better-result";
+
+      const parse = (): BetterResult<number, string> => Result.ok(1);
+      const parseDiscarded = (): BetterResult<number, string> => Result.ok(2);
+      const held = ({
+        ...{ result: parse(), discarded: parseDiscarded() },
+      }).result;
+      held.match({ ok: () => undefined, err: () => undefined });
+    `;
+
+    const diagnostics = scanFixture(source);
+
+    expect(diagnosticLocations(diagnostics)).toEqual(
+      sourceLocations(source, ["parseDiscarded()"]),
+    );
+  });
+
   test("requires invariant messages only on better-result unwrap calls", () => {
     const diagnostics = scanFixture(`
       import { Result, type Result as BetterResult } from "better-result";

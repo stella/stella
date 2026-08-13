@@ -103,6 +103,11 @@ export const cacheMetadata = () =>
 declare const cache: {
   update: (key: unknown) => { set: (value: unknown) => unknown };
 };
+declare const services: {
+  cache: {
+    update: (key: unknown) => { set: (value: unknown) => unknown };
+  };
+};
 
 // Allowed: fluent method names alone do not establish a Drizzle update sink.
 export const updateCacheMetadata = () => cache.update("metadata").set(metadata);
@@ -111,6 +116,10 @@ export const updateCacheMetadata = () => cache.update("metadata").set(metadata);
 // a Drizzle update receiver.
 export const updateCacheFromSchemaConstant = () =>
   cache.update(ENTITY_KINDS).set(metadata);
+
+// Allowed: nested receiver annotations retain their non-Drizzle provenance.
+export const updateNestedCacheFromSchemaConstant = () =>
+  services.cache.update(ENTITY_KINDS).set(metadata);
 
 type MatterUpdate = Partial<{ title: string; status: string }>;
 const typedUpdate: MatterUpdate = { title: "Matter" };

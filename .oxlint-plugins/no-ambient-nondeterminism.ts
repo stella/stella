@@ -402,6 +402,14 @@ const staticComputedMemberName = (
     return expression.value;
   }
   if (
+    expression.type === "Literal" &&
+    typeof expression.value === "number" &&
+    Number.isSafeInteger(expression.value) &&
+    expression.value >= 0
+  ) {
+    return String(expression.value);
+  }
+  if (
     expression.type === "TemplateLiteral" &&
     Array.isArray(expression.expressions) &&
     expression.expressions.length === 0 &&

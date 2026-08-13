@@ -479,15 +479,44 @@ export default eslintCompatPlugin({
         };
 
         const hasExplicitNonDrizzleReceiverType = (node: unknown): boolean => {
-          const expression = unwrapExpression(node);
-          if (!isIdentifierReference(expression)) {
-            return false;
-          }
-          const variable = resolveVariable(expression);
-          if (variable === null) {
-            return false;
-          }
-          const annotation = variableType(variable);
+          const expressionType = (
+            candidate: unknown,
+            seen = new Set<Variable>(),
+          ): unknown => {
+            const expression = unwrapExpression(candidate);
+            if (!isAstNode(expression)) {
+              return null;
+            }
+            if (isIdentifierReference(expression)) {
+              const variable = resolveVariable(expression);
+              if (variable === null || seen.has(variable)) {
+                return null;
+              }
+              const annotation = variableType(variable);
+              if (annotation !== null) {
+                return annotation;
+              }
+              const declaration = variableDeclaration(expression);
+              if (declaration === null || !isStableAlias(declaration)) {
+                return null;
+              }
+              const nextSeen = new Set(seen);
+              nextSeen.add(variable);
+              return expressionType(declaration.init, nextSeen);
+            }
+            if (expression.type !== "MemberExpression") {
+              return null;
+            }
+            const selectedProperty = getPropertyName(expression.property);
+            return selectedProperty === null
+              ? null
+              : propertyType(
+                  expressionType(expression.object, seen),
+                  selectedProperty,
+                );
+          };
+
+          const annotation = expressionType(node);
           return isAstNode(annotation) && !isDrizzleTransactionType(annotation);
         };
 

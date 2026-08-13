@@ -828,6 +828,11 @@ export const localObjectEpoch = spreadLocalClock.now();
 // Mere storage does not execute ambient nondeterminism.
 export const storedAmbientFunction = Date.now;
 
+const tupleClocks = [Date.now] as const;
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: numeric tuple selection retains ambient function provenance
+export const tupleClockEpoch = tupleClocks[0]();
+
 const callbackValues = [1, 2] as const;
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: Array callbacks execute ambient functions
