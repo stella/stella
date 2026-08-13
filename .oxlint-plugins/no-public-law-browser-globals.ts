@@ -37,9 +37,12 @@ const AMBIENT_INTL_CONSTRUCTORS = new Set([
 ]);
 
 const AMBIENT_LOCALE_METHODS = new Set([
+  "localeCompare",
   "toLocaleDateString",
+  "toLocaleLowerCase",
   "toLocaleString",
   "toLocaleTimeString",
+  "toLocaleUpperCase",
 ]);
 
 const TIME_ZONE_SENSITIVE_LOCALE_METHODS = new Set([
@@ -180,6 +183,9 @@ const isAmbientIntlLocale = (argument) => {
       expression.elements.length === 0)
   );
 };
+
+const localeArgumentIndex = (methodName) =>
+  methodName === "localeCompare" ? 1 : 0;
 
 const hasExplicitDateTimeZone = (value) =>
   /(?:Z|[+-]\d{2}(?::?\d{2})?)$/iu.test(value);
@@ -616,7 +622,9 @@ export default eslintCompatPlugin({
             if (
               calledMemberName &&
               AMBIENT_LOCALE_METHODS.has(calledMemberName) &&
-              (isAmbientIntlLocale(node.arguments.at(0)) ||
+              (isAmbientIntlLocale(
+                node.arguments.at(localeArgumentIndex(calledMemberName)),
+              ) ||
                 ((TIME_ZONE_SENSITIVE_LOCALE_METHODS.has(calledMemberName) ||
                   (calledMemberName === "toLocaleString" &&
                     isDateObjectReceiver(context, node.callee.object))) &&

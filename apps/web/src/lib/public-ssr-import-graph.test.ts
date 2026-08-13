@@ -232,6 +232,7 @@ const INTL_CONSTRUCTOR_NAMES =
 const LOCAL_TIME_DATE_METHOD_NAMES =
   "getDate|getDay|getFullYear|getHours|getMinutes|getMonth|getSeconds|getTimezoneOffset|getYear|setDate|setFullYear|setHours|setMinutes|setMonth|setSeconds|setYear|toDateString|toTimeString";
 const AMBIENT_DATE_STRING_SENTINEL = "§";
+const AMBIENT_STRING_LOCALE_CALL_SENTINEL = "¤";
 
 const ambientStatePatterns = [
   new RegExp(`\\bglobalThis\\.(?:${BROWSER_GLOBAL_NAMES})\\b`, "u"),
@@ -246,6 +247,7 @@ const ambientStatePatterns = [
     `\\b(?:globalThis\\.)?Date\\.parse\\s*\\(\\s*${AMBIENT_DATE_STRING_SENTINEL}`,
     "u",
   ),
+  new RegExp(AMBIENT_STRING_LOCALE_CALL_SENTINEL, "u"),
   /\b(?:globalThis\.)?Math\.random\b/u,
   /\b(?:globalThis\.)?performance\.now\b/u,
   /\b(?:globalThis\.)?crypto\.(?:getRandomValues|randomUUID)\b/u,
@@ -579,6 +581,10 @@ const maskNonExecutableLiterals = (source: string, file: string): string => {
     maskRange(start, end);
     masked[start] = AMBIENT_DATE_STRING_SENTINEL;
   };
+  const maskAmbientStringLocaleCall = (start: number, end: number): void => {
+    maskRange(start, end);
+    masked[start] = AMBIENT_STRING_LOCALE_CALL_SENTINEL;
+  };
   const isDateConstructor = (node: ts.Node | undefined): boolean => {
     if (!node || !ts.isNewExpression(node)) {
       return false;
@@ -625,11 +631,37 @@ const maskNonExecutableLiterals = (source: string, file: string): string => {
       node.expression.name.text === "UTC"
     );
   };
+  const isAmbientLocaleArgument = (
+    argument: ts.Expression | undefined,
+  ): boolean =>
+    argument === undefined ||
+    (ts.isIdentifier(argument) && argument.text === "undefined") ||
+    (ts.isArrayLiteralExpression(argument) && argument.elements.length === 0);
+  const isAmbientStringLocaleCall = (node: ts.Node): boolean => {
+    if (
+      !ts.isCallExpression(node) ||
+      !ts.isPropertyAccessExpression(node.expression)
+    ) {
+      return false;
+    }
+    const methodName = node.expression.name.text;
+    const localeIndex = methodName === "localeCompare" ? 1 : 0;
+    return (
+      (methodName === "localeCompare" ||
+        methodName === "toLocaleLowerCase" ||
+        methodName === "toLocaleUpperCase") &&
+      isAmbientLocaleArgument(node.arguments.at(localeIndex))
+    );
+  };
   const hasExplicitDateTimeZone = (value: string): boolean =>
     /(?:Z|[+-]\d{2}(?::?\d{2})?)$/iu.test(value);
   const isDeterministicDateString = (value: string): boolean =>
     /^\d{4}-\d{2}-\d{2}$/u.test(value) || hasExplicitDateTimeZone(value);
   const visit = (node: ts.Node): void => {
+    if (isAmbientStringLocaleCall(node)) {
+      maskAmbientStringLocaleCall(node.getStart(sourceFile), node.end);
+      return;
+    }
     if (
       ts.isNewExpression(node) &&
       isDateConstructor(node) &&
@@ -869,6 +901,35 @@ describe("public SSR import graph", () => {
         executableSource("const width = innerWidth;", "fixture.ts"),
       ),
     ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          'const lower = "I".toLocaleLowerCase();',
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource('const order = "I".localeCompare("ı");', "fixture.ts"),
+      ),
+    ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          'const lower = "I".toLocaleLowerCase("tr");',
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          'const order = "I".localeCompare("ı", "tr");',
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(false);
     expect(
       AMBIENT_STATE_PATTERN.test(
         executableSource("const today = new Date();", "fixture.ts"),

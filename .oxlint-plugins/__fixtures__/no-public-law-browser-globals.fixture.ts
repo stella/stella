@@ -114,6 +114,15 @@ const fixedLocaleTime = fixedDate.toLocaleTimeString(["en"], {
 const fixedLocaleNumber = (42).toLocaleString("en");
 const numericAmount = 42;
 const fixedLocaleNumericVariable = numericAmount.toLocaleString("en");
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves locale-sensitive casing needs an explicit locale
+const ambientLocaleLowerCase = "I".toLocaleLowerCase();
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves an empty locale list remains ambient for casing
+const ambientLocaleUpperCase = "i".toLocaleUpperCase([]);
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves locale-sensitive comparison needs an explicit locale
+const ambientLocaleComparison = "I".localeCompare("ı");
+const fixedLocaleLowerCase = "I".toLocaleLowerCase("tr");
+const fixedLocaleUpperCase = "i".toLocaleUpperCase(["tr"]);
+const fixedLocaleComparison = "I".localeCompare("ı", "tr");
 const fixedSegmenter = new Intl.Segmenter("en", { granularity: "grapheme" });
 const fixedDateFormatter = Intl.DateTimeFormat("en", {
   dateStyle: "long",
@@ -192,8 +201,11 @@ export {
   AmbientDateTimeFormat,
   AmbientNumberFormat,
   ambientLocaleDate,
+  ambientLocaleComparison,
+  ambientLocaleLowerCase,
   ambientLocaleNumber,
   ambientLocaleTime,
+  ambientLocaleUpperCase,
   ambientLocalDateTime,
   ambientLocalDateString,
   ambientLocalYear,
@@ -237,9 +249,12 @@ export {
   fixedEpochDate,
   fixedDateCopy,
   fixedLocaleDate,
+  fixedLocaleComparison,
+  fixedLocaleLowerCase,
   fixedLocaleNumber,
   fixedLocaleNumericVariable,
   fixedLocaleTime,
+  fixedLocaleUpperCase,
   fixedParsedDate,
   fixedParsedInstant,
   fixedUtcComponents,
