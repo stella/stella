@@ -11,7 +11,7 @@ const DIRECT_API_ORIGIN = new URL(
 
 // The public shell is rendered on Linux and hydrated on the user's platform.
 // Emulating macOS catches ambient platform reads that Linux-only CI misses.
-test.use({ userAgent: MACOS_USER_AGENT });
+test.use({ locale: "pt-PT", userAgent: MACOS_USER_AGENT });
 
 // The smoke user mirrors the production default state: org owner,
 // no usage entitlement row, no AI provider config. Regressions that
@@ -99,6 +99,11 @@ test("authenticated chat navigation stays same-origin and has no API preflights"
 test("server-rendered public law decisions stay stable after hydration", async ({
   page,
 }) => {
+  const fixedBrowserDate = new Date();
+  fixedBrowserDate.setUTCHours(12, 0, 0, 0);
+  const expectedToday = fixedBrowserDate.toISOString().slice(0, 10);
+  await page.clock.setFixedTime(fixedBrowserDate);
+
   // A persisted non-English locale is the harder hydration case: the
   // client holds translated messages before hydrating against the
   // server's English markup. The bug class this guards against only
@@ -107,6 +112,8 @@ test("server-rendered public law decisions stay stable after hydration", async (
   // referencing browser globals would not typecheck in this context.
   await page.addInitScript({
     content: `window.localStorage.setItem("sidebar_state", "collapsed");
+      window.localStorage.setItem("stella-ui-theme", "light");
+      window.localStorage.setItem("stella-ui-palette", "flexoki");
       window.localStorage.setItem(
         "stella-i18n",
         JSON.stringify({ state: { lang: "cs" }, version: 0 }),
@@ -124,9 +131,11 @@ test("server-rendered public law decisions stay stable after hydration", async (
   });
   page.on("console", (message) => {
     const text = message.text();
+    const normalizedText = text.toLowerCase();
     if (
       message.type() === "error" &&
-      (text.includes("hydrated") || text.includes("hydration"))
+      (normalizedText.includes("hydrated") ||
+        normalizedText.includes("hydration"))
     ) {
       hydrationConsoleErrors.push(text);
     }
@@ -146,6 +155,14 @@ test("server-rendered public law decisions stay stable after hydration", async (
     .first();
 
   await expect(firstDecision).toBeVisible();
+  const datePickerTrigger = page
+    .getByRole("button", { name: /select date|vybrat datum/iu })
+    .first();
+  await datePickerTrigger.click();
+  await expect(
+    page.locator('[role="gridcell"][aria-current="date"]'),
+  ).toHaveAttribute("data-date", expectedToday);
+  await page.keyboard.press("Escape");
   await firstDecision.click();
   await expect(page).toHaveURL(/\/law\/[a-z]{2,3}\/cases\//u);
 
@@ -167,6 +184,8 @@ test("server-rendered public law decisions stay stable after hydration", async (
     "data-state",
     "collapsed",
   );
+  await expect(page.locator("html")).toHaveClass(/\bpalette-flexoki\b/u);
+  await expect(page.locator("html")).not.toHaveClass(/\bdark\b/u);
 
   // Authentication resolution and the lazy inspector graph settle after the
   // decision body appears. Keep observing long enough to catch a delayed
