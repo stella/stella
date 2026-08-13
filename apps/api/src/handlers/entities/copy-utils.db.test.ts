@@ -18,6 +18,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type {
@@ -137,7 +138,7 @@ const subtree = ({
           content: {
             type: "file",
             version: 1,
-            id: Bun.randomUUIDv7(),
+            id: allocateFileObject(),
             fileName: "Statement of claim.docx",
             mimeType:
               "application/vnd.openxmlformats-officedocument.wordprocessingml.document",

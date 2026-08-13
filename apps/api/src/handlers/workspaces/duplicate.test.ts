@@ -76,7 +76,9 @@ void mock.module("@/api/lib/search/process-extraction", () => ({
   requestNativeExtractionRuns: requestNativeExtractionRunsMock,
 }));
 
-const enqueueDocumentProcessingRunMock = mock(async () => undefined);
+const enqueueDocumentProcessingRunMock = mock(
+  async (_runId: SafeId<"documentProcessingRun">) => undefined,
+);
 void mock.module("@/api/lib/document-processing-enqueue", () => ({
   enqueueDocumentProcessingRun: enqueueDocumentProcessingRunMock,
 }));
