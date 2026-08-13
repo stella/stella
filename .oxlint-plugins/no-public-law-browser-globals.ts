@@ -150,7 +150,10 @@ const isGlobalThisAmbientObject = (context, node, memberName) =>
 
 const ambientFunctionObjectName = (context, node) => {
   const expression = unwrapExpression(node);
-  if (expression?.type === "Identifier") {
+  if (
+    expression?.type === "Identifier" &&
+    typeof expression.name === "string"
+  ) {
     return AMBIENT_FUNCTION_MEMBERS.has(expression.name) &&
       isUnshadowedGlobal(context, expression)
       ? expression.name
