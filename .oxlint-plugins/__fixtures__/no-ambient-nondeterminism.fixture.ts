@@ -299,7 +299,7 @@ export const directlyAliasedConditionalAmbientClock = (monotonic: boolean) => {
 
 export const logicalAmbientClock = (providedClock?: () => number) =>
   // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: logical callees retain ambient outcomes
-  (providedClock || Date.now)();
+  (providedClock ?? Date.now)();
 
 class LocalDate {
   readonly kind = "local";
@@ -319,7 +319,7 @@ export const aliasedConditionalAmbientConstructor = (useAmbient: boolean) => {
 
 export const logicalAmbientConstructor = (Constructor?: typeof LocalDate) =>
   // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: logical zero-argument constructors retain an ambient Date outcome
-  new (Constructor || Date)();
+  new (Constructor ?? Date)();
 
 const observeConstructorChoice = () => undefined;
 export const sequenceAmbientConstructor = () =>
