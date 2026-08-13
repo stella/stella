@@ -1,10 +1,14 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 const BROWSER_GLOBALS = new Set([
+  "devicePixelRatio",
   "document",
+  "history",
   "localStorage",
+  "location",
   "matchMedia",
   "navigator",
+  "screen",
   "sessionStorage",
   "window",
 ]);
@@ -83,6 +87,13 @@ const browserGlobalFromGlobalThis = (node) => {
   return BROWSER_GLOBALS.has(memberName) ? memberName : null;
 };
 
+const isUnshadowedGlobalThisMember = (context, node, memberName) =>
+  node?.type === "MemberExpression" &&
+  !node.computed &&
+  isIdentifier(node.object, "globalThis") &&
+  isIdentifier(node.property, memberName) &&
+  isUnshadowedGlobal(context, node.object);
+
 export default eslintCompatPlugin({
   meta: { name: "no-public-law-browser-globals" },
   rules: {
@@ -127,11 +138,44 @@ export default eslintCompatPlugin({
 
             const memberName = ambientMemberName(node.callee, "Date");
             const randomMemberName = ambientMemberName(node.callee, "Math");
+            const performanceMemberName = ambientMemberName(
+              node.callee,
+              "performance",
+            );
+            const cryptoMemberName = ambientMemberName(node.callee, "crypto");
+            const calledMemberName =
+              node.callee?.type === "MemberExpression" &&
+              !node.callee.computed &&
+              isIdentifier(node.callee.property)
+                ? node.callee.property.name
+                : null;
+            const globalPerformanceCall =
+              calledMemberName === "now" &&
+              isUnshadowedGlobalThisMember(
+                context,
+                node.callee.object,
+                "performance",
+              );
+            const globalCryptoCall =
+              (calledMemberName === "getRandomValues" ||
+                calledMemberName === "randomUUID") &&
+              isUnshadowedGlobalThisMember(
+                context,
+                node.callee.object,
+                "crypto",
+              );
             if (
               (memberName === "now" &&
                 isUnshadowedGlobal(context, node.callee.object)) ||
               (randomMemberName === "random" &&
-                isUnshadowedGlobal(context, node.callee.object))
+                isUnshadowedGlobal(context, node.callee.object)) ||
+              (performanceMemberName === "now" &&
+                isUnshadowedGlobal(context, node.callee.object)) ||
+              ((cryptoMemberName === "getRandomValues" ||
+                cryptoMemberName === "randomUUID") &&
+                isUnshadowedGlobal(context, node.callee.object)) ||
+              globalPerformanceCall ||
+              globalCryptoCall
             ) {
               context.report({ node, messageId: "publicLawAmbientState" });
               return;

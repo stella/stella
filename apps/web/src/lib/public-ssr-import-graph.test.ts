@@ -18,6 +18,7 @@ const REVIEWED_AMBIENT_BOUNDARIES: ReadonlySet<string> = new Set([
   "apps/web/src/i18n/i18n-store.ts",
   "apps/web/src/i18n/time-zone.ts",
   "apps/web/src/lib/api-request-context.ts",
+  "apps/web/src/lib/analytics/error-reference.ts",
   "apps/web/src/lib/auth.ts",
   "apps/web/src/lib/beta-features.ts",
   "apps/web/src/lib/copy-to-clipboard.ts",
@@ -29,7 +30,7 @@ const REVIEWED_AMBIENT_BOUNDARIES: ReadonlySet<string> = new Set([
 ]);
 
 const AMBIENT_STATE_PATTERN =
-  /\b(?:window|document|navigator|localStorage|sessionStorage|matchMedia)\b|\bDate\.now\s*\(|\bMath\.random\s*\(|\b(?:new\s+)?Date\s*\(\s*\)|\b(?:new\s+)?Intl\.[A-Za-z]+\s*\(\s*(?:undefined\s*[,)]|\))/u;
+  /\b(?:window|document|navigator|localStorage|sessionStorage|matchMedia|devicePixelRatio)\b|\bDate\.now\s*\(|\bMath\.random\s*\(|\bperformance\.now\s*\(|\bcrypto\.(?:getRandomValues|randomUUID)\s*\(|\b(?:new\s+)?Date\s*\(\s*\)|\b(?:new\s+)?Intl\.[A-Za-z]+\s*\(\s*(?:undefined\s*[,)]|\))/u;
 const CANDIDATE_SUFFIXES = ["", ".ts", ".tsx", "/index.ts", "/index.tsx"];
 const tsTranspiler = new Bun.Transpiler({ loader: "ts" });
 const tsxTranspiler = new Bun.Transpiler({ loader: "tsx" });

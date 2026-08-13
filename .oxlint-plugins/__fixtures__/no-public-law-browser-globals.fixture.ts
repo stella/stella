@@ -10,6 +10,10 @@ const savedFilter = localStorage.getItem("case-law-filter");
 const prefersDark = matchMedia("(prefers-color-scheme: dark)").matches;
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves browser locale access is not SSR-safe
 const browserLocale = navigator.language;
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves bare location is browser-only
+const browserPath = location.pathname;
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves browser display state is not SSR-safe
+const pixelRatio = devicePixelRatio;
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves ambient clocks are not SSR-safe
 const openedAt = Date.now();
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves zero-argument Date calls are ambient clocks too
@@ -18,6 +22,12 @@ const openedAtLabel = Date();
 const today = new Date();
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves ambient randomness is not SSR-safe
 const randomWidth = Math.random();
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves high-resolution ambient clocks are not SSR-safe
+const measuredAt = performance.now();
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves ambient UUID generation is not SSR-safe
+const randomId = crypto.randomUUID();
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves globalThis cannot bypass ambient randomness detection
+const globalRandomBytes = globalThis.crypto.getRandomValues(new Uint8Array(8));
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves implicit Intl locales are not SSR-safe
 const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves call-form Intl constructors also need an explicit locale
@@ -42,15 +52,20 @@ const computedGlobalBrowserStorage = globalThis["localStorage"];
 
 export {
   browserLocale,
+  browserPath,
   computedGlobalBrowserStorage,
   dateFormatter,
   fixedDate,
   fixedDateFormatter,
   fixedSegmenter,
   globalBrowserStorage,
+  globalRandomBytes,
+  measuredAt,
   openedAt,
   openedAtLabel,
   prefersDark,
+  pixelRatio,
+  randomId,
   randomWidth,
   readShadowedNavigator,
   readShadowedClock,
