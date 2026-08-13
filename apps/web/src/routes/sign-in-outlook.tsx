@@ -67,7 +67,7 @@ const loadOfficeJs = async (): Promise<OfficeRuntime | null> => {
       }
       detached(
         office.onReady().finally(() => resolve(office)),
-        "SignInOutlook.loadOfficeJs",
+        "outlook-handoff.load-office",
       );
     });
     script.addEventListener("error", () => resolve(null));
@@ -142,7 +142,7 @@ const SignInOutlook = () => {
       surfaceOutlookHandoffFailure(tryDeliverToken(), () => {
         setState({ message: t("error.generic"), type: "error" });
       }),
-      "SignInOutlook.tryDeliverToken",
+      "outlook-handoff.deliver-token",
     );
   });
 
