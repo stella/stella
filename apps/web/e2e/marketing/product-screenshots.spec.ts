@@ -126,13 +126,16 @@ test("capture landing product screenshots", async ({
   // already org-scoped — no org-picker UI to drive. Land on a real page first:
   // a fresh page sits on about:blank, where the localStorage access in the
   // theme loop below throws a SecurityError.
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/law/cases", { waitUntil: "domcontentloaded" });
   // `domcontentloaded` only means the document parsed; on a cold dev server the
   // client still has to compile and hydrate the app before anything but the
   // splash paints (measured at ~11s locally, several times that on a CI
   // runner). Absorb that one-time cost here so the per-capture waits below
   // only ever cover a route transition.
   await expect(page.locator("main").first()).toBeVisible({
+    timeout: COLD_COMPILE_TIMEOUT,
+  });
+  await expect(page.getByText("Case Law").first()).toBeVisible({
     timeout: COLD_COMPILE_TIMEOUT,
   });
 
@@ -221,6 +224,11 @@ test("capture landing product screenshots", async ({
         // so the capture shows the structure margin, not just headnote text.
         // eslint-disable-next-line no-await-in-loop -- see above
         await page.locator("aside button").first().scrollIntoViewIfNeeded();
+        // `scrollIntoViewIfNeeded` positions the nested reader correctly, but
+        // can also move the document viewport. Restore only the outer viewport
+        // so the breadcrumb remains in frame without undoing the reader scroll.
+        // eslint-disable-next-line no-await-in-loop -- see above
+        await page.evaluate(() => window.scrollTo({ left: 0, top: 0 }));
       }
       if ("prepare" in capture && capture.prepare === "open-files") {
         // eslint-disable-next-line no-await-in-loop -- see above

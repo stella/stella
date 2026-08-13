@@ -404,6 +404,7 @@
       "name": "@stll/agent-engine",
       "version": "0.0.0",
       "dependencies": {
+        "@ag-ui/core": "catalog:",
         "@tanstack/ai": "catalog:",
         "@tanstack/ai-codex": "catalog:",
         "@tanstack/ai-sandbox": "catalog:",
@@ -808,6 +809,7 @@
     "undici": "7.29.0",
   },
   "catalog": {
+    "@ag-ui/core": "0.1.1-canary.beta.0",
     "@base-ui/react": "1.7.0",
     "@better-auth/api-key": "1.6.26",
     "@better-auth/oauth-provider": "1.6.26",

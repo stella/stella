@@ -1,9 +1,11 @@
-import { codexText } from "@tanstack/ai-codex";
+import { codexText, type CodexTextConfig } from "@tanstack/ai-codex";
 import { withSandbox } from "@tanstack/ai-sandbox";
 import { panic } from "better-result";
 
 import {
   defineStellaSandbox,
+  SANDBOX_NO_MCP,
+  STELLA_WORKSPACE_ROOT,
   type AgentHarness,
   type StellaSandboxInput,
 } from "./sandbox";
@@ -42,12 +44,50 @@ export type StellaSandboxRunInput = StellaSandboxInput & {
 const HARNESS_KEY_ENV = "STELLA_HARNESS_KEY";
 const HARNESS_PROVIDER_ID = "stella";
 const OPENAI_BASE_URL = "https://api.openai.com/v1";
+const STELLA_CODEX_HOME = `${STELLA_WORKSPACE_ROOT}/.codex`;
 
 const harnessBaseUrl = (input: StellaSandboxRunInput): string => {
   if (input.harnessProvider === "openai") {
     return OPENAI_BASE_URL;
   }
   return input.harnessBaseUrl;
+};
+
+/**
+ * Build the Codex boundary configuration in one place. TanStack projects MCP
+ * bindings into `<workspace>/.codex/config.toml`; source-less Stella runs are
+ * not trusted Git projects, so Codex deliberately ignores that file as project
+ * configuration. For MCP runs, pointing CODEX_HOME at the projected directory
+ * makes it the process's user configuration instead, which Codex loads without
+ * weakening project-trust checks or placing the delegated MCP token on the
+ * command line. No-MCP smoke runs retain the ambient home because TanStack does
+ * not project this directory for them.
+ */
+export const buildCodexAdapterConfig = (input: StellaSandboxRunInput) => {
+  const provider = HARNESS_PROVIDER_ID;
+  return {
+    // The outer TanStack/Docker sandbox is the real isolation boundary; codex
+    // may write within its workspace. Approval behavior is intentionally left
+    // to the Stella sandbox policy. Its `ask`/`deny` rules map to on-request;
+    // in non-interactive `codex exec`, approval-requiring actions fail closed.
+    // An adapter override would take precedence and bypass that mapping.
+    sandboxMode: "workspace-write",
+    env: {
+      ...(input.mcp === SANDBOX_NO_MCP
+        ? {}
+        : { CODEX_HOME: STELLA_CODEX_HOME }),
+      [HARNESS_KEY_ENV]: input.harnessApiKey,
+    },
+    // Raw codex `-c` overrides (verbatim TOML values). Point codex at the
+    // resolved provider via a custom model_provider reading the key from env.
+    config: {
+      model_provider: `"${provider}"`,
+      [`model_providers.${provider}.name`]: `"stella-harness"`,
+      [`model_providers.${provider}.base_url`]: `"${harnessBaseUrl(input)}"`,
+      [`model_providers.${provider}.env_key`]: `"${HARNESS_KEY_ENV}"`,
+      [`model_providers.${provider}.wire_api`]: `"responses"`,
+    },
+  } as const satisfies CodexTextConfig;
 };
 
 /**
@@ -69,25 +109,7 @@ export const resolveStellaSandboxRun = (input: StellaSandboxRunInput) => {
     );
   }
 
-  const provider = HARNESS_PROVIDER_ID;
-  const adapter = codexText(input.harnessModel, {
-    // The outer TanStack/Docker sandbox is the real isolation boundary; codex
-    // may write within its workspace. Approval behavior is intentionally left
-    // to the Stella sandbox policy. Its `ask`/`deny` rules map to on-request;
-    // in non-interactive `codex exec`, approval-requiring actions fail closed.
-    // An adapter override would take precedence and bypass that mapping.
-    sandboxMode: "workspace-write",
-    env: { [HARNESS_KEY_ENV]: input.harnessApiKey },
-    // Raw codex `-c` overrides (verbatim TOML values). Point codex at the
-    // resolved provider via a custom model_provider reading the key from env.
-    config: {
-      model_provider: `"${provider}"`,
-      [`model_providers.${provider}.name`]: `"stella-harness"`,
-      [`model_providers.${provider}.base_url`]: `"${harnessBaseUrl(input)}"`,
-      [`model_providers.${provider}.env_key`]: `"${HARNESS_KEY_ENV}"`,
-      [`model_providers.${provider}.wire_api`]: `"responses"`,
-    },
-  });
+  const adapter = codexText(input.harnessModel, buildCodexAdapterConfig(input));
 
   const middleware = withSandbox(defineStellaSandbox(input));
 
