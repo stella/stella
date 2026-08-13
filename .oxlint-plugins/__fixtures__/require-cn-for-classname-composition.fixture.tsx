@@ -50,6 +50,7 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
   const boundedStatus = active ? "open" : "closed";
   const boundedStatusAlias = boundedStatus;
   const emptyStatus = "";
+  // eslint-disable-next-line typescript/no-unnecessary-condition -- fixture: prove logical selector short-circuit resolution
   const logicalBoundedStatus = emptyStatus || boundedStatusAlias;
   const canonicalStyleMap = {
     open: cn("rounded-md", "font-medium"),
