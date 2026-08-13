@@ -15,6 +15,9 @@ const SUPPLIER_AGREEMENT_FIELD_ID = "3f985a8b-26be-5a07-89d3-2a05acb94354";
 // the video recorder's resolveMarketingViewRoutes, so the agent screenshot
 // never lands on the empty /chat/new composer.
 const MARKETING_AGENT_THREAD_TITLE = "Project Atlas · Change-of-control review";
+// One of the four default slash-command skills installed below. Its visible
+// card is the readiness marker for the empty inspector chat in law captures.
+const MARKETING_DEFAULT_SKILL_NAME = "Compare versions";
 // The org that owns every seeded marketing workspace (AKVIZICE/EXPORT_REVIEW/
 // Meridian). Fixed id from seed-utils' DEFAULT_ORG_ID ("Harbrook & Partners",
 // apps/api/scripts/seed-test-user.ts), seeded by
@@ -126,7 +129,7 @@ test("capture landing product screenshots", async ({
   // already org-scoped — no org-picker UI to drive. Land on a real page first:
   // a fresh page sits on about:blank, where the localStorage access in the
   // theme loop below throws a SecurityError.
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/law/cases", { waitUntil: "domcontentloaded" });
   // `domcontentloaded` only means the document parsed; on a cold dev server the
   // client still has to compile and hydrate the app before anything but the
   // splash paints (measured at ~11s locally, several times that on a CI
@@ -221,6 +224,20 @@ test("capture landing product screenshots", async ({
         // so the capture shows the structure margin, not just headnote text.
         // eslint-disable-next-line no-await-in-loop -- see above
         await page.locator("aside button").first().scrollIntoViewIfNeeded();
+        // `scrollIntoViewIfNeeded` positions the nested reader correctly, but
+        // can also move the document viewport. Restore only the outer viewport
+        // so the breadcrumb remains in frame without undoing the reader scroll.
+        // eslint-disable-next-line no-await-in-loop -- see above
+        await page.evaluate(() => window.scrollTo({ left: 0, top: 0 }));
+        // Default skills are seeded during authentication below. Wait for one
+        // stable card so the screenshot cannot race the inspector skills query.
+        // eslint-disable-next-line no-await-in-loop -- see above
+        await expect(
+          page
+            .locator('[data-side="right"]')
+            .getByText(MARKETING_DEFAULT_SKILL_NAME, { exact: true })
+            .first(),
+        ).toBeVisible();
       }
       if ("prepare" in capture && capture.prepare === "open-files") {
         // eslint-disable-next-line no-await-in-loop -- see above
@@ -388,4 +405,14 @@ const authenticateMarketingSession = async (request: APIRequestContext) => {
     },
   );
   expect(setActiveResponse.ok(), await setActiveResponse.text()).toBe(true);
+
+  // Fresh CI databases do not visit Knowledge > Tools, which normally installs
+  // the default slash-command skills. Seed them explicitly so clean-database
+  // captures use the intended empty-inspector product state. The endpoint is
+  // idempotent and preserves an existing authored skill set.
+  const seedSkillsResponse = await request.post(
+    `${apiBaseURL}/v1/skills/seed`,
+    { data: {}, headers: { origin: webOrigin } },
+  );
+  expect(seedSkillsResponse.ok(), await seedSkillsResponse.text()).toBe(true);
 };
