@@ -106,19 +106,30 @@ test("server-rendered public law decisions stay stable after hydration", async (
   // String form: the e2e tsconfig has no DOM lib, so a function body
   // referencing browser globals would not typecheck in this context.
   await page.addInitScript({
-    content: `window.localStorage.setItem(
-      "stella-i18n",
-      JSON.stringify({ state: { lang: "cs" }, version: 0 }),
-    );`,
+    content: `window.localStorage.setItem("sidebar_state", "collapsed");
+      window.localStorage.setItem(
+        "stella-i18n",
+        JSON.stringify({ state: { lang: "cs" }, version: 0 }),
+      );`,
   });
 
   // Hydration mismatches surface as pageerrors (React #418 + a router
   // invariant) and end in the error boundary; collect them explicitly
   // so the failure names the real exception instead of a timeout.
   const pageErrors: string[] = [];
+  const hydrationConsoleErrors: string[] = [];
   const failedAssets: string[] = [];
   page.on("pageerror", (error) => {
     pageErrors.push(error.message);
+  });
+  page.on("console", (message) => {
+    const text = message.text();
+    if (
+      message.type() === "error" &&
+      (text.includes("hydrated") || text.includes("hydration"))
+    ) {
+      hydrationConsoleErrors.push(text);
+    }
   });
   page.on("response", (response) => {
     if (response.status() >= 400 && response.url().includes("/assets/")) {
@@ -152,6 +163,10 @@ test("server-rendered public law decisions stay stable after hydration", async (
   const inspector = page.locator('[data-side="right"]');
   await expect(routeErrorTitle).toHaveCount(0);
   await expect(inspector).toHaveAttribute("data-state", "expanded");
+  await expect(page.locator('[data-slot="sidebar"]').first()).toHaveAttribute(
+    "data-state",
+    "collapsed",
+  );
 
   // Authentication resolution and the lazy inspector graph settle after the
   // decision body appears. Keep observing long enough to catch a delayed
@@ -160,5 +175,6 @@ test("server-rendered public law decisions stay stable after hydration", async (
   await expect(routeErrorTitle).toHaveCount(0);
   await expect(inspector).toHaveAttribute("data-state", "expanded");
   expect(pageErrors).toEqual([]);
+  expect(hydrationConsoleErrors).toEqual([]);
   expect(failedAssets).toEqual([]);
 });

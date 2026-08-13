@@ -30,10 +30,10 @@ import {
   SIDEBAR_WIDTH_ICON_PX,
   SIDEBAR_WIDTH_PX,
 } from "@/components/sidebar-sizing";
+import { usePersistedSidebarOpen } from "@/hooks/use-persisted-sidebar-open";
 import { Slot } from "@/lib/slot";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 
-const SIDEBAR_LS_NAME = "sidebar_state";
 const REM_PX = 16;
 const SIDEBAR_WIDTH = `${SIDEBAR_WIDTH_PX / REM_PX}rem`;
 const SIDEBAR_WIDTH_MOBILE = "18rem";
@@ -96,20 +96,15 @@ const SidebarProvider = ({
 
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
-  const [_open, _setOpen] = useState(() => {
-    if (defaultOpen !== undefined) {
-      return defaultOpen;
-    }
-
-    if (typeof localStorage === "undefined") {
-      return DEFAULT_SIDEBAR_OPEN;
-    }
-
-    const storedState = localStorage.getItem(SIDEBAR_LS_NAME);
-    return storedState === null
-      ? DEFAULT_SIDEBAR_OPEN
-      : storedState === "expanded";
+  const {
+    open: persistedOpen,
+    persistOpen,
+    setOpen: setPersistedOpen,
+  } = usePersistedSidebarOpen({
+    defaultOpen: defaultOpen ?? DEFAULT_SIDEBAR_OPEN,
+    hydrateFromStorage: defaultOpen === undefined && openProp === undefined,
   });
+  const _open = persistedOpen;
   const requestedOpen = openProp ?? _open;
   const open = requestedOpen && !forceCollapsed;
   const setOpen = (value: boolean | ((v: boolean) => boolean)) => {
@@ -118,15 +113,9 @@ const SidebarProvider = ({
     if (setOpenProp) {
       setOpenProp(openState);
     } else {
-      _setOpen(openState);
+      setPersistedOpen(openState);
     }
-
-    const state: SidebarContextProps["state"] = openState
-      ? "expanded"
-      : "collapsed";
-    if (typeof localStorage !== "undefined") {
-      localStorage.setItem(SIDEBAR_LS_NAME, state);
-    }
+    persistOpen(openState);
   };
 
   // Helper to toggle the sidebar.
