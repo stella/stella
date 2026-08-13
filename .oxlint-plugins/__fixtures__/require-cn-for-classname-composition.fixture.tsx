@@ -31,6 +31,12 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
   const spreadStyles = { ...aliasedStyles };
   const staticRowClass = "rounded-md";
   const staticRowClassAlias = staticRowClass;
+  const callbackStyles = {
+    selected: "rounded-md",
+    unselected: `rounded-md`,
+    active: "bg-muted",
+    inactive: "bg-background",
+  };
   const extractedRowClass = ({ selected }: { selected: boolean }) => {
     if (selected) {
       return "bg-muted";
@@ -75,6 +81,11 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
     }
     return result;
   };
+  const ternaryAssignedClass = ({ selected }: { selected: boolean }) => {
+    let result: string;
+    result = selected ? "bg-muted" : "bg-background";
+    return result;
+  };
   const equivalentLiteralClass = ({ selected }: { selected: boolean }) => {
     if (selected) {
       return "rounded-md";
@@ -86,6 +97,18 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
       return staticRowClassAlias;
     }
     return "rounded-md";
+  };
+  const equivalentMemberClass = ({ selected }: { selected: boolean }) => {
+    if (selected) {
+      return callbackStyles.selected;
+    }
+    return callbackStyles.unselected;
+  };
+  const differingMemberClass = ({ selected }: { selected: boolean }) => {
+    if (selected) {
+      return callbackStyles.active;
+    }
+    return callbackStyles.inactive;
   };
   const unrelatedControlFlowClass = ({ selected }: { selected: boolean }) => {
     if (selected) {
@@ -155,11 +178,18 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
       {/* A conditionally assigned returned value is composition: MUST flag. */}
       {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
       <FixtureSlot className={conditionallyAssignedClass} />
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      <FixtureSlot className={ternaryAssignedClass} />
+
+      {/* Distinct locally owned member returns are composition: MUST flag. */}
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      <FixtureSlot className={differingMemberClass} />
 
       {/* Equivalent static returns are not composition. */}
       <FixtureSlot className={guardedStaticClass} />
       <FixtureSlot className={equivalentLiteralClass} />
       <FixtureSlot className={equivalentAliasClass} />
+      <FixtureSlot className={equivalentMemberClass} />
 
       {/* Unrelated control flow with one static return is not composition. */}
       <FixtureSlot className={unrelatedControlFlowClass} />

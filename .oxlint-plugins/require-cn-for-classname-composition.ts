@@ -278,6 +278,13 @@ export default eslintCompatPlugin({
             const quasi = node.quasis.at(0);
             return quasi?.value.cooked ?? quasi?.value.raw ?? "";
           }
+          if (isMemberExpression(node)) {
+            const memberVariables = new Set(visitedVariables);
+            const localValue = localMemberValue(node, memberVariables);
+            return localValue === null
+              ? null
+              : staticClassValue(localValue, memberVariables);
+          }
           if (!isIdentifier(node)) {
             return null;
           }
@@ -293,18 +300,19 @@ export default eslintCompatPlugin({
           return staticClassValue(initializer, visitedVariables);
         };
 
-        const isConditionalWriteInside = (
+        const writeContextInside = (
           identifier: unknown,
           callback: ESTree.ArrowFunctionExpression | ESTree.Function,
-        ): boolean => {
+        ): "conditional" | "unconditional" | null => {
           let current = identifier;
+          let conditional = false;
           while (isAstNode(current)) {
             const parent = current.parent;
             if (parent === callback.body) {
-              return false;
+              return conditional ? "conditional" : "unconditional";
             }
             if (!isAstNode(parent)) {
-              return false;
+              return null;
             }
             if (
               (parent.type === "IfStatement" && current !== parent.test) ||
@@ -319,21 +327,21 @@ export default eslintCompatPlugin({
               parent.type === "WhileStatement" ||
               parent.type === "DoWhileStatement"
             ) {
-              return true;
+              conditional = true;
             }
             if (
               parent.type === "ArrowFunctionExpression" ||
               parent.type === "FunctionExpression" ||
               parent.type === "FunctionDeclaration"
             ) {
-              return false;
+              return null;
             }
             current = parent;
           }
-          return false;
+          return null;
         };
 
-        const conditionalWriteValues = (
+        const writtenValues = (
           value: unknown,
           callback: ESTree.ArrowFunctionExpression | ESTree.Function,
         ): unknown[] | null => {
@@ -349,14 +357,32 @@ export default eslintCompatPlugin({
             (reference) =>
               reference.init !== true &&
               reference.isWrite() &&
-              isConditionalWriteInside(reference.identifier, callback),
+              reference.identifier.range[0] < node.range[0] &&
+              writeContextInside(reference.identifier, callback) !== null,
           );
           if (writes.length === 0) {
             return null;
           }
+          const lastUnconditionalWrite = writes.findLast(
+            (reference) =>
+              writeContextInside(reference.identifier, callback) ===
+              "unconditional",
+          );
+          const baseValue =
+            lastUnconditionalWrite?.writeExpr ??
+            getVariableInitializer(variable);
+          const basePosition =
+            lastUnconditionalWrite?.identifier.range[0] ?? -1;
           return [
-            getVariableInitializer(variable),
-            ...writes.map((reference) => reference.writeExpr),
+            baseValue,
+            ...writes
+              .filter(
+                (reference) =>
+                  reference.identifier.range[0] > basePosition &&
+                  writeContextInside(reference.identifier, callback) ===
+                    "conditional",
+              )
+              .map((reference) => reference.writeExpr),
           ];
         };
 
@@ -437,7 +463,7 @@ export default eslintCompatPlugin({
             visitBody(node.body, true);
 
             const possibleValues = returnValues.flatMap((returnValue) => {
-              const writes = conditionalWriteValues(returnValue, node);
+              const writes = writtenValues(returnValue, node);
               return writes ?? [returnValue];
             });
             const allCanonical = possibleValues.every((returnValue) =>

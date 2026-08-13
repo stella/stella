@@ -48,6 +48,14 @@ const {
   getRandomValues: destructuredGetRandomValues,
   randomUUID: destructuredRandomUuid,
 } = crypto;
+const {
+  Date: { now: nestedGlobalDateNow },
+  Math: { random: nestedGlobalMathRandom },
+  crypto: {
+    getRandomValues: nestedGlobalGetRandomValues,
+    randomUUID: nestedGlobalRandomUuid,
+  },
+} = globalThis;
 /* oxlint-enable typescript/unbound-method */
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: stable aliases retain ambient provenance
@@ -74,6 +82,20 @@ export const destructuredIdentifier = destructuredRandomUuid();
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: destructuring cannot erase crypto.getRandomValues provenance
 export const destructuredRandomBytes = destructuredGetRandomValues(
+  new Uint8Array(8),
+);
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: nested globalThis destructuring retains Date.now provenance
+export const nestedDestructuredEpoch = nestedGlobalDateNow();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: nested globalThis destructuring retains Math.random provenance
+export const nestedDestructuredSample = nestedGlobalMathRandom();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: nested globalThis destructuring retains crypto.randomUUID provenance
+export const nestedDestructuredIdentifier = nestedGlobalRandomUuid();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: nested globalThis destructuring retains crypto.getRandomValues provenance
+export const nestedDestructuredRandomBytes = nestedGlobalGetRandomValues(
   new Uint8Array(8),
 );
 
@@ -108,6 +130,9 @@ export const globalMonotonicTime = globalThis.performance.now();
 
 const ambientRoot = globalThis;
 const secondAmbientRoot = ambientRoot;
+const {
+  Date: { now: nestedAliasedRootNow },
+} = ambientRoot;
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: a stable globalThis alias cannot hide Date.now
 export const rootAliasedEpoch = ambientRoot.Date.now();
@@ -121,6 +146,9 @@ export const chainedRootSample = secondAmbientRoot.Math.random();
 export const chainedRootIdentifier =
   // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: chained globalThis aliases retain crypto provenance
   secondAmbientRoot.crypto.randomUUID();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: nested destructuring follows an immutable globalThis alias
+export const nestedAliasedRootEpoch = nestedAliasedRootNow();
 
 export const explicitDate = new Date("2026-08-13T00:00:00.000Z");
 
@@ -194,6 +222,11 @@ export const withShadowedAliases = (
     getRandomValues: localGetRandomValues,
     randomUUID: localRandomUuid,
   } = crypto;
+  const {
+    Date: { now: nestedLocalNow },
+    Math: { random: nestedLocalRandom },
+    crypto: { randomUUID: nestedLocalRandomUuid },
+  } = globalThis;
   const localRoot = globalThis;
   return {
     epoch: localNow(),
@@ -204,6 +237,9 @@ export const withShadowedAliases = (
     rootInstant: new localRoot.Date(),
     rootSample: localRoot.Math.random(),
     rootIdentifier: localRoot.crypto.randomUUID(),
+    nestedEpoch: nestedLocalNow(),
+    nestedSample: nestedLocalRandom(),
+    nestedIdentifier: nestedLocalRandomUuid(),
   };
 };
 
@@ -220,4 +256,8 @@ mutableRoot = {
     static override now = () => 0;
   },
 };
+const {
+  Date: { now: mutableNestedNow },
+} = mutableRoot;
 export const mutableRootResult = mutableRoot.Date.now();
+export const mutableNestedResult = mutableNestedNow();

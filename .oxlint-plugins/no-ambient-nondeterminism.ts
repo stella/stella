@@ -63,8 +63,55 @@ const bindingHasDefinitions = (binding: unknown): boolean =>
   binding.defs.length > 0;
 
 type ConstAlias =
-  | { type: "property"; object: unknown; propertyName: string }
+  | { type: "property"; object: unknown; propertyPath: readonly string[] }
   | { type: "value"; value: unknown };
+
+const destructuredPropertyPath = (
+  pattern: unknown,
+  bindingName: string,
+  prefix: readonly string[] = [],
+): readonly string[] | null => {
+  const unwrapped =
+    isAstNode(pattern) && pattern.type === "AssignmentPattern"
+      ? unwrapExpression(pattern.left)
+      : unwrapExpression(pattern);
+  if (isIdentifier(unwrapped, bindingName)) {
+    return prefix;
+  }
+  if (
+    !isAstNode(unwrapped) ||
+    unwrapped.type !== "ObjectPattern" ||
+    !Array.isArray(unwrapped.properties)
+  ) {
+    return null;
+  }
+  for (const property of unwrapped.properties) {
+    if (!isAstNode(property) || property.type !== "Property") {
+      continue;
+    }
+    const propertyName =
+      property.computed === false
+        ? isIdentifier(property.key)
+          ? property.key.name
+          : isStringLiteral(property.key)
+            ? property.key.value
+            : null
+        : isStringLiteral(property.key)
+          ? property.key.value
+          : null;
+    if (propertyName === null) {
+      continue;
+    }
+    const path = destructuredPropertyPath(property.value, bindingName, [
+      ...prefix,
+      propertyName,
+    ]);
+    if (path !== null) {
+      return path;
+    }
+  }
+  return null;
+};
 
 const constAlias = (
   context: unknown,
@@ -124,34 +171,16 @@ const constAlias = (
       ) {
         continue;
       }
-      for (const property of declarator.id.properties) {
-        if (!isAstNode(property) || property.type !== "Property") {
-          continue;
-        }
-        let target = unwrapExpression(property.value);
-        if (target?.type === "AssignmentPattern") {
-          target = unwrapExpression(target.left);
-        }
-        if (!isIdentifier(target, node.name)) {
-          continue;
-        }
-        const propertyName =
-          property.computed === false
-            ? isIdentifier(property.key)
-              ? property.key.name
-              : isStringLiteral(property.key)
-                ? property.key.value
-                : null
-            : isStringLiteral(property.key)
-              ? property.key.value
-              : null;
-        if (propertyName !== null) {
-          return {
-            type: "property",
-            object: declarator.init,
-            propertyName,
-          };
-        }
+      const propertyPath = destructuredPropertyPath(
+        declarator.id,
+        node.name,
+      );
+      if (propertyPath !== null && propertyPath.length > 0) {
+        return {
+          type: "property",
+          object: declarator.init,
+          propertyPath,
+        };
       }
     }
   }
@@ -265,9 +294,9 @@ const globalObjectName = (
     if (alias.type === "value") {
       return globalObjectName(context, alias.value, visitedBindings);
     }
-    return globalObjectName(context, alias.object, visitedBindings) ===
-      "globalThis"
-      ? alias.propertyName
+    return alias.propertyPath.length === 1 &&
+      globalObjectName(context, alias.object, visitedBindings) === "globalThis"
+      ? alias.propertyPath.at(0) ?? null
       : null;
   }
   if (expression.type !== "MemberExpression") {
@@ -307,6 +336,24 @@ const ambientMemberKind = (
   return null;
 };
 
+const ambientPropertyPathKind = (
+  context: unknown,
+  object: unknown,
+  propertyPath: readonly string[],
+  visitedBindings: Set<unknown>,
+): string | null => {
+  const objectName = globalObjectName(context, object, visitedBindings);
+  const fullPath =
+    objectName === "globalThis"
+      ? propertyPath
+      : objectName === null
+        ? []
+        : [objectName, ...propertyPath];
+  return fullPath.length === 2
+    ? ambientMemberKind(fullPath.at(0) ?? null, fullPath.at(1) ?? null)
+    : null;
+};
+
 const ambientCallKind = (
   context: unknown,
   callee: unknown,
@@ -325,9 +372,11 @@ const ambientCallKind = (
       return ambientCallKind(context, alias.value, visitedBindings);
     }
     if (alias?.type === "property") {
-      return ambientMemberKind(
-        globalObjectName(context, alias.object, visitedBindings),
-        alias.propertyName,
+      return ambientPropertyPathKind(
+        context,
+        alias.object,
+        alias.propertyPath,
+        visitedBindings,
       );
     }
   }
