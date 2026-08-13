@@ -8,7 +8,8 @@
  * run against pull-request code because the harness model credential is
  * injected into the sandbox process.
  */
-import { chat, EventType } from "@tanstack/ai";
+import { EventType } from "@ag-ui/core";
+import { chat, type StreamChunk } from "@tanstack/ai";
 import { TaggedError } from "better-result";
 import { randomBytes, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -65,6 +66,45 @@ type CanaryAssertion = (
 const assertCanary: CanaryAssertion = (condition, message) => {
   if (!condition) {
     fail(message);
+  }
+};
+
+const consumeHarnessChunk = (chunk: StreamChunk, text: string): string => {
+  switch (chunk.type) {
+    case EventType.RUN_ERROR:
+      return fail(`canary harness failed: ${chunk.message}`);
+    case EventType.TEXT_MESSAGE_CONTENT: {
+      const nextText = text + chunk.delta;
+      if (nextText.length > 1024) {
+        return fail("canary harness returned unexpectedly large text");
+      }
+      return nextText;
+    }
+    case "CUSTOM":
+    case EventType.MESSAGES_SNAPSHOT:
+    case EventType.REASONING_ENCRYPTED_VALUE:
+    case EventType.REASONING_END:
+    case EventType.REASONING_MESSAGE_CONTENT:
+    case EventType.REASONING_MESSAGE_END:
+    case EventType.REASONING_MESSAGE_START:
+    case EventType.REASONING_START:
+    case EventType.RUN_FINISHED:
+    case EventType.RUN_STARTED:
+    case EventType.STATE_DELTA:
+    case EventType.STATE_SNAPSHOT:
+    case EventType.STEP_FINISHED:
+    case EventType.STEP_STARTED:
+    case EventType.TEXT_MESSAGE_END:
+    case EventType.TEXT_MESSAGE_START:
+    case EventType.TOOL_CALL_ARGS:
+    case "TOOL_CALL_END":
+    case EventType.TOOL_CALL_RESULT:
+    case "TOOL_CALL_START":
+      return text;
+    default: {
+      const exhaustive: never = chunk;
+      return exhaustive;
+    }
   }
 };
 
@@ -293,15 +333,7 @@ const runHarness = async (token: string, serverUrl: string): Promise<void> => {
 
   let finalText = "";
   for await (const chunk of stream) {
-    if (chunk.type === EventType.RUN_ERROR) {
-      fail(`canary harness failed: ${chunk.message}`);
-    }
-    if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
-      finalText += chunk.delta;
-      if (finalText.length > 1024) {
-        fail("canary harness returned unexpectedly large text");
-      }
-    }
+    finalText = consumeHarnessChunk(chunk, finalText);
   }
   if (finalText.trim() !== "CANARY_COMPLETE") {
     fail("canary harness did not return the completion marker");

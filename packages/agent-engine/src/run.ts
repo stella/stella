@@ -4,6 +4,7 @@ import { panic } from "better-result";
 
 import {
   defineStellaSandbox,
+  SANDBOX_NO_MCP,
   STELLA_WORKSPACE_ROOT,
   type AgentHarness,
   type StellaSandboxInput,
@@ -56,9 +57,11 @@ const harnessBaseUrl = (input: StellaSandboxRunInput): string => {
  * Build the Codex boundary configuration in one place. TanStack projects MCP
  * bindings into `<workspace>/.codex/config.toml`; source-less Stella runs are
  * not trusted Git projects, so Codex deliberately ignores that file as project
- * configuration. Pointing CODEX_HOME at the projected directory makes it the
- * process's user configuration instead, which Codex loads without weakening
- * project-trust checks or placing the delegated MCP token on the command line.
+ * configuration. For MCP runs, pointing CODEX_HOME at the projected directory
+ * makes it the process's user configuration instead, which Codex loads without
+ * weakening project-trust checks or placing the delegated MCP token on the
+ * command line. No-MCP smoke runs retain the ambient home because TanStack does
+ * not project this directory for them.
  */
 export const buildCodexAdapterConfig = (input: StellaSandboxRunInput) => {
   const provider = HARNESS_PROVIDER_ID;
@@ -70,7 +73,9 @@ export const buildCodexAdapterConfig = (input: StellaSandboxRunInput) => {
     // An adapter override would take precedence and bypass that mapping.
     sandboxMode: "workspace-write",
     env: {
-      CODEX_HOME: STELLA_CODEX_HOME,
+      ...(input.mcp === SANDBOX_NO_MCP
+        ? {}
+        : { CODEX_HOME: STELLA_CODEX_HOME }),
       [HARNESS_KEY_ENV]: input.harnessApiKey,
     },
     // Raw codex `-c` overrides (verbatim TOML values). Point codex at the

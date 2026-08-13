@@ -153,6 +153,15 @@ describe("resolveStellaSandboxRun", () => {
     expect(JSON.stringify(config.config)).not.toContain(baseRunInput.mcp.token);
   });
 
+  test("leaves Codex home ambient when a smoke run projects no MCP configuration", () => {
+    const config = buildCodexAdapterConfig({
+      ...baseRunInput,
+      mcp: SANDBOX_NO_MCP,
+    });
+
+    expect(config.env).toEqual({ STELLA_HARNESS_KEY: "sk-test" });
+  });
+
   test("pairs a codex adapter with sandbox middleware", () => {
     const { adapter, middleware } = resolveStellaSandboxRun(baseRunInput);
     expect(adapter.name).toBe("codex");

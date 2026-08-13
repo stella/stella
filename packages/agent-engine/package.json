@@ -23,6 +23,7 @@
     "format": "oxfmt ."
   },
   "dependencies": {
+    "@ag-ui/core": "catalog:",
     "@tanstack/ai": "catalog:",
     "@tanstack/ai-codex": "catalog:",
     "@tanstack/ai-sandbox": "catalog:",
