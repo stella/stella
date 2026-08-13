@@ -26,8 +26,8 @@ import type {
 } from "@/components/ai-config-role-models.logic";
 import { LanguagePicker } from "@/components/language-picker";
 import { ThemePicker } from "@/components/theme-picker";
+import { useBrowserRegion } from "@/hooks/use-browser-region";
 import { useHydrated } from "@/hooks/use-hydrated";
-import { useI18nStore } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
@@ -97,7 +97,7 @@ export const OnboardingWizard = () => {
   const navigate = useNavigate();
   const analytics = useAnalytics();
   const hydrated = useHydrated();
-  const browserRegion = useI18nStore((state) => state.region);
+  const browserRegion = useBrowserRegion();
   const queryClient = useQueryClient();
   const { data: sessionData } = useQuery(sessionOptions);
   const { data: nativeToolDeployAvailability } = useQuery(
