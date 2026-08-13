@@ -37,6 +37,20 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
   );
   const styleMap = { open: "font-medium", closed: "text-foreground-muted" };
   const equivalentStyleMap = { open: "rounded-md", closed: `rounded-md` };
+  const boundedEquivalentStyleMap = {
+    closed: `rounded-md`,
+    open: "rounded-md",
+    other: active ? "bg-muted" : "bg-background",
+  };
+  const boundedDifferingStyleMap = {
+    closed: "text-foreground-muted",
+    open: "font-medium",
+    other: active ? "bg-muted" : "bg-background",
+  };
+  const boundedStatus = active ? "open" : "closed";
+  const boundedStatusAlias = boundedStatus;
+  const emptyStatus = "";
+  const logicalBoundedStatus = emptyStatus || boundedStatusAlias;
   const canonicalStyleMap = {
     open: cn("rounded-md", "font-medium"),
     closed: mergeClasses("rounded-md", "opacity-60"),
@@ -514,6 +528,9 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
       {/* Dynamic local map and tuple selection — MUST flag. */}
       {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
       <div className={styleMap[status]} />
+      {/* A finite local selector ignores unreachable keys but still rejects differing reachable values. */}
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      <div className={boundedDifferingStyleMap[boundedStatusAlias]} />
       {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
       <div className={selectionTuple[selectionIndex]} />
       {/* Added finite-map keys and statically expanded tuple spreads remain selectable. */}
@@ -619,6 +636,9 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
       <div className={`rounded-md`} />
       <div className={className} />
       <div className={equivalentStyleMap[status]} />
+      {/* Unreachable dynamic map values do not make an equivalent bounded selection dynamic. */}
+      <div className={boundedEquivalentStyleMap[boundedStatusAlias]} />
+      <div className={boundedEquivalentStyleMap[logicalBoundedStatus]} />
       <div className={localStyles.static} />
       <div className={tupleClasses[1]} />
       <div className={equivalentMutableClass} />

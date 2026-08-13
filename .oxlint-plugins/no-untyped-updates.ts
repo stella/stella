@@ -383,7 +383,15 @@ export default eslintCompatPlugin({
           declaration.parent?.type === "VariableDeclaration" &&
           declaration.parent.kind === "const";
 
-        const localFunctionReturnType = (variable: Variable): unknown => {
+        const localFunctionReturnType = (
+          variable: Variable,
+          seen = new Set<Variable>(),
+        ): unknown => {
+          if (seen.has(variable)) {
+            return null;
+          }
+          const nextSeen = new Set(seen);
+          nextSeen.add(variable);
           for (const definition of variable.defs) {
             const declaration = definition.node;
             if (
@@ -402,6 +410,18 @@ export default eslintCompatPlugin({
               initializer?.type === "ArrowFunctionExpression"
             ) {
               return initializer.returnType;
+            }
+            if (
+              isStableAlias(declaration) &&
+              isIdentifierReference(initializer)
+            ) {
+              const source = resolveVariable(initializer);
+              if (source !== null) {
+                const returnType = localFunctionReturnType(source, nextSeen);
+                if (returnType !== null) {
+                  return returnType;
+                }
+              }
             }
           }
           return null;

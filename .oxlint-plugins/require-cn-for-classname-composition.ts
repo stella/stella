@@ -1118,10 +1118,138 @@ export default eslintCompatPlugin({
           return values;
         };
 
+        const localLogicalDisposition = (
+          value: unknown,
+          visitedVariables = new Set<Variable>(),
+        ): LogicalDisposition => {
+          const directDisposition = logicalDisposition(value);
+          if (directDisposition !== "unknown") {
+            return directDisposition;
+          }
+          const expression = unwrapClassExpression(value);
+          if (isIdentifier(expression)) {
+            const variable = resolveVariable(expression);
+            if (variable === null || visitedVariables.has(variable)) {
+              return "unknown";
+            }
+            const stableValue = localValueResolver.stableValue(
+              expression,
+              visitedVariables,
+            );
+            if (stableValue === null) {
+              return "unknown";
+            }
+            const nextVisited = new Set(visitedVariables);
+            nextVisited.add(variable);
+            return localLogicalDisposition(stableValue, nextVisited);
+          }
+          if (expression?.type === "ConditionalExpression") {
+            const consequent = localLogicalDisposition(
+              expression.consequent,
+              new Set(visitedVariables),
+            );
+            const alternate = localLogicalDisposition(
+              expression.alternate,
+              new Set(visitedVariables),
+            );
+            return consequent === alternate ? consequent : "unknown";
+          }
+          return "unknown";
+        };
+
+        const finiteStaticPropertyNames = (
+          selector: unknown,
+          visitedVariables = new Set<Variable>(),
+        ): Set<string> | null => {
+          const expression = unwrapClassExpression(selector);
+          if (expression === null) {
+            return null;
+          }
+          const directName = staticPropertyName(
+            expression,
+            true,
+            new Set(visitedVariables),
+          );
+          if (directName !== null) {
+            return new Set([directName]);
+          }
+          if (expression.type === "ConditionalExpression") {
+            const consequent = finiteStaticPropertyNames(
+              expression.consequent,
+              new Set(visitedVariables),
+            );
+            const alternate = finiteStaticPropertyNames(
+              expression.alternate,
+              new Set(visitedVariables),
+            );
+            return consequent === null || alternate === null
+              ? null
+              : new Set([...consequent, ...alternate]);
+          }
+          if (isLogicalExpression(expression)) {
+            const leftDisposition = localLogicalDisposition(
+              expression.left,
+              new Set(visitedVariables),
+            );
+            const selectedValues =
+              expression.operator === "&&"
+                ? leftDisposition === "truthy"
+                  ? [expression.right]
+                  : leftDisposition === "falsy" || leftDisposition === "nullish"
+                    ? [expression.left]
+                    : [expression.left, expression.right]
+                : expression.operator === "||"
+                  ? leftDisposition === "truthy"
+                    ? [expression.left]
+                    : leftDisposition === "falsy" ||
+                        leftDisposition === "nullish"
+                      ? [expression.right]
+                      : [expression.left, expression.right]
+                  : leftDisposition === "nullish"
+                    ? [expression.right]
+                    : leftDisposition === "truthy" ||
+                        leftDisposition === "falsy"
+                      ? [expression.left]
+                      : [expression.left, expression.right];
+            const names = new Set<string>();
+            for (const selectedValue of selectedValues) {
+              const outcomeNames = finiteStaticPropertyNames(
+                selectedValue,
+                new Set(visitedVariables),
+              );
+              if (outcomeNames === null) {
+                return null;
+              }
+              for (const name of outcomeNames) {
+                names.add(name);
+              }
+            }
+            return names;
+          }
+          if (!isIdentifier(expression)) {
+            return null;
+          }
+          const variable = resolveVariable(expression);
+          if (variable === null || visitedVariables.has(variable)) {
+            return null;
+          }
+          const stableValue = localValueResolver.stableValue(
+            expression,
+            visitedVariables,
+          );
+          if (stableValue === null) {
+            return null;
+          }
+          const nextVisited = new Set(visitedVariables);
+          nextVisited.add(variable);
+          return finiteStaticPropertyNames(stableValue, nextVisited);
+        };
+
         const finiteLocalSelectionValues = (
           source: unknown,
           readPosition: number,
           visitedVariables = new Set<Variable>(),
+          selectedPropertyNames?: ReadonlySet<string>,
         ): unknown[] | null => {
           const expression = unwrapClassExpression(source);
           if (expression === null) {
@@ -1132,11 +1260,13 @@ export default eslintCompatPlugin({
               expression.consequent,
               readPosition,
               new Set(visitedVariables),
+              selectedPropertyNames,
             );
             const alternate = finiteLocalSelectionValues(
               expression.alternate,
               readPosition,
               new Set(visitedVariables),
+              selectedPropertyNames,
             );
             return consequent === null || alternate === null
               ? null
@@ -1152,6 +1282,7 @@ export default eslintCompatPlugin({
                 outcome.value,
                 readPosition,
                 new Set(visitedVariables),
+                selectedPropertyNames,
               );
               if (outcomeValues === null) {
                 return null;
@@ -1188,11 +1319,13 @@ export default eslintCompatPlugin({
                 return null;
               }
               const writes = localPropertyWrites(variable, readPosition);
-              const propertyNames = new Set(
-                flattenedValues.map((_, index) => String(index)),
-              );
+              const propertyNames =
+                selectedPropertyNames === undefined
+                  ? new Set(flattenedValues.map((_, index) => String(index)))
+                  : new Set(selectedPropertyNames);
               for (const write of writes) {
                 if (
+                  selectedPropertyNames === undefined &&
                   write.propertyName !== null &&
                   /^(?:0|[1-9]\d*)$/.test(write.propertyName)
                 ) {
@@ -1239,26 +1372,21 @@ export default eslintCompatPlugin({
             }
           }
           if (expression.type === "ArrayExpression") {
-            const values: unknown[] = [];
-            for (const element of expression.elements) {
-              if (!isAstNode(element)) {
-                continue;
-              }
-              if (element.type !== "SpreadElement") {
-                values.push(element);
-                continue;
-              }
-              const spreadValues = finiteLocalSelectionValues(
-                element.argument,
-                readPosition,
-                new Set(visitedVariables),
-              );
-              if (spreadValues === null) {
-                return null;
-              }
-              values.push(...spreadValues);
+            const flattenedValues = flattenStaticArrayValues(
+              expression,
+              new Set(visitedVariables),
+            );
+            if (flattenedValues === null) {
+              return null;
             }
-            return values;
+            return selectedPropertyNames === undefined
+              ? flattenedValues
+              : [...selectedPropertyNames].map((propertyName) =>
+                  /^(?:0|[1-9]\d*)$/.test(propertyName)
+                    ? (flattenedValues.at(Number(propertyName)) ??
+                      LOCAL_ABSENT_VALUE)
+                    : LOCAL_ABSENT_VALUE,
+                );
           }
           const properties = finiteLocalPropertyNames(
             source,
@@ -1272,7 +1400,11 @@ export default eslintCompatPlugin({
             return null;
           }
           const values: unknown[] = [];
-          for (const candidateName of properties.names) {
+          const candidateNames =
+            selectedPropertyNames === undefined
+              ? properties.names
+              : selectedPropertyNames;
+          for (const candidateName of candidateNames) {
             const resolution = localValueResolver.propertyResolution(
               source,
               candidateName,
@@ -1325,10 +1457,15 @@ export default eslintCompatPlugin({
               member.computed,
             );
             if (propertyName === null) {
+              const selectedPropertyNames = finiteStaticPropertyNames(
+                member.property,
+                new Set(visitedVariables),
+              );
               const values = finiteLocalSelectionValues(
                 member.object,
                 member.range[0],
                 visitedVariables,
+                selectedPropertyNames ?? undefined,
               );
               if (values === null || values.length === 0) {
                 return null;

@@ -142,8 +142,8 @@ describe("Result consumption guard", () => {
         readonly source: "fixture";
       };
 
-      parseAlias();
-      parseWrapper();
+      parseAlias(); // discarded alias invocation
+      parseWrapper(); // discarded wrapper invocation
       asyncWrapper();
       decoratedResult();
       parse().map((value) => value + 1);
@@ -154,8 +154,8 @@ describe("Result consumption guard", () => {
     const diagnostics = scanFixture(source);
 
     const expectedProducers = [
-      "parseAlias();",
-      "parseWrapper();",
+      "parseAlias(); // discarded alias invocation",
+      "parseWrapper(); // discarded wrapper invocation",
       "asyncWrapper();",
       "decoratedResult();",
       "parse().map((value) => value + 1);",
@@ -181,12 +181,15 @@ describe("Result consumption guard", () => {
       ({ direct: parse(), nested: { result: asyncWrapper() }, list: [parse()] });
       ({ result: parse(), other: 0 }).other;
       [asyncWrapper(), 0][1];
+      [0, parse()][1];
       ({ result: parse(), run: () => undefined }).run();
       [asyncWrapper(), () => undefined][1]();
       const retainedSelection = ({ result: parse(), other: 0 }).other;
       const retainedIndexSelection = [asyncWrapper(), 0][1];
       const retainedAtSelection = [parse(), asyncWrapper()].at(0);
       const retainedStringSelection = [parse(), asyncWrapper()]["0"];
+      declare const dynamicIndex: number;
+      const dynamicAtSelection = [parse(), asyncWrapper()].at(dynamicIndex);
       const held = { result: parse() };
       held.result;
       true && parse();
@@ -195,6 +198,7 @@ describe("Result consumption guard", () => {
       undefined ?? parse();
       true ? void parse() : undefined;
       false ? undefined : parse();
+      parse() ? undefined : undefined;
       (parse(), "statement tail");
       const retainedTail = (parse(), "assigned tail");
       \`discarded interpolation: \${parse()}\`;
@@ -212,6 +216,7 @@ describe("Result consumption guard", () => {
       consume(retainedIndexSelection);
       consume(retainedAtSelection);
       consume(retainedStringSelection);
+      consume(dynamicAtSelection);
     `;
     const diagnostics = scanFixture(source);
 
@@ -221,12 +226,15 @@ describe("Result consumption guard", () => {
       "parse()] });",
       "parse(), other: 0 }).other;",
       "asyncWrapper(), 0][1];",
+      "parse()][1];",
       "parse(), run: () => undefined }).run();",
       "asyncWrapper(), () => undefined][1]();",
       "parse(), other: 0 }).other;",
       "asyncWrapper(), 0][1];",
       "asyncWrapper()].at(0);",
       'asyncWrapper()]["0"];',
+      "parse(), asyncWrapper()].at(dynamicIndex);",
+      "asyncWrapper()].at(dynamicIndex);",
       "held.result;",
       "parse();",
       'parse() && consume("cleanup");',
@@ -234,6 +242,7 @@ describe("Result consumption guard", () => {
       "parse();",
       "parse() : undefined;",
       "parse();",
+      "parse() ? undefined : undefined;",
       'parse(), "statement tail");',
       'parse(), "assigned tail");',
       "parse()}`;",

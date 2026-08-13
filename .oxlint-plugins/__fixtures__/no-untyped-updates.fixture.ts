@@ -76,10 +76,16 @@ export const intersectedBroadUpdate = (updates: AuditedBroadUpdate) =>
   db.update(table).set(updates);
 
 const loadBroadUpdate = (): Record<string, unknown> => ({ title: "Matter" });
+const loadBroadUpdateAlias = loadBroadUpdate;
+const loadBroadUpdateAliasAgain = loadBroadUpdateAlias;
 
 export const functionReturnUpdate = () =>
   // oxlint-disable-next-line no-untyped-updates/no-untyped-updates -- fixture: a typed local helper return must retain broad update-bag provenance
   db.update(table).set(loadBroadUpdate());
+
+export const aliasedFunctionReturnUpdate = () =>
+  // oxlint-disable-next-line no-untyped-updates/no-untyped-updates -- fixture: stable function aliases must not launder a broad helper return
+  db.update(table).set(loadBroadUpdateAliasAgain());
 
 export const inferredTransactionUpdate = (updates: Record<string, unknown>) =>
   withTransaction((tx) =>
@@ -109,6 +115,7 @@ export const updateCacheFromSchemaConstant = () =>
 type MatterUpdate = Partial<{ title: string; status: string }>;
 const typedUpdate: MatterUpdate = { title: "Matter" };
 const loadTypedUpdate = (): MatterUpdate => typedUpdate;
+const loadTypedUpdateAlias = loadTypedUpdate;
 
 export const destructuredTypedParameterUpdate = ({
   updates,
@@ -122,3 +129,7 @@ export const updateMatter = () => db.update(table).set(typedUpdate);
 // Allowed: a typed helper return retains its closed field set.
 export const updateMatterFromHelper = () =>
   db.update(table).set(loadTypedUpdate());
+
+// Allowed: a stable helper alias retains its closed return type.
+export const updateMatterFromAliasedHelper = () =>
+  db.update(table).set(loadTypedUpdateAlias());

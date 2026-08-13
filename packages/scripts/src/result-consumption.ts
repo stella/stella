@@ -244,6 +244,11 @@ const inspectDiscardedExpression = ({
   if (ts.isConditionalExpression(expression)) {
     inspectDiscardedExpression({
       checker,
+      expression: expression.condition,
+      report,
+    });
+    inspectDiscardedExpression({
+      checker,
       expression: expression.whenTrue,
       report,
     });
@@ -321,7 +326,15 @@ const inspectDiscardedExpression = ({
     ts.isPropertyAccessExpression(expression) ||
     ts.isElementAccessExpression(expression)
   ) {
-    inspectDiscardedContainerSelection({ checker, expression, report });
+    const handledInlineSelection = inspectDiscardedContainerSelection({
+      checker,
+      expression,
+      includeSelected: true,
+      report,
+    });
+    if (handledInlineSelection) {
+      return;
+    }
   }
 
   if (ts.isCallExpression(expression)) {
@@ -396,11 +409,13 @@ const inspectDiscardedContainerSelection = ({
   checker,
   expression,
   report,
+  includeSelected = false,
   selectionOverride,
 }: InspectDiscardedExpressionOptions & {
   readonly expression: ts.PropertyAccessExpression | ts.ElementAccessExpression;
+  readonly includeSelected?: boolean;
   readonly selectionOverride?: ContainerSelection;
-}): void => {
+}): boolean => {
   const host = unwrapDiscardedExpression(expression.expression);
   const parentAtSelection = ts.isCallExpression(expression.parent)
     ? inlineArrayAtSelection(expression.parent)
@@ -411,12 +426,13 @@ const inspectDiscardedContainerSelection = ({
       ? { kind: "index", value: parentAtSelection.index }
       : containerSelection(expression));
   if (ts.isObjectLiteralExpression(host)) {
-    if (selection.kind === "unknown") {
-      return;
+    if (!includeSelected && selection.kind === "unknown") {
+      return true;
     }
-    const selectedName = String(selection.value);
+    const selectedName =
+      selection.kind === "unknown" ? null : String(selection.value);
     for (const property of host.properties) {
-      if (propertyName(property) === selectedName) {
+      if (!includeSelected && propertyName(property) === selectedName) {
         continue;
       }
       if (ts.isPropertyAssignment(property)) {
@@ -439,15 +455,18 @@ const inspectDiscardedContainerSelection = ({
         });
       }
     }
-    return;
+    return true;
   }
   if (!ts.isArrayLiteralExpression(host)) {
-    return;
+    return false;
   }
   const selectedIndex =
     selection.kind === "index" ? selection.value : undefined;
   for (const [index, element] of host.elements.entries()) {
-    if (index === selectedIndex || ts.isOmittedExpression(element)) {
+    if (
+      (!includeSelected && index === selectedIndex) ||
+      ts.isOmittedExpression(element)
+    ) {
       continue;
     }
     inspectDiscardedExpression({
@@ -456,6 +475,7 @@ const inspectDiscardedContainerSelection = ({
       report,
     });
   }
+  return true;
 };
 
 const constantInteger = (expression: ts.Expression): number | null => {
@@ -619,7 +639,8 @@ const isConsumedInlineContainerMethod = (
   return (
     ts.isArrayLiteralExpression(host) &&
     selection.kind === "property" &&
-    selection.value === "at"
+    selection.value === "at" &&
+    inlineArrayAtSelection(parent) !== null
   );
 };
 

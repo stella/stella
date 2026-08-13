@@ -467,6 +467,7 @@ const astMayThrow = (node: unknown): boolean => {
   if (
     node.type === "CallExpression" ||
     node.type === "ImportExpression" ||
+    node.type === "MemberExpression" ||
     node.type === "NewExpression" ||
     node.type === "TaggedTemplateExpression" ||
     node.type === "ThrowStatement" ||
@@ -1245,23 +1246,39 @@ const resolveStaticObjectPath = (
           (latest, write) => Math.max(latest, write.position),
           Number.NEGATIVE_INFINITY,
         );
-      return applyStaticPropertyWrites(
-        baseResolution,
-        staticPropertyWrites(context, binding, propertyPath, beforePosition)
-          .filter((write) => write.position > ancestorCutoff)
-          .filter((write) => {
-            const aliasCapturePosition = write.aliasCapturePosition;
-            return (
-              aliasCapturePosition === undefined ||
-              !ancestorWrites.some(
-                (ancestorWrite) =>
-                  !ancestorWrite.conditional &&
-                  ancestorWrite.position > aliasCapturePosition &&
-                  ancestorWrite.position < write.position,
-              )
-            );
-          }),
-      );
+      const descendantWrites = staticPropertyWrites(
+        context,
+        binding,
+        propertyPath,
+        beforePosition,
+      )
+        .filter((write) => write.position > ancestorCutoff)
+        .filter((write) => {
+          const aliasCapturePosition = write.aliasCapturePosition;
+          return (
+            aliasCapturePosition === undefined ||
+            !ancestorWrites.some(
+              (ancestorWrite) =>
+                !ancestorWrite.conditional &&
+                ancestorWrite.position > aliasCapturePosition &&
+                ancestorWrite.position < write.position,
+            )
+          );
+        })
+        .map((write) => ({
+          ...write,
+          conditional:
+            write.conditional ||
+            ancestorWrites.some(
+              (ancestorWrite) =>
+                ancestorWrite.conditional &&
+                (ancestorWrite.position > write.position ||
+                  (write.aliasCapturePosition !== undefined &&
+                    ancestorWrite.position > write.aliasCapturePosition &&
+                    ancestorWrite.position < write.position)),
+            ),
+        }));
+      return applyStaticPropertyWrites(baseResolution, descendantWrites);
     }
   }
   const propertyName = propertyPath.at(0);
