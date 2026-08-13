@@ -66,22 +66,28 @@ describe("API deployment health receipt", () => {
   });
 
   test("release promotion preserves the full online-migration window", async () => {
-    const [releaseWorkflow, stagingWorkflow, promoteAction] = await Promise.all(
-      [
-        Bun.file(
-          new URL("../.github/workflows/release.yml", import.meta.url),
-        ).text(),
-        Bun.file(
-          new URL("../.github/workflows/deploy-staging.yml", import.meta.url),
-        ).text(),
-        Bun.file(
-          new URL(
-            "../.github/actions/promote-dispatch/action.yml",
-            import.meta.url,
-          ),
-        ).text(),
-      ],
-    );
+    const [
+      releaseWorkflow,
+      releaseDesktopWorkflow,
+      stagingWorkflow,
+      promoteAction,
+    ] = await Promise.all([
+      Bun.file(
+        new URL("../.github/workflows/release.yml", import.meta.url),
+      ).text(),
+      Bun.file(
+        new URL("../.github/workflows/release-desktop.yml", import.meta.url),
+      ).text(),
+      Bun.file(
+        new URL("../.github/workflows/deploy-staging.yml", import.meta.url),
+      ).text(),
+      Bun.file(
+        new URL(
+          "../.github/actions/promote-dispatch/action.yml",
+          import.meta.url,
+        ),
+      ).text(),
+    ]);
     const promoteJobStart = releaseWorkflow.indexOf("\n  promote:\n");
     const stagingJobStart = releaseWorkflow.indexOf(
       "\n  promote-staging:\n",
@@ -171,6 +177,74 @@ describe("API deployment health receipt", () => {
     expect(promoteJob).not.toContain("steps.app-token.outputs.token");
     expect(stagingWorkflow).not.toContain(
       "steps.deployment-token.outputs.token",
+    );
+
+    const desktopResolveStart =
+      releaseDesktopWorkflow.indexOf("\n  resolve:\n");
+    const desktopBuildStart = releaseDesktopWorkflow.indexOf(
+      "\n  build:\n",
+      desktopResolveStart,
+    );
+    const desktopVerifyStart = releaseDesktopWorkflow.indexOf(
+      "\n  verify-production:\n",
+      desktopBuildStart,
+    );
+    const desktopManifestStart = releaseDesktopWorkflow.indexOf(
+      "\n  manifest:\n",
+      desktopVerifyStart,
+    );
+    const desktopPromoteStart = releaseDesktopWorkflow.indexOf(
+      "\n  promote-latest:\n",
+      desktopManifestStart,
+    );
+    const desktopCarryStart = releaseDesktopWorkflow.indexOf(
+      "\n  carry-forward:\n",
+      desktopPromoteStart,
+    );
+    const desktopResolve = releaseDesktopWorkflow.slice(
+      desktopResolveStart,
+      desktopBuildStart,
+    );
+    const desktopVerify = releaseDesktopWorkflow.slice(
+      desktopVerifyStart,
+      desktopManifestStart,
+    );
+    const desktopManifest = releaseDesktopWorkflow.slice(
+      desktopManifestStart,
+      desktopPromoteStart,
+    );
+    const desktopPromote = releaseDesktopWorkflow.slice(
+      desktopPromoteStart,
+      desktopCarryStart,
+    );
+    const desktopCarry = releaseDesktopWorkflow.slice(desktopCarryStart);
+
+    expect(desktopResolveStart).toBeGreaterThanOrEqual(0);
+    expect(desktopBuildStart).toBeGreaterThan(desktopResolveStart);
+    expect(desktopVerifyStart).toBeGreaterThan(desktopBuildStart);
+    expect(desktopManifestStart).toBeGreaterThan(desktopVerifyStart);
+    expect(desktopPromoteStart).toBeGreaterThan(desktopManifestStart);
+    expect(desktopCarryStart).toBeGreaterThan(desktopPromoteStart);
+    expect(desktopResolve).toContain(
+      "github.event.workflow_run.conclusion == 'success'",
+    );
+    expect(desktopResolve).not.toContain('["success", "failure"]');
+    expect(desktopVerify).toContain("API_DEPLOYMENT_PROBE_PATH: ready");
+    expect(desktopVerify).toContain("API_DEPLOYMENT_PROBE_PATH: version.json");
+    expect(desktopManifest).toContain(
+      "needs: [resolve, build, verify-production]",
+    );
+    expect(desktopManifest).toContain(
+      "needs.verify-production.result == 'success'",
+    );
+    expect(desktopManifest).not.toContain("gh release edit");
+    expect(desktopPromote).toContain("needs.manifest.result == 'success'");
+    expect(desktopPromote).toContain('gh release edit "$RELEASE_REF" --latest');
+    expect(
+      desktopCarry.indexOf("Verify production serves the release commit"),
+    ).toBeGreaterThan(desktopCarry.indexOf('gh release upload "$RELEASE_REF"'));
+    expect(desktopCarry.indexOf("Promote release to latest")).toBeGreaterThan(
+      desktopCarry.indexOf("Verify production web serves the release commit"),
     );
   });
 
