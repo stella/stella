@@ -9,10 +9,10 @@ import { buttonVariants } from "@stll/ui/components/button-variants";
 import { cn } from "@stll/ui/lib/utils";
 
 import { CopyField } from "@/components/copy-field";
+import { useHydrationSafeDesktopPlatform } from "@/hooks/use-hydration-safe-desktop-platform";
 import type { TranslationKey } from "@/i18n/types";
 import { externalApiOrigin } from "@/lib/api-origins";
 import {
-  detectDesktopPlatform,
   MACOS_DMG_URL,
   WINDOWS_EXE_URL,
   WINDOWS_MSI_URL,
@@ -244,7 +244,7 @@ const AssistantSetupPanel = () => {
 
 const DesktopSetupPanel = () => {
   const t = useTranslations();
-  const platform = detectDesktopPlatform();
+  const platform = useHydrationSafeDesktopPlatform();
 
   const primaryClass = cn(buttonVariants(), "w-full");
   const secondaryClass =
