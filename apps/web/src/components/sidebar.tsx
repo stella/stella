@@ -1,4 +1,4 @@
-import { createContext, use, useMemo, useState } from "react";
+import { createContext, use, useId, useState } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { panic } from "better-result";
@@ -39,6 +39,14 @@ const SIDEBAR_WIDTH = `${SIDEBAR_WIDTH_PX / REM_PX}rem`;
 const SIDEBAR_WIDTH_MOBILE = "18rem";
 const SIDEBAR_WIDTH_ICON = `${SIDEBAR_WIDTH_ICON_PX / REM_PX}rem`;
 const DEFAULT_SIDEBAR_OPEN = true;
+
+const skeletonWidthFromId = (id: string): string => {
+  let hash = 0;
+  for (const character of id) {
+    hash = (hash * 31 + (character.codePointAt(0) ?? 0)) % 40;
+  }
+  return `${hash + 50}%`;
+};
 
 type SidebarContextProps = {
   state: "expanded" | "collapsed";
@@ -615,11 +623,8 @@ const SidebarMenuSkeleton = ({
 }: React.ComponentProps<"div"> & {
   showIcon?: boolean;
 }) => {
-  // Impure Math.random() must be frozen to one value for this instance's
-  // lifetime. This file is on the React Compiler bailout list, so React's
-  // runtime useMemo (empty deps) is honored and keeps the width stable.
-  // eslint-disable-next-line react/react-compiler -- deliberate one-shot frozen random skeleton width; useMemo([]) is load-bearing here because the file is compiler-bailed
-  const width = useMemo(() => `${Math.floor(Math.random() * 40) + 50}%`, []);
+  const skeletonId = useId();
+  const width = skeletonWidthFromId(skeletonId);
 
   return (
     <div
