@@ -634,7 +634,7 @@ const scrubCustomProperties = (xml: string): string =>
 type CollaborationAttributePolicies = {
   author: "clear";
   date: "remove";
-  initials: "remove";
+  initials: "clear";
   providerId: "remove";
   userId: "remove";
 };
@@ -646,7 +646,7 @@ type CollaborationAttributePolicies = {
 const COLLABORATION_ATTRIBUTE_POLICIES = {
   author: "clear",
   date: "remove",
-  initials: "remove",
+  initials: "clear",
   userId: "remove",
   providerId: "remove",
 } as const satisfies CollaborationAttributePolicies;

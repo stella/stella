@@ -364,7 +364,8 @@ describe("scrubDocumentProperties", () => {
       /<(?:cp:revision|cp:lastPrinted|dcterms:(?:created|modified))\b/u,
     );
     expect(scrubbedComments).toContain('x:author=""');
-    expect(scrubbedComments).not.toMatch(/x:(?:date|initials)=/u);
+    expect(scrubbedComments).toContain('x:initials=""');
+    expect(scrubbedComments).not.toMatch(/x:date=/u);
   });
 
   it("clears the OpenDocument meta part, statistics included", async () => {
