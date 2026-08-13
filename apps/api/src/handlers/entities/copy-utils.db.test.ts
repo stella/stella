@@ -6,6 +6,7 @@ import { organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { transactionAbortError } from "@/api/db/safe-db";
 import {
+  documentProcessingRuns,
   entities,
   entityVersions,
   fields,
@@ -17,6 +18,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type {
@@ -91,7 +93,7 @@ const seedMatter = async (): Promise<SeededMatter> => {
       id: propertyId,
       workspaceId,
       name: "Summary",
-      content: { type: "text", version: 1 },
+      content: { type: "file", version: 1 },
       tool: { type: "manual-input", version: 1 },
       status: "fresh",
     });
@@ -133,7 +135,18 @@ const subtree = ({
       fields: [
         {
           propertyId,
-          content: { version: 1, type: "text", value: "Filed 2026-01-08" },
+          content: {
+            type: "file",
+            version: 1,
+            id: allocateFileObject(),
+            fileName: "Statement of claim.docx",
+            mimeType:
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            sizeBytes: 1024,
+            encrypted: false,
+            sha256Hex: "a".repeat(64),
+            pdfFileId: null,
+          },
         },
       ],
     },
@@ -158,6 +171,7 @@ const runCopy = async (
       await testDb.transaction(async (tx: TestDatabaseTransaction) => {
         await tx.execute(sql.raw("RESET ROLE"));
         return await copyEntities({
+          organizationId: matter.organizationId,
           tx: asTestRaw<Transaction>(tx),
           targetWorkspaceId: matter.workspaceId,
           targetParentId: null,
@@ -183,6 +197,10 @@ const persistedCounts = async (matter: SeededMatter) => ({
     fields,
     eq(fields.workspaceId, matter.workspaceId),
   ),
+  extractionRuns: await testDb.$count(
+    documentProcessingRuns,
+    eq(documentProcessingRuns.organizationId, matter.organizationId),
+  ),
   searchMarks: await testDb.$count(
     searchProjectionRepairQueue,
     eq(searchProjectionRepairQueue.organizationId, matter.organizationId),
@@ -200,11 +218,47 @@ test("a complete subtree commits every copied row", async () => {
   );
 
   expect(Result.isOk(outcome)).toBe(true);
+  if (!Result.isOk(outcome)) {
+    throw new TypeError("Expected the copy transaction to commit");
+  }
+  const copiedDocument = outcome.value.copiedEntities.find(
+    ({ sourceId }) => sourceId === documentId,
+  );
+  if (!copiedDocument) {
+    throw new TypeError("Expected the document copy to persist");
+  }
+  const runId = outcome.value.nativeExtractionRunIds.at(0);
+  if (!runId) {
+    throw new TypeError(
+      "Expected the copied document to create an extraction run",
+    );
+  }
+  const run = await testDb.query.documentProcessingRuns.findFirst({
+    where: { id: { eq: runId } },
+  });
+  if (!run) {
+    throw new TypeError("Expected the extraction run to persist");
+  }
+  const copiedField = await testDb.query.fields.findFirst({
+    where: { id: { eq: run.fieldId } },
+  });
+  if (!copiedField || copiedField.content.type !== "file") {
+    throw new TypeError("Expected the run to reference a copied file field");
+  }
+  expect(run).toMatchObject({
+    entityId: copiedDocument.entityId,
+    entityVersionId: copiedField.entityVersionId,
+    organizationId: matter.organizationId,
+    sourceFileId: copiedField.content.id,
+    sourceSha256Hex: copiedField.content.sha256Hex,
+    workspaceId: matter.workspaceId,
+  });
   expect(await persistedCounts(matter)).toEqual({
     entities: 3,
     entityVersions: 3,
+    extractionRuns: 1,
     fields: 1,
-    searchMarks: 3,
+    searchMarks: 2,
   });
 });
 
@@ -236,6 +290,43 @@ test("a subtree that fails mid-loop persists no copy at all", async () => {
   expect(await persistedCounts(matter)).toEqual({
     entities: 0,
     entityVersions: 0,
+    extractionRuns: 0,
+    fields: 0,
+    searchMarks: 0,
+  });
+});
+
+test("rolling back after the copy also removes its extraction runs", async () => {
+  const matter = await seedMatter();
+  const sources = subtree({
+    propertyId: matter.propertyId,
+    lastVersion: { fields: [] },
+  });
+
+  const outcome = await Result.tryPromise(
+    async () =>
+      await testDb.transaction(async (tx: TestDatabaseTransaction) => {
+        await tx.execute(sql.raw("RESET ROLE"));
+        await copyEntities({
+          organizationId: matter.organizationId,
+          tx: asTestRaw<Transaction>(tx),
+          targetWorkspaceId: matter.workspaceId,
+          targetParentId: null,
+          userId: matter.userId,
+          recordAuditEvent: noAuditRows,
+          sourceEntityId: rootId,
+          sourceEntities: sources,
+          deleteSource: false,
+        });
+        throw new HandlerError({ status: 500, message: "force rollback" });
+      }),
+  );
+
+  expect(Result.isError(outcome)).toBe(true);
+  expect(await persistedCounts(matter)).toEqual({
+    entities: 0,
+    entityVersions: 0,
+    extractionRuns: 0,
     fields: 0,
     searchMarks: 0,
   });

@@ -64,11 +64,26 @@ void mock.module("@/api/lib/s3-presign", () => ({
 // extraction request itself is replaced.
 const realProcessExtraction =
   await import("@/api/lib/search/process-extraction");
-const processExtractionMock = mock(async (_entityId: string) => undefined);
+const requestNativeExtractionRunsMock = mock(
+  async ({ requests }: { requests: readonly unknown[] }) =>
+    requests.map((_, index) =>
+      toSafeId<"documentProcessingRun">(`run_${index}`),
+    ),
+);
 void mock.module("@/api/lib/search/process-extraction", () => ({
   ...realProcessExtraction,
-  processExtraction: processExtractionMock,
   requestNativeExtractionRun: mock(async () => null),
+  requestNativeExtractionRuns: requestNativeExtractionRunsMock,
+}));
+
+const enqueueDocumentProcessingRunMock = mock(
+  async (_runId: SafeId<"documentProcessingRun">) => undefined,
+);
+const realDocumentProcessingEnqueue =
+  await import("@/api/lib/document-processing-enqueue");
+void mock.module("@/api/lib/document-processing-enqueue", () => ({
+  ...realDocumentProcessingEnqueue,
+  enqueueDocumentProcessingRun: enqueueDocumentProcessingRunMock,
 }));
 
 const syncWorkspaceSearchActivityMock = mock(async () => undefined);
@@ -408,7 +423,8 @@ describe("duplicateWorkspace", () => {
     s3FileMock.mockClear();
     s3WriteMock.mockClear();
     s3DeleteMock.mockClear();
-    processExtractionMock.mockClear();
+    requestNativeExtractionRunsMock.mockClear();
+    enqueueDocumentProcessingRunMock.mockClear();
     syncWorkspaceSearchActivityMock.mockClear();
     enqueueWorkspaceSearchRepairsMock.mockClear();
     flushWorkspaceSearchRepairsMock.mockClear();
@@ -598,7 +614,8 @@ describe("duplicateWorkspace", () => {
   });
 
   test("marks the copies extraction will not index, inside the transaction", async () => {
-    processExtractionMock.mockClear();
+    requestNativeExtractionRunsMock.mockClear();
+    enqueueDocumentProcessingRunMock.mockClear();
     enqueueEntitySearchRepairsMock.mockClear();
     flushEntitySearchRepairsMock.mockClear();
 
@@ -782,7 +799,10 @@ describe("duplicateWorkspace", () => {
     expect(enqueueEntitySearchRepairsMock.mock.calls.at(0)?.at(1)).toEqual([
       copiedTaskId,
     ]);
-    expect(processExtractionMock.mock.calls).toEqual([[copiedDocumentId]]);
+    expect(requestNativeExtractionRunsMock).toHaveBeenCalledTimes(1);
+    expect(enqueueDocumentProcessingRunMock.mock.calls).toEqual([
+      [toSafeId<"documentProcessingRun">("run_0")],
+    ]);
   });
 
   test("returns every object copied for an aborted duplicate", async () => {

@@ -28,6 +28,11 @@ const VERSION_WRITE_HELPERS = new Set([
   "nextEntityVersionNumber",
 ]);
 
+const NATIVE_EXTRACTION_REQUEST_HELPERS = new Set([
+  "requestNativeExtractionRun",
+  "requestNativeExtractionRuns",
+]);
+
 const isScopeIdentifier = (node: unknown): node is ESTree.IdentifierReference =>
   isIdentifier(node);
 
@@ -286,8 +291,10 @@ export default eslintCompatPlugin({
                   processExtractionNamespaces.add(specifier.local.name);
                   continue;
                 }
+                const importedName = getImportedName(specifier);
                 if (
-                  getImportedName(specifier) === "requestNativeExtractionRun"
+                  importedName !== null &&
+                  NATIVE_EXTRACTION_REQUEST_HELPERS.has(importedName)
                 ) {
                   const localName = getImportLocalName(specifier);
                   if (localName !== null) {
@@ -387,8 +394,9 @@ export default eslintCompatPlugin({
               (callee?.type === "MemberExpression" &&
                 isIdentifier(callee.object) &&
                 processExtractionNamespaces.has(callee.object.name) &&
-                getPropertyName(callee.property) ===
-                  "requestNativeExtractionRun");
+                NATIVE_EXTRACTION_REQUEST_HELPERS.has(
+                  getPropertyName(callee.property) ?? "",
+                ));
             if (isNativeExtractionRequest) {
               claimCapability(
                 VERSION_WRITE_CAPABILITY.REQUEST_NATIVE_EXTRACTION,

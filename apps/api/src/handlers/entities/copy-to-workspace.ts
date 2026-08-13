@@ -25,6 +25,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { handoffCommittedDocumentProcessingRuns } from "@/api/lib/document-processing-handoff";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   enqueueImageThumbnailOrMarkFailed,
@@ -40,10 +41,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/lib/properties/create-schema";
 import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtime";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
-import {
-  processExtraction,
-  SEARCH_INDEX_OWNER,
-} from "@/api/lib/search/process-extraction";
+import { SEARCH_INDEX_OWNER } from "@/api/lib/search/process-extraction";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
 const copyToWorkspaceBodySchema = t.Object({
@@ -479,6 +477,7 @@ const copyToWorkspaceHandler = async function* ({
   const sourceEntityIds = sourceEntities.map((e) => e.id);
   const txResultResult = await safeDb(async (tx) => {
     const copyResult = await copyEntities({
+      organizationId,
       tx,
       targetWorkspaceId,
       targetParentId,
@@ -549,12 +548,10 @@ const copyToWorkspaceHandler = async function* ({
     txResult.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
   ).catch(captureError);
 
-  // Request extraction for the copies a run indexes
-  for (const entityId of txResult.entityIdsBySearchIndexOwner[
-    SEARCH_INDEX_OWNER.durableExtraction
-  ]) {
-    processExtraction(entityId).catch(captureError);
-  }
+  // Acceleration only: each run already committed with its copied source.
+  handoffCommittedDocumentProcessingRuns({
+    runIds: txResult.nativeExtractionRunIds,
+  }).catch(captureError);
 
   // Enqueue PDF derivative generation for copied file fields
   for (const fileField of txResult.fileFields) {

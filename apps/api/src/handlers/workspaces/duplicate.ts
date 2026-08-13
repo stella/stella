@@ -29,6 +29,7 @@ import {
   remapNodePropertyIds,
 } from "@/api/lib/conditions/ast-utils";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
+import { handoffCommittedDocumentProcessingRuns } from "@/api/lib/document-processing-handoff";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
@@ -47,11 +48,14 @@ import {
 import { getS3 } from "@/api/lib/s3";
 import { copyObject } from "@/api/lib/s3-presign";
 import {
-  processExtraction,
+  nativeExtractionRunRequestForFields,
+  requestNativeExtractionRuns,
   SEARCH_INDEX_OWNER,
-  searchIndexOwnerForFields,
 } from "@/api/lib/search/process-extraction";
-import type { SearchIndexOwner } from "@/api/lib/search/process-extraction";
+import type {
+  NativeExtractionRunRequest,
+  SearchIndexOwner,
+} from "@/api/lib/search/process-extraction";
 import {
   enqueueEntitySearchRepairs,
   enqueueWorkspaceSearchRepairs,
@@ -767,6 +771,7 @@ const duplicateWorkspace = createSafeHandler(
           [SEARCH_INDEX_OWNER.durableExtraction]: [],
           [SEARCH_INDEX_OWNER.searchMark]: [],
         };
+      const nativeExtractionRequests: NativeExtractionRunRequest[] = [];
       const entitiesToDuplicate = orderEntitiesForDuplicate(snapshot.entities);
 
       if (includeContent && entitiesToDuplicate.length > 0) {
@@ -851,6 +856,7 @@ const duplicateWorkspace = createSafeHandler(
             }
             return [
               {
+                id: createSafeId<"field">(),
                 workspaceId: targetWorkspaceId,
                 propertyId,
                 entityVersionId: newVersionId,
@@ -864,12 +870,25 @@ const duplicateWorkspace = createSafeHandler(
           }
 
           entityIdMap.set(source.id, newEntityId);
-          // `newFields` is inserted in source field order and its ids are
-          // generated in that same order, so the copy resolves the same
-          // extraction source `processExtraction` will resolve for it.
-          duplicatedEntityIds[searchIndexOwnerForFields(newFields)].push(
-            newEntityId,
-          );
+          // IDs are minted in source field order, so the transactional run
+          // uses the same selected file the post-commit processor would read.
+          const extractionRequest = nativeExtractionRunRequestForFields({
+            entityId: newEntityId,
+            entityVersionId: newVersionId,
+            fields: newFields,
+            organizationId,
+            workspaceId: targetWorkspaceId,
+          });
+          if (extractionRequest === null) {
+            duplicatedEntityIds[SEARCH_INDEX_OWNER.searchMark].push(
+              newEntityId,
+            );
+          } else {
+            duplicatedEntityIds[SEARCH_INDEX_OWNER.durableExtraction].push(
+              newEntityId,
+            );
+            nativeExtractionRequests.push(extractionRequest);
+          }
         }
       }
 
@@ -890,11 +909,16 @@ const duplicateWorkspace = createSafeHandler(
         tx,
         duplicatedEntityIds[SEARCH_INDEX_OWNER.searchMark],
       );
+      const nativeExtractionRunIds = await requestNativeExtractionRuns({
+        requests: nativeExtractionRequests,
+        tx,
+      });
       await enqueueWorkspaceSearchRepairs(tx, [targetWorkspaceId]);
 
       return {
         workspaceId: targetWorkspaceId,
         entityIds: duplicatedEntityIds,
+        nativeExtractionRunIds,
       };
     });
 
@@ -908,10 +932,8 @@ const duplicateWorkspace = createSafeHandler(
       return Result.err(transactionAbortError(txResult.error));
     }
 
-    // Both post-commit calls only accelerate what the transaction already
-    // guarantees: the marked copies keep their queued row until a repair
-    // rebuilds their projection, and the documents keep the immutable source
-    // the bounded extraction repair scan requests a run for.
+    // These post-commit calls only accelerate work the transaction already
+    // made durable: projection marks and immutable-source extraction runs.
     flushWorkspaceSearchRepairs([txResult.value.workspaceId]).catch(
       captureError,
     );
@@ -919,11 +941,9 @@ const duplicateWorkspace = createSafeHandler(
       txResult.value.entityIds[SEARCH_INDEX_OWNER.searchMark],
     ).catch(captureError);
 
-    for (const entityId of txResult.value.entityIds[
-      SEARCH_INDEX_OWNER.durableExtraction
-    ]) {
-      processExtraction(entityId).catch(captureError);
-    }
+    handoffCommittedDocumentProcessingRuns({
+      runIds: txResult.value.nativeExtractionRunIds,
+    }).catch(captureError);
 
     return Result.ok({ workspaceId: txResult.value.workspaceId });
   },

@@ -57,11 +57,26 @@ void mock.module("@/api/lib/s3-presign", () => ({
 // split from here. Only the durable extraction request itself is replaced.
 const realProcessExtraction =
   await import("@/api/lib/search/process-extraction");
-const processExtractionMock = mock(async (_entityId: string) => undefined);
+const requestNativeExtractionRunsMock = mock(
+  async ({ requests }: { requests: readonly unknown[] }) =>
+    requests.map((_, index) =>
+      toSafeId<"documentProcessingRun">(`run_${index}`),
+    ),
+);
 void mock.module("@/api/lib/search/process-extraction", () => ({
   ...realProcessExtraction,
-  processExtraction: processExtractionMock,
   requestNativeExtractionRun: mock(async () => null),
+  requestNativeExtractionRuns: requestNativeExtractionRunsMock,
+}));
+
+const enqueueDocumentProcessingRunMock = mock(
+  async (_runId: SafeId<"documentProcessingRun">) => undefined,
+);
+const realDocumentProcessingEnqueue =
+  await import("@/api/lib/document-processing-enqueue");
+void mock.module("@/api/lib/document-processing-enqueue", () => ({
+  ...realDocumentProcessingEnqueue,
+  enqueueDocumentProcessingRun: enqueueDocumentProcessingRunMock,
 }));
 
 const enqueueEntitySearchRepairsMock = mock(
@@ -225,7 +240,8 @@ beforeEach(() => {
   writeMock.mockClear();
   s3DeleteMock.mockClear();
   captureErrorMock.mockClear();
-  processExtractionMock.mockClear();
+  requestNativeExtractionRunsMock.mockClear();
+  enqueueDocumentProcessingRunMock.mockClear();
   enqueueEntitySearchRepairsMock.mockClear();
   flushEntitySearchRepairsMock.mockClear();
   syncWorkspaceSearchActivityMock.mockClear();
@@ -450,7 +466,10 @@ describe("copy-to-workspace", () => {
     if (!copiedEntity) {
       throw new Error("Expected the copy to be inserted");
     }
-    expect(processExtractionMock.mock.calls).toEqual([[copiedEntity.id]]);
+    expect(requestNativeExtractionRunsMock).toHaveBeenCalledTimes(1);
+    expect(enqueueDocumentProcessingRunMock.mock.calls).toEqual([
+      [toSafeId<"documentProcessingRun">("run_0")],
+    ]);
     expect(enqueueEntitySearchRepairsMock.mock.calls.at(0)?.at(1)).toEqual([]);
   });
 
@@ -1374,7 +1393,7 @@ describe("copy-to-workspace", () => {
     // Neither copy has a file for an extraction run to read, so both are
     // marked dirty inside the copy transaction and nothing else would index
     // them if the post-commit flush were lost.
-    expect(processExtractionMock).not.toHaveBeenCalled();
+    expect(enqueueDocumentProcessingRunMock).not.toHaveBeenCalled();
     expect(enqueueEntitySearchRepairsMock).toHaveBeenCalledTimes(1);
     expect(enqueueEntitySearchRepairsMock.mock.calls.at(0)?.at(1)).toEqual([
       copiedFolder?.id,
@@ -1592,7 +1611,7 @@ describe("copy-to-workspace", () => {
     // Nothing is indexed for copies that no longer exist.
     expect(enqueueEntitySearchRepairsMock).not.toHaveBeenCalled();
     expect(flushEntitySearchRepairsMock).not.toHaveBeenCalled();
-    expect(processExtractionMock).not.toHaveBeenCalled();
+    expect(enqueueDocumentProcessingRunMock).not.toHaveBeenCalled();
   });
 
   test("rejects copy to same workspace", async () => {
