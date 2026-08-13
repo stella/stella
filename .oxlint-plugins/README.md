@@ -62,7 +62,7 @@ runtime validation, or integration tests.
 - [`no-offset-pagination`](./no-offset-pagination.ts) (`no-offset-pagination`): prevents offset/skip pagination in scalable application query paths.
 - [`no-spread-input-in-query-key`](./no-spread-input-in-query-key.ts) (`no-spread-input-in-query-key`): prevents whole input objects from silently changing query-key identity as fields evolve.
 - [`no-truncated-timestamp-comparison`](./no-truncated-timestamp-comparison.ts) (`no-truncated-timestamp-comparison`): prevents cursor and ordering comparisons against timestamps truncated below stored precision.
-- [`no-untyped-updates`](./no-untyped-updates.ts) (`no-untyped-updates`): rejects broad `Record<string, unknown | any>` update bags in handler scopes; prefer schema-derived, explicit update shapes.
+- [`no-untyped-updates`](./no-untyped-updates.ts) (`no-untyped-updates`): rejects broad `Record<string, unknown | any>` update bags only when they flow through stable aliases or spreads into direct Drizzle `update(...).set(...)` sinks; unrelated records remain valid.
 - [`no-workspace-field-value-drift`](./no-workspace-field-value-drift.ts) (`no-workspace-field-value-drift`, `no-raw-field-value-bidi-text`): keeps workspace field rendering on the canonical value path and requires bidi-safe rendering for raw field text.
 - [`require-coordination-key`](./require-coordination-key.ts) (`require-coordination-key`): requires background and ingestion work to declare the stable key used for deduplication and serialization.
 - [`require-custom-jsonb-column`](./require-custom-jsonb-column.ts) (`require-custom-jsonb-column`): requires Drizzle JSONB columns to carry their domain type through `$type`.
@@ -92,6 +92,7 @@ runtime validation, or integration tests.
 - [`no-shared-suspense-query`](./no-shared-suspense-query.ts) (`no-shared-suspense-query`): prevents suspense queries in shared UI components that lack route-owned prefetching.
 - [`no-static-catalogue-route-import`](./no-static-catalogue-route-import.ts) (`no-static-catalogue-route-import`): prevents static imports of large catalogue route modules that defeat route-level code splitting.
 - [`no-strict-route-read-in-chrome`](./no-strict-route-read-in-chrome.ts) (`no-strict-route-read-in-chrome`): prevents strict router reads in reusable chrome that can render outside the matching route.
+- [`require-cn-for-classname-composition`](./require-cn-for-classname-composition.ts) (`require-cn-for-classname-composition`): requires conditional, interpolated, concatenated, or helper-composed JSX class names to use `cn` from `@stll/ui/lib/utils`; static and pass-through values remain valid.
 - [`require-contained-handler`](./require-contained-handler.ts) (`require-contained-handler`): wraps handlers on ref-owned containers so portal-bubbled events do not trigger unrelated parent behavior.
 - [`require-loader-prefetch`](./require-loader-prefetch.ts) (`require-loader-prefetch`): requires suspense query data to start in the route loader rather than after component mount.
 - [`require-query-key-factory`](./require-query-key-factory.ts) (`require-query-key-factory`): requires query keys to come from their feature-owned factory.
@@ -124,7 +125,6 @@ runtime validation, or integration tests.
 
 ### Errors, async work, results, and observability
 
-- [`must-use-result`](./must-use-result.ts) (`must-use-result`): prevents typed `Result` values from being discarded without inspection, return, or propagation.
 - [`no-async-context-enter-with`](./no-async-context-enter-with.ts) (`no-async-context-enter-with`): bans `AsyncLocalStorage.enterWith`, whose ambient context can leak into unrelated background work; use `run`.
 - [`no-bare-error`](./no-bare-error.ts) (`no-bare-error`): requires structured tagged errors or `panic()` instead of unclassified `new Error()` values.
 - [`no-swallowed-rejection`](./no-swallowed-rejection.ts) (`no-swallowed-rejection`): rejects `.catch()` handlers that silently turn failures into constant empty values.
@@ -140,6 +140,7 @@ runtime validation, or integration tests.
 - [`ai-output-strict-schema`](./ai-output-strict-schema.ts) (`ai-output-strict-schema`): requires AI structured-output schemas to reject unknown properties instead of silently accepting model drift.
 - [`forbid-dev-runner-config-reads`](./forbid-dev-runner-config-reads.ts) (`forbid-dev-runner-config-reads`): prevents application code from importing or reading development-runner configuration.
 - [`forbid-process-env-outside-env-ts`](./forbid-process-env-outside-env-ts.ts) (`forbid-process-env-outside-env-ts`): confines unvalidated environment reads to explicit env, config, test, and script boundaries.
+- [`no-ambient-nondeterminism`](./no-ambient-nondeterminism.ts) (`no-ambient-nondeterminism`): rejects ambient time and randomness in deterministic backend policy, normalization, codec, and classification modules; callers must provide owned inputs.
 - [`no-awaited-builder-union`](./no-awaited-builder-union.ts) (`no-awaited-builder-union`): avoids awaiting a union of two generic builder states, which causes disproportionate type-instantiation cost.
 - [`no-bare-chrome-query`](./no-bare-chrome-query.ts) (`no-bare-chrome-query`): requires Chrome extension messaging and query operations to use the owned adapter.
 - [`no-coerced-optional-union-enum`](./no-coerced-optional-union-enum.ts) (`no-coerced-optional-union-enum`): rejects coercion around optional union enums that widens or changes missing-value semantics.
@@ -158,6 +159,7 @@ Do not recreate a project plugin when an enabled native rule expresses the same
 invariant more accurately:
 
 - `typescript/no-explicit-any` and `typescript/no-unsafe-type-assertion` replace the retired `no-any-casts`, `no-dangerous-type-assertions`, and `no-prompt-boundary-casts` plugins.
+- [`result-consumption.ts`](../packages/scripts/src/result-consumption.ts) uses the TypeScript compiler's resolved Better Result types to reject discarded `Result` values without relying on callee spellings.
 - `oxc/no-accumulating-spread` prevents quadratic spread accumulation in loops and reducers.
 - `@stll/oxlint-config/no-raw-colors` owns semantic color-token enforcement; it is external to this directory.
 - The shared `stella-lowercase` plugin owns lowercase-copy checks.

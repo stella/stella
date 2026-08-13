@@ -5,6 +5,7 @@ import { Result } from "better-result";
 import { useShallow } from "zustand/react/shallow";
 
 import { Skeleton } from "@stll/ui/components/skeleton";
+import { cn } from "@stll/ui/lib/utils";
 
 import {
   PAGE_ID_ATTRIBUTE,
@@ -304,11 +305,11 @@ const PDFSearchHighlightBox = ({
   return (
     <div
       ref={highlightRef}
-      className={
+      className={cn(
         isActive
           ? "search-document-highlight bg-highlight/90 ring-highlight-foreground/30 absolute rounded-xs ring-1"
-          : "search-document-highlight bg-highlight/45 absolute rounded-xs"
-      }
+          : "search-document-highlight bg-highlight/45 absolute rounded-xs",
+      )}
       data-active={isActive ? "true" : undefined}
       data-search-highlight={true}
       data-search-match-index={matchIndex}

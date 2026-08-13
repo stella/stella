@@ -1,3 +1,5 @@
+import { cn } from "@stll/ui/lib/utils";
+
 import { UserIdentity } from "@/components/user-avatar";
 import type { PersonMention } from "@/lib/types";
 
@@ -23,7 +25,7 @@ export const PersonMentionLabel = ({
       image={mention.image}
       name={mention.name}
       nameClassName="text-inherit font-normal"
-      {...(className === undefined ? {} : { className })}
+      {...(className === undefined ? {} : { className: cn(className) })}
       {...(mention.hideAvatar === undefined
         ? {}
         : { hideAvatar: mention.hideAvatar })}

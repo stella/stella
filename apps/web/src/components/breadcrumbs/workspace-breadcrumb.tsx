@@ -18,6 +18,7 @@ import {
 import { Input } from "@stll/ui/components/input";
 import { Popover, PopoverPopup } from "@stll/ui/components/popover";
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
 import { MatterIcon } from "@/components/matter-icon";
@@ -188,7 +189,7 @@ export const WorkspaceBreadcrumb = ({
     if (isEditingRef) {
       return (
         <Input
-          className={`${breadcrumbInputClassName} w-28 text-sm`}
+          className={cn(breadcrumbInputClassName, "w-28 text-sm")}
           onBlur={() => {
             detached(refRename.commit(), "workspace-breadcrumb.commit");
           }}
@@ -260,7 +261,7 @@ export const WorkspaceBreadcrumb = ({
                     />
                   </span>
                   <Input
-                    className={`${matterNameInputClassName} w-fit`}
+                    className={cn(matterNameInputClassName, "w-fit")}
                     disabled={updateWorkspace.isPending}
                     onBlur={() => {
                       detached(
@@ -368,7 +369,7 @@ export const WorkspaceBreadcrumb = ({
         <BreadcrumbItem className="shrink-0">
           {colorPicker}
           <Input
-            className={`${matterNameInputClassName} w-fit`}
+            className={cn(matterNameInputClassName, "w-fit")}
             disabled={updateWorkspace.isPending}
             onBlur={() => {
               detached(nameRename.commit(), "workspace-breadcrumb.commit");

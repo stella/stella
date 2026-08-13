@@ -620,9 +620,7 @@ export const ClauseEditor = ({
         <div className="bg-border mx-1 h-4 w-px" />
         <Button
           aria-label={t("folio.bold")}
-          className={
-            editorReady && editor.isActive("bold") ? "bg-muted" : undefined
-          }
+          className={cn(editorReady && editor.isActive("bold") && "bg-muted")}
           disabled={!editorReady || editingLocked}
           onClick={toggleBold}
           size="icon-xs"
@@ -633,9 +631,7 @@ export const ClauseEditor = ({
         </Button>
         <Button
           aria-label={t("folio.italic")}
-          className={
-            editorReady && editor.isActive("italic") ? "bg-muted" : undefined
-          }
+          className={cn(editorReady && editor.isActive("italic") && "bg-muted")}
           disabled={!editorReady || editingLocked}
           onClick={toggleItalic}
           size="icon-xs"
@@ -647,11 +643,11 @@ export const ClauseEditor = ({
         <div className="bg-border mx-1 h-4 w-px" />
         <Button
           aria-label="H1"
-          className={
-            editorReady && editor.isActive("heading", { level: 1 })
-              ? "bg-muted"
-              : undefined
-          }
+          className={cn(
+            editorReady &&
+              editor.isActive("heading", { level: 1 }) &&
+              "bg-muted",
+          )}
           disabled={!editorReady || editingLocked}
           onClick={() => toggleHeading(1)}
           size="icon-xs"
@@ -662,11 +658,11 @@ export const ClauseEditor = ({
         </Button>
         <Button
           aria-label="H2"
-          className={
-            editorReady && editor.isActive("heading", { level: 2 })
-              ? "bg-muted"
-              : undefined
-          }
+          className={cn(
+            editorReady &&
+              editor.isActive("heading", { level: 2 }) &&
+              "bg-muted",
+          )}
           disabled={!editorReady || editingLocked}
           onClick={() => toggleHeading(2)}
           size="icon-xs"
@@ -677,11 +673,11 @@ export const ClauseEditor = ({
         </Button>
         <Button
           aria-label="H3"
-          className={
-            editorReady && editor.isActive("heading", { level: 3 })
-              ? "bg-muted"
-              : undefined
-          }
+          className={cn(
+            editorReady &&
+              editor.isActive("heading", { level: 3 }) &&
+              "bg-muted",
+          )}
           disabled={!editorReady || editingLocked}
           onClick={() => toggleHeading(3)}
           size="icon-xs"
@@ -693,11 +689,9 @@ export const ClauseEditor = ({
         <div className="bg-border mx-1 h-4 w-px" />
         <Button
           aria-label={t("folio.bulletList")}
-          className={
-            editorReady && editor.isActive("bulletList")
-              ? "bg-muted"
-              : undefined
-          }
+          className={cn(
+            editorReady && editor.isActive("bulletList") && "bg-muted",
+          )}
           disabled={!editorReady || editingLocked}
           onClick={toggleBulletList}
           size="icon-xs"
@@ -708,11 +702,9 @@ export const ClauseEditor = ({
         </Button>
         <Button
           aria-label={t("folio.numberedList")}
-          className={
-            editorReady && editor.isActive("orderedList")
-              ? "bg-muted"
-              : undefined
-          }
+          className={cn(
+            editorReady && editor.isActive("orderedList") && "bg-muted",
+          )}
           disabled={!editorReady || editingLocked}
           onClick={toggleOrderedList}
           size="icon-xs"

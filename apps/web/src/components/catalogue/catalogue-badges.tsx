@@ -1,5 +1,7 @@
 import { useTranslations } from "use-intl";
 
+import { cn } from "@stll/ui/lib/utils";
+
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
 import type { TranslationKey } from "@/i18n/types";
@@ -29,7 +31,10 @@ export const CostBadge = ({ cost }: { cost: Cost | null }) => {
       : "bg-warning/12 text-warning-foreground";
   return (
     <span
-      className={`${tone} inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium`}
+      className={cn(
+        tone,
+        "inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium",
+      )}
     >
       {t(COST_LABEL_KEY[cost])}
     </span>

@@ -851,7 +851,7 @@ const RedlinePreview = ({
           return <span key={key}>{seg.text}</span>;
         }
         return (
-          <span className={seg.type === "del" ? delCls : insCls} key={key}>
+          <span className={cn(seg.type === "del" ? delCls : insCls)} key={key}>
             {seg.text}
           </span>
         );

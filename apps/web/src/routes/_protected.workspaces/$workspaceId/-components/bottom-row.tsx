@@ -1,6 +1,8 @@
 import { PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { cn } from "@stll/ui/lib/utils";
+
 import { getInternalColId } from "@/components/workspaces/entity-utils";
 import type { WorkspaceTable } from "@/components/workspaces/table/types";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
@@ -33,7 +35,7 @@ export const BottomRow = ({
       onFolderCreated={onFolderCreated}
       uploadOnly
       render={
-        <WorkspaceGridRow className={bottomRowClassName} role="button">
+        <WorkspaceGridRow className={cn(bottomRowClassName)} role="button">
           <WorkspaceGridCell
             className="z-10 flex items-center justify-center border-t"
             style={{

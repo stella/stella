@@ -1,6 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import { scanMarkers } from "@stll/template-conditions";
+import { cn } from "@stll/ui/lib/utils";
 
 import { CONDITIONAL_KINDS } from "@/routes/_protected.knowledge/-components/directive-kinds";
 import type { BlockDirectiveKind } from "@/routes/_protected.knowledge/-components/directive-kinds";
@@ -24,11 +25,12 @@ export const HighlightedText = ({ text }: { text: string }) => {
 
     parts.push(
       <mark
-        className={`rounded-sm px-0.5 ${
+        className={cn(
+          "rounded-sm px-0.5",
           isField
             ? "bg-warning/15 dark:bg-warning/15"
-            : "bg-muted dark:bg-muted"
-        }`}
+            : "bg-muted dark:bg-muted",
+        )}
         key={marker.start}
       >
         {marker.raw}
@@ -75,11 +77,12 @@ export const DirectiveLabel = ({
 
   return (
     <span
-      className={`text-xs font-medium ${
+      className={cn(
+        "text-xs font-medium",
         isConditional
           ? "text-foreground dark:text-foreground-muted"
-          : "text-success"
-      }`}
+          : "text-success",
+      )}
     >
       {label}
     </span>

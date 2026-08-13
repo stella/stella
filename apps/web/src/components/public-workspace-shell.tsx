@@ -215,11 +215,11 @@ const PublicSidebar = ({
     >
       <SidebarHeader className="border-sidebar-border h-12 border-b p-0">
         <div
-          className={
+          className={cn(
             isCollapsed
               ? "flex h-full items-center justify-center"
-              : "flex h-full items-center justify-between ps-3 pe-2"
-          }
+              : "flex h-full items-center justify-between ps-3 pe-2",
+          )}
         >
           {!isCollapsed && <StellaWordmark className="h-5 w-auto" />}
           <Button

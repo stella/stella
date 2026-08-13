@@ -4,6 +4,7 @@ import { AlertTriangleIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { TextSeparator } from "@stll/ui/components/separator";
+import { cn } from "@stll/ui/lib/utils";
 
 import { optionalArray } from "@/lib/arrays";
 import { templatePreviewOptions } from "@/lib/knowledge/queries";
@@ -179,11 +180,12 @@ const ConnectorLines = ({
   <>
     {activeSpans.map((span) => (
       <div
-        className={`absolute top-0 bottom-0 w-px ${
+        className={cn(
+          "absolute top-0 bottom-0 w-px",
           span.family === "conditional"
             ? "bg-foreground/30 dark:bg-foreground-strong-muted"
-            : "bg-success/30 dark:bg-success/50"
-        }`}
+            : "bg-success/30 dark:bg-success/50",
+        )}
         key={`${span.startIdx}-${span.depth}`}
         style={{ insetInlineStart: span.depth * LINE_OFFSET + 7 }}
       />
@@ -216,11 +218,12 @@ const PreviewParagraph = ({
       <div className="relative">
         <ConnectorLines activeSpans={activeSpans} />
         <div
-          className={`rounded-sm border-s-[3px] py-1.5 ps-3 pe-2 ${
+          className={cn(
+            "rounded-sm border-s-[3px] py-1.5 ps-3 pe-2",
             isConditional
               ? "border-foreground-disabled bg-accent/50 dark:border-foreground-disabled dark:bg-accent/30"
-              : "border-success/40 bg-success/10 dark:border-success/40 dark:bg-success/10"
-          }`}
+              : "border-success/40 bg-success/10 dark:border-success/40 dark:bg-success/10",
+          )}
           style={{ marginInlineStart: depth * LINE_OFFSET }}
         >
           <DirectiveLabel
@@ -263,7 +266,7 @@ const PreviewParagraph = ({
       style={{ paddingInlineStart: depth * LINE_OFFSET }}
     >
       <ConnectorLines activeSpans={activeSpans} />
-      <p className={fontClasses} style={fontStyle}>
+      <p className={cn(fontClasses)} style={fontStyle}>
         <HighlightedText text={paragraph.text} />
       </p>
       {error && <ErrorIndicator error={error} />}

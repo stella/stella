@@ -1505,19 +1505,10 @@ const AssistantMessageParts = ({
     if (part.type === "text") {
       return (
         <AssistantTextPart
-          className={
-            assistantTextDensity === "compact"
-              ? cn(
-                  "text-[13px] leading-5",
-                  "[&_h1]:my-2 [&_h1]:text-[16px] [&_h1]:leading-5",
-                  "[&_h2]:my-2 [&_h2]:text-[15px] [&_h2]:leading-5",
-                  "[&_h3]:my-1.5 [&_h3]:text-[14px] [&_h3]:leading-5",
-                  "[&_h4]:my-1.5 [&_h4]:text-[13px] [&_h4]:leading-5",
-                  "[&_h5]:my-1.5 [&_h5]:text-[13px] [&_h5]:leading-5",
-                  "[&_h6]:my-1.5 [&_h6]:text-[13px] [&_h6]:leading-5",
-                )
-              : undefined
-          }
+          className={cn(
+            assistantTextDensity === "compact" &&
+              "text-[13px] leading-5 [&_h1]:my-2 [&_h1]:text-[16px] [&_h1]:leading-5 [&_h2]:my-2 [&_h2]:text-[15px] [&_h2]:leading-5 [&_h3]:my-1.5 [&_h3]:text-[14px] [&_h3]:leading-5 [&_h4]:my-1.5 [&_h4]:text-[13px] [&_h4]:leading-5 [&_h5]:my-1.5 [&_h5]:text-[13px] [&_h5]:leading-5 [&_h6]:my-1.5 [&_h6]:text-[13px] [&_h6]:leading-5",
+          )}
           components={streamdownComponents}
           key={`${message.id}-text-${index}`}
           restorationPairs={restorationPairs}
@@ -1920,7 +1911,8 @@ const AssistantTextPart = ({
         : undefined,
     [restorationPairs],
   );
-  const classNamePatch = className === undefined ? {} : { className };
+  const classNamePatch =
+    className === undefined ? {} : { className: cn(className) };
   if (rehypePlugins === undefined) {
     return (
       <MessageResponse

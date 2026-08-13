@@ -3,6 +3,8 @@ import type { MouseEvent } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useShallow } from "zustand/react/shallow";
 
+import { cn } from "@stll/ui/lib/utils";
+
 import { getOverlayRectKey } from "@/lib/anonymize/overlay-rects";
 import { getEntityColor } from "@/lib/anonymize/ui-constants";
 import { useOverlayRects } from "@/lib/anonymize/use-overlay-rects";
@@ -51,11 +53,11 @@ export const PageAnonymization = ({
   return (
     <div
       aria-hidden={true}
-      className={
+      className={cn(
         variant === "peek" && peekNavigation
           ? "absolute inset-0 z-10"
-          : "pointer-events-none absolute inset-0"
-      }
+          : "pointer-events-none absolute inset-0",
+      )}
     >
       {overlays.flatMap((entity) => {
         const rects = entityRects.get(entity.id);

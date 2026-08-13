@@ -395,7 +395,7 @@ const EditorialSupplement = ({
         </section>
       )}
       {abstract && (
-        <section className={legalSentence ? "mt-4" : ""}>
+        <section className={cn(legalSentence ? "mt-4" : "")}>
           <h4 className="text-muted-foreground mb-2 text-[0.75rem] font-semibold tracking-wide uppercase">
             {t("caseLaw.viewer.abstract")}
           </h4>

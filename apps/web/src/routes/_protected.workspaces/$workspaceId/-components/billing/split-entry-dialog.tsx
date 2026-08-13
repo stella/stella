@@ -8,6 +8,7 @@ import { Dialog, DialogPopup } from "@stll/ui/components/dialog";
 import { Input } from "@stll/ui/components/input";
 import { Label } from "@stll/ui/components/label";
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import { MatterCombobox } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox";
 import { useSplitTimeEntry } from "@/routes/_protected.workspaces/$workspaceId/-mutations/time-entries";
@@ -169,11 +170,11 @@ export const SplitEntryDialog = ({
               {t("billing.split.addSplit")}
             </Button>
             <span
-              className={
+              className={cn(
                 totalPercentage === 100
                   ? "text-success text-xs"
-                  : "text-destructive text-xs"
-              }
+                  : "text-destructive text-xs",
+              )}
             >
               {t("billing.split.percentValue", {
                 value: String(totalPercentage),

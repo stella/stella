@@ -2,6 +2,8 @@ import { lazy, Suspense } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { cn } from "@stll/ui/lib/utils";
+
 import type { CreateDocumentDraftPayload } from "@/components/chat/create-document-draft.logic";
 import { DocumentIcon } from "@/components/document-icon";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
@@ -43,7 +45,7 @@ export const CreateDocumentDraftRailIcon = ({
   tab,
 }: InspectorRailIconProps<CreateDocumentDraftPayload>) => (
   <DocumentIcon
-    className={active ? "size-3.5" : "size-3.5 opacity-70"}
+    className={cn(active ? "size-3.5" : "size-3.5 opacity-70")}
     fileName={tab.label}
     mimeType={DOCX_MIME}
   />

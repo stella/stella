@@ -102,14 +102,23 @@ const LazyInspectorPanel = lazy(
 const InspectorRailFallback = () => (
   <div className="bg-background flex h-full border-s shadow-lg">
     <div
-      className={`bg-muted/50 flex shrink-0 flex-col border-e ${SIDE_RAIL_WIDTH}`}
+      className={cn(
+        "bg-muted/50 flex shrink-0 flex-col border-e",
+        SIDE_RAIL_WIDTH,
+      )}
     >
       <div
         aria-hidden="true"
-        className={`text-muted-foreground flex w-full shrink-0 items-center justify-center border-b ${TOOLBAR_ROW_HEIGHT}`}
+        className={cn(
+          "text-muted-foreground flex w-full shrink-0 items-center justify-center border-b",
+          TOOLBAR_ROW_HEIGHT,
+        )}
       >
         <span
-          className={`flex items-center justify-center ${SIDE_RAIL_ICON_BUTTON_SIZE}`}
+          className={cn(
+            "flex items-center justify-center",
+            SIDE_RAIL_ICON_BUTTON_SIZE,
+          )}
         >
           <PanelRightIcon className="size-4" />
         </span>
@@ -117,10 +126,16 @@ const InspectorRailFallback = () => (
       <div className="flex-1" />
       <div
         aria-hidden="true"
-        className={`text-muted-foreground flex w-full shrink-0 items-center justify-center border-t ${TOOLBAR_ROW_HEIGHT}`}
+        className={cn(
+          "text-muted-foreground flex w-full shrink-0 items-center justify-center border-t",
+          TOOLBAR_ROW_HEIGHT,
+        )}
       >
         <span
-          className={`flex items-center justify-center ${SIDE_RAIL_ICON_BUTTON_SIZE}`}
+          className={cn(
+            "flex items-center justify-center",
+            SIDE_RAIL_ICON_BUTTON_SIZE,
+          )}
         >
           <MessageSquarePlusIcon className="size-4" />
         </span>
@@ -242,7 +257,7 @@ function ProtectedPendingSkeleton() {
           header row, a few stacked nav rows, and a footer row. */}
       <div className="bg-sidebar hidden w-64 shrink-0 flex-col gap-2 border-e p-2 md:flex">
         <div
-          className={`flex shrink-0 items-center gap-2 ${TOOLBAR_ROW_HEIGHT}`}
+          className={cn("flex shrink-0 items-center gap-2", TOOLBAR_ROW_HEIGHT)}
         >
           <Skeleton className="size-6 rounded-md" />
           <Skeleton className="h-4 w-28" />
@@ -260,7 +275,10 @@ function ProtectedPendingSkeleton() {
           content blocks. */}
       <div className="flex min-w-0 flex-1 flex-col">
         <div
-          className={`flex shrink-0 items-center gap-3 border-b px-4 ${TOOLBAR_ROW_HEIGHT}`}
+          className={cn(
+            "flex shrink-0 items-center gap-3 border-b px-4",
+            TOOLBAR_ROW_HEIGHT,
+          )}
         >
           <Skeleton className="h-4 w-40" />
           <div className="ms-auto flex items-center gap-2">
@@ -280,16 +298,25 @@ function ProtectedPendingSkeleton() {
       {/* Right side-rail — same width as the real rail with muted
           icon-sized blocks top and bottom. */}
       <div
-        className={`bg-muted/50 hidden shrink-0 flex-col border-s md:flex ${SIDE_RAIL_WIDTH}`}
+        className={cn(
+          "bg-muted/50 hidden shrink-0 flex-col border-s md:flex",
+          SIDE_RAIL_WIDTH,
+        )}
       >
         <div
-          className={`flex w-full shrink-0 items-center justify-center border-b ${TOOLBAR_ROW_HEIGHT}`}
+          className={cn(
+            "flex w-full shrink-0 items-center justify-center border-b",
+            TOOLBAR_ROW_HEIGHT,
+          )}
         >
           <Skeleton className={SIDE_RAIL_ICON_BUTTON_SIZE} />
         </div>
         <div className="flex-1" />
         <div
-          className={`flex w-full shrink-0 items-center justify-center border-t ${TOOLBAR_ROW_HEIGHT}`}
+          className={cn(
+            "flex w-full shrink-0 items-center justify-center border-t",
+            TOOLBAR_ROW_HEIGHT,
+          )}
         >
           <Skeleton className={SIDE_RAIL_ICON_BUTTON_SIZE} />
         </div>

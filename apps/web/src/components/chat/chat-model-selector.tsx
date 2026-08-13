@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/components/menu";
+import { cn } from "@stll/ui/lib/utils";
 
 import type { ProviderValue } from "@/components/ai-config-role-models.logic";
 import { AIProviderIcon } from "@/components/ai-provider-icons";
@@ -60,11 +61,11 @@ export const ChatModelSelector = ({
         render={
           <Button
             aria-label={triggerLabel}
-            className={
+            className={cn(
               selectedModel === null
                 ? "text-muted-foreground hover:text-foreground gap-1.5"
-                : "bg-accent text-accent-foreground hover:text-accent-foreground gap-1.5"
-            }
+                : "bg-accent text-accent-foreground hover:text-accent-foreground gap-1.5",
+            )}
             disabled={disabled}
             onFocus={() => setDetailsRequested(true)}
             onMouseEnter={() => setDetailsRequested(true)}

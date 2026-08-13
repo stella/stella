@@ -4,6 +4,7 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { Skeleton } from "@stll/ui/components/skeleton";
+import { cn } from "@stll/ui/lib/utils";
 import { getClipFieldValueLabel } from "@stll/workspace-ui/field-value-logic";
 
 import {
@@ -112,7 +113,9 @@ export const IntFieldValue = ({
   const fallback = `${format.number(content.value)} ${content.currency}`;
 
   if (!content.currency) {
-    return <span className={className}>{format.number(content.value)}</span>;
+    return (
+      <span className={cn(className)}>{format.number(content.value)}</span>
+    );
   }
 
   const formattedResult = Result.try(() =>
@@ -124,10 +127,10 @@ export const IntFieldValue = ({
   );
 
   if (formattedResult.isErr()) {
-    return <span className={className}>{fallback}</span>;
+    return <span className={cn(className)}>{fallback}</span>;
   }
 
-  return <span className={className}>{formattedResult.value}</span>;
+  return <span className={cn(className)}>{formattedResult.value}</span>;
 };
 
 const EmptyFieldValue = ({ variant }: { variant: FieldValueVariant }) => {
@@ -224,7 +227,7 @@ const FileFieldValue = ({
   return (
     <BidiText
       as="span"
-      className={variant === "table" ? "truncate" : "text-sm"}
+      className={cn(variant === "table" ? "truncate" : "text-sm")}
     >
       {content.fileName}
     </BidiText>
@@ -257,7 +260,7 @@ const TextFieldValue = ({
     variant === "table" ? "line-clamp-2" : "line-clamp-2 text-sm";
 
   return (
-    <BidiText as="span" className={className}>
+    <BidiText as="span" className={cn(className)}>
       {content.value}
     </BidiText>
   );
@@ -300,7 +303,7 @@ const DateFieldValue = ({
   }
 
   return (
-    <span className={variant === "default" ? "text-sm" : undefined}>
+    <span className={cn(variant === "default" ? "text-sm" : undefined)}>
       {formatted}
     </span>
   );
@@ -335,11 +338,11 @@ const SelectFieldValue = ({
 
   return (
     <span
-      className={
+      className={cn(
         variant === "table"
           ? "flex max-w-full items-center gap-x-1 rounded px-1 py-0.25 font-medium"
-          : "flex w-max max-w-full items-center gap-x-1 rounded px-1 py-0.25 text-sm font-medium"
-      }
+          : "flex w-max max-w-full items-center gap-x-1 rounded px-1 py-0.25 text-sm font-medium",
+      )}
       style={{
         backgroundColor: color?.background,
         color: color?.foreground,
@@ -373,11 +376,11 @@ const MultiSelectFieldValue = ({
 
   return (
     <span
-      className={
+      className={cn(
         variant === "table"
           ? "flex min-w-0 flex-wrap gap-1.5"
-          : "flex flex-wrap gap-1"
-      }
+          : "flex flex-wrap gap-1",
+      )}
     >
       {value.map((option) => (
         <SelectFieldValue

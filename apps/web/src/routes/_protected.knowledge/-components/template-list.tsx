@@ -515,11 +515,9 @@ const DropdownActionItem = ({ action }: { action: ContextMenuAction }) => {
     <>
       {separator}
       <DropdownMenuItem
-        className={
-          action.variant === "destructive"
-            ? "text-destructive-foreground"
-            : undefined
-        }
+        className={cn(
+          action.variant === "destructive" && "text-destructive-foreground",
+        )}
         disabled={action.disabled === true}
         onClick={action.onClick}
       >
@@ -794,11 +792,11 @@ const TemplateRow = ({
     <li className="group">
       <ContextMenu actions={rowActions}>
         <div
-          className={
+          className={cn(
             density === "compact"
               ? "hover:bg-muted/50 relative flex cursor-pointer items-center gap-3 px-4 py-2 transition-colors"
-              : "hover:bg-muted/50 relative flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors"
-          }
+              : "hover:bg-muted/50 relative flex cursor-pointer items-start gap-3 px-4 py-3 transition-colors",
+          )}
           draggable
           onDragStart={handleDragStart}
         >

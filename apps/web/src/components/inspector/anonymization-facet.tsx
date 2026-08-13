@@ -45,6 +45,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/components/menu";
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import { AnonymizationContextMenu } from "@/components/inspector/anonymization-context-menu";
 import {
@@ -859,11 +860,11 @@ export const AnonymizationFacet = ({
                   <ul className="flex flex-col gap-px border-t">
                     {rows.map((row) => (
                       <li
-                        className={
+                        className={cn(
                           row.isExcluded
                             ? "text-muted-foreground hover:bg-muted/30 flex items-center justify-between gap-2 px-3 py-1.5 line-through"
-                            : "hover:bg-muted/50 flex items-center justify-between gap-2 px-3 py-1.5"
-                        }
+                            : "hover:bg-muted/50 flex items-center justify-between gap-2 px-3 py-1.5",
+                        )}
                         data-anonymization-canonical={row.canonical}
                         key={row.canonical}
                       >

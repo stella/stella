@@ -1,6 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import type { LoadedCatalogueEntry } from "@stll/catalogue";
+import { cn } from "@stll/ui/lib/utils";
 
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
@@ -174,9 +175,9 @@ const Row = ({
   const content = (
     <>
       <CatalogueEntryIcon
-        className={
-          tone === "baseline" ? "text-foreground" : "text-muted-foreground"
-        }
+        className={cn(
+          tone === "baseline" ? "text-foreground" : "text-muted-foreground",
+        )}
         icon={entry.icon}
         iconUrl={entry.iconUrl ?? null}
         size={20}

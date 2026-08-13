@@ -352,7 +352,6 @@ export const buildCzNsDecision = async (
   let documentAst: DocumentAst | EmptyAst = EMPTY_AST;
   let fulltext = meta["fulltext"];
 
-  // eslint-disable-next-line no-untyped-updates/no-untyped-updates -- court API metadata container, not a DB update
   let sourceMetadata: Record<string, unknown> = {};
 
   if (printHtml) {

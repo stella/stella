@@ -9,6 +9,8 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { cn } from "@stll/ui/lib/utils";
+
 import { PROVIDER_LABELS } from "@/components/ai-config-role-models.logic";
 import type {
   ProviderPreview,
@@ -65,9 +67,12 @@ const NavItem = ({
   trailing?: ReactNode;
 }) => (
   <div
-    className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm ${
-      active ? "bg-accent text-foreground font-medium" : "text-muted-foreground"
-    }`}
+    className={cn(
+      "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm",
+      active
+        ? "bg-accent text-foreground font-medium"
+        : "text-muted-foreground",
+    )}
   >
     <Icon className="size-4" />
     <span className="flex-1 truncate">{label}</span>
@@ -195,7 +200,10 @@ export const SidebarPreview = ({
                 <span className="ms-auto flex items-center gap-1.5">
                   <span
                     aria-hidden="true"
-                    className={`size-1.5 rounded-full transition-opacity duration-500 ease-in-out ${STATUS_DOT_CLASS[status]}`}
+                    className={cn(
+                      "size-1.5 rounded-full transition-opacity duration-500 ease-in-out",
+                      STATUS_DOT_CLASS[status],
+                    )}
                     style={{ opacity: dotShouldPulse && !pulseOn ? 0.3 : 1 }}
                   />
                   <span className="text-foreground-strong-muted text-[10px] tracking-wide uppercase">

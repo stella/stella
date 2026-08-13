@@ -185,6 +185,7 @@ import {
   TooltipPopup,
   TooltipTrigger,
 } from "@stll/ui/components/tooltip";
+import { cn } from "@stll/ui/lib/utils";
 
 import { ChatActivityOrb } from "@/components/chat/chat-activity-orb";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
@@ -687,9 +688,11 @@ export function UiPlayground() {
                     <AlertDialogTrigger
                       render={
                         <span
-                          className={buttonVariants({
-                            variant: "destructive-outline",
-                          })}
+                          className={cn(
+                            buttonVariants({
+                              variant: "destructive-outline",
+                            }),
+                          )}
                         />
                       }
                     >
@@ -725,9 +728,11 @@ export function UiPlayground() {
                     <AlertDialogTrigger
                       render={
                         <span
-                          className={buttonVariants({
-                            variant: "destructive-outline",
-                          })}
+                          className={cn(
+                            buttonVariants({
+                              variant: "destructive-outline",
+                            }),
+                          )}
                         />
                       }
                     >

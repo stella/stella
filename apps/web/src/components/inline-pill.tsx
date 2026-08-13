@@ -120,7 +120,7 @@ export const InlinePill = ({
   const body = (
     <>
       {leadingIcon}
-      <span className={labelClass}>{children}</span>
+      <span className={cn(labelClass)}>{children}</span>
     </>
   );
 
