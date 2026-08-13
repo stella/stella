@@ -35,6 +35,10 @@ export type RouteErrorLifecycleSnapshot = {
   routeTemplate: string;
 };
 
+export const resolveCaughtRouteTemplate = (
+  matches: readonly { fullPath: string }[],
+): string => matches.at(-1)?.fullPath ?? "unknown";
+
 export const createRouteErrorLifecycleController = (
   analytics: RouteErrorAnalytics,
 ): RouteErrorLifecycleController => {
@@ -43,18 +47,22 @@ export const createRouteErrorLifecycleController = (
     routeTemplate: "unknown",
   };
   let loaded: Promise<RouteErrorLifecycleController | undefined> | undefined;
+  let capturedReference: ErrorReference | undefined;
   const load = async () => {
-    loaded ??= import("@/lib/analytics/route-error-lifecycle-loaded")
-      .then((module) =>
-        module.createLoadedRouteErrorLifecycleController(analytics, snapshot),
-      )
-      .catch((error: unknown) => {
-        analytics.captureError(error, {
-          operation: "route-error.load",
-          type: "detached",
+    if (!loaded) {
+      const initial = snapshot;
+      loaded = import("@/lib/analytics/route-error-lifecycle-loaded")
+        .then((module) =>
+          module.createLoadedRouteErrorLifecycleController(analytics, initial),
+        )
+        .catch((error: unknown) => {
+          analytics.captureError(error, {
+            operation: "route-error.load",
+            type: "detached",
+          });
+          return undefined;
         });
-        return undefined;
-      });
+    }
     return await loaded;
   };
   const captureDispatchError = (error: unknown) => {
@@ -88,6 +96,13 @@ export const createRouteErrorLifecycleController = (
       run((controller) => controller.retryStarted(reference, recovery));
     },
     shown: (options) => {
+      if (capturedReference !== options.reference) {
+        capturedReference = options.reference;
+        analytics.captureError(options.error, {
+          reference: options.reference,
+          type: "recovery",
+        });
+      }
       run((controller) => controller.shown(options));
     },
     updateInspectorState: (inspectorState) => {

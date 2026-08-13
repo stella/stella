@@ -12,6 +12,7 @@ type RouteErrorLifecycleState =
   | { type: "idle" }
   | {
       type: "caught";
+      inspectorState: RouteErrorIncident["inspectorState"];
       routeTemplate: string;
       priorIncident?: RouteErrorIncident;
     }
@@ -36,8 +37,13 @@ export const createLoadedRouteErrorLifecycleController = (
   const caught = (routeTemplate: string) => {
     state =
       state.type === "retrying"
-        ? { priorIncident: state.incident, routeTemplate, type: "caught" }
-        : { routeTemplate, type: "caught" };
+        ? {
+            inspectorState: state.incident.inspectorState,
+            priorIncident: state.incident,
+            routeTemplate,
+            type: "caught",
+          }
+        : { inspectorState, routeTemplate, type: "caught" };
   };
 
   const shown = ({ error, recovery, reference }: ShowRouteErrorOptions) => {
@@ -50,13 +56,13 @@ export const createLoadedRouteErrorLifecycleController = (
     const incident: RouteErrorIncident = {
       errorFingerprint: fingerprintTelemetryError(error),
       incidentReference: priorIncident?.incidentReference ?? reference,
-      inspectorState,
+      inspectorState:
+        state.type === "caught" ? state.inspectorState : inspectorState,
       recovery,
       reference,
       routeTemplate,
     };
     state = { incident, type: "visible" };
-    analytics.captureError(error, { type: "recovery", reference });
     capture(incident, priorIncident ? "recurred" : "shown");
   };
 

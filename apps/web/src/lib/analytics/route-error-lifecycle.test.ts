@@ -5,7 +5,10 @@ import type {
   RouteErrorLifecycleProperties,
 } from "@/lib/analytics/types";
 
-import { createRouteErrorLifecycleController } from "./route-error-lifecycle";
+import {
+  createRouteErrorLifecycleController,
+  resolveCaughtRouteTemplate,
+} from "./route-error-lifecycle";
 import { createLoadedRouteErrorLifecycleController } from "./route-error-lifecycle-loaded";
 
 const FIRST_REFERENCE = "ERR-DEAD-BEEF-1234" as const;
@@ -37,16 +40,28 @@ const setup = () => {
 
 describe("route error lifecycle diagnostics", () => {
   test("preserves call order while rare diagnostics load", async () => {
-    const { analytics, events } = setup();
+    const { analytics, errors, events } = setup();
     const controller = createRouteErrorLifecycleController(analytics);
+    const error = new TypeError("Privileged decision text");
     controller.caught(ROUTE_TEMPLATE);
     controller.shown({
-      error: new TypeError("Privileged decision text"),
+      error,
+      recovery: "retry-route",
+      reference: FIRST_REFERENCE,
+    });
+    controller.shown({
+      error,
       recovery: "retry-route",
       reference: FIRST_REFERENCE,
     });
     controller.retryStarted(FIRST_REFERENCE, "retry-route");
 
+    expect(errors).toEqual([
+      {
+        context: { reference: FIRST_REFERENCE, type: "recovery" },
+        error,
+      },
+    ]);
     await Bun.sleep(0);
 
     expect(events.map(({ status }) => status)).toEqual([
@@ -55,8 +70,18 @@ describe("route error lifecycle diagnostics", () => {
     ]);
   });
 
+  test("reads the attempted leaf route at catch time", () => {
+    expect(
+      resolveCaughtRouteTemplate([
+        { fullPath: "/" },
+        { fullPath: ROUTE_TEMPLATE },
+      ]),
+    ).toBe(ROUTE_TEMPLATE);
+    expect(resolveCaughtRouteTemplate([])).toBe("unknown");
+  });
+
   test("reports an in-app retry", () => {
-    const { controller, errors, events } = setup();
+    const { controller, events } = setup();
     const error = new TypeError("Privileged decision text");
     controller.caught(ROUTE_TEMPLATE);
     controller.shown({
@@ -67,12 +92,6 @@ describe("route error lifecycle diagnostics", () => {
 
     controller.retryStarted(FIRST_REFERENCE, "retry-route");
 
-    expect(errors).toEqual([
-      {
-        context: { type: "recovery", reference: FIRST_REFERENCE },
-        error,
-      },
-    ]);
     expect(events.map(({ status }) => status)).toEqual([
       "shown",
       "retry_started",
@@ -132,7 +151,7 @@ describe("route error lifecycle diagnostics", () => {
   });
 
   test("deduplicates React strict-effect observation", () => {
-    const { controller, errors, events } = setup();
+    const { controller, events } = setup();
     const error = new TypeError("Privileged decision text");
     controller.caught(ROUTE_TEMPLATE);
     controller.shown({
@@ -145,7 +164,6 @@ describe("route error lifecycle diagnostics", () => {
       recovery: "retry-route",
       reference: FIRST_REFERENCE,
     });
-    expect(errors).toHaveLength(1);
     expect(events.map(({ status }) => status)).toEqual(["shown"]);
   });
 
@@ -155,6 +173,7 @@ describe("route error lifecycle diagnostics", () => {
     controller.updateInspectorState("open");
     const error = new TypeError("redacted");
     controller.caught(ROUTE_TEMPLATE);
+    controller.updateInspectorState("unavailable");
     controller.shown({
       error,
       recovery: "retry-route",

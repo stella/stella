@@ -86,10 +86,10 @@ export const InspectorRail = ({
   });
   const t = useTranslations();
   const inspectorState = inspectorDiagnosticState(tabs.length, minimized);
-  useExternalSyncEffect(
-    () => routeErrorLifecycle?.updateInspectorState(inspectorState),
-    [routeErrorLifecycle, inspectorState],
-  );
+  useExternalSyncEffect(() => {
+    routeErrorLifecycle?.updateInspectorState(inspectorState);
+    return () => routeErrorLifecycle?.updateInspectorState("unavailable");
+  }, [routeErrorLifecycle, inspectorState]);
   const activeTab = tabs.find((tab) => tab.id === activeId);
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const { data: activeSkillCatalogueData } = useQuery({
