@@ -48,6 +48,7 @@ type ClassifyCitationArgs = {
   context: string;
   citationText: string;
   language: string;
+  observedAt: Date;
   scopedDb: ScopedDb;
   options?: {
     abortSignal?: AbortSignal;
@@ -60,6 +61,7 @@ export const classifyCitation = async ({
   context,
   citationText,
   language,
+  observedAt,
   scopedDb,
   options,
 }: ClassifyCitationArgs): Promise<ClassifyResult> => {
@@ -74,7 +76,11 @@ export const classifyCitation = async ({
   if (ruleMatch) {
     if (!options?.dryRun) {
       // Fire-and-forget: increment match count
-      incrementMatchCount(ruleMatch.ruleId, scopedDb).catch(
+      incrementMatchCount({
+        observedAt,
+        ruleId: ruleMatch.ruleId,
+        scopedDb,
+      }).catch(
         (error: unknown) => {
           captureError(error, { ruleId: ruleMatch.ruleId });
         },
@@ -109,7 +115,13 @@ export const classifyCitation = async ({
 
   // Track surface form for potential rule promotion
   if (!options?.dryRun && confidence >= 0.8 && keyPhrase.length >= 3) {
-    trackSurfaceForm(keyPhrase, polarity, language, scopedDb).catch(
+    trackSurfaceForm({
+      keyPhrase,
+      language,
+      observedAt,
+      polarity,
+      scopedDb,
+    }).catch(
       (error: unknown) => {
         captureError(error, { language, polarity });
       },
@@ -128,12 +140,21 @@ export const classifyCitation = async ({
  * atomically. Promotion to `llm-promoted` happens when the
  * surface-form count reaches PROMOTION_THRESHOLD.
  */
-const trackSurfaceForm = async (
-  keyPhrase: string,
-  polarity: Polarity,
-  language: string,
-  scopedDb: ScopedDb,
-) => {
+type TrackSurfaceFormArgs = {
+  keyPhrase: string;
+  language: string;
+  observedAt: Date;
+  polarity: Polarity;
+  scopedDb: ScopedDb;
+};
+
+const trackSurfaceForm = async ({
+  keyPhrase,
+  language,
+  observedAt,
+  polarity,
+  scopedDb,
+}: TrackSurfaceFormArgs) => {
   const pattern = phraseToPattern(keyPhrase);
   // Bound below as `::text::jsonb`, never a bare `::jsonb`: the bare cast fixes
   // the parameter's type to jsonb, so the driver JSON-encodes this string again
@@ -201,7 +222,7 @@ const trackSurfaceForm = async (
             ELSE ${caseLawPolarityRules.confidence}
           END
         `,
-          updatedAt: sql`now()`,
+          updatedAt: observedAt,
         },
       });
   });

@@ -168,6 +168,7 @@ const main = async () => {
         context,
         citationText: citation.citationText,
         language: citation.language,
+        observedAt: new Date(),
         scopedDb,
         options: { ruleCache, dryRun: args.dryRun },
       });

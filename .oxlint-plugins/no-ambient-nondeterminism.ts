@@ -7,7 +7,7 @@
 //
 // Flags true global references only:
 //   Date.now()
-//   Date()
+//   Date(...)
 //   new Date()
 //   Math.random()
 //   crypto.randomUUID()
@@ -155,15 +155,11 @@ export default eslintCompatPlugin({
               });
               return;
             }
-            if (
-              Array.isArray(node.arguments) &&
-              node.arguments.length === 0 &&
-              globalObjectName(context, node.callee) === "Date"
-            ) {
+            if (globalObjectName(context, node.callee) === "Date") {
               context.report({
                 node,
                 messageId: "ambientNondeterminism",
-                data: { kind: "Date()" },
+                data: { kind: "Date(...)" },
               });
             }
           },

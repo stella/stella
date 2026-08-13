@@ -137,10 +137,17 @@ export const matchRule = async (
 };
 
 /** Increment the match count for a rule. */
-export const incrementMatchCount = async (
-  ruleId: SafeId<"caseLawPolarityRule">,
-  scopedDb: ScopedDb,
-) => {
+type IncrementMatchCountArgs = {
+  observedAt: Date;
+  ruleId: SafeId<"caseLawPolarityRule">;
+  scopedDb: ScopedDb;
+};
+
+export const incrementMatchCount = async ({
+  observedAt,
+  ruleId,
+  scopedDb,
+}: IncrementMatchCountArgs) => {
   // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that the require-audit-on-mutation rule scans for inside this arrow's body range
   await scopedDb((tx) => {
     // audit: skip — background polarity classification pipeline; no user-facing state change
@@ -148,7 +155,7 @@ export const incrementMatchCount = async (
       .update(caseLawPolarityRules)
       .set({
         matchCount: sql`${caseLawPolarityRules.matchCount} + 1`,
-        updatedAt: sql`now()`,
+        updatedAt: observedAt,
       })
       .where(eq(caseLawPolarityRules.id, ruleId));
   });

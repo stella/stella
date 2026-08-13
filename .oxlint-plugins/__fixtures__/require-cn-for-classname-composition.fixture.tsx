@@ -22,6 +22,10 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
     status === "closed" && "opacity-60",
   );
   const styleMap = { open: "font-medium", closed: "text-foreground-muted" };
+  const localStyles = {
+    root: active ? "bg-muted" : "bg-background",
+    static: "rounded-md",
+  };
 
   return (
     <div>
@@ -49,6 +53,10 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
       {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition, typescript/no-unnecessary-type-assertion -- fixture: the rule must follow TypeScript expression wrappers */}
       <div className={indirectClasses as string} />
 
+      {/* Locally owned member indirection — MUST flag. */}
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      <div className={localStyles.root} />
+
       {/* Callback branch composition — MUST flag. */}
       {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
       <FixtureSlot className={({ selected }) => {
@@ -74,6 +82,7 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
       <div className={`rounded-md`} />
       <div className={className} />
       <div className={styleMap[status]} />
+      <div className={localStyles.static} />
 
       {/* Canonical direct, aliased, and const-indirected calls — MUST NOT flag. */}
       <div className={cn("rounded-md", active && "ring-1")} />

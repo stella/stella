@@ -12,8 +12,10 @@ import {
 
 import {
   getImportedName,
+  getPropertyName,
   isAstNode,
   isIdentifier,
+  isStringLiteral,
   unwrapExpression,
 } from "./utils.ts";
 
@@ -119,6 +121,52 @@ export default eslintCompatPlugin({
           );
         };
 
+        const localMemberValue = (value: unknown): unknown => {
+          const member = unwrapClassExpression(value);
+          if (member?.type !== "MemberExpression") {
+            return null;
+          }
+          const propertyName =
+            member.computed === false
+              ? getPropertyName(member.property)
+              : isStringLiteral(member.property)
+                ? member.property.value
+                : null;
+          if (propertyName === null) {
+            return null;
+          }
+
+          const owner = unwrapClassExpression(member.object);
+          const ownerValue = isIdentifier(owner)
+            ? getConstInitializer(owner)
+            : owner?.type === "MemberExpression"
+              ? localMemberValue(owner)
+              : owner;
+          const object = unwrapClassExpression(ownerValue);
+          if (object?.type !== "ObjectExpression") {
+            return null;
+          }
+
+          for (const property of object.properties) {
+            if (
+              property.type === "Property" &&
+              property.computed === false &&
+              getPropertyName(property.key) === propertyName
+            ) {
+              return property.value;
+            }
+            if (
+              property.type === "Property" &&
+              property.computed === true &&
+              isStringLiteral(property.key) &&
+              property.key.value === propertyName
+            ) {
+              return property.value;
+            }
+          }
+          return null;
+        };
+
         const isCanonicalCnComposition = (
           value: unknown,
           visitedVariables = new Set<Variable>(),
@@ -168,7 +216,11 @@ export default eslintCompatPlugin({
             return isAllowedClassValue(initializer, visitedVariables);
           }
           if (node.type === "MemberExpression") {
-            return true;
+            const localValue = localMemberValue(node);
+            return (
+              localValue === null ||
+              isAllowedClassValue(localValue, visitedVariables)
+            );
           }
           if (node.type === "TemplateLiteral") {
             return node.expressions.length === 0;

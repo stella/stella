@@ -7,6 +7,9 @@ export const epoch = Date.now();
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism, unicorn/new-for-builtins -- fixture: direct Date calls are part of the rejected API surface
 export const dateString = Date();
 
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism, unicorn/new-for-builtins -- fixture: Date ignores arguments when called without new
+export const dateStringWithIgnoredArgument = Date(0);
+
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: implicit current date must be injected
 export const instant = new Date();
 
@@ -21,6 +24,9 @@ export const globalEpoch = globalThis.Date.now();
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism, unicorn/new-for-builtins -- fixture: explicit globalThis calls are part of the rejected API surface
 export const globalDateString = globalThis.Date();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism, unicorn/new-for-builtins -- fixture: globalThis.Date also ignores call arguments
+export const globalDateStringWithIgnoredArgument = globalThis.Date(0);
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: explicit globalThis construction is still ambient time
 export const globalInstant = new globalThis.Date();
@@ -47,12 +53,16 @@ export const withShadowedBindings = (
   epoch: Date.now(),
   // oxlint-disable-next-line unicorn/new-for-builtins -- fixture: the shadowed callable is deliberately not the Date built-in
   dateString: Date(),
+  // oxlint-disable-next-line unicorn/new-for-builtins -- fixture: the shadowed callable accepts arguments unlike the Date built-in
+  dateStringWithArgument: Date(0),
   instant: new Date(),
   sample: Math.random(),
   identifier: crypto.randomUUID(),
   globalEpoch: globalThis.Date.now(),
   // oxlint-disable-next-line unicorn/new-for-builtins -- fixture: the shadowed callable is deliberately not the Date built-in
   globalDateString: globalThis.Date(),
+  // oxlint-disable-next-line unicorn/new-for-builtins -- fixture: the shadowed callable accepts arguments unlike the Date built-in
+  globalDateStringWithArgument: globalThis.Date(0),
   globalInstant: new globalThis.Date(),
   globalSample: globalThis.Math.random(),
   globalIdentifier: globalThis.crypto.randomUUID(),

@@ -179,16 +179,31 @@ const isBetterResultType = (
 const isBetterResultValueType = (
   checker: ts.TypeChecker,
   type: ts.Type,
+  seen = new Set<ts.Type>(),
 ): boolean => {
+  if (seen.has(type)) {
+    return false;
+  }
+  seen.add(type);
+
   if (isBetterResultType(checker, type)) {
     return true;
   }
 
   const awaitedType = checker.getAwaitedType(type);
-  return (
+  if (
     awaitedType !== undefined &&
     awaitedType !== type &&
-    isBetterResultType(checker, awaitedType)
+    isBetterResultValueType(checker, awaitedType, seen)
+  ) {
+    return true;
+  }
+
+  const elementType = checker.getIndexTypeOfType(type, ts.IndexKind.Number);
+  return (
+    elementType !== undefined &&
+    elementType !== type &&
+    isBetterResultValueType(checker, elementType, seen)
   );
 };
 
