@@ -109,6 +109,8 @@ export const unwrapExpression = (node: unknown): AstNode | null => {
   if (
     node.type === "TSAsExpression" ||
     node.type === "TSSatisfiesExpression" ||
+    node.type === "TSNonNullExpression" ||
+    node.type === "TSTypeAssertion" ||
     node.type === "ChainExpression"
   ) {
     return unwrapExpression(node.expression);

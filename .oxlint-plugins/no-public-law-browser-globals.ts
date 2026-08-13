@@ -1,5 +1,7 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
+import { unwrapExpression } from "./utils.ts";
+
 const BROWSER_GLOBALS = new Set([
   "devicePixelRatio",
   "document",
@@ -9,6 +11,7 @@ const BROWSER_GLOBALS = new Set([
   "matchMedia",
   "navigator",
   "screen",
+  "self",
   "sessionStorage",
   "window",
 ]);
@@ -54,8 +57,25 @@ const isNonReferenceIdentifier = (node) => {
       parent.key === node &&
       !parent.computed) ||
     (parent?.type === "TSQualifiedName" && parent.right === node) ||
-    (parent?.type === "VariableDeclarator" && parent.id === node)
+    (parent?.type === "VariableDeclarator" && parent.id === node) ||
+    (parent?.type === "Property" &&
+      parent.parent?.type === "ObjectPattern" &&
+      (parent.key === node || parent.value === node))
   );
+};
+
+const staticPatternPropertyName = (node) => {
+  if (node?.type !== "Property") {
+    return null;
+  }
+  if (!node.computed && node.key?.type === "Identifier") {
+    return node.key.name;
+  }
+  return node.computed &&
+    node.key?.type === "Literal" &&
+    typeof node.key.value === "string"
+    ? node.key.value
+    : null;
 };
 
 const staticMemberName = (node) => {
@@ -73,19 +93,18 @@ const staticMemberName = (node) => {
 };
 
 const ambientMemberName = (node, objectName) => {
-  if (
-    node?.type !== "MemberExpression" ||
-    !isIdentifier(node.object, objectName)
-  ) {
+  const object = unwrapExpression(node?.object);
+  if (node?.type !== "MemberExpression" || !isIdentifier(object, objectName)) {
     return null;
   }
   return staticMemberName(node);
 };
 
 const browserGlobalFromGlobalThis = (node) => {
+  const object = unwrapExpression(node?.object);
   if (
     node?.type !== "MemberExpression" ||
-    !isIdentifier(node.object, "globalThis") ||
+    !isIdentifier(object, "globalThis") ||
     staticMemberName(node) === null
   ) {
     return null;
@@ -96,9 +115,25 @@ const browserGlobalFromGlobalThis = (node) => {
 
 const isUnshadowedGlobalThisMember = (context, node, memberName) =>
   node?.type === "MemberExpression" &&
-  isIdentifier(node.object, "globalThis") &&
+  isIdentifier(unwrapExpression(node.object), "globalThis") &&
   staticMemberName(node) === memberName &&
-  isUnshadowedGlobal(context, node.object);
+  isUnshadowedGlobal(context, unwrapExpression(node.object));
+
+const isAmbientIntlLocale = (argument) => {
+  if (argument === undefined) {
+    return true;
+  }
+  const expression = unwrapExpression(argument);
+  return (
+    isIdentifier(expression, "undefined") ||
+    (expression?.type === "ArrayExpression" &&
+      Array.isArray(expression.elements) &&
+      expression.elements.length === 0)
+  );
+};
+
+const isGlobalThisAmbientObject = (context, node, memberName) =>
+  isUnshadowedGlobalThisMember(context, unwrapExpression(node), memberName);
 
 export default eslintCompatPlugin({
   meta: { name: "no-public-law-browser-globals" },
@@ -125,11 +160,32 @@ export default eslintCompatPlugin({
             }
           },
           MemberExpression(node) {
+            const object = unwrapExpression(node.object);
             if (
               browserGlobalFromGlobalThis(node) &&
-              isUnshadowedGlobal(context, node.object)
+              isUnshadowedGlobal(context, object)
             ) {
               context.report({ node, messageId: "publicLawBrowserGlobal" });
+            }
+          },
+          VariableDeclarator(node) {
+            const initializer = unwrapExpression(node.init);
+            if (
+              node.id?.type !== "ObjectPattern" ||
+              !isIdentifier(initializer, "globalThis") ||
+              !isUnshadowedGlobal(context, initializer)
+            ) {
+              return;
+            }
+
+            for (const property of node.id.properties) {
+              const propertyName = staticPatternPropertyName(property);
+              if (propertyName && BROWSER_GLOBALS.has(propertyName)) {
+                context.report({
+                  node: property,
+                  messageId: "publicLawBrowserGlobal",
+                });
+              }
             }
           },
           CallExpression(node) {
@@ -146,6 +202,14 @@ export default eslintCompatPlugin({
               return;
             }
 
+            if (
+              isUnshadowedGlobalThisMember(context, node.callee, "Date") &&
+              node.arguments.length === 0
+            ) {
+              context.report({ node, messageId: "publicLawAmbientState" });
+              return;
+            }
+
             const memberName = ambientMemberName(node.callee, "Date");
             const randomMemberName = ambientMemberName(node.callee, "Math");
             const performanceMemberName = ambientMemberName(
@@ -153,10 +217,11 @@ export default eslintCompatPlugin({
               "performance",
             );
             const cryptoMemberName = ambientMemberName(node.callee, "crypto");
+            const ambientObject = unwrapExpression(node.callee.object);
             const calledMemberName = staticMemberName(node.callee);
             const globalPerformanceCall =
               calledMemberName === "now" &&
-              isUnshadowedGlobalThisMember(
+              isGlobalThisAmbientObject(
                 context,
                 node.callee.object,
                 "performance",
@@ -164,35 +229,46 @@ export default eslintCompatPlugin({
             const globalCryptoCall =
               (calledMemberName === "getRandomValues" ||
                 calledMemberName === "randomUUID") &&
-              isUnshadowedGlobalThisMember(
-                context,
-                node.callee.object,
-                "crypto",
-              );
+              isGlobalThisAmbientObject(context, node.callee.object, "crypto");
+            const globalDateCall =
+              calledMemberName === "now" &&
+              isGlobalThisAmbientObject(context, node.callee.object, "Date");
+            const globalMathCall =
+              calledMemberName === "random" &&
+              isGlobalThisAmbientObject(context, node.callee.object, "Math");
             if (
               (memberName === "now" &&
-                isUnshadowedGlobal(context, node.callee.object)) ||
+                isUnshadowedGlobal(context, ambientObject)) ||
               (randomMemberName === "random" &&
-                isUnshadowedGlobal(context, node.callee.object)) ||
+                isUnshadowedGlobal(context, ambientObject)) ||
               (performanceMemberName === "now" &&
-                isUnshadowedGlobal(context, node.callee.object)) ||
+                isUnshadowedGlobal(context, ambientObject)) ||
               ((cryptoMemberName === "getRandomValues" ||
                 cryptoMemberName === "randomUUID") &&
-                isUnshadowedGlobal(context, node.callee.object)) ||
+                isUnshadowedGlobal(context, ambientObject)) ||
               globalPerformanceCall ||
-              globalCryptoCall
+              globalCryptoCall ||
+              globalDateCall ||
+              globalMathCall
             ) {
               context.report({ node, messageId: "publicLawAmbientState" });
               return;
             }
 
             const intlName = ambientMemberName(node.callee, "Intl");
+            const globalIntlName = staticMemberName(node.callee);
             if (
-              intlName &&
-              AMBIENT_INTL_CONSTRUCTORS.has(intlName) &&
-              isUnshadowedGlobal(context, node.callee.object) &&
-              (node.arguments.length === 0 ||
-                isIdentifier(node.arguments.at(0), "undefined"))
+              ((intlName &&
+                AMBIENT_INTL_CONSTRUCTORS.has(intlName) &&
+                isUnshadowedGlobal(context, ambientObject)) ||
+                (globalIntlName &&
+                  AMBIENT_INTL_CONSTRUCTORS.has(globalIntlName) &&
+                  isGlobalThisAmbientObject(
+                    context,
+                    node.callee.object,
+                    "Intl",
+                  ))) &&
+              isAmbientIntlLocale(node.arguments.at(0))
             ) {
               context.report({ node, messageId: "publicLawAmbientState" });
             }
@@ -211,13 +287,29 @@ export default eslintCompatPlugin({
               return;
             }
 
-            const intlName = ambientMemberName(node.callee, "Intl");
             if (
-              intlName &&
-              AMBIENT_INTL_CONSTRUCTORS.has(intlName) &&
-              isUnshadowedGlobal(context, node.callee.object) &&
-              (node.arguments.length === 0 ||
-                isIdentifier(node.arguments.at(0), "undefined"))
+              isUnshadowedGlobalThisMember(context, node.callee, "Date") &&
+              node.arguments.length === 0
+            ) {
+              context.report({ node, messageId: "publicLawAmbientState" });
+              return;
+            }
+
+            const intlName = ambientMemberName(node.callee, "Intl");
+            const ambientObject = unwrapExpression(node.callee.object);
+            const globalIntlName = staticMemberName(node.callee);
+            if (
+              ((intlName &&
+                AMBIENT_INTL_CONSTRUCTORS.has(intlName) &&
+                isUnshadowedGlobal(context, ambientObject)) ||
+                (globalIntlName &&
+                  AMBIENT_INTL_CONSTRUCTORS.has(globalIntlName) &&
+                  isGlobalThisAmbientObject(
+                    context,
+                    node.callee.object,
+                    "Intl",
+                  ))) &&
+              isAmbientIntlLocale(node.arguments.at(0))
             ) {
               context.report({ node, messageId: "publicLawAmbientState" });
             }
