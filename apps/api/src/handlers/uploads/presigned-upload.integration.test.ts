@@ -27,6 +27,8 @@ const pdfDerivativeMock = mock(async () => undefined);
 const thumbnailDerivativeMock = mock(async () => undefined);
 
 const realS3 = await import("@/api/lib/s3");
+const realProcessExtraction =
+  await import("@/api/lib/search/process-extraction");
 
 void mock.module("@/api/lib/s3", () => ({
   ...realS3,
@@ -37,6 +39,7 @@ void mock.module("@/api/lib/s3", () => ({
 }));
 
 void mock.module("@/api/lib/search/process-extraction", () => ({
+  ...realProcessExtraction,
   processExtraction: extractionMock,
 }));
 
