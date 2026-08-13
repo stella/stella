@@ -29,7 +29,10 @@ import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
-import { processExtraction } from "@/api/lib/search/process-extraction";
+import {
+  processExtraction,
+  requestNativeExtractionRun,
+} from "@/api/lib/search/process-extraction";
 import { finalizeErr, finalizeOk } from "@/api/lib/uploads/runtime";
 import type { UploadFinalizeError } from "@/api/lib/uploads/runtime";
 import { withTimeout } from "@/api/lib/with-timeout";
@@ -169,7 +172,7 @@ export const finalizeEntityVersion = async function* ({
       return { status: "upload-claim-lost" as const };
     }
 
-    return await writeFileVersion({
+    const versionResult = await writeFileVersion({
       tx,
       organizationId,
       workspaceId,
@@ -215,6 +218,13 @@ export const finalizeEntityVersion = async function* ({
           );
       },
     });
+    if (versionResult.status === "ok") {
+      // Durable extraction request, committed with the version that owns the
+      // file. The post-promote call below only accelerates the queue handoff,
+      // so it resolves the same source file: no property pin, same as there.
+      await requestNativeExtractionRun({ entityId, tx });
+    }
+    return versionResult;
   });
   if (Result.isError(writeResultResult)) {
     await cleanupFinalObject("final-cleanup-after-db-error");

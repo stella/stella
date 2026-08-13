@@ -63,7 +63,10 @@ import { LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
 import type { SanitizedFileName } from "@/api/lib/sanitize-filename";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
-import { processExtraction } from "@/api/lib/search/process-extraction";
+import {
+  processExtraction,
+  requestNativeExtractionRun,
+} from "@/api/lib/search/process-extraction";
 import {
   FINALIZE_CLAIM_TIMEOUT_MS,
   UploadFinalizeError,
@@ -681,6 +684,10 @@ export const finalizeEntityCreate = async function* ({
       .update(workspaces)
       .set({ lastActivityAt: new Date() })
       .where(eq(workspaces.id, workspaceId));
+
+    // Durable extraction request, committed with the file it reads. The
+    // post-promote call below only accelerates the queue handoff.
+    await requestNativeExtractionRun({ entityId, tx });
 
     await recordAuditEvent(tx, {
       action: AUDIT_ACTION.CREATE,

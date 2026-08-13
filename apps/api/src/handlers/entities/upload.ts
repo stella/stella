@@ -58,7 +58,10 @@ import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { getS3, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import type { SanitizedFileName } from "@/api/lib/sanitize-filename";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
-import { processExtraction } from "@/api/lib/search/process-extraction";
+import {
+  processExtraction,
+  requestNativeExtractionRun,
+} from "@/api/lib/search/process-extraction";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const uploadEntityBodySchema = t.Object({
@@ -1140,6 +1143,8 @@ const uploadEntityHandler = async function* ({
           .update(workspaces)
           .set({ lastActivityAt: new Date() })
           .where(eq(workspaces.id, workspaceId));
+
+        await requestNativeExtractionRun({ entityId, tx });
 
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.CREATE,

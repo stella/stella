@@ -43,7 +43,10 @@ import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { deleteS3ObjectWithSignal, putS3ObjectWithSignal } from "@/api/lib/s3";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
-import { processExtraction } from "@/api/lib/search/process-extraction";
+import {
+  processExtraction,
+  requestNativeExtractionRun,
+} from "@/api/lib/search/process-extraction";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 const toSafeDb =
@@ -339,6 +342,10 @@ export const createEntityFromBuffer = async ({
           .update(workspaces)
           .set({ lastActivityAt: new Date() })
           .where(eq(workspaces.id, workspaceId));
+
+        // Durable extraction request, committed with the file it reads. The
+        // post-commit call below only accelerates the queue handoff.
+        await requestNativeExtractionRun({ entityId, tx });
 
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.CREATE,

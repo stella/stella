@@ -74,6 +74,7 @@ void mock.module("@/api/lib/file-scan/scan", () => ({
 
 void mock.module("@/api/lib/search/process-extraction", () => ({
   processExtraction: processExtractionMock,
+  requestNativeExtractionRun: mock(async () => null),
 }));
 
 const realFileDerivativeQueue = await import("@/api/lib/file-derivative-queue");

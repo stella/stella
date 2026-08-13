@@ -68,6 +68,7 @@ const processExtractionMock = mock(async (_entityId: string) => undefined);
 void mock.module("@/api/lib/search/process-extraction", () => ({
   ...realProcessExtraction,
   processExtraction: processExtractionMock,
+  requestNativeExtractionRun: mock(async () => null),
 }));
 
 const syncWorkspaceSearchActivityMock = mock(async () => undefined);

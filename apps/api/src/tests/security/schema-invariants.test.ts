@@ -1,11 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import { is } from "drizzle-orm";
 import { PgDialect, PgTable, getTableConfig } from "drizzle-orm/pg-core";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 import * as agentAuthSchema from "@/api/db/agent-auth-schema";
 import * as authSchema from "@/api/db/auth-schema";
 import * as schema from "@/api/db/schema";
+import { SCOPED_NATIVE_EXTRACTION_ENQUEUE } from "@/api/db/schema";
 import { POLARITY } from "@/api/handlers/case-law/polarity/consts";
+import { DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 
 const {
   CASE_LAW_CORPUS_MIRROR_STATUS,
@@ -257,6 +261,31 @@ describe("schema invariants", () => {
     ).toSorted();
     expect(dbValues).toEqual(
       Object.values(CASE_LAW_CORPUS_MIRROR_STATUS).toSorted(),
+    );
+  });
+
+  test("the scoped enqueue policy pins the contract's processor version", () => {
+    // The policy admits one `processor_version`, because that column is part
+    // of the conflict identity: left free, a scoped session could walk it and
+    // mint unlimited dispatchable runs for one source. The literal lives in a
+    // migration, which is frozen by design, so bumping
+    // DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION without a new policy
+    // migration would leave the database rejecting every enqueue the
+    // application writes. That has to fail here, loudly, rather than in
+    // production.
+    const migration = readFileSync(
+      path.join(
+        import.meta.dir,
+        "../../../drizzle/20260813230000_document_processing_scoped_enqueue/migration.sql",
+      ),
+      "utf-8",
+    );
+
+    expect(SCOPED_NATIVE_EXTRACTION_ENQUEUE.processorVersion).toBe(
+      DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION,
+    );
+    expect(migration).toContain(
+      `processor_version = ${String(SCOPED_NATIVE_EXTRACTION_ENQUEUE.processorVersion)}`,
     );
   });
 });

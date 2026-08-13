@@ -305,23 +305,20 @@ export const wsOrganizationPolicies = (tableName: string) => [
   }),
 ];
 
-/**
- * Tenant-scoped read access for root-owned history tables. Explicit restrictive
- * write policies keep the rows immutable even if a future permissive policy is
- * added accidentally.
- */
-export const wsOrganizationReadOnlyPolicies = (tableName: string) => [
+const wsOrganizationSelectPolicy = (tableName: string) =>
   p.pgPolicy(`${tableName}_workspace_select`, {
     for: "select",
     to: stella,
     using: workspaceOrganizationCheck,
-  }),
-  p.pgPolicy(`${tableName}_no_insert`, {
-    as: "restrictive",
-    for: "insert",
-    to: stella,
-    withCheck: sql`false`,
-  }),
+  });
+
+/**
+ * Restrictive denials for the two commands no root-owned table ever exposes to
+ * the app role. A restrictive policy is AND-ed with every permissive one, so a
+ * later migration that adds a permissive UPDATE/DELETE cannot silently unlock
+ * mutation of a row the root writer owns.
+ */
+const wsOrganizationImmutableWritePolicies = (tableName: string) => [
   p.pgPolicy(`${tableName}_no_update`, {
     as: "restrictive",
     for: "update",
@@ -334,6 +331,52 @@ export const wsOrganizationReadOnlyPolicies = (tableName: string) => [
     to: stella,
     using: sql`false`,
   }),
+];
+
+/**
+ * Tenant-scoped read access for root-owned history tables. Explicit restrictive
+ * write policies keep the rows immutable even if a future permissive policy is
+ * added accidentally.
+ */
+export const wsOrganizationReadOnlyPolicies = (tableName: string) => [
+  wsOrganizationSelectPolicy(tableName),
+  p.pgPolicy(`${tableName}_no_insert`, {
+    as: "restrictive",
+    for: "insert",
+    to: stella,
+    withCheck: sql`false`,
+  }),
+  ...wsOrganizationImmutableWritePolicies(tableName),
+];
+
+/**
+ * Root-owned table whose request row is created by the very transaction that
+ * causes the work, and whose lifecycle after that insert stays root-writer
+ * only.
+ *
+ * `requestShapeCheck` is the contract: it must pin every caller-controlled
+ * request and lifecycle field, so the scoped role can write exactly the one
+ * fresh shape the application enqueues and nothing else. It is
+ * AND-ed with the same workspace + organization pin the table's read policy
+ * uses, and UPDATE/DELETE stay denied, so a tenant can never advance, retry, or
+ * re-attribute the row it requested.
+ */
+export const wsOrganizationScopedRequestPolicies = ({
+  insertPolicyName,
+  requestShapeCheck,
+  tableName,
+}: {
+  insertPolicyName: string;
+  requestShapeCheck: SQL;
+  tableName: string;
+}) => [
+  wsOrganizationSelectPolicy(tableName),
+  p.pgPolicy(insertPolicyName, {
+    for: "insert",
+    to: stella,
+    withCheck: sql`(${workspaceOrganizationCheck} AND ${requestShapeCheck})`,
+  }),
+  ...wsOrganizationImmutableWritePolicies(tableName),
 ];
 
 export const orgPolicies = () => [
