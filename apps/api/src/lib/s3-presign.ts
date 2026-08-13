@@ -552,6 +552,40 @@ const getPresignClient = async ({
   return await getScopedAwsS3Client(scope, actions, expiresIn);
 };
 
+/**
+ * Longest presign expiry the warmed session must be able to cover. Matches
+ * the file-read expiry (`FILE_READ_URL_EXPIRY_SECONDS` in
+ * handlers/files/get.ts): a warmed session passes
+ * `hasScopedSessionTimeForPresign` for any presign up to this expiry.
+ */
+const PREWARM_PRESIGN_EXPIRES_IN_SECONDS = 15 * 60;
+
+/**
+ * Fire-and-forget warmup of a workspace's scoped download-signing session.
+ *
+ * Under scoped signing (AWS prod), the FIRST presign for a given
+ * organization/workspace scope pays a full STS AssumeRole round trip, which
+ * surfaced as a >1s TTFB tail on the first `GET /files/:id/url` after
+ * opening a workspace. Warming the session when the workspace is activated
+ * (see handlers/workspaces/update-active.ts) moves that round trip off the
+ * file-open path; the session is then cached for ~1h like any other scoped
+ * client. No-op when scoped signing is not configured. Callers run this
+ * detached and capture failures as telemetry — the real presign path keeps
+ * its own error handling either way.
+ */
+export const prewarmScopedDownloadSigning = async (
+  scope: S3SigningScope,
+): Promise<void> => {
+  if (!shouldUseScopedSigning()) {
+    return;
+  }
+  await getScopedAwsS3Client(
+    scope,
+    ["s3:GetObject"],
+    PREWARM_PRESIGN_EXPIRES_IN_SECONDS,
+  );
+};
+
 /** Reset the cached client. Test seam; not used in prod. */
 export const resetAwsS3ClientForTesting = (): void => {
   _clientPromise = null;
