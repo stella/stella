@@ -3,7 +3,12 @@ import { posthog } from "posthog-js";
 import type { CaptureResult } from "posthog-js";
 
 import { env } from "@/env";
+import {
+  normalizeTelemetryErrorTypeName,
+  telemetryErrorType,
+} from "@/lib/analytics/error-diagnostics";
 import { isErrorReference } from "@/lib/analytics/error-reference";
+import type { sanitizeRouteErrorLifecycleEvent } from "@/lib/analytics/posthog-route-error";
 import { WEB_ANALYTICS_EVENTS } from "@/lib/analytics/types";
 import type {
   Analytics,
@@ -65,16 +70,6 @@ const isNoiseException = (event: {
   });
 };
 
-const TELEMETRY_ERROR_TYPE = /^[A-Za-z][\w.-]{0,79}$/u;
-
-const normalizeTelemetryErrorType = (candidate: string): string =>
-  TELEMETRY_ERROR_TYPE.test(candidate) ? candidate : "UnknownError";
-
-const telemetryErrorType = (error: unknown): string => {
-  const candidate = error instanceof Error ? error.name : typeof error;
-  return normalizeTelemetryErrorType(candidate);
-};
-
 const toRedactedTelemetryError = (error: unknown): Error => {
   // eslint-disable-next-line unicorn/error-message -- the original message is intentionally dropped so telemetry cannot leak PII from the underlying error; the error class is carried in `.name` instead.
   const redacted = new Error("");
@@ -93,7 +88,7 @@ const sanitizeExceptionEvent = (event: CaptureResult): CaptureResult => {
   const firstException: unknown = Array.isArray(exceptionList)
     ? exceptionList.at(0)
     : undefined;
-  const type = normalizeTelemetryErrorType(
+  const type = normalizeTelemetryErrorTypeName(
     readStringField(firstException, "type"),
   );
   return {
@@ -110,6 +105,9 @@ const sanitizeExceptionEvent = (event: CaptureResult): CaptureResult => {
     },
   };
 };
+
+type RouteErrorLifecycleSanitizer = typeof sanitizeRouteErrorLifecycleEvent;
+let routeErrorLifecycleSanitizer: RouteErrorLifecycleSanitizer | undefined;
 
 const errorContextProperties = (
   context: ErrorCaptureContext | undefined,
@@ -195,6 +193,9 @@ export const createPostHogAnalytics = (
       if (event.event === WEB_ANALYTICS_EVENTS.exception) {
         return sanitizeExceptionEvent(event);
       }
+      if (event.event === WEB_ANALYTICS_EVENTS.routeErrorRecovery) {
+        return routeErrorLifecycleSanitizer?.(event) ?? null;
+      }
       return event;
     },
   });
@@ -233,6 +234,19 @@ export const createPostHogAnalytics = (
     captureGuideStepSkipped: (properties) => {
       posthog.capture(WEB_ANALYTICS_EVENTS.guideStepSkipped, properties);
     },
+    captureRouteErrorLifecycle: async (properties) =>
+      import("@/lib/analytics/posthog-route-error")
+        .then((module) => {
+          routeErrorLifecycleSanitizer =
+            module.sanitizeRouteErrorLifecycleEvent;
+          return module.captureRouteErrorLifecycle(posthog, properties);
+        })
+        .catch((error: unknown) => {
+          analytics.captureError(error, {
+            operation: "posthog.route-error-lifecycle",
+            type: "detached",
+          });
+        }),
     identifyUser: (user) => {
       const distinctId = posthog.get_distinct_id();
 

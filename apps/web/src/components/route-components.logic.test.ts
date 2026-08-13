@@ -26,13 +26,19 @@ describe("route error recovery", () => {
     }
   });
 
-  test("hard reloads instead of retrying a cached rejected import", () => {
+  test("records the retry before reloading a cached rejected import", async () => {
     const actions: string[] = [];
+    let finishRecording: () => void = () => undefined;
 
-    recoverRouteError({
+    const recovery = recoverRouteError({
       error: new TypeError(
         "Failed to fetch dynamically imported module: https://example.test/chunk.js",
       ),
+      recordRetryStarted: async () =>
+        new Promise<void>((resolve) => {
+          actions.push("record");
+          finishRecording = resolve;
+        }),
       reloadPage: () => {
         actions.push("reload");
       },
@@ -41,14 +47,20 @@ describe("route error recovery", () => {
       },
     });
 
-    expect(actions).toEqual(["reload"]);
+    expect(actions).toEqual(["record"]);
+    finishRecording();
+    await recovery;
+    expect(actions).toEqual(["record", "reload"]);
   });
 
-  test("keeps ordinary route errors on the in-app retry path", () => {
+  test("keeps ordinary route errors on the in-app retry path", async () => {
     const actions: string[] = [];
 
-    recoverRouteError({
+    await recoverRouteError({
       error: new TypeError("Cannot read properties of null"),
+      recordRetryStarted: async () => {
+        actions.push("record");
+      },
       reloadPage: () => {
         actions.push("reload");
       },
@@ -57,7 +69,7 @@ describe("route error recovery", () => {
       },
     });
 
-    expect(actions).toEqual(["retry"]);
+    expect(actions).toEqual(["record", "retry"]);
   });
 });
 

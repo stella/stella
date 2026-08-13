@@ -34,6 +34,7 @@ import { MatterIcon } from "@/components/matter-icon";
 import Tooltip from "@/components/tooltip";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import {
   SIDE_RAIL_CONTAINER_CLASS,
@@ -42,26 +43,6 @@ import {
 } from "@/lib/consts";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
-
-type InspectorRailProps = {
-  activeId: string | null;
-  minimized: boolean;
-  onActivateTab: (tabId: string) => void;
-  onCloseTab: (tabId: string) => void;
-  onOpenChat: (
-    args?: Parameters<
-      (args?: {
-        label?: string;
-        workspaceId?: string | undefined;
-        contextMatterIds?: string[];
-        activeSkill?: ChatTab["activeSkill"];
-      }) => void
-    >[0],
-  ) => void;
-  onSetMinimized: (minimized: boolean) => void;
-  tabs: InspectorTab[];
-  workspaceId?: string | undefined;
-};
 
 export const InspectorRail = ({
   activeId,
@@ -73,7 +54,13 @@ export const InspectorRail = ({
   tabs,
   workspaceId,
 }: InspectorRailProps) => {
+  const routeErrorLifecycle = useRouteErrorLifecycle();
   const t = useTranslations();
+  const inspectorState = inspectorDiagnosticState(tabs.length, minimized);
+  useExternalSyncEffect(() => {
+    routeErrorLifecycle.updateInspectorState(inspectorState);
+    return () => routeErrorLifecycle.updateInspectorState("unavailable");
+  }, [routeErrorLifecycle, inspectorState]);
   const activeTab = tabs.find((tab) => tab.id === activeId);
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const { data: activeSkillCatalogueData } = useQuery({
@@ -203,6 +190,33 @@ export const InspectorRail = ({
       </div>
     </div>
   );
+};
+
+type InspectorRailProps = {
+  activeId: string | null;
+  minimized: boolean;
+  onActivateTab: (tabId: string) => void;
+  onCloseTab: (tabId: string) => void;
+  onOpenChat: (
+    args?: Parameters<
+      (args?: {
+        label?: string;
+        workspaceId?: string | undefined;
+        contextMatterIds?: string[];
+        activeSkill?: ChatTab["activeSkill"];
+      }) => void
+    >[0],
+  ) => void;
+  onSetMinimized: (minimized: boolean) => void;
+  tabs: InspectorTab[];
+  workspaceId?: string | undefined;
+};
+
+const inspectorDiagnosticState = (tabCount: number, minimized: boolean) => {
+  if (tabCount === 0) {
+    return "empty";
+  }
+  return minimized ? "minimized" : "open";
 };
 
 /** Extract a short abbreviation from a filename (stem, not extension). */

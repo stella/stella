@@ -15,6 +15,7 @@ import {
   buildErrorReportMailto,
   isNetworkError,
   recoverRouteError,
+  resolveRouteErrorRecovery,
   resolveRouteErrorSupport,
 } from "@/components/route-components.logic";
 import { StellaMark } from "@/components/stella-mark";
@@ -24,6 +25,7 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useSignOut } from "@/hooks/use-sign-out";
 import { createErrorReference } from "@/lib/analytics/error-reference";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-context";
 import { detached } from "@/lib/detached";
 import { isMemberError, isUnauthorizedError } from "@/lib/errors/auth";
 import { sanitizeHref } from "@/lib/sanitize-href";
@@ -220,8 +222,10 @@ const UnexpectedRouteError = ({
   retry,
 }: UnexpectedRouteErrorProps) => {
   const analytics = useAnalytics();
+  const routeErrorLifecycle = useRouteErrorLifecycle();
   const t = useTranslations();
   const [errorReference] = useState(createErrorReference);
+  const recovery = resolveRouteErrorRecovery(routeError);
   const support = resolveRouteErrorSupport({
     deployment: env.VITE_SELFHOST ? "selfHosted" : "hosted",
     feedbackRecipient: env.VITE_FEEDBACK_EMAIL_TO,
@@ -244,11 +248,12 @@ const UnexpectedRouteError = ({
   }
 
   useExternalSyncEffect(() => {
-    analytics.captureError(routeError, {
-      type: "recovery",
+    routeErrorLifecycle.shown({
+      error: routeError,
+      recovery: recovery.type,
       reference: errorReference,
     });
-  }, [analytics, routeError, errorReference]);
+  }, [routeErrorLifecycle, routeError, errorReference, recovery.type]);
 
   const handleCopyReference = async () => {
     try {
@@ -270,11 +275,16 @@ const UnexpectedRouteError = ({
       : null;
 
   const handleRecovery = () => {
-    recoverRouteError({
-      error: routeError,
-      reloadPage: () => window.location.reload(),
-      retryRoute: retry,
-    });
+    detached(
+      recoverRouteError({
+        error: routeError,
+        recordRetryStarted: async (recoveryType) =>
+          routeErrorLifecycle.retryStarted(errorReference, recoveryType),
+        reloadPage: () => window.location.reload(),
+        retryRoute: retry,
+      }),
+      "route-error.recover",
+    );
   };
 
   return (

@@ -10,6 +10,10 @@ import {
 } from "@/components/route-components";
 import { installChatRuntimeCleanup } from "@/features/chat/queries";
 import { createAnalyticsValue } from "@/lib/analytics/provider";
+import {
+  createRouteErrorLifecycleController,
+  resolveCaughtRouteTemplate,
+} from "@/lib/analytics/route-error-lifecycle";
 import { STALE_TIME } from "@/lib/consts";
 import { installPDFDocumentCleanup } from "@/lib/pdf/hooks/use-pdf-document";
 import { routeTree } from "@/routeTree.gen";
@@ -18,6 +22,9 @@ enableMapSet();
 
 export function getRouter() {
   const analyticsValue = createAnalyticsValue();
+  const routeErrorLifecycle = createRouteErrorLifecycleController(
+    analyticsValue.analytics,
+  );
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -27,11 +34,15 @@ export function getRouter() {
   });
   installPDFDocumentCleanup(queryClient);
   installChatRuntimeCleanup(queryClient);
+  let readCaughtRouteTemplate = () => "unknown";
 
   const router = createRouter({
     routeTree,
     defaultPreload: "intent",
-    context: { analyticsValue, queryClient },
+    context: { analyticsValue, queryClient, routeErrorLifecycle },
+    defaultOnCatch: () => {
+      routeErrorLifecycle.caught(readCaughtRouteTemplate());
+    },
     // Keep browser scroll restoration after hydration, but avoid rendering
     // TanStack's restoration sibling during server streaming for client-only
     // top-level routes.
@@ -47,6 +58,8 @@ export function getRouter() {
     defaultPendingMs: 500,
     defaultPendingMinMs: 300,
   });
+  readCaughtRouteTemplate = () =>
+    resolveCaughtRouteTemplate(router.state.matches);
 
   router.subscribe("onResolved", () => {
     // Report the matched route template (e.g. `/workspaces/$workspaceId`),
@@ -57,6 +70,7 @@ export function getRouter() {
     if (path === undefined) {
       return;
     }
+    routeErrorLifecycle.routeResolved(path);
     analyticsValue.analytics.capturePageViewed({ path });
   });
 

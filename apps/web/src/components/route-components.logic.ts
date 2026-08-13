@@ -50,23 +50,30 @@ export const resolveRouteErrorRecovery = (
 
 type RecoverRouteErrorOptions = {
   error: unknown;
+  recordRetryStarted: (recovery: RouteErrorRecovery["type"]) => Promise<void>;
   reloadPage: () => void;
   retryRoute: () => void;
 };
 
-export const recoverRouteError = ({
+export const recoverRouteError = async ({
   error,
+  recordRetryStarted,
   reloadPage,
   retryRoute,
-}: RecoverRouteErrorOptions): void => {
+}: RecoverRouteErrorOptions): Promise<void> => {
   const recovery = resolveRouteErrorRecovery(error);
+  const retryDispatch = recordRetryStarted(recovery.type);
   switch (recovery.type) {
-    case "reload-page":
+    case "reload-page": {
+      await retryDispatch;
       reloadPage();
       return;
-    case "retry-route":
+    }
+    case "retry-route": {
       retryRoute();
+      await retryDispatch;
       return;
+    }
     default: {
       const exhaustive: never = recovery;
       return exhaustive;
