@@ -50,12 +50,8 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
     return conditionalClasses;
   };
   // oxlint-disable-next-line typescript/consistent-return -- fixture: every union member is covered by the switch
-  const extractedStatusClass = ({
-    slotStatus,
-  }: {
-    slotStatus: "open" | "closed";
-  }) => {
-    switch (slotStatus) {
+  const extractedStatusClass = ({ status }: { status: "open" | "closed" }) => {
+    switch (status) {
       case "open":
         return "font-medium";
       case "closed":

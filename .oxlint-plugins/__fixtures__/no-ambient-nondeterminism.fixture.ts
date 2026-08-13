@@ -1,7 +1,17 @@
 // Passive regression fixture for
 // `no-ambient-nondeterminism/no-ambient-nondeterminism`.
 
-import { randomUUID, randomUUID as nodeRandomUuid } from "node:crypto";
+import bareCryptoDefault, {
+  randomUUID as bareRandomUuid,
+} from "crypto";
+// oxlint-disable-next-line import/no-duplicates -- fixture: namespace and default import provenance both need coverage
+import * as bareCryptoNamespace from "crypto";
+import nodeCryptoDefault, {
+  randomUUID,
+  randomUUID as nodeRandomUuid,
+} from "node:crypto";
+// oxlint-disable-next-line import/no-duplicates -- fixture: namespace and named/default import provenance both need coverage
+import * as nodeCryptoNamespace from "node:crypto";
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: ambient epoch time must be injected
 export const epoch = Date.now();
@@ -35,6 +45,30 @@ export const importedIdentifier = randomUUID();
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: aliased imports retain their provenance
 export const aliasedImportedIdentifier = nodeRandomUuid();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: bare crypto named imports retain ambient provenance
+export const bareImportedIdentifier = bareRandomUuid();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: node:crypto namespace imports retain ambient provenance
+export const nodeNamespaceIdentifier = nodeCryptoNamespace.randomUUID();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: bare crypto namespace imports retain ambient provenance
+export const bareNamespaceIdentifier = bareCryptoNamespace.randomUUID();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: node:crypto default imports retain ambient provenance
+export const nodeDefaultIdentifier = nodeCryptoDefault.randomUUID();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: bare crypto default imports retain ambient provenance
+export const bareDefaultIdentifier = bareCryptoDefault.randomUUID();
+
+const localCryptoModule = { randomUUID: () => "local" };
+const localCryptoModuleAlias = localCryptoModule;
+const { randomUUID: localCryptoRandomUuid } = localCryptoModule;
+
+export const localModuleIdentifier = localCryptoModule.randomUUID();
+export const localAliasedModuleIdentifier =
+  localCryptoModuleAlias.randomUUID();
+export const localDestructuredIdentifier = localCryptoRandomUuid();
 
 const readNow = Date.now;
 const createSortableIdentifier = Bun.randomUUIDv7;

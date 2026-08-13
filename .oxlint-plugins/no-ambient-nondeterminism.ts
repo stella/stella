@@ -14,7 +14,7 @@
 //   crypto.getRandomValues(...)
 //   Bun.randomUUIDv7()
 //   performance.now()
-//   randomUUID() imported from node:crypto
+//   randomUUID() imported from crypto or node:crypto
 //   globalThis.Date.now() (and the corresponding forms above)
 //
 // Immutable identifier aliases, object-destructured method aliases, and
@@ -34,6 +34,7 @@ import {
 } from "./utils.ts";
 
 const RULE_NAME = "no-ambient-nondeterminism";
+const CRYPTO_MODULES = new Set(["crypto", "node:crypto"]);
 
 const bindingFromScope = (initialScope: unknown, name: string): unknown => {
   let scope = initialScope;
@@ -218,7 +219,12 @@ const isGlobalReference = (context: unknown, node: unknown): boolean => {
   return binding === null || !bindingHasDefinitions(binding);
 };
 
-const isNodeCryptoRandomUuid = (context: unknown, node: unknown): boolean => {
+type CryptoImportKind = "module" | "randomUUID";
+
+const cryptoImportKind = (
+  context: unknown,
+  node: unknown,
+): CryptoImportKind | null => {
   if (
     !isIdentifier(node) ||
     typeof context !== "object" ||
@@ -229,35 +235,52 @@ const isNodeCryptoRandomUuid = (context: unknown, node: unknown): boolean => {
     !("getScope" in context.sourceCode) ||
     typeof context.sourceCode.getScope !== "function"
   ) {
-    return false;
+    return null;
   }
 
   const binding = bindingFromScope(
     context.sourceCode.getScope(node),
     node.name,
   );
-  return (
-    typeof binding === "object" &&
-    binding !== null &&
-    "defs" in binding &&
-    Array.isArray(binding.defs) &&
-    binding.defs.some(
-      (definition) =>
-        typeof definition === "object" &&
-        definition !== null &&
-        "type" in definition &&
-        definition.type === "ImportBinding" &&
-        "node" in definition &&
-        isAstNode(definition.node) &&
-        definition.node.type === "ImportSpecifier" &&
-        getImportedName(definition.node) === "randomUUID" &&
-        "parent" in definition &&
-        isAstNode(definition.parent) &&
-        definition.parent.type === "ImportDeclaration" &&
-        isAstNode(definition.parent.source) &&
-        definition.parent.source.value === "node:crypto",
-    )
-  );
+  if (
+    typeof binding !== "object" ||
+    binding === null ||
+    !("defs" in binding) ||
+    !Array.isArray(binding.defs)
+  ) {
+    return null;
+  }
+  for (const definition of binding.defs) {
+    if (
+      typeof definition !== "object" ||
+      definition === null ||
+      !("type" in definition) ||
+      definition.type !== "ImportBinding" ||
+      !("node" in definition) ||
+      !isAstNode(definition.node) ||
+      !("parent" in definition) ||
+      !isAstNode(definition.parent) ||
+      definition.parent.type !== "ImportDeclaration" ||
+      !isAstNode(definition.parent.source) ||
+      typeof definition.parent.source.value !== "string" ||
+      !CRYPTO_MODULES.has(definition.parent.source.value)
+    ) {
+      continue;
+    }
+    if (
+      definition.node.type === "ImportSpecifier" &&
+      getImportedName(definition.node) === "randomUUID"
+    ) {
+      return "randomUUID";
+    }
+    if (
+      definition.node.type === "ImportNamespaceSpecifier" ||
+      definition.node.type === "ImportDefaultSpecifier"
+    ) {
+      return "module";
+    }
+  }
+  return null;
 };
 
 const staticMemberName = (node: unknown): string | null => {
@@ -336,12 +359,38 @@ const ambientMemberKind = (
   return null;
 };
 
+const isCryptoModuleReference = (
+  context: unknown,
+  node: unknown,
+  visitedBindings: Set<unknown>,
+): boolean => {
+  const expression = unwrapExpression(node);
+  if (!isIdentifier(expression)) {
+    return false;
+  }
+  if (cryptoImportKind(context, expression) === "module") {
+    return true;
+  }
+  const alias = constAlias(context, expression, visitedBindings);
+  return (
+    alias?.type === "value" &&
+    isCryptoModuleReference(context, alias.value, visitedBindings)
+  );
+};
+
 const ambientPropertyPathKind = (
   context: unknown,
   object: unknown,
   propertyPath: readonly string[],
   visitedBindings: Set<unknown>,
 ): string | null => {
+  if (
+    propertyPath.length === 1 &&
+    propertyPath.at(0) === "randomUUID" &&
+    isCryptoModuleReference(context, object, new Set(visitedBindings))
+  ) {
+    return "randomUUID() from crypto";
+  }
   const objectName = globalObjectName(context, object, visitedBindings);
   const fullPath =
     objectName === "globalThis"
@@ -363,8 +412,8 @@ const ambientCallKind = (
   if (expression === null) {
     return null;
   }
-  if (isNodeCryptoRandomUuid(context, expression)) {
-    return "randomUUID() from node:crypto";
+  if (cryptoImportKind(context, expression) === "randomUUID") {
+    return "randomUUID() from crypto";
   }
   if (isIdentifier(expression)) {
     const alias = constAlias(context, expression, visitedBindings);
@@ -382,6 +431,16 @@ const ambientCallKind = (
   }
   if (expression.type !== "MemberExpression") {
     return null;
+  }
+  if (
+    staticMemberName(expression) === "randomUUID" &&
+    isCryptoModuleReference(
+      context,
+      expression.object,
+      new Set(visitedBindings),
+    )
+  ) {
+    return "randomUUID() from crypto";
   }
   return ambientMemberKind(
     globalObjectName(context, expression.object, visitedBindings),
