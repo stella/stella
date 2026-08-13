@@ -143,7 +143,8 @@ describe("view reorder cache path", () => {
     expect(await cachedOrder(queryClient)).toEqual(second);
   });
 
-  test("invalidates every cached locale variant on settle", async () => {
+  test("invalidates every cached locale variant and navigation projection on settle", async () => {
+    const { workspacesKeys } = await import("@/lib/workspaces/queries.logic");
     const { viewsKeys } = await import("@/lib/workspaces/queries/views");
     const { viewOrderCache } = await import("./views.logic");
     const queryClient = await seededClient();
@@ -153,11 +154,19 @@ describe("view reorder cache path", () => {
     // a second literal, so the test still covers the prefix if the key changes.
     const otherLocaleKey = [...viewsKeys.all(WORKSPACE_ID), "xx-other"];
     queryClient.setQueryData(otherLocaleKey, CACHED_VIEWS);
+    const navigationKey = workspacesKeys.navigation("org_navigation");
+    const unrelatedWorkspaceListKey = workspacesKeys.list("org_navigation");
+    queryClient.setQueryData(navigationKey, { workspaces: [] });
+    queryClient.setQueryData(unrelatedWorkspaceListKey, { workspaces: [] });
 
     await viewOrderCache({ queryClient, workspaceId: WORKSPACE_ID }).settle();
 
     for (const key of [viewsKeys.localized(WORKSPACE_ID), otherLocaleKey]) {
       expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
     }
+    expect(queryClient.getQueryState(navigationKey)?.isInvalidated).toBe(true);
+    expect(
+      queryClient.getQueryState(unrelatedWorkspaceListKey)?.isInvalidated,
+    ).toBe(false);
   });
 });

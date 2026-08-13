@@ -24,9 +24,9 @@ export const workspacesKeys = {
     "list",
     activeOrganizationId,
   ],
+  navigationAll: () => [...workspacesKeys.all, "navigation"],
   navigation: (activeOrganizationId: string) => [
-    ...workspacesKeys.all,
-    "navigation",
+    ...workspacesKeys.navigationAll(),
     activeOrganizationId,
   ],
   byId: (workspaceId: string) => [...workspacesKeys.all, workspaceId],

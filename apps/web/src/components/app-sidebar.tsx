@@ -671,6 +671,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
                   {pinned.map((ws, i) => (
                     <MatterItem
                       activeOrganizationId={user.activeOrganizationId}
+                      isActive={activeWorkspaceId === ws.id}
                       isExpanded={!isCollapsed && expandedMatterId === ws.id}
                       isPinned
                       key={ws.id}
@@ -701,6 +702,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
                   {recents.map((ws) => (
                     <MatterItem
                       activeOrganizationId={user.activeOrganizationId}
+                      isActive={activeWorkspaceId === ws.id}
                       isExpanded={!isCollapsed && expandedMatterId === ws.id}
                       key={ws.id}
                       onDeleted={handleMatterDeleted}
@@ -885,6 +887,7 @@ type MatterItemProps = {
     client?: { id: string; displayName: string } | null;
     lastActivityAt: Date;
   };
+  isActive: boolean;
   isPinned?: boolean;
   isExpanded: boolean;
   onExpandedChange: () => void;
@@ -961,6 +964,7 @@ const toCopyToMatterEntities = (raw: unknown): CopyToMatterEntity[] => {
 const MatterItem = ({
   activeOrganizationId,
   workspace: ws,
+  isActive,
   isExpanded,
   isPinned: _isPinnedProp,
   onTogglePin,
@@ -1251,7 +1255,7 @@ const MatterItem = ({
             .filter(Boolean)
             .join(" — ")}
         >
-          <Link activeProps={{ "data-active": true }} {...navigationTarget}>
+          <Link data-active={isActive || undefined} {...navigationTarget}>
             <MatterIcon
               className="size-4 shrink-0"
               matter={{ id: ws.id, color: ws.color }}

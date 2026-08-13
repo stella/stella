@@ -13,7 +13,7 @@ import type {
 import { propertiesKeys } from "@/lib/workspaces/queries/properties";
 import { viewsKeys } from "@/lib/workspaces/queries/views";
 
-import { viewOrderCache } from "./views.logic";
+import { invalidateViewDerivedQueries, viewOrderCache } from "./views.logic";
 
 type CreateViewVars = {
   id: string;
@@ -35,9 +35,7 @@ export const useCreateView = (workspaceId: string) => {
     },
     onSuccess: async (_data, variables) => {
       const invalidations = [
-        queryClient.invalidateQueries({
-          queryKey: viewsKeys.all(workspaceId),
-        }),
+        invalidateViewDerivedQueries({ queryClient, workspaceId }),
       ];
       // Applying a template can create properties in this matter.
       // Without invalidating, the table renders with a stale property
@@ -194,9 +192,7 @@ export const useDeleteView = (workspaceId: string) => {
       return unwrapEden(response);
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: viewsKeys.all(workspaceId),
-      });
+      await invalidateViewDerivedQueries({ queryClient, workspaceId });
     },
     onError: (error) => {
       analytics.captureError(error);
