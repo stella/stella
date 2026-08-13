@@ -94,6 +94,16 @@ describe("vite config", () => {
       "pdfjs-dist/build/pdf.worker.mjs",
     );
   });
+
+  test("applies runtime asset contracts to worker sub-builds", async () => {
+    const workerPlugins = resolveConfig("test").worker?.plugins?.() ?? [];
+    const pluginNames = (await collectNamedPlugins(workerPlugins)).map(
+      (plugin) => plugin.name,
+    );
+
+    expect(pluginNames).toContain("stll-anonymize-wasm");
+    expect(pluginNames).toContain("stella-pdfjs-worker-module-contract");
+  });
 });
 
 const resolveConfig = (mode: string): UserConfig => {

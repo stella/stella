@@ -108,6 +108,42 @@ const ensurePluginOption = (option: unknown, label: string): PluginOption => {
   throw new TypeError(`Invalid Vite plugin option from ${label}`);
 };
 
+const runtimeAssetPlugins = (): PluginOption[] => [
+  ensurePluginOption(
+    stllAnonymizeWasm({ packages: "none" }),
+    "@stll/anonymize-wasm/vite",
+  ),
+];
+
+const pdfjsWorkerModuleContractPlugin = (): Plugin => ({
+  name: "stella-pdfjs-worker-module-contract",
+  generateBundle(_, bundle) {
+    for (const output of Object.values(bundle)) {
+      if (
+        output.type !== "chunk" ||
+        !output.isEntry ||
+        !output.facadeModuleId
+          ?.replaceAll("\\", "/")
+          .endsWith("/src/lib/pdf/pdfjs-worker.ts")
+      ) {
+        continue;
+      }
+
+      // Vite deliberately strips exports from worker entries. PDF.js also
+      // imports workerSrc as an ES module for its same-thread recovery path,
+      // so restore that public contract from the handler the upstream worker
+      // registers while evaluating.
+      output.code +=
+        "\nexport const WorkerMessageHandler = globalThis.pdfjsWorker.WorkerMessageHandler;\n";
+    }
+  },
+});
+
+const workerRuntimeAssetPlugins = (): PluginOption[] => [
+  ...runtimeAssetPlugins(),
+  pdfjsWorkerModuleContractPlugin(),
+];
+
 const isPluginOption = (value: unknown): value is PluginOption => {
   if (value === false || value === null || value === undefined) {
     return true;
@@ -178,10 +214,7 @@ export default defineConfig(({ mode }) => {
     // createNativePipelineFromConfig), so no bundled prepared packages
     // are needed — "none" skips emitting the ~20MB+ default/per-language
     // .stlanonpkg assets.
-    ensurePluginOption(
-      stllAnonymizeWasm({ packages: "none" }),
-      "@stll/anonymize-wasm/vite",
-    ),
+    ...runtimeAssetPlugins(),
     ensurePluginOption(tailwindcss(), "@tailwindcss/vite"),
     ensurePluginOption(
       tanstackStart({
@@ -274,6 +307,10 @@ export default defineConfig(({ mode }) => {
     // browser target the rest of the build already assumes (es2025).
     worker: {
       format: "es",
+      // Worker builds have their own Vite plugin pipeline. Reuse the runtime
+      // asset plugins so dependencies that rewrite and emit WASM sidecars keep
+      // the same contract when they move off the main thread.
+      plugins: workerRuntimeAssetPlugins,
     },
     build: {
       target: "es2025",
