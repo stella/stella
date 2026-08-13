@@ -1,8 +1,7 @@
 # Pin to digest for supply-chain integrity (oven/bun:1.3.14-slim).
-# Compile on the native build host; only the runtime dependency tree and final
-# image belong to the deployment target. This keeps Rolldown and its native
-# binding off target-architecture emulation while preserving ARM64 runtime
-# dependencies such as sharp/canvas.
+# Run the JavaScript toolchain on the native build host. Cross-platform
+# installs select the target's optional native packages explicitly; the final
+# image alone belongs to the deployment target.
 FROM --platform=$BUILDPLATFORM oven/bun:1.3.14-slim@sha256:d56a2534ffd262e92c12fd3249d3924d296d97086da773f821d7d0477435ea04 AS build-base
 WORKDIR /app
 
@@ -42,11 +41,20 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 
 # Runtime install: the SSR server bundle (dist/server/server.js) externalises
 # its imports, so they must resolve from `dependencies` alone with
-# devDependencies stripped. The web-build CI job boot-smokes this same install.
-FROM runtime-base AS deps-prod
+# devDependencies stripped. Select target-native optional packages while Bun
+# itself stays on the native build platform; running Bun through QEMU is not a
+# reliable image-build boundary.
+FROM build-base AS deps-prod
+ARG TARGETARCH
 COPY --from=install-inputs /json/ .
 RUN --mount=type=cache,target=/root/.bun/install/cache \
-    bun install --filter @stll/web --production --frozen-lockfile --ignore-scripts --network-concurrency=8
+    case "${TARGETARCH}" in \
+      amd64) target_cpu=x64 ;; \
+      arm64) target_cpu=arm64 ;; \
+      *) echo "unsupported web runtime architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac && \
+    bun install --filter @stll/web --production --frozen-lockfile --ignore-scripts \
+      --network-concurrency=8 --cpu="${target_cpu}" --os=linux
 
 FROM deps AS builder
 ARG STELLA_VERSION=dev
@@ -150,12 +158,13 @@ COPY --from=pruner /app/scripts/publish-manifest.ts /app/scripts/stage-web-runti
 RUN --mount=type=cache,target=/root/.bun/install/cache \
     bun scripts/stage-web-runtime.ts /app/web-runtime-stage --install-build-deps
 
-FROM deps-prod AS runner
+FROM runtime-base AS runner
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=3002
 RUN groupadd --system --gid 1001 stella && \
     useradd --system --uid 1001 --gid stella --no-create-home stella
+COPY --from=deps-prod /app/ .
 # Bun links workspace dependencies into /app/packages. Folio remains external
 # to the SSR bundle and imports those workspaces at runtime; overlay the
 # staged dist-shaped closure (derived from bun.lock at build time) onto the
@@ -165,10 +174,6 @@ COPY --chown=stella:stella --from=builder /app/web-runtime-stage/ .
 COPY --chown=stella:stella --from=builder /app/apps/web/start-runtime.js ./apps/web/start-runtime.js
 COPY --chown=stella:stella --from=builder /app/apps/web/dist ./apps/web/dist
 WORKDIR /app/apps/web
-# Prove the full production module graph resolves inside this filesystem
-# before the image can exist; a missing runtime dependency fails the build,
-# not the rollout.
-RUN bun start-runtime.js --smoke
 USER stella
 EXPOSE 3002
 CMD ["bun", "start-runtime.js"]

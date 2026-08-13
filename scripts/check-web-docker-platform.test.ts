@@ -14,8 +14,14 @@ const stagesByName = new Map(stages.map((stage) => [stage.name, stage]));
 
 describe("web container platform boundary", () => {
   test("runs the JavaScript toolchain on the native build platform", () => {
-    for (const stageName of ["install-inputs", "pruner", "deps", "builder"]) {
-      expect(resolvePlatform(stageName)).toBe("$BUILDPLATFORM");
+    for (const stage of stages) {
+      const runsBun = logicalInstructions(stage.body).some(
+        (instruction) =>
+          instruction.startsWith("RUN ") && /\bbun\b/u.test(instruction),
+      );
+      if (runsBun) {
+        expect(resolvePlatform(stage.name)).toBe("$BUILDPLATFORM");
+      }
     }
 
     const compilerStage = stages.find((stage) =>
@@ -25,17 +31,33 @@ describe("web container platform boundary", () => {
     expect(resolvePlatform(compilerStage?.name ?? "")).toBe("$BUILDPLATFORM");
   });
 
-  test("installs production native dependencies for the target runtime", () => {
-    expect(resolvePlatform("deps-prod")).toBe("$TARGETPLATFORM");
+  test("selects target-native dependencies without emulating Bun", () => {
     expect(resolvePlatform("runner")).toBe("$TARGETPLATFORM");
-    expect(stagesByName.get("deps-prod")?.body).toContain(
+    const productionDependencies = stagesByName.get("deps-prod")?.body;
+    expect(productionDependencies).toContain("ARG TARGETARCH");
+    const architectureMapping = Object.fromEntries(
+      [
+        ...(productionDependencies?.matchAll(
+          /\b([a-z0-9_]+)\)\s+target_cpu=([a-z0-9_]+)\s+;;/gu,
+        ) ?? []),
+      ].map((match) => [match.at(1), match.at(2)]),
+    );
+    expect(architectureMapping).toEqual({ amd64: "x64", arm64: "arm64" });
+    expect(productionDependencies).toMatch(/\*\).*?\bexit 1\s+;;/su);
+    expect(productionDependencies).toContain(
       "bun install --filter @stll/web --production",
     );
+    expect(productionDependencies).toMatch(
+      /--cpu="\$\{target_cpu\}" --os=linux/u,
+    );
+
+    const runner = stagesByName.get("runner");
+    expect(runner?.parent).toBe("runtime-base");
+    expect(runner?.body).toContain("COPY --from=deps-prod /app/ .");
   });
 
   test("copies only architecture-independent build output across platforms", () => {
     const runner = stagesByName.get("runner");
-    expect(runner?.parent).toBe("deps-prod");
     expect(runner?.body).toContain(
       "COPY --chown=stella:stella --from=builder /app/apps/web/dist ./apps/web/dist",
     );
@@ -58,7 +80,7 @@ describe("web container platform boundary", () => {
         });
     });
     expect(crossPlatformCopies).toEqual([
-      "deps-prod: COPY --from=install-inputs /json/ .",
+      "runner: COPY --from=deps-prod /app/ .",
       "runner: COPY --chown=stella:stella --from=pruner /app/out/json/ .",
       "runner: COPY --chown=stella:stella --from=builder /app/web-runtime-stage/ .",
       "runner: COPY --chown=stella:stella --from=builder /app/apps/web/start-runtime.js ./apps/web/start-runtime.js",
@@ -88,9 +110,7 @@ describe("web container platform boundary", () => {
     expect(runner?.body).toContain(
       "COPY --chown=stella:stella --from=builder /app/web-runtime-stage/ .",
     );
-    // Boot-time proof that the whole production module graph resolves inside
-    // the image filesystem: a missing runtime dependency fails the build.
-    expect(runner?.body).toContain("RUN bun start-runtime.js --smoke");
+    expect(runner?.body).toContain("COPY --from=deps-prod /app/ .");
   });
 
   test("uses the same pinned multi-architecture base for build and runtime", () => {
@@ -125,6 +145,25 @@ function parseStages(source: string): DockerStage[] {
   }
 
   return parsed;
+}
+
+function logicalInstructions(body: string): string[] {
+  const instructions: string[] = [];
+  let current = "";
+
+  for (const line of body.split("\n")) {
+    current += `${current ? " " : ""}${line.trim()}`;
+    if (current.endsWith("\\")) {
+      current = current.slice(0, -1).trimEnd();
+      continue;
+    }
+    if (current) {
+      instructions.push(current);
+    }
+    current = "";
+  }
+
+  return instructions;
 }
 
 function resolvePlatform(stageName: string, seen = new Set<string>()): string {
