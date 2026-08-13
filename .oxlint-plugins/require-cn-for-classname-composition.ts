@@ -297,7 +297,6 @@ export default eslintCompatPlugin({
               return isAllowedClassValue(node.body, visitedVariables);
             }
 
-            let hasConditionalBranch = false;
             const returnValues: unknown[] = [];
             const visitBody = (candidate: unknown, isRoot = false): void => {
               if (!isAstNode(candidate)) {
@@ -310,12 +309,6 @@ export default eslintCompatPlugin({
                   candidate.type === "FunctionDeclaration")
               ) {
                 return;
-              }
-              if (
-                candidate.type === "IfStatement" ||
-                candidate.type === "SwitchStatement"
-              ) {
-                hasConditionalBranch = true;
               }
               if (candidate.type === "ReturnStatement") {
                 returnValues.push(candidate.argument);
@@ -336,8 +329,33 @@ export default eslintCompatPlugin({
             };
             visitBody(node.body, true);
 
+            const returnKinds = new Set(
+              returnValues.map((returnValue) => {
+                if (returnValue === null) {
+                  return "empty";
+                }
+                if (isCanonicalCnComposition(returnValue)) {
+                  return "canonical";
+                }
+                const returned = unwrapClassExpression(returnValue);
+                if (isStringLiteral(returned)) {
+                  return `static:${returned.value}`;
+                }
+                if (
+                  isTemplateLiteral(returned) &&
+                  returned.expressions.length === 0
+                ) {
+                  return `static:${context.sourceCode.getText(returned)}`;
+                }
+                return isAstNode(returned)
+                  ? `dynamic:${context.sourceCode.getText(returned)}`
+                  : "dynamic:unknown";
+              }),
+            );
+            const selectsClassValue = returnKinds.size > 1;
+
             return returnValues.every((returnValue) =>
-              hasConditionalBranch
+              selectsClassValue
                 ? isCanonicalCnComposition(returnValue)
                 : isAllowedClassValue(returnValue, new Set(visitedVariables)),
             );

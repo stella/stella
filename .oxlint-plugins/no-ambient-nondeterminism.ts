@@ -59,6 +59,59 @@ const bindingHasDefinitions = (binding: unknown): boolean =>
   Array.isArray(binding.defs) &&
   binding.defs.length > 0;
 
+const constInitializer = (
+  context: unknown,
+  node: unknown,
+  visitedBindings: Set<unknown>,
+): unknown => {
+  if (
+    !isIdentifier(node) ||
+    typeof context !== "object" ||
+    context === null ||
+    !("sourceCode" in context) ||
+    typeof context.sourceCode !== "object" ||
+    context.sourceCode === null ||
+    !("getScope" in context.sourceCode) ||
+    typeof context.sourceCode.getScope !== "function"
+  ) {
+    return null;
+  }
+
+  const binding = bindingFromScope(
+    context.sourceCode.getScope(node),
+    node.name,
+  );
+  if (
+    typeof binding !== "object" ||
+    binding === null ||
+    visitedBindings.has(binding) ||
+    !("defs" in binding) ||
+    !Array.isArray(binding.defs)
+  ) {
+    return null;
+  }
+  visitedBindings.add(binding);
+
+  for (const definition of binding.defs) {
+    if (
+      typeof definition === "object" &&
+      definition !== null &&
+      "type" in definition &&
+      definition.type === "Variable" &&
+      "node" in definition &&
+      isAstNode(definition.node) &&
+      definition.node.type === "VariableDeclarator" &&
+      "parent" in definition &&
+      isAstNode(definition.parent) &&
+      definition.parent.type === "VariableDeclaration" &&
+      definition.parent.kind === "const"
+    ) {
+      return definition.node.init;
+    }
+  }
+  return null;
+};
+
 const isGlobalReference = (context: unknown, node: unknown): boolean => {
   if (!isIdentifier(node)) {
     return false;
@@ -146,13 +199,23 @@ const staticMemberName = (node: unknown): string | null => {
   return null;
 };
 
-const globalObjectName = (context: unknown, node: unknown): string | null => {
+const globalObjectName = (
+  context: unknown,
+  node: unknown,
+  visitedBindings = new Set<unknown>(),
+): string | null => {
   const expression = unwrapExpression(node);
   if (expression === null) {
     return null;
   }
   if (isIdentifier(expression)) {
-    return isGlobalReference(context, expression) ? expression.name : null;
+    if (isGlobalReference(context, expression)) {
+      return expression.name;
+    }
+    const initializer = constInitializer(context, expression, visitedBindings);
+    return initializer === null
+      ? null
+      : globalObjectName(context, initializer, visitedBindings);
   }
   if (expression.type !== "MemberExpression") {
     return null;
@@ -164,13 +227,23 @@ const globalObjectName = (context: unknown, node: unknown): string | null => {
   return staticMemberName(expression);
 };
 
-const ambientCallKind = (context: unknown, callee: unknown): string | null => {
+const ambientCallKind = (
+  context: unknown,
+  callee: unknown,
+  visitedBindings = new Set<unknown>(),
+): string | null => {
   const expression = unwrapExpression(callee);
   if (expression === null) {
     return null;
   }
   if (isNodeCryptoRandomUuid(context, expression)) {
     return "randomUUID() from node:crypto";
+  }
+  if (isIdentifier(expression)) {
+    const initializer = constInitializer(context, expression, visitedBindings);
+    if (initializer !== null) {
+      return ambientCallKind(context, initializer, visitedBindings);
+    }
   }
   if (expression.type !== "MemberExpression") {
     return null;

@@ -35,6 +35,12 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
     }
     return "bg-background";
   };
+  const extractedDynamicClass = ({ selected }: { selected: boolean }) => {
+    if (selected) {
+      return className;
+    }
+    return conditionalClasses;
+  };
   // oxlint-disable-next-line typescript/consistent-return -- fixture: every union member is covered by the switch
   const extractedStatusClass = ({
     slotStatus,
@@ -53,6 +59,12 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
       return cn("rounded-md", className);
     }
     return mergeClasses("rounded-md", "opacity-60");
+  };
+  const guardedStaticClass = ({ selected }: { selected: boolean }) => {
+    if (selected) {
+      return "rounded-md";
+    }
+    return "rounded-md";
   };
 
   return (
@@ -93,6 +105,8 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
       {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
       <FixtureSlot className={extractedRowClass} />
       {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      <FixtureSlot className={extractedDynamicClass} />
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
       <StatusSlot className={extractedStatusClass} />
 
       {/* Static and pass-through values — MUST NOT flag. */}
@@ -110,6 +124,9 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
 
       {/* Conditional callbacks remain valid when every branch uses cn(). */}
       <FixtureSlot className={canonicalRowClass} />
+
+      {/* Control flow returning one static value is not composition. */}
+      <FixtureSlot className={guardedStaticClass} />
 
       <ShadowedCn active={active} />
     </div>

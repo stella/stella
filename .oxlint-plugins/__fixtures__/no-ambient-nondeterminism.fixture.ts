@@ -36,6 +36,19 @@ export const importedIdentifier = randomUUID();
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: aliased imports retain their provenance
 export const aliasedImportedIdentifier = nodeRandomUuid();
 
+const readNow = Date.now;
+const createSortableIdentifier = Bun.randomUUIDv7;
+const createImportedIdentifier = randomUUID;
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: stable aliases retain ambient provenance
+export const aliasedEpoch = readNow();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: stable global-member aliases retain ambient provenance
+export const aliasedSortableIdentifier = createSortableIdentifier();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: stable imported aliases retain ambient provenance
+export const twiceAliasedImportedIdentifier = createImportedIdentifier();
+
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: explicit globalThis access is still ambient time
 export const globalEpoch = globalThis.Date.now();
 
@@ -66,6 +79,11 @@ export const globalSortableIdentifier = globalThis.Bun.randomUUIDv7();
 export const globalMonotonicTime = globalThis.performance.now();
 
 export const explicitDate = new Date("2026-08-13T00:00:00.000Z");
+
+const DateConstructor = Date;
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: constructor aliases retain ambient provenance
+export const aliasedInstant = new DateConstructor();
 
 export const withShadowedBindings = (
   Date: { (): string; now: () => number; new (): object },
