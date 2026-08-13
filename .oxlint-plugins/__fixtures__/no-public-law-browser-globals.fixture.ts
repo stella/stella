@@ -68,6 +68,14 @@ const ambientTimeZoneFormatter = Intl.DateTimeFormat("en");
 const undefinedTimeZoneFormatter = Intl.DateTimeFormat("en", {
   timeZone: undefined,
 });
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves local-time Date accessors are ambient
+const ambientLocalYear = fixedDate.getFullYear();
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves local-time Date stringification is ambient
+const ambientLocalDateString = fixedDate.toDateString();
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves destructured Intl constructors cannot bypass the detector
+const { DateTimeFormat: AmbientDateTimeFormat } = Intl;
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves direct Intl constructor aliases cannot bypass the detector
+const AmbientNumberFormat = Intl.NumberFormat;
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves an omitted prototype locale is ambient
 const ambientLocaleDate = fixedDate.toLocaleDateString();
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves undefined prototype locales are ambient
@@ -159,9 +167,13 @@ const readShadowedGlobalThis = (globalThis: {
 };
 
 export {
+  AmbientDateTimeFormat,
+  AmbientNumberFormat,
   ambientLocaleDate,
   ambientLocaleNumber,
   ambientLocaleTime,
+  ambientLocalDateString,
+  ambientLocalYear,
   ambientTimeZoneDate,
   ambientTimeZoneDateTime,
   ambientTimeZoneFormatter,

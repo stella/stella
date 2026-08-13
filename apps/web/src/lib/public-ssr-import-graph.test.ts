@@ -75,6 +75,15 @@ const REVIEWED_AMBIENT_OCCURRENCES = {
     "Math.random": 1,
     document: 2,
   },
+  "packages/api-contract/src/matter-reference.ts": {
+    ".getFullYear(": 1,
+    ".getMonth(": 1,
+  },
+  "packages/ui/src/components/date-picker-popover.logic.ts": {
+    ".getDate(": 2,
+    ".getFullYear(": 2,
+    ".getMonth(": 2,
+  },
   "packages/ui/src/components/date-picker-popover.tsx": {
     "Date.now": 2,
     navigator: 1,
@@ -181,6 +190,18 @@ const REVIEWED_AMBIENT_FINGERPRINTS = {
     "5b0192bfaef91349",
     "eb4d661e61ec037a",
   ],
+  "packages/api-contract/src/matter-reference.ts": [
+    "611aac1ac27d2d7d",
+    "fb5cb9001a845226",
+  ],
+  "packages/ui/src/components/date-picker-popover.logic.ts": [
+    "078135f7e1507f64",
+    "078135f7e1507f64",
+    "078135f7e1507f64",
+    "453cd9dfd22ede5c",
+    "c7dcfb94961f7578",
+    "caa3e96ec0936509",
+  ],
   "packages/ui/src/components/date-picker-popover.tsx": [
     "021c8cecbf818f77",
     "a1876be9f2976392",
@@ -196,8 +217,53 @@ const REVIEWED_AMBIENT_FINGERPRINTS = {
   ],
 } as const satisfies Readonly<Record<string, readonly string[]>>;
 
-const AMBIENT_STATE_PATTERN =
-  /\bglobalThis\.(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|self)\b|\{[^{}]*\b(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|self)\b[^{}]*\}\s*=\s*globalThis\b|\b(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*globalThis\b(?!\s*\.)|(?<![.\w])(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|self)\b(?!\s*:)|\b(?:globalThis\.)?Date\.now\b|\b(?:globalThis\.)?Math\.random\b|\b(?:globalThis\.)?performance\.now\b|\b(?:globalThis\.)?crypto\.(?:getRandomValues|randomUUID)\b|\{[^{}]*\bnow\b[^{}]*\}\s*=\s*(?:globalThis\.)?(?:Date|performance)\b|\{[^{}]*\brandom\b[^{}]*\}\s*=\s*(?:globalThis\.)?Math\b|\{[^{}]*\b(?:getRandomValues|randomUUID)\b[^{}]*\}\s*=\s*(?:globalThis\.)?crypto\b|\b(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*(?:globalThis\.)?(?:Date|Math|crypto|performance)\b(?!\s*\.)|\b(?:globalThis\.)?Date\s*\(\s*\)|\bnew\s+(?:globalThis\.)?Date(?:\s*\(\s*\)|\s*(?=[;,]))|\bnew\s+(?:globalThis\.)?Intl\.[A-Za-z]+(?:\s*\(\s*\)|\s*(?=[;,]))|\b(?:new\s+)?(?:globalThis\.)?Intl\.[A-Za-z]+\s*\(\s*(?:undefined\s*[,)]|\[\s*\]\s*[,)]|\))|\b(?:new\s+)?(?:globalThis\.)?Intl\.DateTimeFormat\s*\((?:(?!\btimeZone\s*:\s*0\b)[^;])*\)|\.(?:toLocaleDateString|toLocaleTimeString)\s*\((?:(?!\btimeZone\s*:\s*0\b)[^;])*\)|\bnew\s+(?:globalThis\.)?Date\b[^;]*?\.toLocaleString\s*\((?:(?!\btimeZone\s*:\s*0\b)[^;])*\)|\b(?:const|let|var)\s+(?<dateToLocaleStringReceiver>[A-Za-z_$][\w$]*)\s*=\s*new\s+(?:globalThis\.)?Date\b[^;]*;[\s\S]*?\k<dateToLocaleStringReceiver>\.toLocaleString\s*\((?:(?!\btimeZone\s*:\s*0\b)[^;])*\)|\.(?:toLocaleDateString|toLocaleString|toLocaleTimeString)\s*\(\s*(?:undefined\s*[,)]|\[\s*\]\s*[,)]|\))/u;
+const BROWSER_GLOBAL_NAMES =
+  "window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|self";
+const INTL_CONSTRUCTOR_NAMES =
+  "Collator|DateTimeFormat|DisplayNames|ListFormat|NumberFormat|PluralRules|RelativeTimeFormat|Segmenter";
+const LOCAL_TIME_DATE_METHOD_NAMES =
+  "getDate|getDay|getFullYear|getHours|getMinutes|getMonth|getSeconds|getTimezoneOffset|getYear|setDate|setFullYear|setHours|setMinutes|setMonth|setSeconds|setYear|toDateString|toTimeString";
+
+const ambientStatePatterns = [
+  new RegExp(`\\bglobalThis\\.(?:${BROWSER_GLOBAL_NAMES})\\b`, "u"),
+  new RegExp(
+    `\\{[^{}]*\\b(?:${BROWSER_GLOBAL_NAMES})\\b[^{}]*\\}\\s*=\\s*globalThis\\b`,
+    "u",
+  ),
+  /\b(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*globalThis\b(?!\s*\.)/u,
+  new RegExp(`(?<![.\\w])(?:${BROWSER_GLOBAL_NAMES})\\b(?!\\s*:)`, "u"),
+  /\b(?:globalThis\.)?Date\.now\b/u,
+  /\b(?:globalThis\.)?Math\.random\b/u,
+  /\b(?:globalThis\.)?performance\.now\b/u,
+  /\b(?:globalThis\.)?crypto\.(?:getRandomValues|randomUUID)\b/u,
+  /\{[^{}]*\bnow\b[^{}]*\}\s*=\s*(?:globalThis\.)?(?:Date|performance)\b/u,
+  /\{[^{}]*\brandom\b[^{}]*\}\s*=\s*(?:globalThis\.)?Math\b/u,
+  /\{[^{}]*\b(?:getRandomValues|randomUUID)\b[^{}]*\}\s*=\s*(?:globalThis\.)?crypto\b/u,
+  /\b(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*(?:globalThis\.)?(?:Date|Math|crypto|performance)\b(?!\s*\.)/u,
+  /\b(?:globalThis\.)?Date\s*\(\s*\)/u,
+  /\bnew\s+(?:globalThis\.)?Date(?:\s*\(\s*\)|\s*(?=[;,]))/u,
+  /\bnew\s+(?:globalThis\.)?Intl\.[A-Za-z]+(?:\s*\(\s*\)|\s*(?=[;,]))/u,
+  /\b(?:new\s+)?(?:globalThis\.)?Intl\.[A-Za-z]+\s*\(\s*(?:undefined\s*[,)]|\[\s*\]\s*[,)]|\))/u,
+  /\b(?:new\s+)?(?:globalThis\.)?Intl\.DateTimeFormat\s*\((?:(?!\btimeZone\s*:\s*0\b)[^;])*\)/u,
+  /\.(?:toLocaleDateString|toLocaleTimeString)\s*\((?:(?!\btimeZone\s*:\s*0\b)[^;])*\)/u,
+  /\bnew\s+(?:globalThis\.)?Date\b[^;]*?\.toLocaleString\s*\((?:(?!\btimeZone\s*:\s*0\b)[^;])*\)/u,
+  /\b(?:const|let|var)\s+(?<dateToLocaleStringReceiver>[A-Za-z_$][\w$]*)\s*=\s*new\s+(?:globalThis\.)?Date\b[^;]*;[\s\S]*?\k<dateToLocaleStringReceiver>\.toLocaleString\s*\((?:(?!\btimeZone\s*:\s*0\b)[^;])*\)/u,
+  /\.(?:toLocaleDateString|toLocaleString|toLocaleTimeString)\s*\(\s*(?:undefined\s*[,)]|\[\s*\]\s*[,)]|\))/u,
+  new RegExp(`\\.(?:${LOCAL_TIME_DATE_METHOD_NAMES})\\s*\\(`, "u"),
+  new RegExp(
+    `\\{[^{}]*\\b(?:${INTL_CONSTRUCTOR_NAMES})\\b[^{}]*\\}\\s*=\\s*(?:globalThis\\.)?Intl\\b`,
+    "u",
+  ),
+  new RegExp(
+    `\\b(?:const|let|var)\\s+[A-Za-z_$][\\w$]*\\s*=\\s*(?:globalThis\\.)?Intl\\.(?:${INTL_CONSTRUCTOR_NAMES})\\b(?!\\s*\\()`,
+    "u",
+  ),
+] as const;
+
+const AMBIENT_STATE_PATTERN = new RegExp(
+  ambientStatePatterns.map(({ source }) => `(?:${source})`).join("|"),
+  "u",
+);
 const CANDIDATE_SUFFIXES = ["", ".ts", ".tsx", "/index.ts", "/index.tsx"];
 const tsTranspiler = new Bun.Transpiler({ loader: "ts" });
 const tsxTranspiler = new Bun.Transpiler({ loader: "tsx" });
@@ -804,6 +870,30 @@ describe("public SSR import graph", () => {
       AMBIENT_STATE_PATTERN.test(
         executableSource(
           'const formatter = Intl.DateTimeFormat("en", { timeZone: undefined });',
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          'const fixedDate = new Date("2026-08-13T00:00:00Z"); const year = fixedDate.getFullYear();',
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          "const { DateTimeFormat: Formatter } = Intl; const formatter = new Formatter();",
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          "const Formatter = Intl.DateTimeFormat; const formatter = new Formatter();",
           "fixture.ts",
         ),
       ),

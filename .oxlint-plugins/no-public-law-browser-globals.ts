@@ -38,6 +38,28 @@ const TIME_ZONE_SENSITIVE_LOCALE_METHODS = new Set([
   "toLocaleTimeString",
 ]);
 
+const LOCAL_TIME_DATE_METHODS = new Set([
+  "getDate",
+  "getDay",
+  "getFullYear",
+  "getHours",
+  "getMinutes",
+  "getMonth",
+  "getSeconds",
+  "getTimezoneOffset",
+  "getYear",
+  "setDate",
+  "setFullYear",
+  "setHours",
+  "setMinutes",
+  "setMonth",
+  "setSeconds",
+  "setYear",
+  "toDateString",
+  "toString",
+  "toTimeString",
+]);
+
 const AMBIENT_FUNCTION_MEMBERS = new Map([
   ["Date", new Set(["now"])],
   ["Math", new Set(["random"])],
@@ -147,6 +169,36 @@ const isAmbientIntlLocale = (argument) => {
     (expression?.type === "ArrayExpression" &&
       Array.isArray(expression.elements) &&
       expression.elements.length === 0)
+  );
+};
+
+const intlConstructorMemberName = (context, node) => {
+  const expression = unwrapExpression(node);
+  if (expression?.type !== "MemberExpression") {
+    return null;
+  }
+  const directName = ambientMemberName(expression, "Intl");
+  if (
+    directName &&
+    AMBIENT_INTL_CONSTRUCTORS.has(directName) &&
+    isUnshadowedGlobal(context, unwrapExpression(expression.object))
+  ) {
+    return directName;
+  }
+  const globalName = staticMemberName(expression);
+  return globalName &&
+    AMBIENT_INTL_CONSTRUCTORS.has(globalName) &&
+    isGlobalThisAmbientObject(context, expression.object, "Intl")
+    ? globalName
+    : null;
+};
+
+const isUnshadowedIntlObject = (context, node) => {
+  const expression = unwrapExpression(node);
+  return (
+    (isIdentifier(expression, "Intl") &&
+      isUnshadowedGlobal(context, expression)) ||
+    isUnshadowedGlobalThisMember(context, expression, "Intl")
   );
 };
 
@@ -310,6 +362,12 @@ export default eslintCompatPlugin({
           VariableDeclarator(node) {
             const initializer = unwrapExpression(node.init);
             if (node.id.type === "Identifier") {
+              if (intlConstructorMemberName(context, initializer) !== null) {
+                context.report({
+                  node: initializer ?? node,
+                  messageId: "publicLawAmbientState",
+                });
+              }
               if (ambientFunctionObjectName(context, initializer) !== null) {
                 context.report({
                   node: initializer ?? node,
@@ -329,6 +387,21 @@ export default eslintCompatPlugin({
             }
             if (node.id.type !== "ObjectPattern") {
               return;
+            }
+
+            if (isUnshadowedIntlObject(context, initializer)) {
+              for (const property of node.id.properties) {
+                const propertyName = staticPatternPropertyName(property);
+                if (
+                  propertyName &&
+                  AMBIENT_INTL_CONSTRUCTORS.has(propertyName)
+                ) {
+                  context.report({
+                    node: property,
+                    messageId: "publicLawAmbientState",
+                  });
+                }
+              }
             }
 
             if (
@@ -414,6 +487,14 @@ export default eslintCompatPlugin({
 
             const intlName = ambientMemberName(node.callee, "Intl");
             const globalIntlName = staticMemberName(node.callee);
+            if (
+              calledMemberName &&
+              LOCAL_TIME_DATE_METHODS.has(calledMemberName) &&
+              isDateObjectReceiver(context, node.callee.object)
+            ) {
+              context.report({ node, messageId: "publicLawAmbientState" });
+              return;
+            }
             if (
               calledMemberName &&
               AMBIENT_LOCALE_METHODS.has(calledMemberName) &&
