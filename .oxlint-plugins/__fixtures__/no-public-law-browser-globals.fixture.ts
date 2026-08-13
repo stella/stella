@@ -44,6 +44,21 @@ const dateFormatter = Intl.DateTimeFormat(undefined, { dateStyle: "long" });
 const serverRequestUrl = new URL("https://example.test/law/cases");
 const serializedFilter = JSON.stringify({ court: "supreme" });
 const fixedDate = new Date("2026-08-13T00:00:00Z");
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves an omitted prototype locale is ambient
+const ambientLocaleDate = fixedDate.toLocaleDateString();
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves undefined prototype locales are ambient
+const ambientLocaleTime = fixedDate.toLocaleTimeString(undefined, {
+  timeZone: "UTC",
+});
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves empty prototype locale lists are ambient
+const ambientLocaleNumber = (42).toLocaleString([]);
+const fixedLocaleDate = fixedDate.toLocaleDateString("en", {
+  timeZone: "UTC",
+});
+const fixedLocaleTime = fixedDate.toLocaleTimeString(["en"], {
+  timeZone: "UTC",
+});
+const fixedLocaleNumber = (42).toLocaleString("en");
 const fixedSegmenter = new Intl.Segmenter("en", { granularity: "grapheme" });
 const fixedDateFormatter = Intl.DateTimeFormat("en", { dateStyle: "long" });
 const readShadowedNavigator = (navigator: { language: string }) =>
@@ -108,6 +123,9 @@ const readShadowedGlobalThis = (globalThis: {
 };
 
 export {
+  ambientLocaleDate,
+  ambientLocaleNumber,
+  ambientLocaleTime,
   assertedEmptyLocaleDateFormatter,
   assertedGlobalBrowserLocale,
   browserDocument,
@@ -126,6 +144,9 @@ export {
   explicitLocaleListDateFormatter,
   explicitLocaleListSegmenter,
   fixedDate,
+  fixedLocaleDate,
+  fixedLocaleNumber,
+  fixedLocaleTime,
   fixedDateFormatter,
   fixedSegmenter,
   fullyComputedGlobalRandomId,

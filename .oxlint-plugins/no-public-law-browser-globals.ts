@@ -27,6 +27,12 @@ const AMBIENT_INTL_CONSTRUCTORS = new Set([
   "Segmenter",
 ]);
 
+const AMBIENT_LOCALE_METHODS = new Set([
+  "toLocaleDateString",
+  "toLocaleString",
+  "toLocaleTimeString",
+]);
+
 const isIdentifier = (node, name) =>
   node?.type === "Identifier" && (name === undefined || node.name === name);
 
@@ -171,7 +177,7 @@ export default eslintCompatPlugin({
           VariableDeclarator(node) {
             const initializer = unwrapExpression(node.init);
             if (
-              node.id?.type !== "ObjectPattern" ||
+              node.id.type !== "ObjectPattern" ||
               !isIdentifier(initializer, "globalThis") ||
               !isUnshadowedGlobal(context, initializer)
             ) {
@@ -257,6 +263,14 @@ export default eslintCompatPlugin({
 
             const intlName = ambientMemberName(node.callee, "Intl");
             const globalIntlName = staticMemberName(node.callee);
+            if (
+              calledMemberName &&
+              AMBIENT_LOCALE_METHODS.has(calledMemberName) &&
+              isAmbientIntlLocale(node.arguments.at(0))
+            ) {
+              context.report({ node, messageId: "publicLawAmbientState" });
+              return;
+            }
             if (
               ((intlName &&
                 AMBIENT_INTL_CONSTRUCTORS.has(intlName) &&
