@@ -28911,7 +28911,7 @@
       "version": "4.3.4"
     },
     {
-      "bom-ref": "pkg:cargo/zerocopy@0.8.55",
+      "bom-ref": "pkg:cargo/zerocopy@0.8.56",
       "evidence": {
         "identity": [
           {
@@ -28932,7 +28932,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "b5a105cd7b140f6eeec8acff2ea38135d3cab283ada58540f629fe51e46696eb"
+          "content": "556764e583adb45a9f8d413c2a147fa7e8d821e48e12b14fd560b607998b75eb"
         }
       ],
       "licenses": [
@@ -28959,12 +28959,12 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/zerocopy@0.8.55",
+      "purl": "pkg:cargo/zerocopy@0.8.56",
       "type": "library",
-      "version": "0.8.55"
+      "version": "0.8.56"
     },
     {
-      "bom-ref": "pkg:cargo/zerocopy-derive@0.8.55",
+      "bom-ref": "pkg:cargo/zerocopy-derive@0.8.56",
       "evidence": {
         "identity": [
           {
@@ -28985,7 +28985,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "0fe976fb70c78cd64cccfe3a6fc142244e8a77b70959b30faf9d0ac37ee228eb"
+          "content": "f2ab42fc20575779bd240faa45f94a74256f755c0fa9e89f0ede20d91d0cdfc1"
         }
       ],
       "licenses": [
@@ -29012,9 +29012,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/zerocopy-derive@0.8.55",
+      "purl": "pkg:cargo/zerocopy-derive@0.8.56",
       "type": "library",
-      "version": "0.8.55"
+      "version": "0.8.56"
     },
     {
       "bom-ref": "pkg:cargo/zerofrom@0.1.8",
@@ -30913,7 +30913,7 @@
       "dependsOn": [
         "pkg:cargo/cfg-if@1.0.4",
         "pkg:cargo/crunchy@0.2.4",
-        "pkg:cargo/zerocopy@0.8.55"
+        "pkg:cargo/zerocopy@0.8.56"
       ],
       "ref": "pkg:cargo/half@2.7.1"
     },
@@ -32001,7 +32001,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/zerocopy@0.8.55"
+        "pkg:cargo/zerocopy@0.8.56"
       ],
       "ref": "pkg:cargo/ppv-lite86@0.2.21"
     },
@@ -34179,9 +34179,9 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/zerocopy-derive@0.8.55"
+        "pkg:cargo/zerocopy-derive@0.8.56"
       ],
-      "ref": "pkg:cargo/zerocopy@0.8.55"
+      "ref": "pkg:cargo/zerocopy@0.8.56"
     },
     {
       "dependsOn": [
@@ -34189,7 +34189,7 @@
         "pkg:cargo/quote@1.0.47",
         "pkg:cargo/syn@2.0.119"
       ],
-      "ref": "pkg:cargo/zerocopy-derive@0.8.55"
+      "ref": "pkg:cargo/zerocopy-derive@0.8.56"
     },
     {
       "dependsOn": [
