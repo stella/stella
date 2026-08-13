@@ -27,7 +27,7 @@ import type {
 import { LanguagePicker } from "@/components/language-picker";
 import { ThemePicker } from "@/components/theme-picker";
 import { useHydrated } from "@/hooks/use-hydrated";
-import { useLocale } from "@/i18n/formatting-context";
+import { useI18nStore } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
@@ -97,7 +97,7 @@ export const OnboardingWizard = () => {
   const navigate = useNavigate();
   const analytics = useAnalytics();
   const hydrated = useHydrated();
-  const locale = useLocale();
+  const browserRegion = useI18nStore((state) => state.region);
   const queryClient = useQueryClient();
   const { data: sessionData } = useQuery(sessionOptions);
   const { data: nativeToolDeployAvailability } = useQuery(
@@ -124,7 +124,7 @@ export const OnboardingWizard = () => {
   }));
   const suggestedCountryCodes = getSuggestedCountryCodes({
     email: userEmail,
-    locale,
+    browserRegion: hydrated ? browserRegion : undefined,
     detectedCountry: sessionData?.user.detectedCountry,
   });
   const [jurisdictionSuggestionApplied, setJurisdictionSuggestionApplied] =
