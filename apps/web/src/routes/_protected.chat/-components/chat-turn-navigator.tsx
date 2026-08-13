@@ -4,6 +4,7 @@ import { userMessageFallbackText } from "@/components/chat/chat-thread-messages.
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import Tooltip from "@/components/tooltip";
 import { useStickToBottomContext } from "@/hooks/use-stick-to-bottom";
+import { useLocale } from "@/i18n/formatting-context";
 import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { buildChatTurnNavigationItems } from "@/routes/_protected.chat/-components/chat-turn-navigator.logic";
@@ -14,12 +15,14 @@ type ChatTurnNavigatorProps = {
 
 export const ChatTurnNavigator = ({ messages }: ChatTurnNavigatorProps) => {
   const t = useTranslations();
+  const locale = useLocale();
   const lang = useI18nStore((state) => state.lang);
   const { scrollElementRef } = useStickToBottomContext();
-  const navigationItems = buildChatTurnNavigationItems(
-    dedupeById(messages),
-    userMessageFallbackText,
-  );
+  const navigationItems = buildChatTurnNavigationItems({
+    locale,
+    messages: dedupeById(messages),
+    toUserPlainText: userMessageFallbackText,
+  });
 
   if (navigationItems.length < 2) {
     return null;
