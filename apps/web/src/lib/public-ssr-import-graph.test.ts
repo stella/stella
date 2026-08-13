@@ -647,7 +647,11 @@ const maskNonExecutableLiterals = (source: string, file: string): string => {
         return;
       }
     }
-    if (isDateParseCall(node) && node.arguments.length === 1) {
+    if (
+      ts.isCallExpression(node) &&
+      isDateParseCall(node) &&
+      node.arguments.length === 1
+    ) {
       const argument = node.arguments[0];
       if (
         argument &&
