@@ -441,7 +441,7 @@ export type NativeExtractionRunRequest = {
   workspaceId: SafeId<"workspace">;
 };
 
-type NativeExtractionRunRequestForFieldsOptions = {
+type NativeExtractionRequestOptions = {
   entityId: SafeId<"entity">;
   entityVersionId: SafeId<"entityVersion">;
   fields: readonly {
@@ -454,9 +454,7 @@ type NativeExtractionRunRequestForFieldsOptions = {
   filePropertyId?: SafeId<"property"> | undefined;
 };
 
-type NativeExtractionRunRequestForFieldsResult =
-  | NativeExtractionRunRequest
-  | null;
+type NativeExtractionRequestResult = NativeExtractionRunRequest | null;
 
 /**
  * Derive the exact immutable source identity from fields a transaction has
@@ -470,7 +468,7 @@ export const nativeExtractionRunRequestForFields = ({
   organizationId,
   workspaceId,
   filePropertyId,
-}: NativeExtractionRunRequestForFieldsOptions): NativeExtractionRunRequestForFieldsResult => {
+}: NativeExtractionRequestOptions): NativeExtractionRequestResult => {
   const fileFieldRow = findExtractionFileFieldRow(fields, filePropertyId);
   if (
     !fileFieldRow ||

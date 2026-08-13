@@ -797,7 +797,9 @@ describe("duplicateWorkspace", () => {
       copiedTaskId,
     ]);
     expect(requestNativeExtractionRunsMock).toHaveBeenCalledTimes(1);
-    expect(enqueueDocumentProcessingRunMock.mock.calls).toEqual([["run_0"]]);
+    expect(enqueueDocumentProcessingRunMock.mock.calls).toEqual([
+      [toSafeId<"documentProcessingRun">("run_0")],
+    ]);
   });
 
   test("returns every object copied for an aborted duplicate", async () => {

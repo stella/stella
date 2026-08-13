@@ -464,7 +464,9 @@ describe("copy-to-workspace", () => {
       throw new Error("Expected the copy to be inserted");
     }
     expect(requestNativeExtractionRunsMock).toHaveBeenCalledTimes(1);
-    expect(enqueueDocumentProcessingRunMock.mock.calls).toEqual([["run_0"]]);
+    expect(enqueueDocumentProcessingRunMock.mock.calls).toEqual([
+      [toSafeId<"documentProcessingRun">("run_0")],
+    ]);
     expect(enqueueEntitySearchRepairsMock.mock.calls.at(0)?.at(1)).toEqual([]);
   });
 

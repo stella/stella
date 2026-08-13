@@ -350,7 +350,9 @@ describe("duplicate entity", () => {
     // folder copies have no such run, so their marks are written inside the
     // copy transaction and only flushed afterwards.
     expect(requestNativeExtractionRunsMock).toHaveBeenCalledTimes(1);
-    expect(enqueueDocumentProcessingRunMock.mock.calls).toEqual([["run_0"]]);
+    expect(enqueueDocumentProcessingRunMock.mock.calls).toEqual([
+      [toSafeId<"documentProcessingRun">("run_0")],
+    ]);
     expect(enqueueEntitySearchRepairsMock).toHaveBeenCalledTimes(1);
     expect(enqueueEntitySearchRepairsMock.mock.calls.at(0)?.at(1)).toEqual([
       rootDuplicate.id,
