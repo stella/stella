@@ -236,6 +236,7 @@ const AMBIENT_STRING_LOCALE_CALL_SENTINEL = "¤";
 const AMBIENT_UNKNOWN_TO_LOCALE_STRING_SENTINEL = "¶";
 const BARE_GLOBAL_THIS_SENTINEL = "※";
 const INTL_CAPABILITY_CALL_SENTINEL = "◊";
+const FORMATTER_CURRENT_TIME_SENTINEL = "◆";
 
 const ambientStatePatterns = [
   new RegExp(`\\bglobalThis\\.(?:${BROWSER_GLOBAL_NAMES})\\b`, "u"),
@@ -254,6 +255,7 @@ const ambientStatePatterns = [
   new RegExp(AMBIENT_UNKNOWN_TO_LOCALE_STRING_SENTINEL, "u"),
   new RegExp(BARE_GLOBAL_THIS_SENTINEL, "u"),
   new RegExp(INTL_CAPABILITY_CALL_SENTINEL, "u"),
+  new RegExp(FORMATTER_CURRENT_TIME_SENTINEL, "u"),
   /\b(?:globalThis\.)?Math\.random\b/u,
   /\b(?:globalThis\.)?performance\.now\b/u,
   /\b(?:globalThis\.)?crypto\.(?:getRandomValues|randomUUID)\b/u,
@@ -667,7 +669,6 @@ const maskNonExecutableLiterals = (source: string, file: string): string => {
       isAmbientLocaleArgument(node.arguments.at(localeIndex))
     );
   };
-  const primitiveBindings = new Map<string, boolean>();
   const isPrimitiveExpression = (node: ts.Expression): boolean =>
     ts.isStringLiteral(node) ||
     ts.isNumericLiteral(node) ||
@@ -675,25 +676,8 @@ const maskNonExecutableLiterals = (source: string, file: string): string => {
     ts.isNoSubstitutionTemplateLiteral(node) ||
     ts.isTemplateExpression(node) ||
     (ts.isPrefixUnaryExpression(node) && ts.isNumericLiteral(node.operand));
-  const collectPrimitiveBindings = (node: ts.Node): void => {
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer
-    ) {
-      const isPrimitive = isPrimitiveExpression(node.initializer);
-      const previous = primitiveBindings.get(node.name.text);
-      primitiveBindings.set(
-        node.name.text,
-        previous === undefined ? isPrimitive : previous && isPrimitive,
-      );
-    }
-    ts.forEachChild(node, collectPrimitiveBindings);
-  };
-  collectPrimitiveBindings(sourceFile);
   const isProvenPrimitiveReceiver = (node: ts.Expression): boolean =>
-    isPrimitiveExpression(node) ||
-    (ts.isIdentifier(node) && primitiveBindings.get(node.text) === true);
+    isPrimitiveExpression(node);
   const hasExplicitTimeZoneOption = (
     argument: ts.Expression | undefined,
   ): boolean =>
@@ -752,11 +736,26 @@ const maskNonExecutableLiterals = (source: string, file: string): string => {
     }
     return isIntlObject(node.expression.expression.expression);
   };
-  const hasExplicitDateTimeZone = (value: string): boolean =>
-    /(?:Z|[+-]\d{2}(?::?\d{2})?)$/iu.test(value);
+  const isAmbientFormatterCurrentTimeCall = (node: ts.Node): boolean =>
+    ts.isCallExpression(node) &&
+    ts.isPropertyAccessExpression(node.expression) &&
+    (node.expression.name.text === "format" ||
+      node.expression.name.text === "formatToParts") &&
+    (node.arguments.length === 0 ||
+      (node.arguments.length === 1 &&
+        ts.isIdentifier(node.arguments[0]) &&
+        node.arguments[0].text === "undefined"));
   const isDeterministicDateString = (value: string): boolean =>
-    /^\d{4}-\d{2}-\d{2}$/u.test(value) || hasExplicitDateTimeZone(value);
+    /^\d{4}-\d{2}-\d{2}$/u.test(value) ||
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})$/u.test(
+      value,
+    );
   const visit = (node: ts.Node): void => {
+    if (isAmbientFormatterCurrentTimeCall(node)) {
+      maskRange(node.getStart(sourceFile), node.end);
+      masked[node.getStart(sourceFile)] = FORMATTER_CURRENT_TIME_SENTINEL;
+      return;
+    }
     if (isIntlCapabilityCall(node)) {
       maskIntlCapabilityCall(node.getStart(sourceFile), node.end);
       return;
@@ -822,10 +821,7 @@ const maskNonExecutableLiterals = (source: string, file: string): string => {
       return;
     }
     if (ts.isTemplateExpression(node)) {
-      if (
-        (isDateConstructor(node.parent) || isDateParseCall(node.parent)) &&
-        !hasExplicitDateTimeZone(node.templateSpans.at(-1)?.literal.text ?? "")
-      ) {
+      if (isDateConstructor(node.parent) || isDateParseCall(node.parent)) {
         maskAmbientDateString(node.getStart(sourceFile), node.end);
         return;
       }
@@ -1117,6 +1113,22 @@ describe("public SSR import graph", () => {
     ).toBe(false);
     expect(
       AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          'const date = new Date("01/02/2026 +01:00");',
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          ["const date = new Date(`", "$", "{value}Z`);"].join(""),
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
         executableSource('const date = new Date("2026-08-13");', "fixture.ts"),
       ),
     ).toBe(false);
@@ -1253,7 +1265,15 @@ describe("public SSR import graph", () => {
           "fixture.ts",
         ),
       ),
-    ).toBe(false);
+    ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          'const value = 42; const render = (value: Date) => value.toLocaleString("en");',
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(true);
     expect(
       AMBIENT_STATE_PATTERN.test(
         executableSource(
@@ -1274,6 +1294,30 @@ describe("public SSR import graph", () => {
       AMBIENT_STATE_PATTERN.test(
         executableSource(
           'const formatter = Intl.DateTimeFormat("en", { timeZone: "UTC" });',
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          'const formatter = Intl.DateTimeFormat("en", { timeZone: "UTC" }); const label = formatter.format();',
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          'const label = Intl.DateTimeFormat("en", { timeZone: "UTC" }).formatToParts(undefined);',
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          'const formatter = Intl.DateTimeFormat("en", { timeZone: "UTC" }); const label = formatter.format(1_786_579_200_000);',
           "fixture.ts",
         ),
       ),

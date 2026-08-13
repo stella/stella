@@ -76,6 +76,10 @@ const ambientLocalDateTime = new Date("2026-08-13T12:00:00");
 declare const unknownDateInput: string;
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves opaque Date inputs cannot be assumed to be epochs
 const ambientUnknownDate = new Date(unknownDateInput);
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves implementation-defined date strings remain ambient even with an offset suffix
+const ambientNonStandardDate = new Date("01/02/2026 +01:00");
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves dynamic templates cannot establish standardized ISO syntax
+const ambientDynamicZonedDate = new Date(`${unknownDateInput}Z`);
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves Date.parse cannot consume local-time strings during SSR
 const ambientParsedLocalDateTime = Date.parse("2026-08-13T12:00:00");
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves Date.parse cannot assume an opaque input is zoned
@@ -141,6 +145,12 @@ const fixedDateFormatter = Intl.DateTimeFormat("en", {
   dateStyle: "long",
   timeZone: "UTC",
 });
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves a formatter defaults to the ambient current time when no value is supplied
+const ambientFormattedNow = fixedDateFormatter.format();
+const storedDateFormatter = new Intl.DateTimeFormat("en", { timeZone: "UTC" });
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves stored formatter values cannot bypass ambient current-time detection
+const ambientFormattedPartsNow = storedDateFormatter.formatToParts(undefined);
+const fixedFormattedInstant = fixedDateFormatter.format(1_786_579_200_000);
 const readShadowedNavigator = (navigator: { language: string }) =>
   navigator.language;
 const readShadowedViewport = (innerWidth: number) => innerWidth;
@@ -215,6 +225,9 @@ const propagatedGlobalThis = ((root: typeof globalThis) => root)(globalThis);
 export {
   AmbientDateTimeFormat,
   AmbientNumberFormat,
+  ambientDynamicZonedDate,
+  ambientFormattedNow,
+  ambientFormattedPartsNow,
   ambientLocaleDate,
   ambientLocaleComparison,
   ambientLocaleLowerCase,
@@ -224,6 +237,7 @@ export {
   ambientLocalDateTime,
   ambientLocalDateString,
   ambientLocalYear,
+  ambientNonStandardDate,
   ambientParsedLocalDateTime,
   ambientParsedUnknownDate,
   ambientReturnedDateTime,
@@ -263,6 +277,7 @@ export {
   fixedDate,
   fixedDateOnly,
   fixedEpochDate,
+  fixedFormattedInstant,
   fixedDateCopy,
   fixedLocaleDate,
   fixedLocaleComparison,

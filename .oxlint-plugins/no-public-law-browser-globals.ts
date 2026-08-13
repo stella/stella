@@ -203,14 +203,18 @@ const isAmbientIntlLocale = (argument) => {
   );
 };
 
+const isAmbientCurrentTimeArgument = (argument) =>
+  argument === undefined ||
+  isIdentifier(unwrapExpression(argument), "undefined");
+
 const localeArgumentIndex = (methodName) =>
   methodName === "localeCompare" ? 1 : 0;
 
-const hasExplicitDateTimeZone = (value) =>
-  /(?:Z|[+-]\d{2}(?::?\d{2})?)$/iu.test(value);
-
 const isDeterministicDateString = (value) =>
-  /^\d{4}-\d{2}-\d{2}$/u.test(value) || hasExplicitDateTimeZone(value);
+  /^\d{4}-\d{2}-\d{2}$/u.test(value) ||
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})$/u.test(
+    value,
+  );
 
 const staticTemplateText = (expression) => {
   if (
@@ -266,15 +270,7 @@ const hasAmbientDateConstructorArguments = (context, argumentsList) => {
     return !isDeterministicDateString(templateText);
   }
   if (argument?.type === "TemplateLiteral") {
-    const quasis = Array.isArray(argument.quasis) ? argument.quasis : [];
-    const tail = quasis.at(-1)?.value;
-    const tailText =
-      typeof tail?.cooked === "string"
-        ? tail.cooked
-        : typeof tail?.raw === "string"
-          ? tail.raw
-          : "";
-    return !hasExplicitDateTimeZone(tailText);
+    return true;
   }
   return !(
     isDateUtcCall(context, argument) || isDateObjectReceiver(context, argument)
@@ -296,18 +292,7 @@ const hasAmbientDateParseArguments = (argumentsList) => {
   if (templateText !== null) {
     return !isDeterministicDateString(templateText);
   }
-  if (argument?.type !== "TemplateLiteral") {
-    return true;
-  }
-  const quasis = Array.isArray(argument.quasis) ? argument.quasis : [];
-  const tail = quasis.at(-1)?.value;
-  const tailText =
-    typeof tail?.cooked === "string"
-      ? tail.cooked
-      : typeof tail?.raw === "string"
-        ? tail.raw
-        : "";
-  return !hasExplicitDateTimeZone(tailText);
+  return true;
 };
 
 const intlConstructorMemberName = (context, node) => {
@@ -343,6 +328,32 @@ const isIntlCapabilityCall = (context, node) => {
   return (
     methodName === "supportedLocalesOf" &&
     intlConstructorMemberName(context, callee.object) !== null
+  );
+};
+
+const isDateTimeFormatterReceiver = (context, node, visited = new Set()) => {
+  const expression = unwrapExpression(node);
+  if (
+    (expression?.type === "CallExpression" ||
+      expression?.type === "NewExpression") &&
+    intlConstructorMemberName(context, expression.callee) === "DateTimeFormat"
+  ) {
+    return true;
+  }
+  if (!isIdentifier(expression, undefined)) {
+    return false;
+  }
+  const variable = findVariable(context, expression);
+  if (!variable || visited.has(variable)) {
+    return false;
+  }
+  visited.add(variable);
+  const declarator = variable.defs.find(
+    ({ node: definition }) => definition?.type === "VariableDeclarator",
+  )?.node;
+  return (
+    declarator?.type === "VariableDeclarator" &&
+    isDateTimeFormatterReceiver(context, declarator.init, visited)
   );
 };
 
@@ -682,6 +693,15 @@ export default eslintCompatPlugin({
 
             const ambientObject = unwrapExpression(node.callee.object);
             const calledMemberName = staticMemberName(node.callee);
+            if (
+              (calledMemberName === "format" ||
+                calledMemberName === "formatToParts") &&
+              isAmbientCurrentTimeArgument(node.arguments.at(0)) &&
+              isDateTimeFormatterReceiver(context, node.callee.object)
+            ) {
+              context.report({ node, messageId: "publicLawAmbientState" });
+              return;
+            }
             if (
               calledMemberName === "parse" &&
               ambientFunctionObjectName(context, node.callee.object) === "Date"

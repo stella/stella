@@ -4,6 +4,7 @@ import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 const PROMPT_PREVIEW_LENGTH = 180;
 const RESPONSE_PREVIEW_LENGTH = 280;
 const PREVIEW_SOURCE_LENGTH_MULTIPLIER = 4;
+const MAX_PREVIEW_SOURCE_CODE_UNITS = 8192;
 const MAX_NAVIGATION_ITEMS = 10;
 const WHITESPACE_SEGMENT = /^\s+$/u;
 const MARKDOWN_FENCE = /^[ \t]{0,3}(?:```|~~~)[^\n]*$/gmu;
@@ -30,8 +31,15 @@ export type ChatTurnNavigationItem = {
 const getMessageTextParts = (message: PersistedChatMessage): string[] => {
   const textParts: string[] = [];
   for (const part of message.parts) {
-    if (part.type === "text" && part.content.trim()) {
-      textParts.push(part.content);
+    if (part.type !== "text") {
+      continue;
+    }
+    const boundedContent = part.content.slice(
+      0,
+      MAX_PREVIEW_SOURCE_CODE_UNITS + 1,
+    );
+    if (boundedContent.trim()) {
+      textParts.push(boundedContent);
     }
   }
   return textParts;
@@ -130,16 +138,27 @@ const takeGraphemePrefix = (
   length: number,
   segmenter: Intl.Segmenter,
 ): string => {
+  const sourceWasTruncated = value.length > MAX_PREVIEW_SOURCE_CODE_UNITS;
+  const boundedValue = sourceWasTruncated
+    ? value.slice(0, MAX_PREVIEW_SOURCE_CODE_UNITS)
+    : value;
   let end = 0;
   let count = 0;
-  for (const { index, segment } of segmenter.segment(value)) {
+  let pendingEnd: number | null = null;
+  for (const { index, segment } of segmenter.segment(boundedValue)) {
+    if (pendingEnd !== null) {
+      end = pendingEnd;
+      count += 1;
+    }
     if (count >= length) {
       break;
     }
-    end = index + segment.length;
-    count += 1;
+    pendingEnd = index + segment.length;
   }
-  return value.slice(0, end);
+  if (!sourceWasTruncated && count < length && pendingEnd !== null) {
+    end = pendingEnd;
+  }
+  return boundedValue.slice(0, end);
 };
 
 const markdownToPreviewText = (

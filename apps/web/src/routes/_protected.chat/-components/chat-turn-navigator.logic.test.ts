@@ -130,4 +130,13 @@ describe("chat turn navigation items", () => {
 
     expect(item?.userPreview).toBe(`${emoji.repeat(180)}…`);
   });
+
+  test("drops an oversized grapheme before preview processing", () => {
+    const oversizedGrapheme = `a${"\u0301".repeat(20_000)}`;
+    const [item] = buildItems([
+      textMessage("user-oversized-grapheme", "user", oversizedGrapheme),
+    ]);
+
+    expect(item?.userPreview).toBeNull();
+  });
 });
