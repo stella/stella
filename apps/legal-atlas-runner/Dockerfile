@@ -17,8 +17,8 @@ RUN mkdir -p /json && \
       -exec cp --parents -t /json/ {} +
 
 FROM base AS pruner
-# Keep in sync with the turbo version in the root package.json.
-RUN bun install -g turbo@2.10.7
+COPY package.json .
+RUN bun install -g "turbo@$(bun -p 'require("./package.json").devDependencies.turbo')"
 COPY . .
 RUN turbo prune @stll/legal-atlas-runner --docker
 

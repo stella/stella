@@ -1828,8 +1828,8 @@ jobs:
         uses: stella/.github/actions/setup-bun-cached@859a61ee0a799ba1028281329555cadee15bfc4f
 
       - name: Install turbo
-        # Match the Dockerfiles: Turbo is only used for pruned source overlays.
-        run: bun install -g turbo@2.10.7
+        # Turbo is only used for pruned source overlays.
+        run: bun install -g "turbo@$(bun -p 'require("./package.json").devDependencies.turbo')"
 
       - name: Prepare Docker install inputs
         run: |

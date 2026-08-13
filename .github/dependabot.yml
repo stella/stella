@@ -149,6 +149,10 @@ updates:
     # Group related updates so they validate together; unmatched updates receive
     # standalone PRs.
     groups:
+      # Executable installs derive this exact root version at build time.
+      turbo:
+        patterns:
+          - "turbo"
       tanstack:
         patterns:
           - "@tanstack/*"
