@@ -30,6 +30,7 @@ const LINTED_FILE_PATTERN = /\.(?:[cm]?[jt]sx?)$/u;
 const TRACKED_RULES = [
   "no-restricted-imports",
   "no-restricted-globals",
+  "no-restricted-properties",
 ] as const;
 
 type UnionRule = (typeof TRACKED_RULES)[number];
@@ -201,10 +202,47 @@ const restrictedGlobalKeys = (options: unknown): string[] => {
   return keys;
 };
 
+const KNOWN_PROPERTY_FIELDS = new Set([
+  "allowObjects",
+  "allowProperties",
+  "message",
+  "object",
+  "property",
+]);
+
+const restrictedPropertyKeys = (options: unknown): string[] => {
+  const keys: string[] = [];
+  for (const option of ruleOptions(options)) {
+    if (!isRecord(option)) {
+      continue;
+    }
+    recordUnhandledFields(option, KNOWN_PROPERTY_FIELDS, "properties");
+    const object = readString(option, "object");
+    const property = readString(option, "property");
+    if (object !== undefined && property !== undefined) {
+      keys.push(`property:${object}.${property}`);
+      continue;
+    }
+    if (object !== undefined) {
+      keys.push(
+        `object:${object}#allow:${stringArray(option["allowProperties"]).sort().join(",")}`,
+      );
+      continue;
+    }
+    if (property !== undefined) {
+      keys.push(
+        `property:${property}#allow:${stringArray(option["allowObjects"]).sort().join(",")}`,
+      );
+    }
+  }
+  return keys;
+};
+
 // One stable key per restriction entry, per tracked rule.
 const RESTRICTION_KEYS = {
   "no-restricted-imports": restrictedImportKeys,
   "no-restricted-globals": restrictedGlobalKeys,
+  "no-restricted-properties": restrictedPropertyKeys,
 } as const satisfies Record<UnionRule, (options: unknown) => string[]>;
 
 // A whole-module ban subsumes an import-name-scoped ban on the same module:
