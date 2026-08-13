@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { appShellNavigationLink } from "../helpers/app-shell";
 
@@ -12,6 +12,18 @@ const DIRECT_API_ORIGIN = new URL(
 // The smoke user mirrors the production default state: org owner,
 // no usage entitlement row, no AI provider config. Regressions that
 // only appear in that state must fail here, not in front of a user.
+
+// RequireAIKey legitimately replaces the composer with this gate. Keep every
+// staging chat smoke on one readiness contract so new assertions cannot drift.
+const chatReadySurface = (page: Page) => {
+  const composer = page.getByRole("textbox", {
+    name: /type your question/iu,
+  });
+  const aiKeyGate = page
+    .getByRole("heading", { name: "Connect AI provider" })
+    .first();
+  return composer.or(aiKeyGate);
+};
 
 // Surface browser-side failures in the test output: a client render
 // crash otherwise shows up only as an opaque locator timeout, hiding
@@ -44,17 +56,7 @@ test("chat thread page renders for an entitlement-less owner", async ({
   // title is the canonical signature of a client-side render crash.
   await expect(page.getByText("This page couldn’t be opened")).toBeHidden();
 
-  // The smoke org has no AI provider credentials, so RequireAIKey
-  // legitimately gates the thread with the connect-provider card
-  // instead of the composer. Either state proves the route rendered.
-  // The gate renders its heading twice (inline card plus an
-  // auto-opened dialog), so first() scopes to that locator only; the
-  // composer keeps strict matching so a stray second composer fails.
-  const composer = page.getByRole("textbox", { name: /type your question/iu });
-  const aiKeyGate = page
-    .getByRole("heading", { name: "Connect AI provider" })
-    .first();
-  await expect(composer.or(aiKeyGate)).toBeVisible();
+  await expect(chatReadySurface(page)).toBeVisible();
 });
 
 test("authenticated chat navigation stays same-origin and has no API preflights", async ({
@@ -80,9 +82,7 @@ test("authenticated chat navigation stays same-origin and has no API preflights"
   });
 
   await page.goto("/chat", { waitUntil: "commit" });
-  await expect(
-    page.getByRole("textbox", { name: /type your question/iu }),
-  ).toBeVisible();
+  await expect(chatReadySurface(page)).toBeVisible();
   expect(apiRequests.length).toBeGreaterThan(0);
   const pageOrigin = new URL(page.url()).origin;
   expect(apiRequests.every((url) => new URL(url).origin === pageOrigin)).toBe(
