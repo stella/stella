@@ -1,12 +1,12 @@
 // Passive regression fixture for
 // `no-ambient-nondeterminism/no-ambient-nondeterminism`.
 
-// oxlint-disable-next-line unicorn/prefer-node-protocol -- fixture: bare crypto import provenance must remain covered
+/* oxlint-disable unicorn/prefer-node-protocol -- fixture: bare crypto import provenance must remain covered */
 import bareCryptoDefault, {
   randomUUID as bareRandomUuid,
 } from "crypto";
-// oxlint-disable-next-line unicorn/prefer-node-protocol -- fixture: bare crypto namespace provenance must remain covered
 import * as bareCryptoNamespace from "crypto";
+/* oxlint-enable unicorn/prefer-node-protocol */
 import nodeCryptoDefault, {
   randomUUID,
   randomUUID as nodeRandomUuid,
