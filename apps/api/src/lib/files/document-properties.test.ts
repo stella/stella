@@ -340,15 +340,21 @@ describe("scrubDocumentProperties", () => {
     assertNoTrace(result, ["Jane Novak", "Nov&#225;k Legal"]);
   });
 
-  it("keeps typed OOXML metadata schema-valid while removing its values", async () => {
+  it("keeps typed OOXML collaboration metadata schema-valid and anonymous", async () => {
     const comments =
       '<x:comments xmlns:x="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
       '<x:comment x:author="Jane Novak" x:initials="JN" x:date="2024-01-01T00:00:00Z"/></x:comments>';
+    const document =
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p>' +
+      '<w:ins w:id="1" w:author="Jane Novak" w:date="2024-01-01T00:00:00Z"><w:r><w:t>added</w:t></w:r></w:ins>' +
+      '<w:del w:id="2" w:author="Jane Novak" w:date="2024-01-01T00:00:00Z"><w:r><w:delText>deleted</w:delText></w:r></w:del>' +
+      "</w:p></w:body></w:document>";
     const result = await scrubbed(
       await zipOf({
         "docProps/core.xml": CORE_XML,
         "docProps/app.xml": APP_XML,
         "word/comments.xml": comments,
+        "word/document.xml": document,
       }),
       DOCX_MIME_TYPE,
     );
@@ -359,13 +365,18 @@ describe("scrubDocumentProperties", () => {
     const scrubbedComments = await archive
       .file("word/comments.xml")
       ?.async("string");
+    const scrubbedDocument = await archive
+      .file("word/document.xml")
+      ?.async("string");
 
     expect(core).not.toMatch(
       /<(?:cp:revision|cp:lastPrinted|dcterms:(?:created|modified))\b/u,
     );
-    expect(scrubbedComments).toContain('x:author=""');
+    expect(scrubbedComments).toContain('x:author="Author"');
     expect(scrubbedComments).toContain('x:initials=""');
     expect(scrubbedComments).not.toMatch(/x:date=/u);
+    expect(scrubbedDocument?.match(/w:author="Author"/gu)).toHaveLength(2);
+    expect(scrubbedDocument).not.toMatch(/w:date=/u);
   });
 
   it("clears the OpenDocument meta part, statistics included", async () => {

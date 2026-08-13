@@ -632,19 +632,21 @@ const scrubCustomProperties = (xml: string): string =>
   );
 
 type CollaborationAttributePolicies = {
-  author: "clear";
+  author: "anonymize";
   date: "remove";
   initials: "clear";
   providerId: "remove";
   userId: "remove";
 };
 
+const ANONYMIZED_COLLABORATION_AUTHOR = "Author";
+
 /**
- * A closed policy keeps schema-required authors present while making it
- * impossible to blank typed or optional collaboration attributes.
+ * A closed policy keeps schema-required author attributes usable while making
+ * it impossible to preserve typed or optional collaboration attributes.
  */
 const COLLABORATION_ATTRIBUTE_POLICIES = {
-  author: "clear",
+  author: "anonymize",
   date: "remove",
   initials: "clear",
   userId: "remove",
@@ -666,14 +668,24 @@ const removeNamespacedAttribute = (
   return scrubbed;
 };
 
-const clearNamespacedAttribute = (xml: string, element: XmlElement): string => {
+type ReplaceNamespacedAttributeOptions = {
+  element: XmlElement;
+  replacement: "" | typeof ANONYMIZED_COLLABORATION_AUTHOR;
+  xml: string;
+};
+
+const replaceNamespacedAttribute = ({
+  element,
+  replacement,
+  xml,
+}: ReplaceNamespacedAttributeOptions): string => {
   let scrubbed = xml;
   for (const name of qualifiedNames(xml, element)) {
-    const regex = new RegExp(
-      `(?<prefix>\\s${name}\\s*=\\s*)(?<quote>["'])[^"']*\\k<quote>`,
-      "gu",
+    const regex = new RegExp(`(\\s${name}\\s*=\\s*)(["'])[^"']*\\2`, "gu");
+    scrubbed = scrubbed.replace(
+      regex,
+      (_attribute, prefix) => `${prefix}"${replacement}"`,
     );
-    scrubbed = scrubbed.replace(regex, '$<prefix>""');
   }
   return scrubbed;
 };
@@ -686,8 +698,19 @@ const scrubCollaborationAttributes = (xml: string): string => {
     )) {
       const element = { namespace, localName };
       switch (action) {
+        case "anonymize":
+          scrubbed = replaceNamespacedAttribute({
+            element,
+            replacement: ANONYMIZED_COLLABORATION_AUTHOR,
+            xml: scrubbed,
+          });
+          break;
         case "clear":
-          scrubbed = clearNamespacedAttribute(scrubbed, element);
+          scrubbed = replaceNamespacedAttribute({
+            element,
+            replacement: "",
+            xml: scrubbed,
+          });
           break;
         case "remove":
           scrubbed = removeNamespacedAttribute(scrubbed, element);
