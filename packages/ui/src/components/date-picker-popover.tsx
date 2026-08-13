@@ -22,6 +22,11 @@ import type { OverlayLayer } from "@stll/ui/lib/overlay-layer";
 import { cn } from "@stll/ui/lib/utils";
 import { getLocaleWeekInfo, getWeekendDays } from "@stll/ui/lib/week";
 
+import {
+  millisecondsUntilNextUtcDate,
+  utcDateFromTimestamp,
+} from "./date-picker-popover.logic";
+
 // ---------------------------------------------------------------------------
 // Calendar utilities
 // ---------------------------------------------------------------------------
@@ -38,17 +43,35 @@ type CalendarWeekday = {
   label: string;
 };
 
-const toISODate = (d: Date): string => d.toISOString().slice(0, 10);
+const toISODate = (date: Date): string => utcDateFromTimestamp(date.getTime());
 const HYDRATION_DATE = "1970-01-01";
 const HYDRATION_LOCALE = "en";
 const noopSubscribe = (_onStoreChange: () => void) => () => undefined;
 
+const getUtcToday = (): string => utcDateFromTimestamp(Date.now());
+
+const subscribeToUtcDate = (onStoreChange: () => void) => {
+  let active = true;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const scheduleNextDate = () => {
+    timeoutId = setTimeout(() => {
+      onStoreChange();
+      if (active) {
+        scheduleNextDate();
+      }
+    }, millisecondsUntilNextUtcDate(Date.now()));
+  };
+  scheduleNextDate();
+  return () => {
+    active = false;
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
+  };
+};
+
 const useHydrationSafeToday = (): string =>
-  useSyncExternalStore(
-    noopSubscribe,
-    () => toISODate(new Date()),
-    () => HYDRATION_DATE,
-  );
+  useSyncExternalStore(subscribeToUtcDate, getUtcToday, () => HYDRATION_DATE);
 
 const useHydrationSafeBrowserLocale = (): string =>
   useSyncExternalStore(
