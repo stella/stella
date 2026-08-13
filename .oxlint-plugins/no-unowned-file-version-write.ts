@@ -3,6 +3,7 @@
 // Ordinary and automatic file replacements use writeFileVersion. Initial entity
 // creation, import, restore, deletion, and durable edit sessions receive narrow,
 // reviewable capabilities for the physical mutations their lifecycles require.
+// File-source writers must also request extraction in the source transaction.
 
 import { eslintCompatPlugin, type ESTree } from "@oxlint/plugins";
 
@@ -35,6 +36,10 @@ const isVersionUtilsModule = (moduleSpecifier: string): boolean =>
   /(?:^|\/)entity-versions\/version-utils(?:\.ts)?$/.test(moduleSpecifier) ||
   moduleSpecifier === "./version-utils" ||
   moduleSpecifier === "./version-utils.ts";
+
+const isProcessExtractionModule = (moduleSpecifier: string): boolean =>
+  moduleSpecifier === "@/api/lib/search/process-extraction" ||
+  /(?:^|\/)search\/process-extraction(?:\.ts)?$/.test(moduleSpecifier);
 
 const isEntitySchemaModule = (moduleSpecifier: string): boolean =>
   /(?:^|\/)db\/schema(?:\/entities)?(?:\.ts)?$/.test(moduleSpecifier);
@@ -137,6 +142,8 @@ export default eslintCompatPlugin({
           tableName: "entityVersions",
         };
         const versionUtilsNamespaces = new Set<string>();
+        const processExtractionNamespaces = new Set<string>();
+        const nativeExtractionRequestBindings = new Set<string>();
         const observedCapabilities = new Set<VersionWriteCapability>();
         let ownerCapabilities = new Set<VersionWriteCapability>();
 
@@ -224,6 +231,8 @@ export default eslintCompatPlugin({
             entityBindings.namespaces.clear();
             versionBindings.direct.clear();
             versionUtilsNamespaces.clear();
+            processExtractionNamespaces.clear();
+            nativeExtractionRequestBindings.clear();
             observedCapabilities.clear();
             const filename = filenameForContext(context);
             const ownerEntry = ownerEntryForFilename(filename);
@@ -263,6 +272,27 @@ export default eslintCompatPlugin({
                   localName !== null
                 ) {
                   versionBindings.direct.add(localName);
+                }
+              }
+            }
+
+            if (isProcessExtractionModule(node.source.value)) {
+              for (const specifier of node.specifiers) {
+                if (
+                  isAstNode(specifier) &&
+                  specifier.type === "ImportNamespaceSpecifier" &&
+                  isIdentifier(specifier.local)
+                ) {
+                  processExtractionNamespaces.add(specifier.local.name);
+                  continue;
+                }
+                if (
+                  getImportedName(specifier) === "requestNativeExtractionRun"
+                ) {
+                  const localName = getImportLocalName(specifier);
+                  if (localName !== null) {
+                    nativeExtractionRequestBindings.add(localName);
+                  }
                 }
               }
             }
@@ -350,6 +380,22 @@ export default eslintCompatPlugin({
             }
           },
           CallExpression(node) {
+            const callee = unwrapExpression(node.callee);
+            const isNativeExtractionRequest =
+              (isIdentifier(callee) &&
+                nativeExtractionRequestBindings.has(callee.name)) ||
+              (callee?.type === "MemberExpression" &&
+                isIdentifier(callee.object) &&
+                processExtractionNamespaces.has(callee.object.name) &&
+                getPropertyName(callee.property) ===
+                  "requestNativeExtractionRun");
+            if (isNativeExtractionRequest) {
+              claimCapability(
+                VERSION_WRITE_CAPABILITY.REQUEST_NATIVE_EXTRACTION,
+                node,
+              );
+            }
+
             if (isMemberCall(node, "insert") && Array.isArray(node.arguments)) {
               const table = node.arguments.at(0);
               if (isTableReference(table, versionBindings)) {
@@ -371,7 +417,6 @@ export default eslintCompatPlugin({
               );
             }
 
-            const callee = unwrapExpression(node.callee);
             if (
               callee?.type === "MemberExpression" &&
               isIdentifier(callee.object) &&

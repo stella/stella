@@ -43,7 +43,10 @@ import {
 } from "@/api/lib/permissive-route-schema";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { getS3, readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
-import { processExtraction } from "@/api/lib/search/process-extraction";
+import {
+  processExtraction,
+  requestNativeExtractionRun,
+} from "@/api/lib/search/process-extraction";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 import {
@@ -460,6 +463,11 @@ const finalizeFolioCollabSession = createSafeTokenHandler<
           status: "finalized",
         })
         .where(eq(folioCollabSessions.id, sessionId));
+
+      await requestNativeExtractionRun({
+        entityId: sessionPreview.entityId,
+        tx,
+      });
 
       await recordAuditEvent(tx, [
         {

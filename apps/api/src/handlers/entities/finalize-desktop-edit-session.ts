@@ -48,7 +48,10 @@ import { createFileKey } from "@/api/lib/files/utils";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import { getS3, readS3ArrayBuffer, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
-import { processExtraction } from "@/api/lib/search/process-extraction";
+import {
+  processExtraction,
+  requestNativeExtractionRun,
+} from "@/api/lib/search/process-extraction";
 
 export const finalizeDesktopEditSessionParamsSchema = t.Object({
   sessionId: tSafeId("desktopEditSession"),
@@ -519,6 +522,11 @@ export const finalizeDesktopEditSessionHandler = async ({
           status: "finalized",
         })
         .where(eq(desktopEditSessions.id, editSession.id));
+
+      await requestNativeExtractionRun({
+        entityId: editSession.entityId,
+        tx,
+      });
 
       await recordAuditEvent(tx, [
         {
