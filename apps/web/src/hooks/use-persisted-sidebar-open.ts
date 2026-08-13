@@ -1,8 +1,17 @@
-import { useState } from "react";
-
-import { useMountEffect } from "@/hooks/use-effect";
+import { useState, useSyncExternalStore } from "react";
 
 const SIDEBAR_STORAGE_KEY = "sidebar_state";
+
+export const parsePersistedSidebarOpen = (
+  storedState: string | null,
+): boolean | null => {
+  if (storedState === null) {
+    return null;
+  }
+  return storedState === "expanded";
+};
+
+const noopSubscribe = (_onStoreChange: () => void) => () => undefined;
 
 export const usePersistedSidebarOpen = ({
   defaultOpen,
@@ -11,17 +20,18 @@ export const usePersistedSidebarOpen = ({
   defaultOpen: boolean;
   hydrateFromStorage: boolean;
 }) => {
-  const [open, setOpen] = useState(defaultOpen);
-
-  useMountEffect(() => {
-    if (!hydrateFromStorage) {
-      return;
-    }
-    const storedState = localStorage.getItem(SIDEBAR_STORAGE_KEY);
-    if (storedState !== null) {
-      setOpen(storedState === "expanded");
-    }
-  });
+  const storedOpen = useSyncExternalStore(
+    noopSubscribe,
+    () =>
+      hydrateFromStorage
+        ? (parsePersistedSidebarOpen(
+            localStorage.getItem(SIDEBAR_STORAGE_KEY),
+          ) ?? defaultOpen)
+        : defaultOpen,
+    () => defaultOpen,
+  );
+  const [openOverride, setOpenOverride] = useState<boolean | null>(null);
+  const open = openOverride ?? storedOpen;
 
   const persistOpen = (nextOpen: boolean) => {
     localStorage.setItem(
@@ -30,5 +40,5 @@ export const usePersistedSidebarOpen = ({
     );
   };
 
-  return { open, persistOpen, setOpen };
+  return { open, persistOpen, setOpen: setOpenOverride };
 };

@@ -8,13 +8,17 @@ import {
 } from "./date-picker-popover.logic";
 
 describe("date picker clock", () => {
-  test("does not remount picker state when today rolls over", () => {
+  test("does not remount picker state when ambient values change", () => {
     const source = readFileSync(
       new URL("date-picker-popover.tsx", import.meta.url),
       "utf-8",
     );
-    expect(source).toContain("key={locale}");
-    expect(source).not.toMatch(/key=\{[^}]*today/u);
+    expect(source).not.toMatch(
+      /<DatePickerPopoverContent\b(?:(?!\/>)[\s\S])*\bkey=/u,
+    );
+    expect(source).toContain(
+      "<DatePickerPopoverContent {...props} locale={locale} today={today} />",
+    );
   });
 
   test("derives the browser-local date on both sides of midnight", () => {

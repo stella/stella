@@ -781,14 +781,7 @@ const DatePickerPopover = (props: DatePickerPopoverProps) => {
   const today = useHydrationSafeToday();
   const locale = props.locale ?? browserLocale;
 
-  return (
-    <DatePickerPopoverContent
-      key={locale}
-      {...props}
-      locale={locale}
-      today={today}
-    />
-  );
+  return <DatePickerPopoverContent {...props} locale={locale} today={today} />;
 };
 
 export { DatePickerPopover };
