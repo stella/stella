@@ -139,7 +139,6 @@ describe("Result consumption guard", () => {
       "unused-result",
       "unused-result",
       "unused-result",
-      "unused-result",
     ]);
   });
 
@@ -157,10 +156,18 @@ describe("Result consumption guard", () => {
       [asyncWrapper(), 0][1];
       ({ result: parse(), run: () => undefined }).run();
       [asyncWrapper(), () => undefined][1]();
+      const retainedSelection = ({ result: parse(), other: 0 }).other;
+      const retainedIndexSelection = [asyncWrapper(), 0][1];
+      const retainedAtSelection = [parse(), asyncWrapper()].at(0);
+      const retainedStringSelection = [parse(), asyncWrapper()]["0"];
+      const held = { result: parse() };
+      held.result;
       true && parse();
       parse() && consume("cleanup");
       false || parse();
       undefined ?? parse();
+      true ? void parse() : undefined;
+      false ? undefined : parse();
       (parse(), "statement tail");
       const retainedTail = (parse(), "assigned tail");
       \`discarded interpolation: \${parse()}\`;
@@ -174,9 +181,20 @@ describe("Result consumption guard", () => {
       consume(retainedObject);
       consume(retainedTemplate);
       consume(retainedFinal);
+      consume(retainedSelection);
+      consume(retainedIndexSelection);
+      consume(retainedAtSelection);
+      consume(retainedStringSelection);
     `);
 
     expect(diagnostics.map(({ rule }) => rule)).toEqual([
+      "unused-result",
+      "unused-result",
+      "unused-result",
+      "unused-result",
+      "unused-result",
+      "unused-result",
+      "unused-result",
       "unused-result",
       "unused-result",
       "unused-result",
@@ -329,10 +347,53 @@ describe("Result consumption guard", () => {
       let assigned = parse();
       assigned = parse();
       const forwarded = (): BetterResult<number, string> => parse();
+      const selected = ({ result: parse() }).result;
+      const stringSelected = [parse()]["0"];
+      const atSelected = [parse()].at(0);
+      const negativeAtSelected = [0, parse()].at(-1);
+      [parse()].forEach((result) =>
+        result.match({ ok: () => undefined, err: () => undefined }),
+      );
+      [parse()].forEach((result) => {
+        result.match({ ok: () => undefined, err: () => undefined });
+      });
       parse().match({ ok: () => undefined, err: () => undefined });
+      selected.match({ ok: () => undefined, err: () => undefined });
+      stringSelected.match({ ok: () => undefined, err: () => undefined });
+      atSelected?.match({ ok: () => undefined, err: () => undefined });
+      negativeAtSelected?.match({ ok: () => undefined, err: () => undefined });
     `);
 
     expect(diagnostics).toEqual([]);
+  });
+
+  test("requires collection callbacks to consume their Result element", () => {
+    const diagnostics = scanFixture(`
+      import { Result, type Result as BetterResult } from "better-result";
+
+      const parse = (): BetterResult<number, string> => Result.ok(1);
+
+      [parse()].forEach(() => undefined);
+      [parse()].map((result) => result);
+      [parse()].forEach((result) => {
+        const later = () =>
+          result.match({ ok: () => undefined, err: () => undefined });
+        void later;
+      });
+      [parse()].forEach((result) =>
+        true
+          ? result.match({ ok: () => undefined, err: () => undefined })
+          : undefined,
+      );
+    `);
+
+    expect(diagnostics.map(({ rule }) => rule)).toEqual([
+      "unused-result",
+      "unused-result",
+      "unused-result",
+      "unused-result",
+      "unused-result",
+    ]);
   });
 
   test("requires invariant messages only on better-result unwrap calls", () => {

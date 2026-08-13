@@ -3,12 +3,17 @@
 
 /* oxlint-disable unicorn/prefer-node-protocol -- fixture: every supported bare crypto import form must retain provenance */
 import bareCryptoDefault, {
+  randomBytes as bareRandomBytes,
   randomUUID as bareRandomUuid,
   webcrypto as bareWebcrypto,
 } from "crypto";
 import * as bareCryptoNamespace from "crypto";
 /* oxlint-enable unicorn/prefer-node-protocol */
 import nodeCryptoDefault, {
+  randomBytes as nodeRandomBytes,
+  randomFill as nodeRandomFill,
+  randomFillSync as nodeRandomFillSync,
+  randomInt as nodeRandomInt,
   randomUUID,
   randomUUID as nodeRandomUuid,
   webcrypto as nodeWebcrypto,
@@ -51,8 +56,27 @@ export const aliasedImportedIdentifier = nodeRandomUuid();
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: bare crypto named imports retain ambient provenance
 export const bareImportedIdentifier = bareRandomUuid();
 
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: named node:crypto randomBytes consumes ambient entropy
+export const nodeImportedRandomBytes = nodeRandomBytes(8);
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: named bare crypto randomBytes consumes ambient entropy
+export const bareImportedRandomBytes = bareRandomBytes(8);
+
+export const nodeImportedRandomFill =
+  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: named randomFill consumes ambient entropy
+  nodeRandomFill(new Uint8Array(8), () => undefined);
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: named randomFillSync consumes ambient entropy
+export const nodeImportedRandomFillSync = nodeRandomFillSync(new Uint8Array(8));
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: named randomInt consumes ambient entropy
+export const nodeImportedRandomInt = nodeRandomInt(10);
+
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: node:crypto namespace imports retain ambient provenance
 export const nodeNamespaceIdentifier = nodeCryptoNamespace.randomUUID();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: namespace randomBytes retains Node crypto provenance
+export const nodeNamespaceRandomBytes = nodeCryptoNamespace.randomBytes(8);
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: bare crypto namespace imports retain ambient provenance
 export const bareNamespaceIdentifier = bareCryptoNamespace.randomUUID();
@@ -62,6 +86,9 @@ export const nodeDefaultIdentifier = nodeCryptoDefault.randomUUID();
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: bare crypto default imports retain ambient provenance
 export const bareDefaultIdentifier = bareCryptoDefault.randomUUID();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: default-import randomInt retains Node crypto provenance
+export const bareDefaultRandomInt = bareCryptoDefault.randomInt(10);
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: named node:crypto webcrypto imports retain randomUUID provenance
 export const nodeWebcryptoIdentifier = nodeWebcrypto.randomUUID();
@@ -104,6 +131,19 @@ const { randomUUID: localCryptoRandomUuid } = localCryptoModule;
 export const localModuleIdentifier = localCryptoModule.randomUUID();
 export const localAliasedModuleIdentifier = localCryptoModuleAlias.randomUUID();
 export const localDestructuredIdentifier = localCryptoRandomUuid();
+
+const localEntropyModule = {
+  randomBytes: (size: number) => new Uint8Array(size),
+  randomFill: (value: Uint8Array) => value,
+  randomFillSync: (value: Uint8Array) => value,
+  randomInt: (maximum: number) => maximum - 1,
+};
+export const localEntropyValues = {
+  bytes: localEntropyModule.randomBytes(8),
+  filled: localEntropyModule.randomFill(new Uint8Array(8)),
+  filledSync: localEntropyModule.randomFillSync(new Uint8Array(8)),
+  integer: localEntropyModule.randomInt(10),
+};
 
 const localWebcryptoModule = {
   webcrypto: {
@@ -149,9 +189,28 @@ export const identifierAfterCryptoInstallation =
   installedCryptoServices.crypto.randomUUID();
 
 const readNow = Date.now;
+const boundReadNow = Date.now.bind(null);
 const createSortableIdentifier = Bun.randomUUIDv7;
 const createImportedIdentifier = randomUUID;
 const { now: destructuredDateNow } = Date;
+const optionalClock: { now?: () => number } = {};
+const { now: defaultedDateNow = Date.now } = optionalClock;
+const optionalServices: { clock?: { now: () => number } } = {};
+const { clock: { now: nestedDefaultedDateNow } = { now: Date.now } } =
+  optionalServices;
+const presentServices = { clock: { now: () => 0 } };
+const { clock: { now: nestedPresentNow } = { now: Date.now } } =
+  presentServices;
+const emptyNestedClockOptions: { clock?: { now?: () => number } } = {};
+const { clock: { now: outerDefaultedLocalNow = Date.now } = { now: () => 0 } } =
+  emptyNestedClockOptions;
+const { clock: { now: innerDefaultedAmbientNow = Date.now } = {} } =
+  emptyNestedClockOptions;
+const localPresentClock = { now: () => 0 };
+const { now: localPresentNow = Date.now } = localPresentClock;
+const [arrayDestructuredDateNow] = [Date.now];
+const [arrayDestructuredMathRandom] = [Math.random];
+const [arrayDestructuredLocalNow] = [() => 0];
 /* oxlint-disable typescript/unbound-method -- fixture: destructured global methods are the rejected API surface */
 const { random: destructuredMathRandom } = Math;
 const {
@@ -171,6 +230,32 @@ const {
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: stable aliases retain ambient provenance
 export const aliasedEpoch = readNow();
 
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: bound ambient functions retain provenance when invoked
+export const boundAliasedEpoch = boundReadNow();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: immediately invoked bound ambient functions retain provenance
+export const directlyBoundEpoch = Date.now.bind(null)();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism, typescript/strict-void-return -- fixture: scheduling a bound ambient function executes the retained clock provenance
+export const boundAmbientTimer = setTimeout(Date.now.bind(null), 0);
+
+const localBoundClock = (() => 0).bind(null);
+export const localBoundEpoch = localBoundClock();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: bound Date constructors retain ambient zero-argument construction
+export const directlyBoundInstant = new (Date.bind(null))();
+
+const BoundAmbientDate = Date.bind(null);
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: aliased bound Date constructors retain provenance
+export const aliasedBoundInstant = new BoundAmbientDate();
+
+const BoundExplicitDate = Date.bind(null, 0);
+export const explicitBoundInstant = new BoundExplicitDate();
+
+class LocalBoundConstructor {}
+const BoundLocalDate = LocalBoundConstructor.bind(null);
+export const localBoundInstant = new BoundLocalDate();
+
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: stable global-member aliases retain ambient provenance
 export const aliasedSortableIdentifier = createSortableIdentifier();
 
@@ -179,6 +264,69 @@ export const twiceAliasedImportedIdentifier = createImportedIdentifier();
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: destructuring cannot erase Date.now provenance
 export const destructuredEpoch = destructuredDateNow();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: an ambient destructuring default remains a possible invocation target
+export const defaultedDestructuredEpoch = defaultedDateNow();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: nested destructuring defaults retain the selected ambient property path
+export const nestedDefaultedDestructuredEpoch = nestedDefaultedDateNow();
+
+export const nestedPresentDestructuredEpoch = nestedPresentNow();
+
+export const outerDefaultedLocalEpoch = outerDefaultedLocalNow();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: the inner ambient function default applies after an empty outer default
+export const innerDefaultedAmbientEpoch = innerDefaultedAmbientNow();
+
+export const presentDestructuredEpoch = localPresentNow();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: array destructuring retains ambient function provenance
+export const arrayDestructuredEpoch = arrayDestructuredDateNow();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: array destructuring also retains ambient entropy provenance
+export const arrayDestructuredSample = arrayDestructuredMathRandom();
+
+export const localArrayDestructuredEpoch = arrayDestructuredLocalNow();
+
+const optionalConstructors: { Date?: DateConstructor } = {};
+const { Date: defaultedDateConstructor = Date } = optionalConstructors;
+const nestedOptionalConstructors: {
+  constructors?: { Date?: DateConstructor };
+} = {};
+const { constructors: { Date: nestedDefaultedDateConstructor } = { Date } } =
+  nestedOptionalConstructors;
+const [arrayDefaultedDateConstructor = Date] = [];
+class LocalDefaultDate {}
+const presentConstructors = { Date: LocalDefaultDate };
+const { Date: presentDateConstructor = Date } = presentConstructors;
+const emptyNestedConstructorOptions: {
+  constructors?: { Date?: DateConstructor };
+} = {};
+const {
+  constructors: { Date: outerDefaultedLocalConstructor = Date } = {
+    Date: LocalDefaultDate,
+  },
+} = emptyNestedConstructorOptions;
+const { constructors: { Date: innerDefaultedAmbientConstructor = Date } = {} } =
+  emptyNestedConstructorOptions;
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: ambient constructor defaults retain provenance
+export const defaultedConstructorInstant = new defaultedDateConstructor();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: nested ambient constructor defaults retain provenance
+export const nestedDefaultedConstructorInstant =
+  new nestedDefaultedDateConstructor();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: array ambient constructor defaults retain provenance
+export const arrayDefaultedConstructorInstant =
+  new arrayDefaultedDateConstructor();
+
+export const presentConstructorInstant = new presentDateConstructor();
+export const outerDefaultedLocalInstant = new outerDefaultedLocalConstructor();
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: the inner ambient default applies after an empty outer default
+export const innerDefaultedAmbientInstant =
+  new innerDefaultedAmbientConstructor();
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: destructuring cannot erase Math.random provenance
 export const destructuredSample = destructuredMathRandom();
@@ -343,6 +491,185 @@ writtenAmbientClock.now = Date.now;
 
 // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: the latest static property write retains ambient provenance
 export const writtenAmbientEpoch = writtenAmbientClock.now();
+
+const nestedWrittenAmbientServices = { clock: { now: () => 0 } };
+nestedWrittenAmbientServices.clock.now = Date.now;
+
+export const nestedWrittenAmbientEpoch =
+  // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: nested static property writes retain ambient provenance
+  nestedWrittenAmbientServices.clock.now();
+
+const nestedOverwrittenLocalServices = { clock: { now: Date.now } };
+nestedOverwrittenLocalServices.clock.now = () => 0;
+export const nestedOverwrittenLocalEpoch =
+  nestedOverwrittenLocalServices.clock.now();
+
+export const conditionallyWrittenNestedEpoch = (install: boolean) => {
+  const services = { clock: { now: () => 0 } };
+  if (install) {
+    services.clock.now = Date.now;
+  }
+  return (
+    // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: conditional nested writes retain the ambient property outcome
+    services.clock.now()
+  );
+};
+
+const nestedAliasWrittenServices = { clock: { now: () => 0 } };
+const nestedClockAlias = nestedAliasWrittenServices.clock;
+nestedClockAlias.now = Date.now;
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: stable aliases of nested containers retain their write effects
+export const nestedAliasWrittenEpoch = nestedAliasWrittenServices.clock.now();
+
+const destructuredAliasWrittenServices = { clock: { now: () => 0 } };
+const { clock: destructuredClockAlias } = destructuredAliasWrittenServices;
+destructuredClockAlias.now = Date.now;
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: destructured stable container aliases retain nested write provenance
+export const destructuredAliasWrittenEpoch =
+  destructuredAliasWrittenServices.clock.now();
+
+type ClockContainer = { now: () => number };
+const wrappedAliasWrittenServices = { clock: { now: () => 0 } };
+const wrappedClockAlias =
+  wrappedAliasWrittenServices.clock satisfies ClockContainer;
+wrappedClockAlias.now = Date.now;
+
+// oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: TypeScript-wrapped stable aliases retain nested write provenance
+export const wrappedAliasWrittenEpoch = wrappedAliasWrittenServices.clock.now();
+
+const destructuredAliasOverwrittenServices = { clock: { now: Date.now } };
+const { clock: destructuredLocalClockAlias } =
+  destructuredAliasOverwrittenServices;
+destructuredLocalClockAlias.now = () => 0;
+export const destructuredAliasOverwrittenEpoch =
+  destructuredAliasOverwrittenServices.clock.now();
+
+const wrappedAliasOverwrittenServices = { clock: { now: Date.now } };
+const wrappedLocalClockAlias =
+  wrappedAliasOverwrittenServices.clock satisfies ClockContainer;
+wrappedLocalClockAlias.now = () => 0;
+export const wrappedAliasOverwrittenEpoch =
+  wrappedAliasOverwrittenServices.clock.now();
+
+const staleDestructuredAliasServices = { clock: { now: Date.now } };
+const { clock: staleDestructuredClockAlias } = staleDestructuredAliasServices;
+staleDestructuredAliasServices.clock = { now: () => 0 };
+staleDestructuredClockAlias.now = Date.now;
+export const staleDestructuredAliasEpoch =
+  staleDestructuredAliasServices.clock.now();
+
+const staleWrappedAliasServices = { clock: { now: Date.now } };
+const staleWrappedClockAlias =
+  staleWrappedAliasServices.clock satisfies ClockContainer;
+staleWrappedAliasServices.clock = { now: () => 0 };
+staleWrappedClockAlias.now = Date.now;
+export const staleWrappedAliasEpoch = staleWrappedAliasServices.clock.now();
+
+const replacedNestedServices = { clock: { now: () => 0 } };
+replacedNestedServices.clock.now = Date.now;
+replacedNestedServices.clock = { now: () => 0 };
+export const replacedNestedEpoch = replacedNestedServices.clock.now();
+
+const mutableAliasOriginClock = { now: () => 0 };
+const mutableAliasLocalClock = { now: () => 0 };
+let mutableClockAlias = mutableAliasOriginClock;
+mutableClockAlias = mutableAliasLocalClock;
+mutableClockAlias.now = Date.now;
+export const mutableAliasOriginEpoch = mutableAliasOriginClock.now();
+
+const observeCaughtFailure = () => undefined;
+
+export const caughtTryAmbientEpoch = (mayThrow: () => void) => {
+  const clock = { now: Date.now };
+  try {
+    mayThrow();
+    clock.now = () => 0;
+  } catch {
+    observeCaughtFailure();
+  }
+  return (
+    // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: an opaque call can throw before the local overwrite
+    clock.now()
+  );
+};
+
+export const caughtTryLocalEpoch = (mayThrow: () => void) => {
+  const clock = { now: () => 0 };
+  try {
+    mayThrow();
+    clock.now = () => 1;
+  } catch {
+    observeCaughtFailure();
+  }
+  return clock.now();
+};
+
+export const caughtTryEarlyOverwriteEpoch = (mayThrow: () => void) => {
+  const clock = { now: Date.now };
+  try {
+    clock.now = () => 0;
+    mayThrow();
+  } catch {
+    observeCaughtFailure();
+  }
+  return clock.now();
+};
+
+export const conditionallyPresentDefaultEpoch = (install: boolean) => {
+  const clock: { now?: () => number } = {};
+  if (install) {
+    clock.now = () => 0;
+  }
+  const { now = Date.now } = clock;
+  return (
+    // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: conditional absence still reaches the ambient fallback
+    now()
+  );
+};
+
+export const conditionallyPresentLocalDefaultEpoch = (install: boolean) => {
+  const clock: { now?: () => number } = {};
+  if (install) {
+    clock.now = () => 0;
+  }
+  const { now = () => 1 } = clock;
+  return now();
+};
+
+export const conditionalSpreadAmbientEpoch = (install: boolean) => {
+  const override: { now?: () => number } = {};
+  if (install) {
+    override.now = () => 0;
+  }
+  const clock = { now: Date.now, ...override };
+  return (
+    // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: an absent conditional spread property falls through to the ambient base
+    clock.now()
+  );
+};
+
+export const conditionalSpreadLocalEpoch = (install: boolean) => {
+  const override: { now?: () => number } = {};
+  if (install) {
+    override.now = () => 1;
+  }
+  const clock = { now: () => 0, ...override };
+  return clock.now();
+};
+
+export const conditionallyPresentNestedDefaultEpoch = (install: boolean) => {
+  const services: { clock?: { now: () => number } } = {};
+  if (install) {
+    services.clock = { now: () => 0 };
+  }
+  const { clock: { now } = { now: Date.now } } = services;
+  return (
+    // oxlint-disable-next-line no-ambient-nondeterminism/no-ambient-nondeterminism -- fixture: nested conditional absence retains its ambient fallback
+    now()
+  );
+};
 
 const overwrittenAmbientClock = { now: Date.now };
 overwrittenAmbientClock.now = () => 0;

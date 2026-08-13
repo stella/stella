@@ -464,6 +464,60 @@ export default eslintCompatPlugin({
           return variable === null || variable.defs.length === 0;
         };
 
+        const safeCaughtTryAssignment = (
+          block: unknown,
+        ): ESTree.AssignmentExpression | null => {
+          if (
+            !isAstNode(block) ||
+            block.type !== "BlockStatement" ||
+            !Array.isArray(block.body)
+          ) {
+            return null;
+          }
+          const statement = block.body.at(0);
+          if (
+            !isAstNode(statement) ||
+            statement.type !== "ExpressionStatement" ||
+            !isAstNode(statement.expression) ||
+            statement.expression.type !== "AssignmentExpression" ||
+            statement.expression.operator !== "=" ||
+            !isIdentifier(statement.expression.left)
+          ) {
+            return null;
+          }
+          const assignedValue = unwrapClassExpression(
+            statement.expression.right,
+          );
+          return isStaticLiteral(assignedValue) ||
+            (isTemplateLiteral(assignedValue) &&
+              assignedValue.expressions.length === 0)
+            ? statement.expression
+            : null;
+        };
+
+        const isImmediateSafeCaughtTryAssignment = (
+          identifier: unknown,
+          block: unknown,
+        ): boolean => {
+          const assignment = safeCaughtTryAssignment(block);
+          return assignment !== null && assignment.left === identifier;
+        };
+
+        const isUnreachableCatchBody = (
+          current: unknown,
+          parent: unknown,
+        ): boolean =>
+          isAstNode(parent) &&
+          parent.type === "CatchClause" &&
+          current === parent.body &&
+          isAstNode(parent.parent) &&
+          parent.parent.type === "TryStatement" &&
+          parent.parent.handler === parent &&
+          isAstNode(parent.parent.block) &&
+          Array.isArray(parent.parent.block.body) &&
+          parent.parent.block.body.length === 1 &&
+          safeCaughtTryAssignment(parent.parent.block) !== null;
+
         const controlFlowContext = (
           node: unknown,
           boundary: unknown,
@@ -478,6 +532,9 @@ export default eslintCompatPlugin({
             if (!isAstNode(parent)) {
               return null;
             }
+            if (isUnreachableCatchBody(current, parent)) {
+              return null;
+            }
             if (
               (parent.type === "IfStatement" && current !== parent.test) ||
               (parent.type === "ConditionalExpression" &&
@@ -486,6 +543,10 @@ export default eslintCompatPlugin({
               (parent.type === "LogicalExpression" &&
                 current === parent.right) ||
               (parent.type === "CatchClause" && current === parent.body) ||
+              (parent.type === "TryStatement" &&
+                current === parent.block &&
+                parent.handler != null &&
+                !isImmediateSafeCaughtTryAssignment(node, parent.block)) ||
               parent.type === "ForStatement" ||
               parent.type === "ForInStatement" ||
               parent.type === "ForOfStatement" ||
@@ -594,6 +655,665 @@ export default eslintCompatPlugin({
           ) => unknown;
         };
 
+        const staticMemberPath = (
+          value: unknown,
+        ): { path: string[]; root: ESTree.IdentifierReference } | null => {
+          const path: string[] = [];
+          let current = unwrapClassExpression(value);
+          while (isMemberExpression(current)) {
+            const propertyName = staticPropertyName(
+              current.property,
+              current.computed,
+            );
+            if (propertyName === null) {
+              return null;
+            }
+            path.unshift(propertyName);
+            current = unwrapClassExpression(current.object);
+          }
+          return isIdentifierReference(current) && path.length > 0
+            ? { path, root: current }
+            : null;
+        };
+
+        const constMemberAliasFromReference = (
+          identifier: unknown,
+        ): { consumedPath: readonly string[]; variable: Variable } | null => {
+          if (!isIdentifier(identifier)) {
+            return null;
+          }
+          let current: unknown = identifier;
+          const consumedPath: string[] = [];
+          while (isAstNode(current)) {
+            const parent = current.parent;
+            if (
+              isAstNode(parent) &&
+              (parent.type === "ParenthesizedExpression" ||
+                parent.type === "TSAsExpression" ||
+                parent.type === "TSSatisfiesExpression" ||
+                parent.type === "TSNonNullExpression" ||
+                parent.type === "TSTypeAssertion") &&
+              parent.expression === current
+            ) {
+              current = parent;
+              continue;
+            }
+            if (isMemberExpression(parent) && parent.object === current) {
+              const propertyName = staticPropertyName(
+                parent.property,
+                parent.computed,
+              );
+              if (propertyName === null) {
+                return null;
+              }
+              consumedPath.push(propertyName);
+              current = parent;
+              continue;
+            }
+            if (
+              !isAstNode(parent) ||
+              parent.type !== "VariableDeclarator" ||
+              parent.init !== current ||
+              !isIdentifier(parent.id) ||
+              !isAstNode(parent.parent) ||
+              parent.parent.type !== "VariableDeclaration" ||
+              parent.parent.kind !== "const"
+            ) {
+              return null;
+            }
+            const variable = resolveVariable(parent.id);
+            return variable === null ? null : { consumedPath, variable };
+          }
+          return null;
+        };
+
+        const stableObjectPathAliases = (
+          variable: Variable,
+          propertyPath: readonly string[],
+          readPosition: number,
+        ): Array<{
+          propertyPath: readonly string[];
+          validUntil: number;
+          variable: Variable;
+        }> => {
+          const aliases: Array<{
+            propertyPath: readonly string[];
+            validUntil: number;
+            variable: Variable;
+          }> = [];
+          const queue = [
+            {
+              propertyPath,
+              validUntil: readPosition,
+              variable,
+            },
+          ];
+          const visited = new Map<Variable, Set<string>>();
+          while (queue.length > 0) {
+            const candidate = queue.shift();
+            if (candidate === undefined) {
+              continue;
+            }
+            const pathKey = `${candidate.propertyPath.join("\u0000")}@${candidate.validUntil}`;
+            const visitedPaths = visited.get(candidate.variable) ?? new Set();
+            if (visitedPaths.has(pathKey)) {
+              continue;
+            }
+            visitedPaths.add(pathKey);
+            visited.set(candidate.variable, visitedPaths);
+            aliases.push(candidate);
+            for (const reference of candidate.variable.references) {
+              if (reference.identifier.range[0] >= candidate.validUntil) {
+                continue;
+              }
+              const alias = constMemberAliasFromReference(reference.identifier);
+              if (
+                alias === null ||
+                alias.consumedPath.length >= candidate.propertyPath.length ||
+                alias.consumedPath.some(
+                  (segment, index) =>
+                    segment !== candidate.propertyPath.at(index),
+                )
+              ) {
+                continue;
+              }
+              const invalidatedAt = candidate.variable.references.reduce(
+                (earliest, candidateReference) => {
+                  const position = candidateReference.identifier.range[0];
+                  if (
+                    alias.consumedPath.length === 0 ||
+                    position <= reference.identifier.range[0] ||
+                    position >= earliest
+                  ) {
+                    return earliest;
+                  }
+                  let owner: unknown = candidateReference.identifier;
+                  const writtenPath: string[] = [];
+                  while (
+                    isAstNode(owner) &&
+                    isMemberExpression(owner.parent) &&
+                    owner.parent.object === owner
+                  ) {
+                    const propertyName = staticPropertyName(
+                      owner.parent.property,
+                      owner.parent.computed,
+                    );
+                    if (propertyName === null) {
+                      return earliest;
+                    }
+                    writtenPath.push(propertyName);
+                    owner = owner.parent;
+                  }
+                  if (
+                    writtenPath.length === 0 ||
+                    writtenPath.length > alias.consumedPath.length ||
+                    writtenPath.some(
+                      (segment, index) =>
+                        segment !== alias.consumedPath.at(index),
+                    ) ||
+                    !isAstNode(owner) ||
+                    !isAstNode(owner.parent) ||
+                    owner.parent.type !== "AssignmentExpression" ||
+                    owner.parent.left !== owner ||
+                    owner.parent.operator !== "=" ||
+                    controlFlowContext(
+                      candidateReference.identifier,
+                      candidate.variable.scope.block,
+                    ) !== "unconditional"
+                  ) {
+                    return earliest;
+                  }
+                  return position;
+                },
+                candidate.validUntil,
+              );
+              queue.push({
+                propertyPath: candidate.propertyPath.slice(
+                  alias.consumedPath.length,
+                ),
+                validUntil: invalidatedAt,
+                variable: alias.variable,
+              });
+            }
+          }
+          return aliases;
+        };
+
+        const finiteLocalPropertyNames = (
+          source: unknown,
+          readPosition: number,
+          visitedVariables = new Set<Variable>(),
+        ): { names: Set<string>; opaque: boolean } | null => {
+          const expression = unwrapClassExpression(source);
+          if (expression === null) {
+            return null;
+          }
+          if (isIdentifier(expression)) {
+            const variable = resolveVariable(expression);
+            if (variable === null || visitedVariables.has(variable)) {
+              return null;
+            }
+            const stableValue = localValueResolver.stableValue(
+              expression,
+              visitedVariables,
+            );
+            if (stableValue === null) {
+              return null;
+            }
+            const nextVisited = new Set(visitedVariables);
+            nextVisited.add(variable);
+            const properties = finiteLocalPropertyNames(
+              stableValue,
+              readPosition,
+              nextVisited,
+            );
+            if (properties === null) {
+              return null;
+            }
+            for (const ownerVariable of stableObjectAliases(
+              variable,
+              readPosition,
+            )) {
+              for (const reference of ownerVariable.references) {
+                if (reference.identifier.range[0] >= readPosition) {
+                  continue;
+                }
+                const member = reference.identifier.parent;
+                if (
+                  !isMemberExpression(member) ||
+                  member.object !== reference.identifier ||
+                  !isAstNode(member.parent) ||
+                  !(
+                    (member.parent.type === "AssignmentExpression" &&
+                      member.parent.left === member) ||
+                    (member.parent.type === "UpdateExpression" &&
+                      member.parent.argument === member) ||
+                    (member.parent.type === "UnaryExpression" &&
+                      member.parent.operator === "delete" &&
+                      member.parent.argument === member)
+                  )
+                ) {
+                  continue;
+                }
+                const writtenProperty = staticPropertyName(
+                  member.property,
+                  member.computed,
+                );
+                if (writtenProperty === null) {
+                  properties.opaque = true;
+                  continue;
+                }
+                properties.names.add(writtenProperty);
+              }
+            }
+            return properties;
+          }
+          if (isMemberExpression(expression)) {
+            const memberValue = localValueResolver.memberValue(
+              expression,
+              visitedVariables,
+            );
+            return memberValue === null
+              ? null
+              : finiteLocalPropertyNames(
+                  memberValue,
+                  readPosition,
+                  visitedVariables,
+                );
+          }
+          if (expression.type === "ArrayExpression") {
+            if (
+              expression.elements.some(
+                (element) =>
+                  isAstNode(element) && element.type === "SpreadElement",
+              )
+            ) {
+              return null;
+            }
+            return {
+              names: new Set(
+                expression.elements.flatMap((element, index) =>
+                  isAstNode(element) && element.type !== "SpreadElement"
+                    ? [String(index)]
+                    : [],
+                ),
+              ),
+              opaque: false,
+            };
+          }
+          if (!isObjectExpression(expression)) {
+            return null;
+          }
+          const propertyNames = new Set<string>();
+          let opaque = false;
+          for (const property of expression.properties) {
+            if (property.type === "SpreadElement") {
+              const spreadNames = finiteLocalPropertyNames(
+                property.argument,
+                property.range[1],
+                new Set(visitedVariables),
+              );
+              if (spreadNames === null) {
+                return null;
+              }
+              for (const propertyName of spreadNames.names) {
+                propertyNames.add(propertyName);
+              }
+              opaque ||= spreadNames.opaque;
+              continue;
+            }
+            const propertyName = staticPropertyName(
+              property.key,
+              property.computed,
+            );
+            if (propertyName === null) {
+              opaque = true;
+              continue;
+            }
+            propertyNames.add(propertyName);
+          }
+          return { names: propertyNames, opaque };
+        };
+
+        type LocalPropertyWrite = {
+          context: "conditional" | "unconditional";
+          opaque: boolean;
+          position: number;
+          propertyName: string | null;
+          value: unknown;
+        };
+
+        const localPropertyWrites = (
+          variable: Variable,
+          readPosition: number,
+        ): LocalPropertyWrite[] => {
+          const writes: LocalPropertyWrite[] = [];
+          for (const ownerVariable of stableObjectAliases(
+            variable,
+            readPosition,
+          )) {
+            for (const reference of ownerVariable.references) {
+              if (reference.identifier.range[0] >= readPosition) {
+                continue;
+              }
+              const member = reference.identifier.parent;
+              if (
+                !isMemberExpression(member) ||
+                member.object !== reference.identifier ||
+                !isAstNode(member.parent)
+              ) {
+                continue;
+              }
+              const assignment =
+                member.parent.type === "AssignmentExpression" &&
+                member.parent.left === member
+                  ? member.parent
+                  : null;
+              const isOpaqueWrite =
+                (member.parent.type === "UpdateExpression" &&
+                  member.parent.argument === member) ||
+                (member.parent.type === "UnaryExpression" &&
+                  member.parent.operator === "delete" &&
+                  member.parent.argument === member);
+              if (assignment === null && !isOpaqueWrite) {
+                continue;
+              }
+              const writeContext = controlFlowContext(
+                reference.identifier,
+                variable.scope.block,
+              );
+              if (writeContext === null) {
+                continue;
+              }
+              writes.push({
+                context: writeContext,
+                opaque:
+                  assignment === null ||
+                  assignment.operator !== "=" ||
+                  !isAstNode(assignment.right),
+                position: reference.identifier.range[0],
+                propertyName: staticPropertyName(
+                  member.property,
+                  member.computed,
+                ),
+                value: assignment?.right,
+              });
+            }
+          }
+          return writes.toSorted(
+            (left, right) => left.position - right.position,
+          );
+        };
+
+        const flattenStaticArrayValues = (
+          source: unknown,
+          visitedVariables = new Set<Variable>(),
+        ): unknown[] | null => {
+          const expression = unwrapClassExpression(source);
+          if (expression === null) {
+            return null;
+          }
+          if (isIdentifier(expression)) {
+            const variable = resolveVariable(expression);
+            if (variable === null || visitedVariables.has(variable)) {
+              return null;
+            }
+            const stableValue = localValueResolver.stableValue(
+              expression,
+              visitedVariables,
+            );
+            if (stableValue === null) {
+              return null;
+            }
+            const nextVisited = new Set(visitedVariables);
+            nextVisited.add(variable);
+            return flattenStaticArrayValues(stableValue, nextVisited);
+          }
+          if (expression.type === "ConditionalExpression") {
+            const consequent = flattenStaticArrayValues(
+              expression.consequent,
+              new Set(visitedVariables),
+            );
+            const alternate = flattenStaticArrayValues(
+              expression.alternate,
+              new Set(visitedVariables),
+            );
+            if (
+              consequent === null ||
+              alternate === null ||
+              consequent.length !== alternate.length
+            ) {
+              return null;
+            }
+            return consequent.map(
+              (value, index) =>
+                ({
+                  type: "LocalPossibleValues",
+                  values: [value, alternate.at(index)],
+                }) satisfies LocalPossibleValues,
+            );
+          }
+          if (expression.type !== "ArrayExpression") {
+            return null;
+          }
+          const values: unknown[] = [];
+          for (const element of expression.elements) {
+            if (!isAstNode(element)) {
+              values.push(LOCAL_ABSENT_VALUE);
+              continue;
+            }
+            if (element.type !== "SpreadElement") {
+              values.push(element);
+              continue;
+            }
+            const spreadValues = flattenStaticArrayValues(
+              element.argument,
+              new Set(visitedVariables),
+            );
+            if (spreadValues === null) {
+              return null;
+            }
+            values.push(...spreadValues);
+          }
+          return values;
+        };
+
+        const finiteLocalSelectionValues = (
+          source: unknown,
+          readPosition: number,
+          visitedVariables = new Set<Variable>(),
+        ): unknown[] | null => {
+          const expression = unwrapClassExpression(source);
+          if (expression === null) {
+            return null;
+          }
+          if (expression.type === "ConditionalExpression") {
+            const consequent = finiteLocalSelectionValues(
+              expression.consequent,
+              readPosition,
+              new Set(visitedVariables),
+            );
+            const alternate = finiteLocalSelectionValues(
+              expression.alternate,
+              readPosition,
+              new Set(visitedVariables),
+            );
+            return consequent === null || alternate === null
+              ? null
+              : [...consequent, ...alternate];
+          }
+          if (isLogicalExpression(expression)) {
+            const values: unknown[] = [];
+            for (const outcome of logicalOutcomes(expression)) {
+              if (outcome.propertyAbsent) {
+                continue;
+              }
+              const outcomeValues = finiteLocalSelectionValues(
+                outcome.value,
+                readPosition,
+                new Set(visitedVariables),
+              );
+              if (outcomeValues === null) {
+                return null;
+              }
+              values.push(...outcomeValues);
+            }
+            return values;
+          }
+          if (isIdentifier(expression)) {
+            const variable = resolveVariable(expression);
+            if (variable === null || visitedVariables.has(variable)) {
+              return null;
+            }
+            const stableValue = localValueResolver.stableValue(
+              expression,
+              visitedVariables,
+            );
+            if (stableValue === null) {
+              return null;
+            }
+            const stableExpression = unwrapClassExpression(stableValue);
+            if (
+              stableExpression?.type === "ArrayExpression" &&
+              stableExpression.elements.some(
+                (element) =>
+                  isAstNode(element) && element.type === "SpreadElement",
+              )
+            ) {
+              const flattenedValues = flattenStaticArrayValues(
+                stableValue,
+                new Set([...visitedVariables, variable]),
+              );
+              if (flattenedValues === null) {
+                return null;
+              }
+              const writes = localPropertyWrites(variable, readPosition);
+              const propertyNames = new Set(
+                flattenedValues.map((_, index) => String(index)),
+              );
+              for (const write of writes) {
+                if (
+                  write.propertyName !== null &&
+                  /^(?:0|[1-9]\d*)$/.test(write.propertyName)
+                ) {
+                  propertyNames.add(write.propertyName);
+                }
+              }
+              const values: unknown[] = [];
+              for (const propertyName of propertyNames) {
+                const propertyWrites = writes.filter(
+                  (write) => write.propertyName === propertyName,
+                );
+                const lastUnconditionalWrite = propertyWrites.findLast(
+                  (write) => write.context === "unconditional" && !write.opaque,
+                );
+                const basePosition =
+                  lastUnconditionalWrite?.position ?? Number.NEGATIVE_INFINITY;
+                const index = Number(propertyName);
+                const baseValue =
+                  lastUnconditionalWrite?.value ??
+                  flattenedValues.at(index) ??
+                  LOCAL_ABSENT_VALUE;
+                const possibleValues = [baseValue];
+                possibleValues.push(
+                  ...propertyWrites
+                    .filter(
+                      (write) =>
+                        write.position > basePosition &&
+                        write.context === "conditional" &&
+                        !write.opaque,
+                    )
+                    .map((write) => write.value),
+                );
+                if (
+                  propertyWrites.some(
+                    (write) => write.position > basePosition && write.opaque,
+                  ) ||
+                  writes.some((write) => write.propertyName === null)
+                ) {
+                  possibleValues.push(LOCAL_OPAQUE_VALUE);
+                }
+                values.push(...possibleValues);
+              }
+              return values;
+            }
+          }
+          if (expression.type === "ArrayExpression") {
+            const values: unknown[] = [];
+            for (const element of expression.elements) {
+              if (!isAstNode(element)) {
+                continue;
+              }
+              if (element.type !== "SpreadElement") {
+                values.push(element);
+                continue;
+              }
+              const spreadValues = finiteLocalSelectionValues(
+                element.argument,
+                readPosition,
+                new Set(visitedVariables),
+              );
+              if (spreadValues === null) {
+                return null;
+              }
+              values.push(...spreadValues);
+            }
+            return values;
+          }
+          const properties = finiteLocalPropertyNames(
+            source,
+            readPosition,
+            visitedVariables,
+          );
+          if (
+            properties === null ||
+            (properties.names.size === 0 && !properties.opaque)
+          ) {
+            return null;
+          }
+          const values: unknown[] = [];
+          for (const candidateName of properties.names) {
+            const resolution = localValueResolver.propertyResolution(
+              source,
+              candidateName,
+              new Set(visitedVariables),
+              readPosition,
+            );
+            const resolvedValues = resolutionValues(resolution);
+            if (resolvedValues === null) {
+              if (!properties.opaque) {
+                return null;
+              }
+              const stableSource = isIdentifier(expression)
+                ? localValueResolver.stableValue(
+                    expression,
+                    new Set(visitedVariables),
+                  )
+                : source;
+              const stableResolution =
+                stableSource === null
+                  ? { type: "opaque" as const }
+                  : localValueResolver.propertyResolution(
+                      stableSource,
+                      candidateName,
+                      new Set(visitedVariables),
+                      readPosition,
+                    );
+              const stableValues = resolutionValues(stableResolution);
+              if (stableValues !== null) {
+                values.push(...stableValues);
+              }
+              values.push(LOCAL_OPAQUE_VALUE);
+              continue;
+            }
+            values.push(...resolvedValues);
+          }
+          if (properties.opaque) {
+            values.push(LOCAL_OPAQUE_VALUE);
+          }
+          return values;
+        };
+
         const localValueResolver: LocalValueResolver = {
           memberValue(value, visitedVariables = new Set()) {
             const member = unwrapClassExpression(value);
@@ -605,14 +1325,169 @@ export default eslintCompatPlugin({
               member.computed,
             );
             if (propertyName === null) {
-              return null;
+              const values = finiteLocalSelectionValues(
+                member.object,
+                member.range[0],
+                visitedVariables,
+              );
+              if (values === null || values.length === 0) {
+                return null;
+              }
+              return {
+                type: "LocalPossibleValues",
+                values,
+              } satisfies LocalPossibleValues;
             }
-            return this.propertyValue(
+            const directValue = this.propertyValue(
               member.object,
               propertyName,
               visitedVariables,
               member.range[0],
             );
+            const memberPath = staticMemberPath(member);
+            if (memberPath === null || memberPath.path.length < 2) {
+              return directValue;
+            }
+            const variable = resolveVariable(memberPath.root);
+            if (variable === null) {
+              return directValue;
+            }
+            const nestedWrites: Array<{
+              context: "conditional" | "unconditional";
+              position: number;
+              value: unknown;
+            }> = [];
+            const ancestorWrites: Array<{
+              context: "conditional" | "unconditional";
+              position: number;
+              values: readonly unknown[];
+            }> = [];
+            for (const pathOwner of stableObjectPathAliases(
+              variable,
+              memberPath.path,
+              member.range[0],
+            )) {
+              for (const reference of pathOwner.variable.references) {
+                if (reference.identifier.range[0] >= pathOwner.validUntil) {
+                  continue;
+                }
+                let owner: unknown = reference.identifier;
+                const writtenPath: string[] = [];
+                while (
+                  isAstNode(owner) &&
+                  isMemberExpression(owner.parent) &&
+                  owner.parent.object === owner
+                ) {
+                  const nextMember = owner.parent;
+                  const nextProperty = staticPropertyName(
+                    nextMember.property,
+                    nextMember.computed,
+                  );
+                  if (nextProperty === null) {
+                    break;
+                  }
+                  writtenPath.push(nextProperty);
+                  owner = nextMember;
+                }
+                if (
+                  writtenPath.length > pathOwner.propertyPath.length ||
+                  writtenPath.some(
+                    (segment, index) =>
+                      segment !== pathOwner.propertyPath.at(index),
+                  ) ||
+                  !isAstNode(owner) ||
+                  !isAstNode(owner.parent) ||
+                  owner.parent.type !== "AssignmentExpression" ||
+                  owner.parent.left !== owner ||
+                  owner.parent.operator !== "=" ||
+                  !isAstNode(owner.parent.right)
+                ) {
+                  continue;
+                }
+                const writeContext = controlFlowContext(
+                  reference.identifier,
+                  pathOwner.variable.scope.block,
+                );
+                if (writeContext === null) {
+                  continue;
+                }
+                if (writtenPath.length < pathOwner.propertyPath.length) {
+                  let values: readonly unknown[] = [owner.parent.right];
+                  for (const remainingProperty of pathOwner.propertyPath.slice(
+                    writtenPath.length,
+                  )) {
+                    const nextValues: unknown[] = [];
+                    for (const value of values) {
+                      const resolution = this.propertyResolution(
+                        value,
+                        remainingProperty,
+                        new Set(visitedVariables),
+                        reference.identifier.range[0],
+                      );
+                      const resolvedValues = resolutionValues(resolution);
+                      if (resolvedValues === null) {
+                        nextValues.push(LOCAL_OPAQUE_VALUE);
+                      } else {
+                        nextValues.push(...resolvedValues);
+                      }
+                    }
+                    values = nextValues;
+                  }
+                  ancestorWrites.push({
+                    context: writeContext,
+                    position: reference.identifier.range[0],
+                    values,
+                  });
+                  continue;
+                }
+                nestedWrites.push({
+                  context: writeContext,
+                  position: reference.identifier.range[0],
+                  value: owner.parent.right,
+                });
+              }
+            }
+            nestedWrites.sort((left, right) => left.position - right.position);
+            const ancestorCutoff = ancestorWrites
+              .filter((write) => write.context === "unconditional")
+              .reduce(
+                (latest, write) => Math.max(latest, write.position),
+                Number.NEGATIVE_INFINITY,
+              );
+            const effectiveNestedWrites = nestedWrites.filter(
+              (write) => write.position > ancestorCutoff,
+            );
+            const lastUnconditionalWrite = effectiveNestedWrites.findLast(
+              (write) => write.context === "unconditional",
+            );
+            const baseValue = lastUnconditionalWrite?.value ?? directValue;
+            const basePosition = lastUnconditionalWrite?.position ?? -1;
+            const conditionalWrites = effectiveNestedWrites.filter(
+              (write) =>
+                write.position > basePosition &&
+                write.context === "conditional",
+            );
+            const conditionalAncestorValues =
+              lastUnconditionalWrite === undefined
+                ? []
+                : ancestorWrites
+                    .filter(
+                      (write) =>
+                        write.context === "conditional" &&
+                        write.position > basePosition,
+                    )
+                    .flatMap((write) => write.values);
+            return conditionalWrites.length === 0 &&
+              conditionalAncestorValues.length === 0
+              ? baseValue
+              : ({
+                  type: "LocalPossibleValues",
+                  values: [
+                    baseValue ?? LOCAL_OPAQUE_VALUE,
+                    ...conditionalWrites.map((write) => write.value),
+                    ...conditionalAncestorValues,
+                  ],
+                } satisfies LocalPossibleValues);
           },
           patternValue(
             pattern,
@@ -823,6 +1698,23 @@ export default eslintCompatPlugin({
             }
             if (isLocalOpaqueValue(source)) {
               return { type: "opaque" };
+            }
+            if (isLocalPossibleValues(source)) {
+              const values: unknown[] = [];
+              for (const possibleValue of source.values) {
+                const resolution = this.propertyResolution(
+                  possibleValue,
+                  propertyName,
+                  new Set(visitedVariables),
+                  readPosition,
+                );
+                const resolvedValues = resolutionValues(resolution);
+                if (resolvedValues === null) {
+                  return { type: "opaque" };
+                }
+                values.push(...resolvedValues);
+              }
+              return resolutionFromValues(values);
             }
             if (isLocalObjectRestValue(source)) {
               return source.excludedProperties.has(propertyName)
@@ -1354,6 +2246,9 @@ export default eslintCompatPlugin({
             if (!isAstNode(parent)) {
               return null;
             }
+            if (isUnreachableCatchBody(current, parent)) {
+              return null;
+            }
             if (
               (parent.type === "IfStatement" && current !== parent.test) ||
               (parent.type === "ConditionalExpression" &&
@@ -1362,6 +2257,13 @@ export default eslintCompatPlugin({
               (parent.type === "LogicalExpression" &&
                 current === parent.right) ||
               (parent.type === "CatchClause" && current === parent.body) ||
+              (parent.type === "TryStatement" &&
+                current === parent.block &&
+                parent.handler != null &&
+                !isImmediateSafeCaughtTryAssignment(
+                  identifier,
+                  parent.block,
+                )) ||
               parent.type === "ForStatement" ||
               parent.type === "ForInStatement" ||
               parent.type === "ForOfStatement" ||
@@ -1444,6 +2346,9 @@ export default eslintCompatPlugin({
             if (!isAstNode(parent)) {
               return null;
             }
+            if (isUnreachableCatchBody(current, parent)) {
+              return null;
+            }
             if (
               (parent.type === "IfStatement" && current !== parent.test) ||
               (parent.type === "ConditionalExpression" &&
@@ -1452,6 +2357,13 @@ export default eslintCompatPlugin({
               (parent.type === "LogicalExpression" &&
                 current === parent.right) ||
               (parent.type === "CatchClause" && current === parent.body) ||
+              (parent.type === "TryStatement" &&
+                current === parent.block &&
+                parent.handler != null &&
+                !isImmediateSafeCaughtTryAssignment(
+                  identifier,
+                  parent.block,
+                )) ||
               parent.type === "ForStatement" ||
               parent.type === "ForInStatement" ||
               parent.type === "ForOfStatement" ||

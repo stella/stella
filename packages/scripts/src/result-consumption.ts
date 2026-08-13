@@ -83,6 +83,35 @@ export const scanResultConsumption = ({
         });
       }
 
+      if (
+        (ts.isPropertyAccessExpression(node) ||
+          ts.isElementAccessExpression(node)) &&
+        !isConsumedInlineContainerMethod(node, checker)
+      ) {
+        // Constructing an ephemeral container evaluates every entry, even
+        // when the selected value is retained by an assignment or return.
+        inspectDiscardedContainerSelection({
+          checker,
+          expression: node,
+          report: reportDiscardedResult,
+        });
+      }
+
+      if (ts.isCallExpression(node)) {
+        const atSelection = inlineArrayAtSelection(node);
+        if (atSelection !== null) {
+          inspectDiscardedContainerSelection({
+            checker,
+            expression: atSelection.callee,
+            report: reportDiscardedResult,
+            selectionOverride: {
+              kind: "index",
+              value: atSelection.index,
+            },
+          });
+        }
+      }
+
       if (ts.isCallExpression(node) && isUnwrapWithoutMessage(node, checker)) {
         diagnostics.push(
           createDiagnostic({
@@ -139,6 +168,15 @@ const isLogicalExpression = (node: ts.Node): node is ts.BinaryExpression =>
   (node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ||
     node.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
     node.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken);
+
+const COLLECTION_CALLBACK_METHODS = new Set([
+  "filter",
+  "flatMap",
+  "forEach",
+  "map",
+  "reduce",
+  "reduceRight",
+]);
 
 const unwrapDiscardedExpression = (
   expression: ts.Expression,
@@ -198,6 +236,20 @@ const inspectDiscardedExpression = ({
     inspectDiscardedExpression({
       checker,
       expression: expression.right,
+      report,
+    });
+    return;
+  }
+
+  if (ts.isConditionalExpression(expression)) {
+    inspectDiscardedExpression({
+      checker,
+      expression: expression.whenTrue,
+      report,
+    });
+    inspectDiscardedExpression({
+      checker,
+      expression: expression.whenFalse,
       report,
     });
     return;
@@ -269,28 +321,26 @@ const inspectDiscardedExpression = ({
     ts.isPropertyAccessExpression(expression) ||
     ts.isElementAccessExpression(expression)
   ) {
-    inspectDiscardedExpression({
-      checker,
-      expression: expression.expression,
-      report,
-    });
-    return;
+    inspectDiscardedContainerSelection({ checker, expression, report });
   }
 
   if (ts.isCallExpression(expression)) {
     const callee = unwrapDiscardedExpression(expression.expression);
     if (
-      ts.isPropertyAccessExpression(callee) ||
-      ts.isElementAccessExpression(callee)
+      (ts.isPropertyAccessExpression(callee) ||
+        ts.isElementAccessExpression(callee)) &&
+      !isCollectionCallbackInvocation(expression, callee, checker)
     ) {
-      const selectedHost = inlineContainerSelectionHost(callee.expression);
-      if (selectedHost !== null) {
-        inspectDiscardedExpression({
-          checker,
-          expression: selectedHost,
-          report,
-        });
-      }
+      const atSelection = inlineArrayAtSelection(expression);
+      inspectDiscardedContainerSelection({
+        checker,
+        expression: callee,
+        report,
+        selectionOverride:
+          atSelection === null
+            ? undefined
+            : { kind: "index", value: atSelection.index },
+      });
     }
   }
 
@@ -299,23 +349,271 @@ const inspectDiscardedExpression = ({
   }
 };
 
-const inlineContainerSelectionHost = (
-  candidate: ts.Expression,
-): ts.Expression | null => {
-  const expression = unwrapDiscardedExpression(candidate);
+type ContainerSelection =
+  | { readonly kind: "index"; readonly value: number }
+  | { readonly kind: "property"; readonly value: string }
+  | { readonly kind: "unknown" };
+
+const containerSelection = (
+  expression: ts.PropertyAccessExpression | ts.ElementAccessExpression,
+): ContainerSelection => {
+  if (ts.isPropertyAccessExpression(expression)) {
+    return { kind: "property", value: expression.name.text };
+  }
+  const argument = expression.argumentExpression;
+  if (ts.isNumericLiteral(argument)) {
+    return { kind: "index", value: Number(argument.text) };
+  }
+  if (ts.isStringLiteralLike(argument)) {
+    const numericIndex = Number(argument.text);
+    return Number.isInteger(numericIndex) &&
+      String(numericIndex) === argument.text
+      ? { kind: "index", value: numericIndex }
+      : { kind: "property", value: argument.text };
+  }
+  return { kind: "unknown" };
+};
+
+const propertyName = (property: ts.ObjectLiteralElementLike): string | null => {
   if (
-    ts.isObjectLiteralExpression(expression) ||
-    ts.isArrayLiteralExpression(expression)
+    !ts.isPropertyAssignment(property) &&
+    !ts.isShorthandPropertyAssignment(property) &&
+    !ts.isMethodDeclaration(property) &&
+    !ts.isGetAccessorDeclaration(property) &&
+    !ts.isSetAccessorDeclaration(property)
   ) {
-    return expression;
+    return null;
+  }
+  const name = property.name;
+  return ts.isIdentifier(name) || ts.isStringLiteralLike(name)
+    ? name.text
+    : ts.isNumericLiteral(name)
+      ? name.text
+      : null;
+};
+
+const inspectDiscardedContainerSelection = ({
+  checker,
+  expression,
+  report,
+  selectionOverride,
+}: InspectDiscardedExpressionOptions & {
+  readonly expression: ts.PropertyAccessExpression | ts.ElementAccessExpression;
+  readonly selectionOverride?: ContainerSelection;
+}): void => {
+  const host = unwrapDiscardedExpression(expression.expression);
+  const selection = selectionOverride ?? containerSelection(expression);
+  if (ts.isObjectLiteralExpression(host)) {
+    if (selection.kind === "unknown") {
+      return;
+    }
+    const selectedName = String(selection.value);
+    for (const property of host.properties) {
+      if (propertyName(property) === selectedName) {
+        continue;
+      }
+      if (ts.isPropertyAssignment(property)) {
+        inspectDiscardedExpression({
+          checker,
+          expression: property.initializer,
+          report,
+        });
+      } else if (ts.isShorthandPropertyAssignment(property)) {
+        inspectDiscardedExpression({
+          checker,
+          expression: property.name,
+          report,
+        });
+      } else if (ts.isSpreadAssignment(property)) {
+        inspectDiscardedExpression({
+          checker,
+          expression: property.expression,
+          report,
+        });
+      }
+    }
+    return;
+  }
+  if (!ts.isArrayLiteralExpression(host)) {
+    return;
+  }
+  const selectedIndex =
+    selection.kind === "index" ? selection.value : undefined;
+  for (const [index, element] of host.elements.entries()) {
+    if (index === selectedIndex || ts.isOmittedExpression(element)) {
+      continue;
+    }
+    inspectDiscardedExpression({
+      checker,
+      expression: ts.isSpreadElement(element) ? element.expression : element,
+      report,
+    });
+  }
+};
+
+const constantInteger = (expression: ts.Expression): number | null => {
+  const candidate = unwrapDiscardedExpression(expression);
+  if (ts.isNumericLiteral(candidate)) {
+    const value = Number(candidate.text);
+    return Number.isInteger(value) ? value : null;
   }
   if (
-    ts.isPropertyAccessExpression(expression) ||
-    ts.isElementAccessExpression(expression)
+    ts.isPrefixUnaryExpression(candidate) &&
+    candidate.operator === ts.SyntaxKind.MinusToken &&
+    ts.isNumericLiteral(candidate.operand)
   ) {
-    return inlineContainerSelectionHost(expression.expression);
+    const value = -Number(candidate.operand.text);
+    return Number.isInteger(value) ? value : null;
   }
   return null;
+};
+
+const inlineArrayAtSelection = (
+  call: ts.CallExpression,
+): {
+  readonly callee: ts.PropertyAccessExpression | ts.ElementAccessExpression;
+  readonly index: number;
+} | null => {
+  const callee = unwrapDiscardedExpression(call.expression);
+  if (
+    !ts.isPropertyAccessExpression(callee) &&
+    !ts.isElementAccessExpression(callee)
+  ) {
+    return null;
+  }
+  const selection = containerSelection(callee);
+  if (selection.kind !== "property" || selection.value !== "at") {
+    return null;
+  }
+  const host = unwrapDiscardedExpression(callee.expression);
+  if (!ts.isArrayLiteralExpression(host)) {
+    return null;
+  }
+  const argument = call.arguments.at(0);
+  if (argument === undefined) {
+    return null;
+  }
+  const requestedIndex = constantInteger(argument);
+  if (requestedIndex === null) {
+    return null;
+  }
+  return {
+    callee,
+    index:
+      requestedIndex < 0
+        ? host.elements.length + requestedIndex
+        : requestedIndex,
+  };
+};
+
+const isCollectionCallbackInvocation = (
+  call: ts.CallExpression,
+  callee: ts.PropertyAccessExpression | ts.ElementAccessExpression,
+  checker: ts.TypeChecker,
+): boolean => {
+  const host = unwrapDiscardedExpression(callee.expression);
+  if (!ts.isArrayLiteralExpression(host) || call.arguments.length === 0) {
+    return false;
+  }
+  const selection = containerSelection(callee);
+  if (
+    selection.kind !== "property" ||
+    !COLLECTION_CALLBACK_METHODS.has(selection.value)
+  ) {
+    return false;
+  }
+  const callbackArgument = call.arguments.at(0);
+  if (callbackArgument === undefined) {
+    return false;
+  }
+  const callback = unwrapDiscardedExpression(callbackArgument);
+  if (!ts.isArrowFunction(callback) && !ts.isFunctionExpression(callback)) {
+    return false;
+  }
+  const elementParameterIndex =
+    selection.value === "reduce" || selection.value === "reduceRight" ? 1 : 0;
+  const parameter = callback.parameters.at(elementParameterIndex)?.name;
+  if (parameter === undefined || !ts.isIdentifier(parameter)) {
+    return false;
+  }
+  const parameterSymbol = checker.getSymbolAtLocation(parameter);
+  if (parameterSymbol === undefined) {
+    return false;
+  }
+
+  const isTerminalConsume = (candidate: ts.Expression): boolean => {
+    const expression = unwrapDiscardedExpression(candidate);
+    if (!ts.isCallExpression(expression)) {
+      return false;
+    }
+    const consumedMember = unwrapDiscardedExpression(expression.expression);
+    if (
+      !ts.isPropertyAccessExpression(consumedMember) &&
+      !ts.isElementAccessExpression(consumedMember)
+    ) {
+      return false;
+    }
+    const consumedValue = unwrapDiscardedExpression(consumedMember.expression);
+    if (
+      !ts.isIdentifier(consumedValue) ||
+      checker.getSymbolAtLocation(consumedValue) !== parameterSymbol
+    ) {
+      return false;
+    }
+    const method = containerSelection(consumedMember);
+    return (
+      method.kind === "property" &&
+      (method.value === "match" || method.value === "unwrap")
+    );
+  };
+
+  if (!ts.isBlock(callback.body)) {
+    return isTerminalConsume(callback.body);
+  }
+  for (const statement of callback.body.statements) {
+    if (
+      ts.isExpressionStatement(statement) &&
+      isTerminalConsume(statement.expression)
+    ) {
+      return true;
+    }
+    if (
+      ts.isIfStatement(statement) ||
+      ts.isSwitchStatement(statement) ||
+      ts.isTryStatement(statement) ||
+      ts.isWhileStatement(statement) ||
+      ts.isDoStatement(statement) ||
+      ts.isForStatement(statement) ||
+      ts.isForInStatement(statement) ||
+      ts.isForOfStatement(statement) ||
+      ts.isReturnStatement(statement) ||
+      ts.isThrowStatement(statement) ||
+      ts.isBlock(statement)
+    ) {
+      return false;
+    }
+  }
+  return false;
+};
+
+const isConsumedInlineContainerMethod = (
+  expression: ts.PropertyAccessExpression | ts.ElementAccessExpression,
+  checker: ts.TypeChecker,
+): boolean => {
+  const parent = expression.parent;
+  if (!ts.isCallExpression(parent) || parent.expression !== expression) {
+    return false;
+  }
+  if (isCollectionCallbackInvocation(parent, expression, checker)) {
+    return true;
+  }
+  const host = unwrapDiscardedExpression(expression.expression);
+  const selection = containerSelection(expression);
+  return (
+    ts.isArrayLiteralExpression(host) &&
+    selection.kind === "property" &&
+    selection.value === "at"
+  );
 };
 
 const isBetterResultVariant = (

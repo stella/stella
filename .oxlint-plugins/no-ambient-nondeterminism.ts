@@ -12,6 +12,7 @@
 //   Math.random()
 //   crypto.randomUUID()
 //   crypto.getRandomValues(...)
+//   Node crypto randomBytes/randomInt/randomFill/randomFillSync
 //   Bun.randomUUIDv7()
 //   performance.now()
 //   randomUUID() imported from crypto or node:crypto
@@ -41,6 +42,13 @@ import {
 
 const RULE_NAME = "no-ambient-nondeterminism";
 const CRYPTO_MODULES = new Set(["crypto", "node:crypto"]);
+const NODE_CRYPTO_ENTROPY_METHODS = new Set([
+  "randomBytes",
+  "randomFill",
+  "randomFillSync",
+  "randomInt",
+  "randomUUID",
+]);
 const ARRAY_CALLBACK_METHODS = new Set([
   "every",
   "filter",
@@ -113,51 +121,100 @@ const bindingHasDefinitions = (binding: unknown): boolean =>
   binding.defs.length > 0;
 
 type ConstAlias =
-  | { type: "property"; object: unknown; propertyPath: readonly string[] }
+  | {
+      type: "property";
+      defaults: readonly DestructuredDefault[];
+      object: unknown;
+      propertyPath: readonly string[];
+    }
   | { type: "value"; value: unknown };
 
-const destructuredPropertyPath = (
+type DestructuredAlias = {
+  defaults: readonly DestructuredDefault[];
+  propertyPath: readonly string[];
+};
+
+type DestructuredDefault = {
+  propertyPath: readonly string[];
+  sourcePath: readonly string[];
+  value: unknown;
+};
+
+type PendingDestructuredDefault = {
+  sourcePath: readonly string[];
+  value: unknown;
+};
+
+const destructuredAlias = (
   pattern: unknown,
   bindingName: string,
   prefix: readonly string[] = [],
-): readonly string[] | null => {
-  const unwrapped =
-    isAstNode(pattern) && pattern.type === "AssignmentPattern"
-      ? unwrapExpression(pattern.left)
-      : unwrapExpression(pattern);
-  if (isIdentifier(unwrapped, bindingName)) {
-    return prefix;
+  pendingDefaults: readonly PendingDestructuredDefault[] = [],
+): DestructuredAlias | null => {
+  if (isAstNode(pattern) && pattern.type === "AssignmentPattern") {
+    return destructuredAlias(pattern.left, bindingName, prefix, [
+      ...pendingDefaults,
+      { sourcePath: prefix, value: pattern.right },
+    ]);
   }
-  if (
-    !isAstNode(unwrapped) ||
-    unwrapped.type !== "ObjectPattern" ||
-    !Array.isArray(unwrapped.properties)
-  ) {
+  const unwrapped = unwrapExpression(pattern);
+  if (isIdentifier(unwrapped, bindingName)) {
+    return {
+      defaults: pendingDefaults.map(({ sourcePath, value }) => ({
+        propertyPath: prefix.slice(sourcePath.length),
+        sourcePath,
+        value,
+      })),
+      propertyPath: prefix,
+    };
+  }
+  if (!isAstNode(unwrapped)) {
     return null;
   }
-  for (const property of unwrapped.properties) {
-    if (!isAstNode(property) || property.type !== "Property") {
-      continue;
+  if (unwrapped.type === "ArrayPattern" && Array.isArray(unwrapped.elements)) {
+    for (const [index, element] of unwrapped.elements.entries()) {
+      const alias = destructuredAlias(
+        element,
+        bindingName,
+        [...prefix, String(index)],
+        pendingDefaults,
+      );
+      if (alias !== null) {
+        return alias;
+      }
     }
-    const propertyName =
-      property.computed === false
-        ? isIdentifier(property.key)
-          ? property.key.name
+    return null;
+  }
+  if (
+    unwrapped.type === "ObjectPattern" &&
+    Array.isArray(unwrapped.properties)
+  ) {
+    for (const property of unwrapped.properties) {
+      if (!isAstNode(property) || property.type !== "Property") {
+        continue;
+      }
+      const propertyName =
+        property.computed === false
+          ? isIdentifier(property.key)
+            ? property.key.name
+            : isStringLiteral(property.key)
+              ? property.key.value
+              : null
           : isStringLiteral(property.key)
             ? property.key.value
-            : null
-        : isStringLiteral(property.key)
-          ? property.key.value
-          : null;
-    if (propertyName === null) {
-      continue;
-    }
-    const path = destructuredPropertyPath(property.value, bindingName, [
-      ...prefix,
-      propertyName,
-    ]);
-    if (path !== null) {
-      return path;
+            : null;
+      if (propertyName === null) {
+        continue;
+      }
+      const alias = destructuredAlias(
+        property.value,
+        bindingName,
+        [...prefix, propertyName],
+        pendingDefaults,
+      );
+      if (alias !== null) {
+        return alias;
+      }
     }
   }
   return null;
@@ -214,19 +271,16 @@ const constAlias = (
       if (isIdentifier(declarator.id, node.name)) {
         return { type: "value", value: declarator.init };
       }
-      if (
-        !isAstNode(declarator.id) ||
-        declarator.id.type !== "ObjectPattern" ||
-        !Array.isArray(declarator.id.properties)
-      ) {
+      if (!isAstNode(declarator.id)) {
         continue;
       }
-      const propertyPath = destructuredPropertyPath(declarator.id, node.name);
-      if (propertyPath !== null && propertyPath.length > 0) {
+      const alias = destructuredAlias(declarator.id, node.name);
+      if (alias !== null && alias.propertyPath.length > 0) {
         return {
           type: "property",
+          defaults: alias.defaults,
           object: declarator.init,
-          propertyPath,
+          propertyPath: alias.propertyPath,
         };
       }
     }
@@ -265,7 +319,7 @@ const isGlobalReference = (context: unknown, node: unknown): boolean => {
   return binding === null || !bindingHasDefinitions(binding);
 };
 
-type CryptoImportKind = "module" | "randomUUID" | "webcrypto";
+type CryptoImportKind = "entropy" | "module" | "webcrypto";
 
 const cryptoImportKind = (
   context: unknown,
@@ -315,15 +369,15 @@ const cryptoImportKind = (
     }
     if (
       definition.node.type === "ImportSpecifier" &&
-      getImportedName(definition.node) === "randomUUID"
-    ) {
-      return "randomUUID";
-    }
-    if (
-      definition.node.type === "ImportSpecifier" &&
       getImportedName(definition.node) === "webcrypto"
     ) {
       return "webcrypto";
+    }
+    if (
+      definition.node.type === "ImportSpecifier" &&
+      NODE_CRYPTO_ENTROPY_METHODS.has(getImportedName(definition.node) ?? "")
+    ) {
+      return "entropy";
     }
     if (
       definition.node.type === "ImportNamespaceSpecifier" ||
@@ -389,6 +443,7 @@ const staticMemberName = (
 };
 
 type StaticPropertyWrite = {
+  aliasCapturePosition?: number;
   conditional: boolean;
   opaque: boolean;
   position: number;
@@ -404,6 +459,61 @@ const bindingScopeBlock = (binding: unknown): unknown =>
   "block" in binding.scope
     ? binding.scope.block
     : null;
+
+const astMayThrow = (node: unknown): boolean => {
+  if (!isAstNode(node)) {
+    return false;
+  }
+  if (
+    node.type === "CallExpression" ||
+    node.type === "ImportExpression" ||
+    node.type === "NewExpression" ||
+    node.type === "TaggedTemplateExpression" ||
+    node.type === "ThrowStatement" ||
+    node.type === "AwaitExpression" ||
+    node.type === "YieldExpression"
+  ) {
+    return true;
+  }
+  if (
+    node.type === "ArrowFunctionExpression" ||
+    node.type === "FunctionDeclaration" ||
+    node.type === "FunctionExpression"
+  ) {
+    return false;
+  }
+  return Object.entries(node).some(
+    ([key, value]) =>
+      key !== "parent" &&
+      key !== "loc" &&
+      key !== "range" &&
+      (Array.isArray(value)
+        ? value.some((child) => astMayThrow(child))
+        : astMayThrow(value)),
+  );
+};
+
+const caughtTryHasPriorPotentialThrow = (
+  block: unknown,
+  identifier: unknown,
+): boolean => {
+  if (
+    !isAstNode(block) ||
+    block.type !== "BlockStatement" ||
+    !Array.isArray(block.body) ||
+    !isAstNode(identifier)
+  ) {
+    return true;
+  }
+  let statement = identifier;
+  while (isAstNode(statement.parent) && statement.parent !== block) {
+    statement = statement.parent;
+  }
+  const statementIndex = block.body.findIndex((item) => item === statement);
+  return statementIndex < 0
+    ? true
+    : block.body.slice(0, statementIndex).some((item) => astMayThrow(item));
+};
 
 const writeIsConditional = (
   identifier: unknown,
@@ -424,6 +534,10 @@ const writeIsConditional = (
       (parent.type === "ConditionalExpression" && current !== parent.test) ||
       parent.type === "SwitchCase" ||
       (parent.type === "LogicalExpression" && current === parent.right) ||
+      (parent.type === "TryStatement" &&
+        current === parent.block &&
+        parent.handler != null &&
+        caughtTryHasPriorPotentialThrow(parent.block, identifier)) ||
       parent.type === "ForStatement" ||
       parent.type === "ForInStatement" ||
       parent.type === "ForOfStatement" ||
@@ -535,10 +649,119 @@ const immediateHelperCallContexts = (
   return calls;
 };
 
+const staticMemberPathFromRoot = (
+  context: unknown,
+  root: unknown,
+): { member: unknown; propertyPath: readonly string[] } | null => {
+  let current = root;
+  const propertyPath: string[] = [];
+  while (
+    isAstNode(current.parent) &&
+    current.parent.type === "MemberExpression"
+  ) {
+    const member = current.parent;
+    if (member.object !== current) {
+      break;
+    }
+    const propertyName = staticMemberName(context, member);
+    if (propertyName === null) {
+      return null;
+    }
+    propertyPath.push(propertyName);
+    current = member;
+  }
+  return propertyPath.length > 0 ? { member: current, propertyPath } : null;
+};
+
+const staticMemberRootAndPath = (
+  context: unknown,
+  node: unknown,
+): { object: unknown; propertyPath: readonly string[] } | null => {
+  let current = unwrapExpression(node);
+  const propertyPath: string[] = [];
+  while (current?.type === "MemberExpression") {
+    const propertyName = staticMemberName(context, current);
+    if (propertyName === null) {
+      return null;
+    }
+    propertyPath.unshift(propertyName);
+    current = unwrapExpression(current.object);
+  }
+  return current === null ? null : { object: current, propertyPath };
+};
+
+const aliasInitializerExpression = (value: unknown): unknown => {
+  let current = value;
+  while (isAstNode(current)) {
+    const parent = current.parent;
+    if (
+      isAstNode(parent) &&
+      (parent.type === "ParenthesizedExpression" ||
+        parent.type === "TSAsExpression" ||
+        parent.type === "TSInstantiationExpression" ||
+        parent.type === "TSNonNullExpression" ||
+        parent.type === "TSSatisfiesExpression" ||
+        parent.type === "TSTypeAssertion") &&
+      parent.expression === current
+    ) {
+      current = parent;
+      continue;
+    }
+    return current;
+  }
+  return current;
+};
+
+type StablePatternSelection = {
+  identifier: unknown;
+  propertyPath: readonly string[];
+};
+
+const stablePatternSelections = (
+  pattern: unknown,
+  prefix: readonly string[] = [],
+): StablePatternSelection[] => {
+  const expression = unwrapExpression(pattern);
+  if (isIdentifier(expression)) {
+    return [{ identifier: expression, propertyPath: prefix }];
+  }
+  if (!isAstNode(expression) || expression.type === "AssignmentPattern") {
+    return [];
+  }
+  if (
+    expression.type === "ArrayPattern" &&
+    Array.isArray(expression.elements)
+  ) {
+    return expression.elements.flatMap((element, index) =>
+      stablePatternSelections(element, [...prefix, String(index)]),
+    );
+  }
+  if (
+    expression.type !== "ObjectPattern" ||
+    !Array.isArray(expression.properties)
+  ) {
+    return [];
+  }
+  return expression.properties.flatMap((property) => {
+    if (!isAstNode(property) || property.type !== "Property") {
+      return [];
+    }
+    const propertyName =
+      property.computed === false && isIdentifier(property.key)
+        ? property.key.name
+        : isStringLiteral(property.key)
+          ? property.key.value
+          : null;
+    return propertyName === null
+      ? []
+      : stablePatternSelections(property.value, [...prefix, propertyName]);
+  });
+};
+
 const staticPropertyWrites = (
   context: unknown,
   binding: unknown,
-  propertyName: string,
+  propertyPath: readonly string[],
   beforePosition: number,
   visitedBindings = new Set<unknown>(),
   boundary = bindingScopeBlock(binding),
@@ -564,21 +787,26 @@ const staticPropertyWrites = (
       continue;
     }
     const identifier = reference.identifier;
-    const parent = identifier.parent;
+    const selectedMember = staticMemberPathFromRoot(context, identifier);
     if (
-      isAstNode(parent) &&
-      parent.type === "MemberExpression" &&
-      parent.object === identifier &&
-      staticMemberName(context, parent) === propertyName
+      selectedMember !== null &&
+      selectedMember.propertyPath.length === propertyPath.length &&
+      selectedMember.propertyPath.every(
+        (propertyName, index) => propertyName === propertyPath.at(index),
+      )
     ) {
-      const write = parent.parent;
+      const write = isAstNode(selectedMember.member)
+        ? selectedMember.member.parent
+        : null;
       if (
         isAstNode(write) &&
-        ((write.type === "AssignmentExpression" && write.left === parent) ||
-          (write.type === "UpdateExpression" && write.argument === parent) ||
+        ((write.type === "AssignmentExpression" &&
+          write.left === selectedMember.member) ||
+          (write.type === "UpdateExpression" &&
+            write.argument === selectedMember.member) ||
           (write.type === "UnaryExpression" &&
             write.operator === "delete" &&
-            write.argument === parent))
+            write.argument === selectedMember.member))
       ) {
         const directConditional =
           write.range[0] < beforePosition
@@ -630,11 +858,21 @@ const staticPropertyWrites = (
         }
       }
     }
+    const aliasSource = aliasInitializerExpression(
+      selectedMember?.member ?? identifier,
+    );
+    const aliasPrefix = selectedMember?.propertyPath ?? [];
+    const aliasParent = isAstNode(aliasSource) ? aliasSource.parent : null;
     if (
-      isAstNode(parent) &&
-      parent.type === "VariableDeclarator" &&
-      parent.init === identifier &&
-      isIdentifier(parent.id) &&
+      aliasPrefix.every(
+        (propertyName, index) => propertyName === propertyPath.at(index),
+      ) &&
+      isAstNode(aliasParent) &&
+      aliasParent.type === "VariableDeclarator" &&
+      aliasParent.init === aliasSource &&
+      isAstNode(aliasParent.parent) &&
+      aliasParent.parent.type === "VariableDeclaration" &&
+      aliasParent.parent.kind === "const" &&
       typeof context === "object" &&
       context !== null &&
       "sourceCode" in context &&
@@ -643,20 +881,41 @@ const staticPropertyWrites = (
       "getScope" in context.sourceCode &&
       typeof context.sourceCode.getScope === "function"
     ) {
-      const aliasBinding = bindingFromScope(
-        context.sourceCode.getScope(parent.id),
-        parent.id.name,
-      );
-      writes.push(
-        ...staticPropertyWrites(
+      for (const selection of stablePatternSelections(aliasParent.id)) {
+        if (!isIdentifier(selection.identifier)) {
+          continue;
+        }
+        const combinedPrefix = [...aliasPrefix, ...selection.propertyPath];
+        const prefixMatches = combinedPrefix.every(
+          (propertyName, index) => propertyName === propertyPath.at(index),
+        );
+        const remainingPropertyPath = propertyPath.slice(combinedPrefix.length);
+        if (!prefixMatches || remainingPropertyPath.length === 0) {
+          continue;
+        }
+        const aliasBinding = bindingFromScope(
+          context.sourceCode.getScope(selection.identifier),
+          selection.identifier.name,
+        );
+        const aliasWrites = staticPropertyWrites(
           context,
           aliasBinding,
-          propertyName,
+          remainingPropertyPath,
           beforePosition,
           visitedBindings,
           boundary,
-        ),
-      );
+        );
+        writes.push(
+          ...aliasWrites.map((write) =>
+            combinedPrefix.length === 0
+              ? write
+              : {
+                  ...write,
+                  aliasCapturePosition: aliasParent.range[0],
+                },
+          ),
+        );
+      }
     }
   }
   return writes.toSorted((left, right) => left.position - right.position);
@@ -667,6 +926,104 @@ type StaticPropertyResolution =
   | { type: "found"; value: unknown }
   | { type: "possible"; values: readonly unknown[] }
   | { type: "opaque" };
+
+type StaticAbsentValue = { type: "StaticAbsentValue" };
+type StaticOpaqueValue = { type: "StaticOpaqueValue" };
+
+const STATIC_ABSENT_VALUE: StaticAbsentValue = {
+  type: "StaticAbsentValue",
+};
+const STATIC_OPAQUE_VALUE: StaticOpaqueValue = {
+  type: "StaticOpaqueValue",
+};
+
+const isStaticAbsentValue = (value: unknown): value is StaticAbsentValue =>
+  value === STATIC_ABSENT_VALUE;
+
+const isStaticOpaqueValue = (value: unknown): value is StaticOpaqueValue =>
+  value === STATIC_OPAQUE_VALUE;
+
+const staticResolutionValues = (
+  resolution: StaticPropertyResolution,
+): readonly unknown[] | null => {
+  if (resolution.type === "opaque") {
+    return null;
+  }
+  if (resolution.type === "absent") {
+    return [STATIC_ABSENT_VALUE];
+  }
+  return resolution.type === "found" ? [resolution.value] : resolution.values;
+};
+
+const staticResolutionFromValues = (
+  values: readonly unknown[],
+): StaticPropertyResolution =>
+  values.every(isStaticAbsentValue)
+    ? { type: "absent" }
+    : { type: "possible", values };
+
+const overlayStaticResolution = (
+  base: StaticPropertyResolution,
+  override: StaticPropertyResolution,
+): StaticPropertyResolution => {
+  if (override.type === "opaque") {
+    return override;
+  }
+  if (override.type === "absent") {
+    return base;
+  }
+  const overrideValues = staticResolutionValues(override) ?? [];
+  if (!overrideValues.some(isStaticAbsentValue)) {
+    return override;
+  }
+  const baseValues = staticResolutionValues(base);
+  if (baseValues === null) {
+    return { type: "opaque" };
+  }
+  return staticResolutionFromValues(
+    overrideValues.flatMap((value) =>
+      isStaticAbsentValue(value) ? baseValues : [value],
+    ),
+  );
+};
+
+const applyStaticPropertyWrites = (
+  baseResolution: StaticPropertyResolution,
+  propertyWrites: readonly StaticPropertyWrite[],
+): StaticPropertyResolution => {
+  const lastUnconditionalWrite = propertyWrites.findLast(
+    (write) => !write.conditional && !write.opaque,
+  );
+  const basePosition = lastUnconditionalWrite?.position ?? -1;
+  if (
+    propertyWrites.some(
+      (write) => write.position > basePosition && write.opaque,
+    )
+  ) {
+    return { type: "opaque" };
+  }
+  const effectiveBase =
+    lastUnconditionalWrite === undefined
+      ? baseResolution
+      : { type: "found" as const, value: lastUnconditionalWrite.value };
+  const conditionalWrites = propertyWrites.filter(
+    (write) =>
+      write.position > basePosition && write.conditional && !write.opaque,
+  );
+  if (conditionalWrites.length === 0 || effectiveBase.type === "opaque") {
+    return effectiveBase;
+  }
+  const baseValues =
+    effectiveBase.type === "possible"
+      ? effectiveBase.values
+      : effectiveBase.type === "found"
+        ? [effectiveBase.value]
+        : [STATIC_ABSENT_VALUE];
+  return {
+    type: "possible",
+    values: [...baseValues, ...conditionalWrites.map((write) => write.value)],
+  };
+};
 
 const staticPropertyKey = (property: unknown): string | null => {
   if (!isAstNode(property) || property.type !== "Property") {
@@ -685,6 +1042,12 @@ const resolveStaticObjectProperty = (
   visitedBindings: Set<unknown>,
   beforePosition = Number.POSITIVE_INFINITY,
 ): StaticPropertyResolution => {
+  if (isStaticAbsentValue(object)) {
+    return { type: "absent" };
+  }
+  if (isStaticOpaqueValue(object)) {
+    return { type: "opaque" };
+  }
   const expression = unwrapExpression(object);
   if (expression === null) {
     return { type: "opaque" };
@@ -706,23 +1069,12 @@ const resolveStaticObjectProperty = (
     const propertyWrites = staticPropertyWrites(
       context,
       binding,
-      propertyName,
+      [propertyName],
       beforePosition,
     );
     const alias = constAlias(context, expression, visitedBindings);
-    const lastUnconditionalWrite = propertyWrites.findLast(
-      (write) => !write.conditional && !write.opaque,
-    );
-    const basePosition = lastUnconditionalWrite?.position ?? -1;
-    if (
-      propertyWrites.some(
-        (write) => write.position > basePosition && write.opaque,
-      )
-    ) {
-      return { type: "opaque" };
-    }
     const baseResolution =
-      lastUnconditionalWrite === undefined && alias?.type === "value"
+      alias?.type === "value"
         ? resolveStaticObjectProperty(
             context,
             alias.value,
@@ -730,73 +1082,38 @@ const resolveStaticObjectProperty = (
             visitedBindings,
             beforePosition,
           )
-        : lastUnconditionalWrite === undefined
-          ? { type: "opaque" as const }
-          : { type: "found" as const, value: lastUnconditionalWrite.value };
-    const conditionalWrites = propertyWrites.filter(
-      (write) =>
-        write.position > basePosition && write.conditional && !write.opaque,
-    );
-    if (conditionalWrites.length === 0 || baseResolution.type === "opaque") {
-      return baseResolution;
-    }
-    const baseValues =
-      baseResolution.type === "possible"
-        ? baseResolution.values
-        : baseResolution.type === "found"
-          ? [baseResolution.value]
-          : [];
-    return {
-      type: "possible",
-      values: [...baseValues, ...conditionalWrites.map((write) => write.value)],
-    };
+        : { type: "opaque" as const };
+    return applyStaticPropertyWrites(baseResolution, propertyWrites);
   }
   if (expression.type === "MemberExpression") {
-    const parentProperty = staticMemberName(context, expression);
-    if (parentProperty === null) {
+    const root = staticMemberRootAndPath(context, expression);
+    if (root === null) {
       return { type: "opaque" };
     }
-    const parent = resolveStaticObjectProperty(
+    return resolveStaticObjectPath(
       context,
-      expression.object,
-      parentProperty,
-      new Set(visitedBindings),
+      root.object,
+      [...root.propertyPath, propertyName],
+      visitedBindings,
       beforePosition,
     );
-    if (parent.type === "found") {
-      return resolveStaticObjectProperty(
-        context,
-        parent.value,
-        propertyName,
-        visitedBindings,
-        beforePosition,
-      );
+  }
+  if (
+    expression.type === "ArrayExpression" &&
+    Array.isArray(expression.elements)
+  ) {
+    const index = Number(propertyName);
+    if (
+      !Number.isSafeInteger(index) ||
+      index < 0 ||
+      String(index) !== propertyName
+    ) {
+      return { type: "absent" };
     }
-    if (parent.type !== "possible") {
-      return parent;
-    }
-    const branches = parent.values.map((value) =>
-      resolveStaticObjectProperty(
-        context,
-        value,
-        propertyName,
-        new Set(visitedBindings),
-        beforePosition,
-      ),
-    );
-    if (branches.some((branch) => branch.type === "opaque")) {
-      return { type: "opaque" };
-    }
-    return {
-      type: "possible",
-      values: branches.flatMap((branch) =>
-        branch.type === "possible"
-          ? branch.values
-          : branch.type === "found"
-            ? [branch.value]
-            : [],
-      ),
-    };
+    const element = expression.elements.at(index);
+    return element === null || element === undefined
+      ? { type: "absent" }
+      : { type: "found", value: element };
   }
   if (
     expression.type !== "ObjectExpression" ||
@@ -804,9 +1121,11 @@ const resolveStaticObjectProperty = (
   ) {
     return { type: "opaque" };
   }
-  for (const property of expression.properties.toReversed()) {
+  let objectResolution: StaticPropertyResolution = { type: "absent" };
+  for (const property of expression.properties) {
     if (!isAstNode(property)) {
-      return { type: "opaque" };
+      objectResolution = { type: "opaque" };
+      continue;
     }
     if (property.type === "SpreadElement") {
       const spread = resolveStaticObjectProperty(
@@ -816,23 +1135,23 @@ const resolveStaticObjectProperty = (
         new Set(visitedBindings),
         beforePosition,
       );
-      if (spread.type !== "absent") {
-        return spread;
-      }
+      objectResolution = overlayStaticResolution(objectResolution, spread);
       continue;
     }
     if (property.type !== "Property") {
-      return { type: "opaque" };
+      objectResolution = { type: "opaque" };
+      continue;
     }
     const key = staticPropertyKey(property);
     if (key === null) {
-      return { type: "opaque" };
+      objectResolution = { type: "opaque" };
+      continue;
     }
     if (key === propertyName) {
-      return { type: "found", value: property.value };
+      objectResolution = { type: "found", value: property.value };
     }
   }
-  return { type: "absent" };
+  return objectResolution;
 };
 
 const resolveStaticObjectPath = (
@@ -842,6 +1161,109 @@ const resolveStaticObjectPath = (
   visitedBindings: Set<unknown>,
   beforePosition = Number.POSITIVE_INFINITY,
 ): StaticPropertyResolution => {
+  if (isStaticAbsentValue(object)) {
+    return { type: "absent" };
+  }
+  if (isStaticOpaqueValue(object)) {
+    return { type: "opaque" };
+  }
+  const expression = unwrapExpression(object);
+  if (
+    isIdentifier(expression) &&
+    propertyPath.length > 1 &&
+    typeof context === "object" &&
+    context !== null &&
+    "sourceCode" in context &&
+    typeof context.sourceCode === "object" &&
+    context.sourceCode !== null &&
+    "getScope" in context.sourceCode &&
+    typeof context.sourceCode.getScope === "function"
+  ) {
+    const binding = bindingFromScope(
+      context.sourceCode.getScope(expression),
+      expression.name,
+    );
+    const firstProperty = propertyPath.at(0);
+    if (firstProperty !== undefined) {
+      const firstResolution = resolveStaticObjectProperty(
+        context,
+        expression,
+        firstProperty,
+        new Set(visitedBindings),
+        beforePosition,
+      );
+      const remainingPath = propertyPath.slice(1);
+      const branches =
+        firstResolution.type === "found"
+          ? [
+              resolveStaticObjectPath(
+                context,
+                firstResolution.value,
+                remainingPath,
+                new Set(visitedBindings),
+                beforePosition,
+              ),
+            ]
+          : firstResolution.type === "possible"
+            ? firstResolution.values.map((value) =>
+                resolveStaticObjectPath(
+                  context,
+                  value,
+                  remainingPath,
+                  new Set(visitedBindings),
+                  beforePosition,
+                ),
+              )
+            : [firstResolution];
+      const baseResolution: StaticPropertyResolution = branches.some(
+        (branch) => branch.type === "opaque",
+      )
+        ? { type: "opaque" }
+        : branches.length === 1
+          ? (branches.at(0) ?? { type: "opaque" })
+          : {
+              type: "possible",
+              values: branches.flatMap((branch) =>
+                branch.type === "possible"
+                  ? branch.values
+                  : branch.type === "found"
+                    ? [branch.value]
+                    : branch.type === "absent"
+                      ? [STATIC_ABSENT_VALUE]
+                      : [],
+              ),
+            };
+      const ancestorWrites = propertyPath
+        .slice(0, -1)
+        .map((_, index) => propertyPath.slice(0, index + 1))
+        .flatMap((ancestorPath) =>
+          staticPropertyWrites(context, binding, ancestorPath, beforePosition),
+        );
+      const ancestorCutoff = ancestorWrites
+        .filter((write) => !write.conditional)
+        .reduce(
+          (latest, write) => Math.max(latest, write.position),
+          Number.NEGATIVE_INFINITY,
+        );
+      return applyStaticPropertyWrites(
+        baseResolution,
+        staticPropertyWrites(context, binding, propertyPath, beforePosition)
+          .filter((write) => write.position > ancestorCutoff)
+          .filter((write) => {
+            const aliasCapturePosition = write.aliasCapturePosition;
+            return (
+              aliasCapturePosition === undefined ||
+              !ancestorWrites.some(
+                (ancestorWrite) =>
+                  !ancestorWrite.conditional &&
+                  ancestorWrite.position > aliasCapturePosition &&
+                  ancestorWrite.position < write.position,
+              )
+            );
+          }),
+      );
+    }
+  }
   const propertyName = propertyPath.at(0);
   if (propertyName === undefined) {
     return { type: "found", value: object };
@@ -884,7 +1306,9 @@ const resolveStaticObjectPath = (
         ? branch.values
         : branch.type === "found"
           ? [branch.value]
-          : [],
+          : branch.type === "absent"
+            ? [STATIC_ABSENT_VALUE]
+            : [],
     ),
   };
 };
@@ -1046,8 +1470,12 @@ const importedCryptoMemberKind = (
     visitedBindings,
     beforePosition,
   );
-  if (objectKind === "module" && propertyName === "randomUUID") {
-    return "randomUUID() from crypto";
+  if (
+    objectKind === "module" &&
+    propertyName !== null &&
+    NODE_CRYPTO_ENTROPY_METHODS.has(propertyName)
+  ) {
+    return `${propertyName}() from crypto`;
   }
   if (
     objectKind === "webcrypto" &&
@@ -1058,12 +1486,74 @@ const importedCryptoMemberKind = (
   return null;
 };
 
+const valueIsProvablyUndefined = (
+  context: unknown,
+  value: unknown,
+): boolean => {
+  if (isStaticAbsentValue(value)) {
+    return true;
+  }
+  const candidate = unwrapExpression(value);
+  return (
+    (isIdentifier(candidate, "undefined") &&
+      isGlobalReference(context, candidate)) ||
+    (candidate?.type === "UnaryExpression" && candidate.operator === "void")
+  );
+};
+
+const destructuredAliasOutcomes = (
+  context: unknown,
+  object: unknown,
+  propertyPath: readonly string[],
+  defaults: readonly DestructuredDefault[],
+  visitedBindings: Set<unknown>,
+  beforePosition: number,
+): readonly unknown[] => {
+  let outcomes: readonly unknown[] = [object];
+  for (const [index, propertyName] of propertyPath.entries()) {
+    outcomes = outcomes.flatMap((outcome) => {
+      if (isStaticOpaqueValue(outcome)) {
+        return [STATIC_OPAQUE_VALUE];
+      }
+      const resolution = resolveStaticObjectProperty(
+        context,
+        outcome,
+        propertyName,
+        new Set(visitedBindings),
+        beforePosition,
+      );
+      return staticResolutionValues(resolution) ?? [STATIC_OPAQUE_VALUE];
+    });
+    const selectedPath = propertyPath.slice(0, index + 1);
+    for (const fallback of defaults) {
+      if (
+        fallback.sourcePath.length !== selectedPath.length ||
+        !fallback.sourcePath.every(
+          (segment, pathIndex) => segment === selectedPath.at(pathIndex),
+        )
+      ) {
+        continue;
+      }
+      outcomes = outcomes.flatMap((outcome) => {
+        if (isStaticOpaqueValue(outcome)) {
+          return [STATIC_OPAQUE_VALUE, fallback.value];
+        }
+        return valueIsProvablyUndefined(context, outcome)
+          ? [fallback.value]
+          : [outcome];
+      });
+    }
+  }
+  return outcomes;
+};
+
 const ambientPropertyPathKind = (
   context: unknown,
   object: unknown,
   propertyPath: readonly string[],
   visitedBindings: Set<unknown>,
   beforePosition: number,
+  defaults: readonly DestructuredDefault[] = [],
 ): string | null => {
   const importedObjectKind = cryptoObjectKind(
     context,
@@ -1123,9 +1613,39 @@ const ambientPropertyPathKind = (
       : objectName === null
         ? []
         : [objectName, ...propertyPath];
-  return fullPath.length === 2
-    ? ambientMemberKind(fullPath.at(0) ?? null, fullPath.at(1) ?? null)
-    : null;
+  const globalKind =
+    fullPath.length === 2
+      ? ambientMemberKind(fullPath.at(0) ?? null, fullPath.at(1) ?? null)
+      : null;
+  if (globalKind !== null) {
+    return globalKind;
+  }
+  if (defaults.length > 0) {
+    for (const outcome of destructuredAliasOutcomes(
+      context,
+      object,
+      propertyPath,
+      defaults,
+      new Set(visitedBindings),
+      beforePosition,
+    )) {
+      const fallbackKind = ambientCallKind(
+        context,
+        outcome,
+        new Set(visitedBindings),
+        beforePosition,
+      );
+      if (fallbackKind !== null) {
+        return fallbackKind;
+      }
+      if (
+        globalObjectName(context, outcome, new Set(visitedBindings)) === "Date"
+      ) {
+        return "Date(...)";
+      }
+    }
+  }
+  return null;
 };
 
 const ambientCallKind = (
@@ -1142,8 +1662,27 @@ const ambientCallKind = (
     beforePosition === Number.POSITIVE_INFINITY
       ? expression.range[0]
       : beforePosition;
-  if (cryptoImportKind(context, expression) === "randomUUID") {
-    return "randomUUID() from crypto";
+  if (cryptoImportKind(context, expression) === "entropy") {
+    return "entropy API from crypto";
+  }
+  if (expression.type === "CallExpression") {
+    const bindCallee = unwrapExpression(expression.callee);
+    if (
+      bindCallee?.type === "MemberExpression" &&
+      staticMemberName(context, bindCallee) === "bind"
+    ) {
+      return (
+        ambientCallKind(
+          context,
+          bindCallee.object,
+          new Set(visitedBindings),
+          invocationPosition,
+        ) ??
+        (globalObjectName(context, bindCallee.object) === "Date"
+          ? "Date(...)"
+          : null)
+      );
+    }
   }
   if (isIdentifier(expression)) {
     const alias = constAlias(context, expression, visitedBindings);
@@ -1162,6 +1701,7 @@ const ambientCallKind = (
         alias.propertyPath,
         visitedBindings,
         invocationPosition,
+        alias.defaults,
       );
     }
   }
@@ -1275,25 +1815,45 @@ const isAmbientDateConstructor = (
   ) {
     return true;
   }
+  if (expression.type === "CallExpression") {
+    const bindCallee = unwrapExpression(expression.callee);
+    return (
+      bindCallee?.type === "MemberExpression" &&
+      staticMemberName(context, bindCallee) === "bind" &&
+      Array.isArray(expression.arguments) &&
+      expression.arguments.length <= 1 &&
+      isAmbientDateConstructor(
+        context,
+        bindCallee.object,
+        new Set(visitedBindings),
+      )
+    );
+  }
   if (isIdentifier(expression)) {
     const alias = constAlias(context, expression, visitedBindings);
     if (alias?.type === "value") {
       return isAmbientDateConstructor(context, alias.value, visitedBindings);
     }
     if (alias?.type === "property") {
-      const resolved = resolveStaticObjectPath(
-        context,
-        alias.object,
-        alias.propertyPath,
-        visitedBindings,
-        expression.range[0],
-      );
       const values =
-        resolved.type === "found"
-          ? [resolved.value]
-          : resolved.type === "possible"
-            ? resolved.values
-            : [];
+        alias.defaults.length === 0
+          ? (staticResolutionValues(
+              resolveStaticObjectPath(
+                context,
+                alias.object,
+                alias.propertyPath,
+                visitedBindings,
+                expression.range[0],
+              ),
+            ) ?? [])
+          : destructuredAliasOutcomes(
+              context,
+              alias.object,
+              alias.propertyPath,
+              alias.defaults,
+              visitedBindings,
+              expression.range[0],
+            );
       return values.some((candidate) =>
         isAmbientDateConstructor(context, candidate, new Set(visitedBindings)),
       );

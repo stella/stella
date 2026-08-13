@@ -34,6 +34,52 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
     status === "closed" && "opacity-60",
   );
   const styleMap = { open: "font-medium", closed: "text-foreground-muted" };
+  const equivalentStyleMap = { open: "rounded-md", closed: `rounded-md` };
+  const canonicalStyleMap = {
+    open: cn("rounded-md", "font-medium"),
+    closed: mergeClasses("rounded-md", "opacity-60"),
+  };
+  const selectionTuple = ["bg-muted", "bg-background"] as const;
+  const canonicalSelectionTuple = [
+    cn("rounded-md", "bg-muted"),
+    mergeClasses("rounded-md", "bg-background"),
+  ] as const;
+  const spreadSelectionTuple = [
+    ...(active ? ["bg-muted"] : ["bg-background"]),
+    "rounded-md",
+  ];
+  const canonicalSpreadSelectionTuple = [
+    ...(active
+      ? [cn("rounded-md", "bg-muted")]
+      : [mergeClasses("rounded-md", "bg-background")]),
+    cn("rounded-md", "ring-1"),
+  ];
+  const overwrittenSpreadSelectionTuple = [
+    ...(active ? ["bg-muted"] : ["bg-background"]),
+    "rounded-md",
+  ];
+  overwrittenSpreadSelectionTuple[0] = "rounded-md";
+  const writtenSpreadSelectionTuple = [...["rounded-md"], "rounded-md"];
+  if (active) {
+    writtenSpreadSelectionTuple[0] = "bg-muted";
+  }
+  const selectionIndex = active ? 0 : 1;
+  const addedStyleMap: { closed?: string; open: string } = {
+    open: "rounded-md",
+  };
+  const canonicalAddedStyleMap: { closed?: string; open: string } = {
+    open: cn("rounded-md", "font-medium"),
+  };
+  if (active) {
+    addedStyleMap.closed = "bg-muted";
+    canonicalAddedStyleMap.closed = mergeClasses("rounded-md", "opacity-60");
+  }
+  const opaqueWriteKey = active ? "extra" : "other";
+  const opaqueWriteStyleMap: Record<string, string> = {
+    closed: "text-foreground-muted",
+    open: "font-medium",
+  };
+  opaqueWriteStyleMap[opaqueWriteKey] = "rounded-md";
   const localStyles = {
     root: active ? "bg-muted" : "bg-background",
     static: "rounded-md",
@@ -163,6 +209,55 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
     conditionalMemberPresenceStyles.root = "rounded-md";
     canonicalConditionalMemberPresenceStyles.root = cn("rounded-md", "ring-1");
   }
+  const nestedMutationStyles = { row: { root: "rounded-md" } };
+  if (active) {
+    nestedMutationStyles.row.root = "bg-muted";
+  }
+  const canonicalNestedMutationStyles = {
+    row: { root: cn("rounded-md", className) },
+  };
+  if (active) {
+    canonicalNestedMutationStyles.row.root = mergeClasses(
+      "rounded-md",
+      "ring-1",
+    );
+  }
+  const intermediateAliasStyles = { row: { root: "rounded-md" } };
+  const intermediateRowAlias = intermediateAliasStyles.row;
+  if (active) {
+    intermediateRowAlias.root = "bg-muted";
+  }
+  const canonicalIntermediateAliasStyles = {
+    row: { root: cn("rounded-md", className) },
+  };
+  const canonicalIntermediateRowAlias = canonicalIntermediateAliasStyles.row;
+  if (active) {
+    canonicalIntermediateRowAlias.root = mergeClasses("rounded-md", "ring-1");
+  }
+  const replacedAncestorStyles = { row: { root: "rounded-md" } };
+  replacedAncestorStyles.row.root = conditionalClasses;
+  replacedAncestorStyles.row = { root: "rounded-md" };
+  const conditionalAncestorStyles = { row: { root: "rounded-md" } };
+  conditionalAncestorStyles.row.root = cn("rounded-md", className);
+  if (active) {
+    conditionalAncestorStyles.row = { root: "bg-muted" };
+  }
+  const canonicalConditionalAncestorStyles = {
+    row: { root: cn("rounded-md", className) },
+  };
+  canonicalConditionalAncestorStyles.row.root = mergeClasses(
+    "rounded-md",
+    "ring-1",
+  );
+  if (active) {
+    canonicalConditionalAncestorStyles.row = {
+      root: cn("rounded-md", "opacity-60"),
+    };
+  }
+  const detachedAliasStyles = { row: { root: "rounded-md" } };
+  const detachedRowAlias = detachedAliasStyles.row;
+  detachedAliasStyles.row = { root: "rounded-md" };
+  detachedRowAlias.root = conditionalClasses;
   const postSnapshotStyles = { root: "rounded-md" };
   const { root: destructuredSnapshotClass } = postSnapshotStyles;
   const spreadSnapshotStyles = { ...postSnapshotStyles };
@@ -191,6 +286,27 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
   } catch {
     catchWrittenClass = "bg-muted";
     equivalentCatchWrittenClass = `rounded-md`;
+  }
+  let caughtTryClass = conditionalClasses;
+  let canonicalCaughtTryClass = canonicalClasses;
+  try {
+    legacyClassNames("caught-try-probe");
+    caughtTryClass = "rounded-md";
+    canonicalCaughtTryClass = mergeClasses("rounded-md", "ring-1");
+  } catch {
+    legacyClassNames("caught-try-fallback");
+  }
+  let immediateCaughtTryClass = conditionalClasses;
+  try {
+    immediateCaughtTryClass = "rounded-md";
+  } catch {
+    legacyClassNames("immediate-caught-try-fallback");
+  }
+  let unreachableCatchWriteClass = conditionalClasses;
+  try {
+    unreachableCatchWriteClass = "rounded-md";
+  } catch {
+    unreachableCatchWriteClass = "bg-muted";
   }
   const catchMutationStyles = { root: "rounded-md" };
   const catchMutationAlias = catchMutationStyles;
@@ -325,6 +441,44 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
     }
     return result;
   };
+  const caughtTryAssignedClass = () => {
+    let result = conditionalClasses;
+    try {
+      legacyClassNames("caught-try-callback-probe");
+      result = "rounded-md";
+    } catch {
+      legacyClassNames("caught-try-callback-fallback");
+    }
+    return result;
+  };
+  const canonicalCaughtTryAssignedClass = () => {
+    let result = canonicalClasses;
+    try {
+      legacyClassNames("canonical-caught-try-callback-probe");
+      result = mergeClasses("rounded-md", "ring-1");
+    } catch {
+      legacyClassNames("canonical-caught-try-callback-fallback");
+    }
+    return result;
+  };
+  const immediateCaughtTryAssignedClass = () => {
+    let result = conditionalClasses;
+    try {
+      result = "rounded-md";
+    } catch {
+      legacyClassNames("immediate-caught-try-callback-fallback");
+    }
+    return result;
+  };
+  const unreachableCatchAssignedClass = () => {
+    let result = conditionalClasses;
+    try {
+      result = "rounded-md";
+    } catch {
+      result = "bg-muted";
+    }
+    return result;
+  };
 
   return (
     <div>
@@ -355,6 +509,21 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
       {/* Locally owned member indirection — MUST flag. */}
       {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
       <div className={localStyles.root} />
+      {/* Dynamic local map and tuple selection — MUST flag. */}
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      <div className={styleMap[status]} />
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      <div className={selectionTuple[selectionIndex]} />
+      {/* Added finite-map keys and statically expanded tuple spreads remain selectable. */}
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      <div className={addedStyleMap[status]} />
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      <div className={spreadSelectionTuple[selectionIndex]} />
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      <div className={writtenSpreadSelectionTuple[selectionIndex]} />
+      {/* Opaque computed writes cannot erase known differing map values. */}
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      <div className={opaqueWriteStyleMap[status]} />
 
       {/* Const-alias and object-spread laundering — MUST flag. */}
       {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
@@ -397,11 +566,23 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
       <div className={nestedAliasMutationStyles.root} />
       {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
       <div className={conditionalMemberPresenceStyles.root} />
+      {/* Nested class-map writes retain the full static path — MUST flag. */}
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      <div className={nestedMutationStyles.row.root} />
+      {/* Stable aliases of intermediate containers retain nested writes. */}
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      <div className={intermediateAliasStyles.row.root} />
+      {/* Conditional ancestor replacements remain possible after exact writes. */}
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      <div className={conditionalAncestorStyles.row.root} />
       {/* Catch-only local and alias writes remain conditional — MUST flag. */}
       {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
       <div className={catchWrittenClass} />
       {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
       <div className={catchMutationStyles.root} />
+      {/* A caught try may complete before its later write — MUST flag. */}
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      <div className={caughtTryClass} />
 
       {/* Stable computed property keys retain local provenance — MUST flag. */}
       {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
@@ -435,7 +616,7 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
       <div className="rounded-md" />
       <div className={`rounded-md`} />
       <div className={className} />
-      <div className={styleMap[status]} />
+      <div className={equivalentStyleMap[status]} />
       <div className={localStyles.static} />
       <div className={tupleClasses[1]} />
       <div className={equivalentMutableClass} />
@@ -460,12 +641,25 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
       <div className={canonicalAliasMutationStyles.root} />
       <div className={canonicalNestedAliasMutationStyles.root} />
       <div className={canonicalConditionalMemberPresenceStyles.root} />
+      <div className={canonicalNestedMutationStyles.row.root} />
+      <div className={canonicalIntermediateAliasStyles.row.root} />
+      <div className={replacedAncestorStyles.row.root} />
+      <div className={canonicalConditionalAncestorStyles.row.root} />
+      <div className={detachedAliasStyles.row.root} />
       <div {...conditionalCanonicalSpreadProps} />
       <div {...canonicalLogicalSpreadProps} />
       <div {...canonicalPartialOverrideSpreadProps} />
       <ClassNameSurface {...canonicalSuffixedSpreadProps} />
       <div className={canonicalUndefinedDefaultClass} />
       <div className={canonicalCatchMutationStyles.root} />
+      <div className={canonicalStyleMap[status]} />
+      <div className={canonicalSelectionTuple[selectionIndex]} />
+      <div className={canonicalAddedStyleMap[status]} />
+      <div className={canonicalSpreadSelectionTuple[selectionIndex]} />
+      <div className={overwrittenSpreadSelectionTuple[selectionIndex]} />
+      <div className={canonicalCaughtTryClass} />
+      <div className={immediateCaughtTryClass} />
+      <div className={unreachableCatchWriteClass} />
 
       {/* Conditional callbacks remain valid when every branch uses cn(). */}
       <FixtureSlot className={canonicalRowClass} />
@@ -473,6 +667,9 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
       <FixtureSlot className={declaredCanonicalClass} />
       <OptionalFixtureSlot className={canonicalFallthroughClass} />
       <FixtureSlot className={canonicalCatchAssignedClass} />
+      <FixtureSlot className={canonicalCaughtTryAssignedClass} />
+      <FixtureSlot className={immediateCaughtTryAssignedClass} />
+      <FixtureSlot className={unreachableCatchAssignedClass} />
 
       {/* A conditionally assigned returned value is composition: MUST flag. */}
       {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
@@ -483,6 +680,8 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
       <OptionalFixtureSlot className={fallthroughClass} />
       {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
       <FixtureSlot className={catchAssignedClass} />
+      {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
+      <FixtureSlot className={caughtTryAssignedClass} />
 
       {/* Distinct locally owned member returns are composition: MUST flag. */}
       {/* oxlint-disable-next-line require-cn-for-classname-composition/require-cn-for-classname-composition */}
@@ -501,6 +700,7 @@ const MatterRow = ({ active, className, status }: MatterRowProps) => {
       <ExternalSpread className={className} />
       <ExternalTuple classes={[className]} />
       <ExternalMember styles={localStyles} />
+      <ExternalDynamicMap styles={styleMap} status={status} />
       <OpaqueSpreadBoundary active={active} className={className} />
       <ReassignedDeclarationBoundary className={canonicalRowClass} />
       <DestructuringDefaultBoundary className={className} />
@@ -554,6 +754,14 @@ const ExternalTuple = ({ classes }: { classes: (string | undefined)[] }) => (
 const ExternalMember = ({ styles }: { styles: { root: string } }) => (
   <div className={styles.root} />
 );
+
+const ExternalDynamicMap = ({
+  status,
+  styles,
+}: {
+  status: "open" | "closed";
+  styles: Record<"open" | "closed", string>;
+}) => <div className={styles[status]} />;
 
 const OpaqueSpreadBoundary = ({
   active,

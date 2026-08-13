@@ -30,26 +30,49 @@ const isIdentifierReference = (
 const isObjectExpression = (node: unknown): node is ESTree.ObjectExpression =>
   isAstNode(node) && node.type === "ObjectExpression";
 
-const isDrizzleUpdateSetCall = (node: ESTree.CallExpression): boolean => {
+const updateReceiver = (node: ESTree.CallExpression): unknown => {
   const callee = unwrapExpression(node.callee);
   if (
     callee?.type !== "MemberExpression" ||
     getPropertyName(callee.property) !== "set"
   ) {
-    return false;
+    return null;
   }
 
   const updateCall = unwrapExpression(callee.object);
   if (updateCall?.type !== "CallExpression") {
-    return false;
+    return null;
   }
 
   const updateCallee = unwrapExpression(updateCall.callee);
-  return (
-    updateCallee?.type === "MemberExpression" &&
-    getPropertyName(updateCallee.property) === "update"
-  );
+  if (
+    updateCallee?.type !== "MemberExpression" ||
+    getPropertyName(updateCallee.property) !== "update"
+  ) {
+    return null;
+  }
+  return updateCallee.object;
 };
+
+const updateTarget = (node: ESTree.CallExpression): unknown => {
+  const callee = unwrapExpression(node.callee);
+  if (
+    callee?.type !== "MemberExpression" ||
+    getPropertyName(callee.property) !== "set"
+  ) {
+    return null;
+  }
+  const updateCall = unwrapExpression(callee.object);
+  return updateCall?.type === "CallExpression"
+    ? (updateCall.arguments.at(0) ?? null)
+    : null;
+};
+
+const DRIZZLE_SCHEMA_MODULES = new Set([
+  "@/api/db/agent-auth-schema",
+  "@/api/db/auth-schema",
+  "@/api/db/schema",
+]);
 
 const isVariableDefinition = (
   definition: Definition,
@@ -69,6 +92,8 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
+        const drizzleSchemaTables = new Set<Variable>();
+        const drizzleTransactionTypes = new Set<Variable>();
         const namedTypeAnnotations = new Map<Variable, unknown>();
         const setCalls: ESTree.CallExpression[] = [];
         const reported = new Set<Variable>();
@@ -96,6 +121,16 @@ export default eslintCompatPlugin({
             isAstNode(node) && node.type === "TSTypeAnnotation"
               ? node.typeAnnotation
               : node;
+          if (
+            isAstNode(annotation) &&
+            (annotation.type === "TSUnionType" ||
+              annotation.type === "TSIntersectionType") &&
+            Array.isArray(annotation.types)
+          ) {
+            return annotation.types.some((part) =>
+              isBroadRecordType(part, new Set(seen)),
+            );
+          }
           if (
             !isAstNode(annotation) ||
             annotation.type !== "TSTypeReference" ||
@@ -130,6 +165,51 @@ export default eslintCompatPlugin({
           const nextSeen = new Set(seen);
           nextSeen.add(variable);
           return isBroadRecordType(declaration.typeAnnotation, nextSeen);
+        };
+
+        const isDrizzleTransactionType = (
+          node: unknown,
+          seen = new Set<Variable>(),
+        ): boolean => {
+          const annotation =
+            isAstNode(node) && node.type === "TSTypeAnnotation"
+              ? node.typeAnnotation
+              : node;
+          if (!isAstNode(annotation)) {
+            return false;
+          }
+          if (
+            (annotation.type === "TSUnionType" ||
+              annotation.type === "TSIntersectionType") &&
+            Array.isArray(annotation.types)
+          ) {
+            return annotation.types.some((part) =>
+              isDrizzleTransactionType(part, new Set(seen)),
+            );
+          }
+          if (
+            annotation.type !== "TSTypeReference" ||
+            !isIdentifierReference(annotation.typeName)
+          ) {
+            return false;
+          }
+          const variable = resolveVariable(annotation.typeName);
+          if (variable === null || seen.has(variable)) {
+            return false;
+          }
+          if (drizzleTransactionTypes.has(variable)) {
+            return true;
+          }
+          const declaration = namedTypeAnnotations.get(variable);
+          if (
+            !isAstNode(declaration) ||
+            declaration.type !== "TSTypeAliasDeclaration"
+          ) {
+            return false;
+          }
+          const nextSeen = new Set(seen);
+          nextSeen.add(variable);
+          return isDrizzleTransactionType(declaration.typeAnnotation, nextSeen);
         };
 
         const staticPropertyName = (property: unknown): string | null => {
@@ -210,13 +290,13 @@ export default eslintCompatPlugin({
               identifier.range[1] <= pattern.range[1],
           );
 
-        const isBroadBindingPattern = (
+        const bindingType = (
           pattern: unknown,
           variable: Variable,
           inheritedType?: unknown,
-        ): boolean => {
+        ): unknown => {
           if (!isAstNode(pattern)) {
-            return false;
+            return null;
           }
           if (isIdentifierReference(pattern)) {
             const isTarget = variable.identifiers.some(
@@ -224,19 +304,16 @@ export default eslintCompatPlugin({
                 identifier.range[0] === pattern.range[0] &&
                 identifier.range[1] === pattern.range[1],
             );
-            return (
-              isTarget &&
-              isBroadRecordType(inheritedType ?? pattern.typeAnnotation)
-            );
+            return isTarget ? (inheritedType ?? pattern.typeAnnotation) : null;
           }
           if (pattern.type === "AssignmentPattern") {
-            return isBroadBindingPattern(pattern.left, variable, inheritedType);
+            return bindingType(pattern.left, variable, inheritedType);
           }
           if (
             pattern.type !== "ObjectPattern" ||
             !Array.isArray(pattern.properties)
           ) {
-            return false;
+            return null;
           }
           const objectType = inheritedType ?? pattern.typeAnnotation;
           for (const property of pattern.properties) {
@@ -249,15 +326,15 @@ export default eslintCompatPlugin({
             }
             const propertyName = staticPropertyName(property);
             if (propertyName === null) {
-              return false;
+              return null;
             }
-            return isBroadBindingPattern(
+            return bindingType(
               property.value,
               variable,
               propertyType(objectType, propertyName),
             );
           }
-          return false;
+          return null;
         };
 
         const enclosingBindingPattern = (identifier: unknown): unknown => {
@@ -278,13 +355,21 @@ export default eslintCompatPlugin({
           return current;
         };
 
-        const isBroadVariable = (variable: Variable): boolean =>
-          variable.defs.some((definition) =>
-            isBroadBindingPattern(
+        const variableType = (variable: Variable): unknown => {
+          for (const definition of variable.defs) {
+            const annotation = bindingType(
               enclosingBindingPattern(definition.name),
               variable,
-            ),
-          );
+            );
+            if (annotation !== null) {
+              return annotation;
+            }
+          }
+          return null;
+        };
+
+        const isBroadVariable = (variable: Variable): boolean =>
+          isBroadRecordType(variableType(variable));
 
         const variableDeclaration = (
           identifier: ESTree.IdentifierReference,
@@ -297,6 +382,91 @@ export default eslintCompatPlugin({
         const isStableAlias = (declaration: ESTree.VariableDeclarator) =>
           declaration.parent?.type === "VariableDeclaration" &&
           declaration.parent.kind === "const";
+
+        const localFunctionReturnType = (variable: Variable): unknown => {
+          for (const definition of variable.defs) {
+            const declaration = definition.node;
+            if (
+              declaration.type === "FunctionDeclaration" ||
+              declaration.type === "FunctionExpression" ||
+              declaration.type === "ArrowFunctionExpression"
+            ) {
+              return declaration.returnType;
+            }
+            if (declaration.type !== "VariableDeclarator") {
+              continue;
+            }
+            const initializer = unwrapExpression(declaration.init);
+            if (
+              initializer?.type === "FunctionExpression" ||
+              initializer?.type === "ArrowFunctionExpression"
+            ) {
+              return initializer.returnType;
+            }
+          }
+          return null;
+        };
+
+        const isDrizzleReceiver = (
+          node: unknown,
+          seen = new Set<Variable>(),
+        ): boolean => {
+          const expression = unwrapExpression(node);
+          if (!isIdentifierReference(expression)) {
+            return false;
+          }
+          const variable = resolveVariable(expression);
+          if (variable === null || seen.has(variable)) {
+            return false;
+          }
+          seen.add(variable);
+          if (isDrizzleTransactionType(variableType(variable))) {
+            return true;
+          }
+          const declaration = variableDeclaration(expression);
+          return (
+            declaration !== null &&
+            isStableAlias(declaration) &&
+            isDrizzleReceiver(declaration.init, seen)
+          );
+        };
+
+        const isDrizzleSchemaTable = (
+          node: unknown,
+          seen = new Set<Variable>(),
+        ): boolean => {
+          const expression = unwrapExpression(node);
+          if (!isIdentifierReference(expression)) {
+            return false;
+          }
+          const variable = resolveVariable(expression);
+          if (variable === null || seen.has(variable)) {
+            return false;
+          }
+          seen.add(variable);
+          if (drizzleSchemaTables.has(variable)) {
+            return true;
+          }
+          const declaration = variableDeclaration(expression);
+          return (
+            declaration !== null &&
+            isStableAlias(declaration) &&
+            isDrizzleSchemaTable(declaration.init, seen)
+          );
+        };
+
+        const hasExplicitNonDrizzleReceiverType = (node: unknown): boolean => {
+          const expression = unwrapExpression(node);
+          if (!isIdentifierReference(expression)) {
+            return false;
+          }
+          const variable = resolveVariable(expression);
+          if (variable === null) {
+            return false;
+          }
+          const annotation = variableType(variable);
+          return isAstNode(annotation) && !isDrizzleTransactionType(annotation);
+        };
 
         const broadSource = (
           node: unknown,
@@ -328,6 +498,18 @@ export default eslintCompatPlugin({
             return broadSource(declaration.init, seen);
           }
 
+          if (expression.type === "CallExpression") {
+            const callee = unwrapExpression(expression.callee);
+            if (!isIdentifierReference(callee)) {
+              return null;
+            }
+            const variable = resolveVariable(callee);
+            return variable !== null &&
+              isBroadRecordType(localFunctionReturnType(variable))
+              ? variable
+              : null;
+          }
+
           if (isObjectExpression(expression)) {
             for (const property of expression.properties) {
               if (property.type !== "SpreadElement") {
@@ -345,6 +527,8 @@ export default eslintCompatPlugin({
 
         return {
           before() {
+            drizzleSchemaTables.clear();
+            drizzleTransactionTypes.clear();
             namedTypeAnnotations.clear();
             setCalls.length = 0;
             reported.clear();
@@ -357,13 +541,55 @@ export default eslintCompatPlugin({
               }
             }
           },
+          ImportDeclaration(node) {
+            if (DRIZZLE_SCHEMA_MODULES.has(node.source.value)) {
+              for (const specifier of node.specifiers) {
+                if (
+                  specifier.type !== "ImportSpecifier" ||
+                  specifier.importKind === "type" ||
+                  node.importKind === "type"
+                ) {
+                  continue;
+                }
+                const variable = resolveVariable(specifier.local);
+                if (variable !== null) {
+                  drizzleSchemaTables.add(variable);
+                }
+              }
+            }
+            if (node.source.value === "@/api/db/root") {
+              for (const specifier of node.specifiers) {
+                if (
+                  specifier.type !== "ImportSpecifier" ||
+                  !isIdentifier(specifier.imported, "Transaction")
+                ) {
+                  continue;
+                }
+                const variable = resolveVariable(specifier.local);
+                if (variable !== null) {
+                  drizzleTransactionTypes.add(variable);
+                }
+              }
+            }
+          },
           CallExpression(node) {
-            if (isDrizzleUpdateSetCall(node)) {
+            const receiver = updateReceiver(node);
+            if (receiver !== null) {
               setCalls.push(node);
             }
           },
           "Program:exit"() {
             for (const call of setCalls) {
+              const receiver = updateReceiver(call);
+              const target = updateTarget(call);
+              if (
+                receiver === null ||
+                (!isDrizzleReceiver(receiver) &&
+                  (!isDrizzleSchemaTable(target) ||
+                    hasExplicitNonDrizzleReceiverType(receiver)))
+              ) {
+                continue;
+              }
               const argument = call.arguments.at(0);
               const source = broadSource(argument);
               if (source === null || reported.has(source)) {
