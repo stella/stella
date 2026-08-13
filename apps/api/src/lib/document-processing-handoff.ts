@@ -7,8 +7,7 @@ import { withTimeout } from "@/api/lib/with-timeout";
 
 export const DOCUMENT_PROCESSING_HANDOFF_CONCURRENCY = 4;
 const DOCUMENT_PROCESSING_HANDOFF_TIMEOUT_MS = 2000;
-const DOCUMENT_PROCESSING_HANDOFF_TIMEOUT_LABEL =
-  "document-processing.handoff";
+const DOCUMENT_PROCESSING_HANDOFF_TIMEOUT_LABEL = "document-processing.handoff";
 
 type DocumentProcessingHandoffOptions = {
   captureEnqueueError?: typeof captureError;
