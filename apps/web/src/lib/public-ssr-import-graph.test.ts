@@ -233,6 +233,8 @@ const LOCAL_TIME_DATE_METHOD_NAMES =
   "getDate|getDay|getFullYear|getHours|getMinutes|getMonth|getSeconds|getTimezoneOffset|getYear|setDate|setFullYear|setHours|setMinutes|setMonth|setSeconds|setYear|toDateString|toTimeString";
 const AMBIENT_DATE_STRING_SENTINEL = "§";
 const AMBIENT_STRING_LOCALE_CALL_SENTINEL = "¤";
+const AMBIENT_UNKNOWN_TO_LOCALE_STRING_SENTINEL = "¶";
+const BARE_GLOBAL_THIS_SENTINEL = "※";
 
 const ambientStatePatterns = [
   new RegExp(`\\bglobalThis\\.(?:${BROWSER_GLOBAL_NAMES})\\b`, "u"),
@@ -248,6 +250,8 @@ const ambientStatePatterns = [
     "u",
   ),
   new RegExp(AMBIENT_STRING_LOCALE_CALL_SENTINEL, "u"),
+  new RegExp(AMBIENT_UNKNOWN_TO_LOCALE_STRING_SENTINEL, "u"),
+  new RegExp(BARE_GLOBAL_THIS_SENTINEL, "u"),
   /\b(?:globalThis\.)?Math\.random\b/u,
   /\b(?:globalThis\.)?performance\.now\b/u,
   /\b(?:globalThis\.)?crypto\.(?:getRandomValues|randomUUID)\b/u,
@@ -585,6 +589,10 @@ const maskNonExecutableLiterals = (source: string, file: string): string => {
     maskRange(start, end);
     masked[start] = AMBIENT_STRING_LOCALE_CALL_SENTINEL;
   };
+  const maskAmbientUnknownLocaleCall = (start: number, end: number): void => {
+    maskRange(start, end);
+    masked[start] = AMBIENT_UNKNOWN_TO_LOCALE_STRING_SENTINEL;
+  };
   const isDateConstructor = (node: ts.Node | undefined): boolean => {
     if (!node || !ts.isNewExpression(node)) {
       return false;
@@ -653,13 +661,82 @@ const maskNonExecutableLiterals = (source: string, file: string): string => {
       isAmbientLocaleArgument(node.arguments.at(localeIndex))
     );
   };
+  const primitiveBindings = new Map<string, boolean>();
+  const isPrimitiveExpression = (node: ts.Expression): boolean =>
+    ts.isStringLiteral(node) ||
+    ts.isNumericLiteral(node) ||
+    ts.isBigIntLiteral(node) ||
+    ts.isNoSubstitutionTemplateLiteral(node) ||
+    ts.isTemplateExpression(node) ||
+    (ts.isPrefixUnaryExpression(node) && ts.isNumericLiteral(node.operand));
+  const collectPrimitiveBindings = (node: ts.Node): void => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer
+    ) {
+      const isPrimitive = isPrimitiveExpression(node.initializer);
+      const previous = primitiveBindings.get(node.name.text);
+      primitiveBindings.set(
+        node.name.text,
+        previous === undefined ? isPrimitive : previous && isPrimitive,
+      );
+    }
+    ts.forEachChild(node, collectPrimitiveBindings);
+  };
+  collectPrimitiveBindings(sourceFile);
+  const isProvenPrimitiveReceiver = (node: ts.Expression): boolean =>
+    isPrimitiveExpression(node) ||
+    (ts.isIdentifier(node) && primitiveBindings.get(node.text) === true);
+  const hasExplicitTimeZoneOption = (
+    argument: ts.Expression | undefined,
+  ): boolean =>
+    argument !== undefined &&
+    ts.isObjectLiteralExpression(argument) &&
+    argument.properties.some(
+      (property) =>
+        ts.isPropertyAssignment(property) &&
+        ((ts.isIdentifier(property.name) &&
+          property.name.text === "timeZone") ||
+          (ts.isStringLiteral(property.name) &&
+            property.name.text === "timeZone")) &&
+        ts.isStringLiteral(property.initializer) &&
+        property.initializer.text.length > 0,
+    );
+  const isAmbientUnknownToLocaleStringCall = (node: ts.Node): boolean =>
+    ts.isCallExpression(node) &&
+    ts.isPropertyAccessExpression(node.expression) &&
+    node.expression.name.text === "toLocaleString" &&
+    !isProvenPrimitiveReceiver(node.expression.expression) &&
+    !hasExplicitTimeZoneOption(node.arguments.at(1));
+  const isBareGlobalThis = (node: ts.Node): boolean => {
+    if (!ts.isIdentifier(node) || node.text !== "globalThis") {
+      return false;
+    }
+    const parent = node.parent;
+    return (
+      !(
+        (ts.isPropertyAccessExpression(parent) ||
+          ts.isElementAccessExpression(parent)) &&
+        parent.expression === node
+      ) && !(ts.isVariableDeclaration(parent) && parent.initializer === node)
+    );
+  };
   const hasExplicitDateTimeZone = (value: string): boolean =>
     /(?:Z|[+-]\d{2}(?::?\d{2})?)$/iu.test(value);
   const isDeterministicDateString = (value: string): boolean =>
     /^\d{4}-\d{2}-\d{2}$/u.test(value) || hasExplicitDateTimeZone(value);
   const visit = (node: ts.Node): void => {
+    if (isBareGlobalThis(node)) {
+      masked[node.getStart(sourceFile)] = BARE_GLOBAL_THIS_SENTINEL;
+      return;
+    }
     if (isAmbientStringLocaleCall(node)) {
       maskAmbientStringLocaleCall(node.getStart(sourceFile), node.end);
+      return;
+    }
+    if (isAmbientUnknownToLocaleStringCall(node)) {
+      maskAmbientUnknownLocaleCall(node.getStart(sourceFile), node.end);
       return;
     }
     if (
@@ -930,6 +1007,38 @@ describe("public SSR import graph", () => {
         ),
       ),
     ).toBe(false);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          'const renderDate = (value: Date) => value.toLocaleString("en");',
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          'const label = getDate().toLocaleString("en");',
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          'const label = getDate().toLocaleString("en", { timeZone: "UTC" });',
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          "const locale = ((root) => root.navigator.language)(globalThis);",
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(true);
     expect(
       AMBIENT_STATE_PATTERN.test(
         executableSource("const today = new Date();", "fixture.ts"),

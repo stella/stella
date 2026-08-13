@@ -83,6 +83,12 @@ const ambientTimeZoneDate = fixedDate.toLocaleDateString("en");
 const ambientTimeZoneTime = fixedDate.toLocaleTimeString("en");
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves Date toLocaleString requires an explicit time zone too
 const ambientTimeZoneDateTime = fixedDate.toLocaleString("en");
+const formatUnknownDate = (value: Date) =>
+  // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves Date parameters cannot hide ambient time-zone formatting
+  value.toLocaleString("en");
+declare const getUnknownDate: () => Date;
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves function-returned Dates require an explicit time zone
+const ambientReturnedDateTime = getUnknownDate().toLocaleString("en");
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves DateTimeFormat requires both locale and time zone
 const ambientTimeZoneFormatter = Intl.DateTimeFormat("en");
 // oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves an undefined time zone still falls back to ambient host state
@@ -196,6 +202,8 @@ const readShadowedGlobalThis = (globalThis: {
   const { navigator: shadowedNavigator } = globalThis;
   return shadowedNavigator.language;
 };
+// oxlint-disable-next-line no-public-law-browser-globals/no-public-law-browser-globals -- fixture proves bare globalThis cannot be propagated through a helper
+const propagatedGlobalThis = ((root: typeof globalThis) => root)(globalThis);
 
 export {
   AmbientDateTimeFormat,
@@ -211,6 +219,7 @@ export {
   ambientLocalYear,
   ambientParsedLocalDateTime,
   ambientParsedUnknownDate,
+  ambientReturnedDateTime,
   ambientTimeZoneDate,
   ambientTimeZoneDateTime,
   ambientTimeZoneFormatter,
@@ -260,6 +269,7 @@ export {
   fixedUtcComponents,
   fixedDateFormatter,
   fixedSegmenter,
+  formatUnknownDate,
   fullyComputedGlobalRandomId,
   globalBrowserStorage,
   globalDateFormatter,
@@ -273,6 +283,7 @@ export {
   openedAtLabel,
   prefersDark,
   pixelRatio,
+  propagatedGlobalThis,
   randomId,
   randomWidth,
   RandomSource,

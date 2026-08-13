@@ -108,12 +108,31 @@ const isNonReferenceIdentifier = (node) => {
       parent?.type === "TSMethodSignature") &&
       parent.key === node &&
       !parent.computed) ||
+    parent?.type === "TSTypeQuery" ||
     (parent?.type === "TSQualifiedName" && parent.right === node) ||
     (parent?.type === "VariableDeclarator" && parent.id === node) ||
     (parent?.type === "Property" &&
       parent.parent?.type === "ObjectPattern" &&
       (parent.key === node || parent.value === node))
   );
+};
+
+const isGlobalThisMemberHost = (node) => {
+  let expression = node;
+  let parent = expression.parent;
+  while (
+    parent &&
+    (parent.type === "TSAsExpression" ||
+      parent.type === "TSSatisfiesExpression" ||
+      parent.type === "TSNonNullExpression" ||
+      parent.type === "TSTypeAssertion" ||
+      parent.type === "ChainExpression") &&
+    parent.expression === expression
+  ) {
+    expression = parent;
+    parent = expression.parent;
+  }
+  return parent?.type === "MemberExpression" && parent.object === expression;
 };
 
 const staticPatternPropertyName = (node) => {
@@ -384,6 +403,46 @@ const isDateObjectReceiver = (context, node, visited = new Set()) => {
   );
 };
 
+const isProvenPrimitiveLocaleReceiver = (
+  context,
+  node,
+  visited = new Set(),
+) => {
+  const expression = unwrapExpression(node);
+  if (
+    expression?.type === "Literal" &&
+    (typeof expression.value === "string" ||
+      typeof expression.value === "number" ||
+      typeof expression.value === "bigint")
+  ) {
+    return true;
+  }
+  if (
+    expression?.type === "TemplateLiteral" ||
+    (expression?.type === "UnaryExpression" &&
+      (expression.operator === "+" || expression.operator === "-") &&
+      unwrapExpression(expression.argument)?.type === "Literal" &&
+      typeof unwrapExpression(expression.argument)?.value === "number")
+  ) {
+    return true;
+  }
+  if (!isIdentifier(expression, undefined)) {
+    return false;
+  }
+  const variable = findVariable(context, expression);
+  if (!variable || visited.has(variable)) {
+    return false;
+  }
+  visited.add(variable);
+  const declarator = variable.defs.find(
+    ({ node: definition }) => definition?.type === "VariableDeclarator",
+  )?.node;
+  return (
+    declarator?.type === "VariableDeclarator" &&
+    isProvenPrimitiveLocaleReceiver(context, declarator.init, visited)
+  );
+};
+
 const isGlobalThisAmbientObject = (context, node, memberName) =>
   isUnshadowedGlobalThisMember(context, unwrapExpression(node), memberName);
 
@@ -443,6 +502,15 @@ export default eslintCompatPlugin({
       createOnce(context) {
         return {
           Identifier(node) {
+            if (
+              node.name === "globalThis" &&
+              !isNonReferenceIdentifier(node) &&
+              !isGlobalThisMemberHost(node) &&
+              isUnshadowedGlobal(context, node)
+            ) {
+              context.report({ node, messageId: "publicLawBrowserGlobal" });
+              return;
+            }
             if (
               BROWSER_GLOBALS.has(node.name) &&
               !isNonReferenceIdentifier(node) &&
@@ -627,7 +695,10 @@ export default eslintCompatPlugin({
               ) ||
                 ((TIME_ZONE_SENSITIVE_LOCALE_METHODS.has(calledMemberName) ||
                   (calledMemberName === "toLocaleString" &&
-                    isDateObjectReceiver(context, node.callee.object))) &&
+                    !isProvenPrimitiveLocaleReceiver(
+                      context,
+                      node.callee.object,
+                    ))) &&
                   !hasExplicitTimeZone(node.arguments.at(1))))
             ) {
               context.report({ node, messageId: "publicLawAmbientState" });
