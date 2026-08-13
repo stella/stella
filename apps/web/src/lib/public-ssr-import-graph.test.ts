@@ -27,33 +27,62 @@ const REVIEWED_NON_SSR_DYNAMIC_IMPORTS: ReadonlySet<string> = new Set([
   "apps/web/src/routes/tools/$slug.tsx -> @/routes/tools/-components/add-to-stella",
 ]);
 
-// These adapters contain reviewed browser reads behind post-mount snapshots,
-// external-system effects, or browser-only callbacks. A new entry is a scope
-// decision: every other static dependency must remain ambient-state-free.
-const REVIEWED_AMBIENT_BOUNDARIES: ReadonlySet<string> = new Set([
-  "apps/web/src/components/chat/entity-route-detect.ts",
-  "apps/web/src/components/chat/streamdown-mention-link.tsx",
-  "apps/web/src/components/inspector/inspector-broadcast.ts",
-  "apps/web/src/components/theme-provider.tsx",
-  "apps/web/src/components/route-components.tsx",
-  "apps/web/src/hooks/use-persisted-sidebar-open.ts",
-  "apps/web/src/i18n/i18n-store.ts",
-  "apps/web/src/i18n/time-zone.ts",
-  "apps/web/src/lib/api-request-context.ts",
-  "apps/web/src/lib/analytics/error-reference.ts",
-  "apps/web/src/lib/auth.ts",
-  "apps/web/src/lib/beta-features.ts",
-  "apps/web/src/lib/copy-to-clipboard.ts",
-  "apps/web/src/lib/dev-store.ts",
-  "apps/web/src/lib/files/email-citations.ts",
-  "apps/web/src/lib/utils.ts",
-  "packages/ui/src/components/date-picker-popover.tsx",
-  "packages/ui/src/components/outline-rail.tsx",
-  "packages/ui/src/hooks/use-mobile.ts",
-]);
+// Exact detector matches reviewed as post-mount snapshots, external-system
+// effects, or browser-only callbacks. Counts make new reads fail even inside a
+// previously reviewed adapter; removing a read tightens the expected record.
+const REVIEWED_AMBIENT_OCCURRENCES = {
+  "apps/web/src/components/chat/entity-route-detect.ts": {
+    location: 8,
+    window: 4,
+  },
+  "apps/web/src/components/chat/streamdown-mention-link.tsx": { window: 1 },
+  "apps/web/src/components/inspector/inspector-broadcast.ts": {
+    "Date.now(": 1,
+    window: 7,
+  },
+  "apps/web/src/components/route-components.tsx": {
+    navigator: 1,
+    window: 1,
+  },
+  "apps/web/src/components/theme-provider.tsx": {
+    document: 5,
+    localStorage: 8,
+    matchMedia: 3,
+    window: 6,
+  },
+  "apps/web/src/hooks/use-persisted-sidebar-open.ts": { localStorage: 2 },
+  "apps/web/src/i18n/i18n-store.ts": {
+    document: 3,
+    navigator: 6,
+    window: 2,
+  },
+  "apps/web/src/i18n/time-zone.ts": {
+    "Intl.DateTimeFormat()": 1,
+    window: 1,
+  },
+  "apps/web/src/lib/analytics/error-reference.ts": {
+    "crypto.getRandomValues(": 1,
+  },
+  "apps/web/src/lib/api-request-context.ts": { window: 1 },
+  "apps/web/src/lib/auth.ts": { window: 2 },
+  "apps/web/src/lib/beta-features.ts": { window: 1 },
+  "apps/web/src/lib/copy-to-clipboard.ts": { navigator: 1 },
+  "apps/web/src/lib/dev-store.ts": { window: 3 },
+  "apps/web/src/lib/files/email-citations.ts": { window: 6 },
+  "apps/web/src/lib/utils.ts": {
+    "Math.random(": 1,
+    document: 2,
+  },
+  "packages/ui/src/components/date-picker-popover.tsx": {
+    "Date.now(": 2,
+    navigator: 1,
+  },
+  "packages/ui/src/components/outline-rail.tsx": { "Date.now(": 2 },
+  "packages/ui/src/hooks/use-mobile.ts": { window: 2 },
+} as const satisfies Readonly<Record<string, Readonly<Record<string, number>>>>;
 
 const AMBIENT_STATE_PATTERN =
-  /\bglobalThis\.(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|self)\b|\{[^{}]*\b(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|self)\b[^{}]*\}\s*=\s*globalThis\b|(?<![.\w])(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|self)\b(?!\s*:)|\b(?:globalThis\.)?Date\.now\s*\(|\b(?:globalThis\.)?Math\.random\s*\(|\bperformance\.now\s*\(|\bcrypto\.(?:getRandomValues|randomUUID)\s*\(|\b(?:globalThis\.)?Date\s*\(\s*\)|\bnew\s+(?:globalThis\.)?Date(?:\s*\(\s*\)|\s*(?=[;,]))|\bnew\s+(?:globalThis\.)?Intl\.[A-Za-z]+(?:\s*\(\s*\)|\s*(?=[;,]))|\b(?:new\s+)?(?:globalThis\.)?Intl\.[A-Za-z]+\s*\(\s*(?:undefined\s*[,)]|\[\s*\]\s*[,)]|\))/u;
+  /\bglobalThis\.(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|self)\b|\{[^{}]*\b(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|self)\b[^{}]*\}\s*=\s*globalThis\b|(?<![.\w])(?:window|document|navigator|localStorage|sessionStorage|matchMedia|location|history|screen|devicePixelRatio|self)\b(?!\s*:)|\b(?:globalThis\.)?Date\.now\s*\(|\b(?:globalThis\.)?Math\.random\s*\(|\bperformance\.now\s*\(|\bcrypto\.(?:getRandomValues|randomUUID)\s*\(|\b(?:globalThis\.)?Date\s*\(\s*\)|\bnew\s+(?:globalThis\.)?Date(?:\s*\(\s*\)|\s*(?=[;,]))|\bnew\s+(?:globalThis\.)?Intl\.[A-Za-z]+(?:\s*\(\s*\)|\s*(?=[;,]))|\b(?:new\s+)?(?:globalThis\.)?Intl\.[A-Za-z]+\s*\(\s*(?:undefined\s*[,)]|\[\s*\]\s*[,)]|\))|\.(?:toLocaleDateString|toLocaleString|toLocaleTimeString)\s*\(\s*(?:undefined\s*[,)]|\[\s*\]\s*[,)]|\))/u;
 const CANDIDATE_SUFFIXES = ["", ".ts", ".tsx", "/index.ts", "/index.tsx"];
 const tsTranspiler = new Bun.Transpiler({ loader: "ts" });
 const tsxTranspiler = new Bun.Transpiler({ loader: "tsx" });
@@ -87,10 +116,9 @@ type WorkspaceManifest = {
   exports?: unknown;
 };
 
-const workspaceManifests = new Map<
-  string,
-  { root: string; manifest: WorkspaceManifest }
->();
+type WorkspacePackageInfo = { root: string; manifest: WorkspaceManifest };
+
+const workspaceManifests = new Map<string, WorkspacePackageInfo>();
 
 const parseWorkspaceManifest = (source: string): WorkspaceManifest => {
   const parsed: unknown = JSON.parse(source);
@@ -148,6 +176,16 @@ type WorkspaceExport = {
   target: string;
 };
 
+const replaceExportWildcards = (target: string, wildcard: string): string =>
+  target.replaceAll("*", () => wildcard);
+
+const compareCodePoints = (left: string, right: string): number => {
+  if (left < right) {
+    return -1;
+  }
+  return left > right ? 1 : 0;
+};
+
 const conditionalExportTargets = (value: unknown): readonly string[] => {
   if (typeof value === "string") {
     return [value];
@@ -179,12 +217,14 @@ const workspaceExports = (
   );
 };
 
-const resolveWorkspaceImport = (specifier: string): readonly string[] => {
+const resolveWorkspaceImport = (
+  specifier: string,
+  manifests: ReadonlyMap<string, WorkspacePackageInfo> = workspaceManifests,
+): readonly string[] => {
   const match = /^(?<name>@stll\/[^/]+)(?<subpath>\/.*)?$/u.exec(specifier);
   const name = match?.groups?.["name"];
   const subpath = match?.groups?.["subpath"] ?? "/";
-  const packageInfo =
-    name === undefined ? undefined : workspaceManifests.get(name);
+  const packageInfo = name === undefined ? undefined : manifests.get(name);
   if (packageInfo === undefined) {
     return [];
   }
@@ -211,7 +251,7 @@ const resolveWorkspaceImport = (specifier: string): readonly string[] => {
         prefix.length,
         requestedSubpath.length - suffix.length,
       );
-      return [target.replace("*", () => wildcard)];
+      return [replaceExportWildcards(target, wildcard)];
     },
   );
   if (declaredExports.length > 0 && candidates.length === 0) {
@@ -226,7 +266,7 @@ const resolveWorkspaceImport = (specifier: string): readonly string[] => {
           `./src${subpath}.tsx`,
         ];
   return sourceCandidates.flatMap((target) => {
-    const relative = target.replace("*", () => subpath.slice(1));
+    const relative = replaceExportWildcards(target, subpath.slice(1));
     const candidate = nodePath.resolve(packageInfo.root, relative);
     return existsSync(candidate) &&
       statSync(candidate).isFile() &&
@@ -332,13 +372,17 @@ const maskNonExecutableLiterals = (source: string, file: string): string => {
   const maskRange = (start: number, end: number): void => {
     masked.fill(" ", start, end);
   };
+  const maskLiteral = (start: number, end: number): void => {
+    maskRange(start, end);
+    masked[start] = "0";
+  };
   const visit = (node: ts.Node): void => {
     if (
       ts.isStringLiteral(node) ||
       ts.isNoSubstitutionTemplateLiteral(node) ||
       ts.isRegularExpressionLiteral(node)
     ) {
-      maskRange(node.getStart(sourceFile), node.end);
+      maskLiteral(node.getStart(sourceFile), node.end);
       return;
     }
     if (ts.isTemplateExpression(node)) {
@@ -373,6 +417,22 @@ const executableSource = (source: string, file: string): string => {
     // transpiler cannot parse.
   }
   return normalizeExecutableSource(executable, file);
+};
+
+const ambientOccurrenceCounts = (
+  source: string,
+): Readonly<Record<string, number>> => {
+  const counts = new Map<string, number>();
+  const pattern = new RegExp(AMBIENT_STATE_PATTERN.source, "gu");
+  for (const match of source.matchAll(pattern)) {
+    const occurrence = match.at(0);
+    if (occurrence !== undefined) {
+      counts.set(occurrence, (counts.get(occurrence) ?? 0) + 1);
+    }
+  }
+  return Object.fromEntries(
+    [...counts].sort(([left], [right]) => compareCodePoints(left, right)),
+  );
 };
 
 const walkPublicSsrGraph = (
@@ -509,6 +569,38 @@ describe("public SSR import graph", () => {
     expect(
       AMBIENT_STATE_PATTERN.test(
         executableSource(
+          "const label = fixedDate.toLocaleDateString();",
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          "const label = fixedDate.toLocaleTimeString(undefined);",
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          "const label = amount.toLocaleString([]);",
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
+          'const label = fixedDate.toLocaleDateString("en");',
+          "fixture.ts",
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      AMBIENT_STATE_PATTERN.test(
+        executableSource(
           "const label = `https://stll.app/window`;",
           "fixture.ts",
         ),
@@ -621,23 +713,22 @@ describe("public SSR import graph", () => {
       );
       expect(resolved, specifier).not.toBeNull();
     }
-    expect(
-      [...REVIEWED_AMBIENT_BOUNDARIES]
-        .filter((file) => !relativeVisited.includes(file))
-        .sort(),
-    ).toEqual([]);
+    const actualOccurrences = Object.fromEntries(
+      [...visited]
+        .map(
+          (file) =>
+            [
+              nodePath.relative(repoRoot, file),
+              ambientOccurrenceCounts(
+                executableSource(readFileSync(file, "utf-8"), file),
+              ),
+            ] as const,
+        )
+        .filter(([, occurrences]) => Object.keys(occurrences).length > 0)
+        .sort(([left], [right]) => compareCodePoints(left, right)),
+    );
 
-    const violations = [...visited]
-      .filter((file) =>
-        AMBIENT_STATE_PATTERN.test(
-          executableSource(readFileSync(file, "utf-8"), file),
-        ),
-      )
-      .map((file) => nodePath.relative(repoRoot, file))
-      .filter((file) => !REVIEWED_AMBIENT_BOUNDARIES.has(file))
-      .sort();
-
-    expect(violations).toEqual([]);
+    expect(actualOccurrences).toEqual(REVIEWED_AMBIENT_OCCURRENCES);
   });
 
   test("statically analyzable dynamic imports and workspace exports are covered", () => {
@@ -666,5 +757,29 @@ describe("public SSR import graph", () => {
     expect(
       resolveStaticImport("@stll/ui/not-exported", "fixture.ts"),
     ).toBeNull();
+    const fixtureManifests = new Map([
+      [
+        "@stll/resolver-fixture",
+        {
+          root: nodePath.resolve(repoRoot, "packages/ui"),
+          manifest: {
+            exports: {
+              "./codeql/*": "./src/*/../components/*.tsx",
+            },
+          },
+        },
+      ],
+    ]);
+    expect(
+      resolveWorkspaceImport(
+        "@stll/resolver-fixture/codeql/button",
+        fixtureManifests,
+      ),
+    ).toEqual([
+      nodePath.resolve(repoRoot, "packages/ui/src/components/button.tsx"),
+    ]);
+    expect(replaceExportWildcards("./*/generated/*", "$&")).toBe(
+      "./$&/generated/$&",
+    );
   });
 });
