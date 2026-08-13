@@ -1,5 +1,7 @@
 import { EyeOffIcon, GlobeIcon, type LucideIcon } from "lucide-react";
 
+import { cn } from "@stll/ui/lib/utils";
+
 import { getCatalogueIconImageSrc } from "@/components/catalogue/catalogue-entry-icon.logic";
 import { DocxIcon } from "@/components/document-icon";
 import { McpIcon } from "@/components/mcp-icon";
@@ -50,7 +52,7 @@ export const CatalogueEntryIcon = ({
     if (Icon) {
       return (
         <Icon
-          className={className ?? "text-foreground"}
+          className={cn(className ?? "text-foreground")}
           style={{ width: size, height: size }}
         />
       );
@@ -62,7 +64,10 @@ export const CatalogueEntryIcon = ({
     return (
       <img
         alt=""
-        className={`${className ?? ""} rounded-sm object-contain ring-1 ring-black/5 dark:ring-white/10`.trim()}
+        className={cn(
+          className,
+          "rounded-sm object-contain ring-1 ring-black/5 dark:ring-white/10",
+        )}
         height={size}
         src={bundledIconSrc}
         style={{ width: size, height: size }}
@@ -77,7 +82,10 @@ export const CatalogueEntryIcon = ({
     return (
       <img
         alt=""
-        className={`${className ?? ""} rounded-sm object-contain ring-1 ring-black/5 dark:ring-white/10`.trim()}
+        className={cn(
+          className,
+          "rounded-sm object-contain ring-1 ring-black/5 dark:ring-white/10",
+        )}
         height={size}
         src={safeIconHref}
         style={{ width: size, height: size }}
@@ -88,7 +96,7 @@ export const CatalogueEntryIcon = ({
 
   return (
     <McpIcon
-      className={className ?? "text-muted-foreground"}
+      className={cn(className ?? "text-muted-foreground")}
       style={{ width: size, height: size }}
     />
   );

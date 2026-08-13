@@ -148,7 +148,7 @@ export const incrementMatchCount = async (
       .update(caseLawPolarityRules)
       .set({
         matchCount: sql`${caseLawPolarityRules.matchCount} + 1`,
-        updatedAt: new Date(),
+        updatedAt: sql`now()`,
       })
       .where(eq(caseLawPolarityRules.id, ruleId));
   });

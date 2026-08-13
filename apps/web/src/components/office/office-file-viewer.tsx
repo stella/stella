@@ -10,6 +10,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 import { contentDir } from "@stll/ui/hooks/use-content-dir";
+import { cn } from "@stll/ui/lib/utils";
 
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
@@ -228,11 +229,11 @@ export const OfficeFileViewer = ({
           </div>
         )}
         <div
-          className={
+          className={cn(
             format === "xlsx"
               ? "stella-office-spreadsheet relative min-h-0 flex-1"
-              : "relative min-h-0 flex-1"
-          }
+              : "relative min-h-0 flex-1",
+          )}
           data-color-scheme={resolvedTheme}
         >
           <SilurusOfficeFileViewer

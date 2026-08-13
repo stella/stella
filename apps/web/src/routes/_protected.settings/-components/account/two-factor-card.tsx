@@ -33,6 +33,7 @@ import {
   InputOTPSlot,
 } from "@stll/ui/components/input-otp";
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import { SecretInput } from "@/components/secret-input";
 import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
@@ -103,11 +104,11 @@ export const TwoFactorCard = () => {
       <FramePanel>
         <div className="flex items-center justify-between gap-4 p-4">
           <span
-            className={
+            className={cn(
               enabled
                 ? "bg-success/16 text-success-foreground inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium"
-                : "bg-muted text-muted-foreground inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium"
-            }
+                : "bg-muted text-muted-foreground inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium",
+            )}
           >
             {enabled
               ? t("settings.account.twoFactor.enabledStatus")

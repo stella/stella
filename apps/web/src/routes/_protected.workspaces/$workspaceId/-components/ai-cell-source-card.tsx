@@ -188,7 +188,7 @@ export const AICellSourceCard = ({
             // than a real <button> because some cells nest interactive flag
             // controls in `children`, which <button> cannot legally wrap.
             <div
-              className={triggerClassName ?? "w-full min-w-0"}
+              className={cn(triggerClassName ?? "w-full min-w-0")}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
@@ -208,7 +208,7 @@ export const AICellSourceCard = ({
             />
           ) : (
             <div
-              className={triggerClassName ?? "w-full min-w-0"}
+              className={cn(triggerClassName ?? "w-full min-w-0")}
               onPointerDown={() => {
                 dismissedRef.current = true;
                 setOpen(false);

@@ -10,6 +10,7 @@ import { useTranslations } from "use-intl";
 
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { PreviewPane } from "@stll/ui/components/preview-pane";
+import { cn } from "@stll/ui/lib/utils";
 
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import type {
@@ -247,7 +248,7 @@ const PreviewStatusChip = ({ status }: { status: TaskStatus }) => {
 
   return (
     <span className="bg-muted/60 text-muted-foreground flex max-w-full min-w-0 items-center gap-1 rounded px-1.5 py-0.5 text-xs leading-none">
-      <Icon className={`size-3 shrink-0 ${STATUS_COLORS[status]}`} />
+      <Icon className={cn("size-3 shrink-0", STATUS_COLORS[status])} />
       <span className="truncate">{t(labelKey)}</span>
     </span>
   );

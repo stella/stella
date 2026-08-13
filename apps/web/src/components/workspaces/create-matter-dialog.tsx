@@ -37,6 +37,7 @@ import { Field, FieldLabel } from "@stll/ui/components/field";
 import { Input } from "@stll/ui/components/input";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import { ContactPicker } from "@/components/contact-picker";
 import { UserIdentity } from "@/components/user-avatar";
@@ -399,9 +400,9 @@ const CreateMatterDialogBody = ({
               <section className="space-y-3">
                 <Field className="gap-3" invalid={clientInvalid}>
                   <FieldLabel
-                    className={
-                      clientInvalid ? "text-destructive-foreground" : undefined
-                    }
+                    className={cn(
+                      clientInvalid && "text-destructive-foreground",
+                    )}
                   >
                     {t("workspaces.parties.client")}
                   </FieldLabel>
@@ -448,9 +449,9 @@ const CreateMatterDialogBody = ({
         <section>
           <Field invalid={nameInvalid}>
             <FieldLabel
-              className={
-                nameInvalid ? "text-destructive-foreground" : undefined
-              }
+              className={cn(
+                nameInvalid && "text-destructive-foreground",
+              )}
             >
               {t("common.name")}
             </FieldLabel>

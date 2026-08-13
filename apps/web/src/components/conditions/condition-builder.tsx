@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/components/select";
+import { cn } from "@stll/ui/lib/utils";
 
 import {
   appendChild,
@@ -268,7 +269,7 @@ const ConditionGutter = ({
 
   if (index === 0) {
     return (
-      <span className={`${gutterClass} ps-1`}>
+      <span className={cn(gutterClass, "ps-1")}>
         {t("templates.conditionWhen")}
       </span>
     );
@@ -294,7 +295,7 @@ const ConditionGutter = ({
     );
   }
   return (
-    <span className={`${gutterClass} ps-1`}>
+    <span className={cn(gutterClass, "ps-1")}>
       {combinator === "or"
         ? t("templates.conditionOr")
         : t("templates.conditionAnd")}

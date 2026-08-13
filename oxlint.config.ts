@@ -123,6 +123,12 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-async-context-enter-with.fixture.ts", [
     "no-async-context-enter-with/no-async-context-enter-with",
   ]),
+  fixtureRuleOverride("no-ambient-nondeterminism.fixture.ts", [
+    "no-ambient-nondeterminism/no-ambient-nondeterminism",
+  ]),
+  fixtureRuleOverride("require-cn-for-classname-composition.fixture.tsx", [
+    "require-cn-for-classname-composition/require-cn-for-classname-composition",
+  ]),
   fixtureRuleOverride("no-body-ownership-ids.fixture.ts", [
     "no-body-ownership-ids/no-body-ownership-ids",
   ]),
@@ -451,7 +457,6 @@ export default defineConfig({
     "require-relative-time-helpers/require-relative-time-helpers": "error",
     "no-raw-date-input/no-raw-date-input": "error",
     "stella-lowercase/stella-lowercase": "error",
-    "must-use-result/must-use-result": "error",
     "no-unvalidated-json-domain-cast/no-unvalidated-json-domain-cast": "error",
     "no-partial-record-satisfies/no-partial-record-satisfies": "error",
     "no-raw-public-law-seo/no-raw-public-law-seo": "off",
@@ -633,6 +638,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
     "./.oxlint-plugins/no-ambient-hotkey-format.ts",
+    "./.oxlint-plugins/no-ambient-nondeterminism.ts",
     "./.oxlint-plugins/no-physical-properties.ts",
     "./.oxlint-plugins/no-body-ownership-ids.ts",
     "./.oxlint-plugins/no-raw-error-logging.ts",
@@ -649,6 +655,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-native-s3-object-read.ts",
     "./.oxlint-plugins/no-native-s3-object-write.ts",
     "./.oxlint-plugins/no-raw-use-effect.ts",
+    "./.oxlint-plugins/require-cn-for-classname-composition.ts",
     "./.oxlint-plugins/no-ref-mirror.ts",
     "./.oxlint-plugins/no-shared-suspense-query.ts",
     "./.oxlint-plugins/no-bare-chrome-query.ts",
@@ -689,7 +696,6 @@ export default defineConfig({
     "./.oxlint-plugins/require-audit-on-mutation.ts",
     "./.oxlint-plugins/require-transaction-abort.ts",
     "./.oxlint-plugins/no-direct-audit-log-insert.ts",
-    "./.oxlint-plugins/must-use-result.ts",
     "./.oxlint-plugins/no-unvalidated-json-domain-cast.ts",
     "./.oxlint-plugins/no-raw-public-law-seo.ts",
     "./.oxlint-plugins/public-case-law-db-boundary.ts",
@@ -1270,6 +1276,25 @@ export default defineConfig({
       },
     },
     {
+      // Deterministic backend logic must receive wall-clock time and entropy
+      // from its caller. Start with pure policy, normalization, codec, and
+      // classification modules; I/O boundaries continue to own the ambient
+      // clock until their APIs expose an injected clock.
+      files: [
+        "apps/api/src/**/*.logic.ts",
+        "apps/api/src/**/*-policy.ts",
+        "apps/api/src/**/*-normalizer.ts",
+        "apps/api/src/**/*-codec.ts",
+        "apps/api/src/handlers/case-law/ingestion/reconciliation-plan.ts",
+        "apps/api/src/handlers/case-law/polarity/classifier.ts",
+        "apps/api/src/handlers/case-law/polarity/rule-engine.ts",
+        ".oxlint-plugins/__fixtures__/no-ambient-nondeterminism.fixture.ts",
+      ],
+      rules: {
+        "no-ambient-nondeterminism/no-ambient-nondeterminism": "error",
+      },
+    },
+    {
       // An ambient async-context store is per-request state, and `enterWith`
       // is the one way to bind it that outlives the work it was opened for:
       // the frame it mutates stays current for whatever the runtime dispatches
@@ -1541,6 +1566,8 @@ export default defineConfig({
       rules: {
         "react/jsx-key": "error",
         "react/no-array-index-key": "error",
+        "require-cn-for-classname-composition/require-cn-for-classname-composition":
+          "error",
         // Direct useEffect is banned; route external-system sync through
         // useMountEffect / useExternalSyncEffect. See /conventions-use-effect.
         "no-raw-use-effect/no-raw-use-effect": [

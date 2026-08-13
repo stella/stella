@@ -637,11 +637,11 @@ function ReviewClause({
     <div className="bg-muted/45 flex items-center justify-between gap-3 rounded-lg px-3 py-2.5">
       <span className="text-foreground text-xs font-medium">{label}</span>
       <span
-        className={
+        className={cn(
           tone === "clear"
             ? "text-success text-xs"
-            : "text-warning-foreground text-xs"
-        }
+            : "text-warning-foreground text-xs",
+        )}
       >
         {status}
       </span>

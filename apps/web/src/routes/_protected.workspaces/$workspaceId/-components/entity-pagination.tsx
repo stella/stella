@@ -7,6 +7,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@stll/ui/components/pagination";
+import { cn } from "@stll/ui/lib/utils";
 
 type EntityPaginationProps = {
   page: number;
@@ -64,9 +65,11 @@ export const EntityPagination = ({
         <PaginationItem>
           <PaginationPrevious
             aria-disabled={page === 1}
-            className={
-              page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"
-            }
+            className={cn(
+              page === 1
+                ? "pointer-events-none opacity-50"
+                : "cursor-pointer",
+            )}
             onClick={() => {
               if (page > 1) {
                 onPageChange(page - 1);
@@ -94,11 +97,11 @@ export const EntityPagination = ({
         <PaginationItem>
           <PaginationNext
             aria-disabled={page === totalPages}
-            className={
+            className={cn(
               page === totalPages
                 ? "pointer-events-none opacity-50"
-                : "cursor-pointer"
-            }
+                : "cursor-pointer",
+            )}
             onClick={() => {
               if (page < totalPages) {
                 onPageChange(page + 1);

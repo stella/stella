@@ -567,9 +567,9 @@ export const WorkspaceTable = ({
       )}
     >
       <div
-        className={
-          inlineFlow ? "w-full" : "scrollbar-subtle h-full overflow-auto"
-        }
+        className={cn(
+          inlineFlow ? "w-full" : "scrollbar-subtle h-full overflow-auto",
+        )}
         ref={tableWrapperRef}
       >
         <div

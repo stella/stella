@@ -571,7 +571,6 @@ export const clearIneligibleGenerationProjection = async (
  * therefore NOT part of this set.
  */
 const buildSharedFields = (row: IndexableRow): Record<string, unknown> => {
-  // eslint-disable-next-line no-untyped-updates/no-untyped-updates -- corpus index ingest document, not a DB update
   const doc: Record<string, unknown> = {
     document_id: row.id,
     jurisdiction: row.country,

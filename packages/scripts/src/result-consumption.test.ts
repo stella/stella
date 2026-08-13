@@ -60,18 +60,85 @@ describe("Result consumption guard", () => {
     ).toBe(true);
   });
 
-  test("detects discarded Results through helper aliases and chains", () => {
+  test("detects discarded Results through aliases, wrappers, and chains", () => {
     const diagnostics = scanFixture(`
       import { Result, type Result as BetterResult } from "better-result";
 
       const parse = (): BetterResult<number, string> => Result.ok(1);
+      const parseAlias = parse;
+      const parseWrapper = (): BetterResult<number, string> => parseAlias();
+      const asyncWrapper = async (): Promise<BetterResult<number, string>> =>
+        parseWrapper();
+      declare const decoratedResult: () => BetterResult<number, string> & {
+        readonly source: "fixture";
+      };
 
-      parse();
+      parseAlias();
+      parseWrapper();
+      asyncWrapper();
+      decoratedResult();
       parse().map((value) => value + 1);
     `);
 
     expect(diagnostics.map(({ rule }) => rule)).toEqual([
       "unused-result",
+      "unused-result",
+      "unused-result",
+      "unused-result",
+      "unused-result",
+    ]);
+  });
+
+  test("ignores callee-name and structural Result lookalikes", () => {
+    const diagnostics = scanFixture(`
+      const Result = {
+        gen: (operation: () => unknown): unknown => operation(),
+      };
+      const safeDb = (operation: () => unknown): unknown => operation();
+
+      class Ok<T> {
+        readonly status = "ok" as const;
+        constructor(readonly value: T) {}
+      }
+      class Err<E> {
+        readonly status = "error" as const;
+        constructor(readonly error: E) {}
+      }
+      type StructuralResult<T, E> =
+        | { readonly status: "ok"; readonly value: T }
+        | { readonly status: "error"; readonly error: E };
+
+      const localOk = (): Ok<number> => new Ok(1);
+      const localErr = (): Err<string> => new Err("failed");
+      const structural = (): StructuralResult<number, string> => ({
+        status: "ok",
+        value: 1,
+      });
+
+      Result.gen(() => 1);
+      safeDb(() => 1);
+      localOk();
+      localErr();
+      structural();
+    `);
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  test("requires Better Result provenance and discriminants together", () => {
+    const diagnostics = scanFixture(`
+      import { Result, type Result as BetterResult } from "better-result";
+
+      type StatusOnly = Pick<BetterResult<number, string>, "status">;
+      declare const statusOnly: () => StatusOnly;
+      declare const realResult: () => BetterResult<number, string>;
+
+      statusOnly();
+      realResult();
+      void Result;
+    `);
+
+    expect(diagnostics.map(({ rule }) => rule)).toEqual([
       "unused-result",
     ]);
   });

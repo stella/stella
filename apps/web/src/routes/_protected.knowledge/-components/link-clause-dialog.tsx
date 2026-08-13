@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from "@stll/ui/components/select";
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
@@ -327,11 +328,12 @@ export const LinkClauseDialog = ({
               {filtered.map((clause) => (
                 <li key={clause.id}>
                   <button
-                    className={`flex w-full items-center gap-3 px-4 py-2.5 text-start text-sm ${
+                    className={cn(
+                      "flex w-full items-center gap-3 px-4 py-2.5 text-start text-sm",
                       selectedClauseId === clause.id
                         ? "bg-muted"
-                        : "hover:bg-muted/50"
-                    }`}
+                        : "hover:bg-muted/50",
+                    )}
                     onClick={() => {
                       setSelectedClauseId(clause.id);
                       setSelectedVariantId(null);

@@ -54,7 +54,7 @@ export const PropertyPopoverTrigger = ({
       }
     >
       <PropertyIcon
-        className={isValid ? "" : "text-warning"}
+        className={cn(isValid ? "" : "text-warning")}
         type={property.content.type}
       />
       <span className="w-0 flex-1 truncate">{name}</span>

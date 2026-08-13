@@ -4,6 +4,7 @@ import {
   DirectiveLabel,
   HighlightedText,
 } from "@/routes/_protected.knowledge/-components/paragraph-rendering";
+import { cn } from "@stll/ui/lib/utils";
 
 // ── Types ────────────────────────────────────────────
 
@@ -189,11 +190,12 @@ const ClauseParagraphRow = ({ paragraph }: { paragraph: ClauseParagraph }) => {
 
     return (
       <div
-        className={`rounded-sm border-s-[3px] py-1.5 ps-3 pe-2 ${
+        className={cn(
+          "rounded-sm border-s-[3px] py-1.5 ps-3 pe-2",
           isConditional
             ? "border-foreground-disabled bg-accent/50 dark:border-foreground-disabled dark:bg-accent/30"
-            : "border-success/40 bg-success/10 dark:border-success/40 dark:bg-success/10"
-        }`}
+            : "border-success/40 bg-success/10 dark:border-success/40 dark:bg-success/10",
+        )}
       >
         <DirectiveLabel
           expression={paragraph.directiveExpression ?? ""}
@@ -211,7 +213,7 @@ const ClauseParagraphRow = ({ paragraph }: { paragraph: ClauseParagraph }) => {
     paragraph.style?.startsWith("Heading") || paragraph.style === "heading";
 
   return (
-    <p className={`leading-relaxed ${isHeading ? "font-semibold" : ""}`}>
+    <p className={cn("leading-relaxed", isHeading && "font-semibold")}>
       <ParagraphContent paragraph={paragraph} />
     </p>
   );

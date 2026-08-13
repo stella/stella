@@ -49,6 +49,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/components/menu";
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import { buildEntityMentionOption } from "@/components/chat-mention-helpers";
 import { useRequestChatAbout } from "@/components/chat/use-request-chat-about";
@@ -812,10 +813,10 @@ export const RowActions = ({
         content={t("common.actions")}
         render={
           <MenuTrigger
-            className={
+            className={cn(
               triggerClassName ??
-              "opacity-0! transition-opacity group-hover/row:opacity-100!"
-            }
+                "opacity-0! transition-opacity group-hover/row:opacity-100!",
+            )}
             onClick={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
             render={<Button size="icon-xs" variant="ghost" />}

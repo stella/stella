@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/components/button";
 import { TextSeparator } from "@stll/ui/components/separator";
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import { api } from "@/lib/api";
 import { DOCX_MIME, isDocxFile } from "@/lib/consts";
@@ -155,11 +156,12 @@ export const TemplateUpload = ({
   return (
     <div className="flex flex-1 items-center justify-center p-8">
       <div
-        className={`flex w-full max-w-md flex-col items-center gap-4 rounded-xl border-2 border-dashed p-10 transition-[border-color,background-color,box-shadow] duration-200 ${
+        className={cn(
+          "flex w-full max-w-md flex-col items-center gap-4 rounded-xl border-2 border-dashed p-10 transition-[border-color,background-color,box-shadow] duration-200",
           isDragOver
             ? "border-foreground/30 bg-accent/50 shadow-primary/20 shadow-lg"
-            : "border-border shadow-none"
-        }`}
+            : "border-border shadow-none",
+        )}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
         onDrop={handleDrop}

@@ -37,6 +37,7 @@ import {
   SheetTitle,
 } from "@stll/ui/components/sheet";
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import { DocumentIcon } from "@/components/document-icon";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -173,11 +174,11 @@ export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
 
       <div
         aria-busy={isFilterPending}
-        className={
+        className={cn(
           isFilterPending
             ? "opacity-60 transition-opacity duration-150"
-            : "opacity-100 transition-opacity duration-150"
-        }
+            : "opacity-100 transition-opacity duration-150",
+        )}
       >
         <Suspense fallback={<ActivityTimelineSkeleton />}>
           <ActivityTimeline
@@ -387,9 +388,9 @@ const ActivityLoadSentinel = ({
   if (hasError) {
     return (
       <Button
-        className={
-          horizontal ? "mx-4 min-h-11 shrink-0 self-end" : "m-2 min-h-11"
-        }
+        className={cn(
+          horizontal ? "mx-4 min-h-11 shrink-0 self-end" : "m-2 min-h-11",
+        )}
         disabled={isFetching}
         onClick={loadEarlier}
         size="sm"
@@ -405,7 +406,7 @@ const ActivityLoadSentinel = ({
   return (
     <span
       aria-hidden="true"
-      className={horizontal ? "h-px w-px shrink-0" : "block h-px w-px"}
+      className={cn(horizontal ? "h-px w-px shrink-0" : "block h-px w-px")}
       ref={sentinelRef}
     />
   );
@@ -442,11 +443,11 @@ const ActivityTimelineSkeleton = () => (
         {ACTIVITY_SKELETON_WIDTHS.map((width, index) => (
           <div className="w-64 shrink-0" key={width}>
             <div
-              className={
+              className={cn(
                 index === 0
                   ? "bg-muted h-3 w-24 animate-pulse rounded-sm"
-                  : "h-3"
-              }
+                  : "h-3",
+              )}
             />
             <div className="bg-muted mt-2 h-2 w-12 animate-pulse rounded-sm" />
             <div className="relative mt-3 h-3">
@@ -455,7 +456,7 @@ const ActivityTimelineSkeleton = () => (
             </div>
             <div className="mt-3 pe-8">
               <div
-                className={`bg-muted h-3 animate-pulse rounded-sm ${width}`}
+                className={cn("bg-muted h-3 animate-pulse rounded-sm", width)}
               />
               <div className="bg-muted mt-3 h-3 w-40 animate-pulse rounded-sm" />
             </div>
@@ -475,7 +476,7 @@ const ActivityTimelineSkeleton = () => (
           </span>
           <span className="py-3 ps-3 pe-4">
             <span
-              className={`bg-muted block h-3 animate-pulse rounded-sm ${width}`}
+              className={cn("bg-muted block h-3 animate-pulse rounded-sm", width)}
             />
             <span className="bg-muted mt-3 block h-3 w-40 animate-pulse rounded-sm" />
           </span>
@@ -1177,9 +1178,11 @@ const ActivityTriplet = ({ detail, group, size }: ActivityTripletProps) => {
     resolveVisibleActivityTriggerType(item.trigger.type) !== null;
   return (
     <span
-      className={
-        compact ? "min-w-0 text-[13px] leading-5" : "min-w-0 text-sm leading-5"
-      }
+      className={cn(
+        compact
+          ? "min-w-0 text-[13px] leading-5"
+          : "min-w-0 text-sm leading-5",
+      )}
     >
       <span className="block min-h-5 font-medium">
         <Performer item={item} />
@@ -1200,11 +1203,11 @@ const ActivityTriplet = ({ detail, group, size }: ActivityTripletProps) => {
       </span>
       {showProvenance && (
         <span
-          className={
+          className={cn(
             compact
               ? "text-muted-foreground mt-0.5 grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-1.5 text-[11px] leading-4"
-              : "text-muted-foreground mt-0.5 grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-1.5 text-xs leading-4"
-          }
+              : "text-muted-foreground mt-0.5 grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-1.5 text-xs leading-4",
+          )}
         >
           <span aria-hidden="true" />
           <span>

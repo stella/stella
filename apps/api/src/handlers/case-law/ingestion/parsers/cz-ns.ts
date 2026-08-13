@@ -133,7 +133,6 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
     keywords: [],
     statutes: [],
   };
-  // oxlint-disable-next-line no-untyped-updates/no-untyped-updates -- metadata accumulator, not a DB update
   const source: Record<string, unknown> = {};
   let relatedProceedingsTable: TableCell[][] | null = null;
 

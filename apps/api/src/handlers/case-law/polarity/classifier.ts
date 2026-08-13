@@ -201,7 +201,7 @@ const trackSurfaceForm = async (
             ELSE ${caseLawPolarityRules.confidence}
           END
         `,
-          updatedAt: new Date(),
+          updatedAt: sql`now()`,
         },
       });
   });

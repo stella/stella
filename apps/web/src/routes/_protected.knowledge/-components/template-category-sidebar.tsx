@@ -1,6 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
@@ -153,11 +154,12 @@ export const TemplateCategorySidebar = ({
           </div>
           {tags.map((tag) => (
             <button
-              className={`w-full truncate rounded-md px-3 py-1.5 text-start text-sm ${
+              className={cn(
+                "w-full truncate rounded-md px-3 py-1.5 text-start text-sm",
                 selectedTag === tag
                   ? "bg-muted font-medium"
-                  : "hover:bg-muted/50"
-              }`}
+                  : "hover:bg-muted/50",
+              )}
               key={tag}
               onClick={() => onSelectTag(selectedTag === tag ? null : tag)}
               type="button"

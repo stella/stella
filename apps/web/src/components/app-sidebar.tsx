@@ -560,11 +560,11 @@ export const AppSidebar = (props: AppSidebarProps) => {
       {/* Stella logo header */}
       <SidebarHeader className="h-12 border-b p-0">
         <div
-          className={
+          className={cn(
             isCollapsed
               ? "flex h-full items-center justify-center"
-              : "flex h-full items-center justify-between ps-3 pe-2"
-          }
+              : "flex h-full items-center justify-between ps-3 pe-2",
+          )}
         >
           {!isCollapsed && <StellaWordmark className="h-5 w-auto" />}
           <Tooltip
@@ -847,9 +847,9 @@ const NavContextMenu = ({
           )}
           {config.recents?.map((item) => (
             <MenuItem
-              className={
-                item.variant === "destructive" ? "text-destructive" : undefined
-              }
+              className={cn(
+                item.variant === "destructive" && "text-destructive",
+              )}
               key={item.id}
               onClick={item.onClick}
             >

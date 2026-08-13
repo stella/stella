@@ -4,8 +4,11 @@ import path from "node:path";
 import ts from "typescript";
 
 const SOURCE_DIRECTORY = `${path.sep}src${path.sep}`;
-const BETTER_RESULT_PACKAGE = `${path.sep}better-result${path.sep}`;
-const RESULT_VARIANTS = new Set(["Err", "Ok"]);
+const BETTER_RESULT_PACKAGE = `${path.sep}node_modules${path.sep}better-result${path.sep}`;
+const RESULT_VARIANT_STATUS = new Map([
+  ["Err", "error"],
+  ["Ok", "ok"],
+]);
 const TEST_FILE_PATTERN = /(?:\.test\.|\.spec\.|\/tests\/|\/__tests__\/)/u;
 const RESULT_IMPORT_PATTERN =
   /import\s+(?:type\s+)?\{[^}]*\bResult\b[^}]*\}\s*from\s*["']better-result["']/su;
@@ -45,7 +48,10 @@ export const scanResultConsumption = ({
         const discarded = unwrapDiscardedExpression(node.expression);
         if (
           !isAssignmentExpression(discarded) &&
-          isResultType(checker.getTypeAtLocation(discarded))
+          isBetterResultValueType(
+            checker,
+            checker.getTypeAtLocation(discarded),
+          )
         ) {
           diagnostics.push(
             createDiagnostic({
@@ -124,17 +130,66 @@ const unwrapDiscardedExpression = (
   return expression;
 };
 
-const isResultType = (type: ts.Type): boolean => {
-  if (type.isUnion()) {
-    return type.types.some(isResultType);
-  }
-
+const isBetterResultVariant = (
+  checker: ts.TypeChecker,
+  type: ts.Type,
+): boolean => {
   const symbol = type.aliasSymbol ?? type.getSymbol();
-  if (symbol === undefined || !RESULT_VARIANTS.has(symbol.getName())) {
+  const expectedStatus =
+    symbol === undefined
+      ? undefined
+      : RESULT_VARIANT_STATUS.get(symbol.getName());
+  if (symbol === undefined || expectedStatus === undefined) {
     return false;
   }
 
-  return symbol.declarations?.some(isBetterResultDeclaration) === true;
+  if (symbol.declarations?.some(isBetterResultDeclaration) !== true) {
+    return false;
+  }
+
+  const statusProperty = type.getProperty("status");
+  const statusDeclaration =
+    statusProperty?.valueDeclaration ?? statusProperty?.declarations?.at(0);
+  if (statusProperty === undefined || statusDeclaration === undefined) {
+    return false;
+  }
+
+  const statusType = checker.getTypeOfSymbolAtLocation(
+    statusProperty,
+    statusDeclaration,
+  );
+  return statusType.isStringLiteral() && statusType.value === expectedStatus;
+};
+
+const isBetterResultType = (
+  checker: ts.TypeChecker,
+  type: ts.Type,
+): boolean => {
+  if (type.isUnionOrIntersection()) {
+    return type.types.some((part) => isBetterResultType(checker, part));
+  }
+
+  // Require three independent signals before reporting: the public variant
+  // name, a declaration owned by better-result, and its matching literal
+  // status discriminant. Structural lookalikes and local Ok/Err classes can
+  // satisfy at most two of those signals.
+  return isBetterResultVariant(checker, type);
+};
+
+const isBetterResultValueType = (
+  checker: ts.TypeChecker,
+  type: ts.Type,
+): boolean => {
+  if (isBetterResultType(checker, type)) {
+    return true;
+  }
+
+  const awaitedType = checker.getAwaitedType(type);
+  return (
+    awaitedType !== undefined &&
+    awaitedType !== type &&
+    isBetterResultType(checker, awaitedType)
+  );
 };
 
 const isBetterResultDeclaration = (declaration: ts.Declaration): boolean =>

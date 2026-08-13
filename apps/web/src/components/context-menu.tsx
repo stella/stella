@@ -10,6 +10,7 @@ import {
   MenuSubPopup,
   MenuSubTrigger,
 } from "@stll/ui/components/menu";
+import { cn } from "@stll/ui/lib/utils";
 
 export type ContextMenuAction = {
   label: string;
@@ -91,9 +92,9 @@ const ContextMenuActionItem = ({ action }: { action: ContextMenuAction }) => {
     <>
       {separator}
       <MenuItem
-        className={
-          action.variant === "destructive" ? "text-destructive" : undefined
-        }
+        className={cn(
+          action.variant === "destructive" && "text-destructive",
+        )}
         disabled={action.disabled === true}
         onClick={action.onClick}
       >
