@@ -345,15 +345,20 @@ const inspectDiscardedExpression = ({
       !isCollectionCallbackInvocation(expression, callee, checker)
     ) {
       const atSelection = inlineArrayAtSelection(expression);
-      inspectDiscardedContainerSelection({
-        checker,
-        expression: callee,
-        report,
-        selectionOverride:
-          atSelection === null
-            ? undefined
-            : { kind: "index", value: atSelection.index },
-      });
+      if (atSelection === null) {
+        inspectDiscardedContainerSelection({
+          checker,
+          expression: callee,
+          report,
+        });
+      } else {
+        inspectDiscardedContainerSelection({
+          checker,
+          expression: callee,
+          report,
+          selectionOverride: { kind: "index", value: atSelection.index },
+        });
+      }
     }
   }
 
@@ -398,11 +403,10 @@ const propertyName = (property: ts.ObjectLiteralElementLike): string | null => {
     return null;
   }
   const name = property.name;
-  return ts.isIdentifier(name) || ts.isStringLiteralLike(name)
-    ? name.text
-    : ts.isNumericLiteral(name)
-      ? name.text
-      : null;
+  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name)) {
+    return name.text;
+  }
+  return ts.isNumericLiteral(name) ? name.text : null;
 };
 
 const inspectDiscardedContainerSelection = ({
