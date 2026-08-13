@@ -119,10 +119,10 @@ describe("Result consumption guard", () => {
       ({ direct: parse(), nested: { result: asyncWrapper() }, list: [parse()] });
       (parse(), "statement tail");
       const retainedTail = (parse(), "assigned tail");
-      `discarded interpolation: \${parse()}`;
+      \`discarded interpolation: \${parse()}\`;
 
       const retainedObject = { result: parse() };
-      const retainedTemplate = `retained interpolation: \${parse()}`;
+      const retainedTemplate = \`retained interpolation: \${parse()}\`;
       const retainedFinal = (0, parse());
       consume({ result: parse() });
       void retainedTail;
@@ -213,7 +213,7 @@ describe("Result consumption guard", () => {
       structural();
       ({ ok: localOk(), err: localErr(), structural: structural() });
       (localOk(), "statement tail");
-      `discarded interpolation: \${structural()}`;
+      \`discarded interpolation: \${structural()}\`;
       [structural(), Promise.resolve(structural())];
       await Promise.all([Promise.resolve(structural())]);
       await Promise.allSettled([Promise.resolve(structural())]);
