@@ -399,6 +399,31 @@ const documentVersionEntryProjection = v.strictObject({
 const readDocumentEntityId = () =>
   chatEntityRef({ from: "inputEntity", param: "entity_id" });
 
+// Stored tool results can predate the implementation-neutral MCP state. Keep
+// accepting their former discriminator values so historical chats still load;
+// document-tools.ts emits only the generic values for new results.
+const documentProcessingKindProjection = v.picklist([
+  "document-processing",
+  "native-extraction",
+  "ocr",
+]);
+
+const documentProcessingRemediationProjection = v.variant("type", [
+  v.strictObject({
+    type: v.literal("action"),
+    tool: v.literal("invoke_capability"),
+    // Internal chat cannot invoke generic capabilities. Strip arguments
+    // defensively if this unreachable branch is ever returned.
+    arguments: strippedField(),
+  }),
+  v.strictObject({
+    type: v.literal("escalation"),
+    requiredScope: v.literal("stella:matters_write"),
+    requiredPermission: v.literal("entity:update"),
+    instruction: v.string(),
+  }),
+]);
+
 const documentContentStateProjection = v.variant("status", [
   v.strictObject({ status: v.literal("not_applicable") }),
   v.strictObject({
@@ -409,32 +434,23 @@ const documentContentStateProjection = v.variant("status", [
   }),
   v.strictObject({
     status: v.literal("pending"),
-    processingKind: v.picklist(["native-extraction", "ocr"]),
+    processingKind: documentProcessingKindProjection,
     runId: v.nullable(passthroughId()),
     sourceVersionId: passthroughId(),
   }),
   v.strictObject({
+    status: v.literal("requires_processing"),
+    sourceVersionId: passthroughId(),
+    remediation: documentProcessingRemediationProjection,
+  }),
+  v.strictObject({
     status: v.literal("requires_ocr"),
     sourceVersionId: passthroughId(),
-    remediation: v.variant("type", [
-      v.strictObject({
-        type: v.literal("action"),
-        tool: v.literal("invoke_capability"),
-        // Internal chat cannot invoke generic capabilities. Strip arguments
-        // defensively if this unreachable branch is ever returned.
-        arguments: strippedField(),
-      }),
-      v.strictObject({
-        type: v.literal("escalation"),
-        requiredScope: v.literal("stella:matters_write"),
-        requiredPermission: v.literal("entity:update"),
-        instruction: v.string(),
-      }),
-    ]),
+    remediation: documentProcessingRemediationProjection,
   }),
   v.strictObject({
     status: v.literal("failed"),
-    processingKind: v.picklist(["native-extraction", "ocr"]),
+    processingKind: documentProcessingKindProjection,
     runId: passthroughId(),
     sourceVersionId: passthroughId(),
     errorCode: v.nullable(v.string()),
