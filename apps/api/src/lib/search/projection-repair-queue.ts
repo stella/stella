@@ -50,6 +50,13 @@ const SEARCH_PROJECTION_REPAIR_CONCURRENCY = 4;
 
 const REPAIR_RETRY_BASE_SECONDS = 60;
 const REPAIR_RETRY_MAX_SECONDS = 6 * 60 * 60;
+/**
+ * A repair that fails this many times is parked (`next_attempt_at =
+ * infinity`): the claim query never picks it up again, so a permanently
+ * failing row cannot loop. A later real edit re-marks the row, which resets
+ * the schedule and un-parks it.
+ */
+const REPAIR_MAX_ATTEMPTS = 8;
 
 const SEARCH_PROJECTION_KIND = {
   contact: "contact",
@@ -282,17 +289,30 @@ const settleFailed = async (
   db: SearchProjectionRepairDb,
   claim: ClaimedRepair,
 ): Promise<void> => {
-  await db
+  const updated = await db
     .update(searchProjectionRepairQueue)
     .set({
       attempts: sql`${searchProjectionRepairQueue.attempts} + 1`,
-      nextAttemptAt: sql`now() + make_interval(secs => LEAST(
-        ${REPAIR_RETRY_BASE_SECONDS}::double precision
-          * power(2, ${searchProjectionRepairQueue.attempts}),
-        ${REPAIR_RETRY_MAX_SECONDS}::double precision
-      ))`,
+      nextAttemptAt: sql`CASE
+        WHEN ${searchProjectionRepairQueue.attempts} + 1 >= ${REPAIR_MAX_ATTEMPTS}
+          THEN 'infinity'::timestamptz
+        ELSE now() + make_interval(secs => LEAST(
+          ${REPAIR_RETRY_BASE_SECONDS}::double precision
+            * power(2, ${searchProjectionRepairQueue.attempts}),
+          ${REPAIR_RETRY_MAX_SECONDS}::double precision
+        ))
+      END`,
     })
-    .where(claimedRow(claim));
+    .where(claimedRow(claim))
+    .returning({ attempts: searchProjectionRepairQueue.attempts });
+  const attempts = updated.at(0)?.attempts ?? 0;
+  if (attempts >= REPAIR_MAX_ATTEMPTS) {
+    logger.error("search.projection_repair_parked", {
+      attempts,
+      searchProjectionKind: claim.kind,
+      searchProjectionSourceId: claim.sourceId,
+    });
+  }
 };
 
 type RepairRun = {

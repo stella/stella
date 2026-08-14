@@ -351,14 +351,14 @@ test("strips NUL bytes from indexed title and text", async () => {
 
   await upsertSearchDocument(toSafeId<"entity">("entity_1"));
 
-  const query = executeMock.mock.calls.at(0)?.[0];
-  expect(query).toBeDefined();
-  if (!query) {
-    return;
-  }
-  const compiled = new PgDialect().sqlToQuery(query);
-  const stringParams = compiled.params.filter(
-    (param): param is string => typeof param === "string",
+  // Sweep every execution: the preview-passage writes bind derived text in
+  // later queries, and a NUL surviving into any of them poisons the entity
+  // just the same.
+  expect(executeMock.mock.calls.length).toBeGreaterThan(0);
+  const stringParams = executeMock.mock.calls.flatMap(([executedQuery]) =>
+    new PgDialect()
+      .sqlToQuery(executedQuery)
+      .params.filter((param): param is string => typeof param === "string"),
   );
   expect(stringParams.some((param) => param.includes("Extracted text"))).toBe(
     true,
