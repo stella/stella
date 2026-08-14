@@ -122,6 +122,17 @@ export const repairSearchSemanticTimestamps = async ({
       LEFT JOIN search_documents sd ON sd.entity_id = e.id
       WHERE (${state.cursor}::uuid IS NULL OR e.id > ${state.cursor}::uuid)
         AND e.current_version_id IS NOT NULL
+        -- A parked repair (next_attempt_at = infinity) is a permanently
+        -- failing projection; retrying it inline every pass would loop
+        -- forever and keep verification dirty. The queue owns its fate: a
+        -- real edit re-marks the row and un-parks it.
+        AND NOT EXISTS (
+          SELECT 1
+          FROM search_projection_repair_queue parked
+          WHERE parked.kind = 'entity'
+            AND parked.source_id = e.id
+            AND parked.next_attempt_at = 'infinity'::timestamptz
+        )
       ORDER BY e.id
       LIMIT ${REPAIR_BATCH_SIZE}
     )
@@ -340,13 +351,22 @@ export const repairSearchSemanticTimestampsTask: SchedulerTask = async ({
     case "restart":
       logger.info("search.semantic_timestamp_repair.verification_started");
       return;
-    case "progress":
-      logger.info("search.semantic_timestamp_repair.progress", {
+    case "progress": {
+      const progress = {
         cursor: outcome.cursor,
         failed: outcome.failed,
         repaired: outcome.repaired,
-      });
+      };
+      // A failed reindex repeats on every pass until the entity repairs or
+      // parks, so it must reach the ERROR sink operators watch, not only
+      // exception telemetry.
+      if (outcome.failed > 0) {
+        logger.error("search.semantic_timestamp_repair.progress", progress);
+      } else {
+        logger.info("search.semantic_timestamp_repair.progress", progress);
+      }
       return;
+    }
     default: {
       const _exhaustive: never = outcome;
       panic(

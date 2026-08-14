@@ -246,6 +246,41 @@ test("a drained repair removes its row; a failed one backs off out of the batch"
   expect(await queueRows()).toHaveLength(1);
 });
 
+test("a permanently failing repair parks at the attempt cap and un-parks on a real edit", async () => {
+  const matter = await seedWorkspace(workspaceId(1));
+  const poison = await seedEntity(entityId(10), matter);
+
+  await enqueueEntitySearchRepairs(asTx(), [poison]);
+  // One failure away from the cap (REPAIR_MAX_ATTEMPTS = 8), due now.
+  await db
+    .update(searchProjectionRepairQueue)
+    .set({ attempts: 7, nextAttemptAt: new Date() })
+    .where(eq(searchProjectionRepairQueue.sourceId, poison));
+
+  const capping = emptyLog();
+  capping.failing.add(poison);
+  expect(
+    await drainSearchProjectionRepairQueue({ deps: repairDeps(capping) }),
+  ).toEqual({ failed: 1, repaired: 0 });
+  expect((await queueRows()).at(0)?.attempts).toBe(8);
+
+  // Parked: never claimable again, even long after any finite backoff.
+  const parked = emptyLog();
+  parked.failing.add(poison);
+  expect(
+    await drainSearchProjectionRepairQueue({ deps: repairDeps(parked) }),
+  ).toEqual({ failed: 0, repaired: 0 });
+  expect(await queueRows()).toHaveLength(1);
+
+  // A real edit re-marks the row, resetting the schedule and un-parking it.
+  await enqueueEntitySearchRepairs(asTx(), [poison]);
+  const fresh = emptyLog();
+  expect(
+    await drainSearchProjectionRepairQueue({ deps: repairDeps(fresh) }),
+  ).toEqual({ failed: 0, repaired: 1 });
+  expect(await queueRows()).toEqual([]);
+});
+
 test("a queued source that no longer exists is dropped, not resurrected", async () => {
   const matter = await seedWorkspace(workspaceId(1));
   const document = await seedEntity(entityId(10), matter);

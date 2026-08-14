@@ -269,13 +269,24 @@ const buildSearchDocument = async (
  * Build a search document and upsert it into `search_documents`,
  * computing the `tsv` column with the per-document regconfig.
  */
+// Postgres `text` and `tsvector` reject NUL (`\u0000`). Extracted document
+// text reaches this boundary through encrypted `bytea`, which preserves NULs
+// from binary-ish sources, so the projection write is the one place every
+// producer funnels through — strip here, not at each producer.
+const stripNulBytes = (text: string): string => text.replaceAll("\u0000", "");
+
 export const upsertSearchDocument = async (
   entityId: SafeId<"entity">,
 ): Promise<void> => {
-  const doc = await buildSearchDocument(entityId);
-  if (!doc) {
+  const built = await buildSearchDocument(entityId);
+  if (!built) {
     return;
   }
+  const doc = {
+    ...built,
+    searchableText: stripNulBytes(built.searchableText),
+    title: stripNulBytes(built.title),
+  };
 
   const regconfig = doc.language ?? "simple";
   const previewGeneration = Bun.randomUUIDv7();

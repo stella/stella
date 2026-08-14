@@ -322,6 +322,53 @@ test("excludes stale extracted text and fences its observed provenance", async (
   );
 });
 
+// Postgres `text` rejects NUL; extracted text arrives via encrypted bytea
+// which preserves it, so the projection write must strip it or the entity
+// becomes permanently unindexable (every repair retry fails the same way).
+test("strips NUL bytes from indexed title and text", async () => {
+  findFirstMock.mockResolvedValueOnce({
+    ...entityRow,
+    name: "Closing\u0000 memo",
+    currentVersion: {
+      createdAt: entityRow.currentVersion.createdAt,
+      fields: [currentFileField],
+      id: entityRow.currentVersion.id,
+    },
+    extractedContent: {
+      ciphertext: Buffer.from("ciphertext"),
+      extractedAt,
+      iv: Buffer.from("iv"),
+      language: "en",
+      sourceEntityVersionId: entityRow.currentVersion.id,
+      sourceFieldId: currentFileField.id,
+      sourceFileId: currentFileField.content.id,
+      sourceSha256Hex: currentFileField.content.sha256Hex,
+    },
+  });
+  decryptContentMock.mockResolvedValueOnce("Extracted\u0000 text\u0000");
+  const { upsertSearchDocument } =
+    await import("@/api/lib/search/index-entity");
+
+  await upsertSearchDocument(toSafeId<"entity">("entity_1"));
+
+  // Sweep every execution: the preview-passage writes bind derived text in
+  // later queries, and a NUL surviving into any of them poisons the entity
+  // just the same.
+  expect(executeMock.mock.calls.length).toBeGreaterThan(0);
+  const stringParams = executeMock.mock.calls.flatMap(([executedQuery]) =>
+    new PgDialect()
+      .sqlToQuery(executedQuery)
+      .params.filter((param): param is string => typeof param === "string"),
+  );
+  expect(stringParams.some((param) => param.includes("Extracted text"))).toBe(
+    true,
+  );
+  expect(stringParams.some((param) => param.includes("Closing memo"))).toBe(
+    true,
+  );
+  expect(stringParams.some((param) => param.includes("\u0000"))).toBe(false);
+});
+
 test("preserves pre-provenance extracted text until a fenced writer replaces it", async () => {
   findFirstMock.mockResolvedValueOnce({
     ...entityRow,
