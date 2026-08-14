@@ -24,7 +24,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { upsertContactSearchDocument } from "@/api/lib/search/index-global";
+import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
 const onlyDigits = (value: string): string => value.replaceAll(/\D/gu, "");
 
@@ -185,10 +185,12 @@ const importContacts = createSafeRootHandler(
       );
     }
 
-    for (const result of results) {
-      if (result.status === "created") {
-        upsertContactSearchDocument(result.contactId).catch(captureError);
-      }
+    const createdContactIds = results
+      .filter((result) => result.status === "created")
+      .map((result) => result.contactId);
+
+    if (createdContactIds.length > 0) {
+      flushContactSearchRepairs(createdContactIds).catch(captureError);
     }
 
     return Result.ok({ results });
