@@ -46,7 +46,7 @@
         "@firecrawl/anydoc": "0.1.7",
         "@google/genai": "^2.16.0",
         "@libpdf/core": "catalog:",
-        "@litko/yara-x": "^0.7.0",
+        "@litko/yara-x": "^0.7.1",
         "@modelcontextprotocol/server": "2.0.0",
         "@opentelemetry/api-logs": "^0.221.0",
         "@opentelemetry/exporter-logs-otlp-http": "^0.221.0",
@@ -1578,19 +1578,19 @@
 
     "@lifeomic/attempt": ["@lifeomic/attempt@3.1.0", "", {}, "sha512-QZqem4QuAnAyzfz+Gj5/+SLxqwCAw2qmt7732ZXodr6VDWGeYLG6w1i/vYLa55JQM9wRuBKLmXmiZ2P0LtE5rw=="],
 
-    "@litko/yara-x": ["@litko/yara-x@0.7.0", "", { "optionalDependencies": { "@litko/yara-x-darwin-arm64": "0.7.0", "@litko/yara-x-darwin-x64": "0.7.0", "@litko/yara-x-linux-arm64-gnu": "0.7.0", "@litko/yara-x-linux-x64-gnu": "0.7.0", "@litko/yara-x-win32-arm64-msvc": "0.7.0", "@litko/yara-x-win32-x64-msvc": "0.7.0" } }, "sha512-5BG/HXphtbHKrmo6hPpqFdfc6ruvXCJmwzNd4UZ8F+F++D+2oD2r+pqLoWlCJ+8GFxMCXyVvu4FG62u5dV7o3g=="],
+    "@litko/yara-x": ["@litko/yara-x@0.7.1", "", { "optionalDependencies": { "@litko/yara-x-darwin-arm64": "0.7.1", "@litko/yara-x-darwin-x64": "0.7.1", "@litko/yara-x-linux-arm64-gnu": "0.7.1", "@litko/yara-x-linux-x64-gnu": "0.7.1", "@litko/yara-x-win32-arm64-msvc": "0.7.1", "@litko/yara-x-win32-x64-msvc": "0.7.1" } }, "sha512-UhFmplVeX1aYqlqZsRUUsTDhnhMPpW65MVD/r3fkia4cBexuYYFeKN/nEVwymOkxJSQUsbFLmmOu5MBmZZBKWA=="],
 
-    "@litko/yara-x-darwin-arm64": ["@litko/yara-x-darwin-arm64@0.7.0", "", { "os": "darwin", "cpu": "arm64" }, "sha512-G9QoQGS9+uJPReb9/6/8Kffahl7xEmpkFJc/4NbbTX0qG3dADzAl63R+Yj2KcMMD0odrAxfjUzD7BjjYVArCcw=="],
+    "@litko/yara-x-darwin-arm64": ["@litko/yara-x-darwin-arm64@0.7.1", "", { "os": "darwin", "cpu": "arm64" }, "sha512-6UKT/cVNDeRa1xSrAcS6ImxHpbXsST+2gbxYiygRBI/uCyAs1SrDCKeDCzvpfaai0eielsy+Bjz9y7O+KnMc/w=="],
 
-    "@litko/yara-x-darwin-x64": ["@litko/yara-x-darwin-x64@0.7.0", "", { "os": "darwin", "cpu": "x64" }, "sha512-zJ4y0ho+0gJUVyx7zVnYdhIGd/xFZj6I7afyu6AndWplBxOpVvRsnzz98BsX6IUWUqe7c0omtuedHEi1u3bc5g=="],
+    "@litko/yara-x-darwin-x64": ["@litko/yara-x-darwin-x64@0.7.1", "", { "os": "darwin", "cpu": "x64" }, "sha512-AP+iwg675nPgVQIJHr5BakOfl6lhC+q6roVAfkRjHSqefZjIKaheGEFr/cr9bm4fjND7Km3wTAPiwNJxqTZ08w=="],
 
-    "@litko/yara-x-linux-arm64-gnu": ["@litko/yara-x-linux-arm64-gnu@0.7.0", "", { "os": "linux", "cpu": "arm64" }, "sha512-BFLUr/QNUdGQEZTwq1cvuwE1W0/3rzgOXUH03HZun/xQ5QBUfj6AmLTTleFZ9nZ6E7IdhAGtHcSfS7ee4kZLOA=="],
+    "@litko/yara-x-linux-arm64-gnu": ["@litko/yara-x-linux-arm64-gnu@0.7.1", "", { "os": "linux", "cpu": "arm64" }, "sha512-sae3btehDvCLYEa9aYgd3gpT8CtJcMd4Ak0v1gSFUefMkXqvUDzfxPl+bwp6PD2p1Fi7OGcZVCNlrzKyL4AsOw=="],
 
-    "@litko/yara-x-linux-x64-gnu": ["@litko/yara-x-linux-x64-gnu@0.7.0", "", { "os": "linux", "cpu": "x64" }, "sha512-OZG/0NN007jeZr5VWIi94EQynen/1cb0+Nsj5cLo9akezHUbyuQF17n2kw4EHcLFOKq2p5Mxh8rRweHfS5tebA=="],
+    "@litko/yara-x-linux-x64-gnu": ["@litko/yara-x-linux-x64-gnu@0.7.1", "", { "os": "linux", "cpu": "x64" }, "sha512-J6XKNFE0KN4MZj3c9wggqJ6yCyd0nd6OFhgqe2prkjogXE21Oy0fYtsynPuylDHRsdckzwTIDzs/3g0SVoyg7w=="],
 
-    "@litko/yara-x-win32-arm64-msvc": ["@litko/yara-x-win32-arm64-msvc@0.7.0", "", { "os": "win32", "cpu": "arm64" }, "sha512-ibWj0EXG+Z5oiTGYgMF2/1XcjsIoJEYuV7K1maxpJFYzyMK9i9F8aRU2yQabd0ghNcNRi9OVxVKuQylRLPlsXw=="],
+    "@litko/yara-x-win32-arm64-msvc": ["@litko/yara-x-win32-arm64-msvc@0.7.1", "", { "os": "win32", "cpu": "arm64" }, "sha512-n5pAFjcWZEBVj/8FZ1aXH5M65X8BNNdKvgSjUrdHpkiMpCG7Voauzxo5Q0gavlt75sVUGqQ4kBjMhiqPJhCJFg=="],
 
-    "@litko/yara-x-win32-x64-msvc": ["@litko/yara-x-win32-x64-msvc@0.7.0", "", { "os": "win32", "cpu": "x64" }, "sha512-cjQU/jjE9OVbZr1QR4P6EegPwVjTDgGZom8J8G/FJ78B3jx9WXthUsUGE4CGY5ls3PbhIwXU+bSuNlkJluYVSQ=="],
+    "@litko/yara-x-win32-x64-msvc": ["@litko/yara-x-win32-x64-msvc@0.7.1", "", { "os": "win32", "cpu": "x64" }, "sha512-ePw5oaQDWpFINL2nQllbkqtlSrmoJPK9jJKXZ6/Tkiw8naG+qfgpjRARhEPPZfXroU6rS3XroMCRVsQKklAI1g=="],
 
     "@manypkg/find-root": ["@manypkg/find-root@1.1.0", "", { "dependencies": { "@babel/runtime": "^7.5.5", "@types/node": "^12.7.1", "find-up": "^4.1.0", "fs-extra": "^8.1.0" } }, "sha512-mki5uBvhHzO8kYYix/WRy2WX8S3B5wdVSc9D6KcU5lQNglP2yt58/VfLuAK49glRXChosY8ap2oJ1qgma3GUVA=="],
 
