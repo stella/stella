@@ -957,6 +957,7 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
             new IngestionStallError({
               message: `Source made no progress for ${stall.sustained} consecutive cycles`,
               adapterKey,
+              code: adapterKey,
               noProgressCycles: stall.sustained,
             }),
             { adapterKey },
