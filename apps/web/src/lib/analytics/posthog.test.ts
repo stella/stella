@@ -131,7 +131,7 @@ describe("PostHog browser analytics adapter", () => {
       }),
     ).toEqual({ event: WEB_ANALYTICS_EVENTS.pageViewed });
     expect(initOptions?.before_send({ event: "$autocapture" })).toBeNull();
-    expect(initOptions?.before_send({ event: "$pageview" })).toBeNull();
+    expect(initOptions?.before_send({ event: "$pageleave" })).toBeNull();
     expect(initOptions?.before_send({ event: "$heatmap" })).toBeNull();
   });
 
@@ -688,12 +688,21 @@ describe("PostHog browser analytics adapter", () => {
       "https://posthog.test",
     );
 
+    Object.defineProperty(globalThis, "location", {
+      configurable: true,
+      value: new URL("https://app.example.test"),
+    });
     analytics.capturePageViewed({
-      path: "/cases",
+      path: "/workspaces/$workspaceId",
     });
 
+    // The route template overrides the SDK's own URL properties so resolved
+    // resource ids never reach analytics, while web analytics still
+    // aggregates by page.
     expect(captureMock).toHaveBeenCalledWith(WEB_ANALYTICS_EVENTS.pageViewed, {
-      path: "/cases",
+      $current_url: "https://app.example.test/workspaces/$workspaceId",
+      $pathname: "/workspaces/$workspaceId",
+      path: "/workspaces/$workspaceId",
     });
   });
 

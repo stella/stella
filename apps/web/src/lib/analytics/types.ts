@@ -3,7 +3,9 @@ import type { ErrorReference } from "@/lib/analytics/error-reference";
 export const WEB_ANALYTICS_EVENTS = {
   exception: "$exception",
   identify: "$identify",
-  pageViewed: "page_viewed",
+  // The standard event name, so PostHog web analytics aggregates our page
+  // views; the payload still carries route templates, never resolved URLs.
+  pageViewed: "$pageview",
   guideStepSkipped: "guide_step_skipped",
   routeErrorRecovery: "route_error_recovery",
 } as const;
