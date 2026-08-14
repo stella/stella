@@ -9,11 +9,15 @@ import {
   type CycleOutcome,
   type CycleResult,
   INITIAL_CADENCE_STREAKS,
+  INITIAL_STALL_ALERT,
   QUIET_THRESHOLD,
+  type StallAlertState,
+  type StallAlertStep,
   UNPRODUCTIVE_THRESHOLD,
   classifyCycleProductivity,
   cycleMadeProgress,
   stepCadence,
+  stepStallAlert,
 } from "./cycle-progress";
 
 const OUTCOMES = Object.values(CYCLE_OUTCOME) satisfies readonly CycleOutcome[];
@@ -432,5 +436,58 @@ describe("stepCadence", () => {
     expect([...reached].toSorted()).toEqual(
       Object.values(CYCLE_CADENCE).toSorted(),
     );
+  });
+});
+
+describe("stepStallAlert", () => {
+  const THRESHOLD = 5;
+
+  /** Fold a progress sequence, returning every step in order. */
+  const runStalls = (verdicts: readonly boolean[]): StallAlertStep[] => {
+    let state: StallAlertState = INITIAL_STALL_ALERT;
+    return verdicts.map((madeProgress) => {
+      const step = stepStallAlert(state, madeProgress, THRESHOLD);
+      state = step.state;
+      return step;
+    });
+  };
+
+  test("a long outage logs every crossing but captures exactly once", () => {
+    const steps = runStalls(Array.from({ length: THRESHOLD * 3 }, () => false));
+
+    const sustained = steps.filter((step) => step.sustained !== null);
+    expect(sustained).toHaveLength(3);
+    expect(sustained.map((step) => step.sustained)).toEqual([
+      THRESHOLD,
+      THRESHOLD,
+      THRESHOLD,
+    ]);
+    expect(steps.filter((step) => step.capture)).toHaveLength(1);
+    expect(steps.findIndex((step) => step.capture)).toBe(THRESHOLD - 1);
+  });
+
+  test("below the threshold nothing is signalled", () => {
+    const steps = runStalls(Array.from({ length: THRESHOLD - 1 }, () => false));
+
+    expect(steps.every((step) => step.sustained === null)).toBe(true);
+    expect(steps.every((step) => !step.capture)).toBe(true);
+  });
+
+  test("progress re-arms the capture for the next episode", () => {
+    const outage = Array.from({ length: THRESHOLD }, () => false);
+    const steps = runStalls([...outage, true, ...outage]);
+
+    expect(steps.filter((step) => step.capture)).toHaveLength(2);
+  });
+
+  test("intermittent progress keeps the streak from accumulating", () => {
+    const flapping = Array.from(
+      { length: THRESHOLD * 4 },
+      (_, i) => i % 2 === 0,
+    );
+    const steps = runStalls(flapping);
+
+    expect(steps.every((step) => step.sustained === null)).toBe(true);
+    expect(steps.every((step) => !step.capture)).toBe(true);
   });
 });

@@ -1946,14 +1946,15 @@ export const runIngestionPipeline = async ({
 
     const observedPage = observedPageResult.value;
     if (observedPage.type === "fetch-error") {
-      captureError(observedPage.error, {
-        adapterKey: adapter.key,
-        cursor: cursor ?? "",
-      });
+      // Expected operational failure (a source outage fails every attempt),
+      // so no per-attempt exception capture: this halt is recorded in the
+      // ingestion-events row and the structured log, and the runner captures
+      // one exception per sustained stall episode instead.
       haltReason = `Page fetch failed: ${observedPage.error.message}`;
       logger.error("case_law.ingestion.adapter_halted", {
         adapterKey: adapter.key,
         cursor: cursor ?? "",
+        httpStatus: String(observedPage.error.httpStatus ?? ""),
         reason: haltReason,
         inserted,
         skipped,

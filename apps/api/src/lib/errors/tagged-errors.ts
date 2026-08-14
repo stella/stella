@@ -332,6 +332,17 @@ export class AdapterFetchError extends TaggedError("AdapterFetchError")<{
   cause?: unknown;
 }> {}
 
+/**
+ * One source made no progress for a sustained run of ingestion cycles.
+ * Captured once per stall episode; the per-cycle record lives in the
+ * ingestion-events table and the structured logs.
+ */
+export class IngestionStallError extends TaggedError("IngestionStallError")<{
+  message: string;
+  adapterKey: string;
+  noProgressCycles: number;
+}> {}
+
 export const SUBPROCESS_TERMINATION_REASON = {
   timeout: "timeout",
   cancelled: "cancelled",
