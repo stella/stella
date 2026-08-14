@@ -16,6 +16,8 @@ export const CANARY_ORGANIZATION_ID = "organization_agent_canary";
 export const CANARY_RUN_ID = "run_agent_canary";
 export const CANARY_READ_MARKER = "STELLA_AGENT_CANARY_READ_OK";
 export const CANARY_WRITE_MARKER = "STELLA_AGENT_CANARY_WRITE_OK";
+export const CANARY_COMPLETION_MARKER = "CANARY_COMPLETE";
+export const CANARY_FINISH_TOOL_NAME = "canary_finish";
 export const CANARY_AUDIENCE = "http://stella-agent-mcp-canary:8787/mcp";
 export const CANARY_ISSUER = "https://agent-canary.invalid";
 export const CANARY_SCOPE = "stella:read stella:documents_write";
@@ -240,7 +242,7 @@ const toolDefinitions = [
     },
   },
   {
-    name: "canary_finish",
+    name: CANARY_FINISH_TOOL_NAME,
     description:
       "Finish the CI canary only after the allowed read, allowed write, and denied cross-workspace read all completed.",
     inputSchema: {
@@ -347,7 +349,7 @@ const handleToolCall = ({
     return toolResult("Write recorded with user, organization, run, and time.");
   }
 
-  if (name === "canary_finish") {
+  if (name === CANARY_FINISH_TOOL_NAME) {
     const expected = ["read_allowed", "write_allowed", "read_denied"];
     const actual = state.events.map((event) => event.type);
     if (
@@ -364,7 +366,7 @@ const handleToolCall = ({
       at: now,
       ...actor,
     });
-    return toolResult("CANARY_COMPLETE");
+    return toolResult(CANARY_COMPLETION_MARKER);
   }
 
   return undefined;
