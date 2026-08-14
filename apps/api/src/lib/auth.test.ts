@@ -11,6 +11,7 @@ import {
 import { member, organization, user } from "@/api/db/auth-schema";
 import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
 import {
+  AUTHORITATIVE_SESSION_PATHS,
   assertNewAccountEmailAllowedForCreation,
   ensureDisplayName,
   getEmailOtpMinimumResponseDuration,
@@ -21,6 +22,7 @@ import {
   NEW_ACCOUNT_OTP_RATE_LIMIT_MODE,
   runEmailOtpRequestOnResponseSchedule,
   resolveMemberAuthorization,
+  resolveAuthoritativeSessionForSensitiveAuthPath,
   resolveWorkspaceRealtimeAudience,
   SESSION_COOKIE_CACHE_MAX_AGE_SECONDS,
   TWO_FACTOR_MANAGE_PATHS,
@@ -406,6 +408,72 @@ describe("TWO_FACTOR_MANAGE_PATHS", () => {
       false,
     );
     expect(TWO_FACTOR_MANAGE_PATHS.has("/sign-in/email-otp")).toBe(false);
+  });
+});
+
+describe("resolveAuthoritativeSessionForSensitiveAuthPath", () => {
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- this unit
+  // only reaches the global-hook boundary; the injected resolver never reads
+  // the remaining Better Auth context fields.
+  const sensitiveCtx = (path: string) =>
+    ({
+      path,
+      request: new Request(`http://localhost/api/auth${path}`),
+    }) as HookEndpointContext;
+
+  test("loads storage-backed session state before OAuth authorization can mint a durable token", async () => {
+    const resolvedPaths: string[] = [];
+
+    const handled = await resolveAuthoritativeSessionForSensitiveAuthPath({
+      ctx: sensitiveCtx("/oauth2/authorize"),
+      resolveSession: async (ctx) => {
+        resolvedPaths.push(ctx.path);
+        return null;
+      },
+    });
+
+    expect(handled).toBe(true);
+    expect(resolvedPaths).toEqual(["/oauth2/authorize"]);
+  });
+
+  test("uses the same authoritative session boundary before two-factor rotation", async () => {
+    const resolvedPaths: string[] = [];
+
+    const handled = await resolveAuthoritativeSessionForSensitiveAuthPath({
+      ctx: sensitiveCtx("/two-factor/enable"),
+      resolveSession: async (ctx) => {
+        resolvedPaths.push(ctx.path);
+        return null;
+      },
+    });
+
+    expect(handled).toBe(true);
+    expect(resolvedPaths).toEqual(["/two-factor/enable"]);
+  });
+
+  test("keeps ordinary endpoints on the cookie-cache fast path", async () => {
+    let resolved = false;
+
+    expect(
+      await resolveAuthoritativeSessionForSensitiveAuthPath({
+        ctx: sensitiveCtx("/get-session"),
+        resolveSession: async () => {
+          resolved = true;
+          return null;
+        },
+      }),
+    ).toBe(false);
+    expect(resolved).toBe(false);
+  });
+
+  test("declares both OAuth code-flow endpoints as authoritative", () => {
+    expect(AUTHORITATIVE_SESSION_PATHS).toEqual(
+      new Set([
+        ...TWO_FACTOR_MANAGE_PATHS,
+        "/oauth2/authorize",
+        "/oauth2/consent",
+      ]),
+    );
   });
 });
 

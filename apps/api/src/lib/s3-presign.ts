@@ -102,6 +102,10 @@ const isAwsS3Endpoint = (endpoint: string): boolean => {
 type CachedClient = { client: AwsS3Client; createdAt: number };
 type CachedStsClient = { client: STSClient; createdAt: number };
 type CachedScopedClient = { client: AwsS3Client; expiresAt: number };
+type ScopedClientCacheEntry = {
+  cached?: CachedScopedClient;
+  promise: Promise<CachedScopedClient>;
+};
 export const S3_SIGNING_KEYSPACES = ["tenant", "exports"] as const;
 export type S3SigningKeyspace = (typeof S3_SIGNING_KEYSPACES)[number];
 
@@ -115,10 +119,12 @@ type KmsSigningAction = "kms:Decrypt" | "kms:GenerateDataKey";
 
 let _clientPromise: Promise<CachedClient> | null = null;
 let _stsClientPromise: Promise<CachedStsClient> | null = null;
-let _scopedClientPromises = new Map<string, Promise<CachedScopedClient>>();
+let _scopedClientCache = new Map<string, ScopedClientCacheEntry>();
 const CLIENT_MAX_AGE_MS = 50 * 60 * 1000;
 const SCOPED_SESSION_SECONDS = 3600;
 const SCOPED_CLIENT_REFRESH_SKEW_MS = 60 * 1000;
+/** Bound the process-wide STS client cache across organizations/workspaces. */
+export const SCOPED_CLIENT_CACHE_MAX_ENTRIES = 256;
 const AWS_SDK_REQUEST_TIMEOUT_MS = 30_000;
 const TEMP_UPLOAD_TAG_KEY = "stella-upload-stage";
 const TEMP_UPLOAD_TAG_VALUE = "tmp";
@@ -347,21 +353,73 @@ const buildScopedAwsS3Client = async (
   };
 };
 
+export type ScopedS3ClientFactory = typeof buildScopedAwsS3Client;
+let scopedS3ClientFactory: ScopedS3ClientFactory = buildScopedAwsS3Client;
+
+const disposeScopedClient = (entry: ScopedClientCacheEntry): void => {
+  void entry.promise
+    .then(({ client }) => client.destroy())
+    .catch(() => undefined);
+};
+
+const removeScopedClient = (
+  cacheKey: string,
+  entry: ScopedClientCacheEntry,
+): void => {
+  if (_scopedClientCache.get(cacheKey) !== entry) {
+    return;
+  }
+  _scopedClientCache.delete(cacheKey);
+  disposeScopedClient(entry);
+};
+
+/** Remove expired entries and enforce least-recently-used capacity. */
+const pruneScopedClientCache = (): void => {
+  for (const [cacheKey, entry] of _scopedClientCache) {
+    if (
+      entry.cached &&
+      !hasScopedSessionTimeForPresign({
+        expiresAt: entry.cached.expiresAt,
+        expiresIn: 0,
+      })
+    ) {
+      removeScopedClient(cacheKey, entry);
+    }
+  }
+
+  while (_scopedClientCache.size > SCOPED_CLIENT_CACHE_MAX_ENTRIES) {
+    const leastRecentlyUsed = _scopedClientCache.entries().next().value;
+    if (!leastRecentlyUsed) {
+      return;
+    }
+    const [cacheKey, entry] = leastRecentlyUsed;
+    removeScopedClient(cacheKey, entry);
+  }
+};
+
+const touchScopedClient = (
+  cacheKey: string,
+  entry: ScopedClientCacheEntry,
+): void => {
+  _scopedClientCache.delete(cacheKey);
+  _scopedClientCache.set(cacheKey, entry);
+};
+
 const getScopedAwsS3Client = async (
   scope: S3SigningScope,
   actions: readonly S3SigningAction[],
   expiresIn: number,
 ): Promise<AwsS3Client> => {
   const cacheKey = scopedClientCacheKey(scope, actions);
-  const existingPromise = _scopedClientPromises.get(cacheKey);
-  if (existingPromise) {
+  pruneScopedClientCache();
+  const existing = _scopedClientCache.get(cacheKey);
+  if (existing) {
+    touchScopedClient(cacheKey, existing);
     let cached: CachedScopedClient;
     try {
-      cached = await existingPromise;
+      cached = await existing.promise;
     } catch (error) {
-      if (_scopedClientPromises.get(cacheKey) === existingPromise) {
-        _scopedClientPromises.delete(cacheKey);
-      }
+      removeScopedClient(cacheKey, existing);
       throw error;
     }
     if (
@@ -369,20 +427,54 @@ const getScopedAwsS3Client = async (
     ) {
       return cached.client;
     }
+    removeScopedClient(cacheKey, existing);
   }
 
-  const nextPromise = buildScopedAwsS3Client(scope, actions).catch(
+  let createdEntry: ScopedClientCacheEntry | undefined;
+  const nextPromise = scopedS3ClientFactory(scope, actions).catch(
     (error: unknown) => {
-      if (_scopedClientPromises.get(cacheKey) === nextPromise) {
-        _scopedClientPromises.delete(cacheKey);
+      if (createdEntry) {
+        removeScopedClient(cacheKey, createdEntry);
       }
       throw error;
     },
   );
-  _scopedClientPromises.set(cacheKey, nextPromise);
+  const entry = { promise: nextPromise };
+  createdEntry = entry;
+  nextPromise.then(
+    (cached) => {
+      entry.cached = cached;
+      pruneScopedClientCache();
+    },
+    () => undefined,
+  );
+  _scopedClientCache.set(cacheKey, entry);
+  pruneScopedClientCache();
   const built = await nextPromise;
   return built.client;
 };
+
+/** Test seam for cache lifecycle checks without enabling production STS mode. */
+export const getScopedAwsS3ClientForTesting = async ({
+  actions,
+  expiresIn,
+  scope,
+}: {
+  actions: readonly S3SigningAction[];
+  expiresIn: number;
+  scope: S3SigningScope;
+}): Promise<AwsS3Client> =>
+  await getScopedAwsS3Client(scope, actions, expiresIn);
+
+/** Test seam for deterministic scoped-client factory and cache assertions. */
+export const setScopedS3ClientFactoryForTesting = (
+  factory: ScopedS3ClientFactory,
+): void => {
+  scopedS3ClientFactory = factory;
+};
+
+export const getScopedClientCacheSizeForTesting = (): number =>
+  _scopedClientCache.size;
 
 const getTenantAwsS3Client = async ({
   actions,
@@ -590,7 +682,11 @@ export const prewarmScopedDownloadSigning = async (
 export const resetAwsS3ClientForTesting = (): void => {
   _clientPromise = null;
   _stsClientPromise = null;
-  _scopedClientPromises = new Map();
+  for (const entry of _scopedClientCache.values()) {
+    disposeScopedClient(entry);
+  }
+  _scopedClientCache = new Map();
+  scopedS3ClientFactory = buildScopedAwsS3Client;
   tenantS3OperationHooks = DEFAULT_TENANT_S3_OPERATION_HOOKS;
 };
 

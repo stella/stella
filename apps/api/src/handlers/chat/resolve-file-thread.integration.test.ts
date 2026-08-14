@@ -162,8 +162,16 @@ describe("file-thread mapping lookup", () => {
   });
 });
 
-const materialize = async (requestedThreadId: SafeId<"chatThread">) => {
-  const scopedDb = createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
+const materialize = async (
+  requestedThreadId: SafeId<"chatThread">,
+  accessibleWorkspaceIds: readonly SafeId<"workspace">[] = [ids.wsA1],
+) => {
+  const scopedDb = createScopedDb(
+    testDb,
+    accessibleWorkspaceIds,
+    ids.orgA,
+    ids.userA1,
+  );
   return await scopedDb(async (tx) =>
     createFileChatThread(
       asTestRaw<Transaction>(tx),
@@ -265,6 +273,45 @@ describe("file-thread materialization with an occupied draft id", () => {
       expect(mapped).toHaveLength(0);
     } finally {
       await testDb.delete(chatThreads).where(eq(chatThreads.id, foreignId));
+    }
+  });
+
+  test("never adopts the same user's draft from another accessible workspace", async () => {
+    const otherThreadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+    await testDb.insert(chatThreads).values({
+      id: otherThreadId,
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+      title: "Other matter draft",
+      workspaceId: ids.wsA2,
+      dataWorkspaceIds: [ids.wsA2],
+    });
+
+    try {
+      // Administrators and users assigned to both matters can see this row,
+      // but a file-thread materialization for wsA1 must not claim it.
+      const result = await materialize(otherThreadId, [ids.wsA1, ids.wsA2]);
+      expect(result).toMatchObject({
+        ok: false,
+        status: 409,
+        message: "Thread id already in use",
+      });
+
+      const occupant = await testDb.query.chatThreads.findFirst({
+        where: { id: { eq: otherThreadId } },
+        columns: { title: true, workspaceId: true },
+      });
+      expect(occupant).toEqual({
+        title: "Other matter draft",
+        workspaceId: ids.wsA2,
+      });
+      const mapped = await testDb
+        .select({ id: fileChatThreads.id })
+        .from(fileChatThreads)
+        .where(eq(fileChatThreads.chatThreadId, otherThreadId));
+      expect(mapped).toHaveLength(0);
+    } finally {
+      await testDb.delete(chatThreads).where(eq(chatThreads.id, otherThreadId));
     }
   });
 });

@@ -398,8 +398,9 @@ export const createFileChatThread = async (
 
   // Pre-send settings changes (model picker, web-search toggle) upsert a
   // placeholder chatThreads row under the client draft id before this
-  // materialization runs. Adopt a same-owner placeholder instead of
-  // colliding with it; any other occupant of the id is a client bug.
+  // materialization runs. Adopt only a same-owner, same-workspace placeholder
+  // instead of colliding with it; any other occupant of the id is a client
+  // bug and must never be retitled or mapped onto this file.
   if (requestedThreadId) {
     const occupant = await tx.query.chatThreads.findFirst({
       where: { id: { eq: requestedThreadId } },
@@ -407,6 +408,7 @@ export const createFileChatThread = async (
         id: true,
         userId: true,
         organizationId: true,
+        workspaceId: true,
         chatModel: true,
         chatReasoningEffort: true,
         contextMatterIds: true,
@@ -417,7 +419,8 @@ export const createFileChatThread = async (
     if (occupant) {
       if (
         occupant.userId !== userId ||
-        occupant.organizationId !== organizationId
+        occupant.organizationId !== organizationId ||
+        occupant.workspaceId !== workspaceId
       ) {
         return {
           ok: false,

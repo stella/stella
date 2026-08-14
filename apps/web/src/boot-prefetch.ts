@@ -38,6 +38,8 @@ export const BOOT_PREFETCH_PATHS = [
 type BootPrefetchPath = (typeof BOOT_PREFETCH_PATHS)[number];
 
 type PrefetchSlot = {
+  controller: AbortController;
+  generation: number;
   startedAt: number;
   response: Promise<Response | null>;
 };
@@ -51,6 +53,7 @@ const BOOT_PREFETCH_TTL_MS = 30_000;
 const BOOT_PREFETCH_TIMEOUT_MS = 8000;
 
 const slots = new Map<BootPrefetchPath, PrefetchSlot>();
+let prefetchGeneration = 0;
 
 /**
  * Consume the prefetched Response for an auth request, or null when there is
@@ -75,12 +78,23 @@ export const takeBootPrefetch = async (
   if (Date.now() - slot.startedAt > BOOT_PREFETCH_TTL_MS) {
     return null;
   }
-  return await slot.response;
+  const response = await slot.response;
+  if (
+    slot.generation !== prefetchGeneration ||
+    slot.controller.signal.aborted
+  ) {
+    return null;
+  }
+  return response;
 };
 
 /** Drop every pending prefetch. Called on any auth mutation so a stale
  *  pre-mutation response can never satisfy a post-mutation read. */
 export const discardBootPrefetch = (): void => {
+  prefetchGeneration += 1;
+  for (const { controller } of slots.values()) {
+    controller.abort();
+  }
   slots.clear();
 };
 
@@ -115,6 +129,12 @@ export const startBootPrefetch = ({
   fetchImpl = fetch,
   now = Date.now,
 }: StartBootPrefetchOptions = {}): void => {
+  // A second boot attempt supersedes, cancels, and invalidates every response
+  // from the first one. This also keeps test and bfcache re-entry behavior
+  // equivalent to the single browser-module evaluation.
+  discardBootPrefetch();
+  const generation = prefetchGeneration;
+  const controller = new AbortController();
   const base = `${browserAuthBaseUrl()}/api/auth`;
   // A transport failure resolves to null: the consumer falls back to its
   // own (retrying, timeout-bounded) fetch instead of inheriting an
@@ -122,16 +142,26 @@ export const startBootPrefetch = ({
   // analytics graph never rides in this deliberately tiny boot chunk; it
   // only loads on the failure path.
   const reportAndDrop = async (error: unknown): Promise<null> => {
+    if (controller.signal.aborted) {
+      return null;
+    }
     const { getAnalytics } = await import("@/lib/analytics/provider");
     getAnalytics().captureError(error);
     return null;
   };
+  const requestSignal = (): AbortSignal =>
+    AbortSignal.any([
+      controller.signal,
+      AbortSignal.timeout(BOOT_PREFETCH_TIMEOUT_MS),
+    ]);
   const sessionResponse = fetchImpl(`${base}/get-session`, {
     credentials: "include",
     headers: { accept: "application/json" },
-    signal: AbortSignal.timeout(BOOT_PREFETCH_TIMEOUT_MS),
+    signal: requestSignal(),
   }).catch(reportAndDrop);
   slots.set("/get-session", {
+    controller,
+    generation,
     startedAt: now(),
     response: sessionResponse,
   });
@@ -142,9 +172,16 @@ export const startBootPrefetch = ({
   // requests still finish while the route graph is downloading.
   slots.set("/organization/get-active-member-role", {
     startedAt: now(),
+    controller,
+    generation,
     response: sessionResponse
       .then(async (response) => {
-        if (response === null || !response.ok) {
+        if (
+          controller.signal.aborted ||
+          generation !== prefetchGeneration ||
+          response === null ||
+          !response.ok
+        ) {
           return null;
         }
         const body: unknown = await response.clone().json();
@@ -162,7 +199,7 @@ export const startBootPrefetch = ({
         return await fetchImpl(`${base}/organization/get-active-member-role`, {
           credentials: "include",
           headers: { accept: "application/json" },
-          signal: AbortSignal.timeout(BOOT_PREFETCH_TIMEOUT_MS),
+          signal: requestSignal(),
         });
       })
       .catch(reportAndDrop),

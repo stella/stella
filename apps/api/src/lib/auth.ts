@@ -3,10 +3,11 @@ import { oauthProvider } from "@better-auth/oauth-provider";
 import type { BetterAuthPlugin, HookEndpointContext } from "better-auth";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import type { getSessionFromCtx } from "better-auth/api";
 import {
   APIError,
   createAuthMiddleware,
-  getSessionFromCtx,
+  getAuthoritativeSessionFromCtx,
 } from "better-auth/api";
 import {
   bearer,
@@ -336,6 +337,18 @@ export const TWO_FACTOR_MANAGE_PATHS = new Set([
   "/two-factor/get-totp-uri",
   "/two-factor/generate-backup-codes",
 ]);
+
+/**
+ * These endpoints can either mint durable OAuth credentials or change the
+ * account's second factor. They must never authorize from Better Auth's
+ * signed cookie snapshot: it deliberately trades a short revocation delay for
+ * ordinary-request performance. Resolve their session from storage instead.
+ */
+export const AUTHORITATIVE_SESSION_PATHS = new Set([
+  ...TWO_FACTOR_MANAGE_PATHS,
+  "/oauth2/authorize",
+  "/oauth2/consent",
+]);
 const SIX_DIGIT_OTP_PATTERN = /^\d{6}$/u;
 
 export const isSixDigitOtpBody = (body: unknown): body is { otp: string } =>
@@ -350,6 +363,35 @@ type TwoFactorManageSession = Awaited<ReturnType<typeof getSessionFromCtx>>;
 type RequireTwoFactorManageOtpArgs = {
   body: unknown;
   session: TwoFactorManageSession;
+};
+
+type AuthoritativeSessionResolver = typeof getAuthoritativeSessionFromCtx;
+
+/**
+ * Establish database-backed session state before a sensitive plugin endpoint
+ * runs. Better Auth's endpoint middleware reuses this context, so neither the
+ * OAuth authorization-code flow nor two-factor rotation can fall back to a
+ * signed cookie-cache snapshot.
+ */
+export const resolveAuthoritativeSessionForSensitiveAuthPath = async ({
+  ctx,
+  resolveSession = getAuthoritativeSessionFromCtx,
+}: {
+  ctx: HookEndpointContext;
+  resolveSession?: AuthoritativeSessionResolver;
+}): Promise<boolean> => {
+  if (!AUTHORITATIVE_SESSION_PATHS.has(ctx.path)) {
+    return false;
+  }
+  if (ctx.request === undefined) {
+    panic("Authoritative-session hook ran outside HTTP dispatch");
+  }
+
+  const session = await resolveSession(ctx);
+  if (TWO_FACTOR_MANAGE_PATHS.has(ctx.path)) {
+    await requireTwoFactorManageOtp({ body: ctx.body, session });
+  }
+  return true;
 };
 
 /**
@@ -1224,15 +1266,7 @@ const createAuth = () => {
       before: createAuthMiddleware(async (ctx) => {
         await assertSelfhostEmailOtpAllowed(ctx.path);
 
-        if (TWO_FACTOR_MANAGE_PATHS.has(ctx.path)) {
-          if (ctx.request === undefined) {
-            panic("Two-factor management hook ran outside HTTP dispatch");
-          }
-          const session = await getSessionFromCtx({
-            ...ctx,
-            request: ctx.request,
-          });
-          await requireTwoFactorManageOtp({ body: ctx.body, session });
+        if (await resolveAuthoritativeSessionForSensitiveAuthPath({ ctx })) {
           return;
         }
 

@@ -129,6 +129,40 @@ describe("boot prefetch", () => {
     ).toBeNull();
   });
 
+  test("invalidates a response already being consumed when an auth mutation starts", async () => {
+    let resolveSession: ((response: Response) => void) | undefined;
+    const signals: AbortSignal[] = [];
+    const requested: string[] = [];
+    const fetchImpl = async (
+      input: string,
+      init?: RequestInit,
+    ): Promise<Response> => {
+      requested.push(input);
+      if (init?.signal) {
+        signals.push(init.signal);
+      }
+      if (input.endsWith("/get-session")) {
+        return await new Promise<Response>((resolve) => {
+          resolveSession = resolve;
+        });
+      }
+      return jsonResponse({ role: "member" });
+    };
+
+    startBootPrefetch({ fetchImpl });
+    const consumingSession = takeBootPrefetch("/api/auth/get-session");
+
+    // A POST clears auth state while the GET has already claimed the slot.
+    // The old implementation only cleared the map, letting this waiter still
+    // receive the stale response once its network request completed.
+    discardBootPrefetch();
+    resolveSession?.(jsonResponse(SIGNED_IN_SESSION));
+
+    expect(await consumingSession).toBeNull();
+    expect(signals.at(0)?.aborted).toBe(true);
+    expect(requested).toEqual([expect.stringContaining("/get-session")]);
+  });
+
   test("a failed prefetch resolves to null instead of rejecting", async () => {
     startBootPrefetch({ fetchImpl: failingFetch() });
 
