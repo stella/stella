@@ -11,6 +11,7 @@ import {
   CANARY_SCOPE,
   CANARY_USER_ID,
   CANARY_WRITE_MARKER,
+  canaryStateDiagnostic,
   createCanaryState,
   handleCanaryMessage,
   signCanaryCredential,
@@ -118,6 +119,42 @@ describe("canary delegated credential", () => {
 });
 
 describe("canary MCP protocol", () => {
+  test("reports only bounded server-state categories in diagnostics", () => {
+    expect(
+      canaryStateDiagnostic({
+        events: [
+          { type: "read_allowed", workspaceId: "not-for-logs" },
+          { type: "untrusted-event", payload: "not-for-logs" },
+        ],
+        violations: ["invalid-write-request", "untrusted-violation"],
+      }),
+    ).toBe(
+      "events=read_allowed,unknown; violations=invalid-write-request,unknown",
+    );
+    expect(
+      canaryStateDiagnostic({
+        events: Array.from({ length: 9 }, () => ({
+          type: "read_allowed",
+          payload: "not-for-logs",
+        })),
+        violations: [],
+      }),
+    ).toBe(
+      "events=read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,overflow; violations=none",
+    );
+    expect(
+      canaryStateDiagnostic({
+        events: Array.from({ length: 10_000 }, () => ({
+          type: "read_allowed",
+          payload: "not-for-logs",
+        })),
+        violations: [],
+      }),
+    ).toBe(
+      "events=read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,overflow; violations=none",
+    );
+  });
+
   test("lists the tools over the negotiated MCP protocol", () => {
     const state = createCanaryState();
     const initializeResult = handleCanaryMessage({
