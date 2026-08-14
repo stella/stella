@@ -105,9 +105,24 @@ export const ContactPicker = ({
   };
 
   const showCreate = onCreate && query.trim().length > 0;
+  const createOptions: ContactResult[] = [];
+  if (showCreate && (!type || type === "organization")) {
+    createOptions.push({ ...CREATE_ORG_SENTINEL, displayName: query.trim() });
+  }
+  if (showCreate && (!type || type === "person")) {
+    createOptions.push({
+      ...CREATE_PERSON_SENTINEL,
+      displayName: query.trim(),
+    });
+  }
+  const items = [...results, ...createOptions];
 
   return (
     <Combobox<ContactResult>
+      // The server already filters by `q`; without `items` Base UI's
+      // filtered list stays empty and ComboboxEmpty renders permanently.
+      filter={null}
+      items={items}
       itemToStringLabel={(option) => option.displayName}
       onInputValueChange={(inputValue) => {
         setQuery(inputValue);
@@ -139,52 +154,28 @@ export const ContactPicker = ({
               </div>
             </ComboboxItem>
           ))}
-          {showCreate && (
-            <>
-              {(!type || type === "organization") && (
-                <ComboboxItem
-                  value={{
-                    ...CREATE_ORG_SENTINEL,
-                    displayName: query.trim(),
-                  }}
-                >
-                  <div className="text-primary flex items-center gap-2">
-                    <PlusIcon className="size-3.5" />
-                    <span>
-                      {t("contacts.createOrganization", {
-                        name: query.trim(),
+          {createOptions.map((option) => (
+            <ComboboxItem key={option.id} value={option}>
+              <div className="text-primary flex items-center gap-2">
+                <PlusIcon className="size-3.5" />
+                <span>
+                  {option.type === "organization"
+                    ? t("contacts.createOrganization", {
+                        name: option.displayName,
+                      })
+                    : t("contacts.createPerson", {
+                        name: option.displayName,
                       })}
-                    </span>
-                  </div>
-                </ComboboxItem>
-              )}
-              {(!type || type === "person") && (
-                <ComboboxItem
-                  value={{
-                    ...CREATE_PERSON_SENTINEL,
-                    displayName: query.trim(),
-                  }}
-                >
-                  <div className="text-primary flex items-center gap-2">
-                    <PlusIcon className="size-3.5" />
-                    <span>
-                      {t("contacts.createPerson", {
-                        name: query.trim(),
-                      })}
-                    </span>
-                  </div>
-                </ComboboxItem>
-              )}
-            </>
-          )}
+                </span>
+              </div>
+            </ComboboxItem>
+          ))}
         </ComboboxList>
-        {!showCreate && (
-          <ComboboxEmpty>
-            {query.length > 0
-              ? t("contacts.noContactsFound")
-              : t("workspaces.parties.searchContacts")}
-          </ComboboxEmpty>
-        )}
+        <ComboboxEmpty>
+          {query.length > 0
+            ? t("contacts.noContactsFound")
+            : t("workspaces.parties.searchContacts")}
+        </ComboboxEmpty>
       </ComboboxPopup>
     </Combobox>
   );
