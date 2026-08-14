@@ -25,7 +25,7 @@
     },
     "typecheck": {
       "dependsOn": ["transit"],
-      "outputs": [".cache/tsbuildinfo.json"]
+      "outputs": [".cache/tsbuildinfo*.json", "**/.cache/tsbuildinfo*.json"]
     },
     "@stll/landing#typecheck": {
       "dependsOn": ["transit"],

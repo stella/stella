@@ -36,10 +36,12 @@ const BASELINE_PATH = path.resolve(SCRIPTS_DIR, "typecheck-baseline.json");
 const BASELINE_REL = "scripts/typecheck-baseline.json";
 const TSC_NATIVE = "packages/scripts/src/tsc-native.ts";
 const WRITE_HINT = "bun scripts/typecheck-baseline.ts --write-baseline";
+const COLD_MEASUREMENT_FLAGS = ["--incremental", "false"] as const;
 const MEASUREMENT_FLAGS = [
   "--noEmit",
   "--extendedDiagnostics",
   "--singleThreaded",
+  ...COLD_MEASUREMENT_FLAGS,
 ] as const;
 const CLI_MODES = [
   { flag: "--check", mode: "check" },
@@ -465,6 +467,11 @@ const runSelfTest = (): number => {
 
   if (!MEASUREMENT_FLAGS.includes("--singleThreaded")) {
     failures.push("measurement flags allow checker-pool partition noise");
+  }
+  if (
+    !MEASUREMENT_FLAGS.join("\0").includes(COLD_MEASUREMENT_FLAGS.join("\0"))
+  ) {
+    failures.push("measurement flags allow warm incremental state");
   }
 
   const parsed = parseCounters(SELF_TEST_DIAGNOSTICS, "apps/api");

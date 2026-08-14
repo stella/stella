@@ -5,6 +5,7 @@
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.mcp-apps.json",
     "types": ["vite/client"]
   },
   "include": ["src/mcp/apps/**/*.ts"]

@@ -2,7 +2,7 @@
   "extends": "../../../packages/typescript-config/base.json",
   "compilerOptions": {
     "types": ["node"],
-    "tsBuildInfoFile": "./.cache/tsbuildinfo.json"
+    "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.json"
   },
   "include": ["**/*.ts"],
   "exclude": ["node_modules", "unit"]
