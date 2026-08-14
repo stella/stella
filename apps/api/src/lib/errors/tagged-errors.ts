@@ -332,12 +332,33 @@ export class AdapterFetchError extends TaggedError("AdapterFetchError")<{
   cause?: unknown;
 }> {}
 
+export const SUBPROCESS_TERMINATION_REASON = {
+  timeout: "timeout",
+  cancelled: "cancelled",
+  crashed: "crashed",
+  external: "external",
+} as const;
+
+export type SubprocessTerminationReason =
+  (typeof SUBPROCESS_TERMINATION_REASON)[keyof typeof SUBPROCESS_TERMINATION_REASON];
+
+type SubprocessTermination = {
+  reason: SubprocessTerminationReason;
+  signalCode: string;
+};
+
 /** Subprocess execution failure. */
 export class SubprocessError extends TaggedError("SubprocessError")<{
   message: string;
   exitCode: number | null;
+  termination: SubprocessTermination | null;
   cause?: unknown;
 }> {}
+
+type ExtractionWorkerTermination = {
+  reason: SubprocessTerminationReason;
+  signalCode: string;
+};
 
 /** File content extraction failure. */
 export class ExtractionWorkerError extends TaggedError(
@@ -345,6 +366,7 @@ export class ExtractionWorkerError extends TaggedError(
 )<{
   message: string;
   exitCode: number | null;
+  termination: ExtractionWorkerTermination | null;
 }> {}
 
 /** Timeout waiting for a readiness probe, subprocess, or external resource. */

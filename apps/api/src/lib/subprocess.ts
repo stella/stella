@@ -1,6 +1,10 @@
 import { Result } from "better-result";
 
-import { SubprocessError } from "@/api/lib/errors/tagged-errors";
+import {
+  SubprocessError,
+  SUBPROCESS_TERMINATION_REASON,
+  type SubprocessTerminationReason,
+} from "@/api/lib/errors/tagged-errors";
 
 type SpawnWorkerOptions = {
   workerPath: string;
@@ -16,6 +20,15 @@ type SpawnBinaryWorkerOptions = SpawnWorkerOptions & {
   maxOutputBytes: number;
 };
 
+const CRASH_SIGNAL_CODES = new Set([
+  "SIGABRT",
+  "SIGBUS",
+  "SIGFPE",
+  "SIGILL",
+  "SIGSEGV",
+  "SIGTRAP",
+]);
+
 const readBoundedOutput = async (
   stream: ReadableStream<Uint8Array>,
   maxOutputBytes: number,
@@ -27,6 +40,7 @@ const readBoundedOutput = async (
       throw new SubprocessError({
         message: "Worker output exceeded the allowed size",
         exitCode: null,
+        termination: null,
       });
     }
     chunks.push(chunk);
@@ -42,40 +56,162 @@ const readBoundedOutput = async (
   return output;
 };
 
-export const spawnWorker = async ({
-  workerPath,
-  args = [],
-  stdin,
-  timeoutMs,
-  env: extraEnv,
+export const classifySubprocessTermination = ({
+  callerAbort,
+  signalCode,
+  timeoutAbort,
+}: {
+  callerAbort: boolean;
+  signalCode: string;
+  timeoutAbort: boolean;
+}): SubprocessTerminationReason => {
+  if (timeoutAbort) {
+    return SUBPROCESS_TERMINATION_REASON.timeout;
+  }
+  if (callerAbort) {
+    return SUBPROCESS_TERMINATION_REASON.cancelled;
+  }
+  if (CRASH_SIGNAL_CODES.has(signalCode)) {
+    return SUBPROCESS_TERMINATION_REASON.crashed;
+  }
+  return SUBPROCESS_TERMINATION_REASON.external;
+};
+
+const exitFailure = ({
+  callerAbort,
+  exitCode,
+  signalCode,
+  stderr,
+  timeoutAbort,
+}: {
+  callerAbort: boolean;
+  exitCode: number;
+  signalCode: string | null;
+  stderr: string;
+  timeoutAbort: boolean;
+}): SubprocessError => {
+  if (signalCode !== null) {
+    const reason = classifySubprocessTermination({
+      callerAbort,
+      signalCode,
+      timeoutAbort,
+    });
+    return new SubprocessError({
+      message: `Worker ${reason} (${signalCode})`,
+      exitCode: null,
+      termination: { reason, signalCode },
+    });
+  }
+  return new SubprocessError({
+    message: `Worker failed (exit ${exitCode})${stderr ? `: ${stderr.trim()}` : ""}`,
+    exitCode,
+    termination: null,
+  });
+};
+
+type SpawnedWorker = {
+  exited: Promise<number>;
+  kill: () => void;
+  signalCode: string | null;
+  stderr: ReadableStream<Uint8Array>;
+  stdout: ReadableStream<Uint8Array>;
+};
+
+type SpawnWorkerProcessOptions = {
+  args: string[];
+  env: Record<string, string> | undefined;
+  stdin: Blob;
+  workerPath: string;
+};
+
+type WorkerTermination = {
+  callerAbort: boolean;
+  dispose: () => void;
+  timeoutAbort: boolean;
+};
+
+const watchWorkerTermination = ({
   signal,
-}: SpawnWorkerOptions): Promise<Result<string, SubprocessError>> => {
-  signal?.throwIfAborted();
-  const subprocess = Bun.spawn(["bun", "run", workerPath, ...args], {
+  subprocess,
+  timeoutSignal,
+}: {
+  signal: AbortSignal | undefined;
+  subprocess: SpawnedWorker;
+  timeoutSignal: AbortSignal;
+}): (() => WorkerTermination) => {
+  let callerAbort = false;
+  let timeoutAbort = false;
+  const killForCallerAbort = () => {
+    callerAbort = true;
+    subprocess.kill();
+  };
+  const killForTimeout = () => {
+    timeoutAbort = true;
+    subprocess.kill();
+  };
+  signal?.addEventListener("abort", killForCallerAbort, { once: true });
+  timeoutSignal.addEventListener("abort", killForTimeout, { once: true });
+
+  return () => ({
+    callerAbort,
+    timeoutAbort,
+    dispose: () => {
+      signal?.removeEventListener("abort", killForCallerAbort);
+      timeoutSignal.removeEventListener("abort", killForTimeout);
+    },
+  });
+};
+
+const spawn = ({
+  args,
+  env,
+  stdin,
+  workerPath,
+}: SpawnWorkerProcessOptions): SpawnedWorker =>
+  Bun.spawn(["bun", "run", workerPath, ...args], {
     stdin,
     stdout: "pipe",
     stderr: "pipe",
     env: {
       PATH: process.env["PATH"] ?? "",
-      ...extraEnv,
+      ...env,
     },
-    timeout: timeoutMs,
   });
-  const killOnAbort = () => subprocess.kill();
-  signal?.addEventListener("abort", killOnAbort, { once: true });
+
+export const spawnWorker = async ({
+  workerPath,
+  args = [],
+  stdin,
+  timeoutMs,
+  env,
+  signal,
+}: SpawnWorkerOptions): Promise<Result<string, SubprocessError>> => {
+  signal?.throwIfAborted();
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  const subprocess = spawn({ args, env, stdin, workerPath });
+  const getTermination = watchWorkerTermination({
+    signal,
+    subprocess,
+    timeoutSignal,
+  });
 
   try {
-    const [exitCode, stdout, stderr] = await Promise.all([
-      subprocess.exited,
+    const [exit, stdout, stderr] = await Promise.all([
+      subprocess.exited.then((exitCode) => ({
+        exitCode,
+        termination: getTermination(),
+      })),
       new Response(subprocess.stdout).text(),
       new Response(subprocess.stderr).text(),
     ]);
 
-    if (exitCode !== 0) {
+    if (exit.exitCode !== 0) {
       return Result.err(
-        new SubprocessError({
-          message: `Worker failed (exit ${exitCode})${stderr ? `: ${stderr.trim()}` : ""}`,
-          exitCode,
+        exitFailure({
+          exitCode: exit.exitCode,
+          signalCode: subprocess.signalCode,
+          stderr,
+          ...exit.termination,
         }),
       );
     }
@@ -87,13 +223,12 @@ export const spawnWorker = async ({
       new SubprocessError({
         message: error instanceof Error ? error.message : String(error),
         exitCode: null,
+        termination: null,
         cause: error,
       }),
     );
   } finally {
-    // The lifecycle signal outlives this call; an accumulated listener per
-    // spawn would leak across a long-running worker's many runs.
-    signal?.removeEventListener("abort", killOnAbort);
+    getTermination().dispose();
   }
 };
 
@@ -102,31 +237,35 @@ export const spawnBinaryWorker = async ({
   args = [],
   stdin,
   timeoutMs,
-  env: extraEnv,
+  env,
+  signal,
   maxOutputBytes,
 }: SpawnBinaryWorkerOptions): Promise<Result<Uint8Array, SubprocessError>> => {
-  const subprocess = Bun.spawn(["bun", "run", workerPath, ...args], {
-    stdin,
-    stdout: "pipe",
-    stderr: "pipe",
-    env: {
-      PATH: process.env["PATH"] ?? "",
-      ...extraEnv,
-    },
-    timeout: timeoutMs,
+  signal?.throwIfAborted();
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  const subprocess = spawn({ args, env, stdin, workerPath });
+  const getTermination = watchWorkerTermination({
+    signal,
+    subprocess,
+    timeoutSignal,
   });
 
   try {
-    const [exitCode, stdout, stderr] = await Promise.all([
-      subprocess.exited,
+    const [exit, stdout, stderr] = await Promise.all([
+      subprocess.exited.then((exitCode) => ({
+        exitCode,
+        termination: getTermination(),
+      })),
       readBoundedOutput(subprocess.stdout, maxOutputBytes),
       new Response(subprocess.stderr).text(),
     ]);
-    if (exitCode !== 0) {
+    if (exit.exitCode !== 0) {
       return Result.err(
-        new SubprocessError({
-          message: `Worker failed (exit ${exitCode})${stderr ? `: ${stderr.trim()}` : ""}`,
-          exitCode,
+        exitFailure({
+          exitCode: exit.exitCode,
+          signalCode: subprocess.signalCode,
+          stderr,
+          ...exit.termination,
         }),
       );
     }
@@ -137,8 +276,11 @@ export const spawnBinaryWorker = async ({
       new SubprocessError({
         message: error instanceof Error ? error.message : String(error),
         exitCode: null,
+        termination: null,
         cause: error,
       }),
     );
+  } finally {
+    getTermination().dispose();
   }
 };

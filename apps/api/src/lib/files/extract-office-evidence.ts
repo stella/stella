@@ -45,6 +45,7 @@ export const extractOfficeEvidence = async (
         new SubprocessError({
           exitCode: 0,
           message: "Office evidence worker returned an invalid result",
+          termination: null,
         }),
       );
     }
@@ -55,6 +56,7 @@ export const extractOfficeEvidence = async (
         cause: error,
         exitCode: 0,
         message: "Office evidence worker returned invalid JSON",
+        termination: null,
       }),
     );
   }

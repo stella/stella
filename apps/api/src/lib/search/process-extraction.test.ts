@@ -309,6 +309,7 @@ describe("processExtraction", () => {
     const workerError = new ExtractionWorkerError({
       exitCode: 1,
       message: "sandbox crashed",
+      termination: null,
     });
     extractFileTextResultMock.mockImplementationOnce(async () =>
       Result.err(workerError),
