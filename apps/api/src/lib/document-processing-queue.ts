@@ -50,8 +50,8 @@ import {
   enqueueDocumentProcessingRun,
   type DocumentProcessingJobData,
 } from "@/api/lib/document-processing-enqueue";
+import { DocumentOcrProviderError } from "@/api/lib/document-processing-ocr-result";
 import {
-  DocumentOcrProviderError,
   isDocumentOcrProviderConfigured,
   recognizePdfText,
 } from "@/api/lib/document-processing-provider";
@@ -1196,6 +1196,7 @@ export const processDocumentProcessingRun = async (
       const result = await recognizePdfText({
         idempotencyKey: `ocr:${run.id}`,
         signal: lifecycleSignal,
+        sourceKey,
         sourceUrl,
       });
       if (Result.isError(result)) {

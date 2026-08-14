@@ -1,6 +1,7 @@
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client as AwsS3Client,
 } from "@aws-sdk/client-s3";
@@ -503,6 +504,23 @@ export const writeS3ObjectWithRetry = async (
 class S3ObjectReadError extends TaggedError("S3ObjectReadError")<{
   message: string;
 }> {}
+
+/**
+ * Size of one object without reading it, so a caller can refuse an
+ * oversized object before materializing it. Null when storage does not
+ * report a length.
+ */
+export const getS3ObjectSizeWithSignal = async (
+  key: string,
+  signal: AbortSignal,
+): Promise<number | null> => {
+  _abortableClient ??= buildAbortableS3Client(staticCredentialsFromEnv());
+  const response = await _abortableClient.send(
+    new HeadObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
+    { abortSignal: signal },
+  );
+  return response.ContentLength ?? null;
+};
 
 /** Read one object while allowing the caller to cancel the HTTP request. */
 export const getS3ObjectWithSignal = async (

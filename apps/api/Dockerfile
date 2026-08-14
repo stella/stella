@@ -58,8 +58,9 @@ RUN bun build \
     --outfile /app/backfill.js \
     apps/api/src/scripts/backfill-case-law-slugs.ts
 # Dedicated durable document-processing worker. Deploy the same image with
-# command override ["bun", "/app/document-processing-worker.js"]; PaddleOCR
-# itself remains an isolated serving endpoint configured by OCR_SERVICE_URL.
+# command override ["bun", "/app/document-processing-worker.js"]. OCR runs
+# in-image through the local ONNX worker by default; DOCUMENT_OCR_PROVIDER
+# "service" with OCR_SERVICE_URL keeps the dedicated PaddleOCR endpoint path.
 RUN bun build \
     --target bun \
     --outfile /app/document-processing-worker.js \
@@ -94,10 +95,22 @@ RUN mkdir -p /app/runtime-workers && \
       --target bun \
       --outfile /app/runtime-workers/office-evidence-worker.js \
       apps/api/src/lib/files/office-evidence-worker.ts && \
+    bun build \
+      --target bun \
+      --outfile /app/runtime-workers/ocr-local-worker.js \
+      apps/api/src/lib/ocr-local/ocr-local-worker.ts && \
     cp node_modules/@silurus/ooxml/dist/xlsx_parser_bg.wasm \
       /app/runtime-workers/xlsx_parser_bg.wasm && \
     cp node_modules/@silurus/ooxml/dist/pptx_parser_bg.wasm \
-      /app/runtime-workers/pptx_parser_bg.wasm
+      /app/runtime-workers/pptx_parser_bg.wasm && \
+    cp node_modules/@hyzyla/pdfium/dist/pdfium.wasm \
+      /app/runtime-workers/pdfium.wasm && \
+    cp apps/api/src/lib/ocr-local/latin-v5-dict.txt \
+      /app/runtime-workers/latin-v5-dict.txt
+# Local OCR runtime assets: the pinned ONNX models, plus the onnxruntime
+# native binding, which the bundled worker resolves relative to its own
+# location (`../bin/...`), so the directory must sit beside the workers.
+RUN cd apps/api && bun src/scripts/fetch-ocr-models.ts /app/ocr-models
 RUN bun --filter @stll/legal-atlas-runner build
 # Runtime-asset smoke probe: initializes every lazily loaded asset the runner
 # stage copies by hand (anonymize engine, quickjs wasm, yara rules, worker
@@ -133,6 +146,7 @@ ENV FEATURE_TODOS=true
 ENV REQUIRE_PERSONAL_AI_KEY=true
 ENV STELLA_WORKER_DIR=/\$bunfs/root/workers
 ENV STELLA_OCR_PDF_FONT_PATH=/\$bunfs/root/fonts/CabinetGrotesk-Regular.otf
+ENV DOCUMENT_OCR_MODEL_DIR=/app/ocr-models
 ENV STLL_ANONYMIZE_ASSET_DIR=/app/anonymize-native
 RUN groupadd --system --gid 1001 stella && \
     useradd --system --uid 1001 --gid stella --no-create-home stella
@@ -147,6 +161,15 @@ COPY --chown=stella:stella --from=builder /app/apps/api/src/db/migrate.js /app/a
 COPY --chown=stella:stella --from=builder /app/apps/api/drizzle /app/apps/api/drizzle
 RUN mkdir -p '/$bunfs/root'
 COPY --chown=stella:stella --from=builder /app/runtime-workers /\$bunfs/root/workers
+# The bundled OCR worker dlopens onnxruntime from `../bin` relative to the
+# workers directory; the models are read from DOCUMENT_OCR_MODEL_DIR.
+COPY --chown=stella:stella --from=builder /app/node_modules/onnxruntime-node/bin /\$bunfs/root/bin
+COPY --chown=stella:stella --from=builder /app/ocr-models /app/ocr-models
+# sharp's platform binding and libvips resolve at runtime through bare
+# `@img/...` requires the bundler cannot rewrite; a node_modules directory
+# beside the worker bundles satisfies that lookup. The image smoke spawns
+# the worker, so a missing binding fails the build, not the first run.
+COPY --chown=stella:stella --from=builder /app/node_modules/@img /\$bunfs/root/workers/node_modules/@img
 COPY --chown=stella:stella --from=install-inputs \
     /app/apps/landing/public/fonts/CabinetGrotesk-Regular.otf \
     /\$bunfs/root/fonts/CabinetGrotesk-Regular.otf

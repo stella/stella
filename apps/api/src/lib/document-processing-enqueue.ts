@@ -42,6 +42,21 @@ const getQueue = (): Queue<DocumentProcessingJobData> => {
   return queue;
 };
 
+/**
+ * Jobs currently visible to the queue in any not-yet-finished state. The
+ * idle-exit check in the worker entry treats zero as "nothing left to do".
+ */
+export const countPendingDocumentProcessingJobs = async (): Promise<number> => {
+  const counts = await getQueue().getJobCounts(
+    "active",
+    "delayed",
+    "prioritized",
+    "waiting",
+    "waiting-children",
+  );
+  return Object.values(counts).reduce((sum, count) => sum + count, 0);
+};
+
 export const enqueueDocumentProcessingRun = async (
   runId: SafeId<"documentProcessingRun">,
 ): Promise<void> => {

@@ -22,6 +22,7 @@ import { newAsyncContext } from "quickjs-emscripten";
 
 import { getBinding, isNativeAnonymizeBinding } from "@stll/anonymize-wasm";
 
+import { OCR_LOCAL_MODEL_FILES } from "@/api/lib/document-processing-contract";
 import { yaraRuleFileCount, yaraScanner } from "@/api/lib/file-scan/yara";
 import {
   RUNTIME_WORKER_FILES,
@@ -84,6 +85,70 @@ await probe("ocr pdf font", async () => {
     panic("STELLA_OCR_PDF_FONT_PATH must be set for the image smoke");
   if (!(await Bun.file(fontPath).exists())) {
     panic(`missing OCR PDF font at ${fontPath}`);
+  }
+});
+
+// Unlike the presence checks above, the local OCR worker is spawned for
+// real on a minimal blank-page PDF: it exercises the pdfium wasm, the
+// onnxruntime native binding at its bundle-relative location, and the
+// pinned models, exactly as a document-processing run would.
+await probe("local ocr worker", async () => {
+  const workerDir =
+    runtimeWorkerDir() ??
+    panic("STELLA_WORKER_DIR must be set for the image smoke");
+  const modelDir =
+    process.env["DOCUMENT_OCR_MODEL_DIR"] ??
+    panic("DOCUMENT_OCR_MODEL_DIR must be set for the image smoke");
+  const missingModels = (
+    await Promise.all(
+      Object.values(OCR_LOCAL_MODEL_FILES).map(async (file) =>
+        (await Bun.file(path.join(modelDir, file)).exists()) ? null : file,
+      ),
+    )
+  ).filter((file) => file !== null);
+  if (missingModels.length > 0) {
+    panic(`missing OCR models: ${missingModels.join(", ")}`);
+  }
+
+  const blankPagePdf = [
+    "%PDF-1.4",
+    "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj",
+    "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj",
+    "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >> endobj",
+    "trailer << /Size 4 /Root 1 0 R >>",
+  ].join("\n");
+  const subprocess = Bun.spawn(
+    [
+      "bun",
+      "run",
+      path.join(workerDir, RUNTIME_WORKER_FILES.ocrLocal),
+      modelDir,
+    ],
+    {
+      stdin: new Blob([blankPagePdf]),
+      stdout: "pipe",
+      stderr: "pipe",
+      // A hung worker must fail the image build, not stall it.
+      timeout: 120_000,
+    },
+  );
+  const [output, stderr, exitCode] = await Promise.all([
+    new Response(subprocess.stdout).text(),
+    new Response(subprocess.stderr).text(),
+    subprocess.exited,
+  ]);
+  if (exitCode !== 0) {
+    panic(`local ocr worker exited with ${exitCode}: ${stderr.trim()}`);
+  }
+  const parsed: unknown = JSON.parse(output);
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    !("pages" in parsed) ||
+    !Array.isArray(parsed.pages) ||
+    parsed.pages.length !== 1
+  ) {
+    panic("local ocr worker returned an unexpected result shape");
   }
 });
 

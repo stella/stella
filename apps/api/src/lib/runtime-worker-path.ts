@@ -12,6 +12,7 @@ const OCR_PDF_FONT_PATH_ENV = "STELLA_OCR_PDF_FONT_PATH";
 export const RUNTIME_WORKER_FILES = {
   extraction: "extraction-worker.js",
   officeEvidence: "office-evidence-worker.js",
+  ocrLocal: "ocr-local-worker.js",
   ocrSearchablePdf: "ocr-searchable-pdf-worker.js",
   pdf: "pdf-worker.js",
 } as const;
@@ -22,9 +23,26 @@ export type RuntimeWorkerFile =
 // Sidecar assets the worker bundles load relative to their own location;
 // apps/api/Dockerfile copies them into the same runtime worker directory.
 export const RUNTIME_WORKER_SIDECAR_FILES = [
+  "latin-v5-dict.txt",
+  "pdfium.wasm",
   "pptx_parser_bg.wasm",
   "xlsx_parser_bg.wasm",
 ] as const;
+
+/**
+ * Native lookups the bundled workers perform at runtime through paths the
+ * bundler cannot rewrite: bare `require`s of platform packages and
+ * bundle-relative directory walks. The Dockerfile ships each entry into
+ * the runner filesystem, and the image-layout test reproduces the same
+ * layout with Bun's install cache disabled — so a newly introduced hidden
+ * lookup fails a local test run before it can fail an image build.
+ */
+export const RUNTIME_WORKER_NATIVE_LOOKUPS = {
+  /** npm scopes materialized as a node_modules beside the worker bundles. */
+  nodeModuleDirs: ["@img"],
+  /** node_modules paths shipped as siblings of the workers directory. */
+  siblingDirs: [{ source: "onnxruntime-node/bin", target: "bin" }],
+} as const;
 
 export const runtimeWorkerDir = (): string | undefined =>
   process.env[WORKER_DIR_ENV];

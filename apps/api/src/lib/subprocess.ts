@@ -8,6 +8,8 @@ type SpawnWorkerOptions = {
   stdin: Blob;
   timeoutMs: number;
   env?: Record<string, string>;
+  /** Aborting kills the subprocess instead of letting it run to timeout. */
+  signal?: AbortSignal;
 };
 
 type SpawnBinaryWorkerOptions = SpawnWorkerOptions & {
@@ -46,7 +48,9 @@ export const spawnWorker = async ({
   stdin,
   timeoutMs,
   env: extraEnv,
+  signal,
 }: SpawnWorkerOptions): Promise<Result<string, SubprocessError>> => {
+  signal?.throwIfAborted();
   const subprocess = Bun.spawn(["bun", "run", workerPath, ...args], {
     stdin,
     stdout: "pipe",
@@ -57,6 +61,8 @@ export const spawnWorker = async ({
     },
     timeout: timeoutMs,
   });
+  const killOnAbort = () => subprocess.kill();
+  signal?.addEventListener("abort", killOnAbort, { once: true });
 
   try {
     const [exitCode, stdout, stderr] = await Promise.all([
@@ -84,6 +90,10 @@ export const spawnWorker = async ({
         cause: error,
       }),
     );
+  } finally {
+    // The lifecycle signal outlives this call; an accumulated listener per
+    // spawn would leak across a long-running worker's many runs.
+    signal?.removeEventListener("abort", killOnAbort);
   }
 };
 

@@ -258,6 +258,8 @@ export const LIMITS = {
   extractedContentMaxChars: 500_000,
   /** Maximum encrypted OCR page-geometry payload before AES-GCM overhead. */
   documentOcrPayloadMaxBytes: 16 * 1024 * 1024,
+  /** Maximum source PDF the local OCR provider will read and render. */
+  documentOcrSourceMaxBytes: 200 * 1024 * 1024,
   /** Cursor page size for document- and matter-deletion OCR derivative
    *  cleanup. Also caps the storage keys recorded per cleanup request. */
   ocrDerivativeCleanupBatchSize: 1000,

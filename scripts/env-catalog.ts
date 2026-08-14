@@ -94,6 +94,9 @@ const INTERNAL_SERVER_KEYS = new Set([
   "DB_USER",
   "DEBUG_UNREDACTED_ERRORS",
   "DOCUMENT_OCR_BATCH_INTERVAL_MINUTES",
+  "DOCUMENT_OCR_MODEL_DIR",
+  "DOCUMENT_OCR_PROVIDER",
+  "DOCUMENT_PROCESSING_IDLE_EXIT_MINUTES",
   "E2E_DISABLE_AUTH_RATE_LIMIT",
   "EMAIL_PROVIDER",
   "EXTENSION_ORIGIN",
@@ -264,6 +267,12 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Postgres user used with the component settings when DATABASE_URL is unset.",
   DOCUMENT_OCR_BATCH_INTERVAL_MINUTES:
     "Interval for releasing queued OCR requests, in minutes.",
+  DOCUMENT_OCR_MODEL_DIR:
+    "Directory holding the local OCR models; populate it with `bun run ocr:fetch-models`.",
+  DOCUMENT_OCR_PROVIDER:
+    'OCR provider: "local" runs ONNX recognition in an isolated subprocess, "service" posts to OCR_SERVICE_URL.',
+  DOCUMENT_PROCESSING_IDLE_EXIT_MINUTES:
+    "Batch mode: the document-processing worker exits once its queue has stayed empty this many minutes. Unset keeps it long-running.",
   EDGAR_USER_AGENT:
     "Identifying SEC EDGAR contact string. Unset disables the adapter because the SEC requires one.",
   EMAIL_PROVIDER:

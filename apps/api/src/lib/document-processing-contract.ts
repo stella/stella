@@ -1,5 +1,21 @@
-/** Persisted-output contract: v2 adds page geometry and a searchable PDF. */
-export const DOCUMENT_OCR_PROCESSOR_VERSION = 2;
+/**
+ * Persisted-output contract: v2 adds page geometry and a searchable PDF,
+ * v3 switches recognition to the local PP-OCR pipeline (line boxes are in
+ * PDF point coordinates).
+ */
+export const DOCUMENT_OCR_PROCESSOR_VERSION = 3;
+
+/** Both OCR providers refuse documents beyond this page count. */
+export const OCR_MAX_PAGES = 500;
+
+/**
+ * File names the local OCR worker loads from the configured model
+ * directory; `fetch-ocr-models.ts` downloads and pins them.
+ */
+export const OCR_LOCAL_MODEL_FILES = {
+  detection: "ppocr-v5-mobile-det.onnx",
+  recognition: "ppocr-v5-latin-rec.onnx",
+} as const;
 
 /** Persisted-output contract for sandboxed native text extraction. */
 export const DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION = 1;
