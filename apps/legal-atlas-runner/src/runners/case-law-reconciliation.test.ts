@@ -57,7 +57,7 @@ const IDLE: ReconciliationTurnResult = { turn: RECONCILIATION_TURN.IDLE };
 const LEASED: ReconciliationTurnResult = { turn: RECONCILIATION_TURN.LEASED };
 
 type LoopEvent =
-  | { type: "turn"; adapterKey: string }
+  | { type: "turn"; adapterKey: string; atMs: number }
   | { type: "sleep"; ms: number };
 
 type LoopRun = {
@@ -92,7 +92,7 @@ const runLoop = async ({
     sources: responders.map(([adapterKey, respond]) => ({
       adapterKey,
       runWorkUnit: async () => {
-        events.push({ type: "turn", adapterKey });
+        events.push({ type: "turn", adapterKey, atMs: clock });
         taken += 1;
         draining ||= taken >= turns;
         return await Promise.resolve(respond());
@@ -326,13 +326,20 @@ describe("case law reconciliation loop", () => {
       turns: 10,
     });
 
-    const gaps = gapsBetweenTurns(run);
-
-    // The idle schedule engages: some wait exceeds the unit gap.
-    expect(gaps.some((ms) => ms > TIMING.unitDelayMs)).toBe(true);
-    // ...but none of them sleeps past the failure ceiling, which is what
-    // bounds how stale the held source's retry can get.
-    expect(gaps.every((ms) => ms <= TIMING.failureBackoffMaxMs)).toBe(true);
+    expect(run.events.filter((event) => event.type === "turn")).toEqual([
+      { type: "turn", adapterKey: "cz-regional", atMs: 0 },
+      { type: "turn", adapterKey: "cz-ns", atMs: 500 },
+      { type: "turn", adapterKey: "cz-regional", atMs: 1000 },
+      { type: "turn", adapterKey: "cz-ns", atMs: 1500 },
+      { type: "turn", adapterKey: "cz-ns", atMs: 2000 },
+      { type: "turn", adapterKey: "cz-regional", atMs: 3000 },
+      { type: "turn", adapterKey: "cz-ns", atMs: 3500 },
+      { type: "turn", adapterKey: "cz-ns", atMs: 4000 },
+      // The idle schedule advances instead of freezing at the retry wait.
+      { type: "turn", adapterKey: "cz-ns", atMs: 5000 },
+      // It also stops at the held source's deadline instead of oversleeping.
+      { type: "turn", adapterKey: "cz-regional", atMs: 7000 },
+    ]);
   });
 
   test("every source failing waits out the earliest retry rather than spinning", async () => {
@@ -357,10 +364,16 @@ describe("case law reconciliation loop", () => {
       turns: 6,
     });
 
-    const zeroGaps = gapsBetweenTurns(run).filter((ms) => ms === 0);
-
-    expect(zeroGaps).toEqual([]);
-    expect(run.clock).toBeLessThanOrEqual(TIMING.failureBackoffMaxMs * 6);
+    expect(run.events.filter((event) => event.type === "turn")).toEqual([
+      { type: "turn", adapterKey: "cz-regional", atMs: 0 },
+      { type: "turn", adapterKey: "cz-ns", atMs: 500 },
+      { type: "turn", adapterKey: "cz-regional", atMs: 1000 },
+      { type: "turn", adapterKey: "cz-ns", atMs: 1500 },
+      // Both sources are now held. The loop waits until the first deadline,
+      // then reaches the second at its own deadline without a poll storm.
+      { type: "turn", adapterKey: "cz-regional", atMs: 3000 },
+      { type: "turn", adapterKey: "cz-ns", atMs: 3500 },
+    ]);
   });
 
   test("a recovered source starts its next streak from scratch", async () => {
