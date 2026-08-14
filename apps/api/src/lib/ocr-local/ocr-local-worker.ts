@@ -146,7 +146,8 @@ const recognize = async (
       const boxIndex = batch[bi] ?? 0;
       const box = boxes[boxIndex];
       if (!box) {
-        return await packBatchCrop(bi + 1);
+        await packBatchCrop(bi + 1);
+        return;
       }
       const cropWidth = Math.min(
         batchWidth,
@@ -171,7 +172,7 @@ const recognize = async (
         cropWidth,
         tensor,
       });
-      return await packBatchCrop(bi + 1);
+      await packBatchCrop(bi + 1);
     };
 
     await packBatchCrop(0);
@@ -226,7 +227,7 @@ const recognize = async (
         text,
       };
     }
-    return await recognizeBatch(start + REC_BATCH_SIZE);
+    await recognizeBatch(start + REC_BATCH_SIZE);
   };
 
   await recognizeBatch(0);
@@ -287,7 +288,7 @@ try {
       return;
     }
     pages.push(await processPage(index));
-    return await processPages(index + 1);
+    await processPages(index + 1);
   };
   await processPages(0);
   document.destroy();
