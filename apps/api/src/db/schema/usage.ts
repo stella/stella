@@ -50,6 +50,24 @@ export const USAGE_POLICY_VISIBILITIES = ["public", "hidden"] as const;
  */
 export const USAGE_POLICY_PRICE_BASES = ["flat", "per_seat"] as const;
 
+/**
+ * Which budget a usage event settles against. `pool` is the org-wide
+ * purchased-unit ledger (the only lane before per-user budgets
+ * existed); `allowance` is a user's included per-seat budget;
+ * `fallback` is the reduced-cost lane served after the allowance is
+ * exhausted. Only `pool` events count against the org ledger balance.
+ */
+export const USAGE_EVENT_LANES = ["pool", "allowance", "fallback"] as const;
+export type UsageEventLane = (typeof USAGE_EVENT_LANES)[number];
+
+/**
+ * Per-user budget counters. `daily` accrues everything a user consumes
+ * from the included allowance inside one UTC day; `fallback_weekly`
+ * accrues fallback-lane consumption inside one UTC ISO week.
+ */
+export const USAGE_LANE_COUNTER_KINDS = ["daily", "fallback_weekly"] as const;
+export type UsageLaneCounterKind = (typeof USAGE_LANE_COUNTER_KINDS)[number];
+
 const USAGE_POLICY_KIND_SQL_VALUES = USAGE_POLICY_KINDS.map((kind) =>
   sql.raw(`'${kind}'`),
 );
@@ -65,6 +83,14 @@ const DESTRUCTIVE_EFFECT_CHUNK_STATUS_SQL_VALUES =
 
 const USAGE_POLICY_PRICE_BASIS_SQL_VALUES = USAGE_POLICY_PRICE_BASES.map(
   (basis) => sql.raw(`'${basis}'`),
+);
+
+const USAGE_EVENT_LANE_SQL_VALUES = USAGE_EVENT_LANES.map((lane) =>
+  sql.raw(`'${lane}'`),
+);
+
+const USAGE_LANE_COUNTER_KIND_SQL_VALUES = USAGE_LANE_COUNTER_KINDS.map(
+  (kind) => sql.raw(`'${kind}'`),
 );
 
 export const usagePolicies = p.pgTable(
@@ -91,6 +117,11 @@ export const usagePolicies = p.pgTable(
       .text("price_basis", { enum: USAGE_POLICY_PRICE_BASES })
       .notNull()
       .default("flat"),
+    // Per-seat budget sizes in micro-units, operator-seeded like the
+    // price fields. Null = the policy grants no such budget (packs,
+    // and deployments that have not opted in).
+    dailyAllowanceMicroUnits: p.integer("daily_allowance_micro_units"),
+    fallbackWeeklyMicroUnits: p.integer("fallback_weekly_micro_units"),
     // Hidden by default: a seeded policy only appears in the catalog
     // endpoint once the operator explicitly marks it public.
     visibility: p
@@ -133,6 +164,14 @@ export const usagePolicies = p.pgTable(
     p.check(
       "usage_policies_price_basis_domain",
       sql`price_basis IN (${sql.join(USAGE_POLICY_PRICE_BASIS_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "usage_policies_daily_allowance_nonneg",
+      sql`daily_allowance_micro_units IS NULL OR daily_allowance_micro_units >= 0`,
+    ),
+    p.check(
+      "usage_policies_fallback_weekly_nonneg",
+      sql`fallback_weekly_micro_units IS NULL OR fallback_weekly_micro_units >= 0`,
     ),
     p
       .uniqueIndex("usage_policies_hosted_policy_ref_uidx")
@@ -502,6 +541,12 @@ export const usageEvents = p.pgTable(
       .text("service_tier", { enum: USAGE_SERVICE_TIERS })
       .notNull(),
     isByok: p.boolean("is_byok").notNull().default(false),
+    /**
+     * Which budget this event settles against. Ledger balance sums
+     * only `pool` rows; `allowance` and `fallback` rows are settled
+     * by the per-user lane counters instead.
+     */
+    lane: p.text({ enum: USAGE_EVENT_LANES }).notNull().default("pool"),
     traceId: p.text("trace_id"),
     idempotencyKey: p.text("idempotency_key"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
@@ -522,6 +567,10 @@ export const usageEvents = p.pgTable(
     // are floored at 1 in app code.
     p.check("usage_events_units_nonneg", sql`units_consumed >= 0`),
     p.check("usage_events_period_order", sql`period_end > period_start`),
+    p.check(
+      "usage_events_lane_domain",
+      sql`lane IN (${sql.join(USAGE_EVENT_LANE_SQL_VALUES, sql`, `)})`,
+    ),
     p.pgPolicy("usage_events_select", {
       for: "select",
       to: stella,
@@ -539,6 +588,73 @@ export const usageEvents = p.pgTable(
       using: sql`false`,
     }),
     p.pgPolicy("usage_events_no_delete", {
+      as: "restrictive",
+      for: "delete",
+      to: stella,
+      using: sql`false`,
+    }),
+  ],
+);
+
+/**
+ * Per-user budget accumulators, one row per (org, user, kind, bucket).
+ * Written in the same transaction as the usage event they settle, read
+ * as a single point lookup at pre-flight — never derived by scanning
+ * `usage_events`. Buckets are UTC-aligned; a new bucket row starts the
+ * count at zero, which is the reset.
+ */
+export const usageLaneCounters = p.pgTable(
+  "usage_lane_counters",
+  {
+    id: pUuid<"usageLaneCounter">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    kind: p.text({ enum: USAGE_LANE_COUNTER_KINDS }).notNull(),
+    bucketStart: timestamptz("bucket_start").notNull(),
+    microUnits: p
+      .bigint("micro_units", { mode: "number" })
+      .notNull()
+      .default(0),
+    updatedAt: timestamptz("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    // The upsert target and the pre-flight point lookup.
+    p
+      .uniqueIndex("usage_lane_counters_org_user_kind_bucket_uidx")
+      .on(table.organizationId, table.userId, table.kind, table.bucketStart),
+    p.check("usage_lane_counters_micro_units_nonneg", sql`micro_units >= 0`),
+    p.check(
+      "usage_lane_counters_kind_domain",
+      sql`kind IN (${sql.join(USAGE_LANE_COUNTER_KIND_SQL_VALUES, sql`, `)})`,
+    ),
+    // Counters are written from the metered request path (tenant
+    // connection), so insert/update carry the org check; rows are
+    // never deleted — resets happen by bucket rollover.
+    p.pgPolicy("usage_lane_counters_select", {
+      for: "select",
+      to: stella,
+      using: organizationCheck,
+    }),
+    p.pgPolicy("usage_lane_counters_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: organizationCheck,
+    }),
+    p.pgPolicy("usage_lane_counters_update", {
+      for: "update",
+      to: stella,
+      using: organizationCheck,
+      withCheck: organizationCheck,
+    }),
+    p.pgPolicy("usage_lane_counters_no_delete", {
       as: "restrictive",
       for: "delete",
       to: stella,

@@ -4,7 +4,11 @@ import { Result } from "better-result";
 import type { ModelRole } from "@stll/ai-catalog";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
+import type {
+  UsageActionType,
+  UsageEventLane,
+  UsageServiceTier,
+} from "@/api/db/schema";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { classifyAIError, isAnticipatedAIFailure } from "@/api/lib/ai-error";
 import { captureError as captureTelemetryError } from "@/api/lib/analytics/capture";
@@ -18,6 +22,7 @@ import {
   resolveEffectiveServiceTierForProvider,
   type ResolvedTanStackTextModelInfo,
 } from "@/api/lib/tanstack-ai-models";
+import { incrementLaneCounter } from "@/api/lib/usage/lane-budget";
 import { usageUnitsFromTokens } from "@/api/lib/usage/unit-model";
 import { recordUsageEvent } from "@/api/lib/usage/usage-ledger";
 
@@ -36,6 +41,11 @@ type AnalyticsMetadata = Record<string, AnalyticsPrimitive>;
 
 export type TanStackAIUsageMetering = {
   actionType: UsageActionType;
+  /**
+   * Budget this turn settles against, decided at routing time.
+   * Omitted = the org pool (every caller before lane routing landed).
+   */
+  lane?: UsageEventLane;
   organizationId: SafeId<"organization">;
   safeDb: SafeDb;
   serviceTier: UsageServiceTier;
@@ -236,23 +246,38 @@ const recordTanStackConsumption = async ({
     serviceTier: effectiveServiceTier,
   });
 
-  const result = await metering.safeDb(
-    async (tx) =>
-      await recordUsageEvent({
+  const lane = metering.lane ?? "pool";
+  const result = await metering.safeDb(async (tx) => {
+    const recorded = await recordUsageEvent({
+      tx,
+      actionType: metering.actionType,
+      unitsConsumed: lane === "pool" ? unitsConsumed : 0,
+      isByok: modelInfo.keySource === "byok",
+      lane,
+      modelRole: config.modelRole ?? "chat",
+      organizationId: metering.organizationId,
+      rawUsageMicroUnits,
+      serviceTier: effectiveServiceTier,
+      idempotencyKey: `${config.traceId}:${runId}:${iteration}`,
+      traceId: config.traceId,
+      userId: metering.userId,
+      workspaceId: metering.workspaceId,
+    });
+    // Allowance/fallback consumption settles against the user's lane
+    // counter in the SAME transaction as the event, so a crash between
+    // the two cannot leave settled work uncounted. Duplicate callbacks
+    // dedupe on the event and must not double-increment the counter.
+    if (recorded.status === "recorded" && lane !== "pool") {
+      await incrementLaneCounter({
         tx,
-        actionType: metering.actionType,
-        unitsConsumed,
-        isByok: modelInfo.keySource === "byok",
-        modelRole: config.modelRole ?? "chat",
         organizationId: metering.organizationId,
-        rawUsageMicroUnits,
-        serviceTier: effectiveServiceTier,
-        idempotencyKey: `${config.traceId}:${runId}:${iteration}`,
-        traceId: config.traceId,
         userId: metering.userId,
-        workspaceId: metering.workspaceId,
-      }),
-  );
+        kind: lane === "fallback" ? "fallback_weekly" : "daily",
+        microUnits: rawUsageMicroUnits,
+      });
+    }
+    return recorded;
+  });
 
   if (Result.isError(result)) {
     captureTelemetryError(result.error, {

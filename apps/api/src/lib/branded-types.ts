@@ -47,6 +47,7 @@ export type SafeIdType =
   | "contact"
   | "contactRelationship"
   | "usageAllocation"
+  | "usageLaneCounter"
   | "usagePolicy"
   | "usageEntitlement"
   | "usageEvent"
