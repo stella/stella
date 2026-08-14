@@ -6,6 +6,9 @@ export const WEB_ANALYTICS_EVENTS = {
   // The standard event name, so PostHog web analytics aggregates our page
   // views; the payload still carries route templates, never resolved URLs.
   pageViewed: "$pageview",
+  // SDK-emitted performance metrics; `before_send` rebuilds the payload so
+  // only metric values and coarse client context leave the browser.
+  webVitals: "$web_vitals",
   guideStepSkipped: "guide_step_skipped",
   routeErrorRecovery: "route_error_recovery",
 } as const;

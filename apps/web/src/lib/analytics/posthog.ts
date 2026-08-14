@@ -1,6 +1,6 @@
 import { CancelledError } from "@tanstack/react-query";
 import { posthog } from "posthog-js";
-import type { CaptureResult } from "posthog-js";
+import type { CaptureResult, SupportedWebVitalsMetrics } from "posthog-js";
 
 import { env } from "@/env";
 import {
@@ -222,6 +222,130 @@ const sanitizeExceptionEvent = (event: CaptureResult): CaptureResult => {
 type RouteErrorLifecycleSanitizer = typeof sanitizeRouteErrorLifecycleEvent;
 let routeErrorLifecycleSanitizer: RouteErrorLifecycleSanitizer | undefined;
 
+// The SDK stamps `$web_vitals` events with the resolved URL, which can
+// carry resource ids. `capturePageViewed` records resolved pathname →
+// route template for recent navigations (a bounded, adapter-owned map);
+// the sanitizer attributes each event via its originating URL rather
+// than the latest route, because vitals (CLS, INP) can flush after the
+// next navigation resolves. An unknown origin drops the URL fields
+// rather than mislabeling them.
+const ROUTE_TEMPLATE_HISTORY_LIMIT = 50;
+type RouteTemplateHistory = Map<string, string>;
+
+const recordRouteTemplate = (
+  history: RouteTemplateHistory,
+  resolvedPath: string,
+  template: string,
+): void => {
+  history.delete(resolvedPath);
+  history.set(resolvedPath, template);
+  for (const key of history.keys()) {
+    if (history.size <= ROUTE_TEMPLATE_HISTORY_LIMIT) {
+      break;
+    }
+    history.delete(key);
+  }
+};
+
+// Property keys per metric, total over the SDK's metric union so a new
+// metric cannot land without a decision here.
+const WEB_VITALS_KEYS = {
+  CLS: { value: "$web_vitals_CLS_value", event: "$web_vitals_CLS_event" },
+  FCP: { value: "$web_vitals_FCP_value", event: "$web_vitals_FCP_event" },
+  INP: { value: "$web_vitals_INP_value", event: "$web_vitals_INP_event" },
+  LCP: { value: "$web_vitals_LCP_value", event: "$web_vitals_LCP_event" },
+} as const satisfies Record<
+  SupportedWebVitalsMetrics,
+  { value: string; event: string }
+>;
+
+/**
+ * The URL the vitals were measured on, read from the SDK's per-metric
+ * event payloads (stamped when each metric fired, not when the batch
+ * flushed).
+ */
+const webVitalsOriginatingUrl = (
+  properties: Record<string, unknown>,
+): URL | null => {
+  for (const { event } of Object.values(WEB_VITALS_KEYS)) {
+    const entry = properties[event];
+    if (!isRecord(entry)) {
+      continue;
+    }
+    const url = entry["$current_url"];
+    if (typeof url !== "string") {
+      continue;
+    }
+    try {
+      return new URL(url);
+    } catch {
+      continue;
+    }
+  }
+  return null;
+};
+
+// Coarse client context worth keeping on web vitals: device/viewport
+// slicing without URLs, element attribution, or user content.
+const WEB_VITALS_CONTEXT_KEYS = [
+  "$session_id",
+  "$window_id",
+  "$browser",
+  "$browser_version",
+  "$os",
+  "$device_type",
+  "$viewport_height",
+  "$viewport_width",
+] as const;
+
+/**
+ * Rebuild a `$web_vitals` payload from an allowlist: metric values plus
+ * coarse client context. The SDK's per-metric `$web_vitals_*_event`
+ * objects (element attribution, resolved URLs) never pass through, and
+ * the URL fields are replaced with the last captured route template.
+ */
+const sanitizeWebVitalsEvent = (
+  event: CaptureResult,
+  history: RouteTemplateHistory,
+): CaptureResult | null => {
+  const properties: Record<string, unknown> = event.properties;
+  const metricValues = Object.fromEntries(
+    Object.values(WEB_VITALS_KEYS)
+      .map(({ value }) => value)
+      .filter((key) => typeof properties[key] === "number")
+      .map((key) => [key, properties[key]]),
+  );
+  if (Object.keys(metricValues).length === 0) {
+    return null;
+  }
+  const context = Object.fromEntries(
+    WEB_VITALS_CONTEXT_KEYS.filter((key) => key in properties).map((key) => [
+      key,
+      properties[key],
+    ]),
+  );
+  const appCommit = properties["app_commit"];
+  const appVersion = properties["app_version"];
+  const origin = webVitalsOriginatingUrl(properties);
+  const template = origin === null ? undefined : history.get(origin.pathname);
+  return {
+    ...event,
+    properties: {
+      ...pickIngestionRequired(properties),
+      ...metricValues,
+      ...context,
+      ...(typeof appCommit === "string" ? { app_commit: appCommit } : {}),
+      ...(typeof appVersion === "string" ? { app_version: appVersion } : {}),
+      ...(origin !== null && template !== undefined
+        ? {
+            $current_url: `${origin.origin}${template}`,
+            $pathname: template,
+          }
+        : {}),
+    },
+  };
+};
+
 const errorContextProperties = (
   context: ErrorCaptureContext | undefined,
 ): Record<string, string> | undefined => {
@@ -254,16 +378,17 @@ const devErrorContext = (
 /**
  * Initialize PostHog and return an Analytics adapter.
  *
- * Stella only sends error diagnostics through this adapter. Session
- * replay, heatmaps, autocapture, and remote PostHog feature configuration are
- * structurally disabled here rather than relying on deployment-specific
- * environment settings.
+ * Stella sends only error diagnostics, template-path page views, and web
+ * vitals through this adapter. Session replay, heatmaps, autocapture, and
+ * remote PostHog feature configuration are structurally disabled here
+ * rather than relying on deployment-specific environment settings.
  */
 export const createPostHogAnalytics = (
   key: string,
   host: string,
 ): { analytics: Analytics; client: typeof posthog | undefined } => {
   const localDebugEnabled = import.meta.env.DEV && env.VITE_POSTHOG_LOCAL_DEBUG;
+  const routeTemplateHistory: RouteTemplateHistory = new Map();
   const client = posthog.init(key, {
     opt_out_capturing_by_default: import.meta.env.DEV && !localDebugEnabled,
     api_host: host,
@@ -288,7 +413,7 @@ export const createPostHogAnalytics = (
     mask_personal_data_properties: true,
     person_profiles: "identified_only",
     capture_heatmaps: false,
-    capture_performance: false,
+    capture_performance: { network_timing: false, web_vitals: true },
     capture_pageview: false,
     before_send: (event) => {
       if (import.meta.env.DEV && !localDebugEnabled) {
@@ -308,6 +433,9 @@ export const createPostHogAnalytics = (
       }
       if (event.event === WEB_ANALYTICS_EVENTS.routeErrorRecovery) {
         return routeErrorLifecycleSanitizer?.(event) ?? null;
+      }
+      if (event.event === WEB_ANALYTICS_EVENTS.webVitals) {
+        return sanitizeWebVitalsEvent(event, routeTemplateHistory);
       }
       return event;
     },
@@ -347,6 +475,13 @@ export const createPostHogAnalytics = (
       // `location` always exists, but during SSR it does not; the `in` check
       // is the runtime truth the types cannot express.
       const hasLocation = "location" in globalThis;
+      if (hasLocation) {
+        recordRouteTemplate(
+          routeTemplateHistory,
+          globalThis.location.pathname,
+          path,
+        );
+      }
       posthog.capture(WEB_ANALYTICS_EVENTS.pageViewed, {
         ...(hasLocation
           ? { $current_url: `${globalThis.location.origin}${path}` }
