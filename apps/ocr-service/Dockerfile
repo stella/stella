@@ -1,6 +1,6 @@
 # Pin the complete CUDA 12.6 and cuDNN runtime closure. The NVIDIA container
 # runtime supplies the host driver, not toolkit libraries such as libnvrtc.
-FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04@sha256:8aef630a54bc5c5146ae5ce68e6af5caa3df0fb690bb91544175c91f307e4356 AS cuda-runtime
+FROM nvidia/cuda:13.3.1-cudnn-runtime-ubuntu24.04@sha256:2c9730db1d78ce3a7503a2f4ff2d64add3e7d1a47d57da504376192dda335242 AS cuda-runtime
 
 FROM cuda-runtime AS builder
 
