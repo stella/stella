@@ -8,6 +8,9 @@ import {
 
 export const CANARY_MCP_SERVER_NAME = "stella_canary";
 export const CANARY_FINISH_STREAM_TOOL_NAME = `mcp__${CANARY_MCP_SERVER_NAME}__${CANARY_FINISH_TOOL_NAME}`;
+const CANARY_FINISH_COMPLETED_RESULT = JSON.stringify({
+  status: "completed",
+});
 
 type ToolCallStartChunk = Extract<StreamChunk, { type: "TOOL_CALL_START" }>;
 
@@ -107,7 +110,7 @@ export const consumeCanaryHarnessChunk = (
       }
       observation.finishToolCallIds.add(chunk.toolCallId);
       return;
-    case EventType.TOOL_CALL_RESULT:
+    case EventType.TOOL_CALL_RESULT: {
       if (!observation.finishToolCallIds.has(chunk.toolCallId)) {
         return;
       }
@@ -118,10 +121,10 @@ export const consumeCanaryHarnessChunk = (
         };
         return;
       }
-      if (
-        chunk.state === "output-error" ||
-        chunk.content !== CANARY_COMPLETION_MARKER
-      ) {
+      const isExpectedResult =
+        chunk.content === CANARY_COMPLETION_MARKER ||
+        chunk.content === CANARY_FINISH_COMPLETED_RESULT;
+      if (chunk.state === "output-error" || !isExpectedResult) {
         observation.completion = {
           status: "failed",
           message: "canary_finish did not return its exact completion marker",
@@ -133,6 +136,7 @@ export const consumeCanaryHarnessChunk = (
         toolCallId: chunk.toolCallId,
       };
       return;
+    }
     case "CUSTOM":
     case EventType.MESSAGES_SNAPSHOT:
     case EventType.REASONING_ENCRYPTED_VALUE:
