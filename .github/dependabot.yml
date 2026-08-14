@@ -6,6 +6,8 @@ multi-ecosystem-groups:
       interval: "daily"
       time: "07:00"
       timezone: "Europe/Prague"
+    commit-message:
+      prefix: "chore"
 
 updates:
   - package-ecosystem: "github-actions"
@@ -93,8 +95,6 @@ updates:
           - "version-update:semver-major"
     labels:
       - "📦 dependencies"
-    commit-message:
-      prefix: "chore"
     reviewers:
       - "jan-kubica"
 
@@ -168,8 +168,6 @@ updates:
           - ">=3.3,<3.4"
     labels:
       - "📦 dependencies"
-    commit-message:
-      prefix: "chore"
     reviewers:
       - "jan-kubica"
 
