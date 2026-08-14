@@ -340,7 +340,18 @@ export const createPostHogAnalytics = (
       });
     },
     capturePageViewed: ({ path }) => {
+      // `path` is the matched route template (`/workspaces/$workspaceId`),
+      // never a resolved URL. Overriding the SDK's own `$current_url` and
+      // `$pathname` with the template keeps resource ids out of analytics
+      // while letting web analytics aggregate by page. DOM types claim
+      // `location` always exists, but during SSR it does not; the `in` check
+      // is the runtime truth the types cannot express.
+      const hasLocation = "location" in globalThis;
       posthog.capture(WEB_ANALYTICS_EVENTS.pageViewed, {
+        ...(hasLocation
+          ? { $current_url: `${globalThis.location.origin}${path}` }
+          : {}),
+        $pathname: path,
         path,
       });
     },
