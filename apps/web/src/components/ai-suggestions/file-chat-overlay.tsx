@@ -135,7 +135,7 @@ import {
   getChatSendMode,
   useChatAnonymized,
 } from "@/lib/chat-anonymized-store";
-import { useChatDraftStore, useIsChatDraftEmpty } from "@/lib/chat-draft-store";
+import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import {
   type DocxEditSafety,
   docxEditRepresentationForSelection,
@@ -1591,27 +1591,6 @@ const FileChatOverlayInner = ({
         if (ensureFileThreadPersisted !== undefined) {
           const persistedThreadId = await ensureFileThreadPersisted();
           if (persistedThreadId !== threadRef.threadId) {
-            // The composer draft is keyed by thread id, so it must follow
-            // the rebind or the preserved throw would strand it under the
-            // dead draft id.
-            const draftStore = useChatDraftStore.getState();
-            const draftKey = getChatThreadKey(threadRef);
-            const draft = draftStore.getDraft(draftKey);
-            if (draft !== null) {
-              draftStore.setDraft(
-                getChatThreadKey(
-                  threadRef.scope === "workspace"
-                    ? {
-                        scope: "workspace",
-                        threadId: persistedThreadId,
-                        workspaceId: threadRef.workspaceId,
-                      }
-                    : { scope: "global", threadId: persistedThreadId },
-                ),
-                draft,
-              );
-              draftStore.clearDraft(draftKey);
-            }
             stellaToast.add({
               title: t("chat.fileThreadRebound"),
               type: "info",
@@ -1619,6 +1598,15 @@ const FileChatOverlayInner = ({
             throw new ChatSubmitPreservedError({
               message:
                 "File thread rebound to a concurrently created thread; draft preserved for retry",
+              restoreThreadKey: getChatThreadKey(
+                threadRef.scope === "workspace"
+                  ? {
+                      scope: "workspace",
+                      threadId: persistedThreadId,
+                      workspaceId: threadRef.workspaceId,
+                    }
+                  : { scope: "global", threadId: persistedThreadId },
+              ),
             });
           }
         }
@@ -1631,7 +1619,7 @@ const FileChatOverlayInner = ({
           await buildChatRequestMessage({ files, html: prompt }),
         );
       } catch (submitError) {
-        capturePromptSubmitError(submitError);
+        throw submitError;
       }
     },
   );
