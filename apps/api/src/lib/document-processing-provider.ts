@@ -1,43 +1,24 @@
-import { Result, TaggedError } from "better-result";
+import { Result } from "better-result";
 
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import type {
   DocumentOcrLine,
   DocumentOcrPage,
-  DocumentOcrPayload,
 } from "@/api/lib/document-processing-contract";
-import { serializeDocumentOcrPayload } from "@/api/lib/document-processing-contract";
+import {
+  assembleDocumentOcrResult,
+  DocumentOcrProviderError,
+  OCR_TIMEOUT_MS,
+  parseOcrBox,
+  validateOcrResult,
+  type DocumentOcrResult,
+} from "@/api/lib/document-processing-ocr-result";
 import { fetchWithTimeout } from "@/api/lib/fetch";
-import { LIMITS } from "@/api/lib/limits";
-import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import { recognizePdfTextLocally } from "@/api/lib/ocr-local/recognize-local";
+import { isRecord } from "@/api/lib/type-guards";
 
-const OCR_REQUEST_TIMEOUT_MS = 30 * 60 * 1000;
-const OCR_MAX_PAGES = 500;
 const OCR_MAX_RESPONSE_BYTES = 64 * 1024 * 1024;
 const OCR_MAX_RESPONSE_CHUNKS = 16 * 1024;
-const PAGE_SEPARATOR = "\n\n\f\n\n";
-
-export class DocumentOcrProviderError extends TaggedError(
-  "DocumentOcrProviderError",
-)<{
-  code:
-    | "not_configured"
-    | "request_failed"
-    | "invalid_response"
-    | "response_too_large"
-    | "page_limit_exceeded"
-    | "empty_result";
-  message: string;
-  cause?: unknown;
-  status?: number | undefined;
-}> {}
-
-export type DocumentOcrResult = {
-  pageCount: number;
-  payload: DocumentOcrPayload;
-  text: string;
-  truncated: boolean;
-};
 
 export const createOcrRequestInit = ({
   idempotencyKey,
@@ -73,12 +54,9 @@ export const createOcrRequestInit = ({
     // redirect could otherwise disclose it to an unvalidated HTTP endpoint.
     redirect: "error" as const,
     signal,
-    timeoutMs: OCR_REQUEST_TIMEOUT_MS,
+    timeoutMs: OCR_TIMEOUT_MS,
   };
 };
-
-export const isSupportedOcrPageCount = (pageCount: number): boolean =>
-  pageCount > 0 && pageCount <= OCR_MAX_PAGES;
 
 export const readBoundedOcrJson = async (
   response: Response,
@@ -156,48 +134,21 @@ const serviceUrl = (): string => {
   return `${configured.slice(0, end)}/ocr`;
 };
 
-export const isDocumentOcrProviderConfigured = (): boolean =>
-  envDocumentProcessingWorker.OCR_SERVICE_URL !== undefined;
+export const isDocumentOcrProviderConfigured = (): boolean => {
+  switch (envDocumentProcessingWorker.DOCUMENT_OCR_PROVIDER) {
+    case "local":
+      return envDocumentProcessingWorker.DOCUMENT_OCR_MODEL_DIR !== undefined;
+    case "service":
+      return envDocumentProcessingWorker.OCR_SERVICE_URL !== undefined;
+    default:
+      return envDocumentProcessingWorker.DOCUMENT_OCR_PROVIDER satisfies never;
+  }
+};
 
 type PaddlePage = {
   boxes: readonly (readonly [number, number, number, number])[];
   scores: readonly number[];
   texts: readonly string[];
-};
-
-const parseBox = (
-  value: unknown,
-  width: number,
-  height: number,
-): readonly [number, number, number, number] | null => {
-  if (
-    !isUnknownArray(value) ||
-    value.length !== 4 ||
-    !value.every(
-      (coordinate) =>
-        typeof coordinate === "number" && Number.isFinite(coordinate),
-    )
-  ) {
-    return null;
-  }
-
-  const [xMin, yMin, xMax, yMax] = value;
-  if (
-    typeof xMin !== "number" ||
-    typeof yMin !== "number" ||
-    typeof xMax !== "number" ||
-    typeof yMax !== "number" ||
-    xMin < 0 ||
-    yMin < 0 ||
-    xMax <= xMin ||
-    yMax <= yMin ||
-    xMax > width ||
-    yMax > height
-  ) {
-    return null;
-  }
-
-  return [xMin, yMin, xMax, yMax];
 };
 
 const parsePage = (
@@ -235,7 +186,7 @@ const parsePage = (
     return null;
   }
 
-  const parsedBoxes = boxes.map((box) => parseBox(box, width, height));
+  const parsedBoxes = boxes.map((box) => parseOcrBox(box, width, height));
   if (parsedBoxes.some((box) => box === null)) {
     return null;
   }
@@ -305,13 +256,9 @@ export const parsePaddleOcrResponse = (
     return null;
   }
 
-  const textParts: string[] = [];
   const pages: DocumentOcrPage[] = [];
-  let accumulatedChars = 0;
-  let pageCount = 0;
-  let truncated = false;
   for (const pageValue of result["ocrResults"]) {
-    const dimension = dimensions.at(pageCount);
+    const dimension = dimensions.at(pages.length);
     if (!dimension) {
       return null;
     }
@@ -319,15 +266,6 @@ export const parsePaddleOcrResponse = (
     if (!page) {
       return null;
     }
-
-    const pagePrefix = pageCount === 0 ? "" : PAGE_SEPARATOR;
-    const boundedPagePrefix = pagePrefix.slice(
-      0,
-      Math.max(0, LIMITS.extractedContentMaxChars - accumulatedChars),
-    );
-    textParts.push(boundedPagePrefix);
-    accumulatedChars += boundedPagePrefix.length;
-    truncated ||= boundedPagePrefix.length < pagePrefix.length;
 
     const lines: DocumentOcrLine[] = [];
     for (let lineIndex = 0; lineIndex < page.texts.length; lineIndex += 1) {
@@ -337,46 +275,43 @@ export const parsePaddleOcrResponse = (
       if (!text || !box || confidence === undefined) {
         continue;
       }
-      const separator = lines.length > 0 ? "\n" : "";
       lines.push({ box, confidence, text });
-      const remainingChars = LIMITS.extractedContentMaxChars - accumulatedChars;
-      if (remainingChars <= 0) {
-        truncated = true;
-        continue;
-      }
-      const segment = `${separator}${text}`;
-      const boundedSegment = segment.slice(0, remainingChars);
-      const boundedText = boundedSegment.slice(separator.length);
-      if (boundedText.length === 0) {
-        truncated = true;
-        continue;
-      }
-      textParts.push(boundedSegment);
-      accumulatedChars += boundedSegment.length;
-      truncated ||= boundedText.length < text.length;
     }
-
-    pageCount += 1;
     pages.push({ ...dimension, lines });
   }
 
-  return {
-    pageCount,
-    payload: { pages, version: 1 },
-    text: textParts.join(""),
-    truncated,
-  };
+  return assembleDocumentOcrResult(pages);
 };
 
-export const recognizePdfText = async ({
+type RecognizePdfTextOptions = {
+  idempotencyKey: string;
+  signal: AbortSignal;
+  /** Object-storage key the local provider reads directly. */
+  sourceKey: string;
+  /** Presigned URL the service provider hands to the OCR endpoint. */
+  sourceUrl: string;
+};
+
+export const recognizePdfText = async (
+  options: RecognizePdfTextOptions,
+): Promise<Result<DocumentOcrResult, DocumentOcrProviderError>> => {
+  switch (envDocumentProcessingWorker.DOCUMENT_OCR_PROVIDER) {
+    case "local":
+      return await recognizePdfTextLocally(options);
+    case "service":
+      return await recognizePdfTextViaService(options);
+    default:
+      return envDocumentProcessingWorker.DOCUMENT_OCR_PROVIDER satisfies never;
+  }
+};
+
+const recognizePdfTextViaService = async ({
   idempotencyKey,
   signal,
   sourceUrl,
-}: {
-  idempotencyKey: string;
-  signal: AbortSignal;
-  sourceUrl: string;
-}): Promise<Result<DocumentOcrResult, DocumentOcrProviderError>> =>
+}: RecognizePdfTextOptions): Promise<
+  Result<DocumentOcrResult, DocumentOcrProviderError>
+> =>
   await Result.tryPromise({
     try: async () => {
       const response = await fetchWithTimeout(
@@ -404,29 +339,7 @@ export const recognizePdfText = async ({
           message: "OCR service returned an invalid response",
         });
       }
-      if (!isSupportedOcrPageCount(parsed.pageCount)) {
-        throw new DocumentOcrProviderError({
-          code: "page_limit_exceeded",
-          message: `OCR supports PDFs up to ${OCR_MAX_PAGES} pages`,
-        });
-      }
-      const payloadBytes = new TextEncoder().encode(
-        serializeDocumentOcrPayload(parsed.payload),
-      ).byteLength;
-      if (payloadBytes > LIMITS.documentOcrPayloadMaxBytes) {
-        throw new DocumentOcrProviderError({
-          code: "response_too_large",
-          message: "OCR page geometry exceeded the allowed size",
-        });
-      }
-      if (parsed.text.trim().length === 0) {
-        throw new DocumentOcrProviderError({
-          code: "empty_result",
-          message: "OCR service found no searchable text",
-        });
-      }
-
-      return parsed;
+      return validateOcrResult(parsed);
     },
     catch: (cause) =>
       cause instanceof DocumentOcrProviderError

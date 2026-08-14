@@ -4,6 +4,9 @@ services:
       ocr:
         condition: service_healthy
     environment:
+      # Opting into this overlay routes OCR to the bundled GPU service;
+      # without it the worker image runs its built-in local ONNX pipeline.
+      DOCUMENT_OCR_PROVIDER: service
       OCR_SERVICE_URL: http://127.0.0.1:8080
     network_mode: service:ocr
 

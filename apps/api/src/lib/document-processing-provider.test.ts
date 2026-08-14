@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
+import { isSupportedOcrPageCount } from "@/api/lib/document-processing-ocr-result";
 import {
   createOcrRequestInit,
-  isSupportedOcrPageCount,
   parsePaddleOcrResponse,
   readBoundedOcrJson,
 } from "@/api/lib/document-processing-provider";

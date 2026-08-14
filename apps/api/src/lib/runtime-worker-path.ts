@@ -12,6 +12,7 @@ const OCR_PDF_FONT_PATH_ENV = "STELLA_OCR_PDF_FONT_PATH";
 export const RUNTIME_WORKER_FILES = {
   extraction: "extraction-worker.js",
   officeEvidence: "office-evidence-worker.js",
+  ocrLocal: "ocr-local-worker.js",
   ocrSearchablePdf: "ocr-searchable-pdf-worker.js",
   pdf: "pdf-worker.js",
 } as const;
@@ -22,6 +23,8 @@ export type RuntimeWorkerFile =
 // Sidecar assets the worker bundles load relative to their own location;
 // apps/api/Dockerfile copies them into the same runtime worker directory.
 export const RUNTIME_WORKER_SIDECAR_FILES = [
+  "latin-v5-dict.txt",
+  "pdfium.wasm",
   "pptx_parser_bg.wasm",
   "xlsx_parser_bg.wasm",
 ] as const;
