@@ -91,33 +91,6 @@ describe("document-processing worker environment", () => {
     expect(validateWorkerEnv().exitCode).toBe(0);
   });
 
-  test("allows HTTPS and loopback OCR service endpoints", () => {
-    expect(
-      validateWorkerEnv({
-        ...baseEnv,
-        OCR_SERVICE_URL: "https://ocr.example.com",
-      }).exitCode,
-    ).toBe(0);
-    expect(
-      validateWorkerEnv({
-        ...baseEnv,
-        OCR_SERVICE_URL: "http://127.0.0.1:8080",
-      }).exitCode,
-    ).toBe(0);
-  });
-
-  test("rejects plaintext remote OCR service endpoints", () => {
-    const result = validateWorkerEnv({
-      ...baseEnv,
-      OCR_SERVICE_URL: "http://ocr.example.com",
-    });
-
-    expect(result.exitCode).not.toBe(0);
-    expect(result.stderr.toString()).toContain(
-      "OCR_SERVICE_URL must use HTTPS unless it targets a loopback address.",
-    );
-  });
-
   test("accepts Railway private-network Redis in production", () => {
     expect(
       validateWorkerEnv({

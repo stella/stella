@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { DocumentOcrProviderError } from "@/api/lib/document-processing-ocr-result";
+import { DocumentOcrError } from "@/api/lib/document-processing-ocr-result";
 import { LIMITS } from "@/api/lib/limits";
 import { recognizePdfTextLocally } from "@/api/lib/ocr-local/recognize-local";
 
@@ -13,10 +13,8 @@ import { recognizePdfTextLocally } from "@/api/lib/ocr-local/recognize-local";
  */
 
 const baseOptions = {
-  idempotencyKey: "ocr:test",
   signal: new AbortController().signal,
   sourceKey: "org/ws/file",
-  sourceUrl: "https://storage.example/presigned",
   // The configuration gate sits before the behavior under test.
   resolveModelDir: () => "/tmp/ocr-models-test-env",
 };
@@ -35,7 +33,7 @@ describe("recognizePdfTextLocally size bounds", () => {
 
     expect(Result.isError(result)).toBe(true);
     if (Result.isError(result)) {
-      expect(result.error).toBeInstanceOf(DocumentOcrProviderError);
+      expect(result.error).toBeInstanceOf(DocumentOcrError);
       expect(result.error.code).toBe("response_too_large");
     }
     expect(readCalled).toBe(false);

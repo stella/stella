@@ -1,9 +1,7 @@
 /**
- * Provider-neutral OCR result shapes: validation of untrusted page
- * geometry (an HTTP response or a subprocess boundary) and assembly of
- * the bounded plain-text projection from validated pages. Both the
- * remote-service and local-worker providers converge here so their
- * persisted output is byte-identical for the same recognition result.
+ * OCR result shapes: validation of untrusted page geometry at the subprocess
+ * boundary and assembly of the bounded plain-text projection from validated
+ * pages.
  */
 
 import { TaggedError } from "better-result";
@@ -24,9 +22,7 @@ const PAGE_SEPARATOR = "\n\n\f\n\n";
 
 export const OCR_TIMEOUT_MS = 30 * 60 * 1000;
 
-export class DocumentOcrProviderError extends TaggedError(
-  "DocumentOcrProviderError",
-)<{
+export class DocumentOcrError extends TaggedError("DocumentOcrError")<{
   code:
     | "not_configured"
     | "request_failed"
@@ -36,18 +32,17 @@ export class DocumentOcrProviderError extends TaggedError(
     | "empty_result";
   message: string;
   cause?: unknown;
-  status?: number | undefined;
 }> {}
 
 export const isSupportedOcrPageCount = (pageCount: number): boolean =>
   pageCount > 0 && pageCount <= OCR_MAX_PAGES;
 
-/** Post-recognition invariants shared by both providers. */
+/** Post-recognition invariants enforced at the worker boundary. */
 export const validateOcrResult = (
   parsed: DocumentOcrResult,
 ): DocumentOcrResult => {
   if (!isSupportedOcrPageCount(parsed.pageCount)) {
-    throw new DocumentOcrProviderError({
+    throw new DocumentOcrError({
       code: "page_limit_exceeded",
       message: `OCR supports PDFs up to ${OCR_MAX_PAGES} pages`,
     });
@@ -56,13 +51,13 @@ export const validateOcrResult = (
     serializeDocumentOcrPayload(parsed.payload),
   ).byteLength;
   if (payloadBytes > LIMITS.documentOcrPayloadMaxBytes) {
-    throw new DocumentOcrProviderError({
+    throw new DocumentOcrError({
       code: "response_too_large",
       message: "OCR page geometry exceeded the allowed size",
     });
   }
   if (parsed.text.trim().length === 0) {
-    throw new DocumentOcrProviderError({
+    throw new DocumentOcrError({
       code: "empty_result",
       message: "OCR found no searchable text",
     });

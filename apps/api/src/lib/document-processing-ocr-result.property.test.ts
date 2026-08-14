@@ -5,6 +5,7 @@ import { propertyConfig } from "@stll/property-testing";
 
 import {
   buildOcrPage,
+  isSupportedOcrPageCount,
   parseOcrPage,
 } from "@/api/lib/document-processing-ocr-result";
 
@@ -81,5 +82,13 @@ describe("buildOcrPage → parseOcrPage fixed point", () => {
       }),
       propertyConfig(),
     );
+  });
+});
+
+describe("isSupportedOcrPageCount", () => {
+  test("enforces the bounded document limit", () => {
+    expect(isSupportedOcrPageCount(1)).toBe(true);
+    expect(isSupportedOcrPageCount(500)).toBe(true);
+    expect(isSupportedOcrPageCount(501)).toBe(false);
   });
 });

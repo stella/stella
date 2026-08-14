@@ -249,14 +249,6 @@
         "expo-doctor": "1.20.1",
       },
     },
-    "apps/ocr-service": {
-      "name": "@stll/ocr-service",
-      "version": "0.0.0",
-      "devDependencies": {
-        "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
-      },
-    },
     "apps/playground": {
       "name": "@stll/playground",
       "version": "0.1.0",
@@ -2228,8 +2220,6 @@
     "@stll/mobile": ["@stll/mobile@workspace:apps/mobile"],
 
     "@stll/money": ["@stll/money@workspace:packages/money"],
-
-    "@stll/ocr-service": ["@stll/ocr-service@workspace:apps/ocr-service"],
 
     "@stll/oxlint-config": ["@stll/oxlint-config@0.6.0", "", { "peerDependencies": { "oxlint": ">=1.75.0 <2", "oxlint-tsgolint": ">=7.0.2001 <8" } }, "sha512-SPQuoCCMShDBR2+hKeEOv+qh6Ru5NbfjO79h4ZSJ2STlTL5CCQKIPv2ipK3iv5i6BjAIWE3D31lSWi65xWoQgA=="],
 

@@ -1,5 +1,5 @@
 /**
- * Local OCR provider: reads the source PDF from object storage, runs
+ * Local OCR: reads the source PDF from object storage, runs
  * `ocr-local-worker.ts` in an isolated subprocess, and revalidates its
  * JSON output before assembling the shared result shape. The worker
  * process lives for exactly one document, so renderer and inference
@@ -12,7 +12,7 @@ import { envDocumentProcessingWorker } from "@/api/env-document-processing-worke
 import type { DocumentOcrPage } from "@/api/lib/document-processing-contract";
 import {
   assembleDocumentOcrResult,
-  DocumentOcrProviderError,
+  DocumentOcrError,
   OCR_TIMEOUT_MS,
   parseOcrPage,
   validateOcrResult,
@@ -35,7 +35,7 @@ const WORKER_PATH = resolveRuntimeWorkerPath({
 
 const parseWorkerOutput = (raw: string): DocumentOcrPage[] => {
   const invalid = () =>
-    new DocumentOcrProviderError({
+    new DocumentOcrError({
       code: "invalid_response",
       message: "OCR worker returned an invalid result",
     });
@@ -66,22 +66,19 @@ export const recognizePdfTextLocally = async ({
   signal,
   sourceKey,
 }: {
-  idempotencyKey: string;
   signal: AbortSignal;
   sourceKey: string;
-  sourceUrl: string;
   readSource?: (key: string, signal: AbortSignal) => Promise<ArrayBuffer>;
   readSourceSize?: (key: string, signal: AbortSignal) => Promise<number | null>;
   resolveModelDir?: () => string | undefined;
-}): Promise<Result<DocumentOcrResult, DocumentOcrProviderError>> =>
+}): Promise<Result<DocumentOcrResult, DocumentOcrError>> =>
   await Result.tryPromise({
     try: async () => {
       const modelDir = resolveModelDir();
       if (!modelDir) {
-        throw new DocumentOcrProviderError({
+        throw new DocumentOcrError({
           code: "not_configured",
-          message:
-            "DOCUMENT_OCR_MODEL_DIR is required by the local OCR provider",
+          message: "DOCUMENT_OCR_MODEL_DIR is required by the OCR worker",
         });
       }
 
@@ -92,14 +89,14 @@ export const recognizePdfTextLocally = async ({
         declaredSize !== null &&
         declaredSize > LIMITS.documentOcrSourceMaxBytes
       ) {
-        throw new DocumentOcrProviderError({
+        throw new DocumentOcrError({
           code: "response_too_large",
           message: "OCR source document exceeded the allowed size",
         });
       }
       const source = await readSource(sourceKey, signal);
       if (source.byteLength > LIMITS.documentOcrSourceMaxBytes) {
-        throw new DocumentOcrProviderError({
+        throw new DocumentOcrError({
           code: "response_too_large",
           message: "OCR source document exceeded the allowed size",
         });
@@ -113,7 +110,7 @@ export const recognizePdfTextLocally = async ({
         signal,
       });
       if (Result.isError(output)) {
-        throw new DocumentOcrProviderError({
+        throw new DocumentOcrError({
           code: "request_failed",
           message: "OCR worker failed",
           cause: output.error,
@@ -126,11 +123,14 @@ export const recognizePdfTextLocally = async ({
       );
     },
     catch: (cause) =>
-      cause instanceof DocumentOcrProviderError
+      cause instanceof DocumentOcrError
         ? cause
-        : new DocumentOcrProviderError({
+        : new DocumentOcrError({
             code: "request_failed",
             message: "Local OCR failed",
             cause,
           }),
   });
+
+export const isLocalDocumentOcrConfigured = (): boolean =>
+  envDocumentProcessingWorker.DOCUMENT_OCR_MODEL_DIR !== undefined;

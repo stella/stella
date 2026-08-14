@@ -286,13 +286,11 @@ describe("environment doctor output", () => {
         DB_PASSWORD: "",
         DB_SSLMODE: "",
         EMAIL_PROVIDER: "",
-        OCR_SERVICE_URL: "",
       }),
     ).toEqual({
       DB_PASSWORD: "",
       DB_SSLMODE: "",
       EMAIL_PROVIDER: undefined,
-      OCR_SERVICE_URL: undefined,
     });
   });
 

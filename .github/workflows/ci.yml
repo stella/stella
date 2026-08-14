@@ -47,7 +47,6 @@ jobs:
       landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
       legal_atlas_image_required: ${{ steps.changed-files.outputs.legal_atlas_image_required }}
       mobile_build_required: ${{ steps.changed-files.outputs.mobile_build_required }}
-      ocr_image_required: ${{ steps.changed-files.outputs.ocr_image_required }}
       package_checks_required: ${{ steps.changed-files.outputs.package_checks_required }}
       release_typecheck_required: ${{ steps.changed-files.outputs.release_typecheck_required }}
       web_build_required: ${{ steps.changed-files.outputs.web_build_required }}
@@ -101,7 +100,6 @@ jobs:
               echo "landing_build_required=true"
               echo "legal_atlas_image_required=true"
               echo "mobile_build_required=true"
-              echo "ocr_image_required=true"
               echo "package_checks_required=true"
               echo "release_typecheck_required=false"
               echo "web_build_required=true"
@@ -124,7 +122,6 @@ jobs:
               echo "landing_build_required=false"
               echo "legal_atlas_image_required=false"
               echo "mobile_build_required=false"
-              echo "ocr_image_required=false"
               echo "package_checks_required=true"
               echo "release_typecheck_required=false"
               echo "web_build_required=false"
@@ -159,7 +156,6 @@ jobs:
           landing_build_required=false
           legal_atlas_image_required=false
           mobile_build_required=false
-          ocr_image_required=false
           release_typecheck_required=false
           web_build_required=false
           web_image_smoke_required=false
@@ -199,11 +195,6 @@ jobs:
                 ;;
             esac
             case "$file" in
-              apps/ocr-service/*)
-                ocr_image_required=true
-                ;;
-            esac
-            case "$file" in
               packages/scripts/*|package.json|bun.lock|.github/workflows/ci.yml)
                 windows_scripts_required=true
                 ;;
@@ -238,7 +229,6 @@ jobs:
             echo "landing_build_required=$landing_build_required"
             echo "legal_atlas_image_required=$legal_atlas_image_required"
             echo "mobile_build_required=$mobile_build_required"
-            echo "ocr_image_required=$ocr_image_required"
             echo "package_checks_required=$package_checks_required"
             echo "release_typecheck_required=$release_typecheck_required"
             echo "web_build_required=$web_build_required"
@@ -1933,51 +1923,6 @@ jobs:
         env:
           NPM_TOKEN: ""
 
-  ocr-image:
-    needs: ci-plan
-    if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
-       || github.event_name == 'workflow_dispatch')
-      && needs.ci-plan.outputs.ocr_image_required == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
-        with:
-          version: 0.12.2
-          enable-cache: true
-          cache-dependency-glob: apps/ocr-service/uv.lock
-
-      - name: Check OCR Python sources
-        working-directory: apps/ocr-service
-        run: |
-          uv sync --locked --only-group dev
-          uv run --no-sync ruff check .
-          uv run --no-sync ruff format --check .
-          uv run --no-sync ty check
-
-      - name: Build OCR image
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
-        with:
-          context: .
-          file: apps/ocr-service/Dockerfile
-          platforms: linux/amd64
-          push: false
-          cache-from: type=gha,scope=ocr-service
-          cache-to: type=gha,mode=max,scope=ocr-service
-
   legal-atlas-image:
     needs: ci-plan
     if: >-
@@ -2150,7 +2095,6 @@ jobs:
         landing-build,
         e2e,
         api-image-deps,
-        ocr-image,
         legal-atlas-image,
         windows-scripts,
         desktop-clippy,
@@ -2172,7 +2116,6 @@ jobs:
           CODE_QUALITY_RESULT: ${{ needs.code-quality.result }}
           LEGAL_ATLAS_IMAGE_RESULT: ${{ needs.legal-atlas-image.result }}
           MOBILE_RESULT: ${{ needs.mobile-build.result }}
-          OCR_IMAGE_RESULT: ${{ needs.ocr-image.result }}
           TRUSTED: ${{ needs.ci-plan.outputs.trusted }}
           PLAN_RESULT: ${{ needs.ci-plan.result }}
           POSTGRES_SUITES_RESULT: ${{ needs.postgres-suites.result }}
@@ -2203,7 +2146,6 @@ jobs:
                   || "$LANDING_RESULT" == "failure" || "$LANDING_RESULT" == "cancelled" \
                   || "$E2E_RESULT" == "failure" || "$E2E_RESULT" == "cancelled" \
                   || "$API_IMAGE_DEPS_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "cancelled" \
-                  || "$OCR_IMAGE_RESULT" == "failure" || "$OCR_IMAGE_RESULT" == "cancelled" \
                   || "$LEGAL_ATLAS_IMAGE_RESULT" == "failure" || "$LEGAL_ATLAS_IMAGE_RESULT" == "cancelled" \
                   || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" \
                   || "$PLAN_RESULT" == "failure" || "$PLAN_RESULT" == "cancelled" \
@@ -2232,12 +2174,12 @@ jobs:
 
           # "cancelled" means cancel-in-progress replaced this
           # run with a newer one; the newer run is authoritative.
-          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "cancelled" || "$CI_RESULT" == "cancelled" || "$CODE_QUALITY_RESULT" == "cancelled" || "$POSTGRES_SUITES_RESULT" == "cancelled" || "$RELEASE_TYPECHECK_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$WEB_IMAGE_SMOKE_RESULT" == "cancelled" || "$MOBILE_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$OCR_IMAGE_RESULT" == "cancelled" || "$LEGAL_ATLAS_IMAGE_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CHANGESET_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
+          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "cancelled" || "$CI_RESULT" == "cancelled" || "$CODE_QUALITY_RESULT" == "cancelled" || "$POSTGRES_SUITES_RESULT" == "cancelled" || "$RELEASE_TYPECHECK_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$WEB_IMAGE_SMOKE_RESULT" == "cancelled" || "$MOBILE_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$LEGAL_ATLAS_IMAGE_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CHANGESET_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
             echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
             exit 0
           fi
 
-          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "failure" || "$CI_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "failure" || "$POSTGRES_SUITES_RESULT" == "failure" || "$RELEASE_TYPECHECK_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$WEB_IMAGE_SMOKE_RESULT" == "failure" || "$MOBILE_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$OCR_IMAGE_RESULT" == "failure" || "$LEGAL_ATLAS_IMAGE_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CHANGESET_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
+          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "failure" || "$CI_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "failure" || "$POSTGRES_SUITES_RESULT" == "failure" || "$RELEASE_TYPECHECK_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$WEB_IMAGE_SMOKE_RESULT" == "failure" || "$MOBILE_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$LEGAL_ATLAS_IMAGE_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CHANGESET_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
             echo "::error::CI checks failed."
             exit 1
           fi
