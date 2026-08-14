@@ -88,6 +88,8 @@ describe("buildOcrPage → parseOcrPage fixed point", () => {
 describe("isSupportedOcrPageCount", () => {
   test("enforces the bounded document limit", () => {
     expect(isSupportedOcrPageCount(1)).toBe(true);
+    expect(isSupportedOcrPageCount(0)).toBe(false);
+    expect(isSupportedOcrPageCount(-1)).toBe(false);
     expect(isSupportedOcrPageCount(500)).toBe(true);
     expect(isSupportedOcrPageCount(501)).toBe(false);
   });
