@@ -167,12 +167,14 @@ test.describe("public hydration", () => {
       .first();
     // The route is SSR'd, so the trigger is visible just before React has
     // attached its handler and a too-early click is dropped (same gotcha as
-    // public-tools.spec.ts). Retry the open until hydration has accepted it,
-    // clicking only while the popover is closed so a slow-but-successful
-    // open is not toggled shut again.
+    // public-tools.spec.ts). Retry the open until hydration has accepted it.
+    // The re-click guard reads the trigger's aria-expanded, which the
+    // popover flips synchronously with its state: a successful click whose
+    // grid is still mounting is not toggled shut, while the dead SSR markup
+    // keeps it "false" so the pre-hydration case still retries.
     const dayGrid = page.locator('[role="gridcell"]').first();
     await expect(async () => {
-      if (!(await dayGrid.isVisible())) {
+      if ((await datePickerTrigger.getAttribute("aria-expanded")) !== "true") {
         await datePickerTrigger.click();
       }
       await expect(dayGrid).toBeVisible({ timeout: 1000 });
