@@ -20,7 +20,7 @@
     "test": "bun test --path-ignore-patterns='e2e/**' && bun test e2e/unit",
     "test:e2e": "playwright test --config e2e/playwright.config.ts",
     "test:e2e:marketing": "playwright test --config e2e/playwright.marketing.config.ts --project app",
-    "test:e2e:marketing:update": "playwright test --config e2e/playwright.marketing.config.ts --project app --update-snapshots",
+    "test:e2e:marketing:update": "playwright test --config e2e/playwright.marketing.config.ts --project app --update-snapshots=all",
     "test:e2e:landing": "playwright test --config e2e/playwright.marketing.config.ts --project landing",
     "capture:product-story": "bun e2e/marketing/record-product-story.ts",
     "test:e2e:staging": "playwright test --config e2e/playwright.staging.config.ts",

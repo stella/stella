@@ -842,7 +842,10 @@ const ChatTabPanelChrome = ({
   );
 
   return (
-    <div className="bg-muted/40 relative flex min-w-0 flex-1 flex-col">
+    <div
+      className="bg-muted/40 relative flex min-w-0 flex-1 flex-col"
+      data-slot="inspector-chat-panel"
+    >
       <InspectorTabHeader
         actions={actions}
         label={
