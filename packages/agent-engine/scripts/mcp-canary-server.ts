@@ -36,6 +36,7 @@ const CANARY_VIOLATION_CATEGORIES = [
 
 type CanaryEventType = (typeof CANARY_EVENT_TYPES)[number];
 type CanaryViolationCategory = (typeof CANARY_VIOLATION_CATEGORIES)[number];
+export type CanarySandboxCleanupStatus = "ok" | "leaked";
 
 export type CanaryCredentialClaims = {
   sub: string;
@@ -130,6 +131,15 @@ export const canaryStateDiagnostic = (value: unknown): string => {
     : undefined;
   return `events=${boundedCategories(eventTypes, CANARY_EVENT_TYPES)}; violations=${boundedCategories(value["violations"], CANARY_VIOLATION_CATEGORIES)}`;
 };
+
+export const canaryFailureDiagnostic = ({
+  state,
+  sandboxCleanup,
+}: {
+  state: unknown;
+  sandboxCleanup: CanarySandboxCleanupStatus;
+}): string =>
+  `server state: ${canaryStateDiagnostic(state)}; sandboxCleanup=${sandboxCleanup}`;
 
 const base64Url = (value: string | Uint8Array): string =>
   Buffer.from(value).toString("base64url");

@@ -35,7 +35,7 @@ import {
   CANARY_SCOPE,
   CANARY_USER_ID,
   CANARY_WRITE_MARKER,
-  canaryStateDiagnostic,
+  canaryFailureDiagnostic,
   signCanaryCredential,
 } from "./mcp-canary-server";
 
@@ -435,19 +435,22 @@ const main = async (): Promise<void> => {
     } catch (error) {
       harnessOutcome = { status: "failed", error };
     }
-    const containersAfterHarness = await listImageContainers();
-    if (
-      JSON.stringify(containersAfterHarness) !==
-      JSON.stringify(containersBeforeHarness)
-    ) {
-      fail("sandbox container survived successful harness cleanup");
-    }
-
     const state = await readCanaryState(containerName);
+    const containersAfterHarness = await listImageContainers();
+    const sandboxCleanup =
+      JSON.stringify(containersAfterHarness) ===
+      JSON.stringify(containersBeforeHarness)
+        ? "ok"
+        : "leaked";
     if (harnessOutcome.status === "failed") {
       fail(
-        `canary harness failed with server state: ${canaryStateDiagnostic(state)}`,
+        `canary harness failed with ${canaryFailureDiagnostic({ state, sandboxCleanup })}`,
         harnessOutcome.error,
+      );
+    }
+    if (sandboxCleanup === "leaked") {
+      fail(
+        `sandbox container survived successful harness cleanup with ${canaryFailureDiagnostic({ state, sandboxCleanup })}`,
       );
     }
     assertState(state);

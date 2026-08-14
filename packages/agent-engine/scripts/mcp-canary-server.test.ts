@@ -11,6 +11,7 @@ import {
   CANARY_SCOPE,
   CANARY_USER_ID,
   CANARY_WRITE_MARKER,
+  canaryFailureDiagnostic,
   canaryStateDiagnostic,
   createCanaryState,
   handleCanaryMessage,
@@ -152,6 +153,17 @@ describe("canary MCP protocol", () => {
       }),
     ).toBe(
       "events=read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,overflow; violations=none",
+    );
+    expect(
+      canaryFailureDiagnostic({
+        state: {
+          events: [{ type: "read_denied", payload: "not-for-logs" }],
+          violations: ["finish-before-required-sequence"],
+        },
+        sandboxCleanup: "leaked",
+      }),
+    ).toBe(
+      "server state: events=read_denied; violations=finish-before-required-sequence; sandboxCleanup=leaked",
     );
   });
 
