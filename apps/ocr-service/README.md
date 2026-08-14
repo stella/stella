@@ -7,8 +7,8 @@ This is an optional add-on. Stella and its standard self-host Compose stack do
 not require this image, an NVIDIA GPU, or an amd64 host. Those requirements
 apply only when an operator opts into this bundled GPU OCR runtime.
 
-The image pins PaddleOCR 3.7.0, PaddleX 3.7.2, and PaddlePaddle GPU 3.2.2 for
-CUDA 12.9. PP-OCRv6 medium detection and recognition models are downloaded and
+The image pins PaddleOCR 3.7.0, PaddleX 3.7.2, and PaddlePaddle GPU 3.2.0 for
+CUDA 12.6. PP-OCRv6 medium detection and recognition models are downloaded and
 SHA-256 verified while the image is built. Both model directories are wired
 into `pipeline.yaml`; the running service does not download model weights.
 Third-party source and model licensing is recorded in
@@ -16,7 +16,7 @@ Third-party source and model licensing is recorded in
 
 The PaddlePaddle CUDA wheel is published for amd64 Linux, so the Dockerfile
 rejects other target architectures. The host needs an NVIDIA driver compatible
-with CUDA 12.9 and the container must receive an NVIDIA GPU.
+with CUDA 12.6 and the container must receive an NVIDIA GPU.
 
 Build and run manually:
 

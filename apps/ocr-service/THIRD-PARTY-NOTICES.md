@@ -3,7 +3,7 @@
 This image contains software and model artifacts published by the
 PaddlePaddle project under the Apache License 2.0:
 
-- PaddlePaddle GPU 3.2.2
+- PaddlePaddle GPU 3.2.0
 - PaddleX 3.7.2
 - PaddleOCR 3.7.0
 - PP-OCRv6 medium text-detection inference model

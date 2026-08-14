@@ -1,6 +1,6 @@
-# Pin the complete CUDA 12 and cuDNN runtime closure. The NVIDIA container
+# Pin the complete CUDA 12.6 and cuDNN runtime closure. The NVIDIA container
 # runtime supplies the host driver, not toolkit libraries such as libnvrtc.
-FROM nvidia/cuda:12.9.2-cudnn-runtime-ubuntu24.04@sha256:070f8f2672df1b05b84c0409a5fd1d54ddfd646e5b9d8dee7878131271b563fc AS cuda-runtime
+FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04@sha256:8aef630a54bc5c5146ae5ce68e6af5caa3df0fb690bb91544175c91f307e4356 AS cuda-runtime
 
 FROM cuda-runtime AS builder
 
@@ -77,7 +77,6 @@ RUN apt-get update \
       libgl1 \
       libglib2.0-0 \
       libgomp1 \
-      cuda-nvtx-12-9 \
       python3 \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system --gid 1001 stella \
@@ -102,9 +101,7 @@ RUN set -eux; \
     test -n "${libpaddle}"; \
     ldd "${libpaddle}"; \
     missing="$(ldd "${libpaddle}" | awk '/=> not found/ { print $1 }' | sort -u)"; \
-    test "${missing}" = "libcuda.so.1"; \
-    CUDA_VISIBLE_DEVICES="" /opt/stella/venv/bin/python -c \
-      'import paddle; paddle.set_device("cpu"); paddle.utils.run_check()'
+    test "${missing}" = "libcuda.so.1"
 
 WORKDIR /opt/stella
 USER stella

@@ -5,7 +5,7 @@ description = "Pinned PaddleX serving image for Stella document OCR"
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "paddleocr==3.7.0",
-  "paddlepaddle-gpu==3.2.2",
+  "paddlepaddle-gpu==3.2.0",
   "paddlex[ocr,serving]==3.7.2",
 ]
 
@@ -19,11 +19,11 @@ exclude-newer-package = { paddlepaddle-gpu = false }
 package = false
 
 [tool.uv.sources]
-paddlepaddle-gpu = { index = "paddle-cu129" }
+paddlepaddle-gpu = { index = "paddle-cu126" }
 
 [[tool.uv.index]]
-name = "paddle-cu129"
-url = "https://www.paddlepaddle.org.cn/packages/stable/cu129/"
+name = "paddle-cu126"
+url = "https://www.paddlepaddle.org.cn/packages/stable/cu126/"
 explicit = true
 
 # Paddle's package index does not publish PEP 658 metadata. Declaring the
@@ -32,7 +32,7 @@ explicit = true
 # when the Linux image is built.
 [[tool.uv.dependency-metadata]]
 name = "paddlepaddle-gpu"
-version = "3.2.2"
+version = "3.2.0"
 requires-dist = [
   "httpx",
   "networkx",
