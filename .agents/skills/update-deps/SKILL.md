@@ -71,7 +71,7 @@ report the limitation. Do not default to `--root-deps-only` when
 For each uv-managed Python project, inspect direct and transitive packages:
 
 ```bash
-uv tree --project <path> --outdated
+uv tree --project <path> --locked --outdated
 ```
 
 Also compare every direct dependency's declared constraint with authoritative
@@ -180,7 +180,7 @@ example:
 
 ```bash
 uv lock --project <path> --check
-uv run --project <path> <lint-or-test-command>
+uv run --project <path> --locked <lint-or-test-command>
 ```
 
 For native or GPU packages, also build the production image and run the
