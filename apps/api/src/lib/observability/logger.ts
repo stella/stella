@@ -101,8 +101,8 @@ const emit = ({
   }
 
   // Backstop for every structured record above DEBUG. The OTel pipeline
-  // above deliberately has no exporter (see `otel.ts`), so this stream is
-  // the only place a record is readable at all.
+  // above exports only when a deployment opts in (see `otel.ts`), so this
+  // stream is the sink operational tooling can always rely on.
   //
   // Severity answers how bad a record is. It must not also decide whether
   // anyone can ever read it: an INFO or WARN record that reaches no sink is

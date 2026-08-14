@@ -119,7 +119,7 @@
     "expo-modules-core": "57.0.10",
     "ip-address": "10.4.0",
     "lucide-react": "1.28.0",
-    "nanoid": "3.3.17",
+    "nanoid": "3.3.18",
     "postcss": "8.5.25",
     "prosemirror-model": "1.25.11",
     "prosemirror-transform": "1.12.0",

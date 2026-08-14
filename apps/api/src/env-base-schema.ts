@@ -118,6 +118,11 @@ export const envBaseServerSchema = {
   S3_SCOPED_SIGNING_ROLE_ARN: v.optional(v.string()),
   POSTHOG_KEY: v.optional(v.string()),
   POSTHOG_HOST: v.optional(v.string()),
+  // OTLP log export is opt-in per deployment: absent means structured logs
+  // stay local (stderr mirror only), so self-hosted installs never phone
+  // home. The URL carries the full ingest path; the token authenticates it.
+  LOGS_OTLP_URL: v.optional(v.pipe(v.string(), v.url())),
+  LOGS_OTLP_TOKEN: v.optional(v.string()),
   POSTHOG_LOCAL_DEBUG: v.optional(
     v.pipe(v.string(), v.parseBoolean()),
     "false",
