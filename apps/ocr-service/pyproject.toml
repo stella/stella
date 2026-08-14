@@ -5,7 +5,7 @@ description = "Pinned PaddleX serving image for Stella document OCR"
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "paddleocr==3.7.0",
-  "paddlepaddle-gpu==3.2.0",
+  "paddlepaddle-gpu==3.2.2",
   "paddlex[ocr,serving]==3.7.2",
 ]
 
@@ -14,7 +14,7 @@ dev = ["ruff==0.16.0", "ty==0.0.63"]
 
 [tool.uv]
 environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]
-exclude-newer = "2026-07-26T00:00:00Z"
+exclude-newer = "2026-08-09T07:30:00Z"
 exclude-newer-package = { paddlepaddle-gpu = false }
 package = false
 
@@ -32,7 +32,7 @@ explicit = true
 # when the Linux image is built.
 [[tool.uv.dependency-metadata]]
 name = "paddlepaddle-gpu"
-version = "3.2.0"
+version = "3.2.2"
 requires-dist = [
   "httpx",
   "networkx",
