@@ -1572,6 +1572,7 @@ export const runCaseLawIngest = async (
             `pruned=${summary.pruned} ` +
             `failed=${summary.failed} ` +
             `errored=${summary.errored} ` +
+            `erroredSources=${summary.erroredSources.join(",") || "none"} ` +
             `lastErrorType=${summary.errored === 0 ? "none" : errorTag(summary.lastError)}`,
         );
       },

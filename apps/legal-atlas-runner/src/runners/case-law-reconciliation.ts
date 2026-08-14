@@ -85,6 +85,14 @@ export type ReconciliationSweepSummary = ReconciliationCounts & {
    * because a message can carry more than an operator asked to see.
    */
   lastError: unknown;
+  /**
+   * Which sources threw, so an error rate has a subject as well as a cause.
+   * Without it a window reports only how many turns failed and what the last
+   * one was, which cannot distinguish one broken publisher from every
+   * publisher breaking — and those want opposite responses. Distinct keys in
+   * rotation order, so the field is bounded by the source count.
+   */
+  erroredSources: string[];
 };
 
 const emptySummary = (): ReconciliationSweepSummary => ({
@@ -93,6 +101,7 @@ const emptySummary = (): ReconciliationSweepSummary => ({
   leased: 0,
   errored: 0,
   lastError: undefined,
+  erroredSources: [],
   listed: 0,
   keyable: 0,
   unidentifiable: 0,
@@ -280,6 +289,12 @@ export const runCaseLawReconciliationLoop = async ({
         failureStreaks.set(sourceIndex, streak);
         summary.errored += 1;
         summary.lastError = error;
+        if (
+          source !== undefined &&
+          !summary.erroredSources.includes(source.adapterKey)
+        ) {
+          summary.erroredSources.push(source.adapterKey);
+        }
         worked = true;
         retryAtMs.set(
           sourceIndex,

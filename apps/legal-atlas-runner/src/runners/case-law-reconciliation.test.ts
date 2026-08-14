@@ -431,7 +431,37 @@ describe("case law reconciliation loop", () => {
     expect(run.summaries.at(0)).toMatchObject({
       errored: 1,
       lastError: failure,
+      erroredSources: ["cz-regional"],
     });
+  });
+
+  test("a window names every source that threw, each once", async () => {
+    // An error count alone cannot separate one broken publisher from a
+    // dependency they all share, and the two want opposite responses. A
+    // source that threw repeatedly must not crowd the others out of the list.
+    const run = await runLoop({
+      responders: [
+        [
+          "cz-regional",
+          () => {
+            throw new Error("publisher down");
+          },
+        ],
+        ["cz-ns", () => WORKED],
+        [
+          "pl-courts",
+          () => {
+            throw new Error("publisher down");
+          },
+        ],
+      ],
+      turns: 12,
+    });
+
+    expect(run.summaries.at(0)?.erroredSources).toEqual([
+      "cz-regional",
+      "pl-courts",
+    ]);
   });
 
   test("a deployment with no reconcilable source returns instead of spinning", async () => {
