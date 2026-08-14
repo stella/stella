@@ -4,6 +4,61 @@
     {
       "authors": [
         {
+          "name": "Markus Ecker <markus.ecker@gmail.com>"
+        }
+      ],
+      "bom-ref": "pkg:npm/@ag-ui/core@0.1.1-canary.beta.0",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@ag-ui/core/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@ag-ui/core/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "packages/agent-engine/scripts/e2e-mcp-canary.ts#11"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/ag-ui-protocol/ag-ui.git"
+        }
+      ],
+      "group": "@ag-ui",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "core",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@ag-ui/core/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40ag-ui/core@0.1.1-canary.beta.0",
+      "scope": "required",
+      "type": "library",
+      "version": "0.1.1-canary.beta.0"
+    },
+    {
+      "authors": [
+        {
           "name": "withastro"
         }
       ],
@@ -119,6 +174,9 @@
             "location": "apps/web/src/features/guides/use-onboarding-progress.ts#1"
           },
           {
+            "location": "apps/web/src/hooks/use-browser-region.ts#1"
+          },
+          {
             "location": "apps/web/src/hooks/use-chrome-query.ts#1"
           },
           {
@@ -131,6 +189,12 @@
             "location": "apps/web/src/hooks/use-external-file-drop.ts#1"
           },
           {
+            "location": "apps/web/src/hooks/use-hydrated.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-hydration-safe-desktop-platform.ts#1"
+          },
+          {
             "location": "apps/web/src/hooks/use-hydration-safe-hotkey-platform.ts#1"
           },
           {
@@ -138,6 +202,12 @@
           },
           {
             "location": "apps/web/src/hooks/use-latest-callback.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-local-storage-flag.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-persisted-sidebar-open.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-pulse.ts#1"
@@ -935,6 +1005,12 @@
             "location": "apps/web/src/lib/analytics/provider.tsx#1"
           },
           {
+            "location": "apps/web/src/lib/analytics/route-error-lifecycle-context.tsx#1"
+          },
+          {
+            "location": "apps/web/src/lib/analytics/route-error-lifecycle-context.tsx#2"
+          },
+          {
             "location": "apps/web/src/lib/authenticated-user-context.tsx#1"
           },
           {
@@ -1601,7 +1677,7 @@
             "location": "packages/ui/src/components/command.tsx#3"
           },
           {
-            "location": "packages/ui/src/components/date-picker-popover.tsx#3"
+            "location": "packages/ui/src/components/date-picker-popover.tsx#10"
           },
           {
             "location": "packages/ui/src/components/destructive-action-confirmation.tsx#3"
@@ -2874,7 +2950,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1105.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1106.0",
       "description": "AWS SDK for JavaScript S3 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -2926,13 +3002,13 @@
           "value": "node_modules/@aws-sdk/client-s3/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1105.0",
+      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1106.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1105.0"
+      "version": "3.1106.0"
     },
     {
       "authors": [
@@ -2940,7 +3016,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1105.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1106.0",
       "description": "AWS SDK for JavaScript Sesv2 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -2989,13 +3065,13 @@
           "value": "node_modules/@aws-sdk/client-sesv2/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1105.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1106.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1105.0"
+      "version": "3.1106.0"
     },
     {
       "authors": [
@@ -3003,7 +3079,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1105.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1106.0",
       "description": "AWS SDK for JavaScript Sts Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -3052,13 +3128,13 @@
           "value": "node_modules/@aws-sdk/client-sts/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1105.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1106.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1105.0"
+      "version": "3.1106.0"
     },
     {
       "authors": [
@@ -3066,7 +3142,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1105.0",
+      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1106.0",
       "evidence": {
         "identity": [
           {
@@ -3114,13 +3190,13 @@
           "value": "node_modules/@aws-sdk/s3-request-presigner/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1105.0",
+      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1106.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1105.0"
+      "version": "3.1106.0"
     },
     {
       "authors": [
@@ -3360,6 +3436,9 @@
             "location": "apps/web/src/features/guides/use-onboarding-progress.ts#1"
           },
           {
+            "location": "apps/web/src/hooks/use-browser-region.ts#1"
+          },
+          {
             "location": "apps/web/src/hooks/use-chrome-query.ts#1"
           },
           {
@@ -3372,6 +3451,12 @@
             "location": "apps/web/src/hooks/use-external-file-drop.ts#1"
           },
           {
+            "location": "apps/web/src/hooks/use-hydrated.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-hydration-safe-desktop-platform.ts#1"
+          },
+          {
             "location": "apps/web/src/hooks/use-hydration-safe-hotkey-platform.ts#1"
           },
           {
@@ -3379,6 +3464,12 @@
           },
           {
             "location": "apps/web/src/hooks/use-latest-callback.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-local-storage-flag.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-persisted-sidebar-open.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-pulse.ts#1"
@@ -4176,6 +4267,12 @@
             "location": "apps/web/src/lib/analytics/provider.tsx#1"
           },
           {
+            "location": "apps/web/src/lib/analytics/route-error-lifecycle-context.tsx#1"
+          },
+          {
+            "location": "apps/web/src/lib/analytics/route-error-lifecycle-context.tsx#2"
+          },
+          {
             "location": "apps/web/src/lib/authenticated-user-context.tsx#1"
           },
           {
@@ -4842,7 +4939,7 @@
             "location": "packages/ui/src/components/command.tsx#3"
           },
           {
-            "location": "packages/ui/src/components/date-picker-popover.tsx#3"
+            "location": "packages/ui/src/components/date-picker-popover.tsx#10"
           },
           {
             "location": "packages/ui/src/components/destructive-action-confirmation.tsx#3"
@@ -5088,6 +5185,9 @@
             "location": "apps/web/src/features/guides/use-onboarding-progress.ts#1"
           },
           {
+            "location": "apps/web/src/hooks/use-browser-region.ts#1"
+          },
+          {
             "location": "apps/web/src/hooks/use-chrome-query.ts#1"
           },
           {
@@ -5100,6 +5200,12 @@
             "location": "apps/web/src/hooks/use-external-file-drop.ts#1"
           },
           {
+            "location": "apps/web/src/hooks/use-hydrated.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-hydration-safe-desktop-platform.ts#1"
+          },
+          {
             "location": "apps/web/src/hooks/use-hydration-safe-hotkey-platform.ts#1"
           },
           {
@@ -5107,6 +5213,12 @@
           },
           {
             "location": "apps/web/src/hooks/use-latest-callback.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-local-storage-flag.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-persisted-sidebar-open.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-pulse.ts#1"
@@ -5904,6 +6016,12 @@
             "location": "apps/web/src/lib/analytics/provider.tsx#1"
           },
           {
+            "location": "apps/web/src/lib/analytics/route-error-lifecycle-context.tsx#1"
+          },
+          {
+            "location": "apps/web/src/lib/analytics/route-error-lifecycle-context.tsx#2"
+          },
+          {
             "location": "apps/web/src/lib/authenticated-user-context.tsx#1"
           },
           {
@@ -6570,7 +6688,7 @@
             "location": "packages/ui/src/components/command.tsx#3"
           },
           {
-            "location": "packages/ui/src/components/date-picker-popover.tsx#3"
+            "location": "packages/ui/src/components/date-picker-popover.tsx#10"
           },
           {
             "location": "packages/ui/src/components/destructive-action-confirmation.tsx#3"
@@ -7944,6 +8062,9 @@
             "location": "apps/web/src/features/guides/use-onboarding-progress.ts#1"
           },
           {
+            "location": "apps/web/src/hooks/use-browser-region.ts#1"
+          },
+          {
             "location": "apps/web/src/hooks/use-chrome-query.ts#1"
           },
           {
@@ -7956,6 +8077,12 @@
             "location": "apps/web/src/hooks/use-external-file-drop.ts#1"
           },
           {
+            "location": "apps/web/src/hooks/use-hydrated.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-hydration-safe-desktop-platform.ts#1"
+          },
+          {
             "location": "apps/web/src/hooks/use-hydration-safe-hotkey-platform.ts#1"
           },
           {
@@ -7963,6 +8090,12 @@
           },
           {
             "location": "apps/web/src/hooks/use-latest-callback.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-local-storage-flag.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-persisted-sidebar-open.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-pulse.ts#1"
@@ -8760,6 +8893,12 @@
             "location": "apps/web/src/lib/analytics/provider.tsx#1"
           },
           {
+            "location": "apps/web/src/lib/analytics/route-error-lifecycle-context.tsx#1"
+          },
+          {
+            "location": "apps/web/src/lib/analytics/route-error-lifecycle-context.tsx#2"
+          },
+          {
             "location": "apps/web/src/lib/authenticated-user-context.tsx#1"
           },
           {
@@ -9426,7 +9565,7 @@
             "location": "packages/ui/src/components/command.tsx#3"
           },
           {
-            "location": "packages/ui/src/components/date-picker-popover.tsx#3"
+            "location": "packages/ui/src/components/date-picker-popover.tsx#10"
           },
           {
             "location": "packages/ui/src/components/destructive-action-confirmation.tsx#3"
@@ -11491,7 +11630,7 @@
             "location": "packages/agent-engine/scripts/e2e-cloud-run.ts#23"
           },
           {
-            "location": "packages/agent-engine/scripts/e2e-mcp-canary.ts#11"
+            "location": "packages/agent-engine/scripts/e2e-mcp-canary.ts#12"
           },
           {
             "location": "apps/api/src/handlers/chat/types.ts#3"
@@ -12571,7 +12710,10 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-editor.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-starter-gallery-sheet.tsx#1"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-list.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-starter-cards.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-version-history-sheet.tsx#3"
@@ -13029,7 +13171,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.21",
+      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.23",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -13654,10 +13796,10 @@
           "value": "node_modules/@tanstack/react-router/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-router@1.170.21",
+      "purl": "pkg:npm/%40tanstack/react-router@1.170.23",
       "scope": "required",
       "type": "library",
-      "version": "1.170.21"
+      "version": "1.170.23"
     },
     {
       "authors": [
@@ -13665,7 +13807,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-start@1.168.38",
+      "bom-ref": "pkg:npm/@tanstack/react-start@1.168.40",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -13729,10 +13871,10 @@
           "value": "node_modules/@tanstack/react-start/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-start@1.168.38",
+      "purl": "pkg:npm/%40tanstack/react-start@1.168.40",
       "scope": "required",
       "type": "library",
-      "version": "1.168.38"
+      "version": "1.168.40"
     },
     {
       "authors": [
@@ -13914,7 +14056,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-table-devtools@9.0.0",
+      "bom-ref": "pkg:npm/@tanstack/react-table-devtools@9.1.0",
       "description": "React devtools for TanStack Table.",
       "evidence": {
         "identity": [
@@ -13966,10 +14108,10 @@
           "value": "node_modules/@tanstack/react-table-devtools/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-table-devtools@9.0.0",
+      "purl": "pkg:npm/%40tanstack/react-table-devtools@9.1.0",
       "scope": "required",
       "type": "library",
-      "version": "9.0.0"
+      "version": "9.1.0"
     },
     {
       "authors": [
@@ -13977,7 +14119,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-table@9.0.0",
+      "bom-ref": "pkg:npm/@tanstack/react-table@9.1.0",
       "description": "Headless UI for building powerful tables & datagrids for React.",
       "evidence": {
         "identity": [
@@ -14071,10 +14213,10 @@
           "value": "node_modules/@tanstack/react-table/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-table@9.0.0",
+      "purl": "pkg:npm/%40tanstack/react-table@9.1.0",
       "scope": "required",
       "type": "library",
-      "version": "9.0.0"
+      "version": "9.1.0"
     },
     {
       "authors": [
@@ -15133,6 +15275,9 @@
             "location": "apps/web/src/features/guides/use-onboarding-progress.ts#1"
           },
           {
+            "location": "apps/web/src/hooks/use-browser-region.ts#1"
+          },
+          {
             "location": "apps/web/src/hooks/use-chrome-query.ts#1"
           },
           {
@@ -15145,6 +15290,12 @@
             "location": "apps/web/src/hooks/use-external-file-drop.ts#1"
           },
           {
+            "location": "apps/web/src/hooks/use-hydrated.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-hydration-safe-desktop-platform.ts#1"
+          },
+          {
             "location": "apps/web/src/hooks/use-hydration-safe-hotkey-platform.ts#1"
           },
           {
@@ -15152,6 +15303,12 @@
           },
           {
             "location": "apps/web/src/hooks/use-latest-callback.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-local-storage-flag.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-persisted-sidebar-open.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-pulse.ts#1"
@@ -15949,6 +16106,12 @@
             "location": "apps/web/src/lib/analytics/provider.tsx#1"
           },
           {
+            "location": "apps/web/src/lib/analytics/route-error-lifecycle-context.tsx#1"
+          },
+          {
+            "location": "apps/web/src/lib/analytics/route-error-lifecycle-context.tsx#2"
+          },
+          {
             "location": "apps/web/src/lib/authenticated-user-context.tsx#1"
           },
           {
@@ -16615,7 +16778,7 @@
             "location": "packages/ui/src/components/command.tsx#3"
           },
           {
-            "location": "packages/ui/src/components/date-picker-popover.tsx#3"
+            "location": "packages/ui/src/components/date-picker-popover.tsx#10"
           },
           {
             "location": "packages/ui/src/components/destructive-action-confirmation.tsx#3"
@@ -18266,6 +18429,9 @@
             "location": "apps/api/src/handlers/playbooks/from-starter.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/playbooks/instantiate-starter.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/playbooks/list-starters.ts#1"
           },
           {
@@ -18273,6 +18439,9 @@
           },
           {
             "location": "apps/api/src/handlers/playbooks/read.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/recent/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/playbooks/restore-version.ts#1"
@@ -19022,6 +19191,9 @@
             "location": "apps/api/src/lib/document-counter.ts#1"
           },
           {
+            "location": "apps/api/src/lib/document-processing-handoff.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/document-processing-provider.ts#1"
           },
           {
@@ -19547,6 +19719,9 @@
             "location": "apps/web/src/components/chat/chat-anon-decorations-plugin.ts#5"
           },
           {
+            "location": "apps/web/src/components/chat/chat-thread-messages.logic.ts#1"
+          },
+          {
             "location": "apps/web/src/components/chat/chat-ui-tools.ts#7"
           },
           {
@@ -19584,6 +19759,9 @@
           },
           {
             "location": "apps/web/src/env.ts#2"
+          },
+          {
+            "location": "apps/web/src/features/case-law/queries/decisions.ts#2"
           },
           {
             "location": "apps/web/src/features/chat/hooks/use-chat-session-send-queue.logic.ts#2"
@@ -19682,7 +19860,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities.ts#6"
           },
           {
-            "location": "packages/agent-engine/scripts/e2e-mcp-canary.ts#12"
+            "location": "packages/agent-engine/scripts/e2e-mcp-canary.ts#13"
           },
           {
             "location": "packages/agent-engine/src/bun-docker/api.ts#16"
@@ -19983,6 +20161,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/properties/inline-option-editor.tsx#3"
+          },
+          {
+            "location": "apps/web/src/lib/analytics/route-error-lifecycle-context.tsx#4"
           },
           {
             "location": "apps/web/src/lib/authenticated-user-context.tsx#4"
@@ -21190,6 +21371,9 @@
             "location": "apps/api/src/handlers/playbooks/from-starter.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/playbooks/instantiate-starter.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/playbooks/list-starters.ts#1"
           },
           {
@@ -21197,6 +21381,9 @@
           },
           {
             "location": "apps/api/src/handlers/playbooks/read.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/recent/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/playbooks/restore-version.ts#1"
@@ -21946,6 +22133,9 @@
             "location": "apps/api/src/lib/document-counter.ts#1"
           },
           {
+            "location": "apps/api/src/lib/document-processing-handoff.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/document-processing-provider.ts#1"
           },
           {
@@ -22471,6 +22661,9 @@
             "location": "apps/web/src/components/chat/chat-anon-decorations-plugin.ts#5"
           },
           {
+            "location": "apps/web/src/components/chat/chat-thread-messages.logic.ts#1"
+          },
+          {
             "location": "apps/web/src/components/chat/chat-ui-tools.ts#7"
           },
           {
@@ -22508,6 +22701,9 @@
           },
           {
             "location": "apps/web/src/env.ts#2"
+          },
+          {
+            "location": "apps/web/src/features/case-law/queries/decisions.ts#2"
           },
           {
             "location": "apps/web/src/features/chat/hooks/use-chat-session-send-queue.logic.ts#2"
@@ -22606,7 +22802,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities.ts#6"
           },
           {
-            "location": "packages/agent-engine/scripts/e2e-mcp-canary.ts#12"
+            "location": "packages/agent-engine/scripts/e2e-mcp-canary.ts#13"
           },
           {
             "location": "packages/agent-engine/src/bun-docker/api.ts#16"
@@ -22907,6 +23103,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/properties/inline-option-editor.tsx#3"
+          },
+          {
+            "location": "apps/web/src/lib/analytics/route-error-lifecycle-context.tsx#4"
           },
           {
             "location": "apps/web/src/lib/authenticated-user-context.tsx#4"
@@ -24106,6 +24305,9 @@
             "location": "apps/api/src/handlers/playbooks/from-starter.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/playbooks/instantiate-starter.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/playbooks/list-starters.ts#1"
           },
           {
@@ -24113,6 +24315,9 @@
           },
           {
             "location": "apps/api/src/handlers/playbooks/read.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/recent/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/playbooks/restore-version.ts#1"
@@ -24862,6 +25067,9 @@
             "location": "apps/api/src/lib/document-counter.ts#1"
           },
           {
+            "location": "apps/api/src/lib/document-processing-handoff.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/document-processing-provider.ts#1"
           },
           {
@@ -25387,6 +25595,9 @@
             "location": "apps/web/src/components/chat/chat-anon-decorations-plugin.ts#5"
           },
           {
+            "location": "apps/web/src/components/chat/chat-thread-messages.logic.ts#1"
+          },
+          {
             "location": "apps/web/src/components/chat/chat-ui-tools.ts#7"
           },
           {
@@ -25424,6 +25635,9 @@
           },
           {
             "location": "apps/web/src/env.ts#2"
+          },
+          {
+            "location": "apps/web/src/features/case-law/queries/decisions.ts#2"
           },
           {
             "location": "apps/web/src/features/chat/hooks/use-chat-session-send-queue.logic.ts#2"
@@ -25522,7 +25736,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities.ts#6"
           },
           {
-            "location": "packages/agent-engine/scripts/e2e-mcp-canary.ts#12"
+            "location": "packages/agent-engine/scripts/e2e-mcp-canary.ts#13"
           },
           {
             "location": "packages/agent-engine/src/bun-docker/api.ts#16"
@@ -25823,6 +26037,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/properties/inline-option-editor.tsx#3"
+          },
+          {
+            "location": "apps/web/src/lib/analytics/route-error-lifecycle-context.tsx#4"
           },
           {
             "location": "apps/web/src/lib/authenticated-user-context.tsx#4"
@@ -27718,6 +27935,9 @@
           },
           {
             "location": "apps/api/src/handlers/playbooks/read.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/recent/list.ts#2"
           },
           {
             "location": "apps/api/src/handlers/playbooks/restore-version.ts#2"
@@ -29790,6 +30010,9 @@
             "location": "apps/api/src/handlers/playbooks/read.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/playbooks/recent/list.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/playbooks/restore-version.ts#3"
           },
           {
@@ -30405,6 +30628,12 @@
             "location": "apps/api/src/lib/entities/kanban-group-condition.ts#4"
           },
           {
+            "location": "apps/api/src/lib/observability/response-status.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/observability/response-status.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/optimistic-concurrency.ts#1"
           },
           {
@@ -30481,6 +30710,9 @@
           },
           {
             "location": "packages/api-client/src/index.ts#3"
+          },
+          {
+            "location": "apps/api/src/lib/observability/response-status.ts#2"
           }
         ]
       },
@@ -31713,16 +31945,16 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-editor.tsx#12"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-list.tsx#6"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-list.tsx#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-starter-gallery-sheet.tsx#2"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-starter-cards.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-version-history-sheet.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#26"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#24"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx#17"
@@ -32088,7 +32320,7 @@
             "location": "packages/ui/src/components/command.tsx#7"
           },
           {
-            "location": "packages/ui/src/components/date-picker-popover.tsx#5"
+            "location": "packages/ui/src/components/date-picker-popover.tsx#12"
           },
           {
             "location": "packages/ui/src/components/dialog.tsx#6"
@@ -32365,7 +32597,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-js@1.413.3",
+      "bom-ref": "pkg:npm/posthog-js@1.414.0",
       "description": "Posthog-js allows you to automatically capture usage and send events to PostHog.",
       "evidence": {
         "identity": [
@@ -32383,6 +32615,9 @@
           }
         ],
         "occurrences": [
+          {
+            "location": "apps/web/src/lib/analytics/posthog-route-error.ts#1"
+          },
           {
             "location": "apps/web/src/lib/analytics/posthog.ts#2"
           },
@@ -32421,10 +32656,10 @@
           "value": "node_modules/posthog-js/lib/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-js@1.413.3",
+      "purl": "pkg:npm/posthog-js@1.414.0",
       "scope": "required",
       "type": "library",
-      "version": "1.413.3"
+      "version": "1.414.0"
     },
     {
       "authors": [
@@ -33463,6 +33698,9 @@
             "location": "apps/web/src/features/guides/use-onboarding-progress.ts#1"
           },
           {
+            "location": "apps/web/src/hooks/use-browser-region.ts#1"
+          },
+          {
             "location": "apps/web/src/hooks/use-chrome-query.ts#1"
           },
           {
@@ -33475,6 +33713,12 @@
             "location": "apps/web/src/hooks/use-external-file-drop.ts#1"
           },
           {
+            "location": "apps/web/src/hooks/use-hydrated.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-hydration-safe-desktop-platform.ts#1"
+          },
+          {
             "location": "apps/web/src/hooks/use-hydration-safe-hotkey-platform.ts#1"
           },
           {
@@ -33482,6 +33726,12 @@
           },
           {
             "location": "apps/web/src/hooks/use-latest-callback.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-local-storage-flag.ts#1"
+          },
+          {
+            "location": "apps/web/src/hooks/use-persisted-sidebar-open.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-pulse.ts#1"
@@ -34279,6 +34529,12 @@
             "location": "apps/web/src/lib/analytics/provider.tsx#1"
           },
           {
+            "location": "apps/web/src/lib/analytics/route-error-lifecycle-context.tsx#1"
+          },
+          {
+            "location": "apps/web/src/lib/analytics/route-error-lifecycle-context.tsx#2"
+          },
+          {
             "location": "apps/web/src/lib/authenticated-user-context.tsx#1"
           },
           {
@@ -34945,7 +35201,7 @@
             "location": "packages/ui/src/components/command.tsx#3"
           },
           {
-            "location": "packages/ui/src/components/date-picker-popover.tsx#3"
+            "location": "packages/ui/src/components/date-picker-popover.tsx#10"
           },
           {
             "location": "packages/ui/src/components/destructive-action-confirmation.tsx#3"
@@ -35888,7 +36144,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#27"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#25"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-selection-gesture.tsx#17"
@@ -36650,16 +36906,16 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-editor.tsx#13"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-list.tsx#7"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-list.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-starter-gallery-sheet.tsx#3"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-starter-cards.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-version-history-sheet.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#28"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#26"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx#18"
