@@ -57,7 +57,7 @@ const IDLE: ReconciliationTurnResult = { turn: RECONCILIATION_TURN.IDLE };
 const LEASED: ReconciliationTurnResult = { turn: RECONCILIATION_TURN.LEASED };
 
 type LoopEvent =
-  | { type: "turn"; adapterKey: string }
+  | { type: "turn"; adapterKey: string; atMs: number }
   | { type: "sleep"; ms: number };
 
 type LoopRun = {
@@ -92,7 +92,7 @@ const runLoop = async ({
     sources: responders.map(([adapterKey, respond]) => ({
       adapterKey,
       runWorkUnit: async () => {
-        events.push({ type: "turn", adapterKey });
+        events.push({ type: "turn", adapterKey, atMs: clock });
         taken += 1;
         draining ||= taken >= turns;
         return await Promise.resolve(respond());
@@ -222,7 +222,9 @@ describe("case law reconciliation loop", () => {
       "cz-regional",
       "cz-ns",
     ]);
-    expect(gapsBetweenTurns(run).at(0)).toBeGreaterThan(TIMING.unitDelayMs);
+    // The throw is paid by the source that threw, in turns it does not get.
+    // The next source asked a publisher nothing yet and owes nothing extra.
+    expect(gapsBetweenTurns(run).at(0)).toBe(TIMING.unitDelayMs);
   });
 
   test("a run of failures backs off to the ceiling and no further", async () => {
@@ -263,17 +265,115 @@ describe("case law reconciliation loop", () => {
       turns: 8,
     });
 
-    // Gaps alternate: the one after each failing turn is that source's own
-    // backoff, and it has to keep growing.
-    const afterFailures = gapsBetweenTurns(run).filter(
-      (_, index) => index % 2 === 0,
-    );
-    expect(afterFailures.at(0)).toBe(TIMING.unitDelayMs * 2);
-    expect(afterFailures.at(-1)).toBeGreaterThan(TIMING.unitDelayMs * 2);
-    const decreasing = afterFailures.filter(
-      (ms, index) => index > 0 && ms < (afterFailures[index - 1] ?? 0),
-    );
-    expect(decreasing).toEqual([]);
+    // The streak is served in turns skipped, so the failing source is asked
+    // progressively less often while the healthy one keeps its cadence.
+    const failingTurns = turnOrder(run).filter((key) => key === "cz-regional");
+    expect(failingTurns.length).toBeLessThan(4);
+  });
+
+  test("a failing source costs its own turns, never the healthy sources' cadence", async () => {
+    // The whole point of a per-source streak: spent as a shared sleep it is
+    // not isolation at all, because the loop is sequential. One refusing
+    // publisher would then throttle reconciliation for every other source,
+    // which is how a single broken source starves the entire corpus.
+    const run = await runLoop({
+      responders: [
+        [
+          "cz-regional",
+          () => {
+            throw new Error("publisher down");
+          },
+        ],
+        ["cz-ns", () => WORKED],
+        ["pl-courts", () => WORKED],
+      ],
+      turns: 12,
+    });
+
+    const order = turnOrder(run);
+    const healthyGaps = gapsBetweenTurns(run).filter((_, index) => {
+      const to = order[index + 1];
+      return to === "cz-ns" || to === "pl-courts";
+    });
+
+    // Every healthy turn is reached at the plain unit gap. Under a shared
+    // backoff these grow to the failure ceiling and never come back down.
+    // `every` is vacuously true on an empty array, so the count is asserted
+    // too: a regression that stopped the healthy sources taking any turn at
+    // all would otherwise pass this.
+    expect(healthyGaps.length).toBeGreaterThan(0);
+    expect(healthyGaps.every((ms) => ms === TIMING.unitDelayMs)).toBe(true);
+  });
+
+  test("a held source neither freezes the idle schedule nor outlives its own ceiling", async () => {
+    // The two costs a rotation of "one held source plus idle ones" trades off.
+    // Treating it as fully-held would pin the idle schedule at the failing
+    // source's retry cadence forever, so a settled corpus would never get
+    // cheap; treating it as plainly idle would let the sleep double past
+    // `failureBackoffMaxMs`, silently overriding the ceiling that decides how
+    // often a broken source is retried. It has to do both: advance the idle
+    // schedule, and cap the wait at the held source's deadline.
+    const run = await runLoop({
+      responders: [
+        [
+          "cz-regional",
+          () => {
+            throw new Error("publisher down");
+          },
+        ],
+        ["cz-ns", () => IDLE],
+      ],
+      turns: 10,
+    });
+
+    expect(run.events.filter((event) => event.type === "turn")).toEqual([
+      { type: "turn", adapterKey: "cz-regional", atMs: 0 },
+      { type: "turn", adapterKey: "cz-ns", atMs: 500 },
+      { type: "turn", adapterKey: "cz-regional", atMs: 1000 },
+      { type: "turn", adapterKey: "cz-ns", atMs: 1500 },
+      { type: "turn", adapterKey: "cz-ns", atMs: 2000 },
+      { type: "turn", adapterKey: "cz-regional", atMs: 3000 },
+      { type: "turn", adapterKey: "cz-ns", atMs: 3500 },
+      { type: "turn", adapterKey: "cz-ns", atMs: 4000 },
+      // The idle schedule advances instead of freezing at the retry wait.
+      { type: "turn", adapterKey: "cz-ns", atMs: 5000 },
+      // It also stops at the held source's deadline instead of oversleeping.
+      { type: "turn", adapterKey: "cz-regional", atMs: 7000 },
+    ]);
+  });
+
+  test("every source failing waits out the earliest retry rather than spinning", async () => {
+    // A skipped turn costs no pacing gap, so a rotation in which every source
+    // is held would otherwise spin at full speed. The wait is to the first
+    // expiry, not the idle ceiling: the corpus is unreachable, not settled.
+    const run = await runLoop({
+      responders: [
+        [
+          "cz-regional",
+          () => {
+            throw new Error("database down");
+          },
+        ],
+        [
+          "cz-ns",
+          () => {
+            throw new Error("database down");
+          },
+        ],
+      ],
+      turns: 6,
+    });
+
+    expect(run.events.filter((event) => event.type === "turn")).toEqual([
+      { type: "turn", adapterKey: "cz-regional", atMs: 0 },
+      { type: "turn", adapterKey: "cz-ns", atMs: 500 },
+      { type: "turn", adapterKey: "cz-regional", atMs: 1000 },
+      { type: "turn", adapterKey: "cz-ns", atMs: 1500 },
+      // Both sources are now held. The loop waits until the first deadline,
+      // then reaches the second at its own deadline without a poll storm.
+      { type: "turn", adapterKey: "cz-regional", atMs: 3000 },
+      { type: "turn", adapterKey: "cz-ns", atMs: 3500 },
+    ]);
   });
 
   test("a recovered source starts its next streak from scratch", async () => {
@@ -379,7 +479,37 @@ describe("case law reconciliation loop", () => {
     expect(run.summaries.at(0)).toMatchObject({
       errored: 1,
       lastError: failure,
+      erroredSources: ["cz-regional"],
     });
+  });
+
+  test("a window names every source that threw, each once", async () => {
+    // An error count alone cannot separate one broken publisher from a
+    // dependency they all share, and the two want opposite responses. A
+    // source that threw repeatedly must not crowd the others out of the list.
+    const run = await runLoop({
+      responders: [
+        [
+          "cz-regional",
+          () => {
+            throw new Error("publisher down");
+          },
+        ],
+        ["cz-ns", () => WORKED],
+        [
+          "pl-courts",
+          () => {
+            throw new Error("publisher down");
+          },
+        ],
+      ],
+      turns: 12,
+    });
+
+    expect(run.summaries.at(0)?.erroredSources).toEqual([
+      "cz-regional",
+      "pl-courts",
+    ]);
   });
 
   test("a deployment with no reconcilable source returns instead of spinning", async () => {

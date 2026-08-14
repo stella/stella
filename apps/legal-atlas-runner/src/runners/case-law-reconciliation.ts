@@ -85,6 +85,14 @@ export type ReconciliationSweepSummary = ReconciliationCounts & {
    * because a message can carry more than an operator asked to see.
    */
   lastError: unknown;
+  /**
+   * Which sources threw, so an error rate has a subject as well as a cause.
+   * Without it a window reports only how many turns failed and what the last
+   * one was, which cannot distinguish one broken publisher from every
+   * publisher breaking — and those want opposite responses. Distinct keys in
+   * rotation order, so the field is bounded by the source count.
+   */
+  erroredSources: string[];
 };
 
 const emptySummary = (): ReconciliationSweepSummary => ({
@@ -93,6 +101,7 @@ const emptySummary = (): ReconciliationSweepSummary => ({
   leased: 0,
   errored: 0,
   lastError: undefined,
+  erroredSources: [],
   listed: 0,
   keyable: 0,
   unidentifiable: 0,
@@ -188,9 +197,12 @@ export type ReconciliationLoopOptions = {
  * - a turn where every source reported idle or leased doubles its sleep
  *   towards the idle ceiling, so a settled corpus stops asking the database
  *   every half second. Any worked turn resets it.
- * - a throw doubles its delay towards the failure ceiling. Errors never break
- *   the loop: a source the publisher keeps refusing parks its own items, and
- *   a database that is unreachable for everything backs off and comes back.
+ * - a throw holds that source alone until its own backoff expires, doubling
+ *   towards the failure ceiling. The loop keeps its pacing meanwhile, so a
+ *   refusing publisher costs its own turns and nobody else's. Errors never
+ *   break the loop, and when every source is held at once — a database
+ *   unreachable for all of them — the wait to the earliest expiry is the
+ *   loop's, so it neither spins nor oversleeps the recovery.
  */
 export const runCaseLawReconciliationLoop = async ({
   isDraining,
@@ -214,6 +226,12 @@ export const runCaseLawReconciliationLoop = async ({
   // rotation, so the broken one would never get past its first doubled delay
   // and would keep hitting a failing dependency at nearly full cadence.
   const failureStreaks = new Map<number, number>();
+  // Where the streak is served: the source is skipped until this passes, so
+  // the backoff costs that source its turns rather than costing the loop its
+  // pacing. Spending it as a shared sleep instead would leave the failing
+  // source asked once per rotation either way, while every healthy source
+  // waited out a penalty earned by a publisher it has nothing to do with.
+  const retryAtMs = new Map<number, number>();
 
   const flushSummary = (): void => {
     if (!summaryIsEmpty(summary)) {
@@ -236,39 +254,57 @@ export const runCaseLawReconciliationLoop = async ({
 
     let delayMs = timing.unitDelayMs;
     let worked = false;
+    const retryAt = retryAtMs.get(sourceIndex);
 
-    try {
-      // oxlint-disable-next-line no-await-in-loop -- one bounded unit at a time is the point; the next turn only starts after this one is paced
-      const result = await (source?.runWorkUnit() ??
-        Promise.resolve({ turn: RECONCILIATION_TURN.IDLE }));
-      switch (result.turn) {
-        case RECONCILIATION_TURN.WORKED:
-          summary.worked += 1;
-          worked = true;
-          if (result.counts !== undefined) {
-            addCounts(summary, result.counts);
-          }
-          break;
-        case RECONCILIATION_TURN.IDLE:
-          summary.idle += 1;
-          break;
-        case RECONCILIATION_TURN.LEASED:
-          summary.leased += 1;
-          break;
-        default:
-          break;
+    if (retryAt !== undefined && now() < retryAt) {
+      // Serving its backoff. The turn asked nobody for anything, so it owes
+      // the publisher-politeness gap nothing; the next source goes now.
+      delayMs = 0;
+    } else {
+      try {
+        // oxlint-disable-next-line no-await-in-loop -- one bounded unit at a time is the point; the next turn only starts after this one is paced
+        const result = await (source?.runWorkUnit() ??
+          Promise.resolve({ turn: RECONCILIATION_TURN.IDLE }));
+        switch (result.turn) {
+          case RECONCILIATION_TURN.WORKED:
+            summary.worked += 1;
+            worked = true;
+            if (result.counts !== undefined) {
+              addCounts(summary, result.counts);
+            }
+            break;
+          case RECONCILIATION_TURN.IDLE:
+            summary.idle += 1;
+            break;
+          case RECONCILIATION_TURN.LEASED:
+            summary.leased += 1;
+            break;
+          default:
+            break;
+        }
+        failureStreaks.delete(sourceIndex);
+        retryAtMs.delete(sourceIndex);
+      } catch (error) {
+        const streak = (failureStreaks.get(sourceIndex) ?? 0) + 1;
+        failureStreaks.set(sourceIndex, streak);
+        summary.errored += 1;
+        summary.lastError = error;
+        if (
+          source !== undefined &&
+          !summary.erroredSources.includes(source.adapterKey)
+        ) {
+          summary.erroredSources.push(source.adapterKey);
+        }
+        worked = true;
+        retryAtMs.set(
+          sourceIndex,
+          now() +
+            Math.min(
+              timing.unitDelayMs * 2 ** streak,
+              timing.failureBackoffMaxMs,
+            ),
+        );
       }
-      failureStreaks.delete(sourceIndex);
-    } catch (error) {
-      const streak = (failureStreaks.get(sourceIndex) ?? 0) + 1;
-      failureStreaks.set(sourceIndex, streak);
-      summary.errored += 1;
-      summary.lastError = error;
-      worked = true;
-      delayMs = Math.min(
-        timing.unitDelayMs * 2 ** streak,
-        timing.failureBackoffMaxMs,
-      );
     }
 
     workedThisRotation += worked ? 1 : 0;
@@ -276,11 +312,29 @@ export const runCaseLawReconciliationLoop = async ({
       // Only a rotation in which no source had anything to do is idle: with a
       // per-turn test a single busy source would keep every other source
       // polling at the unit rate.
-      if (workedThisRotation === 0) {
-        delayMs = Math.max(delayMs, idleMs);
-        idleMs = Math.min(idleMs * 2, timing.idleSleepMaxMs);
-      } else {
+      if (workedThisRotation > 0) {
         idleMs = timing.idleSleepMs;
+      } else {
+        // The idle schedule advances on its own terms, whether or not a source
+        // is held: a rotation that found nothing to do is the thing it exists
+        // to make cheap, and freezing it would leave a settled corpus polling
+        // the database at some held source's retry cadence forever.
+        const idleWaitMs = idleMs;
+        idleMs = Math.min(idleMs * 2, timing.idleSleepMaxMs);
+        // A held source only ever caps that wait. There is work to try the
+        // moment its deadline expires, so the idle schedule must not sleep
+        // past it, and the unit gap is the floor because a rotation of skips
+        // costs no time of its own and must not spin.
+        const earliestRetryAt = Math.min(...retryAtMs.values());
+        delayMs = Math.max(
+          delayMs,
+          Number.isFinite(earliestRetryAt)
+            ? Math.min(
+                idleWaitMs,
+                Math.max(earliestRetryAt - now(), timing.unitDelayMs),
+              )
+            : idleWaitMs,
+        );
       }
       workedThisRotation = 0;
     }
