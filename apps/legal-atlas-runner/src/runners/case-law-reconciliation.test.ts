@@ -314,11 +314,14 @@ describe("case law reconciliation loop", () => {
     ]);
   });
 
-  test("a held source does not cap the idle schedule of polled peers", async () => {
-    // A retry deadline belongs to the source that failed. When another source
-    // was actually polled and reported idle, that rotation must advance the
-    // ordinary idle schedule; shortening its wait to the held source's
-    // deadline would make the idle peer inherit the failed source's cadence.
+  test("a held source neither freezes the idle schedule nor outlives its own ceiling", async () => {
+    // The two costs a rotation of "one held source plus idle ones" trades off.
+    // Treating it as fully-held would pin the idle schedule at the failing
+    // source's retry cadence forever, so a settled corpus would never get
+    // cheap; treating it as plainly idle would let the sleep double past
+    // `failureBackoffMaxMs`, silently overriding the ceiling that decides how
+    // often a broken source is retried. It has to do both: advance the idle
+    // schedule, and cap the wait at the held source's deadline.
     const run = await runLoop({
       responders: [
         [
@@ -329,12 +332,7 @@ describe("case law reconciliation loop", () => {
         ],
         ["cz-ns", () => IDLE],
       ],
-      timing: {
-        ...TIMING,
-        idleSleepMs: 600,
-        idleSleepMaxMs: 2400,
-      },
-      turns: 7,
+      turns: 10,
     });
 
     expect(run.events.filter((event) => event.type === "turn")).toEqual([
@@ -343,14 +341,17 @@ describe("case law reconciliation loop", () => {
       { type: "turn", adapterKey: "cz-regional", atMs: 1000 },
       { type: "turn", adapterKey: "cz-ns", atMs: 1500 },
       { type: "turn", adapterKey: "cz-ns", atMs: 2000 },
-      // The mixed rotations pay 600ms and then 1200ms. The source becomes
-      // retryable at 3000ms, but that must not truncate its idle peer's wait.
-      { type: "turn", adapterKey: "cz-ns", atMs: 2600 },
-      { type: "turn", adapterKey: "cz-regional", atMs: 3800 },
+      { type: "turn", adapterKey: "cz-regional", atMs: 3000 },
+      { type: "turn", adapterKey: "cz-ns", atMs: 3500 },
+      { type: "turn", adapterKey: "cz-ns", atMs: 4000 },
+      // The idle schedule advances instead of freezing at the retry wait.
+      { type: "turn", adapterKey: "cz-ns", atMs: 5000 },
+      // It also stops at the held source's deadline instead of oversleeping.
+      { type: "turn", adapterKey: "cz-regional", atMs: 7000 },
     ]);
   });
 
-  test("a fully held rotation retries at the first deadline without a poll storm", async () => {
+  test("every source failing waits out the earliest retry rather than spinning", async () => {
     // A skipped turn costs no pacing gap, so a rotation in which every source
     // is held would otherwise spin at full speed. The wait is to the first
     // expiry, not the idle ceiling: the corpus is unreachable, not settled.

@@ -194,17 +194,15 @@ export type ReconciliationLoopOptions = {
  * - a worked turn is followed by `unitDelayMs`, whatever it produced. A unit
  *   that found nothing missing still listed a slice from a publisher; it does
  *   not earn a faster next turn.
- * - a rotation where at least one source reported idle or leased and none
- *   worked doubles its sleep towards the idle ceiling, so a settled corpus
- *   stops asking the database every half second. A held source does not cap
- *   that schedule; its retry deadline belongs to its own turns. Any worked
- *   turn resets it.
+ * - a turn where every source reported idle or leased doubles its sleep
+ *   towards the idle ceiling, so a settled corpus stops asking the database
+ *   every half second. Any worked turn resets it.
  * - a throw holds that source alone until its own backoff expires, doubling
  *   towards the failure ceiling. The loop keeps its pacing meanwhile, so a
  *   refusing publisher costs its own turns and nobody else's. Errors never
- *   break the loop. Only when every source is held at once — a database
- *   unreachable for all of them — does the loop wait to the earliest expiry,
- *   so a fully skipped rotation neither spins nor delays a ready retry.
+ *   break the loop, and when every source is held at once — a database
+ *   unreachable for all of them — the wait to the earliest expiry is the
+ *   loop's, so it neither spins nor oversleeps the recovery.
  */
 export const runCaseLawReconciliationLoop = async ({
   isDraining,
@@ -247,7 +245,6 @@ export const runCaseLawReconciliationLoop = async ({
   // iterations: a rotation that restarted at zero would starve every source
   // after the first whenever the loop backed off mid-rotation.
   let workedThisRotation = 0;
-  let skippedThisRotation = 0;
 
   while (!isDraining()) {
     const sourceIndex = cursor % sources.length;
@@ -263,7 +260,6 @@ export const runCaseLawReconciliationLoop = async ({
       // Serving its backoff. The turn asked nobody for anything, so it owes
       // the publisher-politeness gap nothing; the next source goes now.
       delayMs = 0;
-      skippedThisRotation += 1;
     } else {
       try {
         // oxlint-disable-next-line no-await-in-loop -- one bounded unit at a time is the point; the next turn only starts after this one is paced
@@ -318,21 +314,29 @@ export const runCaseLawReconciliationLoop = async ({
       // polling at the unit rate.
       if (workedThisRotation > 0) {
         idleMs = timing.idleSleepMs;
-      } else if (skippedThisRotation === sources.length) {
-        // Every source is held. Skips cost no time, so wait exactly until the
-        // first source becomes retryable; applying the idle schedule here
-        // would either spin or delay recovery from a shared outage.
-        const earliestRetryAt = Math.min(...retryAtMs.values());
-        delayMs = Math.max(delayMs, earliestRetryAt - now());
       } else {
-        // At least one source was polled and none worked. This is an idle
-        // rotation even when another source was held, so its schedule advances
-        // independently of that source's retry deadline.
-        delayMs = Math.max(delayMs, idleMs);
+        // The idle schedule advances on its own terms, whether or not a source
+        // is held: a rotation that found nothing to do is the thing it exists
+        // to make cheap, and freezing it would leave a settled corpus polling
+        // the database at some held source's retry cadence forever.
+        const idleWaitMs = idleMs;
         idleMs = Math.min(idleMs * 2, timing.idleSleepMaxMs);
+        // A held source only ever caps that wait. There is work to try the
+        // moment its deadline expires, so the idle schedule must not sleep
+        // past it, and the unit gap is the floor because a rotation of skips
+        // costs no time of its own and must not spin.
+        const earliestRetryAt = Math.min(...retryAtMs.values());
+        delayMs = Math.max(
+          delayMs,
+          Number.isFinite(earliestRetryAt)
+            ? Math.min(
+                idleWaitMs,
+                Math.max(earliestRetryAt - now(), timing.unitDelayMs),
+              )
+            : idleWaitMs,
+        );
       }
       workedThisRotation = 0;
-      skippedThisRotation = 0;
     }
 
     if (now() >= summaryDueAt) {
