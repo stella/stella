@@ -165,7 +165,18 @@ test.describe("public hydration", () => {
     const datePickerTrigger = page
       .getByRole("button", { name: /select date|vybrat datum/iu })
       .first();
-    await datePickerTrigger.click();
+    // The route is SSR'd, so the trigger is visible just before React has
+    // attached its handler and a too-early click is dropped (same gotcha as
+    // public-tools.spec.ts). Retry the open until hydration has accepted it,
+    // clicking only while the popover is closed so a slow-but-successful
+    // open is not toggled shut again.
+    const dayGrid = page.locator('[role="gridcell"]').first();
+    await expect(async () => {
+      if (!(await dayGrid.isVisible())) {
+        await datePickerTrigger.click();
+      }
+      await expect(dayGrid).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 15_000 });
     await expect(
       page.locator('[role="gridcell"][aria-current="date"]'),
     ).toHaveAttribute("data-date", expectedToday);
