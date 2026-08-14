@@ -33,7 +33,7 @@ ALTER TABLE "usage_policies"
 -- bucket row starting at zero is the reset.
 CREATE TABLE IF NOT EXISTS "usage_lane_counters" (
   "id" uuid PRIMARY KEY,
-  "organization_id" text NOT NULL REFERENCES "organization" ("id") ON DELETE CASCADE,
+  "organization_id" varchar(128) NOT NULL REFERENCES "organization" ("id") ON DELETE CASCADE,
   "user_id" text NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
   "kind" text NOT NULL,
   "bucket_start" timestamptz NOT NULL,
@@ -54,4 +54,8 @@ CREATE POLICY "usage_lane_counters_insert" ON "usage_lane_counters" AS PERMISSIV
 
 CREATE POLICY "usage_lane_counters_update" ON "usage_lane_counters" AS PERMISSIVE FOR UPDATE TO "stella" USING (organization_id = (SELECT current_setting('app.organization_id', true))) WITH CHECK (organization_id = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
 
-CREATE POLICY "usage_lane_counters_no_delete" ON "usage_lane_counters" AS RESTRICTIVE FOR DELETE TO "stella" USING (false);
+-- Table privileges are granted explicitly below and RLS narrows them;
+-- delete stays restricted by policy.
+CREATE POLICY "usage_lane_counters_no_delete" ON "usage_lane_counters" AS RESTRICTIVE FOR DELETE TO "stella" USING (false);--> statement-breakpoint
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "usage_lane_counters" TO stella;

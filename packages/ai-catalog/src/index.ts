@@ -1096,7 +1096,7 @@ export const MODEL_RATES = {
     kind: "flat",
     inputPerMTok: 50_000,
     outputPerMTok: 300_000,
-    cachedInputPerMTok: 5_000,
+    cachedInputPerMTok: 5000,
   },
   "claude-haiku-4-5-20251001": {
     kind: "flat",
