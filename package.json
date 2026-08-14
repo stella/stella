@@ -124,7 +124,7 @@
     "prosemirror-model": "1.25.11",
     "prosemirror-transform": "1.12.0",
     "prosemirror-view": "1.42.2",
-    "react-native-screens": "4.27.0",
+    "react-native-screens": "4.26.2",
     "sharp": "0.35.3",
     "svgo": "4.0.2",
     "undici": "7.29.0"
