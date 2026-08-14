@@ -1203,7 +1203,7 @@ type Messages = {
     "emptyVideoLabel": "Contacts overview";
     "extractProcuracao": {
       "chooseFile": "Upload power of attorney (.docx)";
-      "dialogDescription": "Upload a power-of-attorney document (.docx) and Stella will try to identify the grantor(s) and their details.";
+      "dialogDescription": "Upload a power-of-attorney document (.docx) and stella will try to identify the grantor(s) and their details.";
       "dialogTitle": "Extract from power of attorney";
       "extractOption": "Extract from power of attorney (.docx)";
       "fileHint": "Stella reads the document and finds the grantor(s) — not the lawyer — automatically. Review the results before confirming.";

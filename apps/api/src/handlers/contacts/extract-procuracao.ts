@@ -66,6 +66,15 @@ const buildPrompt = (documentText: string): string =>
 const config = {
   permissions: { contact: ["create"] },
   mcp: { type: "capability", reason: "contact_extraction_ui" },
+  transport: {
+    type: "file-input",
+    input: { field: "file", required: true, mediaTypes: [DOCX_MIME_TYPE] },
+    alternative: {
+      type: "none",
+      reason:
+        "extraction reads the uploaded document's bytes directly; there is no JSON-only equivalent",
+    },
+  },
   body: extractProcuracaoBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;

@@ -1200,7 +1200,7 @@
     "emptyVideoLabel": "نظرة عامة على جهات الاتصال",
     "extractProcuracao": {
       "chooseFile": "تحميل التوكيل (.docx)",
-      "dialogDescription": "قم بتحميل توكيل (.docx) وستحاول Stella تحديد الموكل (الموكلين) وبياناتهم.",
+      "dialogDescription": "قم بتحميل توكيل (.docx) وستحاول stella تحديد الموكل (الموكلين) وبياناتهم.",
       "dialogTitle": "استخراج من توكيل",
       "extractOption": "استخراج من توكيل (.docx)",
       "fileHint": "تقرأ Stella المستند وتحدد الموكل تلقائيًا (الشخص الذي يمنح التوكيل، وليس المحامي). راجع النتيجة قبل التأكيد.",

@@ -1200,7 +1200,7 @@
     "emptyVideoLabel": "Kontaktpersonu pārskats",
     "extractProcuracao": {
       "chooseFile": "Augšupielādēt pilnvaru (.docx)",
-      "dialogDescription": "Augšupielādējiet pilnvaru (.docx), un Stella mēģinās noteikt pilnvaras devēju(-us) un viņu datus.",
+      "dialogDescription": "Augšupielādējiet pilnvaru (.docx), un stella mēģinās noteikt pilnvaras devēju(-us) un viņu datus.",
       "dialogTitle": "Iegūt no pilnvaras",
       "extractOption": "Iegūt no pilnvaras (.docx)",
       "fileHint": "Stella izlasa dokumentu un automātiski atrod pilnvaras devēju (personu, kas piešķir pilnvaru, nevis juristu). Pirms apstiprināšanas pārbaudiet rezultātu.",

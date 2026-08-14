@@ -1200,7 +1200,7 @@
     "emptyVideoLabel": "Visão geral dos contatos",
     "extractProcuracao": {
       "chooseFile": "Enviar procuração (.docx)",
-      "dialogDescription": "Envie uma procuração (.docx) e a Stella vai tentar identificar o(s) outorgante(s) e seus dados.",
+      "dialogDescription": "Envie uma procuração (.docx) e a stella vai tentar identificar o(s) outorgante(s) e seus dados.",
       "dialogTitle": "Extrair de procuração",
       "extractOption": "Extrair de procuração (.docx)",
       "fileHint": "A Stella lê o documento e localiza o(s) outorgante(s) (quem concede a procuração, não o advogado) automaticamente. Revise o resultado antes de confirmar.",

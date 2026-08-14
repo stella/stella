@@ -257,13 +257,7 @@ type ContactEmailVars = {
 };
 
 type ContactAddressVars = {
-  type:
-    | "office"
-    | "mailing"
-    | "billing"
-    | "service"
-    | "home"
-    | "other";
+  type: "office" | "mailing" | "billing" | "service" | "home" | "other";
   line1: string;
   isPrimary: boolean;
 };
@@ -306,13 +300,13 @@ export const toImportRowVars = (
 
   const { fields } = row;
 
-  const customFields = CUSTOM_FIELD_LABELS.filter(
-    ({ key }) => fields[key],
-  ).map(({ key, label }) => ({
-    id: crypto.randomUUID(),
-    label,
-    value: fields[key],
-  }));
+  const customFields = CUSTOM_FIELD_LABELS.filter(({ key }) => fields[key]).map(
+    ({ key, label }) => ({
+      id: crypto.randomUUID(),
+      label,
+      value: fields[key],
+    }),
+  );
 
   return {
     id: toSafeId<"contact">(crypto.randomUUID()),

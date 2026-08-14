@@ -22,8 +22,11 @@ import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import type { TranslationKey } from "@/i18n/types";
+import { getAnalytics } from "@/lib/analytics/provider";
+import { useImportContacts } from "@/lib/contacts/mutations";
+import { contactsKeys } from "@/lib/contacts/queries";
+import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { useImportContacts } from "@/routes/_protected.contacts/-mutations";
 import {
   parseContactImportText,
   toImportRowVars,
@@ -34,7 +37,6 @@ import type {
   ParsedImportFieldKey,
   ParsedImportRow,
 } from "@/routes/_protected.contacts/-parse-import";
-import { contactsKeys } from "@/routes/_protected.contacts/-queries";
 
 type ImportContactsMutation = ReturnType<typeof useImportContacts>;
 export type ImportContactResult = Awaited<
@@ -143,6 +145,7 @@ export const ImportContactsDialog = ({
       setRows([]);
       await queryClient.invalidateQueries({ queryKey: contactsKeys.all });
     } catch (error) {
+      getAnalytics().captureError(error);
       stellaToast.add({
         title: userErrorFromThrown(error, t("errors.actionFailed")),
         type: "error",
@@ -184,7 +187,9 @@ export const ImportContactsDialog = ({
           <ImportDialogBody
             fileInputRef={fileInputRef}
             invalidCount={invalidCount}
-            onFileChange={(file) => void handleFileChange(file)}
+            onFileChange={(file) =>
+              detached(handleFileChange(file), "contact-import.choose-file")
+            }
             onFieldChange={updateField}
             onRemoveRow={removeRow}
             results={results}
@@ -200,7 +205,9 @@ export const ImportContactsDialog = ({
             <Button
               disabled={validRowVars.length === 0}
               loading={importContacts.isPending}
-              onClick={() => void handleConfirm()}
+              onClick={() =>
+                detached(handleConfirm(), "contact-import.confirm")
+              }
               type="button"
             >
               {t("contacts.import.confirmAction")}
@@ -287,7 +294,9 @@ const ImportDialogBody = ({
       {rows.map((row) => (
         <ImportRowCard
           key={row.rowIndex}
-          onFieldChange={(key, value) => onFieldChange(row.rowIndex, key, value)}
+          onFieldChange={(key, value) =>
+            onFieldChange(row.rowIndex, key, value)
+          }
           onRemove={() => onRemoveRow(row.rowIndex)}
           row={row}
         />

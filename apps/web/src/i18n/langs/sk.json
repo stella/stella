@@ -1200,7 +1200,7 @@
     "emptyVideoLabel": "Prehľad kontaktov",
     "extractProcuracao": {
       "chooseFile": "Nahrať plnomocenstvo (.docx)",
-      "dialogDescription": "Nahrajte plnomocenstvo (.docx) a Stella sa pokúsi identifikovať splnomocniteľa a jeho údaje.",
+      "dialogDescription": "Nahrajte plnomocenstvo (.docx) a stella sa pokúsi identifikovať splnomocniteľa a jeho údaje.",
       "dialogTitle": "Extrahovať z plnomocenstva",
       "extractOption": "Extrahovať z plnomocenstva (.docx)",
       "fileHint": "Stella prečíta dokument a automaticky nájde splnomocniteľa (toho, kto udeľuje plnomocenstvo, nie advokáta). Pred potvrdením výsledok skontrolujte.",

@@ -1200,7 +1200,7 @@
     "emptyVideoLabel": "Vue d’ensemble des contacts",
     "extractProcuracao": {
       "chooseFile": "Téléverser une procuration (.docx)",
-      "dialogDescription": "Téléversez une procuration (.docx) et Stella tentera d'identifier le(s) mandant(s) et leurs informations.",
+      "dialogDescription": "Téléversez une procuration (.docx) et stella tentera d'identifier le(s) mandant(s) et leurs informations.",
       "dialogTitle": "Extraire d'une procuration",
       "extractOption": "Extraire d'une procuration (.docx)",
       "fileHint": "Stella lit le document et repère automatiquement le(s) mandant(s) (celui qui donne procuration, pas l'avocat). Vérifiez le résultat avant de confirmer.",

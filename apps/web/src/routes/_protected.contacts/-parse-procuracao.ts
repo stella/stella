@@ -5,7 +5,10 @@ import type {
   ParsedImportRowFields,
 } from "@/routes/_protected.contacts/-parse-import";
 
-export type ProcuracaoCandidate = Record<ParsedImportFieldKey, string | null> & {
+export type ProcuracaoCandidate = Record<
+  ParsedImportFieldKey,
+  string | null
+> & {
   contactType: "person" | "organization" | null;
 };
 

@@ -1200,7 +1200,7 @@
     "emptyVideoLabel": "Kapcsolatok áttekintése",
     "extractProcuracao": {
       "chooseFile": "Meghatalmazás feltöltése (.docx)",
-      "dialogDescription": "Töltsön fel egy meghatalmazást (.docx), és a Stella megpróbálja azonosítani a meghatalmazó(ka)t és adataikat.",
+      "dialogDescription": "Töltsön fel egy meghatalmazást (.docx), és a stella megpróbálja azonosítani a meghatalmazó(ka)t és adataikat.",
       "dialogTitle": "Kinyerés meghatalmazásból",
       "extractOption": "Kinyerés meghatalmazásból (.docx)",
       "fileHint": "A Stella beolvassa a dokumentumot, és automatikusan megkeresi a meghatalmazót (aki a meghatalmazást adja, nem az ügyvédet). Megerősítés előtt ellenőrizze az eredményt.",

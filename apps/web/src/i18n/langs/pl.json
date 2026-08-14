@@ -1200,7 +1200,7 @@
     "emptyVideoLabel": "Przegląd kontaktów",
     "extractProcuracao": {
       "chooseFile": "Prześlij pełnomocnictwo (.docx)",
-      "dialogDescription": "Prześlij pełnomocnictwo (.docx), a Stella spróbuje zidentyfikować mocodawcę (mocodawców) i ich dane.",
+      "dialogDescription": "Prześlij pełnomocnictwo (.docx), a stella spróbuje zidentyfikować mocodawcę (mocodawców) i ich dane.",
       "dialogTitle": "Wyodrębnij z pełnomocnictwa",
       "extractOption": "Wyodrębnij z pełnomocnictwa (.docx)",
       "fileHint": "Stella odczytuje dokument i automatycznie odnajduje mocodawcę (osobę udzielającą pełnomocnictwa, nie prawnika). Przed potwierdzeniem sprawdź wynik.",

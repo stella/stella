@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import type { RefObject } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { UploadIcon } from "lucide-react";
@@ -17,17 +18,19 @@ import {
 } from "@stll/ui/components/dialog";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { getAnalytics } from "@/lib/analytics/provider";
+import { api } from "@/lib/api";
 import { isDocxFile } from "@/lib/consts";
+import { useImportContacts } from "@/lib/contacts/mutations";
+import { contactsKeys } from "@/lib/contacts/queries";
+import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { api } from "@/lib/api";
 import {
   ImportResultsList,
   ImportRowCard,
 } from "@/routes/_protected.contacts/-import-dialog";
 import type { ImportContactResult } from "@/routes/_protected.contacts/-import-dialog";
-import { useImportContacts } from "@/routes/_protected.contacts/-mutations";
-import { candidatesToRows } from "@/routes/_protected.contacts/-parse-procuracao";
 import {
   toImportRowVars,
   validateRows,
@@ -36,7 +39,7 @@ import type {
   ParsedImportFieldKey,
   ParsedImportRow,
 } from "@/routes/_protected.contacts/-parse-import";
-import { contactsKeys } from "@/routes/_protected.contacts/-queries";
+import { candidatesToRows } from "@/routes/_protected.contacts/-parse-procuracao";
 
 type ExtractProcuracaoDialogProps = {
   open: boolean;
@@ -93,6 +96,7 @@ export const ExtractProcuracaoDialog = ({
       setResults(null);
       setRows(candidatesToRows(outorgantes));
     } catch (error) {
+      getAnalytics().captureError(error);
       stellaToast.add({
         title: userErrorFromThrown(
           error,
@@ -141,6 +145,7 @@ export const ExtractProcuracaoDialog = ({
       setRows([]);
       await queryClient.invalidateQueries({ queryKey: contactsKeys.all });
     } catch (error) {
+      getAnalytics().captureError(error);
       stellaToast.add({
         title: userErrorFromThrown(error, t("errors.actionFailed")),
         type: "error",
@@ -160,7 +165,9 @@ export const ExtractProcuracaoDialog = ({
     >
       <DialogPopup className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{t("contacts.extractProcuracao.dialogTitle")}</DialogTitle>
+          <DialogTitle>
+            {t("contacts.extractProcuracao.dialogTitle")}
+          </DialogTitle>
           <DialogDescription>
             {results
               ? t("contacts.import.resultsSummary", {
@@ -175,59 +182,22 @@ export const ExtractProcuracaoDialog = ({
           </DialogDescription>
         </DialogHeader>
         <DialogPanel className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto">
-          {results ? (
-            <ImportResultsList results={results} />
-          ) : rows.length === 0 ? (
-            <div className="flex flex-col items-start gap-2">
-              <Button
-                disabled={isExtracting}
-                loading={isExtracting}
-                onClick={() => fileInputRef.current?.click()}
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                <UploadIcon className="size-3.5" />
-                {t("contacts.extractProcuracao.chooseFile")}
-              </Button>
-              <span className="text-muted-foreground text-xs">
-                {t("contacts.extractProcuracao.fileHint")}
-              </span>
-              <input
-                accept=".docx"
-                className="hidden"
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (!file) {
-                    return;
-                  }
-                  void handleFileChange(file);
-                  event.target.value = "";
-                }}
-                ref={fileInputRef}
-                type="file"
-              />
-            </div>
-          ) : (
-            <>
-              <p className="text-muted-foreground text-xs">
-                {t("contacts.import.previewSummary", {
-                  valid: String(validRowVars.length),
-                  invalid: String(invalidCount),
-                })}
-              </p>
-              {rows.map((row) => (
-                <ImportRowCard
-                  key={row.rowIndex}
-                  onFieldChange={(key, value) =>
-                    updateField(row.rowIndex, key, value)
-                  }
-                  onRemove={() => removeRow(row.rowIndex)}
-                  row={row}
-                />
-              ))}
-            </>
-          )}
+          <ExtractProcuracaoDialogBody
+            fileInputRef={fileInputRef}
+            invalidCount={invalidCount}
+            isExtracting={isExtracting}
+            onFieldChange={updateField}
+            onFileChange={(file) =>
+              detached(
+                handleFileChange(file),
+                "contact-extract-procuracao.upload",
+              )
+            }
+            onRemoveRow={removeRow}
+            results={results}
+            rows={rows}
+            validCount={validRowVars.length}
+          />
         </DialogPanel>
         <DialogFooter>
           <DialogClose render={<Button variant="outline" />}>
@@ -237,7 +207,9 @@ export const ExtractProcuracaoDialog = ({
             <Button
               disabled={validRowVars.length === 0}
               loading={importContacts.isPending}
-              onClick={() => void handleConfirm()}
+              onClick={() =>
+                detached(handleConfirm(), "contact-extract-procuracao.confirm")
+              }
               type="button"
             >
               {t("contacts.import.confirmAction")}
@@ -246,5 +218,95 @@ export const ExtractProcuracaoDialog = ({
         </DialogFooter>
       </DialogPopup>
     </Dialog>
+  );
+};
+
+type ExtractProcuracaoDialogBodyProps = {
+  isExtracting: boolean;
+  results: ImportContactResult[] | null;
+  rows: ParsedImportRow[];
+  validCount: number;
+  invalidCount: number;
+  fileInputRef: RefObject<HTMLInputElement | null>;
+  onFileChange: (file: File) => void;
+  onFieldChange: (
+    rowIndex: number,
+    key: ParsedImportFieldKey,
+    value: string,
+  ) => void;
+  onRemoveRow: (rowIndex: number) => void;
+};
+
+const ExtractProcuracaoDialogBody = ({
+  isExtracting,
+  results,
+  rows,
+  validCount,
+  invalidCount,
+  fileInputRef,
+  onFileChange,
+  onFieldChange,
+  onRemoveRow,
+}: ExtractProcuracaoDialogBodyProps) => {
+  const t = useTranslations();
+
+  if (results) {
+    return <ImportResultsList results={results} />;
+  }
+
+  if (rows.length === 0) {
+    return (
+      <div className="flex flex-col items-start gap-2">
+        <Button
+          disabled={isExtracting}
+          loading={isExtracting}
+          onClick={() => fileInputRef.current?.click()}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          <UploadIcon className="size-3.5" />
+          {t("contacts.extractProcuracao.chooseFile")}
+        </Button>
+        <span className="text-muted-foreground text-xs">
+          {t("contacts.extractProcuracao.fileHint")}
+        </span>
+        <input
+          accept=".docx"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (!file) {
+              return;
+            }
+            onFileChange(file);
+            event.target.value = "";
+          }}
+          ref={fileInputRef}
+          type="file"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <p className="text-muted-foreground text-xs">
+        {t("contacts.import.previewSummary", {
+          valid: String(validCount),
+          invalid: String(invalidCount),
+        })}
+      </p>
+      {rows.map((row) => (
+        <ImportRowCard
+          key={row.rowIndex}
+          onFieldChange={(key, value) =>
+            onFieldChange(row.rowIndex, key, value)
+          }
+          onRemove={() => onRemoveRow(row.rowIndex)}
+          row={row}
+        />
+      ))}
+    </>
   );
 };

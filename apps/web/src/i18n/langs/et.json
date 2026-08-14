@@ -1200,7 +1200,7 @@
     "emptyVideoLabel": "Kontaktide ülevaade",
     "extractProcuracao": {
       "chooseFile": "Laadi üles volikiri (.docx)",
-      "dialogDescription": "Laadige üles volikiri (.docx) ja Stella proovib tuvastada volitaja(d) ja nende andmed.",
+      "dialogDescription": "Laadige üles volikiri (.docx) ja stella proovib tuvastada volitaja(d) ja nende andmed.",
       "dialogTitle": "Tuvasta volikirjast",
       "extractOption": "Tuvasta volikirjast (.docx)",
       "fileHint": "Stella loeb dokumendi läbi ja leiab automaatselt volitaja (isiku, kes annab volituse, mitte advokaadi). Enne kinnitamist kontrollige tulemust.",

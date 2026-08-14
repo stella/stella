@@ -1200,7 +1200,7 @@
     "emptyVideoLabel": "Kontaktübersicht",
     "extractProcuracao": {
       "chooseFile": "Vollmacht hochladen (.docx)",
-      "dialogDescription": "Laden Sie eine Vollmacht (.docx) hoch, und Stella versucht, den/die Vollmachtgeber und deren Angaben zu erkennen.",
+      "dialogDescription": "Laden Sie eine Vollmacht (.docx) hoch, und stella versucht, den/die Vollmachtgeber und deren Angaben zu erkennen.",
       "dialogTitle": "Aus Vollmacht extrahieren",
       "extractOption": "Aus Vollmacht extrahieren (.docx)",
       "fileHint": "Stella liest das Dokument und findet automatisch den/die Vollmachtgeber (nicht den Anwalt). Prüfen Sie das Ergebnis, bevor Sie bestätigen.",

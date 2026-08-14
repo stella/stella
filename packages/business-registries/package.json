@@ -51,6 +51,7 @@
     "./ares": "./src/ares/index.ts",
     "./browser": "./src/browser.ts",
     "./brreg": "./src/brreg/index.ts",
+    "./cnpj": "./src/cnpj/index.ts",
     "./companies-house": "./src/companies-house/index.ts",
     "./cpf": "./src/cpf/index.ts",
     "./denue": "./src/denue/index.ts",

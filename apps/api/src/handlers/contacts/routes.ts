@@ -4,8 +4,8 @@ import businessRegistriesLookup from "@/api/handlers/contacts/business-registrie
 import createContact from "@/api/handlers/contacts/create";
 import deleteContactById from "@/api/handlers/contacts/delete";
 import extractProcuracao from "@/api/handlers/contacts/extract-procuracao";
-import importContacts from "@/api/handlers/contacts/import";
 import readContactById from "@/api/handlers/contacts/get";
+import importContacts from "@/api/handlers/contacts/import";
 import readContacts from "@/api/handlers/contacts/list";
 import searchContacts from "@/api/handlers/contacts/search";
 import updateContactById from "@/api/handlers/contacts/update";

@@ -1200,7 +1200,7 @@
     "emptyVideoLabel": "Vista general de contactos",
     "extractProcuracao": {
       "chooseFile": "Subir poder notarial (.docx)",
-      "dialogDescription": "Sube un poder notarial (.docx) y Stella intentará identificar al otorgante o los otorgantes y sus datos.",
+      "dialogDescription": "Sube un poder notarial (.docx) y stella intentará identificar al otorgante o los otorgantes y sus datos.",
       "dialogTitle": "Extraer de un poder notarial",
       "extractOption": "Extraer de un poder notarial (.docx)",
       "fileHint": "Stella lee el documento y localiza automáticamente al otorgante (quien otorga el poder, no el abogado). Revisa el resultado antes de confirmar.",

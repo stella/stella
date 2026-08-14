@@ -1200,7 +1200,7 @@
     "emptyVideoLabel": "Přehled kontaktů",
     "extractProcuracao": {
       "chooseFile": "Nahrát plnou moc (.docx)",
-      "dialogDescription": "Nahrajte plnou moc (.docx) a Stella se pokusí identifikovat zmocnitele a jejich údaje.",
+      "dialogDescription": "Nahrajte plnou moc (.docx) a stella se pokusí identifikovat zmocnitele a jejich údaje.",
       "dialogTitle": "Extrahovat z plné moci",
       "extractOption": "Extrahovat z plné moci (.docx)",
       "fileHint": "Stella přečte dokument a automaticky najde zmocnitele (toho, kdo uděluje plnou moc, ne advokáta). Před potvrzením výsledek zkontrolujte.",

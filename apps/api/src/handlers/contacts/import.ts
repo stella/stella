@@ -1,9 +1,10 @@
-import { validateCnpj } from "@stll/business-registries/cnpj";
-import { validateCpf } from "@stll/business-registries/cpf";
 import { Result, panic } from "better-result";
 import { and, eq, isNotNull } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
+
+import { validateCnpj } from "@stll/business-registries/cnpj";
+import { validateCpf } from "@stll/business-registries/cpf";
 
 import { contacts } from "@/api/db/schema";
 import {
@@ -128,7 +129,11 @@ const importContacts = createSafeRootHandler(
         for (const [index, row] of body.rows.entries()) {
           const classification = classifyTaxId(row.taxId);
           if (!classification) {
-            rowResults.push({ index, status: "skipped", reason: "invalid_tax_id" });
+            rowResults.push({
+              index,
+              status: "skipped",
+              reason: "invalid_tax_id",
+            });
             continue;
           }
 
