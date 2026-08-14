@@ -1,4 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { once } from "node:events";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
 import {
   CANARY_ALLOWED_WORKSPACE_ID,
@@ -16,6 +20,7 @@ import {
   createCanaryState,
   handleCanaryMessage,
   signCanaryCredential,
+  startCanaryServer,
   verifyCanaryCredential,
   type CanaryCredentialClaims,
 } from "./mcp-canary-server";
@@ -120,6 +125,97 @@ describe("canary delegated credential", () => {
 });
 
 describe("canary MCP protocol", () => {
+  test("records only authenticated JSON-RPC method categories", async () => {
+    const stateDirectory = await mkdtemp(
+      path.join(tmpdir(), "stella-canary-method-test-"),
+    );
+    const statePath = path.join(stateDirectory, "state.json");
+    const server = startCanaryServer({
+      port: 0,
+      signingSecret: SIGNING_SECRET,
+      statePath,
+    });
+
+    try {
+      await once(server, "listening");
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        throw new Error("canary test server did not bind a TCP address");
+      }
+      const url = `http://127.0.0.1:${address.port}/mcp`;
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      const message = {
+        jsonrpc: "2.0",
+        id: "not-for-logs",
+        method: "tools/list",
+        params: { payload: "not-for-logs" },
+      };
+      const rejected = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(message),
+      });
+      expect(rejected.status).toBe(401);
+
+      const accepted = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${signCanaryCredential(
+            claims({ iat: nowSeconds - 1, exp: nowSeconds + 900 }),
+            SIGNING_SECRET,
+          )}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(message),
+      });
+      expect(accepted.status).toBe(200);
+
+      const state: unknown = JSON.parse(await Bun.file(statePath).text());
+      expect(state).toEqual({
+        version: 1,
+        events: [],
+        authRejections: [{ reason: "missing", at: expect.any(String) }],
+        authenticatedMethods: ["tools/list"],
+        violations: [],
+      });
+      expect(canaryStateDiagnostic(state)).toBe(
+        "events=none; violations=none; authRejections=missing; authProbeBaseline=unexpected; authenticatedMethods=tools/list",
+      );
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+      await rm(stateDirectory, { recursive: true, force: true });
+    }
+  });
+
+  test("bounds authenticated method state before rendering diagnostics", () => {
+    const state = createCanaryState();
+    for (let index = 0; index < 10; index += 1) {
+      handleCanaryMessage({
+        message: { jsonrpc: "2.0", id: index, method: "untrusted-method" },
+        claims: acceptedClaims(),
+        state,
+        now: "2026-07-21T12:00:00.000Z",
+      });
+    }
+
+    expect(state.authenticatedMethods).toEqual([
+      "other",
+      "other",
+      "other",
+      "other",
+      "other",
+      "other",
+      "other",
+      "other",
+      "other",
+    ]);
+    expect(canaryStateDiagnostic(state)).toContain(
+      "authenticatedMethods=other,other,other,other,other,other,other,other,overflow",
+    );
+  });
+
   test("reports only bounded server-state categories in diagnostics", () => {
     expect(
       canaryStateDiagnostic({
@@ -130,7 +226,7 @@ describe("canary MCP protocol", () => {
         violations: ["invalid-write-request", "untrusted-violation"],
       }),
     ).toBe(
-      "events=read_allowed,unknown; violations=invalid-write-request,unknown; authRejections=unavailable; authProbeBaseline=unavailable",
+      "events=read_allowed,unknown; violations=invalid-write-request,unknown; authRejections=unavailable; authProbeBaseline=unavailable; authenticatedMethods=unavailable",
     );
     expect(
       canaryStateDiagnostic({
@@ -141,7 +237,7 @@ describe("canary MCP protocol", () => {
         violations: [],
       }),
     ).toBe(
-      "events=read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,overflow; violations=none; authRejections=unavailable; authProbeBaseline=unavailable",
+      "events=read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,overflow; violations=none; authRejections=unavailable; authProbeBaseline=unavailable; authenticatedMethods=unavailable",
     );
     expect(
       canaryStateDiagnostic({
@@ -152,7 +248,7 @@ describe("canary MCP protocol", () => {
         violations: [],
       }),
     ).toBe(
-      "events=read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,overflow; violations=none; authRejections=unavailable; authProbeBaseline=unavailable",
+      "events=read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,overflow; violations=none; authRejections=unavailable; authProbeBaseline=unavailable; authenticatedMethods=unavailable",
     );
     expect(
       canaryStateDiagnostic({
@@ -164,7 +260,7 @@ describe("canary MCP protocol", () => {
         ],
       }),
     ).toBe(
-      "events=none; violations=none; authRejections=expired,invalid-claims; authProbeBaseline=expected",
+      "events=none; violations=none; authRejections=expired,invalid-claims; authProbeBaseline=expected; authenticatedMethods=unavailable",
     );
     expect(
       canaryStateDiagnostic({
@@ -177,7 +273,7 @@ describe("canary MCP protocol", () => {
         ],
       }),
     ).toBe(
-      "events=none; violations=none; authRejections=expired,invalid-claims,missing; authProbeBaseline=extra",
+      "events=none; violations=none; authRejections=expired,invalid-claims,missing; authProbeBaseline=extra; authenticatedMethods=unavailable",
     );
     expect(
       canaryFailureDiagnostic({
@@ -188,7 +284,27 @@ describe("canary MCP protocol", () => {
         sandboxCleanup: "leaked",
       }),
     ).toBe(
-      "server state: events=read_denied; violations=finish-before-required-sequence; authRejections=unavailable; authProbeBaseline=unavailable; sandboxCleanup=leaked",
+      "server state: events=read_denied; violations=finish-before-required-sequence; authRejections=unavailable; authProbeBaseline=unavailable; authenticatedMethods=unavailable; sandboxCleanup=leaked",
+    );
+    expect(
+      canaryStateDiagnostic({
+        events: [],
+        violations: [],
+        authRejections: [],
+        authenticatedMethods: [
+          "initialize",
+          "tools/list",
+          "not-for-logs",
+          "tools/call",
+          "tools/call",
+          "tools/call",
+          "tools/call",
+          "tools/call",
+          "tools/call",
+        ],
+      }),
+    ).toBe(
+      "events=none; violations=none; authRejections=none; authProbeBaseline=unexpected; authenticatedMethods=initialize,tools/list,unknown,tools/call,tools/call,tools/call,tools/call,tools/call,overflow",
     );
   });
 
@@ -214,6 +330,7 @@ describe("canary MCP protocol", () => {
         capabilities: { tools: { listChanged: false } },
       },
     });
+    expect(state.authenticatedMethods).toEqual(["initialize"]);
 
     const listResult = handleCanaryMessage({
       message: {
@@ -246,6 +363,7 @@ describe("canary MCP protocol", () => {
         "canary_write_workspace",
       ].toSorted(),
     );
+    expect(state.authenticatedMethods).toEqual(["initialize", "tools/list"]);
   });
 
   test("requires the authorized read/write/deny sequence with an audit event", () => {
@@ -280,6 +398,12 @@ describe("canary MCP protocol", () => {
     toolCall("canary_finish", { summary: "complete" }, state);
 
     expect(state.violations).toEqual([]);
+    expect(state.authenticatedMethods).toEqual([
+      "tools/call",
+      "tools/call",
+      "tools/call",
+      "tools/call",
+    ]);
     expect(state.events.map((event) => event.type)).toEqual([
       "read_allowed",
       "write_allowed",

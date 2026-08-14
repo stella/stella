@@ -338,10 +338,12 @@ const assertState = (value: unknown): void => {
   assertCanary(isRecord(value), "canary state is not an object");
   const events = value["events"];
   const authRejections = value["authRejections"];
+  const authenticatedMethods = value["authenticatedMethods"];
   const violations = value["violations"];
   assertCanary(
     Array.isArray(events) &&
       Array.isArray(authRejections) &&
+      Array.isArray(authenticatedMethods) &&
       Array.isArray(violations),
     "canary state is missing required arrays",
   );
