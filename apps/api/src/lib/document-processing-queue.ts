@@ -50,15 +50,15 @@ import {
   enqueueDocumentProcessingRun,
   type DocumentProcessingJobData,
 } from "@/api/lib/document-processing-enqueue";
-import { DocumentOcrProviderError } from "@/api/lib/document-processing-ocr-result";
-import {
-  isDocumentOcrProviderConfigured,
-  recognizePdfText,
-} from "@/api/lib/document-processing-provider";
+import { DocumentOcrError } from "@/api/lib/document-processing-ocr-result";
 import { startDocumentOcrWorkerReadiness } from "@/api/lib/document-processing-readiness";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { createFileKey, createOcrSearchablePdfKey } from "@/api/lib/file-key";
 import { logger } from "@/api/lib/observability/logger";
+import {
+  isLocalDocumentOcrConfigured,
+  recognizePdfTextLocally,
+} from "@/api/lib/ocr-local/recognize-local";
 import { createOcrSearchablePdf } from "@/api/lib/ocr-searchable-pdf";
 import {
   createBullMqConnection,
@@ -67,7 +67,6 @@ import {
 import { unboundedCoordinationKey } from "@/api/lib/redis-keys";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import {
-  presignDownloadUrl,
   readTenantS3ArrayBuffer,
   writeTenantS3Object,
 } from "@/api/lib/s3-presign";
@@ -80,7 +79,6 @@ import { getSearchProvider } from "@/api/lib/search/provider";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
-const OCR_SOURCE_URL_TTL_SECONDS = 35 * 60;
 const WORKER_CONCURRENCY = 2;
 const RECONCILE_INTERVAL_MS = 30_000;
 const RECONCILE_BATCH_SIZE = 100;
@@ -1186,18 +1184,9 @@ export const processDocumentProcessingRun = async (
         fileId: run.sourceFileId,
         mimeType: PDF_MIME_TYPE,
       });
-      const sourceUrl = await presignDownloadUrl(sourceKey, {
-        expiresIn: OCR_SOURCE_URL_TTL_SECONDS,
-        scope: {
-          organizationId: run.organizationId,
-          workspaceId: run.workspaceId,
-        },
-      });
-      const result = await recognizePdfText({
-        idempotencyKey: `ocr:${run.id}`,
+      const result = await recognizePdfTextLocally({
         signal: lifecycleSignal,
         sourceKey,
-        sourceUrl,
       });
       if (Result.isError(result)) {
         throw new DocumentProcessingJobError({
@@ -1285,7 +1274,7 @@ export const processDocumentProcessingRun = async (
 const errorCode = (error: unknown): string => {
   if (
     error instanceof DocumentProcessingJobError ||
-    error instanceof DocumentOcrProviderError
+    error instanceof DocumentOcrError
   ) {
     return error.code;
   }
@@ -2552,7 +2541,7 @@ export const abortDocumentProcessingWorkerBeforeClose = async ({
 
 export const initDocumentProcessingWorker = () => {
   const lifecycle = new AbortController();
-  const ocrProviderConfigured = isDocumentOcrProviderConfigured();
+  const ocrConfigured = isLocalDocumentOcrConfigured();
 
   const worker = new Worker<DocumentProcessingJobData>(
     DOCUMENT_PROCESSING_QUEUE_NAME,
@@ -2580,7 +2569,7 @@ export const initDocumentProcessingWorker = () => {
       if (closing) {
         return undefined;
       }
-      if (ocrProviderConfigured) {
+      if (ocrConfigured) {
         readiness = startDocumentOcrWorkerReadiness();
       }
       return undefined;

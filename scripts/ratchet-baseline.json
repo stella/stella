@@ -232,7 +232,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 762,
+    "count": 761,
     "files": {
       "apps/api/scripts/ai-provider-canary-config.ts": 1,
       "apps/api/scripts/ai-provider-canary.ts": 4,
@@ -343,7 +343,6 @@
       "apps/api/src/lib/deepl/client.ts": 3,
       "apps/api/src/lib/desktop-edit-session-predicates.ts": 2,
       "apps/api/src/lib/document-processing-handoff.ts": 1,
-      "apps/api/src/lib/document-processing-provider.ts": 1,
       "apps/api/src/lib/document-processing-queue.ts": 1,
       "apps/api/src/lib/document-reference.ts": 2,
       "apps/api/src/lib/document-review/review-grade.ts": 1,

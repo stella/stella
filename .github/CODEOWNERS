@@ -8,7 +8,6 @@
 scripts/                                @jan-kubica
 
 # Privileged OCR runtime packaging.
-apps/ocr-service/                       @jan-kubica
 
 # Desktop signing surface — build runs with signing keys live.
 apps/desktop/package.json               @jan-kubica

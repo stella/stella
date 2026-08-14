@@ -889,19 +889,19 @@ describe("automatic OCR failure recovery", () => {
 
 describe("unconfigured worker lifecycle", () => {
   test("starts native processing while publishing OCR readiness only when configured", () => {
-    const providerCheck = queueSource.indexOf(
-      "const ocrProviderConfigured = isDocumentOcrProviderConfigured()",
+    const configurationCheck = queueSource.indexOf(
+      "const ocrConfigured = isLocalDocumentOcrConfigured()",
     );
     const consumerStart = queueSource.indexOf(
       "const worker = new Worker<DocumentProcessingJobData>",
     );
     const readinessGuard = queueSource.indexOf(
-      "if (ocrProviderConfigured)",
+      "if (ocrConfigured)",
       consumerStart,
     );
 
-    expect(providerCheck).toBeGreaterThan(-1);
-    expect(consumerStart).toBeGreaterThan(providerCheck);
+    expect(configurationCheck).toBeGreaterThan(-1);
+    expect(consumerStart).toBeGreaterThan(configurationCheck);
     expect(readinessGuard).toBeGreaterThan(consumerStart);
   });
 });
@@ -980,7 +980,7 @@ describe("worker interruption lifecycle", () => {
     expect(calls).toEqual(["failed"]);
   });
 
-  test("finds lifecycle cancellation through provider error causes", async () => {
+  test("finds lifecycle cancellation through OCR error causes", async () => {
     const lifecycle = new AbortController();
     lifecycle.abort();
     const calls: string[] = [];

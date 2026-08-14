@@ -95,7 +95,6 @@ const INTERNAL_SERVER_KEYS = new Set([
   "DEBUG_UNREDACTED_ERRORS",
   "DOCUMENT_OCR_BATCH_INTERVAL_MINUTES",
   "DOCUMENT_OCR_MODEL_DIR",
-  "DOCUMENT_OCR_PROVIDER",
   "DOCUMENT_PROCESSING_IDLE_EXIT_MINUTES",
   "E2E_DISABLE_AUTH_RATE_LIMIT",
   "EMAIL_PROVIDER",
@@ -130,7 +129,6 @@ const INTERNAL_SERVER_KEYS = new Set([
   "LEGAL_SEARCH_PROVIDER",
   "MICROSOFT_AUTH_CLIENT_ID",
   "MICROSOFT_AUTH_TENANT_ID",
-  "OCR_SERVICE_URL",
   "PORT",
   "POSTHOG_HOST",
   "POSTHOG_KEY",
@@ -269,8 +267,6 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Interval for releasing queued OCR requests, in minutes.",
   DOCUMENT_OCR_MODEL_DIR:
     "Directory holding the local OCR models; populate it with `bun run ocr:fetch-models`.",
-  DOCUMENT_OCR_PROVIDER:
-    'OCR provider: "local" runs ONNX recognition in an isolated subprocess, "service" posts to OCR_SERVICE_URL.',
   DOCUMENT_PROCESSING_IDLE_EXIT_MINUTES:
     "Batch mode: the document-processing worker exits once its queue has stayed empty this many minutes. Unset keeps it long-running.",
   EDGAR_USER_AGENT:
@@ -307,10 +303,6 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Microsoft OAuth client secret; required when the matching web login flag is enabled.",
   MICROSOFT_AUTH_TENANT_ID:
     'Microsoft tenant ID, or "common" for work and personal Microsoft accounts.',
-  OCR_SERVICE_TOKEN:
-    "Bearer token for the dedicated OCR service. Use at least 16 characters.",
-  OCR_SERVICE_URL:
-    "Dedicated PaddleOCR service URL. HTTPS is required except for loopback addresses.",
   OPERATOR_METRICS_TOKEN:
     "Bearer token for registration metrics. Unset disables the endpoint; use a long random value.",
   POSTHOG_KEY:

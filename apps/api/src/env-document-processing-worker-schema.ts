@@ -6,12 +6,6 @@ import {
   isTlsOrLoopbackUrl,
 } from "@/api/lib/secure-service-url";
 
-const isSecureOcrServiceUrl = (value: string) =>
-  isTlsOrLoopbackUrl(value, {
-    plaintextProtocol: "http:",
-    tlsProtocol: "https:",
-  });
-
 const isSecureRedisUrl = (value: string) => {
   const url = new URL(value);
   return (
@@ -30,11 +24,6 @@ const isSecureRedisUrl = (value: string) => {
  */
 export const envDocumentProcessingWorkerServerSchema = {
   REDIS_URL: v.pipe(v.string(), v.url()),
-  /**
-   * `local` runs recognition in an isolated subprocess on ONNX models from
-   * `DOCUMENT_OCR_MODEL_DIR`; `service` posts to `OCR_SERVICE_URL`.
-   */
-  DOCUMENT_OCR_PROVIDER: v.optional(v.picklist(["local", "service"]), "local"),
   DOCUMENT_OCR_MODEL_DIR: v.optional(v.string()),
   /**
    * Batch mode: exit once the processing queue has been empty this many
@@ -43,17 +32,6 @@ export const envDocumentProcessingWorkerServerSchema = {
   DOCUMENT_PROCESSING_IDLE_EXIT_MINUTES: v.optional(
     v.pipe(v.string(), v.transform(Number), v.integer(), v.minValue(1)),
   ),
-  OCR_SERVICE_URL: v.optional(
-    v.pipe(
-      v.string(),
-      v.url(),
-      v.check(
-        isSecureOcrServiceUrl,
-        "OCR_SERVICE_URL must use HTTPS unless it targets a loopback address.",
-      ),
-    ),
-  ),
-  OCR_SERVICE_TOKEN: v.optional(v.pipe(v.string(), v.minLength(16))),
   CONTENT_ENCRYPTION_KEY: v.optional(
     v.pipe(
       v.string(),

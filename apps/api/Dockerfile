@@ -59,8 +59,7 @@ RUN bun build \
     apps/api/src/scripts/backfill-case-law-slugs.ts
 # Dedicated durable document-processing worker. Deploy the same image with
 # command override ["bun", "/app/document-processing-worker.js"]. OCR runs
-# in-image through the local ONNX worker by default; DOCUMENT_OCR_PROVIDER
-# "service" with OCR_SERVICE_URL keeps the dedicated PaddleOCR endpoint path.
+# in-image through the isolated local ONNX worker.
 RUN bun build \
     --target bun \
     --outfile /app/document-processing-worker.js \

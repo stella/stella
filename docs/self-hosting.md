@@ -119,8 +119,6 @@ optional web build arguments are listed in `apps/web/Dockerfile` and mirror
 - RustFS object storage for files.
 - Gotenberg for document conversion. The Compose file runs this next to the API
   on the private Docker Compose network.
-- An HTTPS PaddleOCR-compatible service is optional. Configure it only when
-  organizations should be able to turn scanned PDFs into searchable text.
 
 RustFS is the supported self-hosted object store. Run it with TLS, persistent
 local storage, and a tested backup-and-restore plan. Never use RustFS's default
@@ -197,19 +195,13 @@ The Compose file starts the document-processing worker from the API image. The
 worker stays idle when no OCR work is queued. The API owns the scheduled-job
 loop and releases queued requests every
 `DOCUMENT_OCR_BATCH_INTERVAL_MINUTES` (minimum 5, maximum 10080); there is no
-standalone scheduler service to omit accidentally.
-To enable OCR, deploy a PaddleOCR-compatible service separately and set
-`OCR_SERVICE_URL`; non-loopback endpoints must use HTTPS because requests carry
-short-lived access credentials.
+standalone scheduler service to omit accidentally. OCR uses the CPU ONNX models
+bundled in the API image. AnyDoc first inspects each PDF and queues OCR only
+when the document has no usable text layer. Set
+`DOCUMENT_PROCESSING_IDLE_EXIT_MINUTES` on batch workers that should exit after
+the queue stays empty.
 The original PDF remains unchanged: stella stores and indexes only the derived
 searchable text.
-
-OCR does not change the standard self-host architecture requirements. Operators
-who explicitly opt in on an amd64 NVIDIA host can add the optional
-`docker-compose.ocr.yml` overlay; it builds the included OCR service and keeps
-it private on the worker's loopback network. See
-[the OCR service guide](../apps/ocr-service/README.md) for the command and host
-requirements.
 
 ## Desktop editing
 
