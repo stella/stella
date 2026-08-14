@@ -1,6 +1,7 @@
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { detached } from "@/api/lib/detached";
 import { countPendingDocumentProcessingJobs } from "@/api/lib/document-processing-enqueue";
+import { createIdleExitCheck } from "@/api/lib/document-processing-idle-exit";
 import { initDocumentProcessingWorker } from "@/api/lib/document-processing-queue";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
@@ -46,40 +47,29 @@ if (idleExitMinutes !== undefined) {
     1,
     Math.ceil((idleExitMinutes * 60_000) / IDLE_CHECK_INTERVAL_MS),
   );
-  let consecutiveIdleChecks = 0;
-  let idleCheckInFlight = false;
-  const idleTimer = setInterval(() => {
-    // A slow count must not overlap the next tick: reordered completions
-    // could stitch two stale zero samples across a busy interval and exit
-    // before the queue was continuously idle.
-    if (idleCheckInFlight) {
-      return;
-    }
-    idleCheckInFlight = true;
-    detached(
-      (async () => {
-        const pending = await countPendingDocumentProcessingJobs().catch(
-          (error: unknown) => {
-            // A count failure (Redis hiccup) resets the streak: never exit
-            // on uncertainty.
-            logger.error("document_processing.idle_check_failed", {
-              "error.type": errorTag(error),
-            });
-            return -1;
-          },
-        );
-        idleCheckInFlight = false;
-        consecutiveIdleChecks = pending === 0 ? consecutiveIdleChecks + 1 : 0;
-        if (consecutiveIdleChecks < requiredIdleChecks || shuttingDown) {
-          return;
-        }
+  let idleTimer: ReturnType<typeof setInterval> | null = null;
+  const idleTick = createIdleExitCheck({
+    countPending: countPendingDocumentProcessingJobs,
+    requiredIdleChecks,
+    onCheckFailure: (error) => {
+      logger.error("document_processing.idle_check_failed", {
+        "error.type": errorTag(error),
+      });
+    },
+    onIdleExit: () => {
+      if (idleTimer !== null) {
         clearInterval(idleTimer);
-        logger.info("document_processing.idle_exit", {
-          idleMinutes: idleExitMinutes,
-        });
-        await shutdown("idle-exit");
-      })(),
-      "document-processing.idle-exit-check",
-    );
+      }
+      if (shuttingDown) {
+        return;
+      }
+      logger.info("document_processing.idle_exit", {
+        idleMinutes: idleExitMinutes,
+      });
+      detached(shutdown("idle-exit"), "document-processing.idle-exit");
+    },
+  });
+  idleTimer = setInterval(() => {
+    detached(idleTick(), "document-processing.idle-exit-check");
   }, IDLE_CHECK_INTERVAL_MS);
 }

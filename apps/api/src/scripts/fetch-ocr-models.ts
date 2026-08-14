@@ -12,6 +12,7 @@ import { panic, Result } from "better-result";
 import path from "node:path";
 
 import { OCR_LOCAL_MODEL_FILES } from "@/api/lib/document-processing-contract";
+import { fetchBytesFollowingRedirects } from "@/api/lib/redirect-fetch";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 
 const MODEL_SOURCES = {
@@ -57,38 +58,24 @@ const fetchModel = async (
   // Hugging Face `resolve` URLs redirect to the object host, so follow a
   // bounded chain manually: every hop re-runs the safe-outbound target
   // validation instead of trusting the redirect blindly.
-  let url = source.url;
-  let bytes: ArrayBuffer | null = null;
-  for (let hop = 0; hop < MAX_REDIRECT_HOPS; hop += 1) {
-    // oxlint-disable-next-line no-await-in-loop -- each hop's target depends on the previous response
-    const response = await safeOutboundFetchBytes({
-      maxBytes: DOWNLOAD_MAX_BYTES,
-      redirect: "manual",
-      timeoutMs: DOWNLOAD_TIMEOUT_MS,
-      url,
-    });
-    if (Result.isError(response)) {
-      panic(`download of ${fileName} failed: ${response.error.message}`);
-    }
-    const location = response.value.headers.get("location");
-    if (response.value.status >= 300 && response.value.status < 400) {
-      if (!location) {
-        panic(`download of ${fileName} redirected without a location`);
-      }
-      url = new URL(location, url).toString();
-      continue;
-    }
-    if (!response.value.ok) {
-      panic(
-        `download of ${fileName} failed with HTTP ${response.value.status}`,
-      );
-    }
-    bytes = response.value.body;
-    break;
+  const response = await fetchBytesFollowingRedirects({
+    url: source.url,
+    maxHops: MAX_REDIRECT_HOPS,
+    fetchBytes: async (url) =>
+      await safeOutboundFetchBytes({
+        maxBytes: DOWNLOAD_MAX_BYTES,
+        redirect: "manual",
+        timeoutMs: DOWNLOAD_TIMEOUT_MS,
+        url,
+      }),
+  });
+  if (Result.isError(response)) {
+    panic(`download of ${fileName} failed: ${response.error.message}`);
   }
-  if (bytes === null) {
-    panic(`download of ${fileName} exceeded ${MAX_REDIRECT_HOPS} redirects`);
+  if (!response.value.ok) {
+    panic(`download of ${fileName} failed with HTTP ${response.value.status}`);
   }
+  const bytes = response.value.body;
   const digest = sha256Hex(bytes);
   if (digest !== source.sha256) {
     panic(

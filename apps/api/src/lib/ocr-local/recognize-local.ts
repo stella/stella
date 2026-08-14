@@ -60,6 +60,9 @@ const parseWorkerOutput = (raw: string): DocumentOcrPage[] => {
 };
 
 export const recognizePdfTextLocally = async ({
+  readSource = getS3ObjectWithSignal,
+  readSourceSize = getS3ObjectSizeWithSignal,
+  resolveModelDir = () => envDocumentProcessingWorker.DOCUMENT_OCR_MODEL_DIR,
   signal,
   sourceKey,
 }: {
@@ -67,10 +70,13 @@ export const recognizePdfTextLocally = async ({
   signal: AbortSignal;
   sourceKey: string;
   sourceUrl: string;
+  readSource?: (key: string, signal: AbortSignal) => Promise<ArrayBuffer>;
+  readSourceSize?: (key: string, signal: AbortSignal) => Promise<number | null>;
+  resolveModelDir?: () => string | undefined;
 }): Promise<Result<DocumentOcrResult, DocumentOcrProviderError>> =>
   await Result.tryPromise({
     try: async () => {
-      const modelDir = envDocumentProcessingWorker.DOCUMENT_OCR_MODEL_DIR;
+      const modelDir = resolveModelDir();
       if (!modelDir) {
         throw new DocumentOcrProviderError({
           code: "not_configured",
@@ -81,7 +87,7 @@ export const recognizePdfTextLocally = async ({
 
       // Refuse an oversized source before materializing it; the post-read
       // check backstops storage backends that do not report a length.
-      const declaredSize = await getS3ObjectSizeWithSignal(sourceKey, signal);
+      const declaredSize = await readSourceSize(sourceKey, signal);
       if (
         declaredSize !== null &&
         declaredSize > LIMITS.documentOcrSourceMaxBytes
@@ -91,7 +97,7 @@ export const recognizePdfTextLocally = async ({
           message: "OCR source document exceeded the allowed size",
         });
       }
-      const source = await getS3ObjectWithSignal(sourceKey, signal);
+      const source = await readSource(sourceKey, signal);
       if (source.byteLength > LIMITS.documentOcrSourceMaxBytes) {
         throw new DocumentOcrProviderError({
           code: "response_too_large",

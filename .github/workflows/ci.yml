@@ -1890,6 +1890,11 @@ jobs:
             --outdir /tmp/runtime-workers \
             apps/api/src/lib/search/extraction-worker.ts
           test -s /tmp/runtime-workers/extraction-worker.js
+          bun build \
+            --target bun \
+            --outfile /tmp/runtime-workers/ocr-local-worker.js \
+            apps/api/src/lib/ocr-local/ocr-local-worker.ts
+          test -s /tmp/runtime-workers/ocr-local-worker.js
           # Compile (not run) the runtime-asset smoke probe: it executes
           # inside the image build, where the hand-copied assets exist.
           bun build \

@@ -138,6 +138,41 @@ const parseOcrLine = (
 };
 
 /**
+ * Producer-side counterpart of `parseOcrPage`: normalize recognized line
+ * geometry in fractional PDF point space into the serializable page shape.
+ * Dimensions round to integers; boxes clamp to the rounded page; a line
+ * that clamping collapses is dropped. Keeping this beside the validator
+ * pins the invariant that a page built here always parses — the property
+ * test asserts that fixed point for arbitrary geometry.
+ */
+export const buildOcrPage = ({
+  lines,
+  pointHeight,
+  pointWidth,
+}: {
+  lines: DocumentOcrLine[];
+  pointHeight: number;
+  pointWidth: number;
+}): DocumentOcrPage => {
+  const width = Math.max(1, Math.round(pointWidth));
+  const height = Math.max(1, Math.round(pointHeight));
+  const clamped = lines.flatMap((line) => {
+    const [x0, y0, x1, y1] = line.box;
+    const box: DocumentOcrLine["box"] = [
+      Math.min(Math.max(0, x0), width),
+      Math.min(Math.max(0, y0), height),
+      Math.min(Math.max(0, x1), width),
+      Math.min(Math.max(0, y1), height),
+    ];
+    if (box[2] <= box[0] || box[3] <= box[1]) {
+      return [];
+    }
+    return [{ ...line, box }];
+  });
+  return { height, lines: clamped, width };
+};
+
+/**
  * Validate one page of untrusted OCR output. Rejecting the whole page on
  * any malformed line keeps a corrupted boundary from persisting partial
  * geometry as if it were complete.
