@@ -9,7 +9,10 @@ import { chatThreads, fileChatThreads } from "@/api/db/schema";
 import { estimateChatContextPromptTokens } from "@/api/handlers/chat/chat-prompt";
 import { computeThreadContextUsage } from "@/api/handlers/chat/compaction";
 import type { ThreadContextUsage } from "@/api/handlers/chat/compaction";
-import type { FileThreadLookupInput } from "@/api/handlers/chat/file-thread-mapping";
+import type {
+  FileThreadLookupInput,
+  FileThreadMetadata,
+} from "@/api/handlers/chat/file-thread-mapping";
 import { loadWindowedThreadMessages } from "@/api/handlers/chat/history-window";
 import type { ClientMessage } from "@/api/handlers/chat/message-page";
 import { loadChatMessagePage } from "@/api/handlers/chat/message-page";
@@ -273,7 +276,7 @@ const insertFileChatThread = async (
   }: FileThreadLookupInput,
   chatThreadId: SafeId<"chatThread">,
   recordAuditEvent: AuditRecorder,
-) => {
+): Promise<void> => {
   const fileChatThreadId = createSafeId<"fileChatThread">();
   await tx.insert(fileChatThreads).values({
     id: fileChatThreadId,
@@ -507,7 +510,7 @@ export const createFileChatThread = async (
 export const findFieldKeyedChatThread = async (
   tx: Transaction,
   { fieldId, organizationId, userId, workspaceId }: FileThreadLookupInput,
-) =>
+): Promise<FileThreadMetadata | undefined> =>
   (
     await tx
       .select({

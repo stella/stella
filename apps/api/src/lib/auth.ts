@@ -374,15 +374,6 @@ type AuthoritativeSessionPathContext = SensitiveAuthPathContext & {
   path: string;
   request: Request;
 };
-type BetterAuthMiddlewareContext = Parameters<
-  Parameters<typeof createAuthMiddleware>[0]
->[0];
-
-const getAuthoritativeSessionForHook = async (
-  ctx: BetterAuthMiddlewareContext,
-): ReturnType<typeof getAuthoritativeSessionFromCtx> =>
-  await getAuthoritativeSessionFromCtx(ctx);
-
 /**
  * Establish database-backed session state before a sensitive plugin endpoint
  * runs. Better Auth's endpoint middleware reuses this context, so neither the
@@ -398,7 +389,7 @@ export const resolveAuthoritativeSessionForSensitiveAuthPath = async <
   ctx: TContext;
   resolveSession: (
     ctx: TContext & AuthoritativeSessionPathContext,
-  ) => ReturnType<typeof getAuthoritativeSessionFromCtx>;
+  ) => Promise<TwoFactorManageSession>;
 }): Promise<boolean> => {
   const path = ctx.path;
   if (path === undefined || !AUTHORITATIVE_SESSION_PATHS.has(path)) {
@@ -1291,7 +1282,7 @@ const createAuth = () => {
           await resolveAuthoritativeSessionForSensitiveAuthPath({
             ctx,
             resolveSession: async ({ path, request }) =>
-              await getAuthoritativeSessionForHook({ ...ctx, path, request }),
+              await getAuthoritativeSessionFromCtx({ ...ctx, path, request }),
           })
         ) {
           return;

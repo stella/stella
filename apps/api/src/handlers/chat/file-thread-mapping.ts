@@ -1,5 +1,7 @@
 import { and, eq } from "drizzle-orm";
 
+import type { ReasoningEffort } from "@stll/ai-catalog";
+
 import type { Transaction } from "@/api/db/root";
 import { chatThreads, fileChatThreads } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -10,6 +12,22 @@ export type FileThreadLookupInput = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
+};
+
+/** The thread columns consumed by file-thread resolution paths. */
+export type FileThreadMetadata = {
+  chatModel: string | null;
+  chatReasoningEffort: ReasoningEffort | null;
+  contextMatterIds: SafeId<"workspace">[];
+  id: SafeId<"chatThread">;
+  usedAnonymization: boolean;
+  webSearchEnabled: boolean;
+};
+
+type FileThreadMapping = {
+  id: SafeId<"fileChatThread">;
+  mappedChatThreadId: SafeId<"chatThread">;
+  thread: FileThreadMetadata | null;
 };
 
 const fileChatThreadMappingQuery = (
@@ -53,7 +71,7 @@ const fileChatThreadMappingQuery = (
 export const lockFileChatThreadMapping = async (
   tx: Transaction,
   input: FileThreadLookupInput,
-) =>
+): Promise<FileThreadMapping | undefined> =>
   (
     await fileChatThreadMappingQuery(tx, input).for("update", {
       of: fileChatThreads,
@@ -65,4 +83,5 @@ export const lockFileChatThreadMapping = async (
 export const readFileChatThreadMapping = async (
   tx: Transaction,
   input: FileThreadLookupInput,
-) => (await fileChatThreadMappingQuery(tx, input)).at(0);
+): Promise<FileThreadMapping | undefined> =>
+  (await fileChatThreadMappingQuery(tx, input)).at(0);

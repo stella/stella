@@ -33,9 +33,18 @@ export const fetchBytesFollowingRedirects = async <E>({
 }: FetchBytesFollowingRedirectsOptions<E>): Promise<
   Result<RedirectFetchResponse, E | RedirectChainError>
 > => {
-  let target = url;
-  for (let hop = 0; hop <= maxHops; hop += 1) {
-    // oxlint-disable-next-line no-await-in-loop -- each hop's target depends on the previous response
+  const follow = async (
+    target: string,
+    hop: number,
+  ): Promise<Result<RedirectFetchResponse, E | RedirectChainError>> => {
+    if (hop > maxHops) {
+      return Result.err(
+        new RedirectChainError({
+          code: "too_many_redirects",
+          message: `redirect chain exceeded ${maxHops} hops`,
+        }),
+      );
+    }
     const response = await fetchBytes(target);
     if (Result.isError(response)) {
       return response;
@@ -53,12 +62,8 @@ export const fetchBytesFollowingRedirects = async <E>({
         }),
       );
     }
-    target = new URL(location, target).toString();
-  }
-  return Result.err(
-    new RedirectChainError({
-      code: "too_many_redirects",
-      message: `redirect chain exceeded ${maxHops} hops`,
-    }),
-  );
+    return await follow(new URL(location, target).toString(), hop + 1);
+  };
+
+  return await follow(url, 0);
 };
