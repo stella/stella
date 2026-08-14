@@ -165,6 +165,10 @@ describe("resolveStellaSandboxRun", () => {
       CODEX_HOME: `${STELLA_WORKSPACE_ROOT}/.codex`,
       STELLA_HARNESS_KEY: "sk-test",
     });
+    expect(Object.entries(config.config)).toContainEqual([
+      `mcp_servers.${baseRunInput.mcp.serverName}.default_tools_approval_mode`,
+      '"approve"',
+    ]);
     expect(JSON.stringify(config.config)).not.toContain(baseRunInput.mcp.token);
   });
 
@@ -175,6 +179,12 @@ describe("resolveStellaSandboxRun", () => {
     });
 
     expect(config.env).toEqual({ STELLA_HARNESS_KEY: "sk-test" });
+    expect(
+      Object.hasOwn(
+        config.config,
+        "mcp_servers.stella.default_tools_approval_mode",
+      ),
+    ).toBe(false);
   });
 
   test("pairs a codex adapter with sandbox middleware", () => {
