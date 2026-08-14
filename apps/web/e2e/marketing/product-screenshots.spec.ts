@@ -219,6 +219,23 @@ test("capture landing product screenshots", async ({
         await expect(
           page.getByRole("group", { name: "Outline" }),
         ).toBeVisible();
+        // The inspector chat loads its saved-skill prompts independently of
+        // the decision and analysis queries. The empty state paints the logo
+        // first, so waiting only for the reader can record a blank inspector.
+        // Scope readiness to the visible inspector: other route shells may
+        // remain mounted and must not satisfy the capture gate.
+        const inspectorChat = page.locator(
+          '[data-slot="inspector-chat-panel"]:visible',
+        );
+        // eslint-disable-next-line no-await-in-loop -- see above
+        await expect(inspectorChat).toHaveCount(1, {
+          timeout: COLD_COMPILE_TIMEOUT,
+        });
+        // This component only exists when at least one prompt card rendered.
+        // eslint-disable-next-line no-await-in-loop -- see above
+        await expect(
+          inspectorChat.locator('[data-slot="prompt-suggestions"]'),
+        ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT });
         // The first margin annotation may sit below a long headnote (e.g. a
         // Constitutional Court "legal sentence" summary); scroll it into view
         // so the capture shows the structure margin, not just headnote text.
@@ -396,4 +413,16 @@ const authenticateMarketingSession = async (request: APIRequestContext) => {
     },
   );
   expect(setActiveResponse.ok(), await setActiveResponse.text()).toBe(true);
+
+  // The docked chat empty state only offers suggestions from installed
+  // slash-command skills. Seed the same defaults a new user gets from the
+  // Skills surface so fresh nightly databases record the intended prompt
+  // cards instead of a permanently empty logo state.
+  const seedSkillsResponse = await request.post(
+    `${apiBaseURL}/v1/skills/seed`,
+    {
+      headers: { origin: webOrigin },
+    },
+  );
+  expect(seedSkillsResponse.ok(), await seedSkillsResponse.text()).toBe(true);
 };

@@ -29,7 +29,10 @@ export const PromptSuggestions = ({
   }
 
   return (
-    <div className={cn("flex w-full flex-col items-center gap-3", className)}>
+    <div
+      className={cn("flex w-full flex-col items-center gap-3", className)}
+      data-slot="prompt-suggestions"
+    >
       <p className="text-muted-foreground text-sm">
         {t("chat.prompts.tryOne")}
       </p>
