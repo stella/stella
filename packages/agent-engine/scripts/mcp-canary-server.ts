@@ -8,6 +8,9 @@ import {
 
 const DEFAULT_PROTOCOL_VERSION = "2025-11-25";
 const MAX_REQUEST_BYTES = 64 * 1024;
+const MAX_DIAGNOSTIC_CATEGORY_VALUES = 8;
+const MAX_AUTHENTICATED_METHOD_TRACE_ENTRIES =
+  MAX_DIAGNOSTIC_CATEGORY_VALUES + 1;
 
 export const CANARY_ALLOWED_WORKSPACE_ID = "workspace_canary_allowed";
 export const CANARY_DENIED_WORKSPACE_ID = "workspace_canary_denied";
@@ -39,11 +42,20 @@ const CANARY_AUTH_REJECTION_REASONS = [
   "invalid-signature",
   "missing",
 ] as const;
+const CANARY_AUTHENTICATED_METHOD_CATEGORIES = [
+  "initialize",
+  "notifications/initialized",
+  "tools/list",
+  "tools/call",
+  "other",
+] as const;
 const EXPECTED_AUTH_PROBE_REASONS = ["expired", "invalid-claims"] as const;
 
 type CanaryEventType = (typeof CANARY_EVENT_TYPES)[number];
 type CanaryViolationCategory = (typeof CANARY_VIOLATION_CATEGORIES)[number];
 type CanaryAuthRejectionReason = (typeof CANARY_AUTH_REJECTION_REASONS)[number];
+type CanaryAuthenticatedMethodCategory =
+  (typeof CANARY_AUTHENTICATED_METHOD_CATEGORIES)[number];
 export type CanarySandboxCleanupStatus = "ok" | "leaked";
 
 export type CanaryCredentialClaims = {
@@ -85,6 +97,7 @@ export type CanaryState = {
   version: 1;
   events: CanaryEvent[];
   authRejections: CanaryAuthRejection[];
+  authenticatedMethods: CanaryAuthenticatedMethodCategory[];
   violations: CanaryViolationCategory[];
 };
 
@@ -112,7 +125,7 @@ const boundedCategories = (
     return "unavailable";
   }
   const values = value
-    .slice(0, 8)
+    .slice(0, MAX_DIAGNOSTIC_CATEGORY_VALUES)
     .map((entry) =>
       typeof entry === "string" && categories.includes(entry)
         ? entry
@@ -150,17 +163,17 @@ export const canaryStateDiagnostic = (value: unknown): string => {
   }
   const eventTypes = Array.isArray(value["events"])
     ? value["events"]
-        .slice(0, 9)
+        .slice(0, MAX_AUTHENTICATED_METHOD_TRACE_ENTRIES)
         .map((event) => (isRecord(event) ? event["type"] : undefined))
     : undefined;
   const authRejectionReasons = Array.isArray(value["authRejections"])
     ? value["authRejections"]
-        .slice(0, 9)
+        .slice(0, MAX_AUTHENTICATED_METHOD_TRACE_ENTRIES)
         .map((rejection) =>
           isRecord(rejection) ? rejection["reason"] : undefined,
         )
     : undefined;
-  return `events=${boundedCategories(eventTypes, CANARY_EVENT_TYPES)}; violations=${boundedCategories(value["violations"], CANARY_VIOLATION_CATEGORIES)}; authRejections=${boundedCategories(authRejectionReasons, CANARY_AUTH_REJECTION_REASONS)}; authProbeBaseline=${authProbeBaseline(value["authRejections"])}`;
+  return `events=${boundedCategories(eventTypes, CANARY_EVENT_TYPES)}; violations=${boundedCategories(value["violations"], CANARY_VIOLATION_CATEGORIES)}; authRejections=${boundedCategories(authRejectionReasons, CANARY_AUTH_REJECTION_REASONS)}; authProbeBaseline=${authProbeBaseline(value["authRejections"])}; authenticatedMethods=${boundedCategories(value["authenticatedMethods"], CANARY_AUTHENTICATED_METHOD_CATEGORIES)}`;
 };
 
 export const canaryFailureDiagnostic = ({
@@ -277,6 +290,7 @@ export const createCanaryState = (): CanaryState => ({
   version: 1,
   events: [],
   authRejections: [],
+  authenticatedMethods: [],
   violations: [],
 });
 
@@ -471,12 +485,42 @@ type HandleMessageInput = {
   now: string;
 };
 
+const authenticatedMethodCategory = (
+  message: unknown,
+): CanaryAuthenticatedMethodCategory => {
+  if (!isRecord(message)) {
+    return "other";
+  }
+  switch (message["method"]) {
+    case "initialize":
+    case "notifications/initialized":
+    case "tools/list":
+    case "tools/call":
+      return message["method"];
+    default:
+      return "other";
+  }
+};
+
+const recordAuthenticatedMethod = (
+  state: CanaryState,
+  message: unknown,
+): void => {
+  if (
+    state.authenticatedMethods.length >= MAX_AUTHENTICATED_METHOD_TRACE_ENTRIES
+  ) {
+    return;
+  }
+  state.authenticatedMethods.push(authenticatedMethodCategory(message));
+};
+
 export const handleCanaryMessage = ({
   message,
   claims,
   state,
   now,
 }: HandleMessageInput): JsonRpcResponse | undefined => {
+  recordAuthenticatedMethod(state, message);
   if (!isRecord(message) || message["jsonrpc"] !== "2.0") {
     return errorResponse(null, -32_600, "Invalid JSON-RPC request");
   }
