@@ -22,6 +22,7 @@ export type CanaryHarnessObservation = {
     | { status: "observed"; toolCallId: string }
     | { status: "failed"; message: string };
   finishToolCallIds: Set<string>;
+  hasStarted: boolean;
   runStatus:
     | { status: "streaming" }
     | { status: "finished" }
@@ -32,6 +33,7 @@ export const createCanaryHarnessObservation = (): CanaryHarnessObservation => ({
   assistantText: "",
   completion: { status: "pending" },
   finishToolCallIds: new Set(),
+  hasStarted: false,
   runStatus: { status: "streaming" },
 });
 
@@ -44,6 +46,9 @@ export const consumeCanaryHarnessChunk = (
   observation: CanaryHarnessObservation,
   chunk: CanaryHarnessChunk,
 ): void => {
+  if (canaryHarnessImmediateFailure(observation) !== undefined) {
+    return;
+  }
   switch (chunk.type) {
     case EventType.RUN_ERROR:
       observation.runStatus = {
@@ -61,9 +66,34 @@ export const consumeCanaryHarnessChunk = (
       }
       return;
     case EventType.RUN_FINISHED:
-      if (observation.runStatus.status === "streaming") {
-        observation.runStatus = { status: "finished" };
+      if (chunk.outcome?.type === "interrupt") {
+        observation.runStatus = {
+          status: "failed",
+          message: "canary harness run was interrupted",
+        };
+        return;
       }
+      if (
+        !observation.hasStarted ||
+        observation.runStatus.status !== "streaming"
+      ) {
+        observation.runStatus = {
+          status: "failed",
+          message: "canary harness finished without an active run",
+        };
+        return;
+      }
+      observation.runStatus = { status: "finished" };
+      return;
+    case EventType.RUN_STARTED:
+      if (observation.hasStarted) {
+        observation.runStatus = {
+          status: "failed",
+          message: "canary harness started more than one run",
+        };
+        return;
+      }
+      observation.hasStarted = true;
       return;
     case "TOOL_CALL_START":
       if (chunk.toolCallName !== CANARY_FINISH_STREAM_TOOL_NAME) {
@@ -111,7 +141,6 @@ export const consumeCanaryHarnessChunk = (
     case EventType.REASONING_MESSAGE_END:
     case EventType.REASONING_MESSAGE_START:
     case EventType.REASONING_START:
-    case EventType.RUN_STARTED:
     case EventType.STATE_DELTA:
     case EventType.STATE_SNAPSHOT:
     case EventType.STEP_FINISHED:
@@ -128,17 +157,36 @@ export const consumeCanaryHarnessChunk = (
   }
 };
 
+/**
+ * Surface a terminal protocol failure while the stream is still being read so
+ * the caller stops a runaway harness instead of draining more output.
+ */
+export const canaryHarnessImmediateFailure = (
+  observation: CanaryHarnessObservation,
+): string | undefined => {
+  if (observation.runStatus.status === "failed") {
+    return observation.runStatus.message;
+  }
+  if (observation.completion.status === "failed") {
+    return observation.completion.message;
+  }
+  return undefined;
+};
+
 export const canaryHarnessFailure = (
   observation: CanaryHarnessObservation,
 ): string | undefined => {
   if (observation.runStatus.status === "failed") {
     return observation.runStatus.message;
   }
+  if (observation.completion.status === "failed") {
+    return observation.completion.message;
+  }
   if (observation.runStatus.status !== "finished") {
     return "canary harness stream ended before RUN_FINISHED";
   }
-  if (observation.completion.status === "failed") {
-    return observation.completion.message;
+  if (!observation.hasStarted) {
+    return "canary harness stream ended without RUN_STARTED";
   }
   if (observation.completion.status !== "observed") {
     return "canary harness did not receive the completion marker from canary_finish";

@@ -19,6 +19,7 @@ import { resolveStellaSandboxRun } from "../src/run";
 import {
   CANARY_MCP_SERVER_NAME,
   canaryHarnessFailure,
+  canaryHarnessImmediateFailure,
   consumeCanaryHarnessChunk,
   createCanaryHarnessObservation,
 } from "./canary-harness-protocol";
@@ -304,6 +305,10 @@ const runHarness = async (token: string, serverUrl: string): Promise<void> => {
   const observation = createCanaryHarnessObservation();
   for await (const chunk of stream) {
     consumeCanaryHarnessChunk(observation, chunk);
+    const immediateFailure = canaryHarnessImmediateFailure(observation);
+    if (immediateFailure !== undefined) {
+      fail(immediateFailure);
+    }
   }
   const harnessFailure = canaryHarnessFailure(observation);
   if (harnessFailure !== undefined) {
