@@ -109,6 +109,7 @@ import type {
   ReviewFixState,
   StartReviewResult,
 } from "@/components/ai-suggestions/playbook-review-store";
+import { DocumentIcon } from "@/components/document-icon";
 import { InlinePill } from "@/components/inline-pill";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -128,7 +129,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { DOCX_MIME } from "@/lib/consts";
+import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import type {
@@ -902,7 +903,11 @@ const ReferenceFilePicker = ({
       </div>
       <Combobox<ReferenceFile>
         disabled={atLimit}
+        // The server already filters by `q`; without `items` Base UI's
+        // filtered list stays empty and ComboboxEmpty renders permanently.
+        filter={null}
         isItemEqualToValue={(a, b) => a.fileFieldId === b.fileFieldId}
+        items={availableSources}
         itemToStringLabel={(item) => item.name}
         onInputValueChange={(value) => {
           setQuery(value);
@@ -928,7 +933,10 @@ const ReferenceFilePicker = ({
             {availableSources.map((source) => (
               <ComboboxItem key={source.fileFieldId} value={source}>
                 <div className="flex min-w-0 items-center gap-2">
-                  <FileTextIcon className="text-muted-foreground size-3.5 shrink-0" />
+                  <DocumentIcon
+                    className="size-3.5 shrink-0"
+                    mimeType={DOCX_MIME}
+                  />
                   <div className="min-w-0">
                     <BidiText className="block truncate text-sm">
                       {source.name}
@@ -973,7 +981,10 @@ const ReferenceFilePicker = ({
               className="bg-muted/50 flex min-h-11 items-center gap-2 rounded-md px-2"
               key={reference.fileFieldId}
             >
-              <FileTextIcon className="text-muted-foreground size-3.5 shrink-0" />
+              <DocumentIcon
+                className="size-3.5 shrink-0"
+                mimeType={DOCX_MIME}
+              />
               <BidiText className="min-w-0 flex-1 truncate text-xs">
                 {reference.name}
               </BidiText>
@@ -1149,7 +1160,12 @@ const TopicEditor = ({
           {t("inspector.review.addTopic")}
         </Button>
       </div>
-      <footer className="flex items-center gap-2 border-t p-3">
+      <footer
+        className={cn(
+          "flex shrink-0 items-center gap-2 border-t px-3",
+          TOOLBAR_ROW_HEIGHT,
+        )}
+      >
         <Button className="flex-1" onClick={onBack} size="sm" variant="outline">
           {t("common.back")}
         </Button>
