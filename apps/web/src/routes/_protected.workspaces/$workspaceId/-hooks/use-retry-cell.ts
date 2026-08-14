@@ -5,6 +5,8 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { toAPIError } from "@/lib/errors/api";
+import { ClientTelemetryError } from "@/lib/errors/telemetry";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import type { EntityId, PropertyId, WorkspaceId } from "@/lib/types";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
@@ -35,7 +37,20 @@ export const useRetryCell = (workspaceId: WorkspaceId) => {
         });
 
       if (response.error) {
-        analytics.captureError(new Error("Failed to retry cell"));
+        const apiError = toAPIError(response.error);
+        // 4xx rejections (locked cell, concurrent workflow, read-only
+        // entity) are expected business refusals: the toast is their
+        // whole story. Only a 5xx — the enqueue path breaking — is an
+        // exception worth capturing.
+        if (apiError.status >= 500) {
+          analytics.captureError(
+            new ClientTelemetryError({
+              area: "cell-retry",
+              message: `Cell retry failed (status ${apiError.status})`,
+              cause: apiError,
+            }),
+          );
+        }
         // Surface server-side rejections (locked cell, concurrent
         // workflow, read-only entity) — without this the user just
         // sees the menu close and nothing happens. `userErrorMessage`
