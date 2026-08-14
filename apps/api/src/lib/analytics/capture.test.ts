@@ -96,3 +96,29 @@ describe("captureError repeat suppression", () => {
     expect(captured.at(1)?.properties["suppressed_repeats"]).toBe("7");
   });
 });
+
+describe("captureError issue grouping", () => {
+  // PostHog groups issues from `$exception_list`; with the message and stack
+  // redacted, every event of one class would collapse into a single issue and
+  // first-seen automations would never fire again for that class. The
+  // explicit fingerprint must therefore separate distinct defects while
+  // carrying no message content.
+  test("distinct defects produce distinct grouping fingerprints", () => {
+    captureFromSiteA();
+    captureFromSiteB();
+
+    const fingerprints = captured.map(
+      (event) => event.properties["$exception_fingerprint"],
+    );
+    expect(typeof fingerprints.at(0)).toBe("string");
+    expect(fingerprints.at(0)).not.toBe(fingerprints.at(1));
+  });
+
+  test("the grouping fingerprint never carries the error message", () => {
+    captureError(new Error("Privileged client matter detail"));
+
+    const fingerprint = captured.at(0)?.properties["$exception_fingerprint"];
+    expect(typeof fingerprint).toBe("string");
+    expect(fingerprint).not.toContain("Privileged");
+  });
+});
