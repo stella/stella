@@ -222,7 +222,9 @@ describe("case law reconciliation loop", () => {
       "cz-regional",
       "cz-ns",
     ]);
-    expect(gapsBetweenTurns(run).at(0)).toBeGreaterThan(TIMING.unitDelayMs);
+    // The throw is paid by the source that threw, in turns it does not get.
+    // The next source asked a publisher nothing yet and owes nothing extra.
+    expect(gapsBetweenTurns(run).at(0)).toBe(TIMING.unitDelayMs);
   });
 
   test("a run of failures backs off to the ceiling and no further", async () => {
@@ -263,17 +265,67 @@ describe("case law reconciliation loop", () => {
       turns: 8,
     });
 
-    // Gaps alternate: the one after each failing turn is that source's own
-    // backoff, and it has to keep growing.
-    const afterFailures = gapsBetweenTurns(run).filter(
-      (_, index) => index % 2 === 0,
-    );
-    expect(afterFailures.at(0)).toBe(TIMING.unitDelayMs * 2);
-    expect(afterFailures.at(-1)).toBeGreaterThan(TIMING.unitDelayMs * 2);
-    const decreasing = afterFailures.filter(
-      (ms, index) => index > 0 && ms < (afterFailures[index - 1] ?? 0),
-    );
-    expect(decreasing).toEqual([]);
+    // The streak is served in turns skipped, so the failing source is asked
+    // progressively less often while the healthy one keeps its cadence.
+    const failingTurns = turnOrder(run).filter((key) => key === "cz-regional");
+    expect(failingTurns.length).toBeLessThan(4);
+  });
+
+  test("a failing source costs its own turns, never the healthy sources' cadence", async () => {
+    // The whole point of a per-source streak: spent as a shared sleep it is
+    // not isolation at all, because the loop is sequential. One refusing
+    // publisher would then throttle reconciliation for every other source,
+    // which is how a single broken source starves the entire corpus.
+    const run = await runLoop({
+      responders: [
+        [
+          "cz-regional",
+          () => {
+            throw new Error("publisher down");
+          },
+        ],
+        ["cz-ns", () => WORKED],
+        ["pl-courts", () => WORKED],
+      ],
+      turns: 12,
+    });
+
+    const healthyGaps = gapsBetweenTurns(run).filter((_, index) => {
+      const to = turnOrder(run)[index + 1];
+      return to === "cz-ns" || to === "pl-courts";
+    });
+
+    // Every healthy turn is reached at the plain unit gap. Under a shared
+    // backoff these grow to the failure ceiling and never come back down.
+    expect(healthyGaps.every((ms) => ms === TIMING.unitDelayMs)).toBe(true);
+  });
+
+  test("every source failing waits out the earliest retry rather than spinning", async () => {
+    // A skipped turn costs no pacing gap, so a rotation in which every source
+    // is held would otherwise spin at full speed. The wait is to the first
+    // expiry, not the idle ceiling: the corpus is unreachable, not settled.
+    const run = await runLoop({
+      responders: [
+        [
+          "cz-regional",
+          () => {
+            throw new Error("database down");
+          },
+        ],
+        [
+          "cz-ns",
+          () => {
+            throw new Error("database down");
+          },
+        ],
+      ],
+      turns: 6,
+    });
+
+    const zeroGaps = gapsBetweenTurns(run).filter((ms) => ms === 0);
+
+    expect(zeroGaps).toEqual([]);
+    expect(run.clock).toBeLessThanOrEqual(TIMING.failureBackoffMaxMs * 6);
   });
 
   test("a recovered source starts its next streak from scratch", async () => {
