@@ -716,7 +716,7 @@ jobs:
         id: attest-web
         if: steps.existing.outputs.reused != 'true'
         continue-on-error: true
-        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
           subject-digest: ${{ steps.publish.outputs.digest }}
@@ -732,7 +732,7 @@ jobs:
         id: attest-web-retry
         if: steps.attest-web.outcome == 'failure'
         continue-on-error: true
-        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
           subject-digest: ${{ steps.publish.outputs.digest }}
@@ -748,7 +748,7 @@ jobs:
       # published image without an attestation is not a releasable artifact.
       - name: Attest web image publication (final retry)
         if: steps.attest-web-retry.outcome == 'failure'
-        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
           subject-digest: ${{ steps.publish.outputs.digest }}

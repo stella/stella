@@ -243,6 +243,9 @@ describe("MODEL_RATES economic ordering", () => {
 
   test("canonical provider aliases share one rate schedule", () => {
     expect(getModelRate("gpt-5.6-sol")).toBe(getModelRate("gpt-5.6"));
+    expect(getModelRate("google/gemini-3.7-flash")).toBe(
+      getModelRate("gemini-3.7-flash"),
+    );
   });
 });
 

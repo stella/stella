@@ -5,7 +5,7 @@ services:
     # mounted at /var/lib/postgresql, not /var/lib/postgresql/data.
     # After switching from the old layout, recreate local pgdata with
     # `bun run --cwd apps/api docker:reset-dev`.
-    image: postgres:18.3
+    image: postgres:18.4@sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -75,7 +75,7 @@ services:
 
   gotenberg:
     profiles: [dev]
-    image: gotenberg/gotenberg:8.34.0@sha256:67097317623a503ba2a6a7e9ae8db6929a1f7e1bbd88077bacf2d325fbdab923
+    image: gotenberg/gotenberg:8.35.0@sha256:a16a14e1f18a71405624bc028e90d4ef50ea774c352b303639c10bf7b141f760
     # If you see "context deadline exceeded" or multi-threading errors, add
     # command: ["gotenberg", "--libreoffice-restart-after=1"]. See
     # https://github.com/gotenberg/gotenberg/issues/1452.

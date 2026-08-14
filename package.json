@@ -118,7 +118,7 @@
     "expo-constants": "57.0.9",
     "expo-modules-core": "57.0.10",
     "ip-address": "10.4.0",
-    "lucide-react": "1.28.0",
+    "lucide-react": "1.30.0",
     "nanoid": "3.3.18",
     "postcss": "8.5.25",
     "prosemirror-model": "1.25.11",
@@ -171,11 +171,11 @@
     "drizzle-kit": "1.0.0-rc.4",
     "drizzle-orm": "1.0.0-rc.4",
     "elysia": "1.4.29",
-    "eslint": "10.8.0",
+    "eslint": "10.8.1",
     "eslint-plugin-drizzle": "0.2.3",
     "fast-check": "^4.9.0",
     "jszip": "3.10.1",
-    "lucide-react": "1.28.0",
+    "lucide-react": "1.30.0",
     "oxfmt": "0.62.0",
     "oxlint": "1.77.0",
     "sherif": "1.13.0",
@@ -183,10 +183,10 @@
     "tailwindcss": "4.3.3",
     "tsdown": "0.22.14",
     "typescript": "6.0.3",
-    "ultracite": "7.10.1",
+    "ultracite": "7.10.2",
     "use-intl": "4.13.5",
     "valibot": "1.4.2",
-    "vite": "8.2.0"
+    "vite": "8.2.1"
   },
   "catalogs": {
     "react19": {

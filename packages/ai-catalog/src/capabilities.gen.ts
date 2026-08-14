@@ -20,6 +20,7 @@ import type {
  * through `resolveReasoningEffort`.
  */
 export const MODEL_REASONING_EFFORTS = {
+  "gemini-3.7-flash": ["low", "medium", "high"],
   "gemini-3.6-flash": ["minimal", "low", "medium", "high"],
   "gemini-3.5-flash-lite": ["minimal", "low", "medium", "high"],
   "gemini-3.1-pro-preview": ["low", "medium", "high"],
@@ -27,6 +28,7 @@ export const MODEL_REASONING_EFFORTS = {
   "gemini-3.1-flash-lite": ["minimal", "low", "medium", "high"],
   "openai/gpt-5.6-luna": ["none", "low", "medium", "high", "xhigh", "max"],
   "openai/gpt-5.6-terra": ["none", "low", "medium", "high", "xhigh", "max"],
+  "google/gemini-3.7-flash": ["low", "medium", "high"],
   "google/gemini-3.6-flash": ["minimal", "low", "medium", "high"],
   "google/gemini-3.5-flash-lite": ["minimal", "low", "medium", "high"],
   "google/gemini-3.1-pro-preview": ["low", "medium", "high"],
@@ -80,6 +82,7 @@ export const MODEL_REASONING_EFFORTS = {
  * a truthful named default, so clients must retain a separate Default choice.
  */
 export const MODEL_DEFAULT_REASONING_EFFORTS = {
+  "gemini-3.7-flash": null,
   "gemini-3.6-flash": null,
   "gemini-3.5-flash-lite": null,
   "gemini-3.1-pro-preview": null,
@@ -87,6 +90,7 @@ export const MODEL_DEFAULT_REASONING_EFFORTS = {
   "gemini-3.1-flash-lite": null,
   "openai/gpt-5.6-luna": "medium",
   "openai/gpt-5.6-terra": "medium",
+  "google/gemini-3.7-flash": "medium",
   "google/gemini-3.6-flash": "medium",
   "google/gemini-3.5-flash-lite": "minimal",
   "google/gemini-3.1-pro-preview": "medium",
@@ -137,6 +141,7 @@ export const MODEL_DEFAULT_REASONING_EFFORTS = {
  * parameters. Consumers must go through `shouldEmitTemperature`.
  */
 export const MODEL_TEMPERATURE_POLICIES = {
+  "gemini-3.7-flash": "omit",
   "gemini-3.6-flash": "omit",
   "gemini-3.5-flash-lite": "omit",
   "gemini-3.1-pro-preview": "emit",
@@ -144,6 +149,7 @@ export const MODEL_TEMPERATURE_POLICIES = {
   "gemini-3.1-flash-lite": "emit",
   "openai/gpt-5.6-luna": "omit",
   "openai/gpt-5.6-terra": "omit",
+  "google/gemini-3.7-flash": "omit",
   "google/gemini-3.6-flash": "omit",
   "google/gemini-3.5-flash-lite": "omit",
   "google/gemini-3.1-pro-preview": "emit",
