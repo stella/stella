@@ -23,7 +23,7 @@ import {
   resolveRuntimeWorkerPath,
   RUNTIME_WORKER_FILES,
 } from "@/api/lib/runtime-worker-path";
-import { getS3ObjectWithSignal } from "@/api/lib/s3";
+import { getS3ObjectSizeWithSignal, getS3ObjectWithSignal } from "@/api/lib/s3";
 import { spawnWorker } from "@/api/lib/subprocess";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
@@ -79,6 +79,18 @@ export const recognizePdfTextLocally = async ({
         });
       }
 
+      // Refuse an oversized source before materializing it; the post-read
+      // check backstops storage backends that do not report a length.
+      const declaredSize = await getS3ObjectSizeWithSignal(sourceKey, signal);
+      if (
+        declaredSize !== null &&
+        declaredSize > LIMITS.documentOcrSourceMaxBytes
+      ) {
+        throw new DocumentOcrProviderError({
+          code: "response_too_large",
+          message: "OCR source document exceeded the allowed size",
+        });
+      }
       const source = await getS3ObjectWithSignal(sourceKey, signal);
       if (source.byteLength > LIMITS.documentOcrSourceMaxBytes) {
         throw new DocumentOcrProviderError({
@@ -92,6 +104,7 @@ export const recognizePdfTextLocally = async ({
         args: [modelDir],
         stdin: new Blob([source]),
         timeoutMs: OCR_TIMEOUT_MS,
+        signal,
       });
       if (Result.isError(output)) {
         throw new DocumentOcrProviderError({

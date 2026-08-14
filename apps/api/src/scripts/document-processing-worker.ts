@@ -47,7 +47,15 @@ if (idleExitMinutes !== undefined) {
     Math.ceil((idleExitMinutes * 60_000) / IDLE_CHECK_INTERVAL_MS),
   );
   let consecutiveIdleChecks = 0;
+  let idleCheckInFlight = false;
   const idleTimer = setInterval(() => {
+    // A slow count must not overlap the next tick: reordered completions
+    // could stitch two stale zero samples across a busy interval and exit
+    // before the queue was continuously idle.
+    if (idleCheckInFlight) {
+      return;
+    }
+    idleCheckInFlight = true;
     detached(
       (async () => {
         const pending = await countPendingDocumentProcessingJobs().catch(
@@ -60,6 +68,7 @@ if (idleExitMinutes !== undefined) {
             return -1;
           },
         );
+        idleCheckInFlight = false;
         consecutiveIdleChecks = pending === 0 ? consecutiveIdleChecks + 1 : 0;
         if (consecutiveIdleChecks < requiredIdleChecks || shuttingDown) {
           return;

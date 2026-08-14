@@ -128,14 +128,17 @@ await probe("local ocr worker", async () => {
       stdin: new Blob([blankPagePdf]),
       stdout: "pipe",
       stderr: "pipe",
+      // A hung worker must fail the image build, not stall it.
+      timeout: 120_000,
     },
   );
-  const [output, exitCode] = await Promise.all([
+  const [output, stderr, exitCode] = await Promise.all([
     new Response(subprocess.stdout).text(),
+    new Response(subprocess.stderr).text(),
     subprocess.exited,
   ]);
   if (exitCode !== 0) {
-    panic(`local ocr worker exited with ${exitCode}`);
+    panic(`local ocr worker exited with ${exitCode}: ${stderr.trim()}`);
   }
   const parsed: unknown = JSON.parse(output);
   if (

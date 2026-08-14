@@ -54,13 +54,16 @@ describe("extractTextBoxes", () => {
       sourceHeight: 640,
     });
 
-    expect(boxes.length).toBe(2);
+    const [upper, lower] = boxes;
+    if (!upper || !lower) {
+      throw new Error(`expected two boxes, got ${boxes.length}`);
+    }
     // Reading order: the upper region first.
-    expect(boxes[0]!.y0).toBeLessThan(boxes[1]!.y0);
+    expect(upper.y0).toBeLessThan(lower.y0);
     // Coordinates are scaled 10x and expanded by the unclip offset.
-    expect(boxes[0]!.x0).toBeLessThan(40);
-    expect(boxes[0]!.x1).toBeGreaterThan(290);
-    expect(boxes[0]!.score).toBeCloseTo(0.9, 5);
+    expect(upper.x0).toBeLessThan(40);
+    expect(upper.x1).toBeGreaterThan(290);
+    expect(upper.score).toBeCloseTo(0.9, 5);
   });
 
   test("drops components below the score threshold or minimum size", () => {

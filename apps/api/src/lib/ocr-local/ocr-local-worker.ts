@@ -267,11 +267,26 @@ try {
     };
     const boxes = await detect(rendered);
     const lines = await recognize(rendered, boxes);
-    return {
-      width: Math.round(pointWidth),
-      height: Math.round(pointHeight),
-      lines,
-    };
+    // Page dimensions are serialized as integers, so boxes computed
+    // against fractional MediaBox points must be clamped to the rounded
+    // page or a right/bottom-edge line would fail the parent's bounds
+    // validation. A line collapsed by clamping carries no area.
+    const width = Math.round(pointWidth);
+    const height = Math.round(pointHeight);
+    const clampedLines = lines.flatMap((line) => {
+      const [x0, y0, x1, y1] = line.box;
+      const box: DocumentOcrLine["box"] = [
+        Math.min(x0, width),
+        Math.min(y0, height),
+        Math.min(x1, width),
+        Math.min(y1, height),
+      ];
+      if (box[2] <= box[0] || box[3] <= box[1]) {
+        return [];
+      }
+      return [{ ...line, box }];
+    });
+    return { width, height, lines: clampedLines };
   };
 
   const pages: DocumentOcrPage[] = [];

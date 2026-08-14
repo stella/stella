@@ -165,6 +165,11 @@ COPY --chown=stella:stella --from=builder /app/runtime-workers /\$bunfs/root/wor
 # workers directory; the models are read from DOCUMENT_OCR_MODEL_DIR.
 COPY --chown=stella:stella --from=builder /app/node_modules/onnxruntime-node/bin /\$bunfs/root/bin
 COPY --chown=stella:stella --from=builder /app/ocr-models /app/ocr-models
+# sharp's platform binding and libvips resolve at runtime through bare
+# `@img/...` requires the bundler cannot rewrite; a node_modules directory
+# beside the worker bundles satisfies that lookup. The image smoke spawns
+# the worker, so a missing binding fails the build, not the first run.
+COPY --chown=stella:stella --from=builder /app/node_modules/@img /\$bunfs/root/workers/node_modules/@img
 COPY --chown=stella:stella --from=install-inputs \
     /app/apps/landing/public/fonts/CabinetGrotesk-Regular.otf \
     /\$bunfs/root/fonts/CabinetGrotesk-Regular.otf
