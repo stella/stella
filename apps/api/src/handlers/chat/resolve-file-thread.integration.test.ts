@@ -164,7 +164,7 @@ describe("file-thread mapping lookup", () => {
 
 const materialize = async (
   requestedThreadId: SafeId<"chatThread">,
-  accessibleWorkspaceIds: readonly SafeId<"workspace">[] = [ids.wsA1],
+  accessibleWorkspaceIds: SafeId<"workspace">[] = [ids.wsA1],
 ) => {
   const scopedDb = createScopedDb(
     testDb,

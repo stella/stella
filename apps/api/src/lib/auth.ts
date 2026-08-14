@@ -365,7 +365,23 @@ type RequireTwoFactorManageOtpArgs = {
   session: TwoFactorManageSession;
 };
 
-type AuthoritativeSessionResolver = typeof getAuthoritativeSessionFromCtx;
+type SensitiveAuthPathContext = {
+  body?: unknown;
+  path?: string | undefined;
+  request?: Request | undefined;
+};
+type AuthoritativeSessionPathContext = SensitiveAuthPathContext & {
+  path: string;
+  request: Request;
+};
+type BetterAuthMiddlewareContext = Parameters<
+  Parameters<typeof createAuthMiddleware>[0]
+>[0];
+
+const getAuthoritativeSessionForHook = async (
+  ctx: BetterAuthMiddlewareContext,
+): ReturnType<typeof getAuthoritativeSessionFromCtx> =>
+  await getAuthoritativeSessionFromCtx(ctx);
 
 /**
  * Establish database-backed session state before a sensitive plugin endpoint
@@ -373,22 +389,27 @@ type AuthoritativeSessionResolver = typeof getAuthoritativeSessionFromCtx;
  * OAuth authorization-code flow nor two-factor rotation can fall back to a
  * signed cookie-cache snapshot.
  */
-export const resolveAuthoritativeSessionForSensitiveAuthPath = async ({
+export const resolveAuthoritativeSessionForSensitiveAuthPath = async <
+  TContext extends SensitiveAuthPathContext,
+>({
   ctx,
-  resolveSession = getAuthoritativeSessionFromCtx,
+  resolveSession,
 }: {
-  ctx: HookEndpointContext;
-  resolveSession?: AuthoritativeSessionResolver;
+  ctx: TContext;
+  resolveSession: (
+    ctx: TContext & AuthoritativeSessionPathContext,
+  ) => ReturnType<typeof getAuthoritativeSessionFromCtx>;
 }): Promise<boolean> => {
-  if (!AUTHORITATIVE_SESSION_PATHS.has(ctx.path)) {
+  const path = ctx.path;
+  if (path === undefined || !AUTHORITATIVE_SESSION_PATHS.has(path)) {
     return false;
   }
-  if (ctx.request === undefined) {
+  const request = ctx.request;
+  if (request === undefined) {
     panic("Authoritative-session hook ran outside HTTP dispatch");
   }
-
-  const session = await resolveSession(ctx);
-  if (TWO_FACTOR_MANAGE_PATHS.has(ctx.path)) {
+  const session = await resolveSession({ ...ctx, path, request });
+  if (TWO_FACTOR_MANAGE_PATHS.has(path)) {
     await requireTwoFactorManageOtp({ body: ctx.body, session });
   }
   return true;
@@ -1266,7 +1287,13 @@ const createAuth = () => {
       before: createAuthMiddleware(async (ctx) => {
         await assertSelfhostEmailOtpAllowed(ctx.path);
 
-        if (await resolveAuthoritativeSessionForSensitiveAuthPath({ ctx })) {
+        if (
+          await resolveAuthoritativeSessionForSensitiveAuthPath({
+            ctx,
+            resolveSession: async ({ path, request }) =>
+              await getAuthoritativeSessionForHook({ ...ctx, path, request }),
+          })
+        ) {
           return;
         }
 

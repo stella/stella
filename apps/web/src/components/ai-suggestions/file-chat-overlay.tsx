@@ -1567,60 +1567,54 @@ const FileChatOverlayInner = ({
       prompt: string;
       files: ChatDraftAttachment[];
     }) => {
-      try {
-        if (isDraftChatFrozen()) {
-          return;
-        }
-        if (!(await ensureAIAvailable())) {
-          return;
-        }
-        // Don't let a model just chosen from the (+) Models submenu race the
-        // send: wait for its PATCH to settle (already toasted on failure) and
-        // abort so the request can't run against the previous thread model.
-        if (Result.isError(await modelSelection.awaitPendingSelection())) {
-          return;
-        }
-
-        // A workspace-file overlay mounts on a lookup that deliberately
-        // creates nothing; the thread (row + file mapping) is persisted here,
-        // on the first real message. The persisted id normally IS the
-        // mounted draft id; a different id means another session
-        // materialized this file's thread first, the caches have been
-        // rebound to it, and the preserved throw keeps the typed draft in
-        // the composer for a retry against the rebound thread.
-        if (ensureFileThreadPersisted !== undefined) {
-          const persistedThreadId = await ensureFileThreadPersisted();
-          if (persistedThreadId !== threadRef.threadId) {
-            stellaToast.add({
-              title: t("chat.fileThreadRebound"),
-              type: "info",
-            });
-            throw new ChatSubmitPreservedError({
-              message:
-                "File thread rebound to a concurrently created thread; draft preserved for retry",
-              restoreThreadKey: getChatThreadKey(
-                threadRef.scope === "workspace"
-                  ? {
-                      scope: "workspace",
-                      threadId: persistedThreadId,
-                      workspaceId: threadRef.workspaceId,
-                    }
-                  : { scope: "global", threadId: persistedThreadId },
-              ),
-            });
-          }
-        }
-
-        // Always pop the thread open on send, even if the user
-        // minimised it earlier — they're sending a new prompt
-        // and want to see the response stream in.
-        setPanelOpen(true);
-        await sendMessage(
-          await buildChatRequestMessage({ files, html: prompt }),
-        );
-      } catch (submitError) {
-        throw submitError;
+      if (isDraftChatFrozen()) {
+        return;
       }
+      if (!(await ensureAIAvailable())) {
+        return;
+      }
+      // Don't let a model just chosen from the (+) Models submenu race the
+      // send: wait for its PATCH to settle (already toasted on failure) and
+      // abort so the request can't run against the previous thread model.
+      if (Result.isError(await modelSelection.awaitPendingSelection())) {
+        return;
+      }
+
+      // A workspace-file overlay mounts on a lookup that deliberately
+      // creates nothing; the thread (row + file mapping) is persisted here,
+      // on the first real message. The persisted id normally IS the
+      // mounted draft id; a different id means another session
+      // materialized this file's thread first, the caches have been
+      // rebound to it, and the preserved throw keeps the typed draft in
+      // the composer for a retry against the rebound thread.
+      if (ensureFileThreadPersisted !== undefined) {
+        const persistedThreadId = await ensureFileThreadPersisted();
+        if (persistedThreadId !== threadRef.threadId) {
+          stellaToast.add({
+            title: t("chat.fileThreadRebound"),
+            type: "info",
+          });
+          throw new ChatSubmitPreservedError({
+            message:
+              "File thread rebound to a concurrently created thread; draft preserved for retry",
+            restoreThreadKey: getChatThreadKey(
+              threadRef.scope === "workspace"
+                ? {
+                    scope: "workspace",
+                    threadId: persistedThreadId,
+                    workspaceId: threadRef.workspaceId,
+                  }
+                : { scope: "global", threadId: persistedThreadId },
+            ),
+          });
+        }
+      }
+
+      // Always pop the thread open on send, even if the user
+      // minimised it earlier — they're sending a new prompt
+      // and want to see the response stream in.
+      setPanelOpen(true);
+      await sendMessage(await buildChatRequestMessage({ files, html: prompt }));
     },
   );
 

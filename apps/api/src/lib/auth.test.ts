@@ -412,14 +412,10 @@ describe("TWO_FACTOR_MANAGE_PATHS", () => {
 });
 
 describe("resolveAuthoritativeSessionForSensitiveAuthPath", () => {
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- this unit
-  // only reaches the global-hook boundary; the injected resolver never reads
-  // the remaining Better Auth context fields.
-  const sensitiveCtx = (path: string) =>
-    ({
-      path,
-      request: new Request(`http://localhost/api/auth${path}`),
-    }) as HookEndpointContext;
+  const sensitiveCtx = (path: string) => ({
+    path,
+    request: new Request(`http://localhost/api/auth${path}`),
+  });
 
   test("loads storage-backed session state before OAuth authorization can mint a durable token", async () => {
     const resolvedPaths: string[] = [];

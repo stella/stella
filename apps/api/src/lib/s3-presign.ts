@@ -33,6 +33,7 @@ import { Result, TaggedError } from "better-result";
 
 import { envBase } from "@/api/env-base";
 import { contentDisposition } from "@/api/lib/content-disposition";
+import { detached } from "@/api/lib/detached";
 import { resolveS3Credentials } from "@/api/lib/s3";
 import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
 
@@ -129,6 +130,7 @@ const AWS_SDK_REQUEST_TIMEOUT_MS = 30_000;
 const TEMP_UPLOAD_TAG_KEY = "stella-upload-stage";
 const TEMP_UPLOAD_TAG_VALUE = "tmp";
 const TEMP_UPLOAD_TAGGING = `${TEMP_UPLOAD_TAG_KEY}=${TEMP_UPLOAD_TAG_VALUE}`;
+const S3_GET_OBJECT_ACTION = "s3:GetObject" as const;
 
 const buildAwsS3Client = async (): Promise<CachedClient> => {
   const creds = await resolveS3Credentials();
@@ -217,6 +219,7 @@ const getStsClient = async (): Promise<STSClient> => {
 
 const shouldUseScopedSigning = (): boolean =>
   !!envBase.S3_SCOPED_SIGNING_ROLE_ARN && isAwsS3Endpoint(envBase.S3_ENDPOINT);
+let isScopedSigningEnabled = shouldUseScopedSigning;
 
 const s3SigningScopePrefix = ({
   keyspace = "tenant",
@@ -357,9 +360,10 @@ export type ScopedS3ClientFactory = typeof buildScopedAwsS3Client;
 let scopedS3ClientFactory: ScopedS3ClientFactory = buildScopedAwsS3Client;
 
 const disposeScopedClient = (entry: ScopedClientCacheEntry): void => {
-  void entry.promise
-    .then(({ client }) => client.destroy())
-    .catch(() => undefined);
+  detached(
+    entry.promise.then(({ client }) => client.destroy()),
+    "s3-presign.dispose-scoped-client",
+  );
 };
 
 const removeScopedClient = (
@@ -430,27 +434,24 @@ const getScopedAwsS3Client = async (
     removeScopedClient(cacheKey, existing);
   }
 
-  let createdEntry: ScopedClientCacheEntry | undefined;
-  const nextPromise = scopedS3ClientFactory(scope, actions).catch(
-    (error: unknown) => {
-      if (createdEntry) {
-        removeScopedClient(cacheKey, createdEntry);
-      }
-      throw error;
-    },
-  );
-  const entry = { promise: nextPromise };
-  createdEntry = entry;
-  nextPromise.then(
-    (cached) => {
+  const entry: ScopedClientCacheEntry = {
+    promise: scopedS3ClientFactory(scope, actions),
+  };
+  entry.promise = entry.promise.catch((error: unknown) => {
+    removeScopedClient(cacheKey, entry);
+    throw error;
+  });
+  detached(
+    entry.promise.then((cached) => {
       entry.cached = cached;
       pruneScopedClientCache();
-    },
-    () => undefined,
+      return undefined;
+    }),
+    "s3-presign.cache-entry-settled",
   );
   _scopedClientCache.set(cacheKey, entry);
   pruneScopedClientCache();
-  const built = await nextPromise;
+  const built = await entry.promise;
   return built.client;
 };
 
@@ -473,6 +474,13 @@ export const setScopedS3ClientFactoryForTesting = (
   scopedS3ClientFactory = factory;
 };
 
+/** Test seam for scoped-signing paths without mutating process environment. */
+export const setScopedSigningEnabledForTesting = (
+  predicate: () => boolean,
+): void => {
+  isScopedSigningEnabled = predicate;
+};
+
 export const getScopedClientCacheSizeForTesting = (): number =>
   _scopedClientCache.size;
 
@@ -490,7 +498,7 @@ const getTenantAwsS3Client = async ({
       message: "S3 key is outside the requested signing scope",
     });
   }
-  if (!shouldUseScopedSigning()) {
+  if (!isScopedSigningEnabled()) {
     return await getAwsS3Client();
   }
   return await getScopedAwsS3Client(scope, actions, 0);
@@ -627,7 +635,7 @@ const getPresignClient = async ({
   key: string;
   scope: S3SigningScope | undefined;
 }): Promise<AwsS3Client> => {
-  if (!shouldUseScopedSigning()) {
+  if (!isScopedSigningEnabled()) {
     return await getAwsS3Client();
   }
 
@@ -668,12 +676,12 @@ const PREWARM_PRESIGN_EXPIRES_IN_SECONDS = 15 * 60;
 export const prewarmScopedDownloadSigning = async (
   scope: S3SigningScope,
 ): Promise<void> => {
-  if (!shouldUseScopedSigning()) {
+  if (!isScopedSigningEnabled()) {
     return;
   }
   await getScopedAwsS3Client(
     scope,
-    ["s3:GetObject"],
+    [S3_GET_OBJECT_ACTION],
     PREWARM_PRESIGN_EXPIRES_IN_SECONDS,
   );
 };
@@ -687,6 +695,7 @@ export const resetAwsS3ClientForTesting = (): void => {
   }
   _scopedClientCache = new Map();
   scopedS3ClientFactory = buildScopedAwsS3Client;
+  isScopedSigningEnabled = shouldUseScopedSigning;
   tenantS3OperationHooks = DEFAULT_TENANT_S3_OPERATION_HOOKS;
 };
 

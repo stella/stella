@@ -117,10 +117,17 @@ export const resolveRequestMethod = (
 /** Structural fetch subset so the unit test can pass a plain function
  *  without casting to the full (Bun-extended) fetch type. */
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
+type ReportPrefetchError = (error: unknown) => Promise<void>;
+
+const reportPrefetchError: ReportPrefetchError = async (error) => {
+  const { getAnalytics } = await import("@/lib/analytics/provider");
+  getAnalytics().captureError(error);
+};
 
 type StartBootPrefetchOptions = {
   fetchImpl?: FetchLike;
   now?: () => number;
+  reportError?: ReportPrefetchError;
 };
 
 /** Exported for the unit test only; the module fires it at evaluation time
@@ -128,6 +135,7 @@ type StartBootPrefetchOptions = {
 export const startBootPrefetch = ({
   fetchImpl = fetch,
   now = Date.now,
+  reportError = reportPrefetchError,
 }: StartBootPrefetchOptions = {}): void => {
   // A second boot attempt supersedes, cancels, and invalidates every response
   // from the first one. This also keeps test and bfcache re-entry behavior
@@ -140,13 +148,18 @@ export const startBootPrefetch = ({
   // own (retrying, timeout-bounded) fetch instead of inheriting an
   // unbounded prefetch rejection. The capture import is dynamic so the
   // analytics graph never rides in this deliberately tiny boot chunk; it
-  // only loads on the failure path.
+  // only loads on the failure path. Reporting stays best-effort: a telemetry
+  // failure must never prevent the normal bounded auth request fallback.
   const reportAndDrop = async (error: unknown): Promise<null> => {
     if (controller.signal.aborted) {
       return null;
     }
-    const { getAnalytics } = await import("@/lib/analytics/provider");
-    getAnalytics().captureError(error);
+    try {
+      await reportError(error);
+    } catch {
+      // The reporting path itself failed; the auth client must still perform
+      // its normal fallback request instead of inheriting telemetry failure.
+    }
     return null;
   };
   const requestSignal = (): AbortSignal =>

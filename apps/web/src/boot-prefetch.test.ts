@@ -173,6 +173,17 @@ describe("boot prefetch", () => {
     discardBootPrefetch();
   });
 
+  test("falls back when failure reporting fails", async () => {
+    startBootPrefetch({
+      fetchImpl: failingFetch(),
+      reportError: async () =>
+        await Promise.reject(new Error("telemetry down")),
+    });
+
+    expect(await takeBootPrefetch("/api/auth/get-session")).toBeNull();
+    discardBootPrefetch();
+  });
+
   test("every prefetch request carries an abort-timeout signal", async () => {
     // `takeBootPrefetch` awaits the slot promise directly, bypassing the
     // auth client's fetchWithTimeout fallback; an unbounded prefetch would
