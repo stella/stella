@@ -268,7 +268,7 @@ describe("case law reconciliation loop", () => {
     // The streak is served in turns skipped, so the failing source is asked
     // progressively less often while the healthy one keeps its cadence.
     const failingTurns = turnOrder(run).filter((key) => key === "cz-regional");
-    expect(failingTurns.length).toBeLessThan(4);
+    expect(failingTurns).toHaveLength(3);
   });
 
   test("a failing source costs its own turns, never the healthy sources' cadence", async () => {
@@ -301,8 +301,17 @@ describe("case law reconciliation loop", () => {
     // `every` is vacuously true on an empty array, so the count is asserted
     // too: a regression that stopped the healthy sources taking any turn at
     // all would otherwise pass this.
-    expect(healthyGaps.length).toBeGreaterThan(0);
-    expect(healthyGaps.every((ms) => ms === TIMING.unitDelayMs)).toBe(true);
+    expect(healthyGaps).toEqual([
+      TIMING.unitDelayMs,
+      TIMING.unitDelayMs,
+      TIMING.unitDelayMs,
+      TIMING.unitDelayMs,
+      TIMING.unitDelayMs,
+      TIMING.unitDelayMs,
+      TIMING.unitDelayMs,
+      TIMING.unitDelayMs,
+      TIMING.unitDelayMs,
+    ]);
   });
 
   test("a held source neither freezes the idle schedule nor outlives its own ceiling", async () => {
