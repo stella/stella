@@ -141,10 +141,10 @@ export const FIRST_PARTY_MODEL_PROVIDERS: Exclude<
  */
 export const BYOK_DEFAULT_MODELS = {
   google: {
-    fast: "gemini-3.6-flash",
-    chat: "gemini-3.6-flash",
-    reasoning: "gemini-3.6-flash",
-    pdf: "gemini-3.6-flash",
+    fast: "gemini-3.7-flash",
+    chat: "gemini-3.7-flash",
+    reasoning: "gemini-3.7-flash",
+    pdf: "gemini-3.7-flash",
   },
   openrouter: {
     fast: "openai/gpt-5.6-luna",
@@ -217,6 +217,7 @@ export const DEFAULT_MODELS = {
  */
 export const BYOK_MODEL_OPTIONS = {
   google: [
+    "gemini-3.7-flash",
     "gemini-3.6-flash",
     "gemini-3.5-flash-lite",
     "gemini-3.1-pro-preview",
@@ -244,6 +245,7 @@ export const BYOK_MODEL_OPTIONS = {
   openrouter: [
     "openai/gpt-5.6-luna",
     "openai/gpt-5.6-terra",
+    "google/gemini-3.7-flash",
     "google/gemini-3.6-flash",
     "google/gemini-3.5-flash-lite",
     "google/gemini-3.1-pro-preview",
@@ -333,6 +335,10 @@ export type ModelDisplayMetadata = {
  * creator's icon while their routing provider remains available separately.
  */
 export const MODEL_DISPLAY_METADATA = {
+  "gemini-3.7-flash": {
+    displayName: "Gemini 3.7 Flash",
+    iconProvider: "google",
+  },
   "gemini-3.6-flash": {
     displayName: "Gemini 3.6 Flash",
     iconProvider: "google",
@@ -404,6 +410,10 @@ export const MODEL_DISPLAY_METADATA = {
   "openai/gpt-5.6-terra": {
     displayName: "GPT-5.6 Terra",
     iconProvider: "openai",
+  },
+  "google/gemini-3.7-flash": {
+    displayName: "Gemini 3.7 Flash",
+    iconProvider: "google",
   },
   "google/gemini-3.6-flash": {
     displayName: "Gemini 3.6 Flash",
@@ -552,7 +562,7 @@ const STELLA_EXTENDED_DOCUMENT_INPUT_MODEL_OPTIONS = {
     "claude-opus-4-6",
     "claude-haiku-4-5-20251001",
   ],
-  google: ["gemini-3.6-flash", "gemini-3.5-flash-lite"],
+  google: ["gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"],
   openai: [
     "gpt-5.6",
     "gpt-5.5",
@@ -564,6 +574,7 @@ const STELLA_EXTENDED_DOCUMENT_INPUT_MODEL_OPTIONS = {
   openrouter: [
     "openai/gpt-5.6-luna",
     "openai/gpt-5.6-terra",
+    "google/gemini-3.7-flash",
     "google/gemini-3.6-flash",
     "google/gemini-3.5-flash-lite",
     "anthropic/claude-opus-5",
@@ -985,6 +996,12 @@ export const MODEL_RATES = {
     outputPerMTok: 750_000,
     cachedInputPerMTok: 15_000,
   },
+  "gemini-3.7-flash": {
+    kind: "flat",
+    inputPerMTok: 75_000,
+    outputPerMTok: 375_000,
+    cachedInputPerMTok: 7500,
+  },
   "gemini-3.1-pro-preview": {
     kind: "input-token-tiered",
     inputTokenThreshold: 200_000,
@@ -1193,6 +1210,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "gemini-3.5-flash": 1_048_576,
   "gemini-3.5-flash-lite": 1_048_576,
   "gemini-3.6-flash": 1_048_576,
+  "gemini-3.7-flash": 1_048_576,
   "gemini-3.1-pro-preview": 1_048_576,
   // OpenAI: GPT-4o family 128K; GPT-5 varies by generation.
   "gpt-4o-mini": 128_000,
@@ -1222,6 +1240,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "magistral-small": 128_000,
   "pixtral-large-latest": 128_000,
   // OpenRouter provider-prefixed slugs mirror their upstream windows.
+  "google/gemini-3.7-flash": 1_048_576,
   "google/gemini-3.6-flash": 1_048_576,
   "google/gemini-3.5-flash-lite": 1_048_576,
   "google/gemini-3.1-pro-preview": 1_048_576,

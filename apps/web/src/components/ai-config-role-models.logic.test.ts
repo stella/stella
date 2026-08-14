@@ -34,10 +34,10 @@ describe("BYOK provider and model configuration", () => {
 
   test("uses the provider-specific recommendations for Google and OpenRouter", () => {
     expect(createDefaultRoleModels(["google"])).toEqual({
-      chat: { provider: "google", modelId: "gemini-3.6-flash" },
-      fast: { provider: "google", modelId: "gemini-3.6-flash" },
-      reasoning: { provider: "google", modelId: "gemini-3.6-flash" },
-      pdf: { provider: "google", modelId: "gemini-3.6-flash" },
+      chat: { provider: "google", modelId: "gemini-3.7-flash" },
+      fast: { provider: "google", modelId: "gemini-3.7-flash" },
+      reasoning: { provider: "google", modelId: "gemini-3.7-flash" },
+      pdf: { provider: "google", modelId: "gemini-3.7-flash" },
     });
     expect(createDefaultRoleModels(["openrouter"])).toEqual({
       chat: { provider: "openrouter", modelId: "openai/gpt-5.6-terra" },
@@ -149,8 +149,8 @@ describe("BYOK provider and model configuration", () => {
     });
     expect(modelOptions).toContainEqual({
       provider: "google",
-      modelId: "gemini-3.6-flash",
-      value: "google::gemini-3.6-flash",
+      modelId: "gemini-3.7-flash",
+      value: "google::gemini-3.7-flash",
     });
     expect(modelOptions).toContainEqual({
       provider: "openai",
