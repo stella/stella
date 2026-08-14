@@ -130,7 +130,7 @@ describe("canary MCP protocol", () => {
         violations: ["invalid-write-request", "untrusted-violation"],
       }),
     ).toBe(
-      "events=read_allowed,unknown; violations=invalid-write-request,unknown",
+      "events=read_allowed,unknown; violations=invalid-write-request,unknown; authRejections=unavailable; authProbeBaseline=unavailable",
     );
     expect(
       canaryStateDiagnostic({
@@ -141,7 +141,7 @@ describe("canary MCP protocol", () => {
         violations: [],
       }),
     ).toBe(
-      "events=read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,overflow; violations=none",
+      "events=read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,overflow; violations=none; authRejections=unavailable; authProbeBaseline=unavailable",
     );
     expect(
       canaryStateDiagnostic({
@@ -152,7 +152,32 @@ describe("canary MCP protocol", () => {
         violations: [],
       }),
     ).toBe(
-      "events=read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,overflow; violations=none",
+      "events=read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,read_allowed,overflow; violations=none; authRejections=unavailable; authProbeBaseline=unavailable",
+    );
+    expect(
+      canaryStateDiagnostic({
+        events: [],
+        violations: [],
+        authRejections: [
+          { reason: "expired", token: "not-for-logs" },
+          { reason: "invalid-claims", claims: "not-for-logs" },
+        ],
+      }),
+    ).toBe(
+      "events=none; violations=none; authRejections=expired,invalid-claims; authProbeBaseline=expected",
+    );
+    expect(
+      canaryStateDiagnostic({
+        events: [],
+        violations: [],
+        authRejections: [
+          { reason: "expired", token: "not-for-logs" },
+          { reason: "invalid-claims", claims: "not-for-logs" },
+          { reason: "missing", headers: "not-for-logs" },
+        ],
+      }),
+    ).toBe(
+      "events=none; violations=none; authRejections=expired,invalid-claims,missing; authProbeBaseline=extra",
     );
     expect(
       canaryFailureDiagnostic({
@@ -163,7 +188,7 @@ describe("canary MCP protocol", () => {
         sandboxCleanup: "leaked",
       }),
     ).toBe(
-      "server state: events=read_denied; violations=finish-before-required-sequence; sandboxCleanup=leaked",
+      "server state: events=read_denied; violations=finish-before-required-sequence; authRejections=unavailable; authProbeBaseline=unavailable; sandboxCleanup=leaked",
     );
   });
 
