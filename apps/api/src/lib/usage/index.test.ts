@@ -328,6 +328,68 @@ describe("usage ledger — allocation + usage math", () => {
     });
   });
 
+  test("only pool-lane events settle against allocated units", async () => {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+      await allocateUsage({
+        tx,
+        organizationId: fx.organizationId,
+        units: 1000,
+        reason: "periodic",
+        sourceType: "hosted_entitlement",
+        sourceRef: "evt_lane_exclusion",
+        period: { start: fx.periodStart, end: fx.periodEnd },
+      });
+
+      const laneEvent = {
+        tx,
+        organizationId: fx.organizationId,
+        workspaceId: null,
+        userId: fx.userId,
+        actionType: "chat",
+        modelRole: "chat",
+        serviceTier: "standard",
+        isByok: false,
+        period: { start: fx.periodStart, end: fx.periodEnd },
+      } as const;
+
+      // Allowance and fallback turns carry their consumption as raw
+      // micro-units and are settled by the per-user lane counters, so the
+      // org's purchased units must not move for them.
+      for (const lane of ["allowance", "fallback"] as const) {
+        // oxlint-disable-next-line no-await-in-loop -- two ordered ledger writes against one balance
+        await recordUsageEvent({
+          ...laneEvent,
+          lane,
+          unitsConsumed: 0,
+          rawUsageMicroUnits: 4500,
+        });
+      }
+
+      expect(
+        await getRemainingUsageUnits({
+          tx,
+          organizationId: fx.organizationId,
+          asOf: midPeriod,
+        }),
+      ).toBe(1000);
+
+      await recordUsageEvent({
+        ...laneEvent,
+        lane: "pool",
+        unitsConsumed: 250,
+      });
+
+      expect(
+        await getRemainingUsageUnits({
+          tx,
+          organizationId: fx.organizationId,
+          asOf: midPeriod,
+        }),
+      ).toBe(750);
+    });
+  });
+
   test("sums allocations beyond PostgreSQL's int4 range", async () => {
     await withRolledBackTx(async (tx) => {
       const fx = await setupFixture(tx);
