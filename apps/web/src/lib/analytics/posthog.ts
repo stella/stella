@@ -224,21 +224,26 @@ let routeErrorLifecycleSanitizer: RouteErrorLifecycleSanitizer | undefined;
 
 // The SDK stamps `$web_vitals` events with the resolved URL, which can
 // carry resource ids. `capturePageViewed` records resolved pathname →
-// route template for recent navigations; the sanitizer attributes each
-// event via its originating URL rather than the latest route, because
-// vitals (CLS, INP) can flush after the next navigation resolves. An
-// unknown origin drops the URL fields rather than mislabeling them.
+// route template for recent navigations (a bounded, adapter-owned map);
+// the sanitizer attributes each event via its originating URL rather
+// than the latest route, because vitals (CLS, INP) can flush after the
+// next navigation resolves. An unknown origin drops the URL fields
+// rather than mislabeling them.
 const ROUTE_TEMPLATE_HISTORY_LIMIT = 50;
-const routeTemplateByPath = new Map<string, string>();
+type RouteTemplateHistory = Map<string, string>;
 
-const recordRouteTemplate = (resolvedPath: string, template: string): void => {
-  routeTemplateByPath.delete(resolvedPath);
-  routeTemplateByPath.set(resolvedPath, template);
-  for (const key of routeTemplateByPath.keys()) {
-    if (routeTemplateByPath.size <= ROUTE_TEMPLATE_HISTORY_LIMIT) {
+const recordRouteTemplate = (
+  history: RouteTemplateHistory,
+  resolvedPath: string,
+  template: string,
+): void => {
+  history.delete(resolvedPath);
+  history.set(resolvedPath, template);
+  for (const key of history.keys()) {
+    if (history.size <= ROUTE_TEMPLATE_HISTORY_LIMIT) {
       break;
     }
-    routeTemplateByPath.delete(key);
+    history.delete(key);
   }
 };
 
@@ -299,7 +304,10 @@ const WEB_VITALS_CONTEXT_KEYS = [
  * objects (element attribution, resolved URLs) never pass through, and
  * the URL fields are replaced with the last captured route template.
  */
-const sanitizeWebVitalsEvent = (event: CaptureResult): CaptureResult | null => {
+const sanitizeWebVitalsEvent = (
+  event: CaptureResult,
+  history: RouteTemplateHistory,
+): CaptureResult | null => {
   const properties: Record<string, unknown> = event.properties;
   const metricValues = Object.fromEntries(
     Object.values(WEB_VITALS_KEYS)
@@ -319,8 +327,7 @@ const sanitizeWebVitalsEvent = (event: CaptureResult): CaptureResult | null => {
   const appCommit = properties["app_commit"];
   const appVersion = properties["app_version"];
   const origin = webVitalsOriginatingUrl(properties);
-  const template =
-    origin === null ? undefined : routeTemplateByPath.get(origin.pathname);
+  const template = origin === null ? undefined : history.get(origin.pathname);
   return {
     ...event,
     properties: {
@@ -381,7 +388,7 @@ export const createPostHogAnalytics = (
   host: string,
 ): { analytics: Analytics; client: typeof posthog | undefined } => {
   const localDebugEnabled = import.meta.env.DEV && env.VITE_POSTHOG_LOCAL_DEBUG;
-  routeTemplateByPath.clear();
+  const routeTemplateHistory: RouteTemplateHistory = new Map();
   const client = posthog.init(key, {
     opt_out_capturing_by_default: import.meta.env.DEV && !localDebugEnabled,
     api_host: host,
@@ -428,7 +435,7 @@ export const createPostHogAnalytics = (
         return routeErrorLifecycleSanitizer?.(event) ?? null;
       }
       if (event.event === WEB_ANALYTICS_EVENTS.webVitals) {
-        return sanitizeWebVitalsEvent(event);
+        return sanitizeWebVitalsEvent(event, routeTemplateHistory);
       }
       return event;
     },
@@ -469,7 +476,11 @@ export const createPostHogAnalytics = (
       // is the runtime truth the types cannot express.
       const hasLocation = "location" in globalThis;
       if (hasLocation) {
-        recordRouteTemplate(globalThis.location.pathname, path);
+        recordRouteTemplate(
+          routeTemplateHistory,
+          globalThis.location.pathname,
+          path,
+        );
       }
       posthog.capture(WEB_ANALYTICS_EVENTS.pageViewed, {
         ...(hasLocation
