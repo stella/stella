@@ -18,7 +18,9 @@ type PostHogInitOptions = {
   capture_dead_clicks: boolean;
   capture_heatmaps: boolean;
   capture_pageview: boolean;
-  capture_performance: boolean;
+  capture_performance:
+    | boolean
+    | { network_timing: boolean; web_vitals: boolean };
   disable_persistence: boolean;
   disable_session_recording: boolean;
   mask_all_text: boolean;
@@ -107,7 +109,7 @@ describe("PostHog browser analytics adapter", () => {
       capture_dead_clicks: false,
       capture_heatmaps: false,
       capture_pageview: false,
-      capture_performance: false,
+      capture_performance: { network_timing: false, web_vitals: true },
       disable_persistence: true,
       disable_session_recording: true,
       mask_all_text: true,
@@ -644,6 +646,18 @@ describe("PostHog browser analytics adapter", () => {
     for (const key of INGESTION_REQUIRED_KEYS) {
       expect(routeError?.properties[key]).toEqual(envelope[key]);
     }
+
+    const webVitals = initOptions?.before_send({
+      event: WEB_ANALYTICS_EVENTS.webVitals,
+      properties: {
+        ...envelope,
+        $web_vitals_LCP_value: 1234.5,
+      },
+    });
+    for (const key of INGESTION_REQUIRED_KEYS) {
+      expect(webVitals?.properties?.[key]).toEqual(envelope[key]);
+    }
+    expect(webVitals?.properties).not.toContainKeys(["$lib", "$current_url"]);
   });
 
   test("before_send keeps only valid opaque recovery references", () => {
@@ -679,6 +693,86 @@ describe("PostHog browser analytics adapter", () => {
         $exception_list: [{ type: "TypeError", value: "" }],
         $exception_type: "TypeError",
       },
+    });
+  });
+
+  test("web vitals keep metric values and coarse context, never attribution or resolved URLs", () => {
+    const { analytics } = createPostHogAnalytics(
+      "phc_test",
+      "https://posthog.test",
+    );
+    Object.defineProperty(globalThis, "location", {
+      configurable: true,
+      value: new URL("https://app.example.test"),
+    });
+    analytics.capturePageViewed({ path: "/workspaces/$workspaceId" });
+
+    const sanitized = initOptions?.before_send({
+      event: WEB_ANALYTICS_EVENTS.webVitals,
+      properties: {
+        token: "phc_test",
+        distinct_id: "018f9f0e-7b42-7cc8-9a5d-42db46f6842d",
+        $current_url:
+          "https://app.example.test/workspaces/private-matter-018f9f0e",
+        $pathname: "/workspaces/private-matter-018f9f0e",
+        $session_id: "018f9f0e-7b42-7cc8-9a5d-42db46f6842e",
+        $browser: "Chrome",
+        $web_vitals_LCP_value: 1234.5,
+        $web_vitals_CLS_value: 0.02,
+        $web_vitals_LCP_event: {
+          name: "LCP",
+          value: 1234.5,
+          $current_url:
+            "https://app.example.test/workspaces/private-matter-018f9f0e",
+          attribution: { element: "div#client-name" },
+        },
+        $web_vitals_CLS_event: { name: "CLS", value: 0.02 },
+      },
+    });
+
+    expect(sanitized).toEqual({
+      event: WEB_ANALYTICS_EVENTS.webVitals,
+      properties: {
+        token: "phc_test",
+        distinct_id: "018f9f0e-7b42-7cc8-9a5d-42db46f6842d",
+        $web_vitals_LCP_value: 1234.5,
+        $web_vitals_CLS_value: 0.02,
+        $session_id: "018f9f0e-7b42-7cc8-9a5d-42db46f6842e",
+        $browser: "Chrome",
+        $current_url: "https://app.example.test/workspaces/$workspaceId",
+        $pathname: "/workspaces/$workspaceId",
+      },
+    });
+  });
+
+  test("web vitals without metric values or a seen route are constrained", () => {
+    createPostHogAnalytics("phc_test", "https://posthog.test");
+
+    // No metric values: nothing worth ingesting.
+    expect(
+      initOptions?.before_send({
+        event: WEB_ANALYTICS_EVENTS.webVitals,
+        properties: {
+          token: "phc_test",
+          $current_url: "https://app.example.test/workspaces/private-matter",
+        },
+      }),
+    ).toBeNull();
+
+    // Metric values before any capturePageViewed: the resolved URL is
+    // dropped rather than substituted.
+    const sanitized = initOptions?.before_send({
+      event: WEB_ANALYTICS_EVENTS.webVitals,
+      properties: {
+        token: "phc_test",
+        $current_url: "https://app.example.test/workspaces/private-matter",
+        $pathname: "/workspaces/private-matter",
+        $web_vitals_INP_value: 87,
+      },
+    });
+    expect(sanitized?.properties).toEqual({
+      token: "phc_test",
+      $web_vitals_INP_value: 87,
     });
   });
 
