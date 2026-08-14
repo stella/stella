@@ -143,7 +143,7 @@
     "@stll/anonymize-data": "0.0.9",
     "@stll/anonymize-wasm": "2.7.6",
     "@stll/folio-agents": "0.8.4",
-    "@stll/folio-core": "0.17.0",
+    "@stll/folio-core": "0.17.1",
     "@stll/folio-react": "0.13.4",
     "@t3-oss/env-core": "0.13.11",
     "@tailwindcss/postcss": "4.3.3",
@@ -202,5 +202,9 @@
     "@tanstack/openai-base@0.9.10": "patches/@tanstack%2Fopenai-base@0.9.10.patch",
     "@tanstack/ai-mistral@0.2.4": "patches/@tanstack%2Fai-mistral@0.2.4.patch",
     "@tanstack/ai@0.43.1": "patches/@tanstack%2Fai@0.43.1.patch"
+  },
+  "dependencies": {
+    "@stll/folio-agents": "^0.8.4",
+    "@stll/folio-core": "^0.17.1"
   }
 }
