@@ -33,9 +33,17 @@ const CANARY_VIOLATION_CATEGORIES = [
   "invalid-write-request",
   "finish-before-required-sequence",
 ] as const;
+const CANARY_AUTH_REJECTION_REASONS = [
+  "expired",
+  "invalid-claims",
+  "invalid-signature",
+  "missing",
+] as const;
+const EXPECTED_AUTH_PROBE_REASONS = ["expired", "invalid-claims"] as const;
 
 type CanaryEventType = (typeof CANARY_EVENT_TYPES)[number];
 type CanaryViolationCategory = (typeof CANARY_VIOLATION_CATEGORIES)[number];
+type CanaryAuthRejectionReason = (typeof CANARY_AUTH_REJECTION_REASONS)[number];
 export type CanarySandboxCleanupStatus = "ok" | "leaked";
 
 export type CanaryCredentialClaims = {
@@ -69,7 +77,7 @@ export type CanaryEvent = CanaryActor & {
 };
 
 export type CanaryAuthRejection = {
-  reason: "expired" | "invalid-claims" | "invalid-signature" | "missing";
+  reason: CanaryAuthRejectionReason;
   at: string;
 };
 
@@ -116,6 +124,22 @@ const boundedCategories = (
   return values.join(",") || "none";
 };
 
+const authProbeBaseline = (value: unknown): string => {
+  if (!Array.isArray(value)) {
+    return "unavailable";
+  }
+  const matchesExpectedProbes = EXPECTED_AUTH_PROBE_REASONS.every(
+    (reason, index) =>
+      isRecord(value.at(index)) && value.at(index)["reason"] === reason,
+  );
+  if (!matchesExpectedProbes) {
+    return "unexpected";
+  }
+  return value.length === EXPECTED_AUTH_PROBE_REASONS.length
+    ? "expected"
+    : "extra";
+};
+
 /**
  * Describe only server-owned canary state categories. This is deliberately
  * bounded: protected workflow diagnostics must not publish tool payloads.
@@ -129,7 +153,14 @@ export const canaryStateDiagnostic = (value: unknown): string => {
         .slice(0, 9)
         .map((event) => (isRecord(event) ? event["type"] : undefined))
     : undefined;
-  return `events=${boundedCategories(eventTypes, CANARY_EVENT_TYPES)}; violations=${boundedCategories(value["violations"], CANARY_VIOLATION_CATEGORIES)}`;
+  const authRejectionReasons = Array.isArray(value["authRejections"])
+    ? value["authRejections"]
+        .slice(0, 9)
+        .map((rejection) =>
+          isRecord(rejection) ? rejection["reason"] : undefined,
+        )
+    : undefined;
+  return `events=${boundedCategories(eventTypes, CANARY_EVENT_TYPES)}; violations=${boundedCategories(value["violations"], CANARY_VIOLATION_CATEGORIES)}; authRejections=${boundedCategories(authRejectionReasons, CANARY_AUTH_REJECTION_REASONS)}; authProbeBaseline=${authProbeBaseline(value["authRejections"])}`;
 };
 
 export const canaryFailureDiagnostic = ({
