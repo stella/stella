@@ -23,6 +23,7 @@
         "src/lib/files/pdf-worker.ts!",
         "src/lib/files/office-evidence-worker.ts!",
         "src/lib/search/extraction-worker.ts!",
+        "src/lib/ocr-local/ocr-local-worker.ts!",
         "scripts/*.ts",
         "src/scripts/*.ts",
         "src/dev/register-mock-ai.ts",
