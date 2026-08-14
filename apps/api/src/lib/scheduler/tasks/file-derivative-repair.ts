@@ -236,15 +236,16 @@ type RowRepairResult = {
    * than dropped quietly, so an unrepairable population stays visible.
    */
   unattributed: boolean;
-  unrecognized: number;
+  /** Kinds skipped as unreadable, for the caller's per-row audit record. */
+  unrecognized: FileDerivativeKind[];
 };
 
 const requeueRow = async (row: RepairPageRow): Promise<RowRepairResult> => {
   if (row.content.type !== "file") {
-    return { requeued: 0, unattributed: false, unrecognized: 0 };
+    return { requeued: 0, unattributed: false, unrecognized: [] };
   }
   if (row.createdBy === null) {
-    return { requeued: 0, unattributed: true, unrecognized: 0 };
+    return { requeued: 0, unattributed: true, unrecognized: [] };
   }
   const userId = brandPersistedUserId(row.createdBy);
   const { stuck, unrecognized } = triageFileDerivatives(row.content);
@@ -281,7 +282,7 @@ const requeueRow = async (row: RepairPageRow): Promise<RowRepairResult> => {
   };
 
   await requeueFrom(0);
-  return { requeued, unattributed: false, unrecognized: unrecognized.length };
+  return { requeued, unattributed: false, unrecognized };
 };
 
 const persistCursor = async ({
@@ -359,7 +360,18 @@ export const repairFileDerivatives: SchedulerTask = async ({
     }
     requeued += outcome.value.requeued;
     unattributed += outcome.value.unattributed ? 1 : 0;
-    unrecognized += outcome.value.unrecognized;
+    unrecognized += outcome.value.unrecognized.length;
+    // Capture dedups identical errors inside its window, so with several
+    // unreadable rows in one page only the first field id reaches
+    // analytics. This log line is the per-row audit record; the rows also
+    // stay enumerable in SQL by their unreadable state.
+    for (const kind of outcome.value.unrecognized) {
+      logger.error("file_derivative.unrecognized_state", {
+        fieldId: row.fieldId,
+        kind,
+        workspaceId: row.workspaceId,
+      });
+    }
     await repairFrom(index + 1);
   };
 
