@@ -65,7 +65,9 @@ import type {
 import {
   corpusMirrorColumns,
   corpusContentHash,
+  corpusPayloadDisposition,
   EMPTY_CORPUS_CONTENT_HASHES,
+  TRIMMED_CORPUS_PAYLOAD_COLUMNS,
   writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
@@ -381,7 +383,6 @@ type SettleCaseLawCorpusMirrorTxOptions = Omit<
   SettleCaseLawCorpusMirrorOptions,
   "scopedDb"
 > & {
-  storage: "dual-write" | "canonical";
   tx: Transaction;
 };
 
@@ -390,7 +391,6 @@ const settleCaseLawCorpusMirrorTx = async ({
   persistedSourceHash,
   observationOrder,
   mirrorCarriesDocument,
-  storage,
   tx,
   written,
 }: SettleCaseLawCorpusMirrorTxOptions): Promise<boolean> => {
@@ -398,8 +398,12 @@ const settleCaseLawCorpusMirrorTx = async ({
   const settled = await tx
     .update(caseLawDecisions)
     .set({
-      ...(storage === "canonical"
-        ? { fulltext: null, sections: null, documentAst: null }
+      // Read off the storage mode rather than off the write plan: the plan
+      // is derived from the mode, and a second derivation here is a mirror
+      // that can go stale.
+      ...(corpusPayloadDisposition({ mode: corpusStorageMode, written }) ===
+      "trim"
+        ? TRIMMED_CORPUS_PAYLOAD_COLUMNS
         : {}),
       ...corpusMirrorColumns({
         status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
@@ -446,7 +450,6 @@ export const settleCaseLawCorpusMirror = async ({
         persistedSourceHash,
         observationOrder,
         mirrorCarriesDocument,
-        storage: "dual-write",
         tx,
         written,
       }),
@@ -1741,8 +1744,6 @@ const processDecisionAttempt = async ({
             persistedSourceHash,
             observationOrder,
             mirrorCarriesDocument,
-            storage:
-              corpusPlan.type === "object-storage" ? "canonical" : "dual-write",
             tx,
             written,
           }))

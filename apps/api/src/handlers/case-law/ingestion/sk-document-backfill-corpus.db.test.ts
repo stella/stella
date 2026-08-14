@@ -325,6 +325,163 @@ if (!databaseUrl || !runPostgresTests) {
       });
     });
 
+    /**
+     * Under canonical storage the objects are the payload, so a store that
+     * also filled the columns would put the row straight back into the
+     * pre-cutover shape — the state an external cleanup pass exists to
+     * remove, recreated by the writer faster than the pass can clear it.
+     * The queue predicate reads the result (row-specific hash, no surviving
+     * AST artifact) as corpus-served rather than pending, so the decision
+     * does not come back round.
+     */
+    test("canonical storage settles with the columns already empty", async () => {
+      const caseNumber = `corpus-canonical-${suffix}`;
+      const id = await insertDecision({
+        caseNumber,
+        mirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+      });
+
+      const outcome = await storeBackfilledDocument({
+        decision: decisionFor(id, caseNumber),
+        document: parsedDocument,
+        mode: "canonical",
+        scopedDb,
+        writeCorpus: async () => ({
+          ...NEW_KEYS,
+          contentHash: NEW_CONTENT_HASH,
+        }),
+      });
+
+      expect(outcome).toBe("stored");
+      expect(
+        await db.query.caseLawDecisions.findFirst({
+          where: { id: { eq: id } },
+          columns: {
+            corpusMirrorStatus: true,
+            fulltext: true,
+            sections: true,
+            documentAst: true,
+            textS3Key: true,
+            normalizedS3Key: true,
+            astS3Key: true,
+            contentHash: true,
+          },
+        }),
+      ).toEqual({
+        corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+        fulltext: null,
+        sections: null,
+        documentAst: null,
+        textS3Key: NEW_KEYS.textKey,
+        normalizedS3Key: NEW_KEYS.sectionsKey,
+        astS3Key: NEW_KEYS.astKey,
+        contentHash: NEW_CONTENT_HASH,
+      });
+    });
+
+    test("dual-write storage keeps the columns alongside the objects", async () => {
+      const caseNumber = `corpus-dual-${suffix}`;
+      const id = await insertDecision({
+        caseNumber,
+        mirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+      });
+
+      await storeBackfilledDocument({
+        decision: decisionFor(id, caseNumber),
+        document: parsedDocument,
+        mode: "dual-write",
+        scopedDb,
+        writeCorpus: async () => ({
+          ...NEW_KEYS,
+          contentHash: NEW_CONTENT_HASH,
+        }),
+      });
+
+      expect(
+        await db.query.caseLawDecisions.findFirst({
+          where: { id: { eq: id } },
+          columns: { fulltext: true, textS3Key: true, contentHash: true },
+        }),
+      ).toMatchObject({
+        fulltext: parsedDocument.fulltext,
+        textS3Key: NEW_KEYS.textKey,
+        contentHash: NEW_CONTENT_HASH,
+      });
+    });
+
+    /**
+     * The columns are dropped because object storage holds the payload, so
+     * a store with no corpus write behind it keeps them whatever the mode
+     * says: they are the only copy.
+     */
+    test("canonical storage with no corpus write keeps the columns", async () => {
+      const caseNumber = `corpus-canonical-nowrite-${suffix}`;
+      const id = await insertDecision({
+        caseNumber,
+        mirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+      });
+
+      await storeBackfilledDocument({
+        decision: decisionFor(id, caseNumber),
+        document: parsedDocument,
+        mode: "canonical",
+        scopedDb,
+        writeCorpus: null,
+      });
+
+      expect(
+        await db.query.caseLawDecisions.findFirst({
+          where: { id: { eq: id } },
+          columns: { fulltext: true, textS3Key: true, contentHash: true },
+        }),
+      ).toMatchObject({
+        fulltext: parsedDocument.fulltext,
+        textS3Key: null,
+        contentHash: null,
+      });
+    });
+
+    /**
+     * A corpus write that throws never reaches the row write at all, so the
+     * decision keeps its pending mirror and its empty columns — still
+     * queued, exactly as before this store ran.
+     */
+    test("canonical storage leaves the row untouched when the corpus write fails", async () => {
+      const caseNumber = `corpus-canonical-failed-${suffix}`;
+      const id = await insertDecision({
+        caseNumber,
+        mirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+      });
+
+      const failure = await storeBackfilledDocument({
+        decision: decisionFor(id, caseNumber),
+        document: parsedDocument,
+        mode: "canonical",
+        scopedDb,
+        writeCorpus: async () =>
+          await Promise.reject(new Error("bucket unreachable")),
+      }).then(
+        () => null,
+        (error: unknown) => error,
+      );
+
+      expect(failure).toBeInstanceOf(Error);
+      expect(
+        await db.query.caseLawDecisions.findFirst({
+          where: { id: { eq: id } },
+          columns: {
+            corpusMirrorStatus: true,
+            fulltext: true,
+            textS3Key: true,
+          },
+        }),
+      ).toMatchObject({
+        corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+        fulltext: null,
+        textS3Key: null,
+      });
+    });
+
     test("settles a legacy writer that cannot name the mirror status", async () => {
       const caseNumber = `corpus-legacy-writer-${suffix}`;
       const id = await insertDecision({

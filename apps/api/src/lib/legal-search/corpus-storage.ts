@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -12,6 +12,7 @@ import {
   zstdCompressAsync,
   zstdDecompressToStringBounded,
 } from "@/api/lib/compression";
+import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import { CorpusPayloadUnavailableError } from "@/api/lib/errors/tagged-errors";
 import {
   emptyAstSchema,
@@ -288,6 +289,80 @@ export const corpusMirrorColumns = (
     default: {
       const unhandled: never = state;
       return unhandled;
+    }
+  }
+};
+
+/** The three Postgres columns a decision's canonical payload occupies. */
+export type CorpusPayloadColumns = {
+  fulltext: string | null;
+  sections: DecisionSection[] | null;
+  documentAst: DocumentAst | EmptyAst | null;
+};
+
+/**
+ * Absent: how a corpus-served decision carries its payload columns.
+ *
+ * One definition, because four writers produce this state — the ingestion
+ * pipeline's mirror settlement, the deferred-document store, the corpus
+ * backfill and the operator column trim — and a hand-kept copy in any of
+ * them would let a column survive a cutover in one path and not another.
+ */
+export const TRIMMED_CORPUS_PAYLOAD_COLUMNS = {
+  fulltext: null,
+  sections: null,
+  documentAst: null,
+} as const satisfies CorpusPayloadColumns;
+
+/** What a settling write does with the Postgres payload columns. */
+export const CORPUS_PAYLOAD_DISPOSITIONS = [
+  /** Keep them: they are still what a read falls back to. */
+  "retain",
+  /** Null them: object storage is confirmed to hold the payload. */
+  "trim",
+] as const;
+
+export type CorpusPayloadDisposition =
+  (typeof CORPUS_PAYLOAD_DISPOSITIONS)[number];
+
+type CorpusPayloadDispositionOptions = {
+  mode: CorpusStorageMode;
+  /**
+   * The corpus write this settlement records, or null where nothing was
+   * written. Only a confirmed write may drop the columns: until object
+   * storage holds the payload, the columns are the whole of it.
+   */
+  written: WriteCorpusResult | null;
+};
+
+/**
+ * Whether a write that has just settled a decision's corpus mirror may
+ * drop the Postgres payload columns.
+ *
+ * Under `canonical` the columns are not a second copy, they are a stale
+ * one: reads are served from object storage, so a write path that keeps
+ * persisting them leaves the row in a state the deployed mode does not
+ * describe, and an external pass that nulls them can only ever chase the
+ * writers. Asking it here — once, off the storage mode and the write's
+ * own result — is what makes the write paths converge on their own.
+ *
+ * Failure semantics are unchanged: a corpus write that did not confirm
+ * carries `written: null`, and the columns stay exactly as the row
+ * transaction wrote them.
+ */
+export const corpusPayloadDisposition = ({
+  mode,
+  written,
+}: CorpusPayloadDispositionOptions): CorpusPayloadDisposition => {
+  switch (mode) {
+    case "off":
+    case "dual-write":
+      return "retain";
+    case "canonical":
+      return written === null ? "retain" : "trim";
+    default: {
+      const unhandled: never = mode;
+      return panic(`Unhandled corpus storage mode: ${String(unhandled)}`);
     }
   }
 };

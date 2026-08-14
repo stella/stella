@@ -39,6 +39,7 @@ import {
   readCorpusAst,
   readCorpusSections,
   readCorpusText,
+  TRIMMED_CORPUS_PAYLOAD_COLUMNS,
 } from "@/api/lib/legal-search/corpus-storage";
 import type {
   DecisionSection,
@@ -244,7 +245,7 @@ const trimRow = async (row: TrimRow): Promise<void> => {
     const applied = await ingestionDb(async (tx) => {
       const updated = await tx
         .update(caseLawDecisions)
-        .set({ fulltext: null, sections: null, documentAst: null })
+        .set(TRIMMED_CORPUS_PAYLOAD_COLUMNS)
         // Compare-and-set on the row state this scan read: a concurrent
         // ingestion refresh may have replaced the payload, in which case
         // the columns it just wrote are canonical and must survive.
