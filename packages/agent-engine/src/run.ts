@@ -45,6 +45,7 @@ const HARNESS_KEY_ENV = "STELLA_HARNESS_KEY";
 const HARNESS_PROVIDER_ID = "stella";
 const OPENAI_BASE_URL = "https://api.openai.com/v1";
 const STELLA_CODEX_HOME = `${STELLA_WORKSPACE_ROOT}/.codex`;
+const TRUSTED_MCP_TOOL_APPROVAL_MODE = '"approve"';
 
 const harnessBaseUrl = (input: StellaSandboxRunInput): string => {
   if (input.harnessProvider === "openai") {
@@ -67,10 +68,11 @@ export const buildCodexAdapterConfig = (input: StellaSandboxRunInput) => {
   const provider = HARNESS_PROVIDER_ID;
   return {
     // The outer TanStack/Docker sandbox is the real isolation boundary; codex
-    // may write within its workspace. Approval behavior is intentionally left
-    // to the Stella sandbox policy. Its `ask`/`deny` rules map to on-request;
-    // in non-interactive `codex exec`, approval-requiring actions fail closed.
-    // An adapter override would take precedence and bypass that mapping.
+    // may write within its workspace. Shell-command approval remains governed
+    // by the Stella sandbox policy: its `ask`/`deny` rules map to on-request,
+    // so approval-requiring commands fail closed in non-interactive `codex
+    // exec`. The trusted Stella MCP's tool approval is configured separately
+    // below; it does not alter command approval or network controls.
     sandboxMode: "workspace-write",
     env: {
       ...(input.mcp === SANDBOX_NO_MCP
@@ -86,6 +88,12 @@ export const buildCodexAdapterConfig = (input: StellaSandboxRunInput) => {
       [`model_providers.${provider}.base_url`]: `"${harnessBaseUrl(input)}"`,
       [`model_providers.${provider}.env_key`]: `"${HARNESS_KEY_ENV}"`,
       [`model_providers.${provider}.wire_api`]: `"responses"`,
+      ...(input.mcp === SANDBOX_NO_MCP
+        ? {}
+        : {
+            [`mcp_servers.${input.mcp.serverName}.default_tools_approval_mode`]:
+              TRUSTED_MCP_TOOL_APPROVAL_MODE,
+          }),
     },
   } as const satisfies CodexTextConfig;
 };
