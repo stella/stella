@@ -477,6 +477,7 @@
     "extractingContent": "جارٍ استخراج المحتوى...",
     "filePlaceholder": "تحدّث عن {fileName}",
     "filePlaceholderAction": "تحدّث عن",
+    "fileThreadRebound": "بدأت محادثة هذا الملف بالفعل في جلسة أخرى. تم الاحتفاظ برسالتك؛ أرسلها مرة أخرى.",
     "fileTooLarge": "يتجاوز الملف الحدّ المسموح به {maxSize}",
     "focusSuggestion": "اقتراح التركيز: {topic}",
     "folioCitationFallback": "ص {n}",

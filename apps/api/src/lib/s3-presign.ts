@@ -33,6 +33,7 @@ import { Result, TaggedError } from "better-result";
 
 import { envBase } from "@/api/env-base";
 import { contentDisposition } from "@/api/lib/content-disposition";
+import { detached } from "@/api/lib/detached";
 import { resolveS3Credentials } from "@/api/lib/s3";
 import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
 
@@ -102,6 +103,10 @@ const isAwsS3Endpoint = (endpoint: string): boolean => {
 type CachedClient = { client: AwsS3Client; createdAt: number };
 type CachedStsClient = { client: STSClient; createdAt: number };
 type CachedScopedClient = { client: AwsS3Client; expiresAt: number };
+type ScopedClientCacheEntry = {
+  cached?: CachedScopedClient;
+  promise: Promise<CachedScopedClient>;
+};
 export const S3_SIGNING_KEYSPACES = ["tenant", "exports"] as const;
 export type S3SigningKeyspace = (typeof S3_SIGNING_KEYSPACES)[number];
 
@@ -115,14 +120,17 @@ type KmsSigningAction = "kms:Decrypt" | "kms:GenerateDataKey";
 
 let _clientPromise: Promise<CachedClient> | null = null;
 let _stsClientPromise: Promise<CachedStsClient> | null = null;
-let _scopedClientPromises = new Map<string, Promise<CachedScopedClient>>();
+let _scopedClientCache = new Map<string, ScopedClientCacheEntry>();
 const CLIENT_MAX_AGE_MS = 50 * 60 * 1000;
 const SCOPED_SESSION_SECONDS = 3600;
 const SCOPED_CLIENT_REFRESH_SKEW_MS = 60 * 1000;
+/** Bound the process-wide STS client cache across organizations/workspaces. */
+export const SCOPED_CLIENT_CACHE_MAX_ENTRIES = 256;
 const AWS_SDK_REQUEST_TIMEOUT_MS = 30_000;
 const TEMP_UPLOAD_TAG_KEY = "stella-upload-stage";
 const TEMP_UPLOAD_TAG_VALUE = "tmp";
 const TEMP_UPLOAD_TAGGING = `${TEMP_UPLOAD_TAG_KEY}=${TEMP_UPLOAD_TAG_VALUE}`;
+const S3_GET_OBJECT_ACTION = "s3:GetObject" as const;
 
 const buildAwsS3Client = async (): Promise<CachedClient> => {
   const creds = await resolveS3Credentials();
@@ -211,6 +219,7 @@ const getStsClient = async (): Promise<STSClient> => {
 
 const shouldUseScopedSigning = (): boolean =>
   !!envBase.S3_SCOPED_SIGNING_ROLE_ARN && isAwsS3Endpoint(envBase.S3_ENDPOINT);
+let isScopedSigningEnabled = shouldUseScopedSigning;
 
 const s3SigningScopePrefix = ({
   keyspace = "tenant",
@@ -347,21 +356,74 @@ const buildScopedAwsS3Client = async (
   };
 };
 
+export type ScopedS3ClientFactory = typeof buildScopedAwsS3Client;
+let scopedS3ClientFactory: ScopedS3ClientFactory = buildScopedAwsS3Client;
+
+const disposeScopedClient = (entry: ScopedClientCacheEntry): void => {
+  detached(
+    entry.promise.then(({ client }) => client.destroy()),
+    "s3-presign.dispose-scoped-client",
+  );
+};
+
+const removeScopedClient = (
+  cacheKey: string,
+  entry: ScopedClientCacheEntry,
+): void => {
+  if (_scopedClientCache.get(cacheKey) !== entry) {
+    return;
+  }
+  _scopedClientCache.delete(cacheKey);
+  disposeScopedClient(entry);
+};
+
+/** Remove expired entries and enforce least-recently-used capacity. */
+const pruneScopedClientCache = (): void => {
+  for (const [cacheKey, entry] of _scopedClientCache) {
+    if (
+      entry.cached &&
+      !hasScopedSessionTimeForPresign({
+        expiresAt: entry.cached.expiresAt,
+        expiresIn: 0,
+      })
+    ) {
+      removeScopedClient(cacheKey, entry);
+    }
+  }
+
+  while (_scopedClientCache.size > SCOPED_CLIENT_CACHE_MAX_ENTRIES) {
+    const leastRecentlyUsed = _scopedClientCache.entries().next().value;
+    if (!leastRecentlyUsed) {
+      return;
+    }
+    const [cacheKey, entry] = leastRecentlyUsed;
+    removeScopedClient(cacheKey, entry);
+  }
+};
+
+const touchScopedClient = (
+  cacheKey: string,
+  entry: ScopedClientCacheEntry,
+): void => {
+  _scopedClientCache.delete(cacheKey);
+  _scopedClientCache.set(cacheKey, entry);
+};
+
 const getScopedAwsS3Client = async (
   scope: S3SigningScope,
   actions: readonly S3SigningAction[],
   expiresIn: number,
 ): Promise<AwsS3Client> => {
   const cacheKey = scopedClientCacheKey(scope, actions);
-  const existingPromise = _scopedClientPromises.get(cacheKey);
-  if (existingPromise) {
+  pruneScopedClientCache();
+  const existing = _scopedClientCache.get(cacheKey);
+  if (existing) {
+    touchScopedClient(cacheKey, existing);
     let cached: CachedScopedClient;
     try {
-      cached = await existingPromise;
+      cached = await existing.promise;
     } catch (error) {
-      if (_scopedClientPromises.get(cacheKey) === existingPromise) {
-        _scopedClientPromises.delete(cacheKey);
-      }
+      removeScopedClient(cacheKey, existing);
       throw error;
     }
     if (
@@ -369,20 +431,58 @@ const getScopedAwsS3Client = async (
     ) {
       return cached.client;
     }
+    removeScopedClient(cacheKey, existing);
   }
 
-  const nextPromise = buildScopedAwsS3Client(scope, actions).catch(
-    (error: unknown) => {
-      if (_scopedClientPromises.get(cacheKey) === nextPromise) {
-        _scopedClientPromises.delete(cacheKey);
-      }
-      throw error;
-    },
+  const entry: ScopedClientCacheEntry = {
+    promise: scopedS3ClientFactory(scope, actions),
+  };
+  entry.promise = entry.promise.catch((error: unknown) => {
+    removeScopedClient(cacheKey, entry);
+    throw error;
+  });
+  detached(
+    entry.promise.then((cached) => {
+      entry.cached = cached;
+      pruneScopedClientCache();
+      return undefined;
+    }),
+    "s3-presign.cache-entry-settled",
   );
-  _scopedClientPromises.set(cacheKey, nextPromise);
-  const built = await nextPromise;
+  _scopedClientCache.set(cacheKey, entry);
+  pruneScopedClientCache();
+  const built = await entry.promise;
   return built.client;
 };
+
+/** Test seam for cache lifecycle checks without enabling production STS mode. */
+export const getScopedAwsS3ClientForTesting = async ({
+  actions,
+  expiresIn,
+  scope,
+}: {
+  actions: readonly S3SigningAction[];
+  expiresIn: number;
+  scope: S3SigningScope;
+}): Promise<AwsS3Client> =>
+  await getScopedAwsS3Client(scope, actions, expiresIn);
+
+/** Test seam for deterministic scoped-client factory and cache assertions. */
+export const setScopedS3ClientFactoryForTesting = (
+  factory: ScopedS3ClientFactory,
+): void => {
+  scopedS3ClientFactory = factory;
+};
+
+/** Test seam for scoped-signing paths without mutating process environment. */
+export const setScopedSigningEnabledForTesting = (
+  predicate: () => boolean,
+): void => {
+  isScopedSigningEnabled = predicate;
+};
+
+export const getScopedClientCacheSizeForTesting = (): number =>
+  _scopedClientCache.size;
 
 const getTenantAwsS3Client = async ({
   actions,
@@ -398,7 +498,7 @@ const getTenantAwsS3Client = async ({
       message: "S3 key is outside the requested signing scope",
     });
   }
-  if (!shouldUseScopedSigning()) {
+  if (!isScopedSigningEnabled()) {
     return await getAwsS3Client();
   }
   return await getScopedAwsS3Client(scope, actions, 0);
@@ -535,7 +635,7 @@ const getPresignClient = async ({
   key: string;
   scope: S3SigningScope | undefined;
 }): Promise<AwsS3Client> => {
-  if (!shouldUseScopedSigning()) {
+  if (!isScopedSigningEnabled()) {
     return await getAwsS3Client();
   }
 
@@ -552,11 +652,50 @@ const getPresignClient = async ({
   return await getScopedAwsS3Client(scope, actions, expiresIn);
 };
 
+/**
+ * Longest presign expiry the warmed session must be able to cover. Matches
+ * the file-read expiry (`FILE_READ_URL_EXPIRY_SECONDS` in
+ * handlers/files/get.ts): a warmed session passes
+ * `hasScopedSessionTimeForPresign` for any presign up to this expiry.
+ */
+const PREWARM_PRESIGN_EXPIRES_IN_SECONDS = 15 * 60;
+
+/**
+ * Fire-and-forget warmup of a workspace's scoped download-signing session.
+ *
+ * Under scoped signing (AWS prod), the FIRST presign for a given
+ * organization/workspace scope pays a full STS AssumeRole round trip, which
+ * surfaced as a >1s TTFB tail on the first `GET /files/:id/url` after
+ * opening a workspace. Warming the session when the workspace is activated
+ * (see handlers/workspaces/update-active.ts) moves that round trip off the
+ * file-open path; the session is then cached for ~1h like any other scoped
+ * client. No-op when scoped signing is not configured. Callers run this
+ * detached and capture failures as telemetry — the real presign path keeps
+ * its own error handling either way.
+ */
+export const prewarmScopedDownloadSigning = async (
+  scope: S3SigningScope,
+): Promise<void> => {
+  if (!isScopedSigningEnabled()) {
+    return;
+  }
+  await getScopedAwsS3Client(
+    scope,
+    [S3_GET_OBJECT_ACTION],
+    PREWARM_PRESIGN_EXPIRES_IN_SECONDS,
+  );
+};
+
 /** Reset the cached client. Test seam; not used in prod. */
 export const resetAwsS3ClientForTesting = (): void => {
   _clientPromise = null;
   _stsClientPromise = null;
-  _scopedClientPromises = new Map();
+  for (const entry of _scopedClientCache.values()) {
+    disposeScopedClient(entry);
+  }
+  _scopedClientCache = new Map();
+  scopedS3ClientFactory = buildScopedAwsS3Client;
+  isScopedSigningEnabled = shouldUseScopedSigning;
   tenantS3OperationHooks = DEFAULT_TENANT_S3_OPERATION_HOOKS;
 };
 

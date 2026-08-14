@@ -480,6 +480,7 @@ type Messages = {
     "extractingContent": "Extracting content...";
     "filePlaceholder": "Chat about {fileName}";
     "filePlaceholderAction": "Chat about";
+    "fileThreadRebound": "This file's chat was started in another session. Your message was kept; send it again to continue there.";
     "fileTooLarge": "File exceeds {maxSize} limit";
     "focusSuggestion": "Focus suggestion: {topic}";
     "folioCitationFallback": "p. {n}";

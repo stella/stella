@@ -477,6 +477,7 @@
     "extractingContent": "Satura izgūšana...",
     "filePlaceholder": "Tērzēt par {fileName}",
     "filePlaceholderAction": "Tērzēt par",
+    "fileThreadRebound": "Šī faila tērzēšana jau ir sākta citā sesijā. Jūsu ziņojums tika saglabāts; nosūtiet to vēlreiz.",
     "fileTooLarge": "Fails pārsniedz {maxSize} ierobežojumu",
     "focusSuggestion": "Fokusēt ieteikumu: {topic}",
     "folioCitationFallback": "lpp. {n}",

@@ -10,6 +10,7 @@ import getThreadRecap from "@/api/handlers/chat/get-thread-recap";
 import getThreadTitle from "@/api/handlers/chat/get-thread-title";
 import getThreads from "@/api/handlers/chat/get-threads";
 import improvePrompt from "@/api/handlers/chat/improve-prompt";
+import readFileThread from "@/api/handlers/chat/read-file-thread";
 import renameThread from "@/api/handlers/chat/rename-thread";
 import resolveFileThread from "@/api/handlers/chat/resolve-file-thread";
 import resolveTemplateThread from "@/api/handlers/chat/resolve-template-thread";
@@ -40,6 +41,11 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
   .post("/workspaces/:workspaceId/file-thread", resolveFileThread.handler, {
     body: resolveFileThread.config.body,
     permissions: resolveFileThread.config.permissions,
+    validateWorkspaceAccess: true,
+  })
+  .get("/workspaces/:workspaceId/file-thread", readFileThread.handler, {
+    permissions: readFileThread.config.permissions,
+    query: readFileThread.config.query,
     validateWorkspaceAccess: true,
   })
   .post("/template-thread", resolveTemplateThread.handler, {

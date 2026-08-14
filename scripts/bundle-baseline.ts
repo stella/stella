@@ -69,6 +69,8 @@ const VENDOR_GROUPS = [
   "wasm-vendor",
   "vendor-graphs",
   "vendor-editor",
+  "vendor-icons",
+  "vendor-base-ui",
 ] as const;
 
 // The full, fixed set of baseline keys. Keeping it fixed (rather than "whatever
@@ -124,19 +126,23 @@ const classifyChunk = (
 // --- Measurement ------------------------------------------------------------
 
 // Spelled out (not built in a loop) so the object is type-checked against
-// Sizes without a cast; a new GROUP_KEYS entry fails compilation here.
+// Sizes without a cast; a new GROUP_KEYS entry fails compilation here. Keys
+// are alphabetical because this literal's order is also the committed JSON's
+// key order (see sortedSizes).
 const emptySizes = (): Sizes => ({
   entry: 0,
+  "largest-route": 0,
+  routes: 0,
+  total: 0,
+  "vendor-anonymize-data": 0,
+  "vendor-base-ui": 0,
+  "vendor-editor": 0,
+  "vendor-graphs": 0,
+  "vendor-icons": 0,
   "vendor-react": 0,
   "vendor-tanstack": 0,
   "vendor-tanstack-server-fn": 0,
-  "vendor-anonymize-data": 0,
   "wasm-vendor": 0,
-  "vendor-graphs": 0,
-  "vendor-editor": 0,
-  routes: 0,
-  "largest-route": 0,
-  total: 0,
 });
 
 const gzipSize = (absPath: string): number =>
@@ -186,21 +192,17 @@ const measure = (assetsDir: string): MeasureResult => {
 
 // --- Baseline IO ------------------------------------------------------------
 
-// Alphabetical key order keeps the committed JSON diff-stable. Spelled out for
-// the same no-cast reason as emptySizes.
-const sortedSizes = (sizes: Sizes): Sizes => ({
-  entry: sizes.entry,
-  "largest-route": sizes["largest-route"],
-  routes: sizes.routes,
-  total: sizes.total,
-  "vendor-anonymize-data": sizes["vendor-anonymize-data"],
-  "vendor-editor": sizes["vendor-editor"],
-  "vendor-graphs": sizes["vendor-graphs"],
-  "vendor-react": sizes["vendor-react"],
-  "vendor-tanstack": sizes["vendor-tanstack"],
-  "vendor-tanstack-server-fn": sizes["vendor-tanstack-server-fn"],
-  "wasm-vendor": sizes["wasm-vendor"],
-});
+// Copies every GROUP_KEYS value onto emptySizes' (alphabetical) literal, so
+// the written file's key set and order come from the one compiler-guarded
+// copy. A second spelled-out literal here once silently dropped keys the
+// checker knew about; a loop over GROUP_KEYS cannot.
+const sortedSizes = (sizes: Sizes): Sizes => {
+  const sorted = emptySizes();
+  for (const key of GROUP_KEYS) {
+    sorted[key] = sizes[key];
+  }
+  return sorted;
+};
 
 const writeBaseline = (sizes: Sizes): void => {
   writeFileSync(

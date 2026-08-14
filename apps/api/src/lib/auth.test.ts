@@ -11,6 +11,7 @@ import {
 import { member, organization, user } from "@/api/db/auth-schema";
 import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
 import {
+  AUTHORITATIVE_SESSION_PATHS,
   assertNewAccountEmailAllowedForCreation,
   ensureDisplayName,
   getEmailOtpMinimumResponseDuration,
@@ -21,7 +22,9 @@ import {
   NEW_ACCOUNT_OTP_RATE_LIMIT_MODE,
   runEmailOtpRequestOnResponseSchedule,
   resolveMemberAuthorization,
+  resolveAuthoritativeSessionForSensitiveAuthPath,
   resolveWorkspaceRealtimeAudience,
+  SESSION_COOKIE_CACHE_MAX_AGE_SECONDS,
   TWO_FACTOR_MANAGE_PATHS,
   withStellaTwoFactorSignInGate,
 } from "@/api/lib/auth";
@@ -408,6 +411,68 @@ describe("TWO_FACTOR_MANAGE_PATHS", () => {
   });
 });
 
+describe("resolveAuthoritativeSessionForSensitiveAuthPath", () => {
+  const sensitiveCtx = (path: string) => ({
+    path,
+    request: new Request(`http://localhost/api/auth${path}`),
+  });
+
+  test("loads storage-backed session state before OAuth authorization can mint a durable token", async () => {
+    const resolvedPaths: string[] = [];
+
+    const handled = await resolveAuthoritativeSessionForSensitiveAuthPath({
+      ctx: sensitiveCtx("/oauth2/authorize"),
+      resolveSession: async (ctx) => {
+        resolvedPaths.push(ctx.path);
+        return null;
+      },
+    });
+
+    expect(handled).toBe(true);
+    expect(resolvedPaths).toEqual(["/oauth2/authorize"]);
+  });
+
+  test("uses the same authoritative session boundary before two-factor rotation", async () => {
+    const resolvedPaths: string[] = [];
+
+    const handled = await resolveAuthoritativeSessionForSensitiveAuthPath({
+      ctx: sensitiveCtx("/two-factor/enable"),
+      resolveSession: async (ctx) => {
+        resolvedPaths.push(ctx.path);
+        return null;
+      },
+    });
+
+    expect(handled).toBe(true);
+    expect(resolvedPaths).toEqual(["/two-factor/enable"]);
+  });
+
+  test("keeps ordinary endpoints on the cookie-cache fast path", async () => {
+    let resolved = false;
+
+    expect(
+      await resolveAuthoritativeSessionForSensitiveAuthPath({
+        ctx: sensitiveCtx("/get-session"),
+        resolveSession: async () => {
+          resolved = true;
+          return null;
+        },
+      }),
+    ).toBe(false);
+    expect(resolved).toBe(false);
+  });
+
+  test("declares both OAuth code-flow endpoints as authoritative", () => {
+    expect(AUTHORITATIVE_SESSION_PATHS).toEqual(
+      new Set([
+        ...TWO_FACTOR_MANAGE_PATHS,
+        "/oauth2/authorize",
+        "/oauth2/consent",
+      ]),
+    );
+  });
+});
+
 describe("isSixDigitOtpBody", () => {
   test("accepts a body with a 6-digit string otp", () => {
     expect(isSixDigitOtpBody({ otp: "123456" })).toBe(true);
@@ -734,5 +799,20 @@ describe("session freshness", () => {
     // disabled. If it were re-exposed, relaxing freshAge would let an old
     // session unlink a provider. Keep these two decisions coupled.
     expect(getAuth().options.disabledPaths).toContain("/unlink-account");
+  });
+
+  test("session cookie cache stays enabled with its pinned revocation window", () => {
+    // The cookie cache is what keeps `getSession` off the database for the
+    // huge majority of API requests (see the `cookieCache` comment in
+    // auth.ts). Its `maxAge` is also the upper bound on how long a REVOKED
+    // session's already-issued cookie keeps working, so the window is a
+    // security decision, not a tuning knob: widen it deliberately, in both
+    // this test and the SESSION_COOKIE_CACHE_MAX_AGE_SECONDS constant,
+    // never by dependency-default drift (better-auth defaults to 300s).
+    expect(getAuth().options.session.cookieCache).toEqual({
+      enabled: true,
+      maxAge: SESSION_COOKIE_CACHE_MAX_AGE_SECONDS,
+    });
+    expect(SESSION_COOKIE_CACHE_MAX_AGE_SECONDS).toBe(60);
   });
 });

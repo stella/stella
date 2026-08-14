@@ -3,10 +3,11 @@ import { oauthProvider } from "@better-auth/oauth-provider";
 import type { BetterAuthPlugin, HookEndpointContext } from "better-auth";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import type { getSessionFromCtx } from "better-auth/api";
 import {
   APIError,
   createAuthMiddleware,
-  getSessionFromCtx,
+  getAuthoritativeSessionFromCtx,
 } from "better-auth/api";
 import {
   bearer,
@@ -336,6 +337,18 @@ export const TWO_FACTOR_MANAGE_PATHS = new Set([
   "/two-factor/get-totp-uri",
   "/two-factor/generate-backup-codes",
 ]);
+
+/**
+ * These endpoints can either mint durable OAuth credentials or change the
+ * account's second factor. They must never authorize from Better Auth's
+ * signed cookie snapshot: it deliberately trades a short revocation delay for
+ * ordinary-request performance. Resolve their session from storage instead.
+ */
+export const AUTHORITATIVE_SESSION_PATHS = new Set([
+  ...TWO_FACTOR_MANAGE_PATHS,
+  "/oauth2/authorize",
+  "/oauth2/consent",
+]);
 const SIX_DIGIT_OTP_PATTERN = /^\d{6}$/u;
 
 export const isSixDigitOtpBody = (body: unknown): body is { otp: string } =>
@@ -350,6 +363,47 @@ type TwoFactorManageSession = Awaited<ReturnType<typeof getSessionFromCtx>>;
 type RequireTwoFactorManageOtpArgs = {
   body: unknown;
   session: TwoFactorManageSession;
+};
+
+type SensitiveAuthPathContext = {
+  body?: unknown;
+  path?: string | undefined;
+  request?: Request | undefined;
+};
+type AuthoritativeSessionPathContext = SensitiveAuthPathContext & {
+  path: string;
+  request: Request;
+};
+/**
+ * Establish database-backed session state before a sensitive plugin endpoint
+ * runs. Better Auth's endpoint middleware reuses this context, so neither the
+ * OAuth authorization-code flow nor two-factor rotation can fall back to a
+ * signed cookie-cache snapshot.
+ */
+export const resolveAuthoritativeSessionForSensitiveAuthPath = async <
+  TContext extends SensitiveAuthPathContext,
+>({
+  ctx,
+  resolveSession,
+}: {
+  ctx: TContext;
+  resolveSession: (
+    ctx: TContext & AuthoritativeSessionPathContext,
+  ) => Promise<TwoFactorManageSession>;
+}): Promise<boolean> => {
+  const path = ctx.path;
+  if (path === undefined || !AUTHORITATIVE_SESSION_PATHS.has(path)) {
+    return false;
+  }
+  const request = ctx.request;
+  if (request === undefined) {
+    panic("Authoritative-session hook ran outside HTTP dispatch");
+  }
+  const session = await resolveSession({ ...ctx, path, request });
+  if (TWO_FACTOR_MANAGE_PATHS.has(path)) {
+    await requireTwoFactorManageOtp({ body: ctx.body, session });
+  }
+  return true;
 };
 
 /**
@@ -414,6 +468,14 @@ const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
 
 /** How often the session expiry is refreshed, in seconds (1 day). */
 const SESSION_UPDATE_AGE_SECONDS = 60 * 60 * 24;
+
+/**
+ * How long the signed session-cookie snapshot may satisfy `getSession`
+ * without touching the database. Bounds revocation latency: a revoked
+ * session's already-issued cookie stays valid for at most this long.
+ * Exported for the pinning invariant in `auth.test.ts`.
+ */
+export const SESSION_COOKIE_CACHE_MAX_AGE_SECONDS = 60;
 
 const { cookiePrefix, useSecureCookies } = authCookiePolicy();
 
@@ -763,6 +825,27 @@ const createAuth = () => {
       expiresIn: SESSION_LIFETIME_SECONDS,
       updateAge: SESSION_UPDATE_AGE_SECONDS,
       storeSessionInDatabase: true,
+      // Short-lived signed cookie cache for session resolution. Every API
+      // request runs `getSession` through `sessionAuthMacro` /
+      // `getSessionAndMemberAuthorization`, and without this cache each of
+      // those pays two session/user reads on the primary database — the
+      // single largest per-request DB cost in the network baseline's
+      // `x-db-queries` budgets. With the cache, a request whose signed
+      // cookie snapshot is younger than `maxAge` skips those reads
+      // entirely; the HMAC signature keeps the payload tamper-evident.
+      //
+      // Deliberate trade-off, kept narrow: a revoked session stays usable
+      // for up to SESSION_COOKIE_CACHE_MAX_AGE_SECONDS after revocation on
+      // clients that still hold the cached cookie. Authorization is NOT
+      // cached — member role and workspace access run live per request
+      // (`resolveMemberAuthorization`), so role demotion and workspace
+      // removal take effect immediately; only the identity snapshot rides
+      // the cache. Change the window deliberately: the `auth.test.ts`
+      // invariant pins it.
+      cookieCache: {
+        enabled: true,
+        maxAge: SESSION_COOKIE_CACHE_MAX_AGE_SECONDS,
+      },
       // Disable Better Auth's session-freshness gate. It defaults to 1 day
       // (`create-context.mjs`: `freshAge ?? 3600 * 24`) and compares against
       // `session.createdAt`, which `updateAge` never refreshes — so every
@@ -1195,15 +1278,13 @@ const createAuth = () => {
       before: createAuthMiddleware(async (ctx) => {
         await assertSelfhostEmailOtpAllowed(ctx.path);
 
-        if (TWO_FACTOR_MANAGE_PATHS.has(ctx.path)) {
-          if (ctx.request === undefined) {
-            panic("Two-factor management hook ran outside HTTP dispatch");
-          }
-          const session = await getSessionFromCtx({
-            ...ctx,
-            request: ctx.request,
-          });
-          await requireTwoFactorManageOtp({ body: ctx.body, session });
+        if (
+          await resolveAuthoritativeSessionForSensitiveAuthPath({
+            ctx,
+            resolveSession: async ({ path, request }) =>
+              await getAuthoritativeSessionFromCtx({ ...ctx, path, request }),
+          })
+        ) {
           return;
         }
 

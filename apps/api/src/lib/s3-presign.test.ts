@@ -14,16 +14,23 @@ import { getS3 } from "@/api/lib/s3";
 import {
   copyObject,
   createTenantS3RequestSignal,
+  getScopedAwsS3ClientForTesting,
+  getScopedClientCacheSizeForTesting,
   hasScopedSessionTimeForPresign,
   headObject,
   isS3KeyInSigningScope,
+  prewarmScopedDownloadSigning,
   presignDownloadUrl,
   presignUploadUrl,
   readTenantS3ArrayBuffer,
   resetAwsS3ClientForTesting,
+  SCOPED_CLIENT_CACHE_MAX_ENTRIES,
+  setScopedS3ClientFactoryForTesting,
+  setScopedSigningEnabledForTesting,
   setTenantS3OperationHooksForTesting,
   writeTenantS3Object,
 } from "@/api/lib/s3-presign";
+import type { S3SigningScope } from "@/api/lib/s3-presign";
 
 const sha256Base64 = (data: string): string =>
   new Bun.CryptoHasher("sha256").update(data).digest("base64");
@@ -227,6 +234,114 @@ describe("hasScopedSessionTimeForPresign", () => {
         now: 0,
       }),
     ).toBe(false);
+  });
+});
+
+describe("scoped S3 client cache", () => {
+  const client = new AwsS3Client({
+    credentials: {
+      accessKeyId: "test-access-key",
+      secretAccessKey: "test-secret-key",
+    },
+    region: "us-east-1",
+  });
+  const actions = ["s3:GetObject"] as const;
+
+  afterEach(() => {
+    resetAwsS3ClientForTesting();
+  });
+
+  test("bounds workspace sessions at the configured cache limit", async () => {
+    let builds = 0;
+    setScopedS3ClientFactoryForTesting(async () => {
+      builds += 1;
+      return {
+        client,
+        expiresAt: Date.now() + 60 * 60 * 1000,
+      };
+    });
+
+    await Promise.all(
+      Array.from(
+        { length: SCOPED_CLIENT_CACHE_MAX_ENTRIES + 1 },
+        async (_, index) =>
+          await getScopedAwsS3ClientForTesting({
+            actions,
+            expiresIn: 0,
+            scope: {
+              organizationId: `org_${index}`,
+              workspaceId: `workspace_${index}`,
+            },
+          }),
+      ),
+    );
+
+    expect(builds).toBe(SCOPED_CLIENT_CACHE_MAX_ENTRIES + 1);
+    expect(getScopedClientCacheSizeForTesting()).toBe(
+      SCOPED_CLIENT_CACHE_MAX_ENTRIES,
+    );
+  });
+
+  test("does not retain a session that cannot safely sign another request", async () => {
+    let builds = 0;
+    setScopedS3ClientFactoryForTesting(async () => {
+      builds += 1;
+      return {
+        client,
+        // This is inside the 60-second refresh skew, so it is unusable even
+        // for an immediate presign and must not stay resident.
+        expiresAt: Date.now() + 30_000,
+      };
+    });
+    const args = {
+      actions,
+      expiresIn: 0,
+      scope: { organizationId: "org_1", workspaceId: "workspace_1" },
+    };
+
+    await getScopedAwsS3ClientForTesting(args);
+    await getScopedAwsS3ClientForTesting(args);
+
+    expect(builds).toBe(2);
+    expect(getScopedClientCacheSizeForTesting()).toBe(0);
+  });
+
+  test("prewarms a workspace download scope and replaces a short-lived session", async () => {
+    const calls: { actions: readonly string[]; scope: S3SigningScope }[] = [];
+    setScopedSigningEnabledForTesting(() => true);
+    setScopedS3ClientFactoryForTesting(async (scope, requestedActions) => {
+      calls.push({ actions: requestedActions, scope });
+      return {
+        client,
+        // Too short for the 15-minute file-read presign horizon.
+        expiresAt: Date.now() + 10 * 60 * 1000,
+      };
+    });
+    const scope = { organizationId: "org_1", workspaceId: "workspace_1" };
+
+    await prewarmScopedDownloadSigning(scope);
+    await prewarmScopedDownloadSigning(scope);
+
+    expect(calls).toEqual([
+      { actions: ["s3:GetObject"], scope },
+      { actions: ["s3:GetObject"], scope },
+    ]);
+  });
+
+  test("does not create a client when scoped signing is disabled", async () => {
+    let builds = 0;
+    setScopedSigningEnabledForTesting(() => false);
+    setScopedS3ClientFactoryForTesting(async () => {
+      builds += 1;
+      return { client, expiresAt: Date.now() + 60 * 60 * 1000 };
+    });
+
+    await prewarmScopedDownloadSigning({
+      organizationId: "org_1",
+      workspaceId: "workspace_1",
+    });
+
+    expect(builds).toBe(0);
   });
 });
 

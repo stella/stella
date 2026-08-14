@@ -10,6 +10,10 @@
          Lives in /public so the strict frontend CSP doesn't need
          'unsafe-inline' or a hash. -->
     <script src="/prepaint-init.js"></script>
+    <!-- Tiny separate module graph: starts the session/role prefetch while
+         the main application graph is still downloading. Must stay ahead of
+         /src/main.tsx so it executes first. -->
+    <script type="module" src="/src/boot-prefetch.ts"></script>
     <script type="module">
       import { getStorageKey } from "/src/consts.ts";
 

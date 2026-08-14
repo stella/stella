@@ -17,6 +17,7 @@ import type {
 } from "@/lib/files/email-citations";
 import type { EmailBodyFold } from "@/lib/files/email-preview";
 import {
+  documentPropertiesQueryKey,
   fileContentQueryKey,
   fileMetadataQueryKey,
   filesQueryRoot,
@@ -319,6 +320,24 @@ export const readDocumentProperties = async ({
   }
   return parsed.output;
 };
+
+/**
+ * Shared by the metadata panel's subscriber and the document route loader.
+ * The loader-started fetch survives StrictMode's dev-only
+ * subscribe/unsubscribe churn (an observer-started fetch is aborted and
+ * refired), so the request runs exactly once per file.
+ */
+export const documentPropertiesOptions = ({
+  workspaceId,
+  fieldId,
+}: FileOptionsProps) =>
+  queryOptions({
+    gcTime: Number.POSITIVE_INFINITY,
+    queryKey: documentPropertiesQueryKey({ workspaceId, fieldId }),
+    queryFn: async ({ signal }) =>
+      await readDocumentProperties({ fieldId, signal, workspaceId }),
+    staleTime: Number.POSITIVE_INFINITY,
+  });
 
 export const updateDocumentProperty = async ({
   workspaceId,

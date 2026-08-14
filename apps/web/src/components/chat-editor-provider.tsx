@@ -127,6 +127,8 @@ export class ChatSubmitPreservedError extends TaggedError(
   "ChatSubmitPreservedError",
 )<{
   message: string;
+  /** A materialized thread can supersede the local draft id during submit. */
+  restoreThreadKey?: string;
 }> {}
 
 export type ChatInputMentionSource = {
@@ -1302,8 +1304,13 @@ export const useChatEditor = ({
       try {
         await send({ files, html });
       } catch (error) {
+        const restoreThreadKey =
+          ChatSubmitPreservedError.is(error) &&
+          error.restoreThreadKey !== undefined
+            ? error.restoreThreadKey
+            : threadKey;
         setDraft(
-          threadKey,
+          restoreThreadKey,
           createChatDraftState({
             attachments: files,
             doc,
@@ -1316,7 +1323,7 @@ export const useChatEditor = ({
           isApplyingStoredDraftRef.current = false;
           setIsEmpty(editor.isEmpty);
           if (!editor.isEmpty || files.length > 0) {
-            draftStartedThreadKeyRef.current = threadKey;
+            draftStartedThreadKeyRef.current = restoreThreadKey;
           }
         }
         throw error;

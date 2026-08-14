@@ -126,7 +126,10 @@ const recognize = async (
     .sort((a, b) => (ratios[a] ?? 0) - (ratios[b] ?? 0));
   const lines: (DocumentOcrLine | null)[] = boxes.map(() => null);
 
-  for (let start = 0; start < order.length; start += REC_BATCH_SIZE) {
+  const recognizeBatch = async (start: number): Promise<void> => {
+    if (start >= order.length) {
+      return;
+    }
     const batch = order.slice(start, start + REC_BATCH_SIZE);
     const maxRatio = Math.max(...batch.map((index) => ratios[index] ?? 1));
     const batchWidth = Math.min(
@@ -136,17 +139,20 @@ const recognize = async (
     const tensor = new Float32Array(
       batch.length * 3 * REC_INPUT_HEIGHT * batchWidth,
     );
-    for (let bi = 0; bi < batch.length; bi += 1) {
+    const packBatchCrop = async (bi: number): Promise<void> => {
+      if (bi >= batch.length) {
+        return;
+      }
       const boxIndex = batch[bi] ?? 0;
       const box = boxes[boxIndex];
       if (!box) {
-        continue;
+        await packBatchCrop(bi + 1);
+        return;
       }
       const cropWidth = Math.min(
         batchWidth,
         Math.max(1, Math.round(REC_INPUT_HEIGHT * (ratios[boxIndex] ?? 1))),
       );
-      // oxlint-disable-next-line no-await-in-loop -- crops are cut sequentially to keep one crop buffer in flight
       const crop = await sharp(page.data, {
         raw: { width: page.width, height: page.height, channels: 3 },
       })
@@ -166,8 +172,10 @@ const recognize = async (
         cropWidth,
         tensor,
       });
-    }
-    // oxlint-disable-next-line no-await-in-loop -- recognition batches run sequentially to bound tensor memory
+      await packBatchCrop(bi + 1);
+    };
+
+    await packBatchCrop(0);
     const output = await recSession.run({
       [recSession.inputNames[0] ?? "x"]: new ort.Tensor("float32", tensor, [
         batch.length,
@@ -219,7 +227,10 @@ const recognize = async (
         text,
       };
     }
-  }
+    await recognizeBatch(start + REC_BATCH_SIZE);
+  };
+
+  await recognizeBatch(0);
 
   const orderedBoxes = boxes
     .map((box, index) => ({ box, line: lines[index] }))
@@ -272,10 +283,14 @@ try {
   };
 
   const pages: DocumentOcrPage[] = [];
-  for (let index = 0; index < pageCount; index += 1) {
-    // oxlint-disable-next-line no-await-in-loop -- one page in flight at a time is the memory bound
+  const processPages = async (index: number): Promise<void> => {
+    if (index >= pageCount) {
+      return;
+    }
     pages.push(await processPage(index));
-  }
+    await processPages(index + 1);
+  };
+  await processPages(0);
   document.destroy();
   library.destroy();
 

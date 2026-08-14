@@ -477,6 +477,7 @@
     "extractingContent": "Extraction du contenu...",
     "filePlaceholder": "Discuter de {fileName}",
     "filePlaceholderAction": "Discuter de",
+    "fileThreadRebound": "La discussion sur ce fichier a déjà été lancée dans une autre session. Votre message a été conservé ; envoyez-le à nouveau.",
     "fileTooLarge": "Le fichier dépasse la limite de {maxSize}",
     "focusSuggestion": "Cibler la suggestion : {topic}",
     "folioCitationFallback": "p. {n}",

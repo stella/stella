@@ -477,6 +477,7 @@
     "extractingContent": "Sisu ekstraktimine...",
     "filePlaceholder": "Vestle teemal {fileName}",
     "filePlaceholderAction": "Vestle teemal",
+    "fileThreadRebound": "Selle faili vestlus alustati juba teises seansis. Teie sõnum säilitati; saatke see uuesti.",
     "fileTooLarge": "Fail ületab {maxSize} piirangu",
     "focusSuggestion": "Fookusta soovitus: {topic}",
     "folioCitationFallback": "lk {n}",

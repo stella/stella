@@ -31,10 +31,9 @@ import {
   agentAuthConfirmRoute,
   agentAuthRoute,
 } from "@/api/handlers/agent-auth/routes";
-import { getAuth } from "@/api/lib/auth";
 import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
-import { readDevOtp } from "@/api/lib/dev-otp-store";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
+import { createHumanSession as createHumanSessionWithJar } from "@/api/tests/helpers/human-session";
 import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
@@ -211,41 +210,12 @@ const decodeJwt = (jwt: string): Json => {
 };
 
 /** Create a verified user with a password-less email, plus an org. */
-const createHumanSession = async (email: string) => {
-  const auth = getAuth();
-  await auth.api.sendVerificationOTP({ body: { email, type: "sign-in" } });
-  const otp = readDevOtp(email);
-  if (!otp) {
-    throw new Error("dev OTP not stashed; is env.isDev true under test?");
-  }
-  const signInRes = await auth.api.signInEmailOTP({
-    body: { email, otp },
-    asResponse: true,
+const createHumanSession = async (email: string) =>
+  await createHumanSessionWithJar({
+    email,
+    orgName: "Existing Org",
+    orgSlugPrefix: "existing",
   });
-  const cookieHeader = (signInRes.headers.get("set-cookie") ?? "")
-    .split(",")
-    .map((part) => part.split(";").at(0)?.trim() ?? "")
-    .filter((part) => part.length > 0)
-    .join("; ");
-  const headers = new Headers({ cookie: cookieHeader });
-  const org = await auth.api.createOrganization({
-    body: { name: "Existing Org", slug: `existing-${Bun.randomUUIDv7()}` },
-    headers,
-  });
-  await auth.api.setActiveOrganization({
-    body: { organizationId: org.id },
-    headers,
-  });
-  const session = await auth.api.getSession({ headers });
-  if (!session?.user || !session.session.activeOrganizationId) {
-    throw new Error("session not active for org");
-  }
-  return {
-    cookieHeader,
-    userId: session.user.id,
-    organizationId: session.session.activeOrganizationId,
-  };
-};
 
 describe("agent-auth ID-JAG dark-launch gate", () => {
   test("identity_assertion is rejected when the feature flag is off", async () => {

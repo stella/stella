@@ -22,7 +22,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 import { documentPropertiesQueryKey } from "@/lib/files/file-metadata-query.logic";
 import {
-  readDocumentProperties,
+  documentPropertiesOptions,
   updateDocumentProperty,
 } from "@/lib/files/queries";
 import { formatFullTimestamp } from "@/lib/relative-time";
@@ -108,20 +108,12 @@ export const DocumentPropertiesSection = ({
   const t = useTranslations();
   const format = useFormatter();
   const [isAllOpen, setIsAllOpen] = useState(false);
-  const { data, isPending, isError } = useQuery({
-    gcTime: Number.POSITIVE_INFINITY,
-    queryKey: documentPropertiesQueryKey({
+  const { data, isPending, isError } = useQuery(
+    documentPropertiesOptions({
       workspaceId,
       fieldId: fileFieldId,
     }),
-    queryFn: async ({ signal }) =>
-      await readDocumentProperties({
-        fieldId: fileFieldId,
-        signal,
-        workspaceId,
-      }),
-    staleTime: Number.POSITIVE_INFINITY,
-  });
+  );
 
   if (isPending) {
     return <Message>{t("common.loading")}</Message>;

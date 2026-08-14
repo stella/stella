@@ -67,7 +67,7 @@ import {
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
-import { fileOptions } from "@/lib/files/queries";
+import { documentPropertiesOptions, fileOptions } from "@/lib/files/queries";
 import {
   PDFProvider,
   usePDFStore,
@@ -206,6 +206,26 @@ export const Route = createFileRoute(
           docxSuggestionsOptions({
             workspaceId: params.workspaceId,
             entityId: deps.entity,
+          }),
+          (error: unknown) => {
+            getAnalytics().captureError(error);
+          },
+        ),
+        "document.prefetch",
+      );
+    }
+
+    // The inspector's metadata facet is the document route's default, so its
+    // document-properties read always fires on open. Loader-started, the
+    // request runs exactly once; observer-started it lands inside StrictMode's
+    // dev-only subscribe churn and fires an aborted duplicate.
+    if (field?.content.type === "file") {
+      detached(
+        prefetchRouteQuery(
+          context.queryClient,
+          documentPropertiesOptions({
+            workspaceId: params.workspaceId,
+            fieldId: deps.field,
           }),
           (error: unknown) => {
             getAnalytics().captureError(error);

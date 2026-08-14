@@ -43,7 +43,11 @@ import type {
   DocxEditRepresentation,
 } from "@/lib/chat-edit-mode";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
-import { getChatThreadKey, toChatThreadId } from "@/lib/chat-thread-ref";
+import {
+  createChatThreadId,
+  getChatThreadKey,
+  toChatThreadId,
+} from "@/lib/chat-thread-ref";
 import { STALE_TIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
@@ -574,11 +578,14 @@ const fetchGroupedChatThreads = async ({
 };
 
 type FileChatThreadFetchResult = {
-  threadId: ChatThreadId;
+  /** Null when no thread exists for this file yet; the query layer then
+   *  mounts a local draft and the thread is materialized on first send. */
+  threadId: ChatThreadId | null;
   /** The rest mirror `ChatThreadFetched` so the initial message page the
-   *  POST resolved (see `resolve-file-thread.ts`) can seed
-   *  `chatThreadOptions`' cache directly, collapsing the POST -> GET
-   *  /messages waterfall into one round trip. */
+   *  server already loaded (see `read-file-thread.ts` /
+   *  `resolve-file-thread.ts`) can seed `chatThreadOptions`' cache
+   *  directly, collapsing the lookup -> GET /messages waterfall into one
+   *  round trip. */
   messages: PersistedChatMessage[];
   olderCursor: string | null;
   contextMatterIds: string[];
@@ -593,6 +600,9 @@ type FileChatThreadFetchResult = {
   context: ChatContextUsage | null;
 };
 
+/** Read-only lookup a document open issues: never creates threads, mapping
+ *  rows, or audit records (that write path runs once, in
+ *  `materializeFileChatThread` below, when the first message is sent). */
 const fetchFileChatThread = async ({
   entityId,
   fieldId,
@@ -600,21 +610,23 @@ const fetchFileChatThread = async ({
 }: FileChatThreadKey): Promise<FileChatThreadFetchResult> => {
   const response = await api.chat
     .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-    ["file-thread"].post({
-      entityId: toSafeId<"entity">(entityId),
-      fieldId: toSafeId<"field">(fieldId),
+    ["file-thread"].get({
+      query: {
+        entityId: toSafeId<"entity">(entityId),
+        fieldId: toSafeId<"field">(fieldId),
+      },
     });
 
   const data = unwrapEden(response);
 
   return {
-    threadId: toChatThreadId(data.threadId),
+    threadId: data.threadId === null ? null : toChatThreadId(data.threadId),
     messages: data.messages,
     olderCursor: data.olderCursor,
     contextMatterIds: data.contextMatterIds,
     lastActivityAt: data.lastActivityAt,
     threadRevision: null,
-    threadExists: true,
+    threadExists: data.threadId !== null,
     usedAnonymization: data.usedAnonymization,
     webSearchAvailable: data.webSearchAvailable,
     webSearchEnabled: data.webSearchEnabled,
@@ -1700,6 +1712,68 @@ const stubHandleActiveDocxEditToolCall = (
  *  "active-file" the same way the real overlay's context does. */
 const stubGetActiveFile = (): undefined => undefined;
 
+/** The thread identity `fileChatThreadOptions` resolves. `threadExists`
+ *  false means `threadId` is a local draft id: the overlay must call
+ *  `materializeFileChatThread` before its first send persists anything. */
+export type FileChatThreadBinding = {
+  threadId: ChatThreadId;
+  threadExists: boolean;
+};
+
+/** Seed `chatThreadOptions`' pure-data cache with a message page the
+ *  file-thread lookup already loaded server-side, so the overlay's own
+ *  useSuspenseQuery(chatThreadOptions(...)) right after resolves from cache
+ *  instead of firing a second GET /messages. */
+const seedFileThreadMessageCache = ({
+  activeOrganizationId,
+  client,
+  fetched,
+  hasDocxEditSurface,
+  threadId,
+  workspaceId,
+}: {
+  activeOrganizationId: string;
+  client: QueryClient;
+  fetched: Omit<FileChatThreadFetchResult, "threadId">;
+  hasDocxEditSurface: boolean;
+  threadId: ChatThreadId;
+  workspaceId: string;
+}): void => {
+  const threadRef: ChatThreadRef = {
+    scope: "workspace",
+    threadId,
+    workspaceId,
+  };
+  const stubContext: ChatThreadOptionsContext = hasDocxEditSurface
+    ? {
+        allowMissingThread: true,
+        handleActiveDocxEditToolCall: stubHandleActiveDocxEditToolCall,
+      }
+    : { allowMissingThread: true, getActiveFile: stubGetActiveFile };
+
+  client.setQueryData(
+    chatThreadOptions({
+      activeOrganizationId,
+      key: threadRef,
+      context: stubContext,
+    }).queryKey,
+    {
+      messages: sanitizeRunningToolCalls(fetched.messages),
+      olderCursor: fetched.olderCursor,
+      contextMatterIds: fetched.contextMatterIds,
+      lastActivityAt: fetched.lastActivityAt,
+      threadRevision: fetched.threadRevision,
+      threadExists: fetched.threadExists,
+      usedAnonymization: fetched.usedAnonymization,
+      webSearchAvailable: fetched.webSearchAvailable,
+      webSearchEnabled: fetched.webSearchEnabled,
+      model: fetched.model,
+      reasoningEffort: fetched.reasoningEffort,
+      context: fetched.context,
+    },
+  );
+};
+
 export const fileChatThreadOptions = ({
   activeOrganizationId,
   key,
@@ -1710,51 +1784,108 @@ export const fileChatThreadOptions = ({
     staleTime: STALE_TIME.FIVETEEN.MINUTES,
     gcTime: STALE_TIME.FIVETEEN.MINUTES,
     queryKey: chatKeys.fileThread(activeOrganizationId, key),
-    queryFn: async ({ client }) => {
+    queryFn: async ({ client }): Promise<FileChatThreadBinding> => {
       const fetched = await fetchFileChatThread(key);
 
-      // Seed chatThreadOptions' pure-data cache with the message page this
-      // POST already loaded server-side (see resolve-file-thread.ts), so the
-      // overlay's own useSuspenseQuery(chatThreadOptions(...)) right after
-      // this resolves from cache instead of firing a second GET /messages —
-      // collapsing the POST -> GET waterfall into one round trip.
-      const threadRef: ChatThreadRef = {
-        scope: "workspace",
-        threadId: fetched.threadId,
-        workspaceId: key.workspaceId,
-      };
-      const stubContext: ChatThreadOptionsContext = hasDocxEditSurface
-        ? {
-            allowMissingThread: true,
-            handleActiveDocxEditToolCall: stubHandleActiveDocxEditToolCall,
-          }
-        : { allowMissingThread: true, getActiveFile: stubGetActiveFile };
-
-      client.setQueryData(
-        chatThreadOptions({
-          activeOrganizationId,
-          key: threadRef,
-          context: stubContext,
-        }).queryKey,
-        {
-          messages: sanitizeRunningToolCalls(fetched.messages),
-          olderCursor: fetched.olderCursor,
-          contextMatterIds: fetched.contextMatterIds,
-          lastActivityAt: fetched.lastActivityAt,
-          threadRevision: fetched.threadRevision,
-          threadExists: fetched.threadExists,
-          usedAnonymization: fetched.usedAnonymization,
-          webSearchAvailable: fetched.webSearchAvailable,
-          webSearchEnabled: fetched.webSearchEnabled,
-          model: fetched.model,
-          reasoningEffort: fetched.reasoningEffort,
-          context: fetched.context,
-        },
+      // No thread yet: mount the overlay on a local draft id (same pattern
+      // as a fresh /chat/new thread). Nothing is persisted until the first
+      // send calls `materializeFileChatThread` with this same id. A refetch
+      // must reuse the draft id already bound for this key: the composer
+      // keys its unsent draft on the thread id, so minting a fresh one here
+      // would remount the overlay and orphan typed-but-unsent text.
+      const previous = client.getQueryData<FileChatThreadBinding>(
+        chatKeys.fileThread(activeOrganizationId, key),
       );
+      const threadId =
+        fetched.threadId ??
+        (previous !== undefined && !previous.threadExists
+          ? previous.threadId
+          : createChatThreadId());
 
-      return fetched.threadId;
+      seedFileThreadMessageCache({
+        activeOrganizationId,
+        client,
+        fetched,
+        hasDocxEditSurface,
+        threadId,
+        workspaceId: key.workspaceId,
+      });
+
+      return { threadId, threadExists: fetched.threadId !== null };
     },
   });
+
+type MaterializeFileChatThreadArgs = {
+  activeOrganizationId: string;
+  client: QueryClient;
+  /** The draft id the overlay is mounted on; the server persists the thread
+   *  under this exact id in the common case, so the runtime never rebinds. */
+  draftThreadId: ChatThreadId;
+  hasDocxEditSurface: boolean;
+  key: FileChatThreadKey;
+};
+
+/**
+ * Persist the file's chat thread (thread row + file mapping, audited) via
+ * the materializing POST. Runs once, from the overlay's first send; a
+ * repeat call is a server-side get-or-create and converges on the same
+ * thread. Returns the persisted binding, which normally carries
+ * `draftThreadId` itself; a different id means another session materialized
+ * the same file's thread first, and the caches are updated to rebind the
+ * overlay to it.
+ */
+export const materializeFileChatThread = async ({
+  activeOrganizationId,
+  client,
+  draftThreadId,
+  hasDocxEditSurface,
+  key,
+}: MaterializeFileChatThreadArgs): Promise<FileChatThreadBinding> => {
+  const response = await api.chat
+    .workspaces({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
+    ["file-thread"].post({
+      entityId: toSafeId<"entity">(key.entityId),
+      fieldId: toSafeId<"field">(key.fieldId),
+      threadId: toSafeId<"chatThread">(draftThreadId),
+    });
+
+  const data = unwrapEden(response);
+  const threadId = toChatThreadId(data.threadId);
+  const binding: FileChatThreadBinding = { threadId, threadExists: true };
+
+  client.setQueryData(
+    fileChatThreadOptions({ activeOrganizationId, key, hasDocxEditSurface })
+      .queryKey,
+    binding,
+  );
+  if (threadId !== draftThreadId) {
+    // Rebinding to a concurrently-created thread: seed its real message
+    // page so the overlay remounts with that thread's history.
+    seedFileThreadMessageCache({
+      activeOrganizationId,
+      client,
+      fetched: {
+        messages: data.messages,
+        olderCursor: data.olderCursor,
+        contextMatterIds: data.contextMatterIds,
+        lastActivityAt: data.lastActivityAt,
+        threadRevision: null,
+        threadExists: true,
+        usedAnonymization: data.usedAnonymization,
+        webSearchAvailable: data.webSearchAvailable,
+        webSearchEnabled: data.webSearchEnabled,
+        model: data.model,
+        reasoningEffort: data.reasoningEffort,
+        context: data.context,
+      },
+      hasDocxEditSurface,
+      threadId,
+      workspaceId: key.workspaceId,
+    });
+  }
+
+  return binding;
+};
 
 type TemplateChatThreadOptionsArgs = {
   activeOrganizationId: string;
