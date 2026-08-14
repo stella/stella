@@ -236,6 +236,7 @@ export const BYOK_MODEL_OPTIONS = {
   ],
   openai: [
     "gpt-5.6",
+    "gpt-5.6-luna",
     "gpt-5.5",
     "gpt-5.4",
     "gpt-5.4-mini",
@@ -392,6 +393,7 @@ export const MODEL_DISPLAY_METADATA = {
     iconProvider: "anthropic",
   },
   "gpt-5.6": { displayName: "GPT-5.6", iconProvider: "openai" },
+  "gpt-5.6-luna": { displayName: "GPT-5.6 Luna", iconProvider: "openai" },
   "gpt-5.5": { displayName: "GPT-5.5", iconProvider: "openai" },
   "gpt-5.4": { displayName: "GPT-5.4", iconProvider: "openai" },
   "gpt-5.4-mini": {
@@ -565,6 +567,7 @@ const STELLA_EXTENDED_DOCUMENT_INPUT_MODEL_OPTIONS = {
   google: ["gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"],
   openai: [
     "gpt-5.6",
+    "gpt-5.6-luna",
     "gpt-5.5",
     "gpt-5.4",
     "gpt-5.4-mini",
@@ -1089,6 +1092,12 @@ export const MODEL_RATES = {
       cachedInputPerMTok: 100_000,
     },
   },
+  "gpt-5.6-luna": {
+    kind: "flat",
+    inputPerMTok: 50_000,
+    outputPerMTok: 300_000,
+    cachedInputPerMTok: 5_000,
+  },
   "claude-haiku-4-5-20251001": {
     kind: "flat",
     inputPerMTok: 100_000,
@@ -1239,6 +1248,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "gpt-5.4": 400_000,
   "gpt-5.5": 400_000,
   "gpt-5.6": 922_000,
+  "gpt-5.6-luna": 922_000,
   // Anthropic Claude: 200K through Claude 4; Sonnet 5 and Opus 5 expose 1M.
   "claude-haiku-4-5-20251001": 200_000,
   "claude-sonnet-4-6": 200_000,
