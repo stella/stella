@@ -2,6 +2,7 @@
   "extends": "@stll/typescript-config/base.json",
   "compilerOptions": {
     "allowImportingTsExtensions": true,
+    "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.tooling.json",
     "types": ["bun"]
   },
   "include": [

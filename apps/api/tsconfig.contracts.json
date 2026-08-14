@@ -1,4 +1,7 @@
 {
   "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.contracts.json"
+  },
   "include": ["contracts", "../../types"]
 }

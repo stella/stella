@@ -1,6 +1,7 @@
 {
   "extends": "@stll/typescript-config/base.json",
   "compilerOptions": {
+    "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.scripts.json",
     "paths": {
       "@/api/*": ["./apps/api/src/*"]
     },

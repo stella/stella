@@ -18,6 +18,7 @@
 import { panic } from "better-result";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const TSC_NATIVE = "packages/scripts/src/tsc-native.ts";
@@ -25,6 +26,14 @@ const WORKSPACE_PARENTS = ["apps", "packages"] as const;
 const EXEMPT_PREFIXES = [".oxlint-plugins/__fixtures__/"] as const;
 const CONVENTIONAL_TSCONFIG = "tsconfig.json";
 const ROOT_TSCONFIG = "tsconfig.json";
+const TURBO_CONFIG = "turbo.json";
+const TYPECHECK_CACHE_OUTPUTS = [
+  ".cache/tsbuildinfo*.json",
+  "**/.cache/tsbuildinfo*.json",
+] as const;
+// Astro remains on its isolated TypeScript 6 checker. It does not invoke the
+// native compiler or produce a build-info file for Turbo to restore.
+const INCREMENTAL_EXEMPT_PROJECTS = new Set(["apps/landing/tsconfig.json"]);
 // apps/web/public contains intentionally untyped static browser assets outside
 // the combined Oxc target.
 const OXC_DISCOVERY_EXEMPT_PREFIXES = ["apps/web/public/"] as const;
@@ -34,6 +43,11 @@ const PROJECT_ARGUMENT =
 type OxcProjectProxy = {
   config: string;
   target: string;
+};
+
+type ProjectBuildInfo = {
+  buildInfoFile: string;
+  project: string;
 };
 
 // Oxc discovers only tsconfig.json files while walking up from a source file.
@@ -247,6 +261,118 @@ const readJsonObject = (file: string): Record<string, unknown> => {
     );
   }
   return parsed;
+};
+
+const readCompilerOptions = (project: string): ts.CompilerOptions => {
+  const configFile = path.join(REPO_ROOT, project);
+  const read = ts.readConfigFile(configFile, (file) => ts.sys.readFile(file));
+  if (read.error) {
+    panic(ts.flattenDiagnosticMessageText(read.error.messageText, "\n"));
+  }
+  const parsed = ts.parseJsonConfigFileContent(
+    read.config,
+    ts.sys,
+    path.dirname(configFile),
+    undefined,
+    configFile,
+  );
+  if (parsed.errors.length > 0) {
+    panic(
+      `${project} is invalid:\n${parsed.errors
+        .map((error) =>
+          ts.flattenDiagnosticMessageText(error.messageText, "\n"),
+        )
+        .join("\n")}`,
+    );
+  }
+  return parsed.options;
+};
+
+const duplicateBuildInfoErrors = (projects: ProjectBuildInfo[]): string[] => {
+  const owners = new Map<string, string>();
+  const errors: string[] = [];
+  for (const { buildInfoFile, project } of projects) {
+    const owner = owners.get(buildInfoFile);
+    if (owner) {
+      errors.push(
+        `${project} and ${owner} share ${normalizeRepoPath(path.relative(REPO_ROOT, buildInfoFile))}`,
+      );
+      continue;
+    }
+    owners.set(buildInfoFile, project);
+  }
+  return errors;
+};
+
+const incrementalProjectErrors = (projects: string[]): string[] => {
+  const buildInfoFiles: ProjectBuildInfo[] = [];
+  const errors: string[] = [];
+  for (const project of projects) {
+    if (INCREMENTAL_EXEMPT_PROJECTS.has(project)) {
+      continue;
+    }
+    const options = readCompilerOptions(project);
+    if (options.incremental !== true) {
+      errors.push(`${project} must enable incremental compilation`);
+      continue;
+    }
+
+    const buildInfoFile = options.tsBuildInfoFile;
+    if (typeof buildInfoFile !== "string") {
+      errors.push(`${project} must set tsBuildInfoFile to a string path`);
+      continue;
+    }
+    const relativeBuildInfo = normalizeRepoPath(
+      path.relative(REPO_ROOT, buildInfoFile),
+    );
+    if (!/(?:^|\/)\.cache\/tsbuildinfo[^/]*\.json$/u.test(relativeBuildInfo)) {
+      errors.push(
+        `${project} stores incremental state outside a .cache/tsbuildinfo*.json path: ${relativeBuildInfo}`,
+      );
+    }
+    buildInfoFiles.push({ buildInfoFile, project });
+  }
+  errors.push(...duplicateBuildInfoErrors(buildInfoFiles));
+  return errors;
+};
+
+const turboTypecheckOutputErrors = (): string[] => {
+  const turbo = readJsonObject(path.join(REPO_ROOT, TURBO_CONFIG));
+  const tasks = turbo["tasks"];
+  const typecheck = isRecord(tasks) ? tasks["typecheck"] : undefined;
+  const outputs = isRecord(typecheck) ? typecheck["outputs"] : undefined;
+  if (
+    !Array.isArray(outputs) ||
+    !outputs.every((entry) => typeof entry === "string")
+  ) {
+    return [`${TURBO_CONFIG} typecheck.outputs must be a string array`];
+  }
+
+  const expected = new Set<string>(TYPECHECK_CACHE_OUTPUTS);
+  const actual = new Set(outputs);
+  const errors: string[] = [];
+  for (const output of expected) {
+    if (!actual.has(output)) {
+      errors.push(`${TURBO_CONFIG} typecheck.outputs is missing ${output}`);
+    }
+  }
+  for (const output of actual) {
+    if (!expected.has(output)) {
+      errors.push(`${TURBO_CONFIG} typecheck.outputs has unexpected ${output}`);
+    }
+  }
+  return errors;
+};
+
+const assertIncrementalProjectConfigs = (projects: string[]): void => {
+  const errors = [
+    ...incrementalProjectErrors(projects),
+    ...turboTypecheckOutputErrors(),
+  ];
+  assert(
+    errors.length === 0,
+    `TypeScript incremental configuration failed:\n${errors.join("\n")}`,
+  );
 };
 
 const assertRootConfigIsEmpty = (): void => {
@@ -490,6 +616,28 @@ const selfTest = (): void => {
     "must discover supplemental typecheck projects",
   );
 
+  const duplicateCacheErrors = duplicateBuildInfoErrors([
+    {
+      buildInfoFile: path.join(
+        REPO_ROOT,
+        "apps/example/.cache/tsbuildinfo.json",
+      ),
+      project: "apps/example/tsconfig.json",
+    },
+    {
+      buildInfoFile: path.join(
+        REPO_ROOT,
+        "apps/example/.cache/tsbuildinfo.json",
+      ),
+      project: "apps/example/tsconfig.test.json",
+    },
+  ]);
+  assert(
+    duplicateCacheErrors.length === 1 &&
+      duplicateCacheErrors[0]?.includes("tsconfig.test.json") === true,
+    "must reject TypeScript projects that share incremental state",
+  );
+
   const unaccountedProjectErrors = projectAccountingErrors(
     ["apps/example/tsconfig.json", "apps/example/tsconfig.extra.json"],
     [],
@@ -626,6 +774,7 @@ const main = (): void => {
 
   const projects = typecheckProjects();
   assertOxcProjectDiscovery(projects);
+  assertIncrementalProjectConfigs(projects);
   const repositoryFiles = repositoryTypeScriptFiles();
   const oxcFiles = repositoryOxcFiles();
   const filesByProject = coveredFilesByProject(projects);
