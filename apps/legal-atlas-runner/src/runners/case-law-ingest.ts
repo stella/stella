@@ -42,7 +42,11 @@ import {
 } from "@/api/handlers/case-law/ingestion/source-totals";
 import { backfillLegislationCorpusIndex } from "@/api/handlers/legislation/corpus-index";
 import { backfillLegislationSearchIndex } from "@/api/handlers/legislation/search-index";
-import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import { captureError } from "@/api/lib/analytics/capture";
+import {
+  IngestionStallError,
+  TimeoutError,
+} from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { backfillSearchIndex } from "@/api/lib/legal-search/case-law-search-index";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
@@ -93,8 +97,11 @@ import {
   type CycleOutcome,
   type CycleResult,
   INITIAL_CADENCE_STREAKS,
+  INITIAL_STALL_ALERT,
+  type StallAlertState,
   cycleMadeProgress,
   stepCadence,
+  stepStallAlert,
 } from "./cycle-progress";
 import {
   RECOMPUTE_OUTCOME,
@@ -828,13 +835,8 @@ const runOneCycle = async (
  */
 
 const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
-  /**
-   * Consecutive cycles that advanced no page, whatever their outcome (see
-   * `cycleMadeProgress`). A single streak so an adapter alternating between
-   * stall shapes, each of which would otherwise reset the other's counter,
-   * still reaches the sustained-failure alert.
-   */
-  let noProgressStreak = 0;
+  /** Stall streak plus the once-per-episode capture latch; see cycle-progress. */
+  let stallAlert: StallAlertState = INITIAL_STALL_ALERT;
   /** Separate counter for backoff; not reset by the alert threshold. */
   let backoffFailures = 0;
   /** Quiet and unproductive streaks; drive the inter-cycle delay. */
@@ -846,6 +848,8 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
       return;
     }
     let leaseBusy = false;
+    /** Null when the cycle never ran (lease busy), so it folds no evidence. */
+    let progressVerdict: boolean | null = null;
     try {
       // Bound concurrent cycles: the fetch/enrich/parse phase runs outside
       // the DB-write slot, so without this every source crawls its backlog
@@ -894,7 +898,7 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
         // A stall is a cycle that advanced no page, whatever its outcome; a halt
         // or a timeout that still walked pages moved the cursor.
         const madeProgress = cycleMadeProgress(cycle);
-        noProgressStreak = madeProgress ? 0 : noProgressStreak + 1;
+        progressVerdict = madeProgress;
 
         if (outcome === CYCLE_OUTCOME.FAILED && !madeProgress) {
           backoffFailures++;
@@ -921,7 +925,7 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
       }
     } catch (error) {
       // A thrown cycle made no forward progress either.
-      noProgressStreak++;
+      progressVerdict = false;
       backoffFailures++;
       const msg = error instanceof Error ? error.message : String(error);
       if (isTransientConnectionError(error)) {
@@ -931,17 +935,35 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
       }
     }
 
-    // A run of cycles that advanced no page means the source is stalled;
-    // surface it on the sustained-failure metric.
-    if (noProgressStreak >= SUSTAINED_FAILURE_THRESHOLD) {
-      logger.error("case_law.ingestion.sustained_failure", {
-        adapterKey,
-        noProgressStreak,
-      });
-      // Reset to avoid flooding; backoffFailures stays high so the delay
-      // doesn't collapse. The value is read again at the top of the next
-      // iteration (`noProgressStreak + 1`).
-      noProgressStreak = 0;
+    // A run of cycles that advanced no page means the source is stalled.
+    // The log signal re-fires every threshold-worth of stalled cycles; the
+    // exception capture fires once per episode, when it begins, so a source
+    // outage reaches error tracking as one alert instead of one event per
+    // failed fetch.
+    if (progressVerdict !== null) {
+      const stall = stepStallAlert(
+        stallAlert,
+        progressVerdict,
+        SUSTAINED_FAILURE_THRESHOLD,
+      );
+      stallAlert = stall.state;
+      if (stall.sustained !== null) {
+        logger.error("case_law.ingestion.sustained_failure", {
+          adapterKey,
+          noProgressStreak: stall.sustained,
+        });
+        if (stall.capture) {
+          captureError(
+            new IngestionStallError({
+              message: `Source made no progress for ${stall.sustained} consecutive cycles`,
+              adapterKey,
+              code: adapterKey,
+              noProgressCycles: stall.sustained,
+            }),
+            { adapterKey },
+          );
+        }
+      }
     }
 
     writeHeartbeat();

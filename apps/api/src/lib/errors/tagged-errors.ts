@@ -332,6 +332,24 @@ export class AdapterFetchError extends TaggedError("AdapterFetchError")<{
   cause?: unknown;
 }> {}
 
+/**
+ * One source made no progress for a sustained run of ingestion cycles.
+ * Captured once per stall episode; the per-cycle record lives in the
+ * ingestion-events table and the structured logs.
+ *
+ * `code` carries the adapter key: capture suppression and issue grouping key
+ * on class/code/frame and deliberately ignore context, so without it two
+ * sources stalling inside one suppression window would collapse into a
+ * single event while each loop's once-per-episode latch is already set,
+ * leaving the second stall with no exception at all.
+ */
+export class IngestionStallError extends TaggedError("IngestionStallError")<{
+  message: string;
+  adapterKey: string;
+  code: string;
+  noProgressCycles: number;
+}> {}
+
 export const SUBPROCESS_TERMINATION_REASON = {
   timeout: "timeout",
   cancelled: "cancelled",

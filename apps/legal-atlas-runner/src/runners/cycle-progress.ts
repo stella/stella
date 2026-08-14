@@ -283,3 +283,62 @@ export const stepCadence = (
         : null,
   };
 };
+
+/**
+ * Consecutive cycles that advanced no page, and whether the running stall
+ * episode has already been reported as an exception. One streak whatever the
+ * stall's shape (failed cycle, thrown cycle, timeout with no pages), so an
+ * adapter alternating between shapes still reaches the threshold.
+ */
+export type StallAlertState = {
+  noProgressStreak: number;
+  captured: boolean;
+};
+
+export const INITIAL_STALL_ALERT = {
+  noProgressStreak: 0,
+  captured: false,
+} as const satisfies StallAlertState;
+
+export type StallAlertStep = {
+  state: StallAlertState;
+  /** The streak that reached the threshold this cycle; null below it. */
+  sustained: number | null;
+  /**
+   * True only on the episode's first threshold crossing. The sustained log
+   * signal re-fires on every crossing so an ongoing outage stays visible,
+   * but exception capture is for a human, and a human needs one exception
+   * per outage, not one per crossing of it.
+   */
+  capture: boolean;
+};
+
+/**
+ * Fold one cycle's progress verdict into the stall-alert state. Pure for the
+ * same reason as `stepCadence`: only a whole-sequence test can show that a
+ * long outage is captured exactly once and a recovery re-arms the capture.
+ */
+export const stepStallAlert = (
+  state: StallAlertState,
+  madeProgress: boolean,
+  threshold: number,
+): StallAlertStep => {
+  if (madeProgress) {
+    return { state: INITIAL_STALL_ALERT, sustained: null, capture: false };
+  }
+  const streak = state.noProgressStreak + 1;
+  if (streak < threshold) {
+    return {
+      state: { noProgressStreak: streak, captured: state.captured },
+      sustained: null,
+      capture: false,
+    };
+  }
+  // The streak resets on report so the log signal paces itself at one line
+  // per threshold-worth of cycles; the latch is what remembers the episode.
+  return {
+    state: { noProgressStreak: 0, captured: true },
+    sustained: streak,
+    capture: !state.captured,
+  };
+};
