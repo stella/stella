@@ -390,3 +390,26 @@ export class SchedulerJobTimeoutError extends TaggedError(
   jobId: string;
   timeoutMs: number;
 }> {}
+
+/**
+ * One row of the file-derivative repair sweep could not be requeued. Wraps
+ * the underlying failure so the capture carries a stable tag (a minified
+ * constructor name identifies nothing) while the cause keeps the real frame.
+ */
+export class FileDerivativeRepairError extends TaggedError(
+  "FileDerivativeRepairError",
+)<{
+  message: string;
+  cause: unknown;
+}> {}
+
+/**
+ * A persisted derivative state this build cannot judge: corrupt JSONB, or a
+ * status written by a newer build. The repair sweep reports it and moves on
+ * instead of retrying it or dying mid-scan.
+ */
+export class UnrecognizedDerivativeStateError extends TaggedError(
+  "UnrecognizedDerivativeStateError",
+)<{
+  message: string;
+}> {}
