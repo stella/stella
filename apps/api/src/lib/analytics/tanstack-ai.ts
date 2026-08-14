@@ -293,7 +293,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
       return modelInfo;
     };
 
-  const captureGenerationError = (error: unknown) => {
+  const captureGenerationError = (error: unknown, durationMs?: number) => {
     if (hasCapturedGenerationError) {
       return;
     }
@@ -331,6 +331,31 @@ export const createTanStackAIAnalyticsCallbacks = ({
       trace_id: config.traceId,
     });
 
+    // Standard-schema failure record for LLM observability: the error class
+    // name only, never the message. See the completion-side capture for the
+    // privacy contract.
+    analytics.capture({
+      distinctId,
+      event: SERVER_ANALYTICS_EVENTS.aiGeneration,
+      properties: {
+        $ai_error: errorTag(error),
+        $ai_is_error: true,
+        // The middleware's measured duration covers only the provider call;
+        // the construction-time clock is the catch-path fallback and can
+        // include setup work.
+        $ai_latency:
+          (durationMs ?? performance.now() - startedAt) / ONE_SECOND_MS,
+        $ai_trace_id: config.traceId,
+        feature: config.feature,
+        ...(resolvedModelInfo
+          ? {
+              $ai_model: resolvedModelInfo.modelId,
+              $ai_provider: resolvedModelInfo.provider,
+            }
+          : {}),
+      },
+    });
+
     analytics.capture({
       distinctId,
       event: SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
@@ -364,8 +389,8 @@ export const createTanStackAIAnalyticsCallbacks = ({
       onAfterToolCall: () => {
         toolCount += 1;
       },
-      onError: (_ctx, { error }) => {
-        captureGenerationError(error);
+      onError: (_ctx, { duration, error }) => {
+        captureGenerationError(error, duration);
       },
       onFinish: (_ctx, { duration, usage }) => {
         if (!usage) {
@@ -375,6 +400,24 @@ export const createTanStackAIAnalyticsCallbacks = ({
         if (!resolvedModelInfo) {
           return;
         }
+
+        // The standard $ai_* schema feeds the analytics platform's LLM
+        // observability product. Privacy mode by construction: model, token
+        // counts, latency, and trace correlation only — prompt and completion
+        // content never leave the service.
+        analytics.capture({
+          distinctId,
+          event: SERVER_ANALYTICS_EVENTS.aiGeneration,
+          properties: {
+            $ai_input_tokens: usage.promptTokens,
+            $ai_latency: duration / ONE_SECOND_MS,
+            $ai_model: resolvedModelInfo.modelId,
+            $ai_output_tokens: usage.completionTokens,
+            $ai_provider: resolvedModelInfo.provider,
+            $ai_trace_id: config.traceId,
+            feature: config.feature,
+          },
+        });
 
         analytics.capture({
           distinctId,

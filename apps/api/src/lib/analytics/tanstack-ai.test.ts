@@ -137,8 +137,26 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       usage,
     });
 
-    expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({
+    expect(events).toHaveLength(2);
+    const generation = events.find(
+      (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGeneration,
+    );
+    expect(generation).toMatchObject({
+      distinctId: "user_123",
+      properties: {
+        $ai_model: "gpt-5.4-mini",
+        $ai_provider: "openai",
+        feature: "chat.stream",
+      },
+    });
+    // Privacy mode by construction: the standard event never carries prompt
+    // or completion content.
+    expect(generation?.properties).not.toHaveProperty("$ai_input");
+    expect(generation?.properties).not.toHaveProperty("$ai_output_choices");
+    const completed = events.find(
+      (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGenerationCompleted,
+    );
+    expect(completed).toMatchObject({
       distinctId: "user_123",
       event: SERVER_ANALYTICS_EVENTS.aiGenerationCompleted,
       properties: {
@@ -150,7 +168,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
         workspace_id: "workspace_safe",
       },
     });
-    expect(events[0]?.properties).not.toHaveProperty("unsafe");
+    expect(completed?.properties).not.toHaveProperty("unsafe");
   });
 
   test("records usage through TanStack deferred side effects", async () => {
@@ -336,8 +354,18 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     });
     callbacks.captureError(error);
 
-    expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({
+    // One standard failure record plus one internal event; the catch-path
+    // repeat must add neither.
+    expect(events).toHaveLength(2);
+    expect(
+      events.filter(
+        (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGeneration,
+      ),
+    ).toHaveLength(1);
+    const failedEvent = events.find(
+      (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
+    );
+    expect(failedEvent).toMatchObject({
       event: SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
       properties: {
         failure_reason: "provider",
@@ -379,16 +407,25 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       );
 
       expect(deferred).toHaveLength(0);
-      expect(events).toHaveLength(1);
-      expect(events[0]).toMatchObject({
+      expect(events).toHaveLength(2);
+      const failedEvent = events.find(
+        (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
+      );
+      expect(failedEvent).toMatchObject({
         event: SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
         properties: {
           failure_reason: "provider",
           feature: "chat.suggested-prompts",
         },
       });
-      expect(events[0]?.properties).not.toHaveProperty("model");
-      expect(events[0]?.properties).not.toHaveProperty("provider");
+      expect(failedEvent?.properties).not.toHaveProperty("model");
+      expect(failedEvent?.properties).not.toHaveProperty("provider");
+      // Without resolved model info the standard record still ships, just
+      // without model attribution.
+      const generation = events.find(
+        (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGeneration,
+      );
+      expect(generation?.properties).not.toHaveProperty("$ai_model");
     } finally {
       env.REQUIRE_PERSONAL_AI_KEY = originalRequirePersonalAIKey;
     }

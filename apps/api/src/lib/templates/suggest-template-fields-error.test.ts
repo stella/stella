@@ -99,6 +99,9 @@ describe("suggestTemplateFieldsOrEmpty", () => {
     });
 
     expect(suggestions).toEqual([]);
-    expect(captured).toHaveLength(1);
+    // One standard $ai_generation failure record plus one internal failed
+    // event; the point pinned here is that the failure was captured rather
+    // than thrown.
+    expect(captured).toHaveLength(2);
   });
 });
