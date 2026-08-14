@@ -1182,8 +1182,26 @@ export const MODEL_RATES = {
 
 const MODEL_RATES_BY_ID: Readonly<Record<string, ModelRate>> = MODEL_RATES;
 
-export const getModelRate = (modelId: string): ModelRate | undefined =>
-  MODEL_RATES_BY_ID[normalizeModelCatalogId(modelId)];
+const OPENROUTER_UNDERLYING_MODEL_ID_BY_ID: Readonly<Record<string, string>> =
+  Object.fromEntries(
+    BYOK_MODEL_OPTIONS.openrouter.map((modelId) => [
+      modelId,
+      modelId.slice(modelId.indexOf("/") + 1),
+    ]),
+  );
+
+export const getModelRate = (modelId: string): ModelRate | undefined => {
+  const normalizedModelId = normalizeModelCatalogId(modelId);
+  const exactRate = MODEL_RATES_BY_ID[normalizedModelId];
+  if (exactRate !== undefined) {
+    return exactRate;
+  }
+  const underlyingModelId =
+    OPENROUTER_UNDERLYING_MODEL_ID_BY_ID[normalizedModelId];
+  return underlyingModelId === undefined
+    ? undefined
+    : MODEL_RATES_BY_ID[underlyingModelId];
+};
 
 /**
  * Documented input context-window sizes (in tokens) per model ID.
