@@ -15,6 +15,7 @@ const MODEL = "canary-model";
 const RUN_ID = "canary-run";
 const THREAD_ID = "canary-thread";
 const FINISH_TOOL_CALL_ID = "finish-tool-call";
+const FINISH_TOOL_COMPLETED_RESULT = JSON.stringify({ status: "completed" });
 
 const finishToolStart = {
   type: EventType.TOOL_CALL_START,
@@ -81,6 +82,17 @@ describe("real harness completion protocol", () => {
     ).toBeUndefined();
   });
 
+  test("accepts Codex's canonical completed fallback for an MCP result without text", () => {
+    const completedFallback = {
+      ...finishToolResult,
+      content: FINISH_TOOL_COMPLETED_RESULT,
+    } satisfies CanaryHarnessChunk;
+
+    expect(
+      observe([runStarted, finishToolStart, completedFallback, runFinished]),
+    ).toBeUndefined();
+  });
+
   test("does not accept an assistant claim without the finish tool result", () => {
     expect(
       observe([runStarted, text(CANARY_COMPLETION_MARKER), runFinished]),
@@ -115,6 +127,17 @@ describe("real harness completion protocol", () => {
 
     expect(
       observe([runStarted, finishToolStart, failedFinishResult, runFinished]),
+    ).toBe("canary_finish did not return its exact completion marker");
+  });
+
+  test("rejects a non-canonical completed fallback", () => {
+    const nonCanonicalFallback = {
+      ...finishToolResult,
+      content: JSON.stringify({ status: "completed", extra: true }),
+    } satisfies CanaryHarnessChunk;
+
+    expect(
+      observe([runStarted, finishToolStart, nonCanonicalFallback, runFinished]),
     ).toBe("canary_finish did not return its exact completion marker");
   });
 
