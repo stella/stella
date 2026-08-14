@@ -1,5 +1,12 @@
 version: 2
 
+multi-ecosystem-groups:
+  ocr-runtime:
+    schedule:
+      interval: "daily"
+      time: "07:00"
+      timezone: "Europe/Prague"
+
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -69,12 +76,21 @@ updates:
 
   - package-ecosystem: "docker"
     directory: "/apps/ocr-service"
+    patterns:
+      - "nvidia/cuda"
+    multi-ecosystem-group: "ocr-runtime"
     schedule:
       interval: "daily"
       time: "07:00"
       timezone: "Europe/Prague"
     cooldown:
       default-days: 5
+    # The Paddle wheel is built for CUDA 12. Remove this guard when the Python
+    # source moves to a CUDA 13 wheel index and the image linkage smoke passes.
+    ignore:
+      - dependency-name: "nvidia/cuda"
+        update-types:
+          - "version-update:semver-major"
     labels:
       - "📦 dependencies"
     commit-message:
@@ -125,6 +141,31 @@ updates:
           - "axum"
           - "reqwest"
           - "tower-*"
+    labels:
+      - "📦 dependencies"
+    commit-message:
+      prefix: "chore"
+    reviewers:
+      - "jan-kubica"
+
+  - package-ecosystem: "uv"
+    directory: "/apps/ocr-service"
+    patterns:
+      - "*"
+    multi-ecosystem-group: "ocr-runtime"
+    schedule:
+      interval: "daily"
+      time: "07:00"
+      timezone: "Europe/Prague"
+    # Match minimumReleaseAge (5 days) in bunfig.toml
+    cooldown:
+      default-days: 5
+    # Paddle 3.3 is incompatible with the current PaddleOCR inference stack.
+    # Remove this guard after the OCR image can execute an inference smoke.
+    ignore:
+      - dependency-name: "paddlepaddle-gpu"
+        versions:
+          - ">=3.3,<3.4"
     labels:
       - "📦 dependencies"
     commit-message:
@@ -225,6 +266,12 @@ updates:
         patterns:
           - "@aws-sdk/*"
     versioning-strategy: increase
+    # v5 requires Elysia 2. Remove this guard when Elysia 2 reaches stable and
+    # the API migrates rate-limit scoping from `scoped` to `plugin`.
+    ignore:
+      - dependency-name: "elysia-rate-limit"
+        update-types:
+          - "version-update:semver-major"
     commit-message:
       prefix: "chore"
     reviewers:

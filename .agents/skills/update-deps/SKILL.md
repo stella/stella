@@ -1,6 +1,6 @@
 ---
 name: update-deps
-description: "Inventory, assess, update, and validate third-party dependencies across Bun, Cargo, Docker, and GitHub Actions without hiding ecosystem or supply-chain risk."
+description: "Inventory, assess, update, and validate third-party dependencies across Bun, Python/uv, Cargo, Docker, and GitHub Actions without hiding ecosystem or supply-chain risk."
 ---
 
 # Update Dependencies
@@ -16,6 +16,7 @@ catalogs or resolutions, automated update configuration, and open dependency PRs
 when relevant. Common sources include:
 
 - `package.json`, workspace manifests, `bun.lock`, and `bunfig.toml`
+- every relevant `pyproject.toml`, `uv.lock`, and Python constraints file
 - every relevant `Cargo.toml` and its `Cargo.lock`
 - `Dockerfile*` and Compose YAML
 - `.github/workflows/*` and dependency-update configuration
@@ -66,6 +67,19 @@ manifest's current version requirements. Supplement it with registry-aware
 `cargo info` or `cargo search` checks for every direct dependency in scope, and
 report the limitation. Do not default to `--root-deps-only` when
 `cargo-outdated` is available: transitive changes can carry the material risk.
+
+For each uv-managed Python project, inspect direct and transitive packages:
+
+```bash
+uv tree --project <path> --outdated
+```
+
+Also compare every direct dependency's declared constraint with authoritative
+PyPI metadata. `uv tree --outdated` can hide a newer release when the current
+constraint excludes it, so it is not a complete major-version inventory by
+itself. Keep accelerator packages and their container runtime in one compatibility
+batch: verify the Python wheel's CUDA/ROCm requirements against the selected base
+image and exercise a native-library import or linkage smoke test.
 
 Inventory container references across Dockerfiles and Compose files:
 
@@ -131,6 +145,17 @@ Edit the manifest only when the declared requirement must change. Do not run bar
 `cargo update` for an ordinary batch; a full-graph update must be an explicit,
 reviewed choice.
 
+For uv, update only the planned packages and review the resulting lockfile:
+
+```bash
+uv lock --project <path> --upgrade-package <package>
+uv sync --project <path> --frozen
+```
+
+Edit `pyproject.toml` when intentionally widening or changing a direct dependency
+constraint. Do not run an unscoped full Python upgrade unless the batch explicitly
+covers the full Python graph.
+
 Pin GitHub Actions to commit SHAs and container images to immutable digests when
 that is repository policy. Review every manifest and lockfile delta for unexpected
 transitive additions, replacements, features, scripts, or platform changes.
@@ -149,6 +174,18 @@ manifest path, for example:
 cargo check --manifest-path <path/to/Cargo.toml>
 cargo test --manifest-path <path/to/Cargo.toml>
 ```
+
+Use each Python command against its actual project and locked environment, for
+example:
+
+```bash
+uv lock --project <path> --check
+uv run --project <path> <lint-or-test-command>
+```
+
+For native or GPU packages, also build the production image and run the
+repository's import/linkage smoke test so a resolver-green but ABI-incompatible
+update cannot land.
 
 Run the repository's dependency or security audit command when it defines one,
 for example `bun run security:audit`, and report its result. Do not substitute a
