@@ -17,7 +17,6 @@
  */
 
 import { toMarkdownBytes } from "@firecrawl/anydoc";
-import { PDF } from "@libpdf/core";
 import { load } from "cheerio";
 
 import { FolioDocxReviewer } from "@stll/folio-core/server";
@@ -89,25 +88,31 @@ const ATTACHMENT_EXTENSION_MIME_TYPES: Record<string, string> = {
   xlsx: XLSX_MIME_TYPE,
 };
 
-const extractPdfPlaintext = async (pdfBytes: Uint8Array): Promise<string> => {
-  const pdf = await PDF.load(pdfBytes);
-  const pages = pdf.getPages();
-  const parts: string[] = [];
+/**
+ * PDFs convert through anydoc like the office formats. A scanned or
+ * image-only PDF is not an extraction failure: anydoc rejects it with
+ * `code: "unsupported"` and an OCR marker in the message, and the caller
+ * treats the resulting empty text as the signal to request OCR. The
+ * marker is pinned by fixture tests so an anydoc upgrade that rewords it
+ * fails loudly instead of silently converting scans into hard errors.
+ */
+const isOcrRequiredError = (error: unknown): boolean =>
+  error instanceof Error &&
+  "code" in error &&
+  error.code === "unsupported" &&
+  error.message.includes("OCR is required");
 
-  for (const page of pages) {
-    const result = page.extractText();
-    const pageText = result.lines
-      .flatMap((line) => {
-        const trimmed = line.text.trim();
-        return trimmed ? [trimmed] : [];
-      })
-      .join("\n");
-    if (pageText) {
-      parts.push(pageText);
+const extractPdfMarkdown = async (
+  pdfBytes: Uint8Array,
+): Promise<string | null> => {
+  try {
+    return normalizeExtractedText(await toMarkdownBytes(Buffer.from(pdfBytes)));
+  } catch (error) {
+    if (isOcrRequiredError(error)) {
+      return null;
     }
+    throw error;
   }
-
-  return parts.join("\n\n");
 };
 
 /**
@@ -251,7 +256,7 @@ const extract = async (
   let text: string | null = null;
 
   if (normalizedMimeType === PDF_MIME_TYPE) {
-    text = await extractPdfPlaintext(fileBytes);
+    text = await extractPdfMarkdown(fileBytes);
   } else if (normalizedMimeType === DOCX_MIME_TYPE) {
     const [documentText, reviewer] = await Promise.all([
       extractDocxText(fileBytes),

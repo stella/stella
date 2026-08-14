@@ -60,6 +60,37 @@ describe("extractFileText", () => {
     expect(text).toBe("hello\nworld");
   });
 
+  test("extracts PDF text through anydoc, including Form XObject text", async () => {
+    const text = await extractFileText(
+      await readFixture("xobject-text.pdf"),
+      "application/pdf",
+    );
+
+    expect(text).toContain("Text inside a Form XObject");
+  });
+
+  test("returns no text for an image-only PDF so OCR can be requested", async () => {
+    const text = await extractFileText(
+      await readFixture("image-only.pdf"),
+      "application/pdf",
+    );
+
+    expect(text).toBeNull();
+  });
+
+  test("routes a mixed text-and-scan PDF to OCR while extraction is whole-document", async () => {
+    // anydoc classifies this document as image-based and rejects it with the
+    // "OCR is required" marker the worker keys on. When anydoc ships per-page
+    // extraction, this fixture should instead surface its native text pages
+    // and this expectation must flip.
+    const text = await extractFileText(
+      await readFixture("mixed-3pages.pdf"),
+      "application/pdf",
+    );
+
+    expect(text).toBeNull();
+  });
+
   test("extracts email headers, body, and supported attachment text", async () => {
     const email = [
       "From: Jane Lawyer <jane@example.com>",
