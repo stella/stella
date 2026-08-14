@@ -20,7 +20,7 @@ export type CanaryHarnessChunk =
 
 export type CanaryHarnessObservation = {
   assistantText: string;
-  completion:
+  finishResult:
     | { status: "pending" }
     | { status: "observed"; toolCallId: string }
     | { status: "failed"; message: string };
@@ -34,16 +34,55 @@ export type CanaryHarnessObservation = {
 
 export const createCanaryHarnessObservation = (): CanaryHarnessObservation => ({
   assistantText: "",
-  completion: { status: "pending" },
+  finishResult: { status: "pending" },
   finishToolCallIds: new Set(),
   hasStarted: false,
   runStatus: { status: "streaming" },
 });
 
 /**
- * Observe both independent Codex completion surfaces. The server-controlled
- * finish-tool result proves the protected MCP sequence; assistant text is
- * optional because a completed tool result may be the turn's final output.
+ * The Codex adapter may project an MCP tool's opaque result as a text marker,
+ * structured JSON, or a synthesized interruption status. None of those
+ * transport representations proves the server completed the canary sequence;
+ * that proof comes only from the authenticated server state asserted after the
+ * stream. Keep diagnostic output bounded so an arbitrary tool payload cannot
+ * be published in the protected workflow log.
+ */
+const finishResultShape = (content: string): string => {
+  if (content === "") {
+    return "empty";
+  }
+  if (content === CANARY_COMPLETION_MARKER) {
+    return "completion-marker";
+  }
+  if (content === CANARY_FINISH_COMPLETED_RESULT) {
+    return "completed-status";
+  }
+  if (content === JSON.stringify({ status: "interrupted" })) {
+    return "interrupted-status";
+  }
+  try {
+    const parsed: unknown = JSON.parse(content);
+    if (Array.isArray(parsed)) {
+      return "json-array";
+    }
+    if (parsed === null) {
+      return "json-null";
+    }
+    if (typeof parsed === "object") {
+      return "json-object";
+    }
+    return "json-scalar";
+  } catch {
+    return "text";
+  }
+};
+
+/**
+ * Observe the correlated finish-tool result and optional assistant text. The
+ * authenticated server state asserted after the stream proves the protected
+ * MCP sequence; a tool result only proves the call resolved without an
+ * explicit adapter error.
  */
 export const consumeCanaryHarnessChunk = (
   observation: CanaryHarnessObservation,
@@ -103,7 +142,7 @@ export const consumeCanaryHarnessChunk = (
         return;
       }
       if (observation.finishToolCallIds.size !== 0) {
-        observation.completion = {
+        observation.finishResult = {
           status: "failed",
           message: "canary harness called canary_finish more than once",
         };
@@ -114,24 +153,21 @@ export const consumeCanaryHarnessChunk = (
       if (!observation.finishToolCallIds.has(chunk.toolCallId)) {
         return;
       }
-      if (observation.completion.status !== "pending") {
-        observation.completion = {
+      if (observation.finishResult.status !== "pending") {
+        observation.finishResult = {
           status: "failed",
           message: "canary harness returned multiple canary_finish results",
         };
         return;
       }
-      const isExpectedResult =
-        chunk.content === CANARY_COMPLETION_MARKER ||
-        chunk.content === CANARY_FINISH_COMPLETED_RESULT;
-      if (chunk.state === "output-error" || !isExpectedResult) {
-        observation.completion = {
+      if (chunk.state === "output-error") {
+        observation.finishResult = {
           status: "failed",
-          message: "canary_finish did not return its exact completion marker",
+          message: `canary_finish returned output-error (content shape: ${finishResultShape(chunk.content)})`,
         };
         return;
       }
-      observation.completion = {
+      observation.finishResult = {
         status: "observed",
         toolCallId: chunk.toolCallId,
       };
@@ -171,8 +207,8 @@ export const canaryHarnessImmediateFailure = (
   if (observation.runStatus.status === "failed") {
     return observation.runStatus.message;
   }
-  if (observation.completion.status === "failed") {
-    return observation.completion.message;
+  if (observation.finishResult.status === "failed") {
+    return observation.finishResult.message;
   }
   return undefined;
 };
@@ -183,8 +219,8 @@ export const canaryHarnessFailure = (
   if (observation.runStatus.status === "failed") {
     return observation.runStatus.message;
   }
-  if (observation.completion.status === "failed") {
-    return observation.completion.message;
+  if (observation.finishResult.status === "failed") {
+    return observation.finishResult.message;
   }
   if (observation.runStatus.status !== "finished") {
     return "canary harness stream ended before RUN_FINISHED";
@@ -192,8 +228,8 @@ export const canaryHarnessFailure = (
   if (!observation.hasStarted) {
     return "canary harness stream ended without RUN_STARTED";
   }
-  if (observation.completion.status !== "observed") {
-    return "canary harness did not receive the completion marker from canary_finish";
+  if (observation.finishResult.status !== "observed") {
+    return "canary harness did not receive a non-error result from canary_finish";
   }
   const assistantText = observation.assistantText.trim();
   if (assistantText !== "" && assistantText !== CANARY_COMPLETION_MARKER) {

@@ -82,7 +82,7 @@ describe("real harness completion protocol", () => {
     ).toBeUndefined();
   });
 
-  test("accepts Codex's canonical completed fallback for an MCP result without text", () => {
+  test("defers Codex's canonical completed fallback to the server-owned state assertion", () => {
     const completedFallback = {
       ...finishToolResult,
       content: FINISH_TOOL_COMPLETED_RESULT,
@@ -93,11 +93,22 @@ describe("real harness completion protocol", () => {
     ).toBeUndefined();
   });
 
+  test("defers Codex's synthesized interrupted result to the server-owned state assertion", () => {
+    const interruptedFallback = {
+      ...finishToolResult,
+      content: JSON.stringify({ status: "interrupted" }),
+    } satisfies CanaryHarnessChunk;
+
+    expect(
+      observe([runStarted, finishToolStart, interruptedFallback, runFinished]),
+    ).toBeUndefined();
+  });
+
   test("does not accept an assistant claim without the finish tool result", () => {
     expect(
       observe([runStarted, text(CANARY_COMPLETION_MARKER), runFinished]),
     ).toBe(
-      "canary harness did not receive the completion marker from canary_finish",
+      "canary harness did not receive a non-error result from canary_finish",
     );
   });
 
@@ -115,11 +126,11 @@ describe("real harness completion protocol", () => {
     expect(
       observe([runStarted, otherToolStart, otherToolResult, runFinished]),
     ).toBe(
-      "canary harness did not receive the completion marker from canary_finish",
+      "canary harness did not receive a non-error result from canary_finish",
     );
   });
 
-  test("does not hide a failed finish tool behind the completion text", () => {
+  test("does not hide an explicit finish-tool error behind the completion text", () => {
     const failedFinishResult = {
       ...finishToolResult,
       state: "output-error",
@@ -127,10 +138,12 @@ describe("real harness completion protocol", () => {
 
     expect(
       observe([runStarted, finishToolStart, failedFinishResult, runFinished]),
-    ).toBe("canary_finish did not return its exact completion marker");
+    ).toBe(
+      "canary_finish returned output-error (content shape: completion-marker)",
+    );
   });
 
-  test("rejects a non-canonical completed fallback", () => {
+  test("defers an opaque non-error result to the server-owned state assertion", () => {
     const nonCanonicalFallback = {
       ...finishToolResult,
       content: JSON.stringify({ status: "completed", extra: true }),
@@ -138,7 +151,7 @@ describe("real harness completion protocol", () => {
 
     expect(
       observe([runStarted, finishToolStart, nonCanonicalFallback, runFinished]),
-    ).toBe("canary_finish did not return its exact completion marker");
+    ).toBeUndefined();
   });
 
   test("requires the real harness run to finish", () => {
