@@ -703,7 +703,9 @@ describe("PostHog browser analytics adapter", () => {
     );
     Object.defineProperty(globalThis, "location", {
       configurable: true,
-      value: new URL("https://app.example.test"),
+      value: new URL(
+        "https://app.example.test/workspaces/private-matter-018f9f0e",
+      ),
     });
     analytics.capturePageViewed({ path: "/workspaces/$workspaceId" });
 
@@ -745,7 +747,49 @@ describe("PostHog browser analytics adapter", () => {
     });
   });
 
-  test("web vitals without metric values or a seen route are constrained", () => {
+  // Vitals can flush after the next navigation resolves, so attribution
+  // must follow the metric's originating URL, not the latest route.
+  test("web vitals flushed after a navigation keep their originating route", () => {
+    const { analytics } = createPostHogAnalytics(
+      "phc_test",
+      "https://posthog.test",
+    );
+    Object.defineProperty(globalThis, "location", {
+      configurable: true,
+      value: new URL("https://app.example.test/workspaces/private-matter-a"),
+    });
+    analytics.capturePageViewed({ path: "/workspaces/$workspaceId" });
+    Object.defineProperty(globalThis, "location", {
+      configurable: true,
+      value: new URL("https://app.example.test/contacts"),
+    });
+    analytics.capturePageViewed({ path: "/contacts" });
+
+    // Measured on the workspace route, delivered while /contacts is
+    // current: the label must stay the workspace template.
+    const sanitized = initOptions?.before_send({
+      event: WEB_ANALYTICS_EVENTS.webVitals,
+      properties: {
+        token: "phc_test",
+        $current_url: "https://app.example.test/contacts",
+        $pathname: "/contacts",
+        $web_vitals_INP_value: 87,
+        $web_vitals_INP_event: {
+          name: "INP",
+          value: 87,
+          $current_url: "https://app.example.test/workspaces/private-matter-a",
+        },
+      },
+    });
+    expect(sanitized?.properties?.["$pathname"]).toBe(
+      "/workspaces/$workspaceId",
+    );
+    expect(sanitized?.properties?.["$current_url"]).toBe(
+      "https://app.example.test/workspaces/$workspaceId",
+    );
+  });
+
+  test("web vitals without metric values or a known origin are constrained", () => {
     createPostHogAnalytics("phc_test", "https://posthog.test");
 
     // No metric values: nothing worth ingesting.
@@ -759,8 +803,8 @@ describe("PostHog browser analytics adapter", () => {
       }),
     ).toBeNull();
 
-    // Metric values before any capturePageViewed: the resolved URL is
-    // dropped rather than substituted.
+    // An originating URL no capturePageViewed ever recorded: the
+    // resolved URL is dropped rather than substituted or mislabeled.
     const sanitized = initOptions?.before_send({
       event: WEB_ANALYTICS_EVENTS.webVitals,
       properties: {
@@ -768,6 +812,11 @@ describe("PostHog browser analytics adapter", () => {
         $current_url: "https://app.example.test/workspaces/private-matter",
         $pathname: "/workspaces/private-matter",
         $web_vitals_INP_value: 87,
+        $web_vitals_INP_event: {
+          name: "INP",
+          value: 87,
+          $current_url: "https://app.example.test/workspaces/private-matter",
+        },
       },
     });
     expect(sanitized?.properties).toEqual({
