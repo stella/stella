@@ -283,6 +283,29 @@ const rewrittenMigrationHistories = {
     ],
     requiredIndexes: [],
   },
+  // The file was amended after databases had already applied it: review
+  // tightened the legacy-timer repair to skip owners without current
+  // organization or matter access and to preserve billed minutes. The index
+  // DDL is unchanged, and `time_entries_one_active_timer_per_user_idx` is
+  // already registered in ONLINE_MIGRATION_INDEXES with its create statement,
+  // so redeclaring it here would only duplicate that registration.
+  "20260809120002_unique_active_time_entry_timer": {
+    currentHash:
+      "79b9b91afee0ebb5ab03a1be704b6b2e42b563a9f6c8c273ba97f9512973018b",
+    priorHashes: [
+      "6d9baf23d92a3efe2569cc43c9b5de09b80ca637ef4c08536f01a141afca9bda",
+      "3aaf8809173eda72b77300a20904f12d48e1858f7f34293a5860bc7e64c1fd6c",
+      "9b73e4aabcc8dad6e2efdbf1c1e6dd35c623bf94582fac1cb7d5b8693578a504",
+      "6fd29ef3ec3c1961861f567637ebb1b0c5a2b3824f425289c3b866b7c65242c2",
+      "f6cd037afe4f392121d35d8a4968e15c1868a6af2912511958ec3776a0f42905",
+      "418cdfdd44922fe1025f58da8cb1d277a19964526e3ed21184ec99a9c017bc57",
+      "bf08ac44a1eedbae56a337ad30e431fb6b3bfe6ae44fa6c59d01d7018191fa54",
+      "f11e79ae3979f17900652c8d823d84f065a550a8ea9f05e2262ea509fe7379bd",
+      "4b0b861a732c7faebb27f5970bb3a4f9943f3dc332fef3c8cbd8c468c2f78ba0",
+      "72db38c518a8ef562e279777a31d264b5cd16830596a962826315704dc5a6f9e",
+    ],
+    requiredIndexes: [],
+  },
 } as const satisfies Readonly<Record<string, RewrittenMigrationHistory>>;
 
 export const REWRITTEN_MIGRATION_HISTORIES: Readonly<
