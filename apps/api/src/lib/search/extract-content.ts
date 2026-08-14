@@ -12,7 +12,10 @@
 import { Result } from "better-result";
 
 import { captureError } from "@/api/lib/analytics/capture";
-import { ExtractionWorkerError } from "@/api/lib/errors/tagged-errors";
+import {
+  ExtractionWorkerError,
+  SUBPROCESS_TERMINATION_REASON,
+} from "@/api/lib/errors/tagged-errors";
 import { resolveEmailMimeType } from "@/api/lib/files/email-to-html";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -111,7 +114,7 @@ export const resolveExtractionMimeType = ({
 export const extractFileTextResult = async (
   buffer: ArrayBuffer,
   mimeType: string,
-) => {
+): Promise<Result<string | null, ExtractionWorkerError>> => {
   const normalizedMimeType = normalizeMimeType(mimeType);
   if (!canExtractMimeType(normalizedMimeType)) {
     return Result.ok(null);
@@ -128,6 +131,13 @@ export const extractFileTextResult = async (
     const error = new ExtractionWorkerError({
       message: result.error.message,
       exitCode: result.error.exitCode,
+      termination:
+        result.error.termination === null
+          ? null
+          : {
+              reason: result.error.termination.reason,
+              signalCode: result.error.termination.signalCode,
+            },
     });
     return Result.err(error);
   }
@@ -145,15 +155,35 @@ export const extractFileText = async (
   mimeType: string,
   context?: Record<string, string>,
 ): Promise<string | null> => {
-  const result = await extractFileTextResult(buffer, mimeType);
-  if (Result.isError(result)) {
-    captureError(result.error, {
-      mimeType: normalizeMimeType(mimeType),
-      sizeBytes: String(buffer.byteLength),
-      exitCode: String(result.error.exitCode),
-      ...context,
-    });
-    return null;
+  const first = await extractFileTextResult(buffer, mimeType);
+  if (!Result.isError(first)) {
+    return first.value;
   }
-  return result.value;
+
+  // An externally killed worker (deploy restart, OOM reaper) says
+  // nothing about the document, so this path gets one more attempt
+  // before giving up; there is no queue behind it to requeue into.
+  const retryable =
+    first.error.termination?.reason === SUBPROCESS_TERMINATION_REASON.external;
+  const result = retryable
+    ? await extractFileTextResult(buffer, mimeType)
+    : first;
+  if (!Result.isError(result)) {
+    return result.value;
+  }
+
+  const failureContext =
+    result.error.termination !== null
+      ? {
+          signalCode: result.error.termination.signalCode,
+          terminationReason: result.error.termination.reason,
+        }
+      : { exitCode: String(result.error.exitCode) };
+  captureError(result.error, {
+    mimeType: normalizeMimeType(mimeType),
+    sizeBytes: String(buffer.byteLength),
+    ...failureContext,
+    ...context,
+  });
+  return null;
 };
