@@ -120,10 +120,11 @@ describe("errorFingerprint", () => {
     expect(errorFingerprint(error)["error.code"]).toBe("ECONNRESET");
   });
 
-  test("surfaces the deepest cause's top frame", () => {
-    const root = new Error("root failure");
+  test("surfaces the deepest cause's class and top frame", () => {
+    const root = new TypeError("root failure");
     const wrapped = new Error("wrapped", { cause: root });
     const fingerprint = errorFingerprint(wrapped);
+    expect(fingerprint["error.cause.class"]).toBe("TypeError");
     expect(fingerprint["error.cause.frame"]).toMatch(/:\d+:\d+$/u);
   });
 

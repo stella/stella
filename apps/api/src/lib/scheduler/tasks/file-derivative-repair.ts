@@ -15,6 +15,10 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isUuid } from "@/api/lib/custom-schema";
 import {
+  FileDerivativeRepairError,
+  UnrecognizedDerivativeStateError,
+} from "@/api/lib/errors/tagged-errors";
+import {
   FILE_DERIVATIVE_KIND,
   FILE_DERIVATIVE_REQUEUE_OUTCOME,
   requeueFileDerivative,
@@ -47,33 +51,64 @@ const SETTLE_MS = 15 * 60 * 1000;
 type FileFieldContent = Extract<FieldContent, { type: "file" }>;
 type DerivativeState = FileFieldContent["pdfDerivative"];
 
+const DERIVATIVE_RETRY_VERDICT = {
+  RETRYABLE: "retryable",
+  TERMINAL: "terminal",
+  /** Corrupt JSONB, or a status this build does not know. */
+  UNRECOGNIZED: "unrecognized",
+} as const;
+
+type DerivativeRetryVerdict =
+  (typeof DERIVATIVE_RETRY_VERDICT)[keyof typeof DERIVATIVE_RETRY_VERDICT];
+
 /**
  * Whether this derivative state can still be retried. Absent means `pending`:
  * that is the default every file field is written with. A `failed` state is
  * retryable only when the job never entered the queue; once the worker has
  * run and exhausted its attempts the verdict is terminal, and re-adding the
  * job would replay a conversion that has already been proven to fail.
+ *
+ * `fields.content` is unvalidated JSONB, so a state written by a buggy build
+ * (the bare-`::jsonb` string casts `file-derivative-queue` documents) or a
+ * newer one reaches this predicate as-is. Such a state is `unrecognized`:
+ * this standing sweep must judge it without dying, and replaying a verdict
+ * it cannot read is the costlier mistake.
  */
-const isRetryableDerivativeState = (state: DerivativeState): boolean => {
+const derivativeRetryVerdict = (
+  state: DerivativeState,
+): DerivativeRetryVerdict => {
   if (state === undefined) {
-    return true;
+    return DERIVATIVE_RETRY_VERDICT.RETRYABLE;
+  }
+  const raw: unknown = state;
+  if (typeof raw !== "object" || raw === null) {
+    return DERIVATIVE_RETRY_VERDICT.UNRECOGNIZED;
   }
   switch (state.status) {
     case "pending": {
-      return true;
+      return DERIVATIVE_RETRY_VERDICT.RETRYABLE;
     }
     case "failed": {
-      return state.reason === DERIVATIVE_FAILURE_REASON.ENQUEUE;
+      return state.reason === DERIVATIVE_FAILURE_REASON.ENQUEUE
+        ? DERIVATIVE_RETRY_VERDICT.RETRYABLE
+        : DERIVATIVE_RETRY_VERDICT.TERMINAL;
     }
     case "ready":
     case "not-required": {
-      return false;
+      return DERIVATIVE_RETRY_VERDICT.TERMINAL;
     }
     default: {
-      const unhandled: never = state;
-      return panic(`Unhandled derivative state: ${JSON.stringify(unhandled)}`);
+      state satisfies never;
+      return DERIVATIVE_RETRY_VERDICT.UNRECOGNIZED;
     }
   }
+};
+
+type FileDerivativeTriage = {
+  /** Nothing is driving these anymore; hand them back to the queue. */
+  stuck: FileDerivativeKind[];
+  /** Reported by the caller so an unreadable state cannot rot silently. */
+  unrecognized: FileDerivativeKind[];
 };
 
 /**
@@ -81,31 +116,45 @@ const isRetryableDerivativeState = (state: DerivativeState): boolean => {
  * authority; the SQL below only narrows the scan, and deliberately selects a
  * superset of what this returns.
  */
-export const stuckFileDerivatives = (
+export const triageFileDerivatives = (
   content: FileFieldContent,
-): FileDerivativeKind[] => {
-  const stuck: FileDerivativeKind[] = [];
-  if (
-    content.pdfFileId === null &&
-    isRetryableDerivativeState(content.pdfDerivative) &&
+): FileDerivativeTriage => {
+  const triage: FileDerivativeTriage = { stuck: [], unrecognized: [] };
+  const judge = (
+    kind: FileDerivativeKind,
+    derivativeFileId: string | null,
+    state: DerivativeState,
+    required: boolean,
+  ): void => {
+    if (derivativeFileId !== null || !required) {
+      return;
+    }
+    const verdict = derivativeRetryVerdict(state);
+    if (verdict === DERIVATIVE_RETRY_VERDICT.RETRYABLE) {
+      triage.stuck.push(kind);
+    } else if (verdict === DERIVATIVE_RETRY_VERDICT.UNRECOGNIZED) {
+      triage.unrecognized.push(kind);
+    }
+  };
+  judge(
+    FILE_DERIVATIVE_KIND.PDF,
+    content.pdfFileId,
+    content.pdfDerivative,
     shouldGeneratePdfDerivative({
       encrypted: content.encrypted,
       mimeType: content.mimeType,
-    })
-  ) {
-    stuck.push(FILE_DERIVATIVE_KIND.PDF);
-  }
-  if (
-    (content.thumbnailFileId ?? null) === null &&
-    isRetryableDerivativeState(content.thumbnailDerivative) &&
+    }),
+  );
+  judge(
+    FILE_DERIVATIVE_KIND.THUMBNAIL,
+    content.thumbnailFileId ?? null,
+    content.thumbnailDerivative,
     shouldGenerateImageThumbnail({
       encrypted: content.encrypted,
       mimeType: content.mimeType,
-    })
-  ) {
-    stuck.push(FILE_DERIVATIVE_KIND.THUMBNAIL);
-  }
-  return stuck;
+    }),
+  );
+  return triage;
 };
 
 const repairCursor = (
@@ -187,24 +236,34 @@ type RowRepairResult = {
    * than dropped quietly, so an unrepairable population stays visible.
    */
   unattributed: boolean;
+  /** Kinds skipped as unreadable, for the caller's per-row audit record. */
+  unrecognized: FileDerivativeKind[];
 };
 
 const requeueRow = async (row: RepairPageRow): Promise<RowRepairResult> => {
   if (row.content.type !== "file") {
-    return { requeued: 0, unattributed: false };
+    return { requeued: 0, unattributed: false, unrecognized: [] };
   }
   if (row.createdBy === null) {
-    return { requeued: 0, unattributed: true };
+    return { requeued: 0, unattributed: true, unrecognized: [] };
   }
   const userId = brandPersistedUserId(row.createdBy);
-  const kinds = stuckFileDerivatives(row.content);
+  const { stuck, unrecognized } = triageFileDerivatives(row.content);
+  for (const kind of unrecognized) {
+    captureError(
+      new UnrecognizedDerivativeStateError({
+        message: `Persisted ${kind} derivative state is unreadable to this build`,
+      }),
+      { fieldId: row.fieldId, kind, workspaceId: row.workspaceId },
+    );
+  }
   let requeued = 0;
 
   // Sequential by recursion: a field has at most two derivatives, and one
   // queue write at a time keeps a tick's Redis traffic proportional to the
   // bound rather than to the page.
   const requeueFrom = async (index: number): Promise<void> => {
-    const kind = kinds.at(index);
+    const kind = stuck.at(index);
     if (kind === undefined) {
       return;
     }
@@ -223,7 +282,7 @@ const requeueRow = async (row: RepairPageRow): Promise<RowRepairResult> => {
   };
 
   await requeueFrom(0);
-  return { requeued, unattributed: false };
+  return { requeued, unattributed: false, unrecognized };
 };
 
 const persistCursor = async ({
@@ -275,6 +334,7 @@ export const repairFileDerivatives: SchedulerTask = async ({
   let requeued = 0;
   let scanned = 0;
   let unattributed = 0;
+  let unrecognized = 0;
 
   const repairFrom = async (index: number): Promise<void> => {
     const row = page.at(index);
@@ -282,25 +342,42 @@ export const repairFileDerivatives: SchedulerTask = async ({
       return;
     }
     const outcome = await Result.tryPromise(async () => await requeueRow(row));
+    // The row counts as scanned either way: the cursor must advance past a
+    // row whose repair fails deterministically, or the sweep pins itself
+    // there, re-captures every tick, and starves every field after it.
+    scanned += 1;
     if (Result.isError(outcome)) {
-      // The queue is unreachable (or refused the write). Stop the tick and
-      // leave the cursor on the last repaired row: the rest of the page is
-      // still stuck, and the next tick starts exactly where this one gave up.
-      captureError(outcome.error, {
-        fieldId: row.fieldId,
-        workspaceId: row.workspaceId,
-      });
+      // The queue is unreachable, or this one row cannot be repaired. Stop
+      // the tick; the next full pass retries the row.
+      captureError(
+        new FileDerivativeRepairError({
+          message: "Requeueing one stuck file derivative failed",
+          cause: outcome.error,
+        }),
+        { fieldId: row.fieldId, workspaceId: row.workspaceId },
+      );
       return;
     }
     requeued += outcome.value.requeued;
     unattributed += outcome.value.unattributed ? 1 : 0;
-    scanned += 1;
+    unrecognized += outcome.value.unrecognized.length;
+    // Capture dedups identical errors inside its window, so with several
+    // unreadable rows in one page only the first field id reaches
+    // analytics. This log line is the per-row audit record; the rows also
+    // stay enumerable in SQL by their unreadable state.
+    for (const kind of outcome.value.unrecognized) {
+      logger.error("file_derivative.unrecognized_state", {
+        fieldId: row.fieldId,
+        kind,
+        workspaceId: row.workspaceId,
+      });
+    }
     await repairFrom(index + 1);
   };
 
   await repairFrom(0);
 
-  // Advance only over rows this tick actually finished, so a page cut short
+  // Advance only over rows this tick actually visited, so a page cut short
   // by the requeue bound or an unreachable queue is resumed, not skipped.
   const lastScanned = scanned === 0 ? undefined : page.at(scanned - 1);
   await persistCursor({
@@ -313,5 +390,6 @@ export const repairFileDerivatives: SchedulerTask = async ({
     "fileDerivatives.requeued": requeued,
     "fileDerivatives.scanned": scanned,
     "fileDerivatives.unattributed": unattributed,
+    "fileDerivatives.unrecognized": unrecognized,
   });
 };

@@ -311,6 +311,12 @@ export const errorFingerprint = (error: unknown): ErrorFingerprint => {
   }
   const cause = deepestCause(error);
   if (cause) {
+    // A wrapper (`UnhandledException`, a boundary TaggedError) otherwise
+    // hides what actually failed: the tag is structural, so it ships under
+    // the same contract as `error.class`. Deliberately absent from the
+    // grouping fingerprint and the suppression key — the wrap site is the
+    // defect's identity, the cause its detail.
+    fingerprint["error.cause.class"] = errorTag(cause);
     const causeFrame = topStackFrame(cause);
     if (causeFrame !== undefined) {
       fingerprint["error.cause.frame"] = causeFrame;

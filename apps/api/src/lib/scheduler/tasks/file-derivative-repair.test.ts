@@ -16,7 +16,7 @@ import {
   mock,
   test,
 } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import {
   entities,
@@ -28,6 +28,10 @@ import type { FieldContent } from "@/api/db/schema-validators";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
+import {
+  FileDerivativeRepairError,
+  UnrecognizedDerivativeStateError,
+} from "@/api/lib/errors/tagged-errors";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -51,9 +55,13 @@ const priorJobs = new Map<
   { data: { derivativeFileId?: string; fieldId: string }; state: string }
 >();
 const removedJobIds: string[] = [];
+const failingAddJobIds = new Set<string>();
 
 class StubQueue {
   async add(name: string, data: QueuedJob["data"], opts: QueuedJob["opts"]) {
+    if (failingAddJobIds.has(opts.jobId)) {
+      throw new Error("queue write refused");
+    }
     queued.push({ data, name, opts });
   }
 
@@ -82,6 +90,14 @@ const redisClientModule = await import("@/api/lib/redis-client");
 void mock.module("@/api/lib/redis-client", () => ({
   ...redisClientModule,
   createBullMqConnection: () => ({}),
+}));
+const captureErrorMock = mock(
+  (_error: unknown, _context?: Record<string, string>) => undefined,
+);
+const realCapture = await import("@/api/lib/analytics/capture");
+void mock.module("@/api/lib/analytics/capture", () => ({
+  ...realCapture,
+  captureError: captureErrorMock,
 }));
 
 const { REPAIR_FILE_DERIVATIVES_TASK, repairFileDerivatives } =
@@ -200,6 +216,8 @@ describe("file derivative repair", () => {
     queued.length = 0;
     removedJobIds.length = 0;
     priorJobs.clear();
+    failingAddJobIds.clear();
+    captureErrorMock.mockClear();
     await testDb
       .insert(schedulerJobs)
       .values({
@@ -352,5 +370,58 @@ describe("file derivative repair", () => {
     expect(queued.map(({ data }) => data.fieldId)).toEqual(
       seeded.slice(REQUEUE_LIMIT),
     );
+  });
+
+  // The pre-hardening bare `::jsonb` casts stored the serialized state as a
+  // jsonb *string*. Such a row used to panic the sweep mid-scan, which pinned
+  // the cursor on it and re-captured the same failure every tick.
+  test("reports a state it cannot read, skips it, and keeps sweeping", async () => {
+    const corrupt = await seedFileField();
+    const stuck = await seedFileField();
+    await testDb.execute(
+      sql`update ${fields}
+        set content = jsonb_set(content, '{pdfDerivative}', to_jsonb('{"status":"pending"}'::text), true)
+        where id = ${corrupt}`,
+    );
+
+    await runRepair();
+
+    expect(queued.map(({ data }) => data.fieldId)).toEqual([stuck]);
+    const reported = captureErrorMock.mock.calls.filter(
+      ([error]) => error instanceof UnrecognizedDerivativeStateError,
+    );
+    expect(reported.map(([, context]) => context?.["fieldId"])).toEqual([
+      corrupt,
+    ]);
+    // The tick finished: the cursor moved past both rows.
+    const [job] = await testDb
+      .select({ payload: schedulerJobs.payload })
+      .from(schedulerJobs)
+      .where(eq(schedulerJobs.id, SCHEDULER_JOB_ID));
+    expect(job?.payload).toEqual({ cursor: stuck });
+  });
+
+  // A row whose repair throws stops the tick (the queue may be down), but the
+  // cursor still moves past it: the next tick continues behind the row
+  // instead of replaying the same failure forever and starving what follows.
+  test("advances the cursor past a row whose repair throws", async () => {
+    const failing = await seedFileField();
+    const stuck = await seedFileField();
+    failingAddJobIds.add(
+      createBullMqJobId(ids.wsA1, failing, FILE_DERIVATIVE_KIND.PDF),
+    );
+
+    await runRepair();
+
+    expect(queued).toHaveLength(0);
+    expect(
+      captureErrorMock.mock.calls.some(
+        ([error]) => error instanceof FileDerivativeRepairError,
+      ),
+    ).toBe(true);
+
+    await runRepair();
+
+    expect(queued.map(({ data }) => data.fieldId)).toEqual([stuck]);
   });
 });
