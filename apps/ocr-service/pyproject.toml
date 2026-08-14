@@ -19,11 +19,11 @@ exclude-newer-package = { paddlepaddle-gpu = false }
 package = false
 
 [tool.uv.sources]
-paddlepaddle-gpu = { index = "paddle-cu126" }
+paddlepaddle-gpu = { index = "paddle-cu129" }
 
 [[tool.uv.index]]
-name = "paddle-cu126"
-url = "https://www.paddlepaddle.org.cn/packages/stable/cu126/"
+name = "paddle-cu129"
+url = "https://www.paddlepaddle.org.cn/packages/stable/cu129/"
 explicit = true
 
 # Paddle's package index does not publish PEP 658 metadata. Declaring the

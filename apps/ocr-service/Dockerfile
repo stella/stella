@@ -77,6 +77,7 @@ RUN apt-get update \
       libgl1 \
       libglib2.0-0 \
       libgomp1 \
+      cuda-nvtx-12-9 \
       python3 \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system --gid 1001 stella \
@@ -101,7 +102,9 @@ RUN set -eux; \
     test -n "${libpaddle}"; \
     ldd "${libpaddle}"; \
     missing="$(ldd "${libpaddle}" | awk '/=> not found/ { print $1 }' | sort -u)"; \
-    test "${missing}" = "libcuda.so.1"
+    test "${missing}" = "libcuda.so.1"; \
+    CUDA_VISIBLE_DEVICES="" /opt/stella/venv/bin/python -c \
+      'import paddle; paddle.set_device("cpu"); paddle.utils.run_check()'
 
 WORKDIR /opt/stella
 USER stella

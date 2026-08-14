@@ -622,7 +622,7 @@ wheels = [
 [[package]]
 name = "paddlepaddle-gpu"
 version = "3.2.2"
-source = { registry = "https://www.paddlepaddle.org.cn/packages/stable/cu126/" }
+source = { registry = "https://www.paddlepaddle.org.cn/packages/stable/cu129/" }
 dependencies = [
     { name = "httpx", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
     { name = "networkx", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
@@ -634,7 +634,7 @@ dependencies = [
     { name = "typing-extensions", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
 ]
 wheels = [
-    { url = "https://paddle-whl.bj.bcebos.com/stable/cu126/paddlepaddle-gpu/paddlepaddle_gpu-3.2.2-cp312-cp312-linux_x86_64.whl" },
+    { url = "https://paddle-whl.bj.bcebos.com/stable/cu129/paddlepaddle-gpu/paddlepaddle_gpu-3.2.2-cp312-cp312-linux_x86_64.whl" },
 ]
 
 [[package]]
@@ -1057,7 +1057,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "paddleocr", specifier = "==3.7.0" },
-    { name = "paddlepaddle-gpu", specifier = "==3.2.2", index = "https://www.paddlepaddle.org.cn/packages/stable/cu126/" },
+    { name = "paddlepaddle-gpu", specifier = "==3.2.2", index = "https://www.paddlepaddle.org.cn/packages/stable/cu129/" },
     { name = "paddlex", extras = ["ocr", "serving"], specifier = "==3.7.2" },
 ]
 
