@@ -5,7 +5,7 @@ services:
     # mounted at /var/lib/postgresql, not /var/lib/postgresql/data.
     # After switching from the old layout, recreate local pgdata with
     # `bun run --cwd apps/api docker:reset-dev`.
-    image: postgres:18.3
+    image: postgres:18.4@sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
