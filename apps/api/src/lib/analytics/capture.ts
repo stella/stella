@@ -137,10 +137,24 @@ const captureErrorWithOptions = (
   options: CaptureErrorOptions,
 ) => {
   const tag = errorTag(error);
+  const fingerprint = errorFingerprint(error);
   // PostHog ingestion drops `$exception` events that lack `$exception_list`,
   // so the entry is required even though we deliberately keep it empty —
   // the redaction contract above forbids shipping the message or stack.
   const properties: ExceptionProperties = {
+    // PostHog groups issues from `$exception_list` content; with the message
+    // and stack redacted, every event of one error class collapses into a
+    // single issue and first-seen automations never fire for new defects.
+    // Group by the structural fingerprint instead: same non-PII components,
+    // one issue per distinct defect. Positions are fixed (empty stays empty)
+    // so a frameless error's cause frame can never collide with another
+    // error's primary frame — the same shape `captureWindowKey` uses.
+    $exception_fingerprint: [
+      fingerprint["error.class"] ?? "",
+      fingerprint["error.code"] ?? "",
+      fingerprint["error.frame"] ?? "",
+      fingerprint["error.cause.frame"] ?? "",
+    ].join("|"),
     $exception_level: "error",
     $exception_list: [
       {
@@ -155,7 +169,7 @@ const captureErrorWithOptions = (
     // forbids the message and stack; a code location and class name
     // carry no client data, so they make the exception actionable in
     // the dashboard without violating it.
-    ...errorFingerprint(error),
+    ...fingerprint,
     ...options.context,
     ...(options.organizationId
       ? { organization_id: options.organizationId }
