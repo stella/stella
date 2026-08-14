@@ -35,6 +35,7 @@ import {
   CANARY_SCOPE,
   CANARY_USER_ID,
   CANARY_WRITE_MARKER,
+  canaryStateDiagnostic,
   signCanaryCredential,
 } from "./mcp-canary-server";
 
@@ -263,6 +264,20 @@ const listImageContainers = async (): Promise<string[]> => {
     .sort();
 };
 
+const readCanaryState = async (containerName: string): Promise<unknown> => {
+  const stateResult = await docker(["exec", containerName, "cat", STATE_PATH], {
+    allowFailure: true,
+  });
+  if (stateResult.exitCode !== 0) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(stateResult.stdout);
+  } catch {
+    return undefined;
+  }
+};
+
 const runHarness = async (token: string, serverUrl: string): Promise<void> => {
   assertCanary(
     apiKey !== undefined,
@@ -414,7 +429,12 @@ const main = async (): Promise<void> => {
     await probeRejectedCredential(anonymizedToken, serverUrl);
 
     const containersBeforeHarness = await listImageContainers();
-    await runHarness(validToken, serverUrl);
+    let harnessOutcome: CanaryOutcome = { status: "ok" };
+    try {
+      await runHarness(validToken, serverUrl);
+    } catch (error) {
+      harnessOutcome = { status: "failed", error };
+    }
     const containersAfterHarness = await listImageContainers();
     if (
       JSON.stringify(containersAfterHarness) !==
@@ -423,13 +443,14 @@ const main = async (): Promise<void> => {
       fail("sandbox container survived successful harness cleanup");
     }
 
-    const stateResult = await docker([
-      "exec",
-      containerName,
-      "cat",
-      STATE_PATH,
-    ]);
-    assertState(JSON.parse(stateResult.stdout));
+    const state = await readCanaryState(containerName);
+    if (harnessOutcome.status === "failed") {
+      fail(
+        `canary harness failed with server state: ${canaryStateDiagnostic(state)}`,
+        harnessOutcome.error,
+      );
+    }
+    assertState(state);
   } catch (error) {
     runOutcome = { status: "failed", error };
   }

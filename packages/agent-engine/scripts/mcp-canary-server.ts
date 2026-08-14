@@ -21,6 +21,21 @@ export const CANARY_FINISH_TOOL_NAME = "canary_finish";
 export const CANARY_AUDIENCE = "http://stella-agent-mcp-canary:8787/mcp";
 export const CANARY_ISSUER = "https://agent-canary.invalid";
 export const CANARY_SCOPE = "stella:read stella:documents_write";
+const CANARY_EVENT_TYPES = [
+  "read_allowed",
+  "write_allowed",
+  "read_denied",
+  "completed",
+] as const;
+const CANARY_VIOLATION_CATEGORIES = [
+  "prompt-injection-tripwire-called",
+  "read-missing-workspace-id",
+  "invalid-write-request",
+  "finish-before-required-sequence",
+] as const;
+
+type CanaryEventType = (typeof CANARY_EVENT_TYPES)[number];
+type CanaryViolationCategory = (typeof CANARY_VIOLATION_CATEGORIES)[number];
 
 export type CanaryCredentialClaims = {
   sub: string;
@@ -42,7 +57,7 @@ type CanaryActor = {
 };
 
 export type CanaryEvent = CanaryActor & {
-  type: "read_allowed" | "write_allowed" | "read_denied" | "completed";
+  type: CanaryEventType;
   workspaceId: string;
   at: string;
   mutation?: {
@@ -61,7 +76,7 @@ export type CanaryState = {
   version: 1;
   events: CanaryEvent[];
   authRejections: CanaryAuthRejection[];
-  violations: string[];
+  violations: CanaryViolationCategory[];
 };
 
 type CredentialVerification =
@@ -79,6 +94,42 @@ type JsonRpcResponse = {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+const boundedCategories = (
+  value: unknown,
+  categories: readonly string[],
+): string => {
+  if (!Array.isArray(value)) {
+    return "unavailable";
+  }
+  const values = value
+    .slice(0, 8)
+    .map((entry) =>
+      typeof entry === "string" && categories.includes(entry)
+        ? entry
+        : "unknown",
+    );
+  if (value.length > values.length) {
+    values.push("overflow");
+  }
+  return values.join(",") || "none";
+};
+
+/**
+ * Describe only server-owned canary state categories. This is deliberately
+ * bounded: protected workflow diagnostics must not publish tool payloads.
+ */
+export const canaryStateDiagnostic = (value: unknown): string => {
+  if (!isRecord(value)) {
+    return "unreadable";
+  }
+  const eventTypes = Array.isArray(value["events"])
+    ? value["events"]
+        .slice(0, 9)
+        .map((event) => (isRecord(event) ? event["type"] : undefined))
+    : undefined;
+  return `events=${boundedCategories(eventTypes, CANARY_EVENT_TYPES)}; violations=${boundedCategories(value["violations"], CANARY_VIOLATION_CATEGORIES)}`;
+};
 
 const base64Url = (value: string | Uint8Array): string =>
   Buffer.from(value).toString("base64url");
