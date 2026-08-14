@@ -290,14 +290,49 @@ describe("case law reconciliation loop", () => {
       turns: 12,
     });
 
+    const order = turnOrder(run);
     const healthyGaps = gapsBetweenTurns(run).filter((_, index) => {
-      const to = turnOrder(run)[index + 1];
+      const to = order[index + 1];
       return to === "cz-ns" || to === "pl-courts";
     });
 
     // Every healthy turn is reached at the plain unit gap. Under a shared
     // backoff these grow to the failure ceiling and never come back down.
+    // `every` is vacuously true on an empty array, so the count is asserted
+    // too: a regression that stopped the healthy sources taking any turn at
+    // all would otherwise pass this.
+    expect(healthyGaps.length).toBeGreaterThan(0);
     expect(healthyGaps.every((ms) => ms === TIMING.unitDelayMs)).toBe(true);
+  });
+
+  test("a held source neither freezes the idle schedule nor outlives its own ceiling", async () => {
+    // The two costs a rotation of "one held source plus idle ones" trades off.
+    // Treating it as fully-held would pin the idle schedule at the failing
+    // source's retry cadence forever, so a settled corpus would never get
+    // cheap; treating it as plainly idle would let the sleep double past
+    // `failureBackoffMaxMs`, silently overriding the ceiling that decides how
+    // often a broken source is retried. It has to do both: advance the idle
+    // schedule, and cap the wait at the held source's deadline.
+    const run = await runLoop({
+      responders: [
+        [
+          "cz-regional",
+          () => {
+            throw new Error("publisher down");
+          },
+        ],
+        ["cz-ns", () => IDLE],
+      ],
+      turns: 10,
+    });
+
+    const gaps = gapsBetweenTurns(run);
+
+    // The idle schedule engages: some wait exceeds the unit gap.
+    expect(gaps.some((ms) => ms > TIMING.unitDelayMs)).toBe(true);
+    // ...but none of them sleeps past the failure ceiling, which is what
+    // bounds how stale the held source's retry can get.
+    expect(gaps.every((ms) => ms <= TIMING.failureBackoffMaxMs)).toBe(true);
   });
 
   test("every source failing waits out the earliest retry rather than spinning", async () => {

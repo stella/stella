@@ -312,19 +312,29 @@ export const runCaseLawReconciliationLoop = async ({
       // Only a rotation in which no source had anything to do is idle: with a
       // per-turn test a single busy source would keep every other source
       // polling at the unit rate.
-      const earliestRetryAt = Math.min(...retryAtMs.values());
       if (workedThisRotation > 0) {
         idleMs = timing.idleSleepMs;
-      } else if (Number.isFinite(earliestRetryAt)) {
-        // Every source is held. Skipping costs nothing per turn, so without a
-        // wait here the loop would spin the whole rotation; waiting past the
-        // first expiry would idle a source that is ready to be retried. The
-        // idle backoff is deliberately not doubled: the corpus is not settled,
-        // it is unreachable, and it must come back at full cadence.
-        delayMs = Math.max(delayMs, earliestRetryAt - now());
       } else {
-        delayMs = Math.max(delayMs, idleMs);
+        // The idle schedule advances on its own terms, whether or not a source
+        // is held: a rotation that found nothing to do is the thing it exists
+        // to make cheap, and freezing it would leave a settled corpus polling
+        // the database at some held source's retry cadence forever.
+        const idleWaitMs = idleMs;
         idleMs = Math.min(idleMs * 2, timing.idleSleepMaxMs);
+        // A held source only ever caps that wait. There is work to try the
+        // moment its deadline expires, so the idle schedule must not sleep
+        // past it, and the unit gap is the floor because a rotation of skips
+        // costs no time of its own and must not spin.
+        const earliestRetryAt = Math.min(...retryAtMs.values());
+        delayMs = Math.max(
+          delayMs,
+          Number.isFinite(earliestRetryAt)
+            ? Math.min(
+                idleWaitMs,
+                Math.max(earliestRetryAt - now(), timing.unitDelayMs),
+              )
+            : idleWaitMs,
+        );
       }
       workedThisRotation = 0;
     }
