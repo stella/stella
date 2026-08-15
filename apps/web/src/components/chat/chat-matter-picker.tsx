@@ -277,10 +277,10 @@ export const ChatMatterPicker = ({
       </MenuTrigger>
       <MenuPopup align="start" className="w-72" sideOffset={6}>
         <div className="flex flex-col gap-1.5 border-b px-2 pt-1.5 pb-2">
-          <p className="text-foreground text-xs font-medium">
+          <p className="text-foreground text-sm font-semibold">
             {t("inspector.matterPicker.title")}
           </p>
-          <p className="text-muted-foreground text-[11px] leading-snug text-pretty">
+          <p className="text-muted-foreground text-xs leading-snug text-pretty">
             {t("inspector.matterPicker.description")}
           </p>
           <div className="border-input focus-within:border-ring focus-within:ring-ring/16 bg-background relative flex items-center gap-1.5 rounded-md border px-1.5 transition-shadow focus-within:ring-2">
@@ -289,7 +289,7 @@ export const ChatMatterPicker = ({
               className="text-muted-foreground size-3.5 shrink-0"
             />
             <input
-              className="placeholder:text-foreground-placeholder h-7 w-full min-w-0 bg-transparent text-xs outline-none"
+              className="placeholder:text-foreground-placeholder h-7 w-full min-w-0 bg-transparent text-sm outline-none"
               dir={contentDir(search)}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => {
@@ -333,7 +333,7 @@ export const ChatMatterPicker = ({
             >
               <span className="flex min-w-0 items-center gap-2">
                 <MatterIcon className="size-3.5 shrink-0" variant="all" />
-                <span className="truncate text-xs font-medium">
+                <span className="truncate text-sm font-medium">
                   {t("inspector.matterPicker.allMatters")}
                 </span>
               </span>
@@ -370,7 +370,10 @@ export const ChatMatterPicker = ({
                   return (
                     <MenuCheckboxItem
                       checked={isOn}
-                      className={TRUNCATING_ITEM_CLASS}
+                      className={cn(
+                        TRUNCATING_ITEM_CLASS,
+                        "min-h-11 sm:min-h-11",
+                      )}
                       closeOnClick={false}
                       key={m.id}
                       onClick={() => toggle(m.id)}
@@ -380,22 +383,25 @@ export const ChatMatterPicker = ({
                           className="size-3.5 shrink-0"
                           matter={{ id: m.id, color: m.color }}
                         />
-                        <span className="truncate text-xs" dir="auto">
+                        <span
+                          className="min-w-0 flex-1 truncate text-sm"
+                          dir="auto"
+                        >
                           {m.name}
                         </span>
+                        <a
+                          href={`/workspaces/${m.id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                          }}
+                          className="text-muted-foreground bg-muted hover:bg-background hover:text-foreground focus-visible:ring-ring relative ms-auto inline-flex size-7 shrink-0 items-center justify-center rounded-md shadow-sm/5 outline-none before:absolute before:-inset-2 before:content-[''] focus-visible:ring-2"
+                          title={t("common.openInNewTab")}
+                        >
+                          <ExternalLinkIcon className="size-3.5" />
+                        </a>
                       </span>
-                      <a
-  href={`/workspaces/${m.id}`}
-  target="_blank"
-  rel="noreferrer"
-  onClick={(e) => {
-    e.stopPropagation(); // Prevent selecting the row 
-  }}
-  className="ml-auto inline-flex items-center justify-center p-1 text-muted-foreground hover:text-foreground rounded"
-  title={t("common.openInNewTab")}
->
-  <ExternalLinkIcon className="size-3.5" />
-</a>
                     </MenuCheckboxItem>
                   );
                 })}
@@ -429,7 +435,7 @@ const ClientMatterToggle = ({
     <MenuCheckboxItem
       checked={groupAllSelected}
       className={cn(
-        "text-muted-foreground data-[checked]:text-foreground data-highlighted:text-foreground min-h-7 py-0.5 pe-2 text-xs font-medium",
+        "text-muted-foreground data-[checked]:text-foreground data-highlighted:text-foreground min-h-7 py-0.5 pe-2 text-xs font-medium sm:text-xs",
         TRUNCATING_ITEM_CLASS,
       )}
       closeOnClick={false}
