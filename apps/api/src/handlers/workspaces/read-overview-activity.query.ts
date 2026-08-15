@@ -80,6 +80,27 @@ const LEGACY_VISIBLE_RESOURCE_TYPES = [
   AUDIT_RESOURCE_TYPE.FLOW_RUN,
 ] as const;
 
+export const visibleActivityCondition = () =>
+  and(
+    inArray(auditLogs.action, VISIBLE_ACTIONS),
+    // "other" is housekeeping — session expiry, retention sweeps — and stays
+    // out of the matter's story no matter who performed it. The performer
+    // test only rescues rows written before activityCategory existed.
+    or(
+      and(
+        isNotNull(auditLogs.activityCategory),
+        ne(auditLogs.activityCategory, "other"),
+      ),
+      and(
+        isNull(auditLogs.activityCategory),
+        or(
+          ne(auditLogs.performerType, "user"),
+          inArray(auditLogs.resourceType, LEGACY_VISIBLE_RESOURCE_TYPES),
+        ),
+      ),
+    ),
+  ) ?? sql`false`;
+
 type ActivityCategory = Exclude<MatterActivityCategory, "all">;
 
 const legacyEntityKind = () =>
@@ -463,6 +484,16 @@ type ReadOverviewActivityPageOptions = {
   workspaceId: SafeId<"workspace">;
 };
 
+const timestampNanoseconds = (value: string): bigint | null => {
+  const milliseconds = new Date(value).getTime();
+  if (!Number.isFinite(milliseconds)) {
+    return null;
+  }
+  const fraction = value.match(/\.(\d+)(?=Z|[+-]\d\d:\d\d$)/u)?.[1] ?? "";
+  const nanoseconds = BigInt(fraction.padEnd(9, "0").slice(0, 9) || "0");
+  return BigInt(Math.floor(milliseconds / 1000)) * 1_000_000_000n + nanoseconds;
+};
+
 export const readOverviewActivityPage = async ({
   cursor: cursorValue,
   filters,
@@ -474,13 +505,18 @@ export const readOverviewActivityPage = async ({
   Result<MatterActivityPage, HandlerError | SafeDbError>
 > =>
   await Result.gen(async function* () {
-    const fromDate = filters.from === null ? null : new Date(filters.from);
+    const fromDate =
+      filters.from === null ? null : timestampNanoseconds(filters.from);
     const toExclusiveDate =
-      filters.toExclusive === null ? null : new Date(filters.toExclusive);
+      filters.toExclusive === null
+        ? null
+        : timestampNanoseconds(filters.toExclusive);
     if (
-      fromDate !== null &&
-      toExclusiveDate !== null &&
-      fromDate >= toExclusiveDate
+      (filters.from !== null && fromDate === null) ||
+      (filters.toExclusive !== null && toExclusiveDate === null) ||
+      (fromDate !== null &&
+        toExclusiveDate !== null &&
+        fromDate >= toExclusiveDate)
     ) {
       return Result.err(
         new HandlerError({ status: 400, message: "Invalid date range" }),
@@ -500,26 +536,7 @@ export const readOverviewActivityPage = async ({
     const conditions = [
       eq(auditLogs.organizationId, organizationId),
       eq(auditLogs.workspaceId, workspaceId),
-      inArray(auditLogs.action, VISIBLE_ACTIONS),
-      // "other" is housekeeping — session expiry, retention sweeps — and stays
-      // out of the matter's story no matter who performed it. Testing the
-      // performer on its own let any service-performed row skip that exclusion,
-      // so a scheduler task expiring a desktop edit session read as matter
-      // activity. The performer test only rescues rows written before
-      // activityCategory existed.
-      or(
-        and(
-          isNotNull(auditLogs.activityCategory),
-          ne(auditLogs.activityCategory, "other"),
-        ),
-        and(
-          isNull(auditLogs.activityCategory),
-          or(
-            ne(auditLogs.performerType, "user"),
-            inArray(auditLogs.resourceType, LEGACY_VISIBLE_RESOURCE_TYPES),
-          ),
-        ),
-      ),
+      visibleActivityCondition(),
     ];
 
     if (filters.action !== "all") {
@@ -548,10 +565,12 @@ export const readOverviewActivityPage = async ({
       conditions.push(
         or(
           eq(auditLogs.activityCategory, "automation"),
-          ne(auditLogs.performerType, "user"),
           and(
             isNull(auditLogs.activityCategory),
-            legacyCategoryCondition("automation"),
+            or(
+              ne(auditLogs.performerType, "user"),
+              legacyCategoryCondition("automation"),
+            ),
           ),
         ),
       );
@@ -729,8 +748,7 @@ export const readOverviewActivityPage = async ({
                     eq(entities.workspaceId, workspaceId),
                     inArray(entities.id, entityIds),
                   ),
-                )
-                .limit(limit + 1);
+                );
         const workspace = await tx.query.workspaces.findFirst({
           where: {
             id: { eq: workspaceId },
@@ -764,29 +782,18 @@ export const readOverviewActivityPage = async ({
                   image: user.image,
                   name: user.name,
                 })
-                .from(auditLogs)
-                .innerJoin(
+                .from(user)
+                .leftJoin(
                   member,
                   and(
+                    eq(member.userId, user.id),
                     eq(member.organizationId, organizationId),
-                    or(
-                      eq(member.userId, auditLogs.performerId),
-                      and(
-                        isNull(auditLogs.performerId),
-                        eq(member.userId, auditLogs.userId),
-                      ),
-                      eq(member.userId, auditLogs.triggerUserId),
-                      eq(member.userId, auditLogs.approvedByUserId),
-                      eq(member.userId, teamUserIdSnapshot()),
-                    ),
                   ),
                 )
-                .innerJoin(user, eq(user.id, member.userId))
                 .where(
                   and(
-                    eq(auditLogs.organizationId, organizationId),
-                    eq(auditLogs.workspaceId, workspaceId),
-                    inArray(member.userId, actorIds),
+                    inArray(user.id, actorIds),
+                    or(isNotNull(member.userId), isNotNull(user.deletedAt)),
                   ),
                 );
         return {

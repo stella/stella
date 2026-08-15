@@ -17,6 +17,14 @@ export type WorkspaceActivityKey = {
   workspaceId: string;
 };
 
+export const toMatterActivityQuery = (filters: MatterActivityFilters) => ({
+  action: filters.action,
+  category: filters.category,
+  ...(filters.actorId === null ? {} : { actorId: filters.actorId }),
+  ...(filters.from === null ? {} : { from: filters.from }),
+  ...(filters.toExclusive === null ? {} : { toExclusive: filters.toExclusive }),
+});
+
 export const workspacesKeys = {
   all: ["workspaces"],
   list: (activeOrganizationId: string) => [

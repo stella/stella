@@ -12,6 +12,7 @@ import type { WorkspaceNavigationItem } from "@/lib/memory-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import {
   type MatterActivityFilters,
+  toMatterActivityQuery,
   type WorkspaceActivityKey,
   workspacesKeys,
 } from "@/lib/workspaces/queries.logic";
@@ -24,6 +25,7 @@ export {
   type MatterActivityCategory,
   type MatterActivityFilters,
   workspacesKeys,
+  toMatterActivityQuery,
 } from "@/lib/workspaces/queries.logic";
 
 type WorkspaceActivityOptions = {
@@ -53,14 +55,8 @@ const readOverviewActivity = async ({
   const response = await api.workspaces({ workspaceId }).overview.activity.get({
     ...(signal ? { fetch: { signal } } : {}),
     query: {
-      action: filters.action,
-      category: filters.category,
+      ...toMatterActivityQuery(filters),
       limit,
-      ...(filters.actorId === null ? {} : { actorId: filters.actorId }),
-      ...(filters.from === null ? {} : { from: filters.from }),
-      ...(filters.toExclusive === null
-        ? {}
-        : { toExclusive: filters.toExclusive }),
       ...(cursor ? { cursor } : {}),
     },
   });
@@ -74,24 +70,21 @@ export type MatterActivityItem = Awaited<
 export const exportOverviewActivity = async ({
   filters,
   format,
+  signal,
   workspaceId,
 }: {
   filters: MatterActivityFilters;
   format: "csv" | "json";
+  signal?: AbortSignal;
   workspaceId: string;
 }) => {
   const response = await api
     .workspaces({ workspaceId })
     .overview.activity.export.get({
+      ...(signal ? { fetch: { signal } } : {}),
       query: {
-        action: filters.action,
-        category: filters.category,
+        ...toMatterActivityQuery(filters),
         format,
-        ...(filters.actorId === null ? {} : { actorId: filters.actorId }),
-        ...(filters.from === null ? {} : { from: filters.from }),
-        ...(filters.toExclusive === null
-          ? {}
-          : { toExclusive: filters.toExclusive }),
       },
     });
   return unwrapEden(response);

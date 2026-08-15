@@ -30,13 +30,6 @@ import exportOverviewActivity from "./export-overview-activity";
 import readOverviewActivity from "./read-overview-activity";
 import readOverviewActivityActors from "./read-overview-activity-actors";
 
-// Evidence for the `no-unscoped-user-query` waiver on the `user` import: the
-// actor lookup is bounded by the ids the activity rows carry, and those rows
-// are pinned to one authorized organization and matter. `audit_logs` RLS
-// (`audit_logs_select`) enforces the organization only, so the matter boundary
-// — and with it every identity the payload can name — rests on this query's own
-// workspace predicate.
-
 setDefaultTimeout(120_000);
 
 let testDb: TestDatabase;

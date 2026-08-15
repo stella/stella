@@ -108,6 +108,7 @@ import {
   resolveSelectedActivityGroup,
   toSingleActivityGroup,
   toMatterActivityDateRange,
+  toMatterActivityDatePickerValues,
 } from "./activity-panel.logic";
 
 type ActivityPanelProps = { workspaceId: string };
@@ -160,11 +161,11 @@ export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
   const [filters, setFilters] = useState<MatterActivityFilters>(
     DEFAULT_MATTER_ACTIVITY_FILTERS,
   );
-  const [fromDate, setFromDate] = useState<string | null>(null);
-  const [toDate, setToDate] = useState<string | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ActivityViewMode>("timeline");
   const deferredFilters = useDeferredValue(filters);
+  const { from: fromDate, to: toDate } =
+    toMatterActivityDatePickerValues(filters);
   const isFilterPending = filters !== deferredFilters;
   const viewOptions = [
     {
@@ -181,14 +182,14 @@ export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
 
   return (
     <section aria-labelledby="matter-activity-heading">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2
           className="text-muted-foreground text-sm font-medium"
           id="matter-activity-heading"
         >
           {t("workspaces.overview.activity.title")}
         </h2>
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
           <SegmentedIconToggle
             onChange={setViewMode}
             options={viewOptions}
@@ -203,7 +204,6 @@ export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
               setFilters(nextFilters);
             }}
             onFromDateChange={(value) => {
-              setFromDate(value);
               const range = toMatterActivityDateRange({
                 from: value,
                 to: toDate,
@@ -212,7 +212,6 @@ export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
               setFilters((current) => ({ ...current, ...range }));
             }}
             onToDateChange={(value) => {
-              setToDate(value);
               const range = toMatterActivityDateRange({
                 from: fromDate,
                 to: value,
@@ -313,7 +312,7 @@ const ActivityAdvancedFilters = ({
           deletedAt: null,
           id: filters.actorId,
           image: null,
-          name: filters.actorId,
+          name: null,
         });
   const activeFilterCount = [
     filters.action !== "all",
@@ -382,7 +381,9 @@ const ActivityAdvancedFilters = ({
           </label>
           <Combobox<MatterActivityActor>
             items={actors}
-            itemToStringLabel={(actor) => actor.name ?? actor.id}
+            itemToStringLabel={(actor) =>
+              actor.name ?? t("workspaces.overview.activity.list.actor")
+            }
             onValueChange={(actor) =>
               onFiltersChange({ ...filters, actorId: actor?.id ?? null })
             }
@@ -398,20 +399,52 @@ const ActivityAdvancedFilters = ({
               <ComboboxList>
                 {actors.map((actor) => (
                   <ComboboxItem key={actor.id} value={actor}>
-                    <BidiText>{actor.name ?? actor.id}</BidiText>
+                    <BidiText>
+                      {actor.name ??
+                        t("workspaces.overview.activity.list.actor")}
+                    </BidiText>
                   </ComboboxItem>
                 ))}
               </ComboboxList>
-              <ComboboxEmpty>{t("common.noResults")}</ComboboxEmpty>
+              <ComboboxEmpty>
+                {actorsQuery.error
+                  ? t("common.unexpectedError")
+                  : t("common.noResults")}
+              </ComboboxEmpty>
               {actorsQuery.hasNextPage && (
                 <Button
                   className="m-1 min-h-11"
                   disabled={actorsQuery.isFetchingNextPage}
                   onClick={() => {
-                    detached(
-                      actorsQuery.fetchNextPage(),
-                      "activity-panel.fetch-actors",
-                    );
+                    const request = actorsQuery
+                      .fetchNextPage()
+                      .then((result) => {
+                        if (result.isError) {
+                          getAnalytics().captureError(result.error);
+                          stellaToast.add({
+                            description: userErrorFromThrown(
+                              result.error,
+                              t("common.unexpectedError"),
+                            ),
+                            title: t("errors.actionFailed"),
+                            type: "error",
+                          });
+                        }
+                        return result;
+                      })
+                      .catch((error: unknown) => {
+                        getAnalytics().captureError(error);
+                        stellaToast.add({
+                          description: userErrorFromThrown(
+                            error,
+                            t("common.unexpectedError"),
+                          ),
+                          title: t("errors.actionFailed"),
+                          type: "error",
+                        });
+                        throw error;
+                      });
+                    detached(request, "activity-panel.fetch-actors");
                   }}
                   size="sm"
                   variant="ghost"
@@ -488,7 +521,12 @@ const ActivityExportMenu = ({
     setExporting(true);
     const result = await Result.tryPromise({
       try: async () =>
-        await exportOverviewActivity({ filters, format, workspaceId }),
+        await exportOverviewActivity({
+          filters,
+          format,
+          signal: AbortSignal.timeout(30_000),
+          workspaceId,
+        }),
       catch: (error) => error,
     });
     setExporting(false);

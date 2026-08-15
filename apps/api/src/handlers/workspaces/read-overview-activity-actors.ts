@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, eq, gt, sql } from "drizzle-orm";
+import { and, asc, eq, gt, isNotNull, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -13,6 +13,8 @@ import {
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
+
+import { visibleActivityCondition } from "./read-overview-activity.query";
 
 const config = {
   permissions: { workspace: ["read"] },
@@ -55,6 +57,7 @@ const readOverviewActivityActors = createSafeHandler(
           eq(auditLogs.organizationId, session.activeOrganizationId),
           eq(auditLogs.workspaceId, workspaceId),
           eq(auditLogs.performerType, "user"),
+          visibleActivityCondition(),
         ];
         if (afterActorId !== null) {
           conditions.push(gt(actorId, afterActorId));
@@ -76,7 +79,13 @@ const readOverviewActivityActors = createSafeHandler(
               eq(member.organizationId, session.activeOrganizationId),
             ),
           )
-          .leftJoin(user, and(eq(user.id, actorId), eq(member.userId, user.id)))
+          .leftJoin(
+            user,
+            and(
+              eq(user.id, actorId),
+              or(isNotNull(member.userId), isNotNull(user.deletedAt)),
+            ),
+          )
           .where(and(...conditions))
           .orderBy(asc(actorId))
           .limit(limit + 1);

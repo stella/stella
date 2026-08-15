@@ -18,6 +18,27 @@ export const toMatterActivityDateRange = ({
   };
 };
 
+const formatLocalDate = (date: Date): string =>
+  [date.getFullYear(), date.getMonth() + 1, date.getDate()]
+    .map((part, index) =>
+      index === 0 ? String(part) : String(part).padStart(2, "0"),
+    )
+    .join("-");
+
+export const toMatterActivityDatePickerValues = ({
+  from,
+  toExclusive,
+}: {
+  from: string | null;
+  toExclusive: string | null;
+}): { from: string | null; to: string | null } => ({
+  from: from === null ? null : formatLocalDate(new Date(from)),
+  to:
+    toExclusive === null
+      ? null
+      : formatLocalDate(addDays(new Date(toExclusive), -1)),
+});
+
 type ActivityTriggerType = MatterActivityItem["trigger"]["type"];
 type VisibleActivityTriggerType = Exclude<ActivityTriggerType, "direct">;
 

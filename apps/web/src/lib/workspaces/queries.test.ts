@@ -68,14 +68,16 @@ describe("workspace activity invalidation", () => {
       },
     ];
 
-    for (const filters of variants) {
-      expect(
-        workspacesKeys.overviewActivity(
-          "organization-a",
-          "workspace-a",
-          filters,
-        ),
-      ).not.toEqual(original);
+    const keys = variants.map((filters) =>
+      workspacesKeys.overviewActivity("organization-a", "workspace-a", filters),
+    );
+    for (const key of keys) {
+      expect(key).not.toEqual(original);
+    }
+    for (const [index, key] of keys.entries()) {
+      for (const otherKey of keys.slice(index + 1)) {
+        expect(key).not.toEqual(otherKey);
+      }
     }
   });
 });
