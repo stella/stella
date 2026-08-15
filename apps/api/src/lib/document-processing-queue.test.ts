@@ -10,6 +10,8 @@ import {
   classifyOcrWorkspaceDispatch,
   createDocumentProcessingLeaseRenewal,
   createReconciliationProgress,
+  dispatchScheduledDocumentProcessingRetries,
+  DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS,
   DOCUMENT_PROCESSING_RECONCILIATION_PHASES,
   DocumentProcessingJobError,
   indexDocumentProjection,
@@ -26,6 +28,7 @@ import {
   RECONCILE_BATCH_SIZE,
   reconciliationLeftWorkBehind,
   resolveRepairScanPage,
+  resolveSearchIndexReplayBatch,
   runDocumentProcessingReconciliationPhases,
   runSearchIndexReplayAttempt,
   settleDocumentProcessingAttemptError,
@@ -1155,15 +1158,25 @@ describe("reconciliationLeftWorkBehind", () => {
     ).toBe(true);
   });
 
-  test("repair runs first and delivery last, so a tick hands off what it created", () => {
-    // Repair inserts runs due now; delivery is the phase that hands them
-    // to the queue, so it has to come after everything that creates work.
-    expect(DOCUMENT_PROCESSING_RECONCILIATION_PHASES.at(0)?.name).toBe(
-      "repair",
+  test("every phase runs ahead of the phases it feeds", () => {
+    const order = DOCUMENT_PROCESSING_RECONCILIATION_PHASES.map(
+      ({ name }): string => name,
     );
-    expect(DOCUMENT_PROCESSING_RECONCILIATION_PHASES.at(-1)?.name).toBe(
-      "delivery",
+    const feeds = Object.entries(
+      DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS,
     );
+
+    // Both directions again, this time between the declared edges and the
+    // order they constrain: an edge whose consumer is missing from the
+    // order, or a phase that produces work for a phase that already ran,
+    // fails here. That second case is what leaves a tick's own output
+    // waiting for the next tick.
+    expect(feeds.map(([phase]) => phase).toSorted()).toEqual(order.toSorted());
+    for (const [phase, consumers] of feeds) {
+      for (const consumer of consumers) {
+        expect(order.indexOf(consumer)).toBeGreaterThan(order.indexOf(phase));
+      }
+    }
   });
 
   test("a failed phase counts as work left behind", async () => {
@@ -1207,32 +1220,67 @@ describe("resolveRepairScanPage", () => {
     });
   });
 
-  test("a short page that created runs ends the scan but not the tick's work", () => {
+  test("a short page ends the scan whether or not it created runs", () => {
     const scannedFieldIds = fieldIds(RECONCILE_BATCH_SIZE - 1);
 
-    // The cursor resets, because the scan did reach the end; the tick is
-    // still unfinished, because those runs are queued for delivery.
+    // The runs it created are due input for reindex and delivery, both of
+    // which run later in this tick and answer for them: this phase reports
+    // only its own backlog, which the short page ended.
+    for (const createdRunCount of [0, 2]) {
+      expect(
+        resolveRepairScanPage({ createdRunCount, scannedFieldIds }),
+      ).toEqual({
+        count: createdRunCount,
+        hasMore: false,
+        nextCursor: null,
+      });
+    }
+  });
+});
+
+/**
+ * Work a phase leaves for itself is the one kind the phase order cannot
+ * place, so each of those phases has to report it.
+ */
+describe("work a phase keeps for itself", () => {
+  test("a replay claimed but not completed keeps the reindex phase unfinished", () => {
+    // It went back to failed with a backoff, which is this phase's own
+    // input: no later phase selects it.
     expect(
-      resolveRepairScanPage({ createdRunCount: 2, scannedFieldIds }),
-    ).toEqual({
-      count: 2,
-      hasMore: true,
-      nextCursor: null,
-    });
+      resolveSearchIndexReplayBatch({
+        claimedCount: 4,
+        recoveredCount: 1,
+        saturated: false,
+      }),
+    ).toEqual({ count: 1, hasMore: true });
+
+    expect(
+      resolveSearchIndexReplayBatch({
+        claimedCount: 4,
+        recoveredCount: 4,
+        saturated: false,
+      }),
+    ).toEqual({ count: 4, hasMore: false });
   });
 
-  test("a short page that created nothing is drained", () => {
-    const scannedFieldIds = fieldIds(RECONCILE_BATCH_SIZE - 1);
-
-    // The tick after the one above: nothing left to create, nothing left
-    // to deliver.
+  test("a failed handoff keeps the delivery phase unfinished", async () => {
+    // The run stays queued and rescheduled, and delivery is the only phase
+    // that takes queued rows, so nothing later in this tick can.
     expect(
-      resolveRepairScanPage({ createdRunCount: 0, scannedFieldIds }),
-    ).toEqual({
-      count: 0,
-      hasMore: false,
-      nextCursor: null,
-    });
+      await dispatchScheduledDocumentProcessingRetries(async () => ({
+        attempted: 3,
+        hasMore: false,
+        retryAt: new Date("2030-01-01T00:00:30.000Z"),
+      })),
+    ).toEqual({ count: 3, hasMore: true });
+
+    expect(
+      await dispatchScheduledDocumentProcessingRetries(async () => ({
+        attempted: 3,
+        hasMore: false,
+        retryAt: null,
+      })),
+    ).toEqual({ count: 3, hasMore: false });
   });
 });
 

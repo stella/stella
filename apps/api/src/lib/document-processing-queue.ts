@@ -1802,15 +1802,14 @@ type RepairScanPage = ReconciliationPhaseResult & {
 };
 
 /**
- * The repair sweep's resume position follows the scan alone: a full page
- * means the scan stopped at the cap, so the next tick resumes after the
- * last scanned field; a short page means it reached the end of the table,
- * so the cursor resets. Work left behind has a second, independent
- * source: runs this page created are queued for the delivery phase, which
- * runs later in the same tick and may not take them all, so a page that
- * ended the scan still leaves work behind when it created anything. Both
- * are derived here so the cursor and the signal cannot disagree, and
- * neither is inferred from the created-run count alone, which most
+ * The repair sweep's resume position and its backlog are the same fact:
+ * a full page means the scan stopped at the cap, so the next tick resumes
+ * after the last scanned field; a short page means it reached the end of
+ * the table, so the cursor resets and this phase has nothing more to take.
+ * The runs the page created are not part of it: they are due input for the
+ * reindex and delivery phases, which run later in the same tick, and their
+ * own signals answer for them. Derived together so cursor and signal
+ * cannot disagree, and never from the created-run count, which most
  * scanned fields never reach.
  */
 export const resolveRepairScanPage = ({
@@ -1826,7 +1825,7 @@ export const resolveRepairScanPage = ({
   });
   return {
     count: createdRunCount,
-    hasMore: scanSaturated || createdRunCount > 0,
+    hasMore: scanSaturated,
     nextCursor: scanSaturated ? (scannedFieldIds.at(-1) ?? null) : null,
   };
 };
@@ -2021,14 +2020,16 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
   };
 };
 
-const dispatchScheduledDocumentProcessingRetries = async () => {
-  // Runs whose handoff failed are rescheduled into the future, so they are
-  // not due work this phase could still take; only a full selection means
-  // more was due than one batch could deliver.
-  const { attempted, hasMore } = await dispatchQueuedDocumentProcessingRuns({
+export const dispatchScheduledDocumentProcessingRetries = async (
+  dispatch = dispatchQueuedDocumentProcessingRuns,
+) => {
+  const { attempted, hasMore, retryAt } = await dispatch({
     selection: QUEUED_OCR_SELECTION.SCHEDULED_RETRIES,
   });
-  return { count: attempted, hasMore };
+  // A run whose handoff failed is still queued and still nobody else's
+  // work: it comes back to this phase on a later tick, so the phase order
+  // cannot cover it and this phase has to report it itself.
+  return { count: attempted, hasMore: hasMore || retryAt !== null };
 };
 
 // Manual searchable-PDF failures are retryable too, so the condition spans
@@ -2263,6 +2264,26 @@ const recoverFailedSearchIndex = async ({
     },
   });
 
+/**
+ * A replay this phase claimed and did not complete went back to `failed`
+ * with a backoff, which is this phase's own input again: no later phase
+ * selects it, so the phase order cannot cover it and the phase reports it
+ * itself. Claims lost to another worker are that worker's problem and are
+ * not counted here.
+ */
+export const resolveSearchIndexReplayBatch = ({
+  claimedCount,
+  recoveredCount,
+  saturated,
+}: {
+  claimedCount: number;
+  recoveredCount: number;
+  saturated: boolean;
+}): ReconciliationPhaseResult => ({
+  count: recoveredCount,
+  hasMore: saturated || recoveredCount < claimedCount,
+});
+
 const recoverFailedOcrSearchIndexes = async () => {
   const now = new Date();
   // The failed run is the durable retry token, but the entity projection is
@@ -2419,7 +2440,11 @@ const recoverFailedOcrSearchIndexes = async () => {
     limit: SEARCH_INDEX_REPLAY_CONCURRENCY,
     operation: recoverFailedSearchIndex,
   });
-  return { count: recovered.filter(Boolean).length, hasMore };
+  return resolveSearchIndexReplayBatch({
+    claimedCount: claimed.length,
+    recoveredCount: recovered.filter(Boolean).length,
+    saturated: hasMore,
+  });
 };
 
 const recoverStaleDocumentProcessingRuns = async () => {
@@ -2592,18 +2617,61 @@ const RECONCILIATION_PHASE_RUNNERS = {
 >;
 
 /**
- * The phases the worker actually runs, in order: repair first because it
- * creates runs the later phases settle, delivery last so it hands off
- * what the tick produced. Assembled from the runner map rather than
- * written out again, so the only way to leave a declared phase unrun is
- * to leave it out of this order, which the reconciliation tests compare
- * against the declared names in both directions.
+ * Which phases each phase's transitions feed, read off its writes against
+ * every phase's selection predicate. A produced row counts as an edge only
+ * when the consumer would select it in the same tick, so future-scheduled
+ * rows (a replay backed off, a handoff rescheduled, an enqueued run parked
+ * behind its visibility timeout) are not edges here.
+ *
+ * - repair inserts queued runs due now (delivery selects queued rows with
+ *   a due schedule) and, where a current projection already exists, failed
+ *   runs coded `search_index_failed` and due now (reindex selects those).
+ * - retry moves retryable failures to queued, due now: delivery.
+ * - stale-lease returns expired leases to queued, due now (delivery), and
+ *   expired search-index replays to failed, `search_index_failed`,
+ *   unscheduled, which reindex selects. Its exhausted-attempt writes carry
+ *   `worker_lease_expired` past the attempt cap, which no phase selects.
+ * - reindex claims rows for itself; what it does not complete comes back
+ *   to reindex with a backoff, and what it completes is terminal.
+ * - delivery only moves rows into the job queue or reschedules them for a
+ *   later delivery.
+ *
+ * Work a phase leaves for itself is not listed: no ordering can help it,
+ * so that phase reports it in its own `hasMore` instead.
+ */
+export const DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS = {
+  [RECONCILIATION_PHASE.DELIVERY]: [],
+  [RECONCILIATION_PHASE.REINDEX]: [],
+  [RECONCILIATION_PHASE.REPAIR]: [
+    RECONCILIATION_PHASE.REINDEX,
+    RECONCILIATION_PHASE.DELIVERY,
+  ],
+  [RECONCILIATION_PHASE.RETRY]: [RECONCILIATION_PHASE.DELIVERY],
+  [RECONCILIATION_PHASE.STALE_LEASE]: [
+    RECONCILIATION_PHASE.REINDEX,
+    RECONCILIATION_PHASE.DELIVERY,
+  ],
+} as const satisfies Record<
+  ReconciliationPhaseName,
+  readonly ReconciliationPhaseName[]
+>;
+
+/**
+ * The phases the worker actually runs, in the order those edges force:
+ * every producer ahead of every phase it feeds, so work a tick creates is
+ * taken by the same tick rather than waiting for the next one. Repair and
+ * stale-lease both feed reindex, all three of repair, retry and stale-lease
+ * feed delivery, and reindex and delivery feed nobody, which leaves repair,
+ * retry, stale-lease, reindex, delivery. Assembled from the runner map
+ * rather than written out again, so the only way to leave a declared phase
+ * unrun is to leave it out of this order, which the reconciliation tests
+ * check against both the declared names and the edges above.
  */
 export const DOCUMENT_PROCESSING_RECONCILIATION_PHASES = [
   RECONCILIATION_PHASE.REPAIR,
-  RECONCILIATION_PHASE.REINDEX,
   RECONCILIATION_PHASE.RETRY,
   RECONCILIATION_PHASE.STALE_LEASE,
+  RECONCILIATION_PHASE.REINDEX,
   RECONCILIATION_PHASE.DELIVERY,
 ].map((name) => ({
   name,
