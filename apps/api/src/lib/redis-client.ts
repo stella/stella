@@ -3,6 +3,7 @@ import { type BunRedisRawClient, createBunRedisClient } from "bullmq";
 import { type RedisOptions, RedisClient, sleep } from "bun";
 
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
+import { RedisClientClosedError } from "@/api/lib/errors/tagged-errors";
 import { connectionErrorFields, safeErrorCode } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { redisConnectionOptions } from "@/api/lib/redis-options";
@@ -115,6 +116,63 @@ export const connectWithColdStartRetries = async (
     // oxlint-disable-next-line no-await-in-loop -- retries are intentionally sequential backoff, not parallel work
     await sleep(delayMs);
   }
+};
+
+/** The two capabilities a lazily connected client has to expose. */
+type ManagedRedisClient = {
+  close: () => void;
+  connect: () => Promise<void>;
+};
+
+type LazyRedisClient<Client> = {
+  close: () => void;
+  ready: () => Promise<Client>;
+};
+
+/**
+ * A client that owns its own readiness. It is reachable only through
+ * `ready()`, which builds it on first use and connects it through the
+ * retry ladder above before handing it out, so no caller can issue a
+ * command on a client that is still connecting. That matters for clients
+ * built with the offline queue disabled, where such a command rejects
+ * immediately instead of waiting for the socket.
+ *
+ * The connect runs once per client while it succeeds, and a rejected
+ * attempt is discarded so the next caller retries rather than inheriting a
+ * cached rejection. `close` drops the client and that memo together: a
+ * caller after a shutdown builds and connects a fresh one instead of
+ * receiving a resolved promise for a closed client, and a `ready()` still
+ * in flight across a `close` fails rather than handing out the client it
+ * was connecting.
+ */
+export const createLazyRedisClient = <Client extends ManagedRedisClient>(
+  createClient: () => Client,
+): LazyRedisClient<Client> => {
+  let client: Client | null = null;
+  let connected: Promise<void> | null = null;
+  return {
+    close: () => {
+      client?.close();
+      client = null;
+      connected = null;
+    },
+    ready: async () => {
+      const target = (client ??= createClient());
+      connected ??= connectWithColdStartRetries(async () => {
+        await target.connect();
+      }).catch((error: unknown) => {
+        connected = null;
+        throw error;
+      });
+      await connected;
+      if (client !== target) {
+        throw new RedisClientClosedError({
+          message: "Redis client closed while connecting",
+        });
+      }
+      return target;
+    },
+  };
 };
 
 const withColdStartConnectRetries = (

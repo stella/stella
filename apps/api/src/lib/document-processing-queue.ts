@@ -61,8 +61,8 @@ import {
 } from "@/api/lib/ocr-local/recognize-local";
 import { createOcrSearchablePdf } from "@/api/lib/ocr-searchable-pdf";
 import {
-  connectWithColdStartRetries,
   createBullMqConnection,
+  createLazyRedisClient,
   createRedisClient,
 } from "@/api/lib/redis-client";
 import { unboundedCoordinationKey } from "@/api/lib/redis-keys";
@@ -1429,56 +1429,23 @@ type DocumentProcessingCandidate = {
   workspaceId: SafeId<"workspace">;
 };
 
-let reconciliationRedisClient: ReturnType<typeof createRedisClient> | null =
-  null;
-
-const getReconciliationRedis = () => {
-  reconciliationRedisClient ??= createRedisClient({
+/**
+ * The repair sweep's cursor store, and the only Redis the reconciliation
+ * loop touches. It owns its connection: the client is unreachable except
+ * through `ready()`, so no call site here can issue a cursor command on a
+ * client that is still connecting, which this one would reject outright
+ * rather than wait for.
+ */
+const reconciliationRedis = createLazyRedisClient(() =>
+  createRedisClient({
     connectionTimeout: REPAIR_SCAN_CURSOR_COMMAND_TIMEOUT_MS,
     enableOfflineQueue: false,
-  });
-  return reconciliationRedisClient;
-};
-
-/**
- * Wrap `connect` so it runs at most once per process while it succeeds, and
- * discards a rejected attempt so the next caller retries. Retaining the
- * rejected promise would strand every later caller on the first failure.
- */
-export const memoizeConnect = (
-  connect: () => Promise<void>,
-): (() => Promise<void>) => {
-  let connected: Promise<void> | null = null;
-  return async () => {
-    connected ??= connect().catch((error: unknown) => {
-      connected = null;
-      throw error;
-    });
-    await connected;
-  };
-};
-
-/**
- * Establish the reconciliation client's connection before any cursor command
- * is issued. The client disables the offline queue, so a command sent while it
- * is still connecting rejects immediately instead of waiting for the socket,
- * and the repair phase reads the cursor as its first action: without this the
- * phase fails outright whenever it runs before the connection is up.
- *
- * Connecting here rather than inside `readRepairScanCursor` keeps the retry
- * ladder outside that function's per-command deadline, which bounds command
- * latency and is far shorter than a cold-start retry sequence.
- */
-const ensureReconciliationRedisConnected = memoizeConnect(
-  async () =>
-    await connectWithColdStartRetries(async () => {
-      await getReconciliationRedis().connect();
-    }),
+  }),
 );
 
 export const readRepairScanCursor = async (
   readCursor: () => Promise<string | null> = async () =>
-    await getReconciliationRedis().get(REPAIR_SCAN_CURSOR_KEY),
+    await (await reconciliationRedis.ready()).get(REPAIR_SCAN_CURSOR_KEY),
   timeoutMs = REPAIR_SCAN_CURSOR_COMMAND_TIMEOUT_MS,
 ): Promise<SafeId<"field"> | null> => {
   const cursor = await withTimeout(readCursor, {
@@ -1492,7 +1459,7 @@ export const writeRepairScanCursor = async ({
   expectedCursor,
   nextCursor,
   sendCommand = async (command, args) =>
-    Number(await getReconciliationRedis().send(command, args)),
+    Number(await (await reconciliationRedis.ready()).send(command, args)),
   timeoutMs = REPAIR_SCAN_CURSOR_COMMAND_TIMEOUT_MS,
 }: {
   expectedCursor: SafeId<"field"> | null;
@@ -1834,6 +1801,12 @@ export const resolveRepairScanPage = ({
 // stays visible at the `return`, and the `ReconciliationPhase` contract
 // checks the shape where the phases are declared.
 const recoverMissingNativeExtractionRuns = async () => {
+  // Take the connection before the cursor commands rather than inside
+  // them: their deadlines bound command latency and are far shorter than a
+  // cold-start retry ladder. A connect that fails here fails this phase,
+  // which is the only phase that needs Redis at all; the rest of the tick
+  // runs on the database alone and is not held to this.
+  await reconciliationRedis.ready();
   const settledBefore = new Date(Date.now() - REPAIR_SETTLE_DELAY_MS);
   const cursor = await readRepairScanCursor();
   const candidates = await rootDb
@@ -2020,16 +1993,34 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
   };
 };
 
-export const dispatchScheduledDocumentProcessingRetries = async (
-  dispatch = dispatchQueuedDocumentProcessingRuns,
-) => {
-  const { attempted, hasMore, retryAt } = await dispatch({
-    selection: QUEUED_OCR_SELECTION.SCHEDULED_RETRIES,
+/**
+ * A run whose handoff failed is still queued and still nobody else's work:
+ * it comes back to this phase on a later tick, so the phase order cannot
+ * cover it and the phase reports it itself.
+ */
+export const resolveScheduledDeliveryBatch = ({
+  attempted,
+  retryAt,
+  saturated,
+}: {
+  attempted: number;
+  retryAt: Date | null;
+  saturated: boolean;
+}): ReconciliationPhaseResult => ({
+  count: attempted,
+  hasMore: saturated || retryAt !== null,
+});
+
+const dispatchScheduledDocumentProcessingRetries = async () => {
+  const { attempted, hasMore, retryAt } =
+    await dispatchQueuedDocumentProcessingRuns({
+      selection: QUEUED_OCR_SELECTION.SCHEDULED_RETRIES,
+    });
+  return resolveScheduledDeliveryBatch({
+    attempted,
+    retryAt,
+    saturated: hasMore,
   });
-  // A run whose handoff failed is still queued and still nobody else's
-  // work: it comes back to this phase on a later tick, so the phase order
-  // cannot cover it and this phase has to report it itself.
-  return { count: attempted, hasMore: hasMore || retryAt !== null };
 };
 
 // Manual searchable-PDF failures are retryable too, so the condition spans
@@ -2785,7 +2776,11 @@ export const runDocumentProcessingReconciliationPhases = async ({
   for (const phase of phases) {
     // oxlint-disable-next-line no-await-in-loop -- repair phases are deliberately isolated and ordered
     const result = await Result.tryPromise({
-      try: phase.run,
+      // Called through an arrow rather than passed by reference: a phase
+      // is defined as taking nothing, and handing the reference over lets
+      // whatever the caller supplies land in a parameter the phase never
+      // asked for.
+      try: async () => await phase.run(),
       catch: (cause) => cause,
     });
     if (Result.isError(result)) {
@@ -2808,11 +2803,8 @@ const reconcileDocumentProcessing = async ({
   try {
     // Marks reconciliation unfinished before the first await, so the idle
     // sampler sees an in-flight tick as work in progress no matter how
-    // long the tick runs or where a sample lands inside it. The connect
-    // gate stays the cycle's first action, ahead of every phase, and a
-    // cycle that fails there reports no verdict at all.
+    // long the tick runs or where a sample lands inside it.
     await reconciliationProgress.runTick(async () => {
-      await ensureReconciliationRedisConnected();
       const results = await runDocumentProcessingReconciliationPhases({
         phases: DOCUMENT_PROCESSING_RECONCILIATION_PHASES,
         onPhaseError: (error, phase) => {
@@ -2943,8 +2935,10 @@ export const initDocumentProcessingWorker = () => {
           await worker.close();
         },
       });
-      reconciliationRedisClient?.close();
-      reconciliationRedisClient = null;
+      // Drops the connection memo with the client, so a worker started
+      // again in this process connects a fresh one instead of trusting a
+      // resolved promise for a client that is gone.
+      reconciliationRedis.close();
     },
   };
 };

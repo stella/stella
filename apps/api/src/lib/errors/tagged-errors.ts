@@ -165,6 +165,17 @@ export class HealthCheckError extends TaggedError("HealthCheckError")<{
 }> {}
 
 /**
+ * A Redis client was closed while a caller was waiting for it to connect.
+ * The caller must not be handed that client: it belongs to a shutdown that
+ * has already run, and the next caller builds a fresh one.
+ */
+export class RedisClientClosedError extends TaggedError(
+  "RedisClientClosedError",
+)<{
+  message: string;
+}> {}
+
+/**
  * A legal-corpus object could not be read and the row carries no Postgres
  * copy to serve instead. Under canonical corpus storage (or after a column
  * trim) the object *is* the document, so an object-storage outage has to
