@@ -120,7 +120,7 @@
     "files": {
       "apps/api/src/handlers/operator/query.ts": 1,
       "apps/api/src/handlers/workspaces/list.ts": 1,
-      "apps/api/src/handlers/workspaces/read-overview-activity.ts": 1
+      "apps/api/src/handlers/workspaces/read-overview-activity.query.ts": 1
     }
   },
   "security-guards-require-secure-document-response-suppressions": {

@@ -11,15 +11,21 @@ import {
 import type { WorkspaceNavigationItem } from "@/lib/memory-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import {
-  type MatterActivityCategory,
+  type MatterActivityFilters,
+  toMatterActivityQuery,
   type WorkspaceActivityKey,
   workspacesKeys,
 } from "@/lib/workspaces/queries.logic";
 
 export {
+  DEFAULT_MATTER_ACTIVITY_FILTERS,
+  MATTER_ACTIVITY_ACTIONS,
   MATTER_ACTIVITY_CATEGORIES,
+  type MatterActivityAction,
   type MatterActivityCategory,
+  type MatterActivityFilters,
   workspacesKeys,
+  toMatterActivityQuery,
 } from "@/lib/workspaces/queries.logic";
 
 type WorkspaceActivityOptions = {
@@ -29,25 +35,28 @@ type WorkspaceActivityOptions = {
 
 const WORKSPACE_ACTIVITY_PAGE_SIZE = 3;
 const MATTER_ACTIVITY_PAGE_SIZE = 15;
+const MATTER_ACTIVITY_ACTOR_PAGE_SIZE = 50;
 
 type ReadOverviewActivityOptions = {
-  category: MatterActivityCategory;
   cursor?: string;
+  filters: MatterActivityFilters;
+  limit?: number;
   signal?: AbortSignal;
   workspaceId: string;
 };
 
 const readOverviewActivity = async ({
-  category,
   cursor,
+  filters,
+  limit = MATTER_ACTIVITY_PAGE_SIZE,
   signal,
   workspaceId,
 }: ReadOverviewActivityOptions) => {
   const response = await api.workspaces({ workspaceId }).overview.activity.get({
     ...(signal ? { fetch: { signal } } : {}),
     query: {
-      category,
-      limit: MATTER_ACTIVITY_PAGE_SIZE,
+      ...toMatterActivityQuery(filters),
+      limit,
       ...(cursor ? { cursor } : {}),
     },
   });
@@ -57,6 +66,80 @@ const readOverviewActivity = async ({
 export type MatterActivityItem = Awaited<
   ReturnType<typeof readOverviewActivity>
 >["items"][number];
+
+export const exportOverviewActivity = async ({
+  filters,
+  format,
+  signal,
+  workspaceId,
+}: {
+  filters: MatterActivityFilters;
+  format: "csv" | "json";
+  signal?: AbortSignal;
+  workspaceId: string;
+}) => {
+  const response = await api
+    .workspaces({ workspaceId })
+    .overview.activity.export.get({
+      ...(signal ? { fetch: { signal } } : {}),
+      query: {
+        ...toMatterActivityQuery(filters),
+        format,
+      },
+    });
+  return unwrapEden(response);
+};
+
+const readOverviewActivityActors = async ({
+  cursor,
+  search,
+  signal,
+  workspaceId,
+}: {
+  cursor?: string;
+  search: string;
+  signal: AbortSignal;
+  workspaceId: string;
+}) => {
+  const response = await api
+    .workspaces({ workspaceId })
+    .overview.activity.actors.get({
+      fetch: { signal },
+      query: {
+        limit: MATTER_ACTIVITY_ACTOR_PAGE_SIZE,
+        ...(cursor ? { cursor } : {}),
+        ...(search === "" ? {} : { search }),
+      },
+    });
+  return unwrapEden(response);
+};
+
+export type MatterActivityActor = Awaited<
+  ReturnType<typeof readOverviewActivityActors>
+>["items"][number];
+
+const getInitialMatterActivityActorCursor = (): string | undefined => undefined;
+
+export const overviewActivityActorsOptions = (
+  workspaceId: string,
+  search: string,
+) =>
+  infiniteQueryOptions({
+    queryKey: [
+      ...workspacesKeys.overviewActivityAll(workspaceId),
+      "actors",
+      search,
+    ],
+    queryFn: async ({ pageParam, signal }) =>
+      await readOverviewActivityActors({
+        ...(pageParam ? { cursor: pageParam } : {}),
+        search,
+        signal,
+        workspaceId,
+      }),
+    initialPageParam: getInitialMatterActivityActorCursor(),
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+  });
 
 const getInitialWorkspaceActivityCursor = (): string | undefined => undefined;
 
@@ -169,23 +252,23 @@ export const overviewOptions = (workspaceId: string) =>
 
 export const overviewActivityOptions = ({
   activeOrganizationId,
-  category,
+  filters,
   workspaceId,
 }: {
   activeOrganizationId: string;
-  category: MatterActivityCategory;
+  filters: MatterActivityFilters;
   workspaceId: string;
 }) =>
   infiniteQueryOptions({
     queryKey: workspacesKeys.overviewActivity(
       activeOrganizationId,
       workspaceId,
-      category,
+      filters,
     ),
     queryFn: async ({ pageParam, signal }) =>
       await readOverviewActivity({
-        category,
         ...(pageParam ? { cursor: pageParam } : {}),
+        filters,
         signal,
         workspaceId,
       }),

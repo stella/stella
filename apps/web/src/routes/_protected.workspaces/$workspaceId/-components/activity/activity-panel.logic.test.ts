@@ -7,9 +7,28 @@ import {
   activityDayKey,
   expandActivityGroupsForList,
   groupActivityItems,
-  resolveVisibleActivityTriggerType,
   resolveSelectedActivityGroup,
+  resolveVisibleActivityTriggerType,
+  toMatterActivityDateRange,
 } from "./activity-panel.logic";
+
+describe("toMatterActivityDateRange", () => {
+  test("uses local calendar boundaries and an exclusive end day", () => {
+    const range = toMatterActivityDateRange({
+      from: "2026-08-01",
+      to: "2026-08-13",
+    });
+    expect(new Date(range.from ?? "").getDate()).toBe(1);
+    expect(new Date(range.toExclusive ?? "").getDate()).toBe(14);
+  });
+
+  test("preserves open date bounds", () => {
+    expect(toMatterActivityDateRange({ from: null, to: null })).toEqual({
+      from: null,
+      toExclusive: null,
+    });
+  });
+});
 
 const LOCAL_NOON = new Date(2026, 6, 30, 12).getTime();
 const LOCAL_MIDNIGHT = new Date(2026, 6, 31).getTime();

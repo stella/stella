@@ -1,4 +1,12 @@
+import type { SQLWrapper } from "drizzle-orm";
+
 import { CONTACT_TYPES, WORKSPACE_CONTACT_ROLES } from "@stll/api-contract";
+
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+} from "@/api/lib/audit-log.constants";
+import type { AuditAction } from "@/api/lib/audit-log.constants";
 
 import {
   centsColumn,
@@ -348,6 +356,57 @@ const AUDIT_ACTIVITY_CATEGORY_SQL_VALUES = AUDIT_ACTIVITY_CATEGORIES.map(
   (activityCategory) => sql.raw(`'${activityCategory}'`),
 );
 
+type AuditActivityColumns = {
+  action: SQLWrapper;
+  changes: SQLWrapper;
+  resourceType: SQLWrapper;
+};
+
+const WORKSPACE_RESOURCE_SQL = sql.raw(`'${AUDIT_RESOURCE_TYPE.WORKSPACE}'`);
+const WORKSPACE_MEMBER_RESOURCE_SQL = sql.raw(
+  `'${AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER}'`,
+);
+const WORKSPACE_CONTACT_RESOURCE_SQL = sql.raw(
+  `'${AUDIT_RESOURCE_TYPE.WORKSPACE_CONTACT}'`,
+);
+const CASE_LAW_MATTER_LINK_RESOURCE_SQL = sql.raw(
+  `'${AUDIT_RESOURCE_TYPE.CASE_LAW_MATTER_LINK}'`,
+);
+const CREATE_ACTION_SQL = sql.raw(`'${AUDIT_ACTION.CREATE}'`);
+const DELETE_ACTION_SQL = sql.raw(`'${AUDIT_ACTION.DELETE}'`);
+
+export const auditRelationshipChangeSql = ({
+  action,
+  changes,
+  resourceType,
+}: AuditActivityColumns) => sql<"add" | "remove" | null>`case
+  when ${resourceType} = ${WORKSPACE_RESOURCE_SQL}
+    and ${changes} ? 'membersAdded'
+    then 'add'
+  when ${resourceType} = ${WORKSPACE_RESOURCE_SQL}
+    and ${changes} ? 'membersRemoved'
+    then 'remove'
+  when ${resourceType} in (
+    ${WORKSPACE_MEMBER_RESOURCE_SQL},
+    ${WORKSPACE_CONTACT_RESOURCE_SQL},
+    ${CASE_LAW_MATTER_LINK_RESOURCE_SQL}
+  ) and ${action} = ${CREATE_ACTION_SQL}
+    then 'add'
+  when ${resourceType} in (
+    ${WORKSPACE_MEMBER_RESOURCE_SQL},
+    ${WORKSPACE_CONTACT_RESOURCE_SQL},
+    ${CASE_LAW_MATTER_LINK_RESOURCE_SQL}
+  ) and ${action} = ${DELETE_ACTION_SQL}
+    then 'remove'
+  else null
+end`;
+
+export const auditActivityActionSql = (columns: AuditActivityColumns) =>
+  sql<AuditAction | "add" | "remove">`coalesce(
+    ${auditRelationshipChangeSql(columns)},
+    ${columns.action}
+  )`;
+
 export const auditLogs = p.pgTable(
   "audit_logs",
   {
@@ -425,6 +484,25 @@ export const auditLogs = p.pgTable(
         table.organizationId,
         table.workspaceId,
         table.performerType,
+        table.createdAt,
+        table.id,
+      ),
+    p
+      .index("audit_logs_org_workspace_user_actor_created_id_idx")
+      .on(
+        table.organizationId,
+        table.workspaceId,
+        sql`coalesce(${table.performerId}, ${table.userId})`,
+        table.createdAt,
+        table.id,
+      )
+      .where(sql`${table.performerType} = 'user'`),
+    p
+      .index("audit_logs_org_workspace_activity_action_created_id_idx")
+      .on(
+        table.organizationId,
+        table.workspaceId,
+        auditActivityActionSql(table),
         table.createdAt,
         table.id,
       ),

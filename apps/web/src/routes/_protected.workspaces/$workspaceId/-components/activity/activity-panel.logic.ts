@@ -1,6 +1,43 @@
+import { addDays, parseIsoDateLocal } from "@/lib/dates";
 import type { MatterActivityItem } from "@/lib/workspaces/queries";
 
 const DOCUMENT_BATCH_WINDOW_MS = 60_000;
+
+export const toMatterActivityDateRange = ({
+  from,
+  to,
+}: {
+  from: string | null;
+  to: string | null;
+}): { from: string | null; toExclusive: string | null } => {
+  const fromDate = from === null ? null : parseIsoDateLocal(from);
+  const toDate = to === null ? null : parseIsoDateLocal(to);
+  return {
+    from: fromDate?.toISOString() ?? null,
+    toExclusive: toDate ? addDays(toDate, 1).toISOString() : null,
+  };
+};
+
+const formatLocalDate = (date: Date): string =>
+  [date.getFullYear(), date.getMonth() + 1, date.getDate()]
+    .map((part, index) =>
+      index === 0 ? String(part) : String(part).padStart(2, "0"),
+    )
+    .join("-");
+
+export const toMatterActivityDatePickerValues = ({
+  from,
+  toExclusive,
+}: {
+  from: string | null;
+  toExclusive: string | null;
+}): { from: string | null; to: string | null } => ({
+  from: from === null ? null : formatLocalDate(new Date(from)),
+  to:
+    toExclusive === null
+      ? null
+      : formatLocalDate(addDays(new Date(toExclusive), -1)),
+});
 
 type ActivityTriggerType = MatterActivityItem["trigger"]["type"];
 type VisibleActivityTriggerType = Exclude<ActivityTriggerType, "direct">;

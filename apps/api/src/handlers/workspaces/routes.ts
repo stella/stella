@@ -14,6 +14,7 @@ import cellRetry from "@/api/handlers/workspaces/cell-retry";
 import createWorkspaces from "@/api/handlers/workspaces/create";
 import deleteWorkspace from "@/api/handlers/workspaces/delete";
 import duplicateWorkspace from "@/api/handlers/workspaces/duplicate";
+import exportOverviewActivity from "@/api/handlers/workspaces/export-overview-activity";
 import generateBoundingBoxes from "@/api/handlers/workspaces/generate-bounding-boxes";
 import { readWorkspaceHandler } from "@/api/handlers/workspaces/get";
 import infosoudCourts from "@/api/handlers/workspaces/infosoud-courts";
@@ -26,6 +27,7 @@ import readJustifications from "@/api/handlers/workspaces/read-justifications";
 import readWorkspaceNavigation from "@/api/handlers/workspaces/read-navigation";
 import { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import readOverviewActivity from "@/api/handlers/workspaces/read-overview-activity";
+import readOverviewActivityActors from "@/api/handlers/workspaces/read-overview-activity-actors";
 import readWorkflow from "@/api/handlers/workspaces/read-workflow-status";
 import workflowTargetCount from "@/api/handlers/workspaces/read-workflow-target-count";
 import unarchiveWorkspace from "@/api/handlers/workspaces/unarchive";
@@ -230,6 +232,14 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
         .get("/overview/activity", readOverviewActivity.handler, {
           permissions: readOverviewActivity.config.permissions,
           query: readOverviewActivity.config.query,
+        })
+        .get("/overview/activity/actors", readOverviewActivityActors.handler, {
+          permissions: readOverviewActivityActors.config.permissions,
+          query: readOverviewActivityActors.config.query,
+        })
+        .get("/overview/activity/export", exportOverviewActivity.handler, {
+          permissions: exportOverviewActivity.config.permissions,
+          query: exportOverviewActivity.config.query,
         })
         .post("/", updateWorkspace.handler, {
           body: updateWorkspace.config.body,

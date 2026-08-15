@@ -1,11 +1,16 @@
 import { Suspense, useCallback, useDeferredValue, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 
-import { useSuspenseInfiniteQuery } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useSuspenseInfiniteQuery,
+} from "@tanstack/react-query";
+import { Result } from "better-result";
 import {
   BotIcon,
   ChevronDownIcon,
   Clock3Icon,
+  DownloadIcon,
   FileTextIcon,
   ListIcon,
   ListFilterIcon,
@@ -14,18 +19,40 @@ import {
   UsersIcon,
   WorkflowIcon,
 } from "lucide-react";
+import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import {
+  Combobox,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxPopup,
+} from "@stll/ui/components/combobox";
+import {
   Menu,
+  MenuItem,
   MenuPopup,
   MenuRadioGroup,
   MenuRadioItem,
   MenuTrigger,
 } from "@stll/ui/components/menu";
+import {
+  Popover,
+  PopoverPanel,
+  PopoverTrigger,
+} from "@stll/ui/components/popover";
 import { SegmentedIconToggle } from "@stll/ui/components/segmented-icon-toggle";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/components/select";
 import {
   Sheet,
   SheetClose,
@@ -39,6 +66,7 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { DatePickerPopover } from "@/components/date-picker-popover";
 import { DocumentIcon } from "@/components/document-icon";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterIcon } from "@/components/matter-icon";
@@ -50,16 +78,25 @@ import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
+import { APIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
   FULL_DATE_LONG_TIME_FORMAT,
   MEDIUM_DATE_SHORT_TIME_FORMAT,
 } from "@/lib/relative-time";
 import { isFileDisplayable } from "@/lib/types";
+import { downloadFile } from "@/lib/utils";
 import {
+  DEFAULT_MATTER_ACTIVITY_FILTERS,
+  exportOverviewActivity,
+  MATTER_ACTIVITY_ACTIONS,
   MATTER_ACTIVITY_CATEGORIES,
+  overviewActivityActorsOptions,
   overviewActivityOptions,
+  type MatterActivityActor,
+  type MatterActivityAction,
   type MatterActivityCategory,
+  type MatterActivityFilters,
   type MatterActivityItem,
 } from "@/lib/workspaces/queries";
 
@@ -71,6 +108,8 @@ import {
   resolveVisibleActivityTriggerType,
   resolveSelectedActivityGroup,
   toSingleActivityGroup,
+  toMatterActivityDateRange,
+  toMatterActivityDatePickerValues,
 } from "./activity-panel.logic";
 
 type ActivityPanelProps = { workspaceId: string };
@@ -106,13 +145,29 @@ const categoryLabelKeys = {
   team: "workspaces.overview.activity.filters.team",
 } as const satisfies Record<MatterActivityCategory, TranslationKey>;
 
+const actionLabelKeys = {
+  add: "workspaces.overview.activity.actorActions.added",
+  all: "common.all",
+  cancel: "workspaces.overview.activity.actorActions.cancelled",
+  create: "workspaces.overview.activity.actorActions.created",
+  delete: "workspaces.overview.activity.actorActions.deleted",
+  execute: "workspaces.overview.activity.actorActions.executed",
+  remove: "workspaces.overview.activity.actorActions.removed",
+  review: "workspaces.overview.activity.actorActions.reviewed",
+  update: "workspaces.overview.activity.actorActions.updated",
+} as const satisfies Record<MatterActivityAction, TranslationKey>;
+
 export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
   const t = useTranslations();
-  const [category, setCategory] = useState<MatterActivityCategory>("all");
+  const [filters, setFilters] = useState<MatterActivityFilters>(
+    DEFAULT_MATTER_ACTIVITY_FILTERS,
+  );
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ActivityViewMode>("timeline");
-  const deferredCategory = useDeferredValue(category);
-  const isFilterPending = category !== deferredCategory;
+  const deferredFilters = useDeferredValue(filters);
+  const { from: fromDate, to: toDate } =
+    toMatterActivityDatePickerValues(filters);
+  const isFilterPending = filters !== deferredFilters;
   const viewOptions = [
     {
       icon: Clock3Icon,
@@ -128,20 +183,47 @@ export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
 
   return (
     <section aria-labelledby="matter-activity-heading">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2
           className="text-muted-foreground text-sm font-medium"
           id="matter-activity-heading"
         >
           {t("workspaces.overview.activity.title")}
         </h2>
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
           <SegmentedIconToggle
             onChange={setViewMode}
             options={viewOptions}
             size="touch"
             value={viewMode}
           />
+          <ActivityAdvancedFilters
+            filters={filters}
+            fromDate={fromDate}
+            onFiltersChange={(nextFilters) => {
+              setSelectedGroupId(null);
+              setFilters(nextFilters);
+            }}
+            onFromDateChange={(value) => {
+              const range = toMatterActivityDateRange({
+                from: value,
+                to: toDate,
+              });
+              setSelectedGroupId(null);
+              setFilters((current) => ({ ...current, ...range }));
+            }}
+            onToDateChange={(value) => {
+              const range = toMatterActivityDateRange({
+                from: fromDate,
+                to: value,
+              });
+              setSelectedGroupId(null);
+              setFilters((current) => ({ ...current, ...range }));
+            }}
+            toDate={toDate}
+            workspaceId={workspaceId}
+          />
+          <ActivityExportMenu filters={filters} workspaceId={workspaceId} />
           <Menu>
             <MenuTrigger
               aria-label={t("workspaces.overview.activity.filterLabel")}
@@ -149,17 +231,20 @@ export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
               render={<Button size="sm" variant="ghost" />}
             >
               <ListFilterIcon className="size-3.5" />
-              {t(categoryLabelKeys[category])}
+              {t(categoryLabelKeys[filters.category])}
               <ChevronDownIcon className="size-3" />
             </MenuTrigger>
             <MenuPopup align="end">
-              <MenuRadioGroup value={category}>
+              <MenuRadioGroup value={filters.category}>
                 {MATTER_ACTIVITY_CATEGORIES.map((value) => (
                   <MenuRadioItem
                     key={value}
                     onClick={() => {
                       setSelectedGroupId(null);
-                      setCategory(value);
+                      setFilters((current) => ({
+                        ...current,
+                        category: value,
+                      }));
                     }}
                     value={value}
                   >
@@ -182,7 +267,7 @@ export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
       >
         <Suspense fallback={<ActivityTimelineSkeleton />}>
           <ActivityTimeline
-            category={deferredCategory}
+            filters={deferredFilters}
             onSelectedGroupChange={setSelectedGroupId}
             selectedGroupId={selectedGroupId}
             viewMode={viewMode}
@@ -194,14 +279,356 @@ export const ActivityPanel = ({ workspaceId }: ActivityPanelProps) => {
   );
 };
 
+const ActivityAdvancedFilters = ({
+  filters,
+  fromDate,
+  onFiltersChange,
+  onFromDateChange,
+  onToDateChange,
+  toDate,
+  workspaceId,
+}: {
+  filters: MatterActivityFilters;
+  fromDate: string | null;
+  onFiltersChange: (filters: MatterActivityFilters) => void;
+  onFromDateChange: (value: string | null) => void;
+  onToDateChange: (value: string | null) => void;
+  toDate: string | null;
+  workspaceId: string;
+}) => {
+  const t = useTranslations();
+  const [open, setOpen] = useState(false);
+  const [actorSearch, setActorSearch] = useState("");
+  const [selectedActorDetails, setSelectedActorDetails] =
+    useState<MatterActivityActor | null>(null);
+  const debouncedSetActorSearch = useDebouncedCallback(setActorSearch, 300);
+  const actorsQuery = useInfiniteQuery({
+    ...overviewActivityActorsOptions(workspaceId, actorSearch),
+    enabled: open,
+  });
+  const actors = actorsQuery.data
+    ? actorsQuery.data.pages.flatMap((page) => page.items)
+    : [];
+  const selectedActor =
+    actors.find(({ id }) => id === filters.actorId) ??
+    (selectedActorDetails?.id === filters.actorId
+      ? selectedActorDetails
+      : null) ??
+    (filters.actorId === null
+      ? null
+      : {
+          deletedAt: null,
+          id: filters.actorId,
+          image: null,
+          name: null,
+        });
+  let actorEmptyLabel = t("common.noResults");
+  if (actorsQuery.isPending || actorsQuery.isFetching) {
+    actorEmptyLabel = t("common.loading");
+  }
+  if (actorsQuery.error) {
+    actorEmptyLabel = t("common.unexpectedError");
+  }
+  const activeFilterCount = [
+    filters.action !== "all",
+    filters.actorId !== null,
+    filters.from !== null,
+    filters.toExclusive !== null,
+  ].filter(Boolean).length;
+
+  return (
+    <Popover
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen) {
+          debouncedSetActorSearch.cancel();
+          setActorSearch("");
+        }
+      }}
+      open={open}
+    >
+      <PopoverTrigger
+        render={
+          <Button
+            aria-label={t("common.filter")}
+            className="h-7 gap-1.5 text-xs [@media(any-pointer:coarse)]:h-11"
+            size="sm"
+            variant="ghost"
+          />
+        }
+      >
+        <ListFilterIcon className="size-3.5" />
+        {activeFilterCount > 0
+          ? t("workspaces.views.filtersWithCount", {
+              count: activeFilterCount,
+            })
+          : t("common.filter")}
+      </PopoverTrigger>
+      <PopoverPanel align="end" className="w-80">
+        <div className="space-y-1.5">
+          <label
+            className="text-muted-foreground text-xs font-medium"
+            htmlFor="matter-activity-action"
+          >
+            {t("common.actions")}
+          </label>
+          <Select<MatterActivityAction>
+            onValueChange={(action) => {
+              if (action) {
+                onFiltersChange({ ...filters, action });
+              }
+            }}
+            value={filters.action}
+          >
+            <SelectTrigger id="matter-activity-action" size="sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectPopup>
+              {MATTER_ACTIVITY_ACTIONS.map((action) => (
+                <SelectItem
+                  key={action}
+                  label={t(actionLabelKeys[action])}
+                  value={action}
+                >
+                  {t(actionLabelKeys[action])}
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <label
+            className="text-muted-foreground text-xs font-medium"
+            htmlFor="matter-activity-actor"
+          >
+            {t("workspaces.overview.activity.list.actor")}
+          </label>
+          <Combobox<MatterActivityActor>
+            filter={null}
+            items={actors}
+            itemToStringLabel={(actor) =>
+              actor.name ?? t("workspaces.overview.activity.list.actor")
+            }
+            onValueChange={(actor) => {
+              setSelectedActorDetails(actor);
+              onFiltersChange({ ...filters, actorId: actor?.id ?? null });
+            }}
+            onInputValueChange={(value) =>
+              debouncedSetActorSearch(value.trim())
+            }
+            value={selectedActor}
+          >
+            <ComboboxInput
+              id="matter-activity-actor"
+              placeholder={t("common.all")}
+              showClear
+              size="sm"
+            />
+            <ComboboxPopup>
+              <ComboboxList>
+                {actors.map((actor) => (
+                  <ComboboxItem key={actor.id} value={actor}>
+                    <BidiText>
+                      {actor.name ??
+                        t("workspaces.overview.activity.list.actor")}
+                    </BidiText>
+                  </ComboboxItem>
+                ))}
+              </ComboboxList>
+              <ComboboxEmpty>{actorEmptyLabel}</ComboboxEmpty>
+              {actorsQuery.hasNextPage && (
+                <Button
+                  className="m-1 min-h-11"
+                  disabled={actorsQuery.isFetchingNextPage}
+                  onClick={() => {
+                    const request = actorsQuery
+                      .fetchNextPage()
+                      .then((result) => {
+                        if (result.isError) {
+                          getAnalytics().captureError(result.error);
+                          stellaToast.add({
+                            description: userErrorFromThrown(
+                              result.error,
+                              t("common.unexpectedError"),
+                            ),
+                            title: t("errors.actionFailed"),
+                            type: "error",
+                          });
+                        }
+                        return result;
+                      })
+                      .catch((error: unknown) => {
+                        getAnalytics().captureError(error);
+                        stellaToast.add({
+                          description: userErrorFromThrown(
+                            error,
+                            t("common.unexpectedError"),
+                          ),
+                          title: t("errors.actionFailed"),
+                          type: "error",
+                        });
+                        throw error;
+                      });
+                    detached(request, "activity-panel.fetch-actors");
+                  }}
+                  size="sm"
+                  variant="ghost"
+                >
+                  {actorsQuery.isFetchingNextPage
+                    ? t("common.loading")
+                    : t("common.loadMore")}
+                </Button>
+              )}
+            </ComboboxPopup>
+          </Combobox>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1.5">
+            <span
+              className="text-muted-foreground block text-xs font-medium"
+              id="matter-activity-from-label"
+            >
+              {t("workspaces.filters.from")}
+            </span>
+            <DatePickerPopover
+              id="matter-activity-from"
+              labelledBy="matter-activity-from-label"
+              {...(toDate === null ? {} : { maxDate: toDate })}
+              onChange={onFromDateChange}
+              value={fromDate}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <span
+              className="text-muted-foreground block text-xs font-medium"
+              id="matter-activity-to-label"
+            >
+              {t("workspaces.filters.to")}
+            </span>
+            <DatePickerPopover
+              id="matter-activity-to"
+              labelledBy="matter-activity-to-label"
+              {...(fromDate === null ? {} : { minDate: fromDate })}
+              onChange={onToDateChange}
+              value={toDate}
+            />
+          </div>
+        </div>
+        <Button
+          className="w-full"
+          disabled={activeFilterCount === 0 && filters.category === "all"}
+          onClick={() => {
+            onFromDateChange(null);
+            onToDateChange(null);
+            onFiltersChange(DEFAULT_MATTER_ACTIVITY_FILTERS);
+          }}
+          size="sm"
+          variant="ghost"
+        >
+          {t("workspaces.filters.clearAll")}
+        </Button>
+      </PopoverPanel>
+    </Popover>
+  );
+};
+
+const ActivityExportMenu = ({
+  filters,
+  workspaceId,
+}: {
+  filters: MatterActivityFilters;
+  workspaceId: string;
+}) => {
+  const t = useTranslations();
+  const [exporting, setExporting] = useState(false);
+
+  const exportActivity = async (format: "csv" | "json") => {
+    setExporting(true);
+    const result = await Result.tryPromise({
+      try: async () =>
+        await exportOverviewActivity({
+          filters,
+          format,
+          signal: AbortSignal.timeout(30_000),
+          workspaceId,
+        }),
+      catch: (error) => error,
+    });
+    setExporting(false);
+    if (Result.isError(result)) {
+      getAnalytics().captureError(result.error);
+      stellaToast.add({
+        title:
+          APIError.is(result.error) && result.error.status === 413
+            ? t("settings.organization.auditLogsExportTooLarge")
+            : t("workspaces.views.exportFailed"),
+        type: "error",
+      });
+      return;
+    }
+
+    const data = result.value;
+    const blob =
+      data instanceof Response
+        ? await data.blob()
+        : new Blob(
+            [
+              format === "json" && typeof data !== "string"
+                ? JSON.stringify(data)
+                : String(data),
+            ],
+            {
+              type:
+                format === "csv"
+                  ? "text/csv; charset=utf-8"
+                  : "application/json; charset=utf-8",
+            },
+          );
+    downloadFile(blob, `matter-activity.${format}`);
+  };
+
+  const startExport = (format: "csv" | "json") => {
+    detached(
+      exportActivity(format).catch((error: unknown) => {
+        getAnalytics().captureError(error);
+        stellaToast.add({
+          title: t("workspaces.views.exportFailed"),
+          type: "error",
+        });
+      }),
+      "activity-panel.export",
+    );
+  };
+
+  return (
+    <Menu>
+      <MenuTrigger
+        aria-label={t("common.download")}
+        disabled={exporting}
+        render={<Button size="icon-xs" variant="ghost" />}
+      >
+        <DownloadIcon />
+      </MenuTrigger>
+      <MenuPopup align="end">
+        <MenuItem onClick={() => startExport("csv")}>
+          {t("workspaces.views.exportCsv")}
+        </MenuItem>
+        <MenuItem onClick={() => startExport("json")}>
+          {t("clauses.exportAsJson")}
+        </MenuItem>
+      </MenuPopup>
+    </Menu>
+  );
+};
+
 const ActivityTimeline = ({
-  category,
+  filters,
   onSelectedGroupChange,
   selectedGroupId,
   viewMode,
   workspaceId,
 }: {
-  category: MatterActivityCategory;
+  filters: MatterActivityFilters;
   onSelectedGroupChange: (groupId: string | null) => void;
   selectedGroupId: string | null;
   viewMode: ActivityViewMode;
@@ -210,7 +637,7 @@ const ActivityTimeline = ({
   const t = useTranslations();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const query = useSuspenseInfiniteQuery(
-    overviewActivityOptions({ activeOrganizationId, category, workspaceId }),
+    overviewActivityOptions({ activeOrganizationId, filters, workspaceId }),
   );
   const items = query.data.pages.flatMap((page) => page.items);
   const groups = groupActivityItems(items);
@@ -851,65 +1278,78 @@ const ActivityList = ({
   const t = useTranslations();
   const listGroups = expandActivityGroupsForList(groups);
   return (
-    <div className="overflow-x-auto" role="list">
-      <div className="w-full md:min-w-[57rem]">
-        <div
-          aria-hidden="true"
-          className="text-muted-foreground hidden border-b px-4 py-2 text-[11px] font-medium md:grid md:grid-cols-[10rem_12rem_minmax(16rem,1fr)_14rem] md:gap-4"
-        >
-          <span>{t("workspaces.overview.activity.list.dateTime")}</span>
-          <span>{t("workspaces.overview.activity.list.actor")}</span>
-          <span>{t("common.itemTypeValues.event")}</span>
-          <span>{t("workspaces.overview.activity.list.provenance")}</span>
-        </div>
-        {listGroups.map((group) => {
-          const item = group.items[0];
-          const showProvenance =
-            resolveVisibleActivityTriggerType(item.trigger.type) !== null;
-          return (
-            <div
-              className="border-b last:border-b-0"
-              key={group.id}
-              role="listitem"
-            >
-              <button
-                className="hover:bg-muted/40 focus-visible:bg-muted/40 grid min-h-14 w-full gap-1 px-4 py-2.5 text-start transition-colors md:grid-cols-[10rem_12rem_minmax(16rem,1fr)_14rem] md:items-center md:gap-4"
-                onClick={() => onSelectGroup(group)}
-                type="button"
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-start">
+        <caption className="sr-only">
+          {t("workspaces.overview.activity.title")}
+        </caption>
+        <thead className="sr-only md:not-sr-only">
+          <tr className="text-muted-foreground border-b text-[11px] font-medium">
+            <th className="w-40 px-4 py-2 text-start font-medium" scope="col">
+              {t("workspaces.overview.activity.list.dateTime")}
+            </th>
+            <th className="w-48 px-4 py-2 text-start font-medium" scope="col">
+              {t("workspaces.overview.activity.list.actor")}
+            </th>
+            <th className="px-4 py-2 text-start font-medium" scope="col">
+              {t("common.itemTypeValues.event")}
+            </th>
+            <th className="w-56 px-4 py-2 text-start font-medium" scope="col">
+              {t("workspaces.overview.activity.list.provenance")}
+            </th>
+          </tr>
+        </thead>
+        <tbody className="block md:table-row-group">
+          {listGroups.map((group) => {
+            const item = group.items[0];
+            const showProvenance =
+              resolveVisibleActivityTriggerType(item.trigger.type) !== null;
+            return (
+              <tr
+                className="group grid grid-cols-2 border-b last:border-b-0 md:table-row"
+                key={group.id}
               >
-                <time
-                  className="text-muted-foreground text-xs tabular-nums"
-                  dateTime={item.activityAt}
-                >
-                  {format.dateTime(
-                    new Date(item.activityAt),
-                    MEDIUM_DATE_SHORT_TIME_FORMAT,
-                  )}
-                </time>
-                <span className="min-w-0 text-sm">
+                <td className="px-4 pt-3 align-middle md:table-cell md:py-2.5">
+                  <time
+                    className="text-muted-foreground text-xs tabular-nums"
+                    dateTime={item.activityAt}
+                  >
+                    {format.dateTime(
+                      new Date(item.activityAt),
+                      MEDIUM_DATE_SHORT_TIME_FORMAT,
+                    )}
+                  </time>
+                </td>
+                <td className="min-w-0 px-4 pt-3 text-end align-middle text-sm md:table-cell md:py-2.5 md:text-start">
                   <Performer item={item} />
-                </span>
-                <span className="min-w-0 text-sm leading-5">
-                  <span className="block">
-                    <ActivityAction item={item} />
-                  </span>
-                  <span className="mt-1 grid grid-cols-[1.25rem_minmax(0,1fr)] items-start gap-x-1.5 font-medium">
-                    <span className="flex size-5 items-center justify-center">
-                      {activityGroupTargetIcon(group)}
+                </td>
+                <td className="col-span-2 min-w-0 p-0 align-middle text-sm leading-5 md:table-cell">
+                  <button
+                    className="hover:bg-muted/40 focus-visible:bg-muted/40 min-h-14 w-full px-4 py-2.5 text-start transition-colors"
+                    onClick={() => onSelectGroup(group)}
+                    type="button"
+                  >
+                    <span className="block">
+                      <ActivityAction item={item} />
                     </span>
-                    <BidiText as="span">
-                      <ActivityGroupTargetName group={group} />
-                    </BidiText>
-                  </span>
-                </span>
-                <span className="text-muted-foreground min-w-0 text-xs leading-4">
+                    <span className="mt-1 grid grid-cols-[1.25rem_minmax(0,1fr)] items-start gap-x-1.5 font-medium">
+                      <span className="flex size-5 items-center justify-center">
+                        {activityGroupTargetIcon(group)}
+                      </span>
+                      <BidiText as="span">
+                        <ActivityGroupTargetName group={group} />
+                      </BidiText>
+                    </span>
+                  </button>
+                </td>
+                <td className="text-muted-foreground col-span-2 min-w-0 px-4 pb-3 align-middle text-xs leading-4 md:table-cell md:py-2.5">
                   {showProvenance ? <TriggerDetail item={item} /> : null}
-                </span>
-              </button>
-            </div>
-          );
-        })}
-      </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 };
