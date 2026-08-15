@@ -235,7 +235,10 @@ export const WorkspaceBreadcrumb = ({
             if (isEditing) {
               return (
                 <>
-                  <MatterColorContextPicker matter={workspace}>
+                  <MatterColorContextPicker
+                    label={changeColorLabel}
+                    matter={workspace}
+                  >
                     <MatterIcon
                       className="size-3.5"
                       matter={{ id: workspaceId, color: workspace.color }}
@@ -269,47 +272,52 @@ export const WorkspaceBreadcrumb = ({
               );
             }
             return (
-              <Link
-                activeOptions={{
-                  exact: true,
-                  includeSearch: false,
-                }}
-                activeProps={{
-                  className: "text-foreground font-semibold",
-                }}
-                className="hover:text-foreground inline-flex max-w-80 items-center gap-1.5 font-semibold transition-colors"
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  startEditingName();
-                }}
-                params={{
-                  workspaceId,
-                }}
-                title={displayName}
-                to="/workspaces/$workspaceId"
-              >
-                <MatterColorContextPicker matter={workspace}>
+              <>
+                <MatterColorContextPicker
+                  label={changeColorLabel}
+                  matter={workspace}
+                >
                   <MatterIcon
                     className="size-3.5"
                     matter={{ id: workspaceId, color: workspace.color }}
                   />
                 </MatterColorContextPicker>
-                <BidiText as="span" className="truncate">
-                  {displayName}
-                </BidiText>
-                {workspace.reference && !isEditingRef ? (
-                  <span
-                    className="text-foreground-muted shrink-0 text-sm"
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      refRename.startEditing(workspace.reference);
-                    }}
-                  >
-                    {workspace.reference}
-                  </span>
-                ) : null}
-              </Link>
+                <Link
+                  activeOptions={{
+                    exact: true,
+                    includeSearch: false,
+                  }}
+                  activeProps={{
+                    className: "text-foreground font-semibold",
+                  }}
+                  className="hover:text-foreground inline-flex max-w-80 items-center gap-1.5 font-semibold transition-colors"
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    startEditingName();
+                  }}
+                  params={{
+                    workspaceId,
+                  }}
+                  title={displayName}
+                  to="/workspaces/$workspaceId"
+                >
+                  <BidiText as="span" className="truncate">
+                    {displayName}
+                  </BidiText>
+                  {workspace.reference && !isEditingRef ? (
+                    <span
+                      className="text-foreground-muted shrink-0 text-sm"
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        refRename.startEditing(workspace.reference);
+                      }}
+                    >
+                      {workspace.reference}
+                    </span>
+                  ) : null}
+                </Link>
+              </>
             );
           })()}
           {isEditingRef ? referenceSegment : null}

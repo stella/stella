@@ -1249,10 +1249,20 @@ const MatterItem = ({
             />
           </Tooltip>
         )}
+        <MatterColorContextPicker
+          className="absolute start-2 top-2 z-10 size-4"
+          label={t("common.changeColor")}
+          matter={ws}
+        >
+          <MatterIcon
+            className="size-4 shrink-0"
+            matter={{ id: ws.id, color: ws.color }}
+          />
+        </MatterColorContextPicker>
         <SidebarMenuButton
           asChild
           className={cn(
-            "py-0 ps-2 group-data-[collapsible=icon]:ps-2",
+            "py-0 ps-8 group-data-[collapsible=icon]:ps-2",
             activityIsKnownEmpty ? "pe-12" : "pe-20",
           )}
           tooltip={[
@@ -1264,12 +1274,6 @@ const MatterItem = ({
             .join(" — ")}
         >
           <Link data-active={isActive || undefined} {...navigationTarget}>
-            <MatterColorContextPicker className="mt-0.5 self-start" matter={ws}>
-              <MatterIcon
-                className="size-4 shrink-0"
-                matter={{ id: ws.id, color: ws.color }}
-              />
-            </MatterColorContextPicker>
             <span className="flex min-w-0 flex-col">
               <BidiText as="span" className="truncate">
                 {ws.name}

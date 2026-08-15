@@ -43,29 +43,74 @@ describe("workspace update cache invalidation", () => {
     ]);
   });
 
-  test("only name updates have a document-title side effect", async () => {
-    const { workspaceUpdateEffects } =
+  test("only name updates invalidate the current route metadata", async () => {
+    const { workspaceUpdateInvalidatesRoute } =
       await import("@/lib/workspaces/mutations");
 
-    expect(
-      workspaceUpdateEffects({ type: "name", value: "Renamed matter" }),
-    ).toEqual({ documentTitle: "Renamed matter" });
-
     expect([
-      workspaceUpdateEffects({ type: "clientId", value: "contact_test" }),
-      workspaceUpdateEffects({ type: "color", value: "purple" }),
-      workspaceUpdateEffects({ type: "leadUserId", value: "user_test" }),
-      workspaceUpdateEffects({
+      workspaceUpdateInvalidatesRoute({
+        type: "name",
+        value: "Renamed matter",
+      }),
+      workspaceUpdateInvalidatesRoute({
+        type: "clientId",
+        value: "contact_test",
+      }),
+      workspaceUpdateInvalidatesRoute({ type: "color", value: "purple" }),
+      workspaceUpdateInvalidatesRoute({
+        type: "leadUserId",
+        value: "user_test",
+      }),
+      workspaceUpdateInvalidatesRoute({
         type: "promote",
         value: { clientId: "contact_test" },
       }),
-      workspaceUpdateEffects({ type: "reference", value: "REF-42" }),
-    ]).toEqual([
-      { documentTitle: null },
-      { documentTitle: null },
-      { documentTitle: null },
-      { documentTitle: null },
-      { documentTitle: null },
+      workspaceUpdateInvalidatesRoute({
+        type: "reference",
+        value: "REF-42",
+      }),
+    ]).toEqual([true, false, false, false, false, false]);
+  });
+
+  test("maps every workspace update variant to its API body", async () => {
+    const { workspaceUpdateBody } = await import("@/lib/workspaces/mutations");
+
+    const bodies: unknown = [
+      workspaceUpdateBody({ type: "clientId", value: "contact_test" }),
+      workspaceUpdateBody({ type: "color", value: "purple" }),
+      workspaceUpdateBody({ type: "color", value: null }),
+      workspaceUpdateBody({ type: "leadUserId", value: "user_test" }),
+      workspaceUpdateBody({ type: "leadUserId", value: null }),
+      workspaceUpdateBody({ type: "name", value: "Renamed matter" }),
+      workspaceUpdateBody({
+        type: "promote",
+        value: { clientId: "contact_test", memberUserIds: [] },
+      }),
+      workspaceUpdateBody({
+        type: "promote",
+        value: {
+          clientId: "contact_test",
+          memberUserIds: ["user_one", "user_two"],
+        },
+      }),
+      workspaceUpdateBody({ type: "reference", value: "REF-42" }),
+    ];
+
+    expect(bodies).toEqual([
+      { clientId: "contact_test" },
+      { color: "purple" },
+      { color: null },
+      { leadUserId: "user_test" },
+      { leadUserId: null },
+      { name: "Renamed matter" },
+      { promote: { clientId: "contact_test" } },
+      {
+        promote: {
+          clientId: "contact_test",
+          memberUserIds: ["user_one", "user_two"],
+        },
+      },
+      { reference: "REF-42" },
     ]);
   });
 

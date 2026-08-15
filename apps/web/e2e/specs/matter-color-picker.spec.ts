@@ -20,12 +20,25 @@ test("sidebar color picker stays open when custom colors are expanded", async ({
     });
     await expect(matterLink).toBeVisible({ timeout: 30_000 });
 
-    const colorTrigger = matterLink.locator("span").first();
+    const matterItem = sidebar.locator('[data-sidebar="menu-item"]', {
+      has: matterLink,
+    });
+    const colorTrigger = matterItem.getByRole("button", {
+      name: "Change color",
+    });
+    const colorPicker = page.locator('[data-slot="color-picker"]');
+
+    await colorTrigger.focus();
+    await page.keyboard.press("Enter");
+    await expect(colorPicker).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(colorPicker).toBeHidden();
+
     await colorTrigger.click({ button: "right" });
     await expect(
       colorTrigger.locator('[class~="animate-attention-flash"]'),
     ).toHaveCount(1);
-    await page.getByRole("button", { name: "Show more" }).click();
+    await colorPicker.getByRole("button", { name: "Show more" }).click();
 
     await expect(
       page.getByRole("textbox", { name: "Custom hex color" }),

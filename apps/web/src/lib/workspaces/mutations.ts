@@ -3,7 +3,7 @@ import {
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useRouterState } from "@tanstack/react-router";
+import { useRouter } from "@tanstack/react-router";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -13,7 +13,6 @@ import {
   toAPIError,
   unwrapEden,
 } from "@/lib/errors/api";
-import { pageTitleLiteral } from "@/lib/page-title";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 
@@ -80,7 +79,7 @@ type WorkspaceUpdateValueByType = {
 
 type WorkspaceUpdateType = keyof WorkspaceUpdateValueByType;
 
-type WorkspaceUpdate = {
+export type WorkspaceUpdate = {
   [Type in WorkspaceUpdateType]: {
     type: Type;
     value: WorkspaceUpdateValueByType[Type];
@@ -92,26 +91,16 @@ type UpdateWorkspaceVars = {
   update: WorkspaceUpdate;
 };
 
-type WorkspaceUpdateEffects = {
-  documentTitle: string | null;
-};
-
-const NO_WORKSPACE_UPDATE_EFFECTS: WorkspaceUpdateEffects = {
-  documentTitle: null,
-};
-
-export const workspaceUpdateEffects = (
-  update: WorkspaceUpdate,
-): WorkspaceUpdateEffects => {
+export const workspaceUpdateInvalidatesRoute = (update: WorkspaceUpdate) => {
   switch (update.type) {
     case "name":
-      return { documentTitle: update.value };
+      return true;
     case "clientId":
     case "color":
     case "leadUserId":
     case "promote":
     case "reference":
-      return NO_WORKSPACE_UPDATE_EFFECTS;
+      return false;
     default: {
       const unreachable: never = update;
       return unreachable;
@@ -119,7 +108,7 @@ export const workspaceUpdateEffects = (
   }
 };
 
-const workspaceUpdateBody = (update: WorkspaceUpdate) => {
+export const workspaceUpdateBody = (update: WorkspaceUpdate) => {
   switch (update.type) {
     case "clientId":
       return { clientId: toSafeId<"contact">(update.value) };
@@ -164,12 +153,7 @@ export const workspaceUpdateRefetchFilters = (
 export const useUpdateWorkspace = () => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
-  const activeWorkspaceId = useRouterState({
-    select: (state) =>
-      state.matches.find(
-        (match) => match.routeId === "/_protected/workspaces/$workspaceId",
-      )?.params.workspaceId,
-  });
+  const router = useRouter();
 
   return useMutation({
     mutationFn: async ({ update, workspaceId }: UpdateWorkspaceVars) => {
@@ -198,9 +182,8 @@ export const useUpdateWorkspace = () => {
           },
         ),
       );
-      const effects = workspaceUpdateEffects(variables.update);
-      if (effects.documentTitle !== null && activeWorkspaceId === workspaceId) {
-        globalThis.document.title = pageTitleLiteral(effects.documentTitle);
+      if (workspaceUpdateInvalidatesRoute(variables.update)) {
+        await router.invalidate();
       }
     },
     onError: (error) => {

@@ -9,8 +9,10 @@ import {
   DEFAULT_PRESETS,
 } from "@stll/ui/components/color-picker";
 import { Popover, PopoverPopup } from "@stll/ui/components/popover";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
   getMatterPickerColor,
   resolveMatterColor,
@@ -30,20 +32,14 @@ type MatterColorPickerContentProps = {
 const MatterColorPickerContent = ({
   matter,
 }: MatterColorPickerContentProps) => {
-  const t = useTranslations();
-  const updateWorkspace = useUpdateWorkspace();
+  const { moreLabel, selectColor } = useMatterColorPicker(matter);
 
   return (
     <ColorPickerContent
       columns={9}
       defaultExpanded={false}
-      moreLabel={t("common.showMore")}
-      onSelect={(color) => {
-        updateWorkspace.mutate({
-          workspaceId: matter.id,
-          update: { type: "color", value: toStoredMatterColor(color) },
-        });
-      }}
+      moreLabel={moreLabel}
+      onSelect={selectColor}
       presets={DEFAULT_PRESETS}
       value={getMatterPickerColor(matter.id, matter.color)}
     />
@@ -57,22 +53,17 @@ type MatterColorPickerProps = {
 
 type MatterColorContextPickerProps = MatterColorPickerProps & {
   className?: string;
+  label: string;
 };
 
 const MatterColorPicker = ({ children, matter }: MatterColorPickerProps) => {
-  const t = useTranslations();
-  const updateWorkspace = useUpdateWorkspace();
+  const { moreLabel, selectColor } = useMatterColorPicker(matter);
 
   return (
     <ColorPicker
       defaultExpanded={false}
-      moreLabel={t("common.showMore")}
-      onSelect={(color) => {
-        updateWorkspace.mutate({
-          workspaceId: matter.id,
-          update: { type: "color", value: toStoredMatterColor(color) },
-        });
-      }}
+      moreLabel={moreLabel}
+      onSelect={selectColor}
       value={getMatterPickerColor(matter.id, matter.color)}
     >
       {children}
@@ -83,21 +74,33 @@ const MatterColorPicker = ({ children, matter }: MatterColorPickerProps) => {
 const MatterColorContextPicker = ({
   children,
   className,
+  label,
   matter,
 }: MatterColorContextPickerProps) => {
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<HTMLSpanElement | null>(null);
 
+  const openPicker = () => setOpen(true);
+
   return (
     <>
-      <span
-        className={cn("relative flex shrink-0", className)}
+      <button
+        aria-label={label}
+        className={cn(
+          "relative flex shrink-0 items-center justify-center rounded outline-hidden focus-visible:ring-2",
+          className,
+        )}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          openPicker();
+        }}
         onContextMenu={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          setOpen(true);
+          openPicker();
         }}
-        ref={setAnchor}
+        type="button"
       >
         <span
           aria-hidden
@@ -109,8 +112,10 @@ const MatterColorContextPicker = ({
             backgroundColor: `color-mix(in srgb, ${resolveMatterColor(matter.id, matter.color)} 18%, transparent)`,
           }}
         />
-        <span className="relative flex">{children}</span>
-      </span>
+        <span className="relative flex" ref={setAnchor}>
+          {children}
+        </span>
+      </button>
       <Popover onOpenChange={setOpen} open={open}>
         <PopoverPopup
           align="start"
@@ -124,6 +129,31 @@ const MatterColorContextPicker = ({
       </Popover>
     </>
   );
+};
+
+const useMatterColorPicker = (matter: MatterColorIdentity) => {
+  const t = useTranslations();
+  const updateWorkspace = useUpdateWorkspace();
+
+  return {
+    moreLabel: t("common.showMore"),
+    selectColor: (color: string) => {
+      updateWorkspace.mutate(
+        {
+          workspaceId: matter.id,
+          update: { type: "color", value: toStoredMatterColor(color) },
+        },
+        {
+          onError: (error) => {
+            stellaToast.add({
+              title: userErrorFromThrown(error, t("errors.actionFailed")),
+              type: "error",
+            });
+          },
+        },
+      );
+    },
+  };
 };
 
 export {
