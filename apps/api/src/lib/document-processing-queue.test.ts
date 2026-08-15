@@ -1267,6 +1267,7 @@ describe("createReconciliationProgress", () => {
     const sample = createIdleExitCheck({
       countPending,
       hasUnfinishedReconciliation: progress.hasUnfinishedWork,
+      isReconciliationInFlight: progress.isTickRunning,
       onCheckFailure: () => undefined,
       onIdleExit: () => {
         exits += 1;
@@ -1330,6 +1331,36 @@ describe("createReconciliationProgress", () => {
 
     expect(await outcome).toBe("checked");
     expect(h.exits()).toBe(0);
+  });
+
+  test("a tick that starts as the count resolves is seen by the sample deciding", async () => {
+    const progress = createReconciliationProgress();
+    const tick = pendingTick();
+    const ticks: Promise<void>[] = [];
+    const h = sampler(
+      progress,
+      async () =>
+        await Promise.resolve(0).then((pending) => {
+          // The reconcile timer fires between the count resolving and the
+          // sampler resuming. The tick's own prologue marks it running
+          // before its first await, which is what the decision re-reads.
+          if (ticks.length === 0) {
+            ticks.push(progress.runTick(tick.run));
+          }
+          return pending;
+        }),
+    );
+
+    // One idle check is all this sampler needs, so nothing later could
+    // catch the tick if this sample missed it.
+    expect(await h.sample()).toBe("checked");
+    expect(h.exits()).toBe(0);
+
+    tick.settle(false);
+    await Promise.all(ticks);
+
+    expect(await h.sample()).toBe("exit");
+    expect(h.exits()).toBe(1);
   });
 
   test("a saturated tick keeps the worker alive", async () => {

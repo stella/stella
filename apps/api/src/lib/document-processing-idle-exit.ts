@@ -22,6 +22,13 @@ type CreateIdleExitCheckOptions = {
    * decide.
    */
   hasUnfinishedReconciliation: () => Promise<boolean>;
+  /**
+   * Whether a reconciliation tick is running right now, read synchronously
+   * so the sample can re-check it in the frame it decides in. The
+   * reconciliation side must set this in the tick's synchronous prologue,
+   * before its own first await.
+   */
+  isReconciliationInFlight: () => boolean;
   /** Consecutive empty samples required before exiting. */
   requiredIdleChecks: number;
   onIdleExit: () => void;
@@ -33,6 +40,7 @@ export type IdleExitTickOutcome = "checked" | "exit" | "skipped";
 export const createIdleExitCheck = ({
   countPending,
   hasUnfinishedReconciliation,
+  isReconciliationInFlight,
   onCheckFailure,
   onIdleExit,
   requiredIdleChecks,
@@ -55,13 +63,19 @@ export const createIdleExitCheck = ({
       // flight to report before counting means everything it enqueued is
       // already in the count. Counting first would pair a pre-enqueue
       // count with the same tick's drained verdict and read idle while
-      // fresh jobs wait, which a worker close does not drain. A tick that
-      // starts after this verdict has already marked itself unfinished
-      // before its own first await, so the next sample reads it as
-      // running rather than reading its result.
+      // fresh jobs wait, which a worker close does not drain.
       const unfinished = await hasUnfinishedReconciliation();
       const pending = await countPending();
-      const idle = pending === 0 && !unfinished;
+      // The mirror of that window: a tick can start after the verdict and
+      // while the count is in flight, and on the last sample of a streak
+      // there is no later sample to catch it. So re-read the running flag
+      // here and decide in this frame. Reconciliation sets that flag in
+      // its tick's synchronous prologue, before its own first await, and
+      // nothing else runs between this read and the exit call below: no
+      // await separates them, and neither timers nor microtasks interleave
+      // inside one frame. Every tick that began before the decision is
+      // therefore visible to it, and none can begin during it.
+      const idle = pending === 0 && !unfinished && !isReconciliationInFlight();
       consecutiveIdleChecks = idle ? consecutiveIdleChecks + 1 : 0;
     } catch (error) {
       onCheckFailure(error);

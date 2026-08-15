@@ -5,6 +5,7 @@ import { createIdleExitCheck } from "@/api/lib/document-processing-idle-exit";
 import {
   hasUnfinishedDocumentProcessingReconciliation,
   initDocumentProcessingWorker,
+  isDocumentProcessingReconciliationInFlight,
 } from "@/api/lib/document-processing-queue";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
@@ -56,6 +57,7 @@ if (idleExitMinutes !== undefined) {
   const idleTick = createIdleExitCheck({
     countPending: countPendingDocumentProcessingJobs,
     hasUnfinishedReconciliation: hasUnfinishedDocumentProcessingReconciliation,
+    isReconciliationInFlight: isDocumentProcessingReconciliationInFlight,
     requiredIdleChecks,
     onCheckFailure: (error) => {
       logger.error("document_processing.idle_check_failed", {

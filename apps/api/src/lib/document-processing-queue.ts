@@ -2641,6 +2641,13 @@ export const createReconciliationProgress = () => {
       await running;
       return unfinished;
     },
+    /**
+     * Whether a tick is running right now, for a caller that has already
+     * taken its other readings and is deciding in this frame: the awaited
+     * answer above can only describe the tick it waited for, so a tick
+     * that started afterwards is visible here and nowhere else.
+     */
+    isTickRunning: (): boolean => running !== null,
     /** `tick` resolves with whether it left work behind. */
     runTick: async (tick: () => Promise<boolean>): Promise<void> => {
       // Both published before the first await, so a caller that arrives
@@ -2671,6 +2678,10 @@ const reconciliationProgress = createReconciliationProgress();
  */
 export const hasUnfinishedDocumentProcessingReconciliation =
   reconciliationProgress.hasUnfinishedWork;
+
+/** Companion synchronous read for the idle sampler's decision frame. */
+export const isDocumentProcessingReconciliationInFlight =
+  reconciliationProgress.isTickRunning;
 
 export const runDocumentProcessingReconciliationPhases = async ({
   onPhaseError,

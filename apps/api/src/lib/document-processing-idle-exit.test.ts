@@ -20,6 +20,7 @@ const harness = (
   const tick = createIdleExitCheck({
     countPending: counts,
     hasUnfinishedReconciliation,
+    isReconciliationInFlight: () => false,
     requiredIdleChecks,
     onIdleExit: () => {
       exits += 1;
@@ -132,6 +133,7 @@ describe("createIdleExitCheck", () => {
         return 0;
       },
       hasUnfinishedReconciliation: async () => unfinished,
+      isReconciliationInFlight: () => false,
       requiredIdleChecks: 2,
       onIdleExit: () => {
         exits += 1;
@@ -144,6 +146,38 @@ describe("createIdleExitCheck", () => {
     // before it.
     expect(await tick()).toBe("checked");
     expect(exits).toBe(0);
+  });
+
+  test("a reconciliation that starts as the count resolves blocks the final sample", async () => {
+    let running = false;
+    let exits = 0;
+    const tick = createIdleExitCheck({
+      // The reconcile timer fires in the gap between the count resolving
+      // and the sampler resuming, which no later sample would cover: this
+      // is the last check the streak needs.
+      countPending: async () =>
+        await Promise.resolve(0).then((pending) => {
+          running = true;
+          return pending;
+        }),
+      hasUnfinishedReconciliation: async () => false,
+      isReconciliationInFlight: () => running,
+      requiredIdleChecks: 1,
+      onIdleExit: () => {
+        exits += 1;
+      },
+      onCheckFailure: () => undefined,
+    });
+
+    expect(await tick()).toBe("checked");
+    expect(exits).toBe(0);
+  });
+
+  test("a final sample with nothing running still exits", async () => {
+    const h = harness(1, sequence([0]));
+
+    expect(await h.tick()).toBe("exit");
+    expect(h.exits()).toBe(1);
   });
 
   test("exit fires exactly once; later ticks are inert", async () => {
