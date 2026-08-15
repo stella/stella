@@ -150,57 +150,98 @@ describe("createIdleExitCheck", () => {
     expect(exits).toBe(0);
   });
 
-  test("a reconciliation that starts as the count resolves blocks the final sample", async () => {
-    let running = false;
+  /**
+   * A reconciliation tick that crosses a sample's count leaves the
+   * sample's readings describing different moments. The sample measures
+   * again rather than calling the moment busy, so what decides it is the
+   * crossing tick's own verdict.
+   */
+  const crossedHarness = ({
+    crossEveryCount,
+    leftWorkBehind,
+    requiredIdleChecks,
+  }: {
+    crossEveryCount: boolean;
+    leftWorkBehind: boolean;
+    requiredIdleChecks: number;
+  }) => {
+    let counts = 0;
     let exits = 0;
+    let generation = 0;
+    let running = false;
+    let unfinished = false;
     const tick = createIdleExitCheck({
-      // The reconcile timer fires in the gap between the count resolving
-      // and the sampler resuming, which no later sample would cover: this
-      // is the last check the streak needs.
       countPending: async () =>
         await Promise.resolve(0).then((pending) => {
-          running = true;
+          counts += 1;
+          // The reconcile timer fires while the count is in flight. With
+          // `crossEveryCount` it fires during every one, which is what a
+          // sampler phase-locked inside reconciliation would see.
+          if (crossEveryCount || counts % 2 === 1) {
+            generation += 1;
+            running = true;
+          }
           return pending;
         }),
-      hasUnfinishedReconciliation: async () => false,
+      hasUnfinishedReconciliation: async () => {
+        // Waiting for a tick in flight is what completes it, and its
+        // verdict is what this sample gets.
+        if (running) {
+          running = false;
+          unfinished = leftWorkBehind;
+        }
+        return unfinished;
+      },
       isReconciliationInFlight: () => running,
-      reconciliationGeneration: () => 0,
-      requiredIdleChecks: 1,
+      reconciliationGeneration: () => generation,
+      requiredIdleChecks,
       onIdleExit: () => {
         exits += 1;
       },
       onCheckFailure: () => undefined,
     });
+    return { counts: () => counts, exits: () => exits, tick };
+  };
 
-    expect(await tick()).toBe("checked");
-    expect(exits).toBe(0);
+  test("a sample crossed by a saturated tick reads that tick's verdict", async () => {
+    const h = crossedHarness({
+      crossEveryCount: false,
+      leftWorkBehind: true,
+      requiredIdleChecks: 1,
+    });
+
+    expect(await h.tick()).toBe("checked");
+    expect(h.exits()).toBe(0);
   });
 
-  test("a reconciliation that starts and finishes inside the count blocks the final sample", async () => {
-    let generation = 0;
-    let exits = 0;
-    const tick = createIdleExitCheck({
-      // A whole tick fits inside the count: by the time the sample
-      // resumes, nothing is running and the verdict it already took
-      // belongs to the tick before this one, so only the generation
-      // records that it happened.
-      countPending: async () =>
-        await Promise.resolve(0).then((pending) => {
-          generation += 1;
-          return pending;
-        }),
-      hasUnfinishedReconciliation: async () => false,
-      isReconciliationInFlight: () => false,
-      reconciliationGeneration: () => generation,
-      requiredIdleChecks: 1,
-      onIdleExit: () => {
-        exits += 1;
-      },
-      onCheckFailure: () => undefined,
+  test("samples crossed by drained ticks still complete the streak", async () => {
+    // The livelock shape: every sample's count is crossed by a tick that
+    // reports drained. Reading the crossing as busy would reset the streak
+    // forever on a system with nothing left to do.
+    const h = crossedHarness({
+      crossEveryCount: false,
+      leftWorkBehind: false,
+      requiredIdleChecks: 2,
     });
 
-    expect(await tick()).toBe("checked");
-    expect(exits).toBe(0);
+    expect(await h.tick()).toBe("checked");
+    expect(await h.tick()).toBe("exit");
+    expect(h.exits()).toBe(1);
+  });
+
+  test("a producer that crosses every count is conceded, not chased forever", async () => {
+    const h = crossedHarness({
+      crossEveryCount: true,
+      leftWorkBehind: false,
+      requiredIdleChecks: 1,
+    });
+
+    expect(await h.tick()).toBe("checked");
+    expect(h.exits()).toBe(0);
+    // It measured again rather than deciding on the first reading, and
+    // stopped rather than spinning.
+    expect(h.counts()).toBeGreaterThan(1);
+    expect(h.counts()).toBeLessThan(8);
   });
 
   test("a final sample with nothing running still exits", async () => {

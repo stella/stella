@@ -1382,7 +1382,7 @@ describe("createReconciliationProgress", () => {
     expect(h.exits()).toBe(0);
   });
 
-  test("a tick that starts as the count resolves is seen by the sample deciding", async () => {
+  test("a tick that starts as the count resolves is waited out by that sample", async () => {
     const progress = createReconciliationProgress();
     const tick = pendingTick();
     const ticks: Promise<void>[] = [];
@@ -1392,7 +1392,8 @@ describe("createReconciliationProgress", () => {
         await Promise.resolve(0).then((pending) => {
           // The reconcile timer fires between the count resolving and the
           // sampler resuming. The tick's own prologue marks it running
-          // before its first await, which is what the decision re-reads.
+          // before its first await, so the sample measures again and that
+          // second pass waits for this tick's verdict.
           if (ticks.length === 0) {
             ticks.push(progress.runTick(tick.run));
           }
@@ -1400,16 +1401,16 @@ describe("createReconciliationProgress", () => {
         }),
     );
 
-    // One idle check is all this sampler needs, so nothing later could
-    // catch the tick if this sample missed it.
-    expect(await h.sample()).toBe("checked");
+    const outcome = h.sample();
+    await Bun.sleep(5);
+    // Still measuring: nothing has been decided on the stale verdict.
     expect(h.exits()).toBe(0);
 
-    tick.settle(false);
+    tick.settle(true);
     await Promise.all(ticks);
 
-    expect(await h.sample()).toBe("exit");
-    expect(h.exits()).toBe(1);
+    expect(await outcome).toBe("checked");
+    expect(h.exits()).toBe(0);
   });
 
   /**
@@ -1448,19 +1449,15 @@ describe("createReconciliationProgress", () => {
     expect(h.exits()).toBe(0);
   });
 
-  test("a drained tick that fits inside the count costs one sample, not the exit", async () => {
+  test("a drained tick that fits inside the count is resolved by the same sample", async () => {
     const progress = createReconciliationProgress();
     await progress.runTick(async () => false);
     const h = samplerRunningATickInsideTheCount(progress, false);
 
-    // Every other reading says drained; the moved generation is what
-    // holds this sample back, since that tick may have enqueued after the
-    // count was taken.
-    expect(await h.sample()).toBe("checked");
-    expect(h.exits()).toBe(0);
-
-    // Nothing runs under the next sample, so being conservative delays
-    // the exit by one check rather than preventing it.
+    // The crossing moved the generation, so the sample measures again: it
+    // re-reads the verdict, which is now that tick's own and drained, and
+    // re-counts what it enqueued. Nothing is left, so the sample completes
+    // rather than being spent on the crossing.
     expect(await h.sample()).toBe("exit");
     expect(h.exits()).toBe(1);
   });
