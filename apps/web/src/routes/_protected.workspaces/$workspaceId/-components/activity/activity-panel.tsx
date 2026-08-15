@@ -433,7 +433,7 @@ const ActivityAdvancedFilters = ({
                   ? t("common.unexpectedError")
                   : actorsQuery.isPending || actorsQuery.isFetching
                     ? t("common.loading")
-                  : t("common.noResults")}
+                    : t("common.noResults")}
               </ComboboxEmpty>
               {actorsQuery.hasNextPage && (
                 <Button
