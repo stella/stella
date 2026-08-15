@@ -19,6 +19,32 @@ describe("API deployment health receipt", () => {
     expect(
       workflow.match(/Authorization: Bearer \$WEBHOOK_TOKEN/gu),
     ).toHaveLength(1);
+    expect(workflow).toContain("- Desktop release canary");
+  });
+
+  test("monitors the public desktop latest pointer", async () => {
+    const workflow = await Bun.file(
+      new URL(
+        "../.github/workflows/desktop-release-canary.yml",
+        import.meta.url,
+      ),
+    ).text();
+
+    expect(workflow).toContain('cron: "17 * * * *"');
+    expect(workflow).toContain("permissions: {}");
+    expect(workflow).toContain("contents: read");
+    expect(workflow).toContain(`GH_REPO: \${{ github.repository }}`);
+    expect(workflow).toContain("bash scripts/check-desktop-release-policy.sh");
+  });
+
+  test("package releases use the latest-safe shared workflow", async () => {
+    const workflow = await Bun.file(
+      new URL("../.github/workflows/publish-npm.yml", import.meta.url),
+    ).text();
+
+    expect(workflow).toContain(
+      "stella/.github/.github/workflows/npm-independent-release.yml@2b8697f04b39187c934afc04f7b04ad1a18bd827 # package latest-pointer policy",
+    );
   });
 
   test("ties staging promotion to the current health gate", async () => {
@@ -240,7 +266,13 @@ describe("API deployment health receipt", () => {
     expect(desktopManifest).toContain("needs.build.result == 'success'");
     expect(desktopManifest).not.toContain("gh release edit");
     expect(desktopPromote).toContain("needs.manifest.result == 'success'");
-    expect(desktopPromote).toContain('gh release edit "$RELEASE_REF" --latest');
+    expect(desktopPromote).toContain(`GH_REPO: \${{ github.repository }}`);
+    expect(desktopPromote).toContain("Checkout release policy");
+    expect(desktopPromote).toContain(`ref: \${{ github.workflow_sha }}`);
+    expect(desktopPromote).not.toContain(
+      `ref: \${{ needs.resolve.outputs.release_sha }}`,
+    );
+    expect(desktopPromote).toContain("bash scripts/promote-desktop-release.sh");
     expect(
       desktopCarry.indexOf("Verify production serves the release commit"),
     ).toBeGreaterThan(desktopCarry.indexOf('gh release upload "$RELEASE_REF"'));
@@ -248,6 +280,10 @@ describe("API deployment health receipt", () => {
     expect(desktopCarry.indexOf("Promote release to latest")).toBeGreaterThan(
       desktopCarry.indexOf("Verify production web serves the release commit"),
     );
+    expect(desktopCarry).toContain(`GH_REPO: \${{ github.repository }}`);
+    expect(desktopCarry).toContain("Checkout workflow policy scripts");
+    expect(desktopCarry).toContain(`ref: \${{ github.workflow_sha }}`);
+    expect(desktopCarry).toContain("bash scripts/promote-desktop-release.sh");
   });
 
   test("gates API releases on readiness", async () => {

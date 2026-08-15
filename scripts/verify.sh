@@ -260,6 +260,8 @@ run_step "Knip production deps" run_knip
 run_step "Test" run_test
 run_step "Bridge-version guard self-test" bash scripts/check-bridge-version.test.sh
 run_step "Release-channel self-test" bash scripts/release-channel.test.sh
+run_step "Desktop release promotion self-test" bash \
+  scripts/promote-desktop-release.test.sh
 run_step "Web container platform self-test" bun test \
   scripts/check-web-docker-platform.test.ts
 run_step "API release contract self-test" bun test \
