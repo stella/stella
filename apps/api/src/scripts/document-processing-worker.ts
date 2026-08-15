@@ -1,28 +1,16 @@
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { detached } from "@/api/lib/detached";
 import { countPendingDocumentProcessingJobs } from "@/api/lib/document-processing-enqueue";
-import {
-  createIdleExitCheck,
-  startIdleExitSampling,
-} from "@/api/lib/document-processing-idle-exit";
+import { createIdleExitCheck } from "@/api/lib/document-processing-idle-exit";
 import {
   hasUnfinishedDocumentProcessingReconciliation,
   initDocumentProcessingWorker,
-  RECONCILE_INTERVAL_MS,
 } from "@/api/lib/document-processing-queue";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { refreshS3 } from "@/api/lib/s3";
 
 const IDLE_CHECK_INTERVAL_MS = 60_000;
-// Both loops are intervals started at worker boot, and the sample period is
-// a multiple of the reconciliation period, so unoffset samples would land on
-// the same instant as every second reconciliation tick. A tick that is
-// running reads as unfinished by design, so a phase-locked sampler would see
-// one at every sample and never exit. Start half a reconciliation period
-// late, putting samples between ticks; a tick still running by then has slow
-// work genuinely in flight and should keep the worker alive.
-const IDLE_CHECK_OFFSET_MS = RECONCILE_INTERVAL_MS / 2;
 
 await refreshS3();
 const documentProcessingWorker = initDocumentProcessingWorker();
@@ -85,12 +73,10 @@ if (idleExitMinutes !== undefined) {
       detached(shutdown("idle-exit"), "document-processing.idle-exit");
     },
   });
-  stopIdleSampling = startIdleExitSampling({
-    intervalMs: IDLE_CHECK_INTERVAL_MS,
-    isShuttingDown: () => shuttingDown,
-    offsetMs: IDLE_CHECK_OFFSET_MS,
-    onSample: () => {
-      detached(idleTick(), "document-processing.idle-exit-check");
-    },
-  }).stop;
+  const idleTimer = setInterval(() => {
+    detached(idleTick(), "document-processing.idle-exit-check");
+  }, IDLE_CHECK_INTERVAL_MS);
+  stopIdleSampling = () => {
+    clearInterval(idleTimer);
+  };
 }

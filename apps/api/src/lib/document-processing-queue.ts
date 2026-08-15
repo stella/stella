@@ -81,7 +81,7 @@ import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const WORKER_CONCURRENCY = 2;
-export const RECONCILE_INTERVAL_MS = 30_000;
+const RECONCILE_INTERVAL_MS = 30_000;
 export const RECONCILE_BATCH_SIZE = 100;
 const ENQUEUE_VISIBILITY_TIMEOUT_MS = 5 * 60 * 1000;
 const ENQUEUE_FAILURE_RETRY_MS = 30_000;
@@ -1621,6 +1621,7 @@ const persistMissingNativeExtractionRuns = async (
     const currentProjectionByEntityId = new Map(
       currentProjections.map((projection) => [projection.entityId, projection]),
     );
+    const queuedAt = new Date();
     const values = candidates.flatMap((candidate) => {
       const entity = lockedEntityById.get(candidate.entityId);
       const field = currentFieldById.get(candidate.fieldId);
@@ -1674,6 +1675,12 @@ const persistMissingNativeExtractionRuns = async (
           entityVersionId: candidate.entityVersionId,
           fieldId: candidate.fieldId,
           kind: "native-extraction",
+          // Due now rather than unscheduled, so the reconciliation tick
+          // that created this run also delivers it: the delivery phase
+          // runs last and selects scheduled work. Left unscheduled, the
+          // run would sit queued until the dispatch scheduler noticed it,
+          // which a batch worker may not outlive.
+          nextAttemptAt: queuedAt,
           organizationId: candidate.organizationId,
           processorVersion: DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION,
           requestedBy: null,
@@ -1699,7 +1706,6 @@ const persistMissingNativeExtractionRuns = async (
       ],
       sql` AND `,
     );
-    const queuedAt = new Date();
     const queued = await tx
       .insert(documentProcessingRuns)
       .values(values)
@@ -1796,13 +1802,16 @@ type RepairScanPage = ReconciliationPhaseResult & {
 };
 
 /**
- * The repair sweep's resume position and its saturation signal are the
- * same fact: a full page means the scan stopped at the cap, so the next
- * tick resumes after the last scanned field; a short page means the scan
- * reached the end of the table, so the cursor resets and nothing is left
- * behind. Derived together so the two can never disagree, and kept apart
- * from `createdRunCount` because most scanned fields are filtered out
- * before a run is created.
+ * The repair sweep's resume position follows the scan alone: a full page
+ * means the scan stopped at the cap, so the next tick resumes after the
+ * last scanned field; a short page means it reached the end of the table,
+ * so the cursor resets. Work left behind has a second, independent
+ * source: runs this page created are queued for the delivery phase, which
+ * runs later in the same tick and may not take them all, so a page that
+ * ended the scan still leaves work behind when it created anything. Both
+ * are derived here so the cursor and the signal cannot disagree, and
+ * neither is inferred from the created-run count alone, which most
+ * scanned fields never reach.
  */
 export const resolveRepairScanPage = ({
   createdRunCount,
@@ -1811,14 +1820,14 @@ export const resolveRepairScanPage = ({
   createdRunCount: number;
   scannedFieldIds: readonly SafeId<"field">[];
 }): RepairScanPage => {
-  const hasMore = cappedSelectionHasMore({
+  const scanSaturated = cappedSelectionHasMore({
     limit: RECONCILE_BATCH_SIZE,
     selected: scannedFieldIds.length,
   });
   return {
     count: createdRunCount,
-    hasMore,
-    nextCursor: hasMore ? (scannedFieldIds.at(-1) ?? null) : null,
+    hasMore: scanSaturated || createdRunCount > 0,
+    nextCursor: scanSaturated ? (scannedFieldIds.at(-1) ?? null) : null,
   };
 };
 
@@ -2570,6 +2579,37 @@ type ReconciliationPhase = {
 
 const RECONCILIATION_PHASE_NAMES = Object.values(RECONCILIATION_PHASE);
 
+/** Total by type: a declared phase cannot exist without a producer. */
+const RECONCILIATION_PHASE_RUNNERS = {
+  [RECONCILIATION_PHASE.DELIVERY]: dispatchScheduledDocumentProcessingRetries,
+  [RECONCILIATION_PHASE.REINDEX]: recoverFailedOcrSearchIndexes,
+  [RECONCILIATION_PHASE.REPAIR]: recoverMissingNativeExtractionRuns,
+  [RECONCILIATION_PHASE.RETRY]: recoverRetryableOcrFailures,
+  [RECONCILIATION_PHASE.STALE_LEASE]: recoverStaleDocumentProcessingRuns,
+} as const satisfies Record<
+  ReconciliationPhaseName,
+  ReconciliationPhase["run"]
+>;
+
+/**
+ * The phases the worker actually runs, in order: repair first because it
+ * creates runs the later phases settle, delivery last so it hands off
+ * what the tick produced. Assembled from the runner map rather than
+ * written out again, so the only way to leave a declared phase unrun is
+ * to leave it out of this order, which the reconciliation tests compare
+ * against the declared names in both directions.
+ */
+export const DOCUMENT_PROCESSING_RECONCILIATION_PHASES = [
+  RECONCILIATION_PHASE.REPAIR,
+  RECONCILIATION_PHASE.REINDEX,
+  RECONCILIATION_PHASE.RETRY,
+  RECONCILIATION_PHASE.STALE_LEASE,
+  RECONCILIATION_PHASE.DELIVERY,
+].map((name) => ({
+  name,
+  run: RECONCILIATION_PHASE_RUNNERS[name],
+})) satisfies readonly ReconciliationPhase[];
+
 /**
  * Whether the tick stopped short of draining every backlog. Each phase
  * states its own saturation, so this only has to collect the answers: no
@@ -2582,22 +2622,40 @@ export const reconciliationLeftWorkBehind = (
   RECONCILIATION_PHASE_NAMES.some((phase) => results[phase].hasMore);
 
 /**
- * Reconciliation progress as the idle sampler sees it. The sampler reads
- * `hasUnfinishedWork()` synchronously, so `runTick` publishes "unfinished"
- * in its synchronous prologue, before the first await: a tick that is
- * still running, however long it runs, can never expose the previous
- * tick's drained answer. The flag clears only when a tick resolves with a
- * fully drained result; a rejected tick leaves it set, because a tick that
- * never reported cannot prove the backlog is empty.
+ * Reconciliation progress as the idle sampler sees it. A caller that
+ * arrives while a tick is running waits for that tick instead of reading
+ * the previous one's answer, which makes the answer independent of how
+ * the caller's cadence lines up with the reconciliation cadence: a
+ * snapshot read would let a sampler that keeps landing inside slow ticks
+ * see "running" at every sample and never let the worker exit, while
+ * still risking a stale drained answer from the tick before. The flag
+ * clears only when a tick resolves fully drained; a rejected tick leaves
+ * it set, because a tick that never reported cannot prove the backlog is
+ * empty. One tick at a time: the caller serialises them.
  */
 export const createReconciliationProgress = () => {
   let unfinished = false;
+  let running: Promise<void> | null = null;
   return {
-    hasUnfinishedWork: (): boolean => unfinished,
+    hasUnfinishedWork: async (): Promise<boolean> => {
+      await running;
+      return unfinished;
+    },
     /** `tick` resolves with whether it left work behind. */
     runTick: async (tick: () => Promise<boolean>): Promise<void> => {
+      // Both published before the first await, so a caller that arrives
+      // during this tick waits for it rather than reading the last one.
       unfinished = true;
-      unfinished = await tick();
+      let finish: () => void = () => undefined;
+      running = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      try {
+        unfinished = await tick();
+      } finally {
+        running = null;
+        finish();
+      }
     },
   };
 };
@@ -2605,10 +2663,11 @@ export const createReconciliationProgress = () => {
 const reconciliationProgress = createReconciliationProgress();
 
 /**
- * Whether reconciliation is running or last stopped with work behind it.
- * Batch mode reads this so the worker does not treat an empty job queue as
- * "nothing left to do" while the reconciliation loop is still draining a
- * backlog one capped batch at a time.
+ * Whether the latest reconciliation tick left work behind, waiting for a
+ * tick in flight to report. Batch mode reads this so the worker does not
+ * treat an empty job queue as "nothing left to do" while the
+ * reconciliation loop is still draining a backlog one capped batch at a
+ * time.
  */
 export const hasUnfinishedDocumentProcessingReconciliation =
   reconciliationProgress.hasUnfinishedWork;
@@ -2663,28 +2722,7 @@ const reconcileDocumentProcessing = async ({
     await reconciliationProgress.runTick(async () => {
       await ensureReconciliationRedisConnected();
       const results = await runDocumentProcessingReconciliationPhases({
-        phases: [
-          {
-            name: RECONCILIATION_PHASE.REPAIR,
-            run: recoverMissingNativeExtractionRuns,
-          },
-          {
-            name: RECONCILIATION_PHASE.REINDEX,
-            run: recoverFailedOcrSearchIndexes,
-          },
-          {
-            name: RECONCILIATION_PHASE.RETRY,
-            run: recoverRetryableOcrFailures,
-          },
-          {
-            name: RECONCILIATION_PHASE.STALE_LEASE,
-            run: recoverStaleDocumentProcessingRuns,
-          },
-          {
-            name: RECONCILIATION_PHASE.DELIVERY,
-            run: dispatchScheduledDocumentProcessingRetries,
-          },
-        ],
+        phases: DOCUMENT_PROCESSING_RECONCILIATION_PHASES,
         onPhaseError: (error, phase) => {
           captureError(error, { phase });
           logger.error("document_processing.reconcile_phase_failed", {

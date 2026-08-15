@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  createIdleExitCheck,
-  startIdleExitSampling,
-} from "@/api/lib/document-processing-idle-exit";
+import { createIdleExitCheck } from "@/api/lib/document-processing-idle-exit";
 
 /**
  * The class these pin: an idle-exit decision driven by asynchronous
@@ -16,7 +13,7 @@ import {
 const harness = (
   requiredIdleChecks: number,
   counts: () => Promise<number>,
-  hasUnfinishedReconciliation: () => boolean = () => false,
+  hasUnfinishedReconciliation: () => Promise<boolean> = async () => false,
 ) => {
   let exits = 0;
   let failures = 0;
@@ -98,7 +95,7 @@ describe("createIdleExitCheck", () => {
   });
 
   test("an empty queue is not idle while reconciliation has work behind it", async () => {
-    const h = harness(2, sequence([0, 0, 0, 0]), () => true);
+    const h = harness(2, sequence([0, 0, 0, 0]), async () => true);
     expect(await h.tick()).toBe("checked");
     expect(await h.tick()).toBe("checked");
     expect(await h.tick()).toBe("checked");
@@ -107,7 +104,7 @@ describe("createIdleExitCheck", () => {
 
   test("reconciliation draining mid-streak resets it", async () => {
     let unfinished = false;
-    const h = harness(2, sequence([0, 0, 0, 0]), () => unfinished);
+    const h = harness(2, sequence([0, 0, 0, 0]), async () => unfinished);
     await h.tick();
     unfinished = true;
     // The streak must restart from this sample, not resume where it left off.
@@ -128,7 +125,7 @@ describe("createIdleExitCheck", () => {
         unfinished = true;
         return 0;
       },
-      hasUnfinishedReconciliation: () => unfinished,
+      hasUnfinishedReconciliation: async () => unfinished,
       requiredIdleChecks: 1,
       onIdleExit: () => {
         exits += 1;
@@ -146,72 +143,5 @@ describe("createIdleExitCheck", () => {
     expect(await h.tick()).toBe("skipped");
     expect(await h.tick()).toBe("skipped");
     expect(h.exits()).toBe(1);
-  });
-});
-
-/**
- * The class these pin: sampling starts after an offset, so there is a
- * window in which the worker can shut down before any interval exists. A
- * timer created after that point outlives the shutdown it should have been
- * cancelled by.
- */
-describe("startIdleExitSampling", () => {
-  const OFFSET_MS = 10;
-  const INTERVAL_MS = 5;
-  // Past the offset and several intervals, so a timer that was created
-  // anyway has had every chance to fire.
-  const PAST_OFFSET_MS = 60;
-
-  const samplingHarness = () => {
-    let samples = 0;
-    let shuttingDown = false;
-    const sampling = startIdleExitSampling({
-      intervalMs: INTERVAL_MS,
-      isShuttingDown: () => shuttingDown,
-      offsetMs: OFFSET_MS,
-      onSample: () => {
-        samples += 1;
-      },
-    });
-    return {
-      beginShutdown: () => {
-        shuttingDown = true;
-      },
-      samples: () => samples,
-      stop: sampling.stop,
-    };
-  };
-
-  test("samples on the interval once the offset expires", async () => {
-    const h = samplingHarness();
-
-    await Bun.sleep(PAST_OFFSET_MS);
-    h.stop();
-    const sampled = h.samples();
-
-    expect(sampled).toBeGreaterThan(0);
-    // Stopping ends sampling for good.
-    await Bun.sleep(PAST_OFFSET_MS);
-    expect(h.samples()).toBe(sampled);
-  });
-
-  test("stopping inside the offset window never starts sampling", async () => {
-    const h = samplingHarness();
-
-    h.stop();
-    await Bun.sleep(PAST_OFFSET_MS);
-
-    expect(h.samples()).toBe(0);
-  });
-
-  test("a shutdown inside the offset window never starts sampling", async () => {
-    const h = samplingHarness();
-
-    // Shutdown began but the deferred start was not cancelled: it must
-    // still refuse to create the interval.
-    h.beginShutdown();
-    await Bun.sleep(PAST_OFFSET_MS);
-
-    expect(h.samples()).toBe(0);
   });
 });

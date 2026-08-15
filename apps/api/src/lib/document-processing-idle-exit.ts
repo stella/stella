@@ -14,13 +14,14 @@
 type CreateIdleExitCheckOptions = {
   countPending: () => Promise<number>;
   /**
-   * Whether reconciliation is running or last stopped with work behind it.
-   * Read synchronously, so the reconciliation side must publish "running"
-   * before its first await; anything weaker would let a tick that outlives
-   * an idle window keep exposing the previous tick's drained answer.
-   * Required rather than optional so a new call site must decide.
+   * Whether reconciliation left work behind, answered no earlier than the
+   * tick that is running: the sample waits for a tick in flight instead of
+   * racing it, so the answer never depends on how the sampling cadence
+   * lines up with the reconciliation cadence, and never comes from the
+   * tick before. Required rather than optional so a new call site must
+   * decide.
    */
-  hasUnfinishedReconciliation: () => boolean;
+  hasUnfinishedReconciliation: () => Promise<boolean>;
   /** Consecutive empty samples required before exiting. */
   requiredIdleChecks: number;
   onIdleExit: () => void;
@@ -28,45 +29,6 @@ type CreateIdleExitCheckOptions = {
 };
 
 export type IdleExitTickOutcome = "checked" | "exit" | "skipped";
-
-type StartIdleExitSamplingOptions = {
-  intervalMs: number;
-  isShuttingDown: () => boolean;
-  /** Delay before the first sample, so sampling does not phase-lock. */
-  offsetMs: number;
-  onSample: () => void;
-};
-
-/**
- * Sampling on an interval that only begins after an offset, with one stop
- * handle covering both stages. The offset is a window in which the worker
- * can already be shutting down, so the deferred start is both cancellable
- * and guarded: `stop` clears whichever timer exists, and a start that was
- * not cancelled still refuses to create the interval once shutdown began.
- */
-export const startIdleExitSampling = ({
-  intervalMs,
-  isShuttingDown,
-  offsetMs,
-  onSample,
-}: StartIdleExitSamplingOptions): { stop: () => void } => {
-  let interval: ReturnType<typeof setInterval> | null = null;
-  const start = setTimeout(() => {
-    if (isShuttingDown()) {
-      return;
-    }
-    interval = setInterval(onSample, intervalMs);
-  }, offsetMs);
-  return {
-    stop: () => {
-      clearTimeout(start);
-      if (interval !== null) {
-        clearInterval(interval);
-        interval = null;
-      }
-    },
-  };
-};
 
 export const createIdleExitCheck = ({
   countPending,
@@ -89,10 +51,11 @@ export const createIdleExitCheck = ({
     inFlight = true;
     try {
       const pending = await countPending();
-      // Read reconciliation after the count settles: a reconciliation tick
-      // that starts while the count is in flight still lands in this
-      // sample, so a slow count cannot certify a moment it did not see.
-      const idle = pending === 0 && !hasUnfinishedReconciliation();
+      // Read reconciliation after the count settles, and wait for a tick in
+      // flight: a tick that starts while the count runs still lands in this
+      // sample, and one that outlives the count is answered by its own
+      // verdict rather than by whichever finished first.
+      const idle = pending === 0 && !(await hasUnfinishedReconciliation());
       consecutiveIdleChecks = idle ? consecutiveIdleChecks + 1 : 0;
     } catch (error) {
       onCheckFailure(error);

@@ -10,6 +10,7 @@ import {
   classifyOcrWorkspaceDispatch,
   createDocumentProcessingLeaseRenewal,
   createReconciliationProgress,
+  DOCUMENT_PROCESSING_RECONCILIATION_PHASES,
   DocumentProcessingJobError,
   indexDocumentProjection,
   isCurrentNativeExtractionSource,
@@ -1117,17 +1118,23 @@ describe("reconciliationLeftWorkBehind", () => {
     ).toBe(false);
   });
 
-  test("every declared phase states its own signal", async () => {
+  test("every declared phase runs and states its own signal", async () => {
     const drained = await resultsOf([]);
-    // Both directions: a phase added to the reconciliation list that never
-    // reports, or a name left behind for a removed phase, fails here.
-    expect(Object.keys(drained).toSorted()).toEqual([
+    const declared = Object.keys(drained).toSorted();
+    // Both directions against the list the worker actually passes: a phase
+    // declared but never wired in reports nothing and would be read as
+    // drained; a phase run but not declared has nowhere to report.
+    expect(declared).toEqual([
       "delivery",
       "reindex",
       "repair",
       "retry",
       "stale-lease",
     ]);
+    const executed = DOCUMENT_PROCESSING_RECONCILIATION_PHASES.map(
+      ({ name }): string => name,
+    ).toSorted();
+    expect(executed).toEqual(declared);
     for (const phase of Object.keys(drained)) {
       expect(
         reconciliationLeftWorkBehind({
@@ -1148,6 +1155,17 @@ describe("reconciliationLeftWorkBehind", () => {
     ).toBe(true);
   });
 
+  test("repair runs first and delivery last, so a tick hands off what it created", () => {
+    // Repair inserts runs due now; delivery is the phase that hands them
+    // to the queue, so it has to come after everything that creates work.
+    expect(DOCUMENT_PROCESSING_RECONCILIATION_PHASES.at(0)?.name).toBe(
+      "repair",
+    );
+    expect(DOCUMENT_PROCESSING_RECONCILIATION_PHASES.at(-1)?.name).toBe(
+      "delivery",
+    );
+  });
+
   test("a failed phase counts as work left behind", async () => {
     // It drained nothing it can prove, and a zero count would otherwise
     // read as drained.
@@ -1166,10 +1184,12 @@ describe("reconciliationLeftWorkBehind", () => {
 });
 
 /**
- * The repair sweep is the phase where count and backlog diverge most: it
+ * The repair sweep is where count, cursor, and backlog all diverge: it
  * scans a page of candidate fields, filters nearly all of them, and
- * creates runs only for the survivors, so its created-run count says
- * nothing about whether the scan reached the end of the table.
+ * creates runs only for the survivors. The created-run count says nothing
+ * about whether the scan reached the end of the table, and the end of the
+ * scan says nothing about the runs it just created, which the delivery
+ * phase still has to hand off.
  */
 describe("resolveRepairScanPage", () => {
   const fieldIds = (count: number) =>
@@ -1187,16 +1207,29 @@ describe("resolveRepairScanPage", () => {
     });
   });
 
-  test("a short page ends the scan and resets the cursor", () => {
+  test("a short page that created runs ends the scan but not the tick's work", () => {
     const scannedFieldIds = fieldIds(RECONCILE_BATCH_SIZE - 1);
 
+    // The cursor resets, because the scan did reach the end; the tick is
+    // still unfinished, because those runs are queued for delivery.
     expect(
-      resolveRepairScanPage({
-        createdRunCount: scannedFieldIds.length,
-        scannedFieldIds,
-      }),
+      resolveRepairScanPage({ createdRunCount: 2, scannedFieldIds }),
     ).toEqual({
-      count: scannedFieldIds.length,
+      count: 2,
+      hasMore: true,
+      nextCursor: null,
+    });
+  });
+
+  test("a short page that created nothing is drained", () => {
+    const scannedFieldIds = fieldIds(RECONCILE_BATCH_SIZE - 1);
+
+    // The tick after the one above: nothing left to create, nothing left
+    // to deliver.
+    expect(
+      resolveRepairScanPage({ createdRunCount: 0, scannedFieldIds }),
+    ).toEqual({
+      count: 0,
       hasMore: false,
       nextCursor: null,
     });
@@ -1204,9 +1237,12 @@ describe("resolveRepairScanPage", () => {
 });
 
 /**
- * The idle sampler reads reconciliation progress synchronously, so a tick
- * that outlives an idle window must not keep exposing the previous tick's
- * drained answer.
+ * The class these pin: the sampler's verdict must not depend on how its
+ * cadence lines up with the reconciliation cadence. Reading a snapshot
+ * mid-tick gets that wrong in both directions: a sampler that keeps
+ * landing inside slow ticks would see "running" at every sample and never
+ * exit, and one that lands just before a tick reports would exit on the
+ * previous tick's answer. A sample therefore waits for the tick in flight.
  */
 describe("createReconciliationProgress", () => {
   /** A tick the test settles on demand, standing in for a slow drain. */
@@ -1223,24 +1259,9 @@ describe("createReconciliationProgress", () => {
     };
   };
 
-  test("a running tick reads as unfinished before it awaits anything", async () => {
-    const progress = createReconciliationProgress();
-    await progress.runTick(async () => false);
-    const tick = pendingTick();
-
-    const inFlight = progress.runTick(tick.run);
-
-    // Synchronously after the call, and across every later sample.
-    expect(progress.hasUnfinishedWork()).toBe(true);
-    await Bun.sleep(5);
-    expect(progress.hasUnfinishedWork()).toBe(true);
-    tick.settle(false);
-    await inFlight;
-    expect(progress.hasUnfinishedWork()).toBe(false);
-  });
-
-  test("an in-flight tick keeps the idle sampler from exiting until it drains", async () => {
-    const progress = createReconciliationProgress();
+  const sampler = (
+    progress: ReturnType<typeof createReconciliationProgress>,
+  ) => {
     let exits = 0;
     const sample = createIdleExitCheck({
       countPending: async () => 0,
@@ -1251,32 +1272,59 @@ describe("createReconciliationProgress", () => {
       },
       requiredIdleChecks: 1,
     });
+    return { exits: () => exits, sample };
+  };
+
+  test("a sample inside a tick waits for that tick, not the last one", async () => {
+    const progress = createReconciliationProgress();
+    // The last completed tick was drained: a snapshot read would exit on it.
+    await progress.runTick(async () => false);
     const tick = pendingTick();
     const inFlight = progress.runTick(tick.run);
+    const h = sampler(progress);
 
-    // The queue is empty for the whole window, and the exit still waits.
-    expect(await sample()).toBe("checked");
-    expect(await sample()).toBe("checked");
-    expect(exits).toBe(0);
+    const outcome = h.sample();
+    await Bun.sleep(5);
+    expect(h.exits()).toBe(0);
 
+    tick.settle(true);
+    await inFlight;
+
+    expect(await outcome).toBe("checked");
+    expect(h.exits()).toBe(0);
+  });
+
+  test("a slow tick that drains still lets the worker exit, whenever the sample lands", async () => {
+    const progress = createReconciliationProgress();
+    const tick = pendingTick();
+    const inFlight = progress.runTick(tick.run);
+    const h = sampler(progress);
+
+    // Every sample lands inside the tick, the alignment that would strand
+    // a snapshot-reading sampler forever.
+    const outcome = h.sample();
+    await Bun.sleep(5);
     tick.settle(false);
     await inFlight;
 
-    expect(await sample()).toBe("exit");
-    expect(exits).toBe(1);
+    expect(await outcome).toBe("exit");
+    expect(h.exits()).toBe(1);
   });
 
-  test("a saturated tick keeps it and a drained tick clears it", async () => {
+  test("a saturated tick keeps the worker alive", async () => {
     const progress = createReconciliationProgress();
-
     await progress.runTick(async () => true);
-    expect(progress.hasUnfinishedWork()).toBe(true);
+    const h = sampler(progress);
+
+    expect(await h.sample()).toBe("checked");
+    expect(h.exits()).toBe(0);
 
     await progress.runTick(async () => false);
-    expect(progress.hasUnfinishedWork()).toBe(false);
+
+    expect(await h.sample()).toBe("exit");
   });
 
-  test("a tick that never reported leaves it unfinished", async () => {
+  test("a tick that never reported leaves work unfinished", async () => {
     const progress = createReconciliationProgress();
     await progress.runTick(async () => false);
 
@@ -1290,6 +1338,6 @@ describe("createReconciliationProgress", () => {
       );
 
     expect(rejection).toBeInstanceOf(Error);
-    expect(progress.hasUnfinishedWork()).toBe(true);
+    expect(await progress.hasUnfinishedWork()).toBe(true);
   });
 });
