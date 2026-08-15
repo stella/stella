@@ -20,6 +20,7 @@ import {
   memoizeConnect,
   ownsPromotedManualOcrClaim,
   readRepairScanCursor,
+  reconciliationLeftWorkBehind,
   runDocumentProcessingReconciliationPhases,
   runSearchIndexReplayAttempt,
   settleDocumentProcessingAttemptError,
@@ -1075,5 +1076,76 @@ describe("worker interruption lifecycle", () => {
     expect(
       transition.match(/\.update\(documentProcessingRuns\)/gu),
     ).toHaveLength(1);
+  });
+});
+
+/**
+ * The class these pin: reconciliation drains each backlog one capped
+ * batch per tick, so "this phase returned its whole batch" is the only
+ * signal that work remains. A phase whose limit is not represented, or a
+ * partial batch read as saturated, both let the batch worker call itself
+ * idle while a backlog is still draining.
+ */
+describe("reconciliationLeftWorkBehind", () => {
+  const drainedCounts = async () =>
+    await runDocumentProcessingReconciliationPhases({
+      onPhaseError: () => undefined,
+      phases: [],
+    });
+
+  // Above every phase limit, so saturation is exercised without copying
+  // the limits themselves into the test.
+  const ABOVE_ANY_BATCH = 10_000;
+
+  test("a fully drained tick leaves nothing behind", async () => {
+    expect(
+      reconciliationLeftWorkBehind({
+        counts: await drainedCounts(),
+        failedPhases: [],
+      }),
+    ).toBe(false);
+  });
+
+  test("every declared phase is watched for saturation", async () => {
+    const counts = await drainedCounts();
+    // Both directions: a phase added to the reconciliation list without a
+    // batch limit, or a limit left behind for a removed phase, fails here.
+    expect(Object.keys(counts).toSorted()).toEqual([
+      "delivery",
+      "reindex",
+      "repair",
+      "retry",
+      "stale-lease",
+    ]);
+    for (const phase of Object.keys(counts)) {
+      expect(
+        reconciliationLeftWorkBehind({
+          counts: { ...counts, [phase]: ABOVE_ANY_BATCH },
+          failedPhases: [],
+        }),
+      ).toBe(true);
+    }
+  });
+
+  test("a partial batch is progress, not a backlog", async () => {
+    const counts = await drainedCounts();
+    for (const phase of Object.keys(counts)) {
+      expect(
+        reconciliationLeftWorkBehind({
+          counts: { ...counts, [phase]: 1 },
+          failedPhases: [],
+        }),
+      ).toBe(false);
+    }
+  });
+
+  test("a failed phase counts as work left behind", async () => {
+    // Its count stays 0, which would otherwise read as drained.
+    expect(
+      reconciliationLeftWorkBehind({
+        counts: await drainedCounts(),
+        failedPhases: ["repair"],
+      }),
+    ).toBe(true);
   });
 });

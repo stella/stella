@@ -2,7 +2,10 @@ import { envDocumentProcessingWorker } from "@/api/env-document-processing-worke
 import { detached } from "@/api/lib/detached";
 import { countPendingDocumentProcessingJobs } from "@/api/lib/document-processing-enqueue";
 import { createIdleExitCheck } from "@/api/lib/document-processing-idle-exit";
-import { initDocumentProcessingWorker } from "@/api/lib/document-processing-queue";
+import {
+  hasUnfinishedDocumentProcessingReconciliation,
+  initDocumentProcessingWorker,
+} from "@/api/lib/document-processing-queue";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { refreshS3 } from "@/api/lib/s3";
@@ -38,8 +41,9 @@ process.once("SIGINT", () => {
 
 // Batch mode: when an idle-exit window is configured (the scheduled batch
 // task sets it; long-running deployments leave it unset), the worker exits
-// cleanly once the queue has stayed empty for the whole window, so the
-// task stops billing between batches.
+// cleanly once the queue has stayed empty and reconciliation has stopped
+// finding work for the whole window, so the task stops billing between
+// batches without abandoning a backlog mid-drain.
 const idleExitMinutes =
   envDocumentProcessingWorker.DOCUMENT_PROCESSING_IDLE_EXIT_MINUTES;
 if (idleExitMinutes !== undefined) {
@@ -50,6 +54,7 @@ if (idleExitMinutes !== undefined) {
   let idleTimer: ReturnType<typeof setInterval> | null = null;
   const idleTick = createIdleExitCheck({
     countPending: countPendingDocumentProcessingJobs,
+    hasUnfinishedReconciliation: hasUnfinishedDocumentProcessingReconciliation,
     requiredIdleChecks,
     onCheckFailure: (error) => {
       logger.error("document_processing.idle_check_failed", {

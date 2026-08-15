@@ -10,11 +10,16 @@ import { createIdleExitCheck } from "@/api/lib/document-processing-idle-exit";
  * directly.
  */
 
-const harness = (requiredIdleChecks: number, counts: () => Promise<number>) => {
+const harness = (
+  requiredIdleChecks: number,
+  counts: () => Promise<number>,
+  hasUnfinishedReconciliation: () => boolean = () => false,
+) => {
   let exits = 0;
   let failures = 0;
   const tick = createIdleExitCheck({
     countPending: counts,
+    hasUnfinishedReconciliation,
     requiredIdleChecks,
     onIdleExit: () => {
       exits += 1;
@@ -87,6 +92,26 @@ describe("createIdleExitCheck", () => {
     const second = h.tick();
     resolvers.shift()?.(0);
     expect(await second).toBe("exit");
+  });
+
+  test("an empty queue is not idle while reconciliation has work behind it", async () => {
+    const h = harness(2, sequence([0, 0, 0, 0]), () => true);
+    expect(await h.tick()).toBe("checked");
+    expect(await h.tick()).toBe("checked");
+    expect(await h.tick()).toBe("checked");
+    expect(h.exits()).toBe(0);
+  });
+
+  test("reconciliation draining mid-streak resets it", async () => {
+    let unfinished = false;
+    const h = harness(2, sequence([0, 0, 0, 0]), () => unfinished);
+    await h.tick();
+    unfinished = true;
+    // The streak must restart from this sample, not resume where it left off.
+    expect(await h.tick()).toBe("checked");
+    unfinished = false;
+    expect(await h.tick()).toBe("checked");
+    expect(await h.tick()).toBe("exit");
   });
 
   test("exit fires exactly once; later ticks are inert", async () => {

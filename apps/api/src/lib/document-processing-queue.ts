@@ -2474,6 +2474,45 @@ type ReconciliationPhase = {
   run: () => Promise<number>;
 };
 
+/**
+ * Each phase drains at most one batch per tick, so a phase that returns
+ * its whole batch is reporting "there was more than I could take", not
+ * "done". Kept beside the phase list and derived from the same limits the
+ * queries use, so a phase cannot change its limit without changing this.
+ */
+const RECONCILIATION_PHASE_BATCH_SIZE = {
+  [RECONCILIATION_PHASE.DELIVERY]: RECONCILE_BATCH_SIZE,
+  [RECONCILIATION_PHASE.REINDEX]: SEARCH_INDEX_REPLAY_BATCH_SIZE,
+  [RECONCILIATION_PHASE.REPAIR]: RECONCILE_BATCH_SIZE,
+  [RECONCILIATION_PHASE.RETRY]: RECONCILE_BATCH_SIZE,
+  [RECONCILIATION_PHASE.STALE_LEASE]: RECONCILE_BATCH_SIZE,
+} as const satisfies Record<ReconciliationPhaseName, number>;
+
+const RECONCILIATION_PHASE_NAMES = Object.values(RECONCILIATION_PHASE);
+
+export const reconciliationLeftWorkBehind = ({
+  counts,
+  failedPhases,
+}: {
+  counts: ReconciliationCounts;
+  failedPhases: readonly ReconciliationPhaseName[];
+}): boolean =>
+  failedPhases.length > 0 ||
+  RECONCILIATION_PHASE_NAMES.some(
+    (phase) => counts[phase] >= RECONCILIATION_PHASE_BATCH_SIZE[phase],
+  );
+
+let unfinishedReconciliation = false;
+
+/**
+ * Whether the last completed reconciliation tick still had work queued
+ * behind it. Batch mode reads this so the worker does not treat an empty
+ * job queue as "nothing left to do" while the reconciliation loop is
+ * still draining a backlog one capped batch at a time.
+ */
+export const hasUnfinishedDocumentProcessingReconciliation = (): boolean =>
+  unfinishedReconciliation;
+
 export const runDocumentProcessingReconciliationPhases = async ({
   onPhaseError,
   phases,
@@ -2508,6 +2547,7 @@ const reconcileDocumentProcessing = async ({
 }: {
   onComplete: () => void;
 }): Promise<void> => {
+  const failedPhases: ReconciliationPhaseName[] = [];
   try {
     await ensureReconciliationRedisConnected();
     const counts = await runDocumentProcessingReconciliationPhases({
@@ -2534,12 +2574,17 @@ const reconcileDocumentProcessing = async ({
         },
       ],
       onPhaseError: (error, phase) => {
+        failedPhases.push(phase);
         captureError(error, { phase });
         logger.error("document_processing.reconcile_phase_failed", {
           "error.type": errorTag(error),
           phase,
         });
       },
+    });
+    unfinishedReconciliation = reconciliationLeftWorkBehind({
+      counts,
+      failedPhases,
     });
     if (
       counts[RECONCILIATION_PHASE.DELIVERY] > 0 ||
@@ -2557,6 +2602,9 @@ const reconcileDocumentProcessing = async ({
       });
     }
   } catch (error) {
+    // The tick never produced counts, so the backlog is unknown. Same rule
+    // the idle check applies to a failed sample: never exit on uncertainty.
+    unfinishedReconciliation = true;
     captureError(error);
     logger.error("document_processing.reconcile_failed", {
       "error.type": errorTag(error),
