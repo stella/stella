@@ -51,7 +51,7 @@ test("no field repeated across a document's passages is free-text searchable", (
   expect(
     config.doc_mapping.field_mappings.find((f) => f.name === "heading_path")
       ?.tokenizer,
-  ).toBe("default");
+  ).toBe("folded");
 
   // Anything else a default search field reaches must be per-passage content
   // (`text`) or written once per document (`title`).
@@ -73,6 +73,58 @@ test("passage fields are mapped for every family, heading_path searchable", () =
     expect(fields.get("seq")?.type).toBe("u64");
     // Section context is scored, not just stored.
     expect(fields.get("heading_path")?.fieldnorms).toBe(true);
+  }
+});
+
+// The engine never diffs an existing index's doc mapping, so a change here
+// only reaches documents indexed into a fresh generation. Pinning the exact
+// block keeps the shape a reviewer sees identical to the shape the engine is
+// asked to create.
+test("the doc mapping declares the folded tokenizer verbatim", () => {
+  for (const family of ["case_law", "legislation"] as const) {
+    expect(
+      corpusIndexConfig(family, `${family}_v3_cze`).doc_mapping.tokenizers,
+    ).toEqual([
+      {
+        name: "folded",
+        type: "simple",
+        filters: ["lower_caser", "ascii_folding", "remove_long"],
+      },
+    ]);
+  }
+});
+
+// Declared tokenizers and used tokenizers must match in both directions: a
+// field naming an undeclared tokenizer is rejected by the engine at index
+// creation, and a declared tokenizer nothing uses is dead config.
+test("every full-text field uses a declared tokenizer, and every declared one is used", () => {
+  const BUILT_IN_TOKENIZERS = new Set(["raw", "default", "en_stem"]);
+
+  for (const family of ["case_law", "legislation"] as const) {
+    const config = corpusIndexConfig(family, `${family}_v3_cze`);
+    const declared = new Set(config.doc_mapping.tokenizers.map((t) => t.name));
+    const used = new Set(
+      config.doc_mapping.field_mappings
+        .map((f) => f.tokenizer)
+        .filter((name) => name !== undefined)
+        .filter((name) => !BUILT_IN_TOKENIZERS.has(name)),
+    );
+    expect([...declared].sort()).toEqual([...used].sort());
+
+    // Position-recorded fields are exactly the free-text surface; every one of
+    // them folds, so a query typed without diacritics reaches text carrying
+    // them. A new full-text field added with `default` trips this.
+    const fullText = config.doc_mapping.field_mappings.filter(
+      (f) => f.record === "position",
+    );
+    expect(fullText.map((f) => f.name).sort()).toEqual([
+      "heading_path",
+      "text",
+      "title",
+    ]);
+    for (const field of fullText) {
+      expect(field.tokenizer).toBe("folded");
+    }
   }
 });
 

@@ -8,6 +8,8 @@ import type { CorpusFamily } from "@/api/lib/legal-search/corpus-family";
  *
  * - `text` and `title` enable `fieldnorms` so BM25 scoring works
  *   (corpus index disables BM25 by default for latency).
+ * - full-text fields use the custom `folded` tokenizer so a query typed
+ *   without diacritics reaches text that carries them.
  * - jurisdiction / document_type / source (+ status for legislation) are
  *   `tag_fields` so queries prune irrelevant splits.
  * - date fields are fast datetime for range filtering, not the
@@ -23,10 +25,39 @@ type CorpusIndexFieldType =
   | "bool"
   | "datetime";
 
+type CorpusIndexTokenizer = {
+  name: string;
+  type: "simple" | "raw" | "regex";
+  filters: readonly string[];
+};
+
+/**
+ * The tokenizer every full-text field uses. `ascii_folding` is the reason it
+ * exists: the corpus is written with diacritics, and a query typed without
+ * them ("skody") has to reach the text that carries them ("škody"). The filter
+ * runs over both the indexed terms and the query terms, so the match is
+ * symmetric and neither side has to be normalized by hand. `remove_long`
+ * discards tokens past the default byte limit, keeping OCR runs out of the
+ * term dictionary; `lower_caser` is what `default` already did.
+ */
+const FOLDED_TOKENIZER = {
+  name: "folded",
+  type: "simple",
+  filters: ["lower_caser", "ascii_folding", "remove_long"],
+} as const satisfies CorpusIndexTokenizer;
+
+const CUSTOM_TOKENIZERS = [FOLDED_TOKENIZER] as const;
+
 type CorpusIndexFieldMapping = {
   name: string;
   type: CorpusIndexFieldType;
-  tokenizer?: "raw" | "default" | "en_stem";
+  // Built-in names plus whatever `CUSTOM_TOKENIZERS` declares, so a field can
+  // never name a tokenizer the doc mapping does not ship.
+  tokenizer?:
+    | "raw"
+    | "default"
+    | "en_stem"
+    | (typeof CUSTOM_TOKENIZERS)[number]["name"];
   record?: "basic" | "freq" | "position";
   fieldnorms?: boolean;
   fast?: boolean;
@@ -40,6 +71,7 @@ export type CorpusIndexConfig = {
   doc_mapping: {
     mode: "lenient" | "strict" | "dynamic";
     field_mappings: CorpusIndexFieldMapping[];
+    tokenizers: readonly CorpusIndexTokenizer[];
     tag_fields: string[];
     store_source: boolean;
   };
@@ -72,14 +104,14 @@ const CORE_FIELDS: CorpusIndexFieldMapping[] = [
   {
     name: "title",
     type: "text",
-    tokenizer: "default",
+    tokenizer: FOLDED_TOKENIZER.name,
     record: "position",
     fieldnorms: true,
   },
   {
     name: "text",
     type: "text",
-    tokenizer: "default",
+    tokenizer: FOLDED_TOKENIZER.name,
     record: "position",
     fieldnorms: true,
   },
@@ -114,7 +146,7 @@ const CORE_FIELDS: CorpusIndexFieldMapping[] = [
   {
     name: "heading_path",
     type: "text",
-    tokenizer: "default",
+    tokenizer: FOLDED_TOKENIZER.name,
     record: "position",
     fieldnorms: true,
     stored: true,
@@ -160,6 +192,7 @@ export const corpusIndexConfig = (
   doc_mapping: {
     mode: "lenient",
     field_mappings: [...CORE_FIELDS, ...FAMILY_FIELDS[family]],
+    tokenizers: CUSTOM_TOKENIZERS,
     tag_fields: FAMILY_TAG_FIELDS[family],
     store_source: false,
   },

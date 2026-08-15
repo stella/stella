@@ -92,9 +92,14 @@ services:
   # Stores its splits in the RustFS `stella-quickwit` bucket. This is a
   # standalone opt-in service; select it with
   # LEGAL_SEARCH_PROVIDER=corpus-index and CORPUS_INDEX_ENDPOINT.
+  #
+  # The tag tracks the deployed engine version: an index created locally has to
+  # be one a deployed node can open, and doc-mapping features differ between
+  # minor releases. Digest is the multi-arch manifest list, so linux/amd64 and
+  # linux/arm64 both resolve.
   quickwit:
     profiles: [quickwit]
-    image: quickwit/quickwit:0.9.0@sha256:1e6169bf4e98a489fca397105f1698c1d80a0f9779f3cf652973bac8a0c3b2bd
+    image: quickwit/quickwit:0.8.2@sha256:363ff56ce45614e46eba1c308e420f56a9f2fd8ab5788cbca0ec6b68a2e0ef92
     command: run
     environment:
       QW_METASTORE_URI: s3://stella-quickwit/metastore
