@@ -385,7 +385,7 @@ export const ChatMatterPicker = ({
                         </span>
                       </span>
                       <a
-  href={`/matters/${m.id}`}
+  href={`/workspaces/${m.id}`}
   target="_blank"
   rel="noreferrer"
   onClick={(e) => {
