@@ -158,12 +158,21 @@ export const createLazyRedisClient = <Client extends ManagedRedisClient>(
     },
     ready: async () => {
       const target = (client ??= createClient());
-      connected ??= connectWithColdStartRetries(async () => {
-        await target.connect();
-      }).catch((error: unknown) => {
-        connected = null;
-        throw error;
-      });
+      if (connected === null) {
+        const attempt: Promise<void> = connectWithColdStartRetries(async () => {
+          await target.connect();
+        }).catch((error: unknown) => {
+          // Only this attempt may clear its own memo. A close and a later
+          // caller can install another client's attempt while this ladder
+          // is still climbing, and clearing that one would leave the new
+          // client connecting twice over.
+          if (connected === attempt) {
+            connected = null;
+          }
+          throw error;
+        });
+        connected = attempt;
+      }
       await connected;
       if (client !== target) {
         throw new RedisClientClosedError({

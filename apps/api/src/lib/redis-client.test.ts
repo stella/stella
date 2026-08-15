@@ -185,6 +185,38 @@ describe("createLazyRedisClient", () => {
     expect(clients.at(1)?.connects).toBe(1);
   });
 
+  test("a stale attempt's failure leaves the client that replaced it alone", async () => {
+    const clients: ReturnType<typeof fakeClient>[] = [];
+    const lazy = createLazyRedisClient(() => {
+      const client = fakeClient();
+      if (clients.length === 0) {
+        // The client that is closed mid-ladder: every attempt fails, so
+        // its rejection lands well after its replacement is in place.
+        client.connectResult = async () => {
+          throw Object.assign(new Error("connect ECONNREFUSED"), {
+            code: "ECONNREFUSED",
+          });
+        };
+      }
+      clients.push(client);
+      return client;
+    });
+
+    const abandoned = lazy.ready();
+    lazy.close();
+    const replacement = await lazy.ready();
+    await abandoned.then(
+      () => null,
+      () => null,
+    );
+
+    // The abandoned ladder must not clear a memo it no longer owns, or the
+    // replacement would connect a second time underneath its own callers.
+    expect(await lazy.ready()).toBe(replacement);
+    expect(clients).toHaveLength(2);
+    expect(clients.at(1)?.connects).toBe(1);
+  });
+
   test("a caller waiting on a client that gets closed is not handed it", async () => {
     let releaseConnect: () => void = () => undefined;
     const client = fakeClient();

@@ -1239,6 +1239,16 @@ describe("work a phase keeps for itself", () => {
         saturated: false,
       }),
     ).toEqual({ count: 3, hasMore: false });
+
+    // The other half of the rule: a selection that hit its cap reports
+    // more even when every handoff in it succeeded.
+    expect(
+      resolveScheduledDeliveryBatch({
+        attempted: RECONCILE_BATCH_SIZE,
+        retryAt: null,
+        saturated: true,
+      }),
+    ).toEqual({ count: RECONCILE_BATCH_SIZE, hasMore: true });
   });
 });
 
