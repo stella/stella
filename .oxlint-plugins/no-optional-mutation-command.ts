@@ -103,6 +103,43 @@ export default eslintCompatPlugin({
       createOnce(context) {
         const useMutationNames = new Set<string>();
         const localTypeNodes = new Map<string, unknown>();
+        const callExpressions: unknown[] = [];
+
+        const reportAmbiguousMutation = (node: unknown) => {
+          if (!isAstNode(node) || node.type !== "CallExpression") {
+            return;
+          }
+          if (
+            !isIdentifier(node.callee) ||
+            !useMutationNames.has(node.callee.name)
+          ) {
+            return;
+          }
+          const mutationFunction = mutationFunctionFromOptions(
+            node.arguments?.[0],
+          );
+          if (
+            !isAstNode(mutationFunction) ||
+            (mutationFunction.type !== "ArrowFunctionExpression" &&
+              mutationFunction.type !== "FunctionExpression")
+          ) {
+            return;
+          }
+          const parameter = mutationFunction.params?.[0];
+          const typeNode = parameterType(parameter);
+          if (typeNode === null) {
+            return;
+          }
+          const resolvedType =
+            typeNode.type === "TSTypeReference" &&
+            isIdentifier(typeNode.typeName)
+              ? localTypeNodes.get(typeNode.typeName.name)
+              : typeNode;
+          if (!isAmbiguousOptionalBag(resolvedType)) {
+            return;
+          }
+          context.report({ node: parameter, messageId: "optionalBag" });
+        };
 
         return {
           ImportDeclaration(node) {
@@ -131,36 +168,12 @@ export default eslintCompatPlugin({
             }
           },
           CallExpression(node) {
-            if (
-              !isIdentifier(node.callee) ||
-              !useMutationNames.has(node.callee.name)
-            ) {
-              return;
+            callExpressions.push(node);
+          },
+          "Program:exit"() {
+            for (const callExpression of callExpressions) {
+              reportAmbiguousMutation(callExpression);
             }
-            const mutationFunction = mutationFunctionFromOptions(
-              node.arguments?.[0],
-            );
-            if (
-              !isAstNode(mutationFunction) ||
-              (mutationFunction.type !== "ArrowFunctionExpression" &&
-                mutationFunction.type !== "FunctionExpression")
-            ) {
-              return;
-            }
-            const parameter = mutationFunction.params?.[0];
-            const typeNode = parameterType(parameter);
-            if (typeNode === null) {
-              return;
-            }
-            const resolvedType =
-              typeNode.type === "TSTypeReference" &&
-              isIdentifier(typeNode.typeName)
-                ? localTypeNodes.get(typeNode.typeName.name)
-                : typeNode;
-            if (!isAmbiguousOptionalBag(resolvedType)) {
-              return;
-            }
-            context.report({ node: parameter, messageId: "optionalBag" });
           },
         };
       },

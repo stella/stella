@@ -45,7 +45,7 @@ test("sidebar color picker stays open when custom colors are expanded", async ({
 
     const colorUpdate = page.waitForResponse(
       (response) =>
-        response.request().method() === "PATCH" &&
+        response.request().method() === "POST" &&
         response.url().includes(`/workspaces/${workspace.id}`),
     );
     await customColorInput.fill("12AB34");

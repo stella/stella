@@ -30,6 +30,17 @@ export const useNamedOptionalBag = () =>
     mutationFn: async (body: OptionalUpdateBag) => save(body),
   });
 
+export const useLaterDeclaredOptionalBag = () =>
+  useMutation({
+    // oxlint-disable-next-line no-optional-mutation-command/no-optional-mutation-command -- fixture proves declaration order cannot evade the rule
+    mutationFn: async (body: LaterDeclaredOptionalBag) => save(body),
+  });
+
+type LaterDeclaredOptionalBag = {
+  color?: string;
+  name?: string;
+};
+
 export const useExplicitCommand = () =>
   useMutation({
     mutationFn: async (update: ExplicitUpdate) => save(update),

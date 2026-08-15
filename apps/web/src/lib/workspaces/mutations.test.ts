@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
+import type { WorkspaceUpdate } from "@/lib/workspaces/mutations";
+
 const previousApiUrl = process.env["VITE_API_URL"];
 
 beforeAll(() => {
@@ -47,29 +49,36 @@ describe("workspace update cache invalidation", () => {
     const { workspaceUpdateRefreshScope } =
       await import("@/lib/workspaces/mutations");
 
-    expect({
-      clientId: workspaceUpdateRefreshScope({
+    const updates = {
+      clientId: {
         type: "clientId",
         value: "contact_test",
-      }),
-      color: workspaceUpdateRefreshScope({ type: "color", value: "purple" }),
-      leadUserId: workspaceUpdateRefreshScope({
+      },
+      color: { type: "color", value: "purple" },
+      leadUserId: {
         type: "leadUserId",
         value: "user_test",
-      }),
-      name: workspaceUpdateRefreshScope({
-        type: "name",
-        value: "Renamed matter",
-      }),
-      promote: workspaceUpdateRefreshScope({
+      },
+      name: { type: "name", value: "Renamed matter" },
+      promote: {
         type: "promote",
         value: { clientId: "contact_test" },
-      }),
-      reference: workspaceUpdateRefreshScope({
-        type: "reference",
-        value: "REF-42",
-      }),
-    }).toEqual({
+      },
+      reference: { type: "reference", value: "REF-42" },
+    } as const satisfies {
+      [Type in WorkspaceUpdate["type"]]: Extract<
+        WorkspaceUpdate,
+        { type: Type }
+      >;
+    };
+    const scopes = Object.fromEntries(
+      Object.values(updates).map((update) => [
+        update.type,
+        workspaceUpdateRefreshScope(update),
+      ]),
+    );
+
+    expect(scopes).toEqual({
       clientId: "query-cache",
       color: "query-cache",
       leadUserId: "query-cache",
