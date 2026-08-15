@@ -553,10 +553,11 @@ export const readOverviewActivityPage = async ({
       );
     } else if (filters.category !== "all") {
       const legacyCondition = legacyCategoryCondition(filters.category);
-      const storedOrLegacyCategory = or(
-        eq(auditLogs.activityCategory, filters.category),
-        and(isNull(auditLogs.activityCategory), legacyCondition),
-      ) ?? sql`false`;
+      const storedOrLegacyCategory =
+        or(
+          eq(auditLogs.activityCategory, filters.category),
+          and(isNull(auditLogs.activityCategory), legacyCondition),
+        ) ?? sql`false`;
       if (filters.category === "tasks") {
         conditions.push(
           or(storedOrLegacyCategory, taskEntityResourceCondition()) ??
