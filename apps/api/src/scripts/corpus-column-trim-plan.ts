@@ -4,6 +4,7 @@ import {
 } from "@/api/handlers/case-law/stored-payload";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
+import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * Decision logic for the corpus column trim (`corpus-column-trim.ts`),
@@ -184,9 +185,47 @@ export type ColumnTrimArgs = {
    * statement timeout: the run dies on its first page forever.
    */
   after: string | null;
+  /** Inclusive lower bound of a single bounded walk. */
+  idFrom: string | null;
+  /** Inclusive upper bound of every walk this run makes. */
+  idTo: string | null;
+  /** Path to a JSON array of `{ from, to }` ranges to walk in order. */
+  rangesFile: string | null;
   dryRun: boolean;
   force: boolean;
 };
+
+/**
+ * Where a range's walk starts. `at-or-after` is the range's own lower
+ * bound, which is inclusive because an operator naming a range means to
+ * include the row they named; `after` is a resumed cursor, which is
+ * exclusive because that row has already been processed.
+ */
+export type ColumnTrimLowerBound =
+  | { type: "unbounded" }
+  | { type: "at-or-after"; id: string }
+  | { type: "after"; id: string };
+
+/**
+ * One id range a sweep walks.
+ *
+ * The candidate predicate cannot be satisfied from an index alone, so an
+ * unbounded walk scans forward from its cursor until it has collected a
+ * page — across an already-trimmed stretch of the id space that is an
+ * arbitrarily long scan, and it stops fitting a statement timeout. An
+ * upper bound caps the scan at a span the operator chose, whatever the
+ * density of candidates inside it, which is also what makes a keyspace
+ * whose candidates are scattered (no shared time ordering to walk)
+ * tractable: it is covered by a list of spans rather than one cursor.
+ */
+export type ColumnTrimRange = {
+  lower: ColumnTrimLowerBound;
+  /** Inclusive; null walks to the end of the id space. */
+  upper: string | null;
+};
+
+/** A `--ranges-file` entry: an inclusive `[from, to]` id span. */
+export type ColumnTrimRangeSpec = { from: string; to: string };
 
 export type ParsedColumnTrimArgs =
   | { type: "parsed"; args: ColumnTrimArgs }
@@ -202,11 +241,65 @@ const parseLimit = (raw: string | undefined): number | null => {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 
+const isDecisionId = (value: unknown): value is string =>
+  typeof value === "string" && UUID.test(value);
+
+/** Flags whose value is a single decision id. */
+const ID_FLAGS: ReadonlySet<string> = new Set([
+  "--after",
+  "--id-from",
+  "--id-to",
+]);
+
+/**
+ * `--flag=value` and `--flag value` are the same input. Splitting the
+ * inline form once keeps every flag below reading its value the same way,
+ * rather than each one re-deriving it.
+ */
+const splitInlineValues = (argv: readonly string[]): string[] =>
+  argv.flatMap((argument) => {
+    const separator = argument.indexOf("=");
+    return argument.startsWith("--") && separator !== -1
+      ? [argument.slice(0, separator), argument.slice(separator + 1)]
+      : [argument];
+  });
+
+/**
+ * Bounds that name two lower bounds, or an empty span, are a mistake the
+ * run cannot recover from: it would silently walk something other than
+ * what was asked for. Rejected here, before anything opens a connection.
+ */
+const columnTrimArgConflict = ({
+  after,
+  idFrom,
+  idTo,
+  rangesFile,
+}: ColumnTrimArgs): string | null => {
+  if (
+    rangesFile !== null &&
+    (after !== null || idFrom !== null || idTo !== null)
+  ) {
+    return "--ranges-file carries its own bounds; drop --after/--id-from/--id-to";
+  }
+  if (after !== null && idFrom !== null) {
+    return "--after and --id-from are both lower bounds; pass one";
+  }
+  const lower = after ?? idFrom;
+  if (lower !== null && idTo !== null && lower >= idTo) {
+    return "the lower bound is not below --id-to, so the range is empty";
+  }
+  return null;
+};
+
 export const parseColumnTrimArgs = (
-  argv: readonly string[],
+  rawArgv: readonly string[],
 ): ParsedColumnTrimArgs => {
+  const argv = splitInlineValues(rawArgv);
   let limit: number | null = null;
   let after: string | null = null;
+  let idFrom: string | null = null;
+  let idTo: string | null = null;
+  let rangesFile: string | null = null;
   let dryRun = false;
   let force = false;
 
@@ -223,11 +316,8 @@ export const parseColumnTrimArgs = (
       force = true;
       continue;
     }
-    if (argument === "--limit" || argument.startsWith("--limit=")) {
-      const raw = argument.startsWith("--limit=")
-        ? argument.slice("--limit=".length)
-        : argv[++i];
-      const parsed = parseLimit(raw);
+    if (argument === "--limit") {
+      const parsed = parseLimit(argv[++i]);
       if (parsed === null) {
         return {
           type: "invalid",
@@ -237,21 +327,158 @@ export const parseColumnTrimArgs = (
       limit = parsed;
       continue;
     }
-    if (argument === "--after" || argument.startsWith("--after=")) {
-      const raw = argument.startsWith("--after=")
-        ? argument.slice("--after=".length)
-        : argv[++i];
-      if (raw === undefined || !UUID.test(raw)) {
+    if (argument === "--ranges-file") {
+      const raw = argv[++i];
+      if (raw === undefined || raw === "") {
+        return { type: "invalid", message: "--ranges-file requires a path" };
+      }
+      rangesFile = raw;
+      continue;
+    }
+    if (ID_FLAGS.has(argument)) {
+      const raw = argv[++i];
+      if (!isDecisionId(raw)) {
         return {
           type: "invalid",
-          message: "--after requires a decision id (UUID)",
+          message: `${argument} requires a decision id (UUID)`,
         };
       }
-      after = raw;
+      switch (argument) {
+        case "--id-from":
+          idFrom = raw;
+          break;
+        case "--id-to":
+          idTo = raw;
+          break;
+        default:
+          after = raw;
+      }
       continue;
     }
     return { type: "invalid", message: `Unknown argument: ${argument}` };
   }
 
-  return { type: "parsed", args: { limit, after, dryRun, force } };
+  const args = { limit, after, idFrom, idTo, rangesFile, dryRun, force };
+  const conflict = columnTrimArgConflict(args);
+  return conflict === null
+    ? { type: "parsed", args }
+    : { type: "invalid", message: conflict };
 };
+
+export type ParsedColumnTrimRanges =
+  | { type: "parsed"; ranges: ColumnTrimRangeSpec[] }
+  | { type: "invalid"; message: string };
+
+/**
+ * Read the `--ranges-file` payload.
+ *
+ * Ranges must be sorted and disjoint. Overlapping ranges would trim the
+ * same rows twice — harmless, but the run's counts would then mean
+ * nothing — and unsorted ranges usually mean the file was assembled from
+ * two sources, in which case its coverage is not what the operator
+ * believes. Both are refused rather than normalised, so the file the
+ * operator reads is the file the run walked.
+ *
+ * Ids compare as text: the canonical lowercase form has its separators at
+ * fixed positions and its digits in ASCII order, so text ordering is the
+ * ordering Postgres gives the `uuid` column.
+ */
+export const parseColumnTrimRanges = (raw: string): ParsedColumnTrimRanges => {
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(raw);
+  } catch {
+    // A boundary parse, not control flow: the file is operator input and
+    // JSON.parse has no non-throwing form.
+    return { type: "invalid", message: "--ranges-file must contain JSON" };
+  }
+  if (!Array.isArray(decoded) || decoded.length === 0) {
+    return {
+      type: "invalid",
+      message: "--ranges-file must contain a non-empty JSON array",
+    };
+  }
+
+  const ranges: ColumnTrimRangeSpec[] = [];
+  for (const [index, entry] of decoded.entries()) {
+    if (!isRecord(entry)) {
+      return {
+        type: "invalid",
+        message: `--ranges-file[${index}] must be an object`,
+      };
+    }
+    const { from, to } = entry;
+    if (!isDecisionId(from) || !isDecisionId(to)) {
+      return {
+        type: "invalid",
+        message: `--ranges-file[${index}] needs "from" and "to" decision ids (UUID)`,
+      };
+    }
+    if (from > to) {
+      return {
+        type: "invalid",
+        message: `--ranges-file[${index}] has "from" above "to"`,
+      };
+    }
+    const previous = ranges.at(-1);
+    if (previous !== undefined && previous.to >= from) {
+      return {
+        type: "invalid",
+        message: `--ranges-file[${index}] overlaps or precedes its predecessor; ranges must be sorted and disjoint`,
+      };
+    }
+    ranges.push({ from, to });
+  }
+
+  return { type: "parsed", ranges };
+};
+
+type ColumnTrimRangesOptions = {
+  args: ColumnTrimArgs;
+  /** Parsed `--ranges-file` content, or null where the flag was absent. */
+  fileRanges: readonly ColumnTrimRangeSpec[] | null;
+};
+
+/** The ranges one run walks, in order. */
+export const columnTrimRanges = ({
+  args: { after, idFrom, idTo },
+  fileRanges,
+}: ColumnTrimRangesOptions): ColumnTrimRange[] => {
+  if (fileRanges !== null) {
+    return fileRanges.map(({ from, to }) => ({
+      lower: { type: "at-or-after", id: from },
+      upper: to,
+    }));
+  }
+  if (after !== null) {
+    return [{ lower: { type: "after", id: after }, upper: idTo }];
+  }
+  return [
+    {
+      lower:
+        idFrom === null
+          ? { type: "unbounded" }
+          : { type: "at-or-after", id: idFrom },
+      upper: idTo,
+    },
+  ];
+};
+
+type ColumnTrimPageRangeOptions = {
+  range: ColumnTrimRange;
+  /** Last id this range's walk consumed, or null before its first page. */
+  cursor: string | null;
+};
+
+/**
+ * The range the next page queries: the range itself until a row has been
+ * read, then strictly after the last id the previous page consumed. The
+ * upper bound rides along, so every page of a bounded range stays bounded.
+ */
+export const columnTrimPageRange = ({
+  range,
+  cursor,
+}: ColumnTrimPageRangeOptions): ColumnTrimRange =>
+  cursor === null
+    ? range
+    : { lower: { type: "after", id: cursor }, upper: range.upper };
