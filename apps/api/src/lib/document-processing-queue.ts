@@ -61,6 +61,7 @@ import {
 } from "@/api/lib/ocr-local/recognize-local";
 import { createOcrSearchablePdf } from "@/api/lib/ocr-searchable-pdf";
 import {
+  connectWithColdStartRetries,
   createBullMqConnection,
   createRedisClient,
 } from "@/api/lib/redis-client";
@@ -1439,6 +1440,42 @@ const getReconciliationRedis = () => {
   return reconciliationRedisClient;
 };
 
+/**
+ * Wrap `connect` so it runs at most once per process while it succeeds, and
+ * discards a rejected attempt so the next caller retries. Retaining the
+ * rejected promise would strand every later caller on the first failure.
+ */
+export const memoizeConnect = (
+  connect: () => Promise<void>,
+): (() => Promise<void>) => {
+  let connected: Promise<void> | null = null;
+  return async () => {
+    connected ??= connect().catch((error: unknown) => {
+      connected = null;
+      throw error;
+    });
+    await connected;
+  };
+};
+
+/**
+ * Establish the reconciliation client's connection before any cursor command
+ * is issued. The client disables the offline queue, so a command sent while it
+ * is still connecting rejects immediately instead of waiting for the socket,
+ * and the repair phase reads the cursor as its first action: without this the
+ * phase fails outright whenever it runs before the connection is up.
+ *
+ * Connecting here rather than inside `readRepairScanCursor` keeps the retry
+ * ladder outside that function's per-command deadline, which bounds command
+ * latency and is far shorter than a cold-start retry sequence.
+ */
+const ensureReconciliationRedisConnected = memoizeConnect(
+  async () =>
+    await connectWithColdStartRetries(async () => {
+      await getReconciliationRedis().connect();
+    }),
+);
+
 export const readRepairScanCursor = async (
   readCursor: () => Promise<string | null> = async () =>
     await getReconciliationRedis().get(REPAIR_SCAN_CURSOR_KEY),
@@ -2472,6 +2509,7 @@ const reconcileDocumentProcessing = async ({
   onComplete: () => void;
 }): Promise<void> => {
   try {
+    await ensureReconciliationRedisConnected();
     const counts = await runDocumentProcessingReconciliationPhases({
       phases: [
         {
