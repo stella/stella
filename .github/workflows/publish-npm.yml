@@ -195,9 +195,9 @@ jobs:
           done
 
           packages="$(printf '%s\n' "${pkgs[@]}" | jq -Rnc '[inputs]')"
-          echo "packages=${packages}" >> "$GITHUB_OUTPUT"
-          echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           {
+            echo "packages=${packages}"
+            echo "source_sha=$(git rev-parse HEAD)"
             echo "package_files<<PACKAGE_FILES"
             printf 'packages/%s/package.json\n' "${pkgs[@]}"
             echo "PACKAGE_FILES"
