@@ -1,8 +1,11 @@
 import { Result } from "better-result";
 import {
   and,
+  asc,
   desc,
   eq,
+  gt,
+  ilike,
   inArray,
   isNotNull,
   isNull,
@@ -19,7 +22,8 @@ import type {
   MatterActivityFilters,
 } from "@stll/api-contract/matter-activity";
 
-import { member, user } from "@/api/db/auth-schema";
+// eslint-disable-next-line security-guards/no-unscoped-user-query -- actor IDs come only from audit rows already scoped to the authorized organization and workspace; membership joins would erase retained attribution after membership ends.
+import { user } from "@/api/db/auth-schema";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
   auditActivityActionSql,
@@ -34,6 +38,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { escapeLike } from "@/api/lib/escape-like";
 import { createCursorPage } from "@/api/lib/pagination";
 import {
   brandPersistedAuditLogId,
@@ -102,6 +107,67 @@ export const visibleActivityCondition = () =>
       ),
     ),
   ) ?? sql`false`;
+
+const historicalActorId = () =>
+  sql<string>`coalesce(${auditLogs.performerId}, ${auditLogs.userId})`;
+
+type ReadOverviewActivityActorRowsOptions = {
+  afterActorId: string | null;
+  limit: number;
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
+  search: string;
+  workspaceId: SafeId<"workspace">;
+};
+
+export const readOverviewActivityActorRows = ({
+  afterActorId,
+  limit,
+  organizationId,
+  safeDb,
+  search,
+  workspaceId,
+}: ReadOverviewActivityActorRowsOptions) =>
+  safeDb(async (tx) => {
+    const actorId = historicalActorId();
+    const conditions = [
+      eq(auditLogs.organizationId, organizationId),
+      eq(auditLogs.workspaceId, workspaceId),
+      eq(auditLogs.performerType, "user"),
+      visibleActivityCondition(),
+    ];
+    if (afterActorId !== null) {
+      conditions.push(gt(actorId, afterActorId));
+    }
+    const historicalActors = tx
+      .selectDistinct({ id: actorId.as("actor_id") })
+      .from(auditLogs)
+      .where(and(...conditions))
+      .as("historical_activity_actors");
+    const identityCondition =
+      search === ""
+        ? sql`true`
+        : (or(
+            ilike(user.name, `%${escapeLike(search)}%`),
+            ilike(user.email, `%${escapeLike(search)}%`),
+          ) ?? sql`false`);
+
+    return await tx
+      .selectDistinct({
+        deletedAt: user.deletedAt,
+        email: user.email,
+        id: historicalActors.id,
+        image: user.image,
+        name: user.name,
+      })
+      .from(historicalActors)
+      // The actor ID comes from an organization-and-workspace-scoped audit
+      // row, so attribution remains authorized after membership ends.
+      .leftJoin(user, eq(user.id, historicalActors.id))
+      .where(identityCondition)
+      .orderBy(asc(historicalActors.id))
+      .limit(limit + 1);
+  });
 
 type ActivityCategory = Exclude<MatterActivityCategory, "all">;
 
@@ -761,13 +827,6 @@ export const readOverviewActivityPage = async ({
                   name: user.name,
                 })
                 .from(user)
-                .leftJoin(
-                  member,
-                  and(
-                    eq(member.userId, user.id),
-                    eq(member.organizationId, organizationId),
-                  ),
-                )
                 .where(
                   // Actor IDs originate only from the organization-and-
                   // workspace-scoped rows above, preserving audit attribution
