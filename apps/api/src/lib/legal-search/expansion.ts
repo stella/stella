@@ -28,12 +28,14 @@ import {
   foldExpansionKey,
   isMorphologyDictionaryContentHash,
   isSurfaceForm,
+  MORPHOLOGY_DICTIONARY_MAX_BYTES,
   morphologyDictionaryKey,
   morphologyDictionaryPointerKey,
   parseExpansionDictionary,
   unpackExpansionForms,
 } from "@/api/lib/legal-search/morphology/dictionary";
 import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
+import type { QueryExpansionMode } from "@/api/lib/legal-search/query-expansion-mode";
 import type { LoggerAttributes } from "@/api/lib/observability/logger";
 import { logger } from "@/api/lib/observability/logger";
 import { readCorpusS3Bytes } from "@/api/lib/s3";
@@ -105,11 +107,14 @@ const MIN_EXPANDABLE_TERM_LENGTH = 3;
  */
 const MIN_FORM_COMMON_PREFIX = 3;
 
-/** Decompressed ceiling for one dictionary payload; measured builds are ~2 MB. */
-const DICTIONARY_MAX_DECOMPRESSED_BYTES = 64 * 1024 * 1024;
-
-/** Wall-clock bound on the two object reads a first use costs. */
-const DICTIONARY_READ_TIMEOUT_MS = 30_000;
+/**
+ * Wall-clock bound on resolving a dictionary, pointer read and payload read
+ * together. One deadline for the whole operation, not one per object: two
+ * sequential 30s bounds would let a stalled payload read keep the first search
+ * after startup waiting for a minute, including a `shadow` request that goes
+ * on to execute the unexpanded query anyway.
+ */
+const DICTIONARY_RESOLVE_TIMEOUT_MS = 30_000;
 
 /**
  * How long an unavailable dictionary stays unavailable before another request
@@ -118,6 +123,17 @@ const DICTIONARY_READ_TIMEOUT_MS = 30_000;
  * recovered store starts serving without a restart.
  */
 const DICTIONARY_UNAVAILABLE_TTL_MS = 60_000;
+
+/**
+ * How long a loaded dictionary is served before the pointer is rechecked.
+ *
+ * A loaded payload is immutable, but the pointer naming it is not: caching the
+ * payload forever would make a rebuild or a rollback reach only replicas that
+ * restart afterwards, so identical requests would get different queries from
+ * warm and new instances indefinitely. A failed refresh keeps serving the
+ * payload that last worked rather than falling back to no expansion.
+ */
+const DICTIONARY_REFRESH_TTL_MS = 15 * 60_000;
 
 /** Structured events; swept for, so spelled once. */
 const DICTIONARY_UNAVAILABLE =
@@ -131,32 +147,51 @@ type DictionaryLoad =
 
 const UNAVAILABLE: DictionaryLoad = { status: "unavailable" };
 
-const readDictionaryObject = async (key: string): Promise<Uint8Array> =>
-  await readCorpusS3Bytes(key, AbortSignal.timeout(DICTIONARY_READ_TIMEOUT_MS));
+/** Why a resolve produced no dictionary, for the warning's `reason`. */
+type DictionaryRejection = "content_hash_mismatch" | "malformed_pointer";
+
+type DictionaryPayload =
+  | { payload: string; status: "read" }
+  | { reason: DictionaryRejection; status: "rejected" };
 
 /**
- * Resolve the pointer object to the payload key. The pointer is the one
- * mutable name in the layout, so a rebuild is a small write and a rollback is
- * the previous hash. Its contents choose which key is read, which is why the
- * hash shape is enforced rather than trusted.
+ * Resolve the pointer object to the payload, under one shared deadline.
+ *
+ * The pointer is the layout's only mutable name, so a rebuild is a small write
+ * and a rollback is the previous hash. Two properties are enforced rather than
+ * trusted, because the pointer's contents choose which key is read: its shape
+ * must be a sha256 hex string, and the bytes found at the key it names must
+ * actually hash to it. Without the second check an overwritten or mispublished
+ * object at a content-addressed key would be served as though it were the
+ * addressed content, which is the whole guarantee the layout exists to give.
  */
 const readDictionaryPayload = async (
   language: MorphologyLanguage,
-): Promise<string | null> => {
-  const pointer = await readDictionaryObject(
+): Promise<DictionaryPayload> => {
+  const deadline = AbortSignal.timeout(DICTIONARY_RESOLVE_TIMEOUT_MS);
+  const pointer = await readCorpusS3Bytes(
     morphologyDictionaryPointerKey(language),
+    deadline,
   );
   const contentHash = new TextDecoder().decode(pointer).trim();
   if (!isMorphologyDictionaryContentHash(contentHash)) {
-    return null;
+    return { reason: "malformed_pointer", status: "rejected" };
   }
-  const payload = await readDictionaryObject(
+
+  const compressed = await readCorpusS3Bytes(
     morphologyDictionaryKey(language, contentHash),
+    deadline,
   );
-  return await zstdDecompressToStringBounded(
-    payload,
-    DICTIONARY_MAX_DECOMPRESSED_BYTES,
+  const payload = await zstdDecompressToStringBounded(
+    compressed,
+    MORPHOLOGY_DICTIONARY_MAX_BYTES,
   );
+  const hasher = new Bun.CryptoHasher("sha256");
+  hasher.update(payload);
+  if (hasher.digest("hex") !== contentHash) {
+    return { reason: "content_hash_mismatch", status: "rejected" };
+  }
+  return { payload, status: "read" };
 };
 
 const loadDictionary = async (
@@ -176,15 +211,17 @@ const loadDictionary = async (
     });
     return UNAVAILABLE;
   }
-  if (read.value === null) {
+  if (read.value.status === "rejected") {
     logger.warn(DICTIONARY_UNAVAILABLE, {
       language,
-      reason: "malformed_pointer",
+      reason: read.value.reason,
     });
     return UNAVAILABLE;
   }
 
-  const { entries, skippedLines } = parseExpansionDictionary(read.value);
+  const { collidedKeys, entries, skippedLines } = parseExpansionDictionary(
+    read.value.payload,
+  );
   if (entries.size === 0) {
     logger.warn(DICTIONARY_UNAVAILABLE, {
       language,
@@ -193,47 +230,74 @@ const loadDictionary = async (
     });
     return UNAVAILABLE;
   }
-  if (skippedLines > 0) {
+  if (skippedLines > 0 || collidedKeys > 0) {
     logger.warn(DICTIONARY_UNAVAILABLE, {
       language,
-      reason: "malformed_lines",
+      reason: "degraded_dictionary",
       skippedLines,
+      collidedKeys,
       entries: entries.size,
     });
   }
-  logger.info(DICTIONARY_LOADED, { language, entries: entries.size });
+  logger.info(DICTIONARY_LOADED, {
+    language,
+    entries: entries.size,
+    collidedKeys,
+  });
   return { entries, status: "loaded" };
 };
 
 type CacheEntry = {
-  /** Null once the load succeeded: a loaded dictionary is immutable. */
-  expiresAt: number | null;
+  expiresAt: number;
   load: Promise<DictionaryLoad>;
 };
 
 const cache = new Map<MorphologyLanguage, CacheEntry>();
+/** The last payload that parsed, per language; a failed refresh falls back here. */
+const lastLoaded = new Map<MorphologyLanguage, ReadonlyMap<string, string>>();
 
 /**
- * The per-language lazy singleton. Concurrent first uses share one read, and
- * an unavailable result is remembered for a bounded window rather than
- * forever, so neither an outage nor a recovery needs a deploy.
+ * The per-language lazy singleton. Concurrent uses share one read, a loaded
+ * dictionary is rechecked against the pointer on a slow cycle, and an
+ * unavailable one is retried on a fast one, so neither a rebuild, a rollback,
+ * an outage, nor a recovery needs a deploy.
+ *
+ * A refresh that fails keeps serving the payload that last parsed: losing
+ * expansion because object storage blipped would be a recall regression the
+ * reader sees, where serving a slightly stale dictionary is not.
  */
 const dictionaryFor = async (
   language: MorphologyLanguage,
 ): Promise<DictionaryLoad> => {
   const cached = cache.get(language);
-  if (cached && (cached.expiresAt === null || cached.expiresAt > Date.now())) {
+  if (cached && cached.expiresAt > Date.now()) {
     return await cached.load;
   }
 
-  const load = loadDictionary(language);
+  const load = (async (): Promise<DictionaryLoad> => {
+    const result = await loadDictionary(language);
+    if (result.status === "loaded") {
+      lastLoaded.set(language, result.entries);
+      return result;
+    }
+    const previous = lastLoaded.get(language);
+    return previous === undefined
+      ? result
+      : { entries: previous, status: "loaded" };
+  })();
+
+  // Deduplicates concurrent callers while the read is in flight; corrected to
+  // the retry window below if it turns out there is nothing to serve.
   cache.set(language, {
     load,
-    expiresAt: Date.now() + DICTIONARY_UNAVAILABLE_TTL_MS,
+    expiresAt: Date.now() + DICTIONARY_REFRESH_TTL_MS,
   });
   const result = await load;
-  if (result.status === "loaded") {
-    cache.set(language, { load, expiresAt: null });
+  if (result.status === "unavailable") {
+    cache.set(language, {
+      load,
+      expiresAt: Date.now() + DICTIONARY_UNAVAILABLE_TTL_MS,
+    });
   }
   return result;
 };
@@ -267,10 +331,15 @@ export const expandTermWith = (
   entries: ReadonlyMap<string, string>,
   term: string,
 ): readonly string[] => {
-  if (!isSurfaceForm(term)) {
+  // Fold first, then test the shape. The fold canonicalises and strips
+  // combining marks, so a decomposed `žalobě` (routine from extracted PDFs and
+  // from macOS keyboards) is judged as the word it is rather than rejected for
+  // the marks it carries. Digits and punctuation survive the fold, so the
+  // letters-only rule still excludes every identifier it excluded before.
+  const folded = foldExpansionKey(term);
+  if (!isSurfaceForm(folded)) {
     return [];
   }
-  const folded = foldExpansionKey(term);
   if (Array.from(folded).length < MIN_EXPANDABLE_TERM_LENGTH) {
     return [];
   }
@@ -324,39 +393,163 @@ type ShadowExpansionLog = {
    * Whether the reader scoped the search to one jurisdiction. Unscoped
    * searches fan out across every index and never expand, so the ratio of
    * scoped to unscoped traffic is what says how much of the corpus this
-   * feature can reach at all.
+   * feature can reach at all. Emitted for requests that expanded nothing too,
+   * or the ratio would be one by construction.
    */
   countryScoped: boolean;
-  executedQuery: string;
-  expandedQuery: string;
+  /** Quoted leaves the expanded query carries; equals `baseLeaves` when inert. */
+  expandedLeaves: number;
   language: MorphologyLanguage | null;
+  /** Quoted leaves before expansion: one per token the reader typed. */
+  baseLeaves: number;
+  /** Why this request expanded nothing, or "expanded" when it did. */
+  reach: "expanded" | "no_dictionary" | "unsupported_jurisdiction";
 };
 
 /**
- * What the shadow event carries. Split from the emit so a test can assert
- * `sanitizeLogAttributes` keeps every key: the sanitizer drops payload-shaped
- * keys silently, and a dropped key here is an event that looks emitted and
- * measures nothing. Deriving the assertion from this function rather than
- * from a list of key names is what keeps the two from drifting.
+ * What the shadow event carries: counts, never text.
  *
- * Both query strings are already reduced to quoted word tokens by the query
- * builder, and this endpoint searches published case law, not workspace
- * content.
+ * The query strings are deliberately absent. They are the reader's own words,
+ * and a case-law search can carry a client name, a party, or the shape of a
+ * legal strategy; copying them into INFO telemetry, the stderr mirror, and any
+ * configured OTLP sink would be new exposure that nothing in the request path
+ * creates today. `sanitizeLogAttributes` would not have redacted them either,
+ * since neither key is payload-shaped. Leaf counts answer what the rollout
+ * needs to know (how often expansion fires, how much it widens a query, and
+ * how much traffic it can reach at all) and reconstruct nothing.
+ *
+ * Split from the emit so a test can assert the sanitizer keeps every key: it
+ * drops keys silently, and a dropped key is an event that looks emitted and
+ * measures nothing. The assertion derives from this function rather than from
+ * a hand-kept list of names, so the two cannot drift.
  */
 export const shadowExpansionAttributes = ({
+  baseLeaves,
   countryScoped,
-  executedQuery,
-  expandedQuery,
+  expandedLeaves,
   language,
+  reach,
 }: ShadowExpansionLog): LoggerAttributes => ({
+  baseLeaves,
   countryScoped,
-  executedQuery,
-  expandedQuery,
-  expanded: expandedQuery !== executedQuery,
+  expandedLeaves,
+  addedLeaves: expandedLeaves - baseLeaves,
   language: language ?? "none",
+  reach,
 });
 
 /** Record what expansion would have done to a query that ran unexpanded. */
 export const logShadowExpansion = (log: ShadowExpansionLog): void => {
   logger.info(EXPANSION_SHADOW, shadowExpansionAttributes(log));
+};
+
+/**
+ * Quoted leaves in an assembled clause: quote characters that open a span,
+ * counted outside one. Cheap, and it needs no access to the token stream.
+ */
+const countLeaves = (clause: string): number => {
+  let leaves = 0;
+  let index = 0;
+  let inQuotes = false;
+  while (index < clause.length) {
+    const char = clause.charAt(index);
+    if (inQuotes) {
+      if (char === "\\") {
+        index += 2;
+        continue;
+      }
+      if (char === '"') {
+        inQuotes = false;
+      }
+      index += 1;
+      continue;
+    }
+    if (char === '"') {
+      inQuotes = true;
+      leaves += 1;
+    }
+    index += 1;
+  }
+  return leaves;
+};
+
+type ResolveExpandedQueryOptions = {
+  /** Assemble the clause, with the expander when one is supplied. */
+  build: (expand?: CorpusTermExpander) => string | null;
+  jurisdiction: string | undefined;
+  mode: QueryExpansionMode;
+};
+
+/**
+ * The query a corpus-index search sends to the engine, under the deployment's
+ * expansion mode.
+ *
+ * Both case-law corpus-index boundaries (the public search handler and the
+ * shared provider) resolve through here, for the same reason both assemble
+ * through `caseLawCorpusQuery`: a rollout flag applied at one boundary and not
+ * the other is two answers to what the engine sees, which is exactly what the
+ * shared builder exists to prevent.
+ *
+ * `off` never resolves a dictionary and returns the byte-identical
+ * pre-expansion query. `shadow` builds both, records the comparison, and
+ * executes the unexpanded one. `on` executes the expanded one. Every failure
+ * inside resolves to the unexpanded query, so a search never depends on the
+ * dictionary being reachable.
+ */
+export const resolveExpandedCorpusQuery = async ({
+  build,
+  jurisdiction,
+  mode,
+}: ResolveExpandedQueryOptions): Promise<string | null> => {
+  const baseQuery = build();
+  if (mode === "off" || baseQuery === null) {
+    return baseQuery;
+  }
+
+  const countryScoped = jurisdiction !== undefined;
+  const language = expansionLanguageForJurisdiction(jurisdiction);
+  const expand =
+    language === null ? null : await corpusTermExpander(jurisdiction);
+
+  // A request that reaches no dictionary still reports, or the reach metrics
+  // would only ever describe the traffic expansion already covers.
+  if (expand === null) {
+    if (mode === "shadow") {
+      const baseLeaves = countLeaves(baseQuery);
+      logShadowExpansion({
+        baseLeaves,
+        countryScoped,
+        expandedLeaves: baseLeaves,
+        language,
+        reach: language === null ? "unsupported_jurisdiction" : "no_dictionary",
+      });
+    }
+    return baseQuery;
+  }
+
+  // Both builds tokenize the same text, so this is null only when `baseQuery`
+  // already was; returning the base query keeps the branch total anyway.
+  const expandedQuery = build(expand);
+  if (expandedQuery === null) {
+    return baseQuery;
+  }
+
+  switch (mode) {
+    case "on": {
+      return expandedQuery;
+    }
+    case "shadow": {
+      logShadowExpansion({
+        baseLeaves: countLeaves(baseQuery),
+        countryScoped,
+        expandedLeaves: countLeaves(expandedQuery),
+        language,
+        reach: "expanded",
+      });
+      return baseQuery;
+    }
+    default: {
+      return mode satisfies never;
+    }
+  }
 };

@@ -51,6 +51,14 @@ const MIN_FORMS_PER_BUCKET = 2;
 export const MAX_FORMS_PER_BUCKET = 4;
 
 /**
+ * Decompressed ceiling for one payload. Shared with the builder, which refuses
+ * to publish past it: a dictionary the loader would reject is worse than no
+ * dictionary, because the pointer advances and every replica silently falls
+ * back to unexpanded search until an operator notices.
+ */
+export const MORPHOLOGY_DICTIONARY_MAX_BYTES = 64 * 1024 * 1024;
+
+/**
  * Where the pointer for a language lives. The payload is content-addressed
  * and therefore immutable; this object is the one mutable name, holding the
  * current payload's content hash so a rebuild is a single small write and a
@@ -99,8 +107,15 @@ export type ExpansionBucket = {
   stem: string;
 };
 
+/**
+ * Canonicalised first: a combining mark is `\p{M}`, not `\p{L}`, so decomposed
+ * text fails a letters-only test that precomposed text passes. Extracted
+ * corpus text and typed queries both arrive in whichever form their producer
+ * used, and rejecting one spelling of a word it accepts in the other is a
+ * silent recall loss rather than a safety property.
+ */
 export const isSurfaceForm = (value: string): boolean =>
-  SURFACE_FORM_PATTERN.test(value);
+  SURFACE_FORM_PATTERN.test(value.normalize("NFC"));
 
 /**
  * `<stem>\t<form,form,...>\t<documentFrequency>` per line. Tab-separated
@@ -119,6 +134,12 @@ export const serializeExpansionDictionary = (
 
 export type ParsedExpansionDictionary = {
   /**
+   * Folded keys two different buckets both claimed, and which therefore
+   * expand to nothing. Reported so the count is observable rather than
+   * inferred from missing recall.
+   */
+  collidedKeys: number;
+  /**
    * Folded surface form to the bucket's forms packed as one delimited
    * string. One string per bucket is shared by every member's entry, so the
    * heap cost is the bucket's text once plus a pointer per member.
@@ -132,11 +153,20 @@ export type ParsedExpansionDictionary = {
  * Read a serialized dictionary. A malformed line is skipped and counted,
  * never thrown on: the payload is built offline from corpus text, and one bad
  * line must cost one bucket rather than every query the language serves.
+ *
+ * Keys are folded and values are not, so two buckets whose stems differ only
+ * by diacritics claim the same key: Czech `rada`/`řada` and Polish `sad`/`sąd`
+ * are ordinary words, not edge cases. Letting the later line win would answer
+ * a query for one family with the other family's inflections, and the
+ * prefix guard cannot see it because the folded spellings agree. Such a key
+ * expands to nothing instead — an ambiguous lookup is resolved by declining
+ * to answer, never by serialization order.
  */
 export const parseExpansionDictionary = (
   text: string,
 ): ParsedExpansionDictionary => {
   const entries = new Map<string, string>();
+  const collided = new Set<string>();
   let skippedLines = 0;
 
   for (const line of text.split("\n")) {
@@ -163,11 +193,26 @@ export const parseExpansionDictionary = (
       continue;
     }
     for (const form of forms) {
-      entries.set(foldExpansionKey(form), packed);
+      const key = foldExpansionKey(form);
+      if (collided.has(key)) {
+        continue;
+      }
+      const claimed = entries.get(key);
+      if (claimed === undefined) {
+        entries.set(key, packed);
+        continue;
+      }
+      // Two forms of one bucket may fold together (`rada` and `ráda` within
+      // the same family); that is the same answer twice, not a conflict.
+      if (claimed === packed) {
+        continue;
+      }
+      entries.delete(key);
+      collided.add(key);
     }
   }
 
-  return { entries, skippedLines };
+  return { collidedKeys: collided.size, entries, skippedLines };
 };
 
 /** Unpack a stored bucket value into its surface forms. */

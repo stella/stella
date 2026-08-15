@@ -32,8 +32,10 @@ import {
   foldExpansionKey,
   isSurfaceForm,
   MAX_FORMS_PER_BUCKET,
+  MORPHOLOGY_DICTIONARY_MAX_BYTES,
   morphologyDictionaryKey,
   morphologyDictionaryPointerKey,
+  parseExpansionDictionary,
   serializeExpansionDictionary,
 } from "@/api/lib/legal-search/morphology/dictionary";
 import {
@@ -186,12 +188,17 @@ const chunkVocabulary = async (afterId: string): Promise<VocabularyChunk> =>
       return { lastId: null, scanned: 0, tokens: new Map() };
     }
 
+    // `normalize(..., NFC)` before tokenization: extracted PDF text is often
+    // decomposed, and `to_tsvector` would then emit tokens carrying combining
+    // marks. Those are `\p{M}`, not `\p{L}`, so `TOKEN_PATTERN` would drop
+    // them and the corpus would silently lose the inflections of every
+    // accented word that happened to arrive in NFD.
     const stats = rowsOf(
       await tx.execute(sql`
         SELECT word, ndoc
         FROM ts_stat(
           format(
-            'SELECT to_tsvector(''simple'', sd.searchable_text)
+            'SELECT to_tsvector(''simple'', normalize(sd.searchable_text, NFC))
                FROM case_law_search_documents sd
               WHERE sd.language = %L
                 AND sd.decision_id > %L::uuid
@@ -202,12 +209,20 @@ const chunkVocabulary = async (afterId: string): Promise<VocabularyChunk> =>
       `),
     );
 
+    // Shape-filtered here rather than after the whole scan: the frequency map
+    // lives for the length of the build, and an OCR-heavy corpus produces
+    // enough one-off garbage tokens to grow it without bound. Only the
+    // frequency threshold needs the global total, so only it waits.
     const tokens = new Map<string, number>();
     for (const row of stats) {
       const word = row["word"];
       const ndoc = Number(row["ndoc"]);
-      if (typeof word === "string" && Number.isFinite(ndoc)) {
-        tokens.set(word, ndoc);
+      if (typeof word !== "string" || !Number.isFinite(ndoc)) {
+        continue;
+      }
+      const canonical = word.normalize("NFC");
+      if (TOKEN_PATTERN.test(canonical)) {
+        tokens.set(canonical, ndoc);
       }
     }
     return { lastId, scanned, tokens };
@@ -244,10 +259,12 @@ await scanFrom(NIL_UUID);
 
 // Bucket by stem. The token is stemmed accented, exactly as the corpus wrote
 // it; folding here would strip the characters the suffix tables match on.
+// Token shape was already enforced during the scan, so only the corpus-wide
+// frequency threshold is left to apply.
 const byStem = new Map<string, { df: number; form: string }[]>();
 let filteredTokens = 0;
 for (const [token, df] of documentFrequency) {
-  if (df < minDocumentFrequency || !TOKEN_PATTERN.test(token)) {
+  if (df < minDocumentFrequency) {
     continue;
   }
   filteredTokens += 1;
@@ -299,9 +316,26 @@ buckets.sort((left, right) => (left.stem < right.stem ? -1 : 1));
 
 const payload = serializeExpansionDictionary(buckets);
 
+// The loader is the authority on what a folded key may resolve to, so the
+// report comes from its own parser rather than from a second implementation
+// here: whatever it drops for colliding keys is what the deployment will drop.
+const { collidedKeys, entries, skippedLines } =
+  parseExpansionDictionary(payload);
+
 console.log(
-  `tokens=${documentFrequency.size} kept=${filteredTokens} buckets=${buckets.length} incoherent=${incoherent.length}`,
+  `tokens=${documentFrequency.size} kept=${filteredTokens} buckets=${buckets.length} keys=${entries.size} incoherent=${incoherent.length} collided=${collidedKeys} skipped=${skippedLines}`,
 );
+if (skippedLines > 0) {
+  console.error(
+    `build-expansion-dictionary: ${skippedLines} serialized lines do not parse; refusing to publish`,
+  );
+  process.exit(1);
+}
+if (collidedKeys > 0) {
+  console.log(
+    `--- ${collidedKeys} folded keys are claimed by more than one stem and expand to nothing (e.g. rada/řada, sad/sąd) ---`,
+  );
+}
 if (incoherent.length > 0) {
   console.log(
     `--- buckets whose members share fewer than ${COHERENCE_PREFIX} leading characters (query-time prefix guard drops these forms) ---`,
@@ -314,6 +348,17 @@ if (incoherent.length > 0) {
 if (buckets.length === 0) {
   console.error(
     "build-expansion-dictionary: no buckets produced; refusing to publish an empty dictionary",
+  );
+  process.exit(1);
+}
+
+// Publishing past the loader's ceiling would advance the pointer to a payload
+// every replica then rejects, so the deployment would silently serve
+// unexpanded searches until an operator rolled it back. Fail here instead.
+const payloadBytes = Buffer.byteLength(payload, "utf-8");
+if (payloadBytes > MORPHOLOGY_DICTIONARY_MAX_BYTES) {
+  console.error(
+    `build-expansion-dictionary: ${payloadBytes} bytes exceeds the loader's ${MORPHOLOGY_DICTIONARY_MAX_BYTES}-byte ceiling; refusing to publish`,
   );
   process.exit(1);
 }

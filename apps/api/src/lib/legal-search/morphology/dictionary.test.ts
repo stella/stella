@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import {
   foldExpansionKey,
   isMorphologyDictionaryContentHash,
+  isSurfaceForm,
   MAX_FORMS_PER_BUCKET,
   morphologyDictionaryKey,
   morphologyDictionaryPointerKey,
@@ -67,10 +68,58 @@ test("the cap is what the parser enforces", () => {
 
 test("the fold is lowercase, NFC, and diacritic-free", () => {
   expect(foldExpansionKey("ŠKODY")).toBe("skody");
-  // NFD input (common from PDFs and macOS filesystems) folds identically.
-  expect(foldExpansionKey("s̋kody".normalize("NFD"))).toBe(
-    foldExpansionKey("s̋kody"),
+  // The same word decomposed (routine from extracted PDFs and macOS
+  // filesystems) must reach the same key, or half the corpus is unreachable
+  // from half the keyboards.
+  expect(foldExpansionKey("ŠKODY".normalize("NFD"))).toBe("skody");
+  expect(foldExpansionKey("žalobě".normalize("NFD"))).toBe(
+    foldExpansionKey("žalobě"),
   );
+});
+
+// A combining mark is \p{M}, not \p{L}, so a letters-only test that ran before
+// canonicalisation would reject decomposed spellings of words it accepts
+// precomposed.
+test("a decomposed word is still a surface form", () => {
+  expect(isSurfaceForm("žalobě".normalize("NFD"))).toBe(true);
+  expect(isSurfaceForm("žalobě")).toBe(true);
+  expect(isSurfaceForm("21cdo")).toBe(false);
+});
+
+// Keys are folded and values are not, so two stems that differ only by
+// diacritics claim one key. Czech rada/řada and Polish sad/sąd are ordinary
+// words: answering a query for one with the other's inflections is a wrong
+// answer the prefix guard cannot catch, because the folded spellings agree.
+test("a folded key two stems claim expands to nothing", () => {
+  const parsed = parseExpansionDictionary(
+    ["rad\trada,rady,radu\t900", "řad\třada,řady,řadě\t800"].join("\n"),
+  );
+  expect(parsed.collidedKeys).toBeGreaterThan(0);
+  expect(parsed.entries.get("rada")).toBeUndefined();
+  expect(parsed.entries.get("rady")).toBeUndefined();
+  // Keys only one stem claims are unaffected.
+  expect(parsed.entries.get("radu")).toBe("rada,rady,radu");
+  expect(parsed.entries.get("rade")).toBe("řada,řady,řadě");
+});
+
+// Order must not decide the answer: the same two buckets serialized either way
+// round drop the same keys.
+test("collision handling does not depend on serialization order", () => {
+  const first = "rad\trada,rady,radu\t900";
+  const second = "řad\třada,řady,řadě\t800";
+  const forward = parseExpansionDictionary([first, second].join("\n"));
+  const reverse = parseExpansionDictionary([second, first].join("\n"));
+  expect([...forward.entries.keys()].sort()).toEqual(
+    [...reverse.entries.keys()].sort(),
+  );
+  expect(forward.collidedKeys).toBe(reverse.collidedKeys);
+});
+
+// Two forms of one family may fold together; that is the same answer twice.
+test("forms folding together inside one bucket are not a collision", () => {
+  const parsed = parseExpansionDictionary("rad\trada,ráda,radu\t900");
+  expect(parsed.collidedKeys).toBe(0);
+  expect(parsed.entries.get("rada")).toBe("rada,ráda,radu");
 });
 
 // The pointer object's contents choose which key is read, so its shape is

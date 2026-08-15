@@ -48,6 +48,8 @@ const queryText = fc.oneof(
     "aaa aaab",
     '"aaa aaab" aaa',
     "aaa ".repeat(20),
+    // Past the leaf budget before a single expansion is considered.
+    "aaa ".repeat(30),
     "§ 2235 odst. 1",
     'x) OR (court:"y"',
   ),
@@ -128,7 +130,34 @@ test("no dictionary can produce a clause that escapes its own quoting", () => {
         return;
       }
       expect(isWellQuoted(clause)).toBe(true);
-      expect(leafCount(clause)).toBeLessThanOrEqual(CORPUS_QUERY_LEAF_BUDGET);
+    }),
+    propertyConfig(),
+  );
+});
+
+// The budget bounds what expansion adds, not what the reader typed: a query of
+// more than 24 words already carries more than 24 leaves before any expansion,
+// and the builder must not drop the reader's own terms to fit. So the ceiling
+// is the budget or the unexpanded clause, whichever is larger.
+test("expansion never pushes a clause past the leaf budget it started under", () => {
+  fc.assert(
+    fc.property(dictionaryText, queryText, (text, query) => {
+      const { entries } = parseExpansionDictionary(text);
+      const base = corpusFreeTextClause(query);
+      const expanded = corpusFreeTextClause(query, (term) =>
+        expandTermWith(entries, term),
+      );
+      if (base === null || expanded === null) {
+        return;
+      }
+      const baseLeaves = leafCount(base);
+      expect(leafCount(expanded)).toBeLessThanOrEqual(
+        Math.max(baseLeaves, CORPUS_QUERY_LEAF_BUDGET),
+      );
+      // Over the budget on its own, a query gets no expansion at all.
+      if (baseLeaves >= CORPUS_QUERY_LEAF_BUDGET) {
+        expect(expanded).toBe(base);
+      }
     }),
     propertyConfig(),
   );

@@ -95,6 +95,17 @@ test("a term with no bucket expands to nothing", () => {
   expect(expandTermWith(dictionaryOf(CS_BUCKETS), "smlouva")).toEqual([]);
 });
 
+// A macOS keyboard and an extracted PDF both produce decomposed text. The
+// shape guard runs on the folded spelling for exactly this reason: combining
+// marks are \p{M}, so testing before the fold would reject the word.
+test("a decomposed query term reaches the same bucket as its precomposed spelling", () => {
+  const entries = dictionaryOf(CS_BUCKETS);
+  expect(expandTermWith(entries, "nájemné".normalize("NFD"))).toEqual(
+    expandTermWith(entries, "nájemné"),
+  );
+  expect(expandTermWith(entries, "nájemné".normalize("NFD"))).not.toEqual([]);
+});
+
 test("the typed term is never repeated inside its own group", () => {
   const clause = corpusFreeTextClause("nájemné", (term) =>
     expandTermWith(dictionaryOf(CS_BUCKETS), term),
@@ -190,10 +201,30 @@ test("jurisdiction routing expands only the languages phase one publishes", () =
 // shadow event whose keys it rejects looks emitted and measures nothing.
 test("every shadow-event attribute survives the log sanitizer", () => {
   const attributes = shadowExpansionAttributes({
+    baseLeaves: 1,
     countryScoped: true,
-    executedQuery: '("nájemné")',
-    expandedQuery: '(("nájemné" OR "nájemného"))',
+    expandedLeaves: 2,
     language: "cs",
+    reach: "expanded",
   });
   expect(sanitizeLogAttributes(attributes)).toEqual(attributes);
+});
+
+// The event measures the rewrite; it must not carry what the reader typed. A
+// case-law query can name a client or a party, and nothing else in the request
+// path copies query text into telemetry.
+test("the shadow event carries no query text", () => {
+  const attributes = shadowExpansionAttributes({
+    baseLeaves: 3,
+    countryScoped: true,
+    expandedLeaves: 9,
+    language: "cs",
+    reach: "expanded",
+  });
+  for (const value of Object.values(attributes)) {
+    expect(typeof value === "string" ? value : "").not.toContain('"');
+  }
+  expect(Object.values(attributes)).toEqual(
+    expect.arrayContaining([3, 9, 6, true, "cs", "expanded"]),
+  );
 });

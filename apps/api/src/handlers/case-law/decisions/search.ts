@@ -36,11 +36,7 @@ import {
   caseLawCorpusQuery,
   type CorpusTermExpander,
 } from "@/api/lib/legal-search/corpus-query";
-import {
-  corpusTermExpander,
-  expansionLanguageForJurisdiction,
-  logShadowExpansion,
-} from "@/api/lib/legal-search/expansion";
+import { resolveExpandedCorpusQuery } from "@/api/lib/legal-search/expansion";
 import { loadFtsSearchConfigs } from "@/api/lib/legal-search/fts-config";
 import {
   corpusIndexId,
@@ -457,55 +453,15 @@ const buildCorpusIndexQuery = (
     expand,
   );
 
-/**
- * The query this request sends to the engine, under the deployment's
- * expansion mode.
- *
- * `off` never resolves a dictionary and returns the query the builder
- * produced before expansion existed. `shadow` builds both and runs the
- * unexpanded one, so the rewrite can be judged against real traffic before it
- * serves any. `on` runs the expanded one. Every failure inside the expander
- * resolves to no expander at all, so a search never depends on the dictionary
- * being reachable.
- */
+/** Mode, dictionary, and shadow accounting are the shared resolver's. */
 const resolveCorpusIndexQuery = async (
   body: SearchDecisionsBody,
-): Promise<string | null> => {
-  const mode = envBase.QUERY_EXPANSION_MODE;
-  const baseQuery = buildCorpusIndexQuery(body);
-  if (mode === "off" || baseQuery === null) {
-    return baseQuery;
-  }
-
-  const expand = await corpusTermExpander(body.country);
-  if (expand === null) {
-    return baseQuery;
-  }
-  // Both builds tokenize the same text, so this is null only when `baseQuery`
-  // already was; returning the base query keeps the branch total anyway.
-  const expandedQuery = buildCorpusIndexQuery(body, expand);
-  if (expandedQuery === null) {
-    return baseQuery;
-  }
-
-  switch (mode) {
-    case "on": {
-      return expandedQuery;
-    }
-    case "shadow": {
-      logShadowExpansion({
-        countryScoped: body.country !== undefined,
-        executedQuery: baseQuery,
-        expandedQuery,
-        language: expansionLanguageForJurisdiction(body.country),
-      });
-      return baseQuery;
-    }
-    default: {
-      return mode satisfies never;
-    }
-  }
-};
+): Promise<string | null> =>
+  await resolveExpandedCorpusQuery({
+    build: (expand) => buildCorpusIndexQuery(body, expand),
+    jurisdiction: body.country,
+    mode: envBase.QUERY_EXPANSION_MODE,
+  });
 
 const extractCorpusSnippet = (
   snippet: Record<string, unknown> | undefined,
