@@ -2,12 +2,17 @@ import { describe, expect, test } from "bun:test";
 
 import type { FieldContent } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createIdleExitCheck } from "@/api/lib/document-processing-idle-exit";
 import {
   abortDocumentProcessingWorkerBeforeClose,
   automaticOcrRetryDelayMs,
   classifyOcrProjectionSource,
   classifyOcrWorkspaceDispatch,
   createDocumentProcessingLeaseRenewal,
+  createReconciliationProgress,
+  dispatchScheduledDocumentProcessingRetries,
+  DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS,
+  DOCUMENT_PROCESSING_RECONCILIATION_PHASES,
   DocumentProcessingJobError,
   indexDocumentProjection,
   isCurrentNativeExtractionSource,
@@ -20,6 +25,10 @@ import {
   memoizeConnect,
   ownsPromotedManualOcrClaim,
   readRepairScanCursor,
+  RECONCILE_BATCH_SIZE,
+  reconciliationLeftWorkBehind,
+  resolveRepairScanPage,
+  resolveSearchIndexReplayBatch,
   runDocumentProcessingReconciliationPhases,
   runSearchIndexReplayAttempt,
   settleDocumentProcessingAttemptError,
@@ -319,13 +328,13 @@ describe("reconciliation fault isolation", () => {
     const failures: { error: unknown; phase: string }[] = [];
     const repairError = new Error("repair unavailable");
 
-    const counts = await runDocumentProcessingReconciliationPhases({
+    const results = await runDocumentProcessingReconciliationPhases({
       phases: [
         {
           name: "delivery",
           run: async () => {
             calls.push("delivery");
-            return 5;
+            return { count: 5, hasMore: false };
           },
         },
         {
@@ -339,21 +348,21 @@ describe("reconciliation fault isolation", () => {
           name: "reindex",
           run: async () => {
             calls.push("reindex");
-            return 2;
+            return { count: 2, hasMore: false };
           },
         },
         {
           name: "retry",
           run: async () => {
             calls.push("retry");
-            return 3;
+            return { count: 3, hasMore: true };
           },
         },
         {
           name: "stale-lease",
           run: async () => {
             calls.push("stale-lease");
-            return 4;
+            return { count: 4, hasMore: false };
           },
         },
       ],
@@ -370,12 +379,12 @@ describe("reconciliation fault isolation", () => {
       "stale-lease",
     ]);
     expect(failures).toEqual([{ error: repairError, phase: "repair" }]);
-    expect(counts).toEqual({
-      delivery: 5,
-      reindex: 2,
-      repair: 0,
-      retry: 3,
-      "stale-lease": 4,
+    expect(results).toEqual({
+      delivery: { count: 5, hasMore: false },
+      reindex: { count: 2, hasMore: false },
+      repair: { count: 0, hasMore: true },
+      retry: { count: 3, hasMore: true },
+      "stale-lease": { count: 4, hasMore: false },
     });
   });
 
@@ -754,12 +763,12 @@ describe("bounded search-index replay", () => {
     const calls: string[] = [];
     const phaseErrors: unknown[] = [];
     let replayError: unknown;
-    const counts = await runDocumentProcessingReconciliationPhases({
+    const results = await runDocumentProcessingReconciliationPhases({
       phases: [
         {
           name: "reindex",
-          run: async () =>
-            Number(
+          run: async () => ({
+            count: Number(
               await runSearchIndexReplayAttempt({
                 indexEntity: async () => await new Promise<void>(() => {}),
                 onFailure: async (error) => {
@@ -773,12 +782,14 @@ describe("bounded search-index replay", () => {
                 timeoutMs: 5,
               }),
             ),
+            hasMore: false,
+          }),
         },
         {
           name: "retry",
           run: async () => {
             calls.push("retry");
-            return 2;
+            return { count: 2, hasMore: false };
           },
         },
       ],
@@ -794,8 +805,8 @@ describe("bounded search-index replay", () => {
     });
     expect(calls).toEqual(["reindex-failed", "retry"]);
     expect(phaseErrors).toEqual([]);
-    expect(counts.reindex).toBe(0);
-    expect(counts.retry).toBe(2);
+    expect(results.reindex.count).toBe(0);
+    expect(results.retry.count).toBe(2);
   });
 
   test("bounds stalled failure and success state transitions", async () => {
@@ -1075,5 +1086,409 @@ describe("worker interruption lifecycle", () => {
     expect(
       transition.match(/\.update\(documentProcessingRuns\)/gu),
     ).toHaveLength(1);
+  });
+});
+
+/**
+ * The class these pin: reconciliation drains each backlog one capped batch
+ * per tick, and a phase's effect count is routinely smaller than the rows
+ * it read (candidates filtered out, compare-and-set losses, replays that
+ * fail). Inferring "more remains" from that count therefore reads a
+ * saturated phase as drained and lets the batch worker exit mid-drain, so
+ * each phase states its own saturation and this only collects the answers.
+ */
+describe("reconciliationLeftWorkBehind", () => {
+  const resultsOf = async (
+    phases: Parameters<
+      typeof runDocumentProcessingReconciliationPhases
+    >[0]["phases"],
+  ) =>
+    await runDocumentProcessingReconciliationPhases({
+      onPhaseError: () => undefined,
+      phases,
+    });
+
+  test("a large effect count with no phase saturated leaves nothing behind", async () => {
+    expect(
+      reconciliationLeftWorkBehind(
+        await resultsOf([
+          {
+            name: "repair",
+            run: async () => ({ count: 10_000, hasMore: false }),
+          },
+        ]),
+      ),
+    ).toBe(false);
+  });
+
+  test("every declared phase runs and states its own signal", async () => {
+    const drained = await resultsOf([]);
+    const declared = Object.keys(drained).toSorted();
+    // Both directions against the list the worker actually passes: a phase
+    // declared but never wired in reports nothing and would be read as
+    // drained; a phase run but not declared has nowhere to report.
+    expect(declared).toEqual([
+      "delivery",
+      "reindex",
+      "repair",
+      "retry",
+      "stale-lease",
+    ]);
+    const executed = DOCUMENT_PROCESSING_RECONCILIATION_PHASES.map(
+      ({ name }): string => name,
+    ).toSorted();
+    expect(executed).toEqual(declared);
+    for (const phase of Object.keys(drained)) {
+      expect(
+        reconciliationLeftWorkBehind({
+          ...drained,
+          [phase]: { count: 0, hasMore: true },
+        }),
+      ).toBe(true);
+    }
+  });
+
+  test("a phase that acted on almost nothing still reports its backlog", async () => {
+    expect(
+      reconciliationLeftWorkBehind(
+        await resultsOf([
+          { name: "repair", run: async () => ({ count: 1, hasMore: true }) },
+        ]),
+      ),
+    ).toBe(true);
+  });
+
+  test("every phase runs ahead of the phases it feeds", () => {
+    const order = DOCUMENT_PROCESSING_RECONCILIATION_PHASES.map(
+      ({ name }): string => name,
+    );
+    const feeds = Object.entries(
+      DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS,
+    );
+
+    // Both directions again, this time between the declared edges and the
+    // order they constrain: an edge whose consumer is missing from the
+    // order, or a phase that produces work for a phase that already ran,
+    // fails here. That second case is what leaves a tick's own output
+    // waiting for the next tick.
+    expect(feeds.map(([phase]) => phase).toSorted()).toEqual(order.toSorted());
+    for (const [phase, consumers] of feeds) {
+      for (const consumer of consumers) {
+        expect(order.indexOf(consumer)).toBeGreaterThan(order.indexOf(phase));
+      }
+    }
+  });
+
+  test("a failed phase counts as work left behind", async () => {
+    // It drained nothing it can prove, and a zero count would otherwise
+    // read as drained.
+    const results = await resultsOf([
+      {
+        name: "repair",
+        run: async () => {
+          throw new Error("repair unavailable");
+        },
+      },
+    ]);
+
+    expect(results.repair).toEqual({ count: 0, hasMore: true });
+    expect(reconciliationLeftWorkBehind(results)).toBe(true);
+  });
+});
+
+/**
+ * The repair sweep is where count, cursor, and backlog all diverge: it
+ * scans a page of candidate fields, filters nearly all of them, and
+ * creates runs only for the survivors. The created-run count says nothing
+ * about whether the scan reached the end of the table, and the end of the
+ * scan says nothing about the runs it just created, which the delivery
+ * phase still has to hand off.
+ */
+describe("resolveRepairScanPage", () => {
+  const fieldIds = (count: number) =>
+    Array.from({ length: count }, () => toSafeId<"field">(Bun.randomUUIDv7()));
+
+  test("a full page whose candidates were filtered out still has another page", () => {
+    const scannedFieldIds = fieldIds(RECONCILE_BATCH_SIZE);
+
+    expect(
+      resolveRepairScanPage({ createdRunCount: 0, scannedFieldIds }),
+    ).toEqual({
+      count: 0,
+      hasMore: true,
+      nextCursor: scannedFieldIds.at(-1) ?? null,
+    });
+  });
+
+  test("a short page ends the scan whether or not it created runs", () => {
+    const scannedFieldIds = fieldIds(RECONCILE_BATCH_SIZE - 1);
+
+    // The runs it created are due input for reindex and delivery, both of
+    // which run later in this tick and answer for them: this phase reports
+    // only its own backlog, which the short page ended.
+    for (const createdRunCount of [0, 2]) {
+      expect(
+        resolveRepairScanPage({ createdRunCount, scannedFieldIds }),
+      ).toEqual({
+        count: createdRunCount,
+        hasMore: false,
+        nextCursor: null,
+      });
+    }
+  });
+});
+
+/**
+ * Work a phase leaves for itself is the one kind the phase order cannot
+ * place, so each of those phases has to report it.
+ */
+describe("work a phase keeps for itself", () => {
+  test("a replay claimed but not completed keeps the reindex phase unfinished", () => {
+    // It went back to failed with a backoff, which is this phase's own
+    // input: no later phase selects it.
+    expect(
+      resolveSearchIndexReplayBatch({
+        claimedCount: 4,
+        recoveredCount: 1,
+        saturated: false,
+      }),
+    ).toEqual({ count: 1, hasMore: true });
+
+    expect(
+      resolveSearchIndexReplayBatch({
+        claimedCount: 4,
+        recoveredCount: 4,
+        saturated: false,
+      }),
+    ).toEqual({ count: 4, hasMore: false });
+  });
+
+  test("a failed handoff keeps the delivery phase unfinished", async () => {
+    // The run stays queued and rescheduled, and delivery is the only phase
+    // that takes queued rows, so nothing later in this tick can.
+    expect(
+      await dispatchScheduledDocumentProcessingRetries(async () => ({
+        attempted: 3,
+        hasMore: false,
+        retryAt: new Date("2030-01-01T00:00:30.000Z"),
+      })),
+    ).toEqual({ count: 3, hasMore: true });
+
+    expect(
+      await dispatchScheduledDocumentProcessingRetries(async () => ({
+        attempted: 3,
+        hasMore: false,
+        retryAt: null,
+      })),
+    ).toEqual({ count: 3, hasMore: false });
+  });
+});
+
+/**
+ * The class these pin: the sampler's verdict must not depend on how its
+ * cadence lines up with the reconciliation cadence. Reading a snapshot
+ * mid-tick gets that wrong in both directions: a sampler that keeps
+ * landing inside slow ticks would see "running" at every sample and never
+ * exit, and one that lands just before a tick reports would exit on the
+ * previous tick's answer. A sample therefore waits for the tick in flight.
+ */
+describe("createReconciliationProgress", () => {
+  /** A tick the test settles on demand, standing in for a slow drain. */
+  const pendingTick = () => {
+    let settle: (leftWorkBehind: boolean) => void = () => undefined;
+    return {
+      run: async () =>
+        await new Promise<boolean>((resolve) => {
+          settle = resolve;
+        }),
+      settle: (leftWorkBehind: boolean) => {
+        settle(leftWorkBehind);
+      },
+    };
+  };
+
+  const sampler = (
+    progress: ReturnType<typeof createReconciliationProgress>,
+    countPending: () => Promise<number> = async () => 0,
+  ) => {
+    let exits = 0;
+    const sample = createIdleExitCheck({
+      countPending,
+      hasUnfinishedReconciliation: progress.hasUnfinishedWork,
+      isReconciliationInFlight: progress.isTickRunning,
+      reconciliationGeneration: progress.tickGeneration,
+      onCheckFailure: () => undefined,
+      onIdleExit: () => {
+        exits += 1;
+      },
+      requiredIdleChecks: 1,
+    });
+    return { exits: () => exits, sample };
+  };
+
+  test("a sample inside a tick waits for that tick, not the last one", async () => {
+    const progress = createReconciliationProgress();
+    // The last completed tick was drained: a snapshot read would exit on it.
+    await progress.runTick(async () => false);
+    const tick = pendingTick();
+    const inFlight = progress.runTick(tick.run);
+    const h = sampler(progress);
+
+    const outcome = h.sample();
+    await Bun.sleep(5);
+    expect(h.exits()).toBe(0);
+
+    tick.settle(true);
+    await inFlight;
+
+    expect(await outcome).toBe("checked");
+    expect(h.exits()).toBe(0);
+  });
+
+  test("a slow tick that drains still lets the worker exit, whenever the sample lands", async () => {
+    const progress = createReconciliationProgress();
+    const tick = pendingTick();
+    const inFlight = progress.runTick(tick.run);
+    const h = sampler(progress);
+
+    // Every sample lands inside the tick, the alignment that would strand
+    // a snapshot-reading sampler forever.
+    const outcome = h.sample();
+    await Bun.sleep(5);
+    tick.settle(false);
+    await inFlight;
+
+    expect(await outcome).toBe("exit");
+    expect(h.exits()).toBe(1);
+  });
+
+  test("jobs the tick enqueues before draining are in the count it is sampled against", async () => {
+    const progress = createReconciliationProgress();
+    let queueDepth = 0;
+    const tick = pendingTick();
+    const inFlight = progress.runTick(tick.run);
+    const h = sampler(progress, async () => queueDepth);
+
+    const outcome = h.sample();
+    await Bun.sleep(5);
+    // What the delivery phase does: hand recovered runs to the queue, then
+    // report the tick drained. Counting before waiting for that verdict
+    // would pair this tick's empty "before" with its drained "after".
+    queueDepth = 3;
+    tick.settle(false);
+    await inFlight;
+
+    expect(await outcome).toBe("checked");
+    expect(h.exits()).toBe(0);
+  });
+
+  test("a tick that starts as the count resolves is waited out by that sample", async () => {
+    const progress = createReconciliationProgress();
+    const tick = pendingTick();
+    const ticks: Promise<void>[] = [];
+    const h = sampler(
+      progress,
+      async () =>
+        await Promise.resolve(0).then((pending) => {
+          // The reconcile timer fires between the count resolving and the
+          // sampler resuming. The tick's own prologue marks it running
+          // before its first await, so the sample measures again and that
+          // second pass waits for this tick's verdict.
+          if (ticks.length === 0) {
+            ticks.push(progress.runTick(tick.run));
+          }
+          return pending;
+        }),
+    );
+
+    const outcome = h.sample();
+    await Bun.sleep(5);
+    // Still measuring: nothing has been decided on the stale verdict.
+    expect(h.exits()).toBe(0);
+
+    tick.settle(true);
+    await Promise.all(ticks);
+
+    expect(await outcome).toBe("checked");
+    expect(h.exits()).toBe(0);
+  });
+
+  /**
+   * A tick can also open and close entirely inside the count: nothing is
+   * running when the sample resumes, and the verdict it took belongs to
+   * the tick before, so only the generation records that it ran at all.
+   */
+  const samplerRunningATickInsideTheCount = (
+    progress: ReturnType<typeof createReconciliationProgress>,
+    leftWorkBehind: boolean,
+  ) => {
+    let ran = false;
+    return sampler(
+      progress,
+      async () =>
+        await Promise.resolve(0).then(async (pending) => {
+          if (!ran) {
+            ran = true;
+            await progress.runTick(async () => leftWorkBehind);
+          }
+          return pending;
+        }),
+    );
+  };
+
+  test("a saturated tick that fits inside the count is not exited past", async () => {
+    const progress = createReconciliationProgress();
+    // The verdict this sample waits on is the drained tick before it.
+    await progress.runTick(async () => false);
+    const h = samplerRunningATickInsideTheCount(progress, true);
+
+    expect(await h.sample()).toBe("checked");
+    expect(h.exits()).toBe(0);
+    // And the sample after it reads that tick's own verdict.
+    expect(await h.sample()).toBe("checked");
+    expect(h.exits()).toBe(0);
+  });
+
+  test("a drained tick that fits inside the count is resolved by the same sample", async () => {
+    const progress = createReconciliationProgress();
+    await progress.runTick(async () => false);
+    const h = samplerRunningATickInsideTheCount(progress, false);
+
+    // The crossing moved the generation, so the sample measures again: it
+    // re-reads the verdict, which is now that tick's own and drained, and
+    // re-counts what it enqueued. Nothing is left, so the sample completes
+    // rather than being spent on the crossing.
+    expect(await h.sample()).toBe("exit");
+    expect(h.exits()).toBe(1);
+  });
+
+  test("a saturated tick keeps the worker alive", async () => {
+    const progress = createReconciliationProgress();
+    await progress.runTick(async () => true);
+    const h = sampler(progress);
+
+    expect(await h.sample()).toBe("checked");
+    expect(h.exits()).toBe(0);
+
+    await progress.runTick(async () => false);
+
+    expect(await h.sample()).toBe("exit");
+  });
+
+  test("a tick that never reported leaves work unfinished", async () => {
+    const progress = createReconciliationProgress();
+    await progress.runTick(async () => false);
+
+    const rejection: unknown = await progress
+      .runTick(async () => {
+        throw new Error("reconcile unavailable");
+      })
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+
+    expect(rejection).toBeInstanceOf(Error);
+    expect(await progress.hasUnfinishedWork()).toBe(true);
   });
 });

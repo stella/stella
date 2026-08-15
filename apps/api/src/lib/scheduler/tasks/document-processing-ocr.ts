@@ -63,7 +63,9 @@ export const dispatchDocumentOcrBatches = async ({
       retryAt = batch.retryAt;
     }
 
-    if (batch.attempted < limit) {
+    // The dispatcher reports its own saturation; `attempted` counts the
+    // handoffs it tried, which is not the same question.
+    if (!batch.hasMore) {
       return;
     }
     return dispatchNextBatch();
