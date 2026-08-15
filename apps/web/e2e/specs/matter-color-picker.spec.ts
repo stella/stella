@@ -38,9 +38,22 @@ test("sidebar color picker stays open when custom colors are expanded", async ({
     ).toHaveCount(1);
     await colorPicker.getByRole("button", { name: "Show more" }).click();
 
-    await expect(
-      page.getByRole("textbox", { name: "Custom hex color" }),
-    ).toBeVisible();
+    const customColorInput = page.getByRole("textbox", {
+      name: "Custom hex color",
+    });
+    await expect(customColorInput).toBeVisible();
+
+    const colorUpdate = page.waitForResponse(
+      (response) =>
+        response.request().method() === "PATCH" &&
+        response.url().includes(`/workspaces/${workspace.id}`),
+    );
+    await customColorInput.fill("12AB34");
+    const colorUpdateResponse = await colorUpdate;
+    expect(colorUpdateResponse.ok()).toBe(true);
+
+    await expect(customColorInput).toHaveValue("12AB34");
+    await expect(customColorInput).toBeVisible();
     await expect(page).toHaveURL(
       new RegExp(`/workspaces/${workspace.id}/${workspace.viewId}$`, "u"),
     );

@@ -1,3 +1,4 @@
+import type { ContactUpdate } from "@/lib/contacts/mutations";
 import type { EditableField } from "@/routes/_protected.contacts/-components/types";
 
 type EditableFieldPolicy =
@@ -25,6 +26,8 @@ type NumericEditableField = {
     ? Field
     : never;
 }[EditableField];
+
+type TextEditableField = Exclude<EditableField, NumericEditableField>;
 
 export const isNumericEditableField = (
   field: EditableField,
@@ -91,4 +94,36 @@ export const buildNumericContactPayload = (
     status: "valid",
     payload: buildNumericPayload(field, value),
   };
+};
+
+export const buildTextContactPayload = (
+  field: TextEditableField,
+  value: string,
+): ContactUpdate => {
+  switch (field) {
+    case "currency":
+      return { currency: value || null };
+    case "displayName":
+      return { displayName: value };
+    case "firstName":
+      return { firstName: value || null };
+    case "lastName":
+      return { lastName: value || null };
+    case "middleName":
+      return { middleName: value || null };
+    case "notes":
+      return { notes: value || null };
+    case "organizationName":
+      return { organizationName: value || null };
+    case "prefix":
+      return { prefix: value || null };
+    case "registrationNumber":
+      return { registrationNumber: value || null };
+    case "suffix":
+      return { suffix: value || null };
+    case "taxId":
+      return { taxId: value || null };
+    default:
+      return field satisfies never;
+  }
 };

@@ -37,6 +37,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/components/menu";
 import { stellaToast } from "@stll/ui/components/toast";
+import { containedEventHandler } from "@stll/ui/hooks/use-contained-handler";
 import { cn } from "@stll/ui/lib/utils";
 
 import { DocumentIcon } from "@/components/document-icon";
@@ -1068,7 +1069,7 @@ const ColumnHeaderCell = ({
         "group/column relative flex min-w-0 items-center",
         align === "end" ? "justify-end" : "justify-start",
       )}
-      onContextMenu={handleContextMenu}
+      onContextMenu={containedEventHandler(handleContextMenu)}
       ref={containerRef}
     >
       <button
@@ -1607,7 +1608,7 @@ const FilesystemRow = ({
       <div
         className="group/row relative h-full"
         data-entity-row
-        onContextMenu={handleContextMenu}
+        onContextMenu={containedEventHandler(handleContextMenu)}
         ref={rowRef}
       >
         {isFolder ? (

@@ -27,6 +27,7 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { organizationOptions } from "@/lib/organization/queries";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -135,17 +136,17 @@ const RateTablesView = ({
       analytics.captureError(error);
     },
   });
+  type UpdateRateTableVars = {
+    workspaceId: string;
+    id: string;
+  } & NonEmptyPatch<{
+    name: string;
+    currency: string;
+    isDefault: boolean;
+  }>;
+
   const updateTable = useMutation({
-    mutationFn: async ({
-      workspaceId: ws,
-      ...body
-    }: {
-      workspaceId: string;
-      id: string;
-      name?: string;
-      currency?: string;
-      isDefault?: boolean;
-    }) => {
+    mutationFn: async ({ workspaceId: ws, ...body }: UpdateRateTableVars) => {
       const response = await api
         .rates({ workspaceId: toSafeId<"workspace">(ws) })
         .patch({

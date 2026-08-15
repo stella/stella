@@ -43,33 +43,40 @@ describe("workspace update cache invalidation", () => {
     ]);
   });
 
-  test("only name updates invalidate the current route metadata", async () => {
-    const { workspaceUpdateInvalidatesRoute } =
+  test("assigns every update kind its exact refresh scope", async () => {
+    const { workspaceUpdateRefreshScope } =
       await import("@/lib/workspaces/mutations");
 
-    expect([
-      workspaceUpdateInvalidatesRoute({
-        type: "name",
-        value: "Renamed matter",
-      }),
-      workspaceUpdateInvalidatesRoute({
+    expect({
+      clientId: workspaceUpdateRefreshScope({
         type: "clientId",
         value: "contact_test",
       }),
-      workspaceUpdateInvalidatesRoute({ type: "color", value: "purple" }),
-      workspaceUpdateInvalidatesRoute({
+      color: workspaceUpdateRefreshScope({ type: "color", value: "purple" }),
+      leadUserId: workspaceUpdateRefreshScope({
         type: "leadUserId",
         value: "user_test",
       }),
-      workspaceUpdateInvalidatesRoute({
+      name: workspaceUpdateRefreshScope({
+        type: "name",
+        value: "Renamed matter",
+      }),
+      promote: workspaceUpdateRefreshScope({
         type: "promote",
         value: { clientId: "contact_test" },
       }),
-      workspaceUpdateInvalidatesRoute({
+      reference: workspaceUpdateRefreshScope({
         type: "reference",
         value: "REF-42",
       }),
-    ]).toEqual([true, false, false, false, false, false]);
+    }).toEqual({
+      clientId: "query-cache",
+      color: "query-cache",
+      leadUserId: "query-cache",
+      name: "route-metadata",
+      promote: "query-cache",
+      reference: "query-cache",
+    });
   });
 
   test("maps every workspace update variant to its API body", async () => {

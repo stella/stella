@@ -147,6 +147,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-offset-pagination.fixture.ts", [
     "no-offset-pagination/no-offset-pagination",
   ]),
+  fixtureRuleOverride("no-optional-mutation-command.fixture.ts", [
+    "no-optional-mutation-command/no-optional-mutation-command",
+  ]),
   fixtureRuleOverride("no-physical-properties.fixture.ts", [
     "no-physical-properties/no-physical-properties",
   ]),
@@ -166,6 +169,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-raw-public-law-seo.fixture.ts", [
     "no-raw-public-law-seo/no-raw-public-law-seo",
+  ]),
+  fixtureRuleOverride("no-raw-router-invalidation.fixture.ts", [
+    "no-raw-router-invalidation/no-raw-router-invalidation",
   ]),
   fixtureRuleOverride("no-raw-user-id-schema.fixture.ts", [
     "no-raw-user-id-schema/no-raw-user-id-schema",
@@ -202,6 +208,10 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("require-router-select.fixture.ts", [
     "require-router-select/require-router-select",
+  ]),
+  fixtureRuleOverride("require-contained-handler.fixture.tsx", [
+    "require-contained-handler/no-portal-under-interactive-ancestor",
+    "require-contained-handler/require-contained-handler",
   ]),
   fixtureRuleOverride("require-safe-route-handlers.fixture.ts", [
     "require-safe-route-handlers/require-safe-route-handlers",
@@ -461,6 +471,7 @@ export default defineConfig({
     "no-partial-record-satisfies/no-partial-record-satisfies": "error",
     "no-raw-public-law-seo/no-raw-public-law-seo": "off",
     "public-case-law-db-boundary/public-case-law-db-boundary": "off",
+    "require-contained-handler/no-portal-under-interactive-ancestor": "error",
     "require-contained-handler/require-contained-handler": "error",
     "require-function-replacer/require-function-replacer": "error",
     "no-void": ["error", { allowAsStatement: true }],
@@ -673,6 +684,8 @@ export default defineConfig({
     "./.oxlint-plugins/require-loader-prefetch.ts",
     "./.oxlint-plugins/require-matter-affordance.ts",
     "./.oxlint-plugins/no-raw-route-query-client.ts",
+    "./.oxlint-plugins/no-raw-router-invalidation.ts",
+    "./.oxlint-plugins/no-optional-mutation-command.ts",
     "./.oxlint-plugins/no-beforeload-redirect.ts",
     "./.oxlint-plugins/require-safe-route-handlers.ts",
     "./.oxlint-plugins/no-inline-endpoint-in-routes.ts",
@@ -1672,6 +1685,8 @@ export default defineConfig({
           { allowedText: ["Anthropic", "Google AI", "OpenAI"] },
         ],
         "require-router-select/require-router-select": "error",
+        "no-optional-mutation-command/no-optional-mutation-command": "error",
+        "no-raw-router-invalidation/no-raw-router-invalidation": "error",
         "require-matter-affordance/require-matter-affordance": "error",
         "security-guards/no-unsanitized-href": "error",
         "stella-toast/stella-toast": "error",

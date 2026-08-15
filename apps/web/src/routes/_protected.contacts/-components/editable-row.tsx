@@ -7,10 +7,12 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useUpdateContact } from "@/lib/contacts/mutations";
+import type { ContactUpdate } from "@/lib/contacts/mutations";
 import { detached } from "@/lib/detached";
 import { invalidateContactCaches } from "@/routes/_protected.contacts/-components/contact-caches";
 import {
   buildNumericContactPayload,
+  buildTextContactPayload,
   EDITABLE_FIELD_POLICY,
   getEditableFieldInputAttributes,
   isNumericEditableField,
@@ -69,7 +71,7 @@ export const EditableRow = ({
         return;
       }
 
-      let payload: Record<string, unknown>;
+      let payload: ContactUpdate;
       if (isNumericEditableField(field)) {
         const result = buildNumericContactPayload(field, trimmed);
         if (result.status === "invalid") {
@@ -79,17 +81,15 @@ export const EditableRow = ({
           return;
         }
         payload = result.payload;
-      } else if (field === "displayName") {
-        if (!trimmed) {
+      } else {
+        if (field === "displayName" && !trimmed) {
           stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });
           return;
         }
-        payload = { displayName: trimmed };
-      } else {
-        payload = { [field]: trimmed || null };
+        payload = buildTextContactPayload(field, trimmed);
       }
 
       updateContact.mutate(

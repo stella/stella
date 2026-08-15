@@ -1,6 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 
 import { useAnalytics } from "@/lib/analytics/provider";
+import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import { sendTimeEntryMutation } from "@/lib/workspaces/time-entries-api";
 
@@ -46,17 +47,18 @@ export const useCreateTimeEntry = () => {
 type UpdateTimeEntryVars = {
   workspaceId: string;
   id: string;
-  dateWorked?: string;
-  timezoneId?: string;
-  durationMinutes?: number;
-  narrative?: string;
-  invoiceNarrative?: string | null;
-  billable?: boolean;
-  noCharge?: boolean;
-  workItemId?: string | null;
-  taskCode?: string | null;
-  activityCode?: string | null;
-};
+} & NonEmptyPatch<{
+  dateWorked: string;
+  timezoneId: string;
+  durationMinutes: number;
+  narrative: string;
+  invoiceNarrative: string | null;
+  billable: boolean;
+  noCharge: boolean;
+  workItemId: string | null;
+  taskCode: string | null;
+  activityCode: string | null;
+}>;
 
 export const useUpdateTimeEntry = () => {
   const analytics = useAnalytics();

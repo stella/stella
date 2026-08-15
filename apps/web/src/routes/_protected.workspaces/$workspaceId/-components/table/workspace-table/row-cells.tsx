@@ -14,7 +14,10 @@ import { useTranslations } from "use-intl";
 
 import { Checkbox } from "@stll/ui/components/checkbox";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
-import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
+import {
+  containedEventHandler,
+  containedHandler,
+} from "@stll/ui/hooks/use-contained-handler";
 import { cn } from "@stll/ui/lib/utils";
 
 import { renderDragPreview } from "@/components/drag-preview";
@@ -435,7 +438,7 @@ export const DraggableRow = ({
         editingEntityId={editingEntityId}
         entity={entity}
         isMutedByExpandedCell={isMutedByExpandedCell}
-        onContextMenu={handleContextMenu}
+        onRowContextMenu={handleContextMenu}
         onRename={onRename}
         onStartEditing={onStartEditing}
         onStopEditing={onStopEditing}
@@ -468,7 +471,7 @@ export const DraggableRow = ({
         key={row.id}
         // eslint-disable-next-line react/react-compiler -- containedHandler house pattern; rowRef is handed to the helper, not read for rendered output
         onClick={containedHandler(rowRef, handleRowClick)}
-        onContextMenu={handleContextMenu}
+        onContextMenu={containedEventHandler(handleContextMenu)}
         ref={setRowRef}
       >
         <DataRowCells
@@ -512,7 +515,7 @@ type FolderTableRowProps = {
   editingEntityId: string | null;
   entity: TableTreeNode;
   isMutedByExpandedCell: boolean;
-  onContextMenu: (event: React.MouseEvent) => void;
+  onRowContextMenu: (event: React.MouseEvent) => void;
   onRename: (entityId: string, newName: string) => void;
   onStartEditing: (entityId: string) => void;
   onStopEditing: () => void;
@@ -530,7 +533,7 @@ const FolderTableRow = ({
   editingEntityId,
   entity,
   isMutedByExpandedCell,
-  onContextMenu,
+  onRowContextMenu,
   onRename,
   onStartEditing,
   onStopEditing,
@@ -560,7 +563,7 @@ const FolderTableRow = ({
       data-index={virtualIndex}
       data-state={row_getIsSelected(row) ? "selected" : undefined}
       key={row.id}
-      onContextMenu={onContextMenu}
+      onContextMenu={containedEventHandler(onRowContextMenu)}
       ref={ref}
     >
       <WorkspaceGridCell

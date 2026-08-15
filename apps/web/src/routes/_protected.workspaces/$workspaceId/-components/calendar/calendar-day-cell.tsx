@@ -10,6 +10,7 @@ import {
   MenuPopup,
   MenuTrigger,
 } from "@stll/ui/components/menu";
+import { containedEventHandler } from "@stll/ui/hooks/use-contained-handler";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -121,7 +122,7 @@ export const CalendarDayCell = ({
         mode === "week" && "min-h-[300px]",
         isDropTarget && "bg-primary/10",
       )}
-      onContextMenu={handleContextMenu}
+      onContextMenu={containedEventHandler(handleContextMenu)}
     >
       {/* Current time indicator (week view, today only) */}
       {mode === "week" && day.isToday && <CurrentTimeIndicator />}

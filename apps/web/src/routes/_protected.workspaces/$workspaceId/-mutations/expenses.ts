@@ -5,6 +5,7 @@ import type { ExpenseCategory } from "@stll/api-contract";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
+import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
 
 type CreateExpenseVars = {
@@ -44,17 +45,18 @@ export const useCreateExpense = () => {
 type UpdateExpenseVars = {
   workspaceId: string;
   id: string;
-  dateIncurred?: string;
-  amount?: number;
-  currency?: string;
-  category?: ExpenseCategory;
-  description?: string;
-  invoiceDescription?: string | null;
-  billable?: boolean;
-  markup?: number;
-  matterId?: string;
-  status?: "draft" | "approved";
-};
+} & NonEmptyPatch<{
+  dateIncurred: string;
+  amount: number;
+  currency: string;
+  category: ExpenseCategory;
+  description: string;
+  invoiceDescription: string | null;
+  billable: boolean;
+  markup: number;
+  matterId: string;
+  status: "draft" | "approved";
+}>;
 
 export const useUpdateExpense = () => {
   const analytics = useAnalytics();

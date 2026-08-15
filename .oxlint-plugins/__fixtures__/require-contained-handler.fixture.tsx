@@ -8,7 +8,11 @@
 
 import type { RefObject, SyntheticEvent } from "react";
 
-import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
+import {
+  containedEventHandler,
+  containedHandler,
+} from "@stll/ui/hooks/use-contained-handler";
+import { PopoverPopup } from "@stll/ui/components/popover";
 
 const noop = (_event?: SyntheticEvent) => undefined;
 
@@ -65,6 +69,22 @@ export const FlagWrongCall = () => (
   />
 );
 
+export const FlagBareContextMenu = () => (
+  <button
+    type="button"
+    ref={buttonRef}
+    // oxlint-disable-next-line require-contained-handler/require-contained-handler -- fixture proves context-menu events are contained too
+    onContextMenu={noop}
+  />
+);
+
+export const FlagPortalUnderInteractiveAncestor = () => (
+  <button type="button">
+    {/* oxlint-disable-next-line require-contained-handler/no-portal-under-interactive-ancestor -- fixture proves portaled popups cannot live under interactive ancestors */}
+    <PopoverPopup>Popup</PopoverPopup>
+  </button>
+);
+
 // --- Cases the rule MUST NOT flag ---
 
 export const Wrapped = () => (
@@ -83,11 +103,26 @@ export const ConditionalWrapped = ({ inline }: { inline: boolean }) => (
   />
 );
 
+export const WrappedWithCurrentTarget = () => (
+  <button
+    type="button"
+    ref={buttonRef}
+    onContextMenu={containedEventHandler(noop)}
+  />
+);
+
 export const UndefinedHandler = () => (
   <button type="button" ref={buttonRef} onMouseDown={undefined} />
 );
 
 export const NoRef = () => <button type="button" onMouseDown={noop} />;
+
+export const PortalBesideInteractiveTrigger = () => (
+  <>
+    <button type="button">Open</button>
+    <PopoverPopup>Popup</PopoverPopup>
+  </>
+);
 
 export const NoWatchedHandler = () => (
   <button type="button" ref={buttonRef} onChange={noop} />

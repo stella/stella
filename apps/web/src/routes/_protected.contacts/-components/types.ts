@@ -1,4 +1,6 @@
+import type { ContactUpdateFields } from "@/lib/contacts/mutations";
 import type { contactOptions } from "@/lib/contacts/queries";
+import type { NonEmptyPatch } from "@/lib/mutation-command";
 
 export type ContactData = NonNullable<
   Awaited<ReturnType<NonNullable<ReturnType<typeof contactOptions>["queryFn"]>>>
@@ -35,11 +37,9 @@ export type ContactMetadata = {
   customFields?: ContactCustomField[];
 };
 
-export type ContactPatch = {
-  emails?: ContactEmail[] | null;
-  phones?: ContactPhone[] | null;
-  metadata?: ContactMetadata | null;
-};
+export type ContactPatch = NonEmptyPatch<
+  Pick<ContactUpdateFields, "emails" | "metadata" | "phones">
+>;
 
 export type PartyMatter = ContactData["partyMatters"][number];
 

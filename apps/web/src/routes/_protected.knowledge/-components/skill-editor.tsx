@@ -55,6 +55,7 @@ import { APIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { knowledgeKeys, skillDetailOptions } from "@/lib/knowledge/queries";
 import { catalogueKeys } from "@/lib/knowledge/queries/catalogue";
+import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
 
 import {
@@ -322,13 +323,15 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   // gallery with nothing else to click first.
   // Mutations
   const patchMetadata = useMutation({
-    mutationFn: async (payload: {
-      name?: string;
-      description?: string;
-      version?: string | null;
-      enabled?: boolean;
-      command?: string | null;
-    }) => {
+    mutationFn: async (
+      payload: NonEmptyPatch<{
+        name: string;
+        description: string;
+        version: string | null;
+        enabled: boolean;
+        command: string | null;
+      }>,
+    ) => {
       const response = await api
         .skills({ skillId: safeSkillId })
         .patch({ ...payload });

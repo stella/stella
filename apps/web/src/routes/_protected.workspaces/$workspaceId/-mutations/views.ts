@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
+import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   ViewLayout,
@@ -58,9 +59,10 @@ export const useCreateView = (workspaceId: string) => {
 
 type UpdateViewVars = {
   viewId: string;
-  name?: string;
-  layout?: ViewLayout;
-};
+} & NonEmptyPatch<{
+  name: string;
+  layout: ViewLayout;
+}>;
 
 export const useUpdateView = (workspaceId: string) => {
   const analytics = useAnalytics();

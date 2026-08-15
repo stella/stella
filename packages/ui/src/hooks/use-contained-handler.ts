@@ -20,7 +20,8 @@ import type * as React from "react";
  * directly inside the handler.
  *
  * The `require-contained-handler` oxlint rule enforces this on any JSX
- * element carrying both `ref={…}` and one of the watched handler props.
+ * element carrying both `ref={…}` and one of the watched handler props;
+ * `containedEventHandler` covers elements that do not otherwise need a ref.
  *
  * @example
  *   const barRef = useRef<HTMLDivElement>(null);
@@ -50,6 +51,25 @@ export const containedHandler =
       container !== null &&
       event.target instanceof Node &&
       !container.contains(event.target)
+    ) {
+      return;
+    }
+    handler(event);
+  };
+
+/**
+ * Contain a synchronous JSX handler to its own DOM subtree without a ref.
+ * Prefer this form when the element does not otherwise need a ref.
+ */
+export const containedEventHandler =
+  <E extends { currentTarget: unknown; target: unknown }>(
+    handler: (event: E) => void,
+  ) =>
+  (event: E): void => {
+    if (
+      event.currentTarget instanceof Node &&
+      event.target instanceof Node &&
+      !event.currentTarget.contains(event.target)
     ) {
       return;
     }
