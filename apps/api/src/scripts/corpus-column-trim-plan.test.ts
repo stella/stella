@@ -318,7 +318,43 @@ describe("parseColumnTrimArgs", () => {
       ["--after", ID.a, "--id-from", ID.b],
       ["--id-from", ID.c, "--id-to", ID.a],
       ["--after", ID.c, "--id-to", ID.a],
-      ["--id-from", ID.a, "--id-to", ID.a],
+      // `--after` is exclusive, so this spans nothing.
+      ["--after", ID.a, "--id-to", ID.a],
+    ]) {
+      expect(parseColumnTrimArgs(argv).type).toBe("invalid");
+    }
+  });
+
+  /**
+   * Both `--id-from` and `--id-to` are inclusive, so naming the same id
+   * twice is the one-row repair span a ranges file spells
+   * `{ "from": X, "to": X }`. The two spellings must agree.
+   */
+  test("accepts a single-id inclusive span", () => {
+    expect(parseColumnTrimArgs(["--id-from", ID.a, "--id-to", ID.a])).toEqual({
+      type: "parsed",
+      args: parsedArgs({ idFrom: ID.a, idTo: ID.a }),
+    });
+    expect(
+      columnTrimRanges({
+        args: parsedArgs({ idFrom: ID.a, idTo: ID.a }),
+        fileRanges: null,
+      }),
+    ).toEqual([{ lower: { type: "at-or-after", id: ID.a }, upper: ID.a }]);
+  });
+
+  /**
+   * No flag here takes a value beginning with `--`, so swallowing the next
+   * option token would silently change what the run does: `--ranges-file
+   * --dry-run` would consume the dry run and leave a mutating pass.
+   */
+  test("never consumes an option token as a flag's value", () => {
+    for (const argv of [
+      ["--ranges-file", "--dry-run"],
+      ["--limit", "--dry-run"],
+      ["--after", "--force"],
+      ["--id-from", "--dry-run"],
+      ["--id-to", "--force"],
     ]) {
       expect(parseColumnTrimArgs(argv).type).toBe("invalid");
     }
@@ -399,6 +435,19 @@ describe("parseColumnTrimRanges", () => {
     ]) {
       expect(parseColumnTrimRanges(raw).type).toBe("invalid");
     }
+  });
+
+  /**
+   * A key the sweep does not read must not look like it was honoured: an
+   * operator who writes a per-range cap should be told it does nothing,
+   * not watch the run ignore it and report full coverage.
+   */
+  test("refuses a range entry carrying a key the sweep does not read", () => {
+    expect(
+      parseColumnTrimRanges(
+        JSON.stringify([{ from: ID.a, to: ID.b, limit: 100 }]),
+      ).type,
+    ).toBe("invalid");
   });
 });
 

@@ -250,20 +250,34 @@ const outsideFetchCooldown = or(
  * cutover should revisit it, since a fully drained corpus would leave
  * the scan walking trimmed rows to conclude the queue is empty.
  */
+/**
+ * SQL for "object storage holds no document for this row".
+ *
+ * The text column cannot answer this on its own. Under canonical storage a
+ * stored document leaves the columns null by design, so every predicate
+ * that means "nothing is stored here" has to consult the durable corpus
+ * state as well, or it will read a corpus-served decision as empty work.
+ * Derived once and shared by the three predicates that ask it, so the
+ * queue's idea of pending cannot drift from the guards that protect a
+ * stored payload from being erased.
+ *
+ * A row whose corpus hash is row-specific but whose Postgres AST column is
+ * still present is a legacy empty-envelope copy, not a corpus-served
+ * document: a trimmed row has had every payload column nulled, so a
+ * surviving AST artifact marks the corpus object as a verbatim copy of a
+ * payload that carries no document.
+ */
+export const storesNoCorpusDocument = or(
+  isNull(caseLawDecisions.contentHash),
+  inArray(caseLawDecisions.contentHash, [...EMPTY_CORPUS_CONTENT_HASHES]),
+  isNotNull(caseLawDecisions.documentAst),
+);
+
 export const pendingDocumentPredicate = and(
   isNull(caseLawDecisions.redactedAt),
   isNull(caseLawDecisions.fulltext),
   isNotNull(caseLawDecisions.documentUrl),
-  or(
-    isNull(caseLawDecisions.contentHash),
-    inArray(caseLawDecisions.contentHash, [...EMPTY_CORPUS_CONTENT_HASHES]),
-    // A row whose corpus hash is row-specific but whose Postgres AST
-    // column is still present is a legacy empty-envelope copy, not a
-    // corpus-served document: a trimmed (corpus-served) row has had every
-    // payload column nulled, so a surviving AST artifact marks the corpus
-    // object as a verbatim copy of a payload that carries no document.
-    isNotNull(caseLawDecisions.documentAst),
-  ),
+  storesNoCorpusDocument,
 );
 
 /** Pending, asked for by a reader, and still within its retry budget. */
@@ -599,6 +613,11 @@ export const storeBackfilledDocument = async ({
     eq(caseLawDecisions.id, decision.id),
     isNull(caseLawDecisions.redactedAt),
     sql`coalesce(${caseLawDecisions.fulltext}, '') = ''`,
+    // The text column stops being the whole answer once a canonical store
+    // nulls it: without this, a store whose parse outlived its claim would
+    // read a decision another attempt already filled as still empty and
+    // overwrite it.
+    storesNoCorpusDocument,
     claimedSourceHash === undefined
       ? undefined
       : sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${claimedSourceHash}`,
@@ -797,7 +816,12 @@ export const claimDocumentFetch = async (
  *
  * Conditional on the row still being empty, so a fetch that came back
  * with nothing cannot erase a document another fetch of the same
- * decision has already stored.
+ * decision has already stored. Empty means empty everywhere: this write
+ * clears the corpus pointers along with the text, and a parse that
+ * outlives its 120s claim can land after a retry has already stored the
+ * document, so under canonical storage — where a stored document leaves
+ * the text column null — the corpus state is the only thing standing
+ * between a late failure and an unreachable payload.
  */
 export const markDocumentUnavailable = async (
   decisionId: SafeId<"caseLawDecision">,
@@ -819,6 +843,7 @@ export const markDocumentUnavailable = async (
           eq(caseLawDecisions.id, decisionId),
           isNull(caseLawDecisions.redactedAt),
           isNull(caseLawDecisions.fulltext),
+          storesNoCorpusDocument,
         ),
       );
   });

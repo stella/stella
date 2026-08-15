@@ -16,7 +16,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -36,7 +36,11 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
 import type { WriteCorpusResult } from "@/api/lib/legal-search/corpus-storage";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
-import { storeBackfilledDocument } from "@/api/lib/legal-search/sk-document-backfill";
+import {
+  markDocumentUnavailable,
+  pendingDocumentPredicate,
+  storeBackfilledDocument,
+} from "@/api/lib/legal-search/sk-document-backfill";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -377,6 +381,121 @@ if (!databaseUrl || !runPostgresTests) {
         astS3Key: NEW_KEYS.astKey,
         contentHash: NEW_CONTENT_HASH,
       });
+    });
+
+    /**
+     * A PDF parse is CPU-bound and uncancellable, so an attempt can outlive
+     * its 120s claim: a retry stores the document while the first attempt
+     * is still running, then the first attempt finishes empty and marks the
+     * decision unavailable. That write clears the corpus pointers, and
+     * under canonical storage the stored document no longer shows in the
+     * text column, so a fence that reads only `fulltext` would let a late
+     * failure orphan a confirmed payload.
+     */
+    test("a late unavailable marking cannot erase a stored canonical payload", async () => {
+      const caseNumber = `corpus-late-unavailable-${suffix}`;
+      const id = await insertDecision({
+        caseNumber,
+        mirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+      });
+
+      await storeBackfilledDocument({
+        decision: decisionFor(id, caseNumber),
+        document: parsedDocument,
+        mode: "canonical",
+        scopedDb,
+        writeCorpus: async () => ({
+          ...NEW_KEYS,
+          contentHash: NEW_CONTENT_HASH,
+        }),
+      });
+
+      // The attempt that was overtaken, finishing with nothing to store.
+      await markDocumentUnavailable(id, scopedDb);
+
+      expect(
+        await db.query.caseLawDecisions.findFirst({
+          where: { id: { eq: id } },
+          columns: {
+            fulltext: true,
+            textS3Key: true,
+            normalizedS3Key: true,
+            astS3Key: true,
+            contentHash: true,
+          },
+        }),
+      ).toEqual({
+        fulltext: null,
+        textS3Key: NEW_KEYS.textKey,
+        normalizedS3Key: NEW_KEYS.sectionsKey,
+        astS3Key: NEW_KEYS.astKey,
+        contentHash: NEW_CONTENT_HASH,
+      });
+    });
+
+    /**
+     * The same fence from the other side: a store that lands after another
+     * attempt already filled the decision is superseded, not applied.
+     */
+    test("a late store cannot overwrite a stored canonical payload", async () => {
+      const caseNumber = `corpus-late-store-${suffix}`;
+      const id = await insertDecision({
+        caseNumber,
+        mirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+      });
+      const store = async () =>
+        await storeBackfilledDocument({
+          decision: decisionFor(id, caseNumber),
+          document: parsedDocument,
+          mode: "canonical",
+          scopedDb,
+          writeCorpus: async () => ({
+            ...NEW_KEYS,
+            contentHash: NEW_CONTENT_HASH,
+          }),
+        });
+
+      expect(await store()).toBe("stored");
+      expect(await store()).toBe("superseded");
+    });
+
+    /**
+     * The queue must not hand a corpus-served decision back as pending
+     * work: under canonical its text column is null, which is the shape
+     * the queue reads as "never fetched".
+     */
+    test("a stored canonical decision leaves the pending queue", async () => {
+      const caseNumber = `corpus-queue-exit-${suffix}`;
+      const id = await insertDecision({
+        caseNumber,
+        mirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+      });
+
+      const stillPending = async () =>
+        Boolean(
+          (
+            await db
+              .select({ id: caseLawDecisions.id })
+              .from(caseLawDecisions)
+              .where(and(eq(caseLawDecisions.id, id), pendingDocumentPredicate))
+              .limit(1)
+          ).at(0),
+        );
+
+      expect(await stillPending()).toBe(true);
+
+      await storeBackfilledDocument({
+        decision: decisionFor(id, caseNumber),
+        document: parsedDocument,
+        mode: "canonical",
+        scopedDb,
+        writeCorpus: async () => ({
+          ...NEW_KEYS,
+          contentHash: NEW_CONTENT_HASH,
+        }),
+      });
+
+      expect(await stillPending()).toBe(false);
     });
 
     test("dual-write storage keeps the columns alongside the objects", async () => {

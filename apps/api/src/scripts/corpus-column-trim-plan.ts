@@ -1,10 +1,11 @@
+import * as v from "valibot";
+
 import {
   namesEmptyCorpusPayload,
   payloadCarriesDocument,
 } from "@/api/handlers/case-law/stored-payload";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
-import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * Decision logic for the corpus column trim (`corpus-column-trim.ts`),
@@ -284,9 +285,15 @@ const columnTrimArgConflict = ({
   if (after !== null && idFrom !== null) {
     return "--after and --id-from are both lower bounds; pass one";
   }
-  const lower = after ?? idFrom;
-  if (lower !== null && idTo !== null && lower >= idTo) {
-    return "the lower bound is not below --id-to, so the range is empty";
+  // The two lower bounds compare differently because they mean different
+  // things: `--after` is exclusive, so an id equal to `--id-to` spans
+  // nothing, while `--id-from` is inclusive, so `--id-from X --id-to X` is
+  // the single-row repair a ranges file spells `{ "from": X, "to": X }`.
+  if (after !== null && idTo !== null && after >= idTo) {
+    return "--after is at or above --id-to, so the range is empty";
+  }
+  if (idFrom !== null && idTo !== null && idFrom > idTo) {
+    return "--id-from is above --id-to, so the range is empty";
   }
   return null;
 };
@@ -316,8 +323,15 @@ export const parseColumnTrimArgs = (
       force = true;
       continue;
     }
+    // Every remaining flag takes a value, and none of them takes one that
+    // begins with `--`. Swallowing the next option token as a value would
+    // change what the run does without saying so: `--ranges-file
+    // --dry-run` would consume the dry run and leave a mutating pass. Read
+    // the value once, here, so a flag added later cannot miss the check.
+    const next = argv[++i];
+    const value = next?.startsWith("--") === true ? undefined : next;
     if (argument === "--limit") {
-      const parsed = parseLimit(argv[++i]);
+      const parsed = parseLimit(value);
       if (parsed === null) {
         return {
           type: "invalid",
@@ -328,16 +342,14 @@ export const parseColumnTrimArgs = (
       continue;
     }
     if (argument === "--ranges-file") {
-      const raw = argv[++i];
-      if (raw === undefined || raw === "") {
+      if (value === undefined || value === "") {
         return { type: "invalid", message: "--ranges-file requires a path" };
       }
-      rangesFile = raw;
+      rangesFile = value;
       continue;
     }
     if (ID_FLAGS.has(argument)) {
-      const raw = argv[++i];
-      if (!isDecisionId(raw)) {
+      if (!isDecisionId(value)) {
         return {
           type: "invalid",
           message: `${argument} requires a decision id (UUID)`,
@@ -345,13 +357,13 @@ export const parseColumnTrimArgs = (
       }
       switch (argument) {
         case "--id-from":
-          idFrom = raw;
+          idFrom = value;
           break;
         case "--id-to":
-          idTo = raw;
+          idTo = value;
           break;
         default:
-          after = raw;
+          after = value;
       }
       continue;
     }
@@ -368,6 +380,24 @@ export const parseColumnTrimArgs = (
 export type ParsedColumnTrimRanges =
   | { type: "parsed"; ranges: ColumnTrimRangeSpec[] }
   | { type: "invalid"; message: string };
+
+const decisionIdSchema = v.pipe(
+  v.string("must be a decision id (UUID)"),
+  v.regex(UUID, "must be a lowercase decision id (UUID)"),
+);
+
+/**
+ * Strict, so a key the run does not read cannot look like it was honoured:
+ * an operator who writes a per-range `"limit"` should be told it does
+ * nothing rather than watch the sweep ignore it.
+ */
+const columnTrimRangesSchema = v.pipe(
+  v.array(
+    v.strictObject({ from: decisionIdSchema, to: decisionIdSchema }),
+    "must be an array of ranges",
+  ),
+  v.minLength(1, "must name at least one range"),
+);
 
 /**
  * Read the `--ranges-file` payload.
@@ -392,28 +422,17 @@ export const parseColumnTrimRanges = (raw: string): ParsedColumnTrimRanges => {
     // JSON.parse has no non-throwing form.
     return { type: "invalid", message: "--ranges-file must contain JSON" };
   }
-  if (!Array.isArray(decoded) || decoded.length === 0) {
+
+  const shape = v.safeParse(columnTrimRangesSchema, decoded);
+  if (!shape.success) {
     return {
       type: "invalid",
-      message: "--ranges-file must contain a non-empty JSON array",
+      message: `--ranges-file must be a non-empty array of { "from": ID, "to": ID }: ${shape.issues[0].message}`,
     };
   }
 
   const ranges: ColumnTrimRangeSpec[] = [];
-  for (const [index, entry] of decoded.entries()) {
-    if (!isRecord(entry)) {
-      return {
-        type: "invalid",
-        message: `--ranges-file[${index}] must be an object`,
-      };
-    }
-    const { from, to } = entry;
-    if (!isDecisionId(from) || !isDecisionId(to)) {
-      return {
-        type: "invalid",
-        message: `--ranges-file[${index}] needs "from" and "to" decision ids (UUID)`,
-      };
-    }
+  for (const [index, { from, to }] of shape.output.entries()) {
     if (from > to) {
       return {
         type: "invalid",

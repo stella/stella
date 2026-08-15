@@ -384,16 +384,31 @@ const rangeFilter = ({ lower, upper }: ColumnTrimRange): SQL | undefined => {
 const rangeLabel = ({ lower, upper }: ColumnTrimRange): string =>
   `from=${lower.type === "unbounded" ? "start" : lower.id} to=${upper ?? "end"}`;
 
+/**
+ * Why a range's walk stopped. A range that ran out of candidates is
+ * covered; one the scan cap cut short is not, and the two must not print
+ * the same word: an operator reading `done` takes the span as repaired and
+ * moves on, and the ranges behind it were never queried at all.
+ */
+const RANGE_OUTCOMES = ["exhausted", "capped"] as const;
+type RangeOutcome = (typeof RANGE_OUTCOMES)[number];
+
+/** Ranges the scan cap stopped the sweep before reaching. */
+let unwalkedRanges = 0;
+let sweepOutcome: RangeOutcome = "exhausted";
+
 for (const [index, range] of ranges.entries()) {
   const position = `range=${index + 1}/${ranges.length}`;
   const rangeStart = { trimmed, skipped, failed };
   // The cursor rides on every progress line, so a supervisor that lost a
   // run can resume this range from the last id it saw.
   let lastId: SafeId<"caseLawDecision"> | null = null;
+  let outcome: RangeOutcome = "exhausted";
 
   while (true) {
     const remaining = limit === null ? BATCH_SIZE : limit - scanned;
     if (remaining <= 0) {
+      outcome = "capped";
       break;
     }
 
@@ -429,8 +444,15 @@ for (const [index, range] of ranges.entries()) {
   }
 
   console.log(
-    `  ${position} done ${rangeLabel(range)} trimmed=${trimmed - rangeStart.trimmed} skipped=${skipped - rangeStart.skipped} failed=${failed - rangeStart.failed}`,
+    `  ${position} ${outcome === "exhausted" ? "done" : "capped"} ${rangeLabel(range)} trimmed=${trimmed - rangeStart.trimmed} skipped=${skipped - rangeStart.skipped} failed=${failed - rangeStart.failed} cursor=${lastId ?? "none"}`,
   );
+
+  if (outcome === "capped") {
+    // Walking on would print `done` against ranges this run never queried.
+    sweepOutcome = "capped";
+    unwalkedRanges = ranges.length - index - 1;
+    break;
+  }
 }
 
 // A failed row sits behind the published cursor, so a supervisor resuming
@@ -458,8 +480,13 @@ if (failedIds.length > 0) {
   }
 }
 
+// The scan cap is an operator's choice, not a failure, but the summary has
+// to say the sweep is partial: "Done" against an unfinished range list is
+// the one line most likely to be read on its own.
 console.log(
-  `Done. Trimmed ${trimmed} decisions, skipped ${skipped}, ${failed} failed.`,
+  sweepOutcome === "exhausted"
+    ? `Done. Trimmed ${trimmed} decisions, skipped ${skipped}, ${failed} failed.`
+    : `Stopped at --limit. Trimmed ${trimmed} decisions, skipped ${skipped}, ${failed} failed; ${unwalkedRanges} range(s) not walked. Re-run to continue.`,
 );
 
 // Non-zero on partial failure so a caller can tell an incomplete pass from
