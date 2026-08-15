@@ -1,7 +1,7 @@
 import type * as React from "react";
 
 type ContainmentRoot = {
-  contains(target: Node): boolean;
+  contains: (target: Node) => boolean;
 };
 
 /**
