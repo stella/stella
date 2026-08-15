@@ -206,8 +206,30 @@ test("every shadow-event attribute survives the log sanitizer", () => {
     expandedLeaves: 2,
     language: "cs",
     reach: "expanded",
+  } as const);
+  expect(sanitizeLogAttributes(attributes)).toEqual(attributes);
+});
+
+// Every disposition must survive the sanitizer, not just the happy one: a
+// reach value the sanitizer dropped would erase exactly the traffic the
+// rollout is trying to measure.
+test.each([
+  "dictionary_inert",
+  "expanded",
+  "no_dictionary",
+  "unsupported_jurisdiction",
+] as const)("the %p disposition survives the log sanitizer", (reach) => {
+  const attributes = shadowExpansionAttributes({
+    baseLeaves: 2,
+    countryScoped: reach !== "unsupported_jurisdiction",
+    expandedLeaves: reach === "expanded" ? 5 : 2,
+    language: reach === "unsupported_jurisdiction" ? null : "cs",
+    reach,
   });
   expect(sanitizeLogAttributes(attributes)).toEqual(attributes);
+  expect(attributes["reach"]).toBe(reach);
+  // `addedLeaves` is derived, never passed in, so it cannot disagree.
+  expect(attributes["addedLeaves"]).toBe(reach === "expanded" ? 3 : 0);
 });
 
 // The event measures the rewrite; it must not carry what the reader typed. A
@@ -220,7 +242,7 @@ test("the shadow event carries no query text", () => {
     expandedLeaves: 9,
     language: "cs",
     reach: "expanded",
-  });
+  } as const);
   for (const value of Object.values(attributes)) {
     expect(typeof value === "string" ? value : "").not.toContain('"');
   }

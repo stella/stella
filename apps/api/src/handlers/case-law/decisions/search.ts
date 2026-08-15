@@ -461,6 +461,7 @@ const resolveCorpusIndexQuery = async (
     build: (expand) => buildCorpusIndexQuery(body, expand),
     jurisdiction: body.country,
     mode: envBase.QUERY_EXPANSION_MODE,
+    text: body.query,
   });
 
 const extractCorpusSnippet = (

@@ -23,7 +23,11 @@
 import { Result } from "better-result";
 
 import { zstdDecompressToStringBounded } from "@/api/lib/compression";
-import type { CorpusTermExpander } from "@/api/lib/legal-search/corpus-query";
+import { detached } from "@/api/lib/detached";
+import {
+  corpusFreeTextClause,
+  type CorpusTermExpander,
+} from "@/api/lib/legal-search/corpus-query";
 import {
   foldExpansionKey,
   isMorphologyDictionaryContentHash,
@@ -38,7 +42,7 @@ import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem"
 import type { QueryExpansionMode } from "@/api/lib/legal-search/query-expansion-mode";
 import type { LoggerAttributes } from "@/api/lib/observability/logger";
 import { logger } from "@/api/lib/observability/logger";
-import { readCorpusS3Bytes } from "@/api/lib/s3";
+import { readCorpusS3BytesBounded } from "@/api/lib/s3";
 
 /**
  * Jurisdictions the corpus index serves, and the language whose dictionary
@@ -135,6 +139,9 @@ const DICTIONARY_UNAVAILABLE_TTL_MS = 60_000;
  */
 const DICTIONARY_REFRESH_TTL_MS = 15 * 60_000;
 
+/** A pointer holds one sha256 hex string; anything larger is not a pointer. */
+const POINTER_MAX_BYTES = 1024;
+
 /** Structured events; swept for, so spelled once. */
 const DICTIONARY_UNAVAILABLE =
   "case_law.search.expansion_dictionary_unavailable";
@@ -169,19 +176,24 @@ const readDictionaryPayload = async (
   language: MorphologyLanguage,
 ): Promise<DictionaryPayload> => {
   const deadline = AbortSignal.timeout(DICTIONARY_RESOLVE_TIMEOUT_MS);
-  const pointer = await readCorpusS3Bytes(
-    morphologyDictionaryPointerKey(language),
-    deadline,
-  );
+  const pointer = await readCorpusS3BytesBounded({
+    key: morphologyDictionaryPointerKey(language),
+    maxBytes: POINTER_MAX_BYTES,
+    signal: deadline,
+  });
   const contentHash = new TextDecoder().decode(pointer).trim();
   if (!isMorphologyDictionaryContentHash(contentHash)) {
     return { reason: "malformed_pointer", status: "rejected" };
   }
 
-  const compressed = await readCorpusS3Bytes(
-    morphologyDictionaryKey(language, contentHash),
-    deadline,
-  );
+  // Bounded on the compressed transfer, not only on what it decodes to: the
+  // decompression ceiling below would otherwise run after the whole body was
+  // already resident.
+  const compressed = await readCorpusS3BytesBounded({
+    key: morphologyDictionaryKey(language, contentHash),
+    maxBytes: MORPHOLOGY_DICTIONARY_MAX_BYTES,
+    signal: deadline,
+  });
   const payload = await zstdDecompressToStringBounded(
     compressed,
     MORPHOLOGY_DICTIONARY_MAX_BYTES,
@@ -266,6 +278,42 @@ const lastLoaded = new Map<MorphologyLanguage, ReadonlyMap<string, string>>();
  * expansion because object storage blipped would be a recall regression the
  * reader sees, where serving a slightly stale dictionary is not.
  */
+// `async` only to satisfy the promise-returning convention; the body has no
+// await, so the cache entry below is installed synchronously by the caller's
+// own turn — which is what makes concurrent callers share this one read.
+const beginRefresh = async (
+  language: MorphologyLanguage,
+): Promise<DictionaryLoad> => {
+  const load = (async (): Promise<DictionaryLoad> => {
+    const result = await loadDictionary(language);
+    if (result.status === "loaded") {
+      lastLoaded.set(language, result.entries);
+      return result;
+    }
+    const previous = lastLoaded.get(language);
+    if (previous !== undefined) {
+      return { entries: previous, status: "loaded" };
+    }
+    // Nothing to serve at all: retry on the fast cycle rather than the slow
+    // one. Re-read the entry rather than closing over the promise being built.
+    const entry = cache.get(language);
+    if (entry !== undefined) {
+      cache.set(language, {
+        load: entry.load,
+        expiresAt: Date.now() + DICTIONARY_UNAVAILABLE_TTL_MS,
+      });
+    }
+    return result;
+  })();
+
+  // Set before anyone awaits, so concurrent callers share this one read.
+  cache.set(language, {
+    load,
+    expiresAt: Date.now() + DICTIONARY_REFRESH_TTL_MS,
+  });
+  return load;
+};
+
 const dictionaryFor = async (
   language: MorphologyLanguage,
 ): Promise<DictionaryLoad> => {
@@ -274,32 +322,20 @@ const dictionaryFor = async (
     return await cached.load;
   }
 
-  const load = (async (): Promise<DictionaryLoad> => {
-    const result = await loadDictionary(language);
-    if (result.status === "loaded") {
-      lastLoaded.set(language, result.entries);
-      return result;
-    }
-    const previous = lastLoaded.get(language);
-    return previous === undefined
-      ? result
-      : { entries: previous, status: "loaded" };
-  })();
-
-  // Deduplicates concurrent callers while the read is in flight; corrected to
-  // the retry window below if it turns out there is nothing to serve.
-  cache.set(language, {
-    load,
-    expiresAt: Date.now() + DICTIONARY_REFRESH_TTL_MS,
-  });
-  const result = await load;
-  if (result.status === "unavailable") {
-    cache.set(language, {
-      load,
-      expiresAt: Date.now() + DICTIONARY_UNAVAILABLE_TTL_MS,
-    });
+  const refresh = beginRefresh(language);
+  const previous = lastLoaded.get(language);
+  if (previous === undefined) {
+    // Cold: there is nothing to answer with, so this caller waits for the read.
+    return await refresh;
   }
-  return result;
+
+  // Warm: answer from the payload already in memory and let the refresh finish
+  // behind the request. Awaiting here would make every search that arrives
+  // during a refresh window inherit the read's latency — up to the full resolve
+  // deadline when object storage is slow — which is exactly the stall the
+  // fallback exists to prevent.
+  detached(refresh, "legal-search.expansion-dictionary-refresh");
+  return { entries: previous, status: "loaded" };
 };
 
 /**
@@ -397,13 +433,27 @@ type ShadowExpansionLog = {
    * or the ratio would be one by construction.
    */
   countryScoped: boolean;
-  /** Quoted leaves the expanded query carries; equals `baseLeaves` when inert. */
+  /** Free-text leaves after expansion; equals `baseLeaves` when nothing fired. */
   expandedLeaves: number;
   language: MorphologyLanguage | null;
-  /** Quoted leaves before expansion: one per token the reader typed. */
+  /**
+   * Free-text leaves before expansion: one per token the reader typed. Counted
+   * on the free-text clause alone, never on the assembled query, whose filter
+   * clauses (`court:"…"`, `language:"…"`, a date range) are quoted leaves the
+   * reader did not type and would dilute the multiplier this measures.
+   */
   baseLeaves: number;
-  /** Why this request expanded nothing, or "expanded" when it did. */
-  reach: "expanded" | "no_dictionary" | "unsupported_jurisdiction";
+  /**
+   * What actually happened, not what was available. `expanded` means leaves
+   * were added; a loaded dictionary that matched no term, lost every form to
+   * the guards, or ran out of budget reports `dictionary_inert`, so grouping
+   * by this field cannot overstate how often expansion fires.
+   */
+  reach:
+    | "dictionary_inert"
+    | "expanded"
+    | "no_dictionary"
+    | "unsupported_jurisdiction";
 };
 
 /**
@@ -473,11 +523,23 @@ const countLeaves = (clause: string): number => {
   return leaves;
 };
 
+/**
+ * Leaves the reader's own text contributes, with or without expansion. Built
+ * from the free-text clause rather than measured on the assembled query, so
+ * filter clauses never enter the count.
+ */
+const freeTextLeaves = (text: string, expand?: CorpusTermExpander): number => {
+  const clause = corpusFreeTextClause(text, expand);
+  return clause === null ? 0 : countLeaves(clause);
+};
+
 type ResolveExpandedQueryOptions = {
   /** Assemble the clause, with the expander when one is supplied. */
   build: (expand?: CorpusTermExpander) => string | null;
   jurisdiction: string | undefined;
   mode: QueryExpansionMode;
+  /** The reader's free text, for metrics that must exclude filter clauses. */
+  text: string;
 };
 
 /**
@@ -500,6 +562,7 @@ export const resolveExpandedCorpusQuery = async ({
   build,
   jurisdiction,
   mode,
+  text,
 }: ResolveExpandedQueryOptions): Promise<string | null> => {
   const baseQuery = build();
   if (mode === "off" || baseQuery === null) {
@@ -515,7 +578,7 @@ export const resolveExpandedCorpusQuery = async ({
   // would only ever describe the traffic expansion already covers.
   if (expand === null) {
     if (mode === "shadow") {
-      const baseLeaves = countLeaves(baseQuery);
+      const baseLeaves = freeTextLeaves(text);
       logShadowExpansion({
         baseLeaves,
         countryScoped,
@@ -539,12 +602,16 @@ export const resolveExpandedCorpusQuery = async ({
       return expandedQuery;
     }
     case "shadow": {
+      const baseLeaves = freeTextLeaves(text);
+      const expandedLeaves = freeTextLeaves(text, expand);
       logShadowExpansion({
-        baseLeaves: countLeaves(baseQuery),
+        baseLeaves,
         countryScoped,
-        expandedLeaves: countLeaves(expandedQuery),
+        expandedLeaves,
         language,
-        reach: "expanded",
+        // A dictionary that loaded but matched nothing, lost every form to the
+        // guards, or ran out of budget did not expand this query.
+        reach: expandedLeaves > baseLeaves ? "expanded" : "dictionary_inert",
       });
       return baseQuery;
     }

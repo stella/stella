@@ -100,6 +100,7 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
       ),
     jurisdiction: query.jurisdiction,
     mode: envBase.QUERY_EXPANSION_MODE,
+    text: query.query,
   });
   if (engineQuery === null) {
     return { hits: [], facets: null, nextCursor: null, limit };
