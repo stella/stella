@@ -1,6 +1,9 @@
+import type { Result } from "better-result";
+
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { SafeId } from "@/api/lib/branded-types";
+import type { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-family";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import type { FacetBucket } from "@/api/lib/search/types";
@@ -92,6 +95,27 @@ export type LegalDocumentContext = {
 };
 
 /**
+ * Facets for the *unsearched* browse page. Separate from `LegalSearchFacets`
+ * because it answers a different question: those describe one result set, these
+ * describe the whole corpus, so they are computed without a text query and are
+ * cacheable for minutes.
+ */
+export type LegalBrowseFacetsQuery = {
+  /** Document family to facet; selects the index family. Default case_law. */
+  documentFamily?: CorpusFamily | undefined;
+  /** Maps from the decision's `country`; scopes every facet to it. */
+  jurisdiction?: string | undefined;
+  /** Maximum buckets per facet. */
+  limit: number;
+};
+
+export type LegalBrowseFacets = {
+  country: FacetBucket[];
+  court: FacetBucket[];
+  year: FacetBucket[];
+};
+
+/**
  * Read-side abstraction the app calls for legal-corpus search. Indexing,
  * deletion, and redaction are NOT here: like the shipped case-law FTS,
  * those are daemon-loop / dedicated-module concerns (search-index.ts,
@@ -99,6 +123,14 @@ export type LegalDocumentContext = {
  */
 export type LegalSearchProvider = {
   search: (query: LegalSearchQuery) => Promise<LegalSearchResult>;
+  /**
+   * Corpus-wide facet counts for the browse page. Returns a Result rather
+   * than throwing: facets are navigational, and the caller degrades to an
+   * empty set instead of failing the page.
+   */
+  browseFacets: (
+    query: LegalBrowseFacetsQuery,
+  ) => Promise<Result<LegalBrowseFacets, LegalBrowseFacetsError>>;
   /** Canonical text/AST for the AI reader; served from object storage. */
   getDocumentContext: (
     decisionId: SafeId<"caseLawDecision">,

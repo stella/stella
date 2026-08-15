@@ -22,6 +22,12 @@ const DEFERRED_DOCUMENT_FILE =
   "apps/api/src/handlers/case-law/decisions/get-deferred-document.ts";
 const FACETS_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/facets.ts";
+const PG_FTS_FACETS_FILE =
+  "apps/api/src/lib/legal-search/pg-fts-browse-facets.ts";
+const CORPUS_INDEX_FACETS_FILE =
+  "apps/api/src/lib/legal-search/corpus-index-facets.ts";
+const CORPUS_INDEX_PROJECTION_FILE =
+  "apps/api/src/handlers/case-law/corpus-index.ts";
 const SEARCH_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/search.ts";
 const SEARCH_DECISIONS_SCHEMA_FILE =
@@ -42,6 +48,11 @@ const readDecisionSource = async () => await readSource(READ_DECISION_FILE);
 const readDeferredDocumentSource = async () =>
   await readSource(DEFERRED_DOCUMENT_FILE);
 const readFacetsSource = async () => await readSource(FACETS_DECISIONS_FILE);
+const readPgFtsFacetsSource = async () => await readSource(PG_FTS_FACETS_FILE);
+const readCorpusIndexFacetsSource = async () =>
+  await readSource(CORPUS_INDEX_FACETS_FILE);
+const readCorpusIndexProjectionSource = async () =>
+  await readSource(CORPUS_INDEX_PROJECTION_FILE);
 const readSearchSource = async () => await readSource(SEARCH_DECISIONS_FILE);
 const readSearchSchemaSource = async () =>
   await readSource(SEARCH_DECISIONS_SCHEMA_FILE);
@@ -191,16 +202,28 @@ describe("public case-law route boundary", () => {
   });
 
   test("public facets payload is aggregate public data only", async () => {
-    const source = await readFacetsSource();
+    // Facets are provider-dispatched, so the invariant has to hold on the
+    // handler and on both implementations behind it.
+    const [handlerSource, pgFtsSource, corpusIndexSource] = await Promise.all([
+      readFacetsSource(),
+      readPgFtsFacetsSource(),
+      readCorpusIndexFacetsSource(),
+    ]);
 
-    expect(source).not.toContain("analysis");
-    expect(source).not.toContain("workspace");
-    expect(source).not.toContain("organization");
-    expect(source).not.toContain("matter");
-    expect(source).toContain("caseLawDecisions.country");
-    expect(source).toContain("caseLawDecisions.court");
-    expect(source).toContain("caseLawDecisions.decisionDate");
-    expect(source).toContain("LIMITS.caseLawFacetLimit");
+    for (const source of [handlerSource, pgFtsSource, corpusIndexSource]) {
+      expect(source).not.toContain("analysis");
+      expect(source).not.toContain("workspace");
+      expect(source).not.toContain("organization");
+      expect(source).not.toContain("matter");
+    }
+
+    expect(handlerSource).toContain("LIMITS.caseLawFacetLimit");
+    expect(pgFtsSource).toContain("caseLawDecisions.country");
+    expect(pgFtsSource).toContain("caseLawDecisions.court");
+    expect(pgFtsSource).toContain("caseLawDecisions.decisionDate");
+    expect(corpusIndexSource).toContain('field: "jurisdiction"');
+    expect(corpusIndexSource).toContain('field: "court"');
+    expect(corpusIndexSource).toContain('field: "year"');
   });
 
   test("public search payload is aggregate public data only", async () => {
@@ -284,14 +307,21 @@ describe("public case-law route boundary", () => {
   test("every public decision surface enforces the redistribution gate", async () => {
     const listSource = await readListSource();
     const decisionSource = await readDecisionSource();
-    const facetsSource = await readFacetsSource();
+    const pgFtsFacetsSource = await readPgFtsFacetsSource();
+    const corpusIndexProjectionSource = await readCorpusIndexProjectionSource();
     const searchSource = await readSearchSource();
     const sitemapSource = await readSitemapSource();
 
     expect(listSource).toContain("redistributableCaseLawSource");
     expect(decisionSource).toContain("redistributableCaseLawSource");
     expect(decisionSource).toContain("isRedistributable");
-    expect(facetsSource).toContain("redistributableCaseLawSource");
+    expect(pgFtsFacetsSource).toContain("redistributableCaseLawSource");
+    // The corpus-index facets aggregate the index rather than the table, so
+    // their gate is the projection's: only redistributable decisions are ever
+    // indexed, which is what makes counting the index safe to serve publicly.
+    expect(corpusIndexProjectionSource).toContain(
+      "redistributableCaseLawSource",
+    );
     expect(searchSource).toContain("redistributableSourceJoin");
     expect(searchSource).toContain("redistributableCaseLawSource");
     expect(sitemapSource).toContain("redistributableCaseLawSource");
