@@ -16,6 +16,7 @@ import {
   corpusStorageInvariantViolation,
   resolveCorpusStorageMode,
 } from "@/api/lib/corpus-storage-mode";
+import { QUERY_EXPANSION_MODES } from "@/api/lib/legal-search/query-expansion-mode";
 import { isUsableStaticCredential } from "@/api/lib/s3-credentials";
 import { isTlsOrLoopbackUrl } from "@/api/lib/secure-service-url";
 
@@ -182,6 +183,11 @@ export const envBaseServerSchema = {
     min: 1,
     max: 32,
   }),
+  // Morphological query expansion for case-law corpus-index searches.
+  // `off` is byte-identical to the pre-expansion query builder and fetches
+  // no dictionary; `shadow` logs the expanded query beside the unexpanded
+  // one it still executes; `on` executes the expanded query.
+  QUERY_EXPANSION_MODE: v.optional(v.picklist(QUERY_EXPANSION_MODES), "off"),
   isDev: v.boolean(),
 };
 

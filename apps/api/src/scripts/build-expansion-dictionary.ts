@@ -1,0 +1,351 @@
+/**
+ * Build the morphological expansion dictionary for one language.
+ *
+ * Query-time expansion is a Map lookup, never a stem: query text arrives
+ * folded and decomposed in whatever combination a keyboard produced, and the
+ * suffix tables are written over accented, precomposed characters. So the
+ * stemming happens here, once, over the accented corpus vocabulary, and the
+ * request path only reads what this produced.
+ *
+ * The vocabulary comes from `ts_stat` over `to_tsvector('simple', ...)` of the
+ * decisions' searchable text — deliberately not the stored `tsv` column,
+ * which is unaccent-folded and would hand the stemmer exactly the input it
+ * mis-stems. Documents are read in keyset chunks with their own statement
+ * timeout, sequentially, so this stays safe to run against a live instance.
+ *
+ * Buckets are formed by stem, singletons dropped (a bucket of one expands to
+ * nothing), and each bucket capped at its most frequent surface forms. The
+ * payload is content-addressed; a small pointer object names the current hash
+ * so a rebuild is one small write and a rollback is the previous hash.
+ *
+ *   bun run src/scripts/build-expansion-dictionary.ts --language cs
+ *   bun run src/scripts/build-expansion-dictionary.ts --language pl \
+ *     --out expansion-pl.tsv
+ */
+import { sql } from "drizzle-orm";
+
+import { rlsDb } from "@/api/db/root";
+import { createIngestionDb } from "@/api/db/scoped";
+import { zstdCompress } from "@/api/lib/compression";
+import {
+  type ExpansionBucket,
+  foldExpansionKey,
+  isSurfaceForm,
+  MAX_FORMS_PER_BUCKET,
+  morphologyDictionaryKey,
+  morphologyDictionaryPointerKey,
+  serializeExpansionDictionary,
+} from "@/api/lib/legal-search/morphology/dictionary";
+import {
+  MORPHOLOGY_LANGUAGES,
+  type MorphologyLanguage,
+  stemLegalTerm,
+} from "@/api/lib/legal-search/morphology/stem";
+import { putCorpusS3ObjectWithSignal, refreshCorpusS3 } from "@/api/lib/s3";
+
+const DEFAULT_CHUNK_SIZE = 1000;
+/** Per-chunk ceiling. A measured chunk costs ~2s; this is the stall bound. */
+const CHUNK_STATEMENT_TIMEOUT = "60s";
+/** Corpus document frequency a token needs before it is worth bucketing. */
+const DEFAULT_MIN_DOCUMENT_FREQUENCY = 50;
+const TOKEN_PATTERN = /^\p{L}{3,30}$/u;
+/**
+ * Shared leading characters expected of a coherent bucket. Below this the
+ * bucket's members are probably not the same word, so it is reported for
+ * review; the query-time guard drops the offending forms either way.
+ */
+const COHERENCE_PREFIX = 3;
+const UPLOAD_TIMEOUT_MS = 60_000;
+
+const USAGE = `Usage: bun run src/scripts/build-expansion-dictionary.ts --language <cs|pl|sk> [options]
+
+  --language <code>    Language to build. Required.
+  --out <path>         Write the uncompressed dictionary here instead of uploading.
+  --chunk <n>          Documents scanned per query (default ${DEFAULT_CHUNK_SIZE}).
+  --min-df <n>         Minimum corpus document frequency (default ${DEFAULT_MIN_DOCUMENT_FREQUENCY}).`;
+
+// Annotated on the binding, not just the return position: TypeScript only
+// treats a call as never-returning (and narrows after it) when the callee is a
+// name carrying an explicit type annotation.
+const fail: (message: string) => never = (message) => {
+  console.error(message);
+  console.error(USAGE);
+  process.exit(2);
+};
+
+const flagValue = (name: string): string | undefined => {
+  const index = process.argv.indexOf(`--${name}`);
+  if (index === -1) {
+    return undefined;
+  }
+  const value = process.argv[index + 1];
+  if (value === undefined || value.startsWith("--")) {
+    fail(`--${name} requires a value`);
+  }
+  return value;
+};
+
+const DECIMAL_INTEGER = /^\d+$/u;
+
+const positiveInteger = (
+  raw: string | undefined,
+  fallback: number,
+  name: string,
+): number => {
+  if (raw === undefined) {
+    return fallback;
+  }
+  const parsed = DECIMAL_INTEGER.test(raw)
+    ? Number.parseInt(raw, 10)
+    : Number.NaN;
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    fail(`--${name} must be a positive integer, got: ${raw}`);
+  }
+  return parsed;
+};
+
+const isMorphologyLanguage = (value: string): value is MorphologyLanguage =>
+  MORPHOLOGY_LANGUAGES.some((language) => language === value);
+
+const languageArg = flagValue("language");
+if (languageArg === undefined) {
+  fail("--language is required");
+}
+if (!isMorphologyLanguage(languageArg)) {
+  fail(
+    `--language must be one of ${MORPHOLOGY_LANGUAGES.join(", ")}, got: ${languageArg}`,
+  );
+}
+const language: MorphologyLanguage = languageArg;
+const outPath = flagValue("out");
+const chunkSize = positiveInteger(
+  flagValue("chunk"),
+  DEFAULT_CHUNK_SIZE,
+  "chunk",
+);
+const minDocumentFrequency = positiveInteger(
+  flagValue("min-df"),
+  DEFAULT_MIN_DOCUMENT_FREQUENCY,
+  "min-df",
+);
+
+const ingestionDb = createIngestionDb(rlsDb);
+
+/** The keyset floor: uuids order lexically, so the nil uuid precedes them all. */
+const NIL_UUID = "00000000-0000-0000-0000-000000000000";
+
+const rowsOf = (result: unknown): Record<string, unknown>[] =>
+  Array.isArray(result) ? result : [];
+
+type VocabularyChunk = {
+  /** Exclusive upper bound reached, or null when the language is exhausted. */
+  lastId: string | null;
+  scanned: number;
+  tokens: Map<string, number>;
+};
+
+/**
+ * Document frequency per token over one keyset chunk of decisions.
+ *
+ * Two statements, one transaction. The first names the chunk's closed id
+ * range, because `ts_stat` returns word statistics and cannot also report
+ * where the chunk ended. The second runs `ts_stat` over exactly that range.
+ *
+ * `ts_stat` takes its input as SQL text, so the range is spliced by Postgres'
+ * own `format(%L)` from bound parameters rather than by string building here:
+ * the quoting is the server's, and no value from this process reaches the
+ * inner query unquoted.
+ *
+ * `simple` is the configuration on purpose. It neither stems nor unaccents,
+ * so tokens come back spelled as the corpus wrote them, which is the input
+ * the stemmer's suffix tables are written for. The stored `tsv` column is
+ * unaccent-folded and would be the wrong source for exactly that reason.
+ */
+const chunkVocabulary = async (afterId: string): Promise<VocabularyChunk> =>
+  await ingestionDb(async (tx) => {
+    await tx.execute(
+      sql`SELECT set_config('statement_timeout', ${CHUNK_STATEMENT_TIMEOUT}, true)`,
+    );
+
+    const bounds = rowsOf(
+      await tx.execute(sql`
+        SELECT max(decision_id)::text AS last_id, count(*)::int AS scanned
+        FROM (
+          SELECT sd.decision_id
+          FROM case_law_search_documents sd
+          WHERE sd.language = ${language}
+            AND sd.decision_id > ${afterId}::uuid
+          ORDER BY sd.decision_id
+          LIMIT ${chunkSize}
+        ) chunk
+      `),
+    );
+    const lastId = bounds.at(0)?.["last_id"];
+    const scanned = Number(bounds.at(0)?.["scanned"] ?? 0);
+    if (typeof lastId !== "string" || scanned === 0) {
+      return { lastId: null, scanned: 0, tokens: new Map() };
+    }
+
+    const stats = rowsOf(
+      await tx.execute(sql`
+        SELECT word, ndoc
+        FROM ts_stat(
+          format(
+            'SELECT to_tsvector(''simple'', sd.searchable_text)
+               FROM case_law_search_documents sd
+              WHERE sd.language = %L
+                AND sd.decision_id > %L::uuid
+                AND sd.decision_id <= %L::uuid',
+            ${language}, ${afterId}, ${lastId}
+          )
+        )
+      `),
+    );
+
+    const tokens = new Map<string, number>();
+    for (const row of stats) {
+      const word = row["word"];
+      const ndoc = Number(row["ndoc"]);
+      if (typeof word === "string" && Number.isFinite(ndoc)) {
+        tokens.set(word, ndoc);
+      }
+    }
+    return { lastId, scanned, tokens };
+  });
+
+console.log(
+  `=== BUILD EXPANSION DICTIONARY: ${language} (chunk ${chunkSize}, min df ${minDocumentFrequency}) ===`,
+);
+
+const documentFrequency = new Map<string, number>();
+let scannedDocuments = 0;
+
+/**
+ * Walk the language's documents one chunk at a time. Sequential by design:
+ * this may run against a small live instance, and concurrent `ts_stat` passes
+ * would multiply its cost for no wall-clock gain worth having.
+ */
+const scanFrom = async (afterId: string): Promise<void> => {
+  const chunk = await chunkVocabulary(afterId);
+  if (chunk.lastId === null) {
+    return;
+  }
+  for (const [word, ndoc] of chunk.tokens) {
+    documentFrequency.set(word, (documentFrequency.get(word) ?? 0) + ndoc);
+  }
+  scannedDocuments += chunk.scanned;
+  console.log(
+    `  scanned ${scannedDocuments} documents, ${documentFrequency.size} distinct tokens`,
+  );
+  await scanFrom(chunk.lastId);
+};
+
+await scanFrom(NIL_UUID);
+
+// Bucket by stem. The token is stemmed accented, exactly as the corpus wrote
+// it; folding here would strip the characters the suffix tables match on.
+const byStem = new Map<string, { df: number; form: string }[]>();
+let filteredTokens = 0;
+for (const [token, df] of documentFrequency) {
+  if (df < minDocumentFrequency || !TOKEN_PATTERN.test(token)) {
+    continue;
+  }
+  filteredTokens += 1;
+  const stem = stemLegalTerm(token, language);
+  const bucket = byStem.get(stem);
+  if (bucket === undefined) {
+    byStem.set(stem, [{ df, form: token }]);
+    continue;
+  }
+  bucket.push({ df, form: token });
+}
+
+const buckets: ExpansionBucket[] = [];
+const incoherent: string[] = [];
+for (const [stem, members] of byStem) {
+  if (members.length < 2) {
+    continue;
+  }
+  members.sort((left, right) => right.df - left.df);
+  const forms = members
+    .slice(0, MAX_FORMS_PER_BUCKET)
+    .map((member) => member.form)
+    .filter(isSurfaceForm);
+  if (forms.length < 2) {
+    continue;
+  }
+  buckets.push({
+    documentFrequency: members.reduce((sum, member) => sum + member.df, 0),
+    forms,
+    stem,
+  });
+
+  const folded = forms.map(foldExpansionKey);
+  const [first] = folded;
+  if (
+    first !== undefined &&
+    !folded.every(
+      (form) =>
+        form.slice(0, COHERENCE_PREFIX) === first.slice(0, COHERENCE_PREFIX),
+    )
+  ) {
+    incoherent.push(`${stem}\t${forms.join(",")}`);
+  }
+}
+
+// Code-unit order, not collation: the sort exists to make two builds of the
+// same corpus produce the same bytes, and a stem is a machine key.
+buckets.sort((left, right) => (left.stem < right.stem ? -1 : 1));
+
+const payload = serializeExpansionDictionary(buckets);
+
+console.log(
+  `tokens=${documentFrequency.size} kept=${filteredTokens} buckets=${buckets.length} incoherent=${incoherent.length}`,
+);
+if (incoherent.length > 0) {
+  console.log(
+    `--- buckets whose members share fewer than ${COHERENCE_PREFIX} leading characters (query-time prefix guard drops these forms) ---`,
+  );
+  for (const line of incoherent) {
+    console.log(`  ${line}`);
+  }
+}
+
+if (buckets.length === 0) {
+  console.error(
+    "build-expansion-dictionary: no buckets produced; refusing to publish an empty dictionary",
+  );
+  process.exit(1);
+}
+
+if (outPath !== undefined) {
+  await Bun.write(outPath, payload);
+  console.log(`Wrote ${payload.length} bytes to ${outPath}.`);
+  process.exit(0);
+}
+
+// Addressed by the dictionary's own bytes, not by the compressed frame, so
+// the same corpus republishes to the same key whatever the encoder does.
+const hasher = new Bun.CryptoHasher("sha256");
+hasher.update(payload);
+const contentHash = hasher.digest("hex");
+const compressed = zstdCompress(payload);
+
+await refreshCorpusS3();
+await putCorpusS3ObjectWithSignal(
+  morphologyDictionaryKey(language, contentHash),
+  compressed,
+  "application/zstd",
+  AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
+);
+await putCorpusS3ObjectWithSignal(
+  morphologyDictionaryPointerKey(language),
+  new TextEncoder().encode(contentHash),
+  "text/plain",
+  AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
+);
+
+console.log(
+  `Published ${buckets.length} buckets (${compressed.length} compressed bytes) at ${contentHash}.`,
+);
+process.exit(0);

@@ -1,0 +1,19 @@
+/**
+ * How much of the morphological query expansion is live.
+ *
+ * - `off`    Queries are built exactly as they were before expansion
+ *            existed. No dictionary is fetched and no query byte changes.
+ * - `shadow` The expanded query is built and logged next to the query that
+ *            actually runs, which is still the unexpanded one. This is how
+ *            the rewrite is judged against real traffic before it serves it.
+ * - `on`     The expanded query is what runs.
+ *
+ * Resolved once in `env-base`; every consumer reads that single value.
+ *
+ * A leaf module with no imports, for the same reason `corpus-storage-mode`
+ * is one: `env-base` imports it, and every project that typechecks `env-base`
+ * would otherwise pull in the search graph behind it.
+ */
+export const QUERY_EXPANSION_MODES = ["off", "shadow", "on"] as const;
+
+export type QueryExpansionMode = (typeof QUERY_EXPANSION_MODES)[number];
