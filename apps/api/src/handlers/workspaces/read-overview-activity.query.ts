@@ -22,7 +22,9 @@ import type {
 import { member, user } from "@/api/db/auth-schema";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
+  auditActivityActionSql,
   auditLogs,
+  auditRelationshipChangeSql,
   contacts,
   entities,
   entityVersions,
@@ -377,39 +379,11 @@ const legacyCategoryCondition = (category: ActivityCategory): SQL => {
   }
 };
 
-const relationshipChange = () => sql<"add" | "remove" | null>`case
-  when ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.WORKSPACE}
-    and ${auditLogs.changes} ? 'membersAdded'
-    then 'add'
-  when ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.WORKSPACE}
-    and ${auditLogs.changes} ? 'membersRemoved'
-    then 'remove'
-  when ${auditLogs.resourceType} in (
-    ${AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER},
-    ${AUDIT_RESOURCE_TYPE.WORKSPACE_CONTACT},
-    ${AUDIT_RESOURCE_TYPE.CASE_LAW_MATTER_LINK}
-  ) and ${auditLogs.action} = ${AUDIT_ACTION.CREATE}
-    then 'add'
-  when ${auditLogs.resourceType} in (
-    ${AUDIT_RESOURCE_TYPE.WORKSPACE_MEMBER},
-    ${AUDIT_RESOURCE_TYPE.WORKSPACE_CONTACT},
-    ${AUDIT_RESOURCE_TYPE.CASE_LAW_MATTER_LINK}
-  ) and ${auditLogs.action} = ${AUDIT_ACTION.DELETE}
-    then 'remove'
-  else null
-end`;
-
 const activityActionCondition = (action: MatterActivityAction): SQL => {
-  if (action === "add" || action === "remove") {
-    return sql`${relationshipChange()} = ${action}`;
-  }
   if (action === "all") {
     return sql`true`;
   }
-  return (
-    and(eq(auditLogs.action, action), isNull(relationshipChange())) ??
-    sql`false`
-  );
+  return sql`${auditActivityActionSql(auditLogs)} = ${action}`;
 };
 
 const activityCursor = createTimestampIdCursorCodec({
@@ -630,7 +604,7 @@ export const readOverviewActivityPage = async ({
             performerType: auditLogs.performerType,
             resourceId: auditLogs.resourceId,
             resourceType: auditLogs.resourceType,
-            relationshipChange: relationshipChange(),
+            relationshipChange: auditRelationshipChangeSql(auditLogs),
             runId: auditLogs.runId,
             triggerSource: auditLogs.triggerSource,
             triggerType: auditLogs.triggerType,
