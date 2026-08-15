@@ -74,8 +74,10 @@ describe("workspace update cache invalidation", () => {
 
   test("maps every workspace update variant to its API body", async () => {
     const { workspaceUpdateBody } = await import("@/lib/workspaces/mutations");
+    const { toSafeId } = await import("@/lib/safe-id");
+    const contactId = toSafeId<"contact">("contact_test");
 
-    const bodies: unknown = [
+    const bodies = [
       workspaceUpdateBody({ type: "clientId", value: "contact_test" }),
       workspaceUpdateBody({ type: "color", value: "purple" }),
       workspaceUpdateBody({ type: "color", value: null }),
@@ -97,16 +99,16 @@ describe("workspace update cache invalidation", () => {
     ];
 
     expect(bodies).toEqual([
-      { clientId: "contact_test" },
+      { clientId: contactId },
       { color: "purple" },
       { color: null },
       { leadUserId: "user_test" },
       { leadUserId: null },
       { name: "Renamed matter" },
-      { promote: { clientId: "contact_test" } },
+      { promote: { clientId: contactId } },
       {
         promote: {
-          clientId: "contact_test",
+          clientId: contactId,
           memberUserIds: ["user_one", "user_two"],
         },
       },
