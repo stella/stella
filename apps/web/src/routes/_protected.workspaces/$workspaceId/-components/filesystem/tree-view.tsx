@@ -362,9 +362,8 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   );
   const data = entityData.entities;
   // Parent links of ancestor folders the API backfills when a filter/search
-  // hides an intermediate folder. Used ONLY to complete the ancestor lookup
-  // below so cross-matter copy/move dedup works across hidden folders; never
-  // rendered or selectable, so they cannot become an action target.
+  // hides an intermediate folder. They complete the ancestor lookup below and
+  // connect filtered folder statistics, but remain unrendered and unselectable.
   const ancestorLinks = entityData.ancestorLinks;
 
   // Build a lookup for drag preview data from selected entities.
@@ -392,8 +391,8 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   );
   const tree = useMemo(() => buildTree(data), [data]);
   const folderStatistics = useMemo(
-    () => calculateFolderStatistics(tree),
-    [tree],
+    () => calculateFolderStatistics(data, ancestorLinks),
+    [data, ancestorLinks],
   );
   const treeNodeMap = useMemo(() => {
     const map = new Map<string, TableTreeNode>();
@@ -942,7 +941,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                     getSelectedEntities={getSelectedEntities}
                     getAncestorIds={getAncestorIds}
                     gridTemplate={gridTemplate}
-                    isFiltered={filters.length > 0}
+                    isFiltered={entityData.isFiltered}
                     node={row.node}
                     onNavigateToFolder={(folderId) => {
                       detached(

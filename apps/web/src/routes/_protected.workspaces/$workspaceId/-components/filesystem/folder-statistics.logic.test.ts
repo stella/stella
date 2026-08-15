@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 
-import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceEntity } from "@/lib/types";
 
@@ -9,15 +8,15 @@ import { calculateFolderStatistics } from "./folder-statistics.logic";
 const entityId = (value: string) => toSafeId<"entity">(value);
 
 type EntityOptions = {
-  children?: TableTreeNode[];
+  parentId?: string;
   sizeBytes?: number;
 };
 
 const entity = (
   id: string,
   kind: WorkspaceEntity["kind"],
-  { children = [], sizeBytes }: EntityOptions = {},
-): TableTreeNode => {
+  { parentId, sizeBytes }: EntityOptions = {},
+): WorkspaceEntity => {
   const safeEntityId = entityId(id);
   const propertyId = toSafeId<"property">(`property-${id}`);
 
@@ -25,7 +24,7 @@ const entity = (
     entityId: safeEntityId,
     kind,
     name: id,
-    parentId: null,
+    parentId: parentId ? entityId(parentId) : null,
     createdAt: "2025-01-01T00:00:00.000Z",
     createdBy: null,
     createdByImage: null,
@@ -80,30 +79,32 @@ const entity = (
               },
             },
           },
-    children,
   };
 };
 
 describe("folder statistics", () => {
   test("aggregates all descendant files through nested and empty folders", () => {
-    const statistics = calculateFolderStatistics([
-      entity("root", "folder", {
-        children: [
-          entity("direct-document", "document", { sizeBytes: 100 }),
-          entity("nested", "folder", {
-            children: [
-              entity("nested-document", "document", { sizeBytes: 250 }),
-              entity("deep", "folder", {
-                children: [
-                  entity("deep-document", "document", { sizeBytes: 25 }),
-                ],
-              }),
-            ],
-          }),
-          entity("empty", "folder"),
-        ],
-      }),
-    ]);
+    const statistics = calculateFolderStatistics(
+      [
+        entity("root", "folder"),
+        entity("direct-document", "document", {
+          parentId: "root",
+          sizeBytes: 100,
+        }),
+        entity("nested", "folder", { parentId: "root" }),
+        entity("nested-document", "document", {
+          parentId: "nested",
+          sizeBytes: 250,
+        }),
+        entity("deep", "folder", { parentId: "nested" }),
+        entity("deep-document", "document", {
+          parentId: "deep",
+          sizeBytes: 25,
+        }),
+        entity("empty", "folder", { parentId: "root" }),
+      ],
+      [],
+    );
 
     expect(statistics.get(entityId("deep"))).toEqual({
       fileCount: 1,
@@ -124,18 +125,22 @@ describe("folder statistics", () => {
   });
 
   test("keeps parent totals equal to direct files plus child-folder totals", () => {
-    const directFile = entity("direct-document", "document", {
-      sizeBytes: 125,
-    });
-    const childFolder = entity("child", "folder", {
-      children: [
-        entity("child-document", "document", { sizeBytes: 275 }),
-        entity("missing-file-field", "document"),
+    const statistics = calculateFolderStatistics(
+      [
+        entity("parent", "folder"),
+        entity("direct-document", "document", {
+          parentId: "parent",
+          sizeBytes: 125,
+        }),
+        entity("child", "folder", { parentId: "parent" }),
+        entity("child-document", "document", {
+          parentId: "child",
+          sizeBytes: 275,
+        }),
+        entity("missing-file-field", "document", { parentId: "child" }),
       ],
-    });
-    const statistics = calculateFolderStatistics([
-      entity("parent", "folder", { children: [directFile, childFolder] }),
-    ]);
+      [],
+    );
     const childStatistics = statistics.get(entityId("child"));
 
     expect(childStatistics).toBeDefined();
@@ -146,6 +151,46 @@ describe("folder statistics", () => {
     expect(statistics.get(entityId("parent"))).toEqual({
       fileCount: 1 + childStatistics.fileCount,
       totalSizeBytes: 125 + childStatistics.totalSizeBytes,
+    });
+  });
+
+  test("ignores every non-document leaf kind", () => {
+    const statistics = calculateFolderStatistics(
+      [
+        entity("root", "folder"),
+        entity("task", "task", { parentId: "root", sizeBytes: 10 }),
+        entity("message", "message", { parentId: "root", sizeBytes: 20 }),
+        entity("link", "link", { parentId: "root", sizeBytes: 30 }),
+      ],
+      [],
+    );
+
+    expect(statistics.get(entityId("root"))).toEqual({
+      fileCount: 0,
+      totalSizeBytes: 0,
+    });
+  });
+
+  test("connects filtered documents through hidden ancestor folders", () => {
+    const statistics = calculateFolderStatistics(
+      [
+        entity("visible-root", "folder"),
+        entity("matching-document", "document", {
+          parentId: "hidden-folder",
+          sizeBytes: 425,
+        }),
+      ],
+      [
+        {
+          entityId: entityId("hidden-folder"),
+          parentId: entityId("visible-root"),
+        },
+      ],
+    );
+
+    expect(statistics.get(entityId("visible-root"))).toEqual({
+      fileCount: 1,
+      totalSizeBytes: 425,
     });
   });
 });
