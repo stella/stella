@@ -1,5 +1,5 @@
 import { getFirstFile } from "@/components/workspaces/entity-utils";
-import type { WorkspaceEntity } from "@/lib/types";
+import type { EntityId, WorkspaceEntity } from "@/lib/types";
 
 export type FolderStatistics = {
   fileCount: number;
@@ -7,8 +7,8 @@ export type FolderStatistics = {
 };
 
 type FolderAncestorLink = {
-  entityId: string;
-  parentId: string | null;
+  entityId: EntityId;
+  parentId: EntityId | null;
 };
 
 const EMPTY_STATISTICS = {
@@ -25,12 +25,12 @@ const EMPTY_STATISTICS = {
 export const calculateFolderStatistics = (
   entities: readonly WorkspaceEntity[],
   ancestorLinks: readonly FolderAncestorLink[],
-): ReadonlyMap<string, FolderStatistics> => {
+): ReadonlyMap<EntityId, FolderStatistics> => {
   const entityById = new Map(
     entities.map((entity) => [entity.entityId, entity] as const),
   );
-  const parentById = new Map<string, string | null>();
-  const folderIds = new Set<string>();
+  const parentById = new Map<EntityId, EntityId | null>();
+  const folderIds = new Set<EntityId>();
 
   for (const link of ancestorLinks) {
     parentById.set(link.entityId, link.parentId);
@@ -43,7 +43,7 @@ export const calculateFolderStatistics = (
     }
   }
 
-  const childrenByParentId = new Map<string, string[]>();
+  const childrenByParentId = new Map<EntityId, EntityId[]>();
   for (const [entityId, parentId] of parentById) {
     if (parentId === null) {
       continue;
@@ -56,9 +56,9 @@ export const calculateFolderStatistics = (
     }
   }
 
-  const memo = new Map<string, FolderStatistics>();
-  const visiting = new Set<string>();
-  const visit = (entityId: string): FolderStatistics => {
+  const memo = new Map<EntityId, FolderStatistics>();
+  const visiting = new Set<EntityId>();
+  const visit = (entityId: EntityId): FolderStatistics => {
     const cached = memo.get(entityId);
     if (cached) {
       return cached;
@@ -74,10 +74,13 @@ export const calculateFolderStatistics = (
     if (!entity || entity.kind === "folder") {
       let fileCount = 0;
       let totalSizeBytes = 0;
-      for (const childId of childrenByParentId.get(entityId) ?? []) {
-        const childStatistics = visit(childId);
-        fileCount += childStatistics.fileCount;
-        totalSizeBytes += childStatistics.totalSizeBytes;
+      const childIds = childrenByParentId.get(entityId);
+      if (childIds) {
+        for (const childId of childIds) {
+          const childStatistics = visit(childId);
+          fileCount += childStatistics.fileCount;
+          totalSizeBytes += childStatistics.totalSizeBytes;
+        }
       }
       statistics = { fileCount, totalSizeBytes };
     } else {
@@ -103,7 +106,7 @@ export const calculateFolderStatistics = (
     return statistics;
   };
 
-  const statisticsByFolderId = new Map<string, FolderStatistics>();
+  const statisticsByFolderId = new Map<EntityId, FolderStatistics>();
   for (const folderId of folderIds) {
     statisticsByFolderId.set(folderId, visit(folderId));
   }
