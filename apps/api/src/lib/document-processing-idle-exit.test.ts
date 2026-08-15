@@ -114,6 +114,29 @@ describe("createIdleExitCheck", () => {
     expect(await h.tick()).toBe("exit");
   });
 
+  test("a reconciliation that starts during the count is caught by that sample", async () => {
+    let unfinished = false;
+    let exits = 0;
+    const tick = createIdleExitCheck({
+      countPending: async () => {
+        // Reconciliation ticks are timer-driven, so one can begin while a
+        // sample's count is in flight; the sample must not certify the
+        // moment before it.
+        unfinished = true;
+        return 0;
+      },
+      hasUnfinishedReconciliation: () => unfinished,
+      requiredIdleChecks: 1,
+      onIdleExit: () => {
+        exits += 1;
+      },
+      onCheckFailure: () => undefined,
+    });
+
+    expect(await tick()).toBe("checked");
+    expect(exits).toBe(0);
+  });
+
   test("exit fires exactly once; later ticks are inert", async () => {
     const h = harness(1, sequence([0, 0, 0]));
     expect(await h.tick()).toBe("exit");

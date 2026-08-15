@@ -14,7 +14,10 @@
 type CreateIdleExitCheckOptions = {
   countPending: () => Promise<number>;
   /**
-   * Whether reconciliation still had work behind it on its last tick.
+   * Whether reconciliation is running or last stopped with work behind it.
+   * Read synchronously, so the reconciliation side must publish "running"
+   * before its first await; anything weaker would let a tick that outlives
+   * an idle window keep exposing the previous tick's drained answer.
    * Required rather than optional so a new call site must decide.
    */
   hasUnfinishedReconciliation: () => boolean;
@@ -47,8 +50,9 @@ export const createIdleExitCheck = ({
     inFlight = true;
     try {
       const pending = await countPending();
-      // Read reconciliation after the count settles so both halves of the
-      // sample describe the same moment.
+      // Read reconciliation after the count settles: a reconciliation tick
+      // that starts while the count is in flight still lands in this
+      // sample, so a slow count cannot certify a moment it did not see.
       const idle = pending === 0 && !hasUnfinishedReconciliation();
       consecutiveIdleChecks = idle ? consecutiveIdleChecks + 1 : 0;
     } catch (error) {

@@ -81,8 +81,8 @@ import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const WORKER_CONCURRENCY = 2;
-const RECONCILE_INTERVAL_MS = 30_000;
-const RECONCILE_BATCH_SIZE = 100;
+export const RECONCILE_INTERVAL_MS = 30_000;
+export const RECONCILE_BATCH_SIZE = 100;
 const ENQUEUE_VISIBILITY_TIMEOUT_MS = 5 * 60 * 1000;
 const ENQUEUE_FAILURE_RETRY_MS = 30_000;
 const QUEUED_OCR_SELECTION = {
@@ -1765,7 +1765,67 @@ export const tryEnqueueDocumentProcessingRun = async ({
   return { runId, status: "enqueued" };
 };
 
-const recoverMissingNativeExtractionRuns = async (): Promise<number> => {
+/**
+ * What one reconciliation phase reports for one tick. `count` is the
+ * effect the phase had (runs created, rows recovered, deliveries
+ * attempted); `hasMore` is the phase's own answer to "was there more than
+ * I could take this tick". The two are independent: a phase can scan a
+ * full page and act on none of it, so `count` can never stand in for
+ * saturation.
+ */
+type ReconciliationPhaseResult = {
+  count: number;
+  hasMore: boolean;
+};
+
+/**
+ * A capped selection that came back full stopped at the cap, not at the
+ * end of the backlog. Every phase computes this from the rows it selected,
+ * beside the `.limit()` that capped them.
+ */
+const cappedSelectionHasMore = ({
+  limit,
+  selected,
+}: {
+  limit: number;
+  selected: number;
+}): boolean => selected >= limit;
+
+type RepairScanPage = ReconciliationPhaseResult & {
+  nextCursor: SafeId<"field"> | null;
+};
+
+/**
+ * The repair sweep's resume position and its saturation signal are the
+ * same fact: a full page means the scan stopped at the cap, so the next
+ * tick resumes after the last scanned field; a short page means the scan
+ * reached the end of the table, so the cursor resets and nothing is left
+ * behind. Derived together so the two can never disagree, and kept apart
+ * from `createdRunCount` because most scanned fields are filtered out
+ * before a run is created.
+ */
+export const resolveRepairScanPage = ({
+  createdRunCount,
+  scannedFieldIds,
+}: {
+  createdRunCount: number;
+  scannedFieldIds: readonly SafeId<"field">[];
+}): RepairScanPage => {
+  const hasMore = cappedSelectionHasMore({
+    limit: RECONCILE_BATCH_SIZE,
+    selected: scannedFieldIds.length,
+  });
+  return {
+    count: createdRunCount,
+    hasMore,
+    nextCursor: hasMore ? (scannedFieldIds.at(-1) ?? null) : null,
+  };
+};
+
+// Return types are inferred so each producer's own `hasMore` reasoning
+// stays visible at the `return`, and the `ReconciliationPhase` contract
+// checks the shape where the phases are declared.
+const recoverMissingNativeExtractionRuns = async () => {
   const settledBefore = new Date(Date.now() - REPAIR_SETTLE_DELAY_MS);
   const cursor = await readRepairScanCursor();
   const candidates = await rootDb
@@ -1825,7 +1885,7 @@ const recoverMissingNativeExtractionRuns = async (): Promise<number> => {
     if (cursor !== null) {
       await writeRepairScanCursor({ expectedCursor: cursor, nextCursor: null });
     }
-    return 0;
+    return { count: 0, hasMore: false };
   }
 
   const repairCandidates = candidates.flatMap((candidate) => {
@@ -1838,14 +1898,15 @@ const recoverMissingNativeExtractionRuns = async (): Promise<number> => {
     return [{ ...candidate, content: candidate.content }];
   });
   const runIds = await persistMissingNativeExtractionRuns(repairCandidates);
+  const page = resolveRepairScanPage({
+    createdRunCount: runIds.length,
+    scannedFieldIds: candidates.map(({ fieldId }) => fieldId),
+  });
   await writeRepairScanCursor({
     expectedCursor: cursor,
-    nextCursor:
-      candidates.length < RECONCILE_BATCH_SIZE
-        ? null
-        : (candidates.at(-1)?.fieldId ?? null),
+    nextCursor: page.nextCursor,
   });
-  return runIds.length;
+  return { count: page.count, hasMore: page.hasMore };
 };
 
 const updateQueuedRunSchedule = async ({
@@ -1882,7 +1943,11 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
   selection?:
     | typeof QUEUED_OCR_SELECTION.ALL_DUE
     | typeof QUEUED_OCR_SELECTION.SCHEDULED_RETRIES;
-} = {}): Promise<{ attempted: number; retryAt: Date | null }> => {
+} = {}): Promise<{
+  attempted: number;
+  hasMore: boolean;
+  retryAt: Date | null;
+}> => {
   const now = new Date();
   const runs = await rootDb
     .select({ id: documentProcessingRuns.id })
@@ -1939,6 +2004,7 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
   });
   return {
     attempted: runs.length,
+    hasMore: cappedSelectionHasMore({ limit, selected: runs.length }),
     retryAt:
       failedIds.length === 0
         ? null
@@ -1946,12 +2012,15 @@ export const dispatchQueuedDocumentProcessingRuns = async ({
   };
 };
 
-const dispatchScheduledDocumentProcessingRetries = async (): Promise<number> =>
-  (
-    await dispatchQueuedDocumentProcessingRuns({
-      selection: QUEUED_OCR_SELECTION.SCHEDULED_RETRIES,
-    })
-  ).attempted;
+const dispatchScheduledDocumentProcessingRetries = async () => {
+  // Runs whose handoff failed are rescheduled into the future, so they are
+  // not due work this phase could still take; only a full selection means
+  // more was due than one batch could deliver.
+  const { attempted, hasMore } = await dispatchQueuedDocumentProcessingRuns({
+    selection: QUEUED_OCR_SELECTION.SCHEDULED_RETRIES,
+  });
+  return { count: attempted, hasMore };
+};
 
 // Manual searchable-PDF failures are retryable too, so the condition spans
 // both automatic OCR sources and every derivative failure.
@@ -1967,7 +2036,7 @@ const retryableOcrFailureCondition = () =>
     eq(documentProcessingRuns.errorCode, SEARCHABLE_PDF_FAILURE_CODE),
   );
 
-const recoverRetryableOcrFailures = async (): Promise<number> => {
+const recoverRetryableOcrFailures = async () => {
   const now = new Date();
   const retryableRuns = await rootDb
     .select({
@@ -1995,8 +2064,14 @@ const recoverRetryableOcrFailures = async (): Promise<number> => {
       asc(documentProcessingRuns.id),
     )
     .limit(RECONCILE_BATCH_SIZE);
+  // Only the selection is capped; the compare-and-set below can recover
+  // fewer rows than it read, which says nothing about the backlog.
+  const hasMore = cappedSelectionHasMore({
+    limit: RECONCILE_BATCH_SIZE,
+    selected: retryableRuns.length,
+  });
   if (retryableRuns.length === 0) {
-    return 0;
+    return { count: 0, hasMore };
   }
 
   const capturedSchedules = or(
@@ -2014,7 +2089,7 @@ const recoverRetryableOcrFailures = async (): Promise<number> => {
     ),
   );
   if (!capturedSchedules) {
-    return 0;
+    return { count: 0, hasMore };
   }
 
   const recovered = await rootDb
@@ -2032,7 +2107,7 @@ const recoverRetryableOcrFailures = async (): Promise<number> => {
       ),
     )
     .returning({ id: documentProcessingRuns.id });
-  return recovered.length;
+  return { count: recovered.length, hasMore };
 };
 
 type FailedSearchIndexCandidate = {
@@ -2179,7 +2254,7 @@ const recoverFailedSearchIndex = async ({
     },
   });
 
-const recoverFailedOcrSearchIndexes = async (): Promise<number> => {
+const recoverFailedOcrSearchIndexes = async () => {
   const now = new Date();
   // The failed run is the durable retry token, but the entity projection is
   // the indexing source of truth. Automatic OCR may have preserved valid text
@@ -2274,8 +2349,15 @@ const recoverFailedOcrSearchIndexes = async (): Promise<number> => {
     )
     .limit(SEARCH_INDEX_REPLAY_BATCH_SIZE);
 
+  // A replay that fails is rescheduled with backoff, so it is not work
+  // this phase could still take; only a full selection means more replays
+  // were due than one batch could claim.
+  const hasMore = cappedSelectionHasMore({
+    limit: SEARCH_INDEX_REPLAY_BATCH_SIZE,
+    selected: candidates.length,
+  });
   if (candidates.length === 0) {
-    return 0;
+    return { count: 0, hasMore };
   }
   const capturedSchedules = or(
     ...candidates.map(({ attemptCount, id, nextAttemptAtToken }) =>
@@ -2292,7 +2374,7 @@ const recoverFailedOcrSearchIndexes = async (): Promise<number> => {
     ),
   );
   if (!capturedSchedules) {
-    return 0;
+    return { count: 0, hasMore };
   }
 
   const claimToken = `search-index-replay:${Bun.randomUUIDv7()}`;
@@ -2328,10 +2410,10 @@ const recoverFailedOcrSearchIndexes = async (): Promise<number> => {
     limit: SEARCH_INDEX_REPLAY_CONCURRENCY,
     operation: recoverFailedSearchIndex,
   });
-  return recovered.filter(Boolean).length;
+  return { count: recovered.filter(Boolean).length, hasMore };
 };
 
-const recoverStaleDocumentProcessingRuns = async (): Promise<number> => {
+const recoverStaleDocumentProcessingRuns = async () => {
   const staleBefore = new Date(Date.now() - WORKER_LEASE_TIMEOUT_MS);
   const recoveredAt = new Date();
   const staleRuns = await rootDb
@@ -2353,8 +2435,14 @@ const recoverStaleDocumentProcessingRuns = async (): Promise<number> => {
       asc(documentProcessingRuns.id),
     )
     .limit(RECONCILE_BATCH_SIZE);
+  // The three updates below act on subsets of this selection, so their
+  // combined row count tracks the effect, not the remaining backlog.
+  const hasMore = cappedSelectionHasMore({
+    limit: RECONCILE_BATCH_SIZE,
+    selected: staleRuns.length,
+  });
   if (staleRuns.length === 0) {
-    return 0;
+    return { count: 0, hasMore };
   }
 
   const exhaustedAutomaticIds = staleRuns.flatMap((run) =>
@@ -2439,7 +2527,10 @@ const recoverStaleDocumentProcessingRuns = async (): Promise<number> => {
       ),
     )
     .returning({ id: documentProcessingRuns.id });
-  return exhausted.length + searchReplays.length + recovered.length;
+  return {
+    count: exhausted.length + searchReplays.length + recovered.length,
+    hasMore,
+  };
 };
 
 const handleDocumentProcessingFailure = ({
@@ -2467,51 +2558,60 @@ const RECONCILIATION_PHASE = {
 type ReconciliationPhaseName =
   (typeof RECONCILIATION_PHASE)[keyof typeof RECONCILIATION_PHASE];
 
-type ReconciliationCounts = Record<ReconciliationPhaseName, number>;
+type ReconciliationResults = Record<
+  ReconciliationPhaseName,
+  ReconciliationPhaseResult
+>;
 
 type ReconciliationPhase = {
   name: ReconciliationPhaseName;
-  run: () => Promise<number>;
+  run: () => Promise<ReconciliationPhaseResult>;
 };
-
-/**
- * Each phase drains at most one batch per tick, so a phase that returns
- * its whole batch is reporting "there was more than I could take", not
- * "done". Kept beside the phase list and derived from the same limits the
- * queries use, so a phase cannot change its limit without changing this.
- */
-const RECONCILIATION_PHASE_BATCH_SIZE = {
-  [RECONCILIATION_PHASE.DELIVERY]: RECONCILE_BATCH_SIZE,
-  [RECONCILIATION_PHASE.REINDEX]: SEARCH_INDEX_REPLAY_BATCH_SIZE,
-  [RECONCILIATION_PHASE.REPAIR]: RECONCILE_BATCH_SIZE,
-  [RECONCILIATION_PHASE.RETRY]: RECONCILE_BATCH_SIZE,
-  [RECONCILIATION_PHASE.STALE_LEASE]: RECONCILE_BATCH_SIZE,
-} as const satisfies Record<ReconciliationPhaseName, number>;
 
 const RECONCILIATION_PHASE_NAMES = Object.values(RECONCILIATION_PHASE);
 
-export const reconciliationLeftWorkBehind = ({
-  counts,
-  failedPhases,
-}: {
-  counts: ReconciliationCounts;
-  failedPhases: readonly ReconciliationPhaseName[];
-}): boolean =>
-  failedPhases.length > 0 ||
-  RECONCILIATION_PHASE_NAMES.some(
-    (phase) => counts[phase] >= RECONCILIATION_PHASE_BATCH_SIZE[phase],
-  );
-
-let unfinishedReconciliation = false;
+/**
+ * Whether the tick stopped short of draining every backlog. Each phase
+ * states its own saturation, so this only has to collect the answers: no
+ * count is reinterpreted here, because effect counts (runs created, rows
+ * recovered) are routinely smaller than the rows a phase read.
+ */
+export const reconciliationLeftWorkBehind = (
+  results: ReconciliationResults,
+): boolean =>
+  RECONCILIATION_PHASE_NAMES.some((phase) => results[phase].hasMore);
 
 /**
- * Whether the last completed reconciliation tick still had work queued
- * behind it. Batch mode reads this so the worker does not treat an empty
- * job queue as "nothing left to do" while the reconciliation loop is
- * still draining a backlog one capped batch at a time.
+ * Reconciliation progress as the idle sampler sees it. The sampler reads
+ * `hasUnfinishedWork()` synchronously, so `runTick` publishes "unfinished"
+ * in its synchronous prologue, before the first await: a tick that is
+ * still running, however long it runs, can never expose the previous
+ * tick's drained answer. The flag clears only when a tick resolves with a
+ * fully drained result; a rejected tick leaves it set, because a tick that
+ * never reported cannot prove the backlog is empty.
  */
-export const hasUnfinishedDocumentProcessingReconciliation = (): boolean =>
-  unfinishedReconciliation;
+export const createReconciliationProgress = () => {
+  let unfinished = false;
+  return {
+    hasUnfinishedWork: (): boolean => unfinished,
+    /** `tick` resolves with whether it left work behind. */
+    runTick: async (tick: () => Promise<boolean>): Promise<void> => {
+      unfinished = true;
+      unfinished = await tick();
+    },
+  };
+};
+
+const reconciliationProgress = createReconciliationProgress();
+
+/**
+ * Whether reconciliation is running or last stopped with work behind it.
+ * Batch mode reads this so the worker does not treat an empty job queue as
+ * "nothing left to do" while the reconciliation loop is still draining a
+ * backlog one capped batch at a time.
+ */
+export const hasUnfinishedDocumentProcessingReconciliation =
+  reconciliationProgress.hasUnfinishedWork;
 
 export const runDocumentProcessingReconciliationPhases = async ({
   onPhaseError,
@@ -2519,13 +2619,17 @@ export const runDocumentProcessingReconciliationPhases = async ({
 }: {
   onPhaseError: (error: unknown, phase: ReconciliationPhaseName) => void;
   phases: readonly ReconciliationPhase[];
-}): Promise<ReconciliationCounts> => {
-  const counts: ReconciliationCounts = {
-    [RECONCILIATION_PHASE.DELIVERY]: 0,
-    [RECONCILIATION_PHASE.REINDEX]: 0,
-    [RECONCILIATION_PHASE.REPAIR]: 0,
-    [RECONCILIATION_PHASE.RETRY]: 0,
-    [RECONCILIATION_PHASE.STALE_LEASE]: 0,
+}): Promise<ReconciliationResults> => {
+  const drained = (): ReconciliationPhaseResult => ({
+    count: 0,
+    hasMore: false,
+  });
+  const results: ReconciliationResults = {
+    [RECONCILIATION_PHASE.DELIVERY]: drained(),
+    [RECONCILIATION_PHASE.REINDEX]: drained(),
+    [RECONCILIATION_PHASE.REPAIR]: drained(),
+    [RECONCILIATION_PHASE.RETRY]: drained(),
+    [RECONCILIATION_PHASE.STALE_LEASE]: drained(),
   };
   for (const phase of phases) {
     // oxlint-disable-next-line no-await-in-loop -- repair phases are deliberately isolated and ordered
@@ -2535,11 +2639,14 @@ export const runDocumentProcessingReconciliationPhases = async ({
     });
     if (Result.isError(result)) {
       onPhaseError(result.error, phase.name);
+      // A phase that failed drained nothing it can prove, so its backlog
+      // is unknown: report it as work left behind rather than as drained.
+      results[phase.name] = { count: 0, hasMore: true };
       continue;
     }
-    counts[phase.name] = result.value;
+    results[phase.name] = result.value;
   }
-  return counts;
+  return results;
 };
 
 const reconcileDocumentProcessing = async ({
@@ -2547,64 +2654,64 @@ const reconcileDocumentProcessing = async ({
 }: {
   onComplete: () => void;
 }): Promise<void> => {
-  const failedPhases: ReconciliationPhaseName[] = [];
   try {
-    await ensureReconciliationRedisConnected();
-    const counts = await runDocumentProcessingReconciliationPhases({
-      phases: [
-        {
-          name: RECONCILIATION_PHASE.REPAIR,
-          run: recoverMissingNativeExtractionRuns,
+    // Marks reconciliation unfinished before the first await, so the idle
+    // sampler sees an in-flight tick as work in progress no matter how
+    // long the tick runs or where a sample lands inside it. The connect
+    // gate stays the cycle's first action, ahead of every phase, and a
+    // cycle that fails there reports no verdict at all.
+    await reconciliationProgress.runTick(async () => {
+      await ensureReconciliationRedisConnected();
+      const results = await runDocumentProcessingReconciliationPhases({
+        phases: [
+          {
+            name: RECONCILIATION_PHASE.REPAIR,
+            run: recoverMissingNativeExtractionRuns,
+          },
+          {
+            name: RECONCILIATION_PHASE.REINDEX,
+            run: recoverFailedOcrSearchIndexes,
+          },
+          {
+            name: RECONCILIATION_PHASE.RETRY,
+            run: recoverRetryableOcrFailures,
+          },
+          {
+            name: RECONCILIATION_PHASE.STALE_LEASE,
+            run: recoverStaleDocumentProcessingRuns,
+          },
+          {
+            name: RECONCILIATION_PHASE.DELIVERY,
+            run: dispatchScheduledDocumentProcessingRetries,
+          },
+        ],
+        onPhaseError: (error, phase) => {
+          captureError(error, { phase });
+          logger.error("document_processing.reconcile_phase_failed", {
+            "error.type": errorTag(error),
+            phase,
+          });
         },
-        {
-          name: RECONCILIATION_PHASE.REINDEX,
-          run: recoverFailedOcrSearchIndexes,
-        },
-        {
-          name: RECONCILIATION_PHASE.RETRY,
-          run: recoverRetryableOcrFailures,
-        },
-        {
-          name: RECONCILIATION_PHASE.STALE_LEASE,
-          run: recoverStaleDocumentProcessingRuns,
-        },
-        {
-          name: RECONCILIATION_PHASE.DELIVERY,
-          run: dispatchScheduledDocumentProcessingRetries,
-        },
-      ],
-      onPhaseError: (error, phase) => {
-        failedPhases.push(phase);
-        captureError(error, { phase });
-        logger.error("document_processing.reconcile_phase_failed", {
-          "error.type": errorTag(error),
-          phase,
-        });
-      },
-    });
-    unfinishedReconciliation = reconciliationLeftWorkBehind({
-      counts,
-      failedPhases,
-    });
-    if (
-      counts[RECONCILIATION_PHASE.DELIVERY] > 0 ||
-      counts[RECONCILIATION_PHASE.REPAIR] > 0 ||
-      counts[RECONCILIATION_PHASE.REINDEX] > 0 ||
-      counts[RECONCILIATION_PHASE.RETRY] > 0 ||
-      counts[RECONCILIATION_PHASE.STALE_LEASE] > 0
-    ) {
-      logger.info("document_processing.reconciled", {
-        deliveredCount: String(counts[RECONCILIATION_PHASE.DELIVERY]),
-        recoveredCount: String(counts[RECONCILIATION_PHASE.STALE_LEASE]),
-        reindexedCount: String(counts[RECONCILIATION_PHASE.REINDEX]),
-        repairedCount: String(counts[RECONCILIATION_PHASE.REPAIR]),
-        retriedCount: String(counts[RECONCILIATION_PHASE.RETRY]),
       });
-    }
+      if (
+        RECONCILIATION_PHASE_NAMES.some((phase) => results[phase].count > 0)
+      ) {
+        logger.info("document_processing.reconciled", {
+          deliveredCount: String(results[RECONCILIATION_PHASE.DELIVERY].count),
+          recoveredCount: String(
+            results[RECONCILIATION_PHASE.STALE_LEASE].count,
+          ),
+          reindexedCount: String(results[RECONCILIATION_PHASE.REINDEX].count),
+          repairedCount: String(results[RECONCILIATION_PHASE.REPAIR].count),
+          retriedCount: String(results[RECONCILIATION_PHASE.RETRY].count),
+        });
+      }
+      return reconciliationLeftWorkBehind(results);
+    });
   } catch (error) {
-    // The tick never produced counts, so the backlog is unknown. Same rule
-    // the idle check applies to a failed sample: never exit on uncertainty.
-    unfinishedReconciliation = true;
+    // The tick never reported, so the backlog stays unknown and
+    // `runTick` leaves reconciliation marked unfinished. Same rule the
+    // idle check applies to a failed sample: never exit on uncertainty.
     captureError(error);
     logger.error("document_processing.reconcile_failed", {
       "error.type": errorTag(error),

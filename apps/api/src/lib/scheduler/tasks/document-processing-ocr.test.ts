@@ -9,7 +9,8 @@ test("drains queued OCR in bounded batches", async () => {
   const batchSizes = [100, 100, 17];
   const dispatch = mock(async ({ limit }: { limit?: number } = {}) => {
     expect(limit).toBe(100);
-    return { attempted: batchSizes.shift() ?? 0, retryAt: null };
+    const attempted = batchSizes.shift() ?? 0;
+    return { attempted, hasMore: attempted === limit, retryAt: null };
   });
 
   const result = await dispatchDocumentOcrBatches({
@@ -28,7 +29,11 @@ test("drains queued OCR in bounded batches", async () => {
 test("does not dispatch after scheduler cancellation", async () => {
   const controller = new AbortController();
   controller.abort();
-  const dispatch = mock(async () => ({ attempted: 0, retryAt: null }));
+  const dispatch = mock(async () => ({
+    attempted: 0,
+    hasMore: false,
+    retryAt: null,
+  }));
 
   const result = await dispatchDocumentOcrBatches({
     dispatch,
@@ -44,7 +49,11 @@ test("does not dispatch after scheduler cancellation", async () => {
 });
 
 test("caps each scheduler tick at ten thousand OCR runs", async () => {
-  const dispatch = mock(async () => ({ attempted: 100, retryAt: null }));
+  const dispatch = mock(async () => ({
+    attempted: 100,
+    hasMore: true,
+    retryAt: null,
+  }));
 
   const result = await dispatchDocumentOcrBatches({
     dispatch,
@@ -63,13 +72,14 @@ test("preserves the earliest failed handoff retry across batches", async () => {
   const laterRetry = new Date("2030-01-01T00:01:00.000Z");
   const earlierRetry = new Date("2030-01-01T00:00:30.000Z");
   const batches = [
-    { attempted: 100, retryAt: laterRetry },
-    { attempted: 17, retryAt: earlierRetry },
+    { attempted: 100, hasMore: true, retryAt: laterRetry },
+    { attempted: 17, hasMore: false, retryAt: earlierRetry },
   ];
 
   const result = await dispatchDocumentOcrBatches({
     dispatch: mock(
-      async () => batches.shift() ?? { attempted: 0, retryAt: null },
+      async () =>
+        batches.shift() ?? { attempted: 0, hasMore: false, retryAt: null },
     ),
     signal: new AbortController().signal,
   });
