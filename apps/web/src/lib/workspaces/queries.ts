@@ -92,10 +92,12 @@ export const exportOverviewActivity = async ({
 
 const readOverviewActivityActors = async ({
   cursor,
+  search,
   signal,
   workspaceId,
 }: {
   cursor?: string;
+  search: string;
   signal: AbortSignal;
   workspaceId: string;
 }) => {
@@ -106,6 +108,7 @@ const readOverviewActivityActors = async ({
       query: {
         limit: MATTER_ACTIVITY_ACTOR_PAGE_SIZE,
         ...(cursor ? { cursor } : {}),
+        ...(search === "" ? {} : { search }),
       },
     });
   return unwrapEden(response);
@@ -117,12 +120,20 @@ export type MatterActivityActor = Awaited<
 
 const getInitialMatterActivityActorCursor = (): string | undefined => undefined;
 
-export const overviewActivityActorsOptions = (workspaceId: string) =>
+export const overviewActivityActorsOptions = (
+  workspaceId: string,
+  search: string,
+) =>
   infiniteQueryOptions({
-    queryKey: [...workspacesKeys.overviewActivityAll(workspaceId), "actors"],
+    queryKey: [
+      ...workspacesKeys.overviewActivityAll(workspaceId),
+      "actors",
+      search,
+    ],
     queryFn: async ({ pageParam, signal }) =>
       await readOverviewActivityActors({
         ...(pageParam ? { cursor: pageParam } : {}),
+        search,
         signal,
         workspaceId,
       }),

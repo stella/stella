@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, eq, gt, isNotNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, ilike, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -7,6 +7,7 @@ import { auditLogs } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
@@ -27,22 +28,31 @@ const config = {
         maximum: LIMITS.matterActivityActorPageSizeMax,
       }),
     ),
+    search: t.Optional(t.String({ maxLength: 256 })),
   }),
 } satisfies HandlerConfig;
 
 const historicalActorId = () =>
   sql<string>`coalesce(${auditLogs.performerId}, ${auditLogs.userId})`;
 
-const decodeActorCursor = (cursor: string): string | null => {
+const decodeActorCursor = (cursor: string, search: string): string | null => {
   const parts = decodePaginationCursor(cursor);
-  const actorId = parts?.at(0);
-  return parts?.length === 1 && typeof actorId === "string" ? actorId : null;
+  const cursorSearch = parts?.at(0);
+  const actorId = parts?.at(1);
+  return parts?.length === 2 &&
+    cursorSearch === search &&
+    typeof actorId === "string"
+    ? actorId
+    : null;
 };
 
 const readOverviewActivityActors = createSafeHandler(
   config,
   async function* ({ query, safeDb, session, workspaceId }) {
-    const afterActorId = query.cursor ? decodeActorCursor(query.cursor) : null;
+    const search = query.search?.trim() ?? "";
+    const afterActorId = query.cursor
+      ? decodeActorCursor(query.cursor, search)
+      : null;
     if (query.cursor !== undefined && afterActorId === null) {
       return Result.err(
         new HandlerError({ status: 400, message: "Invalid cursor" }),
@@ -62,6 +72,13 @@ const readOverviewActivityActors = createSafeHandler(
         if (afterActorId !== null) {
           conditions.push(gt(actorId, afterActorId));
         }
+        if (search !== "") {
+          const pattern = `%${escapeLike(search)}%`;
+          conditions.push(
+            or(ilike(user.name, pattern), ilike(user.email, pattern)) ??
+              sql`false`,
+          );
+        }
 
         const actorRows = await tx
           .selectDistinct({
@@ -79,20 +96,16 @@ const readOverviewActivityActors = createSafeHandler(
               eq(member.organizationId, session.activeOrganizationId),
             ),
           )
-          .leftJoin(
-            user,
-            and(
-              eq(user.id, actorId),
-              or(isNotNull(member.userId), isNotNull(user.deletedAt)),
-            ),
-          )
+          // The actor ID comes from an organization-and-workspace-scoped audit
+          // row, so attribution remains authorized after membership ends.
+          .leftJoin(user, eq(user.id, actorId))
           .where(and(...conditions))
           .orderBy(asc(actorId))
           .limit(limit + 1);
         const page = createCursorPage({
           rows: actorRows,
           limit,
-          cursorForItem: ({ id }) => encodePaginationCursor([id]),
+          cursorForItem: ({ id }) => encodePaginationCursor([search, id]),
         });
         return page;
       }),

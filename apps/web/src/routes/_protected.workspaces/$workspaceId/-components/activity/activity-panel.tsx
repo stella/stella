@@ -19,6 +19,7 @@ import {
   UsersIcon,
   WorkflowIcon,
 } from "lucide-react";
+import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
@@ -297,8 +298,10 @@ const ActivityAdvancedFilters = ({
 }) => {
   const t = useTranslations();
   const [open, setOpen] = useState(false);
+  const [actorSearch, setActorSearch] = useState("");
+  const debouncedSetActorSearch = useDebouncedCallback(setActorSearch, 300);
   const actorsQuery = useInfiniteQuery({
-    ...overviewActivityActorsOptions(workspaceId),
+    ...overviewActivityActorsOptions(workspaceId, actorSearch),
     enabled: open,
   });
   const actors = actorsQuery.data
@@ -322,7 +325,16 @@ const ActivityAdvancedFilters = ({
   ].filter(Boolean).length;
 
   return (
-    <Popover onOpenChange={setOpen} open={open}>
+    <Popover
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen) {
+          debouncedSetActorSearch.cancel();
+          setActorSearch("");
+        }
+      }}
+      open={open}
+    >
       <PopoverTrigger
         render={
           <Button
@@ -380,12 +392,16 @@ const ActivityAdvancedFilters = ({
             {t("workspaces.overview.activity.list.actor")}
           </label>
           <Combobox<MatterActivityActor>
+            filter={null}
             items={actors}
             itemToStringLabel={(actor) =>
               actor.name ?? t("workspaces.overview.activity.list.actor")
             }
             onValueChange={(actor) =>
               onFiltersChange({ ...filters, actorId: actor?.id ?? null })
+            }
+            onInputValueChange={(value) =>
+              debouncedSetActorSearch(value.trim())
             }
             value={selectedActor}
           >

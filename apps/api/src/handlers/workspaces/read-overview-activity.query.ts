@@ -458,14 +458,17 @@ type ReadOverviewActivityPageOptions = {
   workspaceId: SafeId<"workspace">;
 };
 
-const timestampNanoseconds = (value: string): bigint | null => {
+const timestampMicroseconds = (value: string): bigint | null => {
   const milliseconds = new Date(value).getTime();
   if (!Number.isFinite(milliseconds)) {
     return null;
   }
   const fraction = value.match(/\.(\d+)(?=Z|[+-]\d\d:\d\d$)/u)?.[1] ?? "";
-  const nanoseconds = BigInt(fraction.padEnd(9, "0").slice(0, 9) || "0");
-  return BigInt(Math.floor(milliseconds / 1000)) * 1_000_000_000n + nanoseconds;
+  if (fraction.length > 6) {
+    return null;
+  }
+  const microseconds = BigInt(fraction.padEnd(6, "0") || "0");
+  return BigInt(Math.floor(milliseconds / 1000)) * 1_000_000n + microseconds;
 };
 
 export const readOverviewActivityPage = async ({
@@ -480,11 +483,11 @@ export const readOverviewActivityPage = async ({
 > =>
   await Result.gen(async function* () {
     const fromDate =
-      filters.from === null ? null : timestampNanoseconds(filters.from);
+      filters.from === null ? null : timestampMicroseconds(filters.from);
     const toExclusiveDate =
       filters.toExclusive === null
         ? null
-        : timestampNanoseconds(filters.toExclusive);
+        : timestampMicroseconds(filters.toExclusive);
     if (
       (filters.from !== null && fromDate === null) ||
       (filters.toExclusive !== null && toExclusiveDate === null) ||
@@ -676,7 +679,6 @@ export const readOverviewActivityPage = async ({
                   and(
                     eq(entityVersions.workspaceId, workspaceId),
                     inArray(entityVersions.id, versionIds),
-                    isNull(entityVersions.deletedAt),
                   ),
                 );
         const entityIds = [
@@ -765,10 +767,10 @@ export const readOverviewActivityPage = async ({
                   ),
                 )
                 .where(
-                  and(
-                    inArray(user.id, actorIds),
-                    or(isNotNull(member.userId), isNotNull(user.deletedAt)),
-                  ),
+                  // Actor IDs originate only from the organization-and-
+                  // workspace-scoped rows above, preserving audit attribution
+                  // after membership ends without widening the identity set.
+                  inArray(user.id, actorIds),
                 );
         return {
           actors,
