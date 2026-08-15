@@ -30,10 +30,18 @@ describe("file size display", () => {
       { sizeBytes: 1001, unit: "kilobyte", value: 1.001 },
       { sizeBytes: 999_999, unit: "kilobyte", value: 999.999 },
       { sizeBytes: 1_000_000, unit: "megabyte", value: 1 },
-      { sizeBytes: 1_000_001, unit: "megabyte", value: 1.000_001 },
-      { sizeBytes: 999_999_999, unit: "megabyte", value: 999.999_999 },
+      { sizeBytes: 1_000_001, unit: "megabyte", value: 1_000_001 / 1_000_000 },
+      {
+        sizeBytes: 999_999_999,
+        unit: "megabyte",
+        value: 999_999_999 / 1_000_000,
+      },
       { sizeBytes: 1_000_000_000, unit: "gigabyte", value: 1 },
-      { sizeBytes: 1_000_000_001, unit: "gigabyte", value: 1.000_000_001 },
+      {
+        sizeBytes: 1_000_000_001,
+        unit: "gigabyte",
+        value: 1_000_000_001 / 1_000_000_000,
+      },
     ] as const;
 
     for (const { sizeBytes, unit, value } of cases) {
