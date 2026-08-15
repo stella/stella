@@ -53,6 +53,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/components/menu";
 import { stellaToast } from "@stll/ui/components/toast";
+import { containedEventHandler } from "@stll/ui/hooks/use-contained-handler";
 import { cn } from "@stll/ui/lib/utils";
 
 import {
@@ -804,7 +805,7 @@ const NavContextMenu = ({
   return (
     <div
       className="contents"
-      onContextMenu={(e) => {
+      onContextMenu={containedEventHandler((e) => {
         e.preventDefault();
         e.stopPropagation();
         const x = e.clientX;
@@ -813,7 +814,7 @@ const NavContextMenu = ({
           getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
         });
         setOpen(true);
-      }}
+      })}
     >
       {children}
       <Menu
@@ -1209,7 +1210,7 @@ const MatterItem = ({
           isEntityDropTarget &&
             "bg-primary/8 ring-primary rounded-md ring-2 ring-inset",
         )}
-        onContextMenu={(e) => {
+        onContextMenu={containedEventHandler((e) => {
           e.preventDefault();
           e.stopPropagation();
           const x = e.clientX;
@@ -1218,7 +1219,7 @@ const MatterItem = ({
             getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
           });
           setMenuOpen(true);
-        }}
+        })}
         ref={dropRef}
       >
         {activityIsKnownEmpty ? null : (
@@ -1583,7 +1584,7 @@ const SidebarContextArea = ({
   return (
     <div
       className="flex min-h-0 flex-1 flex-col"
-      onContextMenu={(e) => {
+      onContextMenu={containedEventHandler((e) => {
         e.preventDefault();
         const x = e.clientX;
         const y = e.clientY;
@@ -1591,7 +1592,7 @@ const SidebarContextArea = ({
           getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
         });
         setCtxOpen(true);
-      }}
+      })}
     >
       {children}
       <Menu

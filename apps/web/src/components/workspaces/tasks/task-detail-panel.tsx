@@ -34,6 +34,14 @@ import {
 import {
   getTaskDetailInstanceKey,
   getTaskStatusUpdate,
+  taskUpdateBody,
+  taskUpdateClearsWorkflowReason,
+  workflowUpdateBody,
+  workflowUpdateClearsReason,
+} from "@/components/workspaces/tasks/task-detail-panel.logic";
+import type {
+  TaskUpdate,
+  WorkflowUpdate,
 } from "@/components/workspaces/tasks/task-detail-panel.logic";
 import { LinksSection } from "@/components/workspaces/tasks/task-links";
 import {
@@ -124,25 +132,17 @@ const TaskDetailPanelContent = ({
   const name = task?.name ?? t("untitled");
 
   const updateMutation = useMutation({
-    mutationFn: async (body: {
-      taskId: string;
-      name?: string;
-      status?: string;
-      priority?: string;
-      dueDate?: string | null;
-      workflowReason?: string;
-      listItemType?: string;
-    }) => {
+    mutationFn: async (update: TaskUpdate) => {
       const response = await api
         .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .patch({
-          ...body,
-          taskId: toSafeId<"entity">(body.taskId),
+          ...taskUpdateBody(update),
+          taskId: toSafeId<"entity">(update.taskId),
         });
       return unwrapEden(response);
     },
     onSuccess: async (_data, variables) => {
-      if (variables.workflowReason) {
+      if (taskUpdateClearsWorkflowReason(variables)) {
         setWorkflowReason("");
       }
       await Promise.all([
@@ -185,29 +185,16 @@ const TaskDetailPanelContent = ({
   };
 
   const workflowMutation = useMutation({
-    mutationFn: async (body: {
-      ownerUserId?: string | null;
-      workingTargetDate?: string | null;
-      hardDeadlineDate?: string | null;
-      type?: "task" | "deadline";
-      reason?: string;
-    }) => {
-      const { ownerUserId, ...workflowBody } = body;
+    mutationFn: async (update: WorkflowUpdate) => {
       const response = await api["work-obligations"]({
         workspaceId: toSafeId<"workspace">(workspaceId),
       })({ entityId: toSafeId<"entity">(taskId) }).patch({
-        ...workflowBody,
-        ...(ownerUserId === undefined
-          ? {}
-          : {
-              ownerUserId:
-                ownerUserId === null ? null : toSafeId<"user">(ownerUserId),
-            }),
+        ...workflowUpdateBody(update),
       });
       return unwrapEden(response);
     },
     onSuccess: async (_data, variables) => {
-      if (variables.reason) {
+      if (workflowUpdateClearsReason(variables)) {
         setWorkflowReason("");
       }
       await invalidateWorkflow();
@@ -335,7 +322,7 @@ const TaskDetailPanelContent = ({
   const commitName = () => {
     const trimmed = editNameValue.trim();
     if (trimmed && trimmed !== (task?.name ?? "")) {
-      updateMutation.mutate({ taskId, name: trimmed });
+      updateMutation.mutate({ taskId, type: "name", value: trimmed });
     }
     setIsEditingName(false);
   };
@@ -351,22 +338,22 @@ const TaskDetailPanelContent = ({
     if (!value) {
       return;
     }
-    updateMutation.mutate({ taskId, priority: value });
+    updateMutation.mutate({ taskId, type: "priority", value });
   };
 
   const handleDueDateChange = (value: string | null) => {
     if (env.VITE_FEATURE_GOVERNED_WORKFLOW) {
-      workflowMutation.mutate({ workingTargetDate: value });
+      workflowMutation.mutate({ type: "workingTargetDate", value });
       return;
     }
-    updateMutation.mutate({ taskId, dueDate: value });
+    updateMutation.mutate({ taskId, type: "dueDate", value });
   };
 
   const handleItemTypeChange = (value: ListItemType | null) => {
     if (!value) {
       return;
     }
-    updateMutation.mutate({ taskId, listItemType: value });
+    updateMutation.mutate({ taskId, type: "listItemType", value });
   };
 
   const handleSubtaskToggle = (
@@ -376,7 +363,8 @@ const TaskDetailPanelContent = ({
     const newStatus = currentStatus === "done" ? "open" : "done";
     updateMutation.mutate({
       taskId: subtaskId,
-      status: newStatus,
+      type: "status",
+      value: { status: newStatus },
     });
   };
 
@@ -641,7 +629,7 @@ const TaskDetailPanelContent = ({
                 <WorkTypeSelect
                   onChange={(type) => {
                     if (type) {
-                      workflowMutation.mutate({ type });
+                      workflowMutation.mutate({ type: "type", value: type });
                     }
                   }}
                   value={workflow.type}
@@ -654,8 +642,11 @@ const TaskDetailPanelContent = ({
                   onChange={(ownerUserId) => {
                     const reason = workflowReason.trim();
                     workflowMutation.mutate({
-                      ownerUserId,
-                      ...(reason ? { reason } : {}),
+                      type: "owner",
+                      value: {
+                        ownerUserId,
+                        ...(reason ? { reason } : {}),
+                      },
                     });
                   }}
                   owner={workflow.owner}
@@ -670,10 +661,13 @@ const TaskDetailPanelContent = ({
                   onChange={(hardDeadline) => {
                     const reason = workflowReason.trim();
                     workflowMutation.mutate({
-                      hardDeadlineDate: hardDeadline,
-                      ...(workflow.hardDeadlineDate && reason
-                        ? { reason }
-                        : {}),
+                      type: "hardDeadline",
+                      value: {
+                        hardDeadlineDate: hardDeadline,
+                        ...(workflow.hardDeadlineDate && reason
+                          ? { reason }
+                          : {}),
+                      },
                     });
                   }}
                   value={workflow.hardDeadlineDate}

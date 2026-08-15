@@ -16,6 +16,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { updateMemory as updateMemoryRequest } from "@/lib/memory-api";
+import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { invalidateMemories } from "@/routes/_protected.settings/-queries/memories";
 import type { MemoryListItem } from "@/routes/_protected.settings/-queries/memories";
 
@@ -54,11 +55,13 @@ export const MemoryRow = ({
   const [draft, setDraft] = useState(memory.content);
 
   const updateMemory = useMutation({
-    mutationFn: async (body: {
-      content?: string;
-      pinned?: boolean;
-      status?: "active" | "archived";
-    }) => await updateMemoryRequest({ body, memoryId: memory.id }),
+    mutationFn: async (
+      body: NonEmptyPatch<{
+        content: string;
+        pinned: boolean;
+        status: "active" | "archived";
+      }>,
+    ) => await updateMemoryRequest({ body, memoryId: memory.id }),
     onSuccess: async (_data, variables) => {
       await invalidateMemories(queryClient, activeOrganizationId);
       if (variables.status === "archived") {

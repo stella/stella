@@ -15,12 +15,27 @@ import { UserIdentity } from "@/components/user-avatar";
 import { useUpdateContact } from "@/lib/contacts/mutations";
 import { detached } from "@/lib/detached";
 import { organizationOptions } from "@/lib/organization/queries";
+import { toSafeId } from "@/lib/safe-id";
 import { invalidateContactCaches } from "@/routes/_protected.contacts/-components/contact-caches";
 import type { ContactData } from "@/routes/_protected.contacts/-components/types";
 
 const NO_OWNER_VALUE = "__none";
 
 const protectedRouteApi = getRouteApi("/_protected");
+
+type ContactOwnerField = "originatingAttorneyId" | "responsibleAttorneyId";
+
+const contactOwnerPatch = (field: ContactOwnerField, value: string | null) => {
+  const ownerUserId = value === null ? null : toSafeId<"user">(value);
+  switch (field) {
+    case "originatingAttorneyId":
+      return { originatingAttorneyId: ownerUserId };
+    case "responsibleAttorneyId":
+      return { responsibleAttorneyId: ownerUserId };
+    default:
+      return field satisfies never;
+  }
+};
 
 export const ContactOwnersEditor = ({ contact }: { contact: ContactData }) => {
   const t = useTranslations();
@@ -41,10 +56,7 @@ export const ContactOwnersEditor = ({ contact }: { contact: ContactData }) => {
     value: member.userId,
   }));
 
-  const updateOwner = (
-    field: "originatingAttorneyId" | "responsibleAttorneyId",
-    value: string | null,
-  ) => {
+  const updateOwner = (field: ContactOwnerField, value: string | null) => {
     const nextValue = value === NO_OWNER_VALUE ? null : value;
     if (contact[field] === nextValue) {
       return;
@@ -53,7 +65,7 @@ export const ContactOwnersEditor = ({ contact }: { contact: ContactData }) => {
     updateContact.mutate(
       {
         contactId: contact.id,
-        [field]: nextValue,
+        ...contactOwnerPatch(field, nextValue),
       },
       {
         onSuccess: () => {

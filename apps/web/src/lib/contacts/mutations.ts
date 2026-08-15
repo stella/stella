@@ -5,6 +5,7 @@ import type { ContactType } from "@stll/api-contract";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import type { NonEmptyPatch } from "@/lib/mutation-command";
 import type { SafeId } from "@/lib/safe-id";
 
 type BankAccount = {
@@ -96,31 +97,36 @@ export const useCreateContact = () => {
   });
 };
 
+export type ContactUpdateFields = {
+  displayName: string;
+  type: ContactType;
+  firstName: string | null;
+  lastName: string | null;
+  organizationName: string | null;
+  prefix: string | null;
+  middleName: string | null;
+  suffix: string | null;
+  notes: string | null;
+  emails: ContactEmail[] | null;
+  phones: ContactPhone[] | null;
+  metadata: ContactMetadata | null;
+  color: string | null;
+  registrationNumber: string | null;
+  taxId: string | null;
+  bankAccounts: BankAccount[] | null;
+  billingAddress: BillingAddress | null;
+  defaultHourlyRate: number | null;
+  currency: string | null;
+  paymentTermDays: number | null;
+  originatingAttorneyId: SafeId<"user"> | null;
+  responsibleAttorneyId: SafeId<"user"> | null;
+};
+
+export type ContactUpdate = NonEmptyPatch<ContactUpdateFields>;
+
 type UpdateContactVars = {
   contactId: SafeId<"contact">;
-  displayName?: string;
-  type?: ContactType;
-  firstName?: string | null;
-  lastName?: string | null;
-  organizationName?: string | null;
-  prefix?: string | null;
-  middleName?: string | null;
-  suffix?: string | null;
-  notes?: string | null;
-  emails?: ContactEmail[] | null;
-  phones?: ContactPhone[] | null;
-  metadata?: ContactMetadata | null;
-  color?: string | null;
-  registrationNumber?: string | null;
-  taxId?: string | null;
-  bankAccounts?: BankAccount[] | null;
-  billingAddress?: BillingAddress | null;
-  defaultHourlyRate?: number | null;
-  currency?: string | null;
-  paymentTermDays?: number | null;
-  originatingAttorneyId?: SafeId<"user"> | null;
-  responsibleAttorneyId?: SafeId<"user"> | null;
-};
+} & ContactUpdate;
 
 export const useUpdateContact = () => {
   const analytics = useAnalytics();

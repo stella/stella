@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   buildNumericContactPayload,
+  buildTextContactPayload,
   getEditableFieldInputAttributes,
 } from "@/routes/_protected.contacts/-components/editable-row.logic";
 
@@ -62,5 +63,61 @@ describe("contact numeric editable fields", () => {
       type: "text",
       inputMode: "numeric",
     });
+  });
+});
+
+describe("contact text editable fields", () => {
+  test("maps every field to its exact API property", () => {
+    expect([
+      buildTextContactPayload("prefix", "Dr"),
+      buildTextContactPayload("firstName", "Ada"),
+      buildTextContactPayload("middleName", "M"),
+      buildTextContactPayload("lastName", "Lovelace"),
+      buildTextContactPayload("suffix", "KC"),
+      buildTextContactPayload("organizationName", "Analytical Engines"),
+      buildTextContactPayload("displayName", "Ada Lovelace"),
+      buildTextContactPayload("notes", "Counsel"),
+      buildTextContactPayload("registrationNumber", "123"),
+      buildTextContactPayload("taxId", "GB123"),
+      buildTextContactPayload("currency", "GBP"),
+    ]).toEqual([
+      { prefix: "Dr" },
+      { firstName: "Ada" },
+      { middleName: "M" },
+      { lastName: "Lovelace" },
+      { suffix: "KC" },
+      { organizationName: "Analytical Engines" },
+      { displayName: "Ada Lovelace" },
+      { notes: "Counsel" },
+      { registrationNumber: "123" },
+      { taxId: "GB123" },
+      { currency: "GBP" },
+    ]);
+  });
+
+  test("clears every optional text field with null", () => {
+    expect([
+      buildTextContactPayload("prefix", ""),
+      buildTextContactPayload("firstName", ""),
+      buildTextContactPayload("middleName", ""),
+      buildTextContactPayload("lastName", ""),
+      buildTextContactPayload("suffix", ""),
+      buildTextContactPayload("organizationName", ""),
+      buildTextContactPayload("notes", ""),
+      buildTextContactPayload("registrationNumber", ""),
+      buildTextContactPayload("taxId", ""),
+      buildTextContactPayload("currency", ""),
+    ]).toEqual([
+      { prefix: null },
+      { firstName: null },
+      { middleName: null },
+      { lastName: null },
+      { suffix: null },
+      { organizationName: null },
+      { notes: null },
+      { registrationNumber: null },
+      { taxId: null },
+      { currency: null },
+    ]);
   });
 });

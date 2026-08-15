@@ -35,6 +35,7 @@ import {
   TableHeader,
   TableRow,
 } from "@stll/ui/components/table";
+import { containedEventHandler } from "@stll/ui/hooks/use-contained-handler";
 import { cn } from "@stll/ui/lib/utils";
 
 import { EmptyScreen } from "@/components/empty-screen";
@@ -576,7 +577,7 @@ const MattersPageContextMenu = ({
   return (
     <div
       className="contents"
-      onContextMenu={(event) => {
+      onContextMenu={containedEventHandler((event) => {
         if (event.defaultPrevented) {
           return;
         }
@@ -587,7 +588,7 @@ const MattersPageContextMenu = ({
           getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
         });
         setOpen(true);
-      }}
+      })}
     >
       {children}
       <Menu

@@ -17,6 +17,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
 import { billingCodesOptions } from "@/lib/workspaces/queries/billing-codes";
 
@@ -85,18 +86,18 @@ export const BillingCodesDialog = ({
       analytics.captureError(error);
     },
   });
+  type UpdateBillingCodeVars = {
+    workspaceId: string;
+    id: string;
+  } & NonEmptyPatch<{
+    code: string;
+    label: string;
+    active: boolean;
+    sortOrder: number;
+  }>;
+
   const updateCode = useMutation({
-    mutationFn: async ({
-      workspaceId: ws,
-      ...body
-    }: {
-      workspaceId: string;
-      id: string;
-      code?: string;
-      label?: string;
-      active?: boolean;
-      sortOrder?: number;
-    }) => {
+    mutationFn: async ({ workspaceId: ws, ...body }: UpdateBillingCodeVars) => {
       const response = await api["billing-codes"]({
         workspaceId: toSafeId<"workspace">(ws),
       }).patch({

@@ -1,7 +1,3 @@
-/* oxlint-disable typescript/no-unsafe-type-assertion --
-   The helper is typed against real DOM interfaces. Bun's default test
-   runtime has no DOM, so the stubs here intentionally narrow to
-   `HTMLElement` to exercise the runtime branches. */
 import { describe, expect, it, mock } from "bun:test";
 
 // The helper does a runtime `instanceof Node` check; install a minimal
@@ -12,17 +8,15 @@ class FakeNode {
 }
 Object.assign(globalThis, { Node: FakeNode });
 
-const { containedHandler } =
+const { containedEventHandler, containedHandler } =
   await import("@stll/ui/hooks/use-contained-handler");
 
 type SyntheticLike = { target: unknown };
 
 const makeRef = <T>(node: T | null) => ({ current: node });
 
-const makeContainer = (containsImpl: (other: unknown) => boolean) => {
-  const stub = { contains: containsImpl };
-  return stub as unknown as HTMLElement;
-};
+const makeContainer = (containsImpl: (other: unknown) => boolean) =>
+  Object.assign(new FakeNode(), { contains: containsImpl });
 
 const node = (): object => new FakeNode();
 
@@ -83,6 +77,31 @@ describe("containedHandler", () => {
     const handler = mock<(e: SyntheticLike) => void>(() => {});
 
     containedHandler(makeRef(container), handler)({ target: { plain: true } });
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("containedEventHandler", () => {
+  it("blocks targets outside the current target subtree", () => {
+    const currentTarget = makeContainer(() => false);
+    const handler = mock<
+      (event: SyntheticLike & { currentTarget: unknown }) => void
+    >(() => {});
+
+    containedEventHandler(handler)({ currentTarget, target: node() });
+
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("invokes the handler for a contained target", () => {
+    const target = node();
+    const currentTarget = makeContainer((other) => other === target);
+    const handler = mock<
+      (event: SyntheticLike & { currentTarget: unknown }) => void
+    >(() => {});
+
+    containedEventHandler(handler)({ currentTarget, target });
 
     expect(handler).toHaveBeenCalledTimes(1);
   });

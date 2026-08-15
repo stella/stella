@@ -82,10 +82,12 @@ runtime validation, or integration tests.
 - [`no-detached-void`](./no-detached-void.ts) (`no-detached-void`): prevents `void promise` from hiding rejection ownership; use `await`, return the promise, or the monitored `detached()` helper.
 - [`no-disabled-tooltip-trigger`](./no-disabled-tooltip-trigger.ts) (`no-disabled-tooltip-trigger`): rejects tooltip triggers rendered as disabled buttons that cannot receive hover or focus events.
 - [`no-inline-endpoint-in-routes`](./no-inline-endpoint-in-routes.ts) (`no-inline-endpoint-in-routes`): requires route code to use owned API clients instead of declaring endpoints inline.
+- [`no-optional-mutation-command`](./no-optional-mutation-command.ts) (`no-optional-mutation-command`): rejects React Query mutation commands with multiple optional domain fields; use a discriminated union so empty, conflicting, and semantically ambiguous operations are unrepresentable.
 - [`no-inline-style-colors`](./no-inline-style-colors.ts) (`no-inline-style-colors`): rejects hardcoded color values only inside JSX `style={{ ... }}` objects; domain data objects are out of scope.
 - [`no-input-dir-auto`](./no-input-dir-auto.ts) (`no-input-dir-auto`): prevents `dir="auto"` on form inputs where direction changes can destabilize layout and value editing.
 - [`no-legacy-entity-route`](./no-legacy-entity-route.ts) (`no-legacy-entity-route`): prevents construction of the removed public entity detail route.
 - [`no-raw-route-query-client`](./no-raw-route-query-client.ts) (`no-raw-route-query-client`): requires route freshness wrappers in loaders and synchronous cache reads in pending components.
+- [`no-raw-router-invalidation`](./no-raw-router-invalidation.ts) (`no-raw-router-invalidation`): confines navigation-grade `router.invalidate()` calls to the owned session, locale, and exhaustively classified route-metadata boundaries.
 - [`no-raw-stored-json`](./no-raw-stored-json.ts) (`no-raw-stored-json`): requires persisted browser JSON to be parsed and schema-validated through `readStoredJson()`.
 - [`no-raw-use-effect`](./no-raw-use-effect.ts) (`no-raw-use-effect`): bans direct React `useEffect`; use the sanctioned lifecycle wrappers or a more precise primitive.
 - [`no-ref-mirror`](./no-ref-mirror.ts) (`no-ref-mirror`): rejects mirroring render values into refs during render, a stale-value and React Compiler hazard.
@@ -93,7 +95,7 @@ runtime validation, or integration tests.
 - [`no-static-catalogue-route-import`](./no-static-catalogue-route-import.ts) (`no-static-catalogue-route-import`): prevents static imports of large catalogue route modules that defeat route-level code splitting.
 - [`no-strict-route-read-in-chrome`](./no-strict-route-read-in-chrome.ts) (`no-strict-route-read-in-chrome`): prevents strict router reads in reusable chrome that can render outside the matching route.
 - [`require-cn-for-classname-composition`](./require-cn-for-classname-composition.ts) (`require-cn-for-classname-composition`): requires conditional, interpolated, concatenated, or helper-composed JSX class names to use `cn` from `@stll/ui/lib/utils`; static and pass-through values remain valid.
-- [`require-contained-handler`](./require-contained-handler.ts) (`require-contained-handler`): wraps handlers on ref-owned containers so portal-bubbled events do not trigger unrelated parent behavior.
+- [`require-contained-handler`](./require-contained-handler.ts) (`require-contained-handler`, `no-portal-under-interactive-ancestor`): wraps handlers on ref-owned containers and rejects portaled popups under interactive ancestors so portal-bubbled events cannot trigger unrelated parent behavior or navigation.
 - [`require-loader-prefetch`](./require-loader-prefetch.ts) (`require-loader-prefetch`): requires suspense query data to start in the route loader rather than after component mount.
 - [`require-query-key-factory`](./require-query-key-factory.ts) (`require-query-key-factory`): requires query keys to come from their feature-owned factory.
 - [`require-query-signal`](./require-query-signal.ts) (`require-query-signal`): requires query functions to pass TanStack Query's abort signal into fetch or Eden calls.

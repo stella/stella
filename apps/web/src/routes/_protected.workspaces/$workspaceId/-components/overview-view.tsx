@@ -43,6 +43,7 @@ import {
   Tooltip as TooltipRoot,
   TooltipTrigger,
 } from "@stll/ui/components/tooltip";
+import { containedEventHandler } from "@stll/ui/hooks/use-contained-handler";
 import { cn } from "@stll/ui/lib/utils";
 
 import { EmptyScreen } from "@/components/empty-screen";
@@ -504,7 +505,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         {/* Upcoming tasks */}
         <section
           className="flex flex-col"
-          onContextMenu={(e) => {
+          onContextMenu={containedEventHandler((e) => {
             e.preventDefault();
             e.stopPropagation();
             setUpcomingMenu({
@@ -515,7 +516,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               },
               task: null,
             });
-          }}
+          })}
         >
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-muted-foreground text-sm font-medium">

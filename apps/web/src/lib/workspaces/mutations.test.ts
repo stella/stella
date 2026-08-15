@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
+import type { WorkspaceUpdate } from "@/lib/workspaces/mutations";
+
 const previousApiUrl = process.env["VITE_API_URL"];
 
 beforeAll(() => {
@@ -43,33 +45,47 @@ describe("workspace update cache invalidation", () => {
     ]);
   });
 
-  test("only name updates invalidate the current route metadata", async () => {
-    const { workspaceUpdateInvalidatesRoute } =
+  test("assigns every update kind its exact refresh scope", async () => {
+    const { workspaceUpdateRefreshScope } =
       await import("@/lib/workspaces/mutations");
 
-    expect([
-      workspaceUpdateInvalidatesRoute({
-        type: "name",
-        value: "Renamed matter",
-      }),
-      workspaceUpdateInvalidatesRoute({
+    const updates = {
+      clientId: {
         type: "clientId",
         value: "contact_test",
-      }),
-      workspaceUpdateInvalidatesRoute({ type: "color", value: "purple" }),
-      workspaceUpdateInvalidatesRoute({
+      },
+      color: { type: "color", value: "purple" },
+      leadUserId: {
         type: "leadUserId",
         value: "user_test",
-      }),
-      workspaceUpdateInvalidatesRoute({
+      },
+      name: { type: "name", value: "Renamed matter" },
+      promote: {
         type: "promote",
         value: { clientId: "contact_test" },
-      }),
-      workspaceUpdateInvalidatesRoute({
-        type: "reference",
-        value: "REF-42",
-      }),
-    ]).toEqual([true, false, false, false, false, false]);
+      },
+      reference: { type: "reference", value: "REF-42" },
+    } as const satisfies {
+      [Type in WorkspaceUpdate["type"]]: Extract<
+        WorkspaceUpdate,
+        { type: Type }
+      >;
+    };
+    const scopes = Object.fromEntries(
+      Object.values(updates).map((update) => [
+        update.type,
+        workspaceUpdateRefreshScope(update),
+      ]),
+    );
+
+    expect(scopes).toEqual({
+      clientId: "query-cache",
+      color: "query-cache",
+      leadUserId: "query-cache",
+      name: "route-metadata",
+      promote: "query-cache",
+      reference: "query-cache",
+    });
   });
 
   test("maps every workspace update variant to its API body", async () => {

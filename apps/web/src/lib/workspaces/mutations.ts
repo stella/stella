@@ -86,27 +86,27 @@ export type WorkspaceUpdate = {
   };
 }[WorkspaceUpdateType];
 
+type WorkspaceUpdateRefreshScope = "query-cache" | "route-metadata";
+
+const WORKSPACE_UPDATE_REFRESH_SCOPE = {
+  clientId: "query-cache",
+  color: "query-cache",
+  leadUserId: "query-cache",
+  name: "route-metadata",
+  promote: "query-cache",
+  reference: "query-cache",
+} as const satisfies Record<
+  WorkspaceUpdate["type"],
+  WorkspaceUpdateRefreshScope
+>;
+
 type UpdateWorkspaceVars = {
   workspaceId: string;
   update: WorkspaceUpdate;
 };
 
-export const workspaceUpdateInvalidatesRoute = (update: WorkspaceUpdate) => {
-  switch (update.type) {
-    case "name":
-      return true;
-    case "clientId":
-    case "color":
-    case "leadUserId":
-    case "promote":
-    case "reference":
-      return false;
-    default: {
-      const unreachable: never = update;
-      return unreachable;
-    }
-  }
-};
+export const workspaceUpdateRefreshScope = (update: WorkspaceUpdate) =>
+  WORKSPACE_UPDATE_REFRESH_SCOPE[update.type];
 
 export const workspaceUpdateBody = (update: WorkspaceUpdate) => {
   switch (update.type) {
@@ -182,7 +182,7 @@ export const useUpdateWorkspace = () => {
           },
         ),
       );
-      if (workspaceUpdateInvalidatesRoute(variables.update)) {
+      if (workspaceUpdateRefreshScope(variables.update) === "route-metadata") {
         await router.invalidate();
       }
     },

@@ -52,6 +52,7 @@ import {
   PopoverPopup,
   PopoverTrigger,
 } from "@stll/ui/components/popover";
+import { containedEventHandler } from "@stll/ui/hooks/use-contained-handler";
 import { cn } from "@stll/ui/lib/utils";
 
 import { InlineEdit } from "@/components/inline-edit";
@@ -489,7 +490,7 @@ export const KanbanColumn = ({
       </div>
       <div
         className="flex-1 overflow-y-auto p-2"
-        onContextMenu={handleContextMenu}
+        onContextMenu={containedEventHandler(handleContextMenu)}
         ref={scrollRef}
       >
         {isFileDragOver && (
