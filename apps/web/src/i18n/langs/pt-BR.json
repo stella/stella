@@ -4231,8 +4231,8 @@
       "untitledColumn": "Nome da coluna, ex.: Data de vigência"
     },
     "reference": "Número de referência",
-    "referenceConventionHint": "Formato de organização: {example}",
-    "referenceFormatWarning": "Não corresponde ao formato da organização.",
+    "referenceConventionHint": "Formato preferido: {example}",
+    "referenceFormatWarning": "Não corresponde ao formato preferido.",
     "referencePlaceholder": "por exemplo 2024/001",
     "referenceTaken": "Este número de referência já está em uso",
     "sections": {

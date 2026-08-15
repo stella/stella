@@ -290,6 +290,7 @@ const showUpdatingToast = () => {
 };
 
 export function UiPlayground() {
+  const t = useTranslations();
   const [checkboxChecked, setCheckboxChecked] = useState(true);
   const [selectValue, setSelectValue] = useState("litigation");
   const [comboboxQuery, setComboboxQuery] = useState("");
@@ -619,6 +620,7 @@ export function UiPlayground() {
                     value={dateValue}
                   />
                   <ColorPicker
+                    moreLabel={t("common.showMore")}
                     onClear={() => setColorValue("")}
                     onSelect={setColorValue}
                     value={colorValue}

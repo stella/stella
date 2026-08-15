@@ -1,7 +1,12 @@
+import { createElement } from "react";
+
+import { useTranslations } from "use-intl";
+
 import type { FolioUIComponents } from "@stll/folio-react";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import { ColorPicker } from "@stll/ui/components/color-picker";
+import type { ColorPickerProps } from "@stll/ui/components/color-picker";
 import {
   Dialog,
   DialogBackdrop,
@@ -38,6 +43,15 @@ import {
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 
+const LocalizedColorPicker = (props: Omit<ColorPickerProps, "moreLabel">) => {
+  const t = useTranslations();
+
+  return createElement(ColorPicker, {
+    ...props,
+    moreLabel: t("common.showMore"),
+  });
+};
+
 /**
  * Chrome UI primitives injected into folio's `DocxEditor` so the editor keeps
  * the app's design system while folio itself stays UI-agnostic. The object
@@ -53,7 +67,7 @@ export const folioUIComponents: Partial<FolioUIComponents> = {
   Button,
   Checkbox,
   Input,
-  ColorPicker,
+  ColorPicker: LocalizedColorPicker,
   DatePickerPopover,
   OutlineRail,
   Dialog: {

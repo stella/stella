@@ -4231,8 +4231,8 @@
       "untitledColumn": "Nom de colonne, p. ex. Date d'effet"
     },
     "reference": "Numéro de référence",
-    "referenceConventionHint": "Format de l'organisation : {example}",
-    "referenceFormatWarning": "Ne correspond pas au format de l'organisation.",
+    "referenceConventionHint": "Format préféré : {example}",
+    "referenceFormatWarning": "Ne correspond pas au format préféré.",
     "referencePlaceholder": "ex. 2024/001",
     "referenceTaken": "Ce numéro de référence est déjà utilisé",
     "sections": {

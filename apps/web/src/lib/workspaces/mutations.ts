@@ -65,17 +65,76 @@ export const useCreateWorkspace = () => {
   });
 };
 
-type UpdateWorkspaceVars = {
-  workspaceId: string;
-  name?: string;
-  clientId?: string;
-  reference?: string;
-  color?: string | null;
-  leadUserId?: string | null;
-  promote?: {
+type WorkspaceUpdateValueByType = {
+  clientId: string;
+  color: string | null;
+  leadUserId: string | null;
+  name: string;
+  promote: {
     clientId: string;
     memberUserIds?: string[];
   };
+  reference: string;
+};
+
+type WorkspaceUpdateType = keyof WorkspaceUpdateValueByType;
+
+export type WorkspaceUpdate = {
+  [Type in WorkspaceUpdateType]: {
+    type: Type;
+    value: WorkspaceUpdateValueByType[Type];
+  };
+}[WorkspaceUpdateType];
+
+type UpdateWorkspaceVars = {
+  workspaceId: string;
+  update: WorkspaceUpdate;
+};
+
+export const workspaceUpdateInvalidatesRoute = (update: WorkspaceUpdate) => {
+  switch (update.type) {
+    case "name":
+      return true;
+    case "clientId":
+    case "color":
+    case "leadUserId":
+    case "promote":
+    case "reference":
+      return false;
+    default: {
+      const unreachable: never = update;
+      return unreachable;
+    }
+  }
+};
+
+export const workspaceUpdateBody = (update: WorkspaceUpdate) => {
+  switch (update.type) {
+    case "clientId":
+      return { clientId: toSafeId<"contact">(update.value) };
+    case "color":
+      return { color: update.value };
+    case "leadUserId":
+      return { leadUserId: update.value };
+    case "name":
+      return { name: update.value };
+    case "promote":
+      return {
+        promote: {
+          clientId: toSafeId<"contact">(update.value.clientId),
+          ...(update.value.memberUserIds &&
+            update.value.memberUserIds.length > 0 && {
+              memberUserIds: update.value.memberUserIds,
+            }),
+        },
+      };
+    case "reference":
+      return { reference: update.value };
+    default: {
+      const unreachable: never = update;
+      return unreachable;
+    }
+  }
 };
 
 export const workspaceUpdateInvalidationKeys = () => [workspacesKeys.all];
@@ -97,30 +156,17 @@ export const useUpdateWorkspace = () => {
   const router = useRouter();
 
   return useMutation({
-    mutationFn: async ({ workspaceId, ...body }: UpdateWorkspaceVars) => {
-      const { clientId, promote, ...restBody } = body;
+    mutationFn: async ({ update, workspaceId }: UpdateWorkspaceVars) => {
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .post({
-          ...restBody,
-          ...(clientId !== undefined && {
-            clientId: toSafeId<"contact">(clientId),
-          }),
-          ...(promote !== undefined && {
-            promote: {
-              clientId: toSafeId<"contact">(promote.clientId),
-              ...(promote.memberUserIds && promote.memberUserIds.length > 0
-                ? { memberUserIds: promote.memberUserIds }
-                : {}),
-            },
-          }),
-        });
+        .post(workspaceUpdateBody(update));
 
       if (response.error) {
         throw toAPIError(response.error);
       }
     },
-    onSuccess: async (_data, { workspaceId }) => {
+    onSuccess: async (_data, variables) => {
+      const { workspaceId } = variables;
       await Promise.all(
         workspaceUpdateInvalidationKeys().map(async (queryKey) => {
           await queryClient.invalidateQueries({
@@ -136,11 +182,9 @@ export const useUpdateWorkspace = () => {
           },
         ),
       );
-      // Re-run route loaders so the document title (driven by the
-      // route `head` from loaderData) reflects the renamed matter
-      // without waiting for a navigation. Query invalidation alone
-      // refreshes components but not the cached loaderData.
-      await router.invalidate();
+      if (workspaceUpdateInvalidatesRoute(variables.update)) {
+        await router.invalidate();
+      }
     },
     onError: (error) => {
       analytics.captureError(error);

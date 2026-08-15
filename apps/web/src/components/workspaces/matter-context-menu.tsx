@@ -397,7 +397,10 @@ export const useMatterContextMenu = (
 
     const trimmed = rename.draft.trim();
     if (trimmed && trimmed !== target.name) {
-      updateWorkspace.mutate({ workspaceId: target.id, name: trimmed });
+      updateWorkspace.mutate({
+        workspaceId: target.id,
+        update: { type: "name", value: trimmed },
+      });
     }
     setRename({ status: "idle" });
   };

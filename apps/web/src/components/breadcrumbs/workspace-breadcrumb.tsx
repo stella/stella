@@ -10,13 +10,7 @@ import {
   BreadcrumbItem,
   BreadcrumbSeparator,
 } from "@stll/ui/components/breadcrumb";
-import {
-  ColorPicker,
-  ColorPickerContent,
-  DEFAULT_PRESETS,
-} from "@stll/ui/components/color-picker";
 import { Input } from "@stll/ui/components/input";
-import { Popover, PopoverPopup } from "@stll/ui/components/popover";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
@@ -24,11 +18,14 @@ import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
 import { MatterIcon } from "@/components/matter-icon";
 import { MatterNumberHint } from "@/components/matter-number-hint";
 import Tooltip from "@/components/tooltip";
+import {
+  MatterColorContextPicker,
+  MatterColorPicker,
+} from "@/components/workspaces/matter-color-picker";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { getMatterPickerColor, toStoredMatterColor } from "@/lib/matter-colors";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 import { workspaceOptions } from "@/lib/workspaces/queries";
 import { useConfigStore } from "@/stores/config-store";
@@ -47,8 +44,6 @@ export const WorkspaceBreadcrumb = ({
     shouldThrow: false,
   });
   const [refInputEl, setRefInputEl] = useState<HTMLInputElement | null>(null);
-  const [colorPickerOpen, setColorPickerOpen] = useState(false);
-  const [iconAnchor, setIconAnchor] = useState<HTMLSpanElement | null>(null);
   const { data: workspace } = useQuery(workspaceOptions(workspaceId));
   const updateWorkspace = useUpdateWorkspace();
   const updateMattersConfig = useConfigStore((s) => s.updateMatters);
@@ -56,7 +51,10 @@ export const WorkspaceBreadcrumb = ({
   const nameRename = useInlineRename({
     initial: workspace?.name ?? "",
     onCommit: (value) => {
-      updateWorkspace.mutate({ workspaceId, name: value });
+      updateWorkspace.mutate({
+        workspaceId,
+        update: { type: "name", value },
+      });
     },
   });
 
@@ -64,7 +62,10 @@ export const WorkspaceBreadcrumb = ({
     initial: workspace?.reference ?? "",
     onCommit: (value, { setError }) => {
       updateWorkspace.mutate(
-        { workspaceId, reference: value },
+        {
+          workspaceId,
+          update: { type: "reference", value },
+        },
         {
           onError: (error) => {
             if (APIError.is(error) && error.status === 409) {
@@ -106,22 +107,10 @@ export const WorkspaceBreadcrumb = ({
   const refError =
     refRename.state.mode === "edit" ? (refRename.state.error ?? "") : "";
 
-  const handleColorChange = (color: string) => {
-    updateWorkspace.mutate({
-      workspaceId,
-      color: toStoredMatterColor(color),
-    });
-  };
-
-  const activeSwatch = getMatterPickerColor(workspaceId, workspace.color);
   const changeColorLabel = t("common.changeColor");
 
   const colorPicker = match ? (
-    <ColorPicker
-      defaultExpanded={false}
-      onSelect={handleColorChange}
-      value={activeSwatch}
-    >
+    <MatterColorPicker matter={workspace}>
       <Tooltip
         content={changeColorLabel}
         render={
@@ -137,7 +126,7 @@ export const WorkspaceBreadcrumb = ({
           </button>
         }
       />
-    </ColorPicker>
+    </MatterColorPicker>
   ) : (
     <MatterIcon
       className="size-3.5 shrink-0"
@@ -246,20 +235,15 @@ export const WorkspaceBreadcrumb = ({
             if (isEditing) {
               return (
                 <>
-                  <span
-                    className="flex shrink-0"
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setColorPickerOpen(true);
-                    }}
-                    ref={setIconAnchor}
+                  <MatterColorContextPicker
+                    label={changeColorLabel}
+                    matter={workspace}
                   >
                     <MatterIcon
                       className="size-3.5"
                       matter={{ id: workspaceId, color: workspace.color }}
                     />
-                  </span>
+                  </MatterColorContextPicker>
                   <Input
                     className={cn(matterNameInputClassName, "w-fit")}
                     disabled={updateWorkspace.isPending}
@@ -288,76 +272,57 @@ export const WorkspaceBreadcrumb = ({
               );
             }
             return (
-              <Link
-                activeOptions={{
-                  exact: true,
-                  includeSearch: false,
-                }}
-                activeProps={{
-                  className: "text-foreground font-semibold",
-                }}
-                className="hover:text-foreground inline-flex max-w-80 items-center gap-1.5 font-semibold transition-colors"
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  startEditingName();
-                }}
-                params={{
-                  workspaceId,
-                }}
-                title={displayName}
-                to="/workspaces/$workspaceId"
-              >
-                <span
-                  className="flex shrink-0"
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setColorPickerOpen(true);
-                  }}
-                  ref={setIconAnchor}
+              <>
+                <MatterColorContextPicker
+                  label={changeColorLabel}
+                  matter={workspace}
                 >
                   <MatterIcon
                     className="size-3.5"
                     matter={{ id: workspaceId, color: workspace.color }}
                   />
-                </span>
-                <BidiText as="span" className="truncate">
-                  {displayName}
-                </BidiText>
-                {workspace.reference && !isEditingRef ? (
-                  <span
-                    className="text-foreground-muted shrink-0 text-sm"
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      refRename.startEditing(workspace.reference);
-                    }}
-                  >
-                    {workspace.reference}
-                  </span>
-                ) : null}
-              </Link>
+                </MatterColorContextPicker>
+                <Link
+                  activeOptions={{
+                    exact: true,
+                    includeSearch: false,
+                  }}
+                  activeProps={{
+                    className: "text-foreground font-semibold",
+                  }}
+                  className="hover:text-foreground inline-flex max-w-80 items-center gap-1.5 font-semibold transition-colors"
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    startEditingName();
+                  }}
+                  params={{
+                    workspaceId,
+                  }}
+                  title={displayName}
+                  to="/workspaces/$workspaceId"
+                >
+                  <BidiText as="span" className="truncate">
+                    {displayName}
+                  </BidiText>
+                  {workspace.reference && !isEditingRef ? (
+                    <span
+                      className="text-foreground-muted shrink-0 text-sm"
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        refRename.startEditing(workspace.reference);
+                      }}
+                    >
+                      {workspace.reference}
+                    </span>
+                  ) : null}
+                </Link>
+              </>
             );
           })()}
           {isEditingRef ? referenceSegment : null}
           {referenceHint}
         </BreadcrumbItem>
-        <Popover onOpenChange={setColorPickerOpen} open={colorPickerOpen}>
-          <PopoverPopup
-            align="start"
-            anchor={iconAnchor}
-            className="w-auto"
-            sideOffset={8}
-          >
-            <ColorPickerContent
-              columns={9}
-              defaultExpanded={false}
-              onSelect={handleColorChange}
-              presets={DEFAULT_PRESETS}
-              value={activeSwatch}
-            />
-          </PopoverPopup>
-        </Popover>
       </>
     );
   }

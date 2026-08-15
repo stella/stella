@@ -118,7 +118,7 @@ export const MatterMetadataPanel = ({
     updateWorkspace.mutate(
       {
         workspaceId,
-        name: trimmed,
+        update: { type: "name", value: trimmed },
       },
       {
         onSuccess: () => {
@@ -150,7 +150,7 @@ export const MatterMetadataPanel = ({
     updateWorkspace.mutate(
       {
         workspaceId,
-        reference: trimmed,
+        update: { type: "reference", value: trimmed },
       },
       {
         onSuccess: () => {

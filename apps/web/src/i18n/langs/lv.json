@@ -4231,8 +4231,8 @@
       "untitledColumn": "Kolonnas nosaukums, piem., spēkā stāšanās datums"
     },
     "reference": "Atsauces numurs",
-    "referenceConventionHint": "Organizācijas formāts: {example}",
-    "referenceFormatWarning": "Neatbilst organizācijas formātam.",
+    "referenceConventionHint": "Vēlamais formāts: {example}",
+    "referenceFormatWarning": "Neatbilst vēlamajam formātam.",
     "referencePlaceholder": "piem. 2024/001",
     "referenceTaken": "Šis atsauces numurs jau tiek izmantots",
     "sections": {

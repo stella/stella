@@ -4231,8 +4231,8 @@
       "untitledColumn": "Veeru nimi, nt jõustumiskuupäev"
     },
     "reference": "Viitenumber",
-    "referenceConventionHint": "Organisatsiooni vorming: {example}",
-    "referenceFormatWarning": "Ei vasta organisatsiooni vormingule.",
+    "referenceConventionHint": "Eelistatud vorming: {example}",
+    "referenceFormatWarning": "Ei vasta eelistatud vormingule.",
     "referencePlaceholder": "nt 2024/001",
     "referenceTaken": "See viitenumber on juba kasutusel",
     "sections": {

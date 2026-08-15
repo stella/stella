@@ -4231,8 +4231,8 @@
       "untitledColumn": "Nazwa kolumny, np. Data wejścia w życie"
     },
     "reference": "Numer referencyjny",
-    "referenceConventionHint": "Format organizacji: {example}",
-    "referenceFormatWarning": "Nie pasuje do formatu organizacji.",
+    "referenceConventionHint": "Preferowany format: {example}",
+    "referenceFormatWarning": "Nie pasuje do preferowanego formatu.",
     "referencePlaceholder": "np. 2024/001",
     "referenceTaken": "Ten numer referencyjny jest już w użyciu",
     "sections": {

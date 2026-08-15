@@ -39,6 +39,8 @@ type ColorPickerProps = {
   columns?: number;
   /** Start with hex input visible (default false) */
   defaultExpanded?: boolean;
+  /** Localized label for expanding the custom color controls. */
+  moreLabel: string;
   /** Popover trigger element */
   children: React.ReactNode;
   /** Popover placement side */
@@ -55,6 +57,7 @@ type ColorPickerContentProps = {
   presets: ColorPreset[];
   columns: number;
   defaultExpanded: boolean;
+  moreLabel: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -161,6 +164,7 @@ const ColorPickerContent = ({
   presets,
   columns,
   defaultExpanded,
+  moreLabel,
 }: ColorPickerContentProps) => {
   const [expanded, setExpanded] = useState(defaultExpanded);
   // pickerHex: last valid 6-char hex from the visual picker (drives the picker's color prop)
@@ -241,7 +245,7 @@ const ColorPickerContent = ({
           onClick={() => setExpanded(true)}
           type="button"
         >
-          More
+          {moreLabel}
           <ChevronDownIcon className="size-3" />
         </button>
       ) : (
@@ -298,6 +302,7 @@ const ColorPicker = ({
   presets = DEFAULT_PRESETS,
   columns = 9,
   defaultExpanded = false,
+  moreLabel,
   children,
   side = "bottom",
   align = "start",
@@ -328,6 +333,7 @@ const ColorPicker = ({
           <ColorPickerContent
             columns={columns}
             defaultExpanded={defaultExpanded}
+            moreLabel={moreLabel}
             onClear={onClear}
             onSelect={onSelect}
             presets={presets}
