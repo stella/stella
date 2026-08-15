@@ -240,8 +240,7 @@ export const filesystemEntitiesOptions = (
       // complete the ancestor chain for cross-matter copy/move dedup; never
       // rendered, so they stay out of selection and bulk actions.
       const ancestorLinks = data.ancestorLinks;
-      const isFiltered =
-        key.filters.length > 0 || Boolean(key.search?.trim());
+      const isFiltered = key.filters.length > 0 || Boolean(key.search?.trim());
 
       return { entities, ancestorLinks, isFiltered };
     },
