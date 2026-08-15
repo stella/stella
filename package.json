@@ -62,6 +62,7 @@
     "check:railway-template": "bun scripts/check-railway-template-shape.ts",
     "check:railway-template-source-runtime": "bun scripts/sync-railway-template-source.ts --check-rendered-credentials",
     "sync:railway-template-source": "bun scripts/sync-railway-template-source.ts",
+    "generate:snowball-stemmers": "bun scripts/generate-snowball-stemmers.ts",
     "test": "turbo run test",
     "test:property": "turbo run test:property",
     "verify": "bash scripts/verify.sh",

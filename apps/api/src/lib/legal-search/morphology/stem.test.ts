@@ -1,0 +1,155 @@
+import { describe, expect, test } from "bun:test";
+
+import { readConformanceVocabulary } from "@/api/lib/legal-search/morphology/snowball/__fixtures__/vocabulary";
+import {
+  MORPHOLOGY_LANGUAGES,
+  stemLegalTerm,
+} from "@/api/lib/legal-search/morphology/stem";
+
+/**
+ * One legal paradigm per language, chosen so a stemmer that silently became
+ * an identity function (a broken generated module, a dispatch wired to the
+ * wrong language) fails here.
+ */
+const PARADIGMS = {
+  cs: [
+    ["rozsudku", "rozsudk"],
+    ["smlouvy", "smlouv"],
+    ["žalobě", "žalob"],
+    ["soudu", "soud"],
+  ],
+  pl: [
+    ["wyroku", "wyrok"],
+    ["umowy", "umow"],
+    ["sądu", "sąd"],
+    ["skargi", "skarg"],
+  ],
+  sk: [
+    ["rozsudkom", "rozsudk"],
+    ["zmluvy", "zmluv"],
+    ["žalobami", "žalob"],
+    ["súdoch", "súd"],
+  ],
+} as const satisfies Record<
+  (typeof MORPHOLOGY_LANGUAGES)[number],
+  readonly (readonly [string, string])[]
+>;
+
+describe("stemLegalTerm", () => {
+  test("every declared language is dispatched, and only those", () => {
+    // Both directions: the paradigm table and the exported language list must
+    // agree, so adding a language without a paradigm (or vice versa) fails.
+    expect<readonly string[]>(Object.keys(PARADIGMS).toSorted()).toEqual(
+      [...MORPHOLOGY_LANGUAGES].toSorted(),
+    );
+  });
+
+  for (const language of MORPHOLOGY_LANGUAGES) {
+    test(`${language} stems inflected legal forms`, () => {
+      const vectors = PARADIGMS[language];
+      const actual = vectors.map(([word]) => [
+        word,
+        stemLegalTerm(word, language),
+      ]);
+
+      expect<readonly (readonly string[])[]>(actual).toEqual(
+        vectors.map(([word, stem]) => [word, stem]),
+      );
+
+      // Non-trivial: a pass-through stemmer would leave every form untouched.
+      expect<boolean>(
+        vectors.some(([word]) => stemLegalTerm(word, language) !== word),
+      ).toBe(true);
+    });
+
+    test(`${language} lowercases before stemming`, () => {
+      const [vector] = PARADIGMS[language];
+      const [word] = vector;
+
+      expect<string>(stemLegalTerm(word.toUpperCase(), language)).toBe(
+        stemLegalTerm(word, language),
+      );
+    });
+  }
+
+  test("a decomposed term stems exactly like its precomposed form", () => {
+    // The suffix tables hold precomposed code points, and toLowerCase()
+    // preserves combining sequences, so without NFC at the entry point an
+    // NFD term matches nothing and passes through unstemmed. Extracted text
+    // arrives in whatever form its producer used. One vector per language,
+    // each with an ending the decomposed form would otherwise strand:
+    const vectors = [
+      ["žalobě", "cs", "žalob"],
+      ["książkę", "pl", "książk"],
+      ["príčinách", "sk", "prík"],
+    ] as const satisfies readonly (readonly [
+      string,
+      (typeof MORPHOLOGY_LANGUAGES)[number],
+      string,
+    ])[];
+
+    for (const [word, language, expected] of vectors) {
+      const decomposed = word.normalize("NFD");
+
+      // The fixture must actually be decomposed, or this asserts nothing.
+      expect<boolean>(decomposed === word.normalize("NFC")).toBe(false);
+      expect<string>(stemLegalTerm(word.normalize("NFC"), language)).toBe(
+        expected,
+      );
+      expect<string>(stemLegalTerm(decomposed, language)).toBe(expected);
+    }
+  });
+
+  test("normalisation can lengthen a term, so the stem is not bounded by the raw input", () => {
+    // U+1D1BB has a canonical decomposition and sits on the composition
+    // exclusion list, so NFC expands it rather than recomposing it. Pinned
+    // because it is the one shape where a stem is longer than the string
+    // handed in, and a caller assuming otherwise would be wrong.
+    const input = "\u{1D1BB}";
+
+    expect<number>(input.length).toBe(2);
+    expect<number>(input.normalize("NFC").length).toBe(4);
+    expect<string>(stemLegalTerm(input, "cs")).toBe(input.normalize("NFC"));
+  });
+
+  test("NFC and NFD agree across the whole reference vocabulary", () => {
+    // 1123 of 2517 Czech and 454 of 2695 Polish words diverged before NFC
+    // normalisation landed at the entry point; the class is wide enough that
+    // the vocabulary, not a handful of vectors, is the right guard.
+    const cases = [
+      { language: "cs", pairs: readConformanceVocabulary("czech") },
+      { language: "pl", pairs: readConformanceVocabulary("polish") },
+    ] as const satisfies readonly {
+      language: (typeof MORPHOLOGY_LANGUAGES)[number];
+      pairs: readonly { readonly word: string }[];
+    }[];
+
+    for (const { language, pairs } of cases) {
+      expect<number>(pairs.length).toBeGreaterThan(2000);
+
+      const divergent = pairs
+        .filter(
+          ({ word }) =>
+            stemLegalTerm(word.normalize("NFD"), language) !==
+            stemLegalTerm(word.normalize("NFC"), language),
+        )
+        .slice(0, 10)
+        .map(({ word }) => word);
+
+      expect<readonly string[]>(divergent).toEqual([]);
+    }
+  });
+
+  test("folding before stemming strands endings, which is why callers fold after", () => {
+    // The ordering is load-bearing, not stylistic: the suffix tables are
+    // written over accented characters, so a pre-folded term keeps the
+    // ending the stemmer exists to strip. Measured over the committed
+    // conformance vocabularies, fold-then-stem diverges from stem-then-fold
+    // on ~16% of Czech and ~9% of Polish words; two of them:
+    expect<string>(stemLegalTerm("absolutních", "cs")).toBe("absolutn");
+    expect<string>(stemLegalTerm("absolutnich", "cs")).toBe("absolutnich");
+
+    expect<string>(stemLegalTerm("absolwentów", "pl")).toBe("absolwent");
+    expect<string>(stemLegalTerm("absolwentow", "pl")).toBe("absolwentow");
+  });
+});
