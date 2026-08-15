@@ -3,11 +3,9 @@ import {
   and,
   desc,
   eq,
-  gte,
   inArray,
   isNotNull,
   isNull,
-  lt,
   ne,
   or,
   sql,
@@ -21,8 +19,7 @@ import type {
   MatterActivityFilters,
 } from "@stll/api-contract/matter-activity";
 
-// eslint-disable-next-line security-guards/no-unscoped-user-query -- actor and affected-user IDs come only from audit rows already scoped to this authorized organization and workspace; a membership join would erase retained attribution after account deletion.
-import { user } from "@/api/db/auth-schema";
+import { member, user } from "@/api/db/auth-schema";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
   auditLogs,
@@ -537,12 +534,14 @@ export const readOverviewActivityPage = async ({
       );
     }
     if (fromDate !== null) {
-      // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- caller-supplied filter bound, never round-tripped through the database
-      conditions.push(gte(auditLogs.createdAt, fromDate));
+      conditions.push(
+        sql`${auditLogs.createdAt} >= ${filters.from}::timestamptz`,
+      );
     }
     if (toExclusiveDate !== null) {
-      // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- caller-supplied filter bound, never round-tripped through the database
-      conditions.push(lt(auditLogs.createdAt, toExclusiveDate));
+      conditions.push(
+        sql`${auditLogs.createdAt} < ${filters.toExclusive}::timestamptz`,
+      );
     }
 
     if (filters.category === "automation") {
@@ -684,6 +683,7 @@ export const readOverviewActivityPage = async ({
                   and(
                     eq(entityVersions.workspaceId, workspaceId),
                     inArray(entityVersions.id, versionIds),
+                    isNull(entityVersions.deletedAt),
                   ),
                 );
         const entityIds = [
@@ -757,15 +757,38 @@ export const readOverviewActivityPage = async ({
           actorIds.length === 0
             ? []
             : await tx
-                .select({
+                .selectDistinct({
                   deletedAt: user.deletedAt,
                   email: user.email,
                   id: user.id,
                   image: user.image,
                   name: user.name,
                 })
-                .from(user)
-                .where(inArray(user.id, actorIds));
+                .from(auditLogs)
+                .innerJoin(
+                  member,
+                  and(
+                    eq(member.organizationId, organizationId),
+                    or(
+                      eq(member.userId, auditLogs.performerId),
+                      and(
+                        isNull(auditLogs.performerId),
+                        eq(member.userId, auditLogs.userId),
+                      ),
+                      eq(member.userId, auditLogs.triggerUserId),
+                      eq(member.userId, auditLogs.approvedByUserId),
+                      eq(member.userId, teamUserIdSnapshot()),
+                    ),
+                  ),
+                )
+                .innerJoin(user, eq(user.id, member.userId))
+                .where(
+                  and(
+                    eq(auditLogs.organizationId, organizationId),
+                    eq(auditLogs.workspaceId, workspaceId),
+                    inArray(member.userId, actorIds),
+                  ),
+                );
         return {
           actors,
           compositeFieldVersions,

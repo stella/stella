@@ -302,7 +302,9 @@ const ActivityAdvancedFilters = ({
     ...overviewActivityActorsOptions(workspaceId),
     enabled: open,
   });
-  const actors = actorsQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  const actors = actorsQuery.data
+    ? actorsQuery.data.pages.flatMap((page) => page.items)
+    : [];
   const selectedActor =
     actors.find(({ id }) => id === filters.actorId) ??
     (filters.actorId === null

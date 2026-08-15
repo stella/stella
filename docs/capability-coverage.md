@@ -507,8 +507,8 @@ mechanics, and similar), not gaps in coverage.
 | realtime_stream        | 2     |
 | search_ui              | 5     |
 | session_token_exchange | 13    |
-| ui_navigation_state    | 6     |
+| ui_navigation_state    | 8     |
 | upload_mechanics       | 9     |
 | url_preview            | 2     |
 
-Total: 123
+Total: 125

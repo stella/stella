@@ -109,16 +109,6 @@
       "count": 1,
       "reason": "joined via RLS-scoped workspaceMembers filtered by org-derived wsIds (see comment above)",
       "evidence": "apps/api/src/handlers/workspaces/list.integration.test.ts"
-    },
-    {
-      "id": "SW-0012",
-      "kind": "permanent",
-      "rule": "security-guards/no-unscoped-user-query",
-      "file": "apps/api/src/handlers/workspaces/read-overview-activity.ts",
-      "symbol": "import @/api/db/auth-schema",
-      "count": 1,
-      "reason": "actor and affected-user IDs come only from audit rows already scoped to this authorized organization and workspace; a membership join would erase retained attribution after account deletion.",
-      "evidence": "apps/api/src/handlers/workspaces/read-overview-activity.integration.test.ts"
     }
   ]
 }

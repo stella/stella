@@ -1,9 +1,8 @@
 import { Result } from "better-result";
-import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, gt, sql } from "drizzle-orm";
 import { t } from "elysia";
 
-// eslint-disable-next-line security-guards/no-unscoped-user-query -- IDs come only from audit rows scoped to the authorized organization and workspace; a membership join would remove departed historical performers.
-import { user } from "@/api/db/auth-schema";
+import { member, user } from "@/api/db/auth-schema";
 import { auditLogs } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -61,53 +60,44 @@ const readOverviewActivityActors = createSafeHandler(
           conditions.push(gt(actorId, afterActorId));
         }
 
-        const actorIdRows = await tx
-          .selectDistinct({ id: actorId })
+        const actorRows = await tx
+          .selectDistinct({
+            deletedAt: user.deletedAt,
+            email: user.email,
+            id: actorId,
+            image: user.image,
+            name: user.name,
+          })
           .from(auditLogs)
+          .leftJoin(
+            member,
+            and(
+              eq(member.userId, actorId),
+              eq(member.organizationId, session.activeOrganizationId),
+            ),
+          )
+          .leftJoin(user, and(eq(user.id, actorId), eq(member.userId, user.id)))
           .where(and(...conditions))
           .orderBy(asc(actorId))
           .limit(limit + 1);
         const page = createCursorPage({
-          rows: actorIdRows,
+          rows: actorRows,
           limit,
           cursorForItem: ({ id }) => encodePaginationCursor([id]),
         });
-        const actors =
-          page.items.length === 0
-            ? []
-            : await tx
-                .select({
-                  deletedAt: user.deletedAt,
-                  email: user.email,
-                  id: user.id,
-                  image: user.image,
-                  name: user.name,
-                })
-                .from(user)
-                .where(
-                  inArray(
-                    user.id,
-                    page.items.map(({ id }) => id),
-                  ),
-                );
-
-        return { actors, page };
+        return page;
       }),
     );
 
-    const actorMap = new Map(result.actors.map((actor) => [actor.id, actor]));
     return Result.ok({
-      items: result.page.items.map(({ id }) => {
-        const actor = actorMap.get(id);
-        return {
-          deletedAt: actor?.deletedAt?.toISOString() ?? null,
-          id,
-          image: actor?.image ?? null,
-          name: actor?.name || actor?.email || null,
-        };
-      }),
-      limit: result.page.limit,
-      nextCursor: result.page.nextCursor,
+      items: result.items.map(({ deletedAt, email, id, image, name }) => ({
+        deletedAt: deletedAt?.toISOString() ?? null,
+        id,
+        image,
+        name: name || email,
+      })),
+      limit: result.limit,
+      nextCursor: result.nextCursor,
     });
   },
 );
