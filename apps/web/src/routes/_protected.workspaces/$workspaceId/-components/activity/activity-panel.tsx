@@ -322,6 +322,13 @@ const ActivityAdvancedFilters = ({
           image: null,
           name: null,
         });
+  let actorEmptyLabel = t("common.noResults");
+  if (actorsQuery.isPending || actorsQuery.isFetching) {
+    actorEmptyLabel = t("common.loading");
+  }
+  if (actorsQuery.error) {
+    actorEmptyLabel = t("common.unexpectedError");
+  }
   const activeFilterCount = [
     filters.action !== "all",
     filters.actorId !== null,
@@ -428,13 +435,7 @@ const ActivityAdvancedFilters = ({
                   </ComboboxItem>
                 ))}
               </ComboboxList>
-              <ComboboxEmpty>
-                {actorsQuery.error
-                  ? t("common.unexpectedError")
-                  : actorsQuery.isPending || actorsQuery.isFetching
-                    ? t("common.loading")
-                    : t("common.noResults")}
-              </ComboboxEmpty>
+              <ComboboxEmpty>{actorEmptyLabel}</ComboboxEmpty>
               {actorsQuery.hasNextPage && (
                 <Button
                   className="m-1 min-h-11"
