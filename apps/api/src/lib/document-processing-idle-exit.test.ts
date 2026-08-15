@@ -79,17 +79,23 @@ describe("createIdleExitCheck", () => {
         }),
     );
 
+    // A sample settles the reconciliation verdict before it counts, so let
+    // it reach the count before handing one over.
+    const countStarted = async () => await Bun.sleep(0);
+
     const first = h.tick();
     // The first sample is still in flight: further ticks must not start
     // a second count or advance the streak.
     expect(await h.tick()).toBe("skipped");
     expect(await h.tick()).toBe("skipped");
+    await countStarted();
     expect(resolvers).toHaveLength(1);
 
     resolvers.shift()?.(0);
     expect(await first).toBe("checked");
 
     const second = h.tick();
+    await countStarted();
     resolvers.shift()?.(0);
     expect(await second).toBe("exit");
   });
@@ -114,25 +120,28 @@ describe("createIdleExitCheck", () => {
     expect(await h.tick()).toBe("exit");
   });
 
-  test("a reconciliation that starts during the count is caught by that sample", async () => {
+  test("a reconciliation that starts after the verdict is caught by the next sample", async () => {
     let unfinished = false;
     let exits = 0;
     const tick = createIdleExitCheck({
       countPending: async () => {
-        // Reconciliation ticks are timer-driven, so one can begin while a
-        // sample's count is in flight; the sample must not certify the
-        // moment before it.
+        // Reconciliation ticks are timer-driven, so one can begin after
+        // this sample read its verdict. It marks itself unfinished before
+        // its own first await, which is what the next sample reads.
         unfinished = true;
         return 0;
       },
       hasUnfinishedReconciliation: async () => unfinished,
-      requiredIdleChecks: 1,
+      requiredIdleChecks: 2,
       onIdleExit: () => {
         exits += 1;
       },
       onCheckFailure: () => undefined,
     });
 
+    expect(await tick()).toBe("checked");
+    // The streak cannot span the tick that started inside the sample
+    // before it.
     expect(await tick()).toBe("checked");
     expect(exits).toBe(0);
   });

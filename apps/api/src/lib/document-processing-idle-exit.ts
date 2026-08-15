@@ -50,12 +50,18 @@ export const createIdleExitCheck = ({
     }
     inFlight = true;
     try {
+      // Reconciliation first, then the count. Reconciliation produces
+      // queue entries and never consumes them, so waiting for the tick in
+      // flight to report before counting means everything it enqueued is
+      // already in the count. Counting first would pair a pre-enqueue
+      // count with the same tick's drained verdict and read idle while
+      // fresh jobs wait, which a worker close does not drain. A tick that
+      // starts after this verdict has already marked itself unfinished
+      // before its own first await, so the next sample reads it as
+      // running rather than reading its result.
+      const unfinished = await hasUnfinishedReconciliation();
       const pending = await countPending();
-      // Read reconciliation after the count settles, and wait for a tick in
-      // flight: a tick that starts while the count runs still lands in this
-      // sample, and one that outlives the count is answered by its own
-      // verdict rather than by whichever finished first.
-      const idle = pending === 0 && !(await hasUnfinishedReconciliation());
+      const idle = pending === 0 && !unfinished;
       consecutiveIdleChecks = idle ? consecutiveIdleChecks + 1 : 0;
     } catch (error) {
       onCheckFailure(error);

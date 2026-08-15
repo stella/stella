@@ -1261,10 +1261,11 @@ describe("createReconciliationProgress", () => {
 
   const sampler = (
     progress: ReturnType<typeof createReconciliationProgress>,
+    countPending: () => Promise<number> = async () => 0,
   ) => {
     let exits = 0;
     const sample = createIdleExitCheck({
-      countPending: async () => 0,
+      countPending,
       hasUnfinishedReconciliation: progress.hasUnfinishedWork,
       onCheckFailure: () => undefined,
       onIdleExit: () => {
@@ -1309,6 +1310,26 @@ describe("createReconciliationProgress", () => {
 
     expect(await outcome).toBe("exit");
     expect(h.exits()).toBe(1);
+  });
+
+  test("jobs the tick enqueues before draining are in the count it is sampled against", async () => {
+    const progress = createReconciliationProgress();
+    let queueDepth = 0;
+    const tick = pendingTick();
+    const inFlight = progress.runTick(tick.run);
+    const h = sampler(progress, async () => queueDepth);
+
+    const outcome = h.sample();
+    await Bun.sleep(5);
+    // What the delivery phase does: hand recovered runs to the queue, then
+    // report the tick drained. Counting before waiting for that verdict
+    // would pair this tick's empty "before" with its drained "after".
+    queueDepth = 3;
+    tick.settle(false);
+    await inFlight;
+
+    expect(await outcome).toBe("checked");
+    expect(h.exits()).toBe(0);
   });
 
   test("a saturated tick keeps the worker alive", async () => {
