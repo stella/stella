@@ -228,11 +228,11 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
 
   const {
     handleResetZoom,
+    handleWheelZoom,
     handleZoom,
-    pdfContentRef,
     scaleOffsets,
     setScaleOffsets,
-  } = usePdfTabZoom({ activeId, activeTabType: activeTab?.type });
+  } = usePdfTabZoom();
 
   // -- Inline rename --
   const {
@@ -616,13 +616,13 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
           handleOpenFullView={handleOpenFullView}
           handleResetZoom={handleResetZoom}
           handleStartDocxEdit={handleStartDocxEdit}
+          handleWheelZoom={handleWheelZoom}
           handleZoom={handleZoom}
           key={tab.renderId ?? tab.id}
           matterColor={matterColor}
           matterOrigin={matterOrigin}
           minimized={minimized}
           mountedPdfIds={mountedPdfIds}
-          pdfContentRef={pdfContentRef}
           pdfRouteJustification={pdfRouteJustification}
           peekPdfViewId={peekPdfViewId}
           ribbonLabelContextMenuOpenAt={ribbonContextMenu.openAt}

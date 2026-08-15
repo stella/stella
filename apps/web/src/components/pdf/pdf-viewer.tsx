@@ -13,6 +13,7 @@ import { fileOptions } from "@/lib/files/queries";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
+import { getPDFWheelZoomScaleOffset } from "@/lib/pdf/pdf-zoom.logic";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import "@/components/pdf/peek/peek-docx.css";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
@@ -29,6 +30,7 @@ const FullscreenPdfViewer = () => {
   const entityId = routeApi.useSearch({ select: (s) => s.entity ?? "" });
   const pageNumber = routeApi.useSearch({ select: (s) => s.pdfPage ?? 1 });
   const setPdfPageCount = useWorkspaceStore((s) => s.setPdfPageCount);
+  const setPdfScaleOffset = useWorkspaceStore((s) => s.setPdfScaleOffset);
   const scaleOffset = useWorkspaceStore((s) => s.pdfViewer.scaleOffset);
   const pageCount = usePDFStore((s) => s.pages.size);
 
@@ -77,6 +79,19 @@ const FullscreenPdfViewer = () => {
     );
   };
 
+  const handleWheelZoom = (deltaY: number) => {
+    const currentScaleOffset =
+      useWorkspaceStore.getState().pdfViewer.scaleOffset;
+    const nextScaleOffset = getPDFWheelZoomScaleOffset(
+      currentScaleOffset,
+      deltaY,
+    );
+
+    if (nextScaleOffset !== currentScaleOffset) {
+      setPdfScaleOffset(nextScaleOffset);
+    }
+  };
+
   return (
     <FileViewerWithAI
       activeFile={
@@ -94,6 +109,7 @@ const FullscreenPdfViewer = () => {
         fileId={fieldId}
         invertColors={isImageOrigin ? false : undefined}
         onPageChanged={handlePageChanged}
+        onWheelZoom={handleWheelZoom}
         page={pageNumber}
         scaleOffset={scaleOffset}
         renderPage={(props) => (

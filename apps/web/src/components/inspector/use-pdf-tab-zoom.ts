@@ -1,33 +1,24 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import {
+  getPDFScaleOffset,
+  getPDFWheelZoomScaleOffset,
+  PDF_SCALE_OFFSET_STEP,
+} from "@/lib/pdf/pdf-zoom.logic";
 
-const ZOOM_STEP = 0.2;
-const MIN_OFFSET = -0.8;
-const MAX_OFFSET = 2;
-const PINCH_ZOOM_SENSITIVITY = 0.005;
-
-type UsePdfTabZoomOptions = {
-  activeId: string | null;
-  activeTabType: string | undefined;
-};
-
-export const usePdfTabZoom = ({
-  activeId,
-  activeTabType,
-}: UsePdfTabZoomOptions) => {
+export const usePdfTabZoom = () => {
   const [scaleOffsets, setScaleOffsets] = useState<Map<string, number>>(
     () => new Map(),
   );
-  const pdfContentRef = useRef<HTMLDivElement>(null);
 
   const handleZoom = (tabId: string, direction: "in" | "out") => {
     setScaleOffsets((prev) => {
       const current = prev.get(tabId) ?? 0;
-      const delta = direction === "in" ? ZOOM_STEP : -ZOOM_STEP;
-      const next = Math.round((current + delta) * 10) / 10;
+      const delta =
+        direction === "in" ? PDF_SCALE_OFFSET_STEP : -PDF_SCALE_OFFSET_STEP;
+      const next = getPDFScaleOffset(current, delta);
 
-      if (next < MIN_OFFSET || next > MAX_OFFSET) {
+      if (next === current) {
         return prev;
       }
 
@@ -45,44 +36,25 @@ export const usePdfTabZoom = ({
     });
   };
 
-  useExternalSyncEffect(() => {
-    const el = pdfContentRef.current;
-    if (!el || activeTabType !== "pdf") {
-      return undefined;
-    }
+  const handleWheelZoom = (tabId: string, deltaY: number) => {
+    setScaleOffsets((prev) => {
+      const current = prev.get(tabId) ?? 0;
+      const next = getPDFWheelZoomScaleOffset(current, deltaY);
 
-    const onWheel = (event: WheelEvent) => {
-      if (!event.ctrlKey || !activeId) {
-        return;
+      if (next === current) {
+        return prev;
       }
-      event.preventDefault();
 
-      setScaleOffsets((prev) => {
-        const current = prev.get(activeId) ?? 0;
-        const delta = -event.deltaY * PINCH_ZOOM_SENSITIVITY;
-        const next =
-          Math.round(
-            Math.max(MIN_OFFSET, Math.min(MAX_OFFSET, current + delta)) * 100,
-          ) / 100;
-
-        if (next === current) {
-          return prev;
-        }
-
-        const updated = new Map(prev);
-        updated.set(activeId, next);
-        return updated;
-      });
-    };
-
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, [activeId, activeTabType]);
+      const updated = new Map(prev);
+      updated.set(tabId, next);
+      return updated;
+    });
+  };
 
   return {
     handleResetZoom,
+    handleWheelZoom,
     handleZoom,
-    pdfContentRef,
     scaleOffsets,
     setScaleOffsets,
   };

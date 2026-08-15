@@ -20,6 +20,7 @@ import { usePDFControlledScaleOffset } from "@/lib/pdf/hooks/use-pdf-controlled-
 import { usePDFDocument } from "@/lib/pdf/hooks/use-pdf-document";
 import { usePDFExternalPageSync } from "@/lib/pdf/hooks/use-pdf-external-page-sync";
 import { usePDFFitToWidth } from "@/lib/pdf/hooks/use-pdf-fit-to-width";
+import { usePDFWheelZoom } from "@/lib/pdf/hooks/use-pdf-wheel-zoom";
 import { useTextSelection } from "@/lib/pdf/hooks/use-text-selection";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import type { PDFDocument } from "@/lib/pdf/pdf-loader";
@@ -42,6 +43,7 @@ type PDFViewportProps = {
   buffer: ArrayBuffer;
   page?: number | undefined;
   onPageChanged?: ((page: number) => void) | undefined;
+  onWheelZoom?: ((deltaY: number) => void) | undefined;
   password?: string | undefined;
   scaleOffset?: number | undefined;
   invertColors?: boolean | undefined;
@@ -130,6 +132,7 @@ const PDFViewerContent = ({
   password,
   page,
   onPageChanged,
+  onWheelZoom,
   scaleOffset = 0,
   invertColors,
   className,
@@ -196,6 +199,7 @@ const PDFViewerContent = ({
   };
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const wheelZoomRef = usePDFWheelZoom(onWheelZoom);
 
   useExternalSyncEffect(() => {
     startTransition(() => {
@@ -273,7 +277,11 @@ const PDFViewerContent = ({
     // stack floats at z-50 over the bottom of the viewer. Without this
     // the scrollbar's bottom section painted underneath that glass veil
     // instead of on top of it.
-    <ScrollArea className={className} scrollbarClassName="z-[60]">
+    <ScrollArea
+      className={className}
+      scrollbarClassName="z-[60]"
+      viewportRef={wheelZoomRef}
+    >
       <div
         ref={pdfContentRef}
         className={contentClassName}

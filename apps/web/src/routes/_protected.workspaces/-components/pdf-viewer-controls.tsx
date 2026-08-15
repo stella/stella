@@ -30,10 +30,14 @@ import { unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { fileMetadataOptions } from "@/lib/files/file-metadata-query";
+import {
+  getPDFScaleOffset,
+  PDF_MAX_SCALE_OFFSET,
+  PDF_MIN_SCALE_OFFSET,
+  PDF_SCALE_OFFSET_STEP,
+} from "@/lib/pdf/pdf-zoom.logic";
 import { downloadFile } from "@/lib/utils";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
-
-const SCALE_OFFSET_STEP = 0.2;
 
 type PdfViewerControlsProps = {
   workspaceId: string;
@@ -163,14 +167,20 @@ export const PdfViewerControls = ({
           canResetZoom={scaleOffset !== 0}
           onResetZoom={() => navigateToScale(0)}
           onZoomIn={
-            scaleOffset >= 2
+            scaleOffset >= PDF_MAX_SCALE_OFFSET
               ? undefined
-              : () => navigateToScale(scaleOffset + SCALE_OFFSET_STEP)
+              : () =>
+                  navigateToScale(
+                    getPDFScaleOffset(scaleOffset, PDF_SCALE_OFFSET_STEP),
+                  )
           }
           onZoomOut={
-            scaleOffset <= -0.8
+            scaleOffset <= PDF_MIN_SCALE_OFFSET
               ? undefined
-              : () => navigateToScale(scaleOffset - SCALE_OFFSET_STEP)
+              : () =>
+                  navigateToScale(
+                    getPDFScaleOffset(scaleOffset, -PDF_SCALE_OFFSET_STEP),
+                  )
           }
           scaleOffset={scaleOffset}
         />
