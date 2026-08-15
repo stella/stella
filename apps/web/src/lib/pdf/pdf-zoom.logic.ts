@@ -9,11 +9,10 @@ type PDFWheelZoomEvent = Pick<WheelEvent, "ctrlKey" | "deltaY"> & {
   preventDefault: () => void;
 };
 
-export const getPDFWheelZoomScaleOffset = (
+export const getPDFScaleOffset = (
   currentScaleOffset: number,
-  deltaY: number,
+  delta: number,
 ) => {
-  const delta = -deltaY * PDF_PINCH_ZOOM_SENSITIVITY;
   const boundedOffset = Math.max(
     PDF_MIN_SCALE_OFFSET,
     Math.min(PDF_MAX_SCALE_OFFSET, currentScaleOffset + delta),
@@ -23,6 +22,14 @@ export const getPDFWheelZoomScaleOffset = (
     Math.round(boundedOffset * PDF_SCALE_OFFSET_PRECISION) /
     PDF_SCALE_OFFSET_PRECISION
   );
+};
+
+export const getPDFWheelZoomScaleOffset = (
+  currentScaleOffset: number,
+  deltaY: number,
+) => {
+  const delta = -deltaY * PDF_PINCH_ZOOM_SENSITIVITY;
+  return getPDFScaleOffset(currentScaleOffset, delta);
 };
 
 export const consumePDFWheelZoomEvent = (

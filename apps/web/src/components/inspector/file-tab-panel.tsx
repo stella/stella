@@ -122,12 +122,12 @@ type FileTabPanelProps = {
   handleOpenFullView: () => Promise<void>;
   handleResetZoom: (tabId: string) => void;
   handleStartDocxEdit: (tabId: string) => Promise<void>;
+  handleWheelZoom: (tabId: string, deltaY: number) => void;
   handleZoom: (tabId: string, direction: "in" | "out") => void;
   matterColor: string | null;
   matterOrigin: MatterOrigin | null;
   minimized: boolean;
   mountedPdfIds: ReadonlySet<string>;
-  pdfContentRef: RefObject<HTMLDivElement | null>;
   pdfRouteJustification: string | null;
   peekPdfViewId: string;
   ribbonLabelContextMenuOpenAt: (event: MouseEvent<HTMLElement>) => void;
@@ -173,12 +173,12 @@ export const FileTabPanel = ({
   handleOpenFullView,
   handleResetZoom,
   handleStartDocxEdit,
+  handleWheelZoom,
   handleZoom,
   matterColor,
   matterOrigin,
   minimized,
   mountedPdfIds,
-  pdfContentRef,
   pdfRouteJustification,
   peekPdfViewId,
   ribbonLabelContextMenuOpenAt,
@@ -1021,6 +1021,7 @@ export const FileTabPanel = ({
         onDocxScrollTopChange={handleDocxScrollTopChange}
         onError={handleViewerError}
         onPeekNavigate={closeAll}
+        onWheelZoom={(deltaY) => handleWheelZoom(tab.id, deltaY)}
         scaleOffset={scaleOffsets.get(tab.id) ?? 0}
         viewId={peekPdfViewId}
         workspaceId={tab.workspaceId}
@@ -1292,7 +1293,6 @@ export const FileTabPanel = ({
         !isActive && "hidden",
       )}
       key={tab.renderId ?? tab.id}
-      ref={isActive ? pdfContentRef : undefined}
     >
       {isNativeDocxDisplay || isOfficeDisplay ? (
         <>

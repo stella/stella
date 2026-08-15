@@ -116,6 +116,7 @@ type PeekPdfViewerProps = {
   onPeekNavigate?: (() => void) | undefined;
   docxPrintActionsRef?: RefObject<Map<string, () => void>> | undefined;
   onDocxScrollTopChange?: ((scrollTop: number) => void) | undefined;
+  onWheelZoom?: ((deltaY: number) => void) | undefined;
   errorFallback?: ((props: { reset: () => void }) => ReactNode) | undefined;
   onError?: ((error: Error) => void) | undefined;
 };
@@ -161,6 +162,7 @@ const PeekPdfViewerContent = ({
   onPeekNavigate,
   docxPrintActionsRef,
   onDocxScrollTopChange,
+  onWheelZoom,
 }: PeekPdfViewerProps) => {
   const isImageOrigin = mimeType?.startsWith("image/") ?? false;
 
@@ -221,6 +223,7 @@ const PeekPdfViewerContent = ({
       scaleOffset={scaleOffset}
       activeSearchMatchIndex={activeSearchMatchIndex}
       onSearchMatchSummaryChange={onSearchMatchSummaryChange}
+      onWheelZoom={onWheelZoom}
       searchText={searchText}
       renderPage={(props) => (
         <PDFPage {...props} renderOverlay={renderPageOverlay} />

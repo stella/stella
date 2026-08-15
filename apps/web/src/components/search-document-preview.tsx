@@ -37,11 +37,8 @@ export const SearchDocumentPreview = ({
     useState<SearchMatchSummary>({ count: 0, truncated: false });
   const [nativeSearchStatus, setNativeSearchStatus] =
     useState<NativeSearchStatus>("pending");
-  const { handleResetZoom, handleZoom, pdfContentRef, scaleOffsets } =
-    usePdfTabZoom({
-      activeId: target.fieldId,
-      activeTabType: target.filePurpose === "display" ? "pdf" : "docx",
-    });
+  const { handleResetZoom, handleWheelZoom, handleZoom, scaleOffsets } =
+    usePdfTabZoom();
   const scaleOffset = scaleOffsets.get(target.fieldId) ?? 0;
   const handleSearchMatchSummaryChange = useCallback(
     (summary: SearchMatchSummary) => {
@@ -81,6 +78,7 @@ export const SearchDocumentPreview = ({
       mimeType={target.mimeType}
       onError={handlePreviewError}
       onSearchMatchSummaryChange={handleSearchMatchSummaryChange}
+      onWheelZoom={(deltaY) => handleWheelZoom(target.fieldId, deltaY)}
       scaleOffset={scaleOffset}
       searchText={searchText}
       viewId="all"
@@ -107,7 +105,7 @@ export const SearchDocumentPreview = ({
   });
 
   return (
-    <div className="relative h-full min-h-0" ref={pdfContentRef}>
+    <div className="relative h-full min-h-0">
       {content}
       {showNoMatchFallback && (
         <div className="bg-background absolute inset-0 z-10 flex min-h-0 flex-col">

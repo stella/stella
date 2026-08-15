@@ -31,6 +31,7 @@ import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { fileMetadataOptions } from "@/lib/files/file-metadata-query";
 import {
+  getPDFScaleOffset,
   PDF_MAX_SCALE_OFFSET,
   PDF_MIN_SCALE_OFFSET,
   PDF_SCALE_OFFSET_STEP,
@@ -168,12 +169,18 @@ export const PdfViewerControls = ({
           onZoomIn={
             scaleOffset >= PDF_MAX_SCALE_OFFSET
               ? undefined
-              : () => navigateToScale(scaleOffset + PDF_SCALE_OFFSET_STEP)
+              : () =>
+                  navigateToScale(
+                    getPDFScaleOffset(scaleOffset, PDF_SCALE_OFFSET_STEP),
+                  )
           }
           onZoomOut={
             scaleOffset <= PDF_MIN_SCALE_OFFSET
               ? undefined
-              : () => navigateToScale(scaleOffset - PDF_SCALE_OFFSET_STEP)
+              : () =>
+                  navigateToScale(
+                    getPDFScaleOffset(scaleOffset, -PDF_SCALE_OFFSET_STEP),
+                  )
           }
           scaleOffset={scaleOffset}
         />

@@ -2,12 +2,14 @@ import { describe, expect, it } from "bun:test";
 
 import {
   consumePDFWheelZoomEvent,
+  getPDFScaleOffset,
   getPDFWheelZoomScaleOffset,
   PDF_MAX_SCALE_OFFSET,
   PDF_MIN_SCALE_OFFSET,
+  PDF_SCALE_OFFSET_STEP,
 } from "@/lib/pdf/pdf-zoom.logic";
 
-describe("PDF wheel zoom", () => {
+describe("PDF zoom", () => {
   it("keeps ordinary scrolling native", () => {
     let prevented = false;
     let receivedDelta: number | undefined;
@@ -62,6 +64,21 @@ describe("PDF wheel zoom", () => {
 
     for (const { current, deltaY, expected } of cases) {
       const offset = getPDFWheelZoomScaleOffset(current, deltaY);
+
+      expect(offset).toBe(expected);
+      expect(offset).toBeGreaterThanOrEqual(PDF_MIN_SCALE_OFFSET);
+      expect(offset).toBeLessThanOrEqual(PDF_MAX_SCALE_OFFSET);
+    }
+  });
+
+  it("clamps toolbar steps after fractional pinch offsets", () => {
+    const cases = [
+      { current: 1.99, delta: PDF_SCALE_OFFSET_STEP, expected: 2 },
+      { current: -0.79, delta: -PDF_SCALE_OFFSET_STEP, expected: -0.8 },
+    ];
+
+    for (const { current, delta, expected } of cases) {
+      const offset = getPDFScaleOffset(current, delta);
 
       expect(offset).toBe(expected);
       expect(offset).toBeGreaterThanOrEqual(PDF_MIN_SCALE_OFFSET);
