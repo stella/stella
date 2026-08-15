@@ -541,6 +541,7 @@ describe("handleMcpHttpRequest", () => {
 
     await reader.cancel();
     await firstRead;
+    expect(captureErrorMock).not.toHaveBeenCalled();
   });
 
   test("refuses session termination with 405", async () => {

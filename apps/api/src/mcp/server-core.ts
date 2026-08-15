@@ -582,10 +582,37 @@ export const createMcpHttpRequestHandler = ({
         once: true,
       });
 
+      // A pull is suspended across the upstream read and the teardown that
+      // follows it, and the consumer can cancel `monitoredBody` during either
+      // await. Cancelling closes the controller, so the close/enqueue that
+      // resumes afterwards throws, and the catch below would report that as a
+      // failed transport read. A cancelled body is a normal end of the
+      // exchange, so absorb the closed-controller throw here, the way the SSE
+      // connection registries do, and leave the catch for real read failures.
+      const closeMonitoredBody = (
+        controller: ReadableStreamDefaultController<Uint8Array>,
+      ): void => {
+        try {
+          controller.close();
+        } catch {
+          // Already closed by a concurrent cancel.
+        }
+      };
+      const enqueueMonitoredChunk = (
+        controller: ReadableStreamDefaultController<Uint8Array>,
+        chunk: Uint8Array,
+      ): void => {
+        try {
+          controller.enqueue(chunk);
+        } catch {
+          // Already closed by a concurrent cancel.
+        }
+      };
+
       const monitoredBody = new ReadableStream<Uint8Array>({
         pull: async (controller) => {
           if (readerReleased) {
-            controller.close();
+            closeMonitoredBody(controller);
             return;
           }
           try {
@@ -595,10 +622,10 @@ export const createMcpHttpRequestHandler = ({
             }
             if (readResult.done) {
               await completeExchange();
-              controller.close();
+              closeMonitoredBody(controller);
               return;
             }
-            controller.enqueue(readResult.value);
+            enqueueMonitoredChunk(controller, readResult.value);
           } catch (error) {
             reportTransportError(error, "read_stream");
             await completeExchange();
