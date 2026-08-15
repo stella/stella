@@ -3,6 +3,7 @@ import { detached } from "@/api/lib/detached";
 import { countPendingDocumentProcessingJobs } from "@/api/lib/document-processing-enqueue";
 import { createIdleExitCheck } from "@/api/lib/document-processing-idle-exit";
 import {
+  documentProcessingReconciliationGeneration,
   hasUnfinishedDocumentProcessingReconciliation,
   initDocumentProcessingWorker,
   isDocumentProcessingReconciliationInFlight,
@@ -58,6 +59,7 @@ if (idleExitMinutes !== undefined) {
     countPending: countPendingDocumentProcessingJobs,
     hasUnfinishedReconciliation: hasUnfinishedDocumentProcessingReconciliation,
     isReconciliationInFlight: isDocumentProcessingReconciliationInFlight,
+    reconciliationGeneration: documentProcessingReconciliationGeneration,
     requiredIdleChecks,
     onCheckFailure: (error) => {
       logger.error("document_processing.idle_check_failed", {

@@ -21,6 +21,7 @@ const harness = (
     countPending: counts,
     hasUnfinishedReconciliation,
     isReconciliationInFlight: () => false,
+    reconciliationGeneration: () => 0,
     requiredIdleChecks,
     onIdleExit: () => {
       exits += 1;
@@ -134,6 +135,7 @@ describe("createIdleExitCheck", () => {
       },
       hasUnfinishedReconciliation: async () => unfinished,
       isReconciliationInFlight: () => false,
+      reconciliationGeneration: () => 0,
       requiredIdleChecks: 2,
       onIdleExit: () => {
         exits += 1;
@@ -162,6 +164,34 @@ describe("createIdleExitCheck", () => {
         }),
       hasUnfinishedReconciliation: async () => false,
       isReconciliationInFlight: () => running,
+      reconciliationGeneration: () => 0,
+      requiredIdleChecks: 1,
+      onIdleExit: () => {
+        exits += 1;
+      },
+      onCheckFailure: () => undefined,
+    });
+
+    expect(await tick()).toBe("checked");
+    expect(exits).toBe(0);
+  });
+
+  test("a reconciliation that starts and finishes inside the count blocks the final sample", async () => {
+    let generation = 0;
+    let exits = 0;
+    const tick = createIdleExitCheck({
+      // A whole tick fits inside the count: by the time the sample
+      // resumes, nothing is running and the verdict it already took
+      // belongs to the tick before this one, so only the generation
+      // records that it happened.
+      countPending: async () =>
+        await Promise.resolve(0).then((pending) => {
+          generation += 1;
+          return pending;
+        }),
+      hasUnfinishedReconciliation: async () => false,
+      isReconciliationInFlight: () => false,
+      reconciliationGeneration: () => generation,
       requiredIdleChecks: 1,
       onIdleExit: () => {
         exits += 1;

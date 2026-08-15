@@ -2636,6 +2636,7 @@ export const reconciliationLeftWorkBehind = (
 export const createReconciliationProgress = () => {
   let unfinished = false;
   let running: Promise<void> | null = null;
+  let generation = 0;
   return {
     hasUnfinishedWork: async (): Promise<boolean> => {
       await running;
@@ -2648,11 +2649,20 @@ export const createReconciliationProgress = () => {
      * that started afterwards is visible here and nowhere else.
      */
     isTickRunning: (): boolean => running !== null,
+    /**
+     * How many ticks have started. A caller that snapshots this and
+     * re-reads it before deciding sees any tick that began in between,
+     * including one that also finished there and so left neither a
+     * running flag nor a verdict of its own behind.
+     */
+    tickGeneration: (): number => generation,
     /** `tick` resolves with whether it left work behind. */
     runTick: async (tick: () => Promise<boolean>): Promise<void> => {
-      // Both published before the first await, so a caller that arrives
-      // during this tick waits for it rather than reading the last one.
+      // All three published before the first await, so a caller that
+      // arrives during this tick waits for it rather than reading the last
+      // one, and one that only overlaps it still sees that it happened.
       unfinished = true;
+      generation += 1;
       let finish: () => void = () => undefined;
       running = new Promise<void>((resolve) => {
         finish = resolve;
@@ -2679,9 +2689,12 @@ const reconciliationProgress = createReconciliationProgress();
 export const hasUnfinishedDocumentProcessingReconciliation =
   reconciliationProgress.hasUnfinishedWork;
 
-/** Companion synchronous read for the idle sampler's decision frame. */
+/** Companion synchronous reads for the idle sampler's decision frame. */
 export const isDocumentProcessingReconciliationInFlight =
   reconciliationProgress.isTickRunning;
+
+export const documentProcessingReconciliationGeneration =
+  reconciliationProgress.tickGeneration;
 
 export const runDocumentProcessingReconciliationPhases = async ({
   onPhaseError,

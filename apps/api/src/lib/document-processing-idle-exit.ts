@@ -29,6 +29,13 @@ type CreateIdleExitCheckOptions = {
    * before its own first await.
    */
   isReconciliationInFlight: () => boolean;
+  /**
+   * How many reconciliation ticks have started, read synchronously and
+   * incremented in the same prologue as the flag above. Snapshotting it
+   * around the count is what catches a tick that both started and finished
+   * inside that window, which leaves no other trace.
+   */
+  reconciliationGeneration: () => number;
   /** Consecutive empty samples required before exiting. */
   requiredIdleChecks: number;
   onIdleExit: () => void;
@@ -43,6 +50,7 @@ export const createIdleExitCheck = ({
   isReconciliationInFlight,
   onCheckFailure,
   onIdleExit,
+  reconciliationGeneration,
   requiredIdleChecks,
 }: CreateIdleExitCheckOptions): (() => Promise<IdleExitTickOutcome>) => {
   let consecutiveIdleChecks = 0;
@@ -65,17 +73,28 @@ export const createIdleExitCheck = ({
       // count with the same tick's drained verdict and read idle while
       // fresh jobs wait, which a worker close does not drain.
       const unfinished = await hasUnfinishedReconciliation();
+      const generation = reconciliationGeneration();
       const pending = await countPending();
-      // The mirror of that window: a tick can start after the verdict and
-      // while the count is in flight, and on the last sample of a streak
-      // there is no later sample to catch it. So re-read the running flag
-      // here and decide in this frame. Reconciliation sets that flag in
-      // its tick's synchronous prologue, before its own first await, and
-      // nothing else runs between this read and the exit call below: no
-      // await separates them, and neither timers nor microtasks interleave
-      // inside one frame. Every tick that began before the decision is
-      // therefore visible to it, and none can begin during it.
-      const idle = pending === 0 && !unfinished && !isReconciliationInFlight();
+      // The count is the one window a sample cannot watch, so the decision
+      // is taken in the frame the count resumes it in: no await separates
+      // the reads below from the exit call, and neither timers nor
+      // microtasks interleave inside a frame, so no tick can begin during
+      // the decision itself. That leaves the ticks that began before it,
+      // and the four terms are what make those total. `pending` and
+      // `unfinished` answer for the tick this sample waited on and the
+      // work it left. `isReconciliationInFlight` catches a tick that
+      // started inside the count and is still running, which the verdict
+      // above predates. The generation catches the one that started and
+      // finished inside the count, leaving neither a running flag nor a
+      // verdict this sample ever read, having possibly enqueued after the
+      // count snapshot; a moved generation is not proof of work, so this
+      // sample is conservative and the next one reads that tick's own
+      // verdict. Every term covers a case the others provably do not.
+      const idle =
+        pending === 0 &&
+        !unfinished &&
+        !isReconciliationInFlight() &&
+        reconciliationGeneration() === generation;
       consecutiveIdleChecks = idle ? consecutiveIdleChecks + 1 : 0;
     } catch (error) {
       onCheckFailure(error);

@@ -1268,6 +1268,7 @@ describe("createReconciliationProgress", () => {
       countPending,
       hasUnfinishedReconciliation: progress.hasUnfinishedWork,
       isReconciliationInFlight: progress.isTickRunning,
+      reconciliationGeneration: progress.tickGeneration,
       onCheckFailure: () => undefined,
       onIdleExit: () => {
         exits += 1;
@@ -1359,6 +1360,59 @@ describe("createReconciliationProgress", () => {
     tick.settle(false);
     await Promise.all(ticks);
 
+    expect(await h.sample()).toBe("exit");
+    expect(h.exits()).toBe(1);
+  });
+
+  /**
+   * A tick can also open and close entirely inside the count: nothing is
+   * running when the sample resumes, and the verdict it took belongs to
+   * the tick before, so only the generation records that it ran at all.
+   */
+  const samplerRunningATickInsideTheCount = (
+    progress: ReturnType<typeof createReconciliationProgress>,
+    leftWorkBehind: boolean,
+  ) => {
+    let ran = false;
+    return sampler(
+      progress,
+      async () =>
+        await Promise.resolve(0).then(async (pending) => {
+          if (!ran) {
+            ran = true;
+            await progress.runTick(async () => leftWorkBehind);
+          }
+          return pending;
+        }),
+    );
+  };
+
+  test("a saturated tick that fits inside the count is not exited past", async () => {
+    const progress = createReconciliationProgress();
+    // The verdict this sample waits on is the drained tick before it.
+    await progress.runTick(async () => false);
+    const h = samplerRunningATickInsideTheCount(progress, true);
+
+    expect(await h.sample()).toBe("checked");
+    expect(h.exits()).toBe(0);
+    // And the sample after it reads that tick's own verdict.
+    expect(await h.sample()).toBe("checked");
+    expect(h.exits()).toBe(0);
+  });
+
+  test("a drained tick that fits inside the count costs one sample, not the exit", async () => {
+    const progress = createReconciliationProgress();
+    await progress.runTick(async () => false);
+    const h = samplerRunningATickInsideTheCount(progress, false);
+
+    // Every other reading says drained; the moved generation is what
+    // holds this sample back, since that tick may have enqueued after the
+    // count was taken.
+    expect(await h.sample()).toBe("checked");
+    expect(h.exits()).toBe(0);
+
+    // Nothing runs under the next sample, so being conservative delays
+    // the exit by one check rather than preventing it.
     expect(await h.sample()).toBe("exit");
     expect(h.exits()).toBe(1);
   });
