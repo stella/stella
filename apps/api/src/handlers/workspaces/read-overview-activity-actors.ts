@@ -72,35 +72,40 @@ const readOverviewActivityActors = createSafeHandler(
         if (afterActorId !== null) {
           conditions.push(gt(actorId, afterActorId));
         }
-        if (search !== "") {
-          const pattern = `%${escapeLike(search)}%`;
-          conditions.push(
-            or(ilike(user.name, pattern), ilike(user.email, pattern)) ??
-              sql`false`,
-          );
-        }
+        const historicalActors = tx
+          .selectDistinct({ id: actorId.as("actor_id") })
+          .from(auditLogs)
+          .where(and(...conditions))
+          .as("historical_activity_actors");
+        const identityCondition =
+          search === ""
+            ? sql`true`
+            : (or(
+                ilike(user.name, `%${escapeLike(search)}%`),
+                ilike(user.email, `%${escapeLike(search)}%`),
+              ) ?? sql`false`);
 
         const actorRows = await tx
           .selectDistinct({
             deletedAt: user.deletedAt,
             email: user.email,
-            id: actorId,
+            id: historicalActors.id,
             image: user.image,
             name: user.name,
           })
-          .from(auditLogs)
+          .from(historicalActors)
           .leftJoin(
             member,
             and(
-              eq(member.userId, actorId),
+              eq(member.userId, historicalActors.id),
               eq(member.organizationId, session.activeOrganizationId),
             ),
           )
           // The actor ID comes from an organization-and-workspace-scoped audit
           // row, so attribution remains authorized after membership ends.
-          .leftJoin(user, eq(user.id, actorId))
-          .where(and(...conditions))
-          .orderBy(asc(actorId))
+          .leftJoin(user, eq(user.id, historicalActors.id))
+          .where(identityCondition)
+          .orderBy(asc(historicalActors.id))
           .limit(limit + 1);
         const page = createCursorPage({
           rows: actorRows,

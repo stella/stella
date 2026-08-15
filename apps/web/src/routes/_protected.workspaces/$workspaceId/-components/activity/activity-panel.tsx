@@ -299,6 +299,8 @@ const ActivityAdvancedFilters = ({
   const t = useTranslations();
   const [open, setOpen] = useState(false);
   const [actorSearch, setActorSearch] = useState("");
+  const [selectedActorDetails, setSelectedActorDetails] =
+    useState<MatterActivityActor | null>(null);
   const debouncedSetActorSearch = useDebouncedCallback(setActorSearch, 300);
   const actorsQuery = useInfiniteQuery({
     ...overviewActivityActorsOptions(workspaceId, actorSearch),
@@ -309,6 +311,9 @@ const ActivityAdvancedFilters = ({
     : [];
   const selectedActor =
     actors.find(({ id }) => id === filters.actorId) ??
+    (selectedActorDetails?.id === filters.actorId
+      ? selectedActorDetails
+      : null) ??
     (filters.actorId === null
       ? null
       : {
@@ -397,9 +402,10 @@ const ActivityAdvancedFilters = ({
             itemToStringLabel={(actor) =>
               actor.name ?? t("workspaces.overview.activity.list.actor")
             }
-            onValueChange={(actor) =>
-              onFiltersChange({ ...filters, actorId: actor?.id ?? null })
-            }
+            onValueChange={(actor) => {
+              setSelectedActorDetails(actor);
+              onFiltersChange({ ...filters, actorId: actor?.id ?? null });
+            }}
             onInputValueChange={(value) =>
               debouncedSetActorSearch(value.trim())
             }
