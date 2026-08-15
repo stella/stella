@@ -5,12 +5,12 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import {
-  createCursorPage,
-  decodePaginationCursor,
-  encodePaginationCursor,
-} from "@/api/lib/pagination";
+import { createCursorPage } from "@/api/lib/pagination";
 
+import {
+  decodeActorCursor,
+  encodeActorCursor,
+} from "./read-overview-activity-actors.logic";
 import { readOverviewActivityActorRows } from "./read-overview-activity.query";
 
 const config = {
@@ -27,17 +27,6 @@ const config = {
     search: t.Optional(t.String({ maxLength: 256 })),
   }),
 } satisfies HandlerConfig;
-
-const decodeActorCursor = (cursor: string, search: string): string | null => {
-  const parts = decodePaginationCursor(cursor);
-  const cursorSearch = parts?.at(0);
-  const actorId = parts?.at(1);
-  return parts?.length === 2 &&
-    cursorSearch === search &&
-    typeof actorId === "string"
-    ? actorId
-    : null;
-};
 
 const readOverviewActivityActors = createSafeHandler(
   config,
@@ -66,7 +55,7 @@ const readOverviewActivityActors = createSafeHandler(
     const result = createCursorPage({
       rows: actorRows,
       limit,
-      cursorForItem: ({ id }) => encodePaginationCursor([search, id]),
+      cursorForItem: ({ id }) => encodeActorCursor(search, id),
     });
 
     return Result.ok({
