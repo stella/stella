@@ -4,10 +4,17 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
+import type {
+  ColumnTrimArgs,
+  ColumnTrimRange,
+} from "@/api/scripts/corpus-column-trim-plan";
 import {
   columnTrimGate,
+  columnTrimPageRange,
+  columnTrimRanges,
   corpusObjectState,
   parseColumnTrimArgs,
+  parseColumnTrimRanges,
   planColumnTrim,
 } from "@/api/scripts/corpus-column-trim-plan";
 
@@ -212,40 +219,144 @@ describe("columnTrimGate", () => {
   });
 });
 
+/** Ids in ascending order, so a range built from them is well-formed. */
+const ID = {
+  a: "019dd0c5-f3bc-7000-84b2-cf5f7a95ce5f",
+  b: "01a00247-0d3c-7000-b1b9-0301bea6441e",
+  c: "01a10000-0000-7000-8000-000000000000",
+  d: "01a20000-0000-7000-8000-000000000000",
+} as const;
+
+/**
+ * Every field the parser sets, so a field added later cannot slip into a
+ * run unasserted.
+ */
+const parsedArgs = (overrides: Partial<ColumnTrimArgs>): ColumnTrimArgs => ({
+  limit: null,
+  after: null,
+  idFrom: null,
+  idTo: null,
+  rangesFile: null,
+  dryRun: false,
+  force: false,
+  ...overrides,
+});
+
 describe("parseColumnTrimArgs", () => {
   test("defaults to an uncapped, mutating, gated run from the start", () => {
     expect(parseColumnTrimArgs([])).toEqual({
       type: "parsed",
-      args: { limit: null, after: null, dryRun: false, force: false },
+      args: parsedArgs({}),
     });
   });
 
   test("accepts both --limit forms alongside the flags", () => {
     expect(parseColumnTrimArgs(["--limit", "25", "--dry-run"])).toEqual({
       type: "parsed",
-      args: { limit: 25, after: null, dryRun: true, force: false },
+      args: parsedArgs({ limit: 25, dryRun: true }),
     });
     expect(parseColumnTrimArgs(["--limit=25", "--force"])).toEqual({
       type: "parsed",
-      args: { limit: 25, after: null, dryRun: false, force: true },
+      args: parsedArgs({ limit: 25, force: true }),
     });
   });
 
   test("accepts both --after forms and requires a UUID", () => {
-    const id = "019dd0c5-f3bc-7000-84b2-cf5f7a95ce5f";
-    expect(parseColumnTrimArgs(["--after", id])).toEqual({
+    expect(parseColumnTrimArgs(["--after", ID.a])).toEqual({
       type: "parsed",
-      args: { limit: null, after: id, dryRun: false, force: false },
+      args: parsedArgs({ after: ID.a }),
     });
-    expect(parseColumnTrimArgs([`--after=${id}`, "--dry-run"])).toEqual({
+    expect(parseColumnTrimArgs([`--after=${ID.a}`, "--dry-run"])).toEqual({
       type: "parsed",
-      args: { limit: null, after: id, dryRun: true, force: false },
+      args: parsedArgs({ after: ID.a, dryRun: true }),
     });
     for (const argv of [["--after"], ["--after", "not-a-uuid"]]) {
       expect(parseColumnTrimArgs(argv)).toEqual({
         type: "invalid",
         message: "--after requires a decision id (UUID)",
       });
+    }
+  });
+
+  test("accepts both forms of every id bound", () => {
+    expect(parseColumnTrimArgs(["--id-from", ID.a, "--id-to", ID.c])).toEqual({
+      type: "parsed",
+      args: parsedArgs({ idFrom: ID.a, idTo: ID.c }),
+    });
+    expect(
+      parseColumnTrimArgs([`--id-from=${ID.a}`, `--id-to=${ID.c}`]),
+    ).toEqual({
+      type: "parsed",
+      args: parsedArgs({ idFrom: ID.a, idTo: ID.c }),
+    });
+    for (const flag of ["--id-from", "--id-to"]) {
+      expect(parseColumnTrimArgs([flag, "not-a-uuid"])).toEqual({
+        type: "invalid",
+        message: `${flag} requires a decision id (UUID)`,
+      });
+    }
+  });
+
+  test("takes a --ranges-file path, and refuses an empty one", () => {
+    expect(parseColumnTrimArgs(["--ranges-file", "./ranges.json"])).toEqual({
+      type: "parsed",
+      args: parsedArgs({ rangesFile: "./ranges.json" }),
+    });
+    expect(parseColumnTrimArgs(["--ranges-file"]).type).toBe("invalid");
+  });
+
+  /**
+   * A run that silently walked something other than what was asked for
+   * would report coverage it does not have, so contradictory bounds are
+   * refused rather than resolved by precedence.
+   */
+  test("refuses bounds that contradict each other or span nothing", () => {
+    for (const argv of [
+      ["--ranges-file", "./r.json", "--after", ID.a],
+      ["--ranges-file", "./r.json", "--id-from", ID.a],
+      ["--ranges-file", "./r.json", "--id-to", ID.c],
+      ["--after", ID.a, "--id-from", ID.b],
+      ["--id-from", ID.c, "--id-to", ID.a],
+      ["--after", ID.c, "--id-to", ID.a],
+      // `--after` is exclusive, so this spans nothing.
+      ["--after", ID.a, "--id-to", ID.a],
+    ]) {
+      expect(parseColumnTrimArgs(argv).type).toBe("invalid");
+    }
+  });
+
+  /**
+   * Both `--id-from` and `--id-to` are inclusive, so naming the same id
+   * twice is the one-row repair span a ranges file spells
+   * `{ "from": X, "to": X }`. The two spellings must agree.
+   */
+  test("accepts a single-id inclusive span", () => {
+    expect(parseColumnTrimArgs(["--id-from", ID.a, "--id-to", ID.a])).toEqual({
+      type: "parsed",
+      args: parsedArgs({ idFrom: ID.a, idTo: ID.a }),
+    });
+    expect(
+      columnTrimRanges({
+        args: parsedArgs({ idFrom: ID.a, idTo: ID.a }),
+        fileRanges: null,
+      }),
+    ).toEqual([{ lower: { type: "at-or-after", id: ID.a }, upper: ID.a }]);
+  });
+
+  /**
+   * No flag here takes a value beginning with `--`, so swallowing the next
+   * option token would silently change what the run does: `--ranges-file
+   * --dry-run` would consume the dry run and leave a mutating pass.
+   */
+  test("never consumes an option token as a flag's value", () => {
+    for (const argv of [
+      ["--ranges-file", "--dry-run"],
+      ["--limit", "--dry-run"],
+      ["--after", "--force"],
+      ["--id-from", "--dry-run"],
+      ["--id-to", "--force"],
+    ]) {
+      expect(parseColumnTrimArgs(argv).type).toBe("invalid");
     }
   });
 
@@ -263,5 +374,152 @@ describe("parseColumnTrimArgs", () => {
 
   test("rejects an unknown flag instead of ignoring it", () => {
     expect(parseColumnTrimArgs(["--wipe"]).type).toBe("invalid");
+  });
+});
+
+describe("parseColumnTrimRanges", () => {
+  test("keeps a sorted, disjoint file as written", () => {
+    expect(
+      parseColumnTrimRanges(
+        JSON.stringify([
+          { from: ID.a, to: ID.b },
+          { from: ID.c, to: ID.d },
+        ]),
+      ),
+    ).toEqual({
+      type: "parsed",
+      ranges: [
+        { from: ID.a, to: ID.b },
+        { from: ID.c, to: ID.d },
+      ],
+    });
+  });
+
+  test("a single-id range is a range", () => {
+    expect(
+      parseColumnTrimRanges(JSON.stringify([{ from: ID.a, to: ID.a }])),
+    ).toEqual({ type: "parsed", ranges: [{ from: ID.a, to: ID.a }] });
+  });
+
+  /**
+   * Every refusal below would otherwise produce a run whose printed
+   * coverage does not describe what it walked: a double-counted span, a
+   * gap the operator believes is covered, or an id the database would
+   * order differently than the file does.
+   */
+  test("refuses malformed, unsorted or overlapping ranges", () => {
+    for (const raw of [
+      "not json",
+      JSON.stringify({ from: ID.a, to: ID.b }),
+      JSON.stringify([]),
+      JSON.stringify([ID.a]),
+      JSON.stringify([{ from: ID.a }]),
+      JSON.stringify([{ from: ID.a, to: "not-a-uuid" }]),
+      // Uppercase would compare differently as text than the database
+      // orders it as a uuid.
+      JSON.stringify([{ from: ID.a.toUpperCase(), to: ID.b }]),
+      JSON.stringify([{ from: ID.b, to: ID.a }]),
+      JSON.stringify([
+        { from: ID.c, to: ID.d },
+        { from: ID.a, to: ID.b },
+      ]),
+      JSON.stringify([
+        { from: ID.a, to: ID.c },
+        { from: ID.b, to: ID.d },
+      ]),
+      // Touching at one id still double-trims that row.
+      JSON.stringify([
+        { from: ID.a, to: ID.b },
+        { from: ID.b, to: ID.c },
+      ]),
+    ]) {
+      expect(parseColumnTrimRanges(raw).type).toBe("invalid");
+    }
+  });
+
+  /**
+   * A key the sweep does not read must not look like it was honoured: an
+   * operator who writes a per-range cap should be told it does nothing,
+   * not watch the run ignore it and report full coverage.
+   */
+  test("refuses a range entry carrying a key the sweep does not read", () => {
+    expect(
+      parseColumnTrimRanges(
+        JSON.stringify([{ from: ID.a, to: ID.b, limit: 100 }]),
+      ).type,
+    ).toBe("invalid");
+  });
+});
+
+describe("columnTrimRanges", () => {
+  test("a bare run walks the whole id space", () => {
+    expect(
+      columnTrimRanges({ args: parsedArgs({}), fileRanges: null }),
+    ).toEqual([{ lower: { type: "unbounded" }, upper: null }]);
+  });
+
+  test("--after resumes exclusively, --id-from starts inclusively", () => {
+    expect(
+      columnTrimRanges({ args: parsedArgs({ after: ID.a }), fileRanges: null }),
+    ).toEqual([{ lower: { type: "after", id: ID.a }, upper: null }]);
+    expect(
+      columnTrimRanges({
+        args: parsedArgs({ idFrom: ID.a }),
+        fileRanges: null,
+      }),
+    ).toEqual([{ lower: { type: "at-or-after", id: ID.a }, upper: null }]);
+  });
+
+  test("--id-to bounds a resumed walk as well as a fresh one", () => {
+    expect(
+      columnTrimRanges({
+        args: parsedArgs({ after: ID.a, idTo: ID.c }),
+        fileRanges: null,
+      }),
+    ).toEqual([{ lower: { type: "after", id: ID.a }, upper: ID.c }]);
+  });
+
+  test("a ranges file becomes one inclusive range per entry, in order", () => {
+    expect(
+      columnTrimRanges({
+        args: parsedArgs({ rangesFile: "./r.json" }),
+        fileRanges: [
+          { from: ID.a, to: ID.b },
+          { from: ID.c, to: ID.d },
+        ],
+      }),
+    ).toEqual([
+      { lower: { type: "at-or-after", id: ID.a }, upper: ID.b },
+      { lower: { type: "at-or-after", id: ID.c }, upper: ID.d },
+    ]);
+  });
+});
+
+describe("columnTrimPageRange", () => {
+  const range = {
+    lower: { type: "at-or-after", id: ID.a },
+    upper: ID.d,
+  } as const satisfies ColumnTrimRange;
+
+  test("the first page is the range itself", () => {
+    expect(columnTrimPageRange({ range, cursor: null })).toEqual(range);
+  });
+
+  /**
+   * The upper bound has to survive pagination: a later page that dropped
+   * it would scan past the range and reintroduce the unbounded scan the
+   * bound exists to prevent.
+   */
+  test("later pages resume after the cursor and keep the upper bound", () => {
+    expect(columnTrimPageRange({ range, cursor: ID.b })).toEqual({
+      lower: { type: "after", id: ID.b },
+      upper: ID.d,
+    });
+    expect(
+      columnTrimPageRange({
+        range: { lower: { type: "unbounded" }, upper: null },
+        cursor: ID.b,
+      }),
+    ).toEqual({ lower: { type: "after", id: ID.b }, upper: null });
   });
 });

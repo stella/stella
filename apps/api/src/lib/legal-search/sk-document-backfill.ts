@@ -48,6 +48,7 @@ import {
   type DocumentAst,
   isDocumentAst,
 } from "@/api/lib/case-law/document-ast";
+import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import {
@@ -58,10 +59,15 @@ import { indexDecision } from "@/api/lib/legal-search/case-law-search-index";
 import {
   corpusContentHash,
   corpusMirrorColumns,
+  corpusPayloadDisposition,
   EMPTY_CORPUS_CONTENT_HASHES,
+  TRIMMED_CORPUS_PAYLOAD_COLUMNS,
   writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
-import type { WriteCorpusResult } from "@/api/lib/legal-search/corpus-storage";
+import type {
+  CorpusPayloadColumns,
+  WriteCorpusResult,
+} from "@/api/lib/legal-search/corpus-storage";
 import {
   ADAPTER_KEYS,
   PARSER_VERSION,
@@ -244,20 +250,34 @@ const outsideFetchCooldown = or(
  * cutover should revisit it, since a fully drained corpus would leave
  * the scan walking trimmed rows to conclude the queue is empty.
  */
+/**
+ * SQL for "object storage holds no document for this row".
+ *
+ * The text column cannot answer this on its own. Under canonical storage a
+ * stored document leaves the columns null by design, so every predicate
+ * that means "nothing is stored here" has to consult the durable corpus
+ * state as well, or it will read a corpus-served decision as empty work.
+ * Derived once and shared by the three predicates that ask it, so the
+ * queue's idea of pending cannot drift from the guards that protect a
+ * stored payload from being erased.
+ *
+ * A row whose corpus hash is row-specific but whose Postgres AST column is
+ * still present is a legacy empty-envelope copy, not a corpus-served
+ * document: a trimmed row has had every payload column nulled, so a
+ * surviving AST artifact marks the corpus object as a verbatim copy of a
+ * payload that carries no document.
+ */
+export const storesNoCorpusDocument = or(
+  isNull(caseLawDecisions.contentHash),
+  inArray(caseLawDecisions.contentHash, [...EMPTY_CORPUS_CONTENT_HASHES]),
+  isNotNull(caseLawDecisions.documentAst),
+);
+
 export const pendingDocumentPredicate = and(
   isNull(caseLawDecisions.redactedAt),
   isNull(caseLawDecisions.fulltext),
   isNotNull(caseLawDecisions.documentUrl),
-  or(
-    isNull(caseLawDecisions.contentHash),
-    inArray(caseLawDecisions.contentHash, [...EMPTY_CORPUS_CONTENT_HASHES]),
-    // A row whose corpus hash is row-specific but whose Postgres AST
-    // column is still present is a legacy empty-envelope copy, not a
-    // corpus-served document: a trimmed (corpus-served) row has had every
-    // payload column nulled, so a surviving AST artifact marks the corpus
-    // object as a verbatim copy of a payload that carries no document.
-    isNotNull(caseLawDecisions.documentAst),
-  ),
+  storesNoCorpusDocument,
 );
 
 /** Pending, asked for by a reader, and still within its retry budget. */
@@ -523,6 +543,13 @@ export type StoreBackfilledDocumentOptions = {
    */
   writeCorpus?: typeof writeCorpusDocument | null;
   /**
+   * Storage mode this store settles under. Production passes nothing;
+   * tests set it for the same reason they inject the writer, so the
+   * canonical path is exercised without depending on which module read
+   * the environment first.
+   */
+  mode?: CorpusStorageMode;
+  /**
    * The row's source hash when the fetch was claimed. The store applies
    * only while it still holds: a source refresh that lands mid-fetch has
    * rewritten the decision this document was parsed for, so the document
@@ -551,6 +578,13 @@ export type StoreBackfilledDocumentOptions = {
  * it was — still queued, no text — rather than storing text that
  * readers of the canonical payload cannot see.
  *
+ * Under `canonical` storage the row write goes one step further and
+ * leaves the payload columns null: the objects are already confirmed at
+ * that point, so writing the columns too would recreate the very state
+ * the mode exists to retire. The queue does not hand such a row back —
+ * its predicate reads a row-specific content hash with no surviving AST
+ * artifact as corpus-served, not pending.
+ *
  * The row write is conditional on the row still having no text, so two
  * fetches of the same decision converge on one stored document instead
  * of the later writer overwriting the earlier one. Both write identical
@@ -564,6 +598,7 @@ export const storeBackfilledDocument = async ({
   document,
   scopedDb,
   writeCorpus = corpusDocumentWriter(),
+  mode = corpusStorageMode,
   claimedSourceHash,
 }: StoreBackfilledDocumentOptions): Promise<"stored" | "superseded"> => {
   const sections = document.sections.length > 0 ? document.sections : null;
@@ -578,22 +613,41 @@ export const storeBackfilledDocument = async ({
     eq(caseLawDecisions.id, decision.id),
     isNull(caseLawDecisions.redactedAt),
     sql`coalesce(${caseLawDecisions.fulltext}, '') = ''`,
+    // The text column stops being the whole answer once a canonical store
+    // nulls it: without this, a store whose parse outlived its claim would
+    // read a decision another attempt already filled as still empty and
+    // overwrite it.
+    storesNoCorpusDocument,
     claimedSourceHash === undefined
       ? undefined
       : sql`${caseLawDecisions.sourceHash} IS NOT DISTINCT FROM ${claimedSourceHash}`,
   );
 
+  const storedPayloadColumns = {
+    fulltext: document.fulltext,
+    documentAst: document.documentAst,
+    sections,
+  } satisfies CorpusPayloadColumns;
+
   const applyStoredPayload = async (
     tx: Transaction,
     written: WriteCorpusResult | null,
   ): Promise<boolean> => {
+    // Under canonical storage the payload this store just wrote to object
+    // storage is the one readers get, so persisting it into the columns as
+    // well would put the row back in the pre-cutover shape the moment
+    // after it left it. The disposition is decided from the confirmed
+    // write, so a corpus failure (which never reaches this callback) still
+    // leaves the columns as the only copy.
+    const payloadColumns =
+      corpusPayloadDisposition({ mode, written }) === "trim"
+        ? TRIMMED_CORPUS_PAYLOAD_COLUMNS
+        : storedPayloadColumns;
     // audit: skip — queue backfill of public case-law text; no user action
     const applied = await tx
       .update(caseLawDecisions)
       .set({
-        fulltext: document.fulltext,
-        documentAst: document.documentAst,
-        sections,
+        ...payloadColumns,
         parserVersion: PARSER_VERSION,
         ...corpusMirrorColumns({
           status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
@@ -762,7 +816,12 @@ export const claimDocumentFetch = async (
  *
  * Conditional on the row still being empty, so a fetch that came back
  * with nothing cannot erase a document another fetch of the same
- * decision has already stored.
+ * decision has already stored. Empty means empty everywhere: this write
+ * clears the corpus pointers along with the text, and a parse that
+ * outlives its 120s claim can land after a retry has already stored the
+ * document, so under canonical storage — where a stored document leaves
+ * the text column null — the corpus state is the only thing standing
+ * between a late failure and an unreachable payload.
  */
 export const markDocumentUnavailable = async (
   decisionId: SafeId<"caseLawDecision">,
@@ -784,6 +843,7 @@ export const markDocumentUnavailable = async (
           eq(caseLawDecisions.id, decisionId),
           isNull(caseLawDecisions.redactedAt),
           isNull(caseLawDecisions.fulltext),
+          storesNoCorpusDocument,
         ),
       );
   });

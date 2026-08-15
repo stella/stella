@@ -1,4 +1,16 @@
-import { and, asc, eq, gt, inArray, isNotNull, or, sql } from "drizzle-orm";
+import { panic } from "better-result";
+import {
+  and,
+  asc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNotNull,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 /**
@@ -18,8 +30,24 @@ import type { SQL } from "drizzle-orm";
  * compare-and-set against the row state it read, so the run is
  * idempotent and safe to repeat.
  *
+ * This is a repair pass over rows written before the write paths settled
+ * on the canonical shape, not a standing cleanup: under `canonical` every
+ * write that confirms its corpus objects now settles with the columns
+ * already empty (`corpusPayloadDisposition`).
+ *
  *   CORPUS_STORAGE_MODE=canonical LEGAL_CORPUS_S3_BUCKET=... \
- *     bun run src/scripts/corpus-column-trim.ts [--limit N] [--dry-run] [--force]
+ *     bun run src/scripts/corpus-column-trim.ts \
+ *       [--limit N] [--dry-run] [--force] \
+ *       [--after ID | --id-from ID] [--id-to ID] [--ranges-file PATH]
+ *
+ * The candidate predicate is not indexable, so an unbounded walk scans
+ * forward until it has collected a page; over an already-trimmed stretch
+ * of the id space that scan grows past the statement timeout, and it
+ * cannot be resumed past it. `--id-to` caps every scan at an id range the
+ * operator chose. `--ranges-file` takes a JSON array of sorted, disjoint
+ * `[{ "from": ID, "to": ID }, ...]` spans and walks them in order, which
+ * is how a keyspace whose candidates share no ordering with time gets
+ * covered: by a list of spans, not by one cursor.
  */
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
@@ -39,6 +67,7 @@ import {
   readCorpusAst,
   readCorpusSections,
   readCorpusText,
+  TRIMMED_CORPUS_PAYLOAD_COLUMNS,
 } from "@/api/lib/legal-search/corpus-storage";
 import type {
   DecisionSection,
@@ -48,11 +77,17 @@ import { LIMITS } from "@/api/lib/limits";
 import { getCorpusS3, refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { withTimeout } from "@/api/lib/with-timeout";
-import type { CorpusObjectState } from "@/api/scripts/corpus-column-trim-plan";
+import type {
+  ColumnTrimRange,
+  CorpusObjectState,
+} from "@/api/scripts/corpus-column-trim-plan";
 import {
   columnTrimGate,
+  columnTrimPageRange,
+  columnTrimRanges,
   corpusObjectState,
   parseColumnTrimArgs,
+  parseColumnTrimRanges,
   planColumnTrim,
 } from "@/api/scripts/corpus-column-trim-plan";
 
@@ -77,7 +112,30 @@ if (parsed.type === "invalid") {
   console.error(parsed.message);
   process.exit(2);
 }
-const { limit, after, dryRun, force } = parsed.args;
+const { limit, rangesFile, dryRun, force } = parsed.args;
+
+// Everything the run needs is settled before it opens a connection: a
+// ranges file that turns out to be malformed halfway through a sweep would
+// leave the operator with a partial pass and no statement of what it
+// covered.
+const fileRanges = await (async () => {
+  if (rangesFile === null) {
+    return null;
+  }
+  const file = Bun.file(rangesFile);
+  if (!(await file.exists())) {
+    console.error(`--ranges-file not found: ${rangesFile}`);
+    process.exit(2);
+  }
+  const parsedRanges = parseColumnTrimRanges(await file.text());
+  if (parsedRanges.type === "invalid") {
+    console.error(parsedRanges.message);
+    process.exit(2);
+  }
+  return parsedRanges.ranges;
+})();
+
+const ranges = columnTrimRanges({ args: parsed.args, fileRanges });
 
 const gate = columnTrimGate({ mode: corpusStorageMode, force });
 if (gate.type === "refused") {
@@ -93,16 +151,11 @@ await refreshCorpusS3();
 const runLabel = [
   dryRun ? "dry run" : "live",
   limit === null ? "no limit" : `limit=${limit}`,
+  `ranges=${ranges.length}`,
 ].join(", ");
 
 console.log(`=== CORPUS COLUMN TRIM (${runLabel}) ===`);
 
-// Resuming from --after keeps a restart's first page from re-skipping the
-// whole trimmed prefix of the id space, a scan that stops fitting a
-// statement timeout once enough rows are trimmed. The cursor rides on every
-// progress line, so a supervisor can pass the last one back in.
-let lastId: SafeId<"caseLawDecision"> | null =
-  after === null ? null : brandPersistedCaseLawDecisionId(after);
 let trimmed = 0;
 let skipped = 0;
 let failed = 0;
@@ -244,7 +297,7 @@ const trimRow = async (row: TrimRow): Promise<void> => {
     const applied = await ingestionDb(async (tx) => {
       const updated = await tx
         .update(caseLawDecisions)
-        .set({ fulltext: null, sections: null, documentAst: null })
+        .set(TRIMMED_CORPUS_PAYLOAD_COLUMNS)
         // Compare-and-set on the row state this scan read: a concurrent
         // ingestion refresh may have replaced the payload, in which case
         // the columns it just wrote are canonical and must survive.
@@ -294,40 +347,112 @@ const trimInChunks = async (rows: TrimRow[]): Promise<void> => {
   }
 };
 
-while (true) {
-  const remaining = limit === null ? BATCH_SIZE : limit - scanned;
-  if (remaining <= 0) {
-    break;
-  }
-
-  const idFilter: SQL | undefined =
-    lastId === null ? undefined : gt(caseLawDecisions.id, lastId);
-
-  // oxlint-disable-next-line no-await-in-loop -- sequential keyset pagination: the next page cursor (lastId) depends on this query
-  const rows: TrimRow[] = await ingestionDb((tx) =>
-    tx
-      .select({
-        ...TRIM_ROW_COLUMNS,
-        updatedAtToken: timestampCasToken(caseLawDecisions.updatedAt),
-      })
-      .from(caseLawDecisions)
-      .where(idFilter ? and(candidateFilter, idFilter) : candidateFilter)
-      .orderBy(asc(caseLawDecisions.id))
-      .limit(Math.min(BATCH_SIZE, remaining)),
+/**
+ * The id predicate for one page. The lower bound is inclusive only for a
+ * range's own start — an operator naming an id means to include it —
+ * and exclusive for every resumed cursor, whose row is already done.
+ */
+const rangeFilter = ({ lower, upper }: ColumnTrimRange): SQL | undefined => {
+  const lowerFilter = ((): SQL | undefined => {
+    switch (lower.type) {
+      case "unbounded":
+        return undefined;
+      case "at-or-after":
+        return gte(
+          caseLawDecisions.id,
+          brandPersistedCaseLawDecisionId(lower.id),
+        );
+      case "after":
+        return gt(
+          caseLawDecisions.id,
+          brandPersistedCaseLawDecisionId(lower.id),
+        );
+      default: {
+        const unhandled: never = lower;
+        return panic(`Unhandled column trim lower bound: ${String(unhandled)}`);
+      }
+    }
+  })();
+  return and(
+    lowerFilter,
+    upper === null
+      ? undefined
+      : lte(caseLawDecisions.id, brandPersistedCaseLawDecisionId(upper)),
   );
+};
 
-  if (rows.length === 0) {
-    break;
+const rangeLabel = ({ lower, upper }: ColumnTrimRange): string =>
+  `from=${lower.type === "unbounded" ? "start" : lower.id} to=${upper ?? "end"}`;
+
+/**
+ * Why a range's walk stopped. A range that ran out of candidates is
+ * covered; one the scan cap cut short is not, and the two must not print
+ * the same word: an operator reading `done` takes the span as repaired and
+ * moves on, and the ranges behind it were never queried at all.
+ */
+const RANGE_OUTCOMES = ["exhausted", "capped"] as const;
+type RangeOutcome = (typeof RANGE_OUTCOMES)[number];
+
+/** Ranges the scan cap stopped the sweep before reaching. */
+let unwalkedRanges = 0;
+let sweepOutcome: RangeOutcome = "exhausted";
+
+for (const [index, range] of ranges.entries()) {
+  const position = `range=${index + 1}/${ranges.length}`;
+  const rangeStart = { trimmed, skipped, failed };
+  // The cursor rides on every progress line, so a supervisor that lost a
+  // run can resume this range from the last id it saw.
+  let lastId: SafeId<"caseLawDecision"> | null = null;
+  let outcome: RangeOutcome = "exhausted";
+
+  while (true) {
+    const remaining = limit === null ? BATCH_SIZE : limit - scanned;
+    if (remaining <= 0) {
+      outcome = "capped";
+      break;
+    }
+
+    const idFilter = rangeFilter(
+      columnTrimPageRange({ range, cursor: lastId }),
+    );
+
+    // oxlint-disable-next-line no-await-in-loop -- sequential keyset pagination: the next page cursor (lastId) depends on this query
+    const rows: TrimRow[] = await ingestionDb((tx) =>
+      tx
+        .select({
+          ...TRIM_ROW_COLUMNS,
+          updatedAtToken: timestampCasToken(caseLawDecisions.updatedAt),
+        })
+        .from(caseLawDecisions)
+        .where(idFilter ? and(candidateFilter, idFilter) : candidateFilter)
+        .orderBy(asc(caseLawDecisions.id))
+        .limit(Math.min(BATCH_SIZE, remaining)),
+    );
+
+    if (rows.length === 0) {
+      break;
+    }
+
+    // oxlint-disable-next-line no-await-in-loop -- sequential keyset pages: the next page's cursor depends on this one completing
+    await trimInChunks(rows);
+
+    scanned += rows.length;
+    lastId = rows.at(-1)?.id ?? lastId;
+    console.log(
+      `  ${position} trimmed=${trimmed} skipped=${skipped} failed=${failed} cursor=${lastId}`,
+    );
   }
 
-  // oxlint-disable-next-line no-await-in-loop -- sequential keyset pages: the next page's cursor depends on this one completing
-  await trimInChunks(rows);
-
-  scanned += rows.length;
-  lastId = rows.at(-1)?.id ?? lastId;
   console.log(
-    `  trimmed=${trimmed} skipped=${skipped} failed=${failed} cursor=${lastId}`,
+    `  ${position} ${outcome === "exhausted" ? "done" : "capped"} ${rangeLabel(range)} trimmed=${trimmed - rangeStart.trimmed} skipped=${skipped - rangeStart.skipped} failed=${failed - rangeStart.failed} cursor=${lastId ?? "none"}`,
   );
+
+  if (outcome === "capped") {
+    // Walking on would print `done` against ranges this run never queried.
+    sweepOutcome = "capped";
+    unwalkedRanges = ranges.length - index - 1;
+    break;
+  }
 }
 
 // A failed row sits behind the published cursor, so a supervisor resuming
@@ -355,8 +480,13 @@ if (failedIds.length > 0) {
   }
 }
 
+// The scan cap is an operator's choice, not a failure, but the summary has
+// to say the sweep is partial: "Done" against an unfinished range list is
+// the one line most likely to be read on its own.
 console.log(
-  `Done. Trimmed ${trimmed} decisions, skipped ${skipped}, ${failed} failed.`,
+  sweepOutcome === "exhausted"
+    ? `Done. Trimmed ${trimmed} decisions, skipped ${skipped}, ${failed} failed.`
+    : `Stopped at --limit. Trimmed ${trimmed} decisions, skipped ${skipped}, ${failed} failed; ${unwalkedRanges} range(s) not walked. Re-run to continue.`,
 );
 
 // Non-zero on partial failure so a caller can tell an incomplete pass from

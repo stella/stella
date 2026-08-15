@@ -16,7 +16,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -36,7 +36,11 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
 import type { WriteCorpusResult } from "@/api/lib/legal-search/corpus-storage";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
-import { storeBackfilledDocument } from "@/api/lib/legal-search/sk-document-backfill";
+import {
+  markDocumentUnavailable,
+  pendingDocumentPredicate,
+  storeBackfilledDocument,
+} from "@/api/lib/legal-search/sk-document-backfill";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -322,6 +326,278 @@ if (!databaseUrl || !runPostgresTests) {
         normalizedS3Key: NEW_KEYS.sectionsKey,
         astS3Key: NEW_KEYS.astKey,
         contentHash: NEW_CONTENT_HASH,
+      });
+    });
+
+    /**
+     * Under canonical storage the objects are the payload, so a store that
+     * also filled the columns would put the row straight back into the
+     * pre-cutover shape — the state an external cleanup pass exists to
+     * remove, recreated by the writer faster than the pass can clear it.
+     * The queue predicate reads the result (row-specific hash, no surviving
+     * AST artifact) as corpus-served rather than pending, so the decision
+     * does not come back round.
+     */
+    test("canonical storage settles with the columns already empty", async () => {
+      const caseNumber = `corpus-canonical-${suffix}`;
+      const id = await insertDecision({
+        caseNumber,
+        mirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+      });
+
+      const outcome = await storeBackfilledDocument({
+        decision: decisionFor(id, caseNumber),
+        document: parsedDocument,
+        mode: "canonical",
+        scopedDb,
+        writeCorpus: async () => ({
+          ...NEW_KEYS,
+          contentHash: NEW_CONTENT_HASH,
+        }),
+      });
+
+      expect(outcome).toBe("stored");
+      expect(
+        await db.query.caseLawDecisions.findFirst({
+          where: { id: { eq: id } },
+          columns: {
+            corpusMirrorStatus: true,
+            fulltext: true,
+            sections: true,
+            documentAst: true,
+            textS3Key: true,
+            normalizedS3Key: true,
+            astS3Key: true,
+            contentHash: true,
+          },
+        }),
+      ).toEqual({
+        corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+        fulltext: null,
+        sections: null,
+        documentAst: null,
+        textS3Key: NEW_KEYS.textKey,
+        normalizedS3Key: NEW_KEYS.sectionsKey,
+        astS3Key: NEW_KEYS.astKey,
+        contentHash: NEW_CONTENT_HASH,
+      });
+    });
+
+    /**
+     * A PDF parse is CPU-bound and uncancellable, so an attempt can outlive
+     * its 120s claim: a retry stores the document while the first attempt
+     * is still running, then the first attempt finishes empty and marks the
+     * decision unavailable. That write clears the corpus pointers, and
+     * under canonical storage the stored document no longer shows in the
+     * text column, so a fence that reads only `fulltext` would let a late
+     * failure orphan a confirmed payload.
+     */
+    test("a late unavailable marking cannot erase a stored canonical payload", async () => {
+      const caseNumber = `corpus-late-unavailable-${suffix}`;
+      const id = await insertDecision({
+        caseNumber,
+        mirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+      });
+
+      await storeBackfilledDocument({
+        decision: decisionFor(id, caseNumber),
+        document: parsedDocument,
+        mode: "canonical",
+        scopedDb,
+        writeCorpus: async () => ({
+          ...NEW_KEYS,
+          contentHash: NEW_CONTENT_HASH,
+        }),
+      });
+
+      // The attempt that was overtaken, finishing with nothing to store.
+      await markDocumentUnavailable(id, scopedDb);
+
+      expect(
+        await db.query.caseLawDecisions.findFirst({
+          where: { id: { eq: id } },
+          columns: {
+            fulltext: true,
+            textS3Key: true,
+            normalizedS3Key: true,
+            astS3Key: true,
+            contentHash: true,
+          },
+        }),
+      ).toEqual({
+        fulltext: null,
+        textS3Key: NEW_KEYS.textKey,
+        normalizedS3Key: NEW_KEYS.sectionsKey,
+        astS3Key: NEW_KEYS.astKey,
+        contentHash: NEW_CONTENT_HASH,
+      });
+    });
+
+    /**
+     * The same fence from the other side: a store that lands after another
+     * attempt already filled the decision is superseded, not applied.
+     */
+    test("a late store cannot overwrite a stored canonical payload", async () => {
+      const caseNumber = `corpus-late-store-${suffix}`;
+      const id = await insertDecision({
+        caseNumber,
+        mirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+      });
+      const store = async () =>
+        await storeBackfilledDocument({
+          decision: decisionFor(id, caseNumber),
+          document: parsedDocument,
+          mode: "canonical",
+          scopedDb,
+          writeCorpus: async () => ({
+            ...NEW_KEYS,
+            contentHash: NEW_CONTENT_HASH,
+          }),
+        });
+
+      expect(await store()).toBe("stored");
+      expect(await store()).toBe("superseded");
+    });
+
+    /**
+     * The queue must not hand a corpus-served decision back as pending
+     * work: under canonical its text column is null, which is the shape
+     * the queue reads as "never fetched".
+     */
+    test("a stored canonical decision leaves the pending queue", async () => {
+      const caseNumber = `corpus-queue-exit-${suffix}`;
+      const id = await insertDecision({
+        caseNumber,
+        mirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+      });
+
+      const stillPending = async () =>
+        Boolean(
+          (
+            await db
+              .select({ id: caseLawDecisions.id })
+              .from(caseLawDecisions)
+              .where(and(eq(caseLawDecisions.id, id), pendingDocumentPredicate))
+              .limit(1)
+          ).at(0),
+        );
+
+      expect(await stillPending()).toBe(true);
+
+      await storeBackfilledDocument({
+        decision: decisionFor(id, caseNumber),
+        document: parsedDocument,
+        mode: "canonical",
+        scopedDb,
+        writeCorpus: async () => ({
+          ...NEW_KEYS,
+          contentHash: NEW_CONTENT_HASH,
+        }),
+      });
+
+      expect(await stillPending()).toBe(false);
+    });
+
+    test("dual-write storage keeps the columns alongside the objects", async () => {
+      const caseNumber = `corpus-dual-${suffix}`;
+      const id = await insertDecision({
+        caseNumber,
+        mirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+      });
+
+      await storeBackfilledDocument({
+        decision: decisionFor(id, caseNumber),
+        document: parsedDocument,
+        mode: "dual-write",
+        scopedDb,
+        writeCorpus: async () => ({
+          ...NEW_KEYS,
+          contentHash: NEW_CONTENT_HASH,
+        }),
+      });
+
+      expect(
+        await db.query.caseLawDecisions.findFirst({
+          where: { id: { eq: id } },
+          columns: { fulltext: true, textS3Key: true, contentHash: true },
+        }),
+      ).toMatchObject({
+        fulltext: parsedDocument.fulltext,
+        textS3Key: NEW_KEYS.textKey,
+        contentHash: NEW_CONTENT_HASH,
+      });
+    });
+
+    /**
+     * The columns are dropped because object storage holds the payload, so
+     * a store with no corpus write behind it keeps them whatever the mode
+     * says: they are the only copy.
+     */
+    test("canonical storage with no corpus write keeps the columns", async () => {
+      const caseNumber = `corpus-canonical-nowrite-${suffix}`;
+      const id = await insertDecision({
+        caseNumber,
+        mirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+      });
+
+      await storeBackfilledDocument({
+        decision: decisionFor(id, caseNumber),
+        document: parsedDocument,
+        mode: "canonical",
+        scopedDb,
+        writeCorpus: null,
+      });
+
+      expect(
+        await db.query.caseLawDecisions.findFirst({
+          where: { id: { eq: id } },
+          columns: { fulltext: true, textS3Key: true, contentHash: true },
+        }),
+      ).toMatchObject({
+        fulltext: parsedDocument.fulltext,
+        textS3Key: null,
+        contentHash: null,
+      });
+    });
+
+    /**
+     * A corpus write that throws never reaches the row write at all, so the
+     * decision keeps its pending mirror and its empty columns — still
+     * queued, exactly as before this store ran.
+     */
+    test("canonical storage leaves the row untouched when the corpus write fails", async () => {
+      const caseNumber = `corpus-canonical-failed-${suffix}`;
+      const id = await insertDecision({
+        caseNumber,
+        mirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+      });
+
+      const failure = await storeBackfilledDocument({
+        decision: decisionFor(id, caseNumber),
+        document: parsedDocument,
+        mode: "canonical",
+        scopedDb,
+        writeCorpus: async () =>
+          await Promise.reject(new Error("bucket unreachable")),
+      }).then(
+        () => null,
+        (error: unknown) => error,
+      );
+
+      expect(failure).toBeInstanceOf(Error);
+      expect(
+        await db.query.caseLawDecisions.findFirst({
+          where: { id: { eq: id } },
+          columns: {
+            corpusMirrorStatus: true,
+            fulltext: true,
+            textS3Key: true,
+          },
+        }),
+      ).toMatchObject({
+        corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+        fulltext: null,
+        textS3Key: null,
       });
     });
 

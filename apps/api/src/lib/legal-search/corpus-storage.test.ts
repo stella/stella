@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { CASE_LAW_CORPUS_MIRROR_STATUS } from "@/api/db/schema";
 import { zstdCompress } from "@/api/lib/compression";
+import { CORPUS_STORAGE_MODES } from "@/api/lib/corpus-storage-mode";
 import {
   CorpusPayloadUnavailableError,
   TimeoutError,
@@ -9,12 +10,15 @@ import {
 import {
   corpusContentHash,
   corpusMirrorColumns,
+  corpusPayloadDisposition,
   EMPTY_CORPUS_CONTENT_HASHES,
   parsePersistedCorpusAst,
   parsePersistedCorpusSections,
   readCorpusPayloadOrFallback,
   readCorpusText,
+  TRIMMED_CORPUS_PAYLOAD_COLUMNS,
 } from "@/api/lib/legal-search/corpus-storage";
+import type { WriteCorpusResult } from "@/api/lib/legal-search/corpus-storage";
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 
 describe("corpus mirror state columns", () => {
@@ -46,6 +50,57 @@ describe("corpus mirror state columns", () => {
       normalizedS3Key: "corpus/sections.zst",
       astS3Key: "corpus/ast.zst",
       contentHash: "content-hash",
+    });
+  });
+});
+
+/**
+ * Canonical storage serves reads from object storage, so a write path that
+ * keeps persisting the Postgres payload columns leaves rows in a shape the
+ * deployed mode does not describe and makes any external cleanup pass chase
+ * the writers. The disposition is the single place that answers whether a
+ * settling write may drop them, so it is asserted over the whole mode set
+ * rather than over the modes that happen to be interesting.
+ */
+describe("corpusPayloadDisposition", () => {
+  const written = {
+    textKey: "corpus/text.zst",
+    sectionsKey: "corpus/sections.zst",
+    astKey: "corpus/ast.zst",
+    contentHash: "content-hash",
+  } as const satisfies WriteCorpusResult;
+
+  test("only canonical storage drops the columns, and only once written", () => {
+    const dispositions = Object.fromEntries(
+      CORPUS_STORAGE_MODES.map((mode) => [
+        mode,
+        {
+          confirmed: corpusPayloadDisposition({ mode, written }),
+          unwritten: corpusPayloadDisposition({ mode, written: null }),
+        },
+      ]),
+    );
+
+    expect(dispositions).toEqual({
+      off: { confirmed: "retain", unwritten: "retain" },
+      "dual-write": { confirmed: "retain", unwritten: "retain" },
+      canonical: { confirmed: "trim", unwritten: "retain" },
+    });
+  });
+
+  test("every storage mode is decided", () => {
+    // A new mode must not inherit "retain" by omission: the switch is
+    // exhaustive, and this pins the set the assertion above covers.
+    expect(new Set(CORPUS_STORAGE_MODES)).toEqual(
+      new Set(["off", "dual-write", "canonical"]),
+    );
+  });
+
+  test("the trimmed shape nulls exactly the three payload columns", () => {
+    expect(TRIMMED_CORPUS_PAYLOAD_COLUMNS).toEqual({
+      fulltext: null,
+      sections: null,
+      documentAst: null,
     });
   });
 });
