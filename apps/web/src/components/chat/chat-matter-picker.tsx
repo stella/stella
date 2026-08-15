@@ -2,7 +2,7 @@ import { useDeferredValue, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { ChevronDownIcon, SearchIcon } from "lucide-react";
+import { ChevronDownIcon, ExternalLinkIcon, SearchIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import {
@@ -384,6 +384,18 @@ export const ChatMatterPicker = ({
                           {m.name}
                         </span>
                       </span>
+                      <a
+  href={`/matters/${m.id}`}
+  target="_blank"
+  rel="noreferrer"
+  onClick={(e) => {
+    e.stopPropagation(); // Prevent selecting the row 
+  }}
+  className="ml-auto inline-flex items-center justify-center p-1 text-muted-foreground hover:text-foreground rounded"
+  title={t("common.openInNewTab")}
+>
+  <ExternalLinkIcon className="size-3.5" />
+</a>
                     </MenuCheckboxItem>
                   );
                 })}
