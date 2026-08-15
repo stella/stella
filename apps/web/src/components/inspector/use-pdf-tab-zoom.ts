@@ -1,11 +1,13 @@
 import { useRef, useState } from "react";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-
-const ZOOM_STEP = 0.2;
-const MIN_OFFSET = -0.8;
-const MAX_OFFSET = 2;
-const PINCH_ZOOM_SENSITIVITY = 0.005;
+import {
+  consumePDFWheelZoomEvent,
+  getPDFWheelZoomScaleOffset,
+  PDF_MAX_SCALE_OFFSET,
+  PDF_MIN_SCALE_OFFSET,
+  PDF_SCALE_OFFSET_STEP,
+} from "@/lib/pdf/pdf-zoom.logic";
 
 type UsePdfTabZoomOptions = {
   activeId: string | null;
@@ -24,10 +26,11 @@ export const usePdfTabZoom = ({
   const handleZoom = (tabId: string, direction: "in" | "out") => {
     setScaleOffsets((prev) => {
       const current = prev.get(tabId) ?? 0;
-      const delta = direction === "in" ? ZOOM_STEP : -ZOOM_STEP;
+      const delta =
+        direction === "in" ? PDF_SCALE_OFFSET_STEP : -PDF_SCALE_OFFSET_STEP;
       const next = Math.round((current + delta) * 10) / 10;
 
-      if (next < MIN_OFFSET || next > MAX_OFFSET) {
+      if (next < PDF_MIN_SCALE_OFFSET || next > PDF_MAX_SCALE_OFFSET) {
         return prev;
       }
 
@@ -52,26 +55,23 @@ export const usePdfTabZoom = ({
     }
 
     const onWheel = (event: WheelEvent) => {
-      if (!event.ctrlKey || !activeId) {
+      if (!activeId) {
         return;
       }
-      event.preventDefault();
 
-      setScaleOffsets((prev) => {
-        const current = prev.get(activeId) ?? 0;
-        const delta = -event.deltaY * PINCH_ZOOM_SENSITIVITY;
-        const next =
-          Math.round(
-            Math.max(MIN_OFFSET, Math.min(MAX_OFFSET, current + delta)) * 100,
-          ) / 100;
+      consumePDFWheelZoomEvent(event, (deltaY) => {
+        setScaleOffsets((prev) => {
+          const current = prev.get(activeId) ?? 0;
+          const next = getPDFWheelZoomScaleOffset(current, deltaY);
 
-        if (next === current) {
-          return prev;
-        }
+          if (next === current) {
+            return prev;
+          }
 
-        const updated = new Map(prev);
-        updated.set(activeId, next);
-        return updated;
+          const updated = new Map(prev);
+          updated.set(activeId, next);
+          return updated;
+        });
       });
     };
 
