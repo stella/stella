@@ -17,6 +17,7 @@ import {
   isRetryableOcrDerivativeFailure,
   isRetryableSearchIndexFailure,
   mapWithConcurrency,
+  memoizeConnect,
   ownsPromotedManualOcrClaim,
   readRepairScanCursor,
   runDocumentProcessingReconciliationPhases,
@@ -228,6 +229,47 @@ describe("repair cursor Redis deadlines", () => {
       label: "document OCR repair cursor write",
       timeoutMs: 5,
     });
+  });
+});
+
+describe("reconciliation connection memo", () => {
+  test("connects once while the attempt succeeds", async () => {
+    let attempts = 0;
+    const ensureConnected = memoizeConnect(async () => {
+      attempts += 1;
+      await Promise.resolve();
+    });
+
+    await Promise.all([
+      ensureConnected(),
+      ensureConnected(),
+      ensureConnected(),
+    ]);
+    await ensureConnected();
+
+    expect(attempts).toBe(1);
+  });
+
+  test("retries after a failed attempt instead of caching the rejection", async () => {
+    let attempts = 0;
+    const ensureConnected = memoizeConnect(async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw new Error("connection refused");
+      }
+      await Promise.resolve();
+    });
+
+    const rejection: unknown = await ensureConnected().then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(rejection).toBeInstanceOf(Error);
+
+    await ensureConnected();
+    await ensureConnected();
+
+    expect(attempts).toBe(2);
   });
 });
 
