@@ -4231,8 +4231,8 @@
       "untitledColumn": "Nombre de columna, p. ej. Fecha de vigencia"
     },
     "reference": "Número de referencia",
-    "referenceConventionHint": "Formato de la organización: {example}",
-    "referenceFormatWarning": "No coincide con el formato de la organización.",
+    "referenceConventionHint": "Formato preferido: {example}",
+    "referenceFormatWarning": "No coincide con el formato preferido.",
     "referencePlaceholder": "p. ej. 2024/001",
     "referenceTaken": "Este número de referencia ya está en uso",
     "sections": {

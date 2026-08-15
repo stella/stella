@@ -4231,8 +4231,8 @@
       "untitledColumn": "Oszlop neve, pl. Hatálybalépés dátuma"
     },
     "reference": "Hivatkozási szám",
-    "referenceConventionHint": "Szervezeti formátum: {example}",
-    "referenceFormatWarning": "Nem egyezik a szervezeti formátummal.",
+    "referenceConventionHint": "Előnyben részesített formátum: {example}",
+    "referenceFormatWarning": "Nem egyezik az előnyben részesített formátummal.",
     "referencePlaceholder": "pl. 2024/001",
     "referenceTaken": "Ez a hivatkozási szám már használatban van",
     "sections": {

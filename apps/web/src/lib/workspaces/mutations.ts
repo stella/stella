@@ -3,7 +3,7 @@ import {
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useRouter } from "@tanstack/react-router";
+import { useRouterState } from "@tanstack/react-router";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -13,6 +13,7 @@ import {
   toAPIError,
   unwrapEden,
 } from "@/lib/errors/api";
+import { pageTitleLiteral } from "@/lib/page-title";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 
@@ -65,17 +66,86 @@ export const useCreateWorkspace = () => {
   });
 };
 
-type UpdateWorkspaceVars = {
-  workspaceId: string;
-  name?: string;
-  clientId?: string;
-  reference?: string;
-  color?: string | null;
-  leadUserId?: string | null;
-  promote?: {
+type WorkspaceUpdateValueByType = {
+  clientId: string;
+  color: string | null;
+  leadUserId: string | null;
+  name: string;
+  promote: {
     clientId: string;
     memberUserIds?: string[];
   };
+  reference: string;
+};
+
+type WorkspaceUpdateType = keyof WorkspaceUpdateValueByType;
+
+type WorkspaceUpdate = {
+  [Type in WorkspaceUpdateType]: {
+    type: Type;
+    value: WorkspaceUpdateValueByType[Type];
+  };
+}[WorkspaceUpdateType];
+
+type UpdateWorkspaceVars = {
+  workspaceId: string;
+  update: WorkspaceUpdate;
+};
+
+type WorkspaceUpdateEffects = {
+  documentTitle: string | null;
+};
+
+const NO_WORKSPACE_UPDATE_EFFECTS: WorkspaceUpdateEffects = {
+  documentTitle: null,
+};
+
+export const workspaceUpdateEffects = (
+  update: WorkspaceUpdate,
+): WorkspaceUpdateEffects => {
+  switch (update.type) {
+    case "name":
+      return { documentTitle: update.value };
+    case "clientId":
+    case "color":
+    case "leadUserId":
+    case "promote":
+    case "reference":
+      return NO_WORKSPACE_UPDATE_EFFECTS;
+    default: {
+      const unreachable: never = update;
+      return unreachable;
+    }
+  }
+};
+
+const workspaceUpdateBody = (update: WorkspaceUpdate) => {
+  switch (update.type) {
+    case "clientId":
+      return { clientId: toSafeId<"contact">(update.value) };
+    case "color":
+      return { color: update.value };
+    case "leadUserId":
+      return { leadUserId: update.value };
+    case "name":
+      return { name: update.value };
+    case "promote":
+      return {
+        promote: {
+          clientId: toSafeId<"contact">(update.value.clientId),
+          ...(update.value.memberUserIds &&
+            update.value.memberUserIds.length > 0 && {
+              memberUserIds: update.value.memberUserIds,
+            }),
+        },
+      };
+    case "reference":
+      return { reference: update.value };
+    default: {
+      const unreachable: never = update;
+      return unreachable;
+    }
+  }
 };
 
 export const workspaceUpdateInvalidationKeys = () => [workspacesKeys.all];
@@ -94,33 +164,25 @@ export const workspaceUpdateRefetchFilters = (
 export const useUpdateWorkspace = () => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
-  const router = useRouter();
+  const activeWorkspaceId = useRouterState({
+    select: (state) =>
+      state.matches.find(
+        (match) => match.routeId === "/_protected/workspaces/$workspaceId",
+      )?.params.workspaceId,
+  });
 
   return useMutation({
-    mutationFn: async ({ workspaceId, ...body }: UpdateWorkspaceVars) => {
-      const { clientId, promote, ...restBody } = body;
+    mutationFn: async ({ update, workspaceId }: UpdateWorkspaceVars) => {
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .post({
-          ...restBody,
-          ...(clientId !== undefined && {
-            clientId: toSafeId<"contact">(clientId),
-          }),
-          ...(promote !== undefined && {
-            promote: {
-              clientId: toSafeId<"contact">(promote.clientId),
-              ...(promote.memberUserIds && promote.memberUserIds.length > 0
-                ? { memberUserIds: promote.memberUserIds }
-                : {}),
-            },
-          }),
-        });
+        .post(workspaceUpdateBody(update));
 
       if (response.error) {
         throw toAPIError(response.error);
       }
     },
-    onSuccess: async (_data, { workspaceId }) => {
+    onSuccess: async (_data, variables) => {
+      const { workspaceId } = variables;
       await Promise.all(
         workspaceUpdateInvalidationKeys().map(async (queryKey) => {
           await queryClient.invalidateQueries({
@@ -136,11 +198,10 @@ export const useUpdateWorkspace = () => {
           },
         ),
       );
-      // Re-run route loaders so the document title (driven by the
-      // route `head` from loaderData) reflects the renamed matter
-      // without waiting for a navigation. Query invalidation alone
-      // refreshes components but not the cached loaderData.
-      await router.invalidate();
+      const effects = workspaceUpdateEffects(variables.update);
+      if (effects.documentTitle !== null && activeWorkspaceId === workspaceId) {
+        globalThis.document.title = pageTitleLiteral(effects.documentTitle);
+      }
     },
     onError: (error) => {
       analytics.captureError(error);

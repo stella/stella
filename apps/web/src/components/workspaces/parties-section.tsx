@@ -97,7 +97,10 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
 
   const handleSetClient = (contact: { id: string; displayName: string }) => {
     updateWorkspace.mutate(
-      { workspaceId, clientId: contact.id },
+      {
+        workspaceId,
+        update: { type: "clientId", value: contact.id },
+      },
       {
         onSuccess: () => {
           stellaToast.add({
@@ -323,7 +326,10 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
     updateWorkspace.mutate(
       {
         workspaceId,
-        promote: { clientId: selectedContact.id },
+        update: {
+          type: "promote",
+          value: { clientId: selectedContact.id },
+        },
       },
       {
         onSuccess: () => {

@@ -4234,8 +4234,8 @@ type Messages = {
       "untitledColumn": "Column name, e.g. Effective date";
     };
     "reference": "Reference number";
-    "referenceConventionHint": "Organization format: {example}";
-    "referenceFormatWarning": "Doesn't match the organization format.";
+    "referenceConventionHint": "Preferred format: {example}";
+    "referenceFormatWarning": "Doesn't match the preferred format.";
     "referencePlaceholder": "e.g. 2024/001";
     "referenceTaken": "This reference number is already in use";
     "sections": {

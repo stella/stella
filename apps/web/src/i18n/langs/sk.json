@@ -4231,8 +4231,8 @@
       "untitledColumn": "Názov stĺpca, napr. Dátum účinnosti"
     },
     "reference": "Referenčné číslo",
-    "referenceConventionHint": "Formát organizácie: {example}",
-    "referenceFormatWarning": "Nezhoduje sa s formátom organizácie.",
+    "referenceConventionHint": "Preferovaný formát: {example}",
+    "referenceFormatWarning": "Nezhoduje sa s preferovaným formátom.",
     "referencePlaceholder": "napr. 2024/001",
     "referenceTaken": "Toto referenčné číslo sa už používa",
     "sections": {

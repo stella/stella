@@ -4231,8 +4231,8 @@
       "untitledColumn": "Stulpelio pavadinimas, pvz., įsigaliojimo data"
     },
     "reference": "Nuorodos numeris",
-    "referenceConventionHint": "Organizacijos formatas: {example}",
-    "referenceFormatWarning": "Neatitinka organizacijos formato.",
+    "referenceConventionHint": "Pageidaujamas formatas: {example}",
+    "referenceFormatWarning": "Neatitinka pageidaujamo formato.",
     "referencePlaceholder": "pvz. 2024/001",
     "referenceTaken": "Šis nuorodos numeris jau naudojamas",
     "sections": {

@@ -4231,8 +4231,8 @@
       "untitledColumn": "Spaltenname, z. B. Vertragsbeginn"
     },
     "reference": "Aktenzeichen",
-    "referenceConventionHint": "Organisationsformat: {example}",
-    "referenceFormatWarning": "Entspricht nicht dem Organisationsformat.",
+    "referenceConventionHint": "Bevorzugtes Format: {example}",
+    "referenceFormatWarning": "Entspricht nicht dem bevorzugten Format.",
     "referencePlaceholder": "z. B. 2024/001",
     "referenceTaken": "Diese Referenznummer wird bereits verwendet",
     "sections": {

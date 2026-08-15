@@ -355,6 +355,7 @@ export const KanbanColumn = ({
           if (color && onChangeColor) {
             return (
               <ColorPicker
+                moreLabel={t("common.showMore")}
                 value={optionColor}
                 onSelect={handleColorSelect}
                 side="bottom"
@@ -431,6 +432,7 @@ export const KanbanColumn = ({
                     <ColorPickerContent
                       columns={9}
                       defaultExpanded={false}
+                      moreLabel={t("common.showMore")}
                       onSelect={handleColorSelect}
                       presets={DEFAULT_PRESETS}
                       value={optionColor}

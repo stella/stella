@@ -4231,8 +4231,8 @@
       "untitledColumn": "اسم العمود، مثل تاريخ السريان"
     },
     "reference": "الرقم المرجعي",
-    "referenceConventionHint": "تنسيق المؤسسة: {example}",
-    "referenceFormatWarning": "لا يطابق تنسيق المؤسسة.",
+    "referenceConventionHint": "التنسيق المفضل: {example}",
+    "referenceFormatWarning": "لا يطابق التنسيق المفضل.",
     "referencePlaceholder": "مثال: 2024/001",
     "referenceTaken": "هذا الرقم المرجعي مستخدَم بالفعل",
     "sections": {

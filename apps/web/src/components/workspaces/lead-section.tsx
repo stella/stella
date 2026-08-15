@@ -47,7 +47,10 @@ export const LeadSection = ({ workspaceId }: LeadSectionProps) => {
       return;
     }
     updateWorkspace.mutate(
-      { workspaceId, leadUserId: value },
+      {
+        workspaceId,
+        update: { type: "leadUserId", value },
+      },
       {
         onError: () => {
           stellaToast.add({

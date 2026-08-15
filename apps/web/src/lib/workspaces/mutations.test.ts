@@ -43,6 +43,32 @@ describe("workspace update cache invalidation", () => {
     ]);
   });
 
+  test("only name updates have a document-title side effect", async () => {
+    const { workspaceUpdateEffects } =
+      await import("@/lib/workspaces/mutations");
+
+    expect(
+      workspaceUpdateEffects({ type: "name", value: "Renamed matter" }),
+    ).toEqual({ documentTitle: "Renamed matter" });
+
+    expect([
+      workspaceUpdateEffects({ type: "clientId", value: "contact_test" }),
+      workspaceUpdateEffects({ type: "color", value: "purple" }),
+      workspaceUpdateEffects({ type: "leadUserId", value: "user_test" }),
+      workspaceUpdateEffects({
+        type: "promote",
+        value: { clientId: "contact_test" },
+      }),
+      workspaceUpdateEffects({ type: "reference", value: "REF-42" }),
+    ]).toEqual([
+      { documentTitle: null },
+      { documentTitle: null },
+      { documentTitle: null },
+      { documentTitle: null },
+      { documentTitle: null },
+    ]);
+  });
+
   test("member mutations invalidate the members query and the matters list", async () => {
     const { workspaceMemberMutationInvalidationKeys } =
       await import("@/lib/workspaces/mutations/workspace-members");

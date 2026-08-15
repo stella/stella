@@ -98,6 +98,7 @@ import {
 import { CopyToMatterDialog } from "@/components/workspaces/copy-to-matter-dialog";
 import type { CopyToMatterEntity } from "@/components/workspaces/copy-to-matter-dialog.logic";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
+import { MatterColorContextPicker } from "@/components/workspaces/matter-color-picker";
 import {
   MatterMenuHeader,
   MatterMenuItems,
@@ -856,8 +857,14 @@ const NavContextMenu = ({
   );
 };
 
-const NavBadge = ({ digit }: { digit: number }) => (
-  <SidebarMenuBadge>
+const NavBadge = ({
+  className,
+  digit,
+}: {
+  className?: string;
+  digit: number;
+}) => (
+  <SidebarMenuBadge className={className}>
     <kbd className="animate-in bg-muted text-muted-foreground fade-in rounded border px-1.5 py-0.5 text-[0.625rem] duration-150">
       {digit}
     </kbd>
@@ -991,7 +998,10 @@ const MatterItem = ({
         return;
       }
       updateWorkspace.mutate(
-        { workspaceId: ws.id, name: value },
+        {
+          workspaceId: ws.id,
+          update: { type: "name", value },
+        },
         {
           onError: () => {
             stellaToast.add({
@@ -1221,7 +1231,7 @@ const MatterItem = ({
                 aria-label={
                   isExpanded ? t("common.showLess") : t("common.showMore")
                 }
-                className="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground absolute start-1 top-1 z-10 border-0 group-data-[collapsible=icon]:hidden before:hidden focus-visible:ring-1 focus-visible:ring-offset-0"
+                className="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground absolute end-1 top-1 z-10 border-0 group-data-[collapsible=icon]:hidden before:hidden focus-visible:ring-1 focus-visible:ring-offset-0"
                 onClick={onExpandedChange}
                 size="icon-xs"
                 type="button"
@@ -1241,7 +1251,10 @@ const MatterItem = ({
         )}
         <SidebarMenuButton
           asChild
-          className="ps-8 pe-12 group-data-[collapsible=icon]:ps-2"
+          className={cn(
+            "py-0 ps-2 group-data-[collapsible=icon]:ps-2",
+            activityIsKnownEmpty ? "pe-12" : "pe-20",
+          )}
           tooltip={[
             ws.name,
             ws.client?.displayName ?? t("workspaces.parties.personalLabel"),
@@ -1251,10 +1264,12 @@ const MatterItem = ({
             .join(" — ")}
         >
           <Link data-active={isActive || undefined} {...navigationTarget}>
-            <MatterIcon
-              className="size-4 shrink-0"
-              matter={{ id: ws.id, color: ws.color }}
-            />
+            <MatterColorContextPicker className="mt-0.5 self-start" matter={ws}>
+              <MatterIcon
+                className="size-4 shrink-0"
+                matter={{ id: ws.id, color: ws.color }}
+              />
+            </MatterColorContextPicker>
             <span className="flex min-w-0 flex-col">
               <BidiText as="span" className="truncate">
                 {ws.name}
@@ -1276,10 +1291,16 @@ const MatterItem = ({
           </Link>
         </SidebarMenuButton>
         {navBadge !== undefined ? (
-          <NavBadge digit={navBadge} />
+          <NavBadge
+            className={cn(!activityIsKnownEmpty && "end-7")}
+            digit={navBadge}
+          />
         ) : (
           <div
-            className="absolute end-1 top-1.5 flex items-center gap-0.5 opacity-0 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 group-data-[collapsible=icon]:hidden data-[pinned]:opacity-100"
+            className={cn(
+              "absolute top-1.5 flex items-center gap-0.5 opacity-0 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 group-data-[collapsible=icon]:hidden data-[pinned]:opacity-100",
+              activityIsKnownEmpty ? "end-1" : "end-7",
+            )}
             data-pinned={isPinned || undefined}
           >
             <Tooltip
