@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  getEmailAttachmentSize,
   getEmailBodyFrameHeight,
   localizeEmailBodyHtml,
   parseEmailDate,
@@ -18,26 +17,6 @@ describe("email viewer metadata", () => {
     expect(parseEmailDate("Mon, 02 Jun 2026 10:00:00 +0000")).toEqual(
       new Date("2026-06-02T10:00:00.000Z"),
     );
-  });
-
-  test("selects a readable unit for attachment sizes", () => {
-    expect(getEmailAttachmentSize(512)).toEqual({ unit: "byte", value: 512 });
-    expect(getEmailAttachmentSize(2000)).toEqual({
-      unit: "kilobyte",
-      value: 2,
-    });
-    expect(getEmailAttachmentSize(2 * 1000 * 1000)).toEqual({
-      unit: "megabyte",
-      value: 2,
-    });
-    expect(getEmailAttachmentSize(2 * 1000 * 1000 * 1000)).toEqual({
-      unit: "gigabyte",
-      value: 2,
-    });
-    expect(getEmailAttachmentSize(1_000_000)).toEqual({
-      unit: "megabyte",
-      value: 1,
-    });
   });
 
   test("uses vertical scroll extents to size legacy float layouts", () => {

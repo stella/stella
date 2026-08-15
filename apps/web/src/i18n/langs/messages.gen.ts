@@ -3823,7 +3823,9 @@ type Messages = {
     "filesystem": {
       "collapseAll": "Collapse all folders";
       "expandAll": "Expand all folders";
+      "fileCount": "{count, plural, one {# file} other {# files}}";
       "lastUpdated": "Last updated";
+      "matchingFileCount": "{count, plural, one {# matching file} other {# matching files}}";
       "moveToRoot": "Drop here to move to root level";
       "newSubfolder": "New subfolder";
       "noFilesYet": "No files yet";

@@ -3820,7 +3820,9 @@
     "filesystem": {
       "collapseAll": "Ahenda kõik kaustad",
       "expandAll": "Laienda kõik kaustad",
+      "fileCount": "{count, plural, one {# fail} other {# faili}}",
       "lastUpdated": "Viimati uuendatud",
+      "matchingFileCount": "{count, plural, one {# vastav fail} other {# vastavat faili}}",
       "moveToRoot": "Lohistage siia, et liigutada juuretasemele",
       "newSubfolder": "Uus alamkaust",
       "noFilesYet": "Faile pole veel"

@@ -3820,7 +3820,9 @@
     "filesystem": {
       "collapseAll": "Zwiń wszystkie foldery",
       "expandAll": "Rozwiń wszystkie foldery",
+      "fileCount": "{count, plural, one {# plik} few {# pliki} many {# plików} other {# pliku}}",
       "lastUpdated": "Ostatnia aktualizacja",
+      "matchingFileCount": "{count, plural, one {# pasujący plik} few {# pasujące pliki} many {# pasujących plików} other {# pasującego pliku}}",
       "moveToRoot": "Upuść tutaj, aby przenieść na poziom główny",
       "newSubfolder": "Nowy podfolder",
       "noFilesYet": "Brak plików"

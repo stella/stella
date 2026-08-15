@@ -21,7 +21,6 @@ import {
   EMAIL_CHAT_HOST,
   EMAIL_CHAT_MODE,
   EMAIL_VIEWER_LAYOUT,
-  getEmailAttachmentSize,
   getEmailBodyFrameHeight,
   getEmailFileChatContext,
   localizeEmailBodyHtml,
@@ -35,6 +34,7 @@ import {
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
+import { getFileSizeDisplay } from "@/lib/file-size";
 import {
   EMAIL_CITATION_SCROLL_EVENT,
   isEmailCitationTargetDetail,
@@ -469,7 +469,7 @@ const formatAttachmentSize = (
   sizeBytes: number,
   format: ReturnType<typeof useFormatter>,
 ): string => {
-  const size = getEmailAttachmentSize(sizeBytes);
+  const size = getFileSizeDisplay(sizeBytes);
   return format.number(size.value, {
     maximumFractionDigits: 1,
     style: "unit",

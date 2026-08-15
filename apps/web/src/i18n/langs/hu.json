@@ -3820,7 +3820,9 @@
     "filesystem": {
       "collapseAll": "Összes mappa összecsukása",
       "expandAll": "Összes mappa kinyitása",
+      "fileCount": "{count, plural, one {# fájl} other {# fájl}}",
       "lastUpdated": "Utoljára frissítve",
+      "matchingFileCount": "{count, plural, one {# egyező fájl} other {# egyező fájl}}",
       "moveToRoot": "Húzza ide a gyökérszintre helyezéshez",
       "newSubfolder": "Új almappa",
       "noFilesYet": "Még nincsenek fájlok"

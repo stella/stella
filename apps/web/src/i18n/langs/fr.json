@@ -3820,7 +3820,9 @@
     "filesystem": {
       "collapseAll": "Réduire tous les dossiers",
       "expandAll": "Développer tous les dossiers",
+      "fileCount": "{count, plural, one {# fichier} other {# fichiers}}",
       "lastUpdated": "Dernière mise à jour",
+      "matchingFileCount": "{count, plural, one {# fichier correspondant} other {# fichiers correspondants}}",
       "moveToRoot": "Déposez ici pour déplacer à la racine",
       "newSubfolder": "Nouveau sous-dossier",
       "noFilesYet": "Aucun fichier pour le moment"

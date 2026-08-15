@@ -3820,7 +3820,9 @@
     "filesystem": {
       "collapseAll": "Sutraukti visus aplankus",
       "expandAll": "Išskleisti visus aplankus",
+      "fileCount": "{count, plural, one {# failas} few {# failai} other {# failų}}",
       "lastUpdated": "Paskutinis atnaujinimas",
+      "matchingFileCount": "{count, plural, one {# atitinkantis failas} few {# atitinkantys failai} other {# atitinkančių failų}}",
       "moveToRoot": "Numeskite čia, kad perkeltumėte į šakninį lygį",
       "newSubfolder": "Naujas poaplankis",
       "noFilesYet": "Failų dar nėra"

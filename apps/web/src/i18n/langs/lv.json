@@ -3820,7 +3820,9 @@
     "filesystem": {
       "collapseAll": "Sakļaut visas mapes",
       "expandAll": "Izvērst visas mapes",
+      "fileCount": "{count, plural, zero {# failu} one {# fails} other {# faili}}",
       "lastUpdated": "Pēdējoreiz atjaunināts",
+      "matchingFileCount": "{count, plural, zero {# atbilstošu failu} one {# atbilstošs fails} other {# atbilstoši faili}}",
       "moveToRoot": "Nometiet šeit, lai pārvietotu uz saknes līmeni",
       "newSubfolder": "Jauna apakšmape",
       "noFilesYet": "Failu pagaidām nav"

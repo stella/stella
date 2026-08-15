@@ -3820,7 +3820,9 @@
     "filesystem": {
       "collapseAll": "Recolher todas as pastas",
       "expandAll": "Expandir todas as pastas",
+      "fileCount": "{count, plural, one {# arquivo} other {# arquivos}}",
       "lastUpdated": "Última atualização",
+      "matchingFileCount": "{count, plural, one {# arquivo correspondente} other {# arquivos correspondentes}}",
       "moveToRoot": "Solte aqui para passar para o nível raiz",
       "newSubfolder": "Nova subpasta",
       "noFilesYet": "Nenhum arquivo ainda"

@@ -3820,7 +3820,9 @@
     "filesystem": {
       "collapseAll": "Sbalit všechny složky",
       "expandAll": "Rozbalit všechny složky",
+      "fileCount": "{count, plural, one {# soubor} few {# soubory} other {# souborů}}",
       "lastUpdated": "Naposledy aktualizováno",
+      "matchingFileCount": "{count, plural, one {# odpovídající soubor} few {# odpovídající soubory} other {# odpovídajících souborů}}",
       "moveToRoot": "Přetáhněte sem pro přesun do kořenové úrovně",
       "newSubfolder": "Nová podsložka",
       "noFilesYet": "Zatím žádné soubory"
