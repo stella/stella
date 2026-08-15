@@ -52,6 +52,7 @@ import {
   resolveActivityAction,
   resolveActivityCategory,
   resolveActivityRunId,
+  timestampMicroseconds,
 } from "./read-overview-activity.logic";
 
 const versionSnapshotAuditLogs = alias(
@@ -522,19 +523,6 @@ type ReadOverviewActivityPageOptions = {
   organizationId: SafeId<"organization">;
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
-};
-
-const timestampMicroseconds = (value: string): bigint | null => {
-  const milliseconds = new Date(value).getTime();
-  if (!Number.isFinite(milliseconds)) {
-    return null;
-  }
-  const fraction = /\.(\d+)(?=Z|[+-]\d\d:\d\d$)/u.exec(value)?.[1] ?? "";
-  if (fraction.length > 6) {
-    return null;
-  }
-  const microseconds = BigInt(fraction.padEnd(6, "0") || "0");
-  return BigInt(Math.floor(milliseconds / 1000)) * 1_000_000n + microseconds;
 };
 
 export const readOverviewActivityPage = async ({

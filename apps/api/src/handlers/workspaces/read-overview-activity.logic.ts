@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import type { MatterActivityFilters } from "@stll/api-contract/matter-activity";
 
 import {
@@ -30,7 +32,22 @@ export const matterActivityFilterKey = ({
   from,
   toExclusive,
 }: MatterActivityFilters): string =>
-  encodePaginationCursor([category, action, actorId, from, toExclusive]);
+  createHash("sha256")
+    .update(JSON.stringify([category, action, actorId, from, toExclusive]))
+    .digest("base64url");
+
+export const timestampMicroseconds = (value: string): bigint | null => {
+  const milliseconds = new Date(value).getTime();
+  if (!Number.isFinite(milliseconds)) {
+    return null;
+  }
+  const fraction = /\.(\d+)(?=Z|[+-]\d\d:\d\d$)/iu.exec(value)?.[1] ?? "";
+  if (fraction.length > 6) {
+    return null;
+  }
+  const microseconds = BigInt(fraction.padEnd(6, "0") || "0");
+  return BigInt(Math.floor(milliseconds / 1000)) * 1_000_000n + microseconds;
+};
 
 export const bindActivityCursorToFilters = <Id>({
   codec,
