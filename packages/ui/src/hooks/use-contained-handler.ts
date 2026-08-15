@@ -1,5 +1,9 @@
 import type * as React from "react";
 
+type ContainmentRoot = {
+  contains(target: Node): boolean;
+};
+
 /**
  * Wrap a React event handler so it only fires when the event target
  * is a DOM descendant of the given ref.
@@ -39,7 +43,7 @@ import type * as React from "react";
  */
 export const containedHandler =
   <E extends { target: unknown }>(
-    ref: React.RefObject<HTMLElement | null> | null | undefined,
+    ref: React.RefObject<ContainmentRoot | null> | null | undefined,
     handler: ((event: E) => void) | undefined,
   ) =>
   (event: E): void => {

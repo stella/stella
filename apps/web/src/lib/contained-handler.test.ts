@@ -16,8 +16,7 @@ type SyntheticLike = { target: unknown };
 const makeRef = <T>(node: T | null) => ({ current: node });
 
 const makeContainer = (containsImpl: (other: unknown) => boolean) => {
-  const stub = Object.assign(new FakeNode(), { contains: containsImpl });
-  return stub as unknown as HTMLElement;
+  return Object.assign(new FakeNode(), { contains: containsImpl });
 };
 
 const node = (): object => new FakeNode();

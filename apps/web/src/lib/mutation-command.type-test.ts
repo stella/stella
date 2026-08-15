@@ -14,5 +14,8 @@ export const multiFieldPatch: NonEmptyPatch<ExamplePatchFields> = {
   name: "Appeal",
 };
 
-// @ts-expect-error -- an intentional PATCH must supply at least one field
-export const emptyPatch: NonEmptyPatch<ExamplePatchFields> = {};
+type Expect<Condition extends true> = Condition;
+
+export type EmptyPatchIsRejected = Expect<
+  Record<never, never> extends NonEmptyPatch<ExamplePatchFields> ? false : true
+>;
