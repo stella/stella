@@ -621,6 +621,15 @@ export default defineConfig({
     "apps/web/public/**",
     // Declaration files carry no runtime code; skip product-code rules.
     "**/*.d.ts",
+    // Snowball stemmers: generated output plus the upstream JS runtime,
+    // transcribed verbatim. Product-code rules would rewrite the algorithm
+    // (prefer-code-point changes UTF-16 semantics; no-bitwise has no
+    // equivalent for the grouping bitsets) and every --fix would be undone
+    // by the next regeneration. Bound instead by the conformance fixtures
+    // in snowball/__fixtures__ and by
+    // scripts/generate-snowball-stemmers.ts.
+    "apps/api/src/lib/legal-search/morphology/snowball/*.gen.ts",
+    "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts",
   ],
 
   jsPlugins: [

@@ -9,6 +9,7 @@
     "**/dist/**",
     "**/.react-email/**",
     "apps/api/src/db/schema.ts",
+    "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts",
     "apps/api/src/mcp/apps/**/generated/**",
     "**/capability-catalog.json",
     "**/i18n-check-baseline.json",
