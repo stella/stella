@@ -871,6 +871,7 @@ jobs:
           bun test scripts/check-api-deployment.test.ts
           bun test scripts/check-staging-deploy-decision.test.ts
           bash scripts/create-release-manifest.test.sh
+          bash scripts/promote-desktop-release.test.sh
 
       - name: Test maintenance release preparation
         if: needs.ci-plan.outputs.package_checks_required == 'true'

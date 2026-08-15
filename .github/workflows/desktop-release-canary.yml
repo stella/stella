@@ -1,0 +1,31 @@
+name: Desktop release canary
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-release-canary
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  check-latest:
+    name: Check latest desktop release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read # query the repository's GitHub Release API
+    steps:
+      - name: Checkout release policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Verify GitHub latest is a complete desktop release
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash scripts/check-desktop-release-policy.sh

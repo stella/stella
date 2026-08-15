@@ -684,13 +684,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
-      contents: write
+      contents: write # mark the fully assembled desktop release as latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
       RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
     steps:
+      - name: Checkout release policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.resolve.outputs.release_sha }}
+          persist-credentials: false
+
       - name: Promote release to latest
-        run: gh release edit "$RELEASE_REF" --latest
+        run: bash scripts/promote-desktop-release.sh
 
   carry-forward:
     # Runs ONLY when a STABLE (prod) release skipped the desktop build.
@@ -774,7 +781,4 @@ jobs:
         run: bun scripts/check-api-deployment.ts
 
       - name: Promote release to latest
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
-        run: gh release edit "$RELEASE_REF" --latest
+        run: bash scripts/promote-desktop-release.sh
