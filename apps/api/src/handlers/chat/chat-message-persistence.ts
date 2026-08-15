@@ -6,7 +6,6 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
-import { env } from "@/api/env";
 import {
   chatMessageContentFromMessage,
   toPersistableChatMessage,
@@ -202,7 +201,7 @@ const insertMessages = async ({
         userId,
         role: persistedMessage.role,
         content: chatMessageContentFromMessage(persistedMessage),
-        memoryExtractionEligible: env.FEATURE_AI_MEMORY,
+        memoryExtractionEligible: true,
       })),
     );
     await tx
@@ -572,7 +571,6 @@ const runPersistMessage = async ({
         .set({
           role: persistencePlan.message.role,
           content: chatMessageContentFromMessage(persistencePlan.message),
-          ...(!env.FEATURE_AI_MEMORY && { memoryExtractionEligible: false }),
         })
         .where(eq(chatMessages.id, updatedMessageId));
       await tx
@@ -726,7 +724,7 @@ const runPersistMessage = async ({
       threadId,
       userId,
       workspaceId,
-      memoryExtractionEligible: env.FEATURE_AI_MEMORY,
+      memoryExtractionEligible: true,
     });
     await tx
       .update(chatThreads)

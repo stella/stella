@@ -3010,6 +3010,9 @@
     "archivedEmpty": "Keine archivierten Erinnerungen.",
     "archivedToast": "Erinnerung archiviert",
     "createdToast": "Im Gedächtnis gespeichert",
+    "deleteDescription": "Dadurch wird diese Erinnerung dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.",
+    "deleteTitle": "Erinnerung löschen?",
+    "deletedToast": "Erinnerung gelöscht",
     "empty": "Noch nichts im Gedächtnis.",
     "kinds": {
       "decision": "Entscheidung",

@@ -39,7 +39,6 @@ import {
   chatThreads,
 } from "@/api/db/schema";
 import type { ChatCompactionMemoryEligibility } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -138,10 +137,8 @@ type RunChatThreadCompactionOptions = {
   abortSignal: AbortSignal;
   dataWorkspaceIds: readonly SafeId<"workspace">[];
   /**
-   * Whether this deployment may derive AI memory from chat. Passed in rather
-   * than read from `env` here so the value that lands on the checkpoint is the
-   * one the caller observed, and so the re-enable path is exercisable.
-   * Defaults to the deployment flag.
+   * Test override for the historical disabled-feature eligibility path.
+   * New production compactions default to eligible.
    */
   extractionFeatureEnabled?: boolean | undefined;
   modelId?: string | undefined;
@@ -720,8 +717,7 @@ const advanceCheckpointOnTx = async ({
   }
 
   const memoryEligibility = resolveCheckpointMemoryEligibility({
-    extractionFeatureEnabled:
-      options.extractionFeatureEnabled ?? env.FEATURE_AI_MEMORY,
+    extractionFeatureEnabled: options.extractionFeatureEnabled ?? true,
     previous: observed.checkpoint?.memoryEligibility ?? null,
     segmentMessages: plan.messagesToSummarize,
   });

@@ -3,7 +3,6 @@ import { useTranslations } from "use-intl";
 
 import { Skeleton } from "@stll/ui/skeleton";
 
-import { env } from "@/env";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth";
 import { roleOptions } from "@/lib/auth-queries";
@@ -17,10 +16,6 @@ import { memoriesOptions } from "@/routes/_protected.settings/-queries/memories"
 
 export const Route = createFileRoute("/_protected/settings/account/memory")({
   beforeLoad: async ({ context }) => {
-    if (!env.VITE_FEATURE_AI_MEMORY) {
-      throw redirect({ to: "/settings/account/profile", replace: true });
-    }
-
     const [role] = await Promise.all([
       ensureRouteQueryData(context.queryClient, roleOptions),
       Promise.all(

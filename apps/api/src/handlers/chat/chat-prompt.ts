@@ -698,7 +698,7 @@ export const buildChatSystemPromptParts = async ({
     // session (e.g. anonymous prompt-preview builders) there is no
     // memory to inject.
     const memorySection =
-      env.FEATURE_AI_MEMORY && organizationId && userId
+      organizationId && userId
         ? yield* Result.await(
             buildMemoryPromptParts({
               contextMatterIds,

@@ -310,7 +310,6 @@ export const DECLARED_SCHEDULER_JOBS = [
   {
     description:
       "Age AI memories through the active -> stale -> archived lifecycle",
-    enabled: env.FEATURE_AI_MEMORY,
     id: "memory.curator.nightly",
     mode: "recurring",
     schedule: {
@@ -324,7 +323,6 @@ export const DECLARED_SCHEDULER_JOBS = [
   {
     description:
       "Extract suggested AI memories from new chat-thread compactions",
-    enabled: env.FEATURE_AI_MEMORY,
     id: "memory.extractor.hourly",
     mode: "recurring",
     schedule: {

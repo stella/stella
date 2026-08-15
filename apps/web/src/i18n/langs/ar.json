@@ -3010,6 +3010,9 @@
     "archivedEmpty": "لا توجد ذاكرة مؤرشفة.",
     "archivedToast": "تمت أرشفة الذاكرة",
     "createdToast": "تم الحفظ في الذاكرة",
+    "deleteDescription": "سيؤدي هذا إلى حذف هذه الذاكرة نهائيًا. لا يمكن التراجع عن هذا الإجراء.",
+    "deleteTitle": "حذف الذاكرة؟",
+    "deletedToast": "تم حذف الذاكرة",
     "empty": "لا توجد ذاكرة بعد.",
     "kinds": {
       "decision": "قرار",

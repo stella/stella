@@ -1120,11 +1120,6 @@ const aiMemoryScopeCheck = sql`(
   )
 )`;
 
-// Memories are archive-only (status='archived'), never hard-deleted.
-// The RESTRICTIVE `false` DELETE policy makes that durable: a
-// RESTRICTIVE policy is AND-ed with every permissive one, so a later
-// migration adding a permissive DELETE cannot silently unlock removal
-// (same pattern as audit_logs).
 export const aiMemoryPolicies = () => [
   p.pgPolicy("ai_memory_select", {
     for: "select",
@@ -1141,11 +1136,10 @@ export const aiMemoryPolicies = () => [
     to: stella,
     using: aiMemoryScopeCheck,
   }),
-  p.pgPolicy("ai_memory_no_delete", {
-    as: "restrictive",
+  p.pgPolicy("ai_memory_delete", {
     for: "delete",
     to: stella,
-    using: denyAllRows,
+    using: aiMemoryScopeCheck,
   }),
 ];
 

@@ -3010,6 +3010,9 @@
     "archivedEmpty": "No hay recuerdos archivados.",
     "archivedToast": "Recuerdo archivado",
     "createdToast": "Guardado en la memoria",
+    "deleteDescription": "Esto elimina este recuerdo de forma permanente. Esta acción no se puede deshacer.",
+    "deleteTitle": "¿Eliminar el recuerdo?",
+    "deletedToast": "Recuerdo eliminado",
     "empty": "Aún no hay nada en la memoria.",
     "kinds": {
       "decision": "Decisión",

@@ -3010,6 +3010,9 @@
     "archivedEmpty": "Žiadne archivované pamäte.",
     "archivedToast": "Pamäť bola archivovaná",
     "createdToast": "Uložené do pamäte",
+    "deleteDescription": "Týmto túto pamäť natrvalo odstránite. Túto akciu nemožno vrátiť späť.",
+    "deleteTitle": "Odstrániť pamäť?",
+    "deletedToast": "Pamäť bola odstránená",
     "empty": "Zatiaľ žiadna pamäť.",
     "kinds": {
       "decision": "Rozhodnutie",
