@@ -15,14 +15,12 @@ test("sidebar color picker stays open when custom colors are expanded", async ({
     });
 
     const sidebar = page.locator('[data-sidebar="sidebar"]');
-    const matterLink = sidebar.getByRole("link", {
-      name: new RegExp(workspaceName, "u"),
-    });
+    const matterItem = sidebar
+      .locator('[data-sidebar="menu-item"]')
+      .filter({ hasText: workspaceName });
+    const matterLink = matterItem.getByRole("link", { name: workspaceName });
     await expect(matterLink).toBeVisible({ timeout: 30_000 });
 
-    const matterItem = sidebar.locator('[data-sidebar="menu-item"]', {
-      has: matterLink,
-    });
     const colorTrigger = matterItem.getByRole("button", {
       name: "Change color",
     });
