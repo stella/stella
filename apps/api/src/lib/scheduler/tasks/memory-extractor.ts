@@ -9,7 +9,6 @@ import {
   chatThreadCompactions,
   organizationSettings,
 } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { resolveCaching } from "@/api/lib/ai-config";
 import {
   loadOrgAIConfig,
@@ -111,10 +110,6 @@ export const extractMemoriesFromCompactions: SchedulerTask = async ({
   logger,
   signal,
 }) => {
-  if (!env.FEATURE_AI_MEMORY) {
-    return;
-  }
-
   const claimedBatch = await claimMemoryExtractionBatch();
   const compactions = interleaveClaimedMemoryCompactions(
     claimedBatch.organizations,

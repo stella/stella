@@ -240,27 +240,57 @@ describe("ai_memories source-data gating", () => {
   });
 });
 
-describe("ai_memories archive-only", () => {
-  test("direct DELETE affects zero rows and leaves the memory intact", async () => {
+describe("ai_memories deletion", () => {
+  test("a visible memory can be permanently erased", async () => {
+    const erasableId = memId();
+    await testDb.insert(aiMemories).values({
+      id: erasableId,
+      organizationId: ids.orgA,
+      scope: "user",
+      userId: ids.userA1,
+      kind: "preference",
+      content: "Erase this memory",
+      dedupKey: dedupKey(),
+      source: "user",
+    });
+
     const deleted = await scopedQuery(
       [ids.wsA1],
       ids.orgA,
       (tx) =>
         tx
           .delete(aiMemories)
-          .where(eq(aiMemories.id, mem.wsA1))
+          .where(eq(aiMemories.id, erasableId))
+          .returning({ id: aiMemories.id }),
+      ids.userA1,
+    );
+    expect(deleted).toEqual([{ id: erasableId }]);
+
+    const remaining = await testDb.$count(
+      aiMemories,
+      eq(aiMemories.id, erasableId),
+    );
+    expect(remaining).toBe(0);
+  });
+
+  test("a tenant cannot erase another tenant's memory", async () => {
+    const deleted = await scopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      (tx) =>
+        tx
+          .delete(aiMemories)
+          .where(eq(aiMemories.id, mem.wsB1))
           .returning({ id: aiMemories.id }),
       ids.userA1,
     );
     expect(deleted).toHaveLength(0);
 
-    const stillThere = await countMemory(
-      [ids.wsA1],
-      ids.orgA,
-      ids.userA1,
-      mem.wsA1,
+    const remaining = await testDb.$count(
+      aiMemories,
+      eq(aiMemories.id, mem.wsB1),
     );
-    expect(stillThere).toBe(1);
+    expect(remaining).toBe(1);
   });
 
   test("archived rows remain deduplication tombstones", async () => {
