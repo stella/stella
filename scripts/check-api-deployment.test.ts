@@ -268,6 +268,10 @@ describe("API deployment health receipt", () => {
     expect(desktopPromote).toContain("needs.manifest.result == 'success'");
     expect(desktopPromote).toContain(`GH_REPO: \${{ github.repository }}`);
     expect(desktopPromote).toContain("Checkout release policy");
+    expect(desktopPromote).toContain(`ref: \${{ github.workflow_sha }}`);
+    expect(desktopPromote).not.toContain(
+      `ref: \${{ needs.resolve.outputs.release_sha }}`,
+    );
     expect(desktopPromote).toContain("bash scripts/promote-desktop-release.sh");
     expect(
       desktopCarry.indexOf("Verify production serves the release commit"),
@@ -277,6 +281,8 @@ describe("API deployment health receipt", () => {
       desktopCarry.indexOf("Verify production web serves the release commit"),
     );
     expect(desktopCarry).toContain(`GH_REPO: \${{ github.repository }}`);
+    expect(desktopCarry).toContain("Checkout workflow policy scripts");
+    expect(desktopCarry).toContain(`ref: \${{ github.workflow_sha }}`);
     expect(desktopCarry).toContain("bash scripts/promote-desktop-release.sh");
   });
 

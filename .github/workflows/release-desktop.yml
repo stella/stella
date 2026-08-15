@@ -693,7 +693,9 @@ jobs:
       - name: Checkout release policy
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.resolve.outputs.release_sha }}
+          # Recovery may target a release commit that predates this policy.
+          # Run policy code from the trusted revision containing this workflow.
+          ref: ${{ github.workflow_sha }}
           persist-credentials: false
 
       - name: Promote release to latest
@@ -754,10 +756,12 @@ jobs:
           # /releases/latest points here.
           gh release upload "$RELEASE_REF" assets/* --clobber
 
-      - name: Checkout release verification script
+      - name: Checkout workflow policy scripts
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ needs.resolve.outputs.release_sha }}
+          # Keep recovery policy available for historical release commits.
+          # API_DEPLOYMENT_EXPECTED_COMMIT still verifies the release SHA.
+          ref: ${{ github.workflow_sha }}
           persist-credentials: false
 
       - name: Setup Bun
