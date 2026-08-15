@@ -27,19 +27,23 @@ Project: root
 - @better-auth/oauth-provider 1.6.26 — MIT
 - @elysiajs/cors 1.4.2 — MIT
 - @elysiajs/eden 1.4.9 — MIT
-- @firecrawl/anydoc 0.1.7 — MIT
+- @firecrawl/anydoc 0.1.9 — MIT
 - @floating-ui/react-dom 2.1.9 — MIT
 - @formatjs/icu-messageformat-parser 3.5.16 — MIT
 - @google/genai 2.15.0 — Apache-2.0
 - @google/genai 2.16.0 — Apache-2.0
 - @hocuspocus/provider 4.5.0 — MIT
 - @hocuspocus/server 4.5.0 — MIT
+- @hyzyla/pdfium 2.1.13 — MIT
 - @libpdf/core 0.4.1 — MIT
-- @litko/yara-x 0.7.0 — MIT
+- @litko/yara-x 0.7.1 — MIT
 - @modelcontextprotocol/client 2.0.0 — MIT
 - @modelcontextprotocol/ext-apps 1.7.5 — MIT
 - @modelcontextprotocol/server 2.0.0 — MIT
 - @opentelemetry/api-logs 0.221.0 — Apache-2.0
+- @opentelemetry/exporter-logs-otlp-http 0.221.0 — Apache-2.0
+- @opentelemetry/resources 2.10.0 — Apache-2.0
+- @opentelemetry/sdk-logs 0.221.0 — Apache-2.0
 - @posthog/react 1.10.3 — MIT
 - @react-email/components 1.0.12 — MIT
 - @react-email/render 2.0.6 — MIT
@@ -69,18 +73,18 @@ Project: root
 - @tanstack/ai-openrouter 0.15.11 — MIT
 - @tanstack/ai-sandbox 0.3.0 — MIT
 - @tanstack/react-devtools 0.10.9 — MIT
-- @tanstack/react-form 1.33.3 — MIT
+- @tanstack/react-form 1.33.4 — MIT
 - @tanstack/react-hotkeys 0.10.0 — MIT
 - @tanstack/react-query 5.101.4 — MIT
 - @tanstack/react-query-devtools 5.101.4 — MIT
-- @tanstack/react-router 1.170.23 — MIT
+- @tanstack/react-router 1.170.24 — MIT
 - @tanstack/react-router-devtools 1.167.1 — MIT
 - @tanstack/react-router-ssr-query 1.167.1 — MIT
-- @tanstack/react-start 1.168.40 — MIT
+- @tanstack/react-start 1.168.41 — MIT
 - @tanstack/react-store 0.11.1 — MIT
 - @tanstack/react-store 0.9.3 — MIT
-- @tanstack/react-table 9.1.0 — MIT
-- @tanstack/react-table-devtools 9.1.0 — MIT
+- @tanstack/react-table 9.1.2 — MIT
+- @tanstack/react-table-devtools 9.1.2 — MIT
 - @tanstack/react-virtual 3.14.9 — MIT
 - @tauri-apps/api 2.11.1 — Apache-2.0 OR MIT
 - @tiptap/core 3.29.2 — MIT
@@ -133,8 +137,9 @@ Project: root
 - jose 6.2.7 — MIT
 - jose 6.2.8 — MIT
 - jszip 3.10.1 — (MIT OR GPL-3.0-or-later)
-- lucide-react 1.28.0 — ISC
+- lucide-react 1.30.0 — ISC
 - nodemailer 9.0.5 — MIT-0
+- onnxruntime-node 1.27.0 — MIT
 - pdfjs-dist 6.2.108 — Apache-2.0
 - postal-mime 2.7.6 — MIT-0
 - posthog-js 1.414.0 — (Apache-2.0 AND MIT)
