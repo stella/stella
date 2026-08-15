@@ -32,10 +32,7 @@ import {
 } from "@/api/lib/legal-search/case-law-corpus-projection";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
-import {
-  corpusFreeTextClause,
-  quoteCorpusValue,
-} from "@/api/lib/legal-search/corpus-query";
+import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
 import { loadFtsSearchConfigs } from "@/api/lib/legal-search/fts-config";
 import {
   corpusIndexId,
@@ -432,31 +429,16 @@ const searchPostgresDecisions = async (
   };
 };
 
-const buildCorpusIndexQuery = (body: SearchDecisionsBody): string | null => {
-  const freeText = corpusFreeTextClause(body.query);
-  if (freeText === null) {
-    return null;
-  }
-  const clauses: string[] = [freeText];
-  if (body.decisionType) {
-    clauses.push(`document_type:${quoteCorpusValue(body.decisionType)}`);
-  }
-  if (body.sourceId) {
-    clauses.push(`source:${quoteCorpusValue(body.sourceId)}`);
-  }
-  if (body.language) {
-    clauses.push(`language:${quoteCorpusValue(body.language)}`);
-  }
-  if (body.court) {
-    clauses.push(`court:${quoteCorpusValue(body.court)}`);
-  }
-  if (body.dateFrom || body.dateTo) {
-    clauses.push(
-      `decision_date:[${body.dateFrom ?? "*"} TO ${body.dateTo ?? "*"}]`,
-    );
-  }
-  return clauses.join(" AND ");
-};
+// `country` is deliberately absent: it selects the index, not a clause.
+const buildCorpusIndexQuery = (body: SearchDecisionsBody): string | null =>
+  caseLawCorpusQuery(body.query, {
+    court: body.court,
+    dateFrom: body.dateFrom,
+    dateTo: body.dateTo,
+    documentType: body.decisionType,
+    language: body.language,
+    source: body.sourceId,
+  });
 
 const extractCorpusSnippet = (
   snippet: Record<string, unknown> | undefined,

@@ -16,6 +16,7 @@ import {
 } from "@/api/lib/legal-search/case-law-corpus-projection";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
+import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
 import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
 import {
   corpusIndexId,
@@ -52,32 +53,6 @@ import { encodeCursor, decodeCursor } from "@/api/lib/search/cursor";
 const toNullableString = (x: unknown): string | null =>
   x === null ? null : JSON.stringify(x);
 
-const quote = (value: string): string => `"${value.replaceAll('"', '\\"')}"`;
-
-const buildQuery = (query: LegalSearchQuery): string => {
-  // jurisdiction is not a query clause — it selects the index (one index
-  // per jurisdiction), so a scoped query only touches that index.
-  const clauses: string[] = [`(${query.query})`];
-  if (query.documentType) {
-    clauses.push(`document_type:${quote(query.documentType)}`);
-  }
-  if (query.source) {
-    clauses.push(`source:${quote(query.source)}`);
-  }
-  if (query.language) {
-    clauses.push(`language:${quote(query.language)}`);
-  }
-  if (query.court) {
-    clauses.push(`court:${quote(query.court)}`);
-  }
-  if (query.dateFrom || query.dateTo) {
-    const from = query.dateFrom ?? "*";
-    const to = query.dateTo ?? "*";
-    clauses.push(`decision_date:[${from} TO ${to}]`);
-  }
-  return clauses.join(" AND ");
-};
-
 const extractSnippet = (
   snippet: Record<string, unknown> | undefined,
 ): string | null => {
@@ -104,6 +79,20 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
 
   const parsedCursor = query.cursor ? decodeCursor(query.cursor) : null;
 
+  // jurisdiction is deliberately absent: it selected the index above, so a
+  // scoped query never needs a clause for it.
+  const engineQuery = caseLawCorpusQuery(query.query, {
+    court: query.court,
+    dateFrom: query.dateFrom,
+    dateTo: query.dateTo,
+    documentType: query.documentType,
+    language: query.language,
+    source: query.source,
+  });
+  if (engineQuery === null) {
+    return { hits: [], facets: null, nextCursor: null, limit };
+  }
+
   // Upper bound for the pagination early-stop: scanning may end only
   // once no unseen candidate could out-blend the page cursor.
   const [authorityBound] = await caseLawPublicReadDb((tx) =>
@@ -117,7 +106,7 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
 
   const searchPage = await readCorpusIndexSearchPage({
     indexId,
-    query: buildQuery(query),
+    query: engineQuery,
     limit,
     parsedCursor,
     snippetFields: ["text"],

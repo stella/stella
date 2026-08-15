@@ -447,6 +447,32 @@ test("the ingestion role can take every lock the corpus checkpoint holds", async
   }
 });
 
+// One assembler, or the two boundaries drift into two answers about what the
+// engine sees. The public search path and the shared provider must both reach
+// the engine through corpus-query.ts, and neither may re-derive quoting or
+// interpolate user text into the DSL itself.
+test("every case-law corpus query is assembled by the shared builder", async () => {
+  const consumers = await Promise.all(
+    [publicSearchSource, sharedSearchProviderSource].map(
+      async (source) => await Bun.file(source).text(),
+    ),
+  );
+  for (const source of consumers) {
+    expect(source).toContain(
+      'import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query"',
+    );
+    expect(source).toContain("caseLawCorpusQuery(");
+    // A local escaping helper is how the two paths diverged before.
+    expect(source).not.toMatch(/const quote = /u);
+    expect(source).not.toMatch(/replaceAll\('"'/u);
+    // No field clause is assembled outside the shared builder, and free text
+    // never reaches a template literal.
+    expect(source).not.toMatch(/`(?:document_type|source|language|court):/u);
+    expect(source).not.toMatch(/`decision_date:\[/u);
+    expect(source).not.toMatch(/\$\{\w+\.query\}/u);
+  }
+});
+
 test("every case-law corpus search boundary uses generation projection state", async () => {
   const consumers = await Promise.all(
     [publicSearchSource, sharedSearchProviderSource].map(
