@@ -464,7 +464,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "recordedAtCommit": "8d1b94331423d9ba3b9d4ef9df088f93d6611b04",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -479,12 +479,7 @@
         "apps/web/src/routes/_protected.workspaces/$workspaceId",
         "apps/web/src/components/inspector",
         "apps/web/src/routes/_protected.tsx"
-      ],
-      "manualVerification": {
-        "artifactsHash": "254138d27f01a0303e2a32952e5c0a180618a3cb088a607eaa6bf11f8e8ee0fa",
-        "reason": "Current recordings reviewed after the prompt-suggestion timing repair",
-        "watchedPathsHash": "44f9f913bd05c80e334c1ad31697bdfb4fd420965270a9e62bd9128b4f93cc6a"
-      }
+      ]
     },
     {
       "captureId": "review-citation",
@@ -494,7 +489,7 @@
         "width": 1280
       },
       "dpr": 2,
-      "recordedAtCommit": "90ef0c4bdda39b5f9d0ad44667dae807750a67fa",
+      "recordedAtCommit": "8d1b94331423d9ba3b9d4ef9df088f93d6611b04",
       "watchedPaths": [
         "apps/web/e2e/marketing/captures.ts",
         "apps/web/e2e/marketing/record-product-story.ts",
@@ -509,12 +504,7 @@
         "apps/web/src/routes/_protected.workspaces/$workspaceId",
         "apps/web/src/components/inspector",
         "apps/web/src/routes/_protected.tsx"
-      ],
-      "manualVerification": {
-        "artifactsHash": "cb7544c97dc7cf1a8ed746ac3ea47403ad5e2b069e63cbfc572e0345b8659afe",
-        "reason": "Current recordings reviewed after the prompt-suggestion timing repair",
-        "watchedPathsHash": "44f9f913bd05c80e334c1ad31697bdfb4fd420965270a9e62bd9128b4f93cc6a"
-      }
+      ]
     },
     {
       "captureId": "review-hero",
