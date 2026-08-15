@@ -16,6 +16,7 @@ void mock.module("bullmq", () => ({
 const {
   connectWithColdStartRetries,
   createBullMqConnection,
+  createLazyRedisClient,
   isRecoverableRedisPollError,
 } = await import("@/api/lib/redis-client");
 
@@ -97,5 +98,143 @@ describe("isRecoverableRedisPollError", () => {
     expect(
       isRecoverableRedisPollError({ code: "ERR_REDIS_INVALID_RESPONSE" }),
     ).toBe(false);
+  });
+});
+
+/**
+ * The class these pin: a client handed out before it is connected, or
+ * after it has been closed, turns a cold start or an ordinary shutdown
+ * into a command failure at whichever call site happens to be first.
+ * Readiness is the client's own property, so these drive it through
+ * `ready()` alone.
+ */
+describe("createLazyRedisClient", () => {
+  /** A stand-in for the real client, recording its own lifecycle. */
+  const fakeClient = () => {
+    const client = {
+      close: () => {
+        client.closed += 1;
+      },
+      closed: 0,
+      connect: async () => {
+        client.connects += 1;
+        await client.connectResult();
+      },
+      connectResult: async () => await Promise.resolve(),
+      connects: 0,
+    };
+    return client;
+  };
+
+  test("connects once for however many callers ask", async () => {
+    const client = fakeClient();
+    const lazy = createLazyRedisClient(() => client);
+
+    const [first, second] = await Promise.all([lazy.ready(), lazy.ready()]);
+    await lazy.ready();
+
+    expect(client.connects).toBe(1);
+    expect(first).toBe(second);
+  });
+
+  test("a caller after an exhausted connect starts a fresh one", async () => {
+    // Long enough to outlast the ladder above, so the first caller sees a
+    // real failure rather than a retry.
+    const failingAttempts = 5;
+    const client = fakeClient();
+    client.connectResult = async () => {
+      if (client.connects <= failingAttempts) {
+        throw Object.assign(new Error("connect ECONNREFUSED"), {
+          code: "ECONNREFUSED",
+        });
+      }
+      await Promise.resolve();
+    };
+    const lazy = createLazyRedisClient(() => client);
+
+    const rejection: unknown = await lazy.ready().then(
+      () => null,
+      (error: unknown) => error,
+    );
+    // Keeping the rejected attempt would strand every later caller behind
+    // the outage that has since cleared.
+    await lazy.ready();
+
+    expect(rejection).toBeInstanceOf(Error);
+    expect(client.connects).toBe(failingAttempts + 1);
+  });
+
+  test("closing drops the connection with the client", async () => {
+    const clients: ReturnType<typeof fakeClient>[] = [];
+    const lazy = createLazyRedisClient(() => {
+      const client = fakeClient();
+      clients.push(client);
+      return client;
+    });
+
+    const before = await lazy.ready();
+    lazy.close();
+    const after = await lazy.ready();
+
+    // A memo that outlived its client would hand the closed one back as
+    // connected, and every command after a restart would go into a dead
+    // socket.
+    expect(after).not.toBe(before);
+    expect(clients).toHaveLength(2);
+    expect(clients.at(0)?.closed).toBe(1);
+    expect(clients.at(1)?.connects).toBe(1);
+  });
+
+  test("a stale attempt's failure leaves the client that replaced it alone", async () => {
+    const clients: ReturnType<typeof fakeClient>[] = [];
+    const lazy = createLazyRedisClient(() => {
+      const client = fakeClient();
+      if (clients.length === 0) {
+        // The client that is closed mid-ladder: every attempt fails, so
+        // its rejection lands well after its replacement is in place.
+        client.connectResult = async () => {
+          throw Object.assign(new Error("connect ECONNREFUSED"), {
+            code: "ECONNREFUSED",
+          });
+        };
+      }
+      clients.push(client);
+      return client;
+    });
+
+    const abandoned = lazy.ready();
+    lazy.close();
+    const replacement = await lazy.ready();
+    await abandoned.then(
+      () => null,
+      () => null,
+    );
+
+    // The abandoned ladder must not clear a memo it no longer owns, or the
+    // replacement would connect a second time underneath its own callers.
+    expect(await lazy.ready()).toBe(replacement);
+    expect(clients).toHaveLength(2);
+    expect(clients.at(1)?.connects).toBe(1);
+  });
+
+  test("a caller waiting on a client that gets closed is not handed it", async () => {
+    let releaseConnect: () => void = () => undefined;
+    const client = fakeClient();
+    client.connectResult = async () =>
+      await new Promise<void>((resolve) => {
+        releaseConnect = resolve;
+      });
+    const lazy = createLazyRedisClient(() => client);
+
+    const pending = lazy.ready();
+    lazy.close();
+    releaseConnect();
+    const rejection: unknown = await pending.then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBeInstanceOf(Error);
+    expect(rejection).toMatchObject({ _tag: "RedisClientClosedError" });
   });
 });

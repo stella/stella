@@ -10,7 +10,6 @@ import {
   classifyOcrWorkspaceDispatch,
   createDocumentProcessingLeaseRenewal,
   createReconciliationProgress,
-  dispatchScheduledDocumentProcessingRetries,
   DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS,
   DOCUMENT_PROCESSING_RECONCILIATION_PHASES,
   DocumentProcessingJobError,
@@ -22,12 +21,12 @@ import {
   isRetryableOcrDerivativeFailure,
   isRetryableSearchIndexFailure,
   mapWithConcurrency,
-  memoizeConnect,
   ownsPromotedManualOcrClaim,
   readRepairScanCursor,
   RECONCILE_BATCH_SIZE,
   reconciliationLeftWorkBehind,
   resolveRepairScanPage,
+  resolveScheduledDeliveryBatch,
   resolveSearchIndexReplayBatch,
   runDocumentProcessingReconciliationPhases,
   runSearchIndexReplayAttempt,
@@ -238,47 +237,6 @@ describe("repair cursor Redis deadlines", () => {
       label: "document OCR repair cursor write",
       timeoutMs: 5,
     });
-  });
-});
-
-describe("reconciliation connection memo", () => {
-  test("connects once while the attempt succeeds", async () => {
-    let attempts = 0;
-    const ensureConnected = memoizeConnect(async () => {
-      attempts += 1;
-      await Promise.resolve();
-    });
-
-    await Promise.all([
-      ensureConnected(),
-      ensureConnected(),
-      ensureConnected(),
-    ]);
-    await ensureConnected();
-
-    expect(attempts).toBe(1);
-  });
-
-  test("retries after a failed attempt instead of caching the rejection", async () => {
-    let attempts = 0;
-    const ensureConnected = memoizeConnect(async () => {
-      attempts += 1;
-      if (attempts === 1) {
-        throw new Error("connection refused");
-      }
-      await Promise.resolve();
-    });
-
-    const rejection: unknown = await ensureConnected().then(
-      () => null,
-      (error: unknown) => error,
-    );
-    expect(rejection).toBeInstanceOf(Error);
-
-    await ensureConnected();
-    await ensureConnected();
-
-    expect(attempts).toBe(2);
   });
 });
 
@@ -1263,24 +1221,34 @@ describe("work a phase keeps for itself", () => {
     ).toEqual({ count: 4, hasMore: false });
   });
 
-  test("a failed handoff keeps the delivery phase unfinished", async () => {
+  test("a failed handoff keeps the delivery phase unfinished", () => {
     // The run stays queued and rescheduled, and delivery is the only phase
     // that takes queued rows, so nothing later in this tick can.
     expect(
-      await dispatchScheduledDocumentProcessingRetries(async () => ({
+      resolveScheduledDeliveryBatch({
         attempted: 3,
-        hasMore: false,
         retryAt: new Date("2030-01-01T00:00:30.000Z"),
-      })),
+        saturated: false,
+      }),
     ).toEqual({ count: 3, hasMore: true });
 
     expect(
-      await dispatchScheduledDocumentProcessingRetries(async () => ({
+      resolveScheduledDeliveryBatch({
         attempted: 3,
-        hasMore: false,
         retryAt: null,
-      })),
+        saturated: false,
+      }),
     ).toEqual({ count: 3, hasMore: false });
+
+    // The other half of the rule: a selection that hit its cap reports
+    // more even when every handoff in it succeeded.
+    expect(
+      resolveScheduledDeliveryBatch({
+        attempted: RECONCILE_BATCH_SIZE,
+        retryAt: null,
+        saturated: true,
+      }),
+    ).toEqual({ count: RECONCILE_BATCH_SIZE, hasMore: true });
   });
 });
 

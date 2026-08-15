@@ -13,6 +13,7 @@ import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-co
 import type {
   DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS as Feeds,
   DOCUMENT_PROCESSING_RECONCILIATION_PHASES as Phases,
+  runDocumentProcessingReconciliationPhases as RunPhases,
 } from "@/api/lib/document-processing-queue";
 import {
   createTestIds,
@@ -51,8 +52,11 @@ const EXTRACTABLE_FILE = {
 
 let testDb: TestDatabase;
 let ids: TestIds;
+/** Flipped by the outage test; the repair phase is the only phase that asks. */
+let redisAvailable = true;
 let phases: typeof Phases;
 let feeds: typeof Feeds;
+let runPhases: typeof RunPhases;
 
 beforeAll(async () => {
   testDb = await getTestDb();
@@ -71,6 +75,18 @@ beforeAll(async () => {
     connectWithColdStartRetries: async (connect: () => Promise<void>) =>
       await connect(),
     createBullMqConnection: () => ({}),
+    createLazyRedisClient: () => ({
+      close: () => undefined,
+      ready: async () => {
+        if (!redisAvailable) {
+          throw new Error("redis unavailable");
+        }
+        return await Promise.resolve({
+          get: async () => null,
+          send: async () => 1,
+        });
+      },
+    }),
     createRedisClient: () => ({
       close: () => undefined,
       connect: async () => undefined,
@@ -98,6 +114,7 @@ beforeAll(async () => {
   ({
     DOCUMENT_PROCESSING_RECONCILIATION_PHASES: phases,
     DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS: feeds,
+    runDocumentProcessingReconciliationPhases: runPhases,
   } = await import("@/api/lib/document-processing-queue"));
 }, 120_000);
 
@@ -207,6 +224,7 @@ const FIXTURES = [
 ] as const;
 
 const resetFixtureState = async () => {
+  redisAvailable = true;
   await testDb
     .delete(documentProcessingRuns)
     .where(eq(documentProcessingRuns.organizationId, ids.orgA));
@@ -347,4 +365,41 @@ test("the declared phase edges are the edges the phases actually produce", async
       order.indexOf(producer ?? ""),
     );
   }
+}, 120_000);
+
+test("a Redis outage fails only the phase that needs Redis", async () => {
+  await resetFixtureState();
+  // Work for two phases that never touch Redis: one retryable failure and
+  // one expired lease.
+  await insertRun({
+    attemptCount: 1,
+    errorCode: "processing_failed",
+    nextAttemptAt: past(1000),
+    status: "failed",
+  });
+  await insertRun({
+    attemptCount: 1,
+    claimedAt: past(STALE_LEASE_MS),
+    claimedBy: "worker-gone",
+    sourceSha256Hex: "e".repeat(64),
+    status: "running",
+  });
+  const failedPhases: string[] = [];
+  redisAvailable = false;
+
+  const results = await runPhases({
+    onPhaseError: (_error, phase) => {
+      failedPhases.push(phase);
+    },
+    phases,
+  });
+
+  // The repair sweep reads its cursor from Redis and can do nothing
+  // without it; every other phase works from the database alone and has to
+  // run regardless, which is what the tick would lose if the connection
+  // were taken before the phases rather than by the phase that needs it.
+  expect(failedPhases).toEqual(["repair"]);
+  expect(results.repair).toEqual({ count: 0, hasMore: true });
+  expect(results.retry.count).toBe(1);
+  expect(results["stale-lease"].count).toBeGreaterThan(0);
 }, 120_000);
