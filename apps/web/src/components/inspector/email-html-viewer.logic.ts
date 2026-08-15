@@ -92,29 +92,6 @@ export const parseEmailDate = (value: string | null): Date | null => {
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
-export type EmailAttachmentSize = {
-  unit: "byte" | "gigabyte" | "kilobyte" | "megabyte";
-  value: number;
-};
-
-export const getEmailAttachmentSize = (
-  sizeBytes: number,
-): EmailAttachmentSize => {
-  if (sizeBytes < 1000) {
-    return { unit: "byte", value: sizeBytes };
-  }
-
-  if (sizeBytes < 1000 * 1000) {
-    return { unit: "kilobyte", value: sizeBytes / 1000 };
-  }
-
-  if (sizeBytes < 1000 * 1000 * 1000) {
-    return { unit: "megabyte", value: sizeBytes / (1000 * 1000) };
-  }
-
-  return { unit: "gigabyte", value: sizeBytes / (1000 * 1000 * 1000) };
-};
-
 type EmailBodyFrameHeightMetrics = {
   body: {
     clientHeight: number;

@@ -3820,7 +3820,9 @@
     "filesystem": {
       "collapseAll": "طي جميع المجلدات",
       "expandAll": "توسيع جميع المجلدات",
+      "fileCount": "{count, plural, zero {لا ملفات} one {ملف واحد} two {ملفان} few {# ملفات} many {# ملفًا} other {# ملف}}",
       "lastUpdated": "آخر تحديث",
+      "matchingFileCount": "{count, plural, zero {لا ملفات مطابقة} one {ملف واحد مطابق} two {ملفان مطابقان} few {# ملفات مطابقة} many {# ملفًا مطابقًا} other {# ملف مطابق}}",
       "moveToRoot": "أفلِت هنا للنقل إلى المستوى الجذر",
       "newSubfolder": "مجلد فرعي جديد",
       "noFilesYet": "لا توجد ملفات بعد"

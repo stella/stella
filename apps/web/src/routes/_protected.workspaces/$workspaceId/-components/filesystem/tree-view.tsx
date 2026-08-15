@@ -65,8 +65,9 @@ import type { InternalPropertyId } from "@/components/workspaces/entity-utils";
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
+import { getFileSizeDisplay } from "@/lib/file-size";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
 import { isFileDisplayable } from "@/lib/types";
@@ -91,6 +92,8 @@ import { useWorkspaceStore } from "@/lib/workspaces/store";
 import { ActiveEditBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge";
 import { AddEntityMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
+import { calculateFolderStatistics } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/folder-statistics.logic";
+import type { FolderStatistics } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/folder-statistics.logic";
 import { getFolderClickIntent } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view-selection.logic";
 import { flattenFilesystemRows } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-virtualization";
 import {
@@ -359,9 +362,8 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   );
   const data = entityData.entities;
   // Parent links of ancestor folders the API backfills when a filter/search
-  // hides an intermediate folder. Used ONLY to complete the ancestor lookup
-  // below so cross-matter copy/move dedup works across hidden folders; never
-  // rendered or selectable, so they cannot become an action target.
+  // hides an intermediate folder. They complete the ancestor lookup below and
+  // connect filtered folder statistics, but remain unrendered and unselectable.
   const ancestorLinks = entityData.ancestorLinks;
 
   // Build a lookup for drag preview data from selected entities.
@@ -388,6 +390,10 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     [parentById],
   );
   const tree = useMemo(() => buildTree(data), [data]);
+  const folderStatistics = useMemo(
+    () => calculateFolderStatistics(data, ancestorLinks),
+    [data, ancestorLinks],
+  );
   const treeNodeMap = useMemo(() => {
     const map = new Map<string, TableTreeNode>();
     const visit = (nodes: readonly TableTreeNode[]) => {
@@ -930,10 +936,12 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                     editingEntityId={editingEntityId}
                     expandedIds={expandedIds}
                     extraColumns={extraColumns}
+                    folderStatistics={folderStatistics.get(row.node.entityId)}
                     getSelectedDragItems={getSelectedDragItems}
                     getSelectedEntities={getSelectedEntities}
                     getAncestorIds={getAncestorIds}
                     gridTemplate={gridTemplate}
+                    isFiltered={entityData.isFiltered}
                     node={row.node}
                     onNavigateToFolder={(folderId) => {
                       detached(
@@ -1132,7 +1140,9 @@ type FilesystemRowProps = {
   depth: number | undefined;
   workspaceId: string;
   extraColumns: ExtraColumn[];
+  folderStatistics: FolderStatistics | undefined;
   gridTemplate: string;
+  isFiltered: boolean;
   ancestorIds: Set<string>;
   expandedIds: Set<string>;
   selectedIds: Set<string>;
@@ -1155,7 +1165,9 @@ const FilesystemRow = ({
   depth = 0,
   workspaceId,
   extraColumns,
+  folderStatistics,
   gridTemplate,
+  isFiltered,
   ancestorIds,
   expandedIds,
   selectedIds,
@@ -1173,6 +1185,7 @@ const FilesystemRow = ({
   getAncestorIds,
 }: FilesystemRowProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   // RowActions can open via two paths: a trigger-button click (anchors
   // the menu to the ellipsis button) or a right-click on the row (anchors
   // to the cursor position). Model both with a discriminated union so the
@@ -1191,6 +1204,17 @@ const FilesystemRow = ({
   const isSelected = selectedIds.has(node.entityId);
   const expanded = isFolder && expandedIds.has(node.entityId);
   const name = getEntityName(node);
+  const formattedFolderSize = folderStatistics
+    ? (() => {
+        const size = getFileSizeDisplay(folderStatistics.totalSizeBytes);
+        return format.number(size.value, {
+          maximumFractionDigits: 1,
+          style: "unit",
+          unit: size.unit,
+          unitDisplay: "short",
+        });
+      })()
+    : null;
 
   const file = isFolder ? null : getFirstFile(node);
   const navigable = file !== null && isFileDisplayable(file);
@@ -1477,6 +1501,22 @@ const FilesystemRow = ({
           <BidiText as="span" className="truncate" title={name}>
             {name}
           </BidiText>
+          {folderStatistics && formattedFolderSize && (
+            <span className="text-muted-foreground flex shrink-0 items-center gap-1 text-xs tabular-nums">
+              <span>
+                {t(
+                  isFiltered
+                    ? "workspaces.filesystem.matchingFileCount"
+                    : "workspaces.filesystem.fileCount",
+                  { count: folderStatistics.fileCount },
+                )}
+              </span>
+              <span className="flex items-center gap-1 opacity-0 transition-opacity duration-150 group-focus-within/row:opacity-100 group-hover/row:opacity-100">
+                <span aria-hidden="true">·</span>
+                <span>{formattedFolderSize}</span>
+              </span>
+            </span>
+          )}
           {node.activeEditBy && (
             <ActiveEditBadge
               className="shrink-0"

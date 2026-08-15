@@ -3820,7 +3820,9 @@
     "filesystem": {
       "collapseAll": "Alle Ordner einklappen",
       "expandAll": "Alle Ordner ausklappen",
+      "fileCount": "{count, plural, one {# Datei} other {# Dateien}}",
       "lastUpdated": "Zuletzt aktualisiert",
+      "matchingFileCount": "{count, plural, one {# passende Datei} other {# passende Dateien}}",
       "moveToRoot": "Hier ablegen, um auf die oberste Ebene zu verschieben",
       "newSubfolder": "Neuer Unterordner",
       "noFilesYet": "Noch keine Dateien"

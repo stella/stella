@@ -3820,7 +3820,9 @@
     "filesystem": {
       "collapseAll": "Contraer todas las carpetas",
       "expandAll": "Expandir todas las carpetas",
+      "fileCount": "{count, plural, one {# archivo} other {# archivos}}",
       "lastUpdated": "Última actualización",
+      "matchingFileCount": "{count, plural, one {# archivo coincidente} other {# archivos coincidentes}}",
       "moveToRoot": "Suelta aquí para mover al nivel raíz",
       "newSubfolder": "Nueva subcarpeta",
       "noFilesYet": "Aún no hay archivos"
