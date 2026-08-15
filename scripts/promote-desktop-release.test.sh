@@ -10,18 +10,19 @@ export GOOD_TAG PACKAGE_TAG
 
 release_json() {
   local tag="$1"
-  local include_dmg="${2:-true}"
+  local omitted_asset="${2:-}"
   jq -cn \
     --arg tag "$tag" \
-    --argjson include_dmg "$include_dmg" \
+    --arg omitted_asset "$omitted_asset" \
     '{
       tag_name: $tag,
       draft: false,
       prerelease: false,
-      assets: ([
+      assets: [
+        {name: "Stella-macos-universal.dmg"},
         {name: "Stella-windows-x64-setup.exe"},
         {name: "latest.json"}
-      ] + if $include_dmg then [{name: "Stella-macos-universal.dmg"}] else [] end)
+      ] | map(select(.name != $omitted_asset))
     }'
 }
 
@@ -39,7 +40,7 @@ gh() {
     return 2
   fi
   if [[ "$2" == "repos/stella/stella/releases/tags/$GOOD_TAG" ]]; then
-    release_json "$GOOD_TAG" "${STELLA_TEST_INCLUDE_DMG:-true}"
+    release_json "$GOOD_TAG" "${STELLA_TEST_OMIT_ASSET:-}"
     return 0
   fi
   if [[ "$2" == "repos/stella/stella/releases/latest" ]]; then
@@ -87,16 +88,22 @@ fi
 grep -Fq "must be a stable desktop release tag" "$work/hijacked.err"
 unset STELLA_TEST_LATEST_TAG
 
-: > "$GH_CALL_LOG"
-export STELLA_TEST_INCLUDE_DMG=false
-if run_promotion >"$work/incomplete.out" 2>"$work/incomplete.err"; then
-  echo "expected an incomplete release to fail before promotion" >&2
-  exit 1
-fi
-grep -Fq "missing a required desktop asset" "$work/incomplete.err"
-if grep -Fq "release edit" "$GH_CALL_LOG"; then
-  echo "incomplete release was promoted" >&2
-  exit 1
-fi
+for required_asset in \
+  "Stella-macos-universal.dmg" \
+  "Stella-windows-x64-setup.exe" \
+  "latest.json"; do
+  : > "$GH_CALL_LOG"
+  export STELLA_TEST_OMIT_ASSET="$required_asset"
+  if run_promotion >"$work/incomplete.out" 2>"$work/incomplete.err"; then
+    echo "expected a release missing $required_asset to fail before promotion" >&2
+    exit 1
+  fi
+  grep -Fq "missing a required desktop asset" "$work/incomplete.err"
+  if grep -Fq "release edit" "$GH_CALL_LOG"; then
+    echo "release missing $required_asset was promoted" >&2
+    exit 1
+  fi
+done
+unset STELLA_TEST_OMIT_ASSET
 
 echo "promote-desktop-release tests passed"

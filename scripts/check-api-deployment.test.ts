@@ -43,7 +43,7 @@ describe("API deployment health receipt", () => {
     ).text();
 
     expect(workflow).toContain(
-      "stella/.github/.github/workflows/npm-independent-release.yml@c9d013466ce9f5ae519ae6b6e6471b746ee1b208 # package latest-pointer policy",
+      "stella/.github/.github/workflows/npm-independent-release.yml@2b8697f04b39187c934afc04f7b04ad1a18bd827 # package latest-pointer policy",
     );
   });
 
