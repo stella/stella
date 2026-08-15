@@ -25,7 +25,7 @@
         ],
         "occurrences": [
           {
-            "location": "packages/agent-engine/scripts/e2e-mcp-canary.ts#11"
+            "location": "packages/agent-engine/scripts/canary-harness-protocol.ts#1"
           }
         ]
       },
@@ -2972,7 +2972,7 @@
             "location": "apps/api/src/lib/s3-presign.ts#29"
           },
           {
-            "location": "apps/api/src/lib/s3.ts#6"
+            "location": "apps/api/src/lib/s3.ts#7"
           }
         ]
       },
@@ -7062,7 +7062,7 @@
       "version": "1.4.9"
     },
     {
-      "bom-ref": "pkg:npm/@firecrawl/anydoc@0.1.7",
+      "bom-ref": "pkg:npm/@firecrawl/anydoc@0.1.9",
       "description": "Convert documents (doc, docx, odt, rtf, epub, pdf, presentations, spreadsheets, csv) to GitHub-Flavored Markdown",
       "evidence": {
         "identity": [
@@ -7111,10 +7111,10 @@
           "value": "node_modules/@firecrawl/anydoc/package.json"
         }
       ],
-      "purl": "pkg:npm/%40firecrawl/anydoc@0.1.7",
+      "purl": "pkg:npm/%40firecrawl/anydoc@0.1.9",
       "scope": "required",
       "type": "library",
-      "version": "0.1.7"
+      "version": "0.1.9"
     },
     {
       "authors": [
@@ -7513,6 +7513,62 @@
     {
       "authors": [
         {
+          "name": "Yevhenii Hyzyla"
+        }
+      ],
+      "bom-ref": "pkg:npm/@hyzyla/pdfium@2.1.13",
+      "description": "Universal wrapper for PDFium",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@hyzyla/pdfium/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@hyzyla/pdfium/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/ocr-local/ocr-local-worker.ts#21"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/hyzyla/pdfium"
+        }
+      ],
+      "group": "@hyzyla",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "pdfium",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@hyzyla/pdfium/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40hyzyla/pdfium@2.1.13",
+      "scope": "required",
+      "type": "library",
+      "version": "2.1.13"
+    },
+    {
+      "authors": [
+        {
           "name": "Lucas Smith"
         }
       ],
@@ -7548,9 +7604,6 @@
           },
           {
             "location": "apps/api/src/lib/ocr-searchable-pdf-worker.ts#8"
-          },
-          {
-            "location": "apps/api/src/lib/search/extraction-worker.ts#20"
           },
           {
             "location": "apps/api/src/lib/workflow/generate-batch.ts#1"
@@ -7595,7 +7648,7 @@
       "version": "0.4.1"
     },
     {
-      "bom-ref": "pkg:npm/@litko/yara-x@0.7.0",
+      "bom-ref": "pkg:npm/@litko/yara-x@0.7.1",
       "evidence": {
         "identity": [
           {
@@ -7646,10 +7699,10 @@
           "value": "node_modules/@litko/yara-x/package.json"
         }
       ],
-      "purl": "pkg:npm/%40litko/yara-x@0.7.0",
+      "purl": "pkg:npm/%40litko/yara-x@0.7.1",
       "scope": "required",
       "type": "library",
-      "version": "0.7.0"
+      "version": "0.7.1"
     },
     {
       "authors": [
@@ -7911,6 +7964,9 @@
         "occurrences": [
           {
             "location": "apps/api/src/lib/observability/logger.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/observability/otel.ts#1"
           }
         ]
       },
@@ -7941,6 +7997,182 @@
       "tags": [
         "api"
       ],
+      "type": "library",
+      "version": "0.221.0"
+    },
+    {
+      "authors": [
+        {
+          "name": "OpenTelemetry Authors"
+        }
+      ],
+      "bom-ref": "pkg:npm/@opentelemetry/exporter-logs-otlp-http@0.221.0",
+      "description": "OpenTelemetry Collector Logs Exporter allows user to send collected logs to the OpenTelemetry Collector",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@opentelemetry/exporter-logs-otlp-http/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@opentelemetry/exporter-logs-otlp-http/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/observability/otel.ts#2"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/open-telemetry/opentelemetry-js/tree/main/experimental/packages/exporter-logs-otlp-http"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/open-telemetry/opentelemetry-js.git"
+        }
+      ],
+      "group": "@opentelemetry",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
+          }
+        }
+      ],
+      "name": "exporter-logs-otlp-http",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@opentelemetry/exporter-logs-otlp-http/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40opentelemetry/exporter-logs-otlp-http@0.221.0",
+      "scope": "required",
+      "type": "library",
+      "version": "0.221.0"
+    },
+    {
+      "authors": [
+        {
+          "name": "OpenTelemetry Authors"
+        }
+      ],
+      "bom-ref": "pkg:npm/@opentelemetry/resources@2.10.0",
+      "description": "OpenTelemetry SDK resources",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@opentelemetry/resources/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@opentelemetry/resources/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/observability/otel.ts#3"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/open-telemetry/opentelemetry-js/tree/main/packages/opentelemetry-resources"
+        }
+      ],
+      "group": "@opentelemetry",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
+          }
+        }
+      ],
+      "name": "resources",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@opentelemetry/resources/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40opentelemetry/resources@2.10.0",
+      "scope": "required",
+      "type": "library",
+      "version": "2.10.0"
+    },
+    {
+      "authors": [
+        {
+          "name": "OpenTelemetry Authors"
+        }
+      ],
+      "bom-ref": "pkg:npm/@opentelemetry/sdk-logs@0.221.0",
+      "description": "OpenTelemetry logs SDK",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@opentelemetry/sdk-logs/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@opentelemetry/sdk-logs/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/observability/otel.ts#7"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/open-telemetry/opentelemetry-js/tree/main/experimental/packages/sdk-logs"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/open-telemetry/opentelemetry-js.git"
+        }
+      ],
+      "group": "@opentelemetry",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
+          }
+        }
+      ],
+      "name": "sdk-logs",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@opentelemetry/sdk-logs/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40opentelemetry/sdk-logs@0.221.0",
+      "scope": "required",
       "type": "library",
       "version": "0.221.0"
     },
@@ -11627,10 +11859,13 @@
             "location": "apps/web/src/features/chat/queries.ts#1"
           },
           {
+            "location": "packages/agent-engine/scripts/canary-harness-protocol.ts#2"
+          },
+          {
             "location": "packages/agent-engine/scripts/e2e-cloud-run.ts#23"
           },
           {
-            "location": "packages/agent-engine/scripts/e2e-mcp-canary.ts#12"
+            "location": "packages/agent-engine/scripts/e2e-mcp-canary.ts#11"
           },
           {
             "location": "apps/api/src/handlers/chat/types.ts#3"
@@ -11743,7 +11978,7 @@
           "name": "tannerlinsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-form@1.33.3",
+      "bom-ref": "pkg:npm/@tanstack/react-form@1.33.4",
       "description": "Powerful, type-safe forms for React.",
       "evidence": {
         "identity": [
@@ -11828,10 +12063,10 @@
           "value": "node_modules/@tanstack/react-form/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-form@1.33.3",
+      "purl": "pkg:npm/%40tanstack/react-form@1.33.4",
       "scope": "required",
       "type": "library",
-      "version": "1.33.3"
+      "version": "1.33.4"
     },
     {
       "authors": [
@@ -13171,7 +13406,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.23",
+      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.24",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -13796,10 +14031,10 @@
           "value": "node_modules/@tanstack/react-router/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-router@1.170.23",
+      "purl": "pkg:npm/%40tanstack/react-router@1.170.24",
       "scope": "required",
       "type": "library",
-      "version": "1.170.23"
+      "version": "1.170.24"
     },
     {
       "authors": [
@@ -13807,7 +14042,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-start@1.168.40",
+      "bom-ref": "pkg:npm/@tanstack/react-start@1.168.41",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -13871,10 +14106,10 @@
           "value": "node_modules/@tanstack/react-start/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-start@1.168.40",
+      "purl": "pkg:npm/%40tanstack/react-start@1.168.41",
       "scope": "required",
       "type": "library",
-      "version": "1.168.40"
+      "version": "1.168.41"
     },
     {
       "authors": [
@@ -14056,7 +14291,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-table-devtools@9.1.0",
+      "bom-ref": "pkg:npm/@tanstack/react-table-devtools@9.1.2",
       "description": "React devtools for TanStack Table.",
       "evidence": {
         "identity": [
@@ -14108,10 +14343,10 @@
           "value": "node_modules/@tanstack/react-table-devtools/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-table-devtools@9.1.0",
+      "purl": "pkg:npm/%40tanstack/react-table-devtools@9.1.2",
       "scope": "required",
       "type": "library",
-      "version": "9.1.0"
+      "version": "9.1.2"
     },
     {
       "authors": [
@@ -14119,7 +14354,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-table@9.1.0",
+      "bom-ref": "pkg:npm/@tanstack/react-table@9.1.2",
       "description": "Headless UI for building powerful tables & datagrids for React.",
       "evidence": {
         "identity": [
@@ -14213,10 +14448,10 @@
           "value": "node_modules/@tanstack/react-table/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-table@9.1.0",
+      "purl": "pkg:npm/%40tanstack/react-table@9.1.2",
       "scope": "required",
       "type": "library",
-      "version": "9.1.0"
+      "version": "9.1.2"
     },
     {
       "authors": [
@@ -17074,6 +17309,9 @@
           },
           {
             "location": "scripts/ratchet.ts#45"
+          },
+          {
+            "location": "scripts/typecheck-coverage.ts#21"
           }
         ]
       },
@@ -17259,10 +17497,13 @@
             "location": "apps/api/src/lib/auth.ts#5"
           },
           {
-            "location": "apps/api/src/lib/auth.ts#10"
+            "location": "apps/api/src/lib/auth.ts#6"
           },
           {
-            "location": "apps/api/src/lib/auth.ts#18"
+            "location": "apps/api/src/lib/auth.ts#11"
+          },
+          {
+            "location": "apps/api/src/lib/auth.ts#19"
           },
           {
             "location": "apps/api/src/lib/selfhost-auth.ts#1"
@@ -17286,7 +17527,10 @@
             "location": "apps/api/src/lib/auth.ts#5"
           },
           {
-            "location": "apps/api/src/lib/auth.ts#10"
+            "location": "apps/api/src/lib/auth.ts#6"
+          },
+          {
+            "location": "apps/api/src/lib/auth.ts#11"
           },
           {
             "location": "apps/api/src/lib/selfhost-auth.ts#1"
@@ -17295,7 +17539,7 @@
             "location": "apps/api/src/lib/user-shortcuts.ts#1"
           },
           {
-            "location": "apps/api/src/lib/auth.ts#18"
+            "location": "apps/api/src/lib/auth.ts#19"
           },
           {
             "location": "apps/web/src/lib/auth.ts#2"
@@ -17655,6 +17899,9 @@
             "location": "apps/api/src/handlers/chat/export/create.ts#19"
           },
           {
+            "location": "apps/api/src/handlers/chat/file-thread-shared.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/chat/generate-thread-title.ts#1"
           },
           {
@@ -17692,6 +17939,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/persistent-compaction.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/read-file-thread.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/rename-thread.ts#1"
@@ -19098,7 +19348,7 @@
             "location": "apps/api/src/lib/audit-log.ts#1"
           },
           {
-            "location": "apps/api/src/lib/auth.ts#19"
+            "location": "apps/api/src/lib/auth.ts#20"
           },
           {
             "location": "apps/api/src/lib/azure-foundry.ts#1"
@@ -19194,7 +19444,7 @@
             "location": "apps/api/src/lib/document-processing-handoff.ts#1"
           },
           {
-            "location": "apps/api/src/lib/document-processing-provider.ts#1"
+            "location": "apps/api/src/lib/document-processing-ocr-result.ts#7"
           },
           {
             "location": "apps/api/src/lib/document-processing-queue.ts#1"
@@ -19371,6 +19621,9 @@
             "location": "apps/api/src/lib/oauth-connections.ts#1"
           },
           {
+            "location": "apps/api/src/lib/ocr-local/recognize-local.ts#9"
+          },
+          {
             "location": "apps/api/src/lib/ocr-searchable-pdf-worker.ts#9"
           },
           {
@@ -19392,6 +19645,9 @@
             "location": "apps/api/src/lib/rate-limit/redis-context.ts#1"
           },
           {
+            "location": "apps/api/src/lib/redirect-fetch.ts#8"
+          },
+          {
             "location": "apps/api/src/lib/redis-client.ts#1"
           },
           {
@@ -19401,7 +19657,7 @@
             "location": "apps/api/src/lib/s3-presign.ts#32"
           },
           {
-            "location": "apps/api/src/lib/s3.ts#7"
+            "location": "apps/api/src/lib/s3.ts#8"
           },
           {
             "location": "apps/api/src/lib/safe-outbound-fetch.ts#1"
@@ -19659,6 +19915,9 @@
             "location": "apps/api/src/scripts/cz-regional-repair.ts#1"
           },
           {
+            "location": "apps/api/src/scripts/fetch-ocr-models.ts#11"
+          },
+          {
             "location": "apps/api/src/scripts/image-smoke.ts#19"
           },
           {
@@ -19860,7 +20119,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities.ts#6"
           },
           {
-            "location": "packages/agent-engine/scripts/e2e-mcp-canary.ts#13"
+            "location": "packages/agent-engine/scripts/e2e-mcp-canary.ts#12"
           },
           {
             "location": "packages/agent-engine/src/bun-docker/api.ts#16"
@@ -20597,6 +20856,9 @@
             "location": "apps/api/src/handlers/chat/export/create.ts#19"
           },
           {
+            "location": "apps/api/src/handlers/chat/file-thread-shared.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/chat/generate-thread-title.ts#1"
           },
           {
@@ -20634,6 +20896,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/persistent-compaction.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/read-file-thread.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/rename-thread.ts#1"
@@ -22040,7 +22305,7 @@
             "location": "apps/api/src/lib/audit-log.ts#1"
           },
           {
-            "location": "apps/api/src/lib/auth.ts#19"
+            "location": "apps/api/src/lib/auth.ts#20"
           },
           {
             "location": "apps/api/src/lib/azure-foundry.ts#1"
@@ -22136,7 +22401,7 @@
             "location": "apps/api/src/lib/document-processing-handoff.ts#1"
           },
           {
-            "location": "apps/api/src/lib/document-processing-provider.ts#1"
+            "location": "apps/api/src/lib/document-processing-ocr-result.ts#7"
           },
           {
             "location": "apps/api/src/lib/document-processing-queue.ts#1"
@@ -22313,6 +22578,9 @@
             "location": "apps/api/src/lib/oauth-connections.ts#1"
           },
           {
+            "location": "apps/api/src/lib/ocr-local/recognize-local.ts#9"
+          },
+          {
             "location": "apps/api/src/lib/ocr-searchable-pdf-worker.ts#9"
           },
           {
@@ -22334,6 +22602,9 @@
             "location": "apps/api/src/lib/rate-limit/redis-context.ts#1"
           },
           {
+            "location": "apps/api/src/lib/redirect-fetch.ts#8"
+          },
+          {
             "location": "apps/api/src/lib/redis-client.ts#1"
           },
           {
@@ -22343,7 +22614,7 @@
             "location": "apps/api/src/lib/s3-presign.ts#32"
           },
           {
-            "location": "apps/api/src/lib/s3.ts#7"
+            "location": "apps/api/src/lib/s3.ts#8"
           },
           {
             "location": "apps/api/src/lib/safe-outbound-fetch.ts#1"
@@ -22601,6 +22872,9 @@
             "location": "apps/api/src/scripts/cz-regional-repair.ts#1"
           },
           {
+            "location": "apps/api/src/scripts/fetch-ocr-models.ts#11"
+          },
+          {
             "location": "apps/api/src/scripts/image-smoke.ts#19"
           },
           {
@@ -22802,7 +23076,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities.ts#6"
           },
           {
-            "location": "packages/agent-engine/scripts/e2e-mcp-canary.ts#13"
+            "location": "packages/agent-engine/scripts/e2e-mcp-canary.ts#12"
           },
           {
             "location": "packages/agent-engine/src/bun-docker/api.ts#16"
@@ -23531,6 +23805,9 @@
             "location": "apps/api/src/handlers/chat/export/create.ts#19"
           },
           {
+            "location": "apps/api/src/handlers/chat/file-thread-shared.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/chat/generate-thread-title.ts#1"
           },
           {
@@ -23568,6 +23845,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/persistent-compaction.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/read-file-thread.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/rename-thread.ts#1"
@@ -24974,7 +25254,7 @@
             "location": "apps/api/src/lib/audit-log.ts#1"
           },
           {
-            "location": "apps/api/src/lib/auth.ts#19"
+            "location": "apps/api/src/lib/auth.ts#20"
           },
           {
             "location": "apps/api/src/lib/azure-foundry.ts#1"
@@ -25070,7 +25350,7 @@
             "location": "apps/api/src/lib/document-processing-handoff.ts#1"
           },
           {
-            "location": "apps/api/src/lib/document-processing-provider.ts#1"
+            "location": "apps/api/src/lib/document-processing-ocr-result.ts#7"
           },
           {
             "location": "apps/api/src/lib/document-processing-queue.ts#1"
@@ -25247,6 +25527,9 @@
             "location": "apps/api/src/lib/oauth-connections.ts#1"
           },
           {
+            "location": "apps/api/src/lib/ocr-local/recognize-local.ts#9"
+          },
+          {
             "location": "apps/api/src/lib/ocr-searchable-pdf-worker.ts#9"
           },
           {
@@ -25268,6 +25551,9 @@
             "location": "apps/api/src/lib/rate-limit/redis-context.ts#1"
           },
           {
+            "location": "apps/api/src/lib/redirect-fetch.ts#8"
+          },
+          {
             "location": "apps/api/src/lib/redis-client.ts#1"
           },
           {
@@ -25277,7 +25563,7 @@
             "location": "apps/api/src/lib/s3-presign.ts#32"
           },
           {
-            "location": "apps/api/src/lib/s3.ts#7"
+            "location": "apps/api/src/lib/s3.ts#8"
           },
           {
             "location": "apps/api/src/lib/safe-outbound-fetch.ts#1"
@@ -25535,6 +25821,9 @@
             "location": "apps/api/src/scripts/cz-regional-repair.ts#1"
           },
           {
+            "location": "apps/api/src/scripts/fetch-ocr-models.ts#11"
+          },
+          {
             "location": "apps/api/src/scripts/image-smoke.ts#19"
           },
           {
@@ -25736,7 +26025,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities.ts#6"
           },
           {
-            "location": "packages/agent-engine/scripts/e2e-mcp-canary.ts#13"
+            "location": "packages/agent-engine/scripts/e2e-mcp-canary.ts#12"
           },
           {
             "location": "packages/agent-engine/src/bun-docker/api.ts#16"
@@ -26327,7 +26616,7 @@
             "location": "apps/api/src/lib/markdown/html-to-markdown.ts#1"
           },
           {
-            "location": "apps/api/src/lib/search/extraction-worker.ts#21"
+            "location": "apps/api/src/lib/search/extraction-worker.ts#20"
           }
         ]
       },
@@ -27421,6 +27710,9 @@
             "location": "apps/api/src/handlers/chat/file-thread-mapping.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/chat/file-thread-shared.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/chat/generate-thread-title.ts#2"
           },
           {
@@ -28363,10 +28655,10 @@
             "location": "apps/api/src/lib/auth-artifacts.ts#3"
           },
           {
-            "location": "apps/api/src/lib/auth.ts#20"
+            "location": "apps/api/src/lib/auth.ts#21"
           },
           {
-            "location": "apps/api/src/lib/auth.ts#21"
+            "location": "apps/api/src/lib/auth.ts#22"
           },
           {
             "location": "apps/api/src/lib/billing-rates.ts#3"
@@ -29105,7 +29397,7 @@
             "location": "apps/api/src/handlers/uploads/routes.ts#2"
           },
           {
-            "location": "apps/api/src/lib/auth.ts#23"
+            "location": "apps/api/src/lib/auth.ts#24"
           },
           {
             "location": "apps/api/src/lib/rate-limit/rate-limit.ts#1"
@@ -29342,6 +29634,9 @@
           },
           {
             "location": "apps/api/src/handlers/chat/improve-prompt.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/read-file-thread.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/rename-thread.ts#3"
@@ -30607,7 +30902,7 @@
             "location": "apps/api/src/lib/api-handlers.ts#9"
           },
           {
-            "location": "apps/api/src/lib/auth.ts#22"
+            "location": "apps/api/src/lib/auth.ts#23"
           },
           {
             "location": "apps/api/src/lib/clauses/body-schema.ts#1"
@@ -31449,7 +31744,7 @@
           "name": "Eric Fennis"
         }
       ],
-      "bom-ref": "pkg:npm/lucide-react@1.28.0",
+      "bom-ref": "pkg:npm/lucide-react@1.30.0",
       "description": "A Lucide icon library package for React applications.",
       "evidence": {
         "identity": [
@@ -32392,13 +32687,13 @@
           "value": "node_modules/lucide-react/package.json"
         }
       ],
-      "purl": "pkg:npm/lucide-react@1.28.0",
+      "purl": "pkg:npm/lucide-react@1.30.0",
       "scope": "required",
       "tags": [
         "network"
       ],
       "type": "library",
-      "version": "1.28.0"
+      "version": "1.30.0"
     },
     {
       "authors": [
@@ -32459,6 +32754,62 @@
       "scope": "required",
       "type": "library",
       "version": "9.0.5"
+    },
+    {
+      "authors": [
+        {
+          "name": "fs-eire"
+        }
+      ],
+      "bom-ref": "pkg:npm/onnxruntime-node@1.27.0",
+      "description": "ONNXRuntime Node.js binding",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/onnxruntime-node/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/onnxruntime-node/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/ocr-local/ocr-local-worker.ts#23"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/Microsoft/onnxruntime.git"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "onnxruntime-node",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/onnxruntime-node/package.json"
+        }
+      ],
+      "purl": "pkg:npm/onnxruntime-node@1.27.0",
+      "scope": "required",
+      "type": "library",
+      "version": "1.27.0"
     },
     {
       "bom-ref": "pkg:npm/pdfjs-dist@6.2.108",
@@ -35417,6 +35768,9 @@
         ],
         "occurrences": [
           {
+            "location": "apps/api/src/lib/ocr-local/ocr-local-worker.ts#24"
+          },
+          {
             "location": "apps/landing/src/lib/og-card.ts#8"
           }
         ]
@@ -35834,6 +36188,9 @@
           },
           {
             "location": "scripts/ratchet.ts#45"
+          },
+          {
+            "location": "scripts/typecheck-coverage.ts#21"
           }
         ]
       },
@@ -35903,6 +36260,9 @@
           },
           {
             "location": "scripts/ratchet.ts#45"
+          },
+          {
+            "location": "scripts/typecheck-coverage.ts#21"
           }
         ]
       },
