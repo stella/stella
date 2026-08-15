@@ -19,7 +19,6 @@ import {
   searchDocuments,
   workspaceSearchDocuments,
 } from "@/api/db/schema";
-import { env } from "@/api/env";
 import { resolveSelectedWorkspaceIds } from "@/api/handlers/search/search";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
@@ -709,7 +708,7 @@ export const createSearchSummaryChatThread = async ({
           version: 1,
           data: [{ type: "text", text: userText }],
         },
-        memoryExtractionEligible: env.FEATURE_AI_MEMORY,
+        memoryExtractionEligible: true,
         createdAt: now,
       },
       {
@@ -726,7 +725,7 @@ export const createSearchSummaryChatThread = async ({
             sourceDocuments: citedContexts.flatMap(toChatSourceDocuments),
           },
         }),
-        memoryExtractionEligible: env.FEATURE_AI_MEMORY,
+        memoryExtractionEligible: true,
         createdAt: new Date(now.getTime() + 1),
       },
     ]);

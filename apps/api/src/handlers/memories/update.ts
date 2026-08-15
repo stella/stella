@@ -2,9 +2,8 @@ import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import { roles } from "@stll/permissions";
-
 import { aiMemories } from "@/api/db/schema";
+import { canManageMemory } from "@/api/handlers/memories/authorization";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { FieldDiffs } from "@/api/lib/audit-log";
@@ -44,6 +43,7 @@ const updateMemory = createSafeRootHandler(
     params,
     recordAuditEvent,
     safeDb,
+    user,
   }) {
     // An edited body re-enters future prompts, so re-run the same fail-closed
     // sanitizer the create paths use before opening the transaction.
@@ -90,23 +90,13 @@ const updateMemory = createSafeRootHandler(
         return { type: "not_found" } as const;
       }
 
-      // Firm memory is governance-gated. The row's scope is only known after
-      // the locked fetch, so this permission cannot be static in `config`.
-      if (row.scope === "organization") {
-        const allowed = roles[memberRole.role].authorize({
-          firmMemory: ["update"],
-        });
-        if (!allowed.success) {
-          return { type: "forbidden" } as const;
-        }
-      }
-
       if (
-        row.scope === "workspace" &&
-        (!roles[memberRole.role].authorize({ workspace: ["update"] }).success ||
-          !accessibleWorkspaces.some(
-            ({ id, status }) => id === row.workspaceId && status === "active",
-          ))
+        !canManageMemory({
+          accessibleWorkspaces,
+          currentUserId: user.id,
+          memberRole,
+          memory: row,
+        })
       ) {
         return { type: "forbidden" } as const;
       }
