@@ -42,7 +42,7 @@ import {
 } from "@stll/ui/components/menu";
 import {
   Popover,
-  PopoverPopup,
+  PopoverPanel,
   PopoverTrigger,
 } from "@stll/ui/components/popover";
 import { SegmentedIconToggle } from "@stll/ui/components/segmented-icon-toggle";
@@ -357,7 +357,7 @@ const ActivityAdvancedFilters = ({
             })
           : t("common.filter")}
       </PopoverTrigger>
-      <PopoverPopup align="end" className="w-80 space-y-3 p-3">
+      <PopoverPanel align="end" className="w-80">
         <div className="space-y-1.5">
           <label
             className="text-muted-foreground text-xs font-medium"
@@ -431,6 +431,8 @@ const ActivityAdvancedFilters = ({
               <ComboboxEmpty>
                 {actorsQuery.error
                   ? t("common.unexpectedError")
+                  : actorsQuery.isPending || actorsQuery.isFetching
+                    ? t("common.loading")
                   : t("common.noResults")}
               </ComboboxEmpty>
               {actorsQuery.hasNextPage && (
@@ -524,7 +526,7 @@ const ActivityAdvancedFilters = ({
         >
           {t("workspaces.filters.clearAll")}
         </Button>
-      </PopoverPopup>
+      </PopoverPanel>
     </Popover>
   );
 };
