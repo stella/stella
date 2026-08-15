@@ -241,7 +241,7 @@ export const filesystemEntitiesOptions = (
       // rendered, so they stay out of selection and bulk actions.
       const ancestorLinks = data.ancestorLinks;
       const isFiltered =
-        (key.filters?.length ?? 0) > 0 || Boolean(key.search?.trim());
+        key.filters.length > 0 || Boolean(key.search?.trim());
 
       return { entities, ancestorLinks, isFiltered };
     },
