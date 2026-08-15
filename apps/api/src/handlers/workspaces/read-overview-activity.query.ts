@@ -549,24 +549,25 @@ export const readOverviewActivityPage = async ({
               legacyCategoryCondition("automation"),
             ),
           ),
-        ),
+        ) ?? sql`false`,
       );
     } else if (filters.category !== "all") {
       const legacyCondition = legacyCategoryCondition(filters.category);
       const storedOrLegacyCategory = or(
         eq(auditLogs.activityCategory, filters.category),
         and(isNull(auditLogs.activityCategory), legacyCondition),
-      );
+      ) ?? sql`false`;
       if (filters.category === "tasks") {
         conditions.push(
-          or(storedOrLegacyCategory, taskEntityResourceCondition()),
+          or(storedOrLegacyCategory, taskEntityResourceCondition()) ??
+            sql`false`,
         );
       } else if (filters.category === "documents") {
         conditions.push(
           and(
             storedOrLegacyCategory,
             sql`NOT coalesce(${taskEntityResourceCondition()}, false)`,
-          ),
+          ) ?? sql`false`,
         );
       } else {
         conditions.push(storedOrLegacyCategory);
