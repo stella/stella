@@ -9,28 +9,10 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 
+import { readConformanceVocabulary } from "@/api/lib/legal-search/morphology/snowball/__fixtures__/vocabulary";
 import { CzechStemmer } from "@/api/lib/legal-search/morphology/snowball/czech.gen";
 import { PolishStemmer } from "@/api/lib/legal-search/morphology/snowball/polish.gen";
-
-type VocabularyPair = { readonly word: string; readonly stem: string };
-
-const readPairs = (algorithm: string): readonly VocabularyPair[] =>
-  readFileSync(
-    path.join(import.meta.dir, "__fixtures__", `${algorithm}.conformance.txt`),
-    "utf-8",
-  )
-    .split("\n")
-    .filter((line) => line !== "" && !line.startsWith("#"))
-    .map((line) => {
-      const [word, stem, ...rest] = line.split("\t");
-      if (word === undefined || stem === undefined || rest.length > 0) {
-        throw new Error(`malformed conformance line: ${JSON.stringify(line)}`);
-      }
-      return { word, stem };
-    });
 
 const czech = new CzechStemmer();
 const polish = new PolishStemmer();
@@ -39,12 +21,12 @@ const CASES = [
   {
     algorithm: "czech",
     stem: (term: string) => czech.stem(term),
-    pairs: readPairs("czech"),
+    pairs: readConformanceVocabulary("czech"),
   },
   {
     algorithm: "polish",
     stem: (term: string) => polish.stem(term),
-    pairs: readPairs("polish"),
+    pairs: readConformanceVocabulary("polish"),
   },
 ] as const;
 

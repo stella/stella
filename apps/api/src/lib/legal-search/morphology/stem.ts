@@ -42,10 +42,20 @@ const STEMMERS = {
 /**
  * Reduce a term to its stem for the given language.
  *
- * Input is lowercased first because every algorithm's tables are lowercase;
- * diacritics are deliberately preserved (see the module note on ordering).
+ * Two normalisations happen here, and both are preconditions the underlying
+ * stemmers do not enforce themselves:
+ *
+ * - **NFC.** Every suffix table is written with precomposed code points
+ *   (`ě` is U+011B, not `e` + U+030C). A decomposed term keeps its combining
+ *   marks through `toLowerCase()`, so `find_among` never matches and the
+ *   word passes through unstemmed. Extracted text arrives in whatever form
+ *   its producer used, and NFD is common from PDFs and macOS filesystems.
+ * - **Lowercase.** The tables are lowercase throughout.
+ *
+ * Diacritics are deliberately preserved; only the encoding is normalised
+ * (see the module note on fold-after-stem ordering).
  */
 export const stemLegalTerm = (
   term: string,
   language: MorphologyLanguage,
-): string => STEMMERS[language](term.toLowerCase());
+): string => STEMMERS[language](term.normalize("NFC").toLowerCase());

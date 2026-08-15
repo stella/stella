@@ -41,11 +41,46 @@ const term = fc.oneof(
 test("a stem never grows and never empties a non-empty term", () => {
   fc.assert(
     fc.property(term, language, (input, code) => {
-      const lowercased = input.toLowerCase();
+      // Bounded against what the stemmer actually sees, not the raw input:
+      // NFC can lengthen a string. U+1D1BB decomposes canonically and is on
+      // the composition-exclusion list, so normalising it yields two code
+      // points, never one. That growth is normalisation's, not the
+      // stemmer's; see the pinned vector in stem.test.ts.
+      const normalized = input.normalize("NFC").toLowerCase();
       const stem = stemLegalTerm(input, code);
 
-      expect<number>(stem.length).toBeLessThanOrEqual(lowercased.length);
+      expect<number>(stem.length).toBeLessThanOrEqual(normalized.length);
       expect<boolean>(stem.length > 0).toBe(true);
+    }),
+    propertyConfig({ numRuns: 2000 }),
+  );
+});
+
+/**
+ * Latin letters that carry a combining mark in NFD, so the generated strings
+ * genuinely differ between the two normal forms rather than being NFC-stable
+ * by accident.
+ */
+const DECOMPOSABLE_ALPHABET =
+  "áäčďéěíĺľňóôŕřšťúůýžąćęńóśźżàâãåèêëìîïòõùûü".split("");
+
+const decomposableTerm = fc.string({
+  unit: fc.constantFrom(
+    ...DECOMPOSABLE_ALPHABET,
+    ..."abcdefghijklmnop".split(""),
+  ),
+  minLength: 1,
+  maxLength: 40,
+});
+
+test("normalisation form does not change the stem", () => {
+  // Extracted text arrives in whichever normal form its producer used, so
+  // the same word must not index one way and query another.
+  fc.assert(
+    fc.property(decomposableTerm, language, (input, code) => {
+      expect<string>(stemLegalTerm(input.normalize("NFD"), code)).toBe(
+        stemLegalTerm(input.normalize("NFC"), code),
+      );
     }),
     propertyConfig({ numRuns: 2000 }),
   );

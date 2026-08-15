@@ -311,20 +311,23 @@ const stemSlovakVariant = (
 };
 
 /**
- * Stem a lowercase Slovak term, reproducing upstream exactly.
+ * Stem a Slovak term, reproducing upstream exactly.
  *
- * Input is expected to be lowercase and to keep its diacritics: the suffix
- * tables are written over `á ä č ď é í ĺ ľ ň ó ô ŕ š ť ú ý ž`, so folding
- * before stemming loses matches.
+ * Preconditions, both of which {@link stemLegalTerm} applies for you:
+ * the term must be NFC and lowercase. The suffix tables are written with
+ * precomposed, lowercase, accented code points (`á ä č ď é í ĺ ľ ň ó ô ŕ š
+ * ť ú ý ž`), so a decomposed term matches nothing and passes through
+ * unstemmed, and a folded term loses the endings this exists to strip.
  */
 export const stemSlovak = (term: string): string =>
   stemSlovakVariant(term, "faithful");
 
 /**
- * Stem a lowercase Slovak term, additionally stripping a bare final `u`.
+ * Stem a Slovak term, additionally stripping a bare final `u`.
  *
- * Not wired into {@link stemLegalTerm}; see {@link SlovakStemmerVariant} for
- * why it ships off by default.
+ * Same NFC and lowercase preconditions as {@link stemSlovak}. Not wired into
+ * {@link stemLegalTerm}; see {@link SlovakStemmerVariant} for why it ships
+ * off by default.
  */
 export const stemSlovakExtended = (term: string): string =>
   stemSlovakVariant(term, "extended");
