@@ -120,7 +120,7 @@ type ReadOverviewActivityActorRowsOptions = {
   workspaceId: SafeId<"workspace">;
 };
 
-export const readOverviewActivityActorRows = ({
+export const readOverviewActivityActorRows = async ({
   afterActorId,
   limit,
   organizationId,
@@ -128,7 +128,7 @@ export const readOverviewActivityActorRows = ({
   search,
   workspaceId,
 }: ReadOverviewActivityActorRowsOptions) =>
-  safeDb(async (tx) => {
+  await safeDb(async (tx) => {
     const actorId = historicalActorId();
     const conditions = [
       eq(auditLogs.organizationId, organizationId),
@@ -529,7 +529,7 @@ const timestampMicroseconds = (value: string): bigint | null => {
   if (!Number.isFinite(milliseconds)) {
     return null;
   }
-  const fraction = value.match(/\.(\d+)(?=Z|[+-]\d\d:\d\d$)/u)?.[1] ?? "";
+  const fraction = /\.(\d+)(?=Z|[+-]\d\d:\d\d$)/u.exec(value)?.[1] ?? "";
   if (fraction.length > 6) {
     return null;
   }
