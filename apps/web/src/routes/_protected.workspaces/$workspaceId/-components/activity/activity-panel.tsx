@@ -1,7 +1,10 @@
 import { Suspense, useCallback, useDeferredValue, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 
-import { useQuery, useSuspenseInfiniteQuery } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useSuspenseInfiniteQuery,
+} from "@tanstack/react-query";
 import { Result } from "better-result";
 import {
   BotIcon,
@@ -20,6 +23,14 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
+import {
+  Combobox,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxPopup,
+} from "@stll/ui/components/combobox";
 import {
   Menu,
   MenuItem,
@@ -66,6 +77,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
+import { APIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
   FULL_DATE_LONG_TIME_FORMAT,
@@ -78,20 +90,20 @@ import {
   exportOverviewActivity,
   MATTER_ACTIVITY_ACTIONS,
   MATTER_ACTIVITY_CATEGORIES,
+  overviewActivityActorsOptions,
   overviewActivityOptions,
+  type MatterActivityActor,
   type MatterActivityAction,
   type MatterActivityCategory,
   type MatterActivityFilters,
   type MatterActivityItem,
 } from "@/lib/workspaces/queries";
-import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
 
 import type { ActivityGroup } from "./activity-panel.logic";
 import {
   activityDayKey,
   expandActivityGroupsForList,
   groupActivityItems,
-  matterActivityExportResponse,
   resolveVisibleActivityTriggerType,
   resolveSelectedActivityGroup,
   toSingleActivityGroup,
@@ -285,7 +297,22 @@ const ActivityAdvancedFilters = ({
   workspaceId: string;
 }) => {
   const t = useTranslations();
-  const { data: members = [] } = useQuery(workspaceMembersOptions(workspaceId));
+  const [open, setOpen] = useState(false);
+  const actorsQuery = useInfiniteQuery({
+    ...overviewActivityActorsOptions(workspaceId),
+    enabled: open,
+  });
+  const actors = actorsQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  const selectedActor =
+    actors.find(({ id }) => id === filters.actorId) ??
+    (filters.actorId === null
+      ? null
+      : {
+          deletedAt: null,
+          id: filters.actorId,
+          image: null,
+          name: filters.actorId,
+        });
   const activeFilterCount = [
     filters.action !== "all",
     filters.actorId !== null,
@@ -294,7 +321,7 @@ const ActivityAdvancedFilters = ({
   ].filter(Boolean).length;
 
   return (
-    <Popover>
+    <Popover onOpenChange={setOpen} open={open}>
       <PopoverTrigger
         render={
           <Button
@@ -351,30 +378,49 @@ const ActivityAdvancedFilters = ({
           >
             {t("workspaces.overview.activity.list.actor")}
           </label>
-          <Select<string>
-            onValueChange={(actorId) =>
-              onFiltersChange({ ...filters, actorId: actorId || null })
+          <Combobox<MatterActivityActor>
+            items={actors}
+            itemToStringLabel={(actor) => actor.name ?? actor.id}
+            onValueChange={(actor) =>
+              onFiltersChange({ ...filters, actorId: actor?.id ?? null })
             }
-            value={filters.actorId ?? ""}
+            value={selectedActor}
           >
-            <SelectTrigger id="matter-activity-actor" size="sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectPopup>
-              <SelectItem label={t("common.all")} value="">
-                {t("common.all")}
-              </SelectItem>
-              {members.map((member) => (
-                <SelectItem
-                  key={member.user.id}
-                  label={member.user.name || member.user.email}
-                  value={member.user.id}
+            <ComboboxInput
+              id="matter-activity-actor"
+              placeholder={t("common.all")}
+              showClear
+              size="sm"
+            />
+            <ComboboxPopup>
+              <ComboboxList>
+                {actors.map((actor) => (
+                  <ComboboxItem key={actor.id} value={actor}>
+                    <BidiText>{actor.name ?? actor.id}</BidiText>
+                  </ComboboxItem>
+                ))}
+              </ComboboxList>
+              <ComboboxEmpty>{t("common.noResults")}</ComboboxEmpty>
+              {actorsQuery.hasNextPage && (
+                <Button
+                  className="m-1 min-h-11"
+                  disabled={actorsQuery.isFetchingNextPage}
+                  onClick={() => {
+                    detached(
+                      actorsQuery.fetchNextPage(),
+                      "activity-panel.fetch-actors",
+                    );
+                  }}
+                  size="sm"
+                  variant="ghost"
                 >
-                  {member.user.name || member.user.email}
-                </SelectItem>
-              ))}
-            </SelectPopup>
-          </Select>
+                  {actorsQuery.isFetchingNextPage
+                    ? t("common.loading")
+                    : t("common.loadMore")}
+                </Button>
+              )}
+            </ComboboxPopup>
+          </Combobox>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-1.5">
@@ -387,7 +433,7 @@ const ActivityAdvancedFilters = ({
             <DatePickerPopover
               id="matter-activity-from"
               labelledBy="matter-activity-from-label"
-              maxDate={toDate ?? undefined}
+              {...(toDate === null ? {} : { maxDate: toDate })}
               onChange={onFromDateChange}
               value={fromDate}
             />
@@ -402,7 +448,7 @@ const ActivityAdvancedFilters = ({
             <DatePickerPopover
               id="matter-activity-to"
               labelledBy="matter-activity-to-label"
-              minDate={fromDate ?? undefined}
+              {...(fromDate === null ? {} : { minDate: fromDate })}
               onChange={onToDateChange}
               value={toDate}
             />
@@ -439,36 +485,41 @@ const ActivityExportMenu = ({
   const exportActivity = async (format: "csv" | "json") => {
     setExporting(true);
     const result = await Result.tryPromise({
-      try: async () => await exportOverviewActivity({ filters, workspaceId }),
+      try: async () =>
+        await exportOverviewActivity({ filters, format, workspaceId }),
       catch: (error) => error,
     });
     setExporting(false);
     if (Result.isError(result)) {
       getAnalytics().captureError(result.error);
       stellaToast.add({
-        title: t("workspaces.views.exportFailed"),
+        title:
+          APIError.is(result.error) && result.error.status === 413
+            ? t("settings.organization.auditLogsExportTooLarge")
+            : t("workspaces.views.exportFailed"),
         type: "error",
       });
       return;
     }
 
-    if (result.value.type === "tooLarge") {
-      stellaToast.add({
-        title: t("settings.organization.auditLogsExportTooLarge"),
-        type: "error",
-      });
-      return;
-    }
-
-    const fileName =
-      format === "csv" ? "matter-activity.csv" : "matter-activity.json";
-    const response = matterActivityExportResponse({
-      exportedAt: new Date().toISOString(),
-      filters,
-      format,
-      items: result.value.items,
-    });
-    downloadFile(await response.blob(), fileName);
+    const data = result.value;
+    const blob =
+      data instanceof Response
+        ? await data.blob()
+        : new Blob(
+            [
+              format === "json" && typeof data !== "string"
+                ? JSON.stringify(data)
+                : String(data),
+            ],
+            {
+              type:
+                format === "csv"
+                  ? "text/csv; charset=utf-8"
+                  : "application/json; charset=utf-8",
+            },
+          );
+    downloadFile(blob, `matter-activity.${format}`);
   };
 
   const startExport = (format: "csv" | "json") => {

@@ -216,6 +216,8 @@ export const LIMITS = {
   auditLogPageSizeMax: 200,
   matterActivityPageSizeDefault: 15,
   matterActivityPageSizeMax: 50,
+  matterActivityActorPageSizeDefault: 50,
+  matterActivityActorPageSizeMax: 100,
   /** Page sizes for the operator recent-registrations listing. */
   operatorRegistrationsPageSizeDefault: 50,
   operatorRegistrationsPageSizeMax: 200,

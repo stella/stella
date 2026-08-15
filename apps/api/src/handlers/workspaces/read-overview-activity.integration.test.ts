@@ -26,7 +26,9 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+import exportOverviewActivity from "./export-overview-activity";
 import readOverviewActivity from "./read-overview-activity";
+import readOverviewActivityActors from "./read-overview-activity-actors";
 
 // Evidence for the `no-unscoped-user-query` waiver on the `user` import: the
 // actor lookup is bounded by the ids the activity rows carry, and those rows
@@ -43,6 +45,7 @@ let ids: TestIds;
 const seededAuditLogIds: SafeId<"auditLog">[] = [];
 
 let activityInOwnMatter: SafeId<"auditLog">;
+let agentActivityInOwnMatter: SafeId<"auditLog">;
 let createdActivityInOwnMatter: SafeId<"auditLog">;
 let activityInSiblingMatter: SafeId<"auditLog">;
 let activityInOtherOrganization: SafeId<"auditLog">;
@@ -89,6 +92,39 @@ const seedActivity = async ({
   return id;
 };
 
+const seedFormulaAgentActivity = async (): Promise<SafeId<"auditLog">> => {
+  const resourceId = Bun.randomUUIDv7();
+  const recorder = createBackgroundAuditRecorder({
+    organizationId: ids.orgA,
+    workspaceId: ids.wsA1,
+    userId: ids.userA1,
+    execution: {
+      performer: { type: "agent", id: "formula-agent", name: "=2+2" },
+      trigger: {
+        type: "user_dispatch",
+        source: "action",
+        userId: ids.userA1,
+      },
+    },
+  });
+  await recorder(asTestRaw<Transaction>(testDb), {
+    action: AUDIT_ACTION.UPDATE,
+    resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+    resourceId,
+  });
+
+  const written = await testDb
+    .select({ id: auditLogs.id })
+    .from(auditLogs)
+    .where(eq(auditLogs.resourceId, resourceId));
+  const id = written.at(0)?.id;
+  if (id === undefined) {
+    panic("agent activity fixture wrote no row");
+  }
+  seededAuditLogIds.push(id);
+  return id;
+};
+
 type ActivityPerformer = {
   id?: string;
   name: string | null;
@@ -116,6 +152,7 @@ beforeAll(async () => {
     workspaceId: ids.wsA1,
     userId: ids.userA1,
   });
+  agentActivityInOwnMatter = await seedFormulaAgentActivity();
   // Same organization, a matter the reader is not looking at, edited by a
   // colleague who works only there.
   activityInSiblingMatter = await seedActivity({
@@ -212,6 +249,89 @@ describe("matter overview activity", () => {
     for (const { performer } of items) {
       expect(performer.id).not.toBe(ids.userB1);
       expect(performer.name).not.toBe("User B1");
+    }
+  });
+
+  test("exports one bounded workspace-scoped download", async () => {
+    const context = {
+      memberRole: { role: "owner" },
+      recordAuditEvent: async () => undefined,
+      safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+      session: { activeOrganizationId: ids.orgA },
+      user: { id: ids.userA1 },
+      workspaceId: ids.wsA1,
+    };
+    const jsonResult = await exportOverviewActivity.handler(
+      asTestRaw<Parameters<typeof exportOverviewActivity.handler>[0]>({
+        ...context,
+        query: { format: "json" },
+      }),
+    );
+    const jsonResponse = asTestRaw<Response>(jsonResult);
+    const json = asTestRaw<{
+      filters: { category: string };
+      items: ActivityItem[];
+      version: number;
+    }>(await jsonResponse.json());
+
+    expect(jsonResponse.headers.get("Content-Disposition")).toContain(
+      'attachment; filename="matter-activity.json"',
+    );
+    expect(json.version).toBe(1);
+    expect(json.filters.category).toBe("all");
+    expect(json.items.map(({ id }) => id)).toContain(agentActivityInOwnMatter);
+    expect(json.items.map(({ id }) => id)).not.toContain(
+      activityInSiblingMatter,
+    );
+    expect(json.items.map(({ id }) => id)).not.toContain(
+      activityInOtherOrganization,
+    );
+
+    const csvResult = await exportOverviewActivity.handler(
+      asTestRaw<Parameters<typeof exportOverviewActivity.handler>[0]>({
+        ...context,
+        query: { format: "csv" },
+      }),
+    );
+    const csvResponse = asTestRaw<Response>(csvResult);
+    expect(csvResponse.headers.get("Content-Type")).toBe(
+      "text/csv; charset=utf-8",
+    );
+    expect(await csvResponse.text()).toContain('"\t=2+2"');
+  });
+
+  test("pages historical performers from authorized activity, not current matter membership", async () => {
+    const historicalActivityId = await seedActivity({
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      userId: ids.userA2,
+    });
+
+    try {
+      const result = await readOverviewActivityActors.handler(
+        asTestRaw<Parameters<typeof readOverviewActivityActors.handler>[0]>({
+          memberRole: { role: "owner" },
+          query: {},
+          safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+          session: { activeOrganizationId: ids.orgA },
+          user: { id: ids.userA1 },
+          workspaceId: ids.wsA1,
+        }),
+      );
+      const page = asTestRaw<{
+        items: { id: string; name: string | null }[];
+        nextCursor: string | null;
+      }>(result);
+
+      expect(page.items.find(({ id }) => id === ids.userA2)).toMatchObject({
+        id: ids.userA2,
+        name: "User A2",
+      });
+      expect(page.items.map(({ id }) => id)).not.toContain(ids.userB1);
+    } finally {
+      await testDb
+        .delete(auditLogs)
+        .where(eq(auditLogs.id, historicalActivityId));
     }
   });
 });

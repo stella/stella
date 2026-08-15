@@ -33,11 +33,7 @@ type WorkspaceActivityOptions = {
 
 const WORKSPACE_ACTIVITY_PAGE_SIZE = 3;
 const MATTER_ACTIVITY_PAGE_SIZE = 15;
-const MATTER_ACTIVITY_EXPORT_LIMIT = 10_000;
-const MATTER_ACTIVITY_EXPORT_PAGE_SIZE = 50;
-const MATTER_ACTIVITY_EXPORT_PAGE_LIMIT =
-  Math.ceil(MATTER_ACTIVITY_EXPORT_LIMIT / MATTER_ACTIVITY_EXPORT_PAGE_SIZE) +
-  1;
+const MATTER_ACTIVITY_ACTOR_PAGE_SIZE = 50;
 
 type ReadOverviewActivityOptions = {
   cursor?: string;
@@ -58,11 +54,13 @@ const readOverviewActivity = async ({
     ...(signal ? { fetch: { signal } } : {}),
     query: {
       action: filters.action,
-      actorId: filters.actorId ?? undefined,
       category: filters.category,
-      from: filters.from ?? undefined,
       limit,
-      toExclusive: filters.toExclusive ?? undefined,
+      ...(filters.actorId === null ? {} : { actorId: filters.actorId }),
+      ...(filters.from === null ? {} : { from: filters.from }),
+      ...(filters.toExclusive === null
+        ? {}
+        : { toExclusive: filters.toExclusive }),
       ...(cursor ? { cursor } : {}),
     },
   });
@@ -73,61 +71,70 @@ export type MatterActivityItem = Awaited<
   ReturnType<typeof readOverviewActivity>
 >["items"][number];
 
-type CollectOverviewActivityOptions = {
-  cursor?: string;
-  filters: MatterActivityFilters;
-  items: MatterActivityItem[];
-  pageCount: number;
-  workspaceId: string;
-};
-
-const collectOverviewActivity = async ({
-  cursor,
-  filters,
-  items,
-  pageCount,
-  workspaceId,
-}: CollectOverviewActivityOptions): Promise<
-  { type: "complete"; items: MatterActivityItem[] } | { type: "tooLarge" }
-> => {
-  if (pageCount >= MATTER_ACTIVITY_EXPORT_PAGE_LIMIT) {
-    return { type: "tooLarge" };
-  }
-  const page = await readOverviewActivity({
-    cursor,
-    filters,
-    limit: MATTER_ACTIVITY_EXPORT_PAGE_SIZE,
-    workspaceId,
-  });
-  if (items.length + page.items.length > MATTER_ACTIVITY_EXPORT_LIMIT) {
-    return { type: "tooLarge" };
-  }
-  items.push(...page.items);
-  if (page.nextCursor === null) {
-    return { items, type: "complete" };
-  }
-
-  return await collectOverviewActivity({
-    cursor: page.nextCursor,
-    filters,
-    items,
-    pageCount: pageCount + 1,
-    workspaceId,
-  });
-};
-
 export const exportOverviewActivity = async ({
   filters,
+  format,
   workspaceId,
 }: {
   filters: MatterActivityFilters;
+  format: "csv" | "json";
   workspaceId: string;
-}) =>
-  await collectOverviewActivity({
-    filters,
-    items: [],
-    pageCount: 0,
-    workspaceId,
+}) => {
+  const response = await api
+    .workspaces({ workspaceId })
+    .overview.activity.export.get({
+      query: {
+        action: filters.action,
+        category: filters.category,
+        format,
+        ...(filters.actorId === null ? {} : { actorId: filters.actorId }),
+        ...(filters.from === null ? {} : { from: filters.from }),
+        ...(filters.toExclusive === null
+          ? {}
+          : { toExclusive: filters.toExclusive }),
+      },
+    });
+  return unwrapEden(response);
+};
+
+const readOverviewActivityActors = async ({
+  cursor,
+  signal,
+  workspaceId,
+}: {
+  cursor?: string;
+  signal: AbortSignal;
+  workspaceId: string;
+}) => {
+  const response = await api
+    .workspaces({ workspaceId })
+    .overview.activity.actors.get({
+      fetch: { signal },
+      query: {
+        limit: MATTER_ACTIVITY_ACTOR_PAGE_SIZE,
+        ...(cursor ? { cursor } : {}),
+      },
+    });
+  return unwrapEden(response);
+};
+
+export type MatterActivityActor = Awaited<
+  ReturnType<typeof readOverviewActivityActors>
+>["items"][number];
+
+const getInitialMatterActivityActorCursor = (): string | undefined => undefined;
+
+export const overviewActivityActorsOptions = (workspaceId: string) =>
+  infiniteQueryOptions({
+    queryKey: [...workspacesKeys.overviewActivityAll(workspaceId), "actors"],
+    queryFn: async ({ pageParam, signal }) =>
+      await readOverviewActivityActors({
+        ...(pageParam ? { cursor: pageParam } : {}),
+        signal,
+        workspaceId,
+      }),
+    initialPageParam: getInitialMatterActivityActorCursor(),
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
   });
 
 const getInitialWorkspaceActivityCursor = (): string | undefined => undefined;

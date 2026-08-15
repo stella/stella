@@ -429,6 +429,16 @@ export const auditLogs = p.pgTable(
         table.id,
       ),
     p
+      .index("audit_logs_org_workspace_user_actor_created_id_idx")
+      .on(
+        table.organizationId,
+        table.workspaceId,
+        sql`coalesce(${table.performerId}, ${table.userId})`,
+        table.createdAt,
+        table.id,
+      )
+      .where(sql`${table.performerType} = 'user'`),
+    p
       .index("audit_logs_org_resource_created_id_idx")
       .on(
         table.organizationId,
