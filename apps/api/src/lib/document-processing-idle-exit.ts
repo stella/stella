@@ -29,6 +29,45 @@ type CreateIdleExitCheckOptions = {
 
 export type IdleExitTickOutcome = "checked" | "exit" | "skipped";
 
+type StartIdleExitSamplingOptions = {
+  intervalMs: number;
+  isShuttingDown: () => boolean;
+  /** Delay before the first sample, so sampling does not phase-lock. */
+  offsetMs: number;
+  onSample: () => void;
+};
+
+/**
+ * Sampling on an interval that only begins after an offset, with one stop
+ * handle covering both stages. The offset is a window in which the worker
+ * can already be shutting down, so the deferred start is both cancellable
+ * and guarded: `stop` clears whichever timer exists, and a start that was
+ * not cancelled still refuses to create the interval once shutdown began.
+ */
+export const startIdleExitSampling = ({
+  intervalMs,
+  isShuttingDown,
+  offsetMs,
+  onSample,
+}: StartIdleExitSamplingOptions): { stop: () => void } => {
+  let interval: ReturnType<typeof setInterval> | null = null;
+  const start = setTimeout(() => {
+    if (isShuttingDown()) {
+      return;
+    }
+    interval = setInterval(onSample, intervalMs);
+  }, offsetMs);
+  return {
+    stop: () => {
+      clearTimeout(start);
+      if (interval !== null) {
+        clearInterval(interval);
+        interval = null;
+      }
+    },
+  };
+};
+
 export const createIdleExitCheck = ({
   countPending,
   hasUnfinishedReconciliation,

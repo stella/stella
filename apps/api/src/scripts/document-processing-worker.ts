@@ -1,7 +1,10 @@
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { detached } from "@/api/lib/detached";
 import { countPendingDocumentProcessingJobs } from "@/api/lib/document-processing-enqueue";
-import { createIdleExitCheck } from "@/api/lib/document-processing-idle-exit";
+import {
+  createIdleExitCheck,
+  startIdleExitSampling,
+} from "@/api/lib/document-processing-idle-exit";
 import {
   hasUnfinishedDocumentProcessingReconciliation,
   initDocumentProcessingWorker,
@@ -25,11 +28,13 @@ await refreshS3();
 const documentProcessingWorker = initDocumentProcessingWorker();
 
 let shuttingDown = false;
+let stopIdleSampling: (() => void) | null = null;
 const shutdown = async (signal: string): Promise<void> => {
   if (shuttingDown) {
     return;
   }
   shuttingDown = true;
+  stopIdleSampling?.();
   logger.info("document_processing.shutdown_started", { signal });
   try {
     await documentProcessingWorker.close();
@@ -60,7 +65,6 @@ if (idleExitMinutes !== undefined) {
     1,
     Math.ceil((idleExitMinutes * 60_000) / IDLE_CHECK_INTERVAL_MS),
   );
-  let idleTimer: ReturnType<typeof setInterval> | null = null;
   const idleTick = createIdleExitCheck({
     countPending: countPendingDocumentProcessingJobs,
     hasUnfinishedReconciliation: hasUnfinishedDocumentProcessingReconciliation,
@@ -71,9 +75,7 @@ if (idleExitMinutes !== undefined) {
       });
     },
     onIdleExit: () => {
-      if (idleTimer !== null) {
-        clearInterval(idleTimer);
-      }
+      stopIdleSampling?.();
       if (shuttingDown) {
         return;
       }
@@ -83,9 +85,12 @@ if (idleExitMinutes !== undefined) {
       detached(shutdown("idle-exit"), "document-processing.idle-exit");
     },
   });
-  setTimeout(() => {
-    idleTimer = setInterval(() => {
+  stopIdleSampling = startIdleExitSampling({
+    intervalMs: IDLE_CHECK_INTERVAL_MS,
+    isShuttingDown: () => shuttingDown,
+    offsetMs: IDLE_CHECK_OFFSET_MS,
+    onSample: () => {
       detached(idleTick(), "document-processing.idle-exit-check");
-    }, IDLE_CHECK_INTERVAL_MS);
-  }, IDLE_CHECK_OFFSET_MS);
+    },
+  }).stop;
 }
