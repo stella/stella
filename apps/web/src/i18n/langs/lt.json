@@ -720,7 +720,7 @@
     },
     "unsupportedFileType": "Nepalaikomas failo tipas",
     "uploadFailed": "Nepavyko apdoroti failo",
-    "usageFallbackNotice": "Dienos AI kvota išnaudota — atsakymai toliau teikiami standartiniu modeliu. Visas greitis grįš rytoj.",
+    "usageFallbackNotice": "Dienos AI kvota išnaudota — atsakymai toliau teikiami standartiniu modeliu.",
     "videoContent": "Sugeneruotas vaizdo įrašas",
     "webSearch": {
       "answer": "Summary from sources",

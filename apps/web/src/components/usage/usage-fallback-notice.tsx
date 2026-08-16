@@ -20,6 +20,10 @@ export const UsageFallbackNotice = () => {
   const { data } = useQuery({
     ...usageLaneOptions({ organizationId: activeOrganizationId }),
     enabled: env.VITE_FEATURE_USAGE,
+    // Turns settle counters server-side with no client event to hook,
+    // so the mounted notice re-reads its single-row state on an
+    // interval instead of coupling into the chat runtime.
+    refetchInterval: 60_000,
   });
 
   const budgets = data?.budgets;
@@ -27,6 +31,15 @@ export const UsageFallbackNotice = () => {
     return null;
   }
   if (budgets.daily.usedMicroUnits < budgets.daily.allowanceMicroUnits) {
+    return null;
+  }
+  // Weekly fallback spent too: routing has moved on from the reduced-
+  // cost lane, so this notice would be wrong; the hard-stop surface
+  // (usage-limit modal) owns that state.
+  if (
+    budgets.fallbackWeekly.usedMicroUnits >=
+    budgets.fallbackWeekly.allowanceMicroUnits
+  ) {
     return null;
   }
 
