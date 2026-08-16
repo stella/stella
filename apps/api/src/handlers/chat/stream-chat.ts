@@ -371,8 +371,8 @@ export const streamChat = async ({
   // Messages carry user-authored and historical text (mention hrefs from
   // before ref hydration covered user text, pasted workspace URLs), so hits
   // are redacted rather than refused: old threads keep working, telemetry
-  // records the path of every residual ingress leak, and the model loses
-  // only an id it could not legitimately use.
+  // counts every residual ingress leak (recording the first 20 paths), and
+  // the model loses only an id it could not legitimately use.
   const preparedMessageList = guardModelMessages({
     messages: rawPreparedMessages.value,
     workspaceIds: tenantWorkspaceIds,

@@ -19,7 +19,6 @@ import {
   adapterCatch,
   isTimeoutError,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { captureError } from "@/api/lib/analytics/capture";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
 
@@ -314,16 +313,16 @@ export const createPagePaginatedFetch = <TResponse>(
           // adapter doesn't stall on a single slow page.
           // Network errors (DNS, connection refused) propagate
           // so a transient outage doesn't permanently skip pages.
+          // A slow publisher is an expected operational failure, so no
+          // per-page exception capture (see the pipeline's halt path):
+          // the skip is logged, and the coverage ledger records the
+          // shortfall the skipped page leaves behind.
           if (isTimeoutError(error)) {
-            captureError(
-              new AdapterFetchError({
-                message:
-                  `${opts.adapterKey}: page ${page} timed out after ` +
-                  `${SERVER_ERROR_RETRIES} retries, skipping`,
-                adapterKey: opts.adapterKey,
-                cursor,
-              }),
-            );
+            logger.warn("case_law.ingestion.page_skipped_timeout", {
+              adapterKey: opts.adapterKey,
+              page: String(page),
+              retries: String(SERVER_ERROR_RETRIES),
+            });
             return {
               decisions: [],
               nextCursor: encode(pageStartOffset + opts.pageSize),
@@ -338,16 +337,14 @@ export const createPagePaginatedFetch = <TResponse>(
           // a page error. The cursor stays put so the page is
           // retried in the next cycle.
           if (response.status >= 500) {
-            captureError(
-              new AdapterFetchError({
-                message:
-                  `${opts.adapterKey}: page ${page} returned ` +
-                  `${response.status} after retries, skipping`,
-                adapterKey: opts.adapterKey,
-                cursor,
-                httpStatus: response.status,
-              }),
-            );
+            // Same rule as the timeout skip above: a publisher-side 5xx
+            // is operational, logged per page, and aggregated by the
+            // coverage ledger rather than captured per attempt.
+            logger.warn("case_law.ingestion.page_skipped_server_error", {
+              adapterKey: opts.adapterKey,
+              httpStatus: String(response.status),
+              page: String(page),
+            });
             return {
               decisions: [],
               nextCursor: encode(pageStartOffset + opts.pageSize),

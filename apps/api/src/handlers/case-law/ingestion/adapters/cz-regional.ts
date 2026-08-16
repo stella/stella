@@ -37,7 +37,6 @@ import {
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
-import { captureError } from "@/api/lib/analytics/capture";
 import { addUtcDays, isoCalendarDay, toUtcDateString } from "@/api/lib/dates";
 import {
   AdapterFetchError,
@@ -328,14 +327,14 @@ const fetchFinaldoc = async (
     const sourceRaw = JSON.stringify(doc);
 
     if (!isCzRegionalFinaldoc(doc)) {
-      captureError(
-        new AdapterFetchError({
-          message: `CZ Regional finaldoc validation failed for ${item.caseNumber}`,
-          adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-          cursor: null,
-        }),
-        { docUrl: target.toString(), caseNumber: item.caseNumber },
-      );
+      // Per-document publisher-side shape drift is operational: the raw
+      // response is preserved for re-parsing, so the miss is logged rather
+      // than captured per document.
+      logger.warn("case_law.ingestion.finaldoc_validation_failed", {
+        adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+        caseNumber: item.caseNumber,
+        docUrl: target.toString(),
+      });
 
       return {
         fulltext: undefined,

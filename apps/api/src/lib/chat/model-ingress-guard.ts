@@ -5,6 +5,7 @@ import * as v from "valibot";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TelemetryError } from "@/api/lib/errors/tagged-errors";
+import { logger } from "@/api/lib/observability/logger";
 
 /**
  * Last-line guard for the "tenant workspace ids reach the model only as chat
@@ -21,9 +22,11 @@ import { TelemetryError } from "@/api/lib/errors/tagged-errors";
  *   panics (fail closed);
  * - tool schemas may include org-configured external MCP tools, so a hit is
  *   captured to telemetry rather than taking the org's chat down;
- * - messages carry user-authored and historical text, so hits are redacted
- *   in place (the model loses an id it could not use legitimately anyway)
- *   and captured to telemetry with the message path, never the value.
+ * - messages carry user-authored and historical text, where a workspace id
+ *   is routine (a pasted app URL contains one), so hits are redacted in
+ *   place (the model loses an id it could not use legitimately anyway) and
+ *   logged with the message path, never the value — the redaction is the
+ *   enforcement; an exception per hit would page on ordinary traffic.
  */
 
 export const TENANT_ID_REDACTION_PLACEHOLDER = "[internal-id-removed]";
@@ -134,9 +137,9 @@ export type RedactTenantIdsResult<T> = {
 
 /**
  * Deep-copy `value` with every occurrence of a tenant workspace id inside any
- * string replaced by `TENANT_ID_REDACTION_PLACEHOLDER`. Hits are captured to
- * telemetry by path so residual ingress leaks stay visible while chat keeps
- * working for threads whose history predates ref mediation.
+ * string replaced by `TENANT_ID_REDACTION_PLACEHOLDER`. Hits are logged by
+ * path so residual ingress leaks stay visible while chat keeps working for
+ * threads whose history predates ref mediation.
  */
 export const redactTenantIdsDeep = <T extends object>({
   value,
@@ -151,16 +154,11 @@ export const redactTenantIdsDeep = <T extends object>({
     redactContainerInPlace(redacted, workspaceIds, "$", state);
   }
   if (state.paths.length > 0) {
-    captureError(
-      new TelemetryError({
-        message: "Model-bound message content embedded tenant workspace ids",
-      }),
-      {
-        source: "model-ingress-guard",
-        surface: "messages",
-        paths: state.paths.slice(0, 20).join(", "),
-      },
-    );
+    logger.warn("chat.model_ingress_redacted", {
+      pathCount: String(state.paths.length),
+      paths: state.paths.slice(0, 20).join(", "),
+      surface: "messages",
+    });
   }
   return { value: redacted, redactedPaths: state.paths };
 };
@@ -266,12 +264,14 @@ export const redactModelSystemPrompt = ({
   const state: RedactionState = { paths: [] };
   const redacted = redactString(system, workspaceIds, "$", state);
   if (state.paths.length > 0) {
-    captureError(
-      new TelemetryError({
-        message: "Model-bound system prompt embedded tenant workspace ids",
-      }),
-      { source: "model-ingress-guard", surface: "system-prompt" },
-    );
+    // Mixed-provenance prompt: the id arrived through interpolated model
+    // output or user text, so the hit is routine and the redaction is the
+    // enforcement — same treatment as the messages surface.
+    logger.warn("chat.model_ingress_redacted", {
+      pathCount: String(state.paths.length),
+      paths: state.paths.slice(0, 20).join(", "),
+      surface: "system-prompt-mixed",
+    });
   }
   return v.parse(guardedSystemPromptSchema, redacted);
 };

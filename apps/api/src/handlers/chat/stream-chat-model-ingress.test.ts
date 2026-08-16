@@ -11,6 +11,13 @@ void mock.module("@/api/lib/analytics/capture", () => ({
   captureRequestError: captureErrorMock,
 }));
 
+const loggerWarnMock = mock();
+const realLogger = await import("@/api/lib/observability/logger");
+void mock.module("@/api/lib/observability/logger", () => ({
+  ...realLogger,
+  logger: { ...realLogger.logger, warn: loggerWarnMock },
+}));
+
 const { guardModelSystemPrompt } =
   await import("@/api/lib/chat/model-ingress-guard");
 const { guardedCompactedMessages, guardedLoopRecoveryPrompts } =
@@ -45,13 +52,22 @@ describe("mid-loop rewrites re-enter the model-ingress guard", () => {
     expect(prompt).not.toContain(WS_A);
     // The base prompt survives: recovery still carries the turn's scaffold.
     expect(prompt).toContain("Matter scope: mat_1.");
-    expect(captureErrorMock).toHaveBeenCalledTimes(1);
-    const [, context] = captureErrorMock.mock.calls.at(0) ?? [];
-    expect(JSON.stringify(context)).not.toContain(WS_A);
+    // Redaction hits on rewrites are routine (the id arrived through an org
+    // tool name), so they log rather than capture.
+    expect(captureErrorMock).not.toHaveBeenCalled();
+    expect(loggerWarnMock).toHaveBeenCalledTimes(1);
+    const [, attributes] = loggerWarnMock.mock.calls.at(0) ?? [];
+    expect(attributes).toEqual({
+      pathCount: "1",
+      paths: "$",
+      surface: "system-prompt-mixed",
+    });
+    expect(JSON.stringify(attributes)).not.toContain(WS_A);
   });
 
   test("passes a clean loop-recovery prompt through unchanged and silent", () => {
     captureErrorMock.mockClear();
+    loggerWarnMock.mockClear();
 
     const [prompt] = guardedLoopRecoveryPrompts({
       baseSystem: BASE_SYSTEM,
@@ -67,10 +83,12 @@ describe("mid-loop rewrites re-enter the model-ingress guard", () => {
     expect(prompt).toContain("search_case_law");
     expect(prompt).not.toContain("[internal-id-removed]");
     expect(captureErrorMock).not.toHaveBeenCalled();
+    expect(loggerWarnMock).not.toHaveBeenCalled();
   });
 
   test("redacts a tenant id the compaction summary reintroduces", () => {
     captureErrorMock.mockClear();
+    loggerWarnMock.mockClear();
     const previous: ModelMessage[] = [
       { role: "user", content: "Earlier turn." },
     ];
@@ -92,11 +110,20 @@ describe("mid-loop rewrites re-enter the model-ingress guard", () => {
     expect(dispatched).toContain("[internal-id-removed]");
     // Membership-exact: the public decision id survives compaction.
     expect(dispatched).toContain(PUBLIC_UUID);
-    expect(captureErrorMock).toHaveBeenCalledTimes(1);
+    expect(captureErrorMock).not.toHaveBeenCalled();
+    expect(loggerWarnMock).toHaveBeenCalledTimes(1);
+    const [, attributes] = loggerWarnMock.mock.calls.at(0) ?? [];
+    expect(attributes).toEqual({
+      pathCount: "1",
+      paths: "$[0].content",
+      surface: "messages",
+    });
+    expect(JSON.stringify(attributes)).not.toContain(WS_A);
   });
 
   test("keeps a clean summary intact and skips the patch when nothing compacted", () => {
     captureErrorMock.mockClear();
+    loggerWarnMock.mockClear();
     const previous: ModelMessage[] = [
       { role: "user", content: "Earlier turn." },
     ];
@@ -120,5 +147,6 @@ describe("mid-loop rewrites re-enter the model-ingress guard", () => {
       }),
     ).toBeUndefined();
     expect(captureErrorMock).not.toHaveBeenCalled();
+    expect(loggerWarnMock).not.toHaveBeenCalled();
   });
 });

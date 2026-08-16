@@ -64,6 +64,7 @@ import {
   createBullMqConnection,
   createLazyRedisClient,
   createRedisClient,
+  isTransientRedisConnectionError,
 } from "@/api/lib/redis-client";
 import { unboundedCoordinationKey } from "@/api/lib/redis-keys";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
@@ -1316,6 +1317,11 @@ export const isRetryableOcrDerivativeFailure = ({
   failureCode === SEARCHABLE_PDF_FAILURE_CODE &&
   attemptCount < AUTOMATIC_OCR_MAX_ATTEMPTS;
 
+type MarkRunFailedOutcome = {
+  attemptCount: number;
+  retryScheduled: boolean;
+};
+
 const markRunFailed = async ({
   claimToken,
   error,
@@ -1326,59 +1332,85 @@ const markRunFailed = async ({
   run: typeof documentProcessingRuns.$inferSelect;
 }): Promise<void> => {
   const failureCode = errorCode(error);
-  await rootDb.transaction(async (tx) => {
-    const ownedRows = await tx
-      .select({
-        attemptCount: documentProcessingRuns.attemptCount,
-        requestSource: documentProcessingRuns.requestSource,
-      })
-      .from(documentProcessingRuns)
-      .where(
-        and(
-          eq(documentProcessingRuns.id, run.id),
-          eq(documentProcessingRuns.status, "running"),
-          eq(documentProcessingRuns.claimedBy, claimToken),
-        ),
-      )
-      .limit(1)
-      .for("update");
-    const owned = ownedRows.at(0);
-    if (!owned) {
-      return;
-    }
-    const retryable = isRetryableAutomaticOcrFailure({
-      attemptCount: owned.attemptCount,
-      errorCode: failureCode,
-      requestSource: owned.requestSource,
-    });
-    const retryableSearchIndex = isRetryableSearchIndexFailure(failureCode);
-    const retryableDerivative = isRetryableOcrDerivativeFailure({
-      attemptCount: owned.attemptCount,
-      errorCode: failureCode,
-    });
-    await tx
-      .update(documentProcessingRuns)
-      .set({
-        claimedAt: null,
-        claimedBy: null,
-        errorAt: new Date(),
+  const outcome = await rootDb.transaction(
+    async (tx): Promise<MarkRunFailedOutcome | null> => {
+      const ownedRows = await tx
+        .select({
+          attemptCount: documentProcessingRuns.attemptCount,
+          requestSource: documentProcessingRuns.requestSource,
+        })
+        .from(documentProcessingRuns)
+        .where(
+          and(
+            eq(documentProcessingRuns.id, run.id),
+            eq(documentProcessingRuns.status, "running"),
+            eq(documentProcessingRuns.claimedBy, claimToken),
+          ),
+        )
+        .limit(1)
+        .for("update");
+      const owned = ownedRows.at(0);
+      if (!owned) {
+        return null;
+      }
+      const retryable = isRetryableAutomaticOcrFailure({
+        attemptCount: owned.attemptCount,
         errorCode: failureCode,
-        nextAttemptAt:
-          retryable || retryableSearchIndex || retryableDerivative
+        requestSource: owned.requestSource,
+      });
+      const retryableSearchIndex = isRetryableSearchIndexFailure(failureCode);
+      const retryableDerivative = isRetryableOcrDerivativeFailure({
+        attemptCount: owned.attemptCount,
+        errorCode: failureCode,
+      });
+      const retryScheduled =
+        retryable || retryableSearchIndex || retryableDerivative;
+      await tx
+        .update(documentProcessingRuns)
+        .set({
+          claimedAt: null,
+          claimedBy: null,
+          errorAt: new Date(),
+          errorCode: failureCode,
+          nextAttemptAt: retryScheduled
             ? new Date(
                 Date.now() + automaticOcrRetryDelayMs(owned.attemptCount),
               )
             : null,
-        status: "failed",
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(documentProcessingRuns.id, run.id),
-          eq(documentProcessingRuns.status, "running"),
-          eq(documentProcessingRuns.claimedBy, claimToken),
-        ),
-      );
+          status: "failed",
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(documentProcessingRuns.id, run.id),
+            eq(documentProcessingRuns.status, "running"),
+            eq(documentProcessingRuns.claimedBy, claimToken),
+          ),
+        );
+      return { attemptCount: owned.attemptCount, retryScheduled };
+    },
+  );
+  if (outcome === null) {
+    return;
+  }
+  // One exception per run, at its terminal transition. An attempt whose
+  // failure schedules a retry is expected churn of the durable retry model
+  // and stays a structured log; capturing every attempt reported the same
+  // defect up to AUTOMATIC_OCR_MAX_ATTEMPTS times.
+  if (outcome.retryScheduled) {
+    logger.warn("document_processing.attempt_failed", {
+      "error.type": errorTag(error),
+      attempt: String(outcome.attemptCount),
+      errorCode: failureCode,
+      runId: run.id,
+    });
+    return;
+  }
+  captureError(error, { runId: run.id });
+  logger.error("document_processing.run_failed", {
+    "error.type": errorTag(error),
+    errorCode: failureCode,
+    runId: run.id,
   });
 };
 
@@ -2565,7 +2597,17 @@ const handleDocumentProcessingFailure = ({
   error: unknown;
   job: { data: DocumentProcessingJobData } | undefined;
 }): void => {
-  captureError(error, { runId: job?.data.runId ?? "" });
+  // No capture here: run-scoped failures capture once at their terminal
+  // transition in `markRunFailed`, and a dropped Redis socket on the claim
+  // path heals on the job's own retry. Machinery failures stay visible
+  // through the ERROR log.
+  if (isTransientRedisConnectionError(error)) {
+    logger.warn("document_processing.job_disrupted", {
+      "error.type": errorTag(error),
+      runId: job?.data.runId ?? "",
+    });
+    return;
+  }
   logger.error("document_processing.failed", {
     "error.type": errorTag(error),
     runId: job?.data.runId ?? "",
@@ -2808,6 +2850,16 @@ const reconcileDocumentProcessing = async ({
       const results = await runDocumentProcessingReconciliationPhases({
         phases: DOCUMENT_PROCESSING_RECONCILIATION_PHASES,
         onPhaseError: (error, phase) => {
+          // A dropped Redis socket rejects the first command after an idle
+          // window; the next 30s tick retries the phase, so the transient
+          // stays a structured log instead of an exception.
+          if (isTransientRedisConnectionError(error)) {
+            logger.warn("document_processing.reconcile_phase_disrupted", {
+              "error.type": errorTag(error),
+              phase,
+            });
+            return;
+          }
           captureError(error, { phase });
           logger.error("document_processing.reconcile_phase_failed", {
             "error.type": errorTag(error),
@@ -2834,10 +2886,16 @@ const reconcileDocumentProcessing = async ({
     // The tick never reported, so the backlog stays unknown and
     // `runTick` leaves reconciliation marked unfinished. Same rule the
     // idle check applies to a failed sample: never exit on uncertainty.
-    captureError(error);
-    logger.error("document_processing.reconcile_failed", {
-      "error.type": errorTag(error),
-    });
+    if (isTransientRedisConnectionError(error)) {
+      logger.warn("document_processing.reconcile_disrupted", {
+        "error.type": errorTag(error),
+      });
+    } else {
+      captureError(error);
+      logger.error("document_processing.reconcile_failed", {
+        "error.type": errorTag(error),
+      });
+    }
   } finally {
     onComplete();
   }
