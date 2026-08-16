@@ -142,6 +142,13 @@ const typeSignature = (typeNode) => {
   if (typeNode.type === "TSLiteralType") {
     return JSON.stringify(typeNode.literal?.value ?? null);
   }
+  // Two inline objects are different sources when they declare different keys.
+  if (typeNode.type === "TSTypeLiteral") {
+    const names = (typeNode.members ?? [])
+      .map((member) => getPropertyName(member.key) ?? "?")
+      .sort();
+    return `{${names.join(",")}}`;
+  }
   if (
     typeNode.type === "TSUnionType" ||
     typeNode.type === "TSIntersectionType"
@@ -172,12 +179,15 @@ const suppliersOf = (typeNode, localTypes, open = new Set()) => {
   const args = typeArgumentsOf(typeNode);
   if (name === OMIT_TYPE) {
     const source = args.at(0);
+    const removed = new Set(literalKeysOf(args.at(1)));
+    // Removals compose down the chain: what this `Omit` takes away is gone from
+    // everything its source could otherwise have supplied.
     return [
-      {
-        source: typeSignature(source),
-        removed: new Set(literalKeysOf(args.at(1))),
-      },
-      ...suppliersOf(source, localTypes, open),
+      { source: typeSignature(source), removed },
+      ...suppliersOf(source, localTypes, open).map((supplier) => ({
+        source: supplier.source,
+        removed: new Set([...supplier.removed, ...removed]),
+      })),
     ];
   }
   if (MODIFIER_UTILITIES.has(name)) {
@@ -251,12 +261,13 @@ const omittedKeysOf = (typeNode, localTypes, open = new Set()): string[] => {
       ),
     );
   }
-  // A union only guarantees the omission its branches share.
+  // A union only guarantees the omission its branches share. A `never` branch
+  // is uninhabited, so it neither carries a key nor weakens the guarantee.
   if (typeNode.type === "TSUnionType") {
     return intersectAll(
-      typeNode.types.map(
-        (member) => new Set(omittedKeysOf(member, localTypes, open)),
-      ),
+      typeNode.types
+        .filter((member) => member.type !== "TSNeverKeyword")
+        .map((member) => new Set(omittedKeysOf(member, localTypes, open))),
     );
   }
   if (typeNode.type === "TSTypeReference") {
