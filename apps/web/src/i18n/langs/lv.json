@@ -103,10 +103,10 @@
         "addingSkills": "Prasmju pievienošana",
         "authenticating": "Pierakstīšanās",
         "creatingOrganization": "Organizācijas izveide",
-        "startingImport": "LAB importēšanas sākšana"
+        "startingImport": "LAB lietu importēšana"
       },
       "success": {
-        "description": "Fonā tiek importētas 10 Harvey LAB lietas.",
+        "description": "Importētas 10 Harvey LAB lietas; dokumentu apstrāde turpinās fonā.",
         "title": "Izstrādes iestatīšana ir pabeigta"
       }
     },

@@ -103,10 +103,10 @@
         "addingSkills": "إضافة المهارات",
         "authenticating": "تسجيل الدخول",
         "creatingOrganization": "إنشاء المؤسسة",
-        "startingImport": "بدء استيراد LAB"
+        "startingImport": "استيراد ملفات LAB القانونية"
       },
       "success": {
-        "description": "يجري استيراد 10 ملفات قانونية من Harvey LAB في الخلفية.",
+        "description": "تم استيراد 10 ملفات قانونية من Harvey LAB؛ وتستمر معالجة المستندات في الخلفية.",
         "title": "إعداد التطوير جاهز"
       }
     },

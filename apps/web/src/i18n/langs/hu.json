@@ -103,10 +103,10 @@
         "addingSkills": "Készségek hozzáadása",
         "authenticating": "Bejelentkezés",
         "creatingOrganization": "Szervezet létrehozása",
-        "startingImport": "LAB-import indítása"
+        "startingImport": "LAB-ügyek importálása"
       },
       "success": {
-        "description": "10 Harvey LAB-ügy importálása folyamatban van a háttérben.",
+        "description": "10 Harvey LAB-ügy importálása befejeződött; a dokumentumfeldolgozás a háttérben folytatódik.",
         "title": "A fejlesztői beállítás elkészült"
       }
     },

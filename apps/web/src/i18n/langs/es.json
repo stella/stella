@@ -103,10 +103,10 @@
         "addingSkills": "Añadiendo habilidades",
         "authenticating": "Iniciando sesión",
         "creatingOrganization": "Creando la organización",
-        "startingImport": "Iniciando la importación de LAB"
+        "startingImport": "Importando asuntos de LAB"
       },
       "success": {
-        "description": "Se están importando 10 asuntos de Harvey LAB en segundo plano.",
+        "description": "Se importaron 10 asuntos de Harvey LAB; el procesamiento de documentos continúa en segundo plano.",
         "title": "La configuración de desarrollo está lista"
       }
     },

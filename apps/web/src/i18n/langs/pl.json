@@ -103,10 +103,10 @@
         "addingSkills": "Dodawanie umiejętności",
         "authenticating": "Logowanie",
         "creatingOrganization": "Tworzenie organizacji",
-        "startingImport": "Uruchamianie importu LAB"
+        "startingImport": "Importowanie spraw z LAB"
       },
       "success": {
-        "description": "W tle trwa importowanie 10 spraw z Harvey LAB.",
+        "description": "Zaimportowano 10 spraw z Harvey LAB; przetwarzanie dokumentów trwa w tle.",
         "title": "Konfiguracja deweloperska jest gotowa"
       }
     },

@@ -103,10 +103,10 @@
         "addingSkills": "Pridedami įgūdžiai",
         "authenticating": "Prisijungiama",
         "creatingOrganization": "Kuriama organizacija",
-        "startingImport": "Pradedamas LAB importavimas"
+        "startingImport": "Importuojamos LAB bylos"
       },
       "success": {
-        "description": "Fone importuojama 10 „Harvey LAB“ bylų.",
+        "description": "Importuota 10 „Harvey LAB“ bylų; dokumentai toliau apdorojami fone.",
         "title": "Kūrimo sąranka paruošta"
       }
     },

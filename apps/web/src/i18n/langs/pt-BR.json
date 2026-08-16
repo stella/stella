@@ -103,10 +103,10 @@
         "addingSkills": "Adicionando habilidades",
         "authenticating": "Entrando",
         "creatingOrganization": "Criando a organização",
-        "startingImport": "Iniciando a importação do LAB"
+        "startingImport": "Importando casos do LAB"
       },
       "success": {
-        "description": "10 casos do Harvey LAB estão sendo importados em segundo plano.",
+        "description": "10 casos do Harvey LAB foram importados; o processamento dos documentos continua em segundo plano.",
         "title": "A configuração de desenvolvimento está pronta"
       }
     },

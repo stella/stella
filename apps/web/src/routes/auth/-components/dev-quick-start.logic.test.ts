@@ -124,7 +124,15 @@ describe("runDevQuickStart", () => {
         },
       });
 
-    expect(run()).rejects.toThrow("import failed");
+    const firstRun = await run().then(
+      () => ({ status: "succeeded" }) as const,
+      (error: unknown) =>
+        ({
+          message: error instanceof Error ? error.message : "Unknown error",
+          status: "failed",
+        }) as const,
+    );
+    expect(firstRun).toEqual({ message: "import failed", status: "failed" });
     await run();
     await run();
 

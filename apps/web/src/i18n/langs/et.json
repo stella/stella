@@ -103,10 +103,10 @@
         "addingSkills": "Oskuste lisamine",
         "authenticating": "Sisselogimine",
         "creatingOrganization": "Organisatsiooni loomine",
-        "startingImport": "LAB impordi käivitamine"
+        "startingImport": "LAB toimikute importimine"
       },
       "success": {
-        "description": "Taustal imporditakse 10 Harvey LAB toimikut.",
+        "description": "10 Harvey LAB toimikut imporditi; dokumentide töötlemine jätkub taustal.",
         "title": "Arenduse seadistus on valmis"
       }
     },

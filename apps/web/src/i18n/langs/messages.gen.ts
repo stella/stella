@@ -106,10 +106,10 @@ type Messages = {
         "addingSkills": "Adding skills";
         "authenticating": "Signing in";
         "creatingOrganization": "Creating organization";
-        "startingImport": "Starting LAB import";
+        "startingImport": "Importing LAB matters";
       };
       "success": {
-        "description": "10 Harvey LAB matters are importing in the background.";
+        "description": "10 Harvey LAB matters were imported; document processing continues in the background.";
         "title": "Dev setup ready";
       };
     };

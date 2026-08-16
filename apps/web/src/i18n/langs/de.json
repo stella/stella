@@ -103,10 +103,10 @@
         "addingSkills": "Skills werden hinzugefügt",
         "authenticating": "Anmeldung läuft",
         "creatingOrganization": "Organisation wird erstellt",
-        "startingImport": "LAB-Import wird gestartet"
+        "startingImport": "LAB-Akten werden importiert"
       },
       "success": {
-        "description": "10 Harvey-LAB-Akten werden im Hintergrund importiert.",
+        "description": "10 Harvey-LAB-Akten wurden importiert; die Dokumentverarbeitung läuft im Hintergrund weiter.",
         "title": "Entwicklungssetup ist bereit"
       }
     },

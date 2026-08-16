@@ -50,6 +50,11 @@ let firmKnowledgeOrganizationId: string | null = null;
 const FIRM_KNOWLEDGE_MATTERS = 15;
 const MAX_FIRM_KNOWLEDGE_MATTERS = 50;
 
+const INCOMPLETE_MATTER_MODE = {
+  replace: "replace",
+  skip: "skip",
+} as const;
+
 const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : "Seed failed";
 
@@ -138,6 +143,9 @@ export const devRoute = new Elysia({ prefix: "/dev" })
               apiOrigin,
               cookie: seedSession.cookie,
               matters: ctx.body?.matters ?? FIRM_KNOWLEDGE_MATTERS,
+              replaceIncomplete:
+                ctx.body?.incompleteMatterMode ===
+                INCOMPLETE_MATTER_MODE.replace,
               ...(ctx.body?.selectionSeed === undefined
                 ? {}
                 : { selectionSeed: ctx.body.selectionSeed }),
@@ -165,6 +173,12 @@ export const devRoute = new Elysia({ prefix: "/dev" })
     {
       body: t.Optional(
         t.Object({
+          incompleteMatterMode: t.Optional(
+            t.Union([
+              t.Literal(INCOMPLETE_MATTER_MODE.skip),
+              t.Literal(INCOMPLETE_MATTER_MODE.replace),
+            ]),
+          ),
           matters: t.Optional(
             t.Integer({ minimum: 1, maximum: MAX_FIRM_KNOWLEDGE_MATTERS }),
           ),

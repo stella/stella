@@ -103,10 +103,10 @@
         "addingSkills": "Ajout des compétences",
         "authenticating": "Connexion en cours",
         "creatingOrganization": "Création de l’organisation",
-        "startingImport": "Démarrage de l’importation LAB"
+        "startingImport": "Importation des dossiers LAB"
       },
       "success": {
-        "description": "10 dossiers Harvey LAB sont en cours d’importation en arrière-plan.",
+        "description": "10 dossiers Harvey LAB ont été importés ; le traitement des documents se poursuit en arrière-plan.",
         "title": "La configuration de développement est prête"
       }
     },

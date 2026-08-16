@@ -103,10 +103,10 @@
         "addingSkills": "Pridávanie zručností",
         "authenticating": "Prihlasovanie",
         "creatingOrganization": "Vytváranie organizácie",
-        "startingImport": "Spúšťanie importu LAB"
+        "startingImport": "Import spisov z LAB"
       },
       "success": {
-        "description": "Na pozadí sa importuje 10 spisov z Harvey LAB.",
+        "description": "Importovalo sa 10 spisov z Harvey LAB; spracovanie dokumentov pokračuje na pozadí.",
         "title": "Vývojové nastavenie je pripravené"
       }
     },

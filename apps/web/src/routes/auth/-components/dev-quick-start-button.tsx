@@ -27,6 +27,9 @@ import {
 } from "./dev-quick-start.logic";
 
 const QUICK_START_MATTER_COUNT = 10;
+const MATTER_IMPORT_POLL_INTERVAL_MS = 1000;
+const MATTER_IMPORT_MAX_POLLS = 15 * 60;
+const QUICK_START_INCOMPLETE_MATTER_MODE = "replace";
 
 const PHASE_LABEL_KEYS = {
   [DEV_QUICK_START_PHASE.authenticate]:
@@ -125,8 +128,51 @@ const seedSkills = async () => {
   }
 };
 
+const waitForMatterImport = async () => {
+  for (let poll = 0; poll < MATTER_IMPORT_MAX_POLLS; poll++) {
+    // oxlint-disable-next-line no-await-in-loop -- each status probe must follow the prior poll interval
+    const { data, error } = await api.dev["seed-firm-knowledge"].get();
+    if (error !== null || data instanceof Response) {
+      throw new DevQuickStartError({
+        code: DEV_QUICK_START_ERROR.matterImport,
+        message: "The Harvey LAB import status was unavailable.",
+      });
+    }
+
+    switch (data.status) {
+      case "failed":
+        throw new DevQuickStartError({
+          code: DEV_QUICK_START_ERROR.matterImport,
+          message: data.message,
+        });
+      case "idle":
+        throw new DevQuickStartError({
+          code: DEV_QUICK_START_ERROR.matterImport,
+          message: "The Harvey LAB import stopped before completion.",
+        });
+      case "running":
+        break;
+      case "succeeded":
+        return undefined;
+      default:
+        return data satisfies never;
+    }
+
+    // oxlint-disable-next-line no-await-in-loop -- polling waits between sequential status probes
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, MATTER_IMPORT_POLL_INTERVAL_MS);
+    });
+  }
+
+  throw new DevQuickStartError({
+    code: DEV_QUICK_START_ERROR.matterImport,
+    message: "The Harvey LAB import did not finish before the timeout.",
+  });
+};
+
 const seedMatters = async ({ selectionSeed }: DevQuickStartIdentity) => {
   const response = await api.dev["seed-firm-knowledge"].post({
+    incompleteMatterMode: QUICK_START_INCOMPLETE_MATTER_MODE,
     matters: QUICK_START_MATTER_COUNT,
     selectionSeed,
   });
@@ -136,6 +182,8 @@ const seedMatters = async ({ selectionSeed }: DevQuickStartIdentity) => {
       message: "The Harvey LAB import could not start.",
     });
   }
+
+  await waitForMatterImport();
 };
 
 export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
