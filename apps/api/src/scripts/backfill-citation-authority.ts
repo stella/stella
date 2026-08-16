@@ -2,17 +2,22 @@
  * Materialize `citation_authority` / `citation_count` across the whole
  * case-law corpus, on demand.
  *
- * The corpus daemon keeps this fresh on a schedule; this is the operator's
- * handle on the same machinery, for seeding a corpus that has never been swept
- * or forcing the time-decayed values forward after a ranking change.
+ * The corpus daemon keeps this fresh on a rolling window; this is the
+ * operator's handle on the same machinery, for seeding a corpus that has never
+ * been swept or forcing the time-decayed values forward after a ranking change.
  *
- * A full sweep here means `staleBefore = now`: every decision is older than
- * that instant, so every decision is due. Each batch is one bounded statement,
- * and a recomputed decision is stamped with the current instant and drops out
- * of the set — so the walk advances by doing its work and this script can be
- * interrupted and re-run without losing or repeating any of it.
+ * A sweep here is pinned to one instant: every decision not already computed at
+ * exactly that instant is due, and every decision it recomputes is stamped with
+ * it. Each batch is one bounded statement, and a recomputed decision drops out
+ * of the set, so the walk advances by doing its work.
+ *
+ * **Resuming.** Re-running with a fresh instant is a *new* sweep and recomputes
+ * the whole corpus, because every row the interrupted run stamped is older than
+ * the new boundary. To resume the interrupted one instead, pass the instant it
+ * printed on its first line:
  *
  *   bun apps/api/src/scripts/backfill-citation-authority.ts
+ *   bun apps/api/src/scripts/backfill-citation-authority.ts --as-of 2026-08-16T12:00:00.000Z
  *   bun apps/api/src/scripts/backfill-citation-authority.ts --batch 2000
  */
 import { panic } from "better-result";
@@ -21,20 +26,35 @@ import { rootDb } from "@/api/db/root";
 import { recomputeCitationAuthorityBatch } from "@/api/handlers/case-law/citation-authority";
 import { loadCourtWeightEntriesForSql } from "@/api/handlers/case-law/court-weights";
 
-const batchArg = process.argv.indexOf("--batch");
-const BATCH =
-  batchArg === -1 ? 5000 : Number(process.argv[batchArg + 1] ?? Number.NaN);
+const flag = (name: string): string | undefined => {
+  const at = process.argv.indexOf(name);
+  return at === -1 ? undefined : process.argv[at + 1];
+};
+
+const rawBatch = flag("--batch");
+const BATCH = rawBatch === undefined ? 5000 : Number(rawBatch);
 if (!Number.isInteger(BATCH) || BATCH < 1) {
   panic("--batch requires a positive integer");
 }
 
+// One instant for the whole run, and the same instant the batches stamp with.
+// Deriving the boundary and the stamp from one value is what makes the sweep
+// converge: a boundary from a host clock running even milliseconds ahead of
+// PostgreSQL would leave every row this run stamped still older than it, and
+// the walk would rewrite the same oldest rows forever.
+const rawAsOf = flag("--as-of");
+const asOf = rawAsOf === undefined ? new Date() : new Date(rawAsOf);
+if (Number.isNaN(asOf.getTime())) {
+  panic("--as-of requires an ISO timestamp");
+}
+
 console.log("=== BACKFILL CITATION AUTHORITY ===");
+console.log(
+  `Sweep instant: ${asOf.toISOString()} ` +
+    "(pass it back with --as-of to resume this sweep rather than start a new one)",
+);
 
 const courtWeightEntries = await loadCourtWeightEntriesForSql();
-// One boundary for the whole run: a per-batch `new Date()` would keep moving
-// past rows this run has already stamped, which is harmless but makes the
-// progress line lie about how much is left.
-const staleBefore = new Date();
 
 let recomputed = 0;
 let cited = 0;
@@ -45,7 +65,7 @@ while (true) {
     async (tx) =>
       await recomputeCitationAuthorityBatch(tx, {
         limit: BATCH,
-        staleBefore,
+        window: { type: "pinned", at: asOf },
         courtWeightEntries,
       }),
   );

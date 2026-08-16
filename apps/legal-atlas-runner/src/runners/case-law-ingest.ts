@@ -1211,12 +1211,13 @@ export const runCaseLawIngest = async (
         } else {
           // oxlint-disable-next-line no-await-in-loop -- one bounded batch at a time; the next only starts once this one is durable
           const courtWeightEntries = await loadCourtWeightEntries();
-          // The boundary is read per batch rather than pinned per sweep: the
-          // sweep is continuous and has no start, and a row recomputed an
-          // interval ago is due again whatever this process was doing then.
-          const staleBefore = new Date(
-            Date.now() - CITATION_AUTHORITY_INTERVAL_MS,
-          );
+          // A rolling window, not a pinned one: the sweep is continuous and
+          // has no start, and a row recomputed an interval ago is due again
+          // whatever this process was doing then. Expressed as an age so both
+          // the boundary and the stamp come from PostgreSQL — a host clock
+          // running ahead of the database would otherwise leave every row it
+          // just stamped still older than the boundary, and the walk would
+          // rewrite the same oldest rows forever.
           // oxlint-disable-next-line no-await-in-loop -- one bounded batch at a time; the next only starts once this one is durable
           const batch = await runWithHardDeadline(
             "citation-authority",
@@ -1226,7 +1227,10 @@ export const runCaseLawIngest = async (
                 async (tx) =>
                   await tryRecomputeCitationAuthorityBatch(tx, {
                     limit: CITATION_AUTHORITY_BATCH_SIZE,
-                    staleBefore,
+                    window: {
+                      type: "olderThan",
+                      ms: CITATION_AUTHORITY_INTERVAL_MS,
+                    },
                     courtWeightEntries,
                   }),
               ),

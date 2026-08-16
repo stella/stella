@@ -50,11 +50,10 @@ type SweepOptions = {
 /**
  * Walk a whole sweep at the given batch size, and report what it did.
  *
- * `staleBefore` is the sweep's own instant, which is what makes it terminate:
- * a row this sweep recomputed is stamped with that instant and is no longer
- * older than it. Setting a boundary in the future would make every row due
- * again the moment it was written, which is the shape of a walk that never
- * ends.
+ * A pinned window is what makes the walk terminate: the boundary and the stamp
+ * are the same instant, so a row this sweep recomputed is no longer *before*
+ * the boundary. Two instants from two clocks would not have that property, and
+ * a boundary even a millisecond ahead of the stamp is a walk that never ends.
  */
 const sweep = async (
   limit: number,
@@ -68,8 +67,7 @@ const sweep = async (
       async (tx) =>
         await recomputeCitationAuthorityBatch(tx, {
           limit,
-          staleBefore: now,
-          now,
+          window: { type: "pinned", at: now },
           ...(options.contributionWeight
             ? { contributionWeight: options.contributionWeight }
             : {}),
@@ -280,6 +278,60 @@ test("batching is arithmetic-neutral", async () => {
   expect(oneAtATime.recomputed).toBe(allAtOnce.recomputed);
   expect(oneAtATime.batches).toBeGreaterThan(allAtOnce.batches);
   expect(perBatch).toEqual(single);
+});
+
+test("a resumed sweep skips what the interrupted one finished", async () => {
+  // The restart hazard: a fresh instant is a *new* sweep and recomputes the
+  // whole corpus, because every row the interrupted run stamped is older than
+  // the new boundary. Handed the original instant, the walk resumes.
+  await markAllDue();
+  const interrupted = await db.transaction(
+    async (tx) =>
+      await recomputeCitationAuthorityBatch(tx, {
+        limit: 2,
+        window: { type: "pinned", at: NOW },
+      }),
+  );
+  expect(interrupted.recomputed).toBe(2);
+
+  const resumed = await sweep(1000);
+  const [{ n: total } = { n: 0 }] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(caseLawDecisions);
+  expect(resumed.recomputed).toBe(total - 2);
+});
+
+test("a rolling window converges even when the host clock runs ahead", async () => {
+  // The boundary and the stamp must come from one clock. Expressed as an age,
+  // both come from PostgreSQL, so a row this batch stamped is never still
+  // older than the boundary — which is the difference between a sweep that
+  // finishes and one that rewrites the same oldest rows forever.
+  await markAllDue();
+  let turnsTaken = 0;
+  let converged = false;
+  for (let turn = 0; turn < 50; turn += 1) {
+    // oxlint-disable-next-line no-await-in-loop -- the sweep advances by the work each batch commits
+    const batch = await db.transaction(
+      async (tx) =>
+        await recomputeCitationAuthorityBatch(tx, {
+          limit: 1000,
+          window: { type: "olderThan", ms: 60_000 },
+        }),
+    );
+    turnsTaken = turn;
+    if (batch.recomputed === 0) {
+      converged = true;
+      break;
+    }
+  }
+  // Reaching a fixed point at all is the whole assertion; a boundary from a
+  // different clock than the stamp would spin here until the turn limit.
+  expect(converged).toBe(true);
+  expect(turnsTaken).toBeGreaterThan(0);
+
+  // Restore the fixture's pinned instant for the tests that follow.
+  await markAllDue();
+  await sweep(1000);
 });
 
 test("the staleness probe reports the oldest computed instant", async () => {

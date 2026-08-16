@@ -43,6 +43,7 @@
  * legacy hardcoded tiers.
  */
 
+import { panic } from "better-result";
 import type { SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
@@ -133,23 +134,79 @@ export const courtRecencyContributionWeight: CitationContributionWeight = ({
           1.0
         )))`;
 
+/**
+ * Which decisions a batch considers stale, and what it stamps them with.
+ *
+ * The two are one decision, not two, which is why they are one type. The
+ * predicate compares `citation_authority_computed_at` against a boundary and
+ * the update writes a new value into that same column, so if the two instants
+ * come from different clocks the sweep can fail to converge: a boundary from a
+ * host running even milliseconds ahead of PostgreSQL leaves every row it just
+ * stamped still older than the boundary, and the walk rewrites the same oldest
+ * rows forever. Each variant below derives both instants from one clock.
+ */
+export type CitationAuthoritySweepWindow =
+  /**
+   * A sweep pinned to one instant: recompute every decision not already
+   * computed at exactly this instant, and stamp what it recomputes with it.
+   *
+   * Restart-safe by construction — a resumed run given the same instant skips
+   * precisely what the interrupted one finished, because those rows are no
+   * longer *before* the boundary. Give a new instant and the sweep starts
+   * over, which is what makes "recompute the whole corpus" expressible at all.
+   * The decay is evaluated at that instant for every batch, so a sweep taking
+   * an hour ranks its first decision and its last on the same terms.
+   */
+  | { type: "pinned"; at: Date }
+  /**
+   * A rolling refresh: recompute whatever PostgreSQL's own clock says was last
+   * computed longer ago than this. Both the boundary and the stamp come from
+   * the database, so no host clock participates.
+   */
+  | { type: "olderThan"; ms: number };
+
 export type CitationAuthorityBatchOptions = {
   /** Decisions per statement. The bound the statement timeout is judged on. */
   limit: number;
   /**
-   * Recompute decisions last computed before this instant, and decisions never
-   * computed at all. `now` makes the batch part of a full sweep; `now` minus
-   * the refresh interval makes it part of the periodic decay refresh.
-   *
-   * This is the whole of the sweep's state. A recomputed row is stamped with
-   * the current instant and so falls out of the set, which is why a sweep
+   * The staleness window. This is the whole of the sweep's state: a recomputed
+   * row is stamped out of the set it was selected from, which is why a sweep
    * needs no cursor and resumes wherever it was interrupted.
    */
-  staleBefore: Date;
-  now?: Date;
+  window: CitationAuthoritySweepWindow;
   courtWeightEntries?: CourtWeightEntry[] | undefined;
   /** Defaults to `courtRecencyContributionWeight`. */
   contributionWeight?: CitationContributionWeight | undefined;
+};
+
+/**
+ * The boundary and the stamp, from one clock.
+ *
+ * Both are returned as SQL rather than as values, because in the rolling case
+ * neither exists outside the database. The comparison site casts the boundary
+ * to `timestamptz` explicitly: a bare interpolation would be a JS `Date`
+ * round-tripped through millisecond precision against a microsecond column,
+ * which is the class of comparison that silently re-admits or skips the
+ * boundary row.
+ */
+const sweepInstants = (
+  window: CitationAuthoritySweepWindow,
+): { staleBefore: SQL; now: SQL } => {
+  switch (window.type) {
+    case "pinned": {
+      const at = sql`${window.at.toISOString()}::timestamptz`;
+      return { staleBefore: at, now: at };
+    }
+    case "olderThan":
+      return {
+        staleBefore: sql`(now() - make_interval(secs => ${window.ms / 1000}))`,
+        now: sql`now()`,
+      };
+    default: {
+      const unhandled: never = window;
+      return panic(`Unhandled sweep window: ${JSON.stringify(unhandled)}`);
+    }
+  }
 };
 
 export type CitationAuthorityBatch = {
@@ -233,14 +290,10 @@ export const recomputeCitationAuthorityBatch = async (
     contributionWeight = courtRecencyContributionWeight,
     courtWeightEntries,
     limit,
-    now,
-    staleBefore,
+    window,
   }: CitationAuthorityBatchOptions,
 ): Promise<CitationAuthorityBatch> => {
-  // `now()` is the transaction's start, so every row a batch writes carries
-  // the same instant. It advances between batches, which is why the staleness
-  // probe reads the oldest value rather than the newest.
-  const nowExpr = now ? sql`${now.toISOString()}::timestamptz` : sql`now()`;
+  const { staleBefore, now: nowExpr } = sweepInstants(window);
   const contribution = contributionWeight({
     aliases: { citation: "c", citing: "citing_d" },
     now: nowExpr,
@@ -253,7 +306,7 @@ export const recomputeCitationAuthorityBatch = async (
       SELECT d.id, d.decision_date
         FROM case_law_decisions d
        WHERE d.citation_authority_computed_at IS NULL
-          OR d.citation_authority_computed_at < ${staleBefore.toISOString()}::timestamptz
+          OR d.citation_authority_computed_at < ${staleBefore}::timestamptz
        ORDER BY d.citation_authority_computed_at ASC NULLS FIRST, d.id
        LIMIT ${limit}
     ),
