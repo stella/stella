@@ -311,7 +311,10 @@ export const executeNativeExtraction = async ({
   const extraction = await extractFileTextResult(
     buffer,
     source.extractionMimeType,
-    { timeoutMs: LIMITS.documentProcessingExtractionTimeoutMs },
+    {
+      signal: lifecycleSignal,
+      timeoutMs: LIMITS.documentProcessingExtractionTimeoutMs,
+    },
   );
   if (Result.isError(extraction)) {
     throw extraction.error;

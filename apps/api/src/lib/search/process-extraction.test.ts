@@ -321,10 +321,11 @@ describe("processExtraction", () => {
     extractFileTextResultMock.mockImplementationOnce(async () =>
       Result.err(workerError),
     );
+    const lifecycleSignal = new AbortController().signal;
 
     const rejection: unknown = await executeNativeExtraction({
       fileField: fileContent,
-      lifecycleSignal: new AbortController().signal,
+      lifecycleSignal,
       run: {
         entityId,
         entityVersionId,
@@ -343,7 +344,10 @@ describe("processExtraction", () => {
     expect(extractFileTextResultMock).toHaveBeenCalledWith(
       expect.any(ArrayBuffer),
       fileContent.mimeType,
-      { timeoutMs: LIMITS.documentProcessingExtractionTimeoutMs },
+      {
+        signal: lifecycleSignal,
+        timeoutMs: LIMITS.documentProcessingExtractionTimeoutMs,
+      },
     );
     expect(encryptContentMock).not.toHaveBeenCalled();
     expect(requestAutomaticDocumentOcrMock).not.toHaveBeenCalled();

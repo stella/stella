@@ -113,13 +113,17 @@ export const resolveExtractionMimeType = ({
 };
 
 type ExtractFileTextResultOptions = {
+  signal?: AbortSignal;
   timeoutMs?: number;
 };
 
 export const extractFileTextResult = async (
   buffer: ArrayBuffer,
   mimeType: string,
-  { timeoutMs = LIMITS.extractionTimeoutMs }: ExtractFileTextResultOptions = {},
+  {
+    signal,
+    timeoutMs = LIMITS.extractionTimeoutMs,
+  }: ExtractFileTextResultOptions = {},
 ): Promise<Result<string | null, ExtractionWorkerError>> => {
   const normalizedMimeType = normalizeMimeType(mimeType);
   if (!canExtractMimeType(normalizedMimeType)) {
@@ -129,6 +133,7 @@ export const extractFileTextResult = async (
   const result = await spawnWorker({
     workerPath: WORKER_PATH,
     args: [normalizedMimeType],
+    ...(signal ? { signal } : {}),
     stdin: new Blob([buffer]),
     timeoutMs,
   });
