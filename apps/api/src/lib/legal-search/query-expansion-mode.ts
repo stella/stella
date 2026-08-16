@@ -8,7 +8,11 @@
  *            comparison is recorded — leaf counts and a reach disposition,
  *            never the query text. This is how the rewrite is judged against
  *            real traffic before it serves any.
- * - `on`     The expanded query is what runs.
+ * - `on`     The expanded query is what runs. Refused at boot today: a corpus
+ *            cursor does not yet carry the dictionary version it was built
+ *            against, so a paginated expanded search can rank a different
+ *            result set against an earlier page's cursor. See the invariant in
+ *            `env-base-schema`, which is deleted when that work lands.
  *
  * Resolved once in `env-base`; every consumer reads that single value.
  *

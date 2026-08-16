@@ -148,7 +148,6 @@ const DICTIONARY_UNAVAILABLE =
 const DICTIONARY_DEGRADED = "case_law.search.expansion_dictionary_degraded";
 const DICTIONARY_LOADED = "case_law.search.expansion_dictionary_loaded";
 const EXPANSION_SHADOW = "case_law.search.expansion_shadow";
-const EXPANSION_MODE_UNVALIDATED = "case_law.search.expansion_mode_unvalidated";
 
 type LoadedDictionary = {
   /** sha256 of the payload: which build this replica is answering from. */
@@ -592,29 +591,6 @@ const freeTextLeaves = (text: string, expand?: CorpusTermExpander): number => {
   return clause === null ? 0 : countLeaves(clause);
 };
 
-let warnedModeUnvalidated = false;
-
-/**
- * Say once per process that `on` is serving expanded queries while the
- * pagination constraint below is still open.
- *
- * Deliberately a warning and not a refusal: blocking the mode outright would
- * decide, from inside an inert feature flag, that the product may not have it
- * — which is a rollout call for whoever owns the rollout. A comment alone was
- * the other extreme, readable only by someone already in this file. This is
- * the version an operator sees in their logs the moment they flip it.
- */
-const warnExpansionModeUnvalidated = (): void => {
-  if (warnedModeUnvalidated) {
-    return;
-  }
-  warnedModeUnvalidated = true;
-  logger.warn(EXPANSION_MODE_UNVALIDATED, {
-    mode: "on",
-    reason: "cursor_lacks_dictionary_version",
-  });
-};
-
 type ResolveExpandedQueryOptions = {
   /** Assemble the clause, with the expander when one is supplied. */
   build: (expand?: CorpusTermExpander) => string | null;
@@ -641,20 +617,23 @@ type ResolveExpandedQueryOptions = {
  * dictionary being reachable.
  */
 /**
- * Known limitation of `on`, recorded where the decision to flip it will be
- * made: the query a request builds depends on which dictionary its replica has
- * loaded, so a page-2 request served by a replica mid-refresh (or holding a
- * fallback payload) can rebuild a different engine query while reusing page 1's
- * cursor, which ranks a different result set against an old score/id boundary.
- * Replicas converge on the pointer, so the window is a rebuild or a failed
- * refresh rather than steady state, and `shadow` cannot hit it at all because
- * it executes the unexpanded query.
+ * `on` is unreachable by configuration, and this is why.
  *
- * Turning `on` on requires closing this first: the cursor has to carry the
- * dictionary version and later pages have to resolve that same version, which
- * means retaining superseded payloads. That is a rollout decision, not an
- * inert-flag one, so the shadow event reports which payload each replica used
- * (`dictionaryHash`) to make convergence measurable before the choice is made.
+ * The query a request builds depends on which dictionary its replica has
+ * loaded, so a page-2 request served by a replica mid-refresh (or holding a
+ * fallback payload) rebuilds a different engine query while reusing page 1's
+ * cursor, which ranks a different result set against an old score/id boundary
+ * and can skip or repeat decisions. Replicas converge on the pointer, so the
+ * window is a rebuild or a failed refresh rather than steady state, and
+ * `shadow` cannot hit it at all because it executes the unexpanded query.
+ *
+ * `envBaseInvariantViolation` refuses to boot under `on` for that reason;
+ * the branch below stays because the mode is part of the union, not because
+ * it is reachable today. Closing this means the cursor carries the dictionary
+ * version and later pages resolve that same version, which in turn means
+ * retaining superseded payloads. Until then the shadow event reports which
+ * payload answered (`dictionaryHash`), so replica convergence is measurable
+ * from real traffic before that work is scoped.
  */
 export const resolveExpandedCorpusQuery = async ({
   build,
@@ -698,7 +677,6 @@ export const resolveExpandedCorpusQuery = async ({
 
   switch (mode) {
     case "on": {
-      warnExpansionModeUnvalidated();
       return expandedQuery;
     }
     case "shadow": {

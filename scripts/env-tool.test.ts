@@ -362,6 +362,13 @@ describe("environment doctor output", () => {
         "LEGAL_SEARCH_PROVIDER=corpus-index requires CORPUS_INDEX_SEARCH_ENDPOINT or CORPUS_INDEX_ENDPOINT to be set.",
       overrides: { LEGAL_SEARCH_PROVIDER: "corpus-index" },
     },
+    // Removed together with the invariant, in the PR that makes a corpus
+    // cursor carry the dictionary version it was built against.
+    {
+      expected:
+        'QUERY_EXPANSION_MODE="on" requires dictionary-version-carrying cursors; not yet implemented — use "shadow".',
+      overrides: { QUERY_EXPANSION_MODE: "on" },
+    },
     {
       expected:
         "CONTENT_ENCRYPTION_KEY is required when NODE_ENV is 'production' or 'staging'.",
@@ -529,6 +536,22 @@ describe("environment doctor output", () => {
       expect(result.issues).toContain(expected);
     }
   });
+
+  // The other half of the `on` invariant above: it must refuse exactly one
+  // mode. A guard that rejected `shadow` too would block the only way to
+  // gather the evidence for lifting it. Removed with the invariant, in the PR
+  // that makes a corpus cursor carry its dictionary version.
+  test.each(["off", "shadow"] as const)(
+    "QUERY_EXPANSION_MODE=%p passes the runtime invariants",
+    (mode) => {
+      expect(
+        validateDoctorEnvironment({
+          app: "api",
+          input: { ...validApiInput(), QUERY_EXPANSION_MODE: mode },
+        }).status,
+      ).toBe("valid");
+    },
+  );
 
   test("applies the selected API mode to runtime invariants", () => {
     const result = validateDoctorEnvironment({
