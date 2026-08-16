@@ -40,7 +40,7 @@ type CorpusIndexTokenizer = {
  * discards tokens past the default byte limit, keeping OCR runs out of the
  * term dictionary; `lower_caser` is what `default` already did.
  */
-const FOLDED_TOKENIZER = {
+export const FOLDED_TOKENIZER = {
   name: "folded",
   type: "simple",
   filters: ["lower_caser", "ascii_folding", "remove_long"],
