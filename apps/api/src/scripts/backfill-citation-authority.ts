@@ -30,9 +30,25 @@ import { rootDb } from "@/api/db/root";
 import { recomputeCitationAuthorityBatch } from "@/api/handlers/case-law/citation-authority";
 import { loadCourtWeightEntriesForSql } from "@/api/handlers/case-law/court-weights";
 
+/**
+ * A flag's value, or undefined when the flag is absent.
+ *
+ * An absent flag and a flag whose value is missing are different mistakes: the
+ * first means "use the default", the second means the operator typed something
+ * they expect to take effect. Silently defaulting the second is the failure
+ * mode worth refusing, because a `--batch` that reads 5000 when the operator
+ * asked for 500 does not announce itself.
+ */
 const flag = (name: string): string | undefined => {
   const at = process.argv.indexOf(name);
-  return at === -1 ? undefined : process.argv[at + 1];
+  if (at === -1) {
+    return undefined;
+  }
+  const value = process.argv[at + 1];
+  if (value === undefined || value.startsWith("--")) {
+    return panic(`${name} requires a value`);
+  }
+  return value;
 };
 
 const rawBatch = flag("--batch");

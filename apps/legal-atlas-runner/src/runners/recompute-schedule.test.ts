@@ -69,14 +69,18 @@ describe("nextRecomputeDelayMs", () => {
   test("a skip keeps the batch gap however long the sweep has been failing", () => {
     // The lock holder is doing the work; finding it held says nothing about
     // how much is left, and is not evidence the sweep cannot finish.
-    expect(
+    // Across a whole run of failure counts, not just zero: the invariant is
+    // that a skip is *never* backed off, and asserting it at zero would leave
+    // a future change that applies the failure curve to SKIPPED passing.
+    const delays = FAILURE_RUN.map((consecutiveFailures) =>
       nextRecomputeDelayMs({
         outcome: RECOMPUTE_OUTCOME.SKIPPED,
-        consecutiveFailures: 0,
+        consecutiveFailures,
         batchDelayMs: BATCH_DELAY_MS,
         idleDelayMs: IDLE_DELAY_MS,
       }),
-    ).toBe(BATCH_DELAY_MS);
+    );
+    expect(delays.filter((delay) => delay !== BATCH_DELAY_MS)).toEqual([]);
   });
 
   test("a current corpus and an unrankable one both wait the idle poll", () => {
