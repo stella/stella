@@ -18,36 +18,27 @@ import { mintDevSeedSession } from "@/api/lib/dev-seed-session-store";
 import { rebuildSupplementalSearchIndex } from "@/api/lib/search/index-global";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
+import {
+  type FirmKnowledgeJob,
+  FirmKnowledgeJobStore,
+  type FirmKnowledgeSeedStatus,
+} from "./firm-knowledge-job-store";
+
 const VITE_CACHE_DIR = path.resolve(
   import.meta.dir,
   "../../../../../apps/web/node_modules/.vite",
 );
 
-type SeedStatus =
-  | { status: "idle" }
-  | { status: "running"; startedAt: string }
-  | { status: "succeeded"; startedAt: string; finishedAt: string }
-  | {
-      status: "failed";
-      startedAt: string;
-      finishedAt: string;
-      message: string;
-    };
+type SeedStatus = FirmKnowledgeSeedStatus;
 
 const IDLE_SEED_STATUS = { status: "idle" } as const satisfies SeedStatus;
-
-type FirmKnowledgeJob = {
-  id: string;
-  organizationId: string;
-  status: SeedStatus;
-  userId: string;
-};
 
 let seedInFlight: Promise<void> | null = null;
 let seedStatus: SeedStatus = IDLE_SEED_STATUS;
 
 let firmKnowledgeInFlight: Promise<void> | null = null;
-let firmKnowledgeJob: FirmKnowledgeJob | null = null;
+let firmKnowledgeJobId: string | null = null;
+const firmKnowledgeJobs = new FirmKnowledgeJobStore();
 
 /** Matters to seed from the Dev menu; the CLI's own default. */
 const FIRM_KNOWLEDGE_MATTERS = 15;
@@ -112,11 +103,12 @@ export const devRoute = new Elysia({ prefix: "/dev" })
   })
   .get(
     "/seed-firm-knowledge",
-    (ctx) =>
-      firmKnowledgeJob?.id === ctx.query.jobId &&
-      firmKnowledgeJob.userId === ctx.user.id
-        ? getFirmKnowledgeJobResponse(firmKnowledgeJob)
-        : { jobId: ctx.query.jobId, ...IDLE_SEED_STATUS },
+    (ctx) => {
+      const job = firmKnowledgeJobs.getOwned(ctx.query.jobId, ctx.user.id);
+      return job
+        ? getFirmKnowledgeJobResponse(job)
+        : { jobId: ctx.query.jobId, ...IDLE_SEED_STATUS };
+    },
     {
       query: t.Object({
         jobId: t.String({ minLength: 1, maxLength: 128 }),
@@ -134,26 +126,26 @@ export const devRoute = new Elysia({ prefix: "/dev" })
       const userId = ctx.user.id;
 
       if (firmKnowledgeInFlight) {
-        if (
-          firmKnowledgeJob?.organizationId !== organizationId ||
-          firmKnowledgeJob.userId !== userId
-        ) {
+        const job =
+          firmKnowledgeJobId === null
+            ? null
+            : firmKnowledgeJobs.get(firmKnowledgeJobId);
+        if (job?.organizationId !== organizationId || job.userId !== userId) {
           return new Response("A firm-knowledge seed is already running", {
             status: 409,
           });
         }
 
-        return getFirmKnowledgeJobResponse(firmKnowledgeJob);
+        return getFirmKnowledgeJobResponse(job);
       }
 
       const startedAt = new Date().toISOString();
-      const job = {
-        id: Bun.randomUUIDv7(),
+      const job = firmKnowledgeJobs.create({
         organizationId,
-        status: { status: "running", startedAt },
+        startedAt,
         userId,
-      } satisfies FirmKnowledgeJob;
-      firmKnowledgeJob = job;
+      });
+      firmKnowledgeJobId = job.id;
       firmKnowledgeInFlight = (async () => {
         try {
           const seedSession = await mintDevSeedSession({
@@ -172,30 +164,21 @@ export const devRoute = new Elysia({ prefix: "/dev" })
               ? {}
               : { selectionSeed: ctx.body.selectionSeed }),
           });
-          firmKnowledgeJob = {
-            id: job.id,
-            organizationId,
-            status: {
-              status: "succeeded",
-              startedAt,
-              finishedAt: new Date().toISOString(),
-            },
-            userId,
-          } satisfies FirmKnowledgeJob;
+          firmKnowledgeJobs.update(job.id, {
+            status: "succeeded",
+            startedAt,
+            finishedAt: new Date().toISOString(),
+          } satisfies FirmKnowledgeSeedStatus);
         } catch (error: unknown) {
-          firmKnowledgeJob = {
-            id: job.id,
-            organizationId,
-            status: {
-              status: "failed",
-              startedAt,
-              finishedAt: new Date().toISOString(),
-              message: getErrorMessage(error),
-            },
-            userId,
-          } satisfies FirmKnowledgeJob;
+          firmKnowledgeJobs.update(job.id, {
+            status: "failed",
+            startedAt,
+            finishedAt: new Date().toISOString(),
+            message: getErrorMessage(error),
+          } satisfies FirmKnowledgeSeedStatus);
         } finally {
           firmKnowledgeInFlight = null;
+          firmKnowledgeJobId = null;
         }
       })();
 
