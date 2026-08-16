@@ -5,6 +5,8 @@ import {
   isMorphologyDictionaryContentHash,
   isSurfaceForm,
   MAX_FORMS_PER_BUCKET,
+  SURFACE_FORM_MAX_LENGTH,
+  SURFACE_FORM_MIN_LENGTH,
   morphologyDictionaryKey,
   morphologyDictionaryPointerKey,
   parseExpansionDictionary,
@@ -59,7 +61,7 @@ test("a bad line costs only itself", () => {
 
 test("the cap is what the parser enforces", () => {
   const forms = Array.from({ length: MAX_FORMS_PER_BUCKET }, (_, index) =>
-    "a".repeat(index + 2),
+    "a".repeat(index + SURFACE_FORM_MIN_LENGTH),
   );
   expect(
     parseExpansionDictionary(`s\t${forms.join(",")}\t9`).entries.size,
@@ -84,6 +86,16 @@ test("a decomposed word is still a surface form", () => {
   expect(isSurfaceForm("žalobě".normalize("NFD"))).toBe(true);
   expect(isSurfaceForm("žalobě")).toBe(true);
   expect(isSurfaceForm("21cdo")).toBe(false);
+});
+
+// The leaf budget caps how many quoted values a query carries, never how long
+// one is, so an unbounded form would let a payload pair an ordinary key with a
+// multi-megabyte value and have an ordinary search build an enormous clause.
+test("a surface form is bounded at both ends", () => {
+  expect(isSurfaceForm("a".repeat(SURFACE_FORM_MIN_LENGTH - 1))).toBe(false);
+  expect(isSurfaceForm("a".repeat(SURFACE_FORM_MIN_LENGTH))).toBe(true);
+  expect(isSurfaceForm("a".repeat(SURFACE_FORM_MAX_LENGTH))).toBe(true);
+  expect(isSurfaceForm("a".repeat(SURFACE_FORM_MAX_LENGTH + 1))).toBe(false);
 });
 
 // Keys are folded and values are not, so two stems that differ only by

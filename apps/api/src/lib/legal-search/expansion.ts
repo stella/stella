@@ -145,8 +145,10 @@ const POINTER_MAX_BYTES = 1024;
 /** Structured events; swept for, so spelled once. */
 const DICTIONARY_UNAVAILABLE =
   "case_law.search.expansion_dictionary_unavailable";
+const DICTIONARY_DEGRADED = "case_law.search.expansion_dictionary_degraded";
 const DICTIONARY_LOADED = "case_law.search.expansion_dictionary_loaded";
 const EXPANSION_SHADOW = "case_law.search.expansion_shadow";
+const EXPANSION_MODE_UNVALIDATED = "case_law.search.expansion_mode_unvalidated";
 
 type LoadedDictionary = {
   /** sha256 of the payload: which build this replica is answering from. */
@@ -251,10 +253,14 @@ const loadDictionary = async (
     });
     return UNAVAILABLE;
   }
+  // Its own event, not the unavailable one: this dictionary is being served.
+  // Folding it into the unavailable event would make every alert on that name
+  // count successful loads, and a handful of collided keys is the normal state
+  // of a real dictionary (`rada`/`řada` is ordinary Czech), so the false
+  // positives would be continuous rather than occasional.
   if (skippedLines > 0 || collidedKeys > 0) {
-    logger.warn(DICTIONARY_UNAVAILABLE, {
+    logger.warn(DICTIONARY_DEGRADED, {
       language,
-      reason: "degraded_dictionary",
       skippedLines,
       collidedKeys,
       entries: entries.size,
@@ -586,6 +592,29 @@ const freeTextLeaves = (text: string, expand?: CorpusTermExpander): number => {
   return clause === null ? 0 : countLeaves(clause);
 };
 
+let warnedModeUnvalidated = false;
+
+/**
+ * Say once per process that `on` is serving expanded queries while the
+ * pagination constraint below is still open.
+ *
+ * Deliberately a warning and not a refusal: blocking the mode outright would
+ * decide, from inside an inert feature flag, that the product may not have it
+ * — which is a rollout call for whoever owns the rollout. A comment alone was
+ * the other extreme, readable only by someone already in this file. This is
+ * the version an operator sees in their logs the moment they flip it.
+ */
+const warnExpansionModeUnvalidated = (): void => {
+  if (warnedModeUnvalidated) {
+    return;
+  }
+  warnedModeUnvalidated = true;
+  logger.warn(EXPANSION_MODE_UNVALIDATED, {
+    mode: "on",
+    reason: "cursor_lacks_dictionary_version",
+  });
+};
+
 type ResolveExpandedQueryOptions = {
   /** Assemble the clause, with the expander when one is supplied. */
   build: (expand?: CorpusTermExpander) => string | null;
@@ -669,6 +698,7 @@ export const resolveExpandedCorpusQuery = async ({
 
   switch (mode) {
     case "on": {
+      warnExpansionModeUnvalidated();
       return expandedQuery;
     }
     case "shadow": {

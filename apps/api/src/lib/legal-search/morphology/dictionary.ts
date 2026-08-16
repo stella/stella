@@ -23,12 +23,31 @@ const KEY_PREFIX = "legal-corpus/morphology";
 const CONTENT_HASH_PATTERN = /^[0-9a-f]{64}$/u;
 
 /**
- * A surface form is letters and nothing else. Digits, punctuation, and
- * whitespace are excluded at the source: a form that carried them could not
- * be a word the stemmer bucketed, and letters-only is what lets the packed
- * value use a comma as its separator without an escape rule.
+ * Shortest and longest a surface form may be, in characters. The bound is the
+ * same one the builder filters corpus tokens with, single-sourced here so the
+ * two cannot drift: a loader that accepted what the builder would never emit
+ * is a loader validating a different format than the one being produced.
  */
-const SURFACE_FORM_PATTERN = /^\p{L}+$/u;
+export const SURFACE_FORM_MIN_LENGTH = 3;
+export const SURFACE_FORM_MAX_LENGTH = 30;
+
+/**
+ * A surface form is letters and nothing else, within the length bound. Digits,
+ * punctuation, and whitespace are excluded at the source: a form that carried
+ * them could not be a word the stemmer bucketed, and letters-only is what lets
+ * the packed value use a comma as its separator without an escape rule.
+ *
+ * The length bound is load-bearing rather than cosmetic. The leaf budget caps
+ * how many quoted values a query may carry, not how long one may be, so an
+ * unbounded form would let a payload pair an ordinary key with a
+ * multi-megabyte value and have an ordinary search build an enormous clause.
+ * The dictionary is corpus-derived and read from object storage, so its
+ * contents are checked here rather than assumed.
+ */
+const SURFACE_FORM_PATTERN = new RegExp(
+  String.raw`^\p{L}{${SURFACE_FORM_MIN_LENGTH},${SURFACE_FORM_MAX_LENGTH}}$`,
+  "u",
+);
 
 /** Separator between packed surface forms, in the file and in memory alike. */
 const FORM_SEPARATOR = ",";

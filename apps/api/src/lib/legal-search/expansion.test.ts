@@ -75,9 +75,12 @@ test("the ruk family keeps only the members sharing the stem's prefix", () => {
 // The floor is a constant 3, not min(3, term.length): the shorter-of rule let
 // two-character terms match a whole family of unrelated words.
 test("a term under three characters expands to nothing", () => {
+  // The bucket is real and the short term prefixes it, so the empty result is
+  // the floor firing rather than a missing entry.
   const entries = dictionaryOf([
-    { documentFrequency: 300, forms: ["zl", "zla"], stem: "zl" },
+    { documentFrequency: 300, forms: ["zla", "zlo"], stem: "zl" },
   ]);
+  expect(entries.get("zla")).toBe("zla,zlo");
   expect(expandTermWith(entries, "zl")).toEqual([]);
 });
 

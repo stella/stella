@@ -50,7 +50,6 @@ const DEFAULT_CHUNK_SIZE = 1000;
 const CHUNK_STATEMENT_TIMEOUT = "60s";
 /** Corpus document frequency a token needs before it is worth bucketing. */
 const DEFAULT_MIN_DOCUMENT_FREQUENCY = 50;
-const TOKEN_PATTERN = /^\p{L}{3,30}$/u;
 /**
  * Shared leading characters expected of a coherent bucket. Below this the
  * bucket's members are probably not the same word, so it is reported for
@@ -190,7 +189,7 @@ const chunkVocabulary = async (afterId: string): Promise<VocabularyChunk> =>
 
     // `normalize(..., NFC)` before tokenization: extracted PDF text is often
     // decomposed, and `to_tsvector` would then emit tokens carrying combining
-    // marks. Those are `\p{M}`, not `\p{L}`, so `TOKEN_PATTERN` would drop
+    // marks. Those are `\p{M}`, not `\p{L}`, so the token filter would drop
     // them and the corpus would silently lose the inflections of every
     // accented word that happened to arrive in NFD.
     const stats = rowsOf(
@@ -221,7 +220,7 @@ const chunkVocabulary = async (afterId: string): Promise<VocabularyChunk> =>
         continue;
       }
       const canonical = word.normalize("NFC");
-      if (TOKEN_PATTERN.test(canonical)) {
+      if (isSurfaceForm(canonical)) {
         tokens.set(canonical, ndoc);
       }
     }
