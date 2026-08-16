@@ -1,3 +1,49 @@
+/**
+ * Materialize the citation-authority ranking signal onto
+ * `case_law_decisions.citation_authority` (and `citation_count`).
+ *
+ * This is the query-independent half of the case-law ranking. It is the same
+ * value the search SQL used to compute inline per query with a LATERAL over
+ * the citation graph:
+ *
+ *   authority = ln(1 + weightedCitationSum / max(ageYears(decision), 1))
+ *
+ * where each incoming citation contributes
+ * `courtWeight(citingCourt) * 1/(1 + ageYears(citing))`. See citation-score.ts
+ * for the reference TS implementation; this SQL must stay equal to
+ * `citationScore(...)` evaluated at the same instant.
+ *
+ * Because the value decays with time (both age terms reference "now"), it is a
+ * point-in-time snapshot refreshed on a schedule — the search blend tolerates
+ * being stale by up to one refresh interval. Pass a fixed `now` to make the
+ * computation deterministic (used by tests to assert equality against
+ * `citationScore`).
+ *
+ * **It runs in bounded batches, and it has to.** The whole-corpus form was one
+ * UPDATE over every decision, which on a corpus of this size outruns the
+ * statement timeout and rolls back: it spent the work and kept none of it,
+ * every time, forever. A batch is bounded by its row count rather than by the
+ * corpus, so its statement finishes whatever the corpus grows to.
+ *
+ * **`citation_authority_computed_at` is the whole of the bookkeeping.** A
+ * sweep takes the least recently computed decisions that are older than its
+ * staleness boundary; recomputing one stamps it with the current instant,
+ * which puts it past the boundary and out of the set being walked. So the
+ * sweep advances by doing its work, with no cursor to persist and nothing to
+ * resume from: a task replaced mid-sweep picks up exactly where the last one
+ * stopped because the remaining work is the only work the predicate still
+ * describes. Never-computed rows sort first, which is what makes the same
+ * mechanism serve the initial backfill.
+ *
+ * Court weights are passed in via `courtWeightEntries` rather than loaded
+ * internally: this keeps the function a `tx`-in/count-out unit that is safe to
+ * exercise against a pglite fixture in tests. Production callers load the
+ * current DB-seeded weights themselves (`loadCourtWeightEntriesForSql()`)
+ * before calling in; omitting the option falls back to `courtWeightSql`'s
+ * legacy hardcoded tiers.
+ */
+
+import { panic } from "better-result";
 import type { SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
@@ -7,47 +53,8 @@ import { redistributableCaseLawSourceSqlFor } from "@/api/lib/case-law/redistrib
 import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
 import { isRecord } from "@/api/lib/type-guards";
 
-/**
- * Materialize the citation-authority ranking signal onto
- * `case_law_decisions.citation_authority` (and `citation_count`).
- *
- * This is the query-independent half of the case-law ranking. It is the
- * same value the search SQL used to compute inline per query with a
- * LATERAL over the citation graph:
- *
- *   authority = ln(1 + weightedCitationSum / max(ageYears(decision), 1))
- *
- * where each incoming citation contributes
- * `courtWeight(citingCourt) * 1/(1 + ageYears(citing))`. See
- * citation-score.ts for the reference TS implementation; this SQL must
- * stay equal to `citationScore(...)` evaluated at the same instant.
- *
- * Because the value decays with time (both age terms reference "now"),
- * it is a point-in-time snapshot refreshed on a schedule — the search
- * blend tolerates being stale by up to one recompute interval. Pass a
- * fixed `now` to make the computation deterministic (used by tests to
- * assert equality against `citationScore`).
- *
- * Runs as one set-based UPDATE over the whole corpus. At pilot
- * (jurisdiction) scale this is cheap; at hundreds-of-millions scale it
- * should become incremental, keyed off `citation_authority_computed_at`
- * (the column exists for that future bound).
- *
- * Court weights are passed in via `courtWeightEntries` rather than
- * loaded internally: this keeps the function a pure `tx`-in/count-out
- * unit that is safe to exercise against a pglite fixture in tests.
- * Production callers load the current DB-seeded weights themselves
- * (`loadCourtWeightEntriesForSql()`) before calling in; omitting the
- * option falls back to `courtWeightSql`'s legacy hardcoded tiers.
- */
-
 type CitationAuthorityTx = {
   execute: (query: SQL) => Promise<unknown>;
-};
-
-type RecomputeCitationAuthorityOptions = {
-  now?: Date;
-  courtWeightEntries?: CourtWeightEntry[] | undefined;
 };
 
 const SECONDS_PER_YEAR = 365.25 * 86_400;
@@ -63,11 +70,168 @@ const executedRows = (result: unknown): unknown[] => {
   return [];
 };
 
+const firstNumber = (result: unknown, key: string): number => {
+  const row = executedRows(result).at(0);
+  if (!isRecord(row)) {
+    return 0;
+  }
+  const value = Number(row[key] ?? 0);
+  return Number.isFinite(value) ? value : 0;
+};
+
+/** The SQL aliases a contribution expression may read. */
+export type CitationContributionAliases = {
+  /** The citation row. */
+  citation: string;
+  /** The decision that made the citation. */
+  citing: string;
+};
+
+export type CitationContributionOptions = {
+  aliases: CitationContributionAliases;
+  /** The instant the batch is evaluated at. */
+  now: SQL;
+  courtWeightEntries?: CourtWeightEntry[] | undefined;
+};
+
+/**
+ * What one incoming citation adds to a decision's weighted sum.
+ *
+ * A seam, not an abstraction for its own sake. The ranking's open question is
+ * whether a citation that distinguishes or overrules a decision should count
+ * for less than one that follows it, and answering it must not mean rewriting
+ * the aggregate, the batching and the equality test against `citationScore` at
+ * the same time. Everything outside this expression is arithmetic that would
+ * not change; a polarity multiplier is a change to this expression alone.
+ *
+ * No polarity term today, deliberately. `case_law_citations.polarity` is
+ * populated for almost nothing, so a discount keyed on it would not express
+ * "endorsements rank above criticism" — it would express "classified citations
+ * rank below unclassified ones", which misranks the corpus in proportion to
+ * how little of it has been classified.
+ */
+export type CitationContributionWeight = (
+  options: CitationContributionOptions,
+) => SQL;
+
+/**
+ * Court authority multiplied by a hyperbolic decay on the citing decision's
+ * age. Mirrors `courtWeight(...) * recencyFactor(...)` in citation-score.ts,
+ * which is the equality the tests assert.
+ */
+export const courtRecencyContributionWeight: CitationContributionWeight = ({
+  aliases,
+  courtWeightEntries,
+  now,
+}) =>
+  sql`(${sql.raw(courtWeightSql(`${aliases.citing}.court`, courtWeightEntries))})
+      * (1.0 / (1 + COALESCE(
+          extract(
+            epoch FROM (
+              ${now} - (${sql.raw(aliases.citing)}.decision_date::timestamp AT TIME ZONE 'UTC')
+            )
+          ) / ${SECONDS_PER_YEAR},
+          1.0
+        )))`;
+
+/**
+ * Which decisions a batch considers stale, and what it stamps them with.
+ *
+ * The two are one decision, not two, which is why they are one type. The
+ * predicate compares `citation_authority_computed_at` against a boundary and
+ * the update writes a new value into that same column, so if the two instants
+ * come from different clocks the sweep can fail to converge: a boundary from a
+ * host running even milliseconds ahead of PostgreSQL leaves every row it just
+ * stamped still older than the boundary, and the walk rewrites the same oldest
+ * rows forever. Each variant below derives both instants from one clock.
+ */
+export type CitationAuthoritySweepWindow =
+  /**
+   * A sweep pinned to one instant: recompute every decision last computed
+   * *before* it, and stamp what it recomputes with it.
+   *
+   * What it guarantees is a floor, not an equality — when it completes, no
+   * decision was last computed before the pinned instant. A row the rolling
+   * loop computed after it is already fresher and is deliberately left alone;
+   * chasing exact equality instead would make the two sweeps overwrite each
+   * other's stamps indefinitely whenever a pinned run outlives the refresh
+   * interval. The floor is the property a backfill needs: nothing left stale.
+   *
+   * Restart-safe by construction — a resumed run given the same instant skips
+   * precisely what the interrupted one finished, because those rows are no
+   * longer before the boundary. Give a new instant and the sweep starts over,
+   * which is what makes "recompute the whole corpus" expressible at all.
+   *
+   * Every batch of one pinned run evaluates the decay at the same instant, so
+   * a run left to itself ranks its first decision and its last on identical
+   * terms; a concurrent rolling loop is the exception, and it is one this
+   * signal already tolerates, since it is a point-in-time approximation
+   * refreshed continuously rather than a single consistent snapshot.
+   */
+  | { type: "pinned"; at: Date }
+  /**
+   * A rolling refresh: recompute whatever PostgreSQL's own clock says was last
+   * computed longer ago than this. Both the boundary and the stamp come from
+   * the database, so no host clock participates.
+   */
+  | { type: "olderThan"; ms: number };
+
+export type CitationAuthorityBatchOptions = {
+  /** Decisions per statement. The bound the statement timeout is judged on. */
+  limit: number;
+  /**
+   * The staleness window. This is the whole of the sweep's state: a recomputed
+   * row is stamped out of the set it was selected from, which is why a sweep
+   * needs no cursor and resumes wherever it was interrupted.
+   */
+  window: CitationAuthoritySweepWindow;
+  courtWeightEntries?: CourtWeightEntry[] | undefined;
+  /** Defaults to `courtRecencyContributionWeight`. */
+  contributionWeight?: CitationContributionWeight | undefined;
+};
+
+/**
+ * The boundary and the stamp, from one clock.
+ *
+ * Both are returned as SQL rather than as values, because in the rolling case
+ * neither exists outside the database. The comparison site casts the boundary
+ * to `timestamptz` explicitly: a bare interpolation would be a JS `Date`
+ * round-tripped through millisecond precision against a microsecond column,
+ * which is the class of comparison that silently re-admits or skips the
+ * boundary row.
+ */
+const sweepInstants = (
+  window: CitationAuthoritySweepWindow,
+): { staleBefore: SQL; now: SQL } => {
+  switch (window.type) {
+    case "pinned": {
+      const at = sql`${window.at.toISOString()}::timestamptz`;
+      return { staleBefore: at, now: at };
+    }
+    case "olderThan":
+      return {
+        staleBefore: sql`(now() - make_interval(secs => ${window.ms / 1000}))`,
+        now: sql`now()`,
+      };
+    default: {
+      const unhandled: never = window;
+      return panic(`Unhandled sweep window: ${JSON.stringify(unhandled)}`);
+    }
+  }
+};
+
+export type CitationAuthorityBatch = {
+  /** Decisions the batch recomputed. Zero means the sweep is complete. */
+  recomputed: number;
+  /** Of those, how many hold at least one counted citation. */
+  cited: number;
+};
+
 /**
  * Whether any citation has resolved to a target decision. Until one has, a
- * recompute scans the whole citation table to update nothing; the daemon
- * sleeps through that regime instead. Served by the partial cited-decision
- * index, so the probe is O(1).
+ * recompute walks the corpus to write zeroes; the daemon sleeps through that
+ * regime instead. Served by the partial cited-decision index, so the probe is
+ * O(1).
  */
 export const hasResolvedCitations = async (
   tx: CitationAuthorityTx,
@@ -79,138 +243,157 @@ export const hasResolvedCitations = async (
 };
 
 /**
- * When the last full recompute committed. The whole-corpus statement stamps
- * every cited row with the same per-statement now(), so the max is the last
- * run's time. This is a sequential scan; callers probe once per process
- * start, not per iteration.
+ * How far behind the ranking is: the oldest instant any decision was computed
+ * at, or null while some decision has never been computed.
+ *
+ * The minimum rather than the maximum, because a sweep now advances row by row
+ * instead of stamping the whole corpus at once — the freshest row says nothing
+ * about the picture as a whole, and the oldest says everything. Served by the
+ * computed-at index, so it is an index probe rather than a scan.
  */
-export const latestCitationAuthorityRecomputeAt = async (
+export const oldestCitationAuthorityRecomputeAt = async (
   tx: CitationAuthorityTx,
 ): Promise<Date | null> => {
+  const uncomputed = await tx.execute(
+    sql`SELECT 1 AS one FROM case_law_decisions WHERE citation_authority_computed_at IS NULL LIMIT 1`,
+  );
+  if (executedRows(uncomputed).length > 0) {
+    return null;
+  }
   const result = await tx.execute(
-    sql`SELECT max(citation_authority_computed_at) AS latest FROM case_law_decisions`,
+    sql`SELECT citation_authority_computed_at AS oldest
+          FROM case_law_decisions
+         WHERE citation_authority_computed_at IS NOT NULL
+         ORDER BY citation_authority_computed_at
+         LIMIT 1`,
   );
   const row = executedRows(result).at(0);
   if (!isRecord(row)) {
     return null;
   }
-  const latest = row["latest"];
-  if (latest instanceof Date) {
-    return latest;
+  const oldest = row["oldest"];
+  if (oldest instanceof Date) {
+    return oldest;
   }
-  if (typeof latest === "string" && latest.length > 0) {
-    return new Date(latest);
+  if (typeof oldest === "string" && oldest.length > 0) {
+    return new Date(oldest);
   }
   return null;
 };
 
-export const recomputeCitationAuthorityForAll = async (
+/**
+ * Recompute one bounded slice of the corpus, least recently computed first.
+ *
+ * The aggregate keeps the shape the whole-corpus statement had, with the batch
+ * as its driving side: the citation join is nested inside the LEFT JOIN so a
+ * citation whose citing decision is gone, or whose source is not
+ * redistributable, contributes nothing AND is not counted. Those are the same
+ * row being absent, and separating them would change the count.
+ *
+ * Every batch row is written, including a decision with no citations at all —
+ * that is what resets a decision whose last citation went away, and what makes
+ * the sum over batches equal the old single statement rather than merely
+ * resemble it.
+ */
+export const recomputeCitationAuthorityBatch = async (
   tx: CitationAuthorityTx,
-  options: RecomputeCitationAuthorityOptions = {},
-): Promise<number> => {
-  const nowExpr = options.now
-    ? sql`${options.now.toISOString()}::timestamptz`
-    : sql`now()`;
-  // Court-authority weighting as a CASE expression over the citing
-  // court name; mirrors the search SQL's `courtWeightSql`.
-  const courtWeightExpr = sql.raw(
-    courtWeightSql("citing_d.court", options.courtWeightEntries),
-  );
+  {
+    contributionWeight = courtRecencyContributionWeight,
+    courtWeightEntries,
+    limit,
+    window,
+  }: CitationAuthorityBatchOptions,
+): Promise<CitationAuthorityBatch> => {
+  const { staleBefore, now: nowExpr } = sweepInstants(window);
+  const contribution = contributionWeight({
+    aliases: { citation: "c", citing: "citing_d" },
+    now: nowExpr,
+    courtWeightEntries,
+  });
 
-  // The aggregate over (citation ⨝ citing decision) is LEFT JOINed onto
-  // every decision so decisions with zero citations are reset to 0 too.
-  // The inner JOIN on citing_d matches the original semantics (a
-  // citation whose citing decision no longer exists does not count).
   await setCorpusBackfillStatementTimeout(tx);
-  await tx.execute(sql`
-    UPDATE case_law_decisions d
-    SET
-      citation_authority = ln(1 + (
-        agg.raw_sum / GREATEST(
-          COALESCE(
-            extract(
-              epoch FROM (
-                ${nowExpr}
-                - (d.decision_date::timestamp AT TIME ZONE 'UTC')
-              )
-            ) / ${SECONDS_PER_YEAR},
-            1.0
-          ),
-          1.0
-        )
-      )),
-      citation_count = agg.cnt,
-      citation_authority_computed_at = ${nowExpr}
-    FROM (
-      SELECT
-        d2.id AS decision_id,
-        coalesce(sum(
-          CASE WHEN c.id IS NULL THEN 0 ELSE
-            (${courtWeightExpr})
-            * (1.0 / (1 + COALESCE(
-                extract(
-                  epoch FROM (
-                    ${nowExpr}
-                    - (citing_d.decision_date::timestamp AT TIME ZONE 'UTC')
-                  )
-                )
-                  / ${SECONDS_PER_YEAR},
-                1.0
-              )))
-          END
-        ), 0) AS raw_sum,
-        count(c.id)::int AS cnt
-      FROM case_law_decisions d2
-      LEFT JOIN (
-        case_law_citations c
-        JOIN case_law_decisions citing_d
-          ON citing_d.id = c.citing_decision_id
-        JOIN case_law_sources citing_src
-          ON citing_src.id = citing_d.source_id
-         AND ${sql.raw(redistributableCaseLawSourceSqlFor("citing_src"))}
-      ) ON c.cited_decision_id = d2.id
-         -- Procedural references name the judgment under review, not an
-         -- authority being invoked; counting them would rank a decision
-         -- by how often it was appealed.
-         AND c.kind = 'precedent'
-      GROUP BY d2.id
-    ) agg
-    WHERE agg.decision_id = d.id
+  const result: unknown = await tx.execute(sql`
+    WITH batch AS (
+      SELECT d.id, d.decision_date
+        FROM case_law_decisions d
+       WHERE d.citation_authority_computed_at IS NULL
+          OR d.citation_authority_computed_at < ${staleBefore}::timestamptz
+       ORDER BY d.citation_authority_computed_at ASC NULLS FIRST, d.id
+       LIMIT ${limit}
+    ),
+    agg AS (
+      SELECT b.id AS decision_id,
+             b.decision_date,
+             coalesce(sum(
+               CASE WHEN c.id IS NULL THEN 0 ELSE ${contribution} END
+             ), 0) AS raw_sum,
+             count(c.id)::int AS cnt
+        FROM batch b
+        LEFT JOIN (
+          case_law_citations c
+          JOIN case_law_decisions citing_d
+            ON citing_d.id = c.citing_decision_id
+          JOIN case_law_sources citing_src
+            ON citing_src.id = citing_d.source_id
+           AND ${sql.raw(redistributableCaseLawSourceSqlFor("citing_src"))}
+        ) ON c.cited_decision_id = b.id
+           -- Procedural references name the judgment under review, not an
+           -- authority being invoked; counting them would rank a decision by
+           -- how often it was appealed.
+           AND c.kind = 'precedent'
+       GROUP BY b.id, b.decision_date
+    ),
+    updated AS (
+      UPDATE case_law_decisions d
+         SET citation_authority = ln(1 + (
+               agg.raw_sum / GREATEST(
+                 COALESCE(
+                   extract(
+                     epoch FROM (
+                       ${nowExpr}
+                       - (agg.decision_date::timestamp AT TIME ZONE 'UTC')
+                     )
+                   ) / ${SECONDS_PER_YEAR},
+                   1.0
+                 ),
+                 1.0
+               )
+             )),
+             citation_count = agg.cnt,
+             citation_authority_computed_at = ${nowExpr}
+        FROM agg
+       WHERE agg.decision_id = d.id
+      RETURNING agg.cnt AS cnt
+    )
+    SELECT count(*)::int AS recomputed,
+           count(*) FILTER (WHERE u.cnt > 0)::int AS cited
+      FROM updated u
   `);
 
-  const result: unknown = await tx.execute(
-    sql`SELECT count(*)::int AS n FROM case_law_decisions WHERE citation_count > 0`,
-  );
-  if (!Array.isArray(result)) {
-    return 0;
-  }
-  const firstRow: unknown = result.at(0);
-  if (!isRecord(firstRow) || typeof firstRow["n"] !== "number") {
-    return 0;
-  }
-  return firstRow["n"];
+  return {
+    recomputed: firstNumber(result, "recomputed"),
+    cited: firstNumber(result, "cited"),
+  };
 };
 
 /**
- * Try-locked variant for periodic daemon recomputes. Overlapping
- * processes (a rolling deployment, a restart racing a still-draining
- * task) would otherwise queue duplicate whole-corpus updates behind each
- * other's row locks; the advisory try-lock lets exactly one proceed and
- * the rest return null ("another process is recomputing") instead of
- * blocking. The lock is transaction-scoped, so it releases with the tx.
+ * Take one batch, or report that another writer holds the sweep.
+ *
+ * The lock is transaction-scoped and therefore per batch, which is the point:
+ * two processes cannot write the same slice at once, and neither holds the
+ * sweep across a whole corpus. A rolling deployment costs one batch's
+ * contention rather than an hour of progress.
  */
-export const tryRecomputeCitationAuthorityForAll = async (
+export const tryRecomputeCitationAuthorityBatch = async (
   tx: CitationAuthorityTx,
-  options: RecomputeCitationAuthorityOptions = {},
-): Promise<number | null> => {
+  options: CitationAuthorityBatchOptions,
+): Promise<CitationAuthorityBatch | null> => {
   const lockResult: unknown = await tx.execute(
     sql`SELECT pg_try_advisory_xact_lock(hashtext('case_law'), hashtext('citation_authority_recompute')) AS locked`,
   );
-  const lockRow: unknown = Array.isArray(lockResult)
-    ? lockResult.at(0)
-    : undefined;
+  const lockRow = executedRows(lockResult).at(0);
   if (!isRecord(lockRow) || lockRow["locked"] !== true) {
     return null;
   }
-  return await recomputeCitationAuthorityForAll(tx, options);
+  return await recomputeCitationAuthorityBatch(tx, options);
 };

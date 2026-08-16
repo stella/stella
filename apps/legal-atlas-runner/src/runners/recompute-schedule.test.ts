@@ -10,8 +10,8 @@ const OUTCOMES = Object.values(
   RECOMPUTE_OUTCOME,
 ) satisfies readonly RecomputeOutcome[];
 
-const RETRY_DELAY_MS = 10 * 60 * 1000;
-const INTERVAL_MS = 6 * 60 * 60 * 1000;
+const BATCH_DELAY_MS = 2000;
+const IDLE_DELAY_MS = 10 * 60 * 1000;
 
 /** Well past the point where doubling saturates the cap. */
 const FAILURE_RUN = Array.from({ length: 40 }, (_, i) => i + 1);
@@ -20,12 +20,12 @@ const delayAfterFailures = (consecutiveFailures: number): number =>
   nextRecomputeDelayMs({
     outcome: RECOMPUTE_OUTCOME.FAILED,
     consecutiveFailures,
-    retryDelayMs: RETRY_DELAY_MS,
-    intervalMs: INTERVAL_MS,
+    batchDelayMs: BATCH_DELAY_MS,
+    idleDelayMs: IDLE_DELAY_MS,
   });
 
 describe("nextRecomputeDelayMs", () => {
-  test("no outcome ever schedules sooner than the retry delay or later than the interval", () => {
+  test("no outcome ever schedules sooner than the batch gap or later than the idle poll", () => {
     const outOfRange = OUTCOMES.flatMap((outcome) =>
       FAILURE_RUN.map((consecutiveFailures) => ({
         outcome,
@@ -33,73 +33,69 @@ describe("nextRecomputeDelayMs", () => {
           outcome,
           consecutiveFailures:
             outcome === RECOMPUTE_OUTCOME.FAILED ? consecutiveFailures : 0,
-          retryDelayMs: RETRY_DELAY_MS,
-          intervalMs: INTERVAL_MS,
+          batchDelayMs: BATCH_DELAY_MS,
+          idleDelayMs: IDLE_DELAY_MS,
         }),
       })),
-    ).filter(({ delay }) => delay < RETRY_DELAY_MS || delay > INTERVAL_MS);
+    ).filter(({ delay }) => delay < BATCH_DELAY_MS || delay > IDLE_DELAY_MS);
 
     expect(outOfRange).toEqual([]);
   });
 
-  test("a run of failures backs off monotonically and settles at the interval", () => {
+  test("a run of failures backs off monotonically and settles at the idle poll", () => {
     const delays = FAILURE_RUN.map(delayAfterFailures);
     const regressions = delays.filter(
       (delay, i) => i > 0 && delay < (delays[i - 1] ?? 0),
     );
 
     expect(regressions).toEqual([]);
-    expect(delays.at(0)).toBe(RETRY_DELAY_MS);
-    expect(delays.at(-1)).toBe(INTERVAL_MS);
+    expect(delays.at(0)).toBe(BATCH_DELAY_MS);
+    expect(delays.at(-1)).toBe(IDLE_DELAY_MS);
   });
 
-  test("a skip keeps the short retry however long the recompute has been failing", () => {
-    // The lock holder may exit before committing; its replacement should not
-    // inherit a gap, and a skip is not evidence the recompute cannot finish.
+  test("a batch that advanced pays only the duty cycle", () => {
+    // Throughput is this gap and nothing else: a batch that recomputed rows
+    // says there is more work, so backing off would be backwards.
     expect(
+      nextRecomputeDelayMs({
+        outcome: RECOMPUTE_OUTCOME.ADVANCED,
+        consecutiveFailures: 0,
+        batchDelayMs: BATCH_DELAY_MS,
+        idleDelayMs: IDLE_DELAY_MS,
+      }),
+    ).toBe(BATCH_DELAY_MS);
+  });
+
+  test("a skip keeps the batch gap however long the sweep has been failing", () => {
+    // The lock holder is doing the work; finding it held says nothing about
+    // how much is left, and is not evidence the sweep cannot finish.
+    // Across a whole run of failure counts, not just zero: the invariant is
+    // that a skip is *never* backed off, and asserting it at zero would leave
+    // a future change that applies the failure curve to SKIPPED passing.
+    const delays = FAILURE_RUN.map((consecutiveFailures) =>
       nextRecomputeDelayMs({
         outcome: RECOMPUTE_OUTCOME.SKIPPED,
-        consecutiveFailures: 0,
-        retryDelayMs: RETRY_DELAY_MS,
-        intervalMs: INTERVAL_MS,
+        consecutiveFailures,
+        batchDelayMs: BATCH_DELAY_MS,
+        idleDelayMs: IDLE_DELAY_MS,
       }),
-    ).toBe(RETRY_DELAY_MS);
+    );
+    expect(delays.filter((delay) => delay !== BATCH_DELAY_MS)).toEqual([]);
   });
 
-  test("idle waits the full interval", () => {
-    expect(
-      nextRecomputeDelayMs({
-        outcome: RECOMPUTE_OUTCOME.IDLE,
-        consecutiveFailures: 0,
-        retryDelayMs: RETRY_DELAY_MS,
-        intervalMs: INTERVAL_MS,
-      }),
-    ).toBe(INTERVAL_MS);
-  });
-
-  test("fresh waits out the remainder, clamped into the schedule's range", () => {
-    const freshDelay = (freshRemainingMs: number): number =>
-      nextRecomputeDelayMs({
-        outcome: RECOMPUTE_OUTCOME.FRESH,
-        consecutiveFailures: 0,
-        freshRemainingMs,
-        retryDelayMs: RETRY_DELAY_MS,
-        intervalMs: INTERVAL_MS,
-      });
-
-    expect(freshDelay(2 * 60 * 60 * 1000)).toBe(2 * 60 * 60 * 1000);
-    expect(freshDelay(1)).toBe(RETRY_DELAY_MS);
-    expect(freshDelay(INTERVAL_MS * 2)).toBe(INTERVAL_MS);
-  });
-
-  test("a recompute that succeeded waits the full interval", () => {
-    expect(
-      nextRecomputeDelayMs({
-        outcome: RECOMPUTE_OUTCOME.RECOMPUTED,
-        consecutiveFailures: 0,
-        retryDelayMs: RETRY_DELAY_MS,
-        intervalMs: INTERVAL_MS,
-      }),
-    ).toBe(INTERVAL_MS);
+  test("a current corpus and an unrankable one both wait the idle poll", () => {
+    for (const outcome of [
+      RECOMPUTE_OUTCOME.CURRENT,
+      RECOMPUTE_OUTCOME.IDLE,
+    ] as const) {
+      expect(
+        nextRecomputeDelayMs({
+          outcome,
+          consecutiveFailures: 0,
+          batchDelayMs: BATCH_DELAY_MS,
+          idleDelayMs: IDLE_DELAY_MS,
+        }),
+      ).toBe(IDLE_DELAY_MS);
+    }
   });
 });

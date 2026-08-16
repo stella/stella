@@ -1,19 +1,27 @@
 /**
- * When the citation-authority recompute should run again, given how the
- * attempt that just finished ended.
+ * How long the citation-authority sweep waits before its next batch, given how
+ * the batch that just finished ended.
+ *
+ * The sweep is continuous rather than periodic: it takes bounded batches of
+ * the least recently computed decisions, and a batch that finds none is what
+ * "the corpus is current" looks like. So the schedule has two regimes rather
+ * than a single interval — a duty cycle while there is work, and a poll while
+ * there is not.
  *
  * Kept free of the runner's DB and env imports so the schedule can be
  * exercised on its own.
  */
 
 export const RECOMPUTE_OUTCOME = {
-  RECOMPUTED: "recomputed",
+  /** A batch recomputed decisions. */
+  ADVANCED: "advanced",
+  /** Nothing was due: every decision is current within the refresh interval. */
+  CURRENT: "current",
+  /** Another process holds the sweep. Not an error; asked again next turn. */
   SKIPPED: "skipped",
-  FAILED: "failed",
   /** Nothing to rank: no citation has resolved to a target yet. */
   IDLE: "idle",
-  /** A previous process recomputed recently; wait out the remainder. */
-  FRESH: "fresh",
+  FAILED: "failed",
 } as const;
 
 export type RecomputeOutcome =
@@ -23,51 +31,48 @@ type RecomputeDelayOptions = {
   outcome: RecomputeOutcome;
   /** Consecutive failures including this one; 0 for any other outcome. */
   consecutiveFailures: number;
-  retryDelayMs: number;
-  intervalMs: number;
   /**
-   * For `fresh` only: how much of the interval the last committed
-   * recompute has left. Clamped into [retryDelayMs, intervalMs].
+   * Gap between two batches while there is work. The whole throughput of the
+   * sweep, and the knob that decides how much of the database it takes.
    */
-  freshRemainingMs?: number;
+  batchDelayMs: number;
+  /** Poll gap once the corpus is current, and the ceiling on any backoff. */
+  idleDelayMs: number;
 };
 
 /**
- * A recompute rewrites the whole corpus in one statement, so a failing one is
- * not free: it burns its entire statement-timeout budget against the same
- * tables the ingest loops are writing, and then leaves the corpus exactly as
- * large as it found it. Retrying that on a flat short delay turns a recompute
- * the corpus has outgrown into a permanent load source, because nothing about
- * why it failed changes between two attempts minutes apart. The heavier the
- * statement, the more the failing schedule costs, which is backwards.
+ * A batch is bounded, so a failing one no longer burns a whole-corpus
+ * statement-timeout budget the way the single UPDATE did. It is still not
+ * free: it fails against the same tables the ingest loops are writing, and
+ * nothing about why it failed changes between two attempts seconds apart. So a
+ * failure doubles its delay per consecutive failure up to the idle poll, which
+ * is the cadence a sweep that can no longer finish settles at, and any
+ * non-failure resets the doubling so a single blip costs one short retry
+ * rather than a degraded schedule.
  *
- * So only a *skip* keeps the flat short retry: there the lock holder is doing
- * the work and may exit before committing, and its replacement should not
- * inherit a full interval's gap. A failure doubles its delay per consecutive
- * failure, capped at the normal interval, which is the cadence a recompute
- * that can no longer finish settles at. Any non-failure resets the doubling,
- * so a single blip costs one short retry, not a degraded schedule.
+ * A skip keeps the batch gap rather than backing off: the lock holder is doing
+ * the work, and this process finding it held says nothing about how much work
+ * is left.
  */
 export const nextRecomputeDelayMs = ({
   outcome,
   consecutiveFailures,
-  retryDelayMs,
-  intervalMs,
-  freshRemainingMs = 0,
+  batchDelayMs,
+  idleDelayMs,
 }: RecomputeDelayOptions): number => {
   switch (outcome) {
-    case RECOMPUTE_OUTCOME.RECOMPUTED:
-      return intervalMs;
+    case RECOMPUTE_OUTCOME.ADVANCED:
+      return batchDelayMs;
     case RECOMPUTE_OUTCOME.SKIPPED:
-      return retryDelayMs;
+      return batchDelayMs;
+    case RECOMPUTE_OUTCOME.CURRENT:
+      return idleDelayMs;
     case RECOMPUTE_OUTCOME.IDLE:
-      return intervalMs;
-    case RECOMPUTE_OUTCOME.FRESH:
-      return Math.min(Math.max(freshRemainingMs, retryDelayMs), intervalMs);
+      return idleDelayMs;
     case RECOMPUTE_OUTCOME.FAILED:
       return Math.min(
-        retryDelayMs * 2 ** Math.max(0, consecutiveFailures - 1),
-        intervalMs,
+        batchDelayMs * 2 ** Math.max(0, consecutiveFailures - 1),
+        idleDelayMs,
       );
     default: {
       const unreachable: never = outcome;
