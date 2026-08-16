@@ -45,13 +45,13 @@ too). Use it for accent-insensitive search keys.
 
 `foldToAscii` keeps that strip as its base and adds the folds a
 decomposition cannot express, so it matches PostgreSQL `unaccent()` for
-every Latin-script character the extension declares a rule for: `ł` to
-`l`, `đ` to `d`, `ø` to `o`, `ß` to `ss`, `æ` to `ae`, and the rest of
-the table in `src/ascii-fold-table.ts`. Use it wherever the counterpart
-is an `unaccent`-folded index (or a Tantivy `ascii_folding` one); a plain
-mark strip leaves `ł` standing and under-matches the lexemes the index
-actually stored. Non-Latin scripts are out of contract and pass through
-with their marks stripped.
+every Latin-script character for which the extension declares a rule:
+`ł` to `l`, `đ` to `d`, `ø` to `o`, `ß` to `ss`, `æ` to `ae`, and the
+rest of the table in `src/ascii-fold-table.ts`. Use it wherever the
+counterpart is an `unaccent`-folded index (or a Tantivy `ascii_folding`
+one); a plain mark strip leaves `ł` standing and under-matches the
+lexemes the index actually stored. Non-Latin scripts are out of contract
+and pass through with their marks stripped.
 
 `stripDiacriticsForSlug` is the same strip but decomposes with NFKD, so
 compatibility characters (ligatures, full-width forms, superscripts) fold
