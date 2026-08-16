@@ -224,6 +224,24 @@ export const _ok_reTypedUnderNestedOmit = (
   >,
 ) => <Panel {...props} orientation="horizontal" />;
 
+// A function-local alias resolves like a top-level one.
+export const _blockLocalAlias = () => {
+  type InnerProps = Omit<PanelProps, "orientation">;
+  const Inner = (props: InnerProps) => (
+    // oxlint-disable-next-line no-omitted-prop-respread/no-omitted-prop-respread
+    <Panel {...props} />
+  );
+  return <Inner />;
+};
+
+// A top-level alias declared after the component that annotates with it still
+// resolves: the walk finishes before anything is reported.
+export const _forwardDeclaredAlias = (props: LaterProps) => (
+  // oxlint-disable-next-line no-omitted-prop-respread/no-omitted-prop-respread
+  <Panel {...props} />
+);
+type LaterProps = Omit<PanelProps, "orientation">;
+
 // A long alias chain still resolves: only a cycle stops the walk.
 type Shell1 = Omit<PanelProps, "orientation">;
 type Shell2 = Shell1;

@@ -49,7 +49,9 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 //     position. A generic or computed key set (`Omit<P, K>`, `keyof Q`) is out
 //     of scope, as is an `Omit` reached through an imported type alias; only
 //     file-local type aliases and the modifier utilities `Partial`, `Readonly`,
-//     and `Required` are unwrapped.
+//     and `Required` are unwrapped. Aliases are indexed by name across the whole
+//     file, so a name two declarations share resolves to nothing rather than
+//     guessing which scope a reference meant.
 //   - `Omit` is matched by name. A shadowed or re-exported `Omit` is not
 //     distinguished.
 //   - The omission must be written on the parameter. A props type inferred from
@@ -94,14 +96,15 @@ const typeReferenceName = (typeName) => {
   return left === null || right === null ? null : `${left}.${right}`;
 };
 
-// The body of a file-local alias, unless it is already being expanded on this
-// path. `open` bounds cyclic aliases without capping how deep an honest chain
-// may go: a depth cutoff would silently stop reporting past the limit.
+// The body of a local alias, unless it is already being expanded on this path.
+// `open` bounds cyclic aliases without capping how deep an honest chain may go:
+// a depth cutoff would silently stop reporting past the limit. An entry of
+// `null` marks a name two declarations share, which resolves to nothing.
 const expandAlias = (name, localTypes, open) => {
   if (name === null || open.has(name)) {
     return null;
   }
-  return localTypes.get(name) ?? null;
+  return localTypes.get(name)?.typeNode ?? null;
 };
 
 // String keys from the second `Omit` argument: `"a"` or `"a" | "b"`.
@@ -320,37 +323,63 @@ export default eslintCompatPlugin({
         // binding identifier. Scope resolution maps a spread back to exactly one
         // binding, so any shadowing declaration wins over an enclosing one.
         const omittedByBinding = new Map<number, Set<string>>();
+        // Collected during traversal, evaluated once the file is fully walked.
+        const propsParams: { binding; param }[] = [];
+        const spreadElements: unknown[] = [];
 
         // Props types are aliases here: `typescript/consistent-type-definitions`
-        // keeps interfaces out of this codebase.
+        // keeps interfaces out of this codebase. Aliases are indexed by name
+        // across the whole file, including block- and function-local ones; a
+        // name two declarations share resolves to nothing rather than guessing
+        // which scope a reference meant.
         const declareLocalType = (declaration) => {
           if (declaration?.type !== "TSTypeAliasDeclaration") {
             return;
           }
           const name = declaration.id?.name;
-          if (typeof name === "string") {
-            localTypes.set(name, declaration.typeAnnotation);
+          if (typeof name !== "string") {
+            return;
+          }
+          const start = declaration.range[0];
+          const existing = localTypes.get(name);
+          if (existing === undefined) {
+            localTypes.set(name, {
+              start,
+              typeNode: declaration.typeAnnotation,
+            });
+            return;
+          }
+          if (existing !== null && existing.start !== start) {
+            localTypes.set(name, null);
           }
         };
 
-        const enterFunction = (node) => {
+        const collectPropsParam = (node) => {
           const param = patternOf(node.params?.at(0));
           const binding = propsBindingOf(param);
-          if (binding === null) {
-            return;
+          if (binding !== null) {
+            propsParams.push({ binding, param });
           }
-          const propsType = param.typeAnnotation?.typeAnnotation;
-          // A key the pattern destructures is absent from the rest object, and
-          // a key the props type re-declares is meant to pass through.
-          const carried = new Set([
-            ...destructuredKeysOf(param),
-            ...reintroducedKeysOf(propsType, localTypes),
-          ]);
-          const keys = omittedKeysOf(propsType, localTypes).filter(
-            (key) => !carried.has(key),
-          );
-          if (keys.length > 0) {
-            omittedByBinding.set(binding.range[0], new Set(keys));
+        };
+
+        // Deferred to `Program:exit` so every alias in the file is known first:
+        // a type alias may be declared after the component that annotates with
+        // it, in any scope.
+        const indexOmittedKeys = () => {
+          for (const { binding, param } of propsParams) {
+            const propsType = param.typeAnnotation?.typeAnnotation;
+            // A key the pattern destructures is absent from the rest object,
+            // and a key the props type re-declares is meant to pass through.
+            const carried = new Set([
+              ...destructuredKeysOf(param),
+              ...reintroducedKeysOf(propsType, localTypes),
+            ]);
+            const keys = omittedKeysOf(propsType, localTypes).filter(
+              (key) => !carried.has(key),
+            );
+            if (keys.length > 0) {
+              omittedByBinding.set(binding.range[0], new Set(keys));
+            }
           }
         };
 
@@ -373,65 +402,76 @@ export default eslintCompatPlugin({
           return undefined;
         };
 
+        const reportElement = (node) => {
+          const attributes = node.openingElement.attributes;
+          const omitted = new Set<string>();
+          for (const attribute of attributes) {
+            if (
+              attribute.type !== "JSXSpreadAttribute" ||
+              !isIdentifier(attribute.argument)
+            ) {
+              continue;
+            }
+            for (const key of omittedKeysForSpread(attribute.argument) ?? []) {
+              omitted.add(key);
+            }
+          }
+
+          for (const key of omitted) {
+            if (key === "children" && hasMeaningfulChildren(node)) {
+              continue;
+            }
+            // Only a spread that could carry this key can override the pin.
+            const lastOverrideIndex = attributes.findLastIndex(
+              (attribute) =>
+                attribute.type === "JSXSpreadAttribute" &&
+                spreadCanDeliver(attribute, key),
+            );
+            if (lastOverrideIndex === -1) {
+              continue;
+            }
+            const pin = attributes.find(
+              (attribute) => attributeName(attribute) === key,
+            );
+            if (
+              pin !== undefined &&
+              attributes.indexOf(pin) > lastOverrideIndex
+            ) {
+              continue;
+            }
+            context.report({
+              node: pin ?? node.openingElement,
+              messageId:
+                pin === undefined ? "suppliedBySpread" : "pinnedBeforeSpread",
+              data: { key },
+            });
+          }
+        };
+
         return {
-          Program(node) {
+          Program() {
             localTypes.clear();
             omittedByBinding.clear();
-            for (const statement of node.body) {
-              declareLocalType(
-                statement.type === "ExportNamedDeclaration"
-                  ? statement.declaration
-                  : statement,
-              );
+            propsParams.length = 0;
+            spreadElements.length = 0;
+          },
+          TSTypeAliasDeclaration: declareLocalType,
+          ArrowFunctionExpression: collectPropsParam,
+          FunctionDeclaration: collectPropsParam,
+          FunctionExpression: collectPropsParam,
+          JSXElement(node) {
+            if (
+              node.openingElement.attributes.some(
+                (attribute) => attribute.type === "JSXSpreadAttribute",
+              )
+            ) {
+              spreadElements.push(node);
             }
           },
-          ArrowFunctionExpression: enterFunction,
-          FunctionDeclaration: enterFunction,
-          FunctionExpression: enterFunction,
-          JSXElement(node) {
-            const attributes = node.openingElement.attributes;
-            const omitted = new Set<string>();
-            for (const attribute of attributes) {
-              if (
-                attribute.type !== "JSXSpreadAttribute" ||
-                !isIdentifier(attribute.argument)
-              ) {
-                continue;
-              }
-              for (const key of omittedKeysForSpread(attribute.argument) ??
-                []) {
-                omitted.add(key);
-              }
-            }
-
-            for (const key of omitted) {
-              if (key === "children" && hasMeaningfulChildren(node)) {
-                continue;
-              }
-              // Only a spread that could carry this key can override the pin.
-              const lastOverrideIndex = attributes.findLastIndex(
-                (attribute) =>
-                  attribute.type === "JSXSpreadAttribute" &&
-                  spreadCanDeliver(attribute, key),
-              );
-              if (lastOverrideIndex === -1) {
-                continue;
-              }
-              const pin = attributes.find(
-                (attribute) => attributeName(attribute) === key,
-              );
-              if (
-                pin !== undefined &&
-                attributes.indexOf(pin) > lastOverrideIndex
-              ) {
-                continue;
-              }
-              context.report({
-                node: pin ?? node.openingElement,
-                messageId:
-                  pin === undefined ? "suppliedBySpread" : "pinnedBeforeSpread",
-                data: { key },
-              });
+          "Program:exit"() {
+            indexOmittedKeys();
+            for (const element of spreadElements) {
+              reportElement(element);
             }
           },
         };
