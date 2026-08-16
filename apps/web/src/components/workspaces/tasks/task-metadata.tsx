@@ -216,6 +216,7 @@ const hasDeletedAccount = (
 
 export const DatePickerPopover = (props: DatePickerPopoverProps) => {
   const t = useTranslations("tasks");
+  const tCommon = useTranslations("common");
   const locale = useLocale();
 
   return (
@@ -224,6 +225,13 @@ export const DatePickerPopover = (props: DatePickerPopoverProps) => {
       clearLabel={t("clearDate")}
       locale={locale}
       overdueLabel={t("overdue")}
+      // The props type omits all four labels so this wrapper owns them, but
+      // `todayLabel` was never supplied: the base fell back to its own
+      // Intl-derived string while its siblings came from the catalogue. An
+      // omit also only rejects a literal attribute — a props object typed
+      // wider stays assignable and carries a label through the spread — so
+      // every pinned label sits after it.
+      todayLabel={tCommon("today")}
     />
   );
 };

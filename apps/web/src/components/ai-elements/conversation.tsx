@@ -201,11 +201,15 @@ export const ConversationDownload = ({
         "inset-e-4 top-4 rounded-full",
         className,
       )}
-      onClick={handleDownload}
       size="icon"
       type="button"
       variant="outline"
       {...props}
+      // After the spread on purpose: the props type omits `onClick` so the
+      // button keeps its download action, but an omit only rejects a literal
+      // attribute. A props object typed wider stays assignable and carries a
+      // handler through the spread, silently replacing the download.
+      onClick={handleDownload}
     >
       {children ?? <DownloadIcon className="size-4" />}
     </Button>

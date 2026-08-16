@@ -86,6 +86,7 @@ runtime validation, or integration tests.
 - [`no-inline-style-colors`](./no-inline-style-colors.ts) (`no-inline-style-colors`): rejects hardcoded color values only inside JSX `style={{ ... }}` objects; domain data objects are out of scope.
 - [`no-input-dir-auto`](./no-input-dir-auto.ts) (`no-input-dir-auto`): prevents `dir="auto"` on form inputs where direction changes can destabilize layout and value editing.
 - [`no-legacy-entity-route`](./no-legacy-entity-route.ts) (`no-legacy-entity-route`): prevents construction of the removed public entity detail route.
+- [`no-omitted-prop-respread`](./no-omitted-prop-respread.ts) (`no-omitted-prop-respread`): requires a prop a component omits from its props type to be pinned after the last props spread, because width subtyping keeps the key on the spread value at runtime. It reads literal `Omit` keys and the component's own props binding only.
 - [`no-raw-route-query-client`](./no-raw-route-query-client.ts) (`no-raw-route-query-client`): requires route freshness wrappers in loaders and synchronous cache reads in pending components.
 - [`no-raw-router-invalidation`](./no-raw-router-invalidation.ts) (`no-raw-router-invalidation`): confines navigation-grade `router.invalidate()` calls to the owned session, locale, and exhaustively classified route-metadata boundaries.
 - [`no-raw-stored-json`](./no-raw-stored-json.ts) (`no-raw-stored-json`): requires persisted browser JSON to be parsed and schema-validated through `readStoredJson()`.
