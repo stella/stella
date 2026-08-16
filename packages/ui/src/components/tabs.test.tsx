@@ -65,6 +65,15 @@ describe("TabsList overflow", () => {
     // exactly that split, so the list owns the only one. Clipping without
     // scrolling (`overflow-hidden` on a tab that truncates) is not that split.
     expect(content).not.toMatch(/overflow(-[xy])?-(auto|scroll)/u);
+
+    // Containment stays on the scrolling axis. Both axes would leave a
+    // horizontal strip swallowing the wheel gestures meant for the page: it is
+    // a scroll container with no vertical range, so the gesture hits a boundary
+    // it cannot chain past.
+    expect(openTag).toContain(
+      "data-[orientation=horizontal]:overscroll-x-contain",
+    );
+    expect(openTag).not.toMatch(/(?:^|["\s])overscroll-contain\b/u);
   });
 
   test("centres safely so an overflowing strip keeps its leading tabs", () => {
@@ -76,13 +85,18 @@ describe("TabsList overflow", () => {
     expect(openTag).not.toMatch(/\bjustify-center(?![\w-])/u);
   });
 
-  test("stays inert while the tabs fit", () => {
+  test("hugs the tabs that fit and caps the ones that do not", () => {
     const { openTag } = readTabList(renderStrip());
 
-    // A `fit-content` list is exactly as wide as its tabs unless a consumer
-    // constrains it, so the scroll container has nothing to scroll and the
-    // strip renders as it did before it had one.
+    // Both, and neither alone. `w-fit` keeps a short strip exactly as wide as
+    // its tabs, so the scroll container has nothing to scroll. It cannot
+    // produce the scroll either: the tabs are `shrink-0 whitespace-nowrap`, so
+    // the list's min-content width equals its max-content width and
+    // `fit-content` resolves to the tabs' full width whatever space it is
+    // given. Measured in Chromium, a 349px strip in a 238px parent overflows
+    // that parent unscrolled without the cap, and scrolls 111px with it.
     expect(openTag).toMatch(/\bw-fit\b/u);
+    expect(openTag).toMatch(/\bmax-w-full\b/u);
 
     // The bar itself would not be inert: it takes block size from the strip the
     // moment it appears and paints over the indicator on the strip's edge. The

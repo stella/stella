@@ -54,20 +54,27 @@ const TabsList = ({
   return (
     <TabsPrimitive.List
       className={cn(
-        "text-muted-foreground relative z-0 flex w-fit items-center justify-center-safe gap-x-0.5",
+        "text-muted-foreground relative z-0 flex w-fit max-w-full items-center justify-center-safe gap-x-0.5",
         // A list narrower than its tabs used to clip them with no way to reach
-        // them, so the list scrolls itself. It has to be this element: Base UI
-        // drives it as the composite root, so it scrolls the active tab into
-        // view on mount and the focused one during arrow navigation (honouring
+        // them, so the list scrolls itself. `w-fit` alone cannot deliver that:
+        // the tabs are `shrink-0 whitespace-nowrap`, so the list's min-content
+        // width equals its max-content width and `fit-content` never shrinks,
+        // leaving the strip overflowing its parent rather than scrolling.
+        // `max-w-full` caps it at the available width, which is what turns that
+        // overflow into scrollable overflow; `w-fit` still hugs a strip that
+        // fits. The scroll container has to be this element: Base UI drives it
+        // as the composite root, so it scrolls the active tab into view on
+        // mount and the focused one during arrow navigation (honouring
         // `scroll-margin` on the tab), and it measures the indicator against
         // this element's scroll origin. `safe center` falls back to start
-        // alignment once the strip overflows, so the leading tabs cannot spill
-        // past that origin, and `w-fit` keeps all of it inert until a consumer
-        // constrains the list. Scrolling one axis computes the other to `auto`
-        // anyway, hence both. The bar itself stays hidden: it would take block
-        // size from the strip on appearing and paint over the indicator
+        // alignment once the strip overflows, because plain centring puts the
+        // leading tabs at a negative offset, outside the scrollable area.
+        // Scrolling one axis computes the other to `auto` anyway, hence both,
+        // but containment stays per axis so a wheel over a horizontal strip
+        // still scrolls the page. The bar itself stays hidden: it would take
+        // block size from the strip on appearing and paint over the indicator
         // anchored to the strip's edge.
-        "scrollbar-none overflow-auto overscroll-contain [&::-webkit-scrollbar]:hidden",
+        "scrollbar-none overflow-auto data-[orientation=horizontal]:overscroll-x-contain data-[orientation=vertical]:overscroll-y-contain [&::-webkit-scrollbar]:hidden",
         "data-[orientation=vertical]:flex-col",
         variant === "default"
           ? "bg-muted text-foreground-label rounded-lg p-0.5"
