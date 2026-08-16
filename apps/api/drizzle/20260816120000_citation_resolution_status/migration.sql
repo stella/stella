@@ -1,5 +1,8 @@
-SET lock_timeout = '1s';--> statement-breakpoint
-SET statement_timeout = '5s';--> statement-breakpoint
+-- SET LOCAL, not SET: the migrator runs every pending migration on one
+-- connection inside one transaction, so a session-level setting here would
+-- outlive this file and silently govern whatever runs after it.
+SET LOCAL lock_timeout = '1s';--> statement-breakpoint
+SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 
 -- Citation resolution recorded its outcome in the nullability of
 -- "cited_decision_id", which cannot distinguish "not examined yet" from

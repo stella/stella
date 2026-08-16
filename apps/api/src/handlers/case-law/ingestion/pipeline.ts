@@ -20,6 +20,7 @@ import type { ProceduralKeys } from "@/api/handlers/case-law/citation-kind";
 import {
   reopenCitationsForDecisionKey,
   reopenCitationsForKeys,
+  reopenCitationsFrom,
   reopenCitationsResolvedTo,
   resolveCitationsForDecision,
 } from "@/api/handlers/case-law/citation-resolution";
@@ -1404,7 +1405,13 @@ const processDecisionAttempt = async ({
    * the guarded update deliberately lets a newer observation intervene, so a
    * row that went X → Y → X would compare equal against that snapshot and
    * report no change, skipping the retraction the Y edges need. What matters is
-   * the identity actually replaced, and that is only knowable here.
+   * the identity actually replaced.
+   *
+   * `FOR UPDATE`, because reading it inside this transaction is not enough on
+   * its own: without the row lock another observation can still commit between
+   * this read and the update, and the comparison would again be against an
+   * identity this transaction did not replace. The lock holds the row until
+   * commit, so what is read here is what gets overwritten.
    *
    * All three fields travel together because all three are filters: a
    * jurisdiction correction under an unchanged key invalidates exactly the
@@ -1417,11 +1424,19 @@ const processDecisionAttempt = async ({
     citationKey: string | null;
     country: string;
     decisionDate: string | null;
-  } | null> =>
-    (await tx.query.caseLawDecisions.findFirst({
-      where: { id: { eq: id } },
-      columns: { citationKey: true, country: true, decisionDate: true },
-    })) ?? null;
+  } | null> => {
+    const rows = await tx
+      .select({
+        citationKey: caseLawDecisions.citationKey,
+        country: caseLawDecisions.country,
+        decisionDate: caseLawDecisions.decisionDate,
+      })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, id))
+      .for("update")
+      .limit(1);
+    return rows.at(0) ?? null;
+  };
 
   const resolutionIdentityChanged = (previous: {
     citationKey: string | null;
@@ -1577,6 +1592,12 @@ const processDecisionAttempt = async ({
           // path deliberately excludes its own links, so nothing else would
           // ever ask about them again.
           await reopenCitationsResolvedTo(tx, existing.id);
+          // And the edges this decision *makes*. Its jurisdiction and date are
+          // the resolver's policy and time filters, so moving either changes
+          // what its own citations may match — a date moving forwards can
+          // revive an unmatched one, moving backwards invalidates a resolved
+          // one, and the walk excludes terminal rows either way.
+          await reopenCitationsFrom(tx, existing.id);
           // The old key as well as the new one. An ambiguous citation carries
           // no target, so nothing that searches by target can reach it — and
           // this decision leaving its old key is exactly what can make the

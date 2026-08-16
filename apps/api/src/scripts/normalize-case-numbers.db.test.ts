@@ -169,6 +169,10 @@ test("the normalization splits the docket and retracts its edges", async () => {
 });
 
 test("a second pass finds nothing, so the walk terminates", async () => {
+  // Independent of the test above: a row already split no longer matches the
+  // pattern, so run the pass here rather than relying on a sibling having done
+  // it. A test that only passes in file order is not testing idempotence.
+  await db.execute(normalizeSheetNumbersStatement(100));
   const row = firstRow(await db.execute(normalizeSheetNumbersStatement(100)));
   expect(row["normalized"]).toBe(0);
 });

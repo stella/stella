@@ -23,6 +23,7 @@
  */
 
 import { rootDb } from "@/api/db/root";
+import { lockCitationGraph } from "@/api/handlers/case-law/citation-resolution";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   normalizeSheetNumbersStatement,
@@ -61,8 +62,16 @@ let normalized = 0;
 let reopened = 0;
 
 while (true) {
+  // The graph lock, then the statement, in one transaction. This changes what
+  // decisions are citable, so it is a graph mutation like any other: without
+  // the lock a resolver batch holding a snapshot from before the key was
+  // cleared can commit a `resolved` edge to a decision that no longer carries
+  // that key, and nothing revisits it.
   // oxlint-disable-next-line no-await-in-loop -- each batch depends on the previous one having committed
-  const result = await rootDb.execute(normalizeSheetNumbersStatement(BATCH));
+  const result = await rootDb.transaction(async (tx) => {
+    await lockCitationGraph(tx);
+    return await tx.execute(normalizeSheetNumbersStatement(BATCH));
+  });
   const batch = firstNumber(result, "normalized");
   if (batch === 0) {
     break;

@@ -1308,7 +1308,18 @@ export const runCaseLawIngest = async (
         }
         return { type: CITATION_RESOLUTION_STEP.SETTLED, counts: batch };
       },
-      readPending: async () => await countPendingCitations(backfillDb),
+      // Bounded like the batch is. A rejection is safe — the loop catches it
+      // and reports the window anyway — but a hang is not: the summary flush
+      // is awaited inside the walk, so a gauge query that never returns parks
+      // the whole thing. The database's statement timeout normally covers
+      // this, and `DB_BACKFILL_TRANSACTION_TIMEOUT_MS=0` deliberately removes
+      // that cover.
+      readPending: async () =>
+        await runWithHardDeadline(
+          "citation-resolution-gauge",
+          BACKFILL_HARD_DEADLINE_MS,
+          async () => await countPendingCitations(backfillDb),
+        ),
       errorTag,
       isDraining,
       now: Date.now,

@@ -840,10 +840,26 @@ test("the database refuses an empty citation key on either side", async () => {
   // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
   // type-aware lint; capture the rejection explicitly instead. `.execute()`
   // rather than the builder, which is a thenable and not a promise.
-  const rejectionOf = async (run: Promise<unknown>): Promise<unknown> =>
+  //
+  // The constraint is named in the assertion, not merely "something threw":
+  // these inserts omit columns that could fail for unrelated reasons, so a
+  // NOT NULL violation, a foreign-key failure, or a future required column
+  // would each keep this green while the constraint it exists for is absent.
+  // Drizzle wraps the driver error and puts the query text in its own message,
+  // so the constraint name lives on the cause; read the whole chain.
+  const messageChain = (error: unknown): string => {
+    const parts: string[] = [];
+    let current: unknown = error;
+    while (current instanceof Error) {
+      parts.push(current.message);
+      current = current.cause;
+    }
+    return parts.join(" | ");
+  };
+  const rejectionOf = async (run: Promise<unknown>): Promise<string> =>
     await run.then(
-      () => null,
-      (error: unknown) => error,
+      () => "no rejection",
+      (error: unknown) => messageChain(error),
     );
 
   expect(
@@ -861,7 +877,7 @@ test("the database refuses an empty citation key on either side", async () => {
         })
         .execute(),
     ),
-  ).not.toBeNull();
+  ).toContain("decisions_citation_key_non_empty");
   expect(
     await rejectionOf(
       db
@@ -874,5 +890,5 @@ test("the database refuses an empty citation key on either side", async () => {
         })
         .execute(),
     ),
-  ).not.toBeNull();
+  ).toContain("citations_citation_key_non_empty");
 });

@@ -172,7 +172,9 @@ const CITATION_GRAPH_LOCK = sql`hashtext('case_law'), hashtext('citation_resolut
  * Re-entrant within a transaction, so a path that reopens and then resolves
  * pays one wait, not two.
  */
-const lockCitationGraph = async (tx: CitationResolutionTx): Promise<void> => {
+export const lockCitationGraph = async (
+  tx: CitationResolutionTx,
+): Promise<void> => {
   await tx.execute(sql`SELECT pg_advisory_xact_lock(${CITATION_GRAPH_LOCK})`);
 };
 
@@ -362,11 +364,24 @@ const resolveCitationBatchIn = async (
   };
 };
 
+/**
+ * Settle one batch from an explicit position, waiting for the walk rather than
+ * skipping it.
+ *
+ * Every exported entry point that touches the graph takes the lock, including
+ * this one: an unlocked variant sitting beside the locked ones is the call site
+ * that reintroduces the interleaving, and the rows it produces look correct.
+ * The daemon uses `tryResolveCitationBatch`, which declines instead of waiting
+ * because a held walk is a reason to come back later.
+ */
 export const resolveCitationBatch = async (
   scopedDb: ScopedDb,
   options: ResolveCitationBatchOptions,
 ): Promise<CitationResolutionBatch> =>
-  await scopedDb(async (tx) => await resolveCitationBatchIn(tx, options));
+  await scopedDb(async (tx) => {
+    await lockCitationGraph(tx);
+    return await resolveCitationBatchIn(tx, options);
+  });
 
 /**
  * Settle one batch, or report that another writer is already walking.
@@ -678,6 +693,46 @@ export const reopenCitationsResolvedTo = async (
       RETURNING id
     )
     SELECT count(*)::int AS reopened FROM retracted
+  `);
+  const row: unknown = firstRow(result);
+  return isRecord(row) ? toCount(row["reopened"]) : 0;
+};
+
+/**
+ * Re-adjudicate every citation a decision *makes*, after its own identity
+ * changed.
+ *
+ * The outgoing direction, and the one that is easiest to forget because the
+ * decision is the subject rather than the object. A citing decision's
+ * jurisdiction and date are not description: they are the resolver's policy
+ * filter and its time filter. Moving the date past a candidate's turns an
+ * `unmatched` citation into a resolvable one; moving it back invalidates a
+ * `resolved` edge that was honest under the old date. Neither is discoverable
+ * from the cited side, and the walk excludes terminal rows, so nothing else
+ * would ever ask again.
+ *
+ * Every non-pending row, not just the negatives: a date moving backwards
+ * retracts, a date moving forwards revives, and this cannot tell which without
+ * redoing the adjudication that the resolver owns.
+ *
+ * Bounded by the citing index, so the cost is this decision's own citations.
+ */
+export const reopenCitationsFrom = async (
+  tx: CitationResolutionTx,
+  decisionId: SafeId<"caseLawDecision">,
+): Promise<number> => {
+  await lockCitationGraph(tx);
+  // audit: skip — derived citation graph, not a user action
+  const result: unknown = await tx.execute(sql`
+    WITH requeued AS (
+      UPDATE ${caseLawCitations}
+         SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING}::text,
+             cited_decision_id = NULL
+       WHERE citing_decision_id = ${decisionId}::uuid
+         AND resolution_status <> ${CITATION_RESOLUTION_STATUS.PENDING}
+      RETURNING id
+    )
+    SELECT count(*)::int AS reopened FROM requeued
   `);
   const row: unknown = firstRow(result);
   return isRecord(row) ? toCount(row["reopened"]) : 0;

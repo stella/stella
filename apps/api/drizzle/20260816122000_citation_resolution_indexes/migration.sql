@@ -69,6 +69,14 @@ CREATE INDEX CONCURRENTLY "case_law_decisions_citation_candidate_idx" ON "case_l
 -- predicate that empties as citations settle.
 DROP INDEX CONCURRENTLY IF EXISTS "case_law_citations_unresolved_key_idx";--> statement-breakpoint
 
+-- Also superseded: a strict prefix of the candidate index created above, which
+-- answers every query it answered. Keeping both would cost a few hundred
+-- megabytes of cache on the same instance that has to hold the new one.
+-- stella-migration-safety: reviewed destructive-change - the surviving index
+-- leads on the same column with the same partial predicate, so every plan that
+-- used this one can use that one.
+DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_citation_key_idx";--> statement-breakpoint
+
 SET statement_timeout = '5s';
 --> statement-breakpoint
 SET lock_timeout = '1s';

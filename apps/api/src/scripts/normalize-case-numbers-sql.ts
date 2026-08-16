@@ -13,7 +13,10 @@
 import type { SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
-import { CITATION_RESOLUTION_STATUS } from "@/api/handlers/case-law/citation-resolution-status";
+import {
+  CITATION_RESOLUTION_STATUS,
+  citationReopenableByKeySql,
+} from "@/api/handlers/case-law/citation-resolution-status";
 
 /**
  * Trailing `-<digits>` on a docket that already carries a year — the same
@@ -43,7 +46,7 @@ export const sheetNumberSurveyStatement = (): SQL => sql`
  */
 export const normalizeSheetNumbersStatement = (limit: number): SQL => sql`
   WITH batch AS (
-    SELECT id FROM case_law_decisions
+    SELECT id, citation_key AS old_key FROM case_law_decisions
     WHERE case_number ~ ${SHEET_PATTERN}
       AND source_document_id IS NOT NULL
     LIMIT ${limit}
@@ -57,14 +60,30 @@ export const normalizeSheetNumbersStatement = (limit: number): SQL => sql`
     WHERE d.id = batch.id
     RETURNING d.id
   ),
-  reopened AS (
+  retracted AS (
     UPDATE case_law_citations c
        SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING},
            cited_decision_id = NULL
-     WHERE c.cited_decision_id IN (SELECT id FROM normalized)
+     WHERE c.cited_decision_id IN (SELECT id FROM batch)
        AND c.resolution_status = ${CITATION_RESOLUTION_STATUS.RESOLVED}
+    RETURNING c.id
+  ),
+  -- The key these decisions are losing, not the one they will gain. A citation
+  -- that went ambiguous because two decisions shared a sheet-bearing key holds
+  -- no target, so the retraction above cannot reach it — and one of the two
+  -- candidates leaving the key is exactly what makes the other unique. The key
+  -- backfill that follows announces the new key, which says nothing about the
+  -- old one, so this is the only place those rows are reachable.
+  requeued AS (
+    UPDATE case_law_citations c
+       SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING}
+     WHERE c.citation_key IN (
+             SELECT old_key FROM batch WHERE old_key IS NOT NULL
+           )
+       AND ${citationReopenableByKeySql(sql.raw("c.resolution_status"))}
     RETURNING c.id
   )
   SELECT (SELECT count(*)::int FROM normalized) AS normalized,
-         (SELECT count(*)::int FROM reopened) AS reopened
+         (SELECT count(*)::int FROM retracted)
+         + (SELECT count(*)::int FROM requeued) AS reopened
 `;

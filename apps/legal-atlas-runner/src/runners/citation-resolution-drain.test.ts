@@ -129,13 +129,27 @@ const runDrain = async ({
 const batchStarts = (events: readonly DrainEvent[]): number[] =>
   events.flatMap((event) => (event.type === "batch" ? [event.atMs] : []));
 
+/**
+ * The gap between two turns, by index. Named rather than subtracted inline
+ * with non-null assertions: a missing turn is the failure these tests exist to
+ * catch, and `starts.at(n)! - starts.at(n - 1)!` reports it as `NaN` instead
+ * of saying which turn never happened.
+ */
+const gapBefore = (events: readonly DrainEvent[], turn: number): number => {
+  const starts = batchStarts(events);
+  const from = starts.at(turn - 1);
+  const to = starts.at(turn);
+  if (from === undefined || to === undefined) {
+    throw new Error(
+      `expected at least ${turn + 1} turns, saw ${starts.length}`,
+    );
+  }
+  return to - from;
+};
+
 test("a settled turn is paced by the duty cycle, not by its result", async () => {
   const { events } = await runDrain({ steps: [SETTLED], turns: 3 });
-  const starts = batchStarts(events);
-  // Throughput is this gap and nothing else: the database serving the walk is
-  // also serving readers, so a turn that found plenty does not earn a faster
-  // next one.
-  expect(starts.at(1)! - starts.at(0)!).toBe(TIMING.batchDelayMs);
+  expect(gapBefore(events, 1)).toBe(TIMING.batchDelayMs);
 });
 
 test("an empty batch backs off towards the idle ceiling", async () => {
@@ -143,9 +157,8 @@ test("an empty batch backs off towards the idle ceiling", async () => {
     steps: [SETTLED, DRAINED],
     turns: 4,
   });
-  const starts = batchStarts(events);
-  expect(starts.at(2)! - starts.at(1)!).toBe(TIMING.idleSleepMs);
-  expect(starts.at(3)! - starts.at(2)!).toBe(TIMING.idleSleepMs * 2);
+  expect(gapBefore(events, 2)).toBe(TIMING.idleSleepMs);
+  expect(gapBefore(events, 3)).toBe(TIMING.idleSleepMs * 2);
 });
 
 test("a settled turn resets the idle backoff", async () => {
@@ -153,17 +166,15 @@ test("a settled turn resets the idle backoff", async () => {
     steps: [DRAINED, DRAINED, SETTLED, DRAINED],
     turns: 5,
   });
-  const starts = batchStarts(events);
-  expect(starts.at(2)! - starts.at(1)!).toBe(TIMING.idleSleepMs * 2);
+  expect(gapBefore(events, 2)).toBe(TIMING.idleSleepMs * 2);
   // The settled turn pays the duty cycle and puts the idle floor back.
-  expect(starts.at(3)! - starts.at(2)!).toBe(TIMING.batchDelayMs);
-  expect(starts.at(4)! - starts.at(3)!).toBe(TIMING.idleSleepMs);
+  expect(gapBefore(events, 3)).toBe(TIMING.batchDelayMs);
+  expect(gapBefore(events, 4)).toBe(TIMING.idleSleepMs);
 });
 
 test("a held walk waits instead of spinning", async () => {
   const { events } = await runDrain({ steps: [BUSY], turns: 3 });
-  const starts = batchStarts(events);
-  expect(starts.at(1)! - starts.at(0)!).toBe(TIMING.idleSleepMs);
+  expect(gapBefore(events, 1)).toBe(TIMING.idleSleepMs);
 });
 
 test("a throwing batch backs off and the walk continues", async () => {
@@ -171,9 +182,8 @@ test("a throwing batch backs off and the walk continues", async () => {
     steps: ["throw"],
     turns: 4,
   });
-  const starts = batchStarts(events);
-  expect(starts.at(1)! - starts.at(0)!).toBe(TIMING.batchDelayMs);
-  expect(starts.at(2)! - starts.at(1)!).toBe(TIMING.batchDelayMs * 2);
+  expect(gapBefore(events, 1)).toBe(TIMING.batchDelayMs);
+  expect(gapBefore(events, 2)).toBe(TIMING.batchDelayMs * 2);
   expect(summaries.at(-1)).toMatchObject({ errored: 4, lastErrorTag: "Error" });
 });
 
@@ -186,9 +196,8 @@ test("the failure backoff has a floor of its own when pacing is zero", async () 
     turns: 4,
     timing: { ...TIMING, batchDelayMs: 0 },
   });
-  const starts = batchStarts(events);
-  expect(starts.at(1)! - starts.at(0)!).toBe(TIMING.failureBackoffMinMs);
-  expect(starts.at(2)! - starts.at(1)!).toBe(TIMING.failureBackoffMinMs * 2);
+  expect(gapBefore(events, 1)).toBe(TIMING.failureBackoffMinMs);
+  expect(gapBefore(events, 2)).toBe(TIMING.failureBackoffMinMs * 2);
 });
 
 test("work waiting with nothing examined is reported as a contradiction", async () => {
