@@ -231,6 +231,10 @@
     "count": 0,
     "files": {}
   },
+  "no-vacuous-throw-assertion-suppressions": {
+    "count": 0,
+    "files": {}
+  },
   "lint-suppression-directives": {
     "count": 760,
     "files": {
@@ -403,6 +407,7 @@
       "apps/api/src/mcp/template-persistence.ts": 1,
       "apps/api/src/mcp/tool-utils.ts": 1,
       "apps/api/src/scripts/adapter-health.ts": 1,
+      "apps/api/src/scripts/backfill-citation-authority.ts": 1,
       "apps/api/src/scripts/backfill-citation-keys.ts": 2,
       "apps/api/src/scripts/backfill-corpus-storage.ts": 1,
       "apps/api/src/scripts/backfill-fulltext.ts": 6,
@@ -412,6 +417,7 @@
       "apps/api/src/scripts/cz-regional-repair.ts": 8,
       "apps/api/src/scripts/eu-ecj-census.ts": 3,
       "apps/api/src/scripts/eu-ecj-refetch.ts": 6,
+      "apps/api/src/scripts/normalize-case-numbers.ts": 1,
       "apps/api/src/scripts/post-deploy-smoke.ts": 3,
       "apps/api/src/scripts/redact-case-law-decision.ts": 1,
       "apps/api/src/scripts/repair-case-law-jsonb.ts": 1,
@@ -423,9 +429,9 @@
       "apps/landing/src/components/react/EditorLiveDemo.tsx": 1,
       "apps/landing/src/components/react/previews/CliMcpPreview.tsx": 1,
       "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts": 10,
-      "apps/legal-atlas-runner/src/runners/case-law-ingest.ts": 20,
+      "apps/legal-atlas-runner/src/runners/case-law-ingest.ts": 19,
       "apps/legal-atlas-runner/src/runners/case-law-reconciliation.ts": 2,
-      "apps/legal-atlas-runner/src/runners/citation-resolution-drain.ts": 4,
+      "apps/legal-atlas-runner/src/runners/citation-resolution-drain.ts": 3,
       "apps/legal-atlas-runner/src/runners/sk-document-drain.ts": 3,
       "apps/legal-atlas-runner/src/runners/source-total-poll.ts": 2,
       "apps/mobile/src/app/_layout.tsx": 1,

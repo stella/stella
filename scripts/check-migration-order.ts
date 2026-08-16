@@ -102,8 +102,11 @@ if (import.meta.main) {
   }
   if (violation?.type === "not-after-base") {
     panic(
-      `New migration ${violation.directory} has timestamp ${violation.timestamp}; ` +
-        `it must be later than ${violation.previousTimestamp} so already-migrated databases apply it.`,
+      `New migration ${violation.directory} has timestamp ${violation.timestamp}, ` +
+        `which is not above ${violation.previousTimestamp}. Rename the directory ` +
+        `(and its journal entry) to a timestamp above ${violation.previousTimestamp}: ` +
+        `a database that already recorded ${violation.previousTimestamp} skips this ` +
+        `migration silently, so its DDL never runs and nothing reports an error.`,
     );
   }
 }

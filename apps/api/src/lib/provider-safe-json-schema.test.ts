@@ -242,7 +242,9 @@ describe("projectToProviderSafeJsonSchema", () => {
       expect(providerKeywords.has("maxItems")).toBe(false);
     }
 
-    expect(() => v.parse(sourceSchema, { entries: [] })).toThrow();
+    expect(() => v.parse(sourceSchema, { entries: [] })).toThrow(
+      "Invalid length: Expected >=1 but received 0",
+    );
 
     const tooManyEntries = {
       entries: Array.from({ length: 201 }, (_, index) => ({
@@ -254,7 +256,9 @@ describe("projectToProviderSafeJsonSchema", () => {
         suggestedRevision: null,
       })),
     };
-    expect(() => v.parse(sourceSchema, tooManyEntries)).toThrow();
+    expect(() => v.parse(sourceSchema, tooManyEntries)).toThrow(
+      "Invalid length: Expected <=200 but received 201",
+    );
   });
 
   test("drops propertyNames from the fill_template repro while keeping additionalProperties", () => {

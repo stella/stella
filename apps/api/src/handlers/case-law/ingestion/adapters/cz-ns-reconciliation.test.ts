@@ -238,9 +238,15 @@ describe("cz-ns reconciliation slices", () => {
   });
 
   test("a slice that is not a UTC calendar day is refused", () => {
-    expect(() => reconciliation.nextSlice("2026-08")).toThrow();
-    expect(() => reconciliation.previousSlice("2026-02-30")).toThrow();
-    expect(() => reconciliation.nextSlice("11.08.2026")).toThrow();
+    expect(() => reconciliation.nextSlice("2026-08")).toThrow(
+      "cz-ns slice is not a UTC calendar day",
+    );
+    expect(() => reconciliation.previousSlice("2026-02-30")).toThrow(
+      "cz-ns slice is not a UTC calendar day",
+    );
+    expect(() => reconciliation.nextSlice("11.08.2026")).toThrow(
+      "cz-ns slice is not a UTC calendar day",
+    );
   });
 });
 

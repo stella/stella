@@ -1,0 +1,278 @@
+import { describe, expect, test } from "bun:test";
+
+import { evaluateMergeBar, type MergeBarSnapshot } from "./merge-bar";
+
+const HEAD_SHA = "1f0c3a7d9e5b4c2a8d6f0e1b3c5a7d9e5b4c2a8d";
+const OTHER_SHA = "9e5b4c2a8d6f0e1b3c5a7d9e5b4c2a8d6f0e1b3c";
+
+const passingSnapshot = (
+  overrides: Partial<MergeBarSnapshot> = {},
+): MergeBarSnapshot => ({
+  pullRequest: {
+    number: 2137,
+    title: "feat(api): pre-flight budget resolution",
+    body: "Resolves the budget before the request runs.",
+    state: "OPEN",
+    isDraft: false,
+    mergeable: "MERGEABLE",
+    headSha: HEAD_SHA,
+  },
+  checkRunsHeadSha: HEAD_SHA,
+  checkRuns: [
+    { name: "ci-result", status: "completed", conclusion: "success" },
+    { name: "typecheck", status: "completed", conclusion: "success" },
+  ],
+  reviewThreads: [{ id: "PRRT_kwDOabcdef", isResolved: true }],
+  migrations: {
+    baseDirectories: ["20260801120000_earlier", "20260812090000_latest"],
+    addedDirectories: ["apps/api/drizzle/20260816200000_new_column"],
+  },
+  headShaBeforeMerge: HEAD_SHA,
+  ...overrides,
+});
+
+const failedGate = (snapshot: MergeBarSnapshot) => {
+  const verdict = evaluateMergeBar(snapshot);
+  return {
+    decision: verdict.decision,
+    reasons: verdict.gates.flatMap((gate) =>
+      gate.status === "fail" ? [gate.reason] : [],
+    ),
+  };
+};
+
+describe("merge bar", () => {
+  test("merges when every gate is positively satisfied", () => {
+    const verdict = evaluateMergeBar(passingSnapshot());
+
+    expect(verdict.decision).toBe("merge");
+    expect(verdict.gates.every((gate) => gate.status === "pass")).toBe(true);
+  });
+
+  // Failure class (a): a negative predicate over an empty list reads as green.
+  test("an empty check-run list fails rather than passing vacuously", () => {
+    expect(failedGate(passingSnapshot({ checkRuns: [] }))).toEqual({
+      decision: "abort",
+      reasons: ["REQUIRED_CHECK_MISSING"],
+    });
+  });
+
+  test("other checks succeeding does not substitute for ci-result", () => {
+    expect(
+      failedGate(
+        passingSnapshot({
+          checkRuns: [
+            { name: "typecheck", status: "completed", conclusion: "success" },
+            { name: "lint", status: "completed", conclusion: "success" },
+          ],
+        }),
+      ),
+    ).toEqual({ decision: "abort", reasons: ["REQUIRED_CHECK_MISSING"] });
+  });
+
+  test("a conflicting pull request fails on mergeability and on its empty check list", () => {
+    expect(
+      failedGate(
+        passingSnapshot({
+          pullRequest: {
+            ...passingSnapshot().pullRequest,
+            mergeable: "CONFLICTING",
+          },
+          checkRuns: [],
+        }),
+      ),
+    ).toEqual({
+      decision: "abort",
+      reasons: ["MERGEABLE_CONFLICTING", "REQUIRED_CHECK_MISSING"],
+    });
+  });
+
+  test("a draft fails before its empty check list can be misread", () => {
+    expect(
+      failedGate(
+        passingSnapshot({
+          pullRequest: { ...passingSnapshot().pullRequest, isDraft: true },
+          checkRuns: [],
+        }),
+      ),
+    ).toEqual({
+      decision: "abort",
+      reasons: ["PULL_REQUEST_IS_DRAFT", "REQUIRED_CHECK_MISSING"],
+    });
+  });
+
+  test("UNKNOWN mergeability is a refusal, not a pass", () => {
+    expect(
+      failedGate(
+        passingSnapshot({
+          pullRequest: {
+            ...passingSnapshot().pullRequest,
+            mergeable: "UNKNOWN",
+          },
+        }),
+      ),
+    ).toEqual({ decision: "abort", reasons: ["MERGEABLE_UNKNOWN"] });
+  });
+
+  test("a closed pull request is refused", () => {
+    expect(
+      failedGate(
+        passingSnapshot({
+          pullRequest: { ...passingSnapshot().pullRequest, state: "MERGED" },
+        }),
+      ),
+    ).toEqual({ decision: "abort", reasons: ["PULL_REQUEST_NOT_OPEN"] });
+  });
+
+  test("a still-running ci-result is not a success", () => {
+    expect(
+      failedGate(
+        passingSnapshot({
+          checkRuns: [
+            { name: "ci-result", status: "in_progress", conclusion: null },
+          ],
+        }),
+      ),
+    ).toEqual({ decision: "abort", reasons: ["REQUIRED_CHECK_INCOMPLETE"] });
+  });
+
+  test("a completed but unsuccessful ci-result is refused", () => {
+    expect(
+      failedGate(
+        passingSnapshot({
+          checkRuns: [
+            { name: "ci-result", status: "completed", conclusion: "failure" },
+          ],
+        }),
+      ),
+    ).toEqual({
+      decision: "abort",
+      reasons: ["REQUIRED_CHECK_NOT_SUCCESSFUL"],
+    });
+  });
+
+  test("a skipped ci-result is refused", () => {
+    expect(
+      failedGate(
+        passingSnapshot({
+          checkRuns: [
+            { name: "ci-result", status: "completed", conclusion: "skipped" },
+          ],
+        }),
+      ),
+    ).toEqual({
+      decision: "abort",
+      reasons: ["REQUIRED_CHECK_NOT_SUCCESSFUL"],
+    });
+  });
+
+  // Failure class (b): check runs that describe a commit that is no longer head.
+  test("check runs fetched for a different SHA cannot vouch for head", () => {
+    expect(
+      failedGate(passingSnapshot({ checkRunsHeadSha: OTHER_SHA })),
+    ).toEqual({
+      decision: "abort",
+      reasons: ["CHECK_RUNS_READ_FOR_STALE_SHA"],
+    });
+  });
+
+  test("a push between the checks and the merge aborts", () => {
+    expect(
+      failedGate(passingSnapshot({ headShaBeforeMerge: OTHER_SHA })),
+    ).toEqual({ decision: "abort", reasons: ["HEAD_MOVED_DURING_CHECKS"] });
+  });
+
+  test("an unresolved review thread aborts", () => {
+    expect(
+      failedGate(
+        passingSnapshot({
+          reviewThreads: [
+            { id: "PRRT_resolved", isResolved: true },
+            { id: "PRRT_open", isResolved: false },
+          ],
+        }),
+      ),
+    ).toEqual({ decision: "abort", reasons: ["UNRESOLVED_REVIEW_THREADS"] });
+  });
+
+  test("zero review threads is a pass, not a missing observation", () => {
+    expect(
+      evaluateMergeBar(passingSnapshot({ reviewThreads: [] })).decision,
+    ).toBe("merge");
+  });
+
+  // Failure class (b) across pull requests: the branch's own CI could not see
+  // a migration that landed on the default branch after that run finished.
+  test("a migration below the default branch's maximum aborts at merge time", () => {
+    expect(
+      failedGate(
+        passingSnapshot({
+          migrations: {
+            baseDirectories: ["20260816200000_landed_meanwhile"],
+            addedDirectories: ["apps/api/drizzle/20260816140000_branch"],
+          },
+        }),
+      ),
+    ).toEqual({ decision: "abort", reasons: ["MIGRATION_ORDER_VIOLATION"] });
+  });
+
+  test("a migration equal to the default branch's maximum aborts", () => {
+    expect(
+      failedGate(
+        passingSnapshot({
+          migrations: {
+            baseDirectories: ["20260816200000_landed_meanwhile"],
+            addedDirectories: ["apps/api/drizzle/20260816200000_branch"],
+          },
+        }),
+      ),
+    ).toEqual({ decision: "abort", reasons: ["MIGRATION_ORDER_VIOLATION"] });
+  });
+
+  test("a pull request that adds no migrations passes the ordering gate", () => {
+    expect(
+      evaluateMergeBar(
+        passingSnapshot({
+          migrations: {
+            baseDirectories: ["20260816200000_landed_meanwhile"],
+            addedDirectories: [],
+          },
+        }),
+      ).decision,
+    ).toBe("merge");
+  });
+
+  test("every failing gate is reported, not just the first", () => {
+    const verdict = evaluateMergeBar(
+      passingSnapshot({
+        pullRequest: {
+          ...passingSnapshot().pullRequest,
+          state: "CLOSED",
+          mergeable: "CONFLICTING",
+        },
+        checkRuns: [],
+        reviewThreads: [{ id: "PRRT_open", isResolved: false }],
+        headShaBeforeMerge: OTHER_SHA,
+      }),
+    );
+
+    expect(verdict.gates.filter((gate) => gate.status === "fail")).toHaveLength(
+      5,
+    );
+  });
+
+  test("the verdict covers every declared gate exactly once", () => {
+    const gates = evaluateMergeBar(passingSnapshot()).gates.map(
+      (gate) => gate.gate,
+    );
+
+    expect(gates.toSorted()).toEqual([
+      "head-stability",
+      "mergeable",
+      "migration-order",
+      "pull-request-state",
+      "required-check",
+      "review-threads",
+    ]);
+  });
+});

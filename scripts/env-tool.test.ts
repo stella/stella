@@ -791,7 +791,7 @@ describe("web container build arguments", () => {
           exports: [["VITE_EXAMPLE", `prefix-${reference("EXAMPLE_INPUT")}`]],
         }),
       }),
-    ).toThrow();
+    ).toThrow("VITE_EXAMPLE must map directly to one build argument");
   });
 
   test("report a schema key the build command never exports", () => {
@@ -889,6 +889,6 @@ describe("web container build arguments", () => {
   test("fail loudly when the build command moves", () => {
     expect(() =>
       parseWebBuildContract("FROM oven/bun AS builder\nRUN bun run build\n"),
-    ).toThrow();
+    ).toThrow("no longer runs");
   });
 });

@@ -155,12 +155,16 @@ describe("persisted corpus JSON validation", () => {
       parsePersistedCorpusSections([
         { index: "0", type: "header", title: null, text: "Rozsudok" },
       ]),
-    ).toThrow();
+    ).toThrow('Invalid type: Expected number but received "0"');
     expect(() =>
       parsePersistedCorpusAst({ version: 1, blocks: [{ type: "paragraph" }] }),
-    ).toThrow();
-    expect(() => parsePersistedCorpusAst([])).toThrow();
-    expect(() => parsePersistedCorpusAst({ unexpected: true })).toThrow();
+    ).toThrow("Invalid type: Expected (Object | unknown) but received Object");
+    expect(() => parsePersistedCorpusAst([])).toThrow(
+      "Invalid type: Expected (Object | unknown) but received Array",
+    );
+    expect(() => parsePersistedCorpusAst({ unexpected: true })).toThrow(
+      "Invalid type: Expected (Object | unknown) but received Object",
+    );
   });
 });
 

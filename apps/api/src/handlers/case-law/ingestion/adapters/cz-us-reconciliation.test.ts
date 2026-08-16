@@ -314,9 +314,15 @@ describe("cz-us reconciliation slices", () => {
   });
 
   test("refuses a slice that is not a decision year", () => {
-    expect(() => reconciliation.nextSlice("2026-08")).toThrow();
-    expect(() => reconciliation.previousSlice("")).toThrow();
-    expect(() => reconciliation.nextSlice("199")).toThrow();
+    expect(() => reconciliation.nextSlice("2026-08")).toThrow(
+      "cz-us slice is not a decision year",
+    );
+    expect(() => reconciliation.previousSlice("")).toThrow(
+      "cz-us slice is not a decision year",
+    );
+    expect(() => reconciliation.nextSlice("199")).toThrow(
+      "cz-us slice is not a decision year",
+    );
   });
 });
 

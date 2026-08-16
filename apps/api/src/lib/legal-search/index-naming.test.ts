@@ -25,18 +25,30 @@ test("pattern globs all jurisdiction indexes for a generation", () => {
 });
 
 test("rejects a non-alpha jurisdiction (guards against odd index ids)", () => {
-  expect(() => corpusIndexId("case_law_v1", "sk droptable")).toThrow();
-  expect(() => corpusIndexId("case_law_v1", "")).toThrow();
-  expect(() => corpusIndexId("case_law_v1", "sk-1")).toThrow();
+  expect(() => corpusIndexId("case_law_v1", "sk droptable")).toThrow(
+    "Invalid jurisdiction for corpus index index id: sk droptable",
+  );
+  expect(() => corpusIndexId("case_law_v1", "")).toThrow(
+    "Invalid jurisdiction for corpus index index id: ",
+  );
+  expect(() => corpusIndexId("case_law_v1", "sk-1")).toThrow(
+    "Invalid jurisdiction for corpus index index id: sk-1",
+  );
 });
 
 test("rejects generations outside the shared storage contract", () => {
-  expect(() => corpusIndexId("", "svk")).toThrow();
-  expect(() => corpusIndexId("1_case_law", "svk")).toThrow();
+  expect(() => corpusIndexId("", "svk")).toThrow(
+    "Invalid corpus index generation: ",
+  );
+  expect(() => corpusIndexId("1_case_law", "svk")).toThrow(
+    "Invalid corpus index generation: 1_case_law",
+  );
   expect(() =>
     corpusIndexId("x".repeat(CORPUS_INDEX_GENERATION_MAX_LENGTH + 1), "svk"),
-  ).toThrow();
-  expect(() => corpusIndexPattern("case law v1")).toThrow();
+  ).toThrow("Invalid corpus index generation:");
+  expect(() => corpusIndexPattern("case law v1")).toThrow(
+    "Invalid corpus index generation: case law v1",
+  );
 });
 
 test("case-law generation order is canonical and total over its domain", () => {
@@ -80,8 +92,12 @@ test("generation extraction is the inverse of index construction", () => {
 });
 
 test("rejects malformed physical index ids", () => {
-  expect(() => corpusIndexGeneration("case_law_v1_12")).toThrow();
-  expect(() => corpusIndexGeneration("svk")).toThrow();
+  expect(() => corpusIndexGeneration("case_law_v1_12")).toThrow(
+    "Invalid corpus index index id: case_law_v1_12",
+  );
+  expect(() => corpusIndexGeneration("svk")).toThrow(
+    "Invalid corpus index index id: svk",
+  );
   expect(tryCorpusIndexGeneration("case_law_v1")).toBeNull();
   expect(tryCorpusIndexGeneration("case_law_v1_svk")).toBe("case_law_v1");
 });

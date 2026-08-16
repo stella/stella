@@ -284,7 +284,7 @@ describe("schema", () => {
         op: "bogus",
         right: { type: "literal", value: "x" },
       }),
-    ).toThrow();
+    ).toThrow('but received "bogus"');
   });
 });
 
@@ -320,7 +320,7 @@ describe("formula operand", () => {
         op: "gte",
         right: { type: "literal", value: 1000 },
       }),
-    ).toThrow();
+    ).toThrow("Expected >=1 but received 0");
   });
 
   test("a formula-right ordered comparison is complete, not pruned", () => {

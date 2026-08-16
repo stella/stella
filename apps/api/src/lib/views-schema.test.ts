@@ -41,7 +41,9 @@ describe("parseViewLayout", () => {
       mode: "month",
     };
 
-    expect(() => parseViewLayout(layout)).toThrow();
+    expect(() => parseViewLayout(layout)).toThrow(
+      'Invalid key: Expected "version" but received undefined',
+    );
   });
 });
 

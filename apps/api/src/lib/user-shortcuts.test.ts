@@ -21,24 +21,34 @@ describe("normalizeUserShortcutsField", () => {
   });
 
   test("rejects non-JSON and non-object shapes", () => {
-    expect(() => normalizeUserShortcutsField("not json")).toThrow();
-    expect(() => normalizeUserShortcutsField("[]")).toThrow();
-    expect(() => normalizeUserShortcutsField("42")).toThrow();
-    expect(() => normalizeUserShortcutsField(42)).toThrow();
+    expect(() => normalizeUserShortcutsField("not json")).toThrow(
+      "Invalid keyboard shortcuts",
+    );
+    expect(() => normalizeUserShortcutsField("[]")).toThrow(
+      "Invalid keyboard shortcuts",
+    );
+    expect(() => normalizeUserShortcutsField("42")).toThrow(
+      "Invalid keyboard shortcuts",
+    );
+    expect(() => normalizeUserShortcutsField(42)).toThrow(
+      "Invalid keyboard shortcuts",
+    );
   });
 
   test("rejects non-string binding values", () => {
     expect(() =>
       normalizeUserShortcutsField(JSON.stringify({ search: 5 })),
-    ).toThrow();
+    ).toThrow("Invalid keyboard shortcuts");
     expect(() =>
       normalizeUserShortcutsField(JSON.stringify({ search: "" })),
-    ).toThrow();
+    ).toThrow("Invalid keyboard shortcuts");
   });
 
   test("rejects an oversized blob", () => {
     const huge = JSON.stringify({ search: "M".repeat(5000) });
-    expect(() => normalizeUserShortcutsField(huge)).toThrow();
+    expect(() => normalizeUserShortcutsField(huge)).toThrow(
+      "Invalid keyboard shortcuts",
+    );
   });
 
   test("rejects too many entries", () => {
@@ -46,6 +56,8 @@ describe("normalizeUserShortcutsField", () => {
     for (let i = 0; i < 100; i += 1) {
       many[`k${i}`] = "Mod+A";
     }
-    expect(() => normalizeUserShortcutsField(JSON.stringify(many))).toThrow();
+    expect(() => normalizeUserShortcutsField(JSON.stringify(many))).toThrow(
+      "Invalid keyboard shortcuts",
+    );
   });
 });

@@ -152,6 +152,7 @@ runtime validation, or integration tests.
 - [`no-facade-imports`](./no-facade-imports.ts) (`no-facade-imports`): requires imports from the owning leaf module instead of broad facades that hide boundaries and side effects.
 - [`no-nanoid`](./no-nanoid.ts) (`no-nanoid`): prevents the removed Nano ID dependency from returning; use UUIDv7 or Web Crypto for custom alphabets.
 - [`no-partial-record-satisfies`](./no-partial-record-satisfies.ts) (`no-partial-record-satisfies`): rejects `satisfies Partial<Record<Union, T>>`, which defeats exhaustive companion-map checking.
+- [`no-vacuous-throw-assertion`](./no-vacuous-throw-assertion.ts) (`no-vacuous-throw-assertion`): requires `toThrow` and `toThrowError` in tests to name the expected error; an unargumented throw assertion is satisfied by every error, so it keeps passing once the code fails for an unrelated reason. `.not.toThrow()` stays valid.
 - [`no-static-devtools-import`](./no-static-devtools-import.ts) (`no-static-devtools-import`): prevents development-only modules from entering eager production dependency graphs.
 - [`require-function-replacer`](./require-function-replacer.ts) (`require-function-replacer`): requires function-valued state updates to use an explicit replacer wrapper so they are not invoked as updater callbacks.
 - [`suppression-hygiene`](./suppression-hygiene.ts) (`require-description`, `no-foreign-directive`): requires rule-specific, explained suppressions and rejects directives for another lint engine.

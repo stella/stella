@@ -106,8 +106,12 @@ describe("canonical resource identity", () => {
     expect(
       parseResourceRef({ type: RESOURCE_TYPE.ENTITY, id: "\uD800" }),
     ).toBeNull();
-    expect(() => toSafeId<"entity">("")).toThrow();
-    expect(() => toSafeId<"entity">("\uD800")).toThrow();
+    expect(() => toSafeId<"entity">("")).toThrow(
+      "Expected a non-empty, well-formed identifier",
+    );
+    expect(() => toSafeId<"entity">("\uD800")).toThrow(
+      "Expected a non-empty, well-formed identifier",
+    );
     expect(
       parseResourceRef({
         type: RESOURCE_TYPE.ENTITY,

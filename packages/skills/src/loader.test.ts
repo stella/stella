@@ -51,7 +51,7 @@ description: Valid description.
 ---
 
 Body.`),
-    ).toThrow();
+    ).toThrow("Skill file frontmatter must include name and description");
     expect(() =>
       parseSkillFile(`---
 name: valid-name
@@ -59,7 +59,7 @@ description: "   "
 ---
 
 Body.`),
-    ).toThrow();
+    ).toThrow("Skill file frontmatter must include name and description");
   });
 
   test("parses skill files with CRLF line endings", () => {

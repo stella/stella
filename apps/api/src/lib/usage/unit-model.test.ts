@@ -145,7 +145,7 @@ describe("computeRawUsageMicroUnits", () => {
         outputTokens: 0,
         cacheReadTokens: 200,
       }),
-    ).toThrow();
+    ).toThrow("cached input tokens cannot exceed total input tokens");
   });
 
   test("rejects every token field outside the non-negative safe-integer domain", () => {
@@ -169,7 +169,7 @@ describe("computeRawUsageMicroUnits", () => {
             cacheReadTokens: 0,
             [field]: invalidCount,
           }),
-        ).toThrow();
+        ).toThrow("usage token counts must be non-negative safe integers");
       }
     }
   });
@@ -181,7 +181,7 @@ describe("computeRawUsageMicroUnits", () => {
         inputTokens: 0,
         outputTokens: Number.MAX_SAFE_INTEGER,
       }),
-    ).toThrow();
+    ).toThrow("computed usage component exceeds the safe integer range");
   });
 
   test("keeps rate scaling exact when the intermediate product is unsafe", () => {

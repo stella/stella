@@ -737,6 +737,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-spread-input-in-query-key.ts",
     "./.oxlint-plugins/require-query-key-factory.ts",
     "./.oxlint-plugins/no-unsafe-inner-html.ts",
+    "./.oxlint-plugins/no-vacuous-throw-assertion.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
     "./.oxlint-plugins/no-static-devtools-import.ts",
     "./.oxlint-plugins/no-static-catalogue-route-import.ts",
@@ -2558,6 +2559,22 @@ export default defineConfig({
       ],
       rules: {
         "no-eager-singleton/no-eager-singleton": "error",
+      },
+    },
+    {
+      // Throw assertions must name the error they expect. Scoped to test
+      // files (and the module-named fixture, which is not one) because
+      // `expect(...).toThrow()` only appears there.
+      files: [
+        "**/*.test.{ts,tsx}",
+        "**/*.property.test.{ts,tsx}",
+        "**/*.spec.{ts,tsx}",
+        "**/__tests__/**/*.{ts,tsx}",
+        "apps/api/src/tests/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-vacuous-throw-assertion.fixture.ts",
+      ],
+      rules: {
+        "no-vacuous-throw-assertion/no-vacuous-throw-assertion": "error",
       },
     },
     {

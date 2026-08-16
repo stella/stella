@@ -915,6 +915,16 @@ jobs:
       - name: Test bun ci retry script
         run: bash scripts/bun-ci-retry.test.sh
 
+      # Both guards decide whether a change may reach a live database or the
+      # default branch, and both fail open if their comparison logic breaks:
+      # a migration ordering check that always returns null passes every PR,
+      # and a merge gate that reads an empty check list as green merges
+      # unverified code. Neither test ran in CI before.
+      - name: Test migration ordering and merge gate logic
+        run: |
+          bun test scripts/check-migration-order.test.ts
+          bun test scripts/merge-bar.test.ts
+
       # Fail PRs that change the desktop bridge surface without
       # bumping BRIDGE_VERSION in apps/desktop/src-tauri/src/types.rs.
       # See scripts/check-bridge-version.sh for rationale.
