@@ -123,21 +123,39 @@ the route's `loader` either doesn't exist or never references `factory`.
 Prefetch `factory(...)` in the `loader` via `ensureRouteQueryData` or
 `prefetchRouteQuery`.
 
-## Depth-Jitter Caveat
+## How Depth Is Measured
 
-The chain-gap heuristic (`CHAIN_GAP_MS = 500` in `network.ts`) treats a
-request as "chained" onto the previous one only if it starts within 500ms of
-that request's end. Under load (a busy CI runner, a cold cache), independent
-requests that would normally fire in parallel can serialize past that gap by
-coincidence, and the computed depth flaps by 1 with **no change to the
-request manifest**. The checker carries a +1 depth allowance in
-`assertNetworkBaseline` for exactly this reason.
+`waterfallDepth` (`apps/web/e2e/helpers/network.ts`) counts the most
+consecutive **busy blocks** in any one observation sequence: a busy block is a
+maximal run of requests whose intervals overlap, and a launch gap over
+`REQUEST_SEQUENCE_GAP_MS` (500) starts a new sequence so an idle prefetch is
+not read as another route-load round. Two requests in flight at the same
+instant are never two levels, so the number is a lower bound on true causal
+depth: a dependent request hiding behind an unrelated slow one is invisible
+to it.
 
-If CI reports a deeper waterfall but the request list (`requests`,
-`requestCounts`) is unchanged from the baseline, treat it as scheduling
-jitter: rerun before touching the baseline. Do not bump an individual route's
-`depth` to paper over a flake; only `write`/`rewrite` when the request
-manifest itself actually changed.
+Reading launch times rather than the gap since the previous response *ended* is
+what buys monotonicity, and it costs sensitivity: a dependent request whose
+parent ran longer than 500ms opens a new sequence instead of counting a level.
+The three properties are not simultaneously satisfiable, because separating a
+dependent request from an idle prefetch requires the parent's duration, and any
+rule reading response ends lets a response growing under load close a gap it
+used to exceed. Under-counting is the safer error for a guard compared only
+upward.
+
+The metric is **load-monotone**: neither a slower response nor a uniformly
+stretched timeline can raise it. Sequence boundaries read launch times only,
+so a longer response cannot move one; coverage is a running max that is never
+rewound at a boundary, so a split can only lower the count.
+
+One residual remains, and it is what the +1 `DEPTH_JITTER_ALLOWANCE` in
+`assertNetworkBaseline` covers: two requests issued from different ticks may
+overlap on one run and not the next, shifting a route by exactly one block. No
+launch-time metric can tell that apart from a real added round. The allowance
+is capped at one level and must stay there, because the metric can no longer
+carry a count across an observation boundary: a route reporting **two** extra
+levels has genuinely grown one, so investigate the request graph rather than
+re-running. Only `write`/`rewrite` when the route's behavior actually changed.
 
 ## Live Hotspot Burn-Down
 

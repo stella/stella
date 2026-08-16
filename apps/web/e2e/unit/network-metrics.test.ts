@@ -93,19 +93,109 @@ describe("waterfallDepth", () => {
     ).toBe(1);
   });
 
-  test("slower-response property cannot deepen a waterfall", () => {
-    const starts = [0, 2, 75, 77, 150, 225];
+  test("a strict chain of n requests is depth n", () => {
+    const chain = Array.from({ length: 6 }, (_, index) => ({
+      start: index * 20,
+      end: index * 20 + 20,
+    }));
+
+    expect(waterfallDepth(chain)).toBe(6);
+  });
+
+  test("a stalled parallel burst is still one round", () => {
+    const burst = [
+      { start: 0, end: 40 },
+      { start: 1, end: 55 },
+      { start: 2, end: 30 },
+    ];
+    const underLoad = burst.map(({ start, end }) => ({
+      start,
+      end: end * 20,
+    }));
+
+    expect(waterfallDepth(burst)).toBe(1);
+    expect(waterfallDepth(underLoad)).toBe(1);
+  });
+
+  test("a slower response cannot close an idle gap into an extra level", () => {
+    // The CI failure shape: an idle prefetch launched after a quiet gap is its
+    // own observation sequence. A response that grows under load may now run
+    // past that launch, and must not thereby fold the prefetch into the route's
+    // round count.
+    const observed = [
+      { start: 0, end: 10 },
+      { start: 600, end: 610 },
+      { start: 615, end: 625 },
+    ];
+    const underLoad = [
+      { start: 0, end: 150 },
+      { start: 600, end: 610 },
+      { start: 615, end: 625 },
+    ];
+
+    expect(waterfallDepth(observed)).toBe(2);
+    expect(waterfallDepth(underLoad)).toBe(2);
+  });
+
+  test("a chain whose parent outruns the sequence gap opens a new sequence", () => {
+    // The documented sensitivity cost of reading launch times: telling this
+    // apart from an idle prefetch would need the parent's duration, and every
+    // rule that reads response ends loses load-monotonicity.
+    expect(
+      waterfallDepth([
+        { start: 0, end: 600 },
+        { start: 600, end: 610 },
+      ]),
+    ).toBe(1);
+  });
+
+  // Deterministic LCG so the properties replay the same timelines every run.
+  const pseudoRandom = (seed: number) => {
+    let state = seed;
+    return () => {
+      state = (state * 48_271) % 2_147_483_647;
+      return state;
+    };
+  };
+
+  // Launch gaps deliberately straddle the 500ms observation-sequence boundary.
+  // A generator whose starts all sit a few ms apart never reaches that branch,
+  // which is how the previous formulation's non-monotonicity survived a
+  // property test.
+  const STARTS = [0, 2, 75, 77, 150, 225, 900, 905, 1600, 1610, 1612];
+
+  test("a slower response never deepens a waterfall", () => {
     for (let seed = 1; seed <= 256; seed++) {
-      let state = seed;
-      const intervals = starts.map((start) => {
-        state = (state * 48_271) % 2_147_483_647;
-        return { start, end: start + 1 + (state % 100) };
-      });
-      const slowerIntervals = intervals.map(({ start, end }) => {
-        state = (state * 48_271) % 2_147_483_647;
-        return { start, end: end + (state % 1000) };
-      });
-      expect(waterfallDepth(slowerIntervals)).toBeLessThanOrEqual(
+      const nextRandom = pseudoRandom(seed);
+      const intervals = STARTS.map((start) => ({
+        start,
+        end: start + 1 + (nextRandom() % 100),
+      }));
+      const underLoad = intervals.map(({ start, end }) => ({
+        start,
+        end: end + (nextRandom() % 1000),
+      }));
+
+      expect(waterfallDepth(underLoad)).toBeLessThanOrEqual(
+        waterfallDepth(intervals),
+      );
+    }
+  });
+
+  test("a uniformly slower runner never deepens a waterfall", () => {
+    for (let seed = 1; seed <= 256; seed++) {
+      const nextRandom = pseudoRandom(seed);
+      const intervals = STARTS.map((start) => ({
+        start,
+        end: start + 1 + (nextRandom() % 300),
+      }));
+      const scale = 1 + (nextRandom() % 10);
+      const underLoad = intervals.map(({ start, end }) => ({
+        start: start * scale,
+        end: end * scale,
+      }));
+
+      expect(waterfallDepth(underLoad)).toBeLessThanOrEqual(
         waterfallDepth(intervals),
       );
     }
@@ -249,7 +339,7 @@ describe("diffNetworkBaseline", () => {
     expect(problems.some((p) => p.includes("GET /v1/contacts/:id"))).toBe(true);
   });
 
-  test("a waterfall within the wave-boundary allowance passes", () => {
+  test("a waterfall within the launch-jitter allowance passes", () => {
     const { problems } = diffNetworkBaseline(
       baseline,
       new Map([["/contacts", metrics(["GET /v1/contacts"], 3)]]),
@@ -257,13 +347,13 @@ describe("diffNetworkBaseline", () => {
     expect(problems).toEqual([]);
   });
 
-  test("a waterfall beyond the wave-boundary allowance is a problem", () => {
+  test("a waterfall beyond the launch-jitter allowance is a problem", () => {
     const { problems } = diffNetworkBaseline(
       baseline,
       new Map([["/contacts", metrics(["GET /v1/contacts"], 4)]]),
     );
     expect(problems.some((p) => p.includes("2 -> 4"))).toBe(true);
-    expect(problems.some((p) => p.includes("wave-boundary jitter"))).toBe(true);
+    expect(problems.some((p) => p.includes("launch jitter"))).toBe(true);
   });
 
   test("a repeated API request is a problem", () => {
@@ -670,8 +760,8 @@ describe("mergeNetworkBaseline", () => {
   });
 
   test("merge records the raw observed depth, no jitter allowance baked in", () => {
-    // The diff check tolerates +1 as jitter, but the committed baseline must
-    // stay exact so the allowance is re-evaluated against a true value next run.
+    // The diff check tolerates +1 as launch jitter, but the committed baseline
+    // must stay exact so the allowance is re-evaluated against a true value.
     const existing: NetworkBaseline = {
       "/contacts": { depth: 2, requests: ["GET /v1/contacts"] },
     };
