@@ -166,10 +166,10 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("scrubs SDK-stamped resolved URLs from navigation events", () => {
-    const { analytics } = createPostHogAnalytics(
-      "phc_test",
-      "https://posthog.test",
-    );
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
 
     Object.defineProperty(globalThis, "location", {
       configurable: true,
@@ -211,7 +211,7 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("drops resolved URLs the route template history cannot map", () => {
-    createPostHogAnalytics("phc_test", "https://posthog.test");
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
 
     const sanitized = initOptions?.before_send({
       event: WEB_ANALYTICS_EVENTS.pageLeft,
@@ -230,7 +230,7 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("keeps the route template override on page views while scrubbing SDK context", () => {
-    createPostHogAnalytics("phc_test", "https://posthog.test");
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
 
     const sanitized = initOptions?.before_send({
       event: WEB_ANALYTICS_EVENTS.pageViewed,
@@ -988,10 +988,10 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("rebinds the organization group on a same-user organization switch", () => {
-    const { analytics } = createPostHogAnalytics(
-      "phc_test",
-      "https://posthog.test",
-    );
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
 
     analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
     analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_2" });
