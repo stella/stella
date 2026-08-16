@@ -53,6 +53,9 @@ const REQUIRED_CHECK_RUN = "ci-result";
 const MIGRATION_DIRECTORY = "apps/api/drizzle";
 const MERGEABLE_POLL_ATTEMPTS = 8;
 const MERGEABLE_POLL_INTERVAL_MS = 2000;
+const MERGE_COMMIT_POLL_ATTEMPTS = 5;
+// GitHub's REST contents listing silently truncates past this many entries.
+const CONTENTS_ENDPOINT_ENTRY_LIMIT = 1000;
 
 // --- Gate model -------------------------------------------------------------
 
@@ -507,8 +510,9 @@ const createGhGateway = ({
       let cursor: string | null = null;
 
       for (;;) {
-        const cursorArgs =
-          cursor === null ? ["-F", "cursor="] : ["-F", `cursor=${cursor}`];
+        // Omit the variable entirely on the first page: `after: ""` is not the
+        // same as `after: null` to the GraphQL connection.
+        const cursorArgs = cursor === null ? [] : ["-F", `cursor=${cursor}`];
         const page = readRecord(
           runGhJson([
             "api",
@@ -572,6 +576,17 @@ const createGhGateway = ({
       ])
         .split("\n")
         .filter(Boolean);
+      // The contents endpoint truncates at 1000 entries without saying so. A
+      // truncated listing would drop the newest migrations and let the gate
+      // pass on the exact ordering it exists to catch, so refuse instead.
+      if (baseDirectories.length >= CONTENTS_ENDPOINT_ENTRY_LIMIT) {
+        panic(
+          `${MIGRATION_DIRECTORY} has ${baseDirectories.length} entries on ` +
+            `${defaultBranch}, at or past the contents endpoint's ` +
+            `${CONTENTS_ENDPOINT_ENTRY_LIMIT}-entry limit. The listing may be ` +
+            "truncated; switch this gate to the git tree API before merging.",
+        );
+      }
 
       const addedDirectories = runGh([
         "api",
@@ -606,15 +621,22 @@ const createGhGateway = ({
         body,
         ...(admin ? ["--admin"] : []),
       ]);
-      return readString(
-        readRecord(
-          readRecord(
-            runGhJson(["pr", "view", ...prArgs, "--json", "mergeCommit"]),
-            "pr view",
-          )["mergeCommit"],
-          "mergeCommit",
-        ),
-        "oid",
+      // The merge already happened; the commit SHA just may not be attached to
+      // the pull request yet. Retry rather than fail on a reporting lag, which
+      // would read as a failed merge.
+      for (let attempt = 1; attempt <= MERGE_COMMIT_POLL_ATTEMPTS; attempt++) {
+        const mergeCommit = readRecord(
+          runGhJson(["pr", "view", ...prArgs, "--json", "mergeCommit"]),
+          "pr view",
+        )["mergeCommit"];
+        if (isRecord(mergeCommit)) {
+          return readString(mergeCommit, "oid");
+        }
+        Bun.sleepSync(MERGEABLE_POLL_INTERVAL_MS);
+      }
+      return panic(
+        "Merge succeeded but GitHub did not report a merge commit; " +
+          `check ${repo}#${pullNumber} manually.`,
       );
     },
   };
