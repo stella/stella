@@ -147,15 +147,26 @@ export const courtRecencyContributionWeight: CitationContributionWeight = ({
  */
 export type CitationAuthoritySweepWindow =
   /**
-   * A sweep pinned to one instant: recompute every decision not already
-   * computed at exactly this instant, and stamp what it recomputes with it.
+   * A sweep pinned to one instant: recompute every decision last computed
+   * *before* it, and stamp what it recomputes with it.
+   *
+   * What it guarantees is a floor, not an equality — when it completes, no
+   * decision was last computed before the pinned instant. A row the rolling
+   * loop computed after it is already fresher and is deliberately left alone;
+   * chasing exact equality instead would make the two sweeps overwrite each
+   * other's stamps indefinitely whenever a pinned run outlives the refresh
+   * interval. The floor is the property a backfill needs: nothing left stale.
    *
    * Restart-safe by construction — a resumed run given the same instant skips
    * precisely what the interrupted one finished, because those rows are no
-   * longer *before* the boundary. Give a new instant and the sweep starts
-   * over, which is what makes "recompute the whole corpus" expressible at all.
-   * The decay is evaluated at that instant for every batch, so a sweep taking
-   * an hour ranks its first decision and its last on the same terms.
+   * longer before the boundary. Give a new instant and the sweep starts over,
+   * which is what makes "recompute the whole corpus" expressible at all.
+   *
+   * Every batch of one pinned run evaluates the decay at the same instant, so
+   * a run left to itself ranks its first decision and its last on identical
+   * terms; a concurrent rolling loop is the exception, and it is one this
+   * signal already tolerates, since it is a point-in-time approximation
+   * refreshed continuously rather than a single consistent snapshot.
    */
   | { type: "pinned"; at: Date }
   /**

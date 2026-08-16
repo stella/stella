@@ -6,10 +6,14 @@
  * operator's handle on the same machinery, for seeding a corpus that has never
  * been swept or forcing the time-decayed values forward after a ranking change.
  *
- * A sweep here is pinned to one instant: every decision not already computed at
- * exactly that instant is due, and every decision it recomputes is stamped with
- * it. Each batch is one bounded statement, and a recomputed decision drops out
- * of the set, so the walk advances by doing its work.
+ * A sweep here is pinned to one instant: every decision last computed *before*
+ * it is due, and every decision it recomputes is stamped with it. Each batch is
+ * one bounded statement, and a recomputed decision drops out of the set, so the
+ * walk advances by doing its work.
+ *
+ * What completion guarantees is a floor: no decision was last computed before
+ * that instant. A row the daemon's rolling loop recomputed after it is already
+ * fresher and is left alone, which is why this can run while the daemon does.
  *
  * **Resuming.** Re-running with a fresh instant is a *new* sweep and recomputes
  * the whole corpus, because every row the interrupted run stamped is older than

@@ -280,6 +280,41 @@ test("batching is arithmetic-neutral", async () => {
   expect(perBatch).toEqual(single);
 });
 
+test("a completed pinned sweep leaves nothing computed before its instant", async () => {
+  // The guarantee is a floor, not an equality. A row the rolling loop computed
+  // *after* the pinned instant is fresher and is deliberately skipped, so the
+  // assertion is that nothing is left older — which is what "the backfill
+  // finished" has to mean for it to be worth running.
+  await markAllDue();
+  const later = new Date(NOW.getTime() + 60_000);
+  await db.execute(sql`
+    UPDATE case_law_decisions
+       SET citation_authority_computed_at = ${later.toISOString()}::timestamptz
+     WHERE id = ${orphanId}
+  `);
+
+  await sweep(1000);
+
+  const [{ n: stale } = { n: 0 }] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(caseLawDecisions)
+    .where(
+      sql`citation_authority_computed_at IS NULL
+          OR citation_authority_computed_at < ${NOW.toISOString()}::timestamptz`,
+    );
+  expect(stale).toBe(0);
+
+  // And the fresher row kept its own stamp rather than being dragged back.
+  const [{ at } = { at: null }] = await db
+    .select({ at: caseLawDecisions.citationAuthorityComputedAt })
+    .from(caseLawDecisions)
+    .where(eq(caseLawDecisions.id, orphanId));
+  expect(at).toEqual(later);
+
+  await markAllDue();
+  await sweep(1000);
+});
+
 test("a resumed sweep skips what the interrupted one finished", async () => {
   // The restart hazard: a fresh instant is a *new* sweep and recomputes the
   // whole corpus, because every row the interrupted run stamped is older than
