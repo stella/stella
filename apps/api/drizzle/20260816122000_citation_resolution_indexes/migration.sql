@@ -22,13 +22,22 @@ SET lock_timeout = 0;
 -- keyed on the walk's axis. Both id families are uuidv7, so walking citations
 -- in citing-decision order reads the decisions heap in insertion order rather
 -- than at random; "id" closes the pair so the keyset is a strict total order.
+--
+-- The predicate must match `unsettledCitationSql` in
+-- handlers/case-law/citation-resolution-status.ts exactly, because that is what
+-- the walk's WHERE clause is built from: a partial index whose predicate is
+-- narrower than its query is not a slower index, it is an unused one, and
+-- nothing about the query would look wrong. The second arm covers a `resolved`
+-- row whose target was deleted — `cited_decision_id` is ON DELETE SET NULL, so
+-- that row claims a target it no longer has and is nobody's work until the walk
+-- treats it as unsettled.
 -- stella-migration-safety: reviewed destructive-change - drops only this
 -- migration's own index by name before recreating it. A cancelled concurrent
 -- build leaves an INVALID index behind, and IF NOT EXISTS would then skip
 -- recreating it.
 DROP INDEX CONCURRENTLY IF EXISTS "case_law_citations_pending_walk_idx";--> statement-breakpoint
 -- squawk-ignore prefer-robust-stmts
-CREATE INDEX CONCURRENTLY "case_law_citations_pending_walk_idx" ON "case_law_citations" ("citing_decision_id","id") WHERE "resolution_status" = 'pending' AND "citation_key" IS NOT NULL;--> statement-breakpoint
+CREATE INDEX CONCURRENTLY "case_law_citations_pending_walk_idx" ON "case_law_citations" ("citing_decision_id","id") WHERE ("resolution_status" = 'pending' OR ("resolution_status" = 'resolved' AND "cited_decision_id" IS NULL)) AND "citation_key" IS NOT NULL;--> statement-breakpoint
 
 -- The reverse direction: a decision arriving under key K asks which citations
 -- gave up on K. Without it that question is a scan of every citation, on the
