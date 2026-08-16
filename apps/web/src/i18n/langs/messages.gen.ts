@@ -2035,6 +2035,9 @@ type Messages = {
       "reviewingHint": "This can take up to a couple of minutes for large documents.";
       "run": "Start review";
       "scoreTopics": "Review these topics";
+      "sizeConfirmDescription": "This review is estimated at {estimated, number} usage units; {available, number} are available. Start it anyway?";
+      "sizeConfirmStart": "Start review";
+      "sizeConfirmTitle": "Large review";
       "targetDocument": "Target document";
       "title": "Review document";
       "topicContext": "Extra context";

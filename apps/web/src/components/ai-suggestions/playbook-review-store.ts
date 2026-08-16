@@ -36,6 +36,7 @@ const RUN_CREATE_TIMEOUT_MS = 30_000;
  *  flight. A second run would spend twice and race the first to the same
  *  findings, so the client attaches to the active one instead. */
 const RUN_ALREADY_ACTIVE_STATUS = 409;
+const RUN_CONFIRMATION_STATUS = 428;
 
 export const SEVERITY_ORDER = ["blocker", "high", "medium", "low"] as const;
 
@@ -178,6 +179,12 @@ export type DocumentReviewSession = {
   /** Guards a stale response from overwriting a newer request's session. */
   requestId: string | null;
   topics: ReviewTopic[];
+  /**
+   * A refused start whose estimated size needs the reviewer's explicit
+   * go-ahead; the dialog re-issues the stored request with the estimate
+   * restated. `null` while no confirmation is pending.
+   */
+  sizeConfirmation: RunSizeConfirmation | null;
 };
 
 type ReviewRequestError = Parameters<typeof toAPIError>[0];
@@ -187,6 +194,42 @@ type ReviewRequestError = Parameters<typeof toAPIError>[0];
  *  depend on how narrowly the transport types a status. */
 const isRunAlreadyActive = (error: ReviewRequestError): boolean =>
   toAPIError(error).status === RUN_ALREADY_ACTIVE_STATUS;
+
+export type RunSizeConfirmation = {
+  estimatedUnits: number;
+  availableUnits: number;
+  /** The refused request, replayed verbatim once the reviewer confirms. */
+  args: StartRunArgs;
+};
+
+/** The 428 answer to a run whose estimated size needs an explicit
+ *  go-ahead; the body carries the estimate for the dialog. */
+const runSizeConfirmationDetail = (
+  error: ReviewRequestError,
+): Pick<RunSizeConfirmation, "estimatedUnits" | "availableUnits"> | null => {
+  const apiError = toAPIError(error);
+  if (apiError.status !== RUN_CONFIRMATION_STATUS) {
+    return null;
+  }
+  const confirmation = apiError.details?.["confirmation"];
+  if (typeof confirmation !== "object" || confirmation === null) {
+    return null;
+  }
+  if (
+    !("estimatedUnits" in confirmation) ||
+    !("availableUnits" in confirmation)
+  ) {
+    return null;
+  }
+  const { estimatedUnits, availableUnits } = confirmation;
+  if (
+    typeof estimatedUnits !== "number" ||
+    typeof availableUnits !== "number"
+  ) {
+    return null;
+  }
+  return { estimatedUnits, availableUnits };
+};
 
 export const reviewSessionKey = (
   entityId: string,
@@ -216,6 +259,8 @@ export type StartRunArgs = {
   references: readonly { entityId: string; fileFieldId: string }[];
   topics: readonly ReviewTopic[];
   unexpectedErrorMessage: string;
+  /** Restated size estimate after a confirmation answer. */
+  confirmedUnits?: number;
 };
 
 type State = {
@@ -240,6 +285,12 @@ type Actions = {
   ) => void;
   startReview: (args: StartReviewArgs) => Promise<StartReviewResult>;
   startRun: (args: StartRunArgs) => Promise<StartReviewResult>;
+  /** Replay the parked request with its estimate restated. */
+  confirmRunSize: (
+    entityId: string,
+    fileFieldId: string,
+  ) => Promise<StartReviewResult>;
+  dismissRunSize: (entityId: string, fileFieldId: string) => void;
   confirmTopics: (
     workspaceId: string,
     entityId: string,
@@ -270,6 +321,7 @@ const blankSession = (): DocumentReviewSession => ({
   restore: "allowed",
   requestId: null,
   topics: [],
+  sizeConfirmation: null,
 });
 
 const requestRun = async ({
@@ -279,6 +331,7 @@ const requestRun = async ({
   playbookId,
   references,
   topics,
+  confirmedUnits,
 }: Omit<StartRunArgs, "unexpectedErrorMessage">) => {
   // Both channels are read here rather than handed on as one response: the
   // caller decides between attaching to an already active run and surfacing
@@ -301,6 +354,7 @@ const requestRun = async ({
         // The run stores the confirmed plan, and the endpoint rejects an
         // unconfirmed topic: send exactly what the reviewer approved.
         topics: topics.filter((topic) => topic.included),
+        ...(confirmedUnits === undefined ? {} : { confirmedUnits }),
       },
       { fetch: { signal: AbortSignal.timeout(RUN_CREATE_TIMEOUT_MS) } },
     );
@@ -450,6 +504,34 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
     return { ok: true };
   },
 
+  confirmRunSize: async (entityId, fileFieldId) => {
+    const key = reviewSessionKey(entityId, fileFieldId);
+    const confirmation = get().sessions[key]?.sizeConfirmation;
+    if (!confirmation) {
+      return { ok: true };
+    }
+    return await get().startRun({
+      ...confirmation.args,
+      confirmedUnits: confirmation.estimatedUnits,
+    });
+  },
+
+  dismissRunSize: (entityId, fileFieldId) => {
+    const key = reviewSessionKey(entityId, fileFieldId);
+    set((state) => {
+      const current = state.sessions[key];
+      if (!current?.sizeConfirmation) {
+        return state;
+      }
+      return {
+        sessions: {
+          ...state.sessions,
+          [key]: { ...current, sizeConfirmation: null },
+        },
+      };
+    });
+  },
+
   startRun: async ({
     workspaceId,
     entityId,
@@ -458,6 +540,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
     references,
     topics,
     unexpectedErrorMessage,
+    confirmedUnits,
   }) => {
     const key = reviewSessionKey(entityId, fileFieldId);
     const requestId = crypto.randomUUID();
@@ -473,6 +556,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
             runId: null,
             requestId,
             topics: [...topics],
+            sizeConfirmation: null,
           },
         },
       };
@@ -487,12 +571,51 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
           playbookId,
           references,
           topics,
+          ...(confirmedUnits === undefined ? {} : { confirmedUnits }),
         }),
     );
 
     const responseError = Result.isError(requestResult)
       ? null
       : requestResult.value.error;
+
+    if (responseError) {
+      const confirmationDetail = runSizeConfirmationDetail(responseError);
+      if (confirmationDetail) {
+        // Not a failure: the server wants the size restated. Park the
+        // request on the session; the dialog replays it on confirm.
+        set((state) => {
+          const current = state.sessions[key];
+          if (current?.requestId !== requestId) {
+            return state;
+          }
+          return {
+            sessions: {
+              ...state.sessions,
+              [key]: {
+                ...current,
+                status: "idle",
+                error: null,
+                requestId: null,
+                sizeConfirmation: {
+                  ...confirmationDetail,
+                  args: {
+                    workspaceId,
+                    entityId,
+                    fileFieldId,
+                    playbookId,
+                    references,
+                    topics,
+                    unexpectedErrorMessage,
+                  },
+                },
+              },
+            },
+          };
+        });
+        return { ok: true };
+      }
+    }
 
     if (responseError && isRunAlreadyActive(responseError)) {
       // Another tab (or a reload that raced this click) already started a run
