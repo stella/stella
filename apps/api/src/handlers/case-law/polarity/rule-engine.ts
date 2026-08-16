@@ -84,6 +84,9 @@ const compareRulePrecedence = (a: CompiledRule, b: CompiledRule): number => {
  * So the budget is divided among the tiers rather than competed for. No tier
  * can starve another, and severity stays a matching concern, expressed once,
  * in `compareRulePrecedence`.
+ *
+ * The read stays bounded: at most this many rows per polarity present, so
+ * the language-wide total is within rounding of the limit it divides.
  */
 export const RULES_PER_POLARITY = Math.ceil(
   LIMITS.caseLawPolarityRulesPerLanguage / CLASSIFIABLE_POLARITIES.length,
