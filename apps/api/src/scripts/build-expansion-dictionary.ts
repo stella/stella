@@ -304,13 +304,31 @@ for (const [token, df] of documentFrequency) {
   bucket.push({ df, form: token });
 }
 
+/** Code-unit order over two forms; a machine key, so no collation. */
+const compareForms = (
+  left: { form: string },
+  right: { form: string },
+): number => {
+  if (left.form < right.form) {
+    return -1;
+  }
+  return left.form > right.form ? 1 : 0;
+};
+
 const buckets: ExpansionBucket[] = [];
 const incoherent: string[] = [];
 for (const [stem, members] of byStem) {
   if (members.length < 2) {
     continue;
   }
-  members.sort((left, right) => right.df - left.df);
+  // Frequency first, then the form's own order. Without the tie-breaker, forms
+  // with equal frequency straddling the cap are kept in the order `ts_stat`
+  // happened to return them, so rebuilding the same corpus could select a
+  // different four, expand differently, and publish under a different content
+  // hash — which the content-addressed layout is supposed to rule out.
+  members.sort(
+    (left, right) => right.df - left.df || compareForms(left, right),
+  );
   const forms = members
     .slice(0, MAX_FORMS_PER_BUCKET)
     .map((member) => member.form)

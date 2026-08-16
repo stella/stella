@@ -35,7 +35,7 @@ import {
   MORPHOLOGY_DICTIONARY_MAX_BYTES,
   morphologyDictionaryKey,
   morphologyDictionaryPointerKey,
-  parseExpansionDictionary,
+  parseExpansionDictionaryOffLoop,
   unpackExpansionForms,
 } from "@/api/lib/legal-search/morphology/dictionary";
 import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
@@ -263,9 +263,8 @@ const loadDictionary = async (
     return UNAVAILABLE;
   }
 
-  const { collidedKeys, entries, skippedLines } = parseExpansionDictionary(
-    read.value.payload,
-  );
+  const { collidedKeys, entries, skippedLines } =
+    await parseExpansionDictionaryOffLoop(read.value.payload);
   if (entries.size === 0) {
     logger.warn(DICTIONARY_UNAVAILABLE, {
       language,

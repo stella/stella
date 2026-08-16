@@ -181,57 +181,121 @@ export type ParsedExpansionDictionary = {
  * expands to nothing instead — an ambiguous lookup is resolved by declining
  * to answer, never by serialization order.
  */
+type ParseAccumulator = {
+  collided: Set<string>;
+  entries: Map<string, string>;
+  skippedLines: number;
+};
+
+/**
+ * Fold one line into the accumulator. The single definition of what a line
+ * means: both drivers below run exactly this, so a synchronous parse and a
+ * yielding one cannot drift into different readings of the format.
+ */
+const parseLine = (line: string, acc: ParseAccumulator): void => {
+  if (line.length === 0) {
+    return;
+  }
+  const fields = line.split("\t");
+  if (fields.length !== LINE_FIELDS) {
+    acc.skippedLines += 1;
+    return;
+  }
+  const [, packed] = fields;
+  if (packed === undefined) {
+    acc.skippedLines += 1;
+    return;
+  }
+  const forms = packed.split(FORM_SEPARATOR);
+  if (
+    forms.length < MIN_FORMS_PER_BUCKET ||
+    forms.length > MAX_FORMS_PER_BUCKET ||
+    !forms.every(isSurfaceForm)
+  ) {
+    acc.skippedLines += 1;
+    return;
+  }
+  for (const form of forms) {
+    const key = foldExpansionKey(form);
+    if (acc.collided.has(key)) {
+      continue;
+    }
+    const claimed = acc.entries.get(key);
+    if (claimed === undefined) {
+      acc.entries.set(key, packed);
+      continue;
+    }
+    // Two forms of one bucket may fold together (`rada` and `ráda` within
+    // the same family); that is the same answer twice, not a conflict.
+    if (claimed === packed) {
+      continue;
+    }
+    acc.entries.delete(key);
+    acc.collided.add(key);
+  }
+};
+
+const newParseAccumulator = (): ParseAccumulator => ({
+  collided: new Set<string>(),
+  entries: new Map<string, string>(),
+  skippedLines: 0,
+});
+
+const finishParse = ({
+  collided,
+  entries,
+  skippedLines,
+}: ParseAccumulator): ParsedExpansionDictionary => ({
+  collidedKeys: collided.size,
+  entries,
+  skippedLines,
+});
+
 export const parseExpansionDictionary = (
   text: string,
 ): ParsedExpansionDictionary => {
-  const entries = new Map<string, string>();
-  const collided = new Set<string>();
-  let skippedLines = 0;
-
+  const acc = newParseAccumulator();
   for (const line of text.split("\n")) {
-    if (line.length === 0) {
-      continue;
-    }
-    const fields = line.split("\t");
-    if (fields.length !== LINE_FIELDS) {
-      skippedLines += 1;
-      continue;
-    }
-    const [, packed] = fields;
-    if (packed === undefined) {
-      skippedLines += 1;
-      continue;
-    }
-    const forms = packed.split(FORM_SEPARATOR);
-    if (
-      forms.length < MIN_FORMS_PER_BUCKET ||
-      forms.length > MAX_FORMS_PER_BUCKET ||
-      !forms.every(isSurfaceForm)
-    ) {
-      skippedLines += 1;
-      continue;
-    }
-    for (const form of forms) {
-      const key = foldExpansionKey(form);
-      if (collided.has(key)) {
-        continue;
-      }
-      const claimed = entries.get(key);
-      if (claimed === undefined) {
-        entries.set(key, packed);
-        continue;
-      }
-      // Two forms of one bucket may fold together (`rada` and `ráda` within
-      // the same family); that is the same answer twice, not a conflict.
-      if (claimed === packed) {
-        continue;
-      }
-      entries.delete(key);
-      collided.add(key);
-    }
+    parseLine(line, acc);
   }
+  return finishParse(acc);
+};
 
-  return { collidedKeys: collided.size, entries, skippedLines };
+/** Lines folded per turn. Small enough that a single batch is imperceptible. */
+const PARSE_BATCH_LINES = 2000;
+
+/**
+ * The same parse, handing the event loop back between batches.
+ *
+ * Parsing is the CPU half of loading a dictionary and it is not cheap: every
+ * line splits twice, and every form is NFC-normalised, lower-cased, decomposed
+ * and stripped before it keys a Map. On a payload near the ceiling that is long
+ * enough to stall an API replica, and detaching the fetch does not help —
+ * a detached promise's continuation still runs on the same thread. A warm-up or
+ * a rebuild should not pause the requests happening around it.
+ */
+export const parseExpansionDictionaryOffLoop = async (
+  text: string,
+): Promise<ParsedExpansionDictionary> => {
+  const acc = newParseAccumulator();
+  const lines = text.split("\n");
+
+  const parseFrom = async (start: number): Promise<void> => {
+    const end = Math.min(start + PARSE_BATCH_LINES, lines.length);
+    for (let index = start; index < end; index += 1) {
+      parseLine(lines[index] ?? "", acc);
+    }
+    if (end >= lines.length) {
+      return;
+    }
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    await parseFrom(end);
+  };
+
+  await parseFrom(0);
+  return finishParse(acc);
 };
 
 /** Unpack a stored bucket value into its surface forms. */

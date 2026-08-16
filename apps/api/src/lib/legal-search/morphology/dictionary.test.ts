@@ -10,6 +10,7 @@ import {
   morphologyDictionaryKey,
   morphologyDictionaryPointerKey,
   parseExpansionDictionary,
+  parseExpansionDictionaryOffLoop,
   serializeExpansionDictionary,
 } from "@/api/lib/legal-search/morphology/dictionary";
 
@@ -39,7 +40,12 @@ test.each([
   ["a singleton bucket", "nájemn\tnájemné\t12"],
   [
     "more forms than the cap",
-    `s\t${["aa", "ab", "ac", "ad", "ae"].join(",")}\t9`,
+    `s\t${["aaa", "aab", "aac", "aad", "aae"].join(",")}\t9`,
+  ],
+  ["a form under the length floor", "s\tab,abc\t9"],
+  [
+    "a form past the length ceiling",
+    `s\t${"a".repeat(SURFACE_FORM_MAX_LENGTH + 1)},abc\t9`,
   ],
   ["a form carrying a digit", "s\tform1,form2\t9"],
   ["a form carrying a quote", 's\tfo"rm,form\t9'],
@@ -49,6 +55,39 @@ test.each([
   const parsed = parseExpansionDictionary(line);
   expect(parsed.skippedLines).toBe(1);
   expect(parsed.entries.size).toBe(0);
+});
+
+// Two drivers over one line parser. If they ever disagree, a replica would be
+// serving a different dictionary than the builder validated, so the agreement
+// is asserted over input that exercises every branch: good lines, a malformed
+// one, a collision, and enough lines to cross a yield boundary.
+test("the yielding parse agrees with the synchronous one", async () => {
+  const lines = [
+    "rad\trada,rady,radu\t900",
+    "řad\třada,řady,řadě\t800",
+    "junk",
+  ];
+  for (let index = 0; index < 2500; index += 1) {
+    lines.push(
+      `s${index}\tform${"a".repeat(index % 5)}x,formbx\t${index + 60}`,
+    );
+  }
+  const text = lines.join("\n");
+
+  const sync = parseExpansionDictionary(text);
+  const offLoop = await parseExpansionDictionaryOffLoop(text);
+
+  expect(offLoop.skippedLines).toBe(sync.skippedLines);
+  expect(offLoop.collidedKeys).toBe(sync.collidedKeys);
+  const byKey = (left: [string, string], right: [string, string]): number =>
+    left[0] < right[0] ? -1 : 1;
+  expect([...offLoop.entries].sort(byKey)).toEqual(
+    [...sync.entries].sort(byKey),
+  );
+  // Non-vacuity: the fixture must actually reach the interesting branches.
+  expect(sync.skippedLines).toBeGreaterThan(0);
+  expect(sync.collidedKeys).toBeGreaterThan(0);
+  expect(sync.entries.size).toBeGreaterThan(0);
 });
 
 test("a bad line costs only itself", () => {
