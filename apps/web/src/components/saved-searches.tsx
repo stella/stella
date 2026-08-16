@@ -282,6 +282,7 @@ export const SavedSearches = ({
               <div className="flex min-w-0 items-center" key={savedSearch.id}>
                 <Button
                   className="h-11 min-w-0 flex-1 justify-start gap-2 px-2 text-start text-sm"
+                  data-search-empty-row=""
                   onClick={() => onApply(savedSearch.criteria)}
                   variant="ghost"
                 >

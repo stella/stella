@@ -7,7 +7,11 @@ import {
   useRef,
   useState,
 } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type {
+  CSSProperties,
+  KeyboardEvent as ReactKeyboardEvent,
+  ReactNode,
+} from "react";
 
 import type { UseMutationResult } from "@tanstack/react-query";
 import {
@@ -1074,6 +1078,52 @@ export const SearchDialog = ({
     ],
   );
 
+  // Roving focus for the zero-query screen: the saved-search and recents
+  // rows are ordinary buttons, not command items, so the listbox highlight
+  // never reaches them. ArrowDown from the input walks them in DOM order
+  // (saved searches, then recent searches, then recent files); ArrowUp from
+  // the first row returns to the input.
+  const getEmptyScreenRows = (): HTMLElement[] =>
+    resultsElement === null
+      ? []
+      : [
+          ...resultsElement.querySelectorAll<HTMLElement>(
+            "[data-search-empty-row]",
+          ),
+        ];
+
+  const handleEmptyScreenListKeyDown = (
+    event: ReactKeyboardEvent<HTMLDivElement>,
+  ) => {
+    if (hasVisibleSearch) {
+      return;
+    }
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") {
+      return;
+    }
+    const rows = getEmptyScreenRows();
+    const { target } = event;
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+    const index = rows.findIndex(
+      (row) => row === target || row.contains(target),
+    );
+    if (index === -1) {
+      return;
+    }
+    event.preventDefault();
+    if (event.key === "ArrowDown") {
+      rows.at(index + 1)?.focus();
+      return;
+    }
+    if (index === 0) {
+      searchInputRef.current?.focus();
+      return;
+    }
+    rows.at(index - 1)?.focus();
+  };
+
   // Divider drags report the pointer's clientX; widths are measured from the
   // start edge of the columns row, so the math flips under RTL.
   const resizeFacetsColumn = (clientX: number) => {
@@ -1218,6 +1268,14 @@ export const SearchDialog = ({
                 className="text-sm"
                 dir={contentDir(query)}
                 onKeyDown={(event) => {
+                  if (event.key === "ArrowDown" && !hasVisibleSearch) {
+                    const firstRow = getEmptyScreenRows().at(0);
+                    if (firstRow) {
+                      event.preventDefault();
+                      firstRow.focus();
+                    }
+                    return;
+                  }
                   if (event.key !== "Tab" || event.shiftKey) {
                     return;
                   }
@@ -1388,6 +1446,7 @@ export const SearchDialog = ({
               {/* Results */}
               <CommandList
                 className="max-h-none min-w-0 flex-1 overflow-y-auto"
+                onKeyDown={handleEmptyScreenListKeyDown}
                 ref={setResultsElement}
               >
                 {!hasVisibleSearch && (
@@ -2274,6 +2333,7 @@ const SearchRecents = ({
             {recentSearches.map((recent) => (
               <Button
                 className="h-auto w-full justify-start gap-2 px-2 py-2 text-start text-sm"
+                data-search-empty-row=""
                 key={recent.query}
                 onClick={() => onSearchClick(recent)}
                 variant="ghost"
@@ -2299,6 +2359,7 @@ const SearchRecents = ({
                 }
                 className="h-auto! w-full justify-start gap-2 py-1 text-start text-sm"
                 data-previewing={previewedFileId === file.entityId}
+                data-search-empty-row=""
                 key={file.entityId}
                 onFocus={() => onFilePreview(file)}
                 onClick={() => {
