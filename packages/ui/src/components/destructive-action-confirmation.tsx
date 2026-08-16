@@ -55,13 +55,18 @@ const DestructiveActionConfirmation = ({
         autoComplete="off"
         className={inputClassName}
         data-slot="destructive-action-confirmation-input"
+        spellCheck={false}
+        {...props}
+        // After the spread on purpose: the props type omits these three so the
+        // field stays controlled by `value`/`onValueChange`, but an omit only
+        // rejects a literal attribute. A props object typed wider stays
+        // assignable and carries them through the spread, which would replace
+        // the confirmation handler or the compared value.
         onChange={(event) => {
           onValueChange(event.currentTarget.value);
         }}
-        spellCheck={false}
         type="text"
         value={value}
-        {...props}
       />
     </Field>
   );

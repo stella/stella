@@ -119,7 +119,17 @@ const SortableHead = ({
     sortIcon = <ArrowDownIcon className="size-3" />;
   }
   return (
-    <TableHead aria-sort={ariaSort} className={className} {...props}>
+    <TableHead
+      aria-sort={ariaSort}
+      className={className}
+      {...props}
+      // After the spread on purpose: the props type omits `onClick` because the
+      // sort button below owns activation, but omitting it only rejects a
+      // literal attribute. A props object typed wider stays assignable and
+      // carries the handler through the spread, giving the cell a click target
+      // that no keyboard user can reach.
+      onClick={undefined}
+    >
       <span className="inline-flex items-center gap-1">
         <button
           className="text-muted-foreground hover:text-foreground inline-flex cursor-pointer items-center gap-1 font-medium select-none"

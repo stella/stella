@@ -767,6 +767,7 @@ export default defineConfig({
     "./.oxlint-plugins/confine-redis-client.ts",
     "./.oxlint-plugins/require-coordination-key.ts",
     "./.oxlint-plugins/no-async-context-enter-with.ts",
+    "./.oxlint-plugins/no-omitted-prop-respread.ts",
   ],
 
   overrides: [
@@ -1467,6 +1468,31 @@ export default defineConfig({
       ],
       rules: {
         "no-disabled-tooltip-trigger/no-disabled-tooltip-trigger": "error",
+      },
+    },
+    {
+      // `Omit<Props, "k">` narrows what a caller may write, not what a value
+      // can carry: a wider props object stays assignable and the rest object
+      // keeps every runtime key, so `{...props}` re-applies the omitted key
+      // unless the component pins it after the last spread.
+      files: [
+        "apps/*/src/**/*.tsx",
+        "packages/*/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-omitted-prop-respread.fixture.tsx",
+      ],
+      rules: {
+        "no-omitted-prop-respread/no-omitted-prop-respread": "error",
+      },
+    },
+    {
+      // A nested callback naming its parameter `props` is the accepted case
+      // this fixture pins: the shadowed binding must not be charged to the
+      // enclosing component's omission. The shadowing is the test.
+      files: [
+        ".oxlint-plugins/__fixtures__/no-omitted-prop-respread.fixture.tsx",
+      ],
+      rules: {
+        "no-shadow": "off",
       },
     },
     {
