@@ -531,9 +531,9 @@ jobs:
             echo "reused=true"
           } >> "$GITHUB_OUTPUT"
 
-      # Keep the current workflow tooling separate from the selected release
-      # source. A manual rerun may build a tag created before this action
-      # existed, but policy must still come from the workflow revision.
+      # Keep current workflow tooling separate from the selected release source.
+      # The action code comes from the workflow revision; the browser build
+      # contract remains bound to the release source and fails closed when absent.
       - name: Checkout workflow tooling
         if: steps.existing.outputs.reused != 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

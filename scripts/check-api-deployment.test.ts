@@ -122,6 +122,9 @@ describe("API deployment health receipt", () => {
     ]);
 
     expect(action).toContain("scripts/render-web-build-args.sh");
+    expect(action).toContain(
+      "Release source predates the public web build contract",
+    );
     expect(action).toContain("type=registry,ref=ghcr.io/");
     expect(action).not.toContain("type=gha");
     expect(action).not.toContain("toJSON(vars)");

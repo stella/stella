@@ -67,7 +67,12 @@ runs:
           echo "::error::source-path does not contain release-sha."
           exit 1
         fi
+        contract="${SOURCE_PATH}/apps/web/build-env-contract.json"
         config="${SOURCE_PATH}/apps/web/build-env/${TARGET_ENV}.json"
+        if [[ ! -f "$contract" || ! -f "$config" ]]; then
+          echo "::error::Release source predates the public web build contract; rebuilding legacy release tags is unsupported."
+          exit 1
+        fi
         if [[ "$(jq -r '.targetEnvironment' "$config")" != "$TARGET_ENV" ]]; then
           echo "::error::web build configuration does not match the target environment."
           exit 1
