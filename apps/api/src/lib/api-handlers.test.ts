@@ -489,7 +489,7 @@ describe("assertRunSizeConfirmedForHandler", () => {
     });
   });
 
-  test("a large unconfirmed run answers 409 carrying the estimate", async () => {
+  test("a large unconfirmed run answers 428 carrying the estimate", async () => {
     await withInstanceEnforcement(async () => {
       const outcome = await assertRunSizeConfirmedForHandler({
         ...baseInput,
@@ -498,7 +498,7 @@ describe("assertRunSizeConfirmedForHandler", () => {
         safeDb: availableDb(500),
       });
       expect(outcome).toMatchObject({
-        status: 409,
+        status: 428,
         code: "usage_confirmation_required",
         confirmation: { estimatedUnits: 120, availableUnits: 500 },
       });
@@ -513,7 +513,7 @@ describe("assertRunSizeConfirmedForHandler", () => {
         confirmedUnits: 60,
         safeDb: availableDb(500),
       });
-      expect(outcome).toMatchObject({ status: 409 });
+      expect(outcome).toMatchObject({ status: 428 });
     });
   });
 

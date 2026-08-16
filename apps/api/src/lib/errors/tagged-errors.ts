@@ -11,6 +11,7 @@ export type HandlerErrorStatusCode =
   | 409
   | 413
   | 422
+  | 428
   | 429
   | 500
   | 502
@@ -35,7 +36,9 @@ export type HandlerErrorUsageDetail = {
  * crosses the confirmation threshold: the client re-submits the same
  * request with `confirmedUnits >= estimatedUnits` to proceed. Distinct
  * from `usage` (the 402 over-limit detail) — this is not an over-limit
- * state, and the run may well be affordable.
+ * state, and the run may well be affordable. Answered as a 428, never a
+ * 409: run initiators already use 409 for "a run is active on this
+ * document", and clients resolve that by attaching the existing run.
  */
 export type HandlerErrorConfirmationDetail = {
   estimatedUnits: number;

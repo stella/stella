@@ -206,7 +206,8 @@ const createDocumentReviewRun = createSafeHandler(
       metering: { actionType: "doc_review", modelRole: "pdf" },
       estimatedUnits: estimateDocumentRunUnits({
         modelId: reviewModel.modelId,
-        inputBytes,
+        actionType: "doc_review",
+        storedInputBytes: inputBytes,
         plannedOutputs: plan.expectedFindingCount,
         serviceTier: "standard",
       }),

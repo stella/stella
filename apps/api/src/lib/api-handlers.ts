@@ -935,7 +935,7 @@ type RunSizePreflightInput = UsagePreflightInput & {
  * for the WHOLE estimate — the per-action preflight would admit a run
  * whose tail cannot settle — and above {@link RUN_CONFIRMATION_UNITS}
  * additionally requires the request to restate the estimate via
- * `confirmedUnits`, else answers a 409 carrying the estimate for the
+ * `confirmedUnits`, else answers a 428 carrying the estimate for the
  * client to confirm. No-op for BYOK settlements (the organization's own
  * key pays) and while `USAGE_ENFORCEMENT_ENABLED` is off.
  */
@@ -948,7 +948,7 @@ export const assertRunSizeConfirmedForHandler = async ({
   workspaceId,
   userId,
   safeDb,
-}: RunSizePreflightInput): Promise<HandlerError<402 | 409 | 500> | null> => {
+}: RunSizePreflightInput): Promise<HandlerError<402 | 428 | 500> | null> => {
   if (!env.USAGE_ENFORCEMENT_ENABLED) {
     return null;
   }
@@ -999,7 +999,7 @@ export const assertRunSizeConfirmedForHandler = async ({
   }
   return new HandlerError({
     code: API_ERROR_CODE.usageConfirmationRequired,
-    status: 409,
+    status: 428,
     message:
       "This run's estimated size needs an explicit confirmation to start.",
     confirmation: {
