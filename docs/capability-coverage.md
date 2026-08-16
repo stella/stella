@@ -495,7 +495,7 @@ mechanics, and similar), not gaps in coverage.
 | assistant_chat         | 15    |
 | auth_plumbing          | 8     |
 | billing_ui             | 1     |
-| chat_thread_ui         | 1     |
+| chat_thread_ui         | 2     |
 | compound_consent       | 1     |
 | deploy_mechanics       | 1     |
 | document_processing    | 17    |
@@ -511,4 +511,4 @@ mechanics, and similar), not gaps in coverage.
 | upload_mechanics       | 9     |
 | url_preview            | 2     |
 
-Total: 125
+Total: 126
