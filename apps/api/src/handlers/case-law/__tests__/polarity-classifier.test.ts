@@ -317,6 +317,9 @@ describe("rule precedence", () => {
   });
 
   test("a rule that does not compile is dropped, not fatal", () => {
+    // Dropped, and reported: such a row can never fire, yet it still takes a
+    // slot in its tier's budget, so leaving it invisible subtracts from the
+    // working set forever.
     const rules = compileRules([
       rule({ pattern: "(unclosed", polarity: POLARITY.NEGATIVE }),
       rule({ pattern: "viz", polarity: POLARITY.SUPPORTIVE }),

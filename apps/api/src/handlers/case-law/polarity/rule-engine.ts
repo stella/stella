@@ -157,13 +157,16 @@ type PolarityRuleRow = Pick<
 /**
  * Compile stored rules into the order they are matched in.
  *
- * Rows whose pattern does not compile are dropped silently: a bad regex is a
- * rule that was never going to match. A row whose polarity a rule may not
- * carry is dropped and reported, because it should not have reached storage:
- * either it is outside `POLARITIES`, which the CHECK constraint forbids, or
- * it is `unknown`, which the constraint permits but no match may mean. The
- * query filters those out too; this is the guard that does not depend on the
- * caller having done so.
+ * A row is dropped, and reported, when it cannot take part in matching:
+ * either its pattern does not compile, or it carries a polarity no match may
+ * assign (outside `POLARITIES`, which the CHECK constraint forbids, or
+ * `unknown`, which the constraint permits but which means classification did
+ * not happen). Both are reported rather than dropped quietly, because such a
+ * row is a rule that can never fire and still occupies its tier's budget:
+ * left invisible, it is subtracted from the working set forever.
+ *
+ * The ranked query filters the polarity case out too. This is the guard that
+ * does not depend on the caller having done so.
  */
 export const compileRules = (
   rows: readonly PolarityRuleRow[],
@@ -173,6 +176,12 @@ export const compileRules = (
   for (const row of rows) {
     const regex = compilePattern(row.pattern);
     if (!regex) {
+      captureError(
+        new TelemetryError({
+          message: "Polarity rule pattern does not compile",
+        }),
+        { pattern: row.pattern, ruleId: row.id },
+      );
       continue;
     }
 
