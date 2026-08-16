@@ -384,17 +384,50 @@ export class SubprocessError extends TaggedError("SubprocessError")<{
   cause?: unknown;
 }> {}
 
-type ExtractionWorkerTermination = {
+export type ExtractionWorkerTermination = {
   reason: SubprocessTerminationReason;
   signalCode: string;
 };
+
+export const EXTRACTION_WORKER_ERROR_CODE = {
+  cancelled: "worker_cancelled",
+  crashed: "worker_crashed",
+  external: "worker_externally_terminated",
+  parser: "parser_failed",
+  timeout: "worker_timeout",
+} as const;
+
+export type ExtractionWorkerErrorCode =
+  (typeof EXTRACTION_WORKER_ERROR_CODE)[keyof typeof EXTRACTION_WORKER_ERROR_CODE];
+
+const EXTRACTION_WORKER_TERMINATION_ERROR_CODE = {
+  [SUBPROCESS_TERMINATION_REASON.cancelled]:
+    EXTRACTION_WORKER_ERROR_CODE.cancelled,
+  [SUBPROCESS_TERMINATION_REASON.crashed]: EXTRACTION_WORKER_ERROR_CODE.crashed,
+  [SUBPROCESS_TERMINATION_REASON.external]:
+    EXTRACTION_WORKER_ERROR_CODE.external,
+  [SUBPROCESS_TERMINATION_REASON.timeout]: EXTRACTION_WORKER_ERROR_CODE.timeout,
+} as const satisfies Record<
+  SubprocessTerminationReason,
+  ExtractionWorkerErrorCode
+>;
+
+export const extractionWorkerErrorCode = (
+  termination: ExtractionWorkerTermination | null,
+): ExtractionWorkerErrorCode =>
+  termination === null
+    ? EXTRACTION_WORKER_ERROR_CODE.parser
+    : EXTRACTION_WORKER_TERMINATION_ERROR_CODE[termination.reason];
 
 /** File content extraction failure. */
 export class ExtractionWorkerError extends TaggedError(
   "ExtractionWorkerError",
 )<{
+  code: ExtractionWorkerErrorCode;
   message: string;
   exitCode: number | null;
+  mimeType: string;
+  sizeBytes: number;
   termination: ExtractionWorkerTermination | null;
 }> {}
 

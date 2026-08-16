@@ -6,6 +6,7 @@ import { createDevErrorLogger } from "@stll/errors";
 
 import { envBase } from "@/api/env-base";
 import { errorClassName, errorTag } from "@/api/lib/errors/error-tag";
+import { ExtractionWorkerError } from "@/api/lib/errors/tagged-errors";
 import { pgErrorFields } from "@/api/lib/pg-error";
 
 // Re-exported so callers keep one import path, while modules that must not
@@ -81,6 +82,32 @@ export const connectionErrorFields = (
     }
   }
   return fields;
+};
+
+/**
+ * Typed, non-content diagnostics that every error capture may safely attach.
+ * Keep this exhaustive per supported error class so callers cannot forget
+ * fields on one execution path, while messages, names, and document bytes
+ * remain excluded by construction.
+ */
+export const safeErrorTelemetryFields = (
+  error: unknown,
+): Record<string, string> => {
+  if (!(error instanceof ExtractionWorkerError)) {
+    return {};
+  }
+  const fields = {
+    mimeType: error.mimeType,
+    sizeBytes: String(error.sizeBytes),
+  };
+  if (error.termination !== null) {
+    return {
+      ...fields,
+      signalCode: error.termination.signalCode,
+      terminationReason: error.termination.reason,
+    };
+  }
+  return { ...fields, exitCode: String(error.exitCode) };
 };
 
 const safeErrorStringProperty = (

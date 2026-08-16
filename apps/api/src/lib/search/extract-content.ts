@@ -13,6 +13,7 @@ import { Result } from "better-result";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import {
+  extractionWorkerErrorCode,
   ExtractionWorkerError,
   SUBPROCESS_TERMINATION_REASON,
 } from "@/api/lib/errors/tagged-errors";
@@ -111,9 +112,14 @@ export const resolveExtractionMimeType = ({
   return EXTENSION_MIME_TYPES[extension] ?? normalized;
 };
 
+type ExtractFileTextResultOptions = {
+  timeoutMs?: number;
+};
+
 export const extractFileTextResult = async (
   buffer: ArrayBuffer,
   mimeType: string,
+  { timeoutMs = LIMITS.extractionTimeoutMs }: ExtractFileTextResultOptions = {},
 ): Promise<Result<string | null, ExtractionWorkerError>> => {
   const normalizedMimeType = normalizeMimeType(mimeType);
   if (!canExtractMimeType(normalizedMimeType)) {
@@ -124,20 +130,24 @@ export const extractFileTextResult = async (
     workerPath: WORKER_PATH,
     args: [normalizedMimeType],
     stdin: new Blob([buffer]),
-    timeoutMs: LIMITS.extractionTimeoutMs,
+    timeoutMs,
   });
 
   if (Result.isError(result)) {
+    const termination =
+      result.error.termination === null
+        ? null
+        : {
+            reason: result.error.termination.reason,
+            signalCode: result.error.termination.signalCode,
+          };
     const error = new ExtractionWorkerError({
+      code: extractionWorkerErrorCode(termination),
       message: result.error.message,
       exitCode: result.error.exitCode,
-      termination:
-        result.error.termination === null
-          ? null
-          : {
-              reason: result.error.termination.reason,
-              signalCode: result.error.termination.signalCode,
-            },
+      mimeType: normalizedMimeType,
+      sizeBytes: buffer.byteLength,
+      termination,
     });
     return Result.err(error);
   }
@@ -172,18 +182,6 @@ export const extractFileText = async (
     return result.value;
   }
 
-  const failureContext =
-    result.error.termination !== null
-      ? {
-          signalCode: result.error.termination.signalCode,
-          terminationReason: result.error.termination.reason,
-        }
-      : { exitCode: String(result.error.exitCode) };
-  captureError(result.error, {
-    mimeType: normalizeMimeType(mimeType),
-    sizeBytes: String(buffer.byteLength),
-    ...failureContext,
-    ...context,
-  });
+  captureError(result.error, context);
   return null;
 };
