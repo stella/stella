@@ -662,8 +662,14 @@ export const reopenCitations = async (
 
 /**
  * How much work the walk has left. Read on the summary interval rather than
- * per batch: it is an index-only count over the pending partial index, which
- * shrinks as the burn-down proceeds but is a full traversal of what remains.
+ * per batch: it is an index-only count over the burn-down index, which shrinks
+ * as the walk proceeds but is a full traversal of what remains.
+ *
+ * Counted over the same predicate the walk selects on, not a narrower one. The
+ * idle-contradiction warning compares this number against what a window
+ * examined, so a gauge that read zero while the walk still had rows to settle
+ * would turn the one signal that catches a wedged walk into noise — and it
+ * would do so exactly in the case the second arm of the predicate exists for.
  */
 export const countPendingCitations = async (
   scopedDb: ScopedDb,
@@ -671,9 +677,12 @@ export const countPendingCitations = async (
   await scopedDb(async (tx) => {
     const result: unknown = await tx.execute(sql`
       SELECT count(*)::int AS pending
-        FROM ${caseLawCitations}
-       WHERE resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING}
-         AND citation_key IS NOT NULL
+        FROM ${caseLawCitations} c
+       WHERE ${unsettledCitationSql({
+         resolutionStatus: sql.raw("c.resolution_status"),
+         citedDecisionId: sql.raw("c.cited_decision_id"),
+         citationKey: sql.raw("c.citation_key"),
+       })}
     `);
     const row: unknown = firstRow(result);
     return isRecord(row) ? toCount(row["pending"]) : 0;
