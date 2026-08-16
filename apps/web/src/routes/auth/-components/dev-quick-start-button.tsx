@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { useMountEffect } from "@/hooks/use-effect";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -14,10 +15,14 @@ import { api } from "@/lib/api";
 import { authClient, isTwoFactorRedirect } from "@/lib/auth";
 import { detached } from "@/lib/detached";
 import { fetchDevOtp } from "@/lib/dev-otp";
-import { toAPIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
+import {
+  clearDevQuickStartAttempt,
+  readDevQuickStartAttempt,
+  writeDevQuickStartAttempt,
+} from "./dev-quick-start-storage";
 import {
   DEV_QUICK_START_PHASE,
   createDevQuickStartIdentity,
@@ -44,6 +49,7 @@ const PHASE_LABEL_KEYS = {
 const DEV_QUICK_START_ERROR = {
   matterImport: "matterImport",
   otpUnavailable: "otpUnavailable",
+  seed: "seed",
 } as const;
 
 type DevQuickStartErrorCode =
@@ -53,6 +59,7 @@ const ERROR_MESSAGE_KEYS = {
   [DEV_QUICK_START_ERROR.matterImport]: "auth.devQuickStart.error.matterImport",
   [DEV_QUICK_START_ERROR.otpUnavailable]:
     "auth.devQuickStart.error.otpUnavailable",
+  [DEV_QUICK_START_ERROR.seed]: "auth.devQuickStart.error.fallback",
 } as const satisfies Record<DevQuickStartErrorCode, TranslationKey>;
 
 class DevQuickStartError extends TaggedError("DevQuickStartError")<{
@@ -60,9 +67,10 @@ class DevQuickStartError extends TaggedError("DevQuickStartError")<{
   message: string;
 }> {}
 
-class DevQuickStartTwoFactorRequired extends TaggedError(
-  "DevQuickStartTwoFactorRequired",
-)<{ message: string }> {}
+const AUTHENTICATION_OUTCOME = {
+  authenticated: "authenticated",
+  twoFactorRequired: "twoFactorRequired",
+} as const;
 
 const authenticate = async ({ email }: DevQuickStartIdentity) => {
   const sent = await authClient.emailOtp.sendVerificationOtp({
@@ -86,15 +94,10 @@ const authenticate = async ({ email }: DevQuickStartIdentity) => {
     throw toAuthClientError(signedIn.error);
   }
   if (isTwoFactorRedirect(signedIn.data)) {
-    throw new DevQuickStartTwoFactorRequired({
-      message: "Two-factor authentication is required.",
-    });
+    return AUTHENTICATION_OUTCOME.twoFactorRequired;
   }
 
-  const updated = await authClient.updateUser({ name: "Dev Quick Start" });
-  if (updated.error) {
-    throw toAuthClientError(updated.error);
-  }
+  return AUTHENTICATION_OUTCOME.authenticated;
 };
 
 const createOrganization = async ({
@@ -129,12 +132,17 @@ const createOrganization = async ({
   if (active.error) {
     throw toAuthClientError(active.error);
   }
+
+  return organizationId;
 };
 
-const seedSkills = async () => {
-  const response = await api.skills.seed.post({});
+const seedSkills = async (organizationId: string) => {
+  const response = await api.dev["seed-skills"].post({ organizationId });
   if (response.error) {
-    throw toAPIError(response.error);
+    throw new DevQuickStartError({
+      code: DEV_QUICK_START_ERROR.seed,
+      message: "The default skills could not be installed.",
+    });
   }
 };
 
@@ -183,10 +191,14 @@ const waitForMatterImport = async (
   }
 };
 
-const seedMatters = async ({ selectionSeed }: DevQuickStartIdentity) => {
+const seedMatters = async (
+  { selectionSeed }: DevQuickStartIdentity,
+  organizationId: string,
+) => {
   const response = await api.dev["seed-firm-knowledge"].post({
     incompleteMatterMode: QUICK_START_INCOMPLETE_MATTER_MODE,
     matters: QUICK_START_MATTER_COUNT,
+    organizationId,
     selectionSeed,
   });
   if (response.error) {
@@ -221,42 +233,143 @@ export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
 
     const attempt =
       attemptRef.current ??
+      readDevQuickStartAttempt() ??
       ({
         completedPhase: null,
         identity: createDevQuickStartIdentity(crypto.randomUUID()),
+        organizationId: null,
       } satisfies DevQuickStartAttempt);
     attemptRef.current = attempt;
+    writeDevQuickStartAttempt(attempt);
+    setPhase(DEV_QUICK_START_PHASE.authenticate);
 
     const result = await Result.tryPromise({
-      try: async () => {
-        await runDevQuickStart({
-          attempt,
-          authenticate,
-          createOrganization,
-          onPhase: setPhase,
-          onPhaseCompleted: (completedPhase) => {
-            attemptRef.current = {
-              completedPhase,
-              identity: attempt.identity,
-            };
-          },
-          seedMatters,
-          seedSkills,
-        });
-        await invalidateSession.mutateAsync();
-      },
+      try: async () => await authenticate(attempt.identity),
       catch: (cause) => cause,
     });
 
     if (Result.isError(result)) {
       setPhase(null);
-      if (DevQuickStartTwoFactorRequired.is(result.error)) {
-        await navigate({
-          to: "/auth/two-factor",
-          search: { redirectTo },
+      analytics.captureError(result.error);
+      stellaToast.add({
+        title: t("auth.devQuickStart.error.title"),
+        description: DevQuickStartError.is(result.error)
+          ? t(ERROR_MESSAGE_KEYS[result.error.code])
+          : userErrorFromThrown(
+              result.error,
+              t("auth.devQuickStart.error.fallback"),
+            ),
+        type: "error",
+      });
+      return;
+    }
+
+    const authenticatedAttempt =
+      attempt.completedPhase === null
+        ? {
+            completedPhase: DEV_QUICK_START_PHASE.authenticate,
+            identity: attempt.identity,
+            organizationId: attempt.organizationId,
+          }
+        : attempt;
+    attemptRef.current = authenticatedAttempt;
+    writeDevQuickStartAttempt(authenticatedAttempt);
+
+    if (result.value === AUTHENTICATION_OUTCOME.twoFactorRequired) {
+      await navigate({
+        to: "/auth/two-factor",
+        search: { devQuickStart: true, redirectTo },
+      });
+      return;
+    }
+
+    await invalidateSession.mutateAsync();
+    await navigate({
+      to: "/auth/organization",
+      search: { devQuickStart: true, redirectTo },
+    });
+  };
+
+  return (
+    <Button
+      className="w-full uppercase"
+      disabled={phase !== null}
+      loading={phase !== null}
+      onClick={() => {
+        detached(handleQuickStart(), "dev-quick-start.run");
+      }}
+      size="lg"
+      type="button"
+      variant="outline"
+    >
+      {phase === null
+        ? t("auth.devQuickStart.button")
+        : t(PHASE_LABEL_KEYS[phase])}
+    </Button>
+  );
+};
+
+export const DevQuickStartContinuation = ({
+  redirectTo,
+}: {
+  redirectTo: string;
+}) => {
+  const t = useTranslations();
+  const analytics = useAnalytics();
+  const invalidateSession = useInvalidateSession();
+  const attemptRef = useRef<DevQuickStartAttempt | null>(null);
+  const runningRef = useRef(false);
+  const [phase, setPhase] = useState<DevQuickStartPhase | null>(null);
+
+  const runContinuation = async () => {
+    if (runningRef.current) {
+      return;
+    }
+    runningRef.current = true;
+
+    const attempt =
+      attemptRef.current ??
+      readDevQuickStartAttempt() ??
+      ({
+        completedPhase: DEV_QUICK_START_PHASE.authenticate,
+        identity: createDevQuickStartIdentity(crypto.randomUUID()),
+        organizationId: null,
+      } satisfies DevQuickStartAttempt);
+    attemptRef.current = attempt;
+    writeDevQuickStartAttempt(attempt);
+
+    const result = await Result.tryPromise({
+      try: async () => {
+        const updated = await authClient.updateUser({
+          name: "Dev Quick Start",
         });
-        return;
-      }
+        if (updated.error) {
+          throw toAuthClientError(updated.error);
+        }
+
+        await runDevQuickStart({
+          attempt,
+          authenticate: async () => {
+            await Promise.resolve();
+          },
+          createOrganization,
+          onAttemptUpdated: (nextAttempt) => {
+            attemptRef.current = nextAttempt;
+            writeDevQuickStartAttempt(nextAttempt);
+          },
+          onPhase: setPhase,
+          seedMatters,
+          seedSkills,
+        });
+        await invalidateSession.mutateAsync();
+        clearDevQuickStartAttempt();
+      },
+      catch: (cause) => cause,
+    });
+
+    runningRef.current = false;
+    if (Result.isError(result)) {
+      setPhase(null);
       analytics.captureError(result.error);
       stellaToast.add({
         title: t("auth.devQuickStart.error.title"),
@@ -279,13 +392,17 @@ export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
     window.location.assign(redirectTo);
   };
 
+  useMountEffect(() => {
+    detached(runContinuation(), "dev-quick-start.continue");
+  });
+
   return (
     <Button
-      className="w-full uppercase"
+      className="w-full max-w-md uppercase"
       disabled={phase !== null}
       loading={phase !== null}
       onClick={() => {
-        detached(handleQuickStart(), "dev-quick-start.run");
+        detached(runContinuation(), "dev-quick-start.retry");
       }}
       size="lg"
       type="button"

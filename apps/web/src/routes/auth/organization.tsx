@@ -1,3 +1,4 @@
+import * as React from "react";
 import { useRef } from "react";
 
 import { useForm } from "@tanstack/react-form";
@@ -52,8 +53,17 @@ import {
 import { toFormErrors } from "@/lib/schema";
 
 const searchSchema = v.object({
+  devQuickStart: v.optional(v.boolean()),
   redirectTo: v.optional(v.pipe(v.string(), v.transform(normalizeRedirectTo))),
 });
+
+const DevQuickStartContinuation = import.meta.env.DEV
+  ? React.lazy(async () => {
+      const module =
+        await import("@/routes/auth/-components/dev-quick-start-button");
+      return { default: module.DevQuickStartContinuation };
+    })
+  : null;
 
 export const Route = createFileRoute("/auth/organization")({
   validateSearch: searchSchema,
@@ -81,7 +91,10 @@ export const Route = createFileRoute("/auth/organization")({
     const isOauthPostLogin =
       bridgedQuery !== null || isOauthPostLoginFromSearch;
 
+    const isDevQuickStart =
+      import.meta.env.DEV && search.devQuickStart === true;
     if (
+      !isDevQuickStart &&
       !isOauthPostLogin &&
       (context.session.activeOrganizationId ||
         isAcceptInvitationRedirect(search.redirectTo ?? "/"))
@@ -95,9 +108,48 @@ export const Route = createFileRoute("/auth/organization")({
 });
 
 function Organization() {
+  const hydrated = useHydrated();
+  const { devQuickStart, redirectTo } = Route.useSearch({
+    select: (search) => ({
+      devQuickStart: search.devQuickStart,
+      redirectTo: search.redirectTo ?? "/",
+    }),
+  });
+
+  if (import.meta.env.DEV && devQuickStart && hydrated) {
+    if (DevQuickStartContinuation === null) {
+      return null;
+    }
+    return (
+      <React.Suspense fallback={<OrganizationSkeleton />}>
+        <DevQuickStartContinuation redirectTo={redirectTo} />
+      </React.Suspense>
+    );
+  }
+
+  if (!hydrated && import.meta.env.DEV && devQuickStart) {
+    return <OrganizationSkeleton />;
+  }
+
+  return <OrganizationFlow hydrated={hydrated} />;
+}
+
+const OrganizationSkeleton = () => (
+  <Frame className="w-full max-w-sm">
+    <FrameHeader>
+      <Skeleton className="h-5 w-48" />
+      <Skeleton className="mt-2 h-4 w-64" />
+    </FrameHeader>
+    <FramePanel className="flex flex-col gap-2">
+      <Skeleton className="h-16 w-full rounded-lg" />
+      <Skeleton className="h-16 w-full rounded-lg" />
+    </FramePanel>
+  </Frame>
+);
+
+const OrganizationFlow = ({ hydrated }: { hydrated: boolean }) => {
   const { data: organizations, isPending } = authClient.useListOrganizations();
   const hasOrganizations = (organizations?.length ?? 0) > 0;
-  const hydrated = useHydrated();
   const isOauthPostLoginFromSearch = Route.useRouteContext({
     select: (context) => context.isOauthPostLoginFromSearch,
   });
@@ -110,18 +162,7 @@ function Organization() {
   }
 
   if (!hydrated || isPending || (!hasOrganizations && !isOauthPostLogin)) {
-    return (
-      <Frame className="w-full max-w-sm">
-        <FrameHeader>
-          <Skeleton className="h-5 w-48" />
-          <Skeleton className="mt-2 h-4 w-64" />
-        </FrameHeader>
-        <FramePanel className="flex flex-col gap-2">
-          <Skeleton className="h-16 w-full rounded-lg" />
-          <Skeleton className="h-16 w-full rounded-lg" />
-        </FramePanel>
-      </Frame>
-    );
+    return <OrganizationSkeleton />;
   }
 
   return (
@@ -136,7 +177,7 @@ function Organization() {
       )}
     </div>
   );
-}
+};
 
 type OrganizationListProps = {
   isOauthPostLogin: boolean;

@@ -4,16 +4,36 @@ import { session } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
 import { sessionCookieName } from "@/api/lib/auth-cookie-name";
+import type { SafeId } from "@/api/lib/branded-types";
+import { parseExternalOrganizationId } from "@/api/lib/safe-id-boundaries";
 
 const DEV_SEED_SESSION_LIFETIME_MS = 2 * 60 * 60 * 1000;
 
 type MintDevSeedSessionOptions = {
-  organizationId: string;
-  userId: string;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
 };
 
 type DevSeedSession = {
   cookie: string;
+};
+
+export const resolveMemberDevOrganization = async (
+  organizationIdValue: string,
+  userId: SafeId<"user">,
+): Promise<SafeId<"organization"> | null> => {
+  const organizationId = parseExternalOrganizationId(organizationIdValue);
+  if (organizationId === null) {
+    return null;
+  }
+  const membership = await rootDb.query.member.findFirst({
+    columns: { id: true },
+    where: {
+      organizationId: { eq: organizationId },
+      userId: { eq: userId },
+    },
+  });
+  return membership ? organizationId : null;
 };
 
 /**

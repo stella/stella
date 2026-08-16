@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 export const DEV_QUICK_START_PHASE = {
   authenticate: "authenticate",
   organization: "organization",
@@ -18,6 +20,7 @@ export type DevQuickStartIdentity = {
 export type DevQuickStartAttempt = {
   completedPhase: DevQuickStartPhase | null;
   identity: DevQuickStartIdentity;
+  organizationId: string | null;
 };
 
 const DEV_QUICK_START_EMAIL = "dev-quick-start@stella.dev";
@@ -38,11 +41,14 @@ export const createDevQuickStartIdentity = (
 type RunDevQuickStartOptions = {
   attempt: DevQuickStartAttempt;
   authenticate: (identity: DevQuickStartIdentity) => Promise<void>;
-  createOrganization: (identity: DevQuickStartIdentity) => Promise<void>;
+  createOrganization: (identity: DevQuickStartIdentity) => Promise<string>;
+  onAttemptUpdated: (attempt: DevQuickStartAttempt) => void;
   onPhase: (phase: DevQuickStartPhase) => void;
-  onPhaseCompleted: (phase: DevQuickStartPhase) => void;
-  seedMatters: (identity: DevQuickStartIdentity) => Promise<void>;
-  seedSkills: () => Promise<void>;
+  seedMatters: (
+    identity: DevQuickStartIdentity,
+    organizationId: string,
+  ) => Promise<void>;
+  seedSkills: (organizationId: string) => Promise<void>;
 };
 
 const PHASE_ORDER = {
@@ -63,36 +69,63 @@ export const runDevQuickStart = async ({
   attempt,
   authenticate,
   createOrganization,
+  onAttemptUpdated,
   onPhase,
-  onPhaseCompleted,
   seedMatters,
   seedSkills,
 }: RunDevQuickStartOptions): Promise<void> => {
+  let currentAttempt = attempt;
+  const completePhase = (
+    completedPhase: DevQuickStartPhase,
+    organizationId = currentAttempt.organizationId,
+  ) => {
+    currentAttempt = {
+      completedPhase,
+      identity: currentAttempt.identity,
+      organizationId,
+    };
+    onAttemptUpdated(currentAttempt);
+  };
+
   if (
-    shouldRunPhase(attempt.completedPhase, DEV_QUICK_START_PHASE.authenticate)
+    shouldRunPhase(
+      currentAttempt.completedPhase,
+      DEV_QUICK_START_PHASE.authenticate,
+    )
   ) {
     onPhase(DEV_QUICK_START_PHASE.authenticate);
-    await authenticate(attempt.identity);
-    onPhaseCompleted(DEV_QUICK_START_PHASE.authenticate);
+    await authenticate(currentAttempt.identity);
+    completePhase(DEV_QUICK_START_PHASE.authenticate);
   }
 
   if (
-    shouldRunPhase(attempt.completedPhase, DEV_QUICK_START_PHASE.organization)
+    shouldRunPhase(
+      currentAttempt.completedPhase,
+      DEV_QUICK_START_PHASE.organization,
+    )
   ) {
     onPhase(DEV_QUICK_START_PHASE.organization);
-    await createOrganization(attempt.identity);
-    onPhaseCompleted(DEV_QUICK_START_PHASE.organization);
+    const organizationId = await createOrganization(currentAttempt.identity);
+    completePhase(DEV_QUICK_START_PHASE.organization, organizationId);
   }
 
-  if (shouldRunPhase(attempt.completedPhase, DEV_QUICK_START_PHASE.skills)) {
+  const organizationId =
+    currentAttempt.organizationId ??
+    panic("Dev quick start completed organization setup without an ID.");
+
+  if (
+    shouldRunPhase(currentAttempt.completedPhase, DEV_QUICK_START_PHASE.skills)
+  ) {
     onPhase(DEV_QUICK_START_PHASE.skills);
-    await seedSkills();
-    onPhaseCompleted(DEV_QUICK_START_PHASE.skills);
+    await seedSkills(organizationId);
+    completePhase(DEV_QUICK_START_PHASE.skills);
   }
 
-  if (shouldRunPhase(attempt.completedPhase, DEV_QUICK_START_PHASE.matters)) {
+  if (
+    shouldRunPhase(currentAttempt.completedPhase, DEV_QUICK_START_PHASE.matters)
+  ) {
     onPhase(DEV_QUICK_START_PHASE.matters);
-    await seedMatters(attempt.identity);
-    onPhaseCompleted(DEV_QUICK_START_PHASE.matters);
+    await seedMatters(currentAttempt.identity, organizationId);
+    completePhase(DEV_QUICK_START_PHASE.matters);
   }
 };

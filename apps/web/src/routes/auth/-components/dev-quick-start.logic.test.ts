@@ -8,6 +8,7 @@ import {
 } from "./dev-quick-start.logic";
 
 const RANDOM_ID = "018f1f7e-89ab-7def-8123-456789abcdef";
+const ORGANIZATION_ID = "organization-quick-start";
 
 describe("createDevQuickStartIdentity", () => {
   test("reuses the local account with a unique org and reproducible seed", () => {
@@ -26,23 +27,26 @@ describe("runDevQuickStart", () => {
     const identity = createDevQuickStartIdentity(RANDOM_ID);
 
     await runDevQuickStart({
-      attempt: { completedPhase: null, identity },
+      attempt: { completedPhase: null, identity, organizationId: null },
       authenticate: async () => {
         calls.push("authenticate");
       },
       createOrganization: async () => {
         calls.push("organization");
+        return ORGANIZATION_ID;
+      },
+      onAttemptUpdated: ({ completedPhase }) => {
+        calls.push(`completed:${completedPhase}`);
       },
       onPhase: (phase) => {
         calls.push(`phase:${phase}`);
       },
-      onPhaseCompleted: (phase) => {
-        calls.push(`completed:${phase}`);
-      },
-      seedMatters: async () => {
+      seedMatters: async (_identity, organizationId) => {
+        expect(organizationId).toBe(ORGANIZATION_ID);
         calls.push("matters");
       },
-      seedSkills: async () => {
+      seedSkills: async (organizationId) => {
+        expect(organizationId).toBe(ORGANIZATION_ID);
         calls.push("skills");
       },
     });
@@ -69,7 +73,7 @@ describe("runDevQuickStart", () => {
 
     expect(
       runDevQuickStart({
-        attempt: { completedPhase: null, identity },
+        attempt: { completedPhase: null, identity, organizationId: null },
         authenticate: async () => {
           calls.push("authenticate");
         },
@@ -77,8 +81,8 @@ describe("runDevQuickStart", () => {
           calls.push("organization");
           throw new Error("organization failed");
         },
+        onAttemptUpdated: () => undefined,
         onPhase: () => undefined,
-        onPhaseCompleted: () => undefined,
         seedMatters: async () => {
           calls.push("matters");
         },
@@ -93,33 +97,40 @@ describe("runDevQuickStart", () => {
   test("resumes after the last completed phase with the same identity", async () => {
     const calls: string[] = [];
     const identity = createDevQuickStartIdentity(RANDOM_ID);
-    const progress: { completedPhase: DevQuickStartPhase | null } = {
+    let progress: {
+      completedPhase: DevQuickStartPhase | null;
+      organizationId: string | null;
+    } = {
       completedPhase: null,
+      organizationId: null,
     };
     let matterAttempts = 0;
 
     const run = async () =>
       runDevQuickStart({
-        attempt: { completedPhase: progress.completedPhase, identity },
+        attempt: { ...progress, identity },
         authenticate: async () => {
           calls.push("authenticate");
         },
         createOrganization: async () => {
           calls.push("organization");
+          return ORGANIZATION_ID;
+        },
+        onAttemptUpdated: ({ completedPhase, organizationId }) => {
+          progress = { completedPhase, organizationId };
         },
         onPhase: () => undefined,
-        onPhaseCompleted: (phase) => {
-          progress.completedPhase = phase;
-        },
-        seedMatters: async (attemptIdentity) => {
+        seedMatters: async (attemptIdentity, organizationId) => {
           expect(attemptIdentity).toBe(identity);
+          expect(organizationId).toBe(ORGANIZATION_ID);
           matterAttempts += 1;
           calls.push("matters");
           if (matterAttempts === 1) {
             throw new Error("import failed");
           }
         },
-        seedSkills: async () => {
+        seedSkills: async (organizationId) => {
+          expect(organizationId).toBe(ORGANIZATION_ID);
           calls.push("skills");
         },
       });
@@ -144,5 +155,31 @@ describe("runDevQuickStart", () => {
       "matters",
     ]);
     expect(progress.completedPhase).toBe(DEV_QUICK_START_PHASE.matters);
+    expect(progress.organizationId).toBe(ORGANIZATION_ID);
+  });
+
+  test("pins resumed seeds to the organization stored by the attempt", async () => {
+    const identity = createDevQuickStartIdentity(RANDOM_ID);
+    const seededOrganizations: string[] = [];
+
+    await runDevQuickStart({
+      attempt: {
+        completedPhase: DEV_QUICK_START_PHASE.organization,
+        identity,
+        organizationId: ORGANIZATION_ID,
+      },
+      authenticate: async () => undefined,
+      createOrganization: async () => "unexpected-organization",
+      onAttemptUpdated: () => undefined,
+      onPhase: () => undefined,
+      seedMatters: async (_identity, organizationId) => {
+        seededOrganizations.push(organizationId);
+      },
+      seedSkills: async (organizationId) => {
+        seededOrganizations.push(organizationId);
+      },
+    });
+
+    expect(seededOrganizations).toEqual([ORGANIZATION_ID, ORGANIZATION_ID]);
   });
 });

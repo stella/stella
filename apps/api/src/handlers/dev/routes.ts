@@ -1,7 +1,10 @@
+import { panic, Result } from "better-result";
 import { eq, inArray } from "drizzle-orm";
 import Elysia, { t } from "elysia";
 import { rmSync } from "node:fs";
 import path from "node:path";
+
+import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 
 import {
   contacts,
@@ -14,7 +17,11 @@ import {
 import { env } from "@/api/env";
 import { authMacro } from "@/api/lib/auth";
 import { readDevOtp } from "@/api/lib/dev-otp-store";
-import { mintDevSeedSession } from "@/api/lib/dev-seed-session-store";
+import {
+  mintDevSeedSession,
+  resolveMemberDevOrganization,
+} from "@/api/lib/dev-seed-session-store";
+import { fetchWithResolvedAddress } from "@/api/lib/safe-outbound-fetch";
 import { rebuildSupplementalSearchIndex } from "@/api/lib/search/index-global";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
@@ -43,6 +50,7 @@ const firmKnowledgeJobs = new FirmKnowledgeJobStore();
 /** Matters to seed from the Dev menu; the CLI's own default. */
 const FIRM_KNOWLEDGE_MATTERS = 15;
 const MAX_FIRM_KNOWLEDGE_MATTERS = 50;
+const MAX_SKILL_SEED_RESPONSE_BYTES = 1024 * 1024;
 
 const INCOMPLETE_MATTER_MODE = {
   replace: "replace",
@@ -56,6 +64,13 @@ const getFirmKnowledgeJobResponse = (job: FirmKnowledgeJob) => ({
   jobId: job.id,
   ...job.status,
 });
+
+const getDevApiOrigin = (port: number | undefined): string => {
+  if (port === undefined) {
+    panic("The dev API server has no listening port.");
+  }
+  return `http://127.0.0.1:${String(port)}`;
+};
 
 export const devRoute = new Elysia({ prefix: "/dev" })
   .use(authMacro)
@@ -115,15 +130,71 @@ export const devRoute = new Elysia({ prefix: "/dev" })
       }),
     },
   )
+  .post(
+    "/seed-skills",
+    async (ctx) => {
+      const organizationId = await resolveMemberDevOrganization(
+        ctx.body.organizationId,
+        ctx.user.id,
+      );
+      if (organizationId === null) {
+        return new Response("Organization membership not found", {
+          status: 403,
+        });
+      }
+
+      const apiOrigin = getDevApiOrigin(ctx.server?.port);
+      const seedSession = await mintDevSeedSession({
+        organizationId,
+        userId: ctx.user.id,
+      });
+      // Pin the socket to loopback as well as constructing a loopback URL, so
+      // the isolated credential cannot leave this process's host.
+      const response = await fetchWithResolvedAddress({
+        addresses: [{ address: "127.0.0.1", family: 4 }],
+        body: "{}",
+        headers: {
+          cookie: seedSession.cookie,
+          "content-type": "application/json",
+        },
+        maxBytes: MAX_SKILL_SEED_RESPONSE_BYTES,
+        method: "POST",
+        timeoutMs: 30_000,
+        url: new URL(`${apiOrigin}${STELLA_API_VERSION_PREFIX}/skills/seed`),
+      });
+      if (Result.isError(response)) {
+        return new Response("Skill seed request failed", { status: 502 });
+      }
+      if (!response.value.ok) {
+        return new Response(new TextDecoder().decode(response.value.body), {
+          status: response.value.status,
+        });
+      }
+      return { ok: true };
+    },
+    {
+      body: t.Object({
+        organizationId: t.String({ minLength: 1, maxLength: 128 }),
+      }),
+    },
+  )
   // Uploads through this same API under a short-lived job session pinned to
   // the initiating user and organization. The corpus must travel the real
   // upload path to get derivatives and extraction.
   .post(
     "/seed-firm-knowledge",
-    (ctx) => {
-      const apiOrigin = new URL(ctx.request.url).origin;
-      const organizationId = ctx.session.activeOrganizationId;
+    async (ctx) => {
+      const apiOrigin = getDevApiOrigin(ctx.server?.port);
       const userId = ctx.user.id;
+      const organizationId =
+        ctx.body?.organizationId === undefined
+          ? ctx.session.activeOrganizationId
+          : await resolveMemberDevOrganization(ctx.body.organizationId, userId);
+      if (organizationId === null) {
+        return new Response("Organization membership not found", {
+          status: 403,
+        });
+      }
 
       if (firmKnowledgeInFlight) {
         const job =
@@ -195,6 +266,9 @@ export const devRoute = new Elysia({ prefix: "/dev" })
           ),
           matters: t.Optional(
             t.Integer({ minimum: 1, maximum: MAX_FIRM_KNOWLEDGE_MATTERS }),
+          ),
+          organizationId: t.Optional(
+            t.String({ minLength: 1, maxLength: 128 }),
           ),
           selectionSeed: t.Optional(t.String({ minLength: 1, maxLength: 128 })),
         }),
