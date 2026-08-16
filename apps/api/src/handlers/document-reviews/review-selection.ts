@@ -22,6 +22,8 @@ export type ResolvedReviewDocument = {
   entityId: SafeId<"entity">;
   entityVersionId: SafeId<"entityVersion">;
   file: ResolvedFile;
+  /** Pinned file's stored size, for pre-flight run sizing. */
+  fileSizeBytes: number;
 };
 
 type ResolveReviewSelectionArgs = {
@@ -64,6 +66,7 @@ const resolveOne = (
   return Result.ok({
     entityId: entity.id,
     entityVersionId: currentVersion.id,
+    fileSizeBytes: field.content.sizeBytes,
     file: {
       fileFieldId: field.id,
       fileId: field.content.id,

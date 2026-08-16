@@ -31,6 +31,18 @@ export type HandlerErrorUsageDetail = {
 };
 
 /**
+ * Structured 409 detail for a queued run whose estimated consumption
+ * crosses the confirmation threshold: the client re-submits the same
+ * request with `confirmedUnits >= estimatedUnits` to proceed. Distinct
+ * from `usage` (the 402 over-limit detail) — this is not an over-limit
+ * state, and the run may well be affordable.
+ */
+export type HandlerErrorConfirmationDetail = {
+  estimatedUnits: number;
+  availableUnits: number;
+};
+
+/**
  * Ceremony fields of an agent-auth ID-JAG `interaction_required` step-up: a
  * human must complete the RFC 8628-style claim ceremony before a first
  * `(iss, sub)` delegation is written. The pinned guide reserves `claim` for
@@ -80,6 +92,7 @@ export type HandlerErrorProps<
   stepUp?: HandlerErrorStepUp | undefined;
   cause?: unknown;
   usage?: HandlerErrorUsageDetail | undefined;
+  confirmation?: HandlerErrorConfirmationDetail | undefined;
 };
 
 // TaggedError(...) cannot reference the class type parameter in the base
@@ -91,6 +104,7 @@ export class HandlerError<
   declare code?: HandlerErrorCode | undefined;
   declare status: TStatus;
   declare usage?: HandlerErrorUsageDetail | undefined;
+  declare confirmation?: HandlerErrorConfirmationDetail | undefined;
   declare error?: string | undefined;
   declare claim?: HandlerErrorClaim | undefined;
   declare stepUp?: HandlerErrorStepUp | undefined;
@@ -100,6 +114,7 @@ export class HandlerError<
     this.code = props.code;
     this.status = props.status;
     this.usage = props.usage;
+    this.confirmation = props.confirmation;
     this.error = props.error;
     this.claim = props.claim;
     this.stepUp = props.stepUp;

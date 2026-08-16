@@ -560,7 +560,9 @@ const executeRun = async (
     promptCachingEnabled: config.value.promptCachingEnabled,
     serviceTier: SERVICE_TIER,
     usageMetering: {
-      actionType: "chat",
+      // Settles under the same action type the create-run pre-flight
+      // estimates with, so the estimate and the ledger agree.
+      actionType: "doc_review",
       organizationId: actor.organizationId,
       safeDb: actor.safeDb,
       serviceTier: SERVICE_TIER,
