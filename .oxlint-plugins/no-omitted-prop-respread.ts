@@ -122,6 +122,78 @@ const intersectAll = (keySets): string[] => {
     : [...first].filter((key) => keySets.every((keys) => keys.has(key)));
 };
 
+// A stable spelling of a type node, enough to tell whether two `Omit`s remove
+// from the same source. Structural, not semantic: two spellings of one type are
+// two sources here.
+const typeSignature = (typeNode) => {
+  if (typeNode === null || typeNode === undefined) {
+    return "?";
+  }
+  if (typeNode.type === "TSParenthesizedType") {
+    return typeSignature(typeNode.typeAnnotation);
+  }
+  if (typeNode.type === "TSTypeReference") {
+    const args = typeArgumentsOf(typeNode);
+    const name = typeReferenceName(typeNode.typeName) ?? "?";
+    return args.length === 0
+      ? name
+      : `${name}<${args.map(typeSignature).join(",")}>`;
+  }
+  if (typeNode.type === "TSLiteralType") {
+    return JSON.stringify(typeNode.literal?.value ?? null);
+  }
+  if (
+    typeNode.type === "TSUnionType" ||
+    typeNode.type === "TSIntersectionType"
+  ) {
+    const separator = typeNode.type === "TSUnionType" ? "|" : "&";
+    return `(${typeNode.types.map(typeSignature).join(separator)})`;
+  }
+  return typeNode.type;
+};
+
+/**
+ * What each member of an intersection can supply, as the source it draws from
+ * and the keys it removes from that source. A bare reference supplies its whole
+ * source; `Omit<S, K>` supplies the rest of `S`. Anything else supplies only
+ * what it declares, which `reintroducedKeysOf` already subtracts.
+ */
+const suppliersOf = (typeNode, localTypes, open = new Set()) => {
+  if (typeNode === null || typeNode === undefined) {
+    return [];
+  }
+  if (typeNode.type === "TSParenthesizedType") {
+    return suppliersOf(typeNode.typeAnnotation, localTypes, open);
+  }
+  if (typeNode.type !== "TSTypeReference") {
+    return [];
+  }
+  const name = typeReferenceName(typeNode.typeName);
+  const args = typeArgumentsOf(typeNode);
+  if (name === OMIT_TYPE) {
+    const source = args.at(0);
+    return [
+      {
+        source: typeSignature(source),
+        removed: new Set(literalKeysOf(args.at(1))),
+      },
+      ...suppliersOf(source, localTypes, open),
+    ];
+  }
+  if (MODIFIER_UTILITIES.has(name)) {
+    return suppliersOf(args.at(0), localTypes, open);
+  }
+  const alias = expandAlias(name, localTypes, open);
+  if (alias === null) {
+    // An opaque reference supplies everything its own source has.
+    return [{ source: typeSignature(typeNode), removed: new Set() }];
+  }
+  open.add(name);
+  const suppliers = suppliersOf(alias, localTypes, open);
+  open.delete(name);
+  return suppliers;
+};
+
 // String keys from the second `Omit` argument: `"a"` or `"a" | "b"`.
 // A non-literal key set yields nothing, which is the documented boundary.
 const literalKeysOf = (keyTypeNode): string[] => {
@@ -150,16 +222,33 @@ const omittedKeysOf = (typeNode, localTypes, open = new Set()): string[] => {
   if (typeNode.type === "TSParenthesizedType") {
     return omittedKeysOf(typeNode.typeAnnotation, localTypes, open);
   }
-  // An intersection has a key when any member has it, so one member's omission
-  // is undone by another's: `Omit<P, "a"> & Omit<P, "b">` still carries both.
-  // Only keys every omitting member removes survive. Members that omit nothing
-  // (a literal, an unresolved reference) neither remove nor supply a key here;
-  // what they declare is subtracted separately, by `reintroducedKeysOf`.
+  // An intersection has a key when any member has it, so a member's omission
+  // survives only when no sibling can supply the key back. A sibling proves it
+  // can when it draws from the same source and does not remove the key itself:
+  // `Omit<P, "a"> & Omit<P, "b">` carries both, while `Omit<A, "a"> & Omit<B, "b">`
+  // carries neither. What a sibling merely declares is subtracted separately, by
+  // `reintroducedKeysOf`.
   if (typeNode.type === "TSIntersectionType") {
-    return intersectAll(
-      typeNode.types
-        .map((member) => new Set(omittedKeysOf(member, localTypes, open)))
-        .filter((keys) => keys.size > 0),
+    const members = typeNode.types.map((member) => ({
+      keys: omittedKeysOf(member, localTypes, open),
+      suppliers: suppliersOf(member, localTypes, open),
+    }));
+    return members.flatMap(({ keys }, index) =>
+      keys.filter(
+        (key) =>
+          !members.some(
+            (sibling, siblingIndex) =>
+              siblingIndex !== index &&
+              sibling.suppliers.some(
+                (supplier) =>
+                  !supplier.removed.has(key) &&
+                  members[index]?.suppliers.some(
+                    (own) =>
+                      own.removed.has(key) && own.source === supplier.source,
+                  ),
+              ),
+          ),
+      ),
     );
   }
   // A union only guarantees the omission its branches share.

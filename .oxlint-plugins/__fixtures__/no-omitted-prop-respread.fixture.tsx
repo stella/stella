@@ -146,11 +146,21 @@ export const _ok_reTypedAlias = (props: RetypedPanelProps) => (
   <Panel {...props} />
 );
 
-// Allowed: an intersection has a key when any member has it, so each member
-// here supplies what the other omits and neither key is actually removed.
+// Allowed: an intersection has a key when any member has it, and here each
+// member draws from the same source and supplies what the other omits.
 export const _ok_intersectedOmissions = (
   props: Omit<PanelProps, "orientation"> & Omit<PanelProps, "variant">,
 ) => <Panel {...props} />;
+
+// A sibling that removes the same key supplies nothing back, so `orientation`
+// stands while `variant` is cancelled by the member that keeps it.
+export const _intersectedSameOmission = (
+  props: Omit<PanelProps, "orientation"> &
+    Omit<PanelProps, "orientation" | "variant">,
+) => (
+  // oxlint-disable-next-line no-omitted-prop-respread/no-omitted-prop-respread
+  <Panel {...props} />
+);
 
 // Allowed: a generic alias means something different per use site, and the
 // argument here deliberately puts `orientation` back.
