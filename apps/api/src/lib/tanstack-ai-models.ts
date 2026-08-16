@@ -1687,9 +1687,13 @@ export const getTanStackTextModelInfoForRole = (
   const provider = getActiveProvider();
   const supportedProvider = resolveTanStackTextProvider({ provider });
   assertTanStackProviderRoleSupport(supportedProvider, role);
+  const modelId = MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[provider][role];
+  // Metadata must agree with dispatch: never advertise an instance
+  // model that resolveInstanceTextModel would refuse as unrated.
+  assertInstanceModelRated(modelId);
   return {
     keySource: "instance",
-    modelId: MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[provider][role],
+    modelId,
     provider: supportedProvider,
   };
 };

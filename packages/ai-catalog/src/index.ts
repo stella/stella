@@ -813,8 +813,15 @@ type NormalizedCatalogId<TId extends string> =
     ? (typeof MODEL_CATALOG_ID_ALIASES)[TId]
     : TId;
 
+/** Derived, not hand-listed: a new aggregator joins the check by kind. */
+type AggregatorModelProvider = {
+  [TProvider in TanStackAIProvider]: (typeof MODEL_CATALOG_PROVIDER_KIND)[TProvider] extends "aggregator"
+    ? TProvider
+    : never;
+}[TanStackAIProvider];
+
 type OfferedAggregatorUnderlyingModelId =
-  (typeof BYOK_MODEL_OPTIONS)["openrouter"][number] extends infer TId extends
+  (typeof BYOK_MODEL_OPTIONS)[AggregatorModelProvider][number] extends infer TId extends
     string
     ? TId extends `${string}/${infer TUnderlying}`
       ? NormalizedCatalogId<TUnderlying>
