@@ -8,7 +8,10 @@ import type {
   DecisionSection,
   EmptyAst,
 } from "@/api/lib/legal-search/document-types";
-import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
+import type {
+  AdapterKey,
+  CaseLawJurisdiction,
+} from "@/api/lib/legal-search/ingestion-constants";
 
 export { EMPTY_AST };
 export type { EmptyAst };
@@ -464,7 +467,14 @@ export type ReconciliationUnsupported = {
 export type SourceAdapter = {
   key: AdapterKey;
   name: string;
-  country: string;
+  /**
+   * The jurisdiction this source publishes for. Typed rather than free text:
+   * every per-jurisdiction policy in the slice is a total map over
+   * `CaseLawJurisdiction`, so registering a source for a jurisdiction nobody
+   * has declared a citation-resolution policy for is a compile error rather
+   * than a silent default at run time.
+   */
+  country: CaseLawJurisdiction;
   language: string;
   fetchPage: (
     cursor: string | null,

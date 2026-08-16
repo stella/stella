@@ -2,6 +2,13 @@ import { eq } from "drizzle-orm";
 
 import { CITATION_KINDS } from "@/api/handlers/case-law/citation-kind";
 import {
+  CITATION_RESOLUTION_SCOPES,
+  CITATION_RESOLUTION_STATUS,
+  CITATION_RESOLUTION_STATUSES,
+  citationReopenableByKeySql,
+  unsettledCitationSql,
+} from "@/api/handlers/case-law/citation-resolution-status";
+import {
   POLARITIES,
   RULE_SOURCE,
   RULE_SOURCES,
@@ -93,6 +100,14 @@ const POLARITY_SQL_VALUES = POLARITIES.map((polarity) =>
 
 const CITATION_KIND_SQL_VALUES = CITATION_KINDS.map((kind) =>
   sql.raw(`'${kind}'`),
+);
+
+const CITATION_RESOLUTION_STATUS_SQL_VALUES = CITATION_RESOLUTION_STATUSES.map(
+  (status) => sql.raw(`'${status}'`),
+);
+
+const CITATION_RESOLUTION_SCOPE_SQL_VALUES = CITATION_RESOLUTION_SCOPES.map(
+  (scope) => sql.raw(`'${scope}'`),
 );
 
 const RULE_SOURCE_SQL_VALUES = RULE_SOURCES.map((source) =>
@@ -412,9 +427,25 @@ export const caseLawDecisions = p.pgTable(
       .index("case_law_decisions_corpus_hash_pending_idx")
       .on(t.id)
       .where(sql`${t.contentHash} is not null and ${t.indexedHash} is null`),
+    // The resolver's candidate lookup, answered entirely from the index. The
+    // key alone finds the candidates; jurisdiction and date are what decide
+    // between them, and the target id is what gets written. Carrying all four
+    // keeps the per-citation cost to one index probe instead of a probe plus a
+    // heap fetch per candidate, which on a corpus of this size is the
+    // difference between a resolution pass that fits in cache and one that
+    // reads the decisions table at random.
+    //
+    // `id` is a fourth key column rather than an INCLUDE payload only because
+    // the Drizzle version in use cannot express INCLUDE; the two are the same
+    // index-only scan here, since nothing ever ranges on `id` in this order.
+    //
+    // This replaces the plain `(citation_key) WHERE citation_key IS NOT NULL`
+    // index it is a strict prefix of. Keeping both would have cost a few
+    // hundred megabytes of cache on the same instance that has to hold this
+    // one, to serve queries this index already answers.
     p
-      .index("case_law_decisions_citation_key_idx")
-      .on(t.citationKey)
+      .index("case_law_decisions_citation_candidate_idx")
+      .on(t.citationKey, t.country, t.decisionDate, t.id)
       .where(isNotNull(t.citationKey)),
     // Deferred-document queue, priority tier: decisions a reader asked
     // for, oldest request first. Partial on the pending predicate, so
@@ -438,6 +469,10 @@ export const caseLawDecisions = p.pgTable(
         t.id,
       )
       .where(sql`${t.fulltext} is null and ${t.documentUrl} is not null`),
+    // Same rule as on the citation side: null means "does not canonicalize",
+    // and an empty string would make every such decision a candidate for
+    // every such citation.
+    p.check("decisions_citation_key_non_empty", sql`${t.citationKey} <> ''`),
     ...globalCaseLawPolicies(),
   ],
 );
@@ -684,6 +719,19 @@ export const caseLawCitations = p.pgTable(
      * honest and `CitationKind` types the write path.
      */
     kind: p.varchar({ length: 16 }).default("precedent").notNull(),
+    /**
+     * Outcome of the last resolution attempt. Split from the nullability of
+     * `citedDecisionId` because a null foreign key cannot tell "not examined"
+     * from "examined, nothing honest to link to": with both meanings on one
+     * column the resolver's predicate never emptied and it re-examined the
+     * permanent residue on every pass. See `citation-resolution-status.ts`.
+     */
+    resolutionStatus: p
+      .text("resolution_status", { enum: CITATION_RESOLUTION_STATUSES })
+      .notNull()
+      .default(CITATION_RESOLUTION_STATUS.PENDING),
+    /** When that outcome was decided; null until the row is first examined. */
+    resolutionAttemptedAt: timestamptz("resolution_attempted_at"),
     sectionIndex: p.integer("section_index"),
     polarity: p.varchar("polarity", { length: 16 }),
     polarityRuleId: safeUuid<"caseLawPolarityRule">(
@@ -703,12 +751,30 @@ export const caseLawCitations = p.pgTable(
       .index("case_law_citations_polarity_null_idx")
       .on(t.polarity)
       .where(isNull(t.polarity)),
+    // The burn-down index: the walk's keyset axis, restricted to the rows it
+    // still has to examine. Ordered by citing decision because both id
+    // families are uuidv7, so walking citations in that order reads the
+    // decisions heap in insertion order rather than at random; `id` closes the
+    // pair so the keyset is a strict total order and no row is served twice or
+    // skipped. It shrinks to nothing as the corpus settles, which the old
+    // `cited_decision_id IS NULL` predicate could never do.
     p
-      .index("case_law_citations_unresolved_key_idx")
-      .on(t.citationKey)
+      .index("case_law_citations_pending_walk_idx")
+      .on(t.citingDecisionId, t.id)
       .where(
-        sql`${t.citedDecisionId} is null and ${t.citationKey} is not null`,
+        unsettledCitationSql({
+          resolutionStatus: t.resolutionStatus,
+          citedDecisionId: t.citedDecisionId,
+          citationKey: t.citationKey,
+        }),
       ),
+    // The reverse direction: a decision whose key changes asks which citations
+    // that key can now answer differently. Without it that question is a scan
+    // of every citation, on the ingestion path, per stored decision.
+    p
+      .index("case_law_citations_reopenable_key_idx")
+      .on(t.citationKey)
+      .where(citationReopenableByKeySql(t.resolutionStatus)),
     p.check(
       "citations_polarity_values",
       sql`${t.polarity} IN (${sql.join(POLARITY_SQL_VALUES, sql.raw(","))})`,
@@ -717,11 +783,70 @@ export const caseLawCitations = p.pgTable(
       "citations_kind_values",
       sql`${t.kind} IN (${sql.join(CITATION_KIND_SQL_VALUES, sql.raw(","))})`,
     ),
+    p.check(
+      "citations_resolution_status_values",
+      sql`${t.resolutionStatus} IN (${sql.join(
+        CITATION_RESOLUTION_STATUS_SQL_VALUES,
+        sql.raw(","),
+      )})`,
+    ),
+    // The empty string is not a key, it is the absence of one wearing a
+    // value's clothes: two rows that both failed to canonicalize would join
+    // each other and draw an edge between unrelated cases. Null already means
+    // "no key"; this makes the second spelling unrepresentable rather than
+    // merely discouraged.
+    p.check("citations_citation_key_non_empty", sql`${t.citationKey} <> ''`),
     // Authority reads precedent only, so the index covers that arm.
     p
       .index("case_law_citations_precedent_cited_idx")
       .on(t.citedDecisionId)
       .where(sql`${t.kind} = 'precedent' AND ${t.citedDecisionId} IS NOT NULL`),
+    ...globalCaseLawPolicies(),
+  ],
+);
+
+/**
+ * Where the standing resolution walk had got to.
+ *
+ * The walk is correct without this: settled rows leave the pending predicate,
+ * so a restart from the beginning loses no work. What it loses is time: the
+ * left edge of the burn-down index carries entries autovacuum has not
+ * reclaimed yet, and every restart re-reads them before reaching live work.
+ * Persisting the pair the walk stopped on skips straight past them.
+ *
+ * A stale cursor can only cost a delay, never a missed row: the walk wraps to
+ * the beginning when a batch comes back empty, which is also what picks up
+ * rows an arriving decision put back behind the cursor.
+ */
+export const caseLawCitationResolutionProgress = p.pgTable(
+  "case_law_citation_resolution_progress",
+  {
+    /** One lane today; the column exists so a second can land as a row. */
+    scope: p.text({ enum: CITATION_RESOLUTION_SCOPES }).primaryKey(),
+    /** The `(citing decision, citation)` pair the last batch stopped on. */
+    cursorCitingDecisionId: safeUuid<"caseLawDecision">(
+      "cursor_citing_decision_id",
+    ),
+    cursorCitationId: safeUuid<"caseLawCitation">("cursor_citation_id"),
+    updatedAt: timestamptz("updated_at")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    p.check(
+      "case_law_citation_resolution_progress_scope_values",
+      sql`${t.scope} IN (${sql.join(
+        CITATION_RESOLUTION_SCOPE_SQL_VALUES,
+        sql.raw(","),
+      )})`,
+    ),
+    // Half a keyset is not a position. Either both columns name where the
+    // walk stopped or neither does and it starts from the beginning.
+    p.check(
+      "case_law_citation_resolution_progress_cursor_pair",
+      sql`(${t.cursorCitingDecisionId} IS NULL) = (${t.cursorCitationId} IS NULL)`,
+    ),
     ...globalCaseLawPolicies(),
   ],
 );

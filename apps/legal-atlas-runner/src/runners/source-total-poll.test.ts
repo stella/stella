@@ -41,7 +41,7 @@ const adapter = (
 ): SourceAdapter => ({
   key,
   name: `${key} fixture`,
-  country: "CZ",
+  country: "CZE",
   language: "cs",
   minRequestIntervalMs: 1000,
   fetchPage: () => {

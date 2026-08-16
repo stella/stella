@@ -18,6 +18,13 @@ import {
 } from "@/api/handlers/case-law/citation-kind";
 import type { ProceduralKeys } from "@/api/handlers/case-law/citation-kind";
 import {
+  reopenCitationsForDecisionKey,
+  reopenCitationsForKeys,
+  reopenCitationsFrom,
+  reopenCitationsResolvedTo,
+  resolveCitationsForDecision,
+} from "@/api/handlers/case-law/citation-resolution";
+import {
   ADAPTER_TIMEOUT,
   MAX_SYNC_PAGES,
 } from "@/api/handlers/case-law/consts";
@@ -31,6 +38,7 @@ import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter"
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import {
   bareCitationKey,
+  citationKeyOf,
   extractCitations,
   isSelfCitation,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
@@ -71,6 +79,7 @@ import {
   writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
+import { isCaseLawJurisdiction } from "@/api/lib/legal-search/ingestion-constants";
 import {
   partialObservationFromMetadata,
   sanitizeResult,
@@ -309,14 +318,6 @@ const uploadSourceRaw = async (
   await writeS3ObjectWithRetry({ contentType, data, key });
   return key;
 };
-
-/**
- * Canonical join key for citation resolution, or null when the text does not
- * canonicalize. Null keeps a row out of the resolver's join instead of
- * matching every other unkeyed row on an empty string.
- */
-const citationKeyOf = (text: string): string | null =>
-  bareCitationKey(text) || null;
 
 /**
  * Row values for one extracted citation, including what the citation is
@@ -689,6 +690,11 @@ const processDecisionAttempt = async ({
       exactClaimedDecisionId ?? repairClaimedDecisionId;
     const identityColumns = {
       id: true,
+      // The three fields the candidate join filters on, read so a refresh can
+      // tell whether it changes which citations may honestly point here.
+      citationKey: true,
+      country: true,
+      decisionDate: true,
       sourceDocumentId: true,
       ecli: true,
       metadata: true,
@@ -1352,6 +1358,96 @@ const processDecisionAttempt = async ({
     }
   })();
 
+  const incomingCitationKey = citationKeyOf(result.caseNumber);
+
+  /**
+   * Tell the citation graph that this decision now holds `incomingCitationKey`.
+   *
+   * A stored decision changes the answer for citations that are not its own,
+   * in both directions: it can satisfy citations that gave up on that key, and
+   * it can make a key that had exactly one holder ambiguous, which retracts
+   * edges drawn to the earlier holder. Neither is discoverable from the citing
+   * side, so the standing walk would never revisit them; doing it here, in the
+   * transaction that created the reason, is what keeps the graph honest.
+   *
+   * Only when the key is genuinely new to this row: a refresh that rewrites
+   * metadata under the same key changes nothing about who can be cited.
+   */
+  const announceCitationKey = async (
+    tx: Transaction,
+    id: SafeId<"caseLawDecision">,
+  ): Promise<void> => {
+    if (incomingCitationKey === null) {
+      return;
+    }
+    if (!isCaseLawJurisdiction(result.country)) {
+      // A stored country nobody declares a resolution policy for. Loud rather
+      // than defaulted: guessing a reach would write cross-border edges on an
+      // assumption, and the fix is a declaration, not a fallback.
+      logger.error("case_law.citation_resolution.undeclared_jurisdiction", {
+        jurisdiction: result.country,
+      });
+      return;
+    }
+    await reopenCitationsForDecisionKey(tx, {
+      citationKey: incomingCitationKey,
+      decisionId: id,
+      jurisdiction: result.country,
+      decisionDate: persistedDecisionDate ?? null,
+    });
+  };
+
+  /**
+   * Everything about a decision the candidate join filters on, read from the
+   * row this transaction is about to overwrite.
+   *
+   * Not from the `existing` snapshot, which was read in an earlier transaction:
+   * the guarded update deliberately lets a newer observation intervene, so a
+   * row that went X → Y → X would compare equal against that snapshot and
+   * report no change, skipping the retraction the Y edges need. What matters is
+   * the identity actually replaced.
+   *
+   * `FOR UPDATE`, because reading it inside this transaction is not enough on
+   * its own: without the row lock another observation can still commit between
+   * this read and the update, and the comparison would again be against an
+   * identity this transaction did not replace. The lock holds the row until
+   * commit, so what is read here is what gets overwritten.
+   *
+   * All three fields travel together because all three are filters: a
+   * jurisdiction correction under an unchanged key invalidates exactly the
+   * same edges a new case number does.
+   */
+  const replacedResolutionIdentity = async (
+    tx: Transaction,
+    id: SafeId<"caseLawDecision">,
+  ): Promise<{
+    citationKey: string | null;
+    country: string;
+    decisionDate: string | null;
+  } | null> => {
+    const rows = await tx
+      .select({
+        citationKey: caseLawDecisions.citationKey,
+        country: caseLawDecisions.country,
+        decisionDate: caseLawDecisions.decisionDate,
+      })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.id, id))
+      .for("update")
+      .limit(1);
+    return rows.at(0) ?? null;
+  };
+
+  const resolutionIdentityChanged = (previous: {
+    citationKey: string | null;
+    country: string;
+    decisionDate: string | null;
+  }): boolean =>
+    previous.citationKey !== incomingCitationKey ||
+    previous.country !== result.country ||
+    (persistedDecisionDate !== undefined &&
+      previous.decisionDate !== persistedDecisionDate);
+
   const writeDecisionRow = async (
     slug?: string,
   ): Promise<DecisionRowWriteStatus> =>
@@ -1369,6 +1465,13 @@ const processDecisionAttempt = async ({
           pendingMirrorPayload === null &&
           Object.keys(payloadColumns).length > 0;
 
+        // Read inside this transaction, before the write: the identity this
+        // update replaces is what decides whether the citation graph moved,
+        // and the snapshot taken in an earlier transaction can no longer say.
+        const replacedIdentity = preservesExistingDetail
+          ? null
+          : await replacedResolutionIdentity(tx, existing.id);
+
         const updated = await tx
           .update(caseLawDecisions)
           .set({
@@ -1376,7 +1479,7 @@ const processDecisionAttempt = async ({
               ? {}
               : {
                   caseNumber: result.caseNumber,
-                  citationKey: citationKeyOf(result.caseNumber),
+                  citationKey: incomingCitationKey,
                   sourceDocumentId: persistedSourceDocumentId,
                   ecli: result.ecli,
                   court: result.court,
@@ -1480,6 +1583,34 @@ const processDecisionAttempt = async ({
           }
         }
 
+        if (
+          replacedIdentity !== null &&
+          resolutionIdentityChanged(replacedIdentity)
+        ) {
+          // Retract before announcing. The edges pointing here were decided
+          // against the identity this decision no longer has, and the announce
+          // path deliberately excludes its own links, so nothing else would
+          // ever ask about them again.
+          await reopenCitationsResolvedTo(tx, existing.id);
+          // And the edges this decision *makes*. Its jurisdiction and date are
+          // the resolver's policy and time filters, so moving either changes
+          // what its own citations may match — a date moving forwards can
+          // revive an unmatched one, moving backwards invalidates a resolved
+          // one, and the walk excludes terminal rows either way.
+          await reopenCitationsFrom(tx, existing.id);
+          // The old key as well as the new one. An ambiguous citation carries
+          // no target, so nothing that searches by target can reach it — and
+          // this decision leaving its old key is exactly what can make the
+          // remaining holder unique.
+          await reopenCitationsForKeys(
+            tx,
+            [replacedIdentity.citationKey, incomingCitationKey].filter(
+              (key) => key !== null,
+            ),
+          );
+          await announceCitationKey(tx, existing.id);
+        }
+
         // Citations are read out of the document, so a refresh that
         // carries no document has nothing to say about them either.
         if (!incomingCarriesDocument) {
@@ -1498,6 +1629,7 @@ const processDecisionAttempt = async ({
                 citationRow(existing.id, c, sections, proceduralKeys),
               ),
             );
+          await resolveCitationsForDecision(tx, existing.id);
         }
 
         return DECISION_ROW_WRITE_STATUS.APPLIED;
@@ -1515,7 +1647,7 @@ const processDecisionAttempt = async ({
           caseNumber: result.caseNumber,
           sourceDocumentId: persistedSourceDocumentId,
           sheetNumber: result.sheetNumber,
-          citationKey: citationKeyOf(result.caseNumber),
+          citationKey: incomingCitationKey,
           slug,
           ecli: result.ecli,
           court: result.court,
@@ -1543,6 +1675,8 @@ const processDecisionAttempt = async ({
         panic("Failed to insert decision: no row returned");
       }
 
+      await announceCitationKey(tx, decisionRow.id);
+
       if (citations.length > 0) {
         await tx
           .insert(caseLawCitations)
@@ -1551,6 +1685,11 @@ const processDecisionAttempt = async ({
               citationRow(decisionRow.id, c, sections, proceduralKeys),
             ),
           );
+        // Resolve what was just written, in the transaction that wrote it.
+        // One indexed lookup per citation against the fetch and parse this
+        // page already paid for; without it every new citation waits for the
+        // standing walk to come round, and the citator trails the crawl.
+        await resolveCitationsForDecision(tx, decisionRow.id);
       }
       return DECISION_ROW_WRITE_STATUS.APPLIED;
     });

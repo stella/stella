@@ -447,6 +447,21 @@ describe("runIngestionPipeline — database timeouts", () => {
       }
 
       const tx = {
+        // The identity the refresh replaces is read FOR UPDATE before the
+        // write. This suite asserts the decision row, so it reports no prior
+        // identity and the citation-graph branch stays out of the way.
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              for: () => ({ limit: async () => await Promise.resolve([]) }),
+              limit: async () => await Promise.resolve([]),
+            }),
+          }),
+        }),
+        // The citation-graph settle the pipeline runs in the same
+        // transaction is raw SQL; this suite asserts the decision row, so
+        // the statement is accepted and reports nothing settled.
+        execute: async () => await Promise.resolve([]),
         update: (table: unknown) => ({
           set: (values: { syncCursor?: string | null }) => {
             if (table === caseLawSources) {
@@ -513,6 +528,21 @@ describe("runIngestionPipeline — empty-page cursor progress", () => {
     let persistedCursor: string | null | undefined;
     const scopedDb: ScopedDb = async (callback) => {
       const tx = {
+        // The identity the refresh replaces is read FOR UPDATE before the
+        // write. This suite asserts the decision row, so it reports no prior
+        // identity and the citation-graph branch stays out of the way.
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              for: () => ({ limit: async () => await Promise.resolve([]) }),
+              limit: async () => await Promise.resolve([]),
+            }),
+          }),
+        }),
+        // The citation-graph settle the pipeline runs in the same
+        // transaction is raw SQL; this suite asserts the decision row, so
+        // the statement is accepted and reports nothing settled.
+        execute: async () => await Promise.resolve([]),
         update: (table: unknown) => ({
           set: (values: { syncCursor?: string | null }) => {
             if (table === caseLawSources) {
@@ -593,6 +623,21 @@ describe("processDecision — corpus storage off", () => {
     let updated: Record<string, unknown> | undefined;
     const scopedDb: ScopedDb = async (callback) => {
       const tx = {
+        // The identity the refresh replaces is read FOR UPDATE before the
+        // write. This suite asserts the decision row, so it reports no prior
+        // identity and the citation-graph branch stays out of the way.
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              for: () => ({ limit: async () => await Promise.resolve([]) }),
+              limit: async () => await Promise.resolve([]),
+            }),
+          }),
+        }),
+        // The citation-graph settle the pipeline runs in the same
+        // transaction is raw SQL; this suite asserts the decision row, so
+        // the statement is accepted and reports nothing settled.
+        execute: async () => await Promise.resolve([]),
         query: {
           caseLawDecisions: {
             findFirst: async () => await Promise.resolve(existing),
@@ -666,6 +711,21 @@ describe("processDecision — decision date on an existing row", () => {
     let updated: Record<string, unknown> | undefined;
     const scopedDb: ScopedDb = async (callback) => {
       const tx = {
+        // The identity the refresh replaces is read FOR UPDATE before the
+        // write. This suite asserts the decision row, so it reports no prior
+        // identity and the citation-graph branch stays out of the way.
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              for: () => ({ limit: async () => await Promise.resolve([]) }),
+              limit: async () => await Promise.resolve([]),
+            }),
+          }),
+        }),
+        // The citation-graph settle the pipeline runs in the same
+        // transaction is raw SQL; this suite asserts the decision row, so
+        // the statement is accepted and reports nothing settled.
+        execute: async () => await Promise.resolve([]),
         query: {
           caseLawDecisions: {
             findFirst: async () => await Promise.resolve(existing),
@@ -757,6 +817,21 @@ describe("processDecision — source raw upload failure", () => {
 
     const scopedDb: ScopedDb = async (callback) => {
       const tx = {
+        // The identity the refresh replaces is read FOR UPDATE before the
+        // write. This suite asserts the decision row, so it reports no prior
+        // identity and the citation-graph branch stays out of the way.
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              for: () => ({ limit: async () => await Promise.resolve([]) }),
+              limit: async () => await Promise.resolve([]),
+            }),
+          }),
+        }),
+        // The citation-graph settle the pipeline runs in the same
+        // transaction is raw SQL; this suite asserts the decision row, so
+        // the statement is accepted and reports nothing settled.
+        execute: async () => await Promise.resolve([]),
         query: {
           caseLawDecisions: {
             findFirst: async () => await Promise.resolve(undefined),
@@ -826,6 +901,21 @@ describe("processDecision — source raw upload failure", () => {
 
     const scopedDb: ScopedDb = async (callback) => {
       const tx = {
+        // The identity the refresh replaces is read FOR UPDATE before the
+        // write. This suite asserts the decision row, so it reports no prior
+        // identity and the citation-graph branch stays out of the way.
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              for: () => ({ limit: async () => await Promise.resolve([]) }),
+              limit: async () => await Promise.resolve([]),
+            }),
+          }),
+        }),
+        // The citation-graph settle the pipeline runs in the same
+        // transaction is raw SQL; this suite asserts the decision row, so
+        // the statement is accepted and reports nothing settled.
+        execute: async () => await Promise.resolve([]),
         query: {
           caseLawDecisions: {
             findFirst: async () => await Promise.resolve(undefined),

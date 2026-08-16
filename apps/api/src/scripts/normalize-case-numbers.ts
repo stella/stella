@@ -12,8 +12,9 @@
  * makes `backfill-source-document-ids.ts` its prerequisite rather than a
  * assumption. Run that first; re-run this afterwards to pick up the rest.
  *
- * `citation_key` is recomputed in the same statement, since it derives from the
- * case number and would otherwise keep pointing at the un-normalized form.
+ * `citation_key` is cleared in the same statement, since it derives from the
+ * case number and would otherwise keep pointing at the un-normalized form, and
+ * the citations resolved to those decisions are reopened with it.
  *
  * Idempotent: a row already split no longer matches the pattern.
  *
@@ -21,21 +22,16 @@
  *   bun apps/api/src/scripts/normalize-case-numbers.ts --dry-run
  */
 
-import { sql } from "drizzle-orm";
-
 import { rootDb } from "@/api/db/root";
+import { lockCitationGraph } from "@/api/handlers/case-law/citation-resolution";
 import { isRecord } from "@/api/lib/type-guards";
+import {
+  normalizeSheetNumbersStatement,
+  sheetNumberSurveyStatement,
+} from "@/api/scripts/normalize-case-numbers-sql";
 
 const BATCH = 2000;
 const DRY_RUN = process.argv.includes("--dry-run");
-
-/**
- * Trailing `-<digits>` on a docket that already carries a year — the same
- * shape `splitCaseReference` applies at ingest, expressed in SQL so a batch is
- * one statement. The year is what keeps references that merely end in a number
- * (`0T/42/2019`) from being split.
- */
-const SHEET_PATTERN = String.raw`^(.*/\d{2,4})-(\d+)$`;
 
 /** Rows from `execute` under either driver shape (bare array or `{ rows }`). */
 const executedRows = (result: unknown): unknown[] => {
@@ -48,21 +44,13 @@ const executedRows = (result: unknown): unknown[] => {
   return [];
 };
 
-const rowCount = (result: unknown): number => executedRows(result).length;
-
 const firstNumber = (result: unknown, key: string): number => {
   const row = executedRows(result).at(0);
   return isRecord(row) && typeof row[key] === "number" ? row[key] : 0;
 };
 
 if (DRY_RUN) {
-  const counts = await rootDb.execute(sql`
-    SELECT
-      count(*) FILTER (WHERE source_document_id IS NOT NULL)::int AS ready,
-      count(*) FILTER (WHERE source_document_id IS NULL)::int AS blocked
-    FROM case_law_decisions
-    WHERE case_number ~ ${SHEET_PATTERN}
-  `);
+  const counts = await rootDb.execute(sheetNumberSurveyStatement());
   console.info(
     `carry a sheet number: ${firstNumber(counts, "ready").toLocaleString()} ready, ` +
       `${firstNumber(counts, "blocked").toLocaleString()} still identified by case number (run the id backfill first)`,
@@ -70,39 +58,33 @@ if (DRY_RUN) {
   process.exit(0);
 }
 
-/**
- * Normalize one batch and continue from wherever it stopped. A walk rather
- * than a loop: each step depends on the previous one having committed.
- */
-const normalizeFrom = async (done: number): Promise<number> => {
-  const result = await rootDb.execute(sql`
-    WITH batch AS (
-      SELECT id FROM case_law_decisions
-      WHERE case_number ~ ${SHEET_PATTERN}
-        AND source_document_id IS NOT NULL
-      LIMIT ${BATCH}
-    )
-    UPDATE case_law_decisions d
-    SET case_number = regexp_replace(d.case_number, ${SHEET_PATTERN}, ${String.raw`\1`}),
-        sheet_number = regexp_replace(d.case_number, ${SHEET_PATTERN}, ${String.raw`\2`}),
-        citation_key = NULL
-    FROM batch
-    WHERE d.id = batch.id
-    RETURNING d.id
-  `);
+let normalized = 0;
+let reopened = 0;
 
-  const updated = rowCount(result);
-  if (updated === 0) {
-    return done;
+while (true) {
+  // The graph lock, then the statement, in one transaction. This changes what
+  // decisions are citable, so it is a graph mutation like any other: without
+  // the lock a resolver batch holding a snapshot from before the key was
+  // cleared can commit a `resolved` edge to a decision that no longer carries
+  // that key, and nothing revisits it.
+  // oxlint-disable-next-line no-await-in-loop -- each batch depends on the previous one having committed
+  const result = await rootDb.transaction(async (tx) => {
+    await lockCitationGraph(tx);
+    return await tx.execute(normalizeSheetNumbersStatement(BATCH));
+  });
+  const batch = firstNumber(result, "normalized");
+  if (batch === 0) {
+    break;
   }
-  const total = done + updated;
-  console.info(`${total.toLocaleString()} normalized`);
-  return await normalizeFrom(total);
-};
+  normalized += batch;
+  reopened += firstNumber(result, "reopened");
+  console.info(`${normalized.toLocaleString()} normalized`);
+}
 
-const total = await normalizeFrom(0);
 console.info(
-  `done, ${total.toLocaleString()} rows. Re-run backfill-citation-keys.ts to refill citation_key.`,
+  `done, ${normalized.toLocaleString()} rows normalized, ` +
+    `${reopened.toLocaleString()} citations reopened. ` +
+    "Re-run backfill-citation-keys.ts to refill citation_key.",
 );
 
 process.exit(0);

@@ -138,6 +138,10 @@ const decision: IngestionResult = {
  */
 const scopedDb: ScopedDb = async (callback) => {
   const tx = {
+    // The citation-graph settle the pipeline runs in the same
+    // transaction is raw SQL; this suite asserts the decision row, so
+    // the statement is accepted and reports nothing settled.
+    execute: async () => await Promise.resolve([]),
     query: {
       // drizzle's relational API returns undefined for a miss.
       caseLawDecisions: {

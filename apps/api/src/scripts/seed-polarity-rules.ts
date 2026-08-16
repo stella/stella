@@ -1,0 +1,43 @@
+/**
+ * Load the hand-written polarity rules into `case_law_polarity_rules`.
+ *
+ * Idempotent: each rule is keyed on `(pattern, language)`, so re-running
+ * updates the polarity a rule asserts rather than accumulating duplicates of
+ * it. Run after changing `polarity/seed-rules.ts`; nothing else writes rows
+ * with `source = 'manual'`.
+ *
+ *   bun apps/api/src/scripts/seed-polarity-rules.ts
+ */
+
+import { rootDb } from "@/api/db/root";
+import { caseLawPolarityRules } from "@/api/db/schema";
+import { SEED_RULES } from "@/api/handlers/case-law/polarity/seed-rules";
+
+console.log(`Seeding ${SEED_RULES.length} polarity rules...`);
+
+for (const rule of SEED_RULES) {
+  // oxlint-disable-next-line no-await-in-loop -- sequential seeding preserves upsert order across rules
+  await rootDb
+    .insert(caseLawPolarityRules)
+    .values({
+      pattern: rule.pattern,
+      polarity: rule.polarity,
+      language: rule.language,
+      source: "manual",
+      confidence: 1,
+    })
+    .onConflictDoUpdate({
+      target: [caseLawPolarityRules.pattern, caseLawPolarityRules.language],
+      // `source` is part of the state being seeded, not incidental metadata:
+      // the rule loader reads `manual` and `llm-promoted` only, so a seed that
+      // collided with an `llm-proposed` rule of the same pattern and language
+      // used to leave it excluded — a successful run that changed nothing a
+      // classifier would ever see. The insert and the update have to establish
+      // the same row.
+      set: { polarity: rule.polarity, confidence: 1, source: "manual" },
+    });
+}
+
+console.log(`Done. ${SEED_RULES.length} rules upserted.`);
+
+process.exit(0);
