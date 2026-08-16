@@ -58,12 +58,15 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 //   - The omission must be written on the parameter. A props type inferred from
 //     a generic wrapper (`forwardRef<Ref, Omit<P, "k">>`) is not read.
 //   - JSX children override a spread `children` prop, so an element with a
-//     rendered child satisfies an omitted `children` key. Whitespace and a JSX
-//     comment emit no child and do not count.
+//     rendered child satisfies an omitted `children` key. A JSX comment emits no
+//     child, and neither does whitespace-only text spanning lines; whitespace
+//     within one line does.
 //   - A spread of an object literal can only deliver what the literal declares,
 //     spreads in, or computes; anything else is opaque and assumed able to.
 //   - The spread identifier is resolved through the lexical scope chain, so a
 //     shadowing binding of the same name always wins over an enclosing one.
+//     Type-only wrappers around it (`as`, `satisfies`, `!`) are unwrapped first,
+//     since they change the type and not the value.
 //
 // When a key legitimately passes through by design, suppress the finding with
 // `// eslint-disable-next-line no-omitted-prop-respread/no-omitted-prop-respread`
@@ -273,11 +276,12 @@ const attributeName = (attribute) =>
     : null;
 
 // JSX children are passed positionally and override a spread `children` prop,
-// so a real child counts as pinning the key. Whitespace-only text and a JSX
-// comment (`{/* … */}`, an expression container holding nothing) emit no child.
+// so a real child counts as pinning the key. A JSX comment (`{/* … */}`, an
+// expression container holding nothing) emits no child, and JSX drops
+// whitespace-only text that spans lines; whitespace within one line survives.
 const isRenderedChild = (child) => {
   if (child.type === "JSXText") {
-    return child.value.trim() !== "";
+    return child.value.trim() !== "" || !child.value.includes("\n");
   }
   return (
     child.type !== "JSXExpressionContainer" ||
@@ -288,11 +292,22 @@ const isRenderedChild = (child) => {
 const hasMeaningfulChildren = (element) =>
   element.children.some(isRenderedChild);
 
+// Wrappers that change a spread argument's type, not its value: the spread is
+// runtime-identical to spreading what they wrap.
+const unwrapSpread = (node) =>
+  node?.type === "TSAsExpression" ||
+  node?.type === "TSSatisfiesExpression" ||
+  node?.type === "TSNonNullExpression" ||
+  node?.type === "TSInstantiationExpression" ||
+  node?.type === "ParenthesizedExpression"
+    ? unwrapSpread(node.expression)
+    : node;
+
 // Whether a spread of this attribute could deliver `key`. An object literal is
 // statically known: it can only deliver what it declares, spreads in, or
 // computes. Anything else is opaque and assumed able to.
 const spreadCanDeliver = (attribute, key) => {
-  const argument = attribute.argument;
+  const argument = unwrapSpread(attribute.argument);
   if (argument.type !== "ObjectExpression") {
     return true;
   }
@@ -414,13 +429,14 @@ export default eslintCompatPlugin({
           const attributes = node.openingElement.attributes;
           const omitted = new Set<string>();
           for (const attribute of attributes) {
-            if (
-              attribute.type !== "JSXSpreadAttribute" ||
-              !isIdentifier(attribute.argument)
-            ) {
+            if (attribute.type !== "JSXSpreadAttribute") {
               continue;
             }
-            for (const key of omittedKeysForSpread(attribute.argument) ?? []) {
+            const argument = unwrapSpread(attribute.argument);
+            if (!isIdentifier(argument)) {
+              continue;
+            }
+            for (const key of omittedKeysForSpread(argument) ?? []) {
               omitted.add(key);
             }
           }

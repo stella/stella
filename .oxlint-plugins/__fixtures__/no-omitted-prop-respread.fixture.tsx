@@ -235,6 +235,20 @@ export const _ok_collidingNestedAlias = () => {
   return (props: SharedProps) => <Panel {...props} />;
 };
 
+// A type-only wrapper around the spread argument changes the type, not the
+// value, so the spread is runtime-identical to spreading the binding.
+export const _wrappedSpread = (props: Omit<PanelProps, "orientation">) => (
+  // oxlint-disable-next-line no-omitted-prop-respread/no-omitted-prop-respread
+  <Panel {...(props satisfies Omit<PanelProps, "orientation">)} />
+);
+
+// Allowed: whitespace within one line is emitted as a child, so it overrides a
+// spread `children` the way any other child would.
+// The single space between the tags is the child under test.
+export const _ok_sameLineWhitespaceChild = (
+  props: Omit<PanelProps, "children">,
+) => <Panel {...props}> </Panel>;
+
 // An erased `this` parameter takes the first AST slot without carrying a
 // runtime argument, so the props parameter follows it.
 export function _thisParameter(
