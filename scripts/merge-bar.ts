@@ -32,6 +32,14 @@
 //     rewrites the commit message. The body is read and inlined here at
 //     startup; the merge call never receives a path.
 //
+// Known boundary. `--match-head-commit` binds the pull request head and
+// nothing else, and `--admin` merges past branch protection by definition, so
+// the review-thread and base-branch gates are client-side assertions with no
+// server-side backstop. Reading them last shrinks their windows to the final
+// two calls; two migration-bearing merges issued simultaneously, or a thread
+// opened inside that window, still slip through. Closing those completely
+// needs a merge queue.
+//
 // What this tool deliberately does NOT gate: review depth. Automated review
 // requests are budgeted at two per pull request, because a third round buys
 // re-litigation of the same diff rather than new findings. Spend both, address
@@ -58,6 +66,7 @@ const MERGEABLE_POLL_INTERVAL_MS = 2000;
 const MERGE_COMMIT_POLL_ATTEMPTS = 5;
 // GitHub's REST contents listing silently truncates past this many entries.
 const CONTENTS_ENDPOINT_ENTRY_LIMIT = 1000;
+const PULL_NUMBER_PATTERN = /^\d+$/u;
 
 // --- Gate model -------------------------------------------------------------
 
@@ -67,6 +76,7 @@ const GATE_IDS = [
   "required-check",
   "review-threads",
   "migration-order",
+  "base-stability",
   "head-stability",
 ] as const;
 type GateId = (typeof GATE_IDS)[number];
@@ -83,6 +93,7 @@ const MERGE_BAR_REASONS = {
   requiredCheckNotSuccessful: "REQUIRED_CHECK_NOT_SUCCESSFUL",
   unresolvedReviewThreads: "UNRESOLVED_REVIEW_THREADS",
   migrationOrder: "MIGRATION_ORDER_VIOLATION",
+  baseMoved: "BASE_MOVED_UNDER_ADDED_MIGRATIONS",
   headMoved: "HEAD_MOVED_DURING_CHECKS",
 } as const;
 type MergeBarReason =
@@ -114,6 +125,8 @@ type MigrationSnapshot = {
   baseDirectories: readonly string[];
   // Migration directories this pull request adds.
   addedDirectories: readonly string[];
+  // The default-branch commit `baseDirectories` was read from.
+  baseSha: string;
 };
 
 export type MergeBarSnapshot = {
@@ -125,7 +138,8 @@ export type MergeBarSnapshot = {
   checkRuns: readonly CheckRunSnapshot[];
   reviewThreads: readonly ReviewThreadSnapshot[];
   migrations: MigrationSnapshot;
-  // Re-read immediately before the merge call.
+  // Both re-read immediately before the merge call.
+  baseShaBeforeMerge: string;
   headShaBeforeMerge: string;
 };
 
@@ -295,6 +309,47 @@ const evaluateMigrationOrder = (migrations: MigrationSnapshot): GateVerdict => {
   };
 };
 
+// `--match-head-commit` binds the pull request head, not the branch being
+// merged into, so nothing server-side notices that the base advanced while the
+// gates ran. That only matters when this pull request adds migrations: another
+// merge landing a higher timestamp in that window would silently put this
+// one's DDL below the maximum an already-migrated database has recorded.
+//
+// Residual boundary: this narrows the window to the merge call itself. Two
+// migration-bearing merges issued in the same instant can still interleave;
+// closing that completely needs a merge queue, not a client-side gate.
+const evaluateBaseStability = ({
+  migrations,
+  baseShaBeforeMerge,
+}: {
+  migrations: MigrationSnapshot;
+  baseShaBeforeMerge: string;
+}): GateVerdict => {
+  if (migrations.addedDirectories.length === 0) {
+    return {
+      gate: "base-stability",
+      status: "pass",
+      detail: "no added migrations; base movement cannot reorder anything",
+    };
+  }
+  if (migrations.baseSha !== baseShaBeforeMerge) {
+    return {
+      gate: "base-stability",
+      status: "fail",
+      reason: MERGE_BAR_REASONS.baseMoved,
+      detail:
+        `default branch moved ${migrations.baseSha} -> ${baseShaBeforeMerge} ` +
+        "while this pull request adds migrations; re-run so ordering is " +
+        "checked against what will actually be merged into",
+    };
+  }
+  return {
+    gate: "base-stability",
+    status: "pass",
+    detail: `default branch steady at ${migrations.baseSha}`,
+  };
+};
+
 const evaluateHeadStability = ({
   headSha,
   headShaBeforeMerge,
@@ -331,6 +386,10 @@ export const evaluateMergeBar = (
     }),
     evaluateReviewThreads(snapshot.reviewThreads),
     evaluateMigrationOrder(snapshot.migrations),
+    evaluateBaseStability({
+      migrations: snapshot.migrations,
+      baseShaBeforeMerge: snapshot.baseShaBeforeMerge,
+    }),
     evaluateHeadStability({
       headSha: snapshot.pullRequest.headSha,
       headShaBeforeMerge: snapshot.headShaBeforeMerge,
@@ -350,6 +409,8 @@ type GitHubGateway = {
   // Deliberately separate from `readPullRequest`: the pre-merge re-read only
   // needs the SHA, and a narrow read makes the TOCTOU window smaller.
   readHeadSha: () => string;
+  // Tip of the branch this pull request merges into.
+  readBaseSha: () => string;
   readCheckRuns: (headSha: string) => readonly CheckRunSnapshot[];
   readReviewThreads: () => readonly ReviewThreadSnapshot[];
   readMigrationDirectories: () => MigrationSnapshot;
@@ -451,6 +512,31 @@ const createGhGateway = ({
         ),
         "headRefOid",
       ),
+
+    // The live tip of the base branch, not `baseRefOid`: gh reports that as
+    // the commit the pull request was compared against, which is exactly the
+    // stale value this gate exists to detect.
+    readBaseSha: () => {
+      const baseRefName = readString(
+        readRecord(
+          runGhJson(["pr", "view", ...prArgs, "--json", "baseRefName"]),
+          "pr view",
+        ),
+        "baseRefName",
+      );
+      return readString(
+        readRecord(
+          runGhJson([
+            "api",
+            `repos/${repo}/commits/${baseRefName}`,
+            "--jq",
+            "{sha: .sha}",
+          ]),
+          "base commit",
+        ),
+        "sha",
+      );
+    },
 
     readPullRequest: () => {
       const raw = readRecord(
@@ -566,21 +652,31 @@ const createGhGateway = ({
     // clone can be behind the default branch, which is the very staleness this
     // gate exists to catch.
     readMigrationDirectories: () => {
-      const defaultBranch = readString(
+      const baseRefName = readString(
+        readRecord(
+          runGhJson(["pr", "view", ...prArgs, "--json", "baseRefName"]),
+          "pr view",
+        ),
+        "baseRefName",
+      );
+      // Pin the listing to one commit so `baseSha` provably describes the
+      // directories read below, rather than whatever the branch pointed at
+      // between two separate requests.
+      const baseSha = readString(
         readRecord(
           runGhJson([
             "api",
-            `repos/${repo}`,
+            `repos/${repo}/commits/${baseRefName}`,
             "--jq",
-            "{name: .default_branch}",
+            "{sha: .sha}",
           ]),
-          "repo",
+          "base commit",
         ),
-        "name",
+        "sha",
       );
       const baseDirectories = runGh([
         "api",
-        `repos/${repo}/contents/${MIGRATION_DIRECTORY}?ref=${defaultBranch}`,
+        `repos/${repo}/contents/${MIGRATION_DIRECTORY}?ref=${baseSha}`,
         "--jq",
         '.[] | select(.type == "dir") | .name',
       ])
@@ -591,8 +687,8 @@ const createGhGateway = ({
       // pass on the exact ordering it exists to catch, so refuse instead.
       if (baseDirectories.length >= CONTENTS_ENDPOINT_ENTRY_LIMIT) {
         panic(
-          `${MIGRATION_DIRECTORY} has ${baseDirectories.length} entries on ` +
-            `${defaultBranch}, at or past the contents endpoint's ` +
+          `${MIGRATION_DIRECTORY} has ${baseDirectories.length} entries at ` +
+            `${baseSha}, at or past the contents endpoint's ` +
             `${CONTENTS_ENDPOINT_ENTRY_LIMIT}-entry limit. The listing may be ` +
             "truncated; switch this gate to the git tree API before merging.",
         );
@@ -613,7 +709,7 @@ const createGhGateway = ({
         )
         .map((file) => file.slice(0, file.lastIndexOf("/")));
 
-      return { baseDirectories, addedDirectories };
+      return { baseDirectories, addedDirectories, baseSha };
     },
 
     // The body arrives already inlined: no path is passed to gh, so no
@@ -700,15 +796,22 @@ const parseOptions = (argv: readonly string[]): MergeBarOptions => {
     positional.push(argument);
   }
 
-  const rawNumber = positional.at(0);
-  if (rawNumber === undefined) {
+  // Exactly one, all digits. `Number.parseInt("2137oops", 10)` is 2137, so a
+  // mistyped suffix would silently merge a different real pull request; extra
+  // positionals would silently pick the first.
+  if (positional.length !== 1) {
     panic(
-      "Usage: bun scripts/merge-bar.ts <pr-number> [--repo owner/name] " +
+      `Expected exactly one PR number, got ${positional.length}. ` +
+        "Usage: bun scripts/merge-bar.ts <pr-number> [--repo owner/name] " +
         "[--body-file path] [--admin] [--dry-run]",
     );
   }
-  const pullNumber = Number.parseInt(rawNumber, 10);
-  if (!Number.isInteger(pullNumber) || pullNumber <= 0) {
+  const rawNumber = positional[0] ?? panic("unreachable: length checked above");
+  if (!PULL_NUMBER_PATTERN.test(rawNumber)) {
+    panic(`PR number must be digits only, got: ${rawNumber}`);
+  }
+  const pullNumber = Number(rawNumber);
+  if (!Number.isSafeInteger(pullNumber) || pullNumber <= 0) {
     panic(`PR number must be a positive integer, got: ${rawNumber}`);
   }
 
@@ -756,14 +859,21 @@ if (import.meta.main) {
   });
 
   const pullRequest = readSettledPullRequest(gateway);
+  // Read order is load-bearing. Each gate's window is the time between its own
+  // read and the merge, so the reads with no server-side enforcement behind
+  // them go LAST. Review threads have none at all: `--admin` merges past
+  // conversation protection by definition, so a thread opened after this read
+  // cannot block the write. Ordering it immediately before the two SHA reads
+  // shrinks that window to those two calls; it does not remove it.
   const snapshot: MergeBarSnapshot = {
     pullRequest,
     checkRunsHeadSha: pullRequest.headSha,
     checkRuns: gateway.readCheckRuns(pullRequest.headSha),
-    reviewThreads: gateway.readReviewThreads(),
     migrations: gateway.readMigrationDirectories(),
-    // Deliberately the LAST read before the verdict: everything above is now
-    // known to describe this exact commit, or the gate fails.
+    reviewThreads: gateway.readReviewThreads(),
+    baseShaBeforeMerge: gateway.readBaseSha(),
+    // Last, and the one the merge write itself re-asserts through
+    // `--match-head-commit`.
     headShaBeforeMerge: gateway.readHeadSha(),
   };
 

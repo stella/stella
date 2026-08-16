@@ -4,6 +4,8 @@ import { evaluateMergeBar, type MergeBarSnapshot } from "./merge-bar";
 
 const HEAD_SHA = "1f0c3a7d9e5b4c2a8d6f0e1b3c5a7d9e5b4c2a8d";
 const OTHER_SHA = "9e5b4c2a8d6f0e1b3c5a7d9e5b4c2a8d6f0e1b3c";
+const BASE_SHA = "4c2a8d6f0e1b3c5a7d9e5b4c2a8d6f0e1b3c5a7d";
+const OTHER_BASE_SHA = "0e1b3c5a7d9e5b4c2a8d6f0e1b3c5a7d9e5b4c2a";
 
 const passingSnapshot = (
   overrides: Partial<MergeBarSnapshot> = {},
@@ -26,7 +28,9 @@ const passingSnapshot = (
   migrations: {
     baseDirectories: ["20260801120000_earlier", "20260812090000_latest"],
     addedDirectories: ["apps/api/drizzle/20260816200000_new_column"],
+    baseSha: BASE_SHA,
   },
+  baseShaBeforeMerge: BASE_SHA,
   headShaBeforeMerge: HEAD_SHA,
   ...overrides,
 });
@@ -210,6 +214,7 @@ describe("merge bar", () => {
           migrations: {
             baseDirectories: ["20260816200000_landed_meanwhile"],
             addedDirectories: ["apps/api/drizzle/20260816140000_branch"],
+            baseSha: BASE_SHA,
           },
         }),
       ),
@@ -223,6 +228,7 @@ describe("merge bar", () => {
           migrations: {
             baseDirectories: ["20260816200000_landed_meanwhile"],
             addedDirectories: ["apps/api/drizzle/20260816200000_branch"],
+            baseSha: BASE_SHA,
           },
         }),
       ),
@@ -236,7 +242,34 @@ describe("merge bar", () => {
           migrations: {
             baseDirectories: ["20260816200000_landed_meanwhile"],
             addedDirectories: [],
+            baseSha: BASE_SHA,
           },
+        }),
+      ).decision,
+    ).toBe("merge");
+  });
+
+  // The migration maximum was read from a commit that is no longer the tip, so
+  // another migration-bearing merge may have landed a higher timestamp since.
+  test("a base branch that moved under added migrations aborts", () => {
+    expect(
+      failedGate(passingSnapshot({ baseShaBeforeMerge: OTHER_BASE_SHA })),
+    ).toEqual({
+      decision: "abort",
+      reasons: ["BASE_MOVED_UNDER_ADDED_MIGRATIONS"],
+    });
+  });
+
+  test("base movement is irrelevant when the pull request adds no migrations", () => {
+    expect(
+      evaluateMergeBar(
+        passingSnapshot({
+          migrations: {
+            baseDirectories: ["20260816200000_landed_meanwhile"],
+            addedDirectories: [],
+            baseSha: BASE_SHA,
+          },
+          baseShaBeforeMerge: OTHER_BASE_SHA,
         }),
       ).decision,
     ).toBe("merge");
@@ -252,12 +285,13 @@ describe("merge bar", () => {
         },
         checkRuns: [],
         reviewThreads: [{ id: "PRRT_open", isResolved: false }],
+        baseShaBeforeMerge: OTHER_BASE_SHA,
         headShaBeforeMerge: OTHER_SHA,
       }),
     );
 
     expect(verdict.gates.filter((gate) => gate.status === "fail")).toHaveLength(
-      5,
+      6,
     );
   });
 
@@ -267,6 +301,7 @@ describe("merge bar", () => {
     );
 
     expect(gates.toSorted()).toEqual([
+      "base-stability",
       "head-stability",
       "mergeable",
       "migration-order",
