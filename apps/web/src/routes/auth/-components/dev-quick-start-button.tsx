@@ -128,46 +128,46 @@ const seedSkills = async () => {
   }
 };
 
-const waitForMatterImport = async () => {
-  for (let poll = 0; poll < MATTER_IMPORT_MAX_POLLS; poll++) {
-    // oxlint-disable-next-line no-await-in-loop -- each status probe must follow the prior poll interval
-    const { data, error } = await api.dev["seed-firm-knowledge"].get();
-    if (error !== null || data instanceof Response) {
-      throw new DevQuickStartError({
-        code: DEV_QUICK_START_ERROR.matterImport,
-        message: "The Harvey LAB import status was unavailable.",
-      });
-    }
-
-    switch (data.status) {
-      case "failed":
-        throw new DevQuickStartError({
-          code: DEV_QUICK_START_ERROR.matterImport,
-          message: data.message,
-        });
-      case "idle":
-        throw new DevQuickStartError({
-          code: DEV_QUICK_START_ERROR.matterImport,
-          message: "The Harvey LAB import stopped before completion.",
-        });
-      case "running":
-        break;
-      case "succeeded":
-        return undefined;
-      default:
-        return data satisfies never;
-    }
-
-    // oxlint-disable-next-line no-await-in-loop -- polling waits between sequential status probes
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, MATTER_IMPORT_POLL_INTERVAL_MS);
+const waitForMatterImport = async (
+  remainingPolls = MATTER_IMPORT_MAX_POLLS,
+): Promise<void> => {
+  if (remainingPolls === 0) {
+    throw new DevQuickStartError({
+      code: DEV_QUICK_START_ERROR.matterImport,
+      message: "The Harvey LAB import did not finish before the timeout.",
     });
   }
 
-  throw new DevQuickStartError({
-    code: DEV_QUICK_START_ERROR.matterImport,
-    message: "The Harvey LAB import did not finish before the timeout.",
-  });
+  const { data, error } = await api.dev["seed-firm-knowledge"].get();
+  if (error !== null || data instanceof Response) {
+    throw new DevQuickStartError({
+      code: DEV_QUICK_START_ERROR.matterImport,
+      message: "The Harvey LAB import status was unavailable.",
+    });
+  }
+
+  switch (data.status) {
+    case "failed":
+      throw new DevQuickStartError({
+        code: DEV_QUICK_START_ERROR.matterImport,
+        message: data.message,
+      });
+    case "idle":
+      throw new DevQuickStartError({
+        code: DEV_QUICK_START_ERROR.matterImport,
+        message: "The Harvey LAB import stopped before completion.",
+      });
+    case "running":
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, MATTER_IMPORT_POLL_INTERVAL_MS);
+      });
+      await waitForMatterImport(remainingPolls - 1);
+      return undefined;
+    case "succeeded":
+      return undefined;
+    default:
+      return data satisfies never;
+  }
 };
 
 const seedMatters = async ({ selectionSeed }: DevQuickStartIdentity) => {
