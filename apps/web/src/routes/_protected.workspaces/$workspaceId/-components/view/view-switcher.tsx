@@ -541,9 +541,14 @@ const ViewTab = ({
       {dropPosition !== null && (
         <span
           aria-hidden="true"
+          // Drawn inside the tab's box rather than in the gap beside it: the
+          // tab list is a scroll container, and anything painted outside the
+          // box is ink overflow, which the container clips instead of
+          // scrolling to. At the strip's ends that would drop the line
+          // entirely.
           className={cn(
             "bg-primary pointer-events-none absolute inset-y-1 z-20 w-0.5 rounded-full",
-            dropPosition === "before" ? "-start-0.5" : "-end-0.5",
+            dropPosition === "before" ? "start-0" : "end-0",
           )}
         />
       )}
