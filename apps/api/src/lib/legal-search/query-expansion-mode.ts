@@ -3,9 +3,11 @@
  *
  * - `off`    Queries are built exactly as they were before expansion
  *            existed. No dictionary is fetched and no query byte changes.
- * - `shadow` The expanded query is built and logged next to the query that
- *            actually runs, which is still the unexpanded one. This is how
- *            the rewrite is judged against real traffic before it serves it.
+ * - `shadow` The expanded query is built and compared against the query that
+ *            actually runs, which is still the unexpanded one. Only the
+ *            comparison is recorded — leaf counts and a reach disposition,
+ *            never the query text. This is how the rewrite is judged against
+ *            real traffic before it serves any.
  * - `on`     The expanded query is what runs.
  *
  * Resolved once in `env-base`; every consumer reads that single value.

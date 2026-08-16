@@ -148,8 +148,17 @@ const DICTIONARY_UNAVAILABLE =
 const DICTIONARY_LOADED = "case_law.search.expansion_dictionary_loaded";
 const EXPANSION_SHADOW = "case_law.search.expansion_shadow";
 
+type LoadedDictionary = {
+  /** sha256 of the payload: which build this replica is answering from. */
+  contentHash: string;
+  entries: ReadonlyMap<string, string>;
+};
+
+/** Enough hash to tell two builds apart in telemetry, without the other 52. */
+const shortHash = (contentHash: string): string => contentHash.slice(0, 12);
+
 type DictionaryLoad =
-  | { entries: ReadonlyMap<string, string>; status: "loaded" }
+  | (LoadedDictionary & { status: "loaded" })
   | { status: "unavailable" };
 
 const UNAVAILABLE: DictionaryLoad = { status: "unavailable" };
@@ -158,7 +167,7 @@ const UNAVAILABLE: DictionaryLoad = { status: "unavailable" };
 type DictionaryRejection = "content_hash_mismatch" | "malformed_pointer";
 
 type DictionaryPayload =
-  | { payload: string; status: "read" }
+  | { contentHash: string; payload: string; status: "read" }
   | { reason: DictionaryRejection; status: "rejected" };
 
 /**
@@ -203,7 +212,7 @@ const readDictionaryPayload = async (
   if (hasher.digest("hex") !== contentHash) {
     return { reason: "content_hash_mismatch", status: "rejected" };
   }
-  return { payload, status: "read" };
+  return { contentHash, payload, status: "read" };
 };
 
 const loadDictionary = async (
@@ -255,8 +264,9 @@ const loadDictionary = async (
     language,
     entries: entries.size,
     collidedKeys,
+    dictionaryHash: shortHash(read.value.contentHash),
   });
-  return { entries, status: "loaded" };
+  return { contentHash: read.value.contentHash, entries, status: "loaded" };
 };
 
 type CacheEntry = {
@@ -266,7 +276,15 @@ type CacheEntry = {
 
 const cache = new Map<MorphologyLanguage, CacheEntry>();
 /** The last payload that parsed, per language; a failed refresh falls back here. */
-const lastLoaded = new Map<MorphologyLanguage, ReadonlyMap<string, string>>();
+const lastLoaded = new Map<MorphologyLanguage, LoadedDictionary>();
+/**
+ * Languages whose read is currently in flight. Distinct from the cache entry's
+ * expiry, which is set to the future the moment a refresh starts: without this,
+ * every request arriving during a refresh window sees a live entry and awaits
+ * the pending read, so only the caller that happened to start the refresh got
+ * the stale-serving fast path.
+ */
+const inFlight = new Set<MorphologyLanguage>();
 
 /**
  * The per-language lazy singleton. Concurrent uses share one read, a loaded
@@ -284,26 +302,36 @@ const lastLoaded = new Map<MorphologyLanguage, ReadonlyMap<string, string>>();
 const beginRefresh = async (
   language: MorphologyLanguage,
 ): Promise<DictionaryLoad> => {
+  inFlight.add(language);
   const load = (async (): Promise<DictionaryLoad> => {
-    const result = await loadDictionary(language);
-    if (result.status === "loaded") {
-      lastLoaded.set(language, result.entries);
+    try {
+      const result = await loadDictionary(language);
+      if (result.status === "loaded") {
+        lastLoaded.set(language, {
+          contentHash: result.contentHash,
+          entries: result.entries,
+        });
+        return result;
+      }
+      const previous = lastLoaded.get(language);
+      if (previous !== undefined) {
+        return { ...previous, status: "loaded" };
+      }
+      // Nothing to serve at all: retry on the fast cycle rather than the slow
+      // one. Re-read the entry rather than closing over the promise being built.
+      const entry = cache.get(language);
+      if (entry !== undefined) {
+        cache.set(language, {
+          load: entry.load,
+          expiresAt: Date.now() + DICTIONARY_UNAVAILABLE_TTL_MS,
+        });
+      }
       return result;
+    } finally {
+      // `finally`, not a trailing statement: a leaked marker would pin the
+      // language to its stale payload for the life of the process.
+      inFlight.delete(language);
     }
-    const previous = lastLoaded.get(language);
-    if (previous !== undefined) {
-      return { entries: previous, status: "loaded" };
-    }
-    // Nothing to serve at all: retry on the fast cycle rather than the slow
-    // one. Re-read the entry rather than closing over the promise being built.
-    const entry = cache.get(language);
-    if (entry !== undefined) {
-      cache.set(language, {
-        load: entry.load,
-        expiresAt: Date.now() + DICTIONARY_UNAVAILABLE_TTL_MS,
-      });
-    }
-    return result;
   })();
 
   // Set before anyone awaits, so concurrent callers share this one read.
@@ -317,13 +345,21 @@ const beginRefresh = async (
 const dictionaryFor = async (
   language: MorphologyLanguage,
 ): Promise<DictionaryLoad> => {
+  const previous = lastLoaded.get(language);
+
+  // A read in flight must not block a request that can already be answered.
+  // This is checked before the cache entry, because a refresh installs its
+  // entry with a future expiry the instant it starts.
+  if (previous !== undefined && inFlight.has(language)) {
+    return { ...previous, status: "loaded" };
+  }
+
   const cached = cache.get(language);
   if (cached && cached.expiresAt > Date.now()) {
     return await cached.load;
   }
 
   const refresh = beginRefresh(language);
-  const previous = lastLoaded.get(language);
   if (previous === undefined) {
     // Cold: there is nothing to answer with, so this caller waits for the read.
     return await refresh;
@@ -335,7 +371,7 @@ const dictionaryFor = async (
   // deadline when object storage is slow — which is exactly the stall the
   // fallback exists to prevent.
   detached(refresh, "legal-search.expansion-dictionary-refresh");
-  return { entries: previous, status: "loaded" };
+  return { ...previous, status: "loaded" };
 };
 
 /**
@@ -398,14 +434,20 @@ export const expandTermWith = (
   return extras;
 };
 
+type ResolvedExpander = {
+  /** Which payload answered, so telemetry can show replicas converging. */
+  contentHash: string;
+  expand: CorpusTermExpander;
+};
+
 /**
  * The expander for a request, or null when this request expands nothing.
  * Null covers an unscoped or unsupported jurisdiction and an unavailable
  * dictionary alike, so the caller has one branch rather than a mode matrix.
  */
-export const corpusTermExpander = async (
+const corpusTermExpander = async (
   country: string | undefined,
-): Promise<CorpusTermExpander | null> => {
+): Promise<ResolvedExpander | null> => {
   const language = expansionLanguageForJurisdiction(country);
   if (language === null) {
     return null;
@@ -416,7 +458,10 @@ export const corpusTermExpander = async (
       return null;
     }
     case "loaded": {
-      return (term) => expandTermWith(dictionary.entries, term);
+      return {
+        contentHash: dictionary.contentHash,
+        expand: (term) => expandTermWith(dictionary.entries, term),
+      };
     }
     default: {
       return dictionary satisfies never;
@@ -433,6 +478,12 @@ type ShadowExpansionLog = {
    * or the ratio would be one by construction.
    */
   countryScoped: boolean;
+  /**
+   * Short hash of the payload that answered, or "none". Replicas serving
+   * different builds is what makes a paginated `on` query inconsistent, so the
+   * rollout has to be able to see convergence before that mode is considered.
+   */
+  dictionaryHash: string;
   /** Free-text leaves after expansion; equals `baseLeaves` when nothing fired. */
   expandedLeaves: number;
   language: MorphologyLanguage | null;
@@ -476,12 +527,14 @@ type ShadowExpansionLog = {
 export const shadowExpansionAttributes = ({
   baseLeaves,
   countryScoped,
+  dictionaryHash,
   expandedLeaves,
   language,
   reach,
 }: ShadowExpansionLog): LoggerAttributes => ({
   baseLeaves,
   countryScoped,
+  dictionaryHash,
   expandedLeaves,
   addedLeaves: expandedLeaves - baseLeaves,
   language: language ?? "none",
@@ -558,6 +611,22 @@ type ResolveExpandedQueryOptions = {
  * inside resolves to the unexpanded query, so a search never depends on the
  * dictionary being reachable.
  */
+/**
+ * Known limitation of `on`, recorded where the decision to flip it will be
+ * made: the query a request builds depends on which dictionary its replica has
+ * loaded, so a page-2 request served by a replica mid-refresh (or holding a
+ * fallback payload) can rebuild a different engine query while reusing page 1's
+ * cursor, which ranks a different result set against an old score/id boundary.
+ * Replicas converge on the pointer, so the window is a rebuild or a failed
+ * refresh rather than steady state, and `shadow` cannot hit it at all because
+ * it executes the unexpanded query.
+ *
+ * Turning `on` on requires closing this first: the cursor has to carry the
+ * dictionary version and later pages have to resolve that same version, which
+ * means retaining superseded payloads. That is a rollout decision, not an
+ * inert-flag one, so the shadow event reports which payload each replica used
+ * (`dictionaryHash`) to make convergence measurable before the choice is made.
+ */
 export const resolveExpandedCorpusQuery = async ({
   build,
   jurisdiction,
@@ -582,6 +651,7 @@ export const resolveExpandedCorpusQuery = async ({
       logShadowExpansion({
         baseLeaves,
         countryScoped,
+        dictionaryHash: "none",
         expandedLeaves: baseLeaves,
         language,
         reach: language === null ? "unsupported_jurisdiction" : "no_dictionary",
@@ -592,7 +662,7 @@ export const resolveExpandedCorpusQuery = async ({
 
   // Both builds tokenize the same text, so this is null only when `baseQuery`
   // already was; returning the base query keeps the branch total anyway.
-  const expandedQuery = build(expand);
+  const expandedQuery = build(expand.expand);
   if (expandedQuery === null) {
     return baseQuery;
   }
@@ -603,10 +673,11 @@ export const resolveExpandedCorpusQuery = async ({
     }
     case "shadow": {
       const baseLeaves = freeTextLeaves(text);
-      const expandedLeaves = freeTextLeaves(text, expand);
+      const expandedLeaves = freeTextLeaves(text, expand.expand);
       logShadowExpansion({
         baseLeaves,
         countryScoped,
+        dictionaryHash: shortHash(expand.contentHash),
         expandedLeaves,
         language,
         // A dictionary that loaded but matched nothing, lost every form to the

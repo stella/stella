@@ -733,10 +733,16 @@ export const readCorpusS3BytesBounded = async ({
   signal,
 }: BoundedCorpusReadOptions): Promise<Uint8Array> => {
   const response = await fetchObject(getCorpusS3(), key, signal);
-  const declared = Number(response.headers.get("content-length"));
-  if (!Number.isFinite(declared)) {
+  // Tested as a header, not as a number. `Number(null)` is 0 and `Number("")`
+  // is 0, so converting first would turn a missing or empty `Content-Length`
+  // into a length of zero that passes every ceiling — making the refusal below
+  // unreachable in exactly the case it exists for.
+  const header = response.headers.get("content-length");
+  const declared =
+    header !== null && /^\d+$/u.test(header.trim()) ? Number(header) : null;
+  if (declared === null) {
     throw new S3ObjectReadError({
-      message: `Object read for ${key} declared no length; refusing an unbounded read`,
+      message: `Object read for ${key} declared no usable length; refusing an unbounded read`,
     });
   }
   if (declared > maxBytes) {

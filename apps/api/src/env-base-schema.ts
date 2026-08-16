@@ -185,8 +185,9 @@ export const envBaseServerSchema = {
   }),
   // Morphological query expansion for case-law corpus-index searches.
   // `off` is byte-identical to the pre-expansion query builder and fetches
-  // no dictionary; `shadow` logs the expanded query beside the unexpanded
-  // one it still executes; `on` executes the expanded query.
+  // no dictionary; `shadow` executes the unexpanded query and records how the
+  // expanded one compares (leaf counts only, never query text); `on` executes
+  // the expanded query.
   QUERY_EXPANSION_MODE: v.optional(v.picklist(QUERY_EXPANSION_MODES), "off"),
   isDev: v.boolean(),
 };

@@ -203,6 +203,7 @@ test("every shadow-event attribute survives the log sanitizer", () => {
   const attributes = shadowExpansionAttributes({
     baseLeaves: 1,
     countryScoped: true,
+    dictionaryHash: "a1b2c3d4e5f6",
     expandedLeaves: 2,
     language: "cs",
     reach: "expanded",
@@ -222,6 +223,7 @@ test.each([
   const attributes = shadowExpansionAttributes({
     baseLeaves: 2,
     countryScoped: reach !== "unsupported_jurisdiction",
+    dictionaryHash: reach === "expanded" ? "a1b2c3d4e5f6" : "none",
     expandedLeaves: reach === "expanded" ? 5 : 2,
     language: reach === "unsupported_jurisdiction" ? null : "cs",
     reach,
@@ -239,6 +241,7 @@ test("the shadow event carries no query text", () => {
   const attributes = shadowExpansionAttributes({
     baseLeaves: 3,
     countryScoped: true,
+    dictionaryHash: "a1b2c3d4e5f6",
     expandedLeaves: 9,
     language: "cs",
     reach: "expanded",
