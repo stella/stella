@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 
+import { FOLDED_TOKENIZER } from "@/api/lib/legal-search/corpus-index-config";
 import {
   foldExpansionKey,
   isMorphologyDictionaryContentHash,
@@ -107,8 +108,9 @@ test("the cap is what the parser enforces", () => {
   ).toBe(MAX_FORMS_PER_BUCKET);
 });
 
-test("the fold is lowercase, NFC, and diacritic-free", () => {
+test("the fold is lowercase, form-independent, and ASCII", () => {
   expect(foldExpansionKey("ŠKODY")).toBe("skody");
+  expect(foldExpansionKey("Straße")).toBe("strasse");
   // The same word decomposed (routine from extracted PDFs and macOS
   // filesystems) must reach the same key, or half the corpus is unreachable
   // from half the keyboards.
@@ -116,6 +118,25 @@ test("the fold is lowercase, NFC, and diacritic-free", () => {
   expect(foldExpansionKey("žalobě".normalize("NFD"))).toBe(
     foldExpansionKey("žalobě"),
   );
+  // `ł` has no canonical decomposition, so a mark strip leaves it standing
+  // while the engine's ascii folding and `unaccent()` both store `l`. A key
+  // spelled with `ł` is a key no indexed lexeme can be spelled as.
+  expect(foldExpansionKey("Łaska")).toBe("laska");
+  expect(foldExpansionKey("zażółć")).toBe("zazolc");
+});
+
+// The key's two steps mirror the tokenizer's filter list, and the mirror is
+// asserted rather than trusted: the orders are not interchangeable for a
+// character whose lowercase form the fold table does not reach. `Ɩ` folds to
+// `I` but lowercases to `ɩ`, so folding first would key an uppercase query on
+// `iota` while the corpus form (already lowercased by `to_tsvector('simple')`,
+// which is what the builder reads) keys `ɩota`.
+test("the fold lowercases before it folds, the order the index applies", () => {
+  const filters: readonly string[] = FOLDED_TOKENIZER.filters;
+  expect(filters.indexOf("lower_caser")).toBeLessThan(
+    filters.indexOf("ascii_folding"),
+  );
+  expect(foldExpansionKey("Ɩota")).toBe(foldExpansionKey("ɩota"));
 });
 
 // A combining mark is \p{M}, not \p{L}, so a letters-only test that ran before
@@ -151,6 +172,21 @@ test("a folded key two stems claim expands to nothing", () => {
   // Keys only one stem claims are unaffected.
   expect(parsed.entries.get("radu")).toBe("rada,rady,radu");
   expect(parsed.entries.get("rade")).toBe("řada,řady,řadě");
+});
+
+// Folding to ASCII widens the ambiguous set rather than narrowing it: `łaska`
+// and `laska` are distinct Polish words that the index stores under one
+// lexeme, so they are the same ambiguity as rada/řada and get the same answer.
+// Under a mark strip they kept separate keys and each expanded to the other
+// family's inflections, which the index could never have matched anyway.
+test("a Polish ł/l pair claims one key and expands to nothing", () => {
+  const parsed = parseExpansionDictionary(
+    ["łask\tłaska,łaski\t400", "lask\tlaska,laski\t300"].join("\n"),
+  );
+  expect(parsed.collidedKeys).toBe(2);
+  expect(parsed.entries.get("laska")).toBeUndefined();
+  expect(parsed.entries.get("laski")).toBeUndefined();
+  expect(parsed.entries.size).toBe(0);
 });
 
 // Order must not decide the answer: the same two buckets serialized either way
