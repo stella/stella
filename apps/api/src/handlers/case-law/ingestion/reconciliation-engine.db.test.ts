@@ -15,6 +15,7 @@ import {
   RECONCILIATION_ITEM_STATUS,
   relations,
 } from "@/api/db/schema";
+import type { SliceRetrySchedule } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import { runReconciliationWorkUnit } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import {
   RECONCILIATION_SETTLED_RECHECK_MS,
@@ -171,6 +172,22 @@ const stubReconciliation: SourceReconciliation = {
   },
 };
 
+/** The same publisher, with one slice it will not serve. */
+const unwalkableSliceStub: SourceReconciliation = {
+  ...stubReconciliation,
+  listSlicePage: async (options): Promise<ReconciliationSlicePage> => {
+    listed.push(options);
+    if (options.slice === OWED_SLICE) {
+      throw new AdapterFetchError({
+        message: "listing refused",
+        adapterKey: "engine-fixture",
+        cursor: options.slice,
+      });
+    }
+    return await Promise.resolve({ items: [], totalPages: 1 });
+  },
+};
+
 /**
  * The same publisher, listing dockets instead of document ids: the other half
  * of the identity index, which is answered by its own held query.
@@ -267,10 +284,18 @@ const checkedAtBySlice = async (
     ).map(({ slice, checkedAt }) => [slice, checkedAt]),
   );
 
-const runUnit = async (
-  sourceId: SafeId<"caseLawSource">,
-  reconciliation: SourceReconciliation = stubReconciliation,
-) =>
+type RunUnitOptions = {
+  sourceId: SafeId<"caseLawSource">;
+  reconciliation?: SourceReconciliation;
+  /** Shared across turns only where a test is about what a failure leaves. */
+  sliceRetries?: SliceRetrySchedule;
+};
+
+const runUnitWith = async ({
+  reconciliation = stubReconciliation,
+  sliceRetries = new Map(),
+  sourceId,
+}: RunUnitOptions) =>
   await runReconciliationWorkUnit({
     adapterKey: "engine-fixture",
     sourceId,
@@ -281,7 +306,13 @@ const runUnit = async (
     sleep: async () => {
       await Promise.resolve();
     },
+    sliceRetries,
   });
+
+const runUnit = async (
+  sourceId: SafeId<"caseLawSource">,
+  reconciliation: SourceReconciliation = stubReconciliation,
+) => await runUnitWith({ sourceId, reconciliation });
 
 test("a settled slice is touched out of the window so the one behind it is reached", async () => {
   const sourceId = await seedSource();
@@ -634,6 +665,80 @@ test("a publisher claiming an absurd page count is refused, not walked", async (
   expect(ledger).toEqual({ reported: 2, collected: 0 });
 });
 
+test("a slice the publisher will not serve does not hold the ones behind it", async () => {
+  // The other half of the test above. A failed walk writes nothing, so every
+  // input the selection reads is exactly what it was before — and the same
+  // slice comes back on the next turn, and on every turn after it, while the
+  // rest of the source's backlog is never reached. The loop's error backoff
+  // does not help: it paces the retries, it does not change what is retried.
+  const sourceId = await seedSource();
+  await seedFreshTip(sourceId);
+  const reachable = stepDay(OWED_SLICE, 1);
+  for (const [slice, checkedAt] of [
+    [OWED_SLICE, addUtcDays(NOW, -3)],
+    [reachable, addUtcDays(NOW, -2)],
+  ] as const) {
+    // oxlint-disable-next-line no-await-in-loop -- fixture seeding, sequential on one pglite handle
+    await seedSlice({ sourceId, slice, reported: 2, collected: 0, checkedAt });
+  }
+
+  // One schedule across both turns, as the runner holds one per source.
+  const sliceRetries: SliceRetrySchedule = new Map();
+  const options = {
+    sourceId,
+    reconciliation: unwalkableSliceStub,
+    sliceRetries,
+  };
+
+  const rejection = await runUnitWith(options).then(
+    () => null,
+    (error: unknown) => error,
+  );
+  expect(rejection).toBeInstanceOf(AdapterFetchError);
+  expect(listed.map(({ slice }) => slice)).toEqual([OWED_SLICE]);
+
+  // The next turn spends itself on the slice behind it rather than on the one
+  // that just refused.
+  expect(await runUnitWith(options)).toMatchObject({ type: "worked" });
+  expect(listed.map(({ slice }) => slice)).toEqual([OWED_SLICE, reachable]);
+});
+
+test("held slices are excluded from the backlog window, not filtered after it", async () => {
+  // The backlog read is a bounded oldest-first window. A held row filtered
+  // out afterwards still occupies a place in it, so a full window of held
+  // rows hides every short slice behind them — the same starvation the
+  // settled-row touch exists to prevent, arriving by a different route. The
+  // holds renew as they expire, so it does not clear on its own.
+  const sourceId = await seedSource();
+  await seedFreshTip(sourceId);
+  const sliceRetries: SliceRetrySchedule = new Map();
+  for (const [index, slice] of SETTLED_SLICES.entries()) {
+    sliceRetries.set(slice, NOW.getTime() + DAY_IN_MS);
+    // oxlint-disable-next-line no-await-in-loop -- fixture seeding, sequential on one pglite handle
+    await seedSlice({
+      sourceId,
+      slice,
+      reported: 2,
+      collected: 0,
+      // Oldest-checked, so these fill the window ahead of the one behind them.
+      checkedAt: addUtcDays(NOW, -10 - index),
+    });
+  }
+  await seedSlice({
+    sourceId,
+    slice: OWED_SLICE,
+    reported: 2,
+    collected: 0,
+    checkedAt: addUtcDays(NOW, -2),
+  });
+  expect(sliceRetries.size).toBe(SETTLED_SLICES.length);
+
+  expect(await runUnitWith({ sourceId, sliceRetries })).toMatchObject({
+    type: "worked",
+  });
+  expect(listed.map(({ slice }) => slice)).toEqual([OWED_SLICE]);
+});
+
 // ── Rechecking a settled slice ──────────────────────────
 
 /**
@@ -706,6 +811,44 @@ test("a settled slice past the recheck window is re-walked, and a grown listing 
     reported: 2,
     collected: 0,
   });
+});
+
+test("a held recheck candidate yields to the next settled row, not to idle", async () => {
+  // The recheck read is `LIMIT 1` on the oldest settled row, so a held row
+  // filtered after the query is the whole candidate set and the source reports
+  // idle with a later settled row due. Unlike the sweep frontier, skipping one
+  // costs nothing: a settled slice keeps its ledger row and is selectable on a
+  // later turn, so the only thing the hold changes is which row this turn
+  // proves.
+  const sourceId = await seedSource();
+  const longSettled = new Date(
+    NOW.getTime() - RECONCILIATION_SETTLED_RECHECK_MS - DAY_IN_MS,
+  );
+  await seedSettledHistory(sourceId, longSettled);
+  const behind = stepDay(OWED_SLICE, 1);
+  await seedSlice({
+    sourceId,
+    slice: behind,
+    reported: 1,
+    collected: 1,
+    // Younger than the held row, so it is only reached once that one is out,
+    // and still the wrong side of the recheck cutoff so it is genuinely due.
+    checkedAt: new Date(longSettled.getTime() + DAY_IN_MS / 2),
+  });
+
+  const sliceRetries: SliceRetrySchedule = new Map([
+    [OWED_SLICE, NOW.getTime() + DAY_IN_MS],
+  ]);
+
+  expect(await runUnitWith({ sourceId, sliceRetries })).toMatchObject({
+    type: "worked",
+    summary: {
+      unit: "slice",
+      slice: behind,
+      reason: SLICE_WALK_REASON.RECHECK,
+    },
+  });
+  expect(listed.map(({ slice }) => slice)).toEqual([behind]);
 });
 
 test("a settled slice inside the recheck window is left alone", async () => {

@@ -194,6 +194,19 @@ export type SelectReconciliationWorkUnitInput = {
   /** The newest never-surveyed slice below the tip window, if any remain. */
   sweepSlice: string | null;
   /**
+   * Slices whose last walk threw and whose retry is not yet due.
+   *
+   * A walk that fails writes nothing, so nothing about the source's state
+   * changes and this selection would return the same slice on the next turn,
+   * and on every turn after it. One slice the publisher cannot serve would
+   * then hold every other slice the source owes, indefinitely: the tip stops
+   * being re-walked, the backlog stops draining and the sweep stops advancing,
+   * while the source still looks busy. Holding the failed slice out of the
+   * order until its retry comes due costs that slice its turns and nobody
+   * else's.
+   */
+  slicesHeldForRetry: ReadonlySet<string>;
+  /**
    * The oldest-checked settled slice below the tip window, if the source has
    * one. Which rows count as settled is the assembly's question, since only it
    * can read the ledger; whether this one is old enough to walk is decided
@@ -231,6 +244,7 @@ export const selectReconciliationWorkUnit = ({
   now,
   recheckAfterMs,
   recheckCandidate,
+  slicesHeldForRetry,
   staleAfterMs,
   sweepSlice,
   tipCheckedAt,
@@ -243,6 +257,9 @@ export const selectReconciliationWorkUnit = ({
 
   const staleBefore = now.getTime() - staleAfterMs;
   const dueTipSlices = tipSlices.filter((slice) => {
+    if (slicesHeldForRetry.has(slice)) {
+      return false;
+    }
     const checkedAt = tipCheckedAt.get(slice);
     return checkedAt === undefined || checkedAt.getTime() < staleBefore;
   });
@@ -271,7 +288,9 @@ export const selectReconciliationWorkUnit = ({
   // Already partitioned by the assembly, which had to look at settledness
   // anyway to know which rows to touch; re-deciding it here would be a second
   // copy of the rule free to drift from that one.
-  const owed = unsettledShortSlices.at(0);
+  const owed = unsettledShortSlices.find(
+    ({ slice }) => !slicesHeldForRetry.has(slice),
+  );
   if (owed !== undefined) {
     return {
       type: "slice",
@@ -280,7 +299,7 @@ export const selectReconciliationWorkUnit = ({
     };
   }
 
-  if (sweepSlice !== null) {
+  if (sweepSlice !== null && !slicesHeldForRetry.has(sweepSlice)) {
     return {
       type: "slice",
       slice: sweepSlice,
@@ -298,6 +317,7 @@ export const selectReconciliationWorkUnit = ({
   // without a database.
   if (
     recheckCandidate !== null &&
+    !slicesHeldForRetry.has(recheckCandidate.slice) &&
     recheckCandidate.checkedAt.getTime() < now.getTime() - recheckAfterMs
   ) {
     return {
