@@ -52,6 +52,7 @@ export const generateBBoxData = async ({
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     feature: "bbox.generate",
     modelRole: "pdf",
+    organizationId,
     orgAIConfig: orgAIConfig ?? null,
     properties: {
       justification_id: justificationId,

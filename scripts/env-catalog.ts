@@ -133,7 +133,6 @@ const INTERNAL_SERVER_KEYS = new Set([
   "POSTHOG_HOST",
   "POSTHOG_KEY",
   "POSTHOG_LOCAL_DEBUG",
-  "POSTHOG_LOCAL_DEBUG_AI_CONTENT",
   "PUBLIC_URL",
   "QUERY_EXPANSION_MODE",
   "REQUIRE_PERSONAL_AI_KEY",
@@ -311,8 +310,6 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     'PostHog project key. The placeholder "phc_" disables capture for local development.',
   POSTHOG_LOCAL_DEBUG:
     "Allow PostHog capture from localhost when using a real project key.",
-  POSTHOG_LOCAL_DEBUG_AI_CONTENT:
-    "Include raw AI prompts and outputs in local diagnostics. This may expose privileged content.",
   PUBLIC_URL:
     "Public API origin for verification links and OAuth callbacks. Defaults to BETTER_AUTH_URL.",
   QUERY_EXPANSION_MODE:

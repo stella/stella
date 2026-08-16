@@ -108,6 +108,7 @@ const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     feature: "playbook.derive-ask",
     modelRole: DERIVE_ASK_ROLE,
+    organizationId,
     orgAIConfig,
     properties: { organization_id: organizationId },
     traceId: Bun.randomUUIDv7(),

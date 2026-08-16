@@ -127,7 +127,10 @@ const AnalyticsAuthIdentity = () => {
       return;
     }
 
-    analytics.identifyUser({ id: authStatus.user.id });
+    analytics.identifyUser({
+      id: authStatus.user.id,
+      activeOrganizationId: authStatus.user.activeOrganizationId,
+    });
   }, [analytics, authStatus]);
 
   return null;

@@ -124,9 +124,13 @@ ${decisionText}`;
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     feature: "case-law.analysis",
     modelRole: "fast",
+    organizationId,
     orgAIConfig,
     properties: {
       decision_id: decisionId,
+      jurisdiction: decision.country,
+      language: decision.language,
+      organization_id: organizationId,
     },
     sessionId: decisionId,
     traceId: Bun.randomUUIDv7(),

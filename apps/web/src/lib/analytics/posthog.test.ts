@@ -17,6 +17,7 @@ type PostHogInitOptions = {
   ) => CapturedBrowserEvent | null;
   capture_dead_clicks: boolean;
   capture_heatmaps: boolean;
+  capture_pageleave: boolean;
   capture_pageview: boolean;
   capture_performance:
     | boolean
@@ -55,11 +56,13 @@ const resetMock = mock(() => {
   distinctId = "anonymous_after_reset";
   identified = false;
 });
+const groupMock = mock((_type: string, _key: string) => undefined);
 
 const posthogMock = {
   capture: captureMock,
   captureException: captureExceptionMock,
   get_distinct_id: getDistinctIdMock,
+  group: groupMock,
   identify: identifyMock,
   init: initMock,
   _isIdentified: isIdentifiedMock,
@@ -97,6 +100,7 @@ describe("PostHog browser analytics adapter", () => {
     initMock.mockClear();
     registerMock.mockClear();
     resetMock.mockClear();
+    groupMock.mockClear();
   });
 
   test("structurally disables interaction tracking features", () => {
@@ -108,6 +112,7 @@ describe("PostHog browser analytics adapter", () => {
       autocapture: false,
       capture_dead_clicks: false,
       capture_heatmaps: false,
+      capture_pageleave: true,
       capture_pageview: false,
       capture_performance: { network_timing: false, web_vitals: true },
       disable_persistence: true,
@@ -145,15 +150,104 @@ describe("PostHog browser analytics adapter", () => {
       initOptions?.before_send({
         event: WEB_ANALYTICS_EVENTS.identify,
       }),
-    ).toEqual({ event: WEB_ANALYTICS_EVENTS.identify });
+    ).toEqual({ event: WEB_ANALYTICS_EVENTS.identify, properties: {} });
     expect(
       initOptions?.before_send({
         event: WEB_ANALYTICS_EVENTS.pageViewed,
       }),
-    ).toEqual({ event: WEB_ANALYTICS_EVENTS.pageViewed });
+    ).toEqual({ event: WEB_ANALYTICS_EVENTS.pageViewed, properties: {} });
+    expect(
+      initOptions?.before_send({
+        event: WEB_ANALYTICS_EVENTS.pageLeft,
+      }),
+    ).toEqual({ event: WEB_ANALYTICS_EVENTS.pageLeft, properties: {} });
     expect(initOptions?.before_send({ event: "$autocapture" })).toBeNull();
-    expect(initOptions?.before_send({ event: "$pageleave" })).toBeNull();
     expect(initOptions?.before_send({ event: "$heatmap" })).toBeNull();
+  });
+
+  test("scrubs SDK-stamped resolved URLs from navigation events", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+
+    Object.defineProperty(globalThis, "location", {
+      configurable: true,
+      value: new URL("https://app.example.test/workspaces/ws_1"),
+    });
+    // Records resolved pathname -> route template in the history the
+    // scrubber maps through.
+    analytics.capturePageViewed({ path: "/workspaces/$workspaceId" });
+
+    const sanitized = initOptions?.before_send({
+      event: WEB_ANALYTICS_EVENTS.pageLeft,
+      properties: {
+        $current_url: "https://app.example.test/workspaces/ws_1",
+        $pathname: "/workspaces/ws_1",
+        $host: "app.example.test",
+        $prev_pageview_pathname: "/workspaces/ws_1",
+        $session_entry_url: "https://app.example.test/workspaces/ws_1",
+        $session_entry_pathname: "/workspaces/ws_1",
+        $referrer: "https://app.example.test/workspaces/ws_1",
+        $session_entry_referrer: "https://www.google.com/",
+        $prev_pageview_duration: 12,
+        title: "Client Smith v Example",
+        $session_id: "session-1",
+      },
+    });
+
+    expect(sanitized?.properties).toEqual({
+      $current_url: "https://app.example.test/workspaces/$workspaceId",
+      $pathname: "/workspaces/$workspaceId",
+      $host: "app.example.test",
+      $prev_pageview_pathname: "/workspaces/$workspaceId",
+      $session_entry_url: "https://app.example.test/workspaces/$workspaceId",
+      $session_entry_pathname: "/workspaces/$workspaceId",
+      // Internal referrer dropped; external referrer kept.
+      $session_entry_referrer: "https://www.google.com/",
+      $prev_pageview_duration: 12,
+      $session_id: "session-1",
+    });
+  });
+
+  test("drops resolved URLs the route template history cannot map", () => {
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
+
+    const sanitized = initOptions?.before_send({
+      event: WEB_ANALYTICS_EVENTS.pageLeft,
+      properties: {
+        $current_url: "https://app.example.test/workspaces/ws_unknown",
+        $pathname: "/workspaces/ws_unknown",
+        $prev_pageview_pathname: "/workspaces/ws_unknown",
+        $session_entry_url: "https://app.example.test/workspaces/ws_unknown",
+        $session_entry_pathname: "/workspaces/ws_unknown",
+        title: "Client Smith v Example",
+        $session_id: "session-1",
+      },
+    });
+
+    expect(sanitized?.properties).toEqual({ $session_id: "session-1" });
+  });
+
+  test("keeps the route template override on page views while scrubbing SDK context", () => {
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
+
+    const sanitized = initOptions?.before_send({
+      event: WEB_ANALYTICS_EVENTS.pageViewed,
+      properties: {
+        $current_url: "https://app.example.test/workspaces/$workspaceId",
+        $pathname: "/workspaces/$workspaceId",
+        path: "/workspaces/$workspaceId",
+        $prev_pageview_pathname: "/workspaces/ws_unmapped",
+        title: "Client Smith v Example",
+      },
+    });
+
+    expect(sanitized?.properties).toEqual({
+      $current_url: "https://app.example.test/workspaces/$workspaceId",
+      $pathname: "/workspaces/$workspaceId",
+      path: "/workspaces/$workspaceId",
+    });
   });
 
   test("drops known browser-noise exceptions", () => {
@@ -868,15 +962,16 @@ describe("PostHog browser analytics adapter", () => {
     });
   });
 
-  test("identifies users by stable id without person properties", () => {
+  test("identifies users by stable id and attaches the organization group", () => {
     const { analytics } = createPostHogAnalytics({
       host: "https://posthog.test",
       key: "phc_test",
     });
 
-    analytics.identifyUser({ id: "user_123" });
+    analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
 
     expect(identifyMock).toHaveBeenCalledWith("user_123");
+    expect(groupMock).toHaveBeenCalledWith("organization", "org_1");
   });
 
   test("identifies the same user only once per browser app session", () => {
@@ -885,11 +980,27 @@ describe("PostHog browser analytics adapter", () => {
       key: "phc_test",
     });
 
-    analytics.identifyUser({ id: "user_123" });
-    analytics.identifyUser({ id: "user_123" });
+    analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
+    analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
 
     expect(identifyMock).toHaveBeenCalledTimes(1);
     expect(resetMock).not.toHaveBeenCalled();
+  });
+
+  test("rebinds the organization group on a same-user organization switch", () => {
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
+
+    analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
+    analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_2" });
+
+    // The identity guard still suppresses the duplicate identify, but the
+    // group must follow the active organization or later events attribute
+    // to the previous organization across an ownership boundary.
+    expect(identifyMock).toHaveBeenCalledTimes(1);
+    expect(groupMock).toHaveBeenNthCalledWith(2, "organization", "org_2");
   });
 
   test("resets before identifying a different user", () => {
@@ -898,11 +1009,12 @@ describe("PostHog browser analytics adapter", () => {
       key: "phc_test",
     });
 
-    analytics.identifyUser({ id: "user_123" });
-    analytics.identifyUser({ id: "user_456" });
+    analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
+    analytics.identifyUser({ id: "user_456", activeOrganizationId: "org_2" });
 
     expect(resetMock).toHaveBeenCalledTimes(1);
     expect(identifyMock).toHaveBeenNthCalledWith(2, "user_456");
+    expect(groupMock).toHaveBeenNthCalledWith(2, "organization", "org_2");
   });
 
   test("reset can be limited to identified sessions", () => {
@@ -915,7 +1027,7 @@ describe("PostHog browser analytics adapter", () => {
 
     expect(resetMock).not.toHaveBeenCalled();
 
-    analytics.identifyUser({ id: "user_123" });
+    analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
     analytics.reset({ onlyIfIdentified: true });
 
     expect(resetMock).toHaveBeenCalledTimes(1);
@@ -938,9 +1050,9 @@ describe("PostHog browser analytics adapter", () => {
       key: "phc_test",
     });
 
-    analytics.identifyUser({ id: "user_123" });
+    analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
     analytics.reset();
-    analytics.identifyUser({ id: "user_123" });
+    analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
 
     expect(resetMock).toHaveBeenCalledTimes(1);
     expect(identifyMock).toHaveBeenCalledTimes(2);

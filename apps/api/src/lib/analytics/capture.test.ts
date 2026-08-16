@@ -14,21 +14,30 @@ import {
   SUBPROCESS_TERMINATION_REASON,
 } from "@/api/lib/errors/tagged-errors";
 
-const captured: { properties: Record<string, unknown> }[] = [];
+const captured: {
+  groups?: Record<string, string>;
+  properties: Record<string, unknown>;
+}[] = [];
 
 const realClient = await import("@/api/lib/analytics/client");
 void mock.module("@/api/lib/analytics/client", () => ({
   ...realClient,
   getAnalytics: () => ({
-    capture: (params: { properties: Record<string, unknown> }) => {
+    capture: (params: {
+      groups?: Record<string, string>;
+      properties: Record<string, unknown>;
+    }) => {
       captured.push(params);
     },
     flush: async () => undefined,
+    identifyOrganizationGroup: () => undefined,
   }),
 }));
 
-const { captureError, resetCaptureWindows } =
+const { captureError, captureRequestError, resetCaptureWindows } =
   await import("@/api/lib/analytics/capture");
+const { enrichRequestContext, initRequestContext } =
+  await import("@/api/lib/observability/request-context");
 
 /**
  * Both helpers construct their error on a single source line, so every
@@ -145,6 +154,30 @@ describe("captureError issue grouping", () => {
     const fingerprint = captured.at(0)?.properties["$exception_fingerprint"];
     expect(typeof fingerprint).toBe("string");
     expect(fingerprint).not.toContain("Privileged");
+  });
+});
+
+describe("captureRequestError organization attribution", () => {
+  test("attaches the organization group from the request context", () => {
+    const organizationId = "3f6e0a7e-9f6f-4a53-9a3e-2b8f6f0c9d41";
+    const request = new Request("https://api.test/internal");
+    initRequestContext(request);
+    enrichRequestContext(request, { organizationId });
+
+    captureRequestError(new Error("boom"), { request });
+
+    // The group is what PostHog's organization breakdown reads; losing it
+    // while organization_id survives as a plain property would go unnoticed.
+    expect(captured.at(0)?.groups).toEqual({ organization: organizationId });
+  });
+
+  test("stays ungrouped without an organization in the request context", () => {
+    const request = new Request("https://api.test/internal");
+    initRequestContext(request);
+
+    captureRequestError(new Error("boom"), { request });
+
+    expect(captured.at(0)?.groups).toBeUndefined();
   });
 });
 

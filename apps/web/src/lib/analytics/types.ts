@@ -6,6 +6,10 @@ export const WEB_ANALYTICS_EVENTS = {
   // The standard event name, so PostHog web analytics aggregates our page
   // views; the payload still carries route templates, never resolved URLs.
   pageViewed: "$pageview",
+  // SDK-emitted on tab hide and close; web analytics derives bounce rate
+  // and page duration from it. `before_send` maps its resolved URL back to
+  // the route template.
+  pageLeft: "$pageleave",
   // SDK-emitted performance metrics; `before_send` rebuilds the payload so
   // only metric values and coarse client context leave the browser.
   webVitals: "$web_vitals",
@@ -71,4 +75,7 @@ export type RouteErrorLifecycleProperties = RouteErrorLifecycleCommon & {
 
 export type AnalyticsUserIdentity = {
   id: string;
+  // Attached as the `organization` group so insights can aggregate and
+  // break down by organization, not just by person.
+  activeOrganizationId: string;
 };

@@ -70,6 +70,12 @@ type TanStackAIAnalyticsProps = {
    */
   selectedModelId?: string | undefined;
   orgAIConfig?: OrgAIConfig | null;
+  /**
+   * Analytics-only organization identity for org-scoped calls that do not
+   * meter usage (fixed-cost or internal features). Metered calls derive the
+   * organization from `usageMetering` and may omit this.
+   */
+  organizationId?: SafeId<"organization"> | null;
   usageMetering?: TanStackAIUsageMetering;
 };
 
@@ -138,6 +144,9 @@ const pickSafeMetadata = (
         break;
       case "file_count":
         safeProperties.file_count = value;
+        break;
+      case "jurisdiction":
+        safeProperties.jurisdiction = value;
         break;
       case "language":
         safeProperties.language = value;
@@ -294,6 +303,15 @@ export const createTanStackAIAnalyticsCallbacks = ({
 }: TanStackAIAnalyticsProps): TanStackAIAnalyticsCallbacks => {
   const distinctId = config.distinctId ?? SERVER_DISTINCT_ID;
   const modelRole = config.modelRole ?? "chat";
+  // Group attachment is derived centrally so call sites cannot forget it:
+  // from the metering context when present, else from the analytics-only
+  // organization identity. Events with neither stay ungrouped.
+  const analyticsOrganizationId =
+    config.usageMetering?.organizationId ?? config.organizationId ?? null;
+  const groups =
+    analyticsOrganizationId === null
+      ? {}
+      : { groups: { organization: analyticsOrganizationId } };
   const selectedModelId = config.selectedModelId;
   let modelInfo: ResolvedTanStackTextModelInfo | null | undefined;
   const startedAt = performance.now();
@@ -317,7 +335,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
                 modelRole,
               )
             : getTanStackTextModelInfoForRole(modelRole, config.orgAIConfig, {
-                organizationId: config.usageMetering?.organizationId ?? null,
+                organizationId: analyticsOrganizationId,
               });
       } catch (error) {
         modelInfo = null;
@@ -365,7 +383,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
     }
     captureTelemetryError(error, {
       feature: config.feature,
-      organization_id: config.usageMetering?.organizationId ?? "",
+      organization_id: analyticsOrganizationId ?? "",
       trace_id: config.traceId,
     });
 
@@ -374,6 +392,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
     // privacy contract.
     analytics.capture({
       distinctId,
+      ...groups,
       event: SERVER_ANALYTICS_EVENTS.aiGeneration,
       properties: {
         $ai_error: errorTag(error),
@@ -396,6 +415,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
 
     analytics.capture({
       distinctId,
+      ...groups,
       event: SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
       properties: {
         ...pickSafeMetadata(config.properties),
@@ -445,6 +465,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
         // content never leave the service.
         analytics.capture({
           distinctId,
+          ...groups,
           event: SERVER_ANALYTICS_EVENTS.aiGeneration,
           properties: {
             $ai_input_tokens: usage.promptTokens,
@@ -459,6 +480,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
 
         analytics.capture({
           distinctId,
+          ...groups,
           event: SERVER_ANALYTICS_EVENTS.aiGenerationCompleted,
           properties: {
             ...pickSafeMetadata(config.properties),

@@ -21,6 +21,10 @@ import { logDevError } from "@/lib/errors/utils";
 const isWebAnalyticsEvent = (event: string): event is WebAnalyticsEvent =>
   Object.values(WEB_ANALYTICS_EVENTS).some((value) => value === event);
 
+// PostHog group type for organization-level analytics; must match the
+// server-side capture wrapper's group key.
+const ORGANIZATION_GROUP_TYPE = "organization";
+
 // Browser-noise patterns we drop client-side before they hit
 // PostHog ingest. PostHog has no built-in `ignoreErrors` analogue
 // to Sentry's, so the canonical filter point is `before_send`.
@@ -346,6 +350,101 @@ const sanitizeWebVitalsEvent = (
   };
 };
 
+// The SDK stamps every capture with context from the live location beyond
+// the `$current_url`/`$pathname` pair `capturePageViewed` overrides: the
+// previous page's pathname, the session entry URL, the document title, and
+// referrers. Events whose payloads are not rebuilt from an allowlist
+// (`$pageview`, `$pageleave`, `$identify`, custom events) go through this
+// scrub so resolved resource ids still never leave the browser: each
+// resolved path is rewritten to its recorded route template or dropped.
+//
+// `route-template` marks events whose `$current_url`/`$pathname` already
+// carry the template (our own `$pageview` override); `resolved` events get
+// those fields mapped through the history like every other resolved path.
+type SdkUrlSource = "route-template" | "resolved";
+
+type TemplateUrl = { url: string; pathname: string };
+
+const templateUrl = (
+  history: RouteTemplateHistory,
+  value: unknown,
+): TemplateUrl | undefined => {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return undefined;
+  }
+  const template = history.get(parsed.pathname);
+  if (template === undefined) {
+    return undefined;
+  }
+  return { url: `${parsed.origin}${template}`, pathname: template };
+};
+
+// Referrers on another host are marketing signal and carry no resource ids;
+// same-host referrers are resolved in-app paths, and `$referring_domain`
+// already covers them.
+const isExternalReferrer = (value: unknown, host: unknown): boolean => {
+  if (typeof value !== "string" || typeof host !== "string") {
+    return false;
+  }
+  try {
+    return new URL(value).host !== host;
+  } catch {
+    return false;
+  }
+};
+
+const sanitizeSdkUrlContext = (
+  event: CaptureResult,
+  history: RouteTemplateHistory,
+  urlSource: SdkUrlSource,
+): CaptureResult => {
+  const properties: Record<string, unknown> = { ...event.properties };
+  // `document.title` can carry document or matter names.
+  delete properties["title"];
+  if (urlSource === "resolved") {
+    const current = templateUrl(history, properties["$current_url"]);
+    delete properties["$current_url"];
+    delete properties["$pathname"];
+    if (current !== undefined) {
+      properties["$current_url"] = current.url;
+      properties["$pathname"] = current.pathname;
+    }
+  }
+  const previousPath = properties["$prev_pageview_pathname"];
+  delete properties["$prev_pageview_pathname"];
+  if (typeof previousPath === "string") {
+    const template = history.get(previousPath);
+    if (template !== undefined) {
+      properties["$prev_pageview_pathname"] = template;
+    }
+  }
+  const entry = templateUrl(history, properties["$session_entry_url"]);
+  delete properties["$session_entry_url"];
+  delete properties["$session_entry_pathname"];
+  if (entry !== undefined) {
+    properties["$session_entry_url"] = entry.url;
+    properties["$session_entry_pathname"] = entry.pathname;
+  }
+  if (!isExternalReferrer(properties["$referrer"], properties["$host"])) {
+    delete properties["$referrer"];
+  }
+  if (
+    !isExternalReferrer(
+      properties["$session_entry_referrer"],
+      properties["$host"],
+    )
+  ) {
+    delete properties["$session_entry_referrer"];
+  }
+  return { ...event, properties };
+};
+
 const errorContextProperties = (
   context: ErrorCaptureContext | undefined,
 ): Record<string, string> | undefined => {
@@ -431,6 +530,10 @@ export const createPostHogAnalytics = ({
     capture_heatmaps: false,
     capture_performance: { network_timing: false, web_vitals: true },
     capture_pageview: false,
+    // The SDK's pageleave is what web analytics derives bounce rate and page
+    // duration from; the default ties it to `capture_pageview`, which stays
+    // off because page views are captured manually with route templates.
+    capture_pageleave: true,
     before_send: (event) => {
       if (import.meta.env.DEV && !localDebugEnabled) {
         return null;
@@ -438,22 +541,28 @@ export const createPostHogAnalytics = ({
       if (!event || !isWebAnalyticsEvent(event.event)) {
         return null;
       }
-      if (
-        event.event === WEB_ANALYTICS_EVENTS.exception &&
-        isNoiseException(event)
-      ) {
-        return null;
+      switch (event.event) {
+        case WEB_ANALYTICS_EVENTS.exception:
+          return isNoiseException(event) ? null : sanitizeExceptionEvent(event);
+        case WEB_ANALYTICS_EVENTS.routeErrorRecovery:
+          return routeErrorLifecycleSanitizer?.(event) ?? null;
+        case WEB_ANALYTICS_EVENTS.webVitals:
+          return sanitizeWebVitalsEvent(event, routeTemplateHistory);
+        case WEB_ANALYTICS_EVENTS.pageViewed:
+          return sanitizeSdkUrlContext(
+            event,
+            routeTemplateHistory,
+            "route-template",
+          );
+        case WEB_ANALYTICS_EVENTS.pageLeft:
+        case WEB_ANALYTICS_EVENTS.identify:
+        case WEB_ANALYTICS_EVENTS.guideStepSkipped:
+          return sanitizeSdkUrlContext(event, routeTemplateHistory, "resolved");
+        default: {
+          const exhaustive: never = event.event;
+          return exhaustive;
+        }
       }
-      if (event.event === WEB_ANALYTICS_EVENTS.exception) {
-        return sanitizeExceptionEvent(event);
-      }
-      if (event.event === WEB_ANALYTICS_EVENTS.routeErrorRecovery) {
-        return routeErrorLifecycleSanitizer?.(event) ?? null;
-      }
-      if (event.event === WEB_ANALYTICS_EVENTS.webVitals) {
-        return sanitizeWebVitalsEvent(event, routeTemplateHistory);
-      }
-      return event;
     },
   });
 
@@ -526,6 +635,10 @@ export const createPostHogAnalytics = ({
       const distinctId = posthog.get_distinct_id();
 
       if (distinctId === user.id) {
+        // Same person, possibly a fresh active organization (SPA org
+        // switch): rebind the group so later events attribute to the
+        // current organization instead of the one bound at identify.
+        posthog.group(ORGANIZATION_GROUP_TYPE, user.activeOrganizationId);
         return;
       }
 
@@ -538,6 +651,9 @@ export const createPostHogAnalytics = ({
       // duplicating them into PostHog person properties adds no analytical
       // value and only widens the person-property surface.
       posthog.identify(user.id);
+      // Group properties (name, practice jurisdictions) are set server-side
+      // via groupIdentify; the browser only attaches the opaque key.
+      posthog.group(ORGANIZATION_GROUP_TYPE, user.activeOrganizationId);
     },
     reset: ({ onlyIfIdentified } = {}) => {
       if (onlyIfIdentified && !posthog._isIdentified()) {

@@ -131,10 +131,6 @@ export const envBaseServerSchema = {
     v.pipe(v.string(), v.parseBoolean()),
     "false",
   ),
-  POSTHOG_LOCAL_DEBUG_AI_CONTENT: v.optional(
-    v.pipe(v.string(), v.parseBoolean()),
-    "false",
-  ),
   // Legal corpus + corpus index. Defaults keep the shipped pg-fts /
   // Postgres-text path active; flipping to corpus index is a config change.
   LEGAL_SEARCH_PROVIDER: v.optional(
