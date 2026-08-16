@@ -3,8 +3,8 @@ import type { SQL } from "drizzle-orm";
 
 import {
   applyArabicFolds,
+  foldToAscii,
   normalizeSearchText,
-  stripDiacritics,
 } from "@stll/text-normalize";
 
 const PREFIX_QUERY_TOKEN_LIMIT = 8;
@@ -80,14 +80,12 @@ export const normalizeFileNameVariantForSearch = (
 const normalizeTextForLexemes = (text: string): string =>
   text.replace(/[._-]+/gu, " ");
 
-export const removeSearchDiacritics = stripDiacritics;
-
 export const fileNameSearchText = (name: string): string =>
   compact([
     name,
     ...new Set([
       normalizeFileNameForSearch(name),
-      removeSearchDiacritics(normalizeFileNameForSearch(name)),
+      foldToAscii(normalizeFileNameForSearch(name)),
     ]),
   ]);
 
@@ -330,12 +328,16 @@ export const validateStellaSearchQuery = (
       };
 };
 
+// Lexemes are matched against a tsvector built over `unaccent(...)`, so the
+// query side has to fold the way the extension does. NFD plus mark removal
+// cannot: `ł` has no canonical decomposition, so it would survive here while
+// the index stored `l`.
 const toSearchLexemes = (
   query: string,
   mode: ArabicFoldMode = "folded",
 ): string[] =>
   Array.from(
-    removeSearchDiacritics(normalizeTextForLexemes(query))
+    foldToAscii(normalizeTextForLexemes(query))
       .normalize("NFKC")
       .matchAll(/[\p{L}\p{N}]+/gu),
     (match) => match[0],
