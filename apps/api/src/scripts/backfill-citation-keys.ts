@@ -19,7 +19,7 @@
 import { sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
-import { CITATION_RESOLUTION_STATUS } from "@/api/handlers/case-law/citation-resolution-status";
+import { reopenCitationsForKeys } from "@/api/handlers/case-law/citation-resolution";
 import { citationKeyOf } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -76,35 +76,32 @@ const backfillTable = async (
         keyed.map(({ id, key }) => sql`(${id}::uuid, ${key}::varchar)`),
         sql`, `,
       );
-      // Giving a decision a key makes it citable, which is the same event the
-      // ingestion pipeline announces: citations that gave up on that key are
-      // put back in the queue in the same statement, or the standing walk
-      // never revisits them and the backfill silently buys nothing. Driven by
-      // the partial unmatched-key index, so the reopen is bounded by the keys
-      // this batch wrote rather than by the citation table.
-      const reopen =
-        table === "case_law_decisions"
-          ? sql`,
-              reopened AS (
-                UPDATE case_law_citations c
-                   SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING}
-                 WHERE c.resolution_status = ${CITATION_RESOLUTION_STATUS.UNMATCHED}
-                   AND c.citation_key IN (SELECT key FROM v)
-                RETURNING c.id
-              )`
-          : sql``;
+      // One transaction, because giving a decision a key is the same event the
+      // ingestion pipeline announces and it has to be announced the same way.
+      // `reopenCitationsForKeys` takes the citation graph's advisory lock, so
+      // the write and its announcement are serialized against the standing
+      // walk: without that, a resolver batch holding a pre-key snapshot can
+      // commit `unmatched` after this statement has already decided there was
+      // nothing to reopen, and the row stays terminal forever.
+      //
+      // Only for decisions. A citation gaining a key was `pending` all along —
+      // it was excluded from the walk by having no key, and now it is not.
       // oxlint-disable-next-line no-await-in-loop -- one bounded write per batch; the next batch only starts once this one is durable
-      await rootDb.execute(
-        sql`WITH v(id, key) AS (VALUES ${values}),
-              keyed AS (
-                UPDATE ${sql.raw(table)} AS t
-                   SET citation_key = v.key
-                  FROM v
-                 WHERE t.id = v.id
-                RETURNING t.id
-              )${reopen}
-            SELECT count(*)::int AS keyed FROM keyed`,
-      );
+      await rootDb.transaction(async (tx) => {
+        await tx.execute(
+          sql`WITH v(id, key) AS (VALUES ${values})
+              UPDATE ${sql.raw(table)} AS t
+                 SET citation_key = v.key
+                FROM v
+               WHERE t.id = v.id`,
+        );
+        if (table === "case_law_decisions") {
+          await reopenCitationsForKeys(
+            tx,
+            keyed.flatMap(({ key }) => (key === null ? [] : [key])),
+          );
+        }
+      });
     }
 
     totals.seen += rows.length;

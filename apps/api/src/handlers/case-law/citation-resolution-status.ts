@@ -81,6 +81,26 @@ export const unsettledCitationSql = ({
   ) AND ${citationKey} IS NOT NULL`;
 
 /**
+ * A settled citation whose answer a key can change.
+ *
+ * Both negative outcomes qualify, and the second is the one that is easy to
+ * miss. `unmatched` becomes resolvable when a key finds its first holder.
+ * `ambiguous` becomes resolvable when a key stops having two: a candidate that
+ * changes its case number, jurisdiction or date leaves the remaining one
+ * unique, and an ambiguous row carries no `cited_decision_id` by design, so
+ * nothing that searches by target can reach it. The key is the only handle
+ * those rows have.
+ *
+ * Exported for the same reason as `unsettledCitationSql`: the reverse index
+ * and every reopen path are built from it, and a partial index whose predicate
+ * is narrower than its query is an unused index that nothing complains about.
+ */
+export const citationReopenableByKeySql = (resolutionStatus: SQLWrapper): SQL =>
+  sql`${resolutionStatus} IN ('${sql.raw(
+    CITATION_RESOLUTION_STATUS.UNMATCHED,
+  )}', '${sql.raw(CITATION_RESOLUTION_STATUS.AMBIGUOUS)}')`;
+
+/**
  * Lanes the resolution walk keeps a cursor for. One today; the type exists so
  * a per-country or per-source lane can land as a new member rather than as a
  * second table.

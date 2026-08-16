@@ -12,6 +12,7 @@ import {
 import {
   type CitationResolutionCursor,
   reopenCitationsForDecisionKey,
+  reopenCitationsForKeys,
   reopenCitationsResolvedTo,
   resolveCitationBatch,
   resolveCitationsForDecision,
@@ -698,6 +699,83 @@ test("a decision whose identity changes retracts the edges drawn to it", async (
     cited: null,
     status: CITATION_RESOLUTION_STATUS.PENDING,
   });
+});
+
+test("a key gaining a second holder retracts the edge, in bulk too", async () => {
+  // What the key backfill creates when it assigns a key another decision
+  // already holds: the edge drawn to the first holder becomes a guess. The
+  // bulk path has to make that transition as well as the single-decision one,
+  // or a backfill leaves an arbitrary authority edge behind.
+  const bulkKey = "33cdo/2178/2018";
+  const bulkCiting = createSafeId<"caseLawDecision">();
+  const bulkCitation = createSafeId<"caseLawCitation">();
+  const firstHolder = createSafeId<"caseLawDecision">();
+  await db.insert(caseLawDecisions).values([
+    {
+      ...base,
+      id: firstHolder,
+      caseNumber: "33 Cdo 2178/2018",
+      citationKey: bulkKey,
+      country: "CZE",
+      decisionDate: "2018-05-01",
+      slug: "bulk-first",
+      languageGroupKey: "bulk-first",
+    },
+    {
+      ...base,
+      id: bulkCiting,
+      caseNumber: "70 Cdo 1/2023",
+      citationKey: "70cdo/1/2023",
+      country: "CZE",
+      decisionDate: "2023-08-01",
+      slug: "bulk-citing",
+      languageGroupKey: "bulk-citing",
+    },
+  ]);
+  await db.insert(caseLawCitations).values({
+    id: bulkCitation,
+    citingDecisionId: bulkCiting,
+    citationText: "sp. zn. 33 Cdo 2178/2018",
+    citationKey: bulkKey,
+  });
+  await resolveCitationsForDecision(asTx(), bulkCiting);
+  expect(await rowOf(bulkCitation)).toMatchObject({
+    cited: firstHolder,
+    status: CITATION_RESOLUTION_STATUS.RESOLVED,
+  });
+
+  // A second decision is given the same key, as the backfill would.
+  const secondHolder = createSafeId<"caseLawDecision">();
+  await db.insert(caseLawDecisions).values({
+    ...base,
+    id: secondHolder,
+    sourceId: otherSourceId,
+    caseNumber: "33 Cdo 2178/2018",
+    citationKey: bulkKey,
+    country: "CZE",
+    decisionDate: "2018-11-01",
+    slug: "bulk-second",
+    languageGroupKey: "bulk-second",
+  });
+  expect(await reopenCitationsForKeys(asTx(), [bulkKey])).toBe(1);
+  expect(await rowOf(bulkCitation)).toMatchObject({
+    cited: null,
+    status: CITATION_RESOLUTION_STATUS.PENDING,
+  });
+
+  await drain();
+  expect(await rowOf(bulkCitation)).toMatchObject({
+    status: CITATION_RESOLUTION_STATUS.AMBIGUOUS,
+  });
+
+  // And an ambiguous row is reachable by key, which is the only handle it has:
+  // it carries no target, so nothing searching by target could find it. This
+  // is what lets a candidate leaving the key make the remaining one unique.
+  expect(await reopenCitationsForKeys(asTx(), [bulkKey])).toBe(1);
+  expect(await rowOf(bulkCitation)).toMatchObject({
+    status: CITATION_RESOLUTION_STATUS.PENDING,
+  });
+  await drain();
 });
 
 test("the walk's position is advanced and wrapped under its own lock", async () => {

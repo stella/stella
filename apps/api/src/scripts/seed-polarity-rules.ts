@@ -28,7 +28,13 @@ for (const rule of SEED_RULES) {
     })
     .onConflictDoUpdate({
       target: [caseLawPolarityRules.pattern, caseLawPolarityRules.language],
-      set: { polarity: rule.polarity, confidence: 1 },
+      // `source` is part of the state being seeded, not incidental metadata:
+      // the rule loader reads `manual` and `llm-promoted` only, so a seed that
+      // collided with an `llm-proposed` rule of the same pattern and language
+      // used to leave it excluded — a successful run that changed nothing a
+      // classifier would ever see. The insert and the update have to establish
+      // the same row.
+      set: { polarity: rule.polarity, confidence: 1, source: "manual" },
     });
 }
 

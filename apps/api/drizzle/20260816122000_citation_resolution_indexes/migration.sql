@@ -39,13 +39,19 @@ DROP INDEX CONCURRENTLY IF EXISTS "case_law_citations_pending_walk_idx";--> stat
 -- squawk-ignore prefer-robust-stmts
 CREATE INDEX CONCURRENTLY "case_law_citations_pending_walk_idx" ON "case_law_citations" ("citing_decision_id","id") WHERE ("resolution_status" = 'pending' OR ("resolution_status" = 'resolved' AND "cited_decision_id" IS NULL)) AND "citation_key" IS NOT NULL;--> statement-breakpoint
 
--- The reverse direction: a decision arriving under key K asks which citations
--- gave up on K. Without it that question is a scan of every citation, on the
--- ingestion path, once per stored decision.
+-- The reverse direction: a decision whose key changes asks which citations
+-- that key can now answer differently. Without it that question is a scan of
+-- every citation, on the ingestion path, once per stored decision.
+--
+-- Both negative outcomes, matching `citationReopenableByKeySql`. `unmatched`
+-- is the obvious one; `ambiguous` is the one that is easy to miss, because a
+-- candidate changing its case number, jurisdiction or date can leave the
+-- remaining one unique, and an ambiguous row carries no cited_decision_id, so
+-- the key is the only handle anything has on it.
 -- stella-migration-safety: reviewed destructive-change - same reasoning.
-DROP INDEX CONCURRENTLY IF EXISTS "case_law_citations_unmatched_key_idx";--> statement-breakpoint
+DROP INDEX CONCURRENTLY IF EXISTS "case_law_citations_reopenable_key_idx";--> statement-breakpoint
 -- squawk-ignore prefer-robust-stmts
-CREATE INDEX CONCURRENTLY "case_law_citations_unmatched_key_idx" ON "case_law_citations" ("citation_key") WHERE "resolution_status" = 'unmatched';--> statement-breakpoint
+CREATE INDEX CONCURRENTLY "case_law_citations_reopenable_key_idx" ON "case_law_citations" ("citation_key") WHERE "resolution_status" IN ('unmatched', 'ambiguous');--> statement-breakpoint
 
 -- The candidate lookup answered entirely from the index. The key finds the
 -- candidates, jurisdiction and date decide between them, and the id is what

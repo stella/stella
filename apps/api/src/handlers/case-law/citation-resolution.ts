@@ -50,6 +50,7 @@ import { citationResolutionPolicyRows } from "@/api/handlers/case-law/citation-j
 import {
   CITATION_RESOLUTION_SCOPE,
   CITATION_RESOLUTION_STATUS,
+  citationReopenableByKeySql,
   unsettledCitationSql,
 } from "@/api/handlers/case-law/citation-resolution-status";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -550,7 +551,7 @@ export const reopenCitationsForDecisionKey = async (
   `;
 
   // Two data-modifying CTEs over one table are only safe while no row can
-  // match both, and none can: `revived` reads `unmatched` rows and
+  // match both, and none can: `revived` reads the two negative outcomes and
   // `contested` reads `resolved` ones. Postgres does not define which write
   // wins when a statement updates a row twice, so the disjointness is load
   // bearing, not incidental.
@@ -562,7 +563,7 @@ export const reopenCitationsForDecisionKey = async (
         FROM ${caseLawDecisions} citing
        WHERE citing.id = c.citing_decision_id
          AND c.citation_key = ${citationKey}
-         AND c.resolution_status = ${CITATION_RESOLUTION_STATUS.UNMATCHED}
+         AND ${citationReopenableByKeySql(sql.raw("c.resolution_status"))}
          AND ${affects}
       RETURNING c.id
     ),
@@ -583,6 +584,66 @@ export const reopenCitationsForDecisionKey = async (
          + (SELECT count(*)::int FROM contested) AS reopened
   `);
 
+  const row: unknown = firstRow(result);
+  return isRecord(row) ? toCount(row["reopened"]) : 0;
+};
+
+/**
+ * Reopen every citation a set of keys can now answer differently.
+ *
+ * The bulk shape of `reopenCitationsForDecisionKey`, for callers that change
+ * many decisions' keys at once — the key backfill writes five thousand per
+ * statement, and calling the single-decision path per key would take the graph
+ * lock five thousand times.
+ *
+ * Deliberately more conservative than the single-decision path: it does not
+ * know which jurisdiction or date each key arrived under, so it reopens every
+ * citation those keys touch and lets the resolver re-decide. Reopening a row
+ * that turns out to resolve the same way costs one indexed lookup; failing to
+ * reopen one leaves a wrong edge nothing revisits, and the two are not
+ * comparable.
+ *
+ * Both arms matter. A key finding its first holder revives the citations that
+ * gave up on it; a key finding a *second* holder retracts the edges drawn to
+ * the first, which is the transition a backfill assigning an already-held key
+ * creates and the one that leaves an arbitrary authority edge behind.
+ */
+export const reopenCitationsForKeys = async (
+  tx: CitationResolutionTx,
+  citationKeys: readonly string[],
+): Promise<number> => {
+  if (citationKeys.length === 0) {
+    return 0;
+  }
+  await lockCitationGraph(tx);
+  const keys = sql`ARRAY[${sql.join(
+    citationKeys.map((key) => sql`${key}`),
+    sql`, `,
+  )}]::varchar[]`;
+  // Disjoint arms again: `revived` reads the negative outcomes, `contested`
+  // reads `resolved`, and no row can match both.
+  // audit: skip — derived citation graph, not a user action
+  const result: unknown = await tx.execute(sql`
+    WITH revived AS (
+      UPDATE ${caseLawCitations} c
+         SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING}
+       WHERE c.citation_key = ANY (${keys})
+         AND ${citationReopenableByKeySql(sql.raw("c.resolution_status"))}
+      RETURNING c.id
+    ),
+    contested AS (
+      UPDATE ${caseLawCitations} c
+         SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING},
+             cited_decision_id = NULL
+        FROM ${caseLawDecisions} cited
+       WHERE cited.id = c.cited_decision_id
+         AND cited.citation_key = ANY (${keys})
+         AND c.resolution_status = ${CITATION_RESOLUTION_STATUS.RESOLVED}
+      RETURNING c.id
+    )
+    SELECT (SELECT count(*)::int FROM revived)
+         + (SELECT count(*)::int FROM contested) AS reopened
+  `);
   const row: unknown = firstRow(result);
   return isRecord(row) ? toCount(row["reopened"]) : 0;
 };

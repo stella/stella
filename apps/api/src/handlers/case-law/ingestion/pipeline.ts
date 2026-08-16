@@ -19,6 +19,7 @@ import {
 import type { ProceduralKeys } from "@/api/handlers/case-law/citation-kind";
 import {
   reopenCitationsForDecisionKey,
+  reopenCitationsForKeys,
   reopenCitationsResolvedTo,
   resolveCitationsForDecision,
 } from "@/api/handlers/case-law/citation-resolution";
@@ -1396,12 +1397,32 @@ const processDecisionAttempt = async ({
   };
 
   /**
-   * Everything about a decision the candidate join filters on. A refresh that
-   * changes any of the three changes which citations may honestly point here,
-   * so the three travel together: a jurisdiction correction under an unchanged
-   * key is exactly as invalidating as a new case number, and treating the key
-   * as the only trigger would leave the other two silently stale.
+   * Everything about a decision the candidate join filters on, read from the
+   * row this transaction is about to overwrite.
+   *
+   * Not from the `existing` snapshot, which was read in an earlier transaction:
+   * the guarded update deliberately lets a newer observation intervene, so a
+   * row that went X → Y → X would compare equal against that snapshot and
+   * report no change, skipping the retraction the Y edges need. What matters is
+   * the identity actually replaced, and that is only knowable here.
+   *
+   * All three fields travel together because all three are filters: a
+   * jurisdiction correction under an unchanged key invalidates exactly the
+   * same edges a new case number does.
    */
+  const replacedResolutionIdentity = async (
+    tx: Transaction,
+    id: SafeId<"caseLawDecision">,
+  ): Promise<{
+    citationKey: string | null;
+    country: string;
+    decisionDate: string | null;
+  } | null> =>
+    (await tx.query.caseLawDecisions.findFirst({
+      where: { id: { eq: id } },
+      columns: { citationKey: true, country: true, decisionDate: true },
+    })) ?? null;
+
   const resolutionIdentityChanged = (previous: {
     citationKey: string | null;
     country: string;
@@ -1428,6 +1449,13 @@ const processDecisionAttempt = async ({
           !incomingCarriesDocument &&
           pendingMirrorPayload === null &&
           Object.keys(payloadColumns).length > 0;
+
+        // Read inside this transaction, before the write: the identity this
+        // update replaces is what decides whether the citation graph moved,
+        // and the snapshot taken in an earlier transaction can no longer say.
+        const replacedIdentity = preservesExistingDetail
+          ? null
+          : await replacedResolutionIdentity(tx, existing.id);
 
         const updated = await tx
           .update(caseLawDecisions)
@@ -1540,12 +1568,25 @@ const processDecisionAttempt = async ({
           }
         }
 
-        if (!preservesExistingDetail && resolutionIdentityChanged(existing)) {
+        if (
+          replacedIdentity !== null &&
+          resolutionIdentityChanged(replacedIdentity)
+        ) {
           // Retract before announcing. The edges pointing here were decided
           // against the identity this decision no longer has, and the announce
           // path deliberately excludes its own links, so nothing else would
           // ever ask about them again.
           await reopenCitationsResolvedTo(tx, existing.id);
+          // The old key as well as the new one. An ambiguous citation carries
+          // no target, so nothing that searches by target can reach it — and
+          // this decision leaving its old key is exactly what can make the
+          // remaining holder unique.
+          await reopenCitationsForKeys(
+            tx,
+            [replacedIdentity.citationKey, incomingCitationKey].filter(
+              (key) => key !== null,
+            ),
+          );
           await announceCitationKey(tx, existing.id);
         }
 

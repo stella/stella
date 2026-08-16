@@ -5,6 +5,7 @@ import {
   CITATION_RESOLUTION_SCOPES,
   CITATION_RESOLUTION_STATUS,
   CITATION_RESOLUTION_STATUSES,
+  citationReopenableByKeySql,
   unsettledCitationSql,
 } from "@/api/handlers/case-law/citation-resolution-status";
 import {
@@ -766,13 +767,13 @@ export const caseLawCitations = p.pgTable(
           citationKey: t.citationKey,
         }),
       ),
-    // The reverse direction: a decision arriving under key K asks which
-    // citations gave up on K. Without it that question is a scan of every
-    // citation, on the ingestion path, per stored decision.
+    // The reverse direction: a decision whose key changes asks which citations
+    // that key can now answer differently. Without it that question is a scan
+    // of every citation, on the ingestion path, per stored decision.
     p
-      .index("case_law_citations_unmatched_key_idx")
+      .index("case_law_citations_reopenable_key_idx")
       .on(t.citationKey)
-      .where(eq(t.resolutionStatus, CITATION_RESOLUTION_STATUS.UNMATCHED)),
+      .where(citationReopenableByKeySql(t.resolutionStatus)),
     p.check(
       "citations_polarity_values",
       sql`${t.polarity} IN (${sql.join(POLARITY_SQL_VALUES, sql.raw(","))})`,
