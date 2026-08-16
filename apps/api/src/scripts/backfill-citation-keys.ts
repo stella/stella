@@ -19,6 +19,7 @@
 import { sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
+import { CITATION_RESOLUTION_STATUS } from "@/api/handlers/case-law/citation-resolution-status";
 import { citationKeyOf } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -71,15 +72,38 @@ const backfillTable = async (
 
     const keyed = rows.filter(({ key }) => key !== null);
     if (keyed.length > 0) {
+      const values = sql.join(
+        keyed.map(({ id, key }) => sql`(${id}::uuid, ${key}::varchar)`),
+        sql`, `,
+      );
+      // Giving a decision a key makes it citable, which is the same event the
+      // ingestion pipeline announces: citations that gave up on that key are
+      // put back in the queue in the same statement, or the standing walk
+      // never revisits them and the backfill silently buys nothing. Driven by
+      // the partial unmatched-key index, so the reopen is bounded by the keys
+      // this batch wrote rather than by the citation table.
+      const reopen =
+        table === "case_law_decisions"
+          ? sql`,
+              reopened AS (
+                UPDATE case_law_citations c
+                   SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING}
+                 WHERE c.resolution_status = ${CITATION_RESOLUTION_STATUS.UNMATCHED}
+                   AND c.citation_key IN (SELECT key FROM v)
+                RETURNING c.id
+              )`
+          : sql``;
       // oxlint-disable-next-line no-await-in-loop -- one bounded write per batch; the next batch only starts once this one is durable
       await rootDb.execute(
-        sql`UPDATE ${sql.raw(table)} AS t
-               SET citation_key = v.key
-              FROM (VALUES ${sql.join(
-                keyed.map(({ id, key }) => sql`(${id}::uuid, ${key}::varchar)`),
-                sql`, `,
-              )}) AS v(id, key)
-             WHERE t.id = v.id`,
+        sql`WITH v(id, key) AS (VALUES ${values}),
+              keyed AS (
+                UPDATE ${sql.raw(table)} AS t
+                   SET citation_key = v.key
+                  FROM v
+                 WHERE t.id = v.id
+                RETURNING t.id
+              )${reopen}
+            SELECT count(*)::int AS keyed FROM keyed`,
       );
     }
 

@@ -41,9 +41,17 @@ import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawCitations, caseLawDecisions } from "@/api/db/schema";
+import {
+  caseLawCitationResolutionProgress,
+  caseLawCitations,
+  caseLawDecisions,
+} from "@/api/db/schema";
 import { citationResolutionPolicyRows } from "@/api/handlers/case-law/citation-jurisdiction-policy";
-import { CITATION_RESOLUTION_STATUS } from "@/api/handlers/case-law/citation-resolution-status";
+import {
+  CITATION_RESOLUTION_SCOPE,
+  CITATION_RESOLUTION_STATUS,
+  unsettledCitationSql,
+} from "@/api/handlers/case-law/citation-resolution-status";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawJurisdiction } from "@/api/lib/legal-search/ingestion-constants";
 import { isRecord } from "@/api/lib/type-guards";
@@ -135,6 +143,38 @@ const firstRow = (result: unknown): unknown => {
   return undefined;
 };
 
+/**
+ * The key every writer of the citation graph serializes on.
+ *
+ * Read Committed is not enough here, and the anomaly is not obvious. A batch
+ * of the standing walk snapshots a citation as pending; ingestion then commits
+ * a decision that matches it and announces the arrival, sees the row still
+ * pending in its own snapshot, and correctly concludes there is nothing to
+ * reopen; the older batch then commits `unmatched`. The row is terminal, the
+ * decision that answers it is stored, and nothing will ever put the two
+ * together again.
+ *
+ * So the walk and the ingestion path take the same transaction-scoped advisory
+ * lock — the walk conditionally, because a held walk is a reason to come back
+ * later rather than to wait, and ingestion unconditionally, because its work is
+ * bounded and must not be dropped. One key, so there is no lock order to get
+ * wrong.
+ */
+const CITATION_GRAPH_LOCK = sql`hashtext('case_law'), hashtext('citation_resolution_walk')`;
+
+/**
+ * Serialize this transaction's citation-graph writes against the standing
+ * walk. Taken inside every helper that mutates the graph rather than left to
+ * call sites: a caller that forgot would reintroduce exactly the interleaving
+ * above, and nothing about the resulting rows would look wrong.
+ *
+ * Re-entrant within a transaction, so a path that reopens and then resolves
+ * pays one wait, not two.
+ */
+const lockCitationGraph = async (tx: CitationResolutionTx): Promise<void> => {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(${CITATION_GRAPH_LOCK})`);
+};
+
 const EMPTY_COUNTS: CitationResolutionCounts = {
   scanned: 0,
   resolved: 0,
@@ -189,8 +229,11 @@ const resolutionStatement = (selection: SQL): SQL => sql`
            citing.decision_date AS citing_date
       FROM ${caseLawCitations} c
       JOIN ${caseLawDecisions} citing ON citing.id = c.citing_decision_id
-     WHERE c.resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING}
-       AND c.citation_key IS NOT NULL
+     WHERE ${unsettledCitationSql({
+       resolutionStatus: sql.raw("c.resolution_status"),
+       citedDecisionId: sql.raw("c.cited_decision_id"),
+       citationKey: sql.raw("c.citation_key"),
+     })}
        ${selection}
   ),
   classified AS (
@@ -327,27 +370,94 @@ export const resolveCitationBatch = async (
 /**
  * Settle one batch, or report that another writer is already walking.
  *
- * The lock is transaction-scoped, so it covers exactly the batch statement and
- * releases with it. Overlapping processes are the normal case during a rolling
- * deployment: without the lock two walks would settle the same rows from the
- * same cursor and each would advance past work the other did, which is not
- * incorrect but is entirely wasted against a database that is also serving
- * readers.
+ * The lock, the cursor read, the batch and the cursor write are one
+ * transaction, and that is the whole point. Overlapping processes are the
+ * normal case during a rolling deployment; with the position read and written
+ * outside the lock, two replicas can persist out of order, or one that found
+ * the walk held can overwrite the holder's new position with the value it
+ * loaded at start-up. Neither loses work — the walk wraps, and settled rows
+ * leave the predicate — but both make a restart resume somewhere arbitrary.
+ * Holding the lock across the read-modify-write removes the race rather than
+ * documenting it.
+ *
+ * A batch that finds nothing writes the wrap back to the beginning, so a task
+ * that stops right after draining does not resume at the far end of a queue
+ * that has since been refilled behind it.
  */
 export const tryResolveCitationBatch = async (
   scopedDb: ScopedDb,
-  { limit, after }: ResolveCitationBatchOptions,
+  { limit }: { limit: number },
 ): Promise<CitationResolutionBatch | null> =>
   await scopedDb(async (tx) => {
     const lockResult: unknown = await tx.execute(
-      sql`SELECT pg_try_advisory_xact_lock(hashtext('case_law'), hashtext('citation_resolution_walk')) AS locked`,
+      sql`SELECT pg_try_advisory_xact_lock(${CITATION_GRAPH_LOCK}) AS locked`,
     );
     const lockRow: unknown = firstRow(lockResult);
     if (!isRecord(lockRow) || lockRow["locked"] !== true) {
       return null;
     }
-    return await resolveCitationBatchIn(tx, { limit, after });
+
+    const after = await readCitationResolutionCursor(tx);
+    const batch = await resolveCitationBatchIn(tx, { limit, after });
+    await writeCitationResolutionCursor(
+      tx,
+      batch.scanned === 0 ? null : batch.cursor,
+    );
+    return batch;
   });
+
+/**
+ * Read the persisted position. Inside the walk's transaction, never on its
+ * own: a position read outside the lock is a position another replica may
+ * already have moved.
+ */
+const readCitationResolutionCursor = async (
+  tx: CitationResolutionTx,
+): Promise<CitationResolutionCursor | null> => {
+  const result: unknown = await tx.execute(sql`
+    SELECT cursor_citing_decision_id::text AS citing_decision_id,
+           cursor_citation_id::text AS citation_id
+      FROM ${caseLawCitationResolutionProgress}
+     WHERE scope = ${CITATION_RESOLUTION_SCOPE.GLOBAL}
+  `);
+  const row: unknown = firstRow(result);
+  if (!isRecord(row)) {
+    return null;
+  }
+  const citingDecisionId = row["citing_decision_id"];
+  const citationId = row["citation_id"];
+  // The pair is enforced whole by a check constraint; both are read anyway
+  // because a half-cursor would silently restart the walk mid-corpus.
+  return typeof citingDecisionId === "string" && typeof citationId === "string"
+    ? { citingDecisionId, citationId }
+    : null;
+};
+
+const writeCitationResolutionCursor = async (
+  tx: CitationResolutionTx,
+  cursor: CitationResolutionCursor | null,
+): Promise<void> => {
+  // Written as SQL rather than through the query builder: the cursor travels
+  // as opaque text because it addresses a position in a scan, and the columns
+  // are branded ids. Re-branding here would claim an entity identity the walk
+  // never established; the database's own `::uuid` cast is the check that
+  // matters, and it rejects anything that is not one.
+  // audit: skip — background walk bookkeeping, not a user action
+  await tx.execute(sql`
+    INSERT INTO ${caseLawCitationResolutionProgress}
+      (scope, cursor_citing_decision_id, cursor_citation_id, updated_at)
+    VALUES (
+      ${CITATION_RESOLUTION_SCOPE.GLOBAL},
+      ${cursor?.citingDecisionId ?? null}::uuid,
+      ${cursor?.citationId ?? null}::uuid,
+      now()
+    )
+    ON CONFLICT (scope) DO UPDATE
+      SET cursor_citing_decision_id = EXCLUDED.cursor_citing_decision_id,
+          cursor_citation_id = EXCLUDED.cursor_citation_id,
+          updated_at = EXCLUDED.updated_at
+  `);
+};
 
 /**
  * Settle the citations of one decision, in the transaction that just wrote
@@ -366,6 +476,7 @@ export const resolveCitationsForDecision = async (
   tx: CitationResolutionTx,
   decisionId: SafeId<"caseLawDecision">,
 ): Promise<CitationResolutionCounts> => {
+  await lockCitationGraph(tx);
   // audit: skip — derived citation graph, not a user action
   const result: unknown = await tx.execute(
     resolutionStatement(sql`AND c.citing_decision_id = ${decisionId}::uuid`),
@@ -414,6 +525,7 @@ export const reopenCitationsForDecisionKey = async (
     decisionDate,
   }: ReopenCitationsForKeyOptions,
 ): Promise<number> => {
+  await lockCitationGraph(tx);
   const reachedFrom = sql`(
     SELECT pol.citing_country
       FROM (VALUES ${sql.join(
@@ -476,6 +588,41 @@ export const reopenCitationsForDecisionKey = async (
 };
 
 /**
+ * Retract every edge drawn to a decision whose identity just changed.
+ *
+ * The complement of `reopenCitationsForDecisionKey`, which deliberately
+ * excludes the arriving decision's own links. A refresh that rewrites the case
+ * number, the jurisdiction or the date changes what this decision is, and
+ * every one of those three fields is a filter in the candidate join — so an
+ * edge drawn under the old values was decided against a decision that no
+ * longer exists in that form. It is not enough to announce the new key: the
+ * old links point here, and nothing else would ever ask about them again.
+ *
+ * Bounded by the cited-decision index, so the cost is this decision's incoming
+ * citations rather than the table.
+ */
+export const reopenCitationsResolvedTo = async (
+  tx: CitationResolutionTx,
+  decisionId: SafeId<"caseLawDecision">,
+): Promise<number> => {
+  await lockCitationGraph(tx);
+  // audit: skip — derived citation graph, not a user action
+  const result: unknown = await tx.execute(sql`
+    WITH retracted AS (
+      UPDATE ${caseLawCitations}
+         SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING}::text,
+             cited_decision_id = NULL
+       WHERE cited_decision_id = ${decisionId}::uuid
+         AND resolution_status = ${CITATION_RESOLUTION_STATUS.RESOLVED}
+      RETURNING id
+    )
+    SELECT count(*)::int AS reopened FROM retracted
+  `);
+  const row: unknown = firstRow(result);
+  return isRecord(row) ? toCount(row["reopened"]) : 0;
+};
+
+/**
  * Put a named, bounded set of citations back into the pending queue.
  *
  * The generic re-entry path: `reopenCitationsForDecisionKey` is what the
@@ -493,6 +640,7 @@ export const reopenCitations = async (
   if (citationIds.length === 0) {
     return 0;
   }
+  await lockCitationGraph(tx);
   // audit: skip — derived citation graph, not a user action
   const result: unknown = await tx.execute(sql`
     WITH reopened AS (

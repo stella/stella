@@ -16,6 +16,9 @@
  * could represent combinations that mean nothing.
  */
 
+import type { SQL, SQLWrapper } from "drizzle-orm";
+import { sql } from "drizzle-orm";
+
 import type { ConstantMap } from "@/api/lib/constant-map";
 
 /** The declaration the column's `enum` and the CHECK both derive from. */
@@ -42,6 +45,40 @@ export const CITATION_RESOLUTION_STATUS = {
    */
   AMBIGUOUS: "ambiguous",
 } as const satisfies ConstantMap<CitationResolutionStatus>;
+
+export type UnsettledCitationColumns = {
+  resolutionStatus: SQLWrapper;
+  citedDecisionId: SQLWrapper;
+  citationKey: SQLWrapper;
+};
+
+/**
+ * A citation the resolver still owes an answer for.
+ *
+ * `pending` is the obvious half. The other half is a row that says `resolved`
+ * and carries no target: `cited_decision_id` is `ON DELETE SET NULL`, so
+ * deleting or redacting a cited decision leaves exactly that state behind. A
+ * status-only predicate would step over those rows forever — they are not
+ * pending, and no arriving decision can revive them because the reopen path
+ * joins through the target that is no longer there. Treating the pair as
+ * unsettled makes the walk self-healing instead of needing a trigger to notice.
+ *
+ * Exported so the burn-down index and the statement that reads it are written
+ * once. A partial index whose predicate drifts from its query is not a slower
+ * index, it is an unused one, and nothing about the query would look wrong.
+ */
+export const unsettledCitationSql = ({
+  resolutionStatus,
+  citedDecisionId,
+  citationKey,
+}: UnsettledCitationColumns): SQL =>
+  sql`(
+    ${resolutionStatus} = '${sql.raw(CITATION_RESOLUTION_STATUS.PENDING)}'
+    OR (
+      ${resolutionStatus} = '${sql.raw(CITATION_RESOLUTION_STATUS.RESOLVED)}'
+      AND ${citedDecisionId} IS NULL
+    )
+  ) AND ${citationKey} IS NOT NULL`;
 
 /**
  * Lanes the resolution walk keeps a cursor for. One today; the type exists so

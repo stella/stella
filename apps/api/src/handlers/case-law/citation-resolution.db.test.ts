@@ -4,6 +4,7 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import type { Transaction } from "@/api/db/root";
 import {
+  caseLawCitationResolutionProgress,
   caseLawCitations,
   caseLawDecisions,
   caseLawSources,
@@ -11,13 +12,11 @@ import {
 import {
   type CitationResolutionCursor,
   reopenCitationsForDecisionKey,
+  reopenCitationsResolvedTo,
   resolveCitationBatch,
   resolveCitationsForDecision,
+  tryResolveCitationBatch,
 } from "@/api/handlers/case-law/citation-resolution";
-import {
-  loadCitationResolutionCursor,
-  saveCitationResolutionCursor,
-} from "@/api/handlers/case-law/citation-resolution-cursor";
 import { CITATION_RESOLUTION_STATUS } from "@/api/handlers/case-law/citation-resolution-status";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -592,20 +591,168 @@ test("a second decision under a resolved key retracts the edge", async () => {
   });
 });
 
-test("the walk's position survives a restart and can be wrapped", async () => {
-  // The walk is correct without a persisted position — settled rows leave the
-  // predicate — so what this pins is that saving one does not corrupt it: the
-  // pair round-trips, and clearing it is written rather than left implicit, so
-  // a task that stops right after draining does not resume at the far end of a
-  // queue that has since been refilled behind it.
-  expect(await loadCitationResolutionCursor(scopedDb)).toBeNull();
+test("a resolved link with no target is unsettled, not settled", async () => {
+  // `cited_decision_id` is ON DELETE SET NULL, so deleting a cited decision
+  // leaves a row that says `resolved` and points at nothing. A status-only
+  // predicate would step over it forever — it is not pending, and no arriving
+  // decision can revive it because the reopen path joins through the target
+  // that is gone. The walk has to treat the pair as unsettled.
+  const orphanCiting = createSafeId<"caseLawDecision">();
+  const orphanTarget = createSafeId<"caseLawDecision">();
+  const orphanCitation = createSafeId<"caseLawCitation">();
+  await db.insert(caseLawDecisions).values([
+    {
+      ...base,
+      id: orphanTarget,
+      caseNumber: "77 Cdo 7/2017",
+      citationKey: "77cdo/7/2017",
+      country: "CZE",
+      decisionDate: "2017-01-01",
+      slug: "orphan-target",
+      languageGroupKey: "orphan-target",
+    },
+    {
+      ...base,
+      id: orphanCiting,
+      caseNumber: "78 Cdo 8/2023",
+      citationKey: "78cdo/8/2023",
+      country: "CZE",
+      decisionDate: "2023-01-01",
+      slug: "orphan-citing",
+      languageGroupKey: "orphan-citing",
+    },
+  ]);
+  await db.insert(caseLawCitations).values({
+    id: orphanCitation,
+    citingDecisionId: orphanCiting,
+    citationText: "sp. zn. 77 Cdo 7/2017",
+    citationKey: "77cdo/7/2017",
+  });
+  await resolveCitationsForDecision(asTx(), orphanCiting);
+  expect(await rowOf(orphanCitation)).toMatchObject({
+    cited: orphanTarget,
+    status: CITATION_RESOLUTION_STATUS.RESOLVED,
+  });
 
-  const position = { citingDecisionId: citing, citationId: plainCitation };
-  await saveCitationResolutionCursor(scopedDb, position);
-  expect(await loadCitationResolutionCursor(scopedDb)).toEqual(position);
+  await db
+    .delete(caseLawDecisions)
+    .where(eq(caseLawDecisions.id, orphanTarget));
+  expect(await rowOf(orphanCitation)).toMatchObject({
+    cited: null,
+    status: CITATION_RESOLUTION_STATUS.RESOLVED,
+  });
 
-  await saveCitationResolutionCursor(scopedDb, null);
-  expect(await loadCitationResolutionCursor(scopedDb)).toBeNull();
+  // The walk picks it up and re-decides it rather than leaving a link that
+  // claims a target it does not have.
+  await drain();
+  expect(await rowOf(orphanCitation)).toMatchObject({
+    cited: null,
+    status: CITATION_RESOLUTION_STATUS.UNMATCHED,
+  });
+});
+
+test("a decision whose identity changes retracts the edges drawn to it", async () => {
+  // The complement of the arriving-decision path, which deliberately excludes
+  // the decision's own links. Case number, jurisdiction and date are all
+  // filters in the candidate join, so an edge decided against the old values
+  // is a guess once any of them changes, and nothing else would ever ask.
+  const movedTarget = createSafeId<"caseLawDecision">();
+  const movedCiting = createSafeId<"caseLawDecision">();
+  const movedCitation = createSafeId<"caseLawCitation">();
+  await db.insert(caseLawDecisions).values([
+    {
+      ...base,
+      id: movedTarget,
+      caseNumber: "80 Cdo 1/2016",
+      citationKey: "80cdo/1/2016",
+      country: "CZE",
+      decisionDate: "2016-01-01",
+      slug: "moved-target",
+      languageGroupKey: "moved-target",
+    },
+    {
+      ...base,
+      id: movedCiting,
+      caseNumber: "81 Cdo 1/2023",
+      citationKey: "81cdo/1/2023",
+      country: "CZE",
+      decisionDate: "2023-01-01",
+      slug: "moved-citing",
+      languageGroupKey: "moved-citing",
+    },
+  ]);
+  await db.insert(caseLawCitations).values({
+    id: movedCitation,
+    citingDecisionId: movedCiting,
+    citationText: "sp. zn. 80 Cdo 1/2016",
+    citationKey: "80cdo/1/2016",
+  });
+  await resolveCitationsForDecision(asTx(), movedCiting);
+  expect(await rowOf(movedCitation)).toMatchObject({
+    cited: movedTarget,
+    status: CITATION_RESOLUTION_STATUS.RESOLVED,
+  });
+
+  expect(await reopenCitationsResolvedTo(asTx(), movedTarget)).toBe(1);
+  expect(await rowOf(movedCitation)).toMatchObject({
+    cited: null,
+    status: CITATION_RESOLUTION_STATUS.PENDING,
+  });
+});
+
+test("the walk's position is advanced and wrapped under its own lock", async () => {
+  // The position is read and written inside the locked batch transaction, so
+  // no caller can persist a stale one. A batch that settles rows leaves a
+  // position behind; a batch that finds nothing writes the wrap, so a task
+  // stopping right after draining does not resume at the far end of a queue
+  // that has since been refilled behind it.
+  const positionAfterBatch =
+    async (): Promise<CitationResolutionCursor | null> => {
+      const rows = await db
+        .select({
+          citingDecisionId:
+            caseLawCitationResolutionProgress.cursorCitingDecisionId,
+          citationId: caseLawCitationResolutionProgress.cursorCitationId,
+        })
+        .from(caseLawCitationResolutionProgress);
+      const row = rows.at(0);
+      return row?.citingDecisionId && row.citationId
+        ? { citingDecisionId: row.citingDecisionId, citationId: row.citationId }
+        : null;
+    };
+
+  const reopenedCiting = createSafeId<"caseLawDecision">();
+  const reopenedCitation = createSafeId<"caseLawCitation">();
+  await db.insert(caseLawDecisions).values({
+    ...base,
+    id: reopenedCiting,
+    caseNumber: "90 Cdo 1/2024",
+    citationKey: "90cdo/1/2024",
+    country: "CZE",
+    decisionDate: "2024-01-01",
+    slug: "cursor-citing",
+    languageGroupKey: "cursor-citing",
+  });
+  await db.insert(caseLawCitations).values({
+    id: reopenedCitation,
+    citingDecisionId: reopenedCiting,
+    citationText: "sp. zn. 21 Cdo 5/2019",
+    citationKey: "21cdo/5/2019",
+  });
+
+  const settled = await tryResolveCitationBatch(scopedDb, { limit: 1 });
+  expect(settled?.scanned).toBeGreaterThan(0);
+  expect(await positionAfterBatch()).not.toBeNull();
+
+  // Walk to the end; the batch that finds nothing wraps the position.
+  for (let turn = 0; turn < 30; turn += 1) {
+    // oxlint-disable-next-line no-await-in-loop -- the walk advances by what each batch commits
+    const batch = await tryResolveCitationBatch(scopedDb, { limit: 5 });
+    if (batch?.scanned === 0) {
+      break;
+    }
+  }
+  expect(await positionAfterBatch()).toBeNull();
 });
 
 test("the database refuses an empty citation key on either side", async () => {

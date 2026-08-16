@@ -26,10 +26,7 @@
 
 import { panic } from "better-result";
 
-import type {
-  CitationResolutionCounts,
-  CitationResolutionCursor,
-} from "@/api/handlers/case-law/citation-resolution";
+import type { CitationResolutionCounts } from "@/api/handlers/case-law/citation-resolution";
 
 /** How one turn ended. */
 export const CITATION_RESOLUTION_STEP = {
@@ -48,8 +45,6 @@ export type CitationResolutionStep =
   | {
       type: typeof CITATION_RESOLUTION_STEP.SETTLED;
       counts: CitationResolutionCounts;
-      /** Where the batch stopped; null when it examined nothing. */
-      cursor: CitationResolutionCursor | null;
     }
   | { type: typeof CITATION_RESOLUTION_STEP.DRAINED }
   | { type: typeof CITATION_RESOLUTION_STEP.BUSY };
@@ -97,6 +92,13 @@ export type CitationResolutionDrainTiming = {
   idleSleepMaxMs: number;
   /** How often the tallies and the gauge are emitted. */
   summaryIntervalMs: number;
+  /**
+   * Where the post-failure delay starts doubling from, independent of the duty
+   * cycle. A backfill may legitimately set the batch gap to zero; deriving the
+   * backoff from it would then make every failure delay zero, and a database
+   * that is refusing statements would be asked again as fast as it can refuse.
+   */
+  failureBackoffMinMs: number;
   /** Ceiling the post-failure delay doubles towards. */
   failureBackoffMaxMs: number;
   /**
@@ -110,6 +112,7 @@ export const CITATION_RESOLUTION_DRAIN_TIMING = {
   idleSleepMs: 30_000,
   idleSleepMaxMs: 15 * 60_000,
   summaryIntervalMs: 5 * 60_000,
+  failureBackoffMinMs: 1000,
   failureBackoffMaxMs: 60_000,
   idleContradictionWindows: 2,
 } as const satisfies Omit<CitationResolutionDrainTiming, "batchDelayMs">;
@@ -121,14 +124,15 @@ export const CITATION_RESOLUTION_DRAIN_TIMING = {
 export const CITATION_RESOLUTION_CHECK_SLICE_MS = 1000;
 
 export type CitationResolutionDrainOptions = {
-  /** Settles one bounded batch from `after`, or reports the walk held. */
-  settleBatch: (
-    after: CitationResolutionCursor | null,
-  ) => Promise<CitationResolutionStep>;
-  /** The persisted position, read once at start. */
-  loadCursor: () => Promise<CitationResolutionCursor | null>;
-  /** Persists the position a batch stopped on, or the wrap to the beginning. */
-  saveCursor: (cursor: CitationResolutionCursor | null) => Promise<void>;
+  /**
+   * Settles one bounded batch, or reports the walk held.
+   *
+   * The position is not this loop's to carry: it is read and written inside
+   * the same locked transaction as the batch, so two replicas cannot persist
+   * out of order and a replica that finds the walk held cannot overwrite the
+   * holder's position with a stale one.
+   */
+  settleBatch: () => Promise<CitationResolutionStep>;
   /** Rows still waiting. Read once per window, never per batch. */
   readPending: () => Promise<number>;
   /** Reduces an unknown throw to a structural tag. */
@@ -190,20 +194,20 @@ const windowContradicts = (summary: CitationResolutionDrainSummary): boolean =>
  * - a turn that settled rows is followed by the duty-cycle gap, whatever it
  *   found. Throughput is that gap, deliberately, because the database serving
  *   this walk is also serving readers.
- * - a turn that found the queue empty wraps its cursor and doubles its sleep
- *   towards the idle ceiling, so a settled corpus stops asking. Any settled
- *   turn resets it.
- * - a turn that threw backs off from the duty-cycle gap towards the failure
+ * - a turn that found the queue empty doubles its sleep towards the idle
+ *   ceiling, so a settled corpus stops asking. Any settled turn resets it. The
+ *   batch itself wraps the persisted position, so the next turn starts from
+ *   the beginning and picks up whatever an arriving decision reopened behind
+ *   it.
+ * - a turn that threw backs off from its own floor towards the failure
  *   ceiling. Errors never break the walk.
  */
 export const runCitationResolutionDrain = async ({
   errorTag,
   isDraining,
-  loadCursor,
   now,
   readPending,
   report,
-  saveCursor,
   settleBatch,
   sleep,
   timing,
@@ -213,16 +217,6 @@ export const runCitationResolutionDrain = async ({
   let idleMs = timing.idleSleepMs;
   let failureStreak = 0;
   let contradictingWindows = 0;
-  let cursor: CitationResolutionCursor | null = null;
-
-  try {
-    cursor = await loadCursor();
-  } catch (error) {
-    // A cursor that cannot be read is a slower start, not a broken walk: the
-    // pending predicate is what makes the position optional.
-    summary.errored += 1;
-    summary.lastErrorTag = errorTag(error);
-  }
 
   const flushSummary = async (): Promise<void> => {
     try {
@@ -248,21 +242,17 @@ export const runCitationResolutionDrain = async ({
 
     try {
       // oxlint-disable-next-line no-await-in-loop -- one bounded batch at a time is the point; the next turn only starts after this one is paced
-      const step = await settleBatch(cursor);
+      const step = await settleBatch();
       failureStreak = 0;
       switch (step.type) {
         case CITATION_RESOLUTION_STEP.SETTLED: {
           summary.batches += 1;
           addCounts(summary, step.counts);
-          cursor = step.cursor;
           idleMs = timing.idleSleepMs;
           break;
         }
         case CITATION_RESOLUTION_STEP.DRAINED: {
           summary.drained += 1;
-          // Wrap rather than stop: rows an arriving decision reopened sit
-          // behind the cursor, and nothing else would ever reach them.
-          cursor = null;
           delayMs = idleMs;
           idleMs = Math.min(idleMs * 2, timing.idleSleepMaxMs);
           break;
@@ -280,14 +270,16 @@ export const runCitationResolutionDrain = async ({
           );
         }
       }
-      // oxlint-disable-next-line no-await-in-loop -- the position must be durable before the next batch reads from it
-      await saveCursor(cursor);
     } catch (error) {
       failureStreak += 1;
       summary.errored += 1;
       summary.lastErrorTag = errorTag(error);
+      // From its own floor, not from the duty cycle: a backfill may set the
+      // batch gap to zero, and a database refusing statements must not then be
+      // asked again as fast as it can refuse.
       delayMs = Math.min(
-        timing.batchDelayMs * 2 ** failureStreak,
+        Math.max(timing.batchDelayMs, timing.failureBackoffMinMs) *
+          2 ** (failureStreak - 1),
         timing.failureBackoffMaxMs,
       );
     }

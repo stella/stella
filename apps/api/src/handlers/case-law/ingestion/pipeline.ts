@@ -19,6 +19,7 @@ import {
 import type { ProceduralKeys } from "@/api/handlers/case-law/citation-kind";
 import {
   reopenCitationsForDecisionKey,
+  reopenCitationsResolvedTo,
   resolveCitationsForDecision,
 } from "@/api/handlers/case-law/citation-resolution";
 import {
@@ -687,9 +688,11 @@ const processDecisionAttempt = async ({
       exactClaimedDecisionId ?? repairClaimedDecisionId;
     const identityColumns = {
       id: true,
-      // Read so a refresh can tell whether it changes which decision holds
-      // this key: only a genuinely new key reopens other decisions' citations.
+      // The three fields the candidate join filters on, read so a refresh can
+      // tell whether it changes which citations may honestly point here.
       citationKey: true,
+      country: true,
+      decisionDate: true,
       sourceDocumentId: true,
       ecli: true,
       metadata: true,
@@ -1392,6 +1395,23 @@ const processDecisionAttempt = async ({
     });
   };
 
+  /**
+   * Everything about a decision the candidate join filters on. A refresh that
+   * changes any of the three changes which citations may honestly point here,
+   * so the three travel together: a jurisdiction correction under an unchanged
+   * key is exactly as invalidating as a new case number, and treating the key
+   * as the only trigger would leave the other two silently stale.
+   */
+  const resolutionIdentityChanged = (previous: {
+    citationKey: string | null;
+    country: string;
+    decisionDate: string | null;
+  }): boolean =>
+    previous.citationKey !== incomingCitationKey ||
+    previous.country !== result.country ||
+    (persistedDecisionDate !== undefined &&
+      previous.decisionDate !== persistedDecisionDate);
+
   const writeDecisionRow = async (
     slug?: string,
   ): Promise<DecisionRowWriteStatus> =>
@@ -1520,10 +1540,12 @@ const processDecisionAttempt = async ({
           }
         }
 
-        if (
-          !preservesExistingDetail &&
-          existing.citationKey !== incomingCitationKey
-        ) {
+        if (!preservesExistingDetail && resolutionIdentityChanged(existing)) {
+          // Retract before announcing. The edges pointing here were decided
+          // against the identity this decision no longer has, and the announce
+          // path deliberately excludes its own links, so nothing else would
+          // ever ask about them again.
+          await reopenCitationsResolvedTo(tx, existing.id);
           await announceCitationKey(tx, existing.id);
         }
 

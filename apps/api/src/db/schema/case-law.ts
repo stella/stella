@@ -5,6 +5,7 @@ import {
   CITATION_RESOLUTION_SCOPES,
   CITATION_RESOLUTION_STATUS,
   CITATION_RESOLUTION_STATUSES,
+  unsettledCitationSql,
 } from "@/api/handlers/case-law/citation-resolution-status";
 import {
   POLARITIES,
@@ -759,7 +760,11 @@ export const caseLawCitations = p.pgTable(
       .index("case_law_citations_pending_walk_idx")
       .on(t.citingDecisionId, t.id)
       .where(
-        sql`${eq(t.resolutionStatus, CITATION_RESOLUTION_STATUS.PENDING)} and ${t.citationKey} is not null`,
+        unsettledCitationSql({
+          resolutionStatus: t.resolutionStatus,
+          citedDecisionId: t.citedDecisionId,
+          citationKey: t.citationKey,
+        }),
       ),
     // The reverse direction: a decision arriving under key K asks which
     // citations gave up on K. Without it that question is a scan of every

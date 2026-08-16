@@ -32,10 +32,6 @@ import {
   countPendingCitations,
   tryResolveCitationBatch,
 } from "@/api/handlers/case-law/citation-resolution";
-import {
-  loadCitationResolutionCursor,
-  saveCitationResolutionCursor,
-} from "@/api/handlers/case-law/citation-resolution-cursor";
 import { ADAPTER_KEYS, MAX_CYCLE_MS } from "@/api/handlers/case-law/consts";
 import {
   BACKFILL_STATUS,
@@ -1297,15 +1293,12 @@ export const runCaseLawIngest = async (
       `[citation-resolution] Enabled (${batchSize} citations per ${batchDelayMs}ms)`,
     );
     await runCitationResolutionDrain({
-      settleBatch: async (after): Promise<CitationResolutionStep> => {
+      settleBatch: async (): Promise<CitationResolutionStep> => {
         const batch = await runWithHardDeadline(
           "citation-resolution",
           BACKFILL_HARD_DEADLINE_MS,
           async () =>
-            await tryResolveCitationBatch(backfillDb, {
-              limit: batchSize,
-              after,
-            }),
+            await tryResolveCitationBatch(backfillDb, { limit: batchSize }),
         );
         if (batch === null) {
           return { type: CITATION_RESOLUTION_STEP.BUSY };
@@ -1313,15 +1306,8 @@ export const runCaseLawIngest = async (
         if (batch.scanned === 0) {
           return { type: CITATION_RESOLUTION_STEP.DRAINED };
         }
-        return {
-          type: CITATION_RESOLUTION_STEP.SETTLED,
-          counts: batch,
-          cursor: batch.cursor,
-        };
+        return { type: CITATION_RESOLUTION_STEP.SETTLED, counts: batch };
       },
-      loadCursor: async () => await loadCitationResolutionCursor(backfillDb),
-      saveCursor: async (cursor) =>
-        await saveCitationResolutionCursor(backfillDb, cursor),
       readPending: async () => await countPendingCitations(backfillDb),
       errorTag,
       isDraining,
