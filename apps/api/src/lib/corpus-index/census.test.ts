@@ -15,6 +15,7 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CENSUS_CYCLE_INTERVAL,
+  CENSUS_DISPOSITION,
   CENSUS_TOLERANCE,
   censusJurisdiction,
   createCaseLawCensus,
@@ -105,7 +106,9 @@ describe("jurisdiction census", () => {
     });
 
     expect(census.isOk()).toBe(true);
-    expect(census.isOk() && census.value.short).toBe(false);
+    expect(census.isOk() && census.value.disposition).toBe(
+      CENSUS_DISPOSITION.aligned,
+    );
   });
 
   test("one lost ingest batch is visible on a large jurisdiction", async () => {
@@ -122,15 +125,17 @@ describe("jurisdiction census", () => {
       jurisdiction: JURISDICTION,
     });
 
-    expect(census.isOk() && census.value.short).toBe(true);
+    expect(census.isOk() && census.value.disposition).toBe(
+      CENSUS_DISPOSITION.short,
+    );
     expect(census.isOk() && census.value.indexId).toBe(INDEX_ID);
   });
 
-  test("an engine holding more than Postgres claims is not short", async () => {
-    // A superseded document nothing points at is unreachable, not wrong,
-    // and a rebuild leaves those behind by design. This is also the
-    // direction a batch landing between the two counts pushes, which is
-    // why Postgres is counted first.
+  test("an engine holding more than Postgres claims is a surplus, not silence", async () => {
+    // Entries no row points at are a defect of their own, and — the
+    // reason this direction cannot simply be ignored — each one cancels
+    // a genuinely missing document in the same subtraction. Reporting
+    // the surplus is what stops the pair going quiet together.
     engineHolding(50_000);
 
     const census = await censusJurisdiction({
@@ -140,7 +145,9 @@ describe("jurisdiction census", () => {
     });
 
     expect(census.isOk() && census.value.shortfall).toBeLessThan(0);
-    expect(census.isOk() && census.value.short).toBe(false);
+    expect(census.isOk() && census.value.disposition).toBe(
+      CENSUS_DISPOSITION.surplus,
+    );
   });
 
   test("an unreachable index is a failure, not an empty index", async () => {
@@ -172,14 +179,14 @@ describe("census reporting", () => {
   test("confirmed drift is reported with both counts", () => {
     reportJurisdictionCensus({
       generation: GENERATION,
-      confirmed: true,
+      previous: CENSUS_DISPOSITION.short,
       census: {
         jurisdiction: JURISDICTION,
         indexId: INDEX_ID,
         engineDocuments: 900,
         markedIndexed: 10_000,
         shortfall: 9100,
-        short: true,
+        disposition: CENSUS_DISPOSITION.short,
       },
     });
 
@@ -200,14 +207,14 @@ describe("census reporting", () => {
   test("agreement is silent", () => {
     reportJurisdictionCensus({
       generation: GENERATION,
-      confirmed: true,
+      previous: CENSUS_DISPOSITION.aligned,
       census: {
         jurisdiction: JURISDICTION,
         indexId: INDEX_ID,
         engineDocuments: 10_000,
         markedIndexed: 10_000,
         shortfall: 0,
-        short: false,
+        disposition: CENSUS_DISPOSITION.aligned,
       },
     });
 
@@ -220,18 +227,37 @@ describe("census reporting", () => {
     // would make every rebuild noisy, and a noisy warning is not read.
     reportJurisdictionCensus({
       generation: GENERATION,
-      confirmed: false,
+      previous: undefined,
       census: {
         jurisdiction: JURISDICTION,
         indexId: INDEX_ID,
         engineDocuments: 900,
         markedIndexed: 10_000,
         shortfall: 9100,
-        short: true,
+        disposition: CENSUS_DISPOSITION.short,
       },
     });
 
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  test("a surplus is reported rather than read as agreement", () => {
+    reportJurisdictionCensus({
+      generation: GENERATION,
+      previous: CENSUS_DISPOSITION.surplus,
+      census: {
+        jurisdiction: JURISDICTION,
+        indexId: INDEX_ID,
+        engineDocuments: 12_000,
+        markedIndexed: 10_000,
+        shortfall: -2000,
+        disposition: CENSUS_DISPOSITION.surplus,
+      },
+    });
+
+    expect(warn.mock.calls.at(0)?.at(1)).toMatchObject({
+      disposition: CENSUS_DISPOSITION.surplus,
+    });
   });
 
   test("an unreachable index reports separately from drift", async () => {

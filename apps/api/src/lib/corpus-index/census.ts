@@ -70,6 +70,33 @@ const DOCUMENT_COUNT_QUERY = "seq:0";
  */
 export const CENSUS_TOLERANCE = 5;
 
+/**
+ * What one observation says about a jurisdiction.
+ *
+ * Two counts can only report their difference, and the difference nets
+ * two independent defects: documents the engine never received, and
+ * entries it holds that no row points at. An orphan cancels a missing
+ * document, so a census that only looked for a shortfall would go quiet
+ * on the pair. Reporting the surplus direction too is what keeps that
+ * from being silent — an index holding more than the corpus claims is
+ * itself worth acting on, and it says the shortfall number cannot be
+ * trusted until it is cleared. Exact cancellation to inside the
+ * tolerance remains this mechanism's blind spot; closing it needs an
+ * identity comparison, which means streaming the jurisdiction rather
+ * than counting it.
+ */
+export const CENSUS_DISPOSITION = {
+  /** Both sides agree inside the tolerance. */
+  aligned: "aligned",
+  /** The engine holds fewer documents than the corpus claims. */
+  short: "short",
+  /** The engine holds documents the corpus does not account for. */
+  surplus: "surplus",
+} as const;
+
+export type CensusDisposition =
+  (typeof CENSUS_DISPOSITION)[keyof typeof CENSUS_DISPOSITION];
+
 export type JurisdictionCensus = {
   jurisdiction: string;
   indexId: string;
@@ -77,15 +104,18 @@ export type JurisdictionCensus = {
   engineDocuments: number;
   /** Rows Postgres reports as indexed into it for this generation. */
   markedIndexed: number;
-  /**
-   * How many rows Postgres claims the engine has and the engine does
-   * not. Negative means the engine holds more, which is the harmless
-   * direction: a superseded document that no row points at is
-   * unreachable, not wrong.
-   */
+  /** Positive where the corpus claims more than the engine holds. */
   shortfall: number;
-  /** Whether this one observation is outside the tolerance. */
-  short: boolean;
+  disposition: CensusDisposition;
+};
+
+const dispositionOf = (shortfall: number): CensusDisposition => {
+  if (shortfall > CENSUS_TOLERANCE) {
+    return CENSUS_DISPOSITION.short;
+  }
+  return shortfall < -CENSUS_TOLERANCE
+    ? CENSUS_DISPOSITION.surplus
+    : CENSUS_DISPOSITION.aligned;
 };
 
 /**
@@ -170,7 +200,7 @@ export const censusJurisdiction = async ({
     engineDocuments: counted.value.numHits,
     markedIndexed,
     shortfall,
-    short: shortfall > CENSUS_TOLERANCE,
+    disposition: dispositionOf(shortfall),
   });
 };
 
@@ -178,17 +208,22 @@ export type ReportJurisdictionCensusOptions = {
   generation: string;
   census: JurisdictionCensus;
   /**
-   * Whether this jurisdiction was already short when it was last
-   * censused. A bulk page marks its rows before the engine publishes
-   * their split, so a single short observation may just be work in
-   * flight; a lost split is short forever, so it survives into the next
-   * observation and a publishing page does not.
+   * The disposition this jurisdiction had when it was last censused. A
+   * bulk page marks its rows before the engine publishes their split, so
+   * a single disagreeing observation may just be work in flight; a lost
+   * split or an orphaned entry is there forever, so it survives into the
+   * next observation and a publishing page does not.
    */
-  confirmed: boolean;
+  previous: CensusDisposition | undefined;
 };
 
 /**
- * Report a census, warning only where the engine is short twice running.
+ * Report a census, warning where the two sides disagree twice running.
+ *
+ * Both directions are reported. A surplus is a defect in its own right —
+ * entries no row points at are unreachable weight in the index — and,
+ * more to the point here, an unaccounted-for surplus is what could be
+ * cancelling a shortfall in the same count.
  *
  * A warning rather than an error because the corpus is still serving:
  * the missing documents are unsearchable, not wrong, and the repair
@@ -197,13 +232,17 @@ export type ReportJurisdictionCensusOptions = {
 export const reportJurisdictionCensus = ({
   generation,
   census,
-  confirmed,
+  previous,
 }: ReportJurisdictionCensusOptions): void => {
-  if (!(census.short && confirmed)) {
+  if (
+    census.disposition === CENSUS_DISPOSITION.aligned ||
+    census.disposition !== previous
+  ) {
     return;
   }
   logger.warn("case_law.corpus_index.census_drift", {
     generation,
+    disposition: census.disposition,
     indexId: census.indexId,
     jurisdiction: census.jurisdiction,
     engineDocuments: census.engineDocuments,
@@ -286,8 +325,8 @@ export const createCaseLawCensus = ({
   // the next step if deployments ever outpace the sweep.
   let cyclesUntilCensus = 1 + Math.floor(startAt * CENSUS_CYCLE_INTERVAL);
   let pending: string[] = [];
-  /** Jurisdictions short at their last census, awaiting confirmation. */
-  const shortLastTime = new Set<string>();
+  /** Each jurisdiction's last disposition, awaiting confirmation. */
+  const lastDisposition = new Map<string, CensusDisposition>();
 
   const takeNextJurisdiction = async (): Promise<string | undefined> => {
     if (pending.length > 0) {
@@ -332,13 +371,9 @@ export const createCaseLawCensus = ({
     reportJurisdictionCensus({
       generation,
       census: census.value,
-      confirmed: shortLastTime.has(jurisdiction),
+      previous: lastDisposition.get(jurisdiction),
     });
-    if (census.value.short) {
-      shortLastTime.add(jurisdiction);
-    } else {
-      shortLastTime.delete(jurisdiction);
-    }
+    lastDisposition.set(jurisdiction, census.value.disposition);
   };
 
   return {

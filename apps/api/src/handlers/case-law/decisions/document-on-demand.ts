@@ -137,9 +137,15 @@ const recordFailure = (
   error: unknown,
   decisionId: SafeId<"caseLawDecision">,
 ): void => {
-  Result.try(() => {
+  const captured = Result.try(() => {
     captureError(error, { source: CAPTURE_SOURCE, decisionId });
   });
+  if (Result.isError(captured)) {
+    // The reporting channel is what broke, so there is nowhere left to
+    // report it. Dropped here on purpose rather than escalated into the
+    // read this was recording a failure for.
+    return;
+  }
 };
 
 /**
