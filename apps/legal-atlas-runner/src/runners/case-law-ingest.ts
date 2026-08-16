@@ -43,6 +43,7 @@ import {
 import { backfillLegislationCorpusIndex } from "@/api/handlers/legislation/corpus-index";
 import { backfillLegislationSearchIndex } from "@/api/handlers/legislation/search-index";
 import { captureError } from "@/api/lib/analytics/capture";
+import { createCaseLawCensus } from "@/api/lib/corpus-index/census";
 import {
   IngestionStallError,
   TimeoutError,
@@ -1271,6 +1272,12 @@ export const runCaseLawIngest = async (
     }
     const generation = envBase.LEGAL_SEARCH_INDEX_GENERATION;
     logInfo(`[corpus-index] Enabled for generation ${generation}`);
+    // Acceptance is not durability for the bulk pages of a rebuild, and no
+    // per-request signal can prove a whole generation landed. Counting both
+    // sides on this loop's own cadence is what makes a lost split visible
+    // at all: the rows it lost are neither missing nor stale, so nothing
+    // else in this process would ever look at them again.
+    const census = createCaseLawCensus({ generation, scopedDb: backfillDb });
     // A leaked lease (every step BUSY) and a failing backend (every step
     // throws) both look like idle silence in this loop unless counted.
     let corpusStreaks: CorpusIndexStreaks = INITIAL_CORPUS_INDEX_STREAKS;
@@ -1296,8 +1303,13 @@ export const runCaseLawIngest = async (
       if (isDraining()) {
         return;
       }
+      // The census rides the interval the loop is idle for anyway, so it
+      // costs the backfill no latency and runs on every cycle — including
+      // the ones where the batch failed or found nothing, which is
+      // exactly when drift stops being repaired. It contains its own
+      // failures, so it cannot turn a slow cycle into a stopped loop.
       // oxlint-disable-next-line no-await-in-loop -- fixed-interval backfill poll; the loop must wait CORPUS_INDEX_INTERVAL_MS between batches, so this await is intentionally sequential
-      await Bun.sleep(CORPUS_INDEX_INTERVAL_MS);
+      await Promise.all([Bun.sleep(CORPUS_INDEX_INTERVAL_MS), census.step()]);
       if (isDraining()) {
         return;
       }

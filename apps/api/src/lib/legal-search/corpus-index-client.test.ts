@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 
 import { envBase } from "@/api/env-base";
-import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
+import {
+  CORPUS_INDEX_COMMIT,
+  CORPUS_INDEX_COMMIT_WAIT_TIMEOUT_MS,
+  CORPUS_INDEX_INGEST_TIMEOUT_MS,
+  getCorpusIndexClient,
+} from "@/api/lib/legal-search/corpus-index-client";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 
 // Pins the corpus-index HTTP request contract. The engine defaults search
@@ -11,7 +16,12 @@ import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-p
 // id-order results. These tests stub global fetch and assert on the
 // outgoing request, not on engine behaviour.
 
-type RecordedRequest = { host: string; path: string; body: string };
+type RecordedRequest = {
+  host: string;
+  path: string;
+  search: string;
+  body: string;
+};
 
 let requests: RecordedRequest[];
 let responseBody: unknown;
@@ -39,6 +49,7 @@ beforeEach(() => {
     requests.push({
       host: url.host,
       path: url.pathname,
+      search: url.search,
       body: typeof init?.body === "string" ? init.body : "",
     });
     return new Response(JSON.stringify(responseBody), { status: 200 });
@@ -165,6 +176,7 @@ test("ingest fails when the engine accepts fewer documents than sent", async () 
   const result = await getCorpusIndexClient().ingestBatch(
     "legal_corpus_v1_cze",
     '{"document_id":"a"}\n{"document_id":"b"}',
+    CORPUS_INDEX_COMMIT.waitFor,
   );
 
   expect(result.isErr()).toBe(true);
@@ -179,6 +191,7 @@ test("ingest fails when the engine reports rejected documents", async () => {
   const result = await getCorpusIndexClient().ingestBatch(
     "legal_corpus_v1_cze",
     '{"document_id":"a"}\n{"document_id":"b"}',
+    CORPUS_INDEX_COMMIT.waitFor,
   );
 
   expect(result.isErr()).toBe(true);
@@ -207,12 +220,45 @@ test("delete-by-query posts one document-scoped delete task", async () => {
   expect(body["query"]).toBe('document_id:"dec-1"');
 });
 
+test("ingest sends the commit mode the caller asked for", async () => {
+  responseBody = { num_docs_for_processing: 1 };
+
+  for (const commit of Object.values(CORPUS_INDEX_COMMIT)) {
+    // oxlint-disable-next-line no-await-in-loop -- one request per mode; the recorder is order-sensitive
+    await getCorpusIndexClient().ingestBatch(
+      "legal_corpus_v1_cze",
+      '{"document_id":"a"}',
+      commit,
+    );
+  }
+
+  // The mode decides whether the response means "buffered" or "committed",
+  // and the caller persists the acceptance on the strength of it. A mode
+  // dropped on the way to the URL would put the durable meaning back to
+  // `auto` with nothing to notice.
+  expect(requests.map(({ search }) => search)).toEqual(
+    Object.values(CORPUS_INDEX_COMMIT).map((mode) => `?commit=${mode}`),
+  );
+});
+
+test("the ingest budget outlasts the engine's commit wait", () => {
+  // Under `wait_for` the engine holds the response for up to its own
+  // commit timeout, and only starts counting once the NDJSON upload is
+  // done. A client that gives up first turns a commit that did happen
+  // into a batch the caller retries — and, for the steady-state path,
+  // into a row it never marks indexed.
+  expect(CORPUS_INDEX_INGEST_TIMEOUT_MS).toBeGreaterThan(
+    CORPUS_INDEX_COMMIT_WAIT_TIMEOUT_MS,
+  );
+});
+
 test("ingest succeeds when every document is accepted", async () => {
   responseBody = { num_docs_for_processing: 2 };
 
   const result = await getCorpusIndexClient().ingestBatch(
     "legal_corpus_v1_cze",
     '{"document_id":"a"}\n{"document_id":"b"}',
+    CORPUS_INDEX_COMMIT.waitFor,
   );
 
   expect(result.isOk()).toBe(true);

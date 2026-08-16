@@ -262,6 +262,80 @@ describe("deferred document read-through", () => {
     expect(fetched).toHaveLength(2);
   });
 
+  /**
+   * The module's whole contract in one property: whatever the durable
+   * side does, the reader gets an answer. The read that calls this has
+   * no error boundary of its own, so a rejection escaping here is a 500
+   * on a decision that is merely waiting for its document — the failure
+   * mode the metadata-only response exists to prevent.
+   *
+   * The cases are the ways the fetch unit can actually end: a rejection
+   * from the court or the pool, a rejecting demand recording, a claim
+   * another worker holds, a unit that never settles, and a resolved
+   * outcome whose shape the caller did not expect — which is a
+   * rejection raised past the fetch's own guard, on the promise the
+   * budget abandons.
+   */
+  const badShape = {
+    recordRequest: async () => {
+      await Promise.resolve();
+    },
+    fetchDocument: async () => {
+      await Promise.resolve();
+      return undefined;
+    },
+  };
+  // SAFETY: deliberately outside the outcome union. The fetch unit is
+  // typed, but the read must survive a shape it did not expect all the
+  // same: reading `.status` off it throws past the fetch's own guard, on
+  // the one promise the read budget abandons.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the point of the case is a value the union forbids
+  const badShapeDeps = badShape as unknown as OnDemandDocumentDeps;
+
+  const hostile: Record<string, () => OnDemandDocumentDeps> = {
+    "a rejecting fetch": () => ({
+      recordRequest: async () => {
+        await Promise.resolve();
+      },
+      fetchDocument: async () => {
+        await Promise.resolve();
+        throw new Error("court site unreachable");
+      },
+    }),
+    "a rejecting demand recording": () => ({
+      recordRequest: async () => {
+        await Promise.resolve();
+        throw new Error("row locked");
+      },
+      fetchDocument: async () => {
+        await Promise.resolve();
+        return { status: "claimed" };
+      },
+    }),
+    "a fetch that never settles": () => ({
+      recordRequest: async () => {
+        await Promise.resolve();
+      },
+      fetchDocument: async () =>
+        await new Promise<never>(() => {
+          // The court never answers, and never says so.
+        }),
+    }),
+    "an unexpected outcome shape": () => badShapeDeps,
+  };
+
+  for (const [name, build] of Object.entries(hostile)) {
+    test(`${name} reads as metadata-only rather than failing the read`, async () => {
+      expect(
+        await readThroughDeferredDocument({
+          decision: pending(),
+          deps: build(),
+          recordDemand: true,
+        }),
+      ).toBeNull();
+    }, 20_000);
+  }
+
   test("only an un-fetched document from a deferred source is fetchable", () => {
     const state = {
       adapterKey: "sk-courts",

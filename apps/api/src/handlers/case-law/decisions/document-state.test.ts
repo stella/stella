@@ -23,6 +23,7 @@ const noColumnRead = async (): Promise<boolean | null> => {
 
 type Scenario = {
   hasReadableDocument?: boolean;
+  corpusPayloadUnavailable?: boolean;
   documentUrl?: string | null;
   corpusServed?: boolean;
   contentHash?: string | null;
@@ -34,6 +35,7 @@ type Scenario = {
 const state = async (scenario: Scenario) =>
   await resolveDocumentState({
     hasReadableDocument: false,
+    corpusPayloadUnavailable: false,
     documentUrl: "https://example.test/decision.pdf",
     corpusServed: false,
     contentHash: null,
@@ -55,6 +57,48 @@ describe("document state", () => {
     expect(await state({ documentUrl: null })).toEqual({
       documentPending: false,
       documentUnavailable: false,
+    });
+  });
+
+  describe("a payload object storage refused", () => {
+    // A trimmed canonical row keeps nothing in Postgres, so a refused
+    // object leaves the read with no body and no column that can say
+    // why. Reporting "neither" would render a decision with no text as a
+    // complete one; the read used to fail outright instead, which loses
+    // the metadata, citations and case number as well.
+    test("reads as pending even where the row is corpus-served", async () => {
+      expect(
+        await state({
+          corpusPayloadUnavailable: true,
+          corpusServed: true,
+          contentHash: REAL_HASH,
+        }),
+      ).toEqual({ documentPending: true, documentUnavailable: false });
+    });
+
+    test("reads as pending even where there is nothing to fetch", async () => {
+      // Sources that store the document during the crawl have no
+      // document URL, so nothing will re-fetch this — but the reader
+      // still must not be shown a bodyless decision as a whole one.
+      expect(
+        await state({
+          corpusPayloadUnavailable: true,
+          documentUrl: null,
+          corpusServed: true,
+          contentHash: REAL_HASH,
+        }),
+      ).toEqual({ documentPending: true, documentUnavailable: false });
+    });
+
+    test("does not override a document the read did resolve", async () => {
+      // Only one of the two payloads has to arrive: an AST refusal with
+      // a text fallback that worked is still a readable decision.
+      expect(
+        await state({
+          corpusPayloadUnavailable: true,
+          hasReadableDocument: true,
+        }),
+      ).toEqual({ documentPending: false, documentUnavailable: false });
     });
   });
 

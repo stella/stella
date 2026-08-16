@@ -8,9 +8,11 @@ import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-family";
 import {
+  CORPUS_INDEX_COMMIT,
   CorpusIndexError,
   getCorpusIndexClient,
 } from "@/api/lib/legal-search/corpus-index-client";
+import type { CorpusIndexCommitMode } from "@/api/lib/legal-search/corpus-index-client";
 import { corpusIndexConfig } from "@/api/lib/legal-search/corpus-index-config";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 import { LIMITS } from "@/api/lib/limits";
@@ -373,14 +375,9 @@ type BackfillSelectedRowsOptions<
       reserveExternalAppend: ReserveExternalAppend<TBrand, TRow>;
       readConcurrency?: number;
     }
-  | {
+  | ({
       type: "generation-rebuild";
-      beforeDatabaseMark: BeforeDatabaseMark;
-      beforeRemoteEffect: GuardRemoteEffect;
-      recoverRemoteEffectLeaseLoss: RecoverRemoteEffectLeaseLoss<TBrand>;
-      reserveExternalAppend: ReserveExternalAppend<TBrand, TRow>;
-      readConcurrency?: number;
-    };
+    } & GenerationRebuildBackfillOptions<TBrand, TRow>);
 
 type GenerationBackfillRowsOptions<
   TBrand extends SafeIdType,
@@ -391,6 +388,21 @@ type GenerationBackfillRowsOptions<
   recoverRemoteEffectLeaseLoss: RecoverRemoteEffectLeaseLoss<TBrand>;
   reserveExternalAppend: ReserveExternalAppend<TBrand, TRow>;
   readConcurrency?: number;
+};
+
+/**
+ * A generation rebuild runs two shapes of walk through one entry point,
+ * and they need opposite commit semantics: the snapshot pages are bulk
+ * (`auto`, verified by a census afterwards) while the pending queue
+ * drained alongside them is the live path every newly ingested decision
+ * goes through (`wait_for`, because its acceptance is persisted). The
+ * `type` discriminator cannot tell them apart, so the caller states it.
+ */
+export type GenerationRebuildBackfillOptions<
+  TBrand extends SafeIdType,
+  TRow extends CorpusIndexRow<TBrand>,
+> = GenerationBackfillRowsOptions<TBrand, TRow> & {
+  commit: CorpusIndexCommitMode;
 };
 
 type FencedIncrementalBackfillOptions<
@@ -419,6 +431,7 @@ type CorpusIndexMarkMode<TBrand extends SafeIdType> =
     };
 
 type IngestBatchWithGuardArgs = {
+  commit: CorpusIndexCommitMode;
   indexId: string;
   ndjson: string;
 } & (
@@ -434,12 +447,13 @@ type IngestBatchWithGuardArgs = {
 
 const ingestBatchWithGuard = async ({
   beforeRemoteEffect,
+  commit,
   indexId,
   ndjson,
   onLeaseLost,
 }: IngestBatchWithGuardArgs): Promise<Result<void, CorpusIndexError>> => {
   const effect = async () =>
-    await getCorpusIndexClient().ingestBatch(indexId, ndjson);
+    await getCorpusIndexClient().ingestBatch(indexId, ndjson, commit);
   if (beforeRemoteEffect === undefined) {
     return await effect();
   }
@@ -1280,6 +1294,15 @@ export const createCorpusIndexer = <
         )) {
           // oxlint-disable-next-line no-await-in-loop -- sequential ingest paces NDJSON pushes to the search backend
           const ingest = await ingestBatchWithGuard({
+            // Both incremental shapes are the steady state: their whole
+            // job is to make a newly written row searchable, and the
+            // mark they take afterwards is what stops anything selecting
+            // it again. Only a rebuild's caller gets to choose, because
+            // only a rebuild has a census behind it.
+            commit:
+              options.type === "generation-rebuild"
+                ? options.commit
+                : CORPUS_INDEX_COMMIT.waitFor,
             ...(options.type === "incremental"
               ? {}
               : {
@@ -1410,7 +1433,7 @@ export const createCorpusIndexer = <
     scopedDb: ScopedDb,
     rows: readonly TRow[],
     generation: string,
-    options: GenerationBackfillRowsOptions<TBrand, TRow>,
+    options: GenerationRebuildBackfillOptions<TBrand, TRow>,
   ): Promise<number> =>
     await backfillSelectedRows(scopedDb, [...rows], generation, {
       ...options,
