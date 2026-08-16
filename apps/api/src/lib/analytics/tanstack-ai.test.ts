@@ -351,9 +351,8 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       rawUsageMicroUnits: ratedMicroUnits("gpt-5.6"),
     });
     expect(events[0]?.properties).toMatchObject({
-      model: "gpt-5.6",
-      model_key_source: "byok",
-      provider: "openai",
+      $ai_model: "gpt-5.6",
+      $ai_provider: "openai",
     });
   });
 

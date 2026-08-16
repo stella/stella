@@ -114,7 +114,6 @@ export const getLaneCounterMicroUnits = async ({
         eq(usageLaneCounters.organizationId, organizationId),
         eq(usageLaneCounters.userId, userId),
         eq(usageLaneCounters.kind, kind),
-        // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- bucket boundaries are app-computed UTC midnights, never sub-millisecond
         eq(usageLaneCounters.bucketStart, bucketStart),
       ),
     )

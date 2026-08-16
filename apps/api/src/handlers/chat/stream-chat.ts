@@ -1009,13 +1009,17 @@ const runChatAttempt = async function* ({
     role,
     scopeKey: promptCacheKey,
   });
+  // Sandbox turns dispatch on the harness's own model, not the thread's
+  // selection, so their consumption must rate against the role default
+  // rather than a model that never served them.
+  const servedModelId = sandboxRun ? undefined : modelId;
   const analytics = createChatAttemptAnalytics({
     feature,
     modelRole: role,
     organizationId,
     orgAIConfig,
     safeDb,
-    selectedModelId: modelId,
+    selectedModelId: servedModelId,
     threadId,
     userId,
     workspaceId,
@@ -1028,7 +1032,7 @@ const runChatAttempt = async function* ({
     safeDb,
     // Compaction runs on the same adapter as the turn itself, so its
     // consumption rates against the same selection.
-    selectedModelId: modelId,
+    selectedModelId: servedModelId,
     threadId,
     userId,
     workspaceId,
