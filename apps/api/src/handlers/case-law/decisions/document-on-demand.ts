@@ -136,17 +136,14 @@ export type OnDemandDocumentDeps = {
 const recordFailure = (
   error: unknown,
   decisionId: SafeId<"caseLawDecision">,
-): void => {
-  const captured = Result.try(() => {
+): void =>
+  // A failure of the recording itself is dropped on purpose: the
+  // reporting channel is what broke, so there is nowhere left to report
+  // that, and it must not be escalated into the read it was recording a
+  // failure for.
+  Result.try(() => {
     captureError(error, { source: CAPTURE_SOURCE, decisionId });
-  });
-  if (Result.isError(captured)) {
-    // The reporting channel is what broke, so there is nowhere left to
-    // report it. Dropped here on purpose rather than escalated into the
-    // read this was recording a failure for.
-    return;
-  }
-};
+  }).unwrapOr(undefined);
 
 /**
  * Whether this is the read budget running out rather than something

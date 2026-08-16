@@ -21,11 +21,14 @@ export class CorpusIndexError extends TaggedError("CorpusIndexError")<{
 const SEARCH_TIMEOUT_MS = 30_000;
 
 /**
- * The engine's own `commit_timeout` for `commit=wait_for`: how long it
+ * The engine's own commit timeout for `commit=wait_for`: how long it
  * will hold the response open waiting for the split to be published.
- * Stated here because the client timeout has to outlast it — a client
+ *
+ * Stated here because the client budget has to outlast it — a client
  * that gives up first turns a commit that did happen into a batch the
- * caller retries.
+ * caller retries. This is the engine's default; the index config below
+ * does not override it, so raising it engine-side means raising the
+ * budget with it.
  */
 export const CORPUS_INDEX_COMMIT_WAIT_TIMEOUT_MS = 60_000;
 
