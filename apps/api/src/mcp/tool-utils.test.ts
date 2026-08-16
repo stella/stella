@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { env } from "@/api/env";
+import { createCaseLawDecisionSlug } from "@/api/handlers/case-law/decisions/slug";
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import { encodePaginationCursor } from "@/api/lib/pagination";
@@ -90,6 +91,29 @@ describe("slugifyCaseLawPathSegment", () => {
   test("falls back to 'unknown' when nothing alphanumeric remains", () => {
     expect(slugifyCaseLawPathSegment("///")).toBe("unknown");
     expect(slugifyCaseLawPathSegment("")).toBe("unknown");
+  });
+
+  test("agrees with the persisted slug generator", () => {
+    // These segments end up in public URLs the API has already persisted
+    // slugs for, so the two must fold identically. This used to be a
+    // hand-copied NFKD strip rather than a call to the shared helper.
+    const segments = [
+      "Nejvyšší soud",
+      "Ústavní soud České republiky",
+      "Najvyšší súd Slovenskej republiky",
+      "Sąd Najwyższy — Izba Cywilna",
+      "Oberster Gerichtshof (Österreich)",
+      "29 Cdo 123/2024",
+      "II. ÚS 251/04",
+      "ﬁnanční ročník²",
+      "  ---  ",
+    ];
+
+    for (const segment of segments) {
+      expect(slugifyCaseLawPathSegment(segment)).toBe(
+        createCaseLawDecisionSlug(segment),
+      );
+    }
   });
 });
 

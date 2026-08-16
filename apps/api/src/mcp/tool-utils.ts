@@ -2,6 +2,8 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { panic, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { stripDiacriticsForSlug } from "@stll/text-normalize";
+
 import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
@@ -707,11 +709,12 @@ const trimSlugHyphens = (value: string): string => {
 };
 
 export const slugifyCaseLawPathSegment = (value: string): string => {
+  // Must reproduce the API's persisted case-law slugs byte-for-byte
+  // (apps/api/src/handlers/case-law/decisions/slug.ts): same NFKD strip,
+  // same op order.
   const slug = trimSlugHyphens(
-    value
-      .normalize("NFKD")
+    stripDiacriticsForSlug(value)
       .toLowerCase()
-      .replace(/\p{Diacritic}/gu, "")
       .replace(/[^a-z0-9]+/gu, "-"),
   );
 
