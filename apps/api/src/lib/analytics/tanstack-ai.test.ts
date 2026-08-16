@@ -172,6 +172,45 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     expect(completed?.properties).not.toHaveProperty("unsafe");
   });
 
+  test("groups events by the analytics organization without usage metering", async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const events: Parameters<Analytics["capture"]>[0][] = [];
+    const analytics: Analytics = {
+      capture: (event) => {
+        events.push(event);
+      },
+      flush: async () => undefined,
+      identifyOrganizationGroup: () => undefined,
+    };
+    // Org-scoped but unmetered (fixed-cost feature): the analytics-only
+    // organization id must group generation, completion, and failure events
+    // exactly like the metering-derived id does.
+    const callbacks = createTanStackAIAnalyticsCallbacks({
+      analytics,
+      feature: "case-law.analysis",
+      organizationId: orgId,
+      orgAIConfig: createOpenAIOrgAIConfig(),
+      traceId: "trace_grouped",
+    });
+    const ctx = createMiddlewareContext();
+
+    await callbacks.middleware.onFinish?.(ctx, {
+      content: "Done",
+      duration: 4200,
+      finishReason: "stop",
+      usage,
+    });
+    callbacks.captureError(new Error("boom"));
+
+    const eventNames = events.map((event) => event.event);
+    expect(eventNames).toContain(SERVER_ANALYTICS_EVENTS.aiGeneration);
+    expect(eventNames).toContain(SERVER_ANALYTICS_EVENTS.aiGenerationCompleted);
+    for (const event of events) {
+      expect(event.groups).toEqual({ organization: orgId });
+    }
+  });
+
   test("records usage through TanStack deferred side effects", async () => {
     const { createTanStackAIAnalyticsCallbacks } =
       await loadTanStackAIAnalytics();

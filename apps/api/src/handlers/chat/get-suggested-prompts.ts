@@ -223,6 +223,7 @@ const getSuggestedPrompts = createSafeRootHandler(
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
       feature: "chat.suggested_prompts",
       modelRole: "fast",
+      organizationId: session.activeOrganizationId,
       orgAIConfig,
       properties: persistedWorkspaceId
         ? { workspace_id: persistedWorkspaceId }

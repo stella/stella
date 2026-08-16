@@ -70,6 +70,12 @@ type TanStackAIAnalyticsProps = {
    */
   selectedModelId?: string | undefined;
   orgAIConfig?: OrgAIConfig | null;
+  /**
+   * Analytics-only organization identity for org-scoped calls that do not
+   * meter usage (fixed-cost or internal features). Metered calls derive the
+   * organization from `usageMetering` and may omit this.
+   */
+  organizationId?: SafeId<"organization"> | null;
   usageMetering?: TanStackAIUsageMetering;
 };
 
@@ -297,12 +303,15 @@ export const createTanStackAIAnalyticsCallbacks = ({
 }: TanStackAIAnalyticsProps): TanStackAIAnalyticsCallbacks => {
   const distinctId = config.distinctId ?? SERVER_DISTINCT_ID;
   const modelRole = config.modelRole ?? "chat";
-  // Group attachment is derived centrally from the metering context so call
-  // sites cannot forget it; events without metering stay ungrouped.
+  // Group attachment is derived centrally so call sites cannot forget it:
+  // from the metering context when present, else from the analytics-only
+  // organization identity. Events with neither stay ungrouped.
+  const analyticsOrganizationId =
+    config.usageMetering?.organizationId ?? config.organizationId ?? null;
   const groups =
-    config.usageMetering === undefined
+    analyticsOrganizationId === null
       ? {}
-      : { groups: { organization: config.usageMetering.organizationId } };
+      : { groups: { organization: analyticsOrganizationId } };
   const selectedModelId = config.selectedModelId;
   let modelInfo: ResolvedTanStackTextModelInfo | null | undefined;
   const startedAt = performance.now();
@@ -326,7 +335,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
                 modelRole,
               )
             : getTanStackTextModelInfoForRole(modelRole, config.orgAIConfig, {
-                organizationId: config.usageMetering?.organizationId ?? null,
+                organizationId: analyticsOrganizationId,
               });
       } catch (error) {
         modelInfo = null;
@@ -374,7 +383,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
     }
     captureTelemetryError(error, {
       feature: config.feature,
-      organization_id: config.usageMetering?.organizationId ?? "",
+      organization_id: analyticsOrganizationId ?? "",
       trace_id: config.traceId,
     });
 

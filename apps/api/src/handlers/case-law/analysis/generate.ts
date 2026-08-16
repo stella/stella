@@ -124,6 +124,7 @@ ${decisionText}`;
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     feature: "case-law.analysis",
     modelRole: "fast",
+    organizationId,
     orgAIConfig,
     properties: {
       decision_id: decisionId,

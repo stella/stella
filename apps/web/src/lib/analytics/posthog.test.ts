@@ -987,6 +987,22 @@ describe("PostHog browser analytics adapter", () => {
     expect(resetMock).not.toHaveBeenCalled();
   });
 
+  test("rebinds the organization group on a same-user organization switch", () => {
+    const { analytics } = createPostHogAnalytics(
+      "phc_test",
+      "https://posthog.test",
+    );
+
+    analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_1" });
+    analytics.identifyUser({ id: "user_123", activeOrganizationId: "org_2" });
+
+    // The identity guard still suppresses the duplicate identify, but the
+    // group must follow the active organization or later events attribute
+    // to the previous organization across an ownership boundary.
+    expect(identifyMock).toHaveBeenCalledTimes(1);
+    expect(groupMock).toHaveBeenNthCalledWith(2, "organization", "org_2");
+  });
+
   test("resets before identifying a different user", () => {
     const { analytics } = createPostHogAnalytics({
       host: "https://posthog.test",

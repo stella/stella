@@ -635,6 +635,10 @@ export const createPostHogAnalytics = ({
       const distinctId = posthog.get_distinct_id();
 
       if (distinctId === user.id) {
+        // Same person, possibly a fresh active organization (SPA org
+        // switch): rebind the group so later events attribute to the
+        // current organization instead of the one bound at identify.
+        posthog.group(ORGANIZATION_GROUP_TYPE, user.activeOrganizationId);
         return;
       }
 
