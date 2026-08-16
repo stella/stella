@@ -41,6 +41,7 @@ import {
 import "@stll/folio-react/editor.css";
 import { cn, composeRefs } from "@stll/ui/lib/utils";
 
+import { openEntityInInspector } from "@/components/chat/entity-open";
 import {
   useDocxFitZoom,
   useDocxWheelZoom,
@@ -904,7 +905,15 @@ function RouteComponentInner({
                     fieldId={fieldId}
                     initialScaleOffset={scaleOffset}
                     startPage={pageNumber}
-                    fallback={{ suspense: <PDFSuspenseFallback /> }}
+                    fallback={{
+                      suspense: <PDFSuspenseFallback />,
+                      error: (error) => (
+                        <DocumentDisplayUnavailable
+                          entityId={entityId}
+                          error={error}
+                        />
+                      ),
+                    }}
                   >
                     <AnonymizeScrollSync />
                     <JustificationScrollSync />
@@ -939,6 +948,63 @@ function RouteComponentInner({
 }
 
 // -- Fullscreen DOCX viewer (read-only Folio) --
+
+type DocumentDisplayUnavailableProps = {
+  entityId: string;
+  error: Error;
+};
+
+/**
+ * Error fallback for the full-screen viewer's file area. A 400 from the
+ * display-URL endpoint is the server's authoritative "this format has no
+ * full-screen rendition" — recover by opening the file where every format
+ * renders, the side panel — while any other failure keeps the generic
+ * message.
+ */
+const DocumentDisplayUnavailable = ({
+  entityId,
+  error,
+}: DocumentDisplayUnavailableProps) => {
+  const t = useTranslations();
+  const navigate = Route.useNavigate();
+  const { viewId, workspaceId } = Route.useParams({
+    select: (p) => ({ viewId: p.viewId, workspaceId: p.workspaceId }),
+  });
+
+  if (!(APIError.is(error) && error.status === 400)) {
+    return (
+      <div className="text-muted-foreground flex h-full items-center justify-center px-6 text-center text-sm">
+        {t("common.somethingWentWrong")}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+      <p className="text-muted-foreground text-sm">
+        {t("fileDetail.noFullScreenPreview")}
+      </p>
+      <Button
+        onClick={() => {
+          detached(
+            (async () => {
+              await navigate({
+                to: "/workspaces/$workspaceId/$viewId",
+                params: { viewId, workspaceId },
+              });
+              await openEntityInInspector(entityId, "", workspaceId);
+            })(),
+            "document.open-in-side-panel",
+          );
+        }}
+        size="sm"
+        variant="outline"
+      >
+        {t("fileDetail.openInSidePanel")}
+      </Button>
+    </div>
+  );
+};
 
 const FullscreenDocxViewer = ({
   workspaceId,

@@ -1430,7 +1430,9 @@ type Messages = {
     };
     "makeCurrent": "Make current";
     "noFileInVersion": "No file in this version";
+    "noFullScreenPreview": "This file type has no full-screen preview.";
     "noLabel": "No label";
+    "openInSidePanel": "Open in side panel";
     "redlinePreview": "Tracked changes";
     "removeLabel": "Remove label";
     "selectVersion": "Select a version";

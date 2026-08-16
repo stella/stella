@@ -15,6 +15,7 @@ import {
 import { usePDFStore, usePDFStoreApi } from "@/lib/pdf/pdf-context";
 import type { PDFScrollTo, RenderPageResult } from "@/lib/pdf/pdf-context";
 import { PDFErrorBoundary } from "@/lib/pdf/pdf-error-boundary";
+import type { PDFErrorFallback } from "@/lib/pdf/pdf-error-boundary";
 import {
   getPDFPageScrollTop,
   isPDFSearchMatchScrollRequest,
@@ -30,7 +31,7 @@ export type PDFPageSearchMatch = {
 
 export type PDFPageFallback = {
   suspense?: ReactNode | undefined;
-  error?: ReactNode | undefined;
+  error?: PDFErrorFallback | undefined;
 };
 
 export type PDFPageProps = {
@@ -102,7 +103,7 @@ export const PDFPage = ({
         height: `round(down, var(--total-scale-factor) * ${page.originalHeight}px, var(--scale-round-y))`,
       }}
     >
-      <PDFErrorBoundary fallback={fallback?.error ?? null}>
+      <PDFErrorBoundary fallback={fallback?.error}>
         <Suspense fallback={fallback?.suspense ?? <PDFPageSkeleton />}>
           {isActive && deferredPromise && (
             <>
