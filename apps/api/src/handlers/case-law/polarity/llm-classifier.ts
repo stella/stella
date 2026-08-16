@@ -35,9 +35,10 @@ const POLARITY_GUIDANCE = {
   agreement outright: a comparison or see-also pointer offered in support
   of what it is saying. Phrases like "srov.", "viz", "obdobně",
   "přiměřeně", "porov.", "pozri", "cf.", "see also".`,
-  neutral: `The court names the cited decision as part of the procedural
-  record, endorsing nothing. Phrases like "proti rozsudku", "vedené u",
-  "veden pod".`,
+  neutral: `The court names the cited decision without endorsing or
+  rejecting it, most often as part of the procedural record. Phrases like
+  "proti rozsudku", "vedené u", "veden pod". This is also the answer when
+  the excerpt does not settle the question.`,
   negative: `The court distinguishes, overrules, departs from, or
   criticizes the cited decision. Phrases like "na rozdíl od",
   "překonán", "zrušen", "odlišuje se", "overruled", "distinguished".`,
@@ -58,7 +59,9 @@ Extract the specific phrase (2-5 words) from the text that most
 strongly indicates the polarity. This phrase will be used to generate
 regex rules for future classification.
 
-If the context is ambiguous, classify as "neutral".`;
+Report confidence honestly. A high-confidence answer can be promoted into
+a regex rule that labels later citations without you, so an uncertain one
+must say so rather than round itself up.`;
 
 const classificationSchema = v.strictObject({
   polarity: v.picklist(CLASSIFIABLE_POLARITIES),
