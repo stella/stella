@@ -91,6 +91,25 @@
     "createFirstOrganization": "Hozza létre első szervezetét a kezdéshez",
     "createOrganization": "Szervezet létrehozása",
     "createOrganizationButton": "Szervezet létrehozása",
+    "devQuickStart": {
+      "button": "Fejlesztői gyorsindítás",
+      "error": {
+        "fallback": "Ellenőrizze az API naplóját, majd próbálja újra.",
+        "matterImport": "A Harvey LAB importálása nem indult el.",
+        "otpUnavailable": "A fejlesztői egyszer használatos kód nem volt elérhető.",
+        "title": "A fejlesztői gyorsindítás sikertelen"
+      },
+      "phase": {
+        "addingSkills": "Készségek hozzáadása",
+        "authenticating": "Bejelentkezés",
+        "creatingOrganization": "Szervezet létrehozása",
+        "startingImport": "LAB-import indítása"
+      },
+      "success": {
+        "description": "10 Harvey LAB-ügy importálása folyamatban van a háttérben.",
+        "title": "A fejlesztői beállítás elkészült"
+      }
+    },
     "emailPlaceholder": "te@example.com",
     "error": {
       "accountNotLinked": "Ez az e-mail-cím másképp jelentkezik be. Használja az eredeti bejelentkezési módot, vagy próbálja újra.",

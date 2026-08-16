@@ -91,6 +91,25 @@
     "createFirstOrganization": "Izveidojiet savu pirmo organizāciju, lai sāktu darbu",
     "createOrganization": "Izveidot organizāciju",
     "createOrganizationButton": "Izveidot organizāciju",
+    "devQuickStart": {
+      "button": "Ātrā izstrādes sākšana",
+      "error": {
+        "fallback": "Pārbaudiet API žurnālu un mēģiniet vēlreiz.",
+        "matterImport": "Neizdevās sākt Harvey LAB importēšanu.",
+        "otpUnavailable": "Izstrādes vides vienreizējais kods nebija pieejams.",
+        "title": "Ātrā izstrādes sākšana neizdevās"
+      },
+      "phase": {
+        "addingSkills": "Prasmju pievienošana",
+        "authenticating": "Pierakstīšanās",
+        "creatingOrganization": "Organizācijas izveide",
+        "startingImport": "LAB importēšanas sākšana"
+      },
+      "success": {
+        "description": "Fonā tiek importētas 10 Harvey LAB lietas.",
+        "title": "Izstrādes iestatīšana ir pabeigta"
+      }
+    },
     "emailPlaceholder": "jus@example.com",
     "error": {
       "accountNotLinked": "Šis e-pasts pieslēdzas citādi. Izmantojiet savu sākotnējo pieslēgšanās veidu vai mēģiniet vēlreiz.",

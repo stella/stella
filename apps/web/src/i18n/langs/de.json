@@ -91,6 +91,25 @@
     "createFirstOrganization": "Erstellen Sie Ihre erste Organisation",
     "createOrganization": "Organisation erstellen",
     "createOrganizationButton": "Organisation erstellen",
+    "devQuickStart": {
+      "button": "Entwicklungs-Schnellstart",
+      "error": {
+        "fallback": "Prüfen Sie das API-Protokoll und versuchen Sie es erneut.",
+        "matterImport": "Der Harvey-LAB-Import konnte nicht gestartet werden.",
+        "otpUnavailable": "Das Entwicklungs-OTP war nicht verfügbar.",
+        "title": "Entwicklungs-Schnellstart fehlgeschlagen"
+      },
+      "phase": {
+        "addingSkills": "Skills werden hinzugefügt",
+        "authenticating": "Anmeldung läuft",
+        "creatingOrganization": "Organisation wird erstellt",
+        "startingImport": "LAB-Import wird gestartet"
+      },
+      "success": {
+        "description": "10 Harvey-LAB-Akten werden im Hintergrund importiert.",
+        "title": "Entwicklungssetup ist bereit"
+      }
+    },
     "emailPlaceholder": "sie@beispiel.de",
     "error": {
       "accountNotLinked": "Diese E-Mail meldet sich auf andere Weise an. Verwenden Sie Ihre ursprüngliche Anmeldemethode oder versuchen Sie es erneut.",

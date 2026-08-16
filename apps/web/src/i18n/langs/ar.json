@@ -91,6 +91,25 @@
     "createFirstOrganization": "أنشئ مؤسستك الأولى للبدء",
     "createOrganization": "إنشاء مؤسسة",
     "createOrganizationButton": "إنشاء مؤسسة",
+    "devQuickStart": {
+      "button": "بدء سريع للتطوير",
+      "error": {
+        "fallback": "تحقّق من سجل API وحاول مرة أخرى.",
+        "matterImport": "تعذّر بدء استيراد Harvey LAB.",
+        "otpUnavailable": "رمز التحقق الخاص ببيئة التطوير غير متاح.",
+        "title": "فشل البدء السريع للتطوير"
+      },
+      "phase": {
+        "addingSkills": "إضافة المهارات",
+        "authenticating": "تسجيل الدخول",
+        "creatingOrganization": "إنشاء المؤسسة",
+        "startingImport": "بدء استيراد LAB"
+      },
+      "success": {
+        "description": "يجري استيراد 10 ملفات قانونية من Harvey LAB في الخلفية.",
+        "title": "إعداد التطوير جاهز"
+      }
+    },
     "emailPlaceholder": "you@example.com",
     "error": {
       "accountNotLinked": "يسجّل هذا البريد الإلكتروني الدخول بطريقة مختلفة. استخدم طريقة تسجيل الدخول الأصلية أو حاول مرة أخرى.",

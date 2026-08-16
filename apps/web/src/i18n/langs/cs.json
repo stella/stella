@@ -91,6 +91,25 @@
     "createFirstOrganization": "Vytvořte svou první organizaci",
     "createOrganization": "Vytvořit organizaci",
     "createOrganizationButton": "Vytvořit organizaci",
+    "devQuickStart": {
+      "button": "Rychlý start pro vývoj",
+      "error": {
+        "fallback": "Zkontrolujte log API a zkuste to znovu.",
+        "matterImport": "Import Harvey LAB se nepodařilo spustit.",
+        "otpUnavailable": "Vývojové OTP nebylo k dispozici.",
+        "title": "Rychlý start pro vývoj se nezdařil"
+      },
+      "phase": {
+        "addingSkills": "Přidávání dovedností",
+        "authenticating": "Přihlašování",
+        "creatingOrganization": "Vytváření organizace",
+        "startingImport": "Spouštění importu LAB"
+      },
+      "success": {
+        "description": "Na pozadí se importuje 10 spisů z Harvey LAB.",
+        "title": "Vývojové nastavení je připravené"
+      }
+    },
     "emailPlaceholder": "vy@priklad.cz",
     "error": {
       "accountNotLinked": "Tento e-mail se přihlašuje jiným způsobem. Použijte svůj původní způsob přihlášení, nebo to zkuste znovu.",

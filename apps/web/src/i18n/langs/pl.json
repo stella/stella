@@ -91,6 +91,25 @@
     "createFirstOrganization": "Utwórz swoją pierwszą organizację, aby rozpocząć",
     "createOrganization": "Utwórz organizację",
     "createOrganizationButton": "Utwórz organizację",
+    "devQuickStart": {
+      "button": "Szybki start deweloperski",
+      "error": {
+        "fallback": "Sprawdź dziennik API i spróbuj ponownie.",
+        "matterImport": "Nie udało się rozpocząć importu Harvey LAB.",
+        "otpUnavailable": "Deweloperski kod jednorazowy nie był dostępny.",
+        "title": "Szybki start deweloperski nie powiódł się"
+      },
+      "phase": {
+        "addingSkills": "Dodawanie umiejętności",
+        "authenticating": "Logowanie",
+        "creatingOrganization": "Tworzenie organizacji",
+        "startingImport": "Uruchamianie importu LAB"
+      },
+      "success": {
+        "description": "W tle trwa importowanie 10 spraw z Harvey LAB.",
+        "title": "Konfiguracja deweloperska jest gotowa"
+      }
+    },
     "emailPlaceholder": "ty@example.com",
     "error": {
       "accountNotLinked": "Ten e-mail loguje się w inny sposób. Użyj swojej pierwotnej metody logowania lub spróbuj ponownie.",

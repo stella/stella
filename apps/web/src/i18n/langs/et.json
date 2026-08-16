@@ -91,6 +91,25 @@
     "createFirstOrganization": "Alustamiseks looge oma esimene organisatsioon",
     "createOrganization": "Loo organisatsioon",
     "createOrganizationButton": "Loo organisatsioon",
+    "devQuickStart": {
+      "button": "Arenduse kiirkäivitus",
+      "error": {
+        "fallback": "Kontrollige API logi ja proovige uuesti.",
+        "matterImport": "Harvey LAB impordi käivitamine ebaõnnestus.",
+        "otpUnavailable": "Arenduskeskkonna ühekordne kood ei olnud saadaval.",
+        "title": "Arenduse kiirkäivitus ebaõnnestus"
+      },
+      "phase": {
+        "addingSkills": "Oskuste lisamine",
+        "authenticating": "Sisselogimine",
+        "creatingOrganization": "Organisatsiooni loomine",
+        "startingImport": "LAB impordi käivitamine"
+      },
+      "success": {
+        "description": "Taustal imporditakse 10 Harvey LAB toimikut.",
+        "title": "Arenduse seadistus on valmis"
+      }
+    },
     "emailPlaceholder": "teie@example.com",
     "error": {
       "accountNotLinked": "See e-post logib sisse teisiti. Kasutage oma algset sisselogimisviisi või proovige uuesti.",

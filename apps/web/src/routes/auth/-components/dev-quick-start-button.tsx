@@ -1,11 +1,13 @@
 import { useState } from "react";
 
 import { Result, TaggedError } from "better-result";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
+import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
@@ -24,14 +26,31 @@ import {
 
 const QUICK_START_MATTER_COUNT = 10;
 
-const PHASE_LABELS = {
-  [DEV_QUICK_START_PHASE.authenticate]: "SIGNING IN",
-  [DEV_QUICK_START_PHASE.organization]: "CREATING WORKSPACE",
-  [DEV_QUICK_START_PHASE.skills]: "ADDING SKILLS",
-  [DEV_QUICK_START_PHASE.matters]: "STARTING LAB IMPORT",
-} as const satisfies Record<DevQuickStartPhase, string>;
+const PHASE_LABEL_KEYS = {
+  [DEV_QUICK_START_PHASE.authenticate]:
+    "auth.devQuickStart.phase.authenticating",
+  [DEV_QUICK_START_PHASE.organization]:
+    "auth.devQuickStart.phase.creatingOrganization",
+  [DEV_QUICK_START_PHASE.skills]: "auth.devQuickStart.phase.addingSkills",
+  [DEV_QUICK_START_PHASE.matters]: "auth.devQuickStart.phase.startingImport",
+} as const satisfies Record<DevQuickStartPhase, TranslationKey>;
+
+const DEV_QUICK_START_ERROR = {
+  matterImport: "matterImport",
+  otpUnavailable: "otpUnavailable",
+} as const;
+
+type DevQuickStartErrorCode =
+  (typeof DEV_QUICK_START_ERROR)[keyof typeof DEV_QUICK_START_ERROR];
+
+const ERROR_MESSAGE_KEYS = {
+  [DEV_QUICK_START_ERROR.matterImport]: "auth.devQuickStart.error.matterImport",
+  [DEV_QUICK_START_ERROR.otpUnavailable]:
+    "auth.devQuickStart.error.otpUnavailable",
+} as const satisfies Record<DevQuickStartErrorCode, TranslationKey>;
 
 class DevQuickStartError extends TaggedError("DevQuickStartError")<{
+  code: DevQuickStartErrorCode;
   message: string;
 }> {}
 
@@ -46,7 +65,10 @@ const authenticate = async ({ email }: DevQuickStartIdentity) => {
 
   const otp = await fetchDevOtp(email);
   if (otp === null) {
-    throw new DevQuickStartError({ message: "Dev OTP was not available." });
+    throw new DevQuickStartError({
+      code: DEV_QUICK_START_ERROR.otpUnavailable,
+      message: "Dev OTP was not available.",
+    });
   }
 
   const signedIn = await authClient.signIn.emailOtp({ email, otp });
@@ -94,12 +116,14 @@ const seedMatters = async ({ selectionSeed }: DevQuickStartIdentity) => {
   });
   if (response.error) {
     throw new DevQuickStartError({
+      code: DEV_QUICK_START_ERROR.matterImport,
       message: "The Harvey LAB import could not start.",
     });
   }
 };
 
 export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
+  const t = useTranslations();
   const analytics = useAnalytics();
   const invalidateSession = useInvalidateSession();
   const [phase, setPhase] = useState<DevQuickStartPhase | null>(null);
@@ -109,35 +133,40 @@ export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
       return;
     }
 
-    const result = await Result.tryPromise(async () => {
-      await runDevQuickStart({
-        authenticate,
-        createOrganization,
-        onPhase: setPhase,
-        randomId: crypto.randomUUID(),
-        seedMatters,
-        seedSkills,
-      });
-      await invalidateSession.mutateAsync();
+    const result = await Result.tryPromise({
+      try: async () => {
+        await runDevQuickStart({
+          authenticate,
+          createOrganization,
+          onPhase: setPhase,
+          randomId: crypto.randomUUID(),
+          seedMatters,
+          seedSkills,
+        });
+        await invalidateSession.mutateAsync();
+      },
+      catch: (cause) => cause,
     });
 
     if (Result.isError(result)) {
       setPhase(null);
       analytics.captureError(result.error);
       stellaToast.add({
-        title: "Dev quick start failed",
-        description: userErrorFromThrown(
-          result.error,
-          "Check the API log and try again.",
-        ),
+        title: t("auth.devQuickStart.error.title"),
+        description: DevQuickStartError.is(result.error)
+          ? t(ERROR_MESSAGE_KEYS[result.error.code])
+          : userErrorFromThrown(
+              result.error,
+              t("auth.devQuickStart.error.fallback"),
+            ),
         type: "error",
       });
       return;
     }
 
     stellaToast.add({
-      title: "Dev workspace ready",
-      description: "10 Harvey LAB matters are importing in the background.",
+      title: t("auth.devQuickStart.success.title"),
+      description: t("auth.devQuickStart.success.description"),
       type: "success",
     });
     window.location.assign(redirectTo);
@@ -145,7 +174,7 @@ export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
 
   return (
     <Button
-      className="w-full"
+      className="w-full uppercase"
       disabled={phase !== null}
       loading={phase !== null}
       onClick={() => {
@@ -155,7 +184,9 @@ export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
       type="button"
       variant="outline"
     >
-      {phase === null ? "DEV QUICK START" : PHASE_LABELS[phase]}
+      {phase === null
+        ? t("auth.devQuickStart.button")
+        : t(PHASE_LABEL_KEYS[phase])}
     </Button>
   );
 };
