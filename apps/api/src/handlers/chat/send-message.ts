@@ -14,6 +14,7 @@ import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
+import type { UsageEventLane } from "@/api/db/schema";
 import { env } from "@/api/env";
 import {
   getActiveFileModelBinding,
@@ -154,7 +155,10 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  assertUsageAvailableForHandler,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -248,7 +252,7 @@ const config = {
   permissions: { chat: ["create"] },
   mcp: { type: "internal", reason: "realtime_stream" },
   body: agUiSendMessageBodySchema,
-  requiresUsage: { actionType: "chat" },
+  requiresUsage: { actionType: "chat", laneRouting: true },
 } satisfies HandlerConfig;
 
 /** IDs of workspaces the chat may touch; deleting workspaces are excluded. */
@@ -383,6 +387,7 @@ const sendMessage = createSafeRootHandler(
     safeDb,
     scopedDb,
     session,
+    usageLane,
     user,
   }) {
     const body = transportBody.forwardedProps;
@@ -844,14 +849,59 @@ const sendMessage = createSafeRootHandler(
       // a catalog bump that drops the model falls back to the org default
       // silently instead of failing the send.
       const {
-        modelId: chatModelOverride,
-        reasoningEffort: chatReasoningEffort,
+        modelId: selectedChatModel,
+        reasoningEffort: selectedReasoningEffort,
       } = resolveEffectiveChatModelSelection({
         devModelId: body.devModelId,
         threadChatModel: thread.data.chatModel,
         threadReasoningEffort: thread.data.chatReasoningEffort,
         orgAIConfig,
       });
+
+      // Budget routing. Inside the included budget any selection
+      // stands. When the pre-flight resolved the reduced-cost lane, an
+      // unselected turn is served on the lane's own model. Two cases
+      // instead fall through to the pool, which must be able to cover
+      // them — the same 402 a pool-only org would see: an explicit
+      // model selection, and an agent-mode send (machine work never
+      // settles an interactive budget).
+      let chatModelOverride = selectedChatModel;
+      let chatReasoningEffort = selectedReasoningEffort;
+      let turnLane = usageLane ?? { lane: "pool" as const };
+      const explicitSelectionNeedsPool =
+        turnLane.lane === "fallback" &&
+        selectedChatModel !== undefined &&
+        selectedChatModel !== turnLane.forcedModelSelection;
+      const agentModeNeedsPool =
+        body.runMode === "agent" && turnLane.lane !== "pool";
+      if (explicitSelectionNeedsPool || agentModeNeedsPool) {
+        const poolCheck = yield* Result.await(
+          Result.tryPromise({
+            try: async () =>
+              await assertUsageAvailableForHandler({
+                metering: { actionType: "chat" },
+                organizationId: session.activeOrganizationId,
+                orgAIConfig,
+                workspaceId: null,
+                userId: user.id,
+                safeDb,
+              }),
+            catch: (cause) =>
+              new HandlerError({
+                status: 500,
+                message: "Usage check failed",
+                cause,
+              }),
+          }),
+        );
+        if (poolCheck !== null) {
+          return Result.err(poolCheck);
+        }
+        turnLane = { lane: "pool" };
+      } else if (turnLane.lane === "fallback") {
+        chatModelOverride = turnLane.forcedModelSelection;
+        chatReasoningEffort = undefined;
+      }
 
       // For an existing thread, accept a non-empty body update as
       // "user changed scope, persist it"; an omitted/empty body keeps
@@ -1320,6 +1370,7 @@ const sendMessage = createSafeRootHandler(
         safeDb,
         tenantWorkspaceIds: accessibleWorkspaceIds,
         threadId: body.threadId,
+        usageLane: turnLane.lane,
         userId: user.id,
         workspaceId,
       });
@@ -1695,6 +1746,7 @@ const sendMessage = createSafeRootHandler(
                 promptCachingEnabled,
                 runMode: body.runMode,
                 sandboxRun,
+                usageLane: turnLane.lane,
                 resolveAssistantTextRefs: refRegistry.resolveAssistantTextRefs,
                 resolveAssistantToolInputRefs: ({ input, toolName }) =>
                   resolveRegistryToolInputRefs({
@@ -1826,6 +1878,8 @@ type CompactMessagesForContextProps = ChatCompactionModelProps & {
   safeDb: SafeDb;
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
   threadId: SafeId<"chatThread">;
+  /** Budget lane of the turn this compaction serves. */
+  usageLane: UsageEventLane;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
 };
@@ -1880,6 +1934,7 @@ const compactMessagesForContext = async ({
   safeDb,
   tenantWorkspaceIds,
   threadId,
+  usageLane,
   userId,
   workspaceId,
 }: CompactMessagesForContextProps): Promise<
@@ -1888,6 +1943,9 @@ const compactMessagesForContext = async ({
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     usageMetering: {
       actionType: "chat",
+      // Pre-stream compaction is part of the same interactive turn,
+      // so it settles against the turn's resolved lane.
+      lane: usageLane,
       organizationId,
       safeDb,
       serviceTier: "standard",

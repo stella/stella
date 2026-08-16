@@ -43,8 +43,11 @@ import type { AnyPermissiveRouteSchema } from "@/api/lib/permissive-route-schema
 import {
   getTanStackTextModelInfoForRole,
   resolveEffectiveServiceTierForProvider,
+  resolveFallbackChatSelection,
 } from "@/api/lib/tanstack-ai-models";
 import { computeUsageUnitCost } from "@/api/lib/usage/action-weights";
+import { decideChatUsageLane } from "@/api/lib/usage/lane-routing";
+import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
 import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
 // Type-only: derive the closed tool-name union from the single MCP registry
 // so `mcp: { type: "tool", name }` typechecks against the real tools. The
@@ -233,6 +236,12 @@ export type UsageMeteringConfig = {
   actionType: UsageActionType;
   serviceTier?: UsageServiceTier;
   /**
+   * Opt this endpoint's pre-flight into per-user budget-lane routing.
+   * Only the interactive chat send declares it; pricing an action as
+   * "chat" is not by itself evidence the handler can honor a lane.
+   */
+  laneRouting?: true;
+  /**
    * Logical model role recorded on the consumption ledger row.
    * Defaults to `"chat"`. Set to the role the handler will pass
    * to the model resolver so cross-cutting analytics match
@@ -362,6 +371,13 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
       role: keyof typeof roles;
     };
     orgAIConfig: OrgAIConfig | null;
+    /**
+     * Budget lane the usage pre-flight resolved for this request.
+     * Set only when the handler declares `requiresUsage` and
+     * enforcement is on; handlers thread it into their metering so
+     * consumption settles against the decided budget.
+     */
+    usageLane?: UsageLaneDecision;
     /**
      * Whether stella may annotate AI requests for this org with
      * prompt-cache markers. Threaded through to the model resolver;
@@ -654,9 +670,10 @@ const createSafeScopedHandler = <
         userId: ctx.user.id,
       });
       const preflight = await runUsagePreflight({ ctx, meteringContext });
-      if (preflight !== null) {
-        return preflight;
+      if (preflight.kind === "blocked") {
+        return preflight.response;
       }
+      ctx.usageLane = preflight.lane;
     }
 
     return await runSafeHandler(ctx, handler);
@@ -669,6 +686,8 @@ type ResolvedMeteringContext = {
   userId: SafeId<"user">;
   actionType: UsageActionType;
   serviceTier: UsageServiceTier;
+  isByok: boolean;
+  laneRouting: boolean;
   cost: number;
 };
 
@@ -706,6 +725,8 @@ export const resolveMeteringContext = ({
     userId,
     actionType: metering.actionType,
     serviceTier,
+    isByok,
+    laneRouting: metering.laneRouting === true,
     cost,
   };
 };
@@ -716,24 +737,64 @@ type PreflightCtx = {
   safeDb: SafeDb;
 };
 
+type UsagePreflightOutcome =
+  | { kind: "blocked"; response: SafeStatusResponse<402 | 500> }
+  | { kind: "allowed"; lane: UsageLaneDecision };
+
 const runUsagePreflight = async ({
   ctx,
   meteringContext,
 }: {
   ctx: PreflightCtx;
   meteringContext: ResolvedMeteringContext;
-}): Promise<SafeStatusResponse<402 | 500> | null> => {
+}): Promise<UsagePreflightOutcome> => {
   if (meteringContext.cost <= 0) {
-    return null;
+    // BYOK (and other zero-cost) turns never draw a managed budget.
+    return { kind: "allowed", lane: { lane: "pool" } };
   }
-  const checkResult = await ctx.safeDb(
-    async (tx) =>
-      await assertUsageAvailable({
+  const checkResult = await ctx.safeDb(async (tx) => {
+    // Only endpoints that opted into lane routing (the interactive
+    // chat send) resolve a per-user budget lane; a turn inside the
+    // included budget settles there and skips the pool check
+    // entirely. A fallback verdict must also be servable on this
+    // deployment, otherwise it degrades to the pool path.
+    if (meteringContext.laneRouting && !meteringContext.isByok) {
+      const verdict = await decideChatUsageLane({
         tx,
         organizationId: meteringContext.organizationId,
-        required: meteringContext.cost,
-      }),
-  );
+        userId: meteringContext.userId,
+      });
+      if (verdict === "allowance") {
+        return {
+          ok: true as const,
+          lane: { lane: "allowance" } satisfies UsageLaneDecision,
+        };
+      }
+      if (verdict === "fallback") {
+        const forcedModelSelection = resolveFallbackChatSelection(null);
+        if (forcedModelSelection !== null) {
+          return {
+            ok: true as const,
+            lane: {
+              lane: "fallback",
+              forcedModelSelection,
+            } satisfies UsageLaneDecision,
+          };
+        }
+      }
+    }
+    const check = await assertUsageAvailable({
+      tx,
+      organizationId: meteringContext.organizationId,
+      required: meteringContext.cost,
+    });
+    return check.ok
+      ? {
+          ok: true as const,
+          lane: { lane: "pool" } satisfies UsageLaneDecision,
+        }
+      : { ok: false as const, error: check.error };
+  });
   if (Result.isError(checkResult)) {
     // DB error during pre-flight — surface generic 500 so the
     // user retries; we don't let it look like an over-limit
@@ -744,22 +805,28 @@ const runUsagePreflight = async ({
       error: checkResult.error,
       statusCode: 500,
     });
-    return toSafeStatusResponse(500, {
-      code: API_ERROR_CODE.internalServerError,
-      message: "Internal server error",
-    });
+    return {
+      kind: "blocked",
+      response: toSafeStatusResponse(500, {
+        code: API_ERROR_CODE.internalServerError,
+        message: "Internal server error",
+      }),
+    };
   }
   const check = checkResult.value;
   if (check.ok) {
-    return null;
+    return { kind: "allowed", lane: check.lane };
   }
-  return toSafeStatusResponse(402, {
-    code: API_ERROR_CODE.usageLimitExceeded,
-    message: check.error.message,
-    reason: check.error.reason,
-    required: check.error.required,
-    available: check.error.available,
-  });
+  return {
+    kind: "blocked",
+    response: toSafeStatusResponse(402, {
+      code: API_ERROR_CODE.usageLimitExceeded,
+      message: check.error.message,
+      reason: check.error.reason,
+      required: check.error.required,
+      available: check.error.available,
+    }),
+  };
 };
 
 type UsagePreflightInput = {

@@ -45,9 +45,13 @@ process.env["SMTP_PORT"] ??= "1025";
 process.env["TRANSACTIONAL_EMAIL_FROM"] ??= "test@example.com";
 process.env["FRONTEND_URL"] ??= "http://localhost:3000";
 // Never reached by tests: corpus-index tests stub global fetch and only
-// assert on the request contract.
-process.env["CORPUS_INDEX_ENDPOINT"] ??= "http://localhost:7280";
-process.env["CORPUS_INDEX_SEARCH_ENDPOINT"] ??= "http://localhost:7281";
+// assert on the request contract. A developer .env that configures
+// CASE_LAW_DATABASE_URL forbids the endpoint (env-base invariant), so
+// only default it when that path is not configured.
+if (process.env["CASE_LAW_DATABASE_URL"] === undefined) {
+  process.env["CORPUS_INDEX_ENDPOINT"] ??= "http://localhost:7280";
+  process.env["CORPUS_INDEX_SEARCH_ENDPOINT"] ??= "http://localhost:7281";
+}
 process.env["GOTENBERG_URL"] ??= "http://localhost:3002";
 process.env["GOTENBERG_USERNAME"] ??= "test";
 process.env["GOTENBERG_PASSWORD"] ??= "test";
