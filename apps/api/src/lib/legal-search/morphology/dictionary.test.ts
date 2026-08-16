@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 
+import { FOLDED_TOKENIZER } from "@/api/lib/legal-search/corpus-index-config";
 import {
   foldExpansionKey,
   isMorphologyDictionaryContentHash,
@@ -109,6 +110,7 @@ test("the cap is what the parser enforces", () => {
 
 test("the fold is lowercase, form-independent, and ASCII", () => {
   expect(foldExpansionKey("ŠKODY")).toBe("skody");
+  expect(foldExpansionKey("Straße")).toBe("strasse");
   // The same word decomposed (routine from extracted PDFs and macOS
   // filesystems) must reach the same key, or half the corpus is unreachable
   // from half the keyboards.
@@ -121,10 +123,24 @@ test("the fold is lowercase, form-independent, and ASCII", () => {
   // spelled with `ł` is a key no indexed lexeme can be spelled as.
   expect(foldExpansionKey("Łaska")).toBe("laska");
   expect(foldExpansionKey("zażółć")).toBe("zazolc");
-  // Case folds after the ASCII fold, the order the index applies. Lowercasing
-  // first would key on `ɩ`, a character no fold rule reaches and no lexeme can
-  // be spelled with.
-  expect(foldExpansionKey("Ɩota")).toBe("iota");
+});
+
+// The key's two steps mirror the tokenizer's filter list, and the mirror is
+// asserted rather than trusted: the orders are not interchangeable for a
+// character whose lowercase form the fold table does not reach. `Ɩ` folds to
+// `I` but lowercases to `ɩ`, so folding first would key an uppercase query on
+// `iota` while the corpus form (already lowercased by `to_tsvector('simple')`,
+// which is what the builder reads) keys `ɩota`.
+test("the fold lowercases before it folds, the order the index applies", () => {
+  // Unannotated on purpose: the tuple keeps its literal element type, so
+  // dropping either filter from the tokenizer makes the argument below a
+  // compile error rather than an `indexOf` returning -1 that this comparison
+  // would read as an ordering. Only the ordering is left to assert at runtime.
+  const { filters } = FOLDED_TOKENIZER;
+  expect(filters.indexOf("lower_caser")).toBeLessThan(
+    filters.indexOf("ascii_folding"),
+  );
+  expect(foldExpansionKey("Ɩota")).toBe(foldExpansionKey("ɩota"));
 });
 
 // A combining mark is \p{M}, not \p{L}, so a letters-only test that ran before

@@ -103,7 +103,7 @@ export const isMorphologyDictionaryContentHash = (value: string): boolean =>
   CONTENT_HASH_PATTERN.test(value);
 
 /**
- * Lookup key for a surface form: folded to ASCII, then lowercased.
+ * Lookup key for a surface form: lowercased, then folded to ASCII.
  *
  * Keys are folded, values are not. The corpus is written with diacritics and
  * queries frequently are not, so folding the key is what lets "skody" reach
@@ -118,18 +118,20 @@ export const isMorphologyDictionaryContentHash = (value: string): boolean =>
  * The fold decomposes internally, so the key is form-independent without a
  * separate NFC pass.
  *
- * Case folding runs after, in the order the index applies it: `unaccent()`
- * maps case for case, and the tokenizer lowercases what comes out. Reversing
- * the two would key on whatever the source character's lowercase form happens
- * to be, and that form is not always one the fold table reaches — `Ɩ` folds to
- * `I`, but lowercases first to `ɩ`, which no lexeme can be spelled with.
+ * Case folding runs first, the order the index applies: `FOLDED_TOKENIZER`
+ * lists `lower_caser` before `ascii_folding`, and the builder's vocabulary
+ * comes from `to_tsvector('simple', ...)`, which has already lowercased. The
+ * two orders are not interchangeable for a character whose lowercase form the
+ * fold table does not reach: `Ɩ` folds to `I` but lowercases to `ɩ`, so
+ * folding first would key an uppercase query on `iota` while the corpus form
+ * keys `ɩota`, and the bucket would be unreachable from that spelling.
  *
  * The stemmer deliberately runs the other way round (fold after stemming),
  * which is why it is never called here: this fold destroys exactly the
  * characters the suffix tables are written over.
  */
 export const foldExpansionKey = (term: string): string =>
-  foldToAscii(term).toLowerCase();
+  foldToAscii(term.toLowerCase());
 
 export type ExpansionBucket = {
   /** Corpus document frequency summed over the bucket's members. */
@@ -281,7 +283,7 @@ const PARSE_BATCH_LINES = 2000;
  * The same parse, handing the event loop back between batches.
  *
  * Parsing is the CPU half of loading a dictionary and it is not cheap: every
- * line splits twice, and every form is decomposed, folded and lower-cased
+ * line splits twice, and every form is lower-cased, decomposed and folded
  * before it keys a Map. On a payload near the ceiling that is long enough to
  * stall an API replica, and detaching the fetch does not help —
  * a detached promise's continuation still runs on the same thread. A warm-up or
