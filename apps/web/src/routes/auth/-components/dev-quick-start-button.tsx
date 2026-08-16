@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 
+import { useNavigate } from "@tanstack/react-router";
 import { Result, TaggedError } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -10,7 +11,7 @@ import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { authClient } from "@/lib/auth";
+import { authClient, isTwoFactorRedirect } from "@/lib/auth";
 import { detached } from "@/lib/detached";
 import { fetchDevOtp } from "@/lib/dev-otp";
 import { toAPIError } from "@/lib/errors/api";
@@ -59,6 +60,10 @@ class DevQuickStartError extends TaggedError("DevQuickStartError")<{
   message: string;
 }> {}
 
+class DevQuickStartTwoFactorRequired extends TaggedError(
+  "DevQuickStartTwoFactorRequired",
+)<{ message: string }> {}
+
 const authenticate = async ({ email }: DevQuickStartIdentity) => {
   const sent = await authClient.emailOtp.sendVerificationOtp({
     email,
@@ -79,6 +84,11 @@ const authenticate = async ({ email }: DevQuickStartIdentity) => {
   const signedIn = await authClient.signIn.emailOtp({ email, otp });
   if (signedIn.error) {
     throw toAuthClientError(signedIn.error);
+  }
+  if (isTwoFactorRedirect(signedIn.data)) {
+    throw new DevQuickStartTwoFactorRequired({
+      message: "Two-factor authentication is required.",
+    });
   }
 
   const updated = await authClient.updateUser({ name: "Dev Quick Start" });
@@ -129,6 +139,7 @@ const seedSkills = async () => {
 };
 
 const waitForMatterImport = async (
+  jobId: string,
   remainingPolls = MATTER_IMPORT_MAX_POLLS,
 ): Promise<void> => {
   if (remainingPolls === 0) {
@@ -138,7 +149,9 @@ const waitForMatterImport = async (
     });
   }
 
-  const { data, error } = await api.dev["seed-firm-knowledge"].get();
+  const { data, error } = await api.dev["seed-firm-knowledge"].get({
+    query: { jobId },
+  });
   if (error !== null || data instanceof Response) {
     throw new DevQuickStartError({
       code: DEV_QUICK_START_ERROR.matterImport,
@@ -161,7 +174,7 @@ const waitForMatterImport = async (
       await new Promise<void>((resolve) => {
         setTimeout(resolve, MATTER_IMPORT_POLL_INTERVAL_MS);
       });
-      await waitForMatterImport(remainingPolls - 1);
+      await waitForMatterImport(jobId, remainingPolls - 1);
       return undefined;
     case "succeeded":
       return undefined;
@@ -183,12 +196,20 @@ const seedMatters = async ({ selectionSeed }: DevQuickStartIdentity) => {
     });
   }
 
-  await waitForMatterImport();
+  if (response.data instanceof Response) {
+    throw new DevQuickStartError({
+      code: DEV_QUICK_START_ERROR.matterImport,
+      message: "The Harvey LAB import could not start.",
+    });
+  }
+
+  await waitForMatterImport(response.data.jobId);
 };
 
 export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
   const t = useTranslations();
   const analytics = useAnalytics();
+  const navigate = useNavigate();
   const invalidateSession = useInvalidateSession();
   const attemptRef = useRef<DevQuickStartAttempt | null>(null);
   const [phase, setPhase] = useState<DevQuickStartPhase | null>(null);
@@ -229,6 +250,13 @@ export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
 
     if (Result.isError(result)) {
       setPhase(null);
+      if (DevQuickStartTwoFactorRequired.is(result.error)) {
+        await navigate({
+          to: "/auth/two-factor",
+          search: { redirectTo },
+        });
+        return;
+      }
       analytics.captureError(result.error);
       stellaToast.add({
         title: t("auth.devQuickStart.error.title"),

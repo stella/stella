@@ -36,15 +36,18 @@ type SeedStatus =
 
 const IDLE_SEED_STATUS = { status: "idle" } as const satisfies SeedStatus;
 
+type FirmKnowledgeJob = {
+  id: string;
+  organizationId: string;
+  status: SeedStatus;
+  userId: string;
+};
+
 let seedInFlight: Promise<void> | null = null;
 let seedStatus: SeedStatus = IDLE_SEED_STATUS;
 
 let firmKnowledgeInFlight: Promise<void> | null = null;
-let firmKnowledgeStatus: SeedStatus = IDLE_SEED_STATUS;
-// The importer mutates one sparse-checkout cache, so jobs stay serialized;
-// bind status and the active job to its owning organization instead of making
-// another signed-in dev session observe or accidentally join that run.
-let firmKnowledgeOrganizationId: string | null = null;
+let firmKnowledgeJob: FirmKnowledgeJob | null = null;
 
 /** Matters to seed from the Dev menu; the CLI's own default. */
 const FIRM_KNOWLEDGE_MATTERS = 15;
@@ -57,6 +60,11 @@ const INCOMPLETE_MATTER_MODE = {
 
 const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : "Seed failed";
+
+const getFirmKnowledgeJobResponse = (job: FirmKnowledgeJob) => ({
+  jobId: job.id,
+  ...job.status,
+});
 
 export const devRoute = new Elysia({ prefix: "/dev" })
   .use(authMacro)
@@ -102,11 +110,18 @@ export const devRoute = new Elysia({ prefix: "/dev" })
 
     return seedStatus;
   })
-  .get("/seed-firm-knowledge", (ctx) =>
-    firmKnowledgeOrganizationId === null ||
-    firmKnowledgeOrganizationId === ctx.session.activeOrganizationId
-      ? firmKnowledgeStatus
-      : IDLE_SEED_STATUS,
+  .get(
+    "/seed-firm-knowledge",
+    (ctx) =>
+      firmKnowledgeJob?.id === ctx.query.jobId &&
+      firmKnowledgeJob.userId === ctx.user.id
+        ? getFirmKnowledgeJobResponse(firmKnowledgeJob)
+        : { jobId: ctx.query.jobId, ...IDLE_SEED_STATUS },
+    {
+      query: t.Object({
+        jobId: t.String({ minLength: 1, maxLength: 128 }),
+      }),
+    },
   )
   // Uploads through this same API under a short-lived job session pinned to
   // the initiating user and organization. The corpus must travel the real
@@ -118,57 +133,73 @@ export const devRoute = new Elysia({ prefix: "/dev" })
       const organizationId = ctx.session.activeOrganizationId;
       const userId = ctx.user.id;
 
-      if (
-        firmKnowledgeInFlight &&
-        firmKnowledgeOrganizationId !== organizationId
-      ) {
-        return new Response("A firm-knowledge seed is already running", {
-          status: 409,
-        });
+      if (firmKnowledgeInFlight) {
+        if (
+          firmKnowledgeJob?.organizationId !== organizationId ||
+          firmKnowledgeJob.userId !== userId
+        ) {
+          return new Response("A firm-knowledge seed is already running", {
+            status: 409,
+          });
+        }
+
+        return getFirmKnowledgeJobResponse(firmKnowledgeJob);
       }
 
-      if (!firmKnowledgeInFlight) {
-        const startedAt = new Date().toISOString();
-        firmKnowledgeOrganizationId = organizationId;
-        firmKnowledgeStatus = { status: "running", startedAt };
-        firmKnowledgeInFlight = (async () => {
-          try {
-            const seedSession = await mintDevSeedSession({
-              organizationId,
-              userId,
-            });
-            const { seedFirmKnowledge } =
-              await import("../../../scripts/seed-firm-knowledge");
-            await seedFirmKnowledge({
-              apiOrigin,
-              cookie: seedSession.cookie,
-              matters: ctx.body?.matters ?? FIRM_KNOWLEDGE_MATTERS,
-              replaceIncomplete:
-                ctx.body?.incompleteMatterMode ===
-                INCOMPLETE_MATTER_MODE.replace,
-              ...(ctx.body?.selectionSeed === undefined
-                ? {}
-                : { selectionSeed: ctx.body.selectionSeed }),
-            });
-            firmKnowledgeStatus = {
+      const startedAt = new Date().toISOString();
+      const job = {
+        id: Bun.randomUUIDv7(),
+        organizationId,
+        status: { status: "running", startedAt },
+        userId,
+      } satisfies FirmKnowledgeJob;
+      firmKnowledgeJob = job;
+      firmKnowledgeInFlight = (async () => {
+        try {
+          const seedSession = await mintDevSeedSession({
+            organizationId,
+            userId,
+          });
+          const { seedFirmKnowledge } =
+            await import("../../../scripts/seed-firm-knowledge");
+          await seedFirmKnowledge({
+            apiOrigin,
+            cookie: seedSession.cookie,
+            matters: ctx.body?.matters ?? FIRM_KNOWLEDGE_MATTERS,
+            replaceIncomplete:
+              ctx.body?.incompleteMatterMode === INCOMPLETE_MATTER_MODE.replace,
+            ...(ctx.body?.selectionSeed === undefined
+              ? {}
+              : { selectionSeed: ctx.body.selectionSeed }),
+          });
+          firmKnowledgeJob = {
+            id: job.id,
+            organizationId,
+            status: {
               status: "succeeded",
               startedAt,
               finishedAt: new Date().toISOString(),
-            };
-          } catch (error: unknown) {
-            firmKnowledgeStatus = {
+            },
+            userId,
+          } satisfies FirmKnowledgeJob;
+        } catch (error: unknown) {
+          firmKnowledgeJob = {
+            id: job.id,
+            organizationId,
+            status: {
               status: "failed",
               startedAt,
               finishedAt: new Date().toISOString(),
               message: getErrorMessage(error),
-            };
-          } finally {
-            firmKnowledgeInFlight = null;
-          }
-        })();
-      }
+            },
+            userId,
+          } satisfies FirmKnowledgeJob;
+        } finally {
+          firmKnowledgeInFlight = null;
+        }
+      })();
 
-      return firmKnowledgeStatus;
+      return getFirmKnowledgeJobResponse(job);
     },
     {
       body: t.Optional(

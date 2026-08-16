@@ -161,10 +161,18 @@ export const DevSidebarGroup = () => {
       return;
     }
 
+    if (start.data instanceof Response) {
+      setSeedingFirmKnowledge(false);
+      stellaToast.add({ title: "Firm-knowledge seed failed", type: "error" });
+      return;
+    }
+
     await pollSeedJob({
       maxPolls: FIRM_KNOWLEDGE_MAX_POLLS,
       poll: async () => {
-        const { data, error } = await api.dev["seed-firm-knowledge"].get();
+        const { data, error } = await api.dev["seed-firm-knowledge"].get({
+          query: { jobId: start.data.jobId },
+        });
         if (error !== null) {
           return null;
         }
