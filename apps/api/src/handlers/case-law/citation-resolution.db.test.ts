@@ -14,6 +14,10 @@ import {
   resolveCitationBatch,
   resolveCitationsForDecision,
 } from "@/api/handlers/case-law/citation-resolution";
+import {
+  loadCitationResolutionCursor,
+  saveCitationResolutionCursor,
+} from "@/api/handlers/case-law/citation-resolution-cursor";
 import { CITATION_RESOLUTION_STATUS } from "@/api/handlers/case-law/citation-resolution-status";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -586,6 +590,22 @@ test("a second decision under a resolved key retracts the edge", async () => {
     cited: null,
     status: CITATION_RESOLUTION_STATUS.AMBIGUOUS,
   });
+});
+
+test("the walk's position survives a restart and can be wrapped", async () => {
+  // The walk is correct without a persisted position — settled rows leave the
+  // predicate — so what this pins is that saving one does not corrupt it: the
+  // pair round-trips, and clearing it is written rather than left implicit, so
+  // a task that stops right after draining does not resume at the far end of a
+  // queue that has since been refilled behind it.
+  expect(await loadCitationResolutionCursor(scopedDb)).toBeNull();
+
+  const position = { citingDecisionId: citing, citationId: plainCitation };
+  await saveCitationResolutionCursor(scopedDb, position);
+  expect(await loadCitationResolutionCursor(scopedDb)).toEqual(position);
+
+  await saveCitationResolutionCursor(scopedDb, null);
+  expect(await loadCitationResolutionCursor(scopedDb)).toBeNull();
 });
 
 test("the database refuses an empty citation key on either side", async () => {

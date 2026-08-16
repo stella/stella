@@ -10,7 +10,7 @@
  * them.
  */
 
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawCitationResolutionProgress } from "@/api/db/schema";
@@ -19,7 +19,6 @@ import {
   CITATION_RESOLUTION_SCOPE,
   type CitationResolutionScope,
 } from "@/api/handlers/case-law/citation-resolution-status";
-import { toSafeId } from "@/api/lib/branded-types";
 
 const SCOPE: CitationResolutionScope = CITATION_RESOLUTION_SCOPE.GLOBAL;
 
@@ -59,26 +58,23 @@ export const saveCitationResolutionCursor = async (
   scopedDb: ScopedDb,
   cursor: CitationResolutionCursor | null,
 ): Promise<void> => {
-  // The cursor travels as opaque text because it addresses a position in a
-  // scan; the columns hold entity ids, and these are the ids the scan reported
-  // having reached, so they are parsed back rather than asserted.
-  const columns = {
-    cursorCitingDecisionId: cursor
-      ? toSafeId<"caseLawDecision">(cursor.citingDecisionId)
-      : null,
-    cursorCitationId: cursor
-      ? toSafeId<"caseLawCitation">(cursor.citationId)
-      : null,
-    updatedAt: new Date(),
-  };
+  // Written as SQL rather than through the query builder: the cursor travels
+  // as opaque text because it addresses a position in a scan, and the columns
+  // are branded ids. Re-branding here would claim an entity identity the walk
+  // never established; the database's own `::uuid` cast is the check that
+  // matters, and it rejects anything that is not one.
+  const citingDecisionId = cursor?.citingDecisionId ?? null;
+  const citationId = cursor?.citationId ?? null;
   await scopedDb(async (tx) => {
     // audit: skip — background walk bookkeeping, not a user action
-    await tx
-      .insert(caseLawCitationResolutionProgress)
-      .values({ scope: SCOPE, ...columns })
-      .onConflictDoUpdate({
-        target: caseLawCitationResolutionProgress.scope,
-        set: columns,
-      });
+    await tx.execute(sql`
+      INSERT INTO ${caseLawCitationResolutionProgress}
+        (scope, cursor_citing_decision_id, cursor_citation_id, updated_at)
+      VALUES (${SCOPE}, ${citingDecisionId}::uuid, ${citationId}::uuid, now())
+      ON CONFLICT (scope) DO UPDATE
+        SET cursor_citing_decision_id = EXCLUDED.cursor_citing_decision_id,
+            cursor_citation_id = EXCLUDED.cursor_citation_id,
+            updated_at = EXCLUDED.updated_at
+    `);
   });
 };
