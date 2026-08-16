@@ -8,7 +8,7 @@ import {
 } from "bun:test";
 import { TransactionRollbackError } from "drizzle-orm";
 
-import { organization, user } from "@/api/db/auth-schema";
+import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
   usageEntitlements,
@@ -65,6 +65,15 @@ const setupFixture = async (tx: Transaction): Promise<Fixture> => {
     id: userId,
     name: "Test User",
     email: `${userId}@test.local`,
+  });
+  // Designations bind to the membership, so the fixture user must be a
+  // member for seedAssignment's row to exist.
+  await tx.insert(member).values({
+    id: `member_${Bun.randomUUIDv7()}`,
+    organizationId,
+    userId,
+    role: "member",
+    createdAt: ASOF,
   });
 
   return { organizationId, userId };
@@ -346,6 +355,13 @@ describe("chat usage lane routing", () => {
         id: otherUserId,
         name: "Other User",
         email: `${otherUserId}@test.local`,
+      });
+      await tx.insert(member).values({
+        id: `member_${Bun.randomUUIDv7()}`,
+        organizationId: fx.organizationId,
+        userId: otherUserId,
+        role: "member",
+        createdAt: ASOF,
       });
       await tx
         .insert(usageSeatAssignments)

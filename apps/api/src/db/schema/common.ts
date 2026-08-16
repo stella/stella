@@ -19,7 +19,7 @@ import type { CountryCode } from "@stll/country-codes";
 import type { PersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import { organization, user } from "@/api/db/auth-schema";
+import { member, organization, user } from "@/api/db/auth-schema";
 import { jsonb, timestamptz } from "@/api/db/columns";
 import {
   agentSkillPolicies,
@@ -448,6 +448,7 @@ export {
   isNotNull,
   isNull,
   jsonb,
+  member,
   organization,
   p,
   panic,

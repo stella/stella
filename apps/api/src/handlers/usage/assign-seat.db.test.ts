@@ -7,8 +7,9 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
+import { member, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   usageEntitlements,
@@ -142,5 +143,35 @@ describe("assign-seat capacity", () => {
 
     expect(result).toEqual({ assigned: true });
     expect(await assignedUserIds()).toEqual([ids.userA2]);
+  });
+
+  test("removing the membership removes the designation and frees the seat", async () => {
+    // Throwaway member so deleting the membership cannot disturb the
+    // shared fixture rows other tests rely on.
+    const leaverId = `user_${Bun.randomUUIDv7()}`;
+    await testDb.insert(user).values({
+      id: leaverId,
+      name: "Leaver",
+      email: `${leaverId}@test.local`,
+    });
+    await testDb.insert(member).values({
+      id: `member_${Bun.randomUUIDv7()}`,
+      organizationId: ids.orgA,
+      userId: leaverId,
+      role: "member",
+      createdAt: new Date(),
+    });
+    await assignSeat.handler(assignContextFor(leaverId));
+    expect(await assignedUserIds()).toEqual([leaverId]);
+
+    await testDb
+      .delete(member)
+      .where(
+        and(eq(member.organizationId, ids.orgA), eq(member.userId, leaverId)),
+      );
+
+    expect(await assignedUserIds()).toEqual([]);
+    const result = await assignSeat.handler(assignContextFor(ids.userA2));
+    expect(result).toEqual({ assigned: true });
   });
 });

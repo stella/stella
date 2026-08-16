@@ -574,6 +574,58 @@ describe("dispatch — handleHostedEntitlementUpsert", () => {
     });
   });
 
+  test("shrinking the quantity trims the roster to the oldest designations", async () => {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+      await handleHostedEntitlementUpsert({
+        tx,
+        payload: buildEntitlementPayload(fx),
+        eventId: "evt_shrink_create",
+      });
+
+      // Three designated members with distinct designation times; the
+      // handler-side default (now()) is the transaction timestamp, so
+      // explicit stamps are what make keep-oldest observable.
+      const designated = [fx.memberUserId];
+      for (const _extra of [1, 2]) {
+        const extraUserId = `user_${Bun.randomUUIDv7()}`;
+        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- two sequential seed rows in a test fixture
+        await tx.insert(user).values({
+          id: extraUserId,
+          name: "Extra Member",
+          email: `${extraUserId}@test.local`,
+        });
+        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- see above
+        await tx.insert(member).values({
+          id: `member_${Bun.randomUUIDv7()}`,
+          organizationId: fx.organizationId,
+          userId: extraUserId,
+          role: "member",
+          createdAt: PERIOD_START,
+        });
+        designated.push(extraUserId);
+      }
+      await tx.insert(usageSeatAssignments).values(
+        designated.map((userId, index) => ({
+          organizationId: fx.organizationId,
+          userId,
+          createdAt: new Date(PERIOD_START.getTime() + index * 3_600_000),
+        })),
+      );
+
+      const outcome = await handleHostedEntitlementUpsert({
+        tx,
+        payload: buildEntitlementPayload(fx, { quantity: 1 }),
+        eventId: "evt_shrink_update",
+      });
+      expect(outcome.kind).toBe("applied");
+      // Only the earliest designation survives a shrink to one.
+      expect(await readSeatAssignments(tx, fx)).toEqual([
+        { userId: fx.memberUserId },
+      ]);
+    });
+  });
+
   test("a seat_user_id outside the organization seats nobody", async () => {
     await withRolledBackTx(async (tx) => {
       const fx = await setupFixture(tx);

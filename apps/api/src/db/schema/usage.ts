@@ -1,6 +1,7 @@
 import {
   DESTRUCTIVE_EFFECT_CHUNK_STATUSES,
   jsonb,
+  member,
   organization,
   organizationCheck,
   p,
@@ -616,10 +617,7 @@ export const usageSeatAssignments = p.pgTable(
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    userId: p
-      .text("user_id")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
+    userId: p.text("user_id").notNull(),
     assignedByUserId: p
       .text("assigned_by_user_id")
       .references(() => user.id, { onDelete: "set null" }),
@@ -629,6 +627,17 @@ export const usageSeatAssignments = p.pgTable(
     p
       .uniqueIndex("usage_seat_assignments_org_user_uidx")
       .on(table.organizationId, table.userId),
+    // Bound to the membership, not the account: removing a member from
+    // the organization removes the designation with it, so an orphan
+    // can neither hold capacity nor silently restore budgets on
+    // re-invite.
+    p
+      .foreignKey({
+        columns: [table.organizationId, table.userId],
+        foreignColumns: [member.organizationId, member.userId],
+        name: "usage_seat_assignments_member_fk",
+      })
+      .onDelete("cascade"),
     // Reads for any member (the lane decision runs for every user);
     // writes stay manager-gated at the handler layer on top of the
     // org check.

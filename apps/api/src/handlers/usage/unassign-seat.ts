@@ -7,6 +7,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tUserId } from "@/api/lib/custom-schema";
+import { lockAssignmentCapacity } from "@/api/lib/usage/assignment-capacity";
 
 /**
  * Release a member's per-user included limit. Idempotent: releasing
@@ -27,6 +28,10 @@ const unassignSeat = createSafeRootHandler(
   async function* ({ body, session, safeDb, recordAuditEvent }) {
     yield* Result.await(
       safeDb(async (tx) => {
+        // Serialize with designation so a racing capacity check cannot
+        // count a row that this release is about to remove.
+        await lockAssignmentCapacity(tx, session.activeOrganizationId);
+
         const deleted = await tx
           .delete(usageSeatAssignments)
           .where(
