@@ -720,6 +720,7 @@
     },
     "unsupportedFileType": "Nieobsługiwany typ pliku",
     "uploadFailed": "Przetwarzanie pliku nie powiodło się",
+    "usageFallbackNotice": "Dzienny limit AI wyczerpany — odpowiedzi działają dalej na modelu standardowym. Pełna szybkość wróci jutro.",
     "videoContent": "Wygenerowane wideo",
     "webSearch": {
       "answer": "Summary from sources",

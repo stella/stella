@@ -3,6 +3,7 @@ import Elysia from "elysia";
 import createHostedManagement from "@/api/handlers/usage/create-hosted-management";
 import createHostedSetup from "@/api/handlers/usage/create-hosted-setup";
 import getEntitlement from "@/api/handlers/usage/get-entitlement";
+import getLane from "@/api/handlers/usage/get-lane";
 import listPolicies from "@/api/handlers/usage/list-policies";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 
@@ -20,6 +21,9 @@ export const usageRoute = new Elysia({ prefix: "/usage" })
   .guard({ validateAuth: true })
   .get("/entitlement", getEntitlement.handler, {
     permissions: getEntitlement.config.permissions,
+  })
+  .get("/lane", getLane.handler, {
+    permissions: getLane.config.permissions,
   })
   .get("/policies", listPolicies.handler, {
     permissions: listPolicies.config.permissions,

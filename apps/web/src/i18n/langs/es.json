@@ -720,6 +720,7 @@
     },
     "unsupportedFileType": "Tipo de archivo no compatible",
     "uploadFailed": "Error al procesar el archivo",
+    "usageFallbackNotice": "Se agotó la asignación diaria de IA: las respuestas continúan con el modelo estándar. La velocidad completa vuelve mañana.",
     "videoContent": "Vídeo generado",
     "webSearch": {
       "answer": "Summary from sources",

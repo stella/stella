@@ -720,6 +720,7 @@
     },
     "unsupportedFileType": "Nepodporovaný typ súboru",
     "uploadFailed": "Spracovanie súboru zlyhalo",
+    "usageFallbackNotice": "Denný prídel AI je vyčerpaný — odpovede pokračujú na štandardnom modeli. Plná rýchlosť sa vráti zajtra.",
     "videoContent": "Vygenerované video",
     "webSearch": {
       "answer": "Summary from sources",

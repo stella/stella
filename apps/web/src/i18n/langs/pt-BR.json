@@ -720,6 +720,7 @@
     },
     "unsupportedFileType": "Tipo de arquivo não suportado",
     "uploadFailed": "Falha ao processar o arquivo",
+    "usageFallbackNotice": "Cota diária de IA esgotada — as respostas continuam no modelo padrão. A velocidade total volta amanhã.",
     "videoContent": "Vídeo gerado",
     "webSearch": {
       "answer": "Summary from sources",

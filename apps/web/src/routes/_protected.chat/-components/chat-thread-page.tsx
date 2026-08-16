@@ -40,8 +40,10 @@ import { useChatModelSelection } from "@/components/chat/use-chat-model-selectio
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import Tooltip from "@/components/tooltip";
+import { UsageFallbackNotice } from "@/components/usage/usage-fallback-notice";
 import { UsageLimitModal } from "@/components/usage/usage-limit-modal";
 import { useUsageLimit } from "@/components/usage/use-usage-limit";
+import { env } from "@/env";
 import { SuggestedFollowupChips } from "@/features/chat/components/suggested-followup-chips";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
@@ -749,6 +751,7 @@ export const ChatThreadPage = ({
                   );
                 }}
               />
+              {env.VITE_FEATURE_USAGE && <UsageFallbackNotice />}
               {/* Glass tray behind the composer + status row: the shared
                   `ComposerVeil` (one owner of the blur/tint values across
                   every chat surface) fills this `relative isolate` wrapper

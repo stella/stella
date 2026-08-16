@@ -720,6 +720,7 @@
     },
     "unsupportedFileType": "Nicht unterstützter Dateityp",
     "uploadFailed": "Datei konnte nicht verarbeitet werden",
+    "usageFallbackNotice": "Tägliches KI-Kontingent aufgebraucht — Antworten laufen weiter über das Standardmodell. Volle Geschwindigkeit gibt es morgen wieder.",
     "videoContent": "Generiertes Video",
     "webSearch": {
       "answer": "Summary from sources",

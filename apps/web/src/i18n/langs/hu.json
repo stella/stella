@@ -720,6 +720,7 @@
     },
     "unsupportedFileType": "Nem támogatott fájltípus",
     "uploadFailed": "A fájl feldolgozása sikertelen",
+    "usageFallbackNotice": "A napi AI-keret elfogyott — a válaszok a normál modellen folytatódnak. A teljes sebesség holnap tér vissza.",
     "videoContent": "Generált videó",
     "webSearch": {
       "answer": "Summary from sources",
