@@ -191,6 +191,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       feature: "case-law.analysis",
       organizationId: orgId,
       orgAIConfig: createOpenAIOrgAIConfig(),
+      properties: { jurisdiction: "CZE" },
       traceId: "trace_grouped",
     });
     const ctx = createMiddlewareContext();
@@ -209,6 +210,12 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     for (const event of events) {
       expect(event.groups).toEqual({ organization: orgId });
     }
+    // `jurisdiction` is a newly allowlisted safe property and must survive
+    // into the completed event.
+    const completed = events.find(
+      (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGenerationCompleted,
+    );
+    expect(completed?.properties).toMatchObject({ jurisdiction: "CZE" });
   });
 
   test("records usage through TanStack deferred side effects", async () => {
