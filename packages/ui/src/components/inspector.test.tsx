@@ -108,6 +108,10 @@ describe("Inspector", () => {
     expect(markup).toContain('data-slot="inspector-property-label"');
     expect(markup).toContain('data-slot="inspector-property-value"');
 
+    // Tabs sit flush inside the root's `overflow-hidden`, so the focus ring has
+    // to be drawn inside the tab or the indicator is clipped for keyboard users.
+    expect(markup).toContain("focus-visible:ring-inset");
+
     // The slot names above survive a swap to generic elements, so pin the
     // description-list tags too: the semantics are the point of these slots.
     expect(markup).toMatch(/<dl\b/u);

@@ -144,7 +144,12 @@ const InspectorTab = ({
 }: React.ComponentProps<typeof TabsTab>) => (
   <TabsTab
     className={cn(
-      "h-11 grow-0 rounded-none px-2 text-xs sm:h-11 sm:text-xs",
+      // The tab fills the list's full height and the list sits flush against
+      // the tabs root, so the inherited outward `focus-visible:ring-2` would be
+      // clipped by that root's `overflow-hidden`. Drawing the ring inside the
+      // tab keeps the whole indicator visible without changing the strip's
+      // metrics.
+      "h-11 grow-0 rounded-none px-2 text-xs focus-visible:ring-inset sm:h-11 sm:text-xs",
       className,
     )}
     data-slot="inspector-tab"
