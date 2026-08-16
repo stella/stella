@@ -37,13 +37,20 @@ export const _neverPinned = ({ ...props }: Omit<PanelProps, "variant">) => (
   <Panel {...props} />
 );
 
-// Both omitted keys are reported; `variant` is pinned before the spread and
-// `orientation` is not pinned at all.
-export const _multipleKeys = (
+// Each member of a literal-key union is guarded on its own: the other key is
+// pinned after the spread, so only one diagnostic can keep each directive used
+// and dropping either member of the union leaves its directive unused.
+export const _unionKeyOrientation = (
   props: Omit<PanelProps, "orientation" | "variant">,
 ) => (
   // oxlint-disable-next-line no-omitted-prop-respread/no-omitted-prop-respread
-  <Panel variant="underline" {...props} />
+  <Panel {...props} variant="underline" />
+);
+export const _unionKeyVariant = (
+  props: Omit<PanelProps, "orientation" | "variant">,
+) => (
+  // oxlint-disable-next-line no-omitted-prop-respread/no-omitted-prop-respread
+  <Panel {...props} orientation="horizontal" />
 );
 
 // A second spread after the pin can override it just as the first would.
