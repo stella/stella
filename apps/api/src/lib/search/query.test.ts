@@ -10,7 +10,6 @@ import {
   getSearchPreviewLocatorCandidates,
   normalizeFileNameForSearch,
   normalizeFileNameVariantForSearch,
-  removeSearchDiacritics,
   toAdvancedTsQueryText,
   toLooseTsQueryText,
   toPrefixTsQueryText,
@@ -69,8 +68,21 @@ describe("search query text", () => {
   });
 
   test("normalizes diacritics for lexeme-based search syntax", () => {
-    expect(removeSearchDiacritics("černý žaloba")).toBe("cerny zaloba");
     expect(toPrefixTsQueryText("černý")).toBe("cerny:*");
+  });
+
+  test("folds stroke letters the way the indexed lexemes were folded", () => {
+    // `to_tsvector('public.stella_unaccent', 'łaska laska')` stores the single
+    // lexeme 'laska'. Asking for `łaska:*` matches nothing the index holds, so
+    // the query side has to reach the same lexeme both spellings collapse to.
+    expect(toPrefixTsQueryText("łaska")).toBe("laska:*");
+    expect(toPrefixTsQueryText("łaska")).toBe(toPrefixTsQueryText("laska"));
+    expect(toPrefixTsQueryText("wyłączenie sędziego")).toBe(
+      "wylaczenie:* & sedziego:*",
+    );
+    expect(getSearchPreviewLocatorCandidates("Świętochłowice")).toEqual([
+      "Swietochlowice",
+    ]);
   });
 
   test("builds prefix tsquery text from normalized filename tokens", () => {

@@ -6,6 +6,8 @@ export {
   ARABIC_REMOVED,
 } from "./arabic.js";
 export type { FoldedText } from "./arabic.js";
+export { foldToAscii } from "./ascii-fold.js";
+export { ASCII_FOLD_TABLE } from "./ascii-fold-table.js";
 export { stripDiacritics, stripDiacriticsForSlug } from "./diacritics.js";
 export { normalizeSearchText } from "./normalize.js";
 export {
