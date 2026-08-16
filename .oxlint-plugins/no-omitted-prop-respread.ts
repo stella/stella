@@ -88,7 +88,7 @@ const typeReferenceName = (typeName) => {
 
 // String keys from the second `Omit` argument: `"a"` or `"a" | "b"`.
 // A non-literal key set yields nothing, which is the documented boundary.
-const literalKeysOf = (keyTypeNode) => {
+const literalKeysOf = (keyTypeNode): string[] => {
   if (keyTypeNode?.type === "TSLiteralType") {
     const literal = keyTypeNode.literal;
     return typeof literal?.value === "string" ? [literal.value] : [];
@@ -105,7 +105,7 @@ const literalKeysOf = (keyTypeNode) => {
  * keeps only the keys every branch omits, since a value of the other branch may
  * legitimately carry the rest.
  */
-const omittedKeysOf = (typeNode, localTypes, depth = 0) => {
+const omittedKeysOf = (typeNode, localTypes, depth = 0): string[] => {
   if (typeNode === null || typeNode === undefined || depth > MAX_ALIAS_DEPTH) {
     return [];
   }
@@ -147,7 +147,7 @@ const omittedKeysOf = (typeNode, localTypes, depth = 0) => {
  * type. `Omit<P, "size"> & { size?: Local }` re-types `size` rather than
  * forbidding it, so the key is meant to reach the element.
  */
-const reintroducedKeysOf = (typeNode, localTypes, depth = 0) => {
+const reintroducedKeysOf = (typeNode, localTypes, depth = 0): string[] => {
   if (typeNode === null || typeNode === undefined || depth > MAX_ALIAS_DEPTH) {
     return [];
   }
@@ -199,7 +199,7 @@ const propsBindingOf = (param) => {
 
 // Keys a destructuring pattern names before its rest element. A rest object
 // provably excludes them, so no spread of it can carry the key.
-const destructuredKeysOf = (param) => {
+const destructuredKeysOf = (param): string[] => {
   if (param?.type !== "ObjectPattern") {
     return [];
   }
@@ -241,7 +241,7 @@ export default eslintCompatPlugin({
         const localTypes = new Map();
         // One frame per enclosing function: the props binding it introduces and
         // the literal keys its parameter type omits.
-        const scopes = [];
+        const scopes: { binding: string | null; keys: Set<string> }[] = [];
 
         // Props types are aliases here: `typescript/consistent-type-definitions`
         // keeps interfaces out of this codebase.
@@ -298,46 +298,50 @@ export default eslintCompatPlugin({
           FunctionExpression: enterFunction,
           "FunctionExpression:exit": exitFunction,
           JSXElement(node) {
-            const attributes = node.openingElement.attributes ?? [];
+            const attributes = node.openingElement.attributes;
             // Only a spread of a named value can smuggle a key; an object
-            // literal spread is statically known.
-            const spreadNames = new Set(
-              attributes
-                .filter(
-                  (attribute) =>
-                    attribute.type === "JSXSpreadAttribute" &&
-                    isIdentifier(attribute.argument),
-                )
-                .map((attribute) => attribute.argument.name),
-            );
+            // literal spread is statically known. Any spread can override an
+            // earlier attribute, so the pin has to clear the last one.
+            const spreadNames = new Set<string>();
+            let lastSpreadIndex = -1;
+            for (const [index, attribute] of attributes.entries()) {
+              if (attribute.type !== "JSXSpreadAttribute") {
+                continue;
+              }
+              lastSpreadIndex = index;
+              if (isIdentifier(attribute.argument)) {
+                spreadNames.add(attribute.argument.name);
+              }
+            }
+
             // The innermost enclosing component whose props reach this element.
             const scope = scopes.findLast(
               (candidate) =>
-                candidate.keys.size > 0 && spreadNames.has(candidate.binding),
+                candidate.binding !== null &&
+                candidate.keys.size > 0 &&
+                spreadNames.has(candidate.binding),
             );
             if (scope === undefined) {
               return;
             }
 
-            // Any later spread can override, so the pin must clear the last one.
-            const lastSpreadIndex = attributes.findLastIndex(
-              (attribute) => attribute.type === "JSXSpreadAttribute",
-            );
             for (const key of scope.keys) {
               if (key === "children" && hasMeaningfulChildren(node)) {
                 continue;
               }
-              const pinIndex = attributes.findIndex(
+              const pin = attributes.find(
                 (attribute) => attributeName(attribute) === key,
               );
-              if (pinIndex > lastSpreadIndex) {
+              if (
+                pin !== undefined &&
+                attributes.indexOf(pin) > lastSpreadIndex
+              ) {
                 continue;
               }
               context.report({
-                node:
-                  pinIndex === -1 ? node.openingElement : attributes[pinIndex],
+                node: pin ?? node.openingElement,
                 messageId:
-                  pinIndex === -1 ? "suppliedBySpread" : "pinnedBeforeSpread",
+                  pin === undefined ? "suppliedBySpread" : "pinnedBeforeSpread",
                 data: { key },
               });
             }
