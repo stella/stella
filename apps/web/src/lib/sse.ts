@@ -92,6 +92,10 @@ export const useWorkspaceSSE = (
     let source: EventSource | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let consecutiveFailures = 0;
+    // Offline failures back off but never count toward the outage capture:
+    // they would either trip it on the first failure after coming back
+    // online, or overshoot the threshold so a real outage never equals it.
+    let consecutiveOnlineFailures = 0;
     let disposed = false;
 
     const handleMessage = (event: MessageEvent) => {
@@ -112,6 +116,7 @@ export const useWorkspaceSSE = (
 
       const handleOpen = () => {
         consecutiveFailures = 0;
+        consecutiveOnlineFailures = 0;
       };
 
       const handleError = () => {
@@ -122,11 +127,13 @@ export const useWorkspaceSSE = (
         }
         stream.close();
         consecutiveFailures += 1;
-        if (
-          consecutiveFailures === SSE_ESCALATE_AFTER_FAILURES &&
-          navigator.onLine
-        ) {
-          captureConnectionOutage();
+        if (navigator.onLine) {
+          consecutiveOnlineFailures += 1;
+          if (consecutiveOnlineFailures === SSE_ESCALATE_AFTER_FAILURES) {
+            captureConnectionOutage();
+          }
+        } else {
+          consecutiveOnlineFailures = 0;
         }
         reconnectTimer = setTimeout(() => {
           reconnectTimer = null;

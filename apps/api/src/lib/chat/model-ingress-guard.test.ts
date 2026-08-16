@@ -275,6 +275,11 @@ describe("guarded model surfaces", () => {
     expect(captureErrorMock).not.toHaveBeenCalled();
     expect(loggerWarnMock).toHaveBeenCalledTimes(1);
     const [, attributes] = loggerWarnMock.mock.calls.at(0) ?? [];
+    expect(attributes).toEqual({
+      pathCount: "1",
+      paths: "$",
+      surface: "system-prompt-mixed",
+    });
     expect(JSON.stringify(attributes)).not.toContain(WS_A);
   });
 

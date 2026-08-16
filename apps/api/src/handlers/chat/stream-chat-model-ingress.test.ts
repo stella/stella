@@ -57,6 +57,11 @@ describe("mid-loop rewrites re-enter the model-ingress guard", () => {
     expect(captureErrorMock).not.toHaveBeenCalled();
     expect(loggerWarnMock).toHaveBeenCalledTimes(1);
     const [, attributes] = loggerWarnMock.mock.calls.at(0) ?? [];
+    expect(attributes).toEqual({
+      pathCount: "1",
+      paths: "$",
+      surface: "system-prompt-mixed",
+    });
     expect(JSON.stringify(attributes)).not.toContain(WS_A);
   });
 
@@ -107,6 +112,13 @@ describe("mid-loop rewrites re-enter the model-ingress guard", () => {
     expect(dispatched).toContain(PUBLIC_UUID);
     expect(captureErrorMock).not.toHaveBeenCalled();
     expect(loggerWarnMock).toHaveBeenCalledTimes(1);
+    const [, attributes] = loggerWarnMock.mock.calls.at(0) ?? [];
+    expect(attributes).toEqual({
+      pathCount: "1",
+      paths: "$[0].content",
+      surface: "messages",
+    });
+    expect(JSON.stringify(attributes)).not.toContain(WS_A);
   });
 
   test("keeps a clean summary intact and skips the patch when nothing compacted", () => {

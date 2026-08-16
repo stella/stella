@@ -155,6 +155,7 @@ export const redactTenantIdsDeep = <T extends object>({
   }
   if (state.paths.length > 0) {
     logger.warn("chat.model_ingress_redacted", {
+      pathCount: String(state.paths.length),
       paths: state.paths.slice(0, 20).join(", "),
       surface: "messages",
     });
@@ -267,6 +268,7 @@ export const redactModelSystemPrompt = ({
     // output or user text, so the hit is routine and the redaction is the
     // enforcement — same treatment as the messages surface.
     logger.warn("chat.model_ingress_redacted", {
+      pathCount: String(state.paths.length),
       paths: state.paths.slice(0, 20).join(", "),
       surface: "system-prompt-mixed",
     });

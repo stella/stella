@@ -55,6 +55,13 @@ void mock.module("@/api/lib/analytics/capture", () => ({
   captureRequestError: captureErrorMock,
 }));
 
+const loggerWarnMock = mock();
+const realLogger = await import("@/api/lib/observability/logger");
+void mock.module("@/api/lib/observability/logger", () => ({
+  ...realLogger,
+  logger: { ...realLogger.logger, warn: loggerWarnMock },
+}));
+
 void mock.module("@/api/lib/tanstack-ai-models", () => ({
   ...realTanStackAIModels,
   getTanStackTextModelById: () => testModel,
@@ -482,6 +489,7 @@ describe("TanStack AI model-ingress guard", () => {
   test("redacts tenant ids out of the dispatched messages", async () => {
     capturedChatOptions.length = 0;
     captureErrorMock.mockClear();
+    loggerWarnMock.mockClear();
     nextChatResult = createTextStream(["ok"]);
 
     await generateTanStackTextForRole({
@@ -499,7 +507,9 @@ describe("TanStack AI model-ingress guard", () => {
     expect(dispatched).toContain("[internal-id-removed]");
     // Membership-exact: a public decision id is not a tenant id.
     expect(dispatched).toContain(publicDecisionId);
-    expect(captureErrorMock).toHaveBeenCalledTimes(1);
+    // Routine redaction hits log; only server-built surfaces still capture.
+    expect(captureErrorMock).not.toHaveBeenCalled();
+    expect(loggerWarnMock).toHaveBeenCalledTimes(1);
   });
 
   test("leaves a request without tenant ids untouched and silent", async () => {
@@ -530,6 +540,7 @@ describe("TanStack AI model-ingress guard", () => {
   test("redacts an untrusted-embedding system prompt, fails closed on a server-built one", async () => {
     capturedChatOptions.length = 0;
     captureErrorMock.mockClear();
+    loggerWarnMock.mockClear();
     nextChatResult = createTextStream(["ok"]);
 
     await generateTanStackTextForRole({
@@ -546,7 +557,9 @@ describe("TanStack AI model-ingress guard", () => {
     expect(getOnlyCapturedChatOptions().systemPrompts).toEqual([
       "Document context: workspace [internal-id-removed]",
     ]);
-    expect(captureErrorMock).toHaveBeenCalledTimes(1);
+    // Routine redaction hits log; only server-built surfaces still capture.
+    expect(captureErrorMock).not.toHaveBeenCalled();
+    expect(loggerWarnMock).toHaveBeenCalledTimes(1);
 
     capturedChatOptions.length = 0;
     nextChatResult = createTextStream(["ok"]);
