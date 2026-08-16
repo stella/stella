@@ -10,7 +10,11 @@ import { TransactionRollbackError } from "drizzle-orm";
 
 import { organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import { usageEntitlements, usagePolicies } from "@/api/db/schema";
+import {
+  usageEntitlements,
+  usagePolicies,
+  usageSeatAssignments,
+} from "@/api/db/schema";
 import type { UsageEntitlementStatus } from "@/api/db/schema";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -103,6 +107,18 @@ const seedEntitlement = async ({
   });
 };
 
+/**
+ * Occupy one of the org's seats with the fixture's user. Per-user budgets
+ * only apply to assigned members, so every test that means to reach a
+ * budget decision must seed this row: without it the verdict is "pool"
+ * for a reason that has nothing to do with the budgets under test.
+ */
+const seedAssignment = async (tx: Transaction, fx: Fixture): Promise<void> => {
+  await tx
+    .insert(usageSeatAssignments)
+    .values({ organizationId: fx.organizationId, userId: fx.userId });
+};
+
 const withRolledBackTx = async (
   fn: (tx: Transaction) => Promise<void>,
 ): Promise<void> => {
@@ -143,6 +159,7 @@ describe("chat usage lane routing", () => {
         dailyAllowanceMicroUnits: null,
         fallbackWeeklyMicroUnits: FALLBACK_WEEKLY,
       });
+      await seedAssignment(tx, fx);
 
       expect(await decideChatUsageLane({ tx, ...fx, asOf: ASOF })).toBe("pool");
     });
@@ -158,6 +175,7 @@ describe("chat usage lane routing", () => {
         dailyAllowanceMicroUnits: DAILY_ALLOWANCE,
         fallbackWeeklyMicroUnits: FALLBACK_WEEKLY,
       });
+      await seedAssignment(tx, fx);
 
       expect(await decideChatUsageLane({ tx, ...fx, asOf: ASOF })).toBe("pool");
     });
@@ -173,6 +191,7 @@ describe("chat usage lane routing", () => {
         dailyAllowanceMicroUnits: DAILY_ALLOWANCE,
         fallbackWeeklyMicroUnits: FALLBACK_WEEKLY,
       });
+      await seedAssignment(tx, fx);
 
       // An untouched bucket has no row; the missing row must read as
       // zero rather than skipping the lane.
@@ -203,6 +222,7 @@ describe("chat usage lane routing", () => {
         dailyAllowanceMicroUnits: DAILY_ALLOWANCE,
         fallbackWeeklyMicroUnits: FALLBACK_WEEKLY,
       });
+      await seedAssignment(tx, fx);
 
       // The allowance is spent at equality, not only past it.
       await incrementLaneCounter({
@@ -248,6 +268,7 @@ describe("chat usage lane routing", () => {
         dailyAllowanceMicroUnits: DAILY_ALLOWANCE,
         fallbackWeeklyMicroUnits: null,
       });
+      await seedAssignment(tx, fx);
 
       await incrementLaneCounter({
         tx,
@@ -270,6 +291,7 @@ describe("chat usage lane routing", () => {
         dailyAllowanceMicroUnits: DAILY_ALLOWANCE,
         fallbackWeeklyMicroUnits: FALLBACK_WEEKLY,
       });
+      await seedAssignment(tx, fx);
 
       await incrementLaneCounter({
         tx,
@@ -285,6 +307,50 @@ describe("chat usage lane routing", () => {
         microUnits: FALLBACK_WEEKLY,
         asOf: ASOF,
       });
+      expect(await decideChatUsageLane({ tx, ...fx, asOf: ASOF })).toBe("pool");
+    });
+  });
+
+  test("an unassigned user draws from the pool despite fully funded budgets", async () => {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+      await seedEntitlement({
+        tx,
+        fx,
+        status: "active",
+        dailyAllowanceMicroUnits: DAILY_ALLOWANCE,
+        fallbackWeeklyMicroUnits: FALLBACK_WEEKLY,
+      });
+
+      // Identical to the allowance test apart from the missing seat row:
+      // the budgets alone must not open the per-user lane.
+      expect(await decideChatUsageLane({ tx, ...fx, asOf: ASOF })).toBe("pool");
+    });
+  });
+
+  test("another member's assignment does not lend this user the budgets", async () => {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+      await seedEntitlement({
+        tx,
+        fx,
+        status: "active",
+        dailyAllowanceMicroUnits: DAILY_ALLOWANCE,
+        fallbackWeeklyMicroUnits: FALLBACK_WEEKLY,
+      });
+
+      // A seat in the same organisation, held by somebody else: the
+      // lookup must match on (org, user), not on the org alone.
+      const otherUserId = `user_${Bun.randomUUIDv7()}`;
+      await tx.insert(user).values({
+        id: otherUserId,
+        name: "Other User",
+        email: `${otherUserId}@test.local`,
+      });
+      await tx
+        .insert(usageSeatAssignments)
+        .values({ organizationId: fx.organizationId, userId: otherUserId });
+
       expect(await decideChatUsageLane({ tx, ...fx, asOf: ASOF })).toBe("pool");
     });
   });

@@ -603,6 +603,59 @@ export const usageEvents = p.pgTable(
  * `usage_events`. Buckets are UTC-aligned; a new bucket row starts the
  * count at zero, which is the reset.
  */
+/**
+ * Which members occupy the organisation's purchased seats. Only
+ * assigned members draw the per-user included budgets; everyone else
+ * keeps the shared-pool path. Assignment is manager-managed and
+ * bounded by the entitlement's seat count at write time.
+ */
+export const usageSeatAssignments = p.pgTable(
+  "usage_seat_assignments",
+  {
+    id: pUuid<"usageSeatAssignment">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    assignedByUserId: p
+      .text("assigned_by_user_id")
+      .references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .uniqueIndex("usage_seat_assignments_org_user_uidx")
+      .on(table.organizationId, table.userId),
+    // Reads for any member (the lane decision runs for every user);
+    // writes stay manager-gated at the handler layer on top of the
+    // org check.
+    p.pgPolicy("usage_seat_assignments_select", {
+      for: "select",
+      to: stella,
+      using: organizationCheck,
+    }),
+    p.pgPolicy("usage_seat_assignments_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: organizationCheck,
+    }),
+    p.pgPolicy("usage_seat_assignments_delete", {
+      for: "delete",
+      to: stella,
+      using: organizationCheck,
+    }),
+    p.pgPolicy("usage_seat_assignments_no_update", {
+      as: "restrictive",
+      for: "update",
+      to: stella,
+      using: sql`false`,
+    }),
+  ],
+);
+
 export const usageLaneCounters = p.pgTable(
   "usage_lane_counters",
   {

@@ -18,7 +18,11 @@ import { and, eq } from "drizzle-orm";
 
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import { usagePolicies, usageEntitlements } from "@/api/db/schema";
+import {
+  usagePolicies,
+  usageEntitlements,
+  usageSeatAssignments,
+} from "@/api/db/schema";
 import type { UsageEntitlementStatus, UsagePolicyKind } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -458,6 +462,26 @@ export const handleHostedEntitlementUpsert = async ({
         resourceId: insertedId,
         eventId,
       });
+      // First activation: assign the purchasing member to a seat so
+      // the per-user budgets work immediately; further assignments are
+      // manager-managed. Membership is validated the same way the
+      // add-on attribution is; a stale value simply assigns nobody.
+      const purchaserUserId = await resolveSeatScopeUserId(
+        tx,
+        organizationId,
+        payload.metadata?.seat_user_id,
+      );
+      if (purchaserUserId !== null) {
+        await tx
+          .insert(usageSeatAssignments)
+          .values({ organizationId, userId: purchaserUserId })
+          .onConflictDoNothing({
+            target: [
+              usageSeatAssignments.organizationId,
+              usageSeatAssignments.userId,
+            ],
+          });
+      }
       entitlementId = insertedId;
     }
   }

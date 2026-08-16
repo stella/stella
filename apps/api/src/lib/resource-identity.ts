@@ -94,6 +94,7 @@ export const RESOURCE_IDENTITY_DISPOSITION = {
   contactRelationship: { type: "non_resource", reason: "association" },
   usageAllocation: { type: "non_resource", reason: "policy" },
   usageLaneCounter: { type: "non_resource", reason: "event" },
+  usageSeatAssignment: { type: "non_resource", reason: "policy" },
   usagePolicy: { type: "non_resource", reason: "policy" },
   usageEntitlement: { type: "non_resource", reason: "policy" },
   usageEvent: { type: "non_resource", reason: "event" },
