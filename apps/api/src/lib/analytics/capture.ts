@@ -5,6 +5,7 @@ import {
   errorFingerprint,
   errorTag,
   logDevError,
+  safeErrorTelemetryFields,
 } from "@/api/lib/errors/utils";
 import { getRequestContext } from "@/api/lib/observability/request-context";
 
@@ -171,6 +172,7 @@ const captureErrorWithOptions = (
     // the dashboard without violating it.
     ...fingerprint,
     ...options.context,
+    ...safeErrorTelemetryFields(error),
     ...(options.organizationId
       ? { organization_id: options.organizationId }
       : {}),

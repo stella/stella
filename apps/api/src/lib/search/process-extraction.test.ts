@@ -5,7 +5,11 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import type { FieldContent } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
-import { ExtractionWorkerError } from "@/api/lib/errors/tagged-errors";
+import {
+  EXTRACTION_WORKER_ERROR_CODE,
+  ExtractionWorkerError,
+} from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 // `processExtraction` reads through the `rootDb` module-level singleton
@@ -307,17 +311,21 @@ describe("processExtraction", () => {
 
   test("keeps a sandbox failure distinct from a valid empty document", async () => {
     const workerError = new ExtractionWorkerError({
+      code: EXTRACTION_WORKER_ERROR_CODE.parser,
       exitCode: 1,
       message: "sandbox crashed",
+      mimeType: fileContent.mimeType,
+      sizeBytes: fileContent.sizeBytes,
       termination: null,
     });
     extractFileTextResultMock.mockImplementationOnce(async () =>
       Result.err(workerError),
     );
+    const lifecycleSignal = new AbortController().signal;
 
     const rejection: unknown = await executeNativeExtraction({
       fileField: fileContent,
-      lifecycleSignal: new AbortController().signal,
+      lifecycleSignal,
       run: {
         entityId,
         entityVersionId,
@@ -333,6 +341,14 @@ describe("processExtraction", () => {
     );
 
     expect(rejection).toBe(workerError);
+    expect(extractFileTextResultMock).toHaveBeenCalledWith(
+      expect.any(ArrayBuffer),
+      fileContent.mimeType,
+      {
+        signal: lifecycleSignal,
+        timeoutMs: LIMITS.documentProcessingExtractionTimeoutMs,
+      },
+    );
     expect(encryptContentMock).not.toHaveBeenCalled();
     expect(requestAutomaticDocumentOcrMock).not.toHaveBeenCalled();
     expect(executeMock).not.toHaveBeenCalled();

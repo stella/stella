@@ -7,6 +7,13 @@ import {
   test,
 } from "bun:test";
 
+import {
+  extractionWorkerErrorCode,
+  ExtractionWorkerError,
+  type ExtractionWorkerTermination,
+  SUBPROCESS_TERMINATION_REASON,
+} from "@/api/lib/errors/tagged-errors";
+
 const captured: { properties: Record<string, unknown> }[] = [];
 
 const realClient = await import("@/api/lib/analytics/client");
@@ -36,6 +43,24 @@ const captureFromSiteA = (context?: Record<string, string>): void => {
 const captureFromSiteB = (): void => {
   captureError(new Error("boom"));
 };
+
+const extractionError = ({
+  exitCode,
+  message,
+  termination,
+}: {
+  exitCode: number | null;
+  message: string;
+  termination: ExtractionWorkerTermination | null;
+}): ExtractionWorkerError =>
+  new ExtractionWorkerError({
+    code: extractionWorkerErrorCode(termination),
+    exitCode,
+    message,
+    mimeType: "application/pdf",
+    sizeBytes: 12_345,
+    termination,
+  });
 
 beforeEach(() => {
   captured.length = 0;
@@ -120,5 +145,61 @@ describe("captureError issue grouping", () => {
     const fingerprint = captured.at(0)?.properties["$exception_fingerprint"];
     expect(typeof fingerprint).toBe("string");
     expect(fingerprint).not.toContain("Privileged");
+  });
+});
+
+describe("captureError extraction diagnostics", () => {
+  test("attaches safe worker metadata without exposing the error message", () => {
+    captureError(
+      extractionError({
+        exitCode: null,
+        message: "Privileged document parser detail",
+        termination: {
+          reason: SUBPROCESS_TERMINATION_REASON.timeout,
+          signalCode: "SIGTERM",
+        },
+      }),
+      { runId: "run-1" },
+    );
+
+    const properties = captured.at(0)?.properties;
+    expect(properties).toMatchObject({
+      "error.code": "worker_timeout",
+      mimeType: "application/pdf",
+      runId: "run-1",
+      signalCode: "SIGTERM",
+      sizeBytes: "12345",
+      terminationReason: "timeout",
+    });
+    expect(JSON.stringify(properties)).not.toContain("Privileged");
+  });
+
+  test("fingerprints parser exits separately from worker termination", () => {
+    captureError(
+      extractionError({
+        exitCode: 1,
+        message: "parser failed",
+        termination: null,
+      }),
+    );
+    captureError(
+      extractionError({
+        exitCode: null,
+        message: "worker timed out",
+        termination: {
+          reason: SUBPROCESS_TERMINATION_REASON.timeout,
+          signalCode: "SIGTERM",
+        },
+      }),
+    );
+
+    expect(captured).toHaveLength(2);
+    expect(captured.at(0)?.properties).toMatchObject({
+      "error.code": "parser_failed",
+      exitCode: "1",
+    });
+    expect(captured.at(0)?.properties["$exception_fingerprint"]).not.toBe(
+      captured.at(1)?.properties["$exception_fingerprint"],
+    );
   });
 });
