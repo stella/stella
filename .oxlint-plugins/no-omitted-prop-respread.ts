@@ -51,6 +51,8 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 //     file-local type aliases are followed.
 //   - `Omit` is matched by name. A shadowed or re-exported `Omit` is not
 //     distinguished.
+//   - The omission must be written on the parameter. A props type inferred from
+//     a generic wrapper (`forwardRef<Ref, Omit<P, "k">>`) is not read.
 //   - JSX children override a spread `children` prop, so an element with
 //     children satisfies an omitted `children` key.
 //
@@ -99,19 +101,27 @@ const literalKeysOf = (keyTypeNode) => {
 
 /**
  * Literal keys omitted anywhere inside a type position, following file-local
- * aliases. Intersections and nested `Omit`s accumulate.
+ * aliases. Intersections and nested `Omit`s accumulate; a union of props shapes
+ * keeps only the keys every branch omits, since a value of the other branch may
+ * legitimately carry the rest.
  */
 const omittedKeysOf = (typeNode, localTypes, depth = 0) => {
   if (typeNode === null || typeNode === undefined || depth > MAX_ALIAS_DEPTH) {
     return [];
   }
-  if (
-    typeNode.type === "TSIntersectionType" ||
-    typeNode.type === "TSUnionType"
-  ) {
+  if (typeNode.type === "TSIntersectionType") {
     return typeNode.types.flatMap((member) =>
       omittedKeysOf(member, localTypes, depth),
     );
+  }
+  if (typeNode.type === "TSUnionType") {
+    const branches = typeNode.types.map(
+      (member) => new Set(omittedKeysOf(member, localTypes, depth)),
+    );
+    const first = branches.at(0);
+    return first === undefined
+      ? []
+      : [...first].filter((key) => branches.every((branch) => branch.has(key)));
   }
   if (typeNode.type === "TSTypeReference") {
     const name = typeReferenceName(typeNode.typeName);

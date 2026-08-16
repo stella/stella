@@ -136,3 +136,9 @@ type RetypedPanelProps = Omit<PanelProps, "variant"> & { variant?: "ghost" };
 export const _ok_reTypedAlias = (props: RetypedPanelProps) => (
   <Panel {...props} />
 );
+
+// Allowed: a union of props shapes keeps only the keys every branch omits, and
+// a value of the second branch may legitimately carry `orientation`.
+export const _ok_unionBranchOmit = (
+  props: Omit<PanelProps, "orientation"> | Omit<PanelProps, "variant">,
+) => <Panel {...props} />;
