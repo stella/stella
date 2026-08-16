@@ -51,6 +51,17 @@ export const CLASSIFIABLE_POLARITIES = POLARITIES.filter(
 );
 
 /**
+ * Whether a stored value is one a classifier may assign.
+ *
+ * Stricter than `isValidPolarity`, and deliberately so at the read boundary:
+ * the CHECK constraint keeps values inside `POLARITIES`, but nothing stops a
+ * row carrying `unknown`, which is the pipeline's word about itself.
+ */
+export const isClassifiablePolarity = (
+  value: string,
+): value is ClassifiablePolarity => includes(CLASSIFIABLE_POLARITIES, value);
+
+/**
  * Order in which competing rule matches are resolved: lower wins.
  *
  * Severity first. A court that distinguishes or overrules a decision has

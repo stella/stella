@@ -2,9 +2,8 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { panic, TaggedError } from "better-result";
 import * as v from "valibot";
 
-import { stripDiacriticsForSlug } from "@stll/text-normalize";
-
 import { env } from "@/api/env";
+import { createCaseLawDecisionSlug } from "@/api/handlers/case-law/decisions/slug";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
@@ -694,32 +693,19 @@ const slugifyCaseNumber = (caseNumber: string) =>
 const UNKNOWN_COURT_SEGMENT = "unknown-court";
 const LANGUAGE_SEGMENT_REGEX = /^(?=.{2,8}$)[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/u;
 
-const trimSlugHyphens = (value: string): string => {
-  let start = 0;
-  while (value.at(start) === "-") {
-    start += 1;
-  }
-
-  let end = value.length;
-  while (end > start && value.at(end - 1) === "-") {
-    end -= 1;
-  }
-
-  return value.slice(start, end);
-};
-
-export const slugifyCaseLawPathSegment = (value: string): string => {
-  // Must reproduce the API's persisted case-law slugs byte-for-byte
-  // (apps/api/src/handlers/case-law/decisions/slug.ts): same NFKD strip,
-  // same op order.
-  const slug = trimSlugHyphens(
-    stripDiacriticsForSlug(value)
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/gu, "-"),
-  );
-
-  return slug.length > 0 ? slug : "unknown";
-};
+/**
+ * A case-law URL segment, folded exactly as the persisted slug was.
+ *
+ * These segments address rows whose slug the API already generated, so the
+ * two folds have to agree on every step, length included: `case_number` and
+ * `slug` are both `varchar(256)`, and NFKD expansion can push a long case
+ * number's slug past the column the persisted one was truncated to. A
+ * segment folded without that truncation would address a slug nobody stored.
+ * Delegating leaves one implementation rather than two that must be kept
+ * equal by hand.
+ */
+export const slugifyCaseLawPathSegment = (value: string): string =>
+  createCaseLawDecisionSlug(value);
 
 const normalizeCaseLawStoredSlug = (
   slug: string | null | undefined,

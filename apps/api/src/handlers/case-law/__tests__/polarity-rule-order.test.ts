@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { lte } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 
-import { CLASSIFIABLE_POLARITIES } from "@/api/handlers/case-law/polarity/consts";
+import {
+  CLASSIFIABLE_POLARITIES,
+  POLARITY,
+} from "@/api/handlers/case-law/polarity/consts";
 import {
   rankPolarityRulesByTier,
   RULES_PER_POLARITY,
@@ -40,6 +43,18 @@ describe("the polarity rule read caps each tier separately", () => {
   test("applies the per-tier budget", () => {
     expect(rendered.sql).toContain('"tier_rank" <=');
     expect(rendered.params).toContain(RULES_PER_POLARITY);
+  });
+
+  test("reads only the polarities a match may assign", () => {
+    // A rule carrying `unknown` would open a fifth partition, taking a share
+    // of a budget divided among four — and would then match, labelling a
+    // citation "classification did not happen" when nothing had tried.
+    expect(statement).toContain('"polarity" in (');
+    expect(rendered.params).not.toContain(POLARITY.UNKNOWN);
+
+    for (const polarity of CLASSIFIABLE_POLARITIES) {
+      expect(rendered.params).toContain(polarity);
+    }
   });
 
   test("no ordering reads match_count", () => {

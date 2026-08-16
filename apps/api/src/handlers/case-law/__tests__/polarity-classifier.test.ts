@@ -300,6 +300,22 @@ describe("rule precedence", () => {
     expect(forward).toEqual(reversed);
   });
 
+  test("a rule carrying a pipeline-only polarity never matches", () => {
+    // The CHECK constraint accepts `unknown` on a rule row, so this is
+    // reachable from a hand-written insert. It must not become a match: the
+    // citation would be labelled "classification did not happen" when the
+    // regex tier had in fact just classified it.
+    const rules = compileRules([
+      rule({ pattern: "viz", polarity: POLARITY.UNKNOWN }),
+      rule({ pattern: "viz", polarity: POLARITY.SUPPORTIVE }),
+    ]);
+
+    expect(rules).toHaveLength(1);
+    expect(selectRuleMatch(rules, "viz nález")?.polarity).toBe(
+      POLARITY.SUPPORTIVE,
+    );
+  });
+
   test("a rule that does not compile is dropped, not fatal", () => {
     const rules = compileRules([
       rule({ pattern: "(unclosed", polarity: POLARITY.NEGATIVE }),

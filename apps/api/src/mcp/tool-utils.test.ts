@@ -94,9 +94,8 @@ describe("slugifyCaseLawPathSegment", () => {
   });
 
   test("agrees with the persisted slug generator", () => {
-    // These segments end up in public URLs the API has already persisted
-    // slugs for, so the two must fold identically. This used to be a
-    // hand-copied NFKD strip rather than a call to the shared helper.
+    // These segments address rows whose slug the API already generated, so
+    // the two folds must agree. This used to be a hand-copied NFKD strip.
     const segments = [
       "Nejvyšší soud",
       "Ústavní soud České republiky",
@@ -114,6 +113,18 @@ describe("slugifyCaseLawPathSegment", () => {
         createCaseLawDecisionSlug(segment),
       );
     }
+  });
+
+  test("truncates like the persisted slug on an expanding case number", () => {
+    // `case_number` and `slug` are both varchar(256), and NFKD expands the
+    // ligature threefold, so a full-width case number slugifies past the
+    // column its persisted slug was truncated to. A URL built without that
+    // truncation would address a slug nobody stored.
+    const caseNumber = "ﬃ".repeat(256);
+    const slug = slugifyCaseLawPathSegment(caseNumber);
+
+    expect(slug.length).toBeLessThanOrEqual(256);
+    expect(slug).toBe(createCaseLawDecisionSlug(caseNumber));
   });
 });
 

@@ -17,11 +17,11 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawPolarityRules } from "@/api/db/schema";
 import {
   CLASSIFIABLE_POLARITIES,
-  isValidPolarity,
+  isClassifiablePolarity,
   POLARITY_PRECEDENCE,
   RULE_SOURCE,
 } from "@/api/handlers/case-law/polarity/consts";
-import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
+import type { ClassifiablePolarity } from "@/api/handlers/case-law/polarity/consts";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TelemetryError } from "@/api/lib/errors/tagged-errors";
@@ -30,7 +30,12 @@ import { LIMITS } from "@/api/lib/limits";
 export type CompiledRule = {
   id: SafeId<"caseLawPolarityRule">;
   regex: RegExp;
-  polarity: Polarity;
+  /**
+   * Narrower than the column, which the CHECK constraint still lets carry any
+   * `Polarity`. A rule labelling a citation `unknown` would be asserting that
+   * classification did not happen, which is not something a match can mean.
+   */
+  polarity: ClassifiablePolarity;
   /** Kept for the specificity tiebreak; the compiled regex hides its length. */
   pattern: string;
   confidence: number;
@@ -38,7 +43,7 @@ export type CompiledRule = {
 
 export type RuleMatch = {
   ruleId: SafeId<"caseLawPolarityRule">;
-  polarity: Polarity;
+  polarity: ClassifiablePolarity;
   confidence: number;
 };
 
@@ -114,6 +119,12 @@ const ACTIVE_SOURCES = [RULE_SOURCE.MANUAL, RULE_SOURCE.LLM_PROMOTED];
  * the per-tier budget bites, which is the same axis `compareRulePrecedence`
  * breaks ties on; the id makes the rank total, so a cap that bites lands on
  * the same rules on every run.
+ *
+ * Only the classifiable polarities are read. The CHECK constraint still lets
+ * a row carry `unknown`, and one that did would otherwise open a fifth
+ * partition — taking a share of a budget divided among four, and, worse,
+ * matching: a citation would be labelled "classification did not happen"
+ * without anything having tried to classify it.
  */
 export const rankPolarityRulesByTier = (language: string) =>
   new QueryBuilder()
@@ -132,6 +143,7 @@ export const rankPolarityRulesByTier = (language: string) =>
       and(
         eq(caseLawPolarityRules.language, language),
         inArray(caseLawPolarityRules.source, ACTIVE_SOURCES),
+        inArray(caseLawPolarityRules.polarity, CLASSIFIABLE_POLARITIES),
       ),
     )
     .as("ranked_polarity_rules");
@@ -145,9 +157,13 @@ type PolarityRuleRow = Pick<
 /**
  * Compile stored rules into the order they are matched in.
  *
- * Rows whose pattern does not compile are dropped; rows carrying a polarity
- * outside `POLARITIES` are dropped and reported, because the CHECK constraint
- * should have made them impossible.
+ * Rows whose pattern does not compile are dropped silently: a bad regex is a
+ * rule that was never going to match. A row whose polarity a rule may not
+ * carry is dropped and reported, because it should not have reached storage:
+ * either it is outside `POLARITIES`, which the CHECK constraint forbids, or
+ * it is `unknown`, which the constraint permits but no match may mean. The
+ * query filters those out too; this is the guard that does not depend on the
+ * caller having done so.
  */
 export const compileRules = (
   rows: readonly PolarityRuleRow[],
@@ -160,12 +176,12 @@ export const compileRules = (
       continue;
     }
 
-    if (!isValidPolarity(row.polarity)) {
+    if (!isClassifiablePolarity(row.polarity)) {
       captureError(
         new TelemetryError({
-          message: "Invalid polarity value in rule",
+          message: "Polarity rule carries a polarity no match may assign",
         }),
-        { ruleId: row.id },
+        { polarity: row.polarity, ruleId: row.id },
       );
       continue;
     }
