@@ -791,6 +791,16 @@ type OfferedFirstPartyModelId =
  * Every metadata lookup normalizes here, so instance/dev overrides cannot
  * bypass rates or capabilities and duplicated alias rows cannot drift apart.
  */
+/**
+ * Model served when a user's included budget is exhausted and no
+ * explicit selection overrides it. A first-party catalog entry so the
+ * rate/display/context guards all apply.
+ */
+export const FALLBACK_CHAT_MODEL = {
+  provider: "openai",
+  modelId: "gpt-5.6-luna",
+} as const;
+
 export const MODEL_CATALOG_ID_ALIASES = {
   "gpt-5.6-sol": "gpt-5.6",
 } as const satisfies Readonly<Record<string, OfferedFirstPartyModelId>>;

@@ -154,7 +154,10 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  assertUsageAvailableForHandler,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -383,6 +386,7 @@ const sendMessage = createSafeRootHandler(
     safeDb,
     scopedDb,
     session,
+    usageLane,
     user,
   }) {
     const body = transportBody.forwardedProps;
@@ -844,14 +848,56 @@ const sendMessage = createSafeRootHandler(
       // a catalog bump that drops the model falls back to the org default
       // silently instead of failing the send.
       const {
-        modelId: chatModelOverride,
-        reasoningEffort: chatReasoningEffort,
+        modelId: selectedChatModel,
+        reasoningEffort: selectedReasoningEffort,
       } = resolveEffectiveChatModelSelection({
         devModelId: body.devModelId,
         threadChatModel: thread.data.chatModel,
         threadReasoningEffort: thread.data.chatReasoningEffort,
         orgAIConfig,
       });
+
+      // Budget routing. Inside the included budget any selection
+      // stands. When the pre-flight resolved the reduced-cost lane, an
+      // unselected turn is served on the lane's own model; an explicit
+      // selection instead falls through to the pool, which must be
+      // able to cover it — the same 402 a pool-only org would see.
+      let chatModelOverride = selectedChatModel;
+      let chatReasoningEffort = selectedReasoningEffort;
+      let turnLane = usageLane ?? { lane: "pool" as const };
+      if (turnLane.lane === "fallback") {
+        if (
+          selectedChatModel === undefined ||
+          selectedChatModel === turnLane.forcedModelSelection
+        ) {
+          chatModelOverride = turnLane.forcedModelSelection;
+          chatReasoningEffort = undefined;
+        } else {
+          const poolCheck = yield* Result.await(
+            Result.tryPromise({
+              try: async () =>
+                await assertUsageAvailableForHandler({
+                  metering: { actionType: "chat" },
+                  organizationId: session.activeOrganizationId,
+                  orgAIConfig,
+                  workspaceId: null,
+                  userId: user.id,
+                  safeDb,
+                }),
+              catch: (cause) =>
+                new HandlerError({
+                  status: 500,
+                  message: "Usage check failed",
+                  cause,
+                }),
+            }),
+          );
+          if (poolCheck !== null) {
+            return Result.err(poolCheck);
+          }
+          turnLane = { lane: "pool" };
+        }
+      }
 
       // For an existing thread, accept a non-empty body update as
       // "user changed scope, persist it"; an omitted/empty body keeps
@@ -1695,6 +1741,7 @@ const sendMessage = createSafeRootHandler(
                 promptCachingEnabled,
                 runMode: body.runMode,
                 sandboxRun,
+                usageLane: turnLane.lane,
                 resolveAssistantTextRefs: refRegistry.resolveAssistantTextRefs,
                 resolveAssistantToolInputRefs: ({ input, toolName }) =>
                   resolveRegistryToolInputRefs({

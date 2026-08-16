@@ -30,6 +30,7 @@ import {
 import type { ChatSendMode } from "@stll/anonymize-chat";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { UsageEventLane } from "@/api/db/schema";
 import { modelAcceptsDocumentAttachment } from "@/api/handlers/chat/attachment-modality";
 import {
   applyChatPartPersistenceBudget,
@@ -196,6 +197,8 @@ type StreamChatProps = {
    */
   runMode: ChatRunMode | undefined;
   sandboxRun: StellaSandboxRunInput | undefined;
+  /** Budget lane the pre-flight resolved for this turn. */
+  usageLane: UsageEventLane;
   resolveAssistantTextRefs?: ((text: string) => string) | undefined;
   resolveAssistantToolInputRefs?: AssistantToolInputRefResolver | undefined;
   resolveAssistantToolOutputRefs?: AssistantToolOutputRefResolver | undefined;
@@ -307,6 +310,7 @@ export const streamChat = async ({
   reasoningEffort,
   runMode,
   sandboxRun,
+  usageLane,
   resolveAssistantTextRefs,
   resolveAssistantToolInputRefs,
   resolveAssistantToolOutputRefs,
@@ -468,6 +472,7 @@ export const streamChat = async ({
     promptCachingEnabled,
     runMode,
     sandboxRun,
+    usageLane,
     runId,
     parentRunId,
     resume: preparedResume,
@@ -752,6 +757,8 @@ type CreateChatAttemptAnalyticsProps = {
   safeDb: SafeDb;
   /** Explicit per-turn model selection; undefined = role default. */
   selectedModelId: string | undefined;
+  /** Budget lane this turn's consumption settles against. */
+  usageLane: UsageEventLane;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
@@ -764,6 +771,7 @@ const createChatAttemptAnalytics = ({
   orgAIConfig,
   safeDb,
   selectedModelId,
+  usageLane,
   threadId,
   userId,
   workspaceId,
@@ -771,6 +779,7 @@ const createChatAttemptAnalytics = ({
   createTanStackAIAnalyticsCallbacks({
     usageMetering: {
       actionType: "chat",
+      lane: usageLane,
       organizationId,
       safeDb,
       serviceTier: "standard",
@@ -823,6 +832,8 @@ type RunChatAttemptsProps = {
   promptCachingEnabled: boolean;
   runMode: ChatRunMode | undefined;
   sandboxRun: StellaSandboxRunInput | undefined;
+  /** Budget lane the pre-flight resolved for this turn. */
+  usageLane: UsageEventLane;
   runId: string;
   parentRunId: string | undefined;
   resume: RunAgentResumeItem[] | undefined;
@@ -847,6 +858,7 @@ const runChatAttempts = async function* ({
   promptCachingEnabled,
   runMode,
   sandboxRun,
+  usageLane,
   runId,
   parentRunId,
   resume,
@@ -879,6 +891,7 @@ const runChatAttempts = async function* ({
     role: "chat",
     safeDb,
     sandboxRun,
+    usageLane,
     state: primaryState,
     surfaces,
     thirdPartyBoundary,
@@ -924,6 +937,9 @@ const runChatAttempts = async function* ({
     promptCachingEnabled,
     role: "reasoning",
     safeDb,
+    // The provider-fallback attempt serves the same user turn, so it
+    // settles against the same budget lane.
+    usageLane,
     state: fallbackState,
     surfaces,
     thirdPartyBoundary,
@@ -942,6 +958,8 @@ type RunChatAttemptProps = {
   abortController: AbortController;
   abortSignal: AbortSignal;
   compactionFeature: string;
+  /** Budget lane this turn's consumption settles against. */
+  usageLane: UsageEventLane;
   externalMcpToolSource: StellaMcpToolSource | undefined;
   feature: string;
   model: ResolvedTanStackTextModel;
@@ -989,6 +1007,7 @@ const runChatAttempt = async function* ({
   role,
   safeDb,
   sandboxRun,
+  usageLane,
   state,
   surfaces,
   thirdPartyBoundary,
@@ -1013,6 +1032,9 @@ const runChatAttempt = async function* ({
   // selection, so their consumption must rate against the role default
   // rather than a model that never served them.
   const servedModelId = sandboxRun ? undefined : modelId;
+  // Sandbox turns are machine work: they settle against the pool
+  // regardless of the interactive lane the pre-flight resolved.
+  const servedLane = sandboxRun ? "pool" : usageLane;
   const analytics = createChatAttemptAnalytics({
     feature,
     modelRole: role,
@@ -1020,6 +1042,7 @@ const runChatAttempt = async function* ({
     orgAIConfig,
     safeDb,
     selectedModelId: servedModelId,
+    usageLane: servedLane,
     threadId,
     userId,
     workspaceId,
@@ -1033,6 +1056,7 @@ const runChatAttempt = async function* ({
     // Compaction runs on the same adapter as the turn itself, so its
     // consumption rates against the same selection.
     selectedModelId: servedModelId,
+    usageLane: servedLane,
     threadId,
     userId,
     workspaceId,
