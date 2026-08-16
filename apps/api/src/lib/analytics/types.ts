@@ -1,10 +1,10 @@
+import type { SafeId } from "@/api/lib/branded-types";
 import type { ResolvedTanStackTextModelInfo } from "@/api/lib/tanstack-ai-models";
 
 export const SERVER_ANALYTICS_EVENTS = {
   aiGeneration: "$ai_generation",
   aiGenerationCompleted: "ai_generation_completed",
   aiGenerationFailed: "ai_generation_failed",
-  aiSpan: "$ai_span",
   exception: "$exception",
 } as const;
 
@@ -30,6 +30,10 @@ export type SafeAIAnalyticsMetadata = {
   content_type?: AnalyticsPrimitive;
   feature_area?: AnalyticsPrimitive;
   file_count?: AnalyticsPrimitive;
+  // Corpus jurisdiction of the underlying legal content (`CZE`, `EU`, ...);
+  // an event property rather than a group because it is a closed enum, not
+  // an entity with a profile.
+  jurisdiction?: AnalyticsPrimitive;
   language?: AnalyticsPrimitive;
   organization_id?: AnalyticsPrimitive;
   page_number?: AnalyticsPrimitive;
@@ -85,35 +89,54 @@ export type ExceptionProperties = {
 
 type DebugAIProperties = Record<string, unknown>;
 
-export type ServerAnalyticsCaptureParams =
-  | {
-      distinctId: string;
-      event: typeof SERVER_ANALYTICS_EVENTS.aiGeneration;
-      properties: DebugAIProperties;
-    }
-  | {
-      distinctId: string;
-      event: typeof SERVER_ANALYTICS_EVENTS.aiGenerationCompleted;
-      properties: AIGenerationCompletedProperties;
-    }
-  | {
-      distinctId: string;
-      event: typeof SERVER_ANALYTICS_EVENTS.aiGenerationFailed;
-      properties: AIGenerationFailedProperties;
-    }
-  | {
-      distinctId: string;
-      event: typeof SERVER_ANALYTICS_EVENTS.aiSpan;
-      properties: DebugAIProperties;
-    }
-  | {
-      distinctId: string;
-      event: typeof SERVER_ANALYTICS_EVENTS.exception;
-      properties: ExceptionProperties;
-    };
+// PostHog group attachment. `organization` is the only group type; it must
+// match the browser adapter's `posthog.group` call so client and server
+// events aggregate under the same group.
+export type ServerAnalyticsGroups = {
+  organization: string;
+};
+
+type ServerAnalyticsCaptureBase = {
+  distinctId: string;
+  groups?: ServerAnalyticsGroups;
+};
+
+export type ServerAnalyticsCaptureParams = ServerAnalyticsCaptureBase &
+  (
+    | {
+        event: typeof SERVER_ANALYTICS_EVENTS.aiGeneration;
+        properties: DebugAIProperties;
+      }
+    | {
+        event: typeof SERVER_ANALYTICS_EVENTS.aiGenerationCompleted;
+        properties: AIGenerationCompletedProperties;
+      }
+    | {
+        event: typeof SERVER_ANALYTICS_EVENTS.aiGenerationFailed;
+        properties: AIGenerationFailedProperties;
+      }
+    | {
+        event: typeof SERVER_ANALYTICS_EVENTS.exception;
+        properties: ExceptionProperties;
+      }
+  );
+
+// Group-profile properties for an organization; upserted whenever the
+// settings they mirror change.
+export type OrganizationGroupProperties = {
+  practice_jurisdictions: string[];
+  primary_jurisdiction: string | null;
+};
+
+export type OrganizationGroupIdentifyParams = {
+  organizationId: SafeId<"organization">;
+  properties: OrganizationGroupProperties;
+};
 
 export type Analytics = {
   capture: (params: ServerAnalyticsCaptureParams) => void;
+  /** Upsert the organization group profile in PostHog. */
+  identifyOrganizationGroup: (params: OrganizationGroupIdentifyParams) => void;
   /** Flush queued events. No-op for providers without a queue. */
   flush: () => Promise<void>;
 };

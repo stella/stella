@@ -106,6 +106,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
         events.push(event);
       },
       flush: async () => undefined,
+      identifyOrganizationGroup: () => undefined,
     };
     const callbacks = createTanStackAIAnalyticsCallbacks({
       analytics,
@@ -206,6 +207,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     const analytics: Analytics = {
       capture: () => undefined,
       flush: async () => undefined,
+      identifyOrganizationGroup: () => undefined,
     };
     const callbacks = createTanStackAIAnalyticsCallbacks({
       analytics,
@@ -300,6 +302,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
         events.push(event);
       },
       flush: async () => undefined,
+      identifyOrganizationGroup: () => undefined,
     };
     const callbacks = createTanStackAIAnalyticsCallbacks({
       analytics,
@@ -391,6 +394,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     const analytics: Analytics = {
       capture: () => undefined,
       flush: async () => undefined,
+      identifyOrganizationGroup: () => undefined,
     };
     const callbacks = createTanStackAIAnalyticsCallbacks({
       analytics,
@@ -434,6 +438,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
         events.push(event);
       },
       flush: async () => undefined,
+      identifyOrganizationGroup: () => undefined,
     };
     const callbacks = createTanStackAIAnalyticsCallbacks({
       analytics,
@@ -482,6 +487,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
         events.push(event);
       },
       flush: async () => undefined,
+      identifyOrganizationGroup: () => undefined,
     };
 
     try {
@@ -535,12 +541,20 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
 
     try {
       createTanStackAIAnalyticsCallbacks({
-        analytics: { capture: () => undefined, flush: async () => undefined },
+        analytics: {
+          capture: () => undefined,
+          flush: async () => undefined,
+          identifyOrganizationGroup: () => undefined,
+        },
         feature: "chat.suggested_prompts",
         traceId: "trace_provider_unavailable",
       }).captureError({ status: 503 });
       createTanStackAIAnalyticsCallbacks({
-        analytics: { capture: () => undefined, flush: async () => undefined },
+        analytics: {
+          capture: () => undefined,
+          flush: async () => undefined,
+          identifyOrganizationGroup: () => undefined,
+        },
         feature: "chat.suggested_prompts",
         traceId: "trace_unknown",
       }).captureError(new Error("boom"));
@@ -582,7 +596,11 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
 
     try {
       createTanStackAIAnalyticsCallbacks({
-        analytics: { capture: () => undefined, flush: async () => undefined },
+        analytics: {
+          capture: () => undefined,
+          flush: async () => undefined,
+          identifyOrganizationGroup: () => undefined,
+        },
         feature: "templates.suggestFields",
         traceId: "trace_byok_role",
       }).captureError(error);
