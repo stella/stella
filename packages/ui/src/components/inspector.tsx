@@ -96,10 +96,16 @@ const InspectorActions = ({
   />
 );
 
+// `orientation` is omitted rather than passed through: the tabs root turns
+// `flex-row` when vertical, but the tab list is sized as a horizontal strip
+// (`h-11 w-full shrink-0`), so a vertical inspector would give the whole width
+// to the list and clip the panel against this root's `overflow-hidden`.
+// Supporting it needs vertical list sizing, so the shell excludes it instead of
+// exposing a prop that silently breaks the layout.
 const InspectorTabs = ({
   className,
   ...props
-}: React.ComponentProps<typeof Tabs>) => (
+}: Omit<React.ComponentProps<typeof Tabs>, "orientation">) => (
   <Tabs
     className={cn("min-h-0 flex-1 gap-0 overflow-hidden", className)}
     data-slot="inspector-tabs"
