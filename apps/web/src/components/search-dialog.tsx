@@ -60,6 +60,7 @@ import { contentDir } from "@stll/ui/hooks/use-content-dir";
 import { useIsMobile } from "@stll/ui/hooks/use-mobile";
 import { cn } from "@stll/ui/lib/utils";
 
+import { openEntityInInspector } from "@/components/chat/entity-open";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { DocumentIcon } from "@/components/document-icon";
 import { MatterIcon } from "@/components/matter-icon";
@@ -121,6 +122,7 @@ import { createChatThreadId } from "@/lib/chat-thread-ref";
 import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
+import { FILE_OPEN_TARGET, resolveFileOpenTarget } from "@/lib/file-open.logic";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -149,6 +151,7 @@ import type {
 } from "@/lib/search-recents";
 import { searchTextQueryKey } from "@/lib/search-text";
 import {
+  getEmailSearchPreviewTarget,
   getFirstSearchHighlightText,
   getNativeSearchDocumentPreviewTarget,
   getSearchHighlightText,
@@ -209,6 +212,16 @@ const ChatPreview = lazy(async () => {
     await import("@/components/search-chat-preview");
   return { default: SearchChatPreview };
 });
+
+// The same email HTML viewer the inspector renders, so an email previews as
+// a message, not as extracted text.
+const EmailPreview = lazy(async () => {
+  const { EmailHtmlViewer } =
+    await import("@/components/inspector/email-html-viewer");
+  return { default: EmailHtmlViewer };
+});
+
+const ignoreSearchPreviewAttachment = (): undefined => undefined;
 
 const NON_ENTITY_KIND_ICONS = {
   contact: UserIcon,
@@ -348,20 +361,21 @@ export const SearchDialog = ({
   const [facetsWidth, setFacetsWidth] = useState<number | null>(null);
   const [previewWidth, setPreviewWidth] = useState<number | null>(null);
   // Cmd/Ctrl held while activating a result switches "open the hit" to
-  // "open its matter location". Tracked at the window so keyboard
-  // activation (Enter re-dispatched as a click by the command list) sees
-  // the modifier too, not just real pointer clicks.
-  const locationModifierRef = useRef(false);
+  // "open its matter location". Tracked at the window (state, not a ref, so
+  // the preview's Open button can relabel itself while the modifier is
+  // down) and additionally read off the activating click itself, which
+  // covers a modifier already held before the dialog opened.
+  const [locationModifierHeld, setLocationModifierHeld] = useState(false);
   useExternalSyncEffect(() => {
     if (!open) {
-      locationModifierRef.current = false;
+      setLocationModifierHeld(false);
       return undefined;
     }
     const syncModifier = (event: KeyboardEvent) => {
-      locationModifierRef.current = event.metaKey || event.ctrlKey;
+      setLocationModifierHeld(event.metaKey || event.ctrlKey);
     };
     const resetModifier = () => {
-      locationModifierRef.current = false;
+      setLocationModifierHeld(false);
     };
     window.addEventListener("keydown", syncModifier, true);
     window.addEventListener("keyup", syncModifier, true);
@@ -834,8 +848,48 @@ export const SearchDialog = ({
     setRecentSearches(recordRecentSearch(recent.query, searchRecentsScope));
   };
 
+  // Formats without a mime-only full-screen viewer (emails, markdown,
+  // anything unknown) open inside their matter: navigate to the workspace,
+  // then hand the entity to the inspector, which resolves the right file
+  // facet (email HTML viewer, markdown, metadata plus download as the
+  // floor).
+  const openFileInWorkspaceInspector = async ({
+    entityId,
+    label,
+    workspaceId,
+  }: {
+    entityId: string;
+    label: string;
+    workspaceId: string;
+  }) => {
+    await navigate(getEntityWorkspaceRoute({ workspaceId }));
+    await openEntityInInspector(entityId, label, workspaceId);
+  };
+
   const openRecentFile = (file: RecentFile) => {
+    // Recent entries do not persist a containing folder, so the modifier
+    // opens the matter root.
+    if (locationModifierHeld) {
+      navigateAfterClose(async () => {
+        await navigate(
+          getEntityWorkspaceRoute({ workspaceId: file.workspaceId }),
+        );
+      });
+      return;
+    }
     navigateAfterClose(async () => {
+      if (
+        resolveFileOpenTarget(file.mimeType ?? null) ===
+        FILE_OPEN_TARGET.workspaceInspector
+      ) {
+        setRecentFiles(recordRecentFile(file, searchRecentsScope));
+        await openFileInWorkspaceInspector({
+          entityId: file.entityId,
+          label: file.title,
+          workspaceId: file.workspaceId,
+        });
+        return;
+      }
       const fileFieldId = await queryClient.fetchQuery(
         recentFilePreviewFieldOptions({
           entityId: file.entityId,
@@ -896,12 +950,15 @@ export const SearchDialog = ({
     }));
   };
 
-  const handleResultClick = (hit: GlobalSearchHit) => {
+  const handleResultClick = (
+    hit: GlobalSearchHit,
+    options?: { locationModifier?: boolean },
+  ) => {
     if (query.trim()) {
       setRecentSearches(recordRecentSearch(query, searchRecentsScope));
     }
 
-    if (locationModifierRef.current) {
+    if (locationModifierHeld || options?.locationModifier === true) {
       const locationRoute = getEntityLocationRoute(hit);
       if (locationRoute) {
         navigateAfterClose(async () => {
@@ -970,6 +1027,34 @@ export const SearchDialog = ({
     }
 
     if (hit.type === "document") {
+      if (
+        resolveFileOpenTarget(hit.mimeType) ===
+        FILE_OPEN_TARGET.workspaceInspector
+      ) {
+        navigateAfterClose(async () => {
+          setRecentFiles(
+            recordRecentFile(
+              {
+                entityId: hit.entityId,
+                fileFieldId: hit.fileFieldId,
+                filePropertyId: hit.filePropertyId,
+                mimeType: hit.mimeType,
+                title: hit.title || hit.id,
+                workspaceId: hit.workspaceId,
+                workspaceName: hit.workspaceName,
+                updatedAt: hit.updatedAt,
+              },
+              searchRecentsScope,
+            ),
+          );
+          await openFileInWorkspaceInspector({
+            entityId: hit.entityId,
+            label: hit.title || hit.id,
+            workspaceId: hit.workspaceId,
+          });
+        });
+        return;
+      }
       navigateAfterClose(async () => {
         const { fileFieldId, route } = await resolveEntityDocumentRoute({
           hit,
@@ -1011,8 +1096,11 @@ export const SearchDialog = ({
     });
   };
 
-  const openSearchResult = (hit: GlobalSearchHit): void => {
-    handleResultClick(hit);
+  const openSearchResult = (
+    hit: GlobalSearchHit,
+    options?: { locationModifier?: boolean },
+  ): void => {
+    handleResultClick(hit, options);
   };
 
   const hasResults = allHits.length > 0;
@@ -1580,8 +1668,8 @@ export const SearchDialog = ({
                             <SearchResultItem
                               hit={hit}
                               index={virtualHit.index}
-                              onClick={(selectedHit) => {
-                                openSearchResult(selectedHit);
+                              onClick={(selectedHit, options) => {
+                                openSearchResult(selectedHit, options);
                               }}
                               resultNumber={virtualHit.index + 1}
                             />
@@ -1630,6 +1718,7 @@ export const SearchDialog = ({
               {showPreview && displayedPreviewHit && (
                 <SearchPreviewPanel
                   hit={displayedPreviewHit}
+                  locationModifierHeld={locationModifierHeld}
                   onOpen={openSearchResult}
                   organizationId={searchRecentsScope.organizationId}
                   previewLocatorCandidates={previewLocatorCandidates}
@@ -1640,6 +1729,7 @@ export const SearchDialog = ({
               {showPreview && !displayedPreviewHit && displayedRecentFile && (
                 <RecentFilePreviewPanel
                   file={displayedRecentFile}
+                  locationModifierHeld={locationModifierHeld}
                   organizationId={searchRecentsScope.organizationId}
                   onOpen={() => {
                     openRecentFile(displayedRecentFile);
@@ -1770,6 +1860,7 @@ const SearchFooterHint = ({ translationKey }: SearchFooterHintProps) => (
 type SearchPreviewPanelProps = {
   dateVisibility?: "hide" | "show" | undefined;
   hit: GlobalSearchHit;
+  locationModifierHeld?: boolean | undefined;
   organizationId: string;
   previewLocatorCandidates?: readonly string[] | undefined;
   query: string;
@@ -1779,6 +1870,7 @@ type SearchPreviewPanelProps = {
 
 type RecentFilePreviewPanelProps = {
   file: RecentFile;
+  locationModifierHeld?: boolean | undefined;
   onOpen: () => void;
   organizationId: string;
   userId: string;
@@ -1816,6 +1908,7 @@ const RecentFilePreviewUnavailable = ({
 
 const RecentFilePreviewPanel = ({
   file,
+  locationModifierHeld = false,
   onOpen,
   organizationId,
   userId,
@@ -1858,6 +1951,7 @@ const RecentFilePreviewPanel = ({
     <SearchPreviewPanel
       dateVisibility={getRecentFilePreviewDateVisibility(file)}
       hit={hit}
+      locationModifierHeld={locationModifierHeld}
       onOpen={() => {
         onOpen();
       }}
@@ -1871,6 +1965,7 @@ const RecentFilePreviewPanel = ({
 const SearchPreviewPanel = ({
   dateVisibility = "show",
   hit,
+  locationModifierHeld = false,
   organizationId,
   previewLocatorCandidates = EMPTY_SEARCH_PREVIEW_LOCATOR_CANDIDATES,
   query,
@@ -1892,6 +1987,7 @@ const SearchPreviewPanel = ({
         dateVisibility={dateVisibility}
         hit={hit}
         key={`${hit.type}:${hit.id}:${hit.updatedAt}:${normalizeSearchQuery(query)}`}
+        locationModifierHeld={locationModifierHeld}
         onOpen={onOpen}
         organizationId={organizationId}
         previewLocatorCandidates={previewLocatorCandidates}
@@ -1905,6 +2001,7 @@ const SearchPreviewPanel = ({
 type SearchPreviewContentProps = {
   dateVisibility: "hide" | "show";
   hit: GlobalSearchHit;
+  locationModifierHeld: boolean;
   organizationId: string;
   previewLocatorCandidates: readonly string[];
   query: string;
@@ -1915,6 +2012,7 @@ type SearchPreviewContentProps = {
 const SearchPreviewContent = ({
   dateVisibility,
   hit,
+  locationModifierHeld,
   organizationId,
   previewLocatorCandidates,
   query,
@@ -1927,6 +2025,12 @@ const SearchPreviewContent = ({
     hit.type === "contact" || hit.type === "case-law"
       ? null
       : hit.workspaceName;
+  // While Cmd/Ctrl is held, activation opens the hit's matter location, so
+  // the button says which matter it will open instead of the generic Open.
+  const opensLocation =
+    locationModifierHeld &&
+    location !== null &&
+    getEntityLocationRoute(hit) !== null;
   const previewDate =
     dateVisibility === "show" ? getSearchPreviewDate(hit) : null;
   const formattedPreviewDate = previewDate
@@ -1963,14 +2067,23 @@ const SearchPreviewContent = ({
             </p>
           </div>
           <Button
-            className="shrink-0"
+            className="min-w-0 shrink-0"
             onClick={() => {
               onOpen(hit);
             }}
             size="sm"
             variant="outline"
           >
-            {t("common.open")}
+            {opensLocation && location !== null ? (
+              <span className="max-w-48 truncate">
+                {t.rich("search.openMatter", {
+                  bdi: (chunks) => <BidiText>{chunks}</BidiText>,
+                  name: location,
+                })}
+              </span>
+            ) : (
+              t("common.open")
+            )}
           </Button>
         </div>
       </div>
@@ -2001,6 +2114,23 @@ const SearchPreviewBody = (props: SearchPreviewBodyProps) => {
       }),
     [hit.headline, props.previewLocatorCandidates, props.query],
   );
+  const emailPreviewTarget = getEmailSearchPreviewTarget(hit);
+  if (emailPreviewTarget) {
+    return (
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <Suspense fallback={<SearchTextPreviewSkeleton />}>
+          <EmailPreview
+            entityId={emailPreviewTarget.entityId}
+            fieldId={emailPreviewTarget.fieldId}
+            key={emailPreviewTarget.fieldId}
+            onOpenAttachment={ignoreSearchPreviewAttachment}
+            workspaceId={emailPreviewTarget.workspaceId}
+          />
+        </Suspense>
+      </div>
+    );
+  }
+
   const nativePreviewTarget = getNativeSearchDocumentPreviewTarget(hit);
   if (nativePreviewTarget) {
     return (
@@ -2715,7 +2845,10 @@ type SearchResultItemProps = {
   hit: GlobalSearchHit;
   index: number;
   resultNumber: number;
-  onClick: (hit: GlobalSearchHit) => void;
+  onClick: (
+    hit: GlobalSearchHit,
+    options?: { locationModifier?: boolean },
+  ) => void;
 };
 
 const SearchResultItem = ({
@@ -2757,7 +2890,11 @@ const SearchResultItem = ({
     <CommandItem
       className="h-auto w-full items-start justify-start gap-3 px-2 py-2 text-start whitespace-normal sm:h-auto"
       index={index}
-      onClick={() => onClick(hit)}
+      onClick={(event) =>
+        onClick(hit, {
+          locationModifier: event.metaKey || event.ctrlKey,
+        })
+      }
       value={hit}
     >
       <SearchHitIcon hit={hit} />

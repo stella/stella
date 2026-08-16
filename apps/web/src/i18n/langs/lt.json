@@ -2905,6 +2905,7 @@
     },
     "mimeType": "Failo tipas",
     "noResults": "Nerasta rezultatų pagal \"{query}\".",
+    "openMatter": "Atidaryti bylą <bdi>{name}</bdi>",
     "placeholder": "Ieškoti visose bylose...",
     "previewUnavailable": "Peržiūra nepasiekiama",
     "recentSearches": "Naujausios paieškos",

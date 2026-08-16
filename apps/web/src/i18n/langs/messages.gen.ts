@@ -2908,6 +2908,7 @@ type Messages = {
     };
     "mimeType": "File type";
     "noResults": "No results found for \"{query}\".";
+    "openMatter": "Open matter <bdi>{name}</bdi>";
     "placeholder": "Search across all matters...";
     "previewUnavailable": "Preview unavailable";
     "recentSearches": "Recent searches";

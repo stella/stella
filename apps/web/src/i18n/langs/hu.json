@@ -2905,6 +2905,7 @@
     },
     "mimeType": "Fájltípus",
     "noResults": "Nincs találat erre: „{query}”.",
+    "openMatter": "<bdi>{name}</bdi> ügy megnyitása",
     "placeholder": "Keresés az összes ügyben...",
     "previewUnavailable": "Az előnézet nem érhető el",
     "recentSearches": "Legutóbbi keresések",

@@ -2905,6 +2905,7 @@
     },
     "mimeType": "Typ souboru",
     "noResults": "Žádné výsledky pro „{query}“.",
+    "openMatter": "Otevřít spis <bdi>{name}</bdi>",
     "placeholder": "Hledat ve všech spisech…",
     "previewUnavailable": "Náhled není k dispozici",
     "recentSearches": "Nedávná hledání",

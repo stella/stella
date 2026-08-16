@@ -2905,6 +2905,7 @@
     },
     "mimeType": "Tipo de archivo",
     "noResults": "Sin resultados para \"{query}\".",
+    "openMatter": "Abrir asunto <bdi>{name}</bdi>",
     "placeholder": "Buscar en todos los asuntos...",
     "previewUnavailable": "Vista previa no disponible",
     "recentSearches": "Búsquedas recientes",

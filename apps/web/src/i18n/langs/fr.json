@@ -2905,6 +2905,7 @@
     },
     "mimeType": "Type de fichier",
     "noResults": "Aucun résultat pour « {query} ».",
+    "openMatter": "Ouvrir le dossier <bdi>{name}</bdi>",
     "placeholder": "Rechercher dans tous les dossiers…",
     "previewUnavailable": "Aperçu indisponible",
     "recentSearches": "Recherches récentes",

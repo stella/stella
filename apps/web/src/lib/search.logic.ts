@@ -1,6 +1,6 @@
 import type { GlobalSearchHit, GlobalSearchResultType } from "@stll/api/types";
 
-import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
+import { DOCX_MIME, isEmailMimeType, PDF_MIME } from "@/lib/consts";
 import { getSearchTextCandidates } from "@/lib/search-text";
 import type { SearchTextQuery } from "@/lib/search-text";
 
@@ -236,6 +236,33 @@ export const getNativeSearchDocumentPreviewTarget = (
   }
 
   return null;
+};
+
+export type EmailSearchPreviewTarget = {
+  entityId: string;
+  fieldId: string;
+  workspaceId: string;
+};
+
+/**
+ * Email hits render with the same email HTML viewer the inspector uses —
+ * one renderer per format across surfaces, never a parallel one — so the
+ * search preview shows the message body, not an extracted-text stand-in.
+ */
+export const getEmailSearchPreviewTarget = (
+  hit: GlobalSearchHit,
+): EmailSearchPreviewTarget | null => {
+  if (hit.type !== "document" || hit.fileFieldId === null) {
+    return null;
+  }
+  if (!isEmailMimeType(hit.mimeType)) {
+    return null;
+  }
+  return {
+    entityId: hit.entityId,
+    fieldId: hit.fileFieldId,
+    workspaceId: hit.workspaceId,
+  };
 };
 
 type AuthorizedSearchPreviewDataArgs<T> = {

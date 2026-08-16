@@ -2905,6 +2905,7 @@
     },
     "mimeType": "نوع الملف",
     "noResults": "لا نتائج لـ «{query}».",
+    "openMatter": "فتح الملف القانوني <bdi>{name}</bdi>",
     "placeholder": "البحث عبر جميع الملفات القانونية...",
     "previewUnavailable": "المعاينة غير متوفرة",
     "recentSearches": "عمليات البحث الأخيرة",

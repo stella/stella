@@ -2905,6 +2905,7 @@
     },
     "mimeType": "Faila tips",
     "noResults": "Nav rezultātu meklēšanai \"{query}\".",
+    "openMatter": "Atvērt lietu <bdi>{name}</bdi>",
     "placeholder": "Meklēt visās lietās...",
     "previewUnavailable": "Priekšskatījums nav pieejams",
     "recentSearches": "Nesenie meklējumi",
