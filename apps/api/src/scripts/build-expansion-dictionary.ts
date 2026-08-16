@@ -51,6 +51,14 @@ const CHUNK_STATEMENT_TIMEOUT = "60s";
 /** Corpus document frequency a token needs before it is worth bucketing. */
 const DEFAULT_MIN_DOCUMENT_FREQUENCY = 50;
 /**
+ * Ceiling on distinct tokens retained during the scan. The frequency threshold
+ * is a corpus-wide sum and cannot prune before the scan ends, so this is what
+ * turns "grows with the corpus vocabulary" into a bounded, reportable failure.
+ * Comfortably above a real Czech or Polish case-law vocabulary; a run that
+ * trips it is describing a corpus this script's in-memory design does not fit.
+ */
+const DEFAULT_MAX_VOCABULARY = 8_000_000;
+/**
  * Shared leading characters expected of a coherent bucket. Below this the
  * bucket's members are probably not the same word, so it is reported for
  * review; the query-time guard drops the offending forms either way.
@@ -63,7 +71,8 @@ const USAGE = `Usage: bun run src/scripts/build-expansion-dictionary.ts --langua
   --language <code>    Language to build. Required.
   --out <path>         Write the uncompressed dictionary here instead of uploading.
   --chunk <n>          Documents scanned per query (default ${DEFAULT_CHUNK_SIZE}).
-  --min-df <n>         Minimum corpus document frequency (default ${DEFAULT_MIN_DOCUMENT_FREQUENCY}).`;
+  --min-df <n>         Minimum corpus document frequency (default ${DEFAULT_MIN_DOCUMENT_FREQUENCY}).
+  --max-vocabulary <n> Distinct tokens retained before the run aborts (default ${DEFAULT_MAX_VOCABULARY}).`;
 
 // Annotated on the binding, not just the return position: TypeScript only
 // treats a call as never-returning (and narrows after it) when the callee is a
@@ -128,6 +137,11 @@ const minDocumentFrequency = positiveInteger(
   flagValue("min-df"),
   DEFAULT_MIN_DOCUMENT_FREQUENCY,
   "min-df",
+);
+const maxVocabulary = positiveInteger(
+  flagValue("max-vocabulary"),
+  DEFAULT_MAX_VOCABULARY,
+  "max-vocabulary",
 );
 
 const ingestionDb = createIngestionDb(rlsDb);
@@ -246,6 +260,20 @@ const scanFrom = async (afterId: string): Promise<void> => {
   }
   for (const [word, ndoc] of chunk.tokens) {
     documentFrequency.set(word, (documentFrequency.get(word) ?? 0) + ndoc);
+  }
+  // The frequency threshold is a corpus-wide sum, so it cannot be applied
+  // before the scan ends: a token reaching 50 documents may do so one document
+  // per chunk, and any early prune would silently drop real vocabulary. The
+  // retained map is therefore the language's whole distinct vocabulary,
+  // including whatever letters-only noise OCR produced, and the shape filter
+  // bounds its shape rather than its size. This is the size bound — chosen so
+  // an oversized corpus stops here, before publishing, with something an
+  // operator can act on, instead of being OOM-killed at an arbitrary point.
+  if (documentFrequency.size > maxVocabulary) {
+    console.error(
+      `build-expansion-dictionary: vocabulary exceeded ${maxVocabulary} distinct tokens after ${scannedDocuments} documents; refusing to continue. Raise --max-vocabulary on a host with the memory for it, or aggregate the counts in the database instead.`,
+    );
+    process.exit(1);
   }
   scannedDocuments += chunk.scanned;
   console.log(
