@@ -38,6 +38,7 @@ import {
 } from "@/api/handlers/case-law/corpus-index";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
+import type { SliceRetrySchedule } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import { runReconciliationWorkUnit } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import {
   readSourceReportedTotals,
@@ -1640,6 +1641,10 @@ export const runCaseLawIngest = async (
       }
       // oxlint-disable-next-line no-await-in-loop -- one bounded source lookup per configured source, at startup
       const source = await ensureSource(adapterKey, name, null);
+      // One schedule per source, living as long as this process: a slice whose
+      // walk threw is held out of that source's selection order until its
+      // retry comes due, so it cannot be handed back on every turn.
+      const sliceRetries: SliceRetrySchedule = new Map();
       reconcilable.push({
         adapterKey,
         runWorkUnit: async () => {
@@ -1657,6 +1662,7 @@ export const runCaseLawIngest = async (
                 sleep: async (ms) => {
                   await Bun.sleep(ms);
                 },
+                sliceRetries,
               }),
           );
           switch (outcome.type) {

@@ -170,6 +170,28 @@ export type ReconciliationUnitOutcome =
   | { type: "idle" }
   | { type: "leased" };
 
+/**
+ * How long a slice whose walk threw is held out of the selection order.
+ *
+ * The walk writes nothing when it fails, so the slice is owed exactly as much
+ * afterwards as before and the selection would hand it back on the next turn
+ * forever. An hour is the trade: short against the tip's daily staleness, so a
+ * publisher that recovers is picked up within the same cadence the slice would
+ * have been walked on anyway, and long enough that a slice nothing can serve
+ * costs its source one turn an hour instead of one a minute.
+ */
+export const RECONCILIATION_SLICE_RETRY_MS = 60 * 60_000;
+
+/**
+ * When each slice whose walk threw may be tried again, by slice.
+ *
+ * Held by the caller, one map per source, for the same reason the loop holds
+ * its per-source failure deadlines: the state is about this process's recent
+ * attempts, not about the corpus, and a restart is entitled to try everything
+ * once more.
+ */
+export type SliceRetrySchedule = Map<string, number>;
+
 export type ReconciliationWorkUnitOptions = {
   adapterKey: string;
   sourceId: SafeId<"caseLawSource">;
@@ -179,6 +201,8 @@ export type ReconciliationWorkUnitOptions = {
   /** Gap between two document fetches; the loop's politeness contract. */
   fetchDelayMs: number;
   sleep: (ms: number) => Promise<void>;
+  /** Read and updated in place; see `SliceRetrySchedule`. */
+  sliceRetries: SliceRetrySchedule;
 };
 
 type KeyedListingItem = ReconciliationListingItem & {
@@ -885,6 +909,7 @@ export const runReconciliationWorkUnit = async ({
   reconciliation,
   scopedDb,
   sleep,
+  sliceRetries,
   sourceId,
 }: ReconciliationWorkUnitOptions): Promise<ReconciliationUnitOutcome> => {
   const startedAt = now();
@@ -953,6 +978,15 @@ export const runReconciliationWorkUnit = async ({
       ? tipStart
       : oldestLedgerSlice;
 
+  // Dropped as they come due rather than left to accumulate: the map is the
+  // process's memory of what it has just failed to walk, and an expired entry
+  // is a slice the selection is free to pick again.
+  for (const [slice, retryAtMs] of sliceRetries) {
+    if (retryAtMs <= startedAt.getTime()) {
+      sliceRetries.delete(slice);
+    }
+  }
+
   const unit = selectReconciliationWorkUnit({
     now: startedAt,
     hasDueParkedItems: dueParked,
@@ -963,6 +997,7 @@ export const runReconciliationWorkUnit = async ({
     unsettledShortSlices: unsettled,
     sweepSlice: reconciliation.previousSlice(frontier),
     recheckCandidate,
+    slicesHeldForRetry: new Set(sliceRetries.keys()),
     staleAfterMs: RECONCILIATION_SLICE_STALE_MS,
     recheckAfterMs: RECONCILIATION_SETTLED_RECHECK_MS,
   });
@@ -1009,6 +1044,25 @@ export const runReconciliationWorkUnit = async ({
             slice: unit.slice,
             sleep,
             sourceId,
+          }).catch((error: unknown) => {
+            // The walk is all-or-nothing by design: a listing that failed part
+            // way through writes no ledger row, so the slice is owed exactly
+            // as much as before and would be selected again immediately. Held
+            // for its retry instead, and named here because the loop's window
+            // tally reports how many turns threw without saying over what;
+            // the slice a source cannot walk is the one fact that turns a
+            // standing error rate into something an operator can reproduce.
+            sliceRetries.set(
+              unit.slice,
+              startedAt.getTime() + RECONCILIATION_SLICE_RETRY_MS,
+            );
+            logger.warn("case_law.reconciliation.slice_failed", {
+              adapterKey,
+              slice: unit.slice,
+              reason: unit.reason,
+              "error.type": errorTag(error),
+            });
+            throw error;
           }),
         };
       default: {

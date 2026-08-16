@@ -56,6 +56,7 @@ const baseInput = (
   unsettledShortSlices: [],
   sweepSlice: null,
   recheckCandidate: null,
+  slicesHeldForRetry: new Set(),
   staleAfterMs: RECONCILIATION_SLICE_STALE_MS,
   recheckAfterMs: RECONCILIATION_SETTLED_RECHECK_MS,
   ...overrides,
@@ -385,6 +386,114 @@ describe("selectReconciliationWorkUnit", () => {
         reason,
       });
     }
+  });
+});
+
+describe("a slice held for retry", () => {
+  // A failed walk writes nothing, so every input this selection reads is
+  // unchanged by it. Without the hold the same slice comes back on the next
+  // turn and on every turn after it, and the source's other work — its tip,
+  // its backlog, its sweep — is never reached again. These assert the source
+  // keeps moving at each priority the hold can apply to.
+  const held = (slice: string) => ({ slicesHeldForRetry: new Set([slice]) });
+
+  test("a held tip slice yields to the rest of the tip window", () => {
+    expect(
+      selectReconciliationWorkUnit(
+        baseInput({
+          tipSlices: ["2026-08-11", "2026-08-10"],
+          ...held("2026-08-11"),
+        }),
+      ),
+    ).toEqual({
+      type: "slice",
+      slice: "2026-08-10",
+      reason: SLICE_WALK_REASON.TIP,
+    });
+  });
+
+  test("a tip window held end to end falls through to the backlog", () => {
+    expect(
+      selectReconciliationWorkUnit(
+        baseInput({
+          tipSlices: ["2026-08-11"],
+          unsettledShortSlices: [shortSlice({ slice: "2024-03-12" })],
+          sweepSlice: "2024-01-01",
+          ...held("2026-08-11"),
+        }),
+      ),
+    ).toEqual({
+      type: "slice",
+      slice: "2024-03-12",
+      reason: SLICE_WALK_REASON.SHORT,
+    });
+  });
+
+  test("a held backlog slice yields to the next one owed", () => {
+    // The backlog is read oldest-checked first and selection took the head,
+    // so one unwalkable row at the front stopped the whole queue.
+    expect(
+      selectReconciliationWorkUnit(
+        baseInput({
+          unsettledShortSlices: [
+            shortSlice({ slice: "2024-03-12" }),
+            shortSlice({ slice: "2024-05-02" }),
+          ],
+          ...held("2024-03-12"),
+        }),
+      ),
+    ).toEqual({
+      type: "slice",
+      slice: "2024-05-02",
+      reason: SLICE_WALK_REASON.SHORT,
+    });
+  });
+
+  test("a held sweep slice does not block the recheck behind it", () => {
+    expect(
+      selectReconciliationWorkUnit(
+        baseInput({
+          sweepSlice: "2023-06-01",
+          recheckCandidate: recheckCandidate(LONG_SETTLED),
+          ...held("2023-06-01"),
+        }),
+      ),
+    ).toMatchObject({ reason: SLICE_WALK_REASON.RECHECK });
+  });
+
+  test("a source whose every candidate is held reports idle, not the slice", () => {
+    // Idle is the honest answer: the loop's own pacing then backs the source
+    // off, where returning the slice again would spin it at the unit rate.
+    const recheck = recheckCandidate(LONG_SETTLED);
+    expect(
+      selectReconciliationWorkUnit(
+        baseInput({
+          tipSlices: ["2026-08-11"],
+          unsettledShortSlices: [shortSlice({ slice: "2024-03-12" })],
+          sweepSlice: "2024-01-01",
+          recheckCandidate: recheck,
+          slicesHeldForRetry: new Set([
+            "2026-08-11",
+            "2024-03-12",
+            "2024-01-01",
+            recheck.slice,
+          ]),
+        }),
+      ),
+    ).toEqual({ type: "idle" });
+  });
+
+  test("holding a slice never displaces work that outranks it", () => {
+    // The hold subtracts candidates; it must not reorder what is left.
+    expect(
+      selectReconciliationWorkUnit(
+        baseInput({
+          hasDueParkedItems: true,
+          tipSlices: ["2026-08-11"],
+          ...held("2026-08-11"),
+        }),
+      ),
+    ).toEqual({ type: "parked-retries" });
   });
 });
 
