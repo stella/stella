@@ -18,6 +18,7 @@ const {
   createBullMqConnection,
   createLazyRedisClient,
   isRecoverableRedisPollError,
+  isTransientRedisConnectionError,
 } = await import("@/api/lib/redis-client");
 
 describe("BullMQ Redis connection", () => {
@@ -98,6 +99,33 @@ describe("isRecoverableRedisPollError", () => {
     expect(
       isRecoverableRedisPollError({ code: "ERR_REDIS_INVALID_RESPONSE" }),
     ).toBe(false);
+  });
+});
+
+describe("isTransientRedisConnectionError", () => {
+  const withCode = (code: string): Error =>
+    Object.assign(new Error(code), { code });
+
+  // The classifier gates whether a periodic loop logs a Redis failure as an
+  // expected transient or captures it as an exception; a drifted code string
+  // would silently disable it, so the exact Bun error code is pinned.
+  test("classifies a closed-connection rejection as transient", () => {
+    expect(
+      isTransientRedisConnectionError(withCode("ERR_REDIS_CONNECTION_CLOSED")),
+    ).toBe(true);
+  });
+
+  test("leaves other failures and the poll blip unclassified", () => {
+    expect(isTransientRedisConnectionError(withCode("ECONNREFUSED"))).toBe(
+      false,
+    );
+    expect(
+      isTransientRedisConnectionError(withCode("ERR_REDIS_INVALID_RESPONSE")),
+    ).toBe(false);
+    expect(isTransientRedisConnectionError(new Error("plain"))).toBe(false);
+    expect(isTransientRedisConnectionError("ERR_REDIS_CONNECTION_CLOSED")).toBe(
+      false,
+    );
   });
 });
 

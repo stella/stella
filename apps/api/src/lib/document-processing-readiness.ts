@@ -2,7 +2,12 @@ import { Result } from "better-result";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import { detached } from "@/api/lib/detached";
-import { createRedisClient } from "@/api/lib/redis-client";
+import { errorTag } from "@/api/lib/errors/utils";
+import { logger } from "@/api/lib/observability/logger";
+import {
+  createRedisClient,
+  isTransientRedisConnectionError,
+} from "@/api/lib/redis-client";
 import {
   coordinationKey,
   coordinationSetArguments,
@@ -53,7 +58,16 @@ export const isDocumentOcrWorkerAvailable = async (): Promise<boolean> => {
     catch: (cause) => cause,
   });
   if (Result.isError(availability)) {
-    captureError(availability.error);
+    // A dropped Redis socket rejects the first read after an idle window;
+    // the caller already degrades to "worker unavailable", and the next
+    // read retries on a reconnected socket.
+    if (isTransientRedisConnectionError(availability.error)) {
+      logger.warn("document_processing.readiness_read_disrupted", {
+        "error.type": errorTag(availability.error),
+      });
+    } else {
+      captureError(availability.error);
+    }
     return false;
   }
   return availability.value;
@@ -111,7 +125,21 @@ export const startDocumentOcrWorkerReadiness = () => {
     if (writeInFlight !== null) {
       return;
     }
-    detached(refresh(), "document-processing.readiness-heartbeat");
+    // A dropped Redis socket rejects the first write after an idle window;
+    // the 90s lease outlives one missed 30s beat, and the next beat writes
+    // on a reconnected socket. Other failures keep flowing to `detached`'s
+    // exception capture.
+    detached(
+      refresh().catch((error: unknown) => {
+        if (!isTransientRedisConnectionError(error)) {
+          throw error;
+        }
+        logger.warn("document_processing.readiness_heartbeat_disrupted", {
+          "error.type": errorTag(error),
+        });
+      }),
+      "document-processing.readiness-heartbeat",
+    );
   };
 
   heartbeat();

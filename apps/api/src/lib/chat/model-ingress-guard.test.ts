@@ -16,6 +16,13 @@ void mock.module("@/api/lib/analytics/capture", () => ({
   captureRequestError: captureErrorMock,
 }));
 
+const loggerWarnMock = mock();
+const realLogger = await import("@/api/lib/observability/logger");
+void mock.module("@/api/lib/observability/logger", () => ({
+  ...realLogger,
+  logger: { ...realLogger.logger, warn: loggerWarnMock },
+}));
+
 const {
   assertModelSurfaceFreeOfTenantIds,
   guardMcpToolSource,
@@ -60,14 +67,17 @@ describe("redactTenantIdsDeep", () => {
     expect(value.createdAt).toEqual(createdAt);
     expect(value.count).toBe(2);
     expect(redactedPaths).toEqual(["$.parts[0].content"]);
-    expect(captureErrorMock).toHaveBeenCalledTimes(1);
-    // Telemetry carries paths, never the id value.
-    const [, context] = captureErrorMock.mock.calls.at(0) ?? [];
-    expect(JSON.stringify(context)).not.toContain(WS_A);
+    // Routine traffic (a pasted app URL) is logged, never captured as an
+    // exception; the log carries paths, never the id value.
+    expect(captureErrorMock).not.toHaveBeenCalled();
+    expect(loggerWarnMock).toHaveBeenCalledTimes(1);
+    const [, attributes] = loggerWarnMock.mock.calls.at(0) ?? [];
+    expect(JSON.stringify(attributes)).not.toContain(WS_A);
   });
 
   test("clean input passes through without telemetry", () => {
     captureErrorMock.mockClear();
+    loggerWarnMock.mockClear();
     const input = { parts: [{ type: "text", content: "all refs: mat_1" }] };
     const { value, redactedPaths } = redactTenantIdsDeep({
       value: input,
@@ -76,6 +86,7 @@ describe("redactTenantIdsDeep", () => {
     expect(value).toEqual(input);
     expect(redactedPaths).toEqual([]);
     expect(captureErrorMock).not.toHaveBeenCalled();
+    expect(loggerWarnMock).not.toHaveBeenCalled();
   });
 });
 
@@ -129,6 +140,7 @@ describe("guarded model surfaces", () => {
 
   test("branding messages redacts tenant ids and reports the path", () => {
     captureErrorMock.mockClear();
+    loggerWarnMock.mockClear();
     const messages = [
       {
         id: "user-1",
@@ -159,10 +171,11 @@ describe("guarded model surfaces", () => {
     expect(guarded[1]?.parts[0]?.content).toBe(`Public ${PUBLIC_UUID} stays`);
     // The caller's array is left untouched: the model gets the redacted copy.
     expect(messages[0]?.parts[0]?.content).toContain(WS_A);
-    expect(captureErrorMock).toHaveBeenCalledTimes(1);
-    const [, context] = captureErrorMock.mock.calls.at(0) ?? [];
-    expect(JSON.stringify(context)).toContain("$[0].parts[0].content");
-    expect(JSON.stringify(context)).not.toContain(WS_A);
+    expect(captureErrorMock).not.toHaveBeenCalled();
+    expect(loggerWarnMock).toHaveBeenCalledTimes(1);
+    const [, attributes] = loggerWarnMock.mock.calls.at(0) ?? [];
+    expect(JSON.stringify(attributes)).toContain("$[0].parts[0].content");
+    expect(JSON.stringify(attributes)).not.toContain(WS_A);
 
     // @ts-expect-error unguarded messages must not reach the model dispatch
     acceptsGuardedMessages(messages);
@@ -248,6 +261,7 @@ describe("guarded model surfaces", () => {
 
   test("redact mode keeps a mixed-provenance system prompt alive", () => {
     captureErrorMock.mockClear();
+    loggerWarnMock.mockClear();
     const redacted = redactModelSystemPrompt({
       system: `Loop detected in tool mcp__crm__${WS_A}. Public: ${PUBLIC_UUID}`,
       workspaceIds: [WS_A, WS_B],
@@ -258,9 +272,10 @@ describe("guarded model surfaces", () => {
       `Loop detected in tool mcp__crm__${TENANT_ID_REDACTION_PLACEHOLDER}. Public: ${PUBLIC_UUID}`,
     );
     expect(acceptsGuardedSystemPrompt(redacted)).toBe(redacted);
-    expect(captureErrorMock).toHaveBeenCalledTimes(1);
-    const [, context] = captureErrorMock.mock.calls.at(0) ?? [];
-    expect(JSON.stringify(context)).not.toContain(WS_A);
+    expect(captureErrorMock).not.toHaveBeenCalled();
+    expect(loggerWarnMock).toHaveBeenCalledTimes(1);
+    const [, attributes] = loggerWarnMock.mock.calls.at(0) ?? [];
+    expect(JSON.stringify(attributes)).not.toContain(WS_A);
   });
 
   test("redact mode leaves a clean system prompt untouched and silent", () => {
