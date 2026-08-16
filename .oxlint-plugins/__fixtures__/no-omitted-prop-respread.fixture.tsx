@@ -240,12 +240,17 @@ export const _ok_typeParameterShadowsAlias = <ShadowedProps extends PanelProps>(
   _sibling: ShadowedProps,
 ) => <Panel {...props} />;
 
-// Allowed: `SharedProps` is imported here and also declared in an unrelated
-// nested scope, so the name answers to neither rather than to the wrong one.
-export const _ok_importedNameCollision = (props: SharedProps) => (
+// Analysis boundary, not an accepted shape. `SharedProps` is imported here and
+// also declared in an unrelated nested scope. The plugin API exposes no type
+// scope, so the rule cannot tell which declaration a reference means; it answers
+// with neither. That keeps the imported half from being reported against the
+// wrong omission, and costs a report on the nested half. Both are pinned so the
+// trade is visible: if type-scope resolution ever lands, the second case gains a
+// directive and the first keeps none.
+export const _boundary_importedNameCollision = (props: SharedProps) => (
   <Panel {...props} />
 );
-export const _ok_collidingNestedAlias = () => {
+export const _boundary_collidingNestedAlias = () => {
   type SharedProps = Omit<PanelProps, "orientation">;
   return (props: SharedProps) => <Panel {...props} />;
 };

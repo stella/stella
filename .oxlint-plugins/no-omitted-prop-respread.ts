@@ -52,7 +52,10 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 //     and `Required` are unwrapped. Aliases are indexed by name across the whole
 //     file, so a name claimed by more than one thing — two declarations, an
 //     import, or a type parameter — resolves to nothing rather than guessing
-//     which one a reference meant.
+//     which one a reference meant. The plugin API exposes no type scope, so this
+//     cuts both ways: it avoids reporting one declaration's omission against
+//     another's reference, and it costs the report on whichever reference did
+//     mean an omitting alias.
 //   - `Omit` is matched by name. A shadowed or re-exported `Omit` is not
 //     distinguished.
 //   - The omission must be written on the parameter. A props type inferred from
