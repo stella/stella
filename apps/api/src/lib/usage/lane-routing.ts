@@ -7,10 +7,14 @@
  * decision lands on the other side of it.
  */
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { usageEntitlements, usagePolicies } from "@/api/db/schema";
+import {
+  usageEntitlements,
+  usagePolicies,
+  usageSeatAssignments,
+} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getLaneCounterMicroUnits } from "@/api/lib/usage/lane-budget";
 import { isEntitlementConsumableAt } from "@/api/lib/usage/usage-ledger";
@@ -68,6 +72,23 @@ export const decideChatUsageLane = async ({
     !isEntitlementConsumableAt(entitlement, asOf) ||
     entitlement.dailyAllowanceMicroUnits === null
   ) {
+    return "pool";
+  }
+
+  // Per-user budgets belong to assigned members only; everyone else
+  // keeps the shared-pool path (never a hard block — the pool check
+  // still runs downstream exactly as before budgets existed).
+  const assignment = await tx
+    .select({ id: usageSeatAssignments.id })
+    .from(usageSeatAssignments)
+    .where(
+      and(
+        eq(usageSeatAssignments.organizationId, organizationId),
+        eq(usageSeatAssignments.userId, userId),
+      ),
+    )
+    .limit(1);
+  if (assignment.at(0) === undefined) {
     return "pool";
   }
 

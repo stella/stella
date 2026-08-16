@@ -73,6 +73,8 @@ export const LIMITS = {
   /** Max entity-link rows returned per direction for one task. */
   taskEntityLinksPerDirectionMax: 200,
   entitySummariesPageSize: 200,
+  /** Max per-user limit assignments returned for one organization. */
+  usageAssignmentsMax: 1000,
   viewsCount: 20,
   viewTemplatesPerUser: 50,
   /** Per-org cap on saved playbook definitions. Per-playbook size is bounded

@@ -8,9 +8,13 @@ import {
 } from "bun:test";
 import { eq, TransactionRollbackError } from "drizzle-orm";
 
-import { organization, user } from "@/api/db/auth-schema";
+import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import { usageEntitlements, usagePolicies } from "@/api/db/schema";
+import {
+  usageEntitlements,
+  usagePolicies,
+  usageSeatAssignments,
+} from "@/api/db/schema";
 import {
   handleHostedAllocation,
   handleUsageEntitlementStatusChange,
@@ -46,6 +50,8 @@ const NEXT_PERIOD_END = new Date("2026-09-01T00:00:00.000Z");
 
 type Fixture = {
   organizationId: SafeId<"organization">;
+  /** A member of the fixture organization: a valid seat_user_id. */
+  memberUserId: string;
   usagePolicyId: SafeId<"usagePolicy">;
   hostedPolicyRef: string;
   hostedAddonPolicyRef: string;
@@ -69,6 +75,13 @@ const setupFixture = async (tx: Transaction): Promise<Fixture> => {
     id: userId,
     name: "Test User",
     email: `${userId}@test.local`,
+  });
+  await tx.insert(member).values({
+    id: `member_${Bun.randomUUIDv7()}`,
+    organizationId,
+    userId,
+    role: "owner",
+    createdAt: PERIOD_START,
   });
 
   const inserted = await tx
@@ -95,6 +108,7 @@ const setupFixture = async (tx: Transaction): Promise<Fixture> => {
 
   return {
     organizationId,
+    memberUserId: userId,
     usagePolicyId,
     hostedPolicyRef,
     hostedAddonPolicyRef,
@@ -148,6 +162,12 @@ const buildAllocationPayload = (
   metadata: { organization_id: fx.organizationId },
   ...overrides,
 });
+
+const readSeatAssignments = async (tx: Transaction, fx: Fixture) =>
+  await tx
+    .select({ userId: usageSeatAssignments.userId })
+    .from(usageSeatAssignments)
+    .where(eq(usageSeatAssignments.organizationId, fx.organizationId));
 
 describe("dispatch — handleHostedEntitlementUpsert", () => {
   test("creates entitlement and allocates policy units by seat count on a fresh event", async () => {
@@ -517,6 +537,119 @@ describe("dispatch — handleHostedEntitlementUpsert", () => {
         asOf: new Date(PERIOD_START.getTime() + 1000),
       });
       expect(balance).toBe(0);
+    });
+  });
+
+  test("a fresh entitlement seats the metadata seat_user_id exactly once", async () => {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+      const payload = buildEntitlementPayload(fx, {
+        metadata: {
+          organization_id: fx.organizationId,
+          seat_user_id: fx.memberUserId,
+        },
+      });
+
+      const created = await handleHostedEntitlementUpsert({
+        tx,
+        payload,
+        eventId: "evt_seat_scope_create",
+      });
+      expect(created.kind).toBe("applied");
+      expect(await readSeatAssignments(tx, fx)).toEqual([
+        { userId: fx.memberUserId },
+      ]);
+
+      // A re-delivery carries the same seat metadata; the purchaser must
+      // occupy one seat, not one per webhook delivery.
+      const redelivery = await handleHostedEntitlementUpsert({
+        tx,
+        payload,
+        eventId: "evt_seat_scope_redelivery",
+      });
+      expect(redelivery.kind).toBe("applied");
+      expect(await readSeatAssignments(tx, fx)).toEqual([
+        { userId: fx.memberUserId },
+      ]);
+    });
+  });
+
+  test("shrinking the quantity trims the roster to the oldest designations", async () => {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+      await handleHostedEntitlementUpsert({
+        tx,
+        payload: buildEntitlementPayload(fx),
+        eventId: "evt_shrink_create",
+      });
+
+      // Three designated members with distinct designation times; the
+      // handler-side default (now()) is the transaction timestamp, so
+      // explicit stamps are what make keep-oldest observable.
+      const designated = [fx.memberUserId];
+      for (const _extra of [1, 2]) {
+        const extraUserId = `user_${Bun.randomUUIDv7()}`;
+        // oxlint-disable-next-line no-await-in-loop -- two sequential seed rows in a test fixture
+        await tx.insert(user).values({
+          id: extraUserId,
+          name: "Extra Member",
+          email: `${extraUserId}@test.local`,
+        });
+        // oxlint-disable-next-line no-await-in-loop -- see above
+        await tx.insert(member).values({
+          id: `member_${Bun.randomUUIDv7()}`,
+          organizationId: fx.organizationId,
+          userId: extraUserId,
+          role: "member",
+          createdAt: PERIOD_START,
+        });
+        designated.push(extraUserId);
+      }
+      await tx.insert(usageSeatAssignments).values(
+        designated.map((userId, index) => ({
+          organizationId: fx.organizationId,
+          userId,
+          createdAt: new Date(PERIOD_START.getTime() + index * 3_600_000),
+        })),
+      );
+
+      const outcome = await handleHostedEntitlementUpsert({
+        tx,
+        payload: buildEntitlementPayload(fx, { quantity: 1 }),
+        eventId: "evt_shrink_update",
+      });
+      expect(outcome.kind).toBe("applied");
+      // Only the earliest designation survives a shrink to one.
+      expect(await readSeatAssignments(tx, fx)).toEqual([
+        { userId: fx.memberUserId },
+      ]);
+    });
+  });
+
+  test("a seat_user_id outside the organization seats nobody", async () => {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+      // A real user row that is not a member here: membership, not the
+      // foreign key, has to be what rejects the value.
+      const outsiderUserId = `user_${Bun.randomUUIDv7()}`;
+      await tx.insert(user).values({
+        id: outsiderUserId,
+        name: "Outsider",
+        email: `${outsiderUserId}@test.local`,
+      });
+
+      const outcome = await handleHostedEntitlementUpsert({
+        tx,
+        payload: buildEntitlementPayload(fx, {
+          metadata: {
+            organization_id: fx.organizationId,
+            seat_user_id: outsiderUserId,
+          },
+        }),
+        eventId: "evt_seat_scope_outsider",
+      });
+      expect(outcome.kind).toBe("applied");
+      expect(await readSeatAssignments(tx, fx)).toEqual([]);
     });
   });
 });

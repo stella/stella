@@ -18,7 +18,11 @@ import { and, eq } from "drizzle-orm";
 
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import { usagePolicies, usageEntitlements } from "@/api/db/schema";
+import {
+  usagePolicies,
+  usageEntitlements,
+  usageSeatAssignments,
+} from "@/api/db/schema";
 import type { UsageEntitlementStatus, UsagePolicyKind } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -28,6 +32,10 @@ import type {
 } from "@/api/lib/hosted-usage-provider/event-schemas";
 import { recordWebhookAuditEvent } from "@/api/lib/hosted-usage-provider/webhook-store";
 import { parseExternalOrganizationId } from "@/api/lib/safe-id-boundaries";
+import {
+  lockAssignmentCapacity,
+  trimAssignmentsToCapacity,
+} from "@/api/lib/usage/assignment-capacity";
 import { allocateUsage } from "@/api/lib/usage/usage-ledger";
 
 export type DispatchOutcome =
@@ -458,8 +466,54 @@ export const handleHostedEntitlementUpsert = async ({
         resourceId: insertedId,
         eventId,
       });
+      // First activation: assign the purchasing member to a seat so
+      // the per-user budgets work immediately; further assignments are
+      // manager-managed. Membership is validated the same way the
+      // add-on attribution is; a stale value simply assigns nobody.
+      const purchaserUserId = await resolveSeatScopeUserId(
+        tx,
+        organizationId,
+        payload.metadata?.seat_user_id,
+      );
+      if (purchaserUserId !== null) {
+        await tx
+          .insert(usageSeatAssignments)
+          .values({ organizationId, userId: purchaserUserId })
+          .onConflictDoNothing({
+            target: [
+              usageSeatAssignments.organizationId,
+              usageSeatAssignments.userId,
+            ],
+          });
+      }
       entitlementId = insertedId;
     }
+  }
+
+  // Capacity may have shrunk: drop designations beyond the recorded
+  // count, keeping the earliest-designated members, under the same
+  // per-organization lock the designation endpoints take so a racing
+  // designation cannot slip past the new bound.
+  await lockAssignmentCapacity(tx, ownerOrganizationId);
+  const trimmedAssignments = await trimAssignmentsToCapacity(
+    tx,
+    ownerOrganizationId,
+    seats,
+  );
+  if (trimmedAssignments > 0) {
+    await recordWebhookAuditEvent({
+      tx,
+      organizationId: ownerOrganizationId,
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+      resourceId: ownerOrganizationId,
+      eventId,
+      changes: {
+        field: { old: null, new: "usageAssignment" },
+        removed: { old: null, new: trimmedAssignments },
+        seats: { old: null, new: seats },
+      },
+    });
   }
 
   // Allocate the period's usage units. Idempotent per entitlement period,

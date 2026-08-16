@@ -1,10 +1,13 @@
 import Elysia from "elysia";
 
+import assignSeat from "@/api/handlers/usage/assign-seat";
 import createHostedManagement from "@/api/handlers/usage/create-hosted-management";
 import createHostedSetup from "@/api/handlers/usage/create-hosted-setup";
 import getEntitlement from "@/api/handlers/usage/get-entitlement";
 import getLane from "@/api/handlers/usage/get-lane";
 import listPolicies from "@/api/handlers/usage/list-policies";
+import listSeatAssignments from "@/api/handlers/usage/list-seat-assignments";
+import unassignSeat from "@/api/handlers/usage/unassign-seat";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 
 // Operator-driven admin endpoints (manual entitlement upsert,
@@ -27,6 +30,17 @@ export const usageRoute = new Elysia({ prefix: "/usage" })
   })
   .get("/policies", listPolicies.handler, {
     permissions: listPolicies.config.permissions,
+  })
+  .get("/assignments", listSeatAssignments.handler, {
+    permissions: listSeatAssignments.config.permissions,
+  })
+  .post("/assignments", assignSeat.handler, {
+    body: assignSeat.config.body,
+    permissions: assignSeat.config.permissions,
+  })
+  .delete("/assignments", unassignSeat.handler, {
+    body: unassignSeat.config.body,
+    permissions: unassignSeat.config.permissions,
   })
   .post("/hosted/setup", createHostedSetup.handler, {
     body: createHostedSetup.config.body,

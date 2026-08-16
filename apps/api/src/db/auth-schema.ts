@@ -238,6 +238,13 @@ export const member = pgTable(
     index("member_organizationId_idx").on(table.organizationId),
     index("member_userId_idx").on(table.userId),
     index("member_lastActiveWorkspaceId_idx").on(table.lastActiveWorkspaceId),
+    // One membership per user per organization (the auth layer already
+    // guarantees this; the index makes it referenceable so dependent
+    // rows can bind to the membership and cascade with it).
+    uniqueIndex("member_organization_id_user_id_uidx").on(
+      table.organizationId,
+      table.userId,
+    ),
     ...authMemberPolicies(),
   ],
 );
