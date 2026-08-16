@@ -114,6 +114,48 @@ export const tokenizeCorpusFreeText = (text: string): CorpusQueryToken[] => {
 };
 
 /**
+ * Extra surface forms to accept alongside a term the reader typed, most
+ * useful first. The typed term is deliberately NOT part of the return value:
+ * this builder always emits it first, so no expander can drop or reorder what
+ * the reader actually wrote. An expander that has nothing to add returns an
+ * empty array.
+ */
+export type CorpusTermExpander = (term: string) => readonly string[];
+
+const noTermExpansion: CorpusTermExpander = () => [];
+
+/**
+ * Whether a token kind may be rewritten before it is quoted. A phrase is
+ * verbatim because rewriting its words would silently change what the reader
+ * asked to match adjacently; a term stands for a word and may carry that
+ * word's other inflections. Total over the token union, so a new token kind
+ * cannot reach the engine without a decision recorded here.
+ */
+const TOKEN_EXPANSION_POLICY = {
+  phrase: "verbatim",
+  term: "expandable",
+} as const satisfies Record<
+  CorpusQueryToken["type"],
+  "verbatim" | "expandable"
+>;
+
+/**
+ * Quoted leaves one query may carry. Expansion multiplies leaves per term, so
+ * without a ceiling a long query would hand the engine a clause whose cost is
+ * quadratic in what the reader typed. Terms are expanded left to right until
+ * the next group would cross the ceiling; the rest stay single leaves.
+ */
+export const CORPUS_QUERY_LEAF_BUDGET = 24;
+
+/**
+ * `("typed" OR "other" ...)` — a bare grouped OR, never a field-scoped one:
+ * the engine parses `(a OR b)` inside the default fields, and a field-scoped
+ * group in this position does not parse at all.
+ */
+const orGroup = (typed: string, extras: readonly string[]): string =>
+  `(${[typed, ...extras].map(quoteCorpusValue).join(" OR ")})`;
+
+/**
  * Convert free user text into a safe corpus-index query clause. The engine's
  * query string syntax (field clauses, AND/OR, parentheses, quotes) must never
  * be reachable from user input, mirroring how the pg-fts path keeps user text
@@ -125,25 +167,44 @@ export const tokenizeCorpusFreeText = (text: string): CorpusQueryToken[] => {
  * quoted clause is a positional phrase match over both. A phrase and a term are
  * quoted identically because a phrase is no more expressive than a term here:
  * only the grouping differs.
+ *
+ * With no expander this emits exactly what it emitted before expansion
+ * existed, byte for byte; the expanded form differs only by OR groups in the
+ * positions expansion chose.
  */
-export const corpusFreeTextClause = (text: string): string | null => {
-  const clauses = tokenizeCorpusFreeText(text).map((token) => {
-    switch (token.type) {
-      case "phrase": {
+export const corpusFreeTextClause = (
+  text: string,
+  expand: CorpusTermExpander = noTermExpansion,
+): string | null => {
+  const tokens = tokenizeCorpusFreeText(text);
+  if (tokens.length === 0) {
+    return null;
+  }
+
+  let leaves = tokens.length;
+  const clauses = tokens.map((token) => {
+    const policy = TOKEN_EXPANSION_POLICY[token.type];
+    switch (policy) {
+      case "verbatim": {
         return quoteCorpusValue(token.value);
       }
-      case "term": {
-        return quoteCorpusValue(token.value);
+      case "expandable": {
+        const extras = expand(token.value);
+        if (
+          extras.length === 0 ||
+          leaves + extras.length > CORPUS_QUERY_LEAF_BUDGET
+        ) {
+          return quoteCorpusValue(token.value);
+        }
+        leaves += extras.length;
+        return orGroup(token.value, extras);
       }
       default: {
-        return token satisfies never;
+        return policy satisfies never;
       }
     }
   });
 
-  if (clauses.length === 0) {
-    return null;
-  }
   return `(${clauses.join(" AND ")})`;
 };
 
@@ -171,8 +232,9 @@ export type CaseLawCorpusFilters = {
 export const caseLawCorpusQuery = (
   text: string,
   filters: CaseLawCorpusFilters,
+  expand?: CorpusTermExpander,
 ): string | null => {
-  const freeText = corpusFreeTextClause(text);
+  const freeText = corpusFreeTextClause(text, expand);
   if (freeText === null) {
     return null;
   }

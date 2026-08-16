@@ -5,6 +5,7 @@ import {
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
+import { envBase } from "@/api/env-base";
 // eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -18,6 +19,7 @@ import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
 import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
+import { resolveExpandedCorpusQuery } from "@/api/lib/legal-search/expansion";
 import {
   corpusIndexId,
   corpusIndexPattern,
@@ -79,15 +81,26 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
 
   const parsedCursor = query.cursor ? decodeCursor(query.cursor) : null;
 
-  // jurisdiction is deliberately absent: it selected the index above, so a
-  // scoped query never needs a clause for it.
-  const engineQuery = caseLawCorpusQuery(query.query, {
-    court: query.court,
-    dateFrom: query.dateFrom,
-    dateTo: query.dateTo,
-    documentType: query.documentType,
-    language: query.language,
-    source: query.source,
+  // jurisdiction is deliberately absent from the filters: it selected the
+  // index above, so a scoped query never needs a clause for it. It does select
+  // the expansion dictionary, which is why the resolver takes it separately.
+  const engineQuery = await resolveExpandedCorpusQuery({
+    build: (expand) =>
+      caseLawCorpusQuery(
+        query.query,
+        {
+          court: query.court,
+          dateFrom: query.dateFrom,
+          dateTo: query.dateTo,
+          documentType: query.documentType,
+          language: query.language,
+          source: query.source,
+        },
+        expand,
+      ),
+    jurisdiction: query.jurisdiction,
+    mode: envBase.QUERY_EXPANSION_MODE,
+    text: query.query,
   });
   if (engineQuery === null) {
     return { hits: [], facets: null, nextCursor: null, limit };

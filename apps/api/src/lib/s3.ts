@@ -707,6 +707,52 @@ export const readCorpusS3Bytes = async (
 ): Promise<Uint8Array> =>
   await (await fetchObject(getCorpusS3(), key, signal)).bytes();
 
+type BoundedCorpusReadOptions = {
+  key: string;
+  /** Ceiling on the transferred (still-compressed) body. */
+  maxBytes: number;
+  signal: AbortSignal;
+};
+
+/**
+ * Read a legal-corpus object, refusing a body past `maxBytes`.
+ *
+ * `readCorpusS3Bytes` buffers whatever the store returns, so a decompression
+ * ceiling applied afterwards bounds the decoded size but not the transfer: an
+ * object overwritten with a very large body is already resident by the time
+ * anything inspects it. This variant rejects before reading the body at all.
+ *
+ * The bound is the declared `Content-Length`. Every S3-compatible store sends
+ * it for a GET of a stored object, because the length is known before the
+ * response starts; a response that omits it is refused rather than read, so
+ * the ceiling cannot be bypassed by withholding the header.
+ */
+export const readCorpusS3BytesBounded = async ({
+  key,
+  maxBytes,
+  signal,
+}: BoundedCorpusReadOptions): Promise<Uint8Array> => {
+  const response = await fetchObject(getCorpusS3(), key, signal);
+  // Tested as a header, not as a number. `Number(null)` is 0 and `Number("")`
+  // is 0, so converting first would turn a missing or empty `Content-Length`
+  // into a length of zero that passes every ceiling — making the refusal below
+  // unreachable in exactly the case it exists for.
+  const header = response.headers.get("content-length");
+  const declared =
+    header !== null && /^\d+$/u.test(header.trim()) ? Number(header) : null;
+  if (declared === null) {
+    throw new S3ObjectReadError({
+      message: `Object read for ${key} declared no usable length; refusing an unbounded read`,
+    });
+  }
+  if (declared > maxBytes) {
+    throw new S3ObjectReadError({
+      message: `Object read for ${key} declares ${declared} bytes, past the ${maxBytes}-byte ceiling`,
+    });
+  }
+  return await response.bytes();
+};
+
 /** Read a documents-bucket object. See `fetchObject`. */
 export const readS3ArrayBuffer = async (
   key: string,

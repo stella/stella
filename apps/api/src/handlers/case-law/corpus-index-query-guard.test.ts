@@ -447,10 +447,17 @@ test("the ingestion role can take every lock the corpus checkpoint holds", async
   }
 });
 
+// The binding, not the statement's formatting: a consumer that imports the
+// shared builder alongside anything else, or across several lines, satisfies
+// this invariant exactly as much as a single-specifier import does. Pinning
+// the literal statement made a reformat look like a bypass.
+const SHARED_BUILDER_IMPORT =
+  /import\s*\{[^}]*\bcaseLawCorpusQuery\b[^}]*\}\s*from\s*"@\/api\/lib\/legal-search\/corpus-query"/su;
+
 // One assembler, or the two boundaries drift into two answers about what the
 // engine sees. The public search path and the shared provider must both reach
-// the engine through corpus-query.ts, and neither may re-derive quoting or
-// interpolate user text into the DSL itself.
+// the engine through corpus-query.ts, and neither may re-derive quoting,
+// interpolate user text into the DSL, or assemble a clause of its own.
 test("every case-law corpus query is assembled by the shared builder", async () => {
   const consumers = await Promise.all(
     [publicSearchSource, sharedSearchProviderSource].map(
@@ -458,18 +465,23 @@ test("every case-law corpus query is assembled by the shared builder", async () 
     ),
   );
   for (const source of consumers) {
-    expect(source).toContain(
-      'import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query"',
-    );
+    expect(source).toMatch(SHARED_BUILDER_IMPORT);
     expect(source).toContain("caseLawCorpusQuery(");
-    // A local escaping helper is how the two paths diverged before.
+    // A local escaping helper is how the two paths diverged before, and
+    // reaching for the shared quoting primitive is the same divergence with a
+    // shared name: quoting belongs to the builder that owns the clause.
     expect(source).not.toMatch(/const quote = /u);
     expect(source).not.toMatch(/replaceAll\('"'/u);
+    expect(source).not.toContain("quoteCorpusValue");
     // No field clause is assembled outside the shared builder, and free text
     // never reaches a template literal.
     expect(source).not.toMatch(/`(?:document_type|source|language|court):/u);
     expect(source).not.toMatch(/`decision_date:\[/u);
     expect(source).not.toMatch(/\$\{\w+\.query\}/u);
+    // Query expansion emits grouped OR leaves. That assembly is the builder's
+    // too: a consumer that grows its own group is the same drift in the shape
+    // the expander made reachable.
+    expect(source).not.toMatch(/"\s+OR\s+"/u);
   }
 });
 

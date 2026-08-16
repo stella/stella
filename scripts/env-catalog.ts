@@ -135,6 +135,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "POSTHOG_LOCAL_DEBUG",
   "POSTHOG_LOCAL_DEBUG_AI_CONTENT",
   "PUBLIC_URL",
+  "QUERY_EXPANSION_MODE",
   "REQUIRE_PERSONAL_AI_KEY",
   "S3_BUCKET",
   "S3_CREDENTIALS_PROVIDER",
@@ -313,6 +314,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Include raw AI prompts and outputs in local diagnostics. This may expose privileged content.",
   PUBLIC_URL:
     "Public API origin for verification links and OAuth callbacks. Defaults to BETTER_AUTH_URL.",
+  QUERY_EXPANSION_MODE:
+    'Morphological expansion of case-law search terms: "off" builds today\'s query, "shadow" runs the unexpanded query and records leaf counts comparing it with the expanded one (never the query text). "on" runs the expanded query and is currently refused at startup, pending cursors that carry the dictionary version.',
   REDIS_URL:
     "Valkey or Redis URL used for cross-instance broadcasts and rate limits. Treated as secret because it may contain credentials.",
   S3_ACCESS_KEY_ID:

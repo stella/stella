@@ -32,7 +32,11 @@ import {
 } from "@/api/lib/legal-search/case-law-corpus-projection";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
-import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
+import {
+  caseLawCorpusQuery,
+  type CorpusTermExpander,
+} from "@/api/lib/legal-search/corpus-query";
+import { resolveExpandedCorpusQuery } from "@/api/lib/legal-search/expansion";
 import { loadFtsSearchConfigs } from "@/api/lib/legal-search/fts-config";
 import {
   corpusIndexId,
@@ -429,15 +433,35 @@ const searchPostgresDecisions = async (
   };
 };
 
-// `country` is deliberately absent: it selects the index, not a clause.
-const buildCorpusIndexQuery = (body: SearchDecisionsBody): string | null =>
-  caseLawCorpusQuery(body.query, {
-    court: body.court,
-    dateFrom: body.dateFrom,
-    dateTo: body.dateTo,
-    documentType: body.decisionType,
-    language: body.language,
-    source: body.sourceId,
+// `country` is deliberately absent from the filters: it selects the index,
+// not a clause. It does select the expansion dictionary, which is why the
+// expander is resolved from it here rather than inside the query builder.
+const buildCorpusIndexQuery = (
+  body: SearchDecisionsBody,
+  expand?: CorpusTermExpander,
+): string | null =>
+  caseLawCorpusQuery(
+    body.query,
+    {
+      court: body.court,
+      dateFrom: body.dateFrom,
+      dateTo: body.dateTo,
+      documentType: body.decisionType,
+      language: body.language,
+      source: body.sourceId,
+    },
+    expand,
+  );
+
+/** Mode, dictionary, and shadow accounting are the shared resolver's. */
+const resolveCorpusIndexQuery = async (
+  body: SearchDecisionsBody,
+): Promise<string | null> =>
+  await resolveExpandedCorpusQuery({
+    build: (expand) => buildCorpusIndexQuery(body, expand),
+    jurisdiction: body.country,
+    mode: envBase.QUERY_EXPANSION_MODE,
+    text: body.query,
   });
 
 const extractCorpusSnippet = (
@@ -474,7 +498,7 @@ const searchCorpusIndexDecisions = async (
     ? corpusIndexId(generation, body.country)
     : corpusIndexPattern(generation);
 
-  const query = buildCorpusIndexQuery(body);
+  const query = await resolveCorpusIndexQuery(body);
   if (query === null) {
     return { hits: [], facets: null, totalCount: null, nextCursor: null };
   }

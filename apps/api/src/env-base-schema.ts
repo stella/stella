@@ -16,6 +16,10 @@ import {
   corpusStorageInvariantViolation,
   resolveCorpusStorageMode,
 } from "@/api/lib/corpus-storage-mode";
+import {
+  QUERY_EXPANSION_MODES,
+  type QueryExpansionMode,
+} from "@/api/lib/legal-search/query-expansion-mode";
 import { isUsableStaticCredential } from "@/api/lib/s3-credentials";
 import { isTlsOrLoopbackUrl } from "@/api/lib/secure-service-url";
 
@@ -182,6 +186,13 @@ export const envBaseServerSchema = {
     min: 1,
     max: 32,
   }),
+  // Morphological query expansion for case-law corpus-index searches.
+  // `off` is byte-identical to the pre-expansion query builder and fetches
+  // no dictionary; `shadow` executes the unexpanded query and records how the
+  // expanded one compares (leaf counts only, never query text). `on` executes
+  // the expanded query and is refused at boot by the invariant below until
+  // corpus cursors carry the dictionary version they were built against.
+  QUERY_EXPANSION_MODE: v.optional(v.picklist(QUERY_EXPANSION_MODES), "off"),
   isDev: v.boolean(),
 };
 
@@ -205,6 +216,7 @@ type EnvBaseInvariantInput = {
   DATABASE_URL: string;
   LEGAL_CORPUS_S3_BUCKET?: string | undefined;
   LEGAL_SEARCH_PROVIDER: "pg-fts" | "corpus-index";
+  QUERY_EXPANSION_MODE: QueryExpansionMode;
   S3_ACCESS_KEY_ID?: string | undefined;
   S3_CREDENTIALS_PROVIDER: "auto" | "env" | "aws-runtime" | "none";
   S3_ENDPOINT: string;
@@ -222,6 +234,7 @@ export const envBaseInvariantViolation = ({
   DATABASE_URL,
   LEGAL_CORPUS_S3_BUCKET,
   LEGAL_SEARCH_PROVIDER,
+  QUERY_EXPANSION_MODE,
   S3_ACCESS_KEY_ID,
   S3_CREDENTIALS_PROVIDER,
   S3_ENDPOINT,
@@ -251,6 +264,19 @@ export const envBaseInvariantViolation = ({
   }
   if (!isDev && CORPUS_INDEX_SEARCH_ENDPOINT !== undefined) {
     return "CORPUS_INDEX_SEARCH_ENDPOINT is only supported in local development.";
+  }
+  // REMOVAL CONDITION: delete this invariant in the PR that makes a corpus
+  // cursor carry the dictionary version it was built against.
+  //
+  // Under `on` the engine query depends on which dictionary the serving
+  // replica loaded, so a page-2 request landing on a replica mid-refresh
+  // rebuilds a different query and ranks a different result set against page
+  // 1's cursor, skipping or repeating decisions. `shadow` cannot reach this,
+  // because it executes the unexpanded query. Refusing the mode at boot is
+  // what keeps the broken combination unreachable rather than merely
+  // documented.
+  if (QUERY_EXPANSION_MODE === "on") {
+    return 'QUERY_EXPANSION_MODE="on" requires dictionary-version-carrying cursors; not yet implemented — use "shadow".';
   }
   if (
     CASE_LAW_DATABASE_URL !== undefined &&
