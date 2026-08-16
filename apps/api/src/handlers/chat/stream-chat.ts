@@ -750,6 +750,8 @@ type CreateChatAttemptAnalyticsProps = {
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   safeDb: SafeDb;
+  /** Explicit per-turn model selection; undefined = role default. */
+  selectedModelId: string | undefined;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
@@ -761,6 +763,7 @@ const createChatAttemptAnalytics = ({
   organizationId,
   orgAIConfig,
   safeDb,
+  selectedModelId,
   threadId,
   userId,
   workspaceId,
@@ -781,6 +784,7 @@ const createChatAttemptAnalytics = ({
       organization_id: organizationId,
       ...(workspaceId ? { workspace_id: workspaceId } : {}),
     },
+    selectedModelId,
     sessionId: threadId,
     traceId: Bun.randomUUIDv7(),
   });
@@ -1005,12 +1009,17 @@ const runChatAttempt = async function* ({
     role,
     scopeKey: promptCacheKey,
   });
+  // Sandbox turns dispatch on the harness's own model, not the thread's
+  // selection, so their consumption must rate against the role default
+  // rather than a model that never served them.
+  const servedModelId = sandboxRun ? undefined : modelId;
   const analytics = createChatAttemptAnalytics({
     feature,
     modelRole: role,
     organizationId,
     orgAIConfig,
     safeDb,
+    selectedModelId: servedModelId,
     threadId,
     userId,
     workspaceId,
@@ -1021,6 +1030,9 @@ const runChatAttempt = async function* ({
     organizationId,
     orgAIConfig,
     safeDb,
+    // Compaction runs on the same adapter as the turn itself, so its
+    // consumption rates against the same selection.
+    selectedModelId: servedModelId,
     threadId,
     userId,
     workspaceId,

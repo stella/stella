@@ -261,6 +261,101 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     });
   });
 
+  test("rates consumption against the explicitly selected model", async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const { usageUnitsFromTokens } = await import("@/api/lib/usage/unit-model");
+    const periodStart = new Date("2026-06-01T00:00:00.000Z");
+    const periodEnd = new Date("2026-07-01T00:00:00.000Z");
+    const insertedRows: unknown[] = [];
+    const tx = {
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => [
+              {
+                currentPeriodEnd: periodEnd,
+                currentPeriodStart: periodStart,
+                status: "active",
+              },
+            ],
+          }),
+        }),
+      }),
+      insert: () => ({
+        values: (values: unknown) => {
+          insertedRows.push(values);
+          return {
+            onConflictDoNothing: () => ({
+              returning: async () => [{ id: "usage_event_1" }],
+            }),
+          };
+        },
+      }),
+    };
+    const { safeDb } = createScopedDbMock(tx);
+    const events: Parameters<Analytics["capture"]>[0][] = [];
+    const analytics: Analytics = {
+      capture: (event) => {
+        events.push(event);
+      },
+      flush: async () => undefined,
+    };
+    const callbacks = createTanStackAIAnalyticsCallbacks({
+      analytics,
+      feature: "chat.stream",
+      modelRole: "chat",
+      orgAIConfig: createOpenAIOrgAIConfig(),
+      selectedModelId: "openai::gpt-5.6",
+      traceId: "trace_selected_model",
+      usageMetering: {
+        actionType: "chat",
+        organizationId: orgId,
+        safeDb,
+        serviceTier: "standard",
+        userId,
+        workspaceId,
+      },
+    });
+    const deferred: Promise<unknown>[] = [];
+
+    await callbacks.middleware.onUsage?.(
+      createMiddlewareContext({ deferred }),
+      usage,
+    );
+    await callbacks.middleware.onFinish?.(createMiddlewareContext(), {
+      content: "Done",
+      duration: 4200,
+      finishReason: "stop",
+      usage,
+    });
+    await Promise.all(deferred);
+
+    const ratedMicroUnits = (modelId: string) =>
+      usageUnitsFromTokens({
+        actionType: "chat",
+        inputTokens: usage.promptTokens,
+        isByok: true,
+        modelId,
+        outputTokens: usage.completionTokens,
+        serviceTier: "standard",
+      }).rawUsageMicroUnits;
+
+    // The org config's chat role default is gpt-5.4-mini: metering and
+    // analytics must both name the model that actually served the turn.
+    expect(ratedMicroUnits("gpt-5.6")).not.toBe(
+      ratedMicroUnits("gpt-5.4-mini"),
+    );
+    expect(insertedRows).toHaveLength(1);
+    expect(insertedRows[0]).toMatchObject({
+      rawUsageMicroUnits: ratedMicroUnits("gpt-5.6"),
+    });
+    expect(events[0]?.properties).toMatchObject({
+      $ai_model: "gpt-5.6",
+      $ai_provider: "openai",
+    });
+  });
+
   test("meters standard-tier fallback usage as standard", async () => {
     const { createTanStackAIAnalyticsCallbacks } =
       await loadTanStackAIAnalytics();

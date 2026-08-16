@@ -41,6 +41,7 @@ import type {
   UsageActionType,
   UsageAllocationReason,
   UsageAllocationSource,
+  UsageEventLane,
   UsageServiceTier,
   UsageEntitlementStatus,
 } from "@/api/db/schema";
@@ -172,6 +173,10 @@ export const getRemainingUsageUnits = async ({
     .where(
       and(
         eq(usageEvents.organizationId, organizationId),
+        // Only pool-lane events settle against purchased units;
+        // allowance/fallback consumption is settled by the per-user
+        // lane counters instead.
+        eq(usageEvents.lane, "pool"),
         // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- caller-supplied filter bound, never round-tripped through the database
         lte(usageEvents.periodStart, asOf),
         // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- caller-supplied filter bound, never round-tripped through the database
@@ -260,6 +265,8 @@ type RecordUsageEventInput = {
   unitsConsumed: number;
   serviceTier: UsageServiceTier;
   isByok: boolean;
+  /** Which budget this event settles against; defaults to the pool. */
+  lane?: UsageEventLane;
   rawUsageMicroUnits?: number | null;
   traceId?: string | null;
   idempotencyKey?: string | null;
@@ -291,6 +298,7 @@ export const recordUsageEvent = async ({
   unitsConsumed,
   serviceTier,
   isByok,
+  lane = "pool",
   rawUsageMicroUnits = null,
   traceId = null,
   idempotencyKey = null,
@@ -309,6 +317,7 @@ export const recordUsageEvent = async ({
     unitsConsumed,
     serviceTier,
     isByok,
+    lane,
     rawUsageMicroUnits,
     traceId,
     idempotencyKey,
