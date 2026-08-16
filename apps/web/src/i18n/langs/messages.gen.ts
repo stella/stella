@@ -723,6 +723,7 @@ type Messages = {
     };
     "unsupportedFileType": "Unsupported file type";
     "uploadFailed": "Failed to process file";
+    "usageFallbackNotice": "Daily AI allowance used — replies continue on the standard model.";
     "videoContent": "Generated video";
     "webSearch": {
       "answer": "Web search summary";

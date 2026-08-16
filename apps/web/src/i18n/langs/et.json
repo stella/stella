@@ -720,6 +720,7 @@
     },
     "unsupportedFileType": "Toetamata failitüüp",
     "uploadFailed": "Faili töötlemine ebaõnnestus",
+    "usageFallbackNotice": "Päevane AI-maht on täis — vastused jätkuvad tavamudeliga.",
     "videoContent": "Loodud video",
     "webSearch": {
       "answer": "Summary from sources",

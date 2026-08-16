@@ -720,6 +720,7 @@
     },
     "unsupportedFileType": "Nepodporovaný typ souboru",
     "uploadFailed": "Zpracování souboru selhalo",
+    "usageFallbackNotice": "Denní příděl AI je vyčerpán — odpovědi pokračují na standardním modelu.",
     "videoContent": "Vygenerované video",
     "webSearch": {
       "answer": "Shrnutí webového vyhledávání",

@@ -720,6 +720,7 @@
     },
     "unsupportedFileType": "Type de fichier non pris en charge",
     "uploadFailed": "Échec du traitement du fichier",
+    "usageFallbackNotice": "Quota d’IA quotidien épuisé — les réponses se poursuivent sur le modèle standard.",
     "videoContent": "Vidéo générée",
     "webSearch": {
       "answer": "Summary from sources",
