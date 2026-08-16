@@ -234,6 +234,9 @@
             "location": "apps/web/src/lib/files/email-citations.ts#1"
           },
           {
+            "location": "apps/web/src/lib/folio-ui-components.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/knowledge/navigation.ts#1"
           },
           {
@@ -256,6 +259,9 @@
           },
           {
             "location": "apps/web/src/lib/pdf/hooks/use-pdf-fit-to-width.ts#2"
+          },
+          {
+            "location": "apps/web/src/lib/pdf/hooks/use-pdf-wheel-zoom.ts#1"
           },
           {
             "location": "apps/web/src/lib/pdf/hooks/use-text-selection.ts#1"
@@ -901,6 +907,12 @@
           },
           {
             "location": "apps/web/src/components/workspaces/editable-field.tsx#12"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/matter-color-picker.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/matter-color-picker.tsx#2"
           },
           {
             "location": "apps/web/src/components/workspaces/matter-context-menu.tsx#10"
@@ -3496,6 +3508,9 @@
             "location": "apps/web/src/lib/files/email-citations.ts#1"
           },
           {
+            "location": "apps/web/src/lib/folio-ui-components.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/knowledge/navigation.ts#1"
           },
           {
@@ -3518,6 +3533,9 @@
           },
           {
             "location": "apps/web/src/lib/pdf/hooks/use-pdf-fit-to-width.ts#2"
+          },
+          {
+            "location": "apps/web/src/lib/pdf/hooks/use-pdf-wheel-zoom.ts#1"
           },
           {
             "location": "apps/web/src/lib/pdf/hooks/use-text-selection.ts#1"
@@ -4163,6 +4181,12 @@
           },
           {
             "location": "apps/web/src/components/workspaces/editable-field.tsx#12"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/matter-color-picker.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/matter-color-picker.tsx#2"
           },
           {
             "location": "apps/web/src/components/workspaces/matter-context-menu.tsx#10"
@@ -5245,6 +5269,9 @@
             "location": "apps/web/src/lib/files/email-citations.ts#1"
           },
           {
+            "location": "apps/web/src/lib/folio-ui-components.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/knowledge/navigation.ts#1"
           },
           {
@@ -5267,6 +5294,9 @@
           },
           {
             "location": "apps/web/src/lib/pdf/hooks/use-pdf-fit-to-width.ts#2"
+          },
+          {
+            "location": "apps/web/src/lib/pdf/hooks/use-pdf-wheel-zoom.ts#1"
           },
           {
             "location": "apps/web/src/lib/pdf/hooks/use-text-selection.ts#1"
@@ -5912,6 +5942,12 @@
           },
           {
             "location": "apps/web/src/components/workspaces/editable-field.tsx#12"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/matter-color-picker.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/matter-color-picker.tsx#2"
           },
           {
             "location": "apps/web/src/components/workspaces/matter-context-menu.tsx#10"
@@ -8354,6 +8390,9 @@
             "location": "apps/web/src/lib/files/email-citations.ts#1"
           },
           {
+            "location": "apps/web/src/lib/folio-ui-components.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/knowledge/navigation.ts#1"
           },
           {
@@ -8376,6 +8415,9 @@
           },
           {
             "location": "apps/web/src/lib/pdf/hooks/use-pdf-fit-to-width.ts#2"
+          },
+          {
+            "location": "apps/web/src/lib/pdf/hooks/use-pdf-wheel-zoom.ts#1"
           },
           {
             "location": "apps/web/src/lib/pdf/hooks/use-text-selection.ts#1"
@@ -9021,6 +9063,12 @@
           },
           {
             "location": "apps/web/src/components/workspaces/editable-field.tsx#12"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/matter-color-picker.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/matter-color-picker.tsx#2"
           },
           {
             "location": "apps/web/src/components/workspaces/matter-context-menu.tsx#10"
@@ -13101,7 +13149,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#4"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#7"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx#3"
@@ -15570,6 +15618,9 @@
             "location": "apps/web/src/lib/files/email-citations.ts#1"
           },
           {
+            "location": "apps/web/src/lib/folio-ui-components.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/knowledge/navigation.ts#1"
           },
           {
@@ -15592,6 +15643,9 @@
           },
           {
             "location": "apps/web/src/lib/pdf/hooks/use-pdf-fit-to-width.ts#2"
+          },
+          {
+            "location": "apps/web/src/lib/pdf/hooks/use-pdf-wheel-zoom.ts#1"
           },
           {
             "location": "apps/web/src/lib/pdf/hooks/use-text-selection.ts#1"
@@ -16237,6 +16291,12 @@
           },
           {
             "location": "apps/web/src/components/workspaces/editable-field.tsx#12"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/matter-color-picker.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/matter-color-picker.tsx#2"
           },
           {
             "location": "apps/web/src/components/workspaces/matter-context-menu.tsx#10"
@@ -19243,6 +19303,9 @@
             "location": "apps/api/src/handlers/workspaces/duplicate.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/workspaces/export-overview-activity.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/workspaces/generate-bounding-boxes.ts#1"
           },
           {
@@ -19268,6 +19331,12 @@
           },
           {
             "location": "apps/api/src/handlers/workspaces/read-navigation.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/read-overview-activity-actors.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/read-overview-activity.query.ts#1"
           },
           {
             "location": "apps/api/src/handlers/workspaces/read-overview-activity.ts#1"
@@ -19600,6 +19669,12 @@
             "location": "apps/api/src/lib/legal-search/ingestion-types.ts#2"
           },
           {
+            "location": "apps/api/src/lib/legal-search/morphology/slovak.ts#78"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts#48"
+          },
+          {
             "location": "apps/api/src/lib/matter-reference.ts#1"
           },
           {
@@ -19907,6 +19982,9 @@
           },
           {
             "location": "apps/api/src/scripts/citation-probe.ts#15"
+          },
+          {
+            "location": "apps/api/src/scripts/corpus-column-trim.ts#1"
           },
           {
             "location": "apps/api/src/scripts/cz-regional-repair-plan.ts#1"
@@ -20308,6 +20386,9 @@
             "location": "scripts/env-tool.ts#2"
           },
           {
+            "location": "scripts/generate-snowball-stemmers.ts#22"
+          },
+          {
             "location": "scripts/lint-suppressions.ts#22"
           },
           {
@@ -20459,6 +20540,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization.audit-logs.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#8"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-narrative-field.tsx#3"
@@ -22200,6 +22284,9 @@
             "location": "apps/api/src/handlers/workspaces/duplicate.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/workspaces/export-overview-activity.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/workspaces/generate-bounding-boxes.ts#1"
           },
           {
@@ -22225,6 +22312,12 @@
           },
           {
             "location": "apps/api/src/handlers/workspaces/read-navigation.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/read-overview-activity-actors.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/read-overview-activity.query.ts#1"
           },
           {
             "location": "apps/api/src/handlers/workspaces/read-overview-activity.ts#1"
@@ -22557,6 +22650,12 @@
             "location": "apps/api/src/lib/legal-search/ingestion-types.ts#2"
           },
           {
+            "location": "apps/api/src/lib/legal-search/morphology/slovak.ts#78"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts#48"
+          },
+          {
             "location": "apps/api/src/lib/matter-reference.ts#1"
           },
           {
@@ -22864,6 +22963,9 @@
           },
           {
             "location": "apps/api/src/scripts/citation-probe.ts#15"
+          },
+          {
+            "location": "apps/api/src/scripts/corpus-column-trim.ts#1"
           },
           {
             "location": "apps/api/src/scripts/cz-regional-repair-plan.ts#1"
@@ -23265,6 +23367,9 @@
             "location": "scripts/env-tool.ts#2"
           },
           {
+            "location": "scripts/generate-snowball-stemmers.ts#22"
+          },
+          {
             "location": "scripts/lint-suppressions.ts#22"
           },
           {
@@ -23416,6 +23521,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization.audit-logs.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#8"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-narrative-field.tsx#3"
@@ -25149,6 +25257,9 @@
             "location": "apps/api/src/handlers/workspaces/duplicate.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/workspaces/export-overview-activity.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/workspaces/generate-bounding-boxes.ts#1"
           },
           {
@@ -25174,6 +25285,12 @@
           },
           {
             "location": "apps/api/src/handlers/workspaces/read-navigation.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/read-overview-activity-actors.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/read-overview-activity.query.ts#1"
           },
           {
             "location": "apps/api/src/handlers/workspaces/read-overview-activity.ts#1"
@@ -25506,6 +25623,12 @@
             "location": "apps/api/src/lib/legal-search/ingestion-types.ts#2"
           },
           {
+            "location": "apps/api/src/lib/legal-search/morphology/slovak.ts#78"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts#48"
+          },
+          {
             "location": "apps/api/src/lib/matter-reference.ts#1"
           },
           {
@@ -25813,6 +25936,9 @@
           },
           {
             "location": "apps/api/src/scripts/citation-probe.ts#15"
+          },
+          {
+            "location": "apps/api/src/scripts/corpus-column-trim.ts#1"
           },
           {
             "location": "apps/api/src/scripts/cz-regional-repair-plan.ts#1"
@@ -26214,6 +26340,9 @@
             "location": "scripts/env-tool.ts#2"
           },
           {
+            "location": "scripts/generate-snowball-stemmers.ts#22"
+          },
+          {
             "location": "scripts/lint-suppressions.ts#22"
           },
           {
@@ -26365,6 +26494,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization.audit-logs.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#8"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-narrative-field.tsx#3"
@@ -27551,6 +27683,9 @@
             "location": "apps/api/src/db/schema/common.ts#5"
           },
           {
+            "location": "apps/api/src/db/schema/contacts.ts#1"
+          },
+          {
             "location": "apps/api/src/db/schema/corpus-index-jobs.ts#8"
           },
           {
@@ -28577,10 +28712,10 @@
             "location": "apps/api/src/handlers/workspaces/read-navigation.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/read-overview-activity.ts#13"
+            "location": "apps/api/src/handlers/workspaces/read-overview-activity.query.ts#16"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/read-overview-activity.ts#14"
+            "location": "apps/api/src/handlers/workspaces/read-overview-activity.query.ts#17"
           },
           {
             "location": "apps/api/src/handlers/workspaces/read-overview.ts#2"
@@ -29222,10 +29357,10 @@
             "location": "apps/api/src/scripts/case-law-reconciliation-items.ts#1"
           },
           {
-            "location": "apps/api/src/scripts/corpus-column-trim.ts#1"
+            "location": "apps/api/src/scripts/corpus-column-trim.ts#13"
           },
           {
-            "location": "apps/api/src/scripts/corpus-column-trim.ts#2"
+            "location": "apps/api/src/scripts/corpus-column-trim.ts#14"
           },
           {
             "location": "apps/api/src/scripts/cz-regional-repair.ts#2"
@@ -29279,7 +29414,7 @@
             "location": "apps/api/src/db/schema/common.ts#5"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/read-overview-activity.ts#14"
+            "location": "apps/api/src/handlers/workspaces/read-overview-activity.query.ts#17"
           },
           {
             "location": "apps/api/src/lib/account-deletion-steps.ts#12"
@@ -30848,6 +30983,9 @@
             "location": "apps/api/src/handlers/workspaces/events.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/workspaces/export-overview-activity.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/workspaces/generate-bounding-boxes.ts#3"
           },
           {
@@ -30855,6 +30993,9 @@
           },
           {
             "location": "apps/api/src/handlers/workspaces/infosoud-common.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/matter-activity-query.ts#1"
           },
           {
             "location": "apps/api/src/handlers/workspaces/read-activity.ts#4"
@@ -30866,7 +31007,10 @@
             "location": "apps/api/src/handlers/workspaces/read-navigation.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/workspaces/read-overview-activity.ts#15"
+            "location": "apps/api/src/handlers/workspaces/read-overview-activity-actors.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/read-overview-activity.ts#2"
           },
           {
             "location": "apps/api/src/handlers/workspaces/read-workflow-target-count.ts#2"
@@ -32354,7 +32498,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#16"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#21"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx#11"
@@ -34109,6 +34253,9 @@
             "location": "apps/web/src/lib/files/email-citations.ts#1"
           },
           {
+            "location": "apps/web/src/lib/folio-ui-components.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/knowledge/navigation.ts#1"
           },
           {
@@ -34131,6 +34278,9 @@
           },
           {
             "location": "apps/web/src/lib/pdf/hooks/use-pdf-fit-to-width.ts#2"
+          },
+          {
+            "location": "apps/web/src/lib/pdf/hooks/use-pdf-wheel-zoom.ts#1"
           },
           {
             "location": "apps/web/src/lib/pdf/hooks/use-text-selection.ts#1"
@@ -34776,6 +34926,12 @@
           },
           {
             "location": "apps/web/src/components/workspaces/editable-field.tsx#12"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/matter-color-picker.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/matter-color-picker.tsx#2"
           },
           {
             "location": "apps/web/src/components/workspaces/matter-context-menu.tsx#10"
@@ -36519,6 +36675,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/matter-numbering-card.tsx#4"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#22"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#16"
           },
           {
@@ -36619,6 +36778,9 @@
           },
           {
             "location": "apps/web/src/hooks/use-sign-out.ts#3"
+          },
+          {
+            "location": "apps/web/src/lib/folio-ui-components.ts#3"
           },
           {
             "location": "apps/web/src/lib/organization/mutations.ts#2"
@@ -37056,6 +37218,9 @@
             "location": "apps/web/src/components/workspaces/lead-section.tsx#3"
           },
           {
+            "location": "apps/web/src/components/workspaces/matter-color-picker.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/workspaces/matter-context-menu.tsx#24"
           },
           {
@@ -37467,7 +37632,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#27"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#17"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#23"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx#12"
@@ -38310,6 +38475,9 @@
             "location": "apps/api/src/mcp/tool-utils.ts#3"
           },
           {
+            "location": "apps/api/src/scripts/corpus-column-trim-plan.ts#1"
+          },
+          {
             "location": "apps/api/src/scripts/mcp-canary.ts#27"
           },
           {
@@ -38923,6 +39091,9 @@
           },
           {
             "location": "apps/api/src/mcp/tool-utils.ts#3"
+          },
+          {
+            "location": "apps/api/src/scripts/corpus-column-trim-plan.ts#1"
           },
           {
             "location": "apps/api/src/scripts/mcp-canary.ts#27"
