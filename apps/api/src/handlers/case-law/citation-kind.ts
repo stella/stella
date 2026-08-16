@@ -47,6 +47,17 @@ const AUTHORITY_REGISTRIES = new Set([
   "tdo",
   "odo",
   "nd",
+  // Czech Supreme Court kolegium opinions ("stanoviska"): civil-and-
+  // commercial (Cpjn 203/2010) and criminal (Tpjn 300/2017). A stanovisko is
+  // issued to unify divergent practice, so it is authority by construction.
+  // The citation extractor already recognises the bare `Cpjn`/`Tpjn` forms;
+  // the registry reader below is what lets them reach this set.
+  "cpjn",
+  "tpjn",
+  // The commercial kolegium's own opinion register, from before that
+  // kolegium merged into the civil-and-commercial one. Historical: the
+  // published set is tiny (Opjn 8/2006), but those opinions are still cited.
+  "opjn",
   // Czech Supreme Administrative Court
   "as",
   "afs",
@@ -66,11 +77,25 @@ const AUTHORITY_REGISTRIES = new Set([
   "uzp",
   "kzp",
   "cskp",
-  // Slovak Supreme Court
+  // Polish Supreme Court legal-question resolutions ("uchwały") of the
+  // labour chamber, the sibling of the `uzp`/`czp`/`kzp` marks already
+  // listed. Cited with a Roman chamber prefix that drifts as chambers are
+  // reorganised ("III PZP 1/21"), so only the mark itself is keyed on.
+  "pzp",
+  // Slovak Supreme Court. `cdo` is shared with the Czech Supreme Court and
+  // is listed once, above.
   "sžo",
   "sž",
   "obdo",
-  "cdo",
+  // Slovak grand chambers ("veľký senát"), which sit precisely to depart
+  // from settled practice: the Supreme Court's civil and commercial ones
+  // ("1VCdo/9/2025", "1VObdo/2/2026"), and the Supreme Administrative
+  // Court's ("1 SVs 1/2021"). There is deliberately no criminal entry:
+  // Slovak criminal law has no veľký senát, and the unifying senates that
+  // stand in for it have published nothing to cite yet.
+  "vcdo",
+  "vobdo",
+  "svs",
 ]);
 
 /**
@@ -102,7 +127,16 @@ const withoutPrefix = (text: string): string =>
     .replace(/^\s*sygn\.\s*(?:akt\s+)?/iu, "")
     .trim();
 
-/** The registry token of a case number: `21 Cdo 1234/2020` -> `cdo`. */
+/**
+ * The registry token of a case number: `21 Cdo 1234/2020` -> `cdo`.
+ *
+ * Most marks are preceded by a chamber number, Roman or Arabic. Some are
+ * not: a Czech kolegium opinion is `Cpjn 203/2010`, with no chamber at all,
+ * because the whole kolegium issued it. That form is read last and only when
+ * the digits of the case number follow it directly, so it cannot pick a word
+ * out of ordinary prose. It never promotes on its own either: an unlisted
+ * mark still falls through to procedural, exactly as a null did.
+ */
 const registryOf = (citationText: string): string | null => {
   const roman = /^\s*[IVX]+\.?\s*(?<reg>[A-Za-zÁ-Žá-ž]{1,5})/u.exec(
     citationText,
@@ -111,7 +145,12 @@ const registryOf = (citationText: string): string | null => {
     citationText,
   );
   const us = /ÚS|US/u.exec(citationText);
-  const raw = roman?.groups?.["reg"] ?? arabic?.groups?.["reg"] ?? us?.[0];
+  const bare = /^\s*(?<reg>[A-Za-zÁ-Žá-ž]{2,6})\.?\s+\d/u.exec(citationText);
+  const raw =
+    roman?.groups?.["reg"] ??
+    arabic?.groups?.["reg"] ??
+    us?.[0] ??
+    bare?.groups?.["reg"];
   return raw === undefined ? null : raw.toLowerCase();
 };
 

@@ -88,6 +88,55 @@ describe("the registry decides when context does not", () => {
     ).toBe(CITATION_KIND.PRECEDENT);
   });
 
+  test("a chamber-less kolegium opinion is precedent", () => {
+    // A "stanovisko" carries no chamber number, so the registry reader used
+    // to find no mark at all and every opinion fell through to procedural —
+    // the one document class issued specifically to unify practice. These
+    // are real file numbers: the registers use disjoint number ranges, so a
+    // shape invented from one would not stand in for the others.
+    for (const citationText of [
+      "Cpjn 203/2010",
+      "sp. zn. Cpjn 206/2010",
+      "Tpjn 300/2017",
+      "sp. zn. Opjn 8/2006",
+    ]) {
+      expect(classifyCitation({ citationText, context: null })).toBe(
+        CITATION_KIND.PRECEDENT,
+      );
+    }
+  });
+
+  test("a chamber-less first-instance mark is still procedural", () => {
+    // The bare-mark reader promotes nothing on its own: an unlisted registry
+    // falls through exactly as an unreadable one did.
+    expect(
+      classifyCitation({ citationText: "Nt 408/2023", context: null }),
+    ).toBe(CITATION_KIND.PROCEDURAL);
+  });
+
+  test("a grand-chamber citation is precedent", () => {
+    // Slovak grand-chamber numbers are senate-prefixed and slash-separated,
+    // with no space after the senate; the Supreme Administrative Court's
+    // spaces its mark instead. Both spellings have to reach the registry.
+    for (const citationText of [
+      "1VCdo/9/2025",
+      "1VObdo/2/2026",
+      "1 SVs 1/2021",
+    ]) {
+      expect(classifyCitation({ citationText, context: null })).toBe(
+        CITATION_KIND.PRECEDENT,
+      );
+    }
+  });
+
+  test("a Polish legal-question resolution is precedent", () => {
+    // The Roman chamber prefix drifts as chambers are reorganised, so the
+    // mark alone decides.
+    expect(
+      classifyCitation({ citationText: "III PZP 1/21", context: null }),
+    ).toBe(CITATION_KIND.PRECEDENT);
+  });
+
   test("context carrying both cues falls back to the registry", () => {
     // "srov." and an appeal recital in one window: the string alone cannot
     // arbitrate, so publication status decides rather than cue order.
