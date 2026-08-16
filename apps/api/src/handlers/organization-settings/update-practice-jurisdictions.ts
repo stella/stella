@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import {
+  identifyOrganizationJurisdictions,
   normalizePracticeJurisdictions,
   upsertPracticeJurisdictions,
 } from "@/api/handlers/organization-settings/practice-jurisdictions";
@@ -70,6 +71,11 @@ const updatePracticeJurisdictions = createSafeRootHandler(
           tx,
         });
       }),
+    );
+
+    identifyOrganizationJurisdictions(
+      session.activeOrganizationId,
+      practiceJurisdictions,
     );
 
     return Result.ok({ practiceJurisdictions });

@@ -11,6 +11,10 @@ const ALLOWED_EVENTS = new Set<ServerAnalyticsCaptureParams["event"]>(
   Object.values(SERVER_ANALYTICS_EVENTS),
 );
 
+// Must match the browser adapter's `posthog.group` call so client and
+// server events aggregate under the same group.
+const ORGANIZATION_GROUP_TYPE = "organization";
+
 export const createPostHogAnalytics = (
   key: string,
   host: string,
@@ -39,6 +43,13 @@ export const createPostHogAnalytics = (
         ...(event === SERVER_ANALYTICS_EVENTS.exception
           ? { _originatedFromCaptureException: true }
           : {}),
+      });
+    },
+    identifyOrganizationGroup: (params) => {
+      client.groupIdentify({
+        groupType: ORGANIZATION_GROUP_TYPE,
+        groupKey: params.organizationId,
+        properties: params.properties,
       });
     },
     // eslint-disable-next-line promise-function-async -- forwards client.flush()'s promise directly; async would add a redundant wrapper

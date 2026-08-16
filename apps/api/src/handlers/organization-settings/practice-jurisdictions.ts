@@ -3,6 +3,7 @@ import { isCountryCode } from "@stll/country-codes";
 import type { Transaction } from "@/api/db/root";
 import { organizationSettings } from "@/api/db/schema";
 import type { PracticeJurisdiction } from "@/api/db/schema";
+import { getAnalytics } from "@/api/lib/analytics/client";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -48,6 +49,27 @@ export const normalizePracticeJurisdictions = (
   }
 
   return [{ ...first, isPrimary: true }, ...normalized.slice(1)];
+};
+
+// Mirrors the persisted setting onto the PostHog organization group profile
+// so insights can break down usage by an organization's selected
+// jurisdictions. Called after the transaction commits, never inside it: a
+// rollback must not leave a phantom group profile.
+export const identifyOrganizationJurisdictions = (
+  organizationId: SafeId<"organization">,
+  practiceJurisdictions: readonly PracticeJurisdiction[],
+): void => {
+  getAnalytics().identifyOrganizationGroup({
+    organizationId,
+    properties: {
+      practice_jurisdictions: practiceJurisdictions.map(
+        (jurisdiction) => jurisdiction.countryCode,
+      ),
+      primary_jurisdiction:
+        practiceJurisdictions.find((jurisdiction) => jurisdiction.isPrimary)
+          ?.countryCode ?? null,
+    },
+  });
 };
 
 type UpsertPracticeJurisdictionsOptions = {

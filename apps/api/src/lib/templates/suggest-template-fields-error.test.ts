@@ -56,7 +56,11 @@ describe("suggestTemplateFields", () => {
     // propagates the failure. Callers (suggest-fields.ts, prepare.ts,
     // template-tools.ts) are responsible for calling captureError.
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
-      analytics: { capture: () => undefined, flush: async () => undefined },
+      analytics: {
+        capture: () => undefined,
+        flush: async () => undefined,
+        identifyOrganizationGroup: () => undefined,
+      },
       feature: "templates.test",
       traceId: "trace_test",
     });
@@ -86,6 +90,7 @@ describe("suggestTemplateFieldsOrEmpty", () => {
           captured.push(params);
         },
         flush: async () => undefined,
+        identifyOrganizationGroup: () => undefined,
       },
       feature: "templates.test",
       traceId: "trace_test",

@@ -19,6 +19,7 @@ import { readDecisionWithDocumentHandler } from "@/api/handlers/case-law/decisio
 import { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { parseUsableDocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
+  identifyOrganizationJurisdictions,
   normalizePracticeJurisdictions,
   upsertPracticeJurisdictions,
 } from "@/api/handlers/organization-settings/practice-jurisdictions";
@@ -1978,6 +1979,11 @@ const handleSetPracticeJurisdictionsTool: McpToolHandler = async ({
       tx,
     });
   });
+
+  identifyOrganizationJurisdictions(
+    context.organizationId,
+    practiceJurisdictions,
+  );
 
   return textResult({ practiceJurisdictions } satisfies v.InferInput<
     typeof SET_PRACTICE_JURISDICTIONS_PROJECTION

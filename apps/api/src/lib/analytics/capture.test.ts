@@ -24,6 +24,7 @@ void mock.module("@/api/lib/analytics/client", () => ({
       captured.push(params);
     },
     flush: async () => undefined,
+    identifyOrganizationGroup: () => undefined,
   }),
 }));
 

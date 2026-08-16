@@ -139,6 +139,9 @@ const pickSafeMetadata = (
       case "file_count":
         safeProperties.file_count = value;
         break;
+      case "jurisdiction":
+        safeProperties.jurisdiction = value;
+        break;
       case "language":
         safeProperties.language = value;
         break;
@@ -294,6 +297,12 @@ export const createTanStackAIAnalyticsCallbacks = ({
 }: TanStackAIAnalyticsProps): TanStackAIAnalyticsCallbacks => {
   const distinctId = config.distinctId ?? SERVER_DISTINCT_ID;
   const modelRole = config.modelRole ?? "chat";
+  // Group attachment is derived centrally from the metering context so call
+  // sites cannot forget it; events without metering stay ungrouped.
+  const groups =
+    config.usageMetering === undefined
+      ? {}
+      : { groups: { organization: config.usageMetering.organizationId } };
   const selectedModelId = config.selectedModelId;
   let modelInfo: ResolvedTanStackTextModelInfo | null | undefined;
   const startedAt = performance.now();
@@ -374,6 +383,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
     // privacy contract.
     analytics.capture({
       distinctId,
+      ...groups,
       event: SERVER_ANALYTICS_EVENTS.aiGeneration,
       properties: {
         $ai_error: errorTag(error),
@@ -396,6 +406,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
 
     analytics.capture({
       distinctId,
+      ...groups,
       event: SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
       properties: {
         ...pickSafeMetadata(config.properties),
@@ -445,6 +456,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
         // content never leave the service.
         analytics.capture({
           distinctId,
+          ...groups,
           event: SERVER_ANALYTICS_EVENTS.aiGeneration,
           properties: {
             $ai_input_tokens: usage.promptTokens,
@@ -459,6 +471,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
 
         analytics.capture({
           distinctId,
+          ...groups,
           event: SERVER_ANALYTICS_EVENTS.aiGenerationCompleted,
           properties: {
             ...pickSafeMetadata(config.properties),

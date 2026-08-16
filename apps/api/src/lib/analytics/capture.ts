@@ -191,6 +191,9 @@ const captureErrorWithOptions = (
   getAnalytics().capture({
     distinctId: options.distinctId ?? SERVER_DISTINCT_ID,
     event: SERVER_ANALYTICS_EVENTS.exception,
+    ...(options.organizationId
+      ? { groups: { organization: options.organizationId } }
+      : {}),
     properties:
       suppressed > 0
         ? { ...properties, suppressed_repeats: String(suppressed) }

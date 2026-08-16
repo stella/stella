@@ -5,5 +5,6 @@ const asyncNoop = async () => await Promise.resolve();
 
 export const noopAnalytics: Analytics = {
   capture: noop,
+  identifyOrganizationGroup: noop,
   flush: asyncNoop,
 };
