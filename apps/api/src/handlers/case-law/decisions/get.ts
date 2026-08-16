@@ -265,7 +265,7 @@ export const readDecisionHandler = async (
   // re-entering the fetch path on every view would cost a claim that can
   // never succeed. Kept as derived booleans rather than a call so this
   // module stays a read.
-  const { documentPending, documentUnavailable } =
+  const { documentPending, documentReadFailed, documentUnavailable } =
     decision.redactedAt === null
       ? await resolveDocumentState({
           hasReadableDocument: hasUsableAst(documentAst) || Boolean(fulltext),
@@ -291,10 +291,15 @@ export const readDecisionHandler = async (
             return row?.written ?? null;
           },
         })
-      : { documentPending: false, documentUnavailable: false };
+      : {
+          documentPending: false,
+          documentReadFailed: false,
+          documentUnavailable: false,
+        };
 
   return {
     documentPending,
+    documentReadFailed,
     documentUnavailable,
     id: decision.id,
     caseNumber: decision.caseNumber,
@@ -468,6 +473,16 @@ export type ResolveDocumentStateInput = {
 type DocumentState = {
   documentPending: boolean;
   documentUnavailable: boolean;
+  /**
+   * Whether the pending state above is an object-storage failure rather
+   * than a document nobody has fetched yet. The reader sees the same
+   * thing either way, but the read-through must not: the publisher fetch
+   * cannot repair a row whose payload is already stored, and its store
+   * refuses a row that carries a corpus document, so treating an outage
+   * as unfetched work costs an outbound download per affected decision
+   * and holds the read for the fetch budget while it does.
+   */
+  documentReadFailed: boolean;
 };
 
 /**
@@ -527,8 +542,9 @@ export const resolveDocumentState = async ({
   resolvedFulltext,
   readTextColumnWritten,
 }: ResolveDocumentStateInput): Promise<DocumentState> => {
+  const settled = { documentReadFailed: false, documentUnavailable: false };
   if (hasReadableDocument) {
-    return { documentPending: false, documentUnavailable: false };
+    return { ...settled, documentPending: false };
   }
 
   // Ahead of every column test, including "nothing to fetch": with the
@@ -537,28 +553,34 @@ export const resolveDocumentState = async ({
   // can tell the two apart. Reporting "neither" here would render a
   // decision with no body as a complete one.
   if (corpusPayloadUnavailable) {
-    return { documentPending: true, documentUnavailable: false };
+    return {
+      documentPending: true,
+      documentReadFailed: true,
+      documentUnavailable: false,
+    };
   }
 
   if (documentUrl === null) {
-    return { documentPending: false, documentUnavailable: false };
+    return { ...settled, documentPending: false };
   }
 
   if (!corpusServed) {
     return {
       documentPending: resolvedFulltext === null,
+      documentReadFailed: false,
       documentUnavailable: resolvedFulltext === "",
     };
   }
 
   if (corpusCarriesDocument(contentHash) && !pgAstPresent) {
-    return { documentPending: false, documentUnavailable: false };
+    return { ...settled, documentPending: false };
   }
 
   const written = await readTextColumnWritten();
 
   return {
     documentPending: written === false,
+    documentReadFailed: false,
     documentUnavailable: written === true,
   };
 };

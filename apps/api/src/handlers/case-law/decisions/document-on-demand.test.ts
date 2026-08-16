@@ -341,9 +341,18 @@ describe("deferred document read-through", () => {
       adapterKey: "sk-courts",
       documentUrl: "https://example.test/decision.pdf",
       documentPending: true,
+      documentReadFailed: false,
     };
 
     expect(isDeferredDocumentFetchable(state)).toBe(true);
+    // Pending because object storage refused a payload the row does
+    // hold. A fetch cannot repair that — the store refuses a row already
+    // carrying a corpus document — so every reader during an outage
+    // would pay for a download that can never land, and wait out the
+    // read budget behind it.
+    expect(
+      isDeferredDocumentFetchable({ ...state, documentReadFailed: true }),
+    ).toBe(false);
     // The read already found something readable stored.
     expect(
       isDeferredDocumentFetchable({ ...state, documentPending: false }),

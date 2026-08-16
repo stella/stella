@@ -49,6 +49,7 @@ describe("document state", () => {
   test("a decision that read as a document is neither", async () => {
     expect(await state({ hasReadableDocument: true })).toEqual({
       documentPending: false,
+      documentReadFailed: false,
       documentUnavailable: false,
     });
   });
@@ -56,6 +57,7 @@ describe("document state", () => {
   test("a decision with nothing to fetch is neither", async () => {
     expect(await state({ documentUrl: null })).toEqual({
       documentPending: false,
+      documentReadFailed: false,
       documentUnavailable: false,
     });
   });
@@ -73,7 +75,11 @@ describe("document state", () => {
           corpusServed: true,
           contentHash: REAL_HASH,
         }),
-      ).toEqual({ documentPending: true, documentUnavailable: false });
+      ).toEqual({
+        documentPending: true,
+        documentReadFailed: true,
+        documentUnavailable: false,
+      });
     });
 
     test("reads as pending even where there is nothing to fetch", async () => {
@@ -87,7 +93,11 @@ describe("document state", () => {
           corpusServed: true,
           contentHash: REAL_HASH,
         }),
-      ).toEqual({ documentPending: true, documentUnavailable: false });
+      ).toEqual({
+        documentPending: true,
+        documentReadFailed: true,
+        documentUnavailable: false,
+      });
     });
 
     test("does not override a document the read did resolve", async () => {
@@ -98,17 +108,23 @@ describe("document state", () => {
           corpusPayloadUnavailable: true,
           hasReadableDocument: true,
         }),
-      ).toEqual({ documentPending: false, documentUnavailable: false });
+      ).toEqual({
+        documentPending: false,
+        documentReadFailed: false,
+        documentUnavailable: false,
+      });
     });
   });
 
   test("served from the columns, NULL is pending and empty is terminal", async () => {
     expect(await state({ resolvedFulltext: null })).toEqual({
       documentPending: true,
+      documentReadFailed: false,
       documentUnavailable: false,
     });
     expect(await state({ resolvedFulltext: "" })).toEqual({
       documentPending: false,
+      documentReadFailed: false,
       documentUnavailable: true,
     });
   });
@@ -125,7 +141,11 @@ describe("document state", () => {
         contentHash: REAL_HASH,
         resolvedFulltext: "",
       }),
-    ).toEqual({ documentPending: false, documentUnavailable: false });
+    ).toEqual({
+      documentPending: false,
+      documentReadFailed: false,
+      documentUnavailable: false,
+    });
   });
 
   test("a surviving AST artifact marks the corpus copy as verbatim empty", async () => {
@@ -142,7 +162,11 @@ describe("document state", () => {
         resolvedFulltext: "",
         readTextColumnWritten: async () => await Promise.resolve(false),
       }),
-    ).toEqual({ documentPending: true, documentUnavailable: false });
+    ).toEqual({
+      documentPending: true,
+      documentReadFailed: false,
+      documentUnavailable: false,
+    });
 
     // The same row, once its document has been fetched and marked
     // unavailable, is terminal rather than pending.
@@ -154,7 +178,11 @@ describe("document state", () => {
         resolvedFulltext: "",
         readTextColumnWritten: async () => await Promise.resolve(true),
       }),
-    ).toEqual({ documentPending: false, documentUnavailable: true });
+    ).toEqual({
+      documentPending: false,
+      documentReadFailed: false,
+      documentUnavailable: true,
+    });
   });
 
   test("an empty corpus payload falls back to what the column says", async () => {
@@ -167,7 +195,11 @@ describe("document state", () => {
         resolvedFulltext: "",
         readTextColumnWritten: async () => await Promise.resolve(false),
       }),
-    ).toEqual({ documentPending: true, documentUnavailable: false });
+    ).toEqual({
+      documentPending: true,
+      documentReadFailed: false,
+      documentUnavailable: false,
+    });
 
     expect(
       await state({
@@ -176,7 +208,11 @@ describe("document state", () => {
         resolvedFulltext: "",
         readTextColumnWritten: async () => await Promise.resolve(true),
       }),
-    ).toEqual({ documentPending: false, documentUnavailable: true });
+    ).toEqual({
+      documentPending: false,
+      documentReadFailed: false,
+      documentUnavailable: true,
+    });
   });
 
   test("a row that vanished under the read is neither", async () => {
@@ -186,6 +222,10 @@ describe("document state", () => {
         contentHash: EMPTY_HASH,
         readTextColumnWritten: async () => await Promise.resolve(null),
       }),
-    ).toEqual({ documentPending: false, documentUnavailable: false });
+    ).toEqual({
+      documentPending: false,
+      documentReadFailed: false,
+      documentUnavailable: false,
+    });
   });
 });

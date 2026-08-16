@@ -30,21 +30,28 @@ import { envBase } from "@/api/env-base";
 import {
   censusJurisdiction,
   clearJurisdictionIndexMarks,
+  MAX_REPAIR_SLICE,
 } from "@/api/lib/corpus-index/census";
 import { isCorpusIndexJurisdiction } from "@/api/lib/legal-search/index-naming";
-
-const DEFAULT_LIMIT = 50_000;
 
 const jurisdiction = process.argv[2];
 if (jurisdiction === undefined || !isCorpusIndexJurisdiction(jurisdiction)) {
   panic("usage: repair-corpus-index-jurisdiction.ts <jurisdiction> [limit]");
 }
 
+// A mistyped digit must not turn a bounded repair into one transaction
+// updating every row in the jurisdiction and firing the projection
+// trigger for each of them, so the ceiling is enforced here rather than
+// trusted from the argument. `clearJurisdictionIndexMarks` clamps too;
+// rejecting loudly here is what tells the operator their number was
+// ignored.
 const limitArgument = process.argv[3];
 const limit =
-  limitArgument === undefined ? DEFAULT_LIMIT : Number(limitArgument);
-if (!Number.isSafeInteger(limit) || limit <= 0) {
-  panic(`limit must be a positive integer, got ${String(limit)}`);
+  limitArgument === undefined ? MAX_REPAIR_SLICE : Number(limitArgument);
+if (!Number.isSafeInteger(limit) || limit <= 0 || limit > MAX_REPAIR_SLICE) {
+  panic(
+    `limit must be a positive integer no greater than ${MAX_REPAIR_SLICE}, got ${String(limit)}`,
+  );
 }
 
 const generation = envBase.LEGAL_SEARCH_INDEX_GENERATION;
@@ -66,6 +73,7 @@ console.log(
 
 const cleared = await clearJurisdictionIndexMarks({
   scopedDb: ingestionDb,
+  generation,
   jurisdiction,
   limit,
 });

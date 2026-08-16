@@ -44,6 +44,7 @@ const hydrate = async (
       adapterKey: decision.source.adapterKey,
       documentUrl: decision.documentUrl,
       documentPending: decision.documentPending,
+      documentReadFailed: decision.documentReadFailed,
     })
   ) {
     return decision;

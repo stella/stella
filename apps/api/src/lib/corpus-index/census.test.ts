@@ -14,19 +14,22 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  CENSUS_ABSOLUTE_TOLERANCE,
   CENSUS_CYCLE_INTERVAL,
+  CENSUS_TOLERANCE,
   censusJurisdiction,
-  censusTolerance,
   createCaseLawCensus,
   reportJurisdictionCensus,
 } from "@/api/lib/corpus-index/census";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
+import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 
 const GENERATION = "case_law_v1";
 const JURISDICTION = "SVK";
 const INDEX_ID = corpusIndexId(GENERATION, JURISDICTION);
+
+/** Phases the sweep so the first census lands on the last cycle counted. */
+const LAST_CYCLE_START = 0.99;
 
 const originalFetch = globalThis.fetch;
 
@@ -92,11 +95,8 @@ afterEach(() => {
 });
 
 describe("jurisdiction census", () => {
-  test("ordinary churn is not drift", async () => {
-    // Two counts taken at different instants: a batch committing between
-    // them always reads as a small shortfall. A census that warned on
-    // that would warn every cycle and stop being read.
-    engineHolding(10_000 - CENSUS_ABSOLUTE_TOLERANCE);
+  test("noise inside the tolerance is not a shortfall", async () => {
+    engineHolding(10_000 - CENSUS_TOLERANCE);
 
     const census = await censusJurisdiction({
       scopedDb: databaseHolding(10_000),
@@ -105,12 +105,16 @@ describe("jurisdiction census", () => {
     });
 
     expect(census.isOk()).toBe(true);
-    expect(census.isOk() && census.value.drifted).toBe(false);
+    expect(census.isOk() && census.value.short).toBe(false);
   });
 
-  test("a shortfall past the tolerance is drift", async () => {
-    const marked = 10_000;
-    engineHolding(marked - censusTolerance(marked) - 1);
+  test("one lost ingest batch is visible on a large jurisdiction", async () => {
+    // The whole failure this detects is a fixed-size batch going
+    // missing, so the tolerance must stay below one — and must not grow
+    // with the corpus, or a large jurisdiction hides more the larger it
+    // gets. `corpusIndexBatchSize` is the size of the smallest real loss.
+    const marked = 5_000_000;
+    engineHolding(marked - LIMITS.corpusIndexBatchSize);
 
     const census = await censusJurisdiction({
       scopedDb: databaseHolding(marked),
@@ -118,13 +122,15 @@ describe("jurisdiction census", () => {
       jurisdiction: JURISDICTION,
     });
 
-    expect(census.isOk() && census.value.drifted).toBe(true);
+    expect(census.isOk() && census.value.short).toBe(true);
     expect(census.isOk() && census.value.indexId).toBe(INDEX_ID);
   });
 
-  test("an engine holding more than Postgres claims is not drift", async () => {
+  test("an engine holding more than Postgres claims is not short", async () => {
     // A superseded document nothing points at is unreachable, not wrong,
-    // and a rebuild leaves those behind by design.
+    // and a rebuild leaves those behind by design. This is also the
+    // direction a batch landing between the two counts pushes, which is
+    // why Postgres is counted first.
     engineHolding(50_000);
 
     const census = await censusJurisdiction({
@@ -134,7 +140,7 @@ describe("jurisdiction census", () => {
     });
 
     expect(census.isOk() && census.value.shortfall).toBeLessThan(0);
-    expect(census.isOk() && census.value.drifted).toBe(false);
+    expect(census.isOk() && census.value.short).toBe(false);
   });
 
   test("an unreachable index is a failure, not an empty index", async () => {
@@ -163,14 +169,18 @@ describe("census reporting", () => {
     warn.mockRestore();
   });
 
-  test("drift is reported with both counts", () => {
-    reportJurisdictionCensus(GENERATION, {
-      jurisdiction: JURISDICTION,
-      indexId: INDEX_ID,
-      engineDocuments: 900,
-      markedIndexed: 10_000,
-      shortfall: 9100,
-      drifted: true,
+  test("confirmed drift is reported with both counts", () => {
+    reportJurisdictionCensus({
+      generation: GENERATION,
+      confirmed: true,
+      census: {
+        jurisdiction: JURISDICTION,
+        indexId: INDEX_ID,
+        engineDocuments: 900,
+        markedIndexed: 10_000,
+        shortfall: 9100,
+        short: true,
+      },
     });
 
     expect(warn).toHaveBeenCalledTimes(1);
@@ -188,13 +198,37 @@ describe("census reporting", () => {
   });
 
   test("agreement is silent", () => {
-    reportJurisdictionCensus(GENERATION, {
-      jurisdiction: JURISDICTION,
-      indexId: INDEX_ID,
-      engineDocuments: 10_000,
-      markedIndexed: 10_000,
-      shortfall: 0,
-      drifted: false,
+    reportJurisdictionCensus({
+      generation: GENERATION,
+      confirmed: true,
+      census: {
+        jurisdiction: JURISDICTION,
+        indexId: INDEX_ID,
+        engineDocuments: 10_000,
+        markedIndexed: 10_000,
+        shortfall: 0,
+        short: false,
+      },
+    });
+
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  test("a first short observation waits for confirmation", () => {
+    // A bulk page marks its rows before the engine publishes their
+    // split, so one short reading may be work in flight. Warning on it
+    // would make every rebuild noisy, and a noisy warning is not read.
+    reportJurisdictionCensus({
+      generation: GENERATION,
+      confirmed: false,
+      census: {
+        jurisdiction: JURISDICTION,
+        indexId: INDEX_ID,
+        engineDocuments: 900,
+        markedIndexed: 10_000,
+        shortfall: 9100,
+        short: true,
+      },
     });
 
     expect(warn).not.toHaveBeenCalled();
@@ -205,6 +239,7 @@ describe("census reporting", () => {
     const census = createCaseLawCensus({
       generation: GENERATION,
       scopedDb: databaseHolding(10_000, [JURISDICTION]),
+      startAt: LAST_CYCLE_START,
     });
 
     for (let cycle = 0; cycle < CENSUS_CYCLE_INTERVAL; cycle += 1) {
@@ -223,6 +258,7 @@ describe("census reporting", () => {
     const census = createCaseLawCensus({
       generation: GENERATION,
       scopedDb: databaseHolding(10_000, [JURISDICTION]),
+      startAt: LAST_CYCLE_START,
     });
 
     for (let cycle = 0; cycle < CENSUS_CYCLE_INTERVAL - 1; cycle += 1) {
@@ -236,6 +272,34 @@ describe("census reporting", () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  test("a shortfall is reported once it survives a second census", async () => {
+    // The confirmation is what lets the tolerance stay smaller than an
+    // ingest batch: a page still publishing clears by the next visit, a
+    // lost split never does. Without it the choice would be between
+    // warning on every rebuild and never seeing the smallest real loss.
+    const marked = 5_000_000;
+    engineHolding(marked - LIMITS.corpusIndexBatchSize);
+    const census = createCaseLawCensus({
+      generation: GENERATION,
+      scopedDb: databaseHolding(marked, [JURISDICTION]),
+      startAt: LAST_CYCLE_START,
+    });
+
+    for (let cycle = 0; cycle < CENSUS_CYCLE_INTERVAL; cycle += 1) {
+      // oxlint-disable-next-line no-await-in-loop -- the cycles are the subject of the test
+      await census.step();
+    }
+    expect(warn).not.toHaveBeenCalled();
+
+    for (let cycle = 0; cycle < CENSUS_CYCLE_INTERVAL; cycle += 1) {
+      // oxlint-disable-next-line no-await-in-loop -- the cycles are the subject of the test
+      await census.step();
+    }
+    expect(warn.mock.calls.at(0)?.at(0)).toBe(
+      "case_law.corpus_index.census_drift",
+    );
+  });
+
   test("a census that throws cannot stop the backfill loop", async () => {
     const explode = async () => {
       await Promise.resolve();
@@ -247,6 +311,7 @@ describe("census reporting", () => {
     const census = createCaseLawCensus({
       generation: GENERATION,
       scopedDb: exploding,
+      startAt: LAST_CYCLE_START,
     });
 
     for (let cycle = 0; cycle < CENSUS_CYCLE_INTERVAL; cycle += 1) {

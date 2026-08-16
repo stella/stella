@@ -79,6 +79,11 @@ export type DeferredDocumentState = {
   adapterKey: string;
   documentUrl: string | null;
   documentPending: boolean;
+  /**
+   * Whether the read reported pending because object storage refused a
+   * payload it does hold, rather than because nothing was ever fetched.
+   */
+  documentReadFailed: boolean;
 };
 
 /**
@@ -86,16 +91,26 @@ export type DeferredDocumentState = {
  *
  * `documentPending` is the read's own answer to "is anything readable
  * stored for this decision" — no text, no AST, and no canonical payload
- * in object storage. This adds the two conditions the read does not
- * judge: the source has to be one that defers its documents, and there
- * has to be something to fetch.
+ * in object storage. This adds the conditions the read does not judge:
+ * the source has to be one that defers its documents, there has to be
+ * something to fetch, and the pending state has to mean the document is
+ * genuinely missing.
+ *
+ * That last one is the difference between a document nobody has fetched
+ * and one object storage could not serve. The reader is told the same
+ * thing either way, but a fetch would be pure waste for the second: the
+ * store refuses a row that already carries a corpus document, so the
+ * download could never land, and every reader during an outage would pay
+ * for one and wait out the read budget behind it.
  */
 export const isDeferredDocumentFetchable = ({
   adapterKey,
   documentUrl,
   documentPending,
+  documentReadFailed,
 }: DeferredDocumentState): boolean =>
   documentPending &&
+  !documentReadFailed &&
   documentUrl !== null &&
   DEFERRED_DOCUMENT_ADAPTER_KEYS.has(adapterKey);
 

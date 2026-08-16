@@ -1,18 +1,21 @@
 /**
- * The repair behind a census drift warning: clear the index marks for a
- * jurisdiction so the ordinary backfill re-selects it.
+ * The repair behind a census drift warning: un-mark a jurisdiction so
+ * the ordinary backfill re-selects it.
  *
- * Three things can go wrong, and all of them are SQL. It can clear more
- * than the operator asked for, which hands the backfill a backlog that
- * starves every newly ingested decision behind it. It can clear rows in
- * a jurisdiction that was not short. And it can clear the same page on
- * every run, so an operator re-running it to walk a large jurisdiction
- * never gets past the first slice — which reads as the repair working,
- * because rows are reported cleared every time.
+ * Four things can go wrong, and all of them are SQL. It can miss the
+ * rows the census counted — a generation rebuild records success in the
+ * projection and leaves the legacy column alone, so a repair keyed off
+ * that column is inert for exactly the rows a rebuild lost. It can clear
+ * more than the operator asked for, handing the backfill a backlog that
+ * starves every newly ingested decision behind it. It can reach into a
+ * jurisdiction that was not short. And it can clear the same page every
+ * run, so an operator re-running it to walk a large jurisdiction never
+ * gets past the first slice — which reads as the repair working, because
+ * rows are reported cleared every time.
  */
 
 import { beforeAll, expect, test } from "bun:test";
-import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import type { Transaction } from "@/api/db/root";
@@ -24,13 +27,18 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
-import type { SafeId } from "@/api/lib/branded-types";
 import { clearJurisdictionIndexMarks } from "@/api/lib/corpus-index/census";
+import {
+  caseLawCorpusProjectionJoin,
+  currentCaseLawCorpusProjection,
+} from "@/api/lib/legal-search/case-law-corpus-projection";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const GENERATION = "case_law_v2";
+/** Marked through the generation projection, as a rebuild leaves them. */
 const SHORT_JURISDICTION = "SVK";
+/** Marked through the legacy column, as the incremental path leaves them. */
 const HEALTHY_JURISDICTION = "CZE";
 const DECISIONS_PER_JURISDICTION = 6;
 const SLICE = 4;
@@ -48,14 +56,22 @@ const decisionId = (jurisdiction: string, index: number) =>
 let db: ReturnType<typeof drizzle>;
 let scopedDb: ScopedDb;
 
-const markedRows = async (jurisdiction: string) =>
+/**
+ * Rows the census would count for this jurisdiction — the same predicate
+ * the repair slices on, so the test measures what the alert measures.
+ */
+const currentRows = async (jurisdiction: string) =>
   await db
     .select({ id: caseLawDecisions.id })
     .from(caseLawDecisions)
+    .leftJoin(
+      caseLawCorpusIndexProjections,
+      caseLawCorpusProjectionJoin(GENERATION),
+    )
     .where(
       and(
         eq(caseLawDecisions.country, jurisdiction),
-        isNotNull(caseLawDecisions.indexedHash),
+        currentCaseLawCorpusProjection(GENERATION),
       ),
     );
 
@@ -113,24 +129,30 @@ beforeAll(async () => {
   const decisions: (typeof caseLawDecisions.$inferInsert)[] = [];
   const projections: (typeof caseLawCorpusIndexProjections.$inferInsert)[] = [];
   for (const jurisdiction of [SHORT_JURISDICTION, HEALTHY_JURISDICTION]) {
+    const rebuilt = jurisdiction === SHORT_JURISDICTION;
     for (let index = 0; index < DECISIONS_PER_JURISDICTION; index += 1) {
       const id = decisionId(jurisdiction, index);
+      const contentHash = `hash-${jurisdiction}-${index}`;
       decisions.push({
         caseNumber: `${jurisdiction}-${index}`,
-        contentHash: `hash-${jurisdiction}-${index}`,
+        contentHash,
         country: jurisdiction,
         court: "Test court",
         id,
-        indexedHash: `hash-${jurisdiction}-${index}`,
+        // A rebuild marks the projection and leaves this null; the
+        // incremental path is the other way round. Both read as indexed.
+        indexedHash: rebuilt ? null : contentHash,
         language: "sk",
         sourceId,
       });
-      projections.push({
-        decisionId: id,
-        generation: GENERATION,
-        indexId: corpusIndexId(GENERATION, jurisdiction),
-        indexedHash: `hash-${jurisdiction}-${index}`,
-      });
+      if (rebuilt) {
+        projections.push({
+          decisionId: id,
+          generation: GENERATION,
+          indexId: corpusIndexId(GENERATION, jurisdiction),
+          indexedHash: contentHash,
+        });
+      }
     }
   }
   await db.insert(caseLawDecisions).values(decisions);
@@ -138,22 +160,26 @@ beforeAll(async () => {
   await installProjectionTrigger();
 });
 
-test("the repair clears one bounded slice and leaves other jurisdictions alone", async () => {
+test("the repair reaches rows marked only through the generation projection", async () => {
+  // The case a repair keyed off `case_law_decisions.indexed_hash` would
+  // miss entirely: these rows never had one.
+  expect(await currentRows(SHORT_JURISDICTION)).toHaveLength(
+    DECISIONS_PER_JURISDICTION,
+  );
+
   const cleared = await clearJurisdictionIndexMarks({
     scopedDb,
+    generation: GENERATION,
     jurisdiction: SHORT_JURISDICTION,
     limit: SLICE,
   });
 
   expect(cleared).toBe(SLICE);
-  expect(await markedRows(SHORT_JURISDICTION)).toHaveLength(
+  expect(await currentRows(SHORT_JURISDICTION)).toHaveLength(
     DECISIONS_PER_JURISDICTION - SLICE,
   );
-  expect(await markedRows(HEALTHY_JURISDICTION)).toHaveLength(
-    DECISIONS_PER_JURISDICTION,
-  );
-  // The point of writing only this column: the projection trigger turns
-  // the cleared mark into a queued re-index, so the repair reaches the
+  // Writing only that one column is the point: the projection trigger
+  // turns the assignment into queued work, so the repair reaches the
   // live drain without a second, hand-maintained copy of what the
   // trigger already states.
   expect(await enqueuedProjections()).toHaveLength(SLICE);
@@ -162,6 +188,7 @@ test("the repair clears one bounded slice and leaves other jurisdictions alone",
 test("re-running walks the jurisdiction instead of re-clearing the first page", async () => {
   const cleared = await clearJurisdictionIndexMarks({
     scopedDb,
+    generation: GENERATION,
     jurisdiction: SHORT_JURISDICTION,
     limit: SLICE,
   });
@@ -169,20 +196,19 @@ test("re-running walks the jurisdiction instead of re-clearing the first page", 
   // The remainder, not the slice: a repair that always reported `limit`
   // rows cleared would look identical while making no progress.
   expect(cleared).toBe(DECISIONS_PER_JURISDICTION - SLICE);
-  expect(await markedRows(SHORT_JURISDICTION)).toHaveLength(0);
+  expect(await currentRows(SHORT_JURISDICTION)).toHaveLength(0);
 
   const exhausted = await clearJurisdictionIndexMarks({
     scopedDb,
+    generation: GENERATION,
     jurisdiction: SHORT_JURISDICTION,
     limit: SLICE,
   });
   expect(exhausted).toBe(0);
 });
 
-test("the untouched jurisdiction kept every mark", async () => {
-  const remaining: SafeId<"caseLawDecision">[] = (
-    await markedRows(HEALTHY_JURISDICTION)
-  ).map(({ id }) => id);
-
-  expect(remaining).toHaveLength(DECISIONS_PER_JURISDICTION);
+test("the jurisdiction that was not short kept every mark", async () => {
+  expect(await currentRows(HEALTHY_JURISDICTION)).toHaveLength(
+    DECISIONS_PER_JURISDICTION,
+  );
 });
