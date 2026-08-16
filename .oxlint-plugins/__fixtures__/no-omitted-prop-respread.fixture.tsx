@@ -225,6 +225,14 @@ export const _ok_reTypedUnderNestedOmit = (
   >,
 ) => <Panel {...props} orientation="horizontal" />;
 
+// Allowed: the annotation is a generic parameter shadowing the alias of the
+// same name, so the alias does not answer for it.
+export type ShadowedProps = Omit<PanelProps, "orientation">;
+export const _ok_typeParameterShadowsAlias = <ShadowedProps extends PanelProps>(
+  props: ShadowedProps,
+  _sibling: ShadowedProps,
+) => <Panel {...props} />;
+
 // Allowed: `SharedProps` is imported here and also declared in an unrelated
 // nested scope, so the name answers to neither rather than to the wrong one.
 export const _ok_importedNameCollision = (props: SharedProps) => (

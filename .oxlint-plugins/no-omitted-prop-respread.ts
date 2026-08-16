@@ -50,9 +50,9 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 //     of scope, as is an `Omit` reached through an imported type alias; only
 //     file-local type aliases and the modifier utilities `Partial`, `Readonly`,
 //     and `Required` are unwrapped. Aliases are indexed by name across the whole
-//     file, so a name shared by two declarations, or by a declaration and an
-//     import, resolves to nothing rather than guessing which one a reference
-//     meant.
+//     file, so a name claimed by more than one thing — two declarations, an
+//     import, or a type parameter — resolves to nothing rather than guessing
+//     which one a reference meant.
 //   - `Omit` is matched by name. A shadowed or re-exported `Omit` is not
 //     distinguished.
 //   - The omission must be written on the parameter. A props type inferred from
@@ -487,6 +487,14 @@ export default eslintCompatPlugin({
               if (typeof specifier.local?.name === "string") {
                 localTypes.set(specifier.local.name, null);
               }
+            }
+          },
+          // A type parameter binds its name inside the declaration that
+          // introduces it, shadowing any alias that shares it. Nothing concrete
+          // can be read from it, so claim the name as unresolvable too.
+          TSTypeParameter(node) {
+            if (typeof node.name?.name === "string") {
+              localTypes.set(node.name.name, null);
             }
           },
           TSTypeAliasDeclaration: declareLocalType,
