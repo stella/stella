@@ -87,6 +87,15 @@ const OMIT_TYPE = "Omit";
 // underneath one is still a reintroduction.
 const MODIFIER_UTILITIES = new Set(["Partial", "Readonly", "Required"]);
 
+// Union branches that contribute no property to a spread: `never` is
+// uninhabited, and spreading a nullish value is a no-op.
+const EMPTY_SPREAD_KEYWORDS = new Set([
+  "TSNeverKeyword",
+  "TSNullKeyword",
+  "TSUndefinedKeyword",
+  "TSVoidKeyword",
+]);
+
 const typeArgumentsOf = (typeNode) =>
   typeNode?.typeArguments?.params ?? typeNode?.typeParameters?.params ?? [];
 
@@ -261,12 +270,13 @@ const omittedKeysOf = (typeNode, localTypes, open = new Set()): string[] => {
       ),
     );
   }
-  // A union only guarantees the omission its branches share. A `never` branch
-  // is uninhabited, so it neither carries a key nor weakens the guarantee.
+  // A union only guarantees the omission its branches share. A branch that
+  // cannot carry a property — uninhabited, or nullish, which spreads as a no-op
+  // — supplies nothing, so it must not weaken that guarantee either.
   if (typeNode.type === "TSUnionType") {
     return intersectAll(
       typeNode.types
-        .filter((member) => member.type !== "TSNeverKeyword")
+        .filter((member) => !EMPTY_SPREAD_KEYWORDS.has(member.type))
         .map((member) => new Set(omittedKeysOf(member, localTypes, open))),
     );
   }
