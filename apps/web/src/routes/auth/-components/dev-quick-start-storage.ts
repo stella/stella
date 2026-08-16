@@ -37,7 +37,7 @@ export const parseDevQuickStartAttempt = (
 export const readDevQuickStartAttempt = (): DevQuickStartAttempt | null => {
   try {
     return parseDevQuickStartAttempt(
-      sessionStorage.getItem(DEV_QUICK_START_STORAGE_KEY),
+      localStorage.getItem(DEV_QUICK_START_STORAGE_KEY),
     );
   } catch {
     return null;
@@ -48,7 +48,7 @@ export const writeDevQuickStartAttempt = (
   attempt: DevQuickStartAttempt,
 ): void => {
   try {
-    writeStoredJson(sessionStorage, DEV_QUICK_START_STORAGE_KEY, attempt);
+    writeStoredJson(localStorage, DEV_QUICK_START_STORAGE_KEY, attempt);
   } catch {
     // Storage can be unavailable or blocked; persistence is best-effort.
   }
@@ -56,7 +56,7 @@ export const writeDevQuickStartAttempt = (
 
 export const clearDevQuickStartAttempt = (): void => {
   try {
-    sessionStorage.removeItem(DEV_QUICK_START_STORAGE_KEY);
+    localStorage.removeItem(DEV_QUICK_START_STORAGE_KEY);
   } catch {
     // Storage can be unavailable or blocked; clearing is best-effort.
   }

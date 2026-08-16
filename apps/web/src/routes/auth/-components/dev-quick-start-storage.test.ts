@@ -15,7 +15,7 @@ const STORED_ATTEMPT = {
 } as const;
 
 describe("parseDevQuickStartAttempt", () => {
-  test("restores the organization-pinned attempt after navigation", () => {
+  test("restores the organization-pinned attempt after a tab restart", () => {
     expect(parseDevQuickStartAttempt(JSON.stringify(STORED_ATTEMPT))).toEqual(
       STORED_ATTEMPT,
     );
