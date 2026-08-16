@@ -50,6 +50,7 @@ import {
   enqueueDocumentProcessingRun,
   type DocumentProcessingJobData,
 } from "@/api/lib/document-processing-enqueue";
+import { documentProcessingFailureFields } from "@/api/lib/document-processing-failure-fields";
 import { DocumentOcrError } from "@/api/lib/document-processing-ocr-result";
 import { startDocumentOcrWorkerReadiness } from "@/api/lib/document-processing-readiness";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
@@ -2609,7 +2610,7 @@ const handleDocumentProcessingFailure = ({
     return;
   }
   logger.error("document_processing.failed", {
-    "error.type": errorTag(error),
+    ...documentProcessingFailureFields(error),
     runId: job?.data.runId ?? "",
   });
 };
