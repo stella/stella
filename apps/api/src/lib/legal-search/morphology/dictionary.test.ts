@@ -132,7 +132,11 @@ test("the fold is lowercase, form-independent, and ASCII", () => {
 // `iota` while the corpus form (already lowercased by `to_tsvector('simple')`,
 // which is what the builder reads) keys `ɩota`.
 test("the fold lowercases before it folds, the order the index applies", () => {
-  const filters: readonly string[] = FOLDED_TOKENIZER.filters;
+  // Unannotated on purpose: the tuple keeps its literal element type, so
+  // dropping either filter from the tokenizer makes the argument below a
+  // compile error rather than an `indexOf` returning -1 that this comparison
+  // would read as an ordering. Only the ordering is left to assert at runtime.
+  const { filters } = FOLDED_TOKENIZER;
   expect(filters.indexOf("lower_caser")).toBeLessThan(
     filters.indexOf("ascii_folding"),
   );
