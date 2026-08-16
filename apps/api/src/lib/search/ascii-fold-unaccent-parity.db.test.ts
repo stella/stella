@@ -50,7 +50,13 @@ const loadLatinUnaccentRules = async (): Promise<UnaccentRule[]> => {
   });
 };
 
-if (runPostgresTests) {
+if (!runPostgresTests) {
+  describe.skip("foldToAscii / unaccent parity", () => {
+    test("requires STELLA_RUN_POSTGRES_TESTS=true", () => {
+      expect(runPostgresTests).toBe(false);
+    });
+  });
+} else {
   describe("foldToAscii / unaccent parity", () => {
     test("folds every Latin-script rule the extension declares", async () => {
       const rules = await loadLatinUnaccentRules();
@@ -85,12 +91,6 @@ if (runPostgresTests) {
 
       expect(row?.tsv).toBe("'laska':1,2");
       expect(foldToAscii("łaska")).toBe("laska");
-    });
-  });
-} else {
-  describe.skip("foldToAscii / unaccent parity", () => {
-    test("requires STELLA_RUN_POSTGRES_TESTS=true", () => {
-      expect(runPostgresTests).toBe(false);
     });
   });
 }
