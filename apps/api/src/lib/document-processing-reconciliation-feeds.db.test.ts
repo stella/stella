@@ -15,6 +15,7 @@ import type {
   DOCUMENT_PROCESSING_RECONCILIATION_PHASES as Phases,
   runDocumentProcessingReconciliationPhases as RunPhases,
 } from "@/api/lib/document-processing-queue";
+import type * as RedisClientModule from "@/api/lib/redis-client";
 import {
   createTestIds,
   setupRlsTestData,
@@ -71,30 +72,35 @@ beforeAll(async () => {
   // this test never reaches, so a module that grows one does not quietly
   // lose it here. Spreading the real module instead would import it, and
   // these are the modules being kept out of the process.
-  void mock.module("@/api/lib/redis-client", () => ({
-    connectWithColdStartRetries: async (connect: () => Promise<void>) =>
-      await connect(),
-    createBullMqConnection: () => ({}),
-    createLazyRedisClient: () => ({
-      close: () => undefined,
-      ready: async () => {
-        if (!redisAvailable) {
-          throw new Error("redis unavailable");
-        }
-        return await Promise.resolve({
+  void mock.module(
+    "@/api/lib/redis-client",
+    () =>
+      ({
+        connectWithColdStartRetries: async (connect: () => Promise<void>) =>
+          await connect(),
+        createBullMqConnection: () => ({}),
+        createLazyRedisClient: () => ({
+          close: () => undefined,
+          ready: async () => {
+            if (!redisAvailable) {
+              throw new Error("redis unavailable");
+            }
+            return await Promise.resolve({
+              get: async () => null,
+              send: async () => 1,
+            });
+          },
+        }),
+        createRedisClient: () => ({
+          close: () => undefined,
+          connect: async () => undefined,
           get: async () => null,
           send: async () => 1,
-        });
-      },
-    }),
-    createRedisClient: () => ({
-      close: () => undefined,
-      connect: async () => undefined,
-      get: async () => null,
-      send: async () => 1,
-    }),
-    isRecoverableRedisPollError: () => false,
-  }));
+        }),
+        isRecoverableRedisPollError: () => false,
+        isTransientRedisConnectionError: () => false,
+      }) satisfies Record<keyof typeof RedisClientModule, unknown>,
+  );
   void mock.module("@/api/lib/document-processing-enqueue", () => ({
     countPendingDocumentProcessingJobs: async () => 0,
     DOCUMENT_PROCESSING_OCR_JOB_NAME: "ocr",
