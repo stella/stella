@@ -25,8 +25,7 @@ import { SOURCE_TOTAL_ORIGIN, caseLawIngestionEvents } from "@/api/db/schema";
 import { corpusStorageMode, envBase } from "@/api/env-base";
 import {
   hasResolvedCitations,
-  latestCitationAuthorityRecomputeAt,
-  tryRecomputeCitationAuthorityForAll,
+  tryRecomputeCitationAuthorityBatch,
 } from "@/api/handlers/case-law/citation-authority";
 import {
   countPendingCitations,
@@ -271,12 +270,16 @@ const SK_DOCUMENT_REQUESTED_POLL_INTERVAL_MS = 5000;
 // quickly after boot from adding a whole-corpus recompute to every start.
 const CITATION_AUTHORITY_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const CITATION_AUTHORITY_STARTUP_DELAY_MS = 5 * 60 * 1000;
-// After a skipped recompute (lock held elsewhere), retry on a short delay
-// instead of waiting a full interval: the holder may have exited before
-// committing, and its replacement should not inherit a six-hour gap. A
-// failed recompute starts here too but backs off from it; see
-// `nextRecomputeDelayMs`.
-const CITATION_AUTHORITY_RETRY_DELAY_MS = 10 * 60 * 1000;
+// Decisions per statement, and the gap between two statements. Together they
+// are the sweep's throughput and the share of the database it takes: at these
+// values a sweep covers a few million decisions in well under the refresh
+// interval while leaving the ingest loops and readers the rest of the time.
+const CITATION_AUTHORITY_BATCH_SIZE = 5000;
+const CITATION_AUTHORITY_BATCH_DELAY_MS = 2000;
+// Poll gap once the corpus is current, and the ceiling any failure backoff
+// settles at. Short relative to the refresh interval, so the first decisions
+// to fall due are picked up promptly rather than at the next interval mark.
+const CITATION_AUTHORITY_IDLE_DELAY_MS = 10 * 60 * 1000;
 
 // Cadence backoff (thresholds, delays and the state machine live in
 // ./cycle-progress): a caught-up adapter polls daily. One that keeps
@@ -1175,71 +1178,72 @@ export const runCaseLawIngest = async (
     }
   })();
 
-  // Citation-authority refresh loop: keeps the materialized ranking
-  // signal current (also runs in the post-citation pass; this covers the
-  // continuous daemon). Runs via the ingestion role outside the DB slot.
-  // The try-locked recompute makes overlapping processes (a rolling
-  // deployment) skip instead of queueing duplicate whole-corpus updates.
+  // Citation-authority refresh loop: keeps the materialized ranking signal
+  // current, in bounded batches. The whole-corpus form was one UPDATE over
+  // every decision, which on this corpus outruns its statement timeout and
+  // rolls back — spending the work and keeping none of it, every time. A batch
+  // is bounded by its row count, and `citation_authority_computed_at` is the
+  // only bookkeeping: recomputing a decision stamps it and takes it out of the
+  // set, so a replaced task resumes without anything having been persisted
+  // about where it was.
+  //
+  // Runs via the ingestion role outside the DB slot. The try-lock is per batch
+  // rather than per sweep, so a rolling deployment costs one batch's
+  // contention instead of a sweep's worth of progress.
   const citationAuthorityLoop = (async () => {
     await Bun.sleep(CITATION_AUTHORITY_STARTUP_DELAY_MS);
     let consecutiveFailures = 0;
-    // Deployments restart the daemon well inside the recompute interval; a
-    // recompute committed by the previous process must count, so the first
-    // real attempt is gated on a one-time freshness probe.
-    let startupFreshnessPending = true;
+    let recomputedSinceLog = 0;
     while (true) {
       if (isDraining()) {
         return;
       }
       let outcome: RecomputeOutcome = RECOMPUTE_OUTCOME.FAILED;
-      let freshRemainingMs = 0;
       try {
-        // oxlint-disable-next-line no-await-in-loop -- O(1) partial-index probe once per scheduled attempt
+        // oxlint-disable-next-line no-await-in-loop -- O(1) partial-index probe once per batch
         const rankable = await ingestionDb(hasResolvedCitations);
         if (!rankable) {
-          // A recompute would scan every citation to update nothing.
+          // A sweep would walk the corpus writing zeroes.
           outcome = RECOMPUTE_OUTCOME.IDLE;
           logInfo(
             "[citation-authority] Idle (no resolved citations to rank yet)",
           );
-        } else if (startupFreshnessPending) {
-          // oxlint-disable-next-line no-await-in-loop -- one-time probe per process start
-          const latest = await ingestionDb(latestCitationAuthorityRecomputeAt);
-          // Cleared only once the probe answered (a throw keeps it armed).
-          startupFreshnessPending = false;
-          const ageMs = latest
-            ? Date.now() - latest.getTime()
-            : Number.POSITIVE_INFINITY;
-          if (ageMs < CITATION_AUTHORITY_INTERVAL_MS) {
-            outcome = RECOMPUTE_OUTCOME.FRESH;
-            freshRemainingMs = CITATION_AUTHORITY_INTERVAL_MS - ageMs;
-            logInfo(
-              `[citation-authority] Fresh (last recompute ${Math.round(ageMs / 60_000)}m ago); waiting out the interval`,
-            );
-          }
-        }
-        // Still at its FAILED initialization = no gate fired; attempt the
-        // recompute (which then reports skipped/recomputed/failed itself).
-        if (outcome === RECOMPUTE_OUTCOME.FAILED) {
-          // oxlint-disable-next-line no-await-in-loop -- one full recompute per interval; the next poll only runs after this recompute completes
+        } else {
+          // oxlint-disable-next-line no-await-in-loop -- one bounded batch at a time; the next only starts once this one is durable
           const courtWeightEntries = await loadCourtWeightEntries();
-          // oxlint-disable-next-line no-await-in-loop -- one full recompute per interval; the next poll only runs after this recompute completes
-          const updated = await ingestionDb(async (tx) => {
-            const count = await tryRecomputeCitationAuthorityForAll(tx, {
-              courtWeightEntries,
-            });
-            return count;
-          });
-          if (updated === null) {
+          // The boundary is read per batch rather than pinned per sweep: the
+          // sweep is continuous and has no start, and a row recomputed an
+          // interval ago is due again whatever this process was doing then.
+          const staleBefore = new Date(
+            Date.now() - CITATION_AUTHORITY_INTERVAL_MS,
+          );
+          // oxlint-disable-next-line no-await-in-loop -- one bounded batch at a time; the next only starts once this one is durable
+          const batch = await runWithHardDeadline(
+            "citation-authority",
+            BACKFILL_HARD_DEADLINE_MS,
+            async () =>
+              await ingestionDb(
+                async (tx) =>
+                  await tryRecomputeCitationAuthorityBatch(tx, {
+                    limit: CITATION_AUTHORITY_BATCH_SIZE,
+                    staleBefore,
+                    courtWeightEntries,
+                  }),
+              ),
+          );
+          if (batch === null) {
             outcome = RECOMPUTE_OUTCOME.SKIPPED;
-            logInfo(
-              "[citation-authority] Skipped (recompute already running in another process)",
-            );
+          } else if (batch.recomputed === 0) {
+            outcome = RECOMPUTE_OUTCOME.CURRENT;
+            if (recomputedSinceLog > 0) {
+              logInfo(
+                `[citation-authority] Sweep complete (${recomputedSinceLog} decisions recomputed)`,
+              );
+              recomputedSinceLog = 0;
+            }
           } else {
-            outcome = RECOMPUTE_OUTCOME.RECOMPUTED;
-            logInfo(
-              `[citation-authority] Recomputed (${updated} cited decisions)`,
-            );
+            outcome = RECOMPUTE_OUTCOME.ADVANCED;
+            recomputedSinceLog += batch.recomputed;
           }
         }
       } catch (error) {
@@ -1252,22 +1256,15 @@ export const runCaseLawIngest = async (
           logError("[citation-authority] Recompute error:", error);
         }
       }
-      if (outcome === RECOMPUTE_OUTCOME.SKIPPED) {
-        // The lock holder's commit is exactly what the retry must observe:
-        // a skip re-arms the freshness probe so the contender waits out the
-        // interval instead of repeating the freshly committed recompute.
-        startupFreshnessPending = true;
-      }
       consecutiveFailures =
         outcome === RECOMPUTE_OUTCOME.FAILED ? consecutiveFailures + 1 : 0;
-      // oxlint-disable-next-line no-await-in-loop -- scheduled recompute poll; the loop must wait between recomputes, so this await is intentionally sequential
+      // oxlint-disable-next-line no-await-in-loop -- batch pacing; the loop must wait between batches, so this await is intentionally sequential
       await Bun.sleep(
         nextRecomputeDelayMs({
           outcome,
           consecutiveFailures,
-          freshRemainingMs,
-          retryDelayMs: CITATION_AUTHORITY_RETRY_DELAY_MS,
-          intervalMs: CITATION_AUTHORITY_INTERVAL_MS,
+          batchDelayMs: CITATION_AUTHORITY_BATCH_DELAY_MS,
+          idleDelayMs: CITATION_AUTHORITY_IDLE_DELAY_MS,
         }),
       );
     }

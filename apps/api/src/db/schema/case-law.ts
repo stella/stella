@@ -409,6 +409,17 @@ export const caseLawDecisions = p.pgTable(
     p
       .index("case_law_decisions_citation_authority_idx")
       .on(t.citationAuthority),
+    // The authority sweep's whole bookkeeping. It takes the least recently
+    // computed decisions older than its staleness boundary, and recomputing
+    // one stamps it with the current instant, which puts it past the boundary:
+    // the walk advances by doing its work, with no cursor to persist. That
+    // only holds if the ordering is an index range rather than a sort of the
+    // corpus, so the direction and null placement here have to match the
+    // statement's ORDER BY exactly. Never-computed rows sort first, which is
+    // what makes the same mechanism serve the initial backfill.
+    p
+      .index("case_law_decisions_authority_due_idx")
+      .on(t.citationAuthorityComputedAt.asc().nullsFirst(), t.id),
     // Supports the missing/stale scan the corpus index indexer loop runs
     // (mirrors backfillSearchIndex): rows whose indexedHash differs
     // from contentHash, or were never indexed.

@@ -7,8 +7,15 @@ import {
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
-import { recomputeCitationAuthorityForAll } from "@/api/handlers/case-law/citation-authority";
+import {
+  type CitationContributionWeight,
+  courtRecencyContributionWeight,
+  hasResolvedCitations,
+  oldestCitationAuthorityRecomputeAt,
+  recomputeCitationAuthorityBatch,
+} from "@/api/handlers/case-law/citation-authority";
 import { citationScore } from "@/api/handlers/case-law/citation-score";
+import type { CourtWeightEntry } from "@/api/handlers/case-law/court-weights";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -17,6 +24,11 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 // evaluated at the same instant, so moving the blend out of the per-query
 // SQL into a precomputed column does not change ranking. `now` is pinned
 // on both sides because the value decays continuously with time.
+//
+// The sweep is now batched, which adds a second thing to pin: batching must be
+// arithmetic-neutral. A sweep run one decision at a time and a sweep run in one
+// batch have to leave the corpus in the same state, or the bound that makes the
+// statement survive a growing corpus has bought a different ranking.
 
 const NOW = new Date("2026-06-05T00:00:00.000Z");
 
@@ -28,6 +40,67 @@ const citedId = createSafeId<"caseLawDecision">();
 const supremeCitingId = createSafeId<"caseLawDecision">();
 const regionalCitingId = createSafeId<"caseLawDecision">();
 const orphanId = createSafeId<"caseLawDecision">();
+
+type SweepOptions = {
+  now?: Date;
+  courtWeightEntries?: CourtWeightEntry[];
+  contributionWeight?: CitationContributionWeight;
+};
+
+/**
+ * Walk a whole sweep at the given batch size, and report what it did.
+ *
+ * `staleBefore` is the sweep's own instant, which is what makes it terminate:
+ * a row this sweep recomputed is stamped with that instant and is no longer
+ * older than it. Setting a boundary in the future would make every row due
+ * again the moment it was written, which is the shape of a walk that never
+ * ends.
+ */
+const sweep = async (
+  limit: number,
+  options: SweepOptions = {},
+): Promise<{ recomputed: number; cited: number; batches: number }> => {
+  const now = options.now ?? NOW;
+  const totals = { recomputed: 0, cited: 0, batches: 0 };
+  for (let turn = 0; turn < 200; turn += 1) {
+    // oxlint-disable-next-line no-await-in-loop -- the sweep advances by the work each batch commits; the next batch reads what this one wrote
+    const batch = await db.transaction(
+      async (tx) =>
+        await recomputeCitationAuthorityBatch(tx, {
+          limit,
+          staleBefore: now,
+          now,
+          ...(options.contributionWeight
+            ? { contributionWeight: options.contributionWeight }
+            : {}),
+          ...(options.courtWeightEntries
+            ? { courtWeightEntries: options.courtWeightEntries }
+            : {}),
+        }),
+    );
+    if (batch.recomputed === 0) {
+      return totals;
+    }
+    totals.recomputed += batch.recomputed;
+    totals.cited += batch.cited;
+    totals.batches += 1;
+  }
+  throw new Error("the citation-authority sweep did not terminate");
+};
+
+/**
+ * Put every decision back in the due set.
+ *
+ * The production sweep does this by waiting: a row falls due again once the
+ * refresh interval has passed. A test that has to re-run a sweep at a pinned
+ * instant clears the stamp instead, which is the same state a corpus is in
+ * before its first sweep.
+ */
+const markAllDue = async (): Promise<void> => {
+  await db.execute(
+    sql`UPDATE case_law_decisions SET citation_authority_computed_at = NULL`,
+  );
+};
 
 // createTestPglite()'s full in-process build (no PGLITE_TEST_SNAPSHOT) is
 // close enough to bun:test's 5s default hook timeout that running this file
@@ -101,9 +174,7 @@ beforeAll(
       },
     ]);
 
-    await db.transaction(async (tx) =>
-      recomputeCitationAuthorityForAll(tx, { now: NOW }),
-    );
+    await sweep(1000);
   },
   { timeout: 30_000 },
 );
@@ -127,6 +198,18 @@ const countOf = async (id: SafeId<"caseLawDecision">): Promise<number> => {
     .where(eq(caseLawDecisions.id, id));
   return row?.n ?? Number.NaN;
 };
+
+const snapshot = async (): Promise<
+  { id: string; authority: number | null; count: number }[]
+> =>
+  await db
+    .select({
+      id: caseLawDecisions.id,
+      authority: caseLawDecisions.citationAuthority,
+      count: caseLawDecisions.citationCount,
+    })
+    .from(caseLawDecisions)
+    .orderBy(caseLawDecisions.id);
 
 test("materialized authority equals citationScore() at the same instant", async () => {
   const expected = citationScore(
@@ -166,20 +249,106 @@ test("a more authoritative citing court yields higher authority", async () => {
   expect(supreme).toBeGreaterThan(regional);
 });
 
-// Bug fix: DB-seeded court weights (case_law_court_weights, loaded via
-// loadCourtWeightEntriesForSql()) were never threaded into
-// recomputeCitationAuthorityForAll's SQL, so it silently always used
-// LEGACY_COURT_TIERS regardless of what was seeded. This test pins the
-// `courtWeightEntries` option actually reaching the generated SQL. It
-// reuses the file's shared pglite fixture (adding one more decision/
-// citation) rather than standing up a second pglite instance, which is
-// expensive enough to trip the default hook timeout when run alongside
-// the file's existing fixture.
+test("the sweep covers every decision once and then reports itself current", async () => {
+  // Every batch stamps the rows it wrote, which takes them out of the set the
+  // next batch walks. That is the whole of the sweep's bookkeeping: no cursor
+  // is persisted, so this is what proves the walk terminates rather than
+  // re-serving the same rows or stopping short of the corpus.
+  const [{ n: total } = { n: 0 }] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(caseLawDecisions);
+  await markAllDue();
+  const walked = await sweep(1000);
+  expect(walked.recomputed).toBe(total);
+  expect(walked.cited).toBe(1);
+  // Immediately afterwards nothing is due against the same boundary.
+  expect((await sweep(1000)).recomputed).toBe(0);
+});
+
+test("batching is arithmetic-neutral", async () => {
+  // The bound that makes the statement survive a growing corpus must not buy
+  // a different ranking. One decision per batch and the whole corpus in one
+  // batch have to leave the same values behind, to the last bit.
+  await markAllDue();
+  const oneAtATime = await sweep(1);
+  const perBatch = await snapshot();
+
+  await markAllDue();
+  const allAtOnce = await sweep(1000);
+  const single = await snapshot();
+
+  expect(oneAtATime.recomputed).toBe(allAtOnce.recomputed);
+  expect(oneAtATime.batches).toBeGreaterThan(allAtOnce.batches);
+  expect(perBatch).toEqual(single);
+});
+
+test("the staleness probe reports the oldest computed instant", async () => {
+  // The oldest rather than the newest: a sweep advances row by row, so the
+  // freshest row says nothing about the picture as a whole.
+  await markAllDue();
+  await sweep(1000, { now: new Date("2026-06-06T00:00:00.000Z") });
+  expect(await db.transaction(oldestCitationAuthorityRecomputeAt)).toEqual(
+    new Date("2026-06-06T00:00:00.000Z"),
+  );
+  // Restore the fixture's instant for the tests that follow.
+  await markAllDue();
+  await sweep(1000);
+});
+
+test("a decision that has never been computed makes the probe answer null", async () => {
+  const uncomputed = createSafeId<"caseLawDecision">();
+  await db.insert(caseLawDecisions).values({
+    id: uncomputed,
+    sourceId,
+    caseNumber: "9 Cdo 9/2022",
+    court: "Okresní soud",
+    country: "CZE",
+    language: "cs",
+    decisionDate: "2022-01-01",
+  });
+  expect(await db.transaction(oldestCitationAuthorityRecomputeAt)).toBeNull();
+  // And the sweep picks it up first, because never-computed rows sort first.
+  expect((await sweep(1)).recomputed).toBe(1);
+  await sweep(1000);
+});
+
+test("the contribution weight is a seam the aggregate reads through", async () => {
+  // The ranking's open question — whether a citation that overrules should
+  // count for less than one that follows — has to be answerable by changing
+  // this expression alone. Doubling it must double the weighted sum and touch
+  // nothing else, including the citation count.
+  const doubled: CitationContributionWeight = (options) =>
+    sql`2 * (${courtRecencyContributionWeight(options)})`;
+  await markAllDue();
+  await sweep(1000, { contributionWeight: doubled });
+
+  const expected = citationScore(
+    [
+      { citingCourt: "Nejvyšší soud", citingDate: "2025-01-01" },
+      { citingCourt: "Krajský soud", citingDate: "2018-01-01" },
+    ],
+    "2020-01-01",
+    NOW,
+  );
+  // score = ln(1 + sum/age), so doubling the sum is ln(1 + 2*(e^score - 1)).
+  expect(await authorityOf(citedId)).toBeCloseTo(
+    Math.log(1 + 2 * (Math.E ** expected - 1)),
+    9,
+  );
+  expect(await countOf(citedId)).toBe(2);
+
+  await markAllDue();
+  await sweep(1000);
+  expect(await authorityOf(citedId)).toBeCloseTo(expected, 9);
+});
+
 test("courtWeightEntries option drives the SQL instead of the legacy tiers", async () => {
-  // A court name that matches none of LEGACY_COURT_TIERS' CZ/SK patterns
-  // (so the legacy fallback would score it at DEFAULT_WEIGHT=1), but
-  // matches CUSTOM_ENTRIES below at weight 7 — proving the entries
-  // actually drove the SQL rather than being silently ignored.
+  // Bug fix regression: DB-seeded court weights (case_law_court_weights,
+  // loaded via loadCourtWeightEntriesForSql()) were never threaded into the
+  // recompute's SQL, so it silently always used LEGACY_COURT_TIERS regardless
+  // of what was seeded. A court name that matches none of the legacy CZ/SK
+  // patterns (so the fallback would score it at DEFAULT_WEIGHT=1) but matches
+  // CUSTOM_ENTRIES at weight 7 proves the entries actually drove the SQL.
   const customCitedId = createSafeId<"caseLawDecision">();
   const customCitingId = createSafeId<"caseLawDecision">();
   const CUSTOM_ENTRIES = [
@@ -217,12 +386,8 @@ test("courtWeightEntries option drives the SQL instead of the legacy tiers", asy
     citationText: "5 Cdo 5/2020",
   });
 
-  await db.transaction(async (tx) =>
-    recomputeCitationAuthorityForAll(tx, {
-      now: NOW,
-      courtWeightEntries: CUSTOM_ENTRIES,
-    }),
-  );
+  await markAllDue();
+  await sweep(1000, { courtWeightEntries: CUSTOM_ENTRIES });
 
   expect(await authorityOf(customCitedId)).toBeCloseTo(
     citationScore(
@@ -244,4 +409,8 @@ test("courtWeightEntries option drives the SQL instead of the legacy tiers", asy
     ),
     2,
   );
+});
+
+test("an unrankable corpus is detected before a sweep walks it", async () => {
+  expect(await db.transaction(hasResolvedCitations)).toBe(true);
 });
