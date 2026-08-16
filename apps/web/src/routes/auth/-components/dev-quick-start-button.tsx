@@ -227,73 +227,75 @@ export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
   const runningRef = useRef(false);
   const [phase, setPhase] = useState<DevQuickStartPhase | null>(null);
 
+  const runQuickStart = async () => {
+    const attempt =
+      attemptRef.current ??
+      readDevQuickStartAttempt() ??
+      ({
+        completedPhase: null,
+        identity: createDevQuickStartIdentity(crypto.randomUUID()),
+        organizationId: null,
+      } satisfies DevQuickStartAttempt);
+    attemptRef.current = attempt;
+    writeDevQuickStartAttempt(attempt);
+    setPhase(DEV_QUICK_START_PHASE.authenticate);
+
+    const result = await Result.tryPromise({
+      try: async () => await authenticate(attempt.identity),
+      catch: (cause) => cause,
+    });
+
+    if (Result.isError(result)) {
+      setPhase(null);
+      analytics.captureError(result.error);
+      stellaToast.add({
+        title: t("auth.devQuickStart.error.title"),
+        description: DevQuickStartError.is(result.error)
+          ? t(ERROR_MESSAGE_KEYS[result.error.code])
+          : userErrorFromThrown(
+              result.error,
+              t("auth.devQuickStart.error.fallback"),
+            ),
+        type: "error",
+      });
+      return;
+    }
+
+    const authenticatedAttempt =
+      attempt.completedPhase === null
+        ? {
+            completedPhase: DEV_QUICK_START_PHASE.authenticate,
+            identity: attempt.identity,
+            organizationId: attempt.organizationId,
+          }
+        : attempt;
+    attemptRef.current = authenticatedAttempt;
+    writeDevQuickStartAttempt(authenticatedAttempt);
+
+    if (result.value === AUTHENTICATION_OUTCOME.twoFactorRequired) {
+      await navigate({
+        to: "/auth/two-factor",
+        search: { devQuickStart: true, redirectTo },
+      });
+      return;
+    }
+
+    await invalidateSession.mutateAsync();
+    await navigate({
+      to: "/auth/organization",
+      search: { devQuickStart: true, redirectTo },
+    });
+  };
+
   const handleQuickStart = async () => {
     if (runningRef.current) {
       return;
     }
     runningRef.current = true;
 
-    try {
-      const attempt =
-        attemptRef.current ??
-        readDevQuickStartAttempt() ??
-        ({
-          completedPhase: null,
-          identity: createDevQuickStartIdentity(crypto.randomUUID()),
-          organizationId: null,
-        } satisfies DevQuickStartAttempt);
-      attemptRef.current = attempt;
-      writeDevQuickStartAttempt(attempt);
-      setPhase(DEV_QUICK_START_PHASE.authenticate);
-
-      const result = await Result.tryPromise({
-        try: async () => await authenticate(attempt.identity),
-        catch: (cause) => cause,
-      });
-
-      if (Result.isError(result)) {
-        setPhase(null);
-        analytics.captureError(result.error);
-        stellaToast.add({
-          title: t("auth.devQuickStart.error.title"),
-          description: DevQuickStartError.is(result.error)
-            ? t(ERROR_MESSAGE_KEYS[result.error.code])
-            : userErrorFromThrown(
-                result.error,
-                t("auth.devQuickStart.error.fallback"),
-              ),
-          type: "error",
-        });
-        return;
-      }
-
-      const authenticatedAttempt =
-        attempt.completedPhase === null
-          ? {
-              completedPhase: DEV_QUICK_START_PHASE.authenticate,
-              identity: attempt.identity,
-              organizationId: attempt.organizationId,
-            }
-          : attempt;
-      attemptRef.current = authenticatedAttempt;
-      writeDevQuickStartAttempt(authenticatedAttempt);
-
-      if (result.value === AUTHENTICATION_OUTCOME.twoFactorRequired) {
-        await navigate({
-          to: "/auth/two-factor",
-          search: { devQuickStart: true, redirectTo },
-        });
-        return;
-      }
-
-      await invalidateSession.mutateAsync();
-      await navigate({
-        to: "/auth/organization",
-        search: { devQuickStart: true, redirectTo },
-      });
-    } finally {
+    await runQuickStart().finally(() => {
       runningRef.current = false;
-    }
+    });
   };
 
   return (
