@@ -8,11 +8,13 @@ import { toSafeId } from "@/lib/safe-id";
 import {
   createDialogCloseActionQueue,
   getChatHitRoute,
+  getEntityLocationRoute,
   getEntityWorkspaceRoute,
   getRecentFileRoute,
   getRecentFilePreviewDateVisibility,
   getRecentFilePreviewHit,
   resolveEntityDocumentRoute,
+  toAskAIMessageHtml,
 } from "./search-dialog.logic";
 
 type ChatGlobalSearchHit = Extract<GlobalSearchHit, { type: "chat" }>;
@@ -140,6 +142,35 @@ describe("document routes", () => {
     });
   });
 
+  test("opens the containing folder for a modifier-activated entity hit", () => {
+    const documentHit = getRecentFilePreviewHit({
+      entityId: "entity-1",
+      openedAt: "2026-07-31T05:00:00.000Z",
+      title: "Disclosure.pdf",
+      workspaceId: "workspace-1",
+      workspaceName: "Disclosure review",
+    });
+
+    expect(
+      getEntityLocationRoute({ ...documentHit, parentId: "folder-1" }),
+    ).toEqual({
+      to: "/workspaces/$workspaceId/$viewId",
+      params: { workspaceId: "workspace-1", viewId: "all" },
+      search: { folder: "folder-1" },
+    });
+    // Matter-root entities carry no folder scope.
+    expect(getEntityLocationRoute(documentHit)).toEqual({
+      to: "/workspaces/$workspaceId/$viewId",
+      params: { workspaceId: "workspace-1", viewId: "all" },
+    });
+    // Hits without a containing matter location keep their normal open.
+    expect(
+      getEntityLocationRoute(
+        chatHit({ threadId: "thread-1", workspaceId: null }),
+      ),
+    ).toBeNull();
+  });
+
   test("opens a recent file directly when its field id was persisted", () => {
     expect(
       getRecentFileRoute({
@@ -195,6 +226,7 @@ describe("recent file previews", () => {
       lastEditedByImage: null,
       lastEditedByName: null,
       mimeType: "application/pdf",
+      parentId: null,
       resource,
       resourceName: toResourceName(resource),
       title: "Disclosure.pdf",
@@ -228,5 +260,19 @@ describe("recent file previews", () => {
         workspaceName: "Disclosure review",
       }),
     ).toBe("show");
+  });
+});
+
+describe("toAskAIMessageHtml", () => {
+  test("escapes markup-significant characters so the query stays literal text", () => {
+    const query = "liability cap < 5% & indemnity <b>scope</b>";
+    expect(toAskAIMessageHtml(query)).not.toBe(query);
+    expect(toAskAIMessageHtml(query)).toBe(
+      "liability cap &lt; 5% &amp; indemnity &lt;b&gt;scope&lt;/b&gt;",
+    );
+  });
+
+  test("leaves plain queries untouched", () => {
+    expect(toAskAIMessageHtml("smluvní pokuta")).toBe("smluvní pokuta");
   });
 });

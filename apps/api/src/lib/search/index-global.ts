@@ -699,6 +699,7 @@ export const searchGlobal = async ({
         w.name AS workspace_name,
         sd.kind AS type,
         sd.title,
+        e.parent_id,
         editor.name AS last_edited_by_name,
         editor.image AS last_edited_by_image,
         file_field.field_id AS file_field_id,

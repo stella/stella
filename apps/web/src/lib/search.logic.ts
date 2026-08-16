@@ -241,16 +241,21 @@ export const getNativeSearchDocumentPreviewTarget = (
 type AuthorizedSearchPreviewDataArgs<T> = {
   data: T | undefined;
   isError: boolean;
-  isFetchedAfterMount: boolean;
-  isFetching: boolean;
 };
 
+/**
+ * Preview data within `searchPreviewOptions`' staleTime counts as authorized:
+ * the query key is content-addressed, so a cache hit is the same authorized
+ * response the server already returned for this user. Only an error withholds
+ * data (the fetch that produced it was rejected). The previous per-mount
+ * `isFetchedAfterMount` gate belonged to the refetch-on-every-mount posture
+ * and, combined with caching, left cache hits on a permanent skeleton.
+ */
 export const selectAuthorizedSearchPreviewData = <T>({
   data,
   isError,
-  isFetchedAfterMount,
 }: AuthorizedSearchPreviewDataArgs<T>): T | undefined =>
-  isFetchedAfterMount && !isError ? data : undefined;
+  isError ? undefined : data;
 
 type SelectSearchPreviewHitArgs = {
   highlightedHitId: string | null;

@@ -606,6 +606,7 @@ type Messages = {
     "richContentUnavailable": "This content cannot be displayed safely.";
     "sendError": "There was an issue sending your message. Contact support if the error persists.";
     "sendErrorAnonymizationBlocked": "stella could not anonymize one attachment, so nothing was sent. Remove the file or send this message without anonymization.";
+    "sendErrorEmptyCompletion": "The AI returned an empty reply. Try again or rephrase your message.";
     "sendErrorLoopDetected": "The AI response repeated too many times. Try again with a narrower request.";
     "sendErrorModelUnavailable": "The configured AI model is no longer available. Ask your workspace admin to update the model in organization settings.";
     "sendErrorProviderBilling": "The AI provider reported a billing problem. Contact your workspace admin.";
@@ -2891,7 +2892,10 @@ type Messages = {
     "deleteSearchTitle": "Delete saved search";
     "editedBy": "Edited by";
     "emptyState": "Start typing to search across all matters.";
-    "escKey": "ESC";
+    "hintAskAI": "<kbd>Tab</kbd> to ask AI";
+    "hintClose": "<kbd>Esc</kbd> to close";
+    "hintNavigate": "<kbd>↑↓</kbd> to navigate";
+    "hintOpen": "<kbd>↵</kbd> to open";
     "kinds": {
       "caseLaw": "Case law";
       "chat": "Chat";

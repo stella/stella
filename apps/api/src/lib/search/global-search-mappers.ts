@@ -55,6 +55,7 @@ export const mapEntityHit = (row: RawRow): ScoredEntityGlobalSearchHit => {
     type: kind,
     entityId,
     workspaceId,
+    parentId: toNullableString(row["parent_id"]),
     workspaceName: String(row["workspace_name"]),
     title: String(row["title"]),
     headline: toHeadline(row["headline"]),

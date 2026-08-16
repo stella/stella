@@ -74,6 +74,13 @@ export const evaluateStormWindow = (
 export type RenderStormDetails = {
   commitsPerSecond: number;
   phaseCounts: RenderStormPhaseCounts;
+  /**
+   * Commits attributed to named `RenderStormRegion` subtrees during the
+   * window that tripped the storm, highest first. A commit whose render
+   * touched no registered region contributes to no entry, so the counts
+   * locate the storm rather than merely restating the total.
+   */
+  regionCounts: readonly (readonly [region: string, commits: number])[];
 };
 
 export type RenderStormOnRender = (
@@ -87,6 +94,13 @@ export type RenderStormOnRender = (
 
 export type RenderStormMonitor = {
   onRender: RenderStormOnRender;
+  /**
+   * Attribute the current commit to a named region. Called by the nested
+   * `RenderStormRegion` profilers, which commit in the same React pass as
+   * the root profiler, so region counts and the root's commit counter
+   * always describe the same window.
+   */
+  onRegionRender: (region: string) => void;
 };
 
 /**
@@ -102,6 +116,7 @@ export const createRenderStormMonitor = (
   let windowStart: number | undefined;
   let commitsInWindow = 0;
   let phaseCountsInWindow = createEmptyPhaseCounts();
+  let regionCountsInWindow = new Map<string, number>();
   let consecutiveStormWindows = 0;
   // -Infinity, not 0: a real commitTime of 0 is possible (performance.now()
   // at app start), and seeding this at 0 would suppress the very first
@@ -128,11 +143,15 @@ export const createRenderStormMonitor = (
       emitStorm({
         commitsPerSecond,
         phaseCounts: phaseCountsInWindow,
+        regionCounts: [...regionCountsInWindow.entries()].sort(
+          ([, left], [, right]) => right - left,
+        ),
       });
     }
 
     commitsInWindow = 0;
     phaseCountsInWindow = createEmptyPhaseCounts();
+    regionCountsInWindow = new Map();
     windowStart = now;
   };
 
@@ -154,5 +173,12 @@ export const createRenderStormMonitor = (
     phaseCountsInWindow[phase] += 1;
   };
 
-  return { onRender };
+  const onRegionRender = (region: string) => {
+    regionCountsInWindow.set(
+      region,
+      (regionCountsInWindow.get(region) ?? 0) + 1,
+    );
+  };
+
+  return { onRegionRender, onRender };
 };

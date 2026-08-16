@@ -31,6 +31,7 @@ import { composeRefs } from "@stll/ui/lib/utils";
 
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import {
+  DOCX_PAGE_FIT_WIDTH,
   useDocxFitZoom,
   useDocxWheelZoom,
 } from "@/components/docx-preview-zoom";
@@ -117,6 +118,12 @@ type PeekPdfViewerProps = {
   docxPrintActionsRef?: RefObject<Map<string, () => void>> | undefined;
   onDocxScrollTopChange?: ((scrollTop: number) => void) | undefined;
   onWheelZoom?: ((deltaY: number) => void) | undefined;
+  /**
+   * DOCX auto-fit target. "text-area" fills the panel with body text and lets
+   * the page margins overflow (inspector reading mode); "page" fits the whole
+   * page inside the panel so narrow previews never scroll horizontally.
+   */
+  docxFitMode?: "text-area" | "page" | undefined;
   errorFallback?: ((props: { reset: () => void }) => ReactNode) | undefined;
   onError?: ((error: Error) => void) | undefined;
 };
@@ -163,6 +170,7 @@ const PeekPdfViewerContent = ({
   docxPrintActionsRef,
   onDocxScrollTopChange,
   onWheelZoom,
+  docxFitMode = "text-area",
 }: PeekPdfViewerProps) => {
   const isImageOrigin = mimeType?.startsWith("image/") ?? false;
 
@@ -200,6 +208,7 @@ const PeekPdfViewerContent = ({
           buffer={file.buffer}
           activeSearchMatchIndex={activeSearchMatchIndex}
           fieldId={fieldId}
+          fitMode={docxFitMode}
           printActionsRef={docxPrintActionsRef}
           onScrollTopChange={onDocxScrollTopChange}
           onSearchMatchSummaryChange={onSearchMatchSummaryChange}
@@ -449,6 +458,7 @@ const PeekDocxViewer = ({
   activeSearchMatchIndex,
   buffer,
   fieldId,
+  fitMode,
   onScrollTopChange,
   onSearchMatchSummaryChange,
   printActionsRef,
@@ -459,6 +469,7 @@ const PeekDocxViewer = ({
   activeSearchMatchIndex: number;
   buffer: ArrayBuffer;
   fieldId: string;
+  fitMode: "text-area" | "page";
   onScrollTopChange?: ((scrollTop: number) => void) | undefined;
   onSearchMatchSummaryChange?:
     | ((summary: SearchMatchSummary) => void)
@@ -475,6 +486,10 @@ const PeekDocxViewer = ({
   const searchResultCacheRef = useRef<DocxSearchResultCache | null>(null);
   const { containerRef: fitZoomRef, fitZoom: targetZoom } = useDocxFitZoom({
     scaleOffset,
+    ...(fitMode === "page" && {
+      fitWidth: DOCX_PAGE_FIT_WIDTH,
+      maxAutoZoom: 1,
+    }),
   });
   // Stable ref callback so React doesn't detach/re-attach the fit-zoom
   // ResizeObserver every render.

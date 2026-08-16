@@ -35,6 +35,7 @@ const CHAT_TURN_LEASE_MS =
   CHAT_METERED_PROVIDER_TIMEOUT_MS + CHAT_TURN_PROVIDER_LEASE_GRACE_MS;
 
 const AI_ERROR_RETRYABLE = {
+  empty_completion: true,
   loop_detected: false,
   model_unavailable: false,
   provider_billing: false,

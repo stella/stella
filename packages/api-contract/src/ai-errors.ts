@@ -4,6 +4,7 @@ export const AI_ERROR_KINDS = [
   "model_unavailable",
   "provider_unavailable",
   "loop_detected",
+  "empty_completion",
   "unknown",
 ] as const;
 

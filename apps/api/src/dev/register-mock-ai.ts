@@ -38,6 +38,14 @@ const MOCK_REPLY =
 // composer while a response is still arriving).
 const E2E_SLOW_STREAM_MARKER = "Stream slowly please";
 
+// A user message containing this marker makes the mock adapter finish the run
+// with zero output — the shape of a real provider empty completion — so specs
+// can exercise the server's ChatEmptyCompletionError path (stream-chat.ts) and
+// the client's run-error handling deterministically.
+const E2E_EMPTY_COMPLETION_MARKER = "Return an empty completion please";
+
+const EMPTY_COMPLETION_DELAY_MS = 1500;
+
 const SLOW_STREAM_REPLY =
   "This mock reply streams back in many small pieces instead of arriving all " +
   "at once, so an end to end test has a real window while the assistant is " +
@@ -109,9 +117,8 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
     const resolvedThreadId = threadId ?? "mock-thread";
     const messageId = "mock-message";
     const timestamp = Date.now();
-    const slowStream = getLatestUserText(messages).includes(
-      E2E_SLOW_STREAM_MARKER,
-    );
+    const latestUserText = getLatestUserText(messages);
+    const slowStream = latestUserText.includes(E2E_SLOW_STREAM_MARKER);
 
     yield {
       type: EventType.RUN_STARTED,
@@ -120,6 +127,25 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
       model,
       timestamp,
     } satisfies StreamChunk;
+
+    if (latestUserText.includes(E2E_EMPTY_COMPLETION_MARKER)) {
+      // Real providers return an empty completion only after a round-trip;
+      // holding the run open briefly lets the destination surface mount and
+      // render the streaming state before the terminal event arrives, which
+      // is the window the incident's render loop lived in.
+      await Bun.sleep(EMPTY_COMPLETION_DELAY_MS);
+      yield {
+        type: EventType.RUN_FINISHED,
+        runId: resolvedRunId,
+        threadId: resolvedThreadId,
+        model,
+        timestamp,
+        finishReason: "stop",
+        usage: mockUsage,
+      } satisfies StreamChunk;
+      return;
+    }
+
     yield {
       type: EventType.TEXT_MESSAGE_START,
       messageId,

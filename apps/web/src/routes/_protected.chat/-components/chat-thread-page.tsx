@@ -38,6 +38,7 @@ import { ComposerVeil } from "@/components/chat/composer-veil";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { RenderStormRegion } from "@/components/render-storm-canary";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import Tooltip from "@/components/tooltip";
 import { UsageFallbackNotice } from "@/components/usage/usage-fallback-notice";
@@ -586,47 +587,48 @@ export const ChatThreadPage = ({
   };
 
   return (
-    <ChatMattersContext
-      value={{
-        createDocumentMatters,
-        isLoadingCreateDocumentMatters,
-      }}
-    >
-      {shouldSeedWebSearch && (
-        <WebSearchSeedLifecycle
-          key={`${threadRef.threadId}:${messages.length}:${data.webSearchAvailable}:${data.webSearchEnabled}:${enabledPreference}`}
-          seed={triggerWebSearchSeed}
-        />
-      )}
-      <ChatApprovalContext
+    <RenderStormRegion name="chat-thread-page">
+      <ChatMattersContext
         value={{
-          activeOrganizationId,
-          alwaysApprovedTools,
-          conversationApprovedTools,
-          handleAllowInConversation,
-          handleAlwaysAllow,
-          handleApprove,
-          handleDeny,
+          createDocumentMatters,
+          isLoadingCreateDocumentMatters,
         }}
       >
-        <div className="relative flex w-full flex-1 flex-col overflow-hidden">
-          <ChromeHeaderActions>
-            <Tooltip
-              content={t("chat.moveToSide")}
-              render={
-                <Button onClick={moveToSide} size="icon-sm" variant="ghost">
-                  <Maximize2Icon className="size-4" />
-                </Button>
-              }
-            />
-            <ThreadsSheet />
-            <NewChatButton
-              hasMessages={messages.length > 0}
-              threadRef={threadRef}
-            />
-          </ChromeHeaderActions>
+        {shouldSeedWebSearch && (
+          <WebSearchSeedLifecycle
+            key={`${threadRef.threadId}:${messages.length}:${data.webSearchAvailable}:${data.webSearchEnabled}:${enabledPreference}`}
+            seed={triggerWebSearchSeed}
+          />
+        )}
+        <ChatApprovalContext
+          value={{
+            activeOrganizationId,
+            alwaysApprovedTools,
+            conversationApprovedTools,
+            handleAllowInConversation,
+            handleAlwaysAllow,
+            handleApprove,
+            handleDeny,
+          }}
+        >
+          <div className="relative flex w-full flex-1 flex-col overflow-hidden">
+            <ChromeHeaderActions>
+              <Tooltip
+                content={t("chat.moveToSide")}
+                render={
+                  <Button onClick={moveToSide} size="icon-sm" variant="ghost">
+                    <Maximize2Icon className="size-4" />
+                  </Button>
+                }
+              />
+              <ThreadsSheet />
+              <NewChatButton
+                hasMessages={messages.length > 0}
+                threadRef={threadRef}
+              />
+            </ChromeHeaderActions>
 
-          {/*
+            {/*
             Page-level stacking order (bottom → top):
               1. transcript content   — in-flow, z-auto
               2. sticky user headers  — z-10 (capped inside <Conversation>)
@@ -638,81 +640,83 @@ export const ChatThreadPage = ({
             value (sticky headers, scroll button) inside its own context so
             none of them can leak up and overlay the fade or the composer.
           */}
-          <div
-            className="relative flex min-h-0 flex-1 flex-col"
-            ref={pageContainerRef}
-          >
-            <Conversation className="@container isolate min-h-0">
-              <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4 pb-[calc(var(--composer-block-h,7rem)+1.5rem)]">
-                {messages.length === 0 && !isGenerating && !error ? (
-                  <div className="m-auto w-full max-w-md px-4">
-                    <PromptSuggestions
-                      onSelect={selectPrompt}
-                      prompts={prompts}
-                    />
-                  </div>
-                ) : (
-                  <>
-                    <ChatThreadMessages
-                      approvalPendingMessageId={approvalPendingMessageId}
-                      error={error}
-                      hasOlderMessages={olderCursor !== null}
-                      isGenerating={isGenerating}
-                      isLoadingOlder={isLoadingOlder}
-                      loadOlderError={loadOlderError}
-                      messages={messages}
-                      onLoadOlder={loadOlder}
-                      onAskUserEditAndRerun={handleAskUserEditAndRerun}
-                      onAskUserEditingChange={handleAskUserEditingChange}
-                      onAskUserSubmit={handleAskUserSubmit}
-                      onCreateDocumentResolve={handleCreateDocumentResolve}
-                      onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
-                      onOpenCreatedDocument={handleOpenCreatedDocument}
-                      onRemoveQueuedMessage={removeQueuedMessage}
-                      onResend={resendLatestMessage}
-                      onSendWithoutAnonymization={sendWithoutAnonymization}
-                      queuedMessages={queuedMessages}
-                      showThinkingIndicator
-                      stickyUserMessages
-                      streamdownComponents={streamdownComponents}
-                      threadRef={threadRef}
-                      workspaceId={workspaceId}
-                    />
-                    <ChatThreadRecap
-                      activeOrganizationId={activeOrganizationId}
-                      isGenerating={isGenerating}
-                      key={threadRef.threadId}
-                      lastActivityAt={data.lastActivityAt}
-                      lastMessageId={messages.at(-1)?.id ?? null}
-                      lastMessageRole={messages.at(-1)?.role ?? null}
-                      messageCount={messages.length}
-                      threadRef={threadRef}
-                    />
-                  </>
-                )}
-              </ConversationContent>
-              <ChatTurnNavigator messages={messages} />
-              <ConversationScrollButton className="bottom-[calc(var(--composer-block-h,7rem)+0.75rem)]" />
-            </Conversation>
+            <div
+              className="relative flex min-h-0 flex-1 flex-col"
+              ref={pageContainerRef}
+            >
+              <Conversation className="@container isolate min-h-0">
+                <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4 pb-[calc(var(--composer-block-h,7rem)+1.5rem)]">
+                  {messages.length === 0 && !isGenerating && !error ? (
+                    <div className="m-auto w-full max-w-md px-4">
+                      <PromptSuggestions
+                        onSelect={selectPrompt}
+                        prompts={prompts}
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <ChatThreadMessages
+                        approvalPendingMessageId={approvalPendingMessageId}
+                        error={error}
+                        hasOlderMessages={olderCursor !== null}
+                        isGenerating={isGenerating}
+                        isLoadingOlder={isLoadingOlder}
+                        loadOlderError={loadOlderError}
+                        messages={messages}
+                        onLoadOlder={loadOlder}
+                        onAskUserEditAndRerun={handleAskUserEditAndRerun}
+                        onAskUserEditingChange={handleAskUserEditingChange}
+                        onAskUserSubmit={handleAskUserSubmit}
+                        onCreateDocumentResolve={handleCreateDocumentResolve}
+                        onOpenCreateDocumentDraft={
+                          handleOpenCreateDocumentDraft
+                        }
+                        onOpenCreatedDocument={handleOpenCreatedDocument}
+                        onRemoveQueuedMessage={removeQueuedMessage}
+                        onResend={resendLatestMessage}
+                        onSendWithoutAnonymization={sendWithoutAnonymization}
+                        queuedMessages={queuedMessages}
+                        showThinkingIndicator
+                        stickyUserMessages
+                        streamdownComponents={streamdownComponents}
+                        threadRef={threadRef}
+                        workspaceId={workspaceId}
+                      />
+                      <ChatThreadRecap
+                        activeOrganizationId={activeOrganizationId}
+                        isGenerating={isGenerating}
+                        key={threadRef.threadId}
+                        lastActivityAt={data.lastActivityAt}
+                        lastMessageId={messages.at(-1)?.id ?? null}
+                        lastMessageRole={messages.at(-1)?.role ?? null}
+                        messageCount={messages.length}
+                        threadRef={threadRef}
+                      />
+                    </>
+                  )}
+                </ConversationContent>
+                <ChatTurnNavigator messages={messages} />
+                <ConversationScrollButton className="bottom-[calc(var(--composer-block-h,7rem)+0.75rem)]" />
+              </Conversation>
 
-            <ChatAnonymizationLayer
-              editor={controller.editor}
-              enabled={anonymized}
-              focused={composerFocused}
-              ownerKey={threadKey}
-              workspaceId={workspaceId ?? threadRef.threadId}
-            />
-            {/* Soft fade so messages dissolve into the floating composer
+              <ChatAnonymizationLayer
+                editor={controller.editor}
+                enabled={anonymized}
+                focused={composerFocused}
+                ownerKey={threadKey}
+                workspaceId={workspaceId ?? threadRef.threadId}
+              />
+              {/* Soft fade so messages dissolve into the floating composer
               instead of being clipped at a hard edge. Only when a
               conversation exists — the centered empty-state suggestions
               must stay crisp, not dimmed by the bottom fade. */}
-            {messages.length > 0 && (
-              <div
-                aria-hidden="true"
-                className="from-background pointer-events-none absolute inset-x-0 bottom-0 mx-auto h-48 w-full max-w-5xl bg-linear-to-t to-transparent"
-              />
-            )}
-            {/* Top of the page stacking order: must stack above the sticky
+              {messages.length > 0 && (
+                <div
+                  aria-hidden="true"
+                  className="from-background pointer-events-none absolute inset-x-0 bottom-0 mx-auto h-48 w-full max-w-5xl bg-linear-to-t to-transparent"
+                />
+              )}
+              {/* Top of the page stacking order: must stack above the sticky
                 transcript headers and the fade gradient. `z-20` beats the
                 isolated <Conversation> context (which caps its sticky
                 headers at z-10) and the z-auto fade sibling.
@@ -725,100 +729,106 @@ export const ChatThreadPage = ({
                 `--composer-block-h` is measured from this block's live
                 height, so transcript clearance and the scroll button's
                 offset track the change automatically. */}
-            <div
-              className="absolute inset-x-0 bottom-0 z-20 mx-auto w-full max-w-5xl px-4"
-              ref={composerBlockRef}
-            >
-              <SuggestedFollowupChips
-                isGenerating={isGenerating}
-                isEmpty={
-                  controller.isEmpty && controller.attachments.length === 0
-                }
-                lastMessageId={messages.at(-1)?.id ?? null}
-                lastMessageRole={messages.at(-1)?.role ?? null}
-                messageCount={messages.length}
-                prompts={suggestedFollowupPrompts}
-                onSelect={(prompt) => {
-                  controller.setContent(prompt);
-                  detached(
-                    controller.submit(async (draft) => {
-                      if (!(await ensureAIAvailable())) {
-                        return;
-                      }
-                      await sendMessage(await buildChatRequestMessage(draft));
-                    }),
-                    "chat-thread-page.submit",
-                  );
-                }}
-              />
-              {env.VITE_FEATURE_USAGE && <UsageFallbackNotice />}
-              {/* Glass tray behind the composer + status row: the shared
+              <div
+                className="absolute inset-x-0 bottom-0 z-20 mx-auto w-full max-w-5xl px-4"
+                ref={composerBlockRef}
+              >
+                <SuggestedFollowupChips
+                  isGenerating={isGenerating}
+                  isEmpty={
+                    controller.isEmpty && controller.attachments.length === 0
+                  }
+                  lastMessageId={messages.at(-1)?.id ?? null}
+                  lastMessageRole={messages.at(-1)?.role ?? null}
+                  messageCount={messages.length}
+                  prompts={suggestedFollowupPrompts}
+                  onSelect={(prompt) => {
+                    controller.setContent(prompt);
+                    detached(
+                      controller.submit(async (draft) => {
+                        if (!(await ensureAIAvailable())) {
+                          return;
+                        }
+                        await sendMessage(await buildChatRequestMessage(draft));
+                      }),
+                      "chat-thread-page.submit",
+                    );
+                  }}
+                />
+                {env.VITE_FEATURE_USAGE && <UsageFallbackNotice />}
+                {/* Glass tray behind the composer + status row: the shared
                   `ComposerVeil` (one owner of the blur/tint values across
                   every chat surface) fills this `relative isolate` wrapper
                   so the floating status-row text stays readable over the
                   scrolled transcript. */}
-              <div className="relative isolate p-2">
-                <ComposerVeil />
-                <ChatInputSurface
-                  anonymized={anonymized}
-                  autoFocus
-                  context={{ activeOrganizationId, threadRef }}
-                  controller={controller}
-                  guideAnchorsEnabled
-                  isGenerating={isGenerating}
-                  mcpOrganizationId={activeOrganizationId}
-                  models={{
-                    activeOrganizationId,
-                    threadRef,
-                    selectedModel: data.model,
-                    selectedReasoningEffort: data.reasoningEffort,
-                    selectModel: modelSelection.selectModel,
-                  }}
-                  reservedCommands={{
-                    hasPersistedThread: messages.length > 0,
-                  }}
-                  skillsOrganizationId={activeOrganizationId}
-                  dock={
-                    <ChatComposerDock
-                      data={data}
-                      guideAnchorsEnabled
-                      models={{
-                        activeOrganizationId,
-                        threadRef,
-                        selectedModel: data.model,
-                        selectedReasoningEffort: data.reasoningEffort,
-                        selectModel: modelSelection.selectModel,
-                      }}
-                      leadingContext={
-                        <ChatMatterPicker
-                          matterIds={selectedContextMatterIds}
-                          onChange={(matterIds) =>
-                            setContextMatterIds(
-                              resolveChatContextMatterIds(threadRef, matterIds),
-                            )
-                          }
-                        />
-                      }
-                      onNewThread={messages.length > 0 ? startNewThread : null}
-                      threadRef={threadRef}
-                    />
-                  }
-                  onStop={() => {
-                    stop();
-                  }}
-                  onFocusChange={setComposerFocused}
-                  onSubmit={handleSubmit}
-                />
+                <div className="relative isolate p-2">
+                  <ComposerVeil />
+                  <ChatInputSurface
+                    anonymized={anonymized}
+                    autoFocus
+                    context={{ activeOrganizationId, threadRef }}
+                    controller={controller}
+                    guideAnchorsEnabled
+                    isGenerating={isGenerating}
+                    mcpOrganizationId={activeOrganizationId}
+                    models={{
+                      activeOrganizationId,
+                      threadRef,
+                      selectedModel: data.model,
+                      selectedReasoningEffort: data.reasoningEffort,
+                      selectModel: modelSelection.selectModel,
+                    }}
+                    reservedCommands={{
+                      hasPersistedThread: messages.length > 0,
+                    }}
+                    skillsOrganizationId={activeOrganizationId}
+                    dock={
+                      <ChatComposerDock
+                        data={data}
+                        guideAnchorsEnabled
+                        models={{
+                          activeOrganizationId,
+                          threadRef,
+                          selectedModel: data.model,
+                          selectedReasoningEffort: data.reasoningEffort,
+                          selectModel: modelSelection.selectModel,
+                        }}
+                        leadingContext={
+                          <ChatMatterPicker
+                            matterIds={selectedContextMatterIds}
+                            onChange={(matterIds) =>
+                              setContextMatterIds(
+                                resolveChatContextMatterIds(
+                                  threadRef,
+                                  matterIds,
+                                ),
+                              )
+                            }
+                          />
+                        }
+                        onNewThread={
+                          messages.length > 0 ? startNewThread : null
+                        }
+                        threadRef={threadRef}
+                      />
+                    }
+                    onStop={() => {
+                      stop();
+                    }}
+                    onFocusChange={setComposerFocused}
+                    onSubmit={handleSubmit}
+                  />
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </ChatApprovalContext>
-      <UsageLimitModal
-        {...usageLimit.modalProps}
-        hasHostedEntitlement={usageLimit.hasHostedEntitlement}
-      />
-    </ChatMattersContext>
+        </ChatApprovalContext>
+        <UsageLimitModal
+          {...usageLimit.modalProps}
+          hasHostedEntitlement={usageLimit.hasHostedEntitlement}
+        />
+      </ChatMattersContext>
+    </RenderStormRegion>
   );
 };
 

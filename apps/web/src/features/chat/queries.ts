@@ -2386,6 +2386,44 @@ export const installChatRuntimeCleanup = (queryClient: QueryClient): void => {
   });
 };
 
+// Dev-only rebuild-churn canary. A priority-4 rebuild is expected a handful
+// of times around a turn boundary (one per surface per authoritative
+// refetch). A rebuild on every render — the registry failing to converge —
+// swaps the store identity under `useSyncExternalStore` each pass and
+// presents in the field as an unattributed render storm. Counting rebuilds
+// per thread in a sliding window turns that failure mode into a named
+// console.error (which the e2e `browserErrors` fixture escalates to a CI
+// failure, like the render-storm canary's emitter).
+const CHAT_RUNTIME_REBUILD_CHURN_WINDOW_MS = 2000;
+const CHAT_RUNTIME_REBUILD_CHURN_THRESHOLD = 10;
+const chatRuntimeRebuildTimes = new Map<string, number[]>();
+
+const trackChatRuntimeRebuildChurn = (threadIdentity: string): void => {
+  if (!import.meta.env.DEV) {
+    return;
+  }
+  const now = performance.now();
+  const previous = chatRuntimeRebuildTimes.get(threadIdentity);
+  const recent =
+    previous === undefined
+      ? []
+      : previous.filter(
+          (time) => now - time < CHAT_RUNTIME_REBUILD_CHURN_WINDOW_MS,
+        );
+  recent.push(now);
+  chatRuntimeRebuildTimes.set(threadIdentity, recent);
+  if (recent.length === CHAT_RUNTIME_REBUILD_CHURN_THRESHOLD) {
+    // eslint-disable-next-line no-console -- dev-only convergence canary; the sanctioned diagnostic emitter pattern from render-storm-canary, existing to be caught by the e2e browserErrors fixture as a CI-failing signal
+    console.error(
+      `[chat-runtime-churn] rebuilt the chat runtime for thread ${threadIdentity} ` +
+        `${String(CHAT_RUNTIME_REBUILD_CHURN_THRESHOLD)} times in ${String(CHAT_RUNTIME_REBUILD_CHURN_WINDOW_MS)}ms. ` +
+        "acquireChatRuntime is not converging: each render sees a seed that " +
+        "differs from the cached thread data, rebuilds, and re-renders. Compare " +
+        "the entry seed against toChatRuntimeSeedSignal(data) at the rebuild site.",
+    );
+  }
+};
+
 export type AcquireChatRuntimeArgs = {
   activeOrganizationId: string;
   context: ChatThreadOptionsContext | undefined;
@@ -2533,6 +2571,7 @@ export const acquireChatRuntime = ({
   // busy scan above found none), so drop superseded same-thread entries —
   // idle, diverged seed — before registering the replacement; the `set`
   // at the end replaces the exact-key entry atomically.
+  trackChatRuntimeRebuildChurn(threadIdentity);
   for (const [staleKey, entry] of chatRuntimeRegistry) {
     if (
       staleKey !== registryKey &&

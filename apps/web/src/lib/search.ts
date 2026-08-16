@@ -4,6 +4,7 @@ import type { EntityKind, GlobalSearchResultType } from "@stll/api/types";
 import { DAY_IN_MS } from "@stll/time";
 
 import { api } from "@/lib/api";
+import { STALE_TIME } from "@/lib/consts";
 import { unwrapEden } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -272,8 +273,12 @@ export const searchPreviewOptions = ({
 
       return unwrapEden(response);
     },
-    refetchOnMount: "always",
-    staleTime: 0,
+    // The key is content-addressed (query + resultId + updatedAt), so a
+    // cached preview can never show stale content for a changed document —
+    // a change rotates `updatedAt` into a new key. Caching within the
+    // search session makes hovering back to an already-previewed hit
+    // instant instead of refiring the preview request on every switch.
+    staleTime: STALE_TIME.FIVE.MINUTES,
   });
 
 type RecentFilePreviewCandidate = {
@@ -336,7 +341,11 @@ export const recentFilePreviewFieldOptions = (
 ) =>
   queryOptions({
     queryKey: searchKeys.recentFilePreviewField(params),
-    staleTime: 0,
+    // Short-lived on purpose: this query IS the access re-check for a recent
+    // file, so it must re-run for a fresh dialog session — but within one
+    // session it should not refire on every hover between recents. 30s
+    // covers a hover burst while keeping revocations near-immediate.
+    staleTime: 30_000,
     queryFn: async ({ signal }) => {
       const response = await api
         .entities({ workspaceId: toSafeId<"workspace">(params.workspaceId) })

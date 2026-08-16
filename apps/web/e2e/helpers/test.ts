@@ -4,6 +4,17 @@ import type { ConsoleMessage, Page } from "@playwright/test";
 export type BrowserErrorCollector = {
   entries: () => string[];
   assertEmpty: (label: string) => void;
+  /**
+   * Declare that this spec deliberately drives the app into a state that
+   * emits a matching console error (e.g. a forced stream failure whose
+   * captureError echoes in dev). At assert time every declared pattern must
+   * have matched at least one collected error — a fixed error path that no
+   * longer emits fails the spec, forcing the stale expectation to be
+   * removed — and matching entries are excluded from the final
+   * empty-collection assertion. Everything unmatched (a render storm, an
+   * unrelated crash) still fails the spec.
+   */
+  expectCaptured: (pattern: RegExp) => void;
   trackPage: (page: Page) => () => void;
 };
 
@@ -74,15 +85,30 @@ export const createBrowserErrorCollector = (
   add: (message: string) => void;
 } => {
   const errors: string[] = [];
+  const expectedPatterns: RegExp[] = [];
 
   return {
     add: (message) => {
       errors.push(message);
     },
     entries: () => [...errors],
+    expectCaptured: (pattern) => {
+      expectedPatterns.push(pattern);
+    },
     assertEmpty: (label) => {
       const collected = errors.splice(0);
-      expect(collected, `${label}\n\n${collected.join("\n\n")}`).toEqual([]);
+      const patterns = expectedPatterns.splice(0);
+      const unmatched = collected.filter(
+        (entry) => !patterns.some((pattern) => pattern.test(entry)),
+      );
+      const unobserved = patterns.filter(
+        (pattern) => !collected.some((entry) => pattern.test(entry)),
+      );
+      expect(
+        unobserved,
+        `expected browser errors never observed — the error path this spec exercises no longer emits; remove the stale expectCaptured call\n\n${unobserved.map(String).join("\n")}`,
+      ).toEqual([]);
+      expect(unmatched, `${label}\n\n${unmatched.join("\n\n")}`).toEqual([]);
     },
     trackPage: (page) => {
       const onPageError = (error: Error) => {
