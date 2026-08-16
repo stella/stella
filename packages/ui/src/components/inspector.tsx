@@ -110,6 +110,11 @@ const InspectorTabs = ({
     className={cn("min-h-0 flex-1 gap-0 overflow-hidden", className)}
     data-slot="inspector-tabs"
     {...props}
+    // After the spread on purpose: the omit above only rejects a literal
+    // `orientation`, while a spread of a wider props object still carries one
+    // through structural subtyping. Pinning it here keeps the layout horizontal
+    // whatever reaches the spread.
+    orientation="horizontal"
   />
 );
 
