@@ -129,7 +129,7 @@ describe("spawnWorker", () => {
         timeoutMs: 600_000,
         signal: abort.signal,
       }),
-    ).rejects.toThrow();
+    ).rejects.toThrow("The operation was aborted.");
   });
 });
 

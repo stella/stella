@@ -39,10 +39,17 @@ import ts from "typescript";
 // `data-volume` and unlike `security`, it carries a per-rule budget but no
 // waiver ledger: the exceptions are numerous and individually cheap to read
 // from the baseline diff, and none of them stands down an authorization check.
+// A `test-integrity` rule guards the assertion itself rather than the product:
+// it rejects a test shape that keeps passing after the behavior it was written
+// for is gone. A suppression here means one guard has been downgraded to a
+// smoke check, which is a coverage decision readable from the baseline diff
+// alone. Like `data-volume` and `observability`, it carries a per-rule budget
+// and no waiver ledger.
 export const SUPPRESSION_TIERS = [
   "security",
   "data-volume",
   "observability",
+  "test-integrity",
 ] as const;
 
 export type SuppressionTier = (typeof SUPPRESSION_TIERS)[number];
@@ -181,6 +188,12 @@ export const TRACKED_SUPPRESSION_RULES = [
     tier: "observability",
     guards:
       "detached-promise labels that cannot correlate a captured rejection to a call site",
+  },
+  {
+    rule: "no-vacuous-throw-assertion/no-vacuous-throw-assertion",
+    tier: "test-integrity",
+    guards:
+      "throw assertions that pin no error, so any unrelated failure keeps them green",
   },
 ] as const satisfies readonly TrackedSuppressionRule[];
 

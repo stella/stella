@@ -182,8 +182,12 @@ describe("pl-courts slice arithmetic", () => {
   });
 
   test("a slice that is not a UTC calendar day is refused", () => {
-    expect(() => reconciliation.nextSlice("2015-03")).toThrow();
-    expect(() => reconciliation.previousSlice("2015-02-30")).toThrow();
+    expect(() => reconciliation.nextSlice("2015-03")).toThrow(
+      "pl-courts slice is not a UTC calendar day",
+    );
+    expect(() => reconciliation.previousSlice("2015-02-30")).toThrow(
+      "pl-courts slice is not a UTC calendar day",
+    );
   });
 });
 

@@ -53,7 +53,11 @@ import {
   TRACKED_SUPPRESSION_RULES,
   type TrackedRule,
 } from "./lint-suppressions";
-import { ALL_SOURCE_GLOBS, isExcludedSource } from "./source-globs";
+import {
+  ALL_SOURCE_GLOBS,
+  isExcludedSource,
+  isExcludedTestInclusiveSource,
+} from "./source-globs";
 
 const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
@@ -1097,12 +1101,18 @@ type RatchetMetric = {
 // apps. A security waiver in an operational script stands down the same
 // invariant as one in a handler, and the rules are enabled well beyond
 // `apps/*/src` in `oxlint.config.ts`.
+// The `test-integrity` tier budgets rules oxlint enables only on tests, so its
+// scan has to keep test files; every other tier guards product code, where a
+// directive in a test is noise.
 const PER_RULE_SUPPRESSION_METRICS: readonly RatchetMetric[] =
   TRACKED_SUPPRESSION_RULES.map(({ rule, tier, guards }) => ({
     id: suppressionMetricId(rule),
     description: `${rule} disable directives, repo-wide (${tier} tier: ${guards}). Bare directives count, because they silence this rule too.`,
     include: ALL_SOURCE_GLOBS,
-    exclude: isExcludedSource,
+    exclude:
+      tier === "test-integrity"
+        ? isExcludedTestInclusiveSource
+        : isExcludedSource,
     count: countTrackedRuleSuppressions(rule),
   }));
 
@@ -2062,6 +2072,7 @@ const EXPECTED_NAMED_FIXTURE_SUPPRESSIONS = {
   "no-detached-void/no-detached-void": 0,
   "require-detached-label-shape/require-detached-label-shape": 0,
   "no-awaited-builder-union/no-awaited-builder-union": 0,
+  "no-vacuous-throw-assertion/no-vacuous-throw-assertion": 0,
 } as const satisfies Record<TrackedRule, number>;
 
 const TS_SUPPRESSION_FIXTURE_LINES = [

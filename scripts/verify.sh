@@ -226,6 +226,8 @@ run_step "Marketing content evidence" bun run marketing:check
 run_step "Marketing recording verification self-test" bun test \
   scripts/check-marketing-recordings.test.ts
 run_step "Environment tooling self-test" bun test scripts/env-tool.test.ts
+run_step "Migration ordering self-test" bun test scripts/check-migration-order.test.ts
+run_step "Merge-bar gate self-test" bun test scripts/merge-bar.test.ts
 run_step "Self-host production contract self-test" bun test \
   scripts/selfhost-contract.test.ts
 run_step "Self-host production contract" bun run selfhost:check

@@ -1238,9 +1238,9 @@ describe("delete-task amplification", () => {
     // The terms are OR-joined, so one id that breaks out of its quotes
     // changes what the whole task deletes. Ids come from `uuid` columns; one
     // that reaches here in another shape is a defect upstream.
-    expect(() =>
-      corpusDocumentsDeleteQuery(['a" OR document_id:"b']),
-    ).toThrow();
+    expect(() => corpusDocumentsDeleteQuery(['a" OR document_id:"b'])).toThrow(
+      'corpus delete query received an unusable document id: a" OR document_id:"b',
+    );
     expect(corpusDocumentsDeleteQuery(["a1b2-c3", "d4e5_f6"])).toBe(
       'document_id:"a1b2-c3" OR document_id:"d4e5_f6"',
     );

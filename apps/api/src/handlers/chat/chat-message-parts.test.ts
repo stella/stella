@@ -205,7 +205,11 @@ describe("persisted chat message parts", () => {
     ];
 
     for (const part of malformedParts) {
-      expect(() => classifyChatPartForPersistence(part)).toThrow();
+      // Every fixture keeps type: "structured-output", so persistence
+      // rejects each the same way (see the invalidHandling !== "drop" panic).
+      expect(() => classifyChatPartForPersistence(part)).toThrow(
+        "Cannot persist malformed chat part type: structured-output",
+      );
     }
   });
 

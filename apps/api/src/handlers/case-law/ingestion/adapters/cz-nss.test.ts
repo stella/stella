@@ -307,11 +307,15 @@ describe("cz-nss reconciliation slices", () => {
   });
 
   test("refuses a slice that is not a UTC calendar day", () => {
-    expect(() => reconciliation.nextSlice("2026-06")).toThrow();
-    expect(() =>
-      reconciliation.previousSlice("2026-06-10T00:00:00Z"),
-    ).toThrow();
-    expect(() => reconciliation.nextSlice("2026-02-30")).toThrow();
+    expect(() => reconciliation.nextSlice("2026-06")).toThrow(
+      "cz-nss slice is not a UTC calendar day",
+    );
+    expect(() => reconciliation.previousSlice("2026-06-10T00:00:00Z")).toThrow(
+      "cz-nss slice is not a UTC calendar day",
+    );
+    expect(() => reconciliation.nextSlice("2026-02-30")).toThrow(
+      "cz-nss slice is not a UTC calendar day",
+    );
   });
 
   test("walk order is the ledger's lexicographic order", () => {

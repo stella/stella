@@ -66,7 +66,7 @@ describe("deriveCapabilityId", () => {
         file: "apps/api/src/lib/x.ts",
         exportName: undefined,
       }),
-    ).toThrow();
+    ).toThrow("handler path is outside apps/api/src/handlers/");
   });
 });
 
@@ -759,7 +759,9 @@ describe("deriveHandlerImportPath", () => {
   });
 
   test("panics on a path outside apps/api/src", () => {
-    expect(() => deriveHandlerImportPath("packages/cli/src/x.ts")).toThrow();
+    expect(() => deriveHandlerImportPath("packages/cli/src/x.ts")).toThrow(
+      "handler path is outside apps/api/src/",
+    );
   });
 });
 

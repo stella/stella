@@ -301,6 +301,13 @@ branch instead of hand-picking individual checks. Green here means
 green on the `ci-result` status. `--all` checks every package instead
 of only those affected vs `origin/main`.
 
+## Merging
+
+Merges go through `bun scripts/merge-bar.ts <pr>`: it re-reads PR state, the
+`ci-result` check run on the exact head SHA, and unresolved review threads in one
+invocation, then merges. Raw `gh pr merge` asserts nothing and reads an empty check
+list as green.
+
 ## Documentation Access
 
 The `stella-docs` MCP server provides on-demand access to library documentation via
@@ -342,6 +349,27 @@ only the non-obvious caveats for this environment.
   of the base checkout; run `git submodule update --init .ai/shared` first, otherwise
   the "AI skill sync" step errors out.
 - Optional demo data: `bun --filter @stll/api db:seed-test-user` and `db:seed-dev`.
+
+## Test Doctrine
+
+Full conventions in `/conventions-testing`; these three are the ones most often
+skipped.
+
+- **Mutation check.** A test guarding behavior X is finished only once reverting X
+  makes it fail; until then it may be passing for an unrelated reason. When the test
+  is the evidence for a fix, state in the PR that you ran the mutation. A test whose
+  fixture cannot express the fault is the common failure: assert the fixture DIFFERS
+  before asserting the equivalence, for example `expect(NFD(word)).not.toBe(NFC(word))`
+  before asserting both normalize alike.
+- **Cross-runtime contracts.** Where a rule lives in two runtimes at once
+  (JavaScript, Postgres, the search engine), prove parity by DERIVING the other
+  side's rules executably: query the live extension, render the SQL the query layer
+  emits, read the analyzer's configuration tuple. A hand-maintained mirror list of
+  the other side's behavior is not evidence of parity; it is the drift, written down.
+- **Projection census.** Any "marked done" flag that mirrors state in an external
+  system (search index, object store, queue) ships with a reconciler that compares
+  both sides and reports the difference. Acceptance by the remote system is not
+  durability, so the flag alone can never prove the projection landed.
 
 ## Convention & Type-Cost Guards
 

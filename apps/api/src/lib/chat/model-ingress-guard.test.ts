@@ -88,7 +88,7 @@ describe("assertModelSurfaceFreeOfTenantIds", () => {
         surface: "system-prompt",
         workspaceIds: [WS_A],
       }),
-    ).toThrow();
+    ).toThrow("Model-bound system-prompt embeds a tenant workspace id");
     expect(captureErrorMock).toHaveBeenCalledTimes(1);
   });
 
@@ -281,7 +281,7 @@ describe("guarded model surfaces", () => {
         system: `Connected matter: ${WS_A}`,
         workspaceIds: [WS_A],
       }),
-    ).toThrow();
+    ).toThrow("Model-bound system-prompt embeds a tenant workspace id");
     expect(captureErrorMock).toHaveBeenCalledTimes(1);
 
     const clean = guardModelSystemPrompt({

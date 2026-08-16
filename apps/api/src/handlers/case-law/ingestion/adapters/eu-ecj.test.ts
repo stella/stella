@@ -689,8 +689,12 @@ describe("euEcjAdapter.reconciliation slices", () => {
   });
 
   test("a slice that is not a year is refused rather than guessed at", () => {
-    expect(() => reconciliation.nextSlice("2024-01")).toThrow();
-    expect(() => reconciliation.previousSlice("202")).toThrow();
+    expect(() => reconciliation.nextSlice("2024-01")).toThrow(
+      "eu-ecj slice is not a four-digit year",
+    );
+    expect(() => reconciliation.previousSlice("202")).toThrow(
+      "eu-ecj slice is not a four-digit year",
+    );
   });
 });
 

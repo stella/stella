@@ -215,9 +215,15 @@ describe("sk-courts slice arithmetic", () => {
   });
 
   test("a slice that is not a UTC calendar day is refused", () => {
-    expect(() => reconciliation.nextSlice("2026-06")).toThrow();
-    expect(() => reconciliation.previousSlice("2026-02-30")).toThrow();
-    expect(() => reconciliation.nextSlice("10.06.2026")).toThrow();
+    expect(() => reconciliation.nextSlice("2026-06")).toThrow(
+      "sk-courts slice is not a UTC calendar day",
+    );
+    expect(() => reconciliation.previousSlice("2026-02-30")).toThrow(
+      "sk-courts slice is not a UTC calendar day",
+    );
+    expect(() => reconciliation.nextSlice("10.06.2026")).toThrow(
+      "sk-courts slice is not a UTC calendar day",
+    );
   });
 });
 

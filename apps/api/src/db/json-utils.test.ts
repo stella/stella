@@ -44,7 +44,9 @@ describe("assertIdentifierLiteral", () => {
     "",
     "emoji-🙂",
   ])("rejects non-identifier value %p", (value) => {
-    expect(() => assertIdentifierLiteral(value)).toThrow();
+    expect(() => assertIdentifierLiteral(value)).toThrow(
+      "Raw SQL literal must be an identifier-like value",
+    );
   });
 });
 

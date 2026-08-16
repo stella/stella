@@ -221,6 +221,6 @@ describe("mockStructuredData", () => {
         properties: { odd: {} },
         required: ["odd"],
       }),
-    ).toThrow();
+    ).toThrow("mock AI adapter cannot synthesise structured output");
   });
 });

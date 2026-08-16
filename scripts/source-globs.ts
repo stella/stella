@@ -21,14 +21,25 @@ export const ALL_SOURCE_GLOBS = [
   ".oxlint-plugins/*.ts",
 ] as const;
 
+// Never hand-edited, so never budgeted: generated declarations, generated
+// modules, and the browser suite that no ratchet glob reaches anyway.
+const isGeneratedSource = (file: string): boolean =>
+  file.endsWith(".d.ts") || /\.gen\./u.test(file) || file.includes("/e2e/");
+
 export const isExcludedSource = (file: string): boolean =>
-  file.endsWith(".d.ts") ||
-  /\.gen\./u.test(file) ||
+  isGeneratedSource(file) ||
   /\.test\./u.test(file) ||
   /\.spec\./u.test(file) ||
   file.includes("/tests/") ||
-  file.includes("/e2e/") ||
   file.includes("/__tests__/");
+
+// The same surface with test files KEPT. A rule that oxlint enables only on
+// tests must be budgeted over tests: scanning it with `isExcludedSource` would
+// leave the budget structurally unable to count a single one of its
+// directives, so a committed zero would stay green no matter how many
+// suppressions land. Known boundary: `apps/*/e2e` sits outside
+// ALL_SOURCE_GLOBS, so no ratchet, this one included, sees directives there.
+export const isExcludedTestInclusiveSource = isGeneratedSource;
 
 // Repo-relative paths of every scannable source file under `root`.
 export const scanSourceFiles = (root: string): readonly string[] => {

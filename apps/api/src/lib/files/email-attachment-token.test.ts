@@ -76,12 +76,12 @@ describe("email attachment descriptors", () => {
         ...source,
         attachmentIndex: -1,
       }),
-    ).toThrow();
+    ).toThrow("Email attachment index is out of bounds");
     expect(() =>
       createEmailAttachmentDescriptor({
         ...source,
         attachmentIndex: Number.MAX_SAFE_INTEGER + 1,
       }),
-    ).toThrow();
+    ).toThrow("Email attachment index is out of bounds");
   });
 });

@@ -74,3 +74,40 @@ enforcement, branded types) live in
   transitions for lifecycle code, and round trips for serialization.
 - Keep time, randomness, network, filesystem, and database ownership explicit
   in tests. Pin or inject them rather than relying on ambient machine state.
+- Name the error a throw assertion expects. `expect(...).toThrow()` with no
+  argument passes for every error, so it keeps passing once the code fails for
+  an unrelated reason; pass a message substring, a regex, or the error class.
+  `no-vacuous-throw-assertion` enforces this.
+
+## Mutation check
+
+A test guarding behavior X is finished only once reverting X makes it fail.
+Until you have seen it go red against the known-bad behavior, it may be
+passing for an unrelated reason. When the test is the evidence for a fix,
+say in the PR that you ran the mutation and what it broke.
+
+The usual failure is a fixture the fault cannot reach. Assert the fixture
+DIFFERS before asserting the equivalence: check
+`expect(NFD(word)).not.toBe(NFC(word))` before asserting both normalize alike,
+so a fixture that is already normalized cannot make the test vacuous.
+
+## Cross-runtime contracts
+
+Where one rule lives in two runtimes at once (JavaScript, Postgres, the search
+engine), parity is proven only by DERIVING the other side's rules executably:
+query the live extension for its token output, render the SQL the query layer
+emits and assert on that, read the analyzer's configuration tuple.
+
+A hand-maintained list mirroring the other side's behavior is not evidence of
+parity. It is the drift, written down: it agrees with the other runtime exactly
+until that runtime changes, and nothing fails when it does.
+
+## Projection census
+
+Any "marked done" flag that mirrors state in an external system (search index,
+object store, queue) ships with a reconciler that compares both sides and
+reports the difference. Acceptance by the remote system is not durability, so
+the flag alone can never prove the projection landed.
+
+Treat the reconciler as part of the feature, not follow-up work: without it the
+first divergence is invisible until a user reports missing data.
