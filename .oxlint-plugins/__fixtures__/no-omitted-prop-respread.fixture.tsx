@@ -156,6 +156,32 @@ export const _ok_shadowedBinding = ({
   </Panel>
 );
 
+// Allowed: the shadowing binding is a later parameter, not the first one.
+export const _ok_shadowedSecondParam = ({
+  ...props
+}: Omit<PanelProps, "orientation">) => (
+  <Panel {...props} orientation="horizontal">
+    {[<span key="a" />].map((_item, props: PanelProps) => (
+      <Panel {...props} />
+    ))}
+  </Panel>
+);
+
+// Allowed: the shadowing binding is a local, not a parameter at all.
+export const _ok_shadowedLocal = ({
+  ...props
+}: Omit<PanelProps, "orientation">) => {
+  const render = () => {
+    const props: PanelProps = { id: "inner" };
+    return <Panel {...props} />;
+  };
+  return (
+    <Panel {...props} orientation="horizontal">
+      {render()}
+    </Panel>
+  );
+};
+
 // Allowed: the trailing spread is a statically known object literal that does
 // not declare the omitted key, so it cannot override the pin.
 export const _ok_trailingLiteralSpread = (
@@ -176,6 +202,17 @@ export const _defaultedParam = (
 export const _defaultedDestructuring = ({
   ...props
 }: Omit<PanelProps, "orientation"> = {}) => (
+  // oxlint-disable-next-line no-omitted-prop-respread/no-omitted-prop-respread
+  <Panel {...props} />
+);
+
+// A long alias chain still resolves: only a cycle stops the walk.
+type Shell1 = Omit<PanelProps, "orientation">;
+type Shell2 = Shell1;
+type Shell3 = Shell2;
+type Shell4 = Shell3;
+type Shell5 = Shell4;
+export const _deepAliasChain = (props: Shell5) => (
   // oxlint-disable-next-line no-omitted-prop-respread/no-omitted-prop-respread
   <Panel {...props} />
 );

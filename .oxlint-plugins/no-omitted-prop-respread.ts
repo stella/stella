@@ -58,8 +58,8 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 //     comment emit no child and do not count.
 //   - A spread of an object literal can only deliver what the literal declares,
 //     spreads in, or computes; anything else is opaque and assumed able to.
-//   - A nested function shadowing the props binding owns the name inside it, so
-//     spreading the inner value is not charged to the outer omission.
+//   - The spread identifier is resolved through the lexical scope chain, so a
+//     shadowing binding of the same name always wins over an enclosing one.
 //
 // When a key legitimately passes through by design, suppress the finding with
 // `// eslint-disable-next-line no-omitted-prop-respread/no-omitted-prop-respread`
@@ -71,9 +71,6 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 import { getPropertyName, isIdentifier } from "./utils.ts";
 
 const OMIT_TYPE = "Omit";
-
-// Local alias chains are short in practice; the cap only bounds a cycle.
-const MAX_ALIAS_DEPTH = 4;
 
 const typeArgumentsOf = (typeNode) =>
   typeNode?.typeArguments?.params ?? typeNode?.typeParameters?.params ?? [];
@@ -89,6 +86,16 @@ const typeReferenceName = (typeName) => {
   const left = typeReferenceName(typeName.left);
   const right = getPropertyName(typeName.right);
   return left === null || right === null ? null : `${left}.${right}`;
+};
+
+// The body of a file-local alias, unless it is already being expanded on this
+// path. `open` bounds cyclic aliases without capping how deep an honest chain
+// may go: a depth cutoff would silently stop reporting past the limit.
+const expandAlias = (name, localTypes, open) => {
+  if (name === null || open.has(name)) {
+    return null;
+  }
+  return localTypes.get(name) ?? null;
 };
 
 // String keys from the second `Omit` argument: `"a"` or `"a" | "b"`.
@@ -110,18 +117,18 @@ const literalKeysOf = (keyTypeNode): string[] => {
  * keeps only the keys every branch omits, since a value of the other branch may
  * legitimately carry the rest.
  */
-const omittedKeysOf = (typeNode, localTypes, depth = 0): string[] => {
-  if (typeNode === null || typeNode === undefined || depth > MAX_ALIAS_DEPTH) {
+const omittedKeysOf = (typeNode, localTypes, open = new Set()): string[] => {
+  if (typeNode === null || typeNode === undefined) {
     return [];
   }
   if (typeNode.type === "TSIntersectionType") {
     return typeNode.types.flatMap((member) =>
-      omittedKeysOf(member, localTypes, depth),
+      omittedKeysOf(member, localTypes, open),
     );
   }
   if (typeNode.type === "TSUnionType") {
     const branches = typeNode.types.map(
-      (member) => new Set(omittedKeysOf(member, localTypes, depth)),
+      (member) => new Set(omittedKeysOf(member, localTypes, open)),
     );
     const first = branches.at(0);
     return first === undefined
@@ -135,14 +142,18 @@ const omittedKeysOf = (typeNode, localTypes, depth = 0): string[] => {
       return [
         ...literalKeysOf(args.at(1)),
         // `Omit<Omit<P, "a">, "b">` omits both.
-        ...omittedKeysOf(args.at(0), localTypes, depth),
+        ...omittedKeysOf(args.at(0), localTypes, open),
       ];
     }
-    const alias = name === null ? undefined : localTypes.get(name);
     // A generic alias parameterized at the use site is not resolved here.
-    return alias === undefined
-      ? []
-      : omittedKeysOf(alias, localTypes, depth + 1);
+    const alias = expandAlias(name, localTypes, open);
+    if (alias === null) {
+      return [];
+    }
+    open.add(name);
+    const keys = omittedKeysOf(alias, localTypes, open);
+    open.delete(name);
+    return keys;
   }
   return [];
 };
@@ -152,8 +163,12 @@ const omittedKeysOf = (typeNode, localTypes, depth = 0): string[] => {
  * type. `Omit<P, "size"> & { size?: Local }` re-types `size` rather than
  * forbidding it, so the key is meant to reach the element.
  */
-const reintroducedKeysOf = (typeNode, localTypes, depth = 0): string[] => {
-  if (typeNode === null || typeNode === undefined || depth > MAX_ALIAS_DEPTH) {
+const reintroducedKeysOf = (
+  typeNode,
+  localTypes,
+  open = new Set(),
+): string[] => {
+  if (typeNode === null || typeNode === undefined) {
     return [];
   }
   if (
@@ -161,7 +176,7 @@ const reintroducedKeysOf = (typeNode, localTypes, depth = 0): string[] => {
     typeNode.type === "TSUnionType"
   ) {
     return typeNode.types.flatMap((member) =>
-      reintroducedKeysOf(member, localTypes, depth),
+      reintroducedKeysOf(member, localTypes, open),
     );
   }
   if (typeNode.type === "TSTypeLiteral") {
@@ -179,10 +194,14 @@ const reintroducedKeysOf = (typeNode, localTypes, depth = 0): string[] => {
     if (name === OMIT_TYPE) {
       return [];
     }
-    const alias = name === null ? undefined : localTypes.get(name);
-    return alias === undefined
-      ? []
-      : reintroducedKeysOf(alias, localTypes, depth + 1);
+    const alias = expandAlias(name, localTypes, open);
+    if (alias === null) {
+      return [];
+    }
+    open.add(name);
+    const keys = reintroducedKeysOf(alias, localTypes, open);
+    open.delete(name);
+    return keys;
   }
   return [];
 };
@@ -192,11 +211,11 @@ const reintroducedKeysOf = (typeNode, localTypes, depth = 0): string[] => {
 const patternOf = (param) =>
   param?.type === "AssignmentPattern" ? param.left : param;
 
-// The binding that carries the rest of the props: the parameter identifier, or
+// The identifier that carries the rest of the props: the parameter itself, or
 // the rest element of a destructuring pattern.
 const propsBindingOf = (param) => {
   if (isIdentifier(param)) {
-    return param.name;
+    return param;
   }
   if (param?.type !== "ObjectPattern") {
     return null;
@@ -204,7 +223,7 @@ const propsBindingOf = (param) => {
   const rest = param.properties?.find(
     (property) => property.type === "RestElement",
   );
-  return isIdentifier(rest?.argument) ? rest.argument.name : null;
+  return isIdentifier(rest?.argument) ? rest.argument : null;
 };
 
 // Keys a destructuring pattern names before its rest element. A rest object
@@ -258,6 +277,13 @@ const spreadCanDeliver = (attribute, key) => {
   );
 };
 
+// The slice of the scope manager this rule reads: names visible at a node, and
+// where each was bound. Oxlint does not publish these types.
+type Scope = {
+  set: Map<string, { defs: { name: { range: [number, number] } }[] }>;
+  upper: Scope | null;
+};
+
 export default eslintCompatPlugin({
   meta: { name: "no-omitted-prop-respread" },
   rules: {
@@ -274,9 +300,10 @@ export default eslintCompatPlugin({
       createOnce(context) {
         // Type aliases declared in this file, by name.
         const localTypes = new Map();
-        // One frame per enclosing function: the props binding it introduces and
-        // the literal keys its parameter type omits.
-        const scopes: { binding: string | null; keys: Set<string> }[] = [];
+        // Keys each props binding omits, keyed by the start offset of its
+        // binding identifier. Scope resolution maps a spread back to exactly one
+        // binding, so any shadowing declaration wins over an enclosing one.
+        const omittedByBinding = new Map<number, Set<string>>();
 
         // Props types are aliases here: `typescript/consistent-type-definitions`
         // keeps interfaces out of this codebase.
@@ -294,7 +321,6 @@ export default eslintCompatPlugin({
           const param = patternOf(node.params?.at(0));
           const binding = propsBindingOf(param);
           if (binding === null) {
-            scopes.push({ binding, keys: new Set() });
             return;
           }
           const propsType = param.typeAnnotation?.typeAnnotation;
@@ -307,17 +333,34 @@ export default eslintCompatPlugin({
           const keys = omittedKeysOf(propsType, localTypes).filter(
             (key) => !carried.has(key),
           );
-          scopes.push({ binding, keys: new Set(keys) });
+          if (keys.length > 0) {
+            omittedByBinding.set(binding.range[0], new Set(keys));
+          }
         };
 
-        const exitFunction = () => {
-          scopes.pop();
+        // What the value behind a spread identifier is declared to omit, read
+        // through the lexical scope chain: a nested binding of the same name, in
+        // any parameter position or as a local, shadows an enclosing one.
+        const omittedKeysForSpread = (identifier) => {
+          let scope: Scope | null = context.sourceCode.getScope(identifier);
+          while (scope !== null) {
+            const variable = scope.set.get(identifier.name);
+            if (variable !== undefined) {
+              return variable.defs
+                .map((definition) =>
+                  omittedByBinding.get(definition.name.range[0]),
+                )
+                .find((keys) => keys !== undefined);
+            }
+            scope = scope.upper;
+          }
+          return undefined;
         };
 
         return {
           Program(node) {
             localTypes.clear();
-            scopes.length = 0;
+            omittedByBinding.clear();
             for (const statement of node.body) {
               declareLocalType(
                 statement.type === "ExportNamedDeclaration"
@@ -327,45 +370,20 @@ export default eslintCompatPlugin({
             }
           },
           ArrowFunctionExpression: enterFunction,
-          "ArrowFunctionExpression:exit": exitFunction,
           FunctionDeclaration: enterFunction,
-          "FunctionDeclaration:exit": exitFunction,
           FunctionExpression: enterFunction,
-          "FunctionExpression:exit": exitFunction,
           JSXElement(node) {
             const attributes = node.openingElement.attributes;
-            const spreadNames = new Set<string>();
+            const omitted = new Set<string>();
             for (const attribute of attributes) {
               if (
-                attribute.type === "JSXSpreadAttribute" &&
-                isIdentifier(attribute.argument)
+                attribute.type !== "JSXSpreadAttribute" ||
+                !isIdentifier(attribute.argument)
               ) {
-                spreadNames.add(attribute.argument.name);
-              }
-            }
-            if (spreadNames.size === 0) {
-              return;
-            }
-
-            // Walk outwards, keeping only the innermost frame per binding name:
-            // a nested callback naming its parameter `props` shadows the
-            // component's `props`, and spreading the callback's value must not
-            // be charged to the component's omission.
-            const omitted = new Set<string>();
-            const resolved = new Set<string>();
-            for (let index = scopes.length - 1; index >= 0; index -= 1) {
-              const frame = scopes[index];
-              if (frame === undefined || frame.binding === null) {
                 continue;
               }
-              if (resolved.has(frame.binding)) {
-                continue;
-              }
-              resolved.add(frame.binding);
-              if (!spreadNames.has(frame.binding)) {
-                continue;
-              }
-              for (const key of frame.keys) {
+              for (const key of omittedKeysForSpread(attribute.argument) ??
+                []) {
                 omitted.add(key);
               }
             }
