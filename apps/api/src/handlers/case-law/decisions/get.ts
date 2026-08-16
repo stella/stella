@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result, UnhandledException } from "better-result";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { status } from "elysia";
 
@@ -8,9 +8,11 @@ import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import { corpusCarriesDocument } from "@/api/handlers/case-law/stored-payload";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
+import { CorpusPayloadUnavailableError } from "@/api/lib/errors/tagged-errors";
 import {
   allowsDerivedAi,
   isRedistributable,
@@ -233,22 +235,26 @@ export const readDecisionHandler = async (
   // Prefer canonical AST from object storage when corpus storage is
   // enabled; fall back to the Postgres column so a read is never harder
   // than today.
-  const documentAst = await resolveAst({
+  const astRead = await resolveAst({
     astS3Key: decision.astS3Key,
     contentHash: decision.contentHash,
     pgAst: decision.documentAst,
     decisionId,
   });
+  const documentAst = astRead.payload;
 
   // Only fetch fulltext if no usable documentAst (fallback).
   let fulltext: string | null = null;
+  let corpusPayloadUnavailable = astRead.unavailable;
   if (!hasUsableAst(documentAst)) {
-    fulltext = await resolveFulltext({
+    const textRead = await resolveFulltext({
       textS3Key: decision.textS3Key,
       contentHash: decision.contentHash,
       decisionId,
       caseLawDb,
     });
+    fulltext = textRead.payload;
+    corpusPayloadUnavailable = corpusPayloadUnavailable || textRead.unavailable;
   }
 
   // Nothing readable resolved, and there is a document to fetch. Which
@@ -259,10 +265,11 @@ export const readDecisionHandler = async (
   // re-entering the fetch path on every view would cost a claim that can
   // never succeed. Kept as derived booleans rather than a call so this
   // module stays a read.
-  const { documentPending, documentUnavailable } =
+  const { documentPending, documentReadFailed, documentUnavailable } =
     decision.redactedAt === null
       ? await resolveDocumentState({
           hasReadableDocument: hasUsableAst(documentAst) || Boolean(fulltext),
+          corpusPayloadUnavailable,
           documentUrl: decision.documentUrl,
           corpusServed:
             corpusReadEnabled() &&
@@ -284,10 +291,15 @@ export const readDecisionHandler = async (
             return row?.written ?? null;
           },
         })
-      : { documentPending: false, documentUnavailable: false };
+      : {
+          documentPending: false,
+          documentReadFailed: false,
+          documentUnavailable: false,
+        };
 
   return {
     documentPending,
+    documentReadFailed,
     documentUnavailable,
     id: decision.id,
     caseNumber: decision.caseNumber,
@@ -353,6 +365,54 @@ export const readDecisionBySlugHandler = async (
   return await readDecisionHandler(firstDecision.id, caseLawDb);
 };
 
+/**
+ * A payload the read tried to resolve, and whether object storage
+ * refused it outright.
+ *
+ * `readCorpusPayloadOrFallback` throws when the object is unreadable and
+ * the row has no Postgres copy, which is every trimmed canonical row. It
+ * throws so that a corpus outage cannot be served as a decision with no
+ * body — but a public read has a third answer for exactly that, and it
+ * is not an error: the document is not readable right now. Failing the
+ * read instead takes the metadata, the citation graph and the case
+ * number down with the body, for a decision the reader could otherwise
+ * still recognise and cite.
+ */
+type CorpusReadOutcome<TPayload> = {
+  payload: TPayload | null;
+  unavailable: boolean;
+};
+
+/**
+ * Contain an object-storage refusal, and only that. Anything else is a
+ * defect in the read and still fails it.
+ */
+const containPayloadUnavailable = async <TPayload>(
+  read: () => Promise<TPayload | null>,
+  decisionId: SafeId<"caseLawDecision">,
+): Promise<CorpusReadOutcome<TPayload>> => {
+  const outcome = await Result.tryPromise(read);
+  if (Result.isOk(outcome)) {
+    return { payload: outcome.value, unavailable: false };
+  }
+
+  // `Result.tryPromise` reports a rejection as an `UnhandledException`
+  // carrying the original as its cause.
+  const raised =
+    outcome.error instanceof UnhandledException
+      ? outcome.error.cause
+      : outcome.error;
+  if (!CorpusPayloadUnavailableError.is(raised)) {
+    throw raised;
+  }
+
+  captureError(raised, {
+    decisionId,
+    step: "readDecision.corpusPayloadUnavailable",
+  });
+  return { payload: null, unavailable: true };
+};
+
 type ResolveAstInput = {
   astS3Key: string | null;
   contentHash: string | null;
@@ -365,22 +425,33 @@ const resolveAst = async ({
   contentHash,
   pgAst,
   decisionId,
-}: ResolveAstInput): Promise<DocumentAst | EmptyAst | null> => {
+}: ResolveAstInput): Promise<CorpusReadOutcome<DocumentAst | EmptyAst>> => {
   if (!corpusReadEnabled() || astS3Key === null || contentHash === null) {
-    return parsePersistedCorpusAst(pgAst);
+    return { payload: parsePersistedCorpusAst(pgAst), unavailable: false };
   }
-  return await readCorpusPayloadOrFallback({
-    documentId: decisionId,
-    key: astS3Key,
-    step: "readDecision.corpusAst",
-    read: async () => await readCorpusAst(astS3Key),
-    fallback: () => parsePersistedCorpusAst(pgAst),
-  });
+  return await containPayloadUnavailable(
+    async () =>
+      await readCorpusPayloadOrFallback({
+        documentId: decisionId,
+        key: astS3Key,
+        step: "readDecision.corpusAst",
+        read: async () => await readCorpusAst(astS3Key),
+        fallback: () => parsePersistedCorpusAst(pgAst),
+      }),
+    decisionId,
+  );
 };
 
 export type ResolveDocumentStateInput = {
   /** Whether the read resolved something a reader can actually read. */
   hasReadableDocument: boolean;
+  /**
+   * Whether object storage refused a payload this row is served from.
+   * A trimmed canonical row has no Postgres copy to fall back to, so
+   * there is nothing readable and nothing that says the source had
+   * nothing either.
+   */
+  corpusPayloadUnavailable: boolean;
   documentUrl: string | null;
   /** Whether the payload above came from object storage. */
   corpusServed: boolean;
@@ -402,6 +473,16 @@ export type ResolveDocumentStateInput = {
 type DocumentState = {
   documentPending: boolean;
   documentUnavailable: boolean;
+  /**
+   * Whether the pending state above is an object-storage failure rather
+   * than a document nobody has fetched yet. The reader sees the same
+   * thing either way, but the read-through must not: the publisher fetch
+   * cannot repair a row whose payload is already stored, and its store
+   * refuses a row that carries a corpus document, so treating an outage
+   * as unfetched work costs an outbound download per affected decision
+   * and holds the read for the fetch budget while it does.
+   */
+  documentReadFailed: boolean;
 };
 
 /**
@@ -428,12 +509,18 @@ type DocumentState = {
  * | NULL    | NULL   | row-specific | document | served      |
  * | text    | any    | row-specific | document | served      |
  * | NULL    | present| row-specific | ''       | pending     |
+ * | any     | any    | any          | refused  | pending     |
  *
  * The sixth row is a trimmed canonical decision: its columns are empty
  * by design and object storage holds the document, so it is neither
- * pending nor unavailable — and if its payload failed to arrive, that is
- * an object-storage failure the read raises rather than a document
- * waiting to be fetched.
+ * pending nor unavailable — unless the payload did not arrive, which is
+ * the `corpusPayloadUnavailable` case. That one reads as pending: there
+ * is genuinely nothing to show, the row is not the terminal
+ * "source had nothing" state, and the alternative is failing the read
+ * and losing the metadata, citations and case number along with the
+ * body. It stays pending rather than unavailable because the outage is
+ * the object store's, not the court's, so the next read may well serve
+ * the document.
  *
  * The last row is what separates that from a decision whose objects
  * merely mirror an empty payload. A row-specific hash proves only that
@@ -447,6 +534,7 @@ type DocumentState = {
  */
 export const resolveDocumentState = async ({
   hasReadableDocument,
+  corpusPayloadUnavailable,
   documentUrl,
   corpusServed,
   contentHash,
@@ -454,25 +542,45 @@ export const resolveDocumentState = async ({
   resolvedFulltext,
   readTextColumnWritten,
 }: ResolveDocumentStateInput): Promise<DocumentState> => {
-  if (hasReadableDocument || documentUrl === null) {
-    return { documentPending: false, documentUnavailable: false };
+  const settled = { documentReadFailed: false, documentUnavailable: false };
+  if (hasReadableDocument) {
+    return { ...settled, documentPending: false };
+  }
+
+  // Ahead of every column test, including "nothing to fetch": with the
+  // payload refused, the resolved text is null because the read could
+  // not get it, not because the row was never fetched, and no column
+  // can tell the two apart. Reporting "neither" here would render a
+  // decision with no body as a complete one.
+  if (corpusPayloadUnavailable) {
+    return {
+      documentPending: true,
+      documentReadFailed: true,
+      documentUnavailable: false,
+    };
+  }
+
+  if (documentUrl === null) {
+    return { ...settled, documentPending: false };
   }
 
   if (!corpusServed) {
     return {
       documentPending: resolvedFulltext === null,
+      documentReadFailed: false,
       documentUnavailable: resolvedFulltext === "",
     };
   }
 
   if (corpusCarriesDocument(contentHash) && !pgAstPresent) {
-    return { documentPending: false, documentUnavailable: false };
+    return { ...settled, documentPending: false };
   }
 
   const written = await readTextColumnWritten();
 
   return {
     documentPending: written === false,
+    documentReadFailed: false,
     documentUnavailable: written === true,
   };
 };
@@ -489,7 +597,7 @@ const resolveFulltext = async ({
   contentHash,
   decisionId,
   caseLawDb,
-}: ResolveFulltextInput): Promise<string | null> => {
+}: ResolveFulltextInput): Promise<CorpusReadOutcome<string>> => {
   const postgresFulltext = async (): Promise<string | null> => {
     const fallback = await caseLawDb((tx) =>
       tx.query.caseLawDecisions.findFirst({
@@ -501,14 +609,18 @@ const resolveFulltext = async ({
   };
 
   if (corpusReadEnabled() && textS3Key !== null && contentHash !== null) {
-    return await readCorpusPayloadOrFallback({
-      documentId: decisionId,
-      key: textS3Key,
-      step: "readDecision.corpusText",
-      read: async () => await readCorpusText(textS3Key),
-      fallback: postgresFulltext,
-    });
+    return await containPayloadUnavailable(
+      async () =>
+        await readCorpusPayloadOrFallback({
+          documentId: decisionId,
+          key: textS3Key,
+          step: "readDecision.corpusText",
+          read: async () => await readCorpusText(textS3Key),
+          fallback: postgresFulltext,
+        }),
+      decisionId,
+    );
   }
 
-  return await postgresFulltext();
+  return { payload: await postgresFulltext(), unavailable: false };
 };

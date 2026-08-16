@@ -19,8 +19,49 @@ export class CorpusIndexError extends TaggedError("CorpusIndexError")<{
 }> {}
 
 const SEARCH_TIMEOUT_MS = 30_000;
-const INGEST_TIMEOUT_MS = 120_000;
+
+/**
+ * The engine's own commit timeout for `commit=wait_for`: how long it
+ * will hold the response open waiting for the split to be published.
+ *
+ * Stated here because the client budget has to outlast it — a client
+ * that gives up first turns a commit that did happen into a batch the
+ * caller retries. This is the engine's default; the index config below
+ * does not override it, so raising it engine-side means raising the
+ * budget with it.
+ */
+export const CORPUS_INDEX_COMMIT_WAIT_TIMEOUT_MS = 60_000;
+
+/**
+ * Whole-request budget for an ingest. Must exceed the commit wait above,
+ * because under `wait_for` the engine only starts that wait once the
+ * NDJSON upload has finished. Pinned against the commit wait in
+ * `corpus-index-client.test.ts`.
+ */
+export const CORPUS_INDEX_INGEST_TIMEOUT_MS = 120_000;
 const ADMIN_TIMEOUT_MS = 30_000;
+
+/**
+ * What "the engine accepted this batch" is allowed to mean.
+ *
+ * `auto` returns as soon as the documents are buffered for indexing, so
+ * an indexer that dies inside the commit window loses them. That is
+ * survivable for a bulk build, whose completeness is verified against a
+ * census afterwards, and not survivable for the steady-state path: there
+ * the acceptance is what lets the caller mark the row indexed in
+ * Postgres, and the row is then neither missing nor stale, so nothing
+ * ever selects it again. `wait_for` holds the response until the split
+ * is published, which makes the acceptance mean durability.
+ */
+export const CORPUS_INDEX_COMMIT = {
+  /** Buffered for indexing. Bulk paths only, with a census behind them. */
+  auto: "auto",
+  /** Published as a split. Required wherever acceptance is persisted. */
+  waitFor: "wait_for",
+} as const;
+
+export type CorpusIndexCommitMode =
+  (typeof CORPUS_INDEX_COMMIT)[keyof typeof CORPUS_INDEX_COMMIT];
 
 export type CorpusIndexSearchInput = {
   indexId: string;
@@ -50,9 +91,15 @@ export type CorpusIndexClient = {
   ) => Promise<Result<void, CorpusIndexError>>;
   deleteIndex: (indexId: string) => Promise<Result<void, CorpusIndexError>>;
   indexExists: (indexId: string) => Promise<Result<boolean, CorpusIndexError>>;
+  /**
+   * `commit` is required rather than defaulted: the difference between
+   * the two modes is whether the caller may persist the acceptance, and
+   * a default would let a new call site inherit the wrong one silently.
+   */
   ingestBatch: (
     indexId: string,
     ndjson: string,
+    commit: CorpusIndexCommitMode,
   ) => Promise<Result<void, CorpusIndexError>>;
   search: (
     input: CorpusIndexSearchInput,
@@ -183,7 +230,7 @@ const buildClient = (): CorpusIndexClient => ({
       catch: toCorpusIndexError,
     }),
 
-  ingestBatch: async (indexId, ndjson) =>
+  ingestBatch: async (indexId, ndjson, commit) =>
     await Result.tryPromise({
       try: async () => {
         const sentDocs = ndjson
@@ -191,13 +238,13 @@ const buildClient = (): CorpusIndexClient => ({
           .filter((line) => line.trim().length > 0).length;
         const response = await requestJson(
           mutationBaseUrl(),
-          `/api/v1/${indexId}/ingest?commit=auto`,
+          `/api/v1/${indexId}/ingest?commit=${commit}`,
           {
             method: "POST",
             headers: { "content-type": "application/x-ndjson" },
             body: ndjson,
           },
-          INGEST_TIMEOUT_MS,
+          CORPUS_INDEX_INGEST_TIMEOUT_MS,
         );
         if (!isRecord(response)) {
           throw new CorpusIndexError({

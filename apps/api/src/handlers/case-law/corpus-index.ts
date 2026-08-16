@@ -45,7 +45,11 @@ import {
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
 import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
-import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
+import {
+  CORPUS_INDEX_COMMIT,
+  CorpusIndexError,
+} from "@/api/lib/legal-search/corpus-index-client";
+import type { CorpusIndexCommitMode } from "@/api/lib/legal-search/corpus-index-client";
 import {
   isRedistributable,
   type CorpusSourceDescriptor,
@@ -1101,7 +1105,7 @@ type GenerationBackfillDependencies = {
     scopedDb: Parameters<typeof backfillIncrementalCorpusIndex>[0],
     rows: readonly IndexableRow[],
     generation: string,
-    options: GenerationProjectionGuards,
+    options: GenerationProjectionGuards & { commit: CorpusIndexCommitMode },
   ) => Promise<number>;
   removeProjection: (
     scopedDb: Parameters<typeof backfillIncrementalCorpusIndex>[0],
@@ -1623,7 +1627,13 @@ export const createCaseLawGenerationBackfill =
           const indexed =
             eligible.length === 0
               ? 0
-              : await backfillRows(scopedDb, eligible, generation, guards);
+              : await backfillRows(scopedDb, eligible, generation, {
+                  ...guards,
+                  // A source-wide re-index walks a whole source's corpus
+                  // a page at a time, so it is bulk work with the same
+                  // census behind it as the snapshot walk.
+                  commit: CORPUS_INDEX_COMMIT.auto,
+                });
           if (indexed !== eligible.length) {
             throw new CorpusIndexError({
               message:
@@ -1722,7 +1732,15 @@ export const createCaseLawGenerationBackfill =
         const indexed =
           eligible.length === 0
             ? 0
-            : await backfillRows(scopedDb, eligible, generation, guards);
+            : await backfillRows(scopedDb, eligible, generation, {
+                ...guards,
+                // The live path: every newly ingested decision waits in
+                // this queue, and the mark taken on the way out is the
+                // last thing that would ever select it. Acceptance has
+                // to mean committed here or the row goes permanently
+                // missing from the index while Postgres reads indexed.
+                commit: CORPUS_INDEX_COMMIT.waitFor,
+              });
         if (indexed !== eligible.length) {
           throw new CorpusIndexError({
             message: "generation reconciliation did not reach a fixed point",
@@ -2009,7 +2027,13 @@ export const createCaseLawGenerationBackfill =
         indexed =
           rows.length === 0
             ? 0
-            : await backfillRows(scopedDb, rows, generation, runningGuards);
+            : await backfillRows(scopedDb, rows, generation, {
+                ...runningGuards,
+                // Snapshot pages of the rebuild: bulk throughput, whose
+                // completeness the generation's census verifies rather
+                // than each request proving it for itself.
+                commit: CORPUS_INDEX_COMMIT.auto,
+              });
         if (indexed !== rows.length) {
           throw new CorpusIndexError({
             message: "generation backfill page did not reach a fixed point",

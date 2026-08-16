@@ -1211,6 +1211,7 @@ const CONTRACT_CORPUS = {
       setup: () => {
         readDecisionWithDocumentHandlerMock.mockResolvedValue({
           documentPending: false,
+          documentReadFailed: false,
           documentUnavailable: false,
           id: toSafeId<"caseLawDecision">(uid(54)),
           caseNumber: "22 Cdo 1000/2020",

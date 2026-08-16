@@ -3,7 +3,10 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
-import type { CorpusJobInput } from "@/api/lib/corpus-index/core";
+import type {
+  CorpusJobInput,
+  FencedRemoteEffect,
+} from "@/api/lib/corpus-index/core";
 import {
   corpusDocumentsDeleteQuery,
   createCorpusIndexer,
@@ -14,6 +17,7 @@ import {
   splitIngestRequests,
 } from "@/api/lib/corpus-index/core";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
+import { CORPUS_INDEX_COMMIT } from "@/api/lib/legal-search/corpus-index-client";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -718,6 +722,7 @@ describe("failed index jobs always reach the audit trail", () => {
     let guardedEffects = 0;
     let guardedMarks = 0;
     const indexed = await indexer.backfillRows(scopedDb, [row], GENERATION, {
+      commit: CORPUS_INDEX_COMMIT.auto,
       beforeDatabaseMark: async () => {
         guardedMarks += 1;
         commitEvents.push("guard");
@@ -775,6 +780,7 @@ describe("failed index jobs always reach the audit trail", () => {
     };
     expect(
       await indexer.backfillRows(scopedDb, [sameIndexRow], GENERATION, {
+        commit: CORPUS_INDEX_COMMIT.auto,
         beforeDatabaseMark: async () => {
           guardedMarks += 1;
           commitEvents.push("guard");
@@ -858,6 +864,142 @@ describe("failed index jobs always reach the audit trail", () => {
   });
 });
 
+/**
+ * Acceptance and durability are not the same thing. `commit=auto` returns
+ * once the documents are buffered, so an indexer that dies inside the
+ * commit window loses them — and the caller has already been told the
+ * batch was accepted, which is what it marks `indexedHash` on. The row is
+ * then neither missing (it has a hash) nor stale (the hash matches), so
+ * nothing ever selects it again and the gap is permanent and silent.
+ *
+ * A bulk rebuild can afford `auto` because its completeness is checked
+ * against a census afterwards. The steady-state paths cannot, so the mode
+ * is pinned per entry point rather than left to whichever call site was
+ * written last.
+ */
+describe("ingest commit mode", () => {
+  const originalFetch = globalThis.fetch;
+  const GENERATION = "case_law_v2";
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const row = {
+    id: toSafeId<"caseLawDecision">("dec-commit"),
+    country: "SK",
+    textS3Key: null,
+    astS3Key: null,
+    contentHash: "hash-dec-commit",
+    indexedHash: null,
+    indexedGeneration: null,
+    projectionIndexId: corpusIndexId(GENERATION, "SK"),
+    // SAFETY: tests fabricate the branded token the adapters normally
+    // select as `updated_at::text`.
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion
+    updatedAtToken: "2026-01-01 00:00:00" as TimestampCasToken,
+  };
+
+  const scopedDb: ScopedDb = async (callback) =>
+    // SAFETY: this test's adapter ignores the transaction.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the fake transaction is deliberately inert
+    await callback({} as Transaction);
+
+  const fencedGuards = {
+    beforeDatabaseMark: async () => undefined,
+    beforeRemoteEffect: async <T>({ effect }: FencedRemoteEffect<T>) =>
+      await effect(),
+    recoverRemoteEffectLeaseLoss: async () => await Promise.resolve(),
+    reserveExternalAppend: async (
+      _tx: Transaction,
+      { generation }: { generation: string; rows: readonly (typeof row)[] },
+    ) =>
+      new Map([
+        [
+          row.id,
+          {
+            indexIds: [corpusIndexId(generation, row.country)],
+            revision: 1,
+            mayHaveCopy: false,
+          },
+        ],
+      ]),
+  };
+
+  /** The commit modes the engine was asked for, in request order. */
+  const recordCommitModes = (): string[] => {
+    const modes: string[] = [];
+    const resolveUrl = (input: Parameters<typeof fetch>[0]): string => {
+      if (typeof input === "string") {
+        return input;
+      }
+      return input instanceof URL ? input.href : input.url;
+    };
+    const stub = async (input: Parameters<typeof fetch>[0]) => {
+      const url = new URL(resolveUrl(input));
+      if (url.pathname.endsWith("/ingest")) {
+        modes.push(url.searchParams.get("commit") ?? "");
+        return new Response(JSON.stringify({ num_docs_for_processing: 1 }), {
+          status: 200,
+        });
+      }
+      return new Response(JSON.stringify({}), { status: 200 });
+    };
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+    return modes;
+  };
+
+  const makeIndexer = () =>
+    createCorpusIndexer<"caseLawDecision", typeof row>({
+      family: "case_law",
+      captureStep: "test",
+      granularity: "document",
+      generationProjectionIndexIds: (selected) => [selected.projectionIndexId],
+      buildDocs: (selected) => [{ document_id: selected.id, text: "body" }],
+      readCorpusText: async () => "body",
+      selectMissing: async () => [row],
+      selectStale: async () => [],
+      fetchFulltext: async () => "body",
+      markIndexedBatch: async (_tx, { rows }) =>
+        new Set(rows.map((selected) => selected.id)),
+      insertSucceededJobs: async () => undefined,
+      recordJobs: async () => undefined,
+    });
+
+  test("the incremental backfill waits for the commit", async () => {
+    const modes = recordCommitModes();
+
+    await makeIndexer().backfill(scopedDb, 1, GENERATION);
+
+    expect(modes).toEqual([CORPUS_INDEX_COMMIT.waitFor]);
+  });
+
+  test("the fenced incremental backfill waits for the commit", async () => {
+    const modes = recordCommitModes();
+
+    await makeIndexer().backfillFenced(scopedDb, 1, GENERATION, fencedGuards);
+
+    expect(modes).toEqual([CORPUS_INDEX_COMMIT.waitFor]);
+  });
+
+  test("a rebuild sends the mode its caller chose", async () => {
+    // One entry point, two walks: the snapshot pages are bulk and the
+    // pending queue drained alongside them is the live path, so the
+    // caller states which it is.
+    for (const commit of Object.values(CORPUS_INDEX_COMMIT)) {
+      const modes = recordCommitModes();
+      // oxlint-disable-next-line no-await-in-loop -- one walk per mode; the recorder is per-stub
+      await makeIndexer().backfillRows(scopedDb, [row], GENERATION, {
+        ...fencedGuards,
+        commit,
+      });
+      expect(modes).toEqual([commit]);
+    }
+  });
+});
+
 describe("first-ever fenced appends", () => {
   const GENERATION = "case_law_v2";
   const originalFetch = globalThis.fetch;
@@ -929,6 +1071,7 @@ describe("first-ever fenced appends", () => {
     });
 
     const indexed = await indexer.backfillRows(scopedDb, [row], GENERATION, {
+      commit: CORPUS_INDEX_COMMIT.auto,
       beforeDatabaseMark: async () => undefined,
       beforeRemoteEffect: async ({ effect }) => await effect(),
       recoverRemoteEffectLeaseLoss: async () => await Promise.resolve(),
@@ -1054,6 +1197,7 @@ describe("delete-task amplification", () => {
     });
 
     const indexed = await indexer.backfillRows(scopedDb, rows, GENERATION, {
+      commit: CORPUS_INDEX_COMMIT.auto,
       beforeDatabaseMark: async () => undefined,
       beforeRemoteEffect: async ({ effect }) => await effect(),
       recoverRemoteEffectLeaseLoss: async () => await Promise.resolve(),

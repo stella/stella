@@ -181,6 +181,14 @@ export class RedisClientClosedError extends TaggedError(
  * trim) the object *is* the document, so an object-storage outage has to
  * surface as a failure rather than an empty body.
  */
+/*
+ * The public decision read is the one caller that contains this rather
+ * than propagating it: it can answer "the document is not readable right
+ * now" (`documentPending`) without claiming the decision has no body, so
+ * failing there would drop the metadata, citations and case number for a
+ * decision the reader could still recognise and cite. Every other caller
+ * has no such third answer and must keep failing.
+ */
 export class CorpusPayloadUnavailableError extends TaggedError(
   "CorpusPayloadUnavailableError",
 )<{
