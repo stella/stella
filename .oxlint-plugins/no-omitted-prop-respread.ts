@@ -50,8 +50,9 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 //     of scope, as is an `Omit` reached through an imported type alias; only
 //     file-local type aliases and the modifier utilities `Partial`, `Readonly`,
 //     and `Required` are unwrapped. Aliases are indexed by name across the whole
-//     file, so a name two declarations share resolves to nothing rather than
-//     guessing which scope a reference meant.
+//     file, so a name shared by two declarations, or by a declaration and an
+//     import, resolves to nothing rather than guessing which one a reference
+//     meant.
 //   - `Omit` is matched by name. A shadowed or re-exported `Omit` is not
 //     distinguished.
 //   - The omission must be written on the parameter. A props type inferred from
@@ -230,6 +231,13 @@ const reintroducedKeysOf = (
 const patternOf = (param) =>
   param?.type === "AssignmentPattern" ? param.left : param;
 
+// The props parameter. An erased `this` parameter occupies the first slot in
+// the AST while contributing no runtime argument, so props follow it.
+const propsParamOf = (params = []) => {
+  const first = params.at(0);
+  return isIdentifier(first, "this") ? params.at(1) : first;
+};
+
 // The identifier that carries the rest of the props: the parameter itself, or
 // the rest element of a destructuring pattern.
 const propsBindingOf = (param) => {
@@ -355,7 +363,7 @@ export default eslintCompatPlugin({
         };
 
         const collectPropsParam = (node) => {
-          const param = patternOf(node.params?.at(0));
+          const param = patternOf(propsParamOf(node.params));
           const binding = propsBindingOf(param);
           if (binding !== null) {
             propsParams.push({ binding, param });
@@ -454,6 +462,16 @@ export default eslintCompatPlugin({
             omittedByBinding.clear();
             propsParams.length = 0;
             spreadElements.length = 0;
+          },
+          // An imported type is not followed, and its name must not be answered
+          // by an unrelated local alias that happens to match, so claim the name
+          // as unresolvable.
+          ImportDeclaration(node) {
+            for (const specifier of node.specifiers) {
+              if (typeof specifier.local?.name === "string") {
+                localTypes.set(specifier.local.name, null);
+              }
+            }
           },
           TSTypeAliasDeclaration: declareLocalType,
           ArrowFunctionExpression: collectPropsParam,

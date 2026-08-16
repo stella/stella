@@ -7,6 +7,7 @@
 // directive cover the allow-list and must keep passing.
 
 import type * as React from "react";
+import type { AriaAttributes as SharedProps } from "react";
 
 type PanelProps = React.ComponentProps<"section"> & {
   orientation?: "horizontal" | "vertical";
@@ -223,6 +224,26 @@ export const _ok_reTypedUnderNestedOmit = (
     "orientation"
   >,
 ) => <Panel {...props} orientation="horizontal" />;
+
+// Allowed: `SharedProps` is imported here and also declared in an unrelated
+// nested scope, so the name answers to neither rather than to the wrong one.
+export const _ok_importedNameCollision = (props: SharedProps) => (
+  <Panel {...props} />
+);
+export const _ok_collidingNestedAlias = () => {
+  type SharedProps = Omit<PanelProps, "orientation">;
+  return (props: SharedProps) => <Panel {...props} />;
+};
+
+// An erased `this` parameter takes the first AST slot without carrying a
+// runtime argument, so the props parameter follows it.
+export function _thisParameter(
+  this: unknown,
+  props: Omit<PanelProps, "orientation">,
+) {
+  // oxlint-disable-next-line no-omitted-prop-respread/no-omitted-prop-respread
+  return <Panel {...props} />;
+}
 
 // A function-local alias resolves like a top-level one.
 export const _blockLocalAlias = () => {
