@@ -25,7 +25,16 @@
 
 import { panic } from "better-result";
 import type { SQL } from "drizzle-orm";
-import { and, eq, gte, inArray, isNull, lt, min } from "drizzle-orm";
+import {
+  and,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  lt,
+  min,
+  notInArray,
+} from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -410,14 +419,26 @@ const selectLedgerSlices = async (
   );
 };
 
+type SelectStaleShortSlicesOptions = {
+  sourceId: SafeId<"caseLawSource">;
+  staleBefore: Date;
+  /**
+   * Slices held for retry, excluded in the query rather than by the caller.
+   * The read is a bounded oldest-first window, so a held row filtered
+   * afterwards still occupies a place in it: enough of them fill the window
+   * and every short slice behind them becomes unreachable, which is the same
+   * starvation the settled-row touch exists to prevent.
+   */
+  heldSlices: string[];
+};
+
 /**
  * Slices the ledger records as short and has not re-checked recently, oldest
  * first. This is the first reader of the ledger's short-slice partial index.
  */
 const selectStaleShortSlices = async (
   scopedDb: ScopedDb,
-  sourceId: SafeId<"caseLawSource">,
-  staleBefore: Date,
+  { heldSlices, sourceId, staleBefore }: SelectStaleShortSlicesOptions,
 ): Promise<LedgerSlice[]> =>
   await scopedDb(
     async (tx) =>
@@ -435,6 +456,9 @@ const selectStaleShortSlices = async (
             lt(caseLawCoverageSlices.collected, caseLawCoverageSlices.reported),
             // eslint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- staleness cutoff derived from the clock, not a cursor boundary: a slice landing within a microsecond of it is walked one turn earlier or later, which the widening tip cadence already tolerates
             lt(caseLawCoverageSlices.checkedAt, staleBefore),
+            heldSlices.length === 0
+              ? undefined
+              : notInArray(caseLawCoverageSlices.slice, heldSlices),
           ),
         )
         .orderBy(caseLawCoverageSlices.checkedAt)
@@ -922,10 +946,22 @@ export const runReconciliationWorkUnit = async ({
   // cadence and needs neither.
   const tipStart = tipSlices.at(-1) ?? reconciliation.sliceOf(startedAt);
 
+  // Dropped as they come due rather than left to accumulate: the map is the
+  // process's memory of what it has just failed to walk, and an expired entry
+  // is a slice the selection is free to pick again. Before the reads, because
+  // the backlog query excludes the held ones and must not exclude a slice
+  // whose hold ended.
+  for (const [slice, retryAtMs] of sliceRetries) {
+    if (retryAtMs <= startedAt.getTime()) {
+      sliceRetries.delete(slice);
+    }
+  }
+  const heldSlices = [...sliceRetries.keys()];
+
   const [tipLedger, shortRows, oldestLedgerSlice, dueParked, recheckCandidate] =
     await Promise.all([
       selectLedgerSlices(scopedDb, sourceId, tipSlices),
-      selectStaleShortSlices(scopedDb, sourceId, staleBefore),
+      selectStaleShortSlices(scopedDb, { sourceId, staleBefore, heldSlices }),
       selectOldestLedgerSlice(scopedDb, sourceId),
       hasDueParkedItems(scopedDb, sourceId, startedAt),
       // Asked every turn rather than only once the higher priorities come up
@@ -978,15 +1014,6 @@ export const runReconciliationWorkUnit = async ({
       ? tipStart
       : oldestLedgerSlice;
 
-  // Dropped as they come due rather than left to accumulate: the map is the
-  // process's memory of what it has just failed to walk, and an expired entry
-  // is a slice the selection is free to pick again.
-  for (const [slice, retryAtMs] of sliceRetries) {
-    if (retryAtMs <= startedAt.getTime()) {
-      sliceRetries.delete(slice);
-    }
-  }
-
   const unit = selectReconciliationWorkUnit({
     now: startedAt,
     hasDueParkedItems: dueParked,
@@ -997,7 +1024,7 @@ export const runReconciliationWorkUnit = async ({
     unsettledShortSlices: unsettled,
     sweepSlice: reconciliation.previousSlice(frontier),
     recheckCandidate,
-    slicesHeldForRetry: new Set(sliceRetries.keys()),
+    slicesHeldForRetry: new Set(heldSlices),
     staleAfterMs: RECONCILIATION_SLICE_STALE_MS,
     recheckAfterMs: RECONCILIATION_SETTLED_RECHECK_MS,
   });
@@ -1052,9 +1079,13 @@ export const runReconciliationWorkUnit = async ({
             // tally reports how many turns threw without saying over what;
             // the slice a source cannot walk is the one fact that turns a
             // standing error rate into something an operator can reproduce.
+            // Measured from the failure, not from the unit's start: a slice
+            // is several paginated requests and a walk can spend most of the
+            // runner's deadline before it throws, which would leave the hold
+            // shorter than it says or already expired.
             sliceRetries.set(
               unit.slice,
-              startedAt.getTime() + RECONCILIATION_SLICE_RETRY_MS,
+              now().getTime() + RECONCILIATION_SLICE_RETRY_MS,
             );
             logger.warn("case_law.reconciliation.slice_failed", {
               adapterKey,

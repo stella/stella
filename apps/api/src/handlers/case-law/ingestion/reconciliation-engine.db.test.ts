@@ -703,6 +703,42 @@ test("a slice the publisher will not serve does not hold the ones behind it", as
   expect(listed.map(({ slice }) => slice)).toEqual([OWED_SLICE, reachable]);
 });
 
+test("held slices are excluded from the backlog window, not filtered after it", async () => {
+  // The backlog read is a bounded oldest-first window. A held row filtered
+  // out afterwards still occupies a place in it, so a full window of held
+  // rows hides every short slice behind them — the same starvation the
+  // settled-row touch exists to prevent, arriving by a different route. The
+  // holds renew as they expire, so it does not clear on its own.
+  const sourceId = await seedSource();
+  await seedFreshTip(sourceId);
+  const sliceRetries: SliceRetrySchedule = new Map();
+  for (const [index, slice] of SETTLED_SLICES.entries()) {
+    sliceRetries.set(slice, NOW.getTime() + DAY_IN_MS);
+    // oxlint-disable-next-line no-await-in-loop -- fixture seeding, sequential on one pglite handle
+    await seedSlice({
+      sourceId,
+      slice,
+      reported: 2,
+      collected: 0,
+      // Oldest-checked, so these fill the window ahead of the one behind them.
+      checkedAt: addUtcDays(NOW, -10 - index),
+    });
+  }
+  await seedSlice({
+    sourceId,
+    slice: OWED_SLICE,
+    reported: 2,
+    collected: 0,
+    checkedAt: addUtcDays(NOW, -2),
+  });
+  expect(sliceRetries.size).toBe(SETTLED_SLICES.length);
+
+  expect(await runUnitWith({ sourceId, sliceRetries })).toMatchObject({
+    type: "worked",
+  });
+  expect(listed.map(({ slice }) => slice)).toEqual([OWED_SLICE]);
+});
+
 // ── Rechecking a settled slice ──────────────────────────
 
 /**
