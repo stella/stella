@@ -89,4 +89,9 @@ export const createDocumentReviewRunBodySchema = t.Object({
     minItems: 1,
     maxItems: DOCUMENT_REVIEW_LIMITS.topicsMax,
   }),
+  /**
+   * Restated size estimate from a prior 428 `usage_confirmation_required`
+   * answer; the run starts only when it covers the current estimate.
+   */
+  confirmedUnits: t.Optional(t.Integer({ minimum: 0 })),
 });

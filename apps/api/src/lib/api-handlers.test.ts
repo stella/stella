@@ -5,6 +5,7 @@ import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import {
+  assertRunSizeConfirmedForHandler,
   createSafeHandler,
   createSafeRootHandler,
   errorCauseChainAttributes,
@@ -12,7 +13,11 @@ import {
 } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
-import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  DatabaseError,
+  HandlerError,
+  UsageLimitExceededError,
+} from "@/api/lib/errors/tagged-errors";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const noopAuditRecorder: AuditRecorder = async () => undefined;
@@ -360,6 +365,167 @@ describe("errorCauseChainAttributes", () => {
 
     expect(errorCauseChainAttributes(first)).toEqual({
       "error.cause.type": "Error",
+    });
+  });
+});
+
+describe("assertRunSizeConfirmedForHandler", () => {
+  const organizationId = toSafeId<"organization">(
+    "019e7000-0000-7000-8000-000000000002",
+  );
+  const userId = toSafeId<"user">("019e7000-0000-7000-8000-000000000001");
+
+  const baseInput = {
+    metering: { actionType: "doc_review", modelRole: "pdf" },
+    organizationId,
+    orgAIConfig: null,
+    workspaceId: null,
+    userId,
+  } as const;
+
+  const untouchableDb: SafeDb = asTestRaw<SafeDb>(async () => {
+    throw new DatabaseError({ message: "ledger must not be touched" });
+  });
+
+  const availableDb = (available: number): SafeDb =>
+    asTestRaw<SafeDb>(async () => Result.ok({ ok: true, available }));
+
+  const overLimitDb = (required: number, available: number): SafeDb =>
+    asTestRaw<SafeDb>(async () =>
+      Result.ok({
+        ok: false,
+        error: new UsageLimitExceededError({
+          message: `Usage limit exceeded: need ${required}, have ${available}`,
+          required,
+          available,
+          reason: "usage_limit_exceeded",
+        }),
+      }),
+    );
+
+  const withInstanceEnforcement = async (
+    fn: () => Promise<void>,
+  ): Promise<void> => {
+    const previous = {
+      enforcement: env.USAGE_ENFORCEMENT_ENABLED,
+      provider: env.AI_PROVIDER,
+      openaiKey: env.OPENAI_API_KEY,
+    };
+    env.USAGE_ENFORCEMENT_ENABLED = true;
+    env.AI_PROVIDER = "openai";
+    env.OPENAI_API_KEY = "test-openai-instance-key";
+    try {
+      await fn();
+    } finally {
+      env.USAGE_ENFORCEMENT_ENABLED = previous.enforcement;
+      env.AI_PROVIDER = previous.provider;
+      env.OPENAI_API_KEY = previous.openaiKey;
+    }
+  };
+
+  test("no-op while enforcement is off", async () => {
+    const previous = env.USAGE_ENFORCEMENT_ENABLED;
+    env.USAGE_ENFORCEMENT_ENABLED = false;
+    try {
+      const outcome = await assertRunSizeConfirmedForHandler({
+        ...baseInput,
+        estimatedUnits: 10_000,
+        confirmedUnits: undefined,
+        safeDb: untouchableDb,
+      });
+      expect(outcome).toBeNull();
+    } finally {
+      env.USAGE_ENFORCEMENT_ENABLED = previous;
+    }
+  });
+
+  test("no-op for BYOK settlements", async () => {
+    await withInstanceEnforcement(async () => {
+      const byokConfig: OrgAIConfig = {
+        providers: [{ provider: "openai", apiKey: "test-api-key" }],
+        overrideModels: {
+          chat: { provider: "openai", modelId: "gpt-5.6" },
+          fast: { provider: "openai", modelId: "gpt-5.4-mini" },
+          pdf: { provider: "openai", modelId: "gpt-5.6" },
+          reasoning: { provider: "openai", modelId: "gpt-5.6" },
+        },
+      };
+      const outcome = await assertRunSizeConfirmedForHandler({
+        ...baseInput,
+        orgAIConfig: byokConfig,
+        estimatedUnits: 10_000,
+        confirmedUnits: undefined,
+        safeDb: untouchableDb,
+      });
+      expect(outcome).toBeNull();
+    });
+  });
+
+  test("small runs pass once the whole estimate is affordable", async () => {
+    await withInstanceEnforcement(async () => {
+      const outcome = await assertRunSizeConfirmedForHandler({
+        ...baseInput,
+        estimatedUnits: 10,
+        confirmedUnits: undefined,
+        safeDb: availableDb(500),
+      });
+      expect(outcome).toBeNull();
+    });
+  });
+
+  test("an unaffordable estimate answers the over-limit shape, not a confirmation", async () => {
+    await withInstanceEnforcement(async () => {
+      const outcome = await assertRunSizeConfirmedForHandler({
+        ...baseInput,
+        estimatedUnits: 800,
+        confirmedUnits: undefined,
+        safeDb: overLimitDb(800, 30),
+      });
+      expect(outcome).toMatchObject({
+        status: 402,
+        code: "usage_limit_exceeded",
+        usage: { required: 800, available: 30 },
+      });
+    });
+  });
+
+  test("a large unconfirmed run answers 428 carrying the estimate", async () => {
+    await withInstanceEnforcement(async () => {
+      const outcome = await assertRunSizeConfirmedForHandler({
+        ...baseInput,
+        estimatedUnits: 120,
+        confirmedUnits: undefined,
+        safeDb: availableDb(500),
+      });
+      expect(outcome).toMatchObject({
+        status: 428,
+        code: "usage_confirmation_required",
+        confirmation: { estimatedUnits: 120, availableUnits: 500 },
+      });
+    });
+  });
+
+  test("a stale lower confirmation does not cover a grown estimate", async () => {
+    await withInstanceEnforcement(async () => {
+      const outcome = await assertRunSizeConfirmedForHandler({
+        ...baseInput,
+        estimatedUnits: 120,
+        confirmedUnits: 60,
+        safeDb: availableDb(500),
+      });
+      expect(outcome).toMatchObject({ status: 428 });
+    });
+  });
+
+  test("restating the estimate lets the run proceed", async () => {
+    await withInstanceEnforcement(async () => {
+      const outcome = await assertRunSizeConfirmedForHandler({
+        ...baseInput,
+        estimatedUnits: 120,
+        confirmedUnits: 120,
+        safeDb: availableDb(500),
+      });
+      expect(outcome).toBeNull();
     });
   });
 });

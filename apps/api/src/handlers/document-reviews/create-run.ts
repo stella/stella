@@ -16,7 +16,10 @@ import { resolveReviewSelection } from "@/api/handlers/document-reviews/review-s
 import { validateReviewTopics } from "@/api/handlers/document-reviews/review-topics";
 import { createDocumentReviewRunBodySchema } from "@/api/handlers/document-reviews/schemas";
 import type { DocumentReviewTopic } from "@/api/handlers/document-reviews/schemas";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import {
+  assertRunSizeConfirmedForHandler,
+  createSafeHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -32,6 +35,8 @@ import type {
 import { planReviewRun } from "@/api/lib/document-review/run-plan";
 import { enqueueDocumentReviewRun } from "@/api/lib/document-review/run-queue";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
+import { estimateDocumentRunUnits } from "@/api/lib/usage/run-estimate";
 
 const config = {
   description:
@@ -67,6 +72,7 @@ const createDocumentReviewRun = createSafeHandler(
   config,
   async function* ({
     body,
+    orgAIConfig,
     recordAuditEvent,
     safeDb,
     session,
@@ -182,6 +188,38 @@ const createDocumentReviewRun = createSafeHandler(
           message: "None of the confirmed topics can be reviewed.",
         }),
       );
+    }
+
+    // Size the whole run before pinning it: every reviewed file's bytes
+    // through the review model's rate, one output budget per planned
+    // finding. Large runs need the client to restate the estimate.
+    const reviewModel = getTanStackTextModelInfoForRole("pdf", orgAIConfig, {
+      organizationId,
+    });
+    const inputBytes =
+      selection.value.target.fileSizeBytes +
+      selection.value.references.reduce(
+        (total, reference) => total + reference.fileSizeBytes,
+        0,
+      );
+    const sizeError = await assertRunSizeConfirmedForHandler({
+      metering: { actionType: "doc_review", modelRole: "pdf" },
+      estimatedUnits: estimateDocumentRunUnits({
+        modelId: reviewModel.modelId,
+        actionType: "doc_review",
+        storedInputBytes: inputBytes,
+        plannedOutputs: plan.expectedFindingCount,
+        serviceTier: "standard",
+      }),
+      confirmedUnits: body.confirmedUnits,
+      organizationId,
+      orgAIConfig,
+      workspaceId,
+      userId: user.id,
+      safeDb,
+    });
+    if (sizeError) {
+      return Result.err(sizeError);
     }
 
     const target = selection.value.target;

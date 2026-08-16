@@ -28,6 +28,7 @@ import {
 import type {
   HandlerErrorClaim,
   HandlerErrorCode,
+  HandlerErrorConfirmationDetail,
   HandlerErrorStatusCode,
 } from "@/api/lib/errors/tagged-errors";
 import {
@@ -432,6 +433,11 @@ type SafeErrorBody = {
   required?: number;
   available?: number;
   /**
+   * Structured 409 detail when a queued run's estimated consumption
+   * needs an explicit go-ahead (see HandlerErrorConfirmationDetail).
+   */
+  confirmation?: HandlerErrorConfirmationDetail;
+  /**
    * OAuth-style machine-readable error identifier surfaced on the
    * agent-auth ID-JAG path (e.g. `login_required`,
    * `interaction_required`, `issuer_not_enabled`). Optional everywhere.
@@ -515,6 +521,7 @@ const API_ERROR_CODE = {
   forbidden: "forbidden",
   internalServerError: "internal_server_error",
   usageLimitExceeded: "usage_limit_exceeded",
+  usageConfirmationRequired: "usage_confirmation_required",
 } as const satisfies Record<string, HandlerErrorCode>;
 
 // This needs function overloads. A generic arrow returning `status(statusCode)`
@@ -909,6 +916,99 @@ export const assertUsageAvailableForHandler = async ({
   });
 };
 
+/**
+ * Above this many estimated units, a queued run must carry an explicit
+ * `confirmedUnits` restating its size before it may start.
+ */
+export const RUN_CONFIRMATION_UNITS = 50;
+
+type RunSizePreflightInput = UsagePreflightInput & {
+  /** Units the initiator expects the whole run to consume. */
+  estimatedUnits: number;
+  /** The client's restated estimate; `undefined` when not confirming. */
+  confirmedUnits: number | undefined;
+};
+
+/**
+ * Pre-flight for batch initiators (document reviews, flows) that
+ * enqueue work whose total size is known up front. Checks availability
+ * for the WHOLE estimate — the per-action preflight would admit a run
+ * whose tail cannot settle — and above {@link RUN_CONFIRMATION_UNITS}
+ * additionally requires the request to restate the estimate via
+ * `confirmedUnits`, else answers a 428 carrying the estimate for the
+ * client to confirm. No-op for BYOK settlements (the organization's own
+ * key pays) and while `USAGE_ENFORCEMENT_ENABLED` is off.
+ */
+export const assertRunSizeConfirmedForHandler = async ({
+  metering,
+  estimatedUnits,
+  confirmedUnits,
+  organizationId,
+  orgAIConfig,
+  workspaceId,
+  userId,
+  safeDb,
+}: RunSizePreflightInput): Promise<HandlerError<402 | 428 | 500> | null> => {
+  if (!env.USAGE_ENFORCEMENT_ENABLED) {
+    return null;
+  }
+  const meteringContext = resolveMeteringContext({
+    metering,
+    organizationId,
+    orgAIConfig,
+    workspaceId,
+    userId,
+  });
+  if (meteringContext.isByok) {
+    return null;
+  }
+  const checkResult = await safeDb(
+    async (tx) =>
+      await assertUsageAvailable({
+        tx,
+        organizationId: meteringContext.organizationId,
+        required: Math.max(estimatedUnits, meteringContext.cost),
+      }),
+  );
+  if (Result.isError(checkResult)) {
+    return new HandlerError({
+      code: API_ERROR_CODE.internalServerError,
+      status: 500,
+      message: "Internal server error",
+      cause: checkResult.error,
+    });
+  }
+  const check = checkResult.value;
+  if (!check.ok) {
+    return new HandlerError({
+      code: API_ERROR_CODE.usageLimitExceeded,
+      status: 402,
+      message: check.error.message,
+      usage: {
+        reason: check.error.reason,
+        required: check.error.required,
+        available: check.error.available,
+      },
+    });
+  }
+  if (estimatedUnits <= RUN_CONFIRMATION_UNITS) {
+    return null;
+  }
+  if (confirmedUnits !== undefined && confirmedUnits >= estimatedUnits) {
+    return null;
+  }
+  return new HandlerError({
+    code: API_ERROR_CODE.usageConfirmationRequired,
+    status: 428,
+    message:
+      "This run's estimated size needs an explicit confirmation to start.",
+    confirmation: {
+      estimatedUnits,
+      availableUnits: check.available,
+    },
+  });
+};
+
 const createSafeDirectHandler = <
   TConfig extends InputSchema,
   TContext extends SafeHandlerLogContext,
@@ -934,6 +1034,7 @@ const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
         available: error.usage.available,
       }
     : {}),
+  ...(error.confirmation ? { confirmation: error.confirmation } : {}),
   ...(error.error ? { error: error.error } : {}),
   ...(error.claim ? { claim: error.claim } : {}),
   ...error.stepUp,

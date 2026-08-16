@@ -11,6 +11,7 @@ export type HandlerErrorStatusCode =
   | 409
   | 413
   | 422
+  | 428
   | 429
   | 500
   | 502
@@ -28,6 +29,20 @@ export type HandlerErrorUsageDetail = {
   reason: UsageLimitExceededReason;
   required: number;
   available: number;
+};
+
+/**
+ * Structured 409 detail for a queued run whose estimated consumption
+ * crosses the confirmation threshold: the client re-submits the same
+ * request with `confirmedUnits >= estimatedUnits` to proceed. Distinct
+ * from `usage` (the 402 over-limit detail) — this is not an over-limit
+ * state, and the run may well be affordable. Answered as a 428, never a
+ * 409: run initiators already use 409 for "a run is active on this
+ * document", and clients resolve that by attaching the existing run.
+ */
+export type HandlerErrorConfirmationDetail = {
+  estimatedUnits: number;
+  availableUnits: number;
 };
 
 /**
@@ -80,6 +95,7 @@ export type HandlerErrorProps<
   stepUp?: HandlerErrorStepUp | undefined;
   cause?: unknown;
   usage?: HandlerErrorUsageDetail | undefined;
+  confirmation?: HandlerErrorConfirmationDetail | undefined;
 };
 
 // TaggedError(...) cannot reference the class type parameter in the base
@@ -91,6 +107,7 @@ export class HandlerError<
   declare code?: HandlerErrorCode | undefined;
   declare status: TStatus;
   declare usage?: HandlerErrorUsageDetail | undefined;
+  declare confirmation?: HandlerErrorConfirmationDetail | undefined;
   declare error?: string | undefined;
   declare claim?: HandlerErrorClaim | undefined;
   declare stepUp?: HandlerErrorStepUp | undefined;
@@ -100,6 +117,7 @@ export class HandlerError<
     this.code = props.code;
     this.status = props.status;
     this.usage = props.usage;
+    this.confirmation = props.confirmation;
     this.error = props.error;
     this.claim = props.claim;
     this.stepUp = props.stepUp;

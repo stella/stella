@@ -170,6 +170,7 @@ export const finalizeAgentSkill = async function* ({
         case 402:
         case 403:
         case 413:
+        case 428:
         case 429:
         case 502:
         case 503:
