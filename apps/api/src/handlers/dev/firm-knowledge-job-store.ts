@@ -13,9 +13,16 @@ export type FirmKnowledgeSeedStatus =
       message: string;
     };
 
+export type FirmKnowledgeSeedParameters = {
+  readonly matters: number;
+  readonly replaceIncomplete: boolean;
+  readonly selectionSeed?: string;
+};
+
 export type FirmKnowledgeJob = {
   id: string;
   organizationId: SafeId<"organization">;
+  parameters: FirmKnowledgeSeedParameters;
   status: FirmKnowledgeSeedStatus;
   userId: SafeId<"user">;
 };
@@ -26,7 +33,14 @@ type StoredFirmKnowledgeJob = FirmKnowledgeJob & {
 
 type CreateFirmKnowledgeJobOptions = {
   organizationId: SafeId<"organization">;
+  parameters: FirmKnowledgeSeedParameters;
   startedAt: string;
+  userId: SafeId<"user">;
+};
+
+type ReusableFirmKnowledgeJobOptions = {
+  organizationId: SafeId<"organization">;
+  parameters: FirmKnowledgeSeedParameters;
   userId: SafeId<"user">;
 };
 
@@ -47,6 +61,17 @@ const defaultOptions = {
   retentionMs: DEFAULT_RETENTION_MS,
 } satisfies FirmKnowledgeJobStoreOptions;
 
+export const isReusableFirmKnowledgeJob = (
+  job: FirmKnowledgeJob,
+  { organizationId, parameters, userId }: ReusableFirmKnowledgeJobOptions,
+): boolean =>
+  job.status.status === "running" &&
+  job.organizationId === organizationId &&
+  job.userId === userId &&
+  job.parameters.matters === parameters.matters &&
+  job.parameters.replaceIncomplete === parameters.replaceIncomplete &&
+  job.parameters.selectionSeed === parameters.selectionSeed;
+
 export class FirmKnowledgeJobStore {
   private readonly createId: () => string;
   private readonly jobs = new Map<string, StoredFirmKnowledgeJob>();
@@ -64,6 +89,7 @@ export class FirmKnowledgeJobStore {
 
   create({
     organizationId,
+    parameters,
     startedAt,
     userId,
   }: CreateFirmKnowledgeJobOptions): FirmKnowledgeJob {
@@ -72,6 +98,7 @@ export class FirmKnowledgeJobStore {
     const job = {
       id: this.createId(),
       organizationId,
+      parameters,
       status: { status: "running", startedAt },
       updatedAtMs: now,
       userId,
@@ -97,6 +124,7 @@ export class FirmKnowledgeJobStore {
     this.jobs.set(jobId, {
       id: job.id,
       organizationId: job.organizationId,
+      parameters: job.parameters,
       status,
       updatedAtMs: this.now(),
       userId: job.userId,

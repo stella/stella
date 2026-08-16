@@ -28,7 +28,9 @@ import { getSearchProvider } from "@/api/lib/search/provider";
 import {
   type FirmKnowledgeJob,
   FirmKnowledgeJobStore,
+  type FirmKnowledgeSeedParameters,
   type FirmKnowledgeSeedStatus,
+  isReusableFirmKnowledgeJob,
 } from "./firm-knowledge-job-store";
 
 const VITE_CACHE_DIR = path.resolve(
@@ -196,12 +198,28 @@ export const devRoute = new Elysia({ prefix: "/dev" })
         });
       }
 
+      const parameters = {
+        matters: ctx.body?.matters ?? FIRM_KNOWLEDGE_MATTERS,
+        replaceIncomplete:
+          ctx.body?.incompleteMatterMode === INCOMPLETE_MATTER_MODE.replace,
+        ...(ctx.body?.selectionSeed === undefined
+          ? {}
+          : { selectionSeed: ctx.body.selectionSeed }),
+      } satisfies FirmKnowledgeSeedParameters;
+
       if (firmKnowledgeInFlight) {
         const job =
           firmKnowledgeJobId === null
             ? null
             : firmKnowledgeJobs.get(firmKnowledgeJobId);
-        if (job?.organizationId !== organizationId || job.userId !== userId) {
+        if (
+          job === null ||
+          !isReusableFirmKnowledgeJob(job, {
+            organizationId,
+            parameters,
+            userId,
+          })
+        ) {
           return new Response("A firm-knowledge seed is already running", {
             status: 409,
           });
@@ -213,6 +231,7 @@ export const devRoute = new Elysia({ prefix: "/dev" })
       const startedAt = new Date().toISOString();
       const job = firmKnowledgeJobs.create({
         organizationId,
+        parameters,
         startedAt,
         userId,
       });
@@ -228,12 +247,11 @@ export const devRoute = new Elysia({ prefix: "/dev" })
           await seedFirmKnowledge({
             apiOrigin,
             cookie: seedSession.cookie,
-            matters: ctx.body?.matters ?? FIRM_KNOWLEDGE_MATTERS,
-            replaceIncomplete:
-              ctx.body?.incompleteMatterMode === INCOMPLETE_MATTER_MODE.replace,
-            ...(ctx.body?.selectionSeed === undefined
+            matters: job.parameters.matters,
+            replaceIncomplete: job.parameters.replaceIncomplete,
+            ...(job.parameters.selectionSeed === undefined
               ? {}
-              : { selectionSeed: ctx.body.selectionSeed }),
+              : { selectionSeed: job.parameters.selectionSeed }),
           });
           firmKnowledgeJobs.update(job.id, {
             status: "succeeded",
