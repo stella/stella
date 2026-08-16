@@ -46,14 +46,24 @@ const InspectorHeaderText = ({
   />
 );
 
+// Record-data slots (title, description, property value) hold caller-supplied
+// values such as case numbers, ECLI identifiers, and filenames. They isolate
+// their own bidi context so a Latin value inside an RTL inspector keeps its
+// character order and truncates from the correct end. Chrome slots stay in the
+// surrounding direction. `dir` precedes the prop spread so callers can force a
+// direction. `inspector.test.tsx` pins which slots belong to each group.
 const InspectorTitle = ({
   children,
   className,
   ...props
 }: React.ComponentProps<"h2">) => (
   <h2
-    className={cn("truncate text-sm font-semibold", className)}
+    className={cn(
+      "truncate text-sm font-semibold [unicode-bidi:isolate]",
+      className,
+    )}
     data-slot="inspector-title"
+    dir="auto"
     {...props}
   >
     {children}
@@ -65,8 +75,12 @@ const InspectorDescription = ({
   ...props
 }: React.ComponentProps<"p">) => (
   <p
-    className={cn("text-muted-foreground truncate text-xs", className)}
+    className={cn(
+      "text-muted-foreground truncate text-xs [unicode-bidi:isolate]",
+      className,
+    )}
     data-slot="inspector-description"
+    dir="auto"
     {...props}
   />
 );
@@ -219,8 +233,12 @@ const InspectorPropertyValue = ({
   ...props
 }: React.ComponentProps<"dd">) => (
   <dd
-    className={cn("min-w-0 truncate text-sm font-medium", className)}
+    className={cn(
+      "min-w-0 truncate text-sm font-medium [unicode-bidi:isolate]",
+      className,
+    )}
     data-slot="inspector-property-value"
+    dir="auto"
     {...props}
   />
 );
