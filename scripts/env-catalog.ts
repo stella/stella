@@ -209,6 +209,7 @@ const EXAMPLE_VALUES: Record<string, string> = {
   VITE_FEEDBACK_EMAIL_TO: "ops@example.com",
   VITE_POSTHOG_KEY: "phc_",
   VITE_POSTHOG_HOST: "https://eu.i.posthog.com",
+  VITE_POSTHOG_UI_HOST: "https://eu.posthog.com",
   VITE_PUBLIC_APP_URL: "http://localhost:3000",
 };
 

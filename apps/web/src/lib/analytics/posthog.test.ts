@@ -100,7 +100,7 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("structurally disables interaction tracking features", () => {
-    createPostHogAnalytics("phc_test", "https://posthog.test");
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
 
     expect(initOptions).toMatchObject({
       advanced_disable_feature_flags: true,
@@ -119,8 +119,27 @@ describe("PostHog browser analytics adapter", () => {
     });
   });
 
+  test("points UI links at the PostHog origin when ingesting via a proxy", () => {
+    createPostHogAnalytics({
+      host: "https://e.example.test",
+      key: "phc_test",
+      uiHost: "https://eu.posthog.com",
+    });
+
+    expect(initOptions).toMatchObject({
+      api_host: "https://e.example.test",
+      ui_host: "https://eu.posthog.com",
+    });
+  });
+
+  test("derives UI links from the api host when no proxy is configured", () => {
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
+
+    expect(initOptions).not.toHaveProperty("ui_host");
+  });
+
   test("drops browser events outside the telemetry allowlist", () => {
-    createPostHogAnalytics("phc_test", "https://posthog.test");
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
 
     expect(
       initOptions?.before_send({
@@ -138,7 +157,7 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("drops known browser-noise exceptions", () => {
-    createPostHogAnalytics("phc_test", "https://posthog.test");
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
 
     const noise = [
       "ResizeObserver loop completed with undelivered notifications.",
@@ -157,7 +176,7 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("keeps actionable rejection types without their raw value", () => {
-    createPostHogAnalytics("phc_test", "https://posthog.test");
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
 
     const event = {
       event: WEB_ANALYTICS_EVENTS.exception,
@@ -181,7 +200,7 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("keeps real exception types and frames without messages", () => {
-    createPostHogAnalytics("phc_test", "https://posthog.test");
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
 
     const event = {
       event: WEB_ANALYTICS_EVENTS.exception,
@@ -214,7 +233,7 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("keeps only structural stack frame fields", () => {
-    createPostHogAnalytics("phc_test", "https://posthog.test");
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
 
     const sanitized = initOptions?.before_send({
       event: WEB_ANALYTICS_EVENTS.exception,
@@ -266,20 +285,20 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("captureError ignores null and undefined", () => {
-    const { analytics } = createPostHogAnalytics(
-      "phc_test",
-      "https://posthog.test",
-    );
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
     analytics.captureError(null);
     analytics.captureError(undefined);
     expect(captureExceptionMock).not.toHaveBeenCalled();
   });
 
   test("captureError sends the error type and a message-free stack", () => {
-    const { analytics } = createPostHogAnalytics(
-      "phc_test",
-      "https://posthog.test",
-    );
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
     analytics.captureError(
       new TypeError("Privileged document name and server payload"),
     );
@@ -296,10 +315,10 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("captureError survives a cyclic cause chain", () => {
-    const { analytics } = createPostHogAnalytics(
-      "phc_test",
-      "https://posthog.test",
-    );
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
     const first = new Error("Privileged first");
     const second = new Error("Privileged second", { cause: first });
     first.cause = second;
@@ -308,7 +327,7 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("drops frame function names that are not symbol-shaped", () => {
-    createPostHogAnalytics("phc_test", "https://posthog.test");
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
     const sanitized = initOptions?.before_send({
       event: WEB_ANALYTICS_EVENTS.exception,
       properties: {
@@ -343,10 +362,10 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("captureError keeps the stack of the deepest cause", () => {
-    const { analytics } = createPostHogAnalytics(
-      "phc_test",
-      "https://posthog.test",
-    );
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
     const original = new RangeError("Privileged original message");
     const wrapper = new Error("Privileged wrapper message", {
       cause: original,
@@ -367,10 +386,10 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("captureError attaches the telemetry area slug and nothing free-form", () => {
-    const { analytics } = createPostHogAnalytics(
-      "phc_test",
-      "https://posthog.test",
-    );
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
     const boundaryError = new Error("Privileged message");
     Object.assign(boundaryError, { area: "pdf-viewer" });
     analytics.captureError(boundaryError);
@@ -385,7 +404,7 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("sanitizer keeps only slug-shaped area properties", () => {
-    createPostHogAnalytics("phc_test", "https://posthog.test");
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
 
     const sanitizedSlug = initOptions?.before_send({
       event: WEB_ANALYTICS_EVENTS.exception,
@@ -407,10 +426,10 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("captureError correlates a recovery reference without error details", () => {
-    const { analytics } = createPostHogAnalytics(
-      "phc_test",
-      "https://posthog.test",
-    );
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
     analytics.captureError(new TypeError("Privileged document name"), {
       type: "recovery",
       reference: "ERR-DEAD-BEEF-1234",
@@ -422,10 +441,10 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("captures and sanitizes route crash lifecycle properties", async () => {
-    const { analytics } = createPostHogAnalytics(
-      "phc_test",
-      "https://posthog.test",
-    );
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
     await analytics.captureRouteErrorLifecycle({
       errorFingerprint: "ERRFP-1234ABCD",
       incidentReference: "ERR-DEAD-BEEF-1234",
@@ -485,7 +504,7 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("keeps only crash diagnostics from an SDK-enriched lifecycle event", () => {
-    createPostHogAnalytics("phc_test", "https://posthog.test");
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
 
     expect(
       sanitizeRouteErrorLifecycleEvent({
@@ -532,7 +551,7 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("drops malformed crash diagnostics", () => {
-    createPostHogAnalytics("phc_test", "https://posthog.test");
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
 
     expect(
       sanitizeRouteErrorLifecycleEvent({
@@ -552,7 +571,7 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("before_send strips exception messages and envelope noise", () => {
-    createPostHogAnalytics("phc_test", "https://posthog.test");
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
     const sanitized = initOptions?.before_send({
       event: WEB_ANALYTICS_EVENTS.exception,
       properties: {
@@ -597,7 +616,7 @@ describe("PostHog browser analytics adapter", () => {
   // every declared key survives both sanitizers, and nothing else from the
   // envelope leaks through the exception sanitizer.
   test("sanitizers preserve every posthog ingestion-required property", () => {
-    createPostHogAnalytics("phc_test", "https://posthog.test");
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
     // Independent restatement of the posthog-js contract (its
     // properties-required-for-ingestion set). If `INGESTION_REQUIRED_KEYS`
     // drifts from this literal, the guard fails instead of mirroring the
@@ -661,7 +680,7 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("before_send keeps only valid opaque recovery references", () => {
-    createPostHogAnalytics("phc_test", "https://posthog.test");
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
     const sanitized = initOptions?.before_send({
       event: WEB_ANALYTICS_EVENTS.exception,
       properties: {
@@ -697,10 +716,10 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("web vitals keep metric values and coarse context, never attribution or resolved URLs", () => {
-    const { analytics } = createPostHogAnalytics(
-      "phc_test",
-      "https://posthog.test",
-    );
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
     Object.defineProperty(globalThis, "location", {
       configurable: true,
       value: new URL(
@@ -750,10 +769,10 @@ describe("PostHog browser analytics adapter", () => {
   // Vitals can flush after the next navigation resolves, so attribution
   // must follow the metric's originating URL, not the latest route.
   test("web vitals flushed after a navigation keep their originating route", () => {
-    const { analytics } = createPostHogAnalytics(
-      "phc_test",
-      "https://posthog.test",
-    );
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
     Object.defineProperty(globalThis, "location", {
       configurable: true,
       value: new URL("https://app.example.test/workspaces/private-matter-a"),
@@ -790,7 +809,7 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("web vitals without metric values or a known origin are constrained", () => {
-    createPostHogAnalytics("phc_test", "https://posthog.test");
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
 
     // No metric values: nothing worth ingesting.
     expect(
@@ -826,10 +845,10 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("captures sanitized page view payloads", () => {
-    const { analytics } = createPostHogAnalytics(
-      "phc_test",
-      "https://posthog.test",
-    );
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
 
     Object.defineProperty(globalThis, "location", {
       configurable: true,
@@ -850,10 +869,10 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("identifies users by stable id without person properties", () => {
-    const { analytics } = createPostHogAnalytics(
-      "phc_test",
-      "https://posthog.test",
-    );
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
 
     analytics.identifyUser({ id: "user_123" });
 
@@ -861,10 +880,10 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("identifies the same user only once per browser app session", () => {
-    const { analytics } = createPostHogAnalytics(
-      "phc_test",
-      "https://posthog.test",
-    );
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
 
     analytics.identifyUser({ id: "user_123" });
     analytics.identifyUser({ id: "user_123" });
@@ -874,10 +893,10 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("resets before identifying a different user", () => {
-    const { analytics } = createPostHogAnalytics(
-      "phc_test",
-      "https://posthog.test",
-    );
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
 
     analytics.identifyUser({ id: "user_123" });
     analytics.identifyUser({ id: "user_456" });
@@ -887,10 +906,10 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("reset can be limited to identified sessions", () => {
-    const { analytics } = createPostHogAnalytics(
-      "phc_test",
-      "https://posthog.test",
-    );
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
 
     analytics.reset({ onlyIfIdentified: true });
 
@@ -903,10 +922,10 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("reset clears anonymous sessions by default", () => {
-    const { analytics } = createPostHogAnalytics(
-      "phc_test",
-      "https://posthog.test",
-    );
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
 
     analytics.reset();
 
@@ -914,10 +933,10 @@ describe("PostHog browser analytics adapter", () => {
   });
 
   test("reset clears the in-memory identity guard", () => {
-    const { analytics } = createPostHogAnalytics(
-      "phc_test",
-      "https://posthog.test",
-    );
+    const { analytics } = createPostHogAnalytics({
+      host: "https://posthog.test",
+      key: "phc_test",
+    });
 
     analytics.identifyUser({ id: "user_123" });
     analytics.reset();

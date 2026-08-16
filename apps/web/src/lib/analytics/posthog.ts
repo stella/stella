@@ -383,15 +383,31 @@ const devErrorContext = (
  * remote PostHog feature configuration are structurally disabled here
  * rather than relying on deployment-specific environment settings.
  */
-export const createPostHogAnalytics = (
-  key: string,
-  host: string,
-): { analytics: Analytics; client: typeof posthog | undefined } => {
+type CreatePostHogAnalyticsOptions = {
+  key: string;
+  host: string;
+  /**
+   * PostHog web-app origin, needed only when `host` is a first-party
+   * ingest proxy: the SDK otherwise derives UI links from `api_host`,
+   * which would point them at the proxy domain.
+   */
+  uiHost?: string | undefined;
+};
+
+export const createPostHogAnalytics = ({
+  host,
+  key,
+  uiHost,
+}: CreatePostHogAnalyticsOptions): {
+  analytics: Analytics;
+  client: typeof posthog | undefined;
+} => {
   const localDebugEnabled = import.meta.env.DEV && env.VITE_POSTHOG_LOCAL_DEBUG;
   const routeTemplateHistory: RouteTemplateHistory = new Map();
   const client = posthog.init(key, {
     opt_out_capturing_by_default: import.meta.env.DEV && !localDebugEnabled,
     api_host: host,
+    ...(uiHost === undefined ? {} : { ui_host: uiHost }),
     defaults: "2025-05-24",
     advanced_disable_feature_flags: true,
     advanced_disable_flags: true,

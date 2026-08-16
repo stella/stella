@@ -19,6 +19,7 @@ const desktopReleaseBaseUrlSchema = v.pipe(
 export const envWebClientSchema = {
   VITE_POSTHOG_KEY: v.optional(v.string()),
   VITE_POSTHOG_HOST: v.optional(v.string()),
+  VITE_POSTHOG_UI_HOST: v.optional(v.pipe(v.string(), v.url())),
   VITE_POSTHOG_LOCAL_DEBUG: v.optional(
     v.pipe(v.string(), v.parseBoolean()),
     "false",
