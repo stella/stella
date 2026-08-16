@@ -34,7 +34,11 @@ export const createAnalyticsValue = (): AnalyticsValue => {
     hasPostHogConfig(posthogConfig) &&
     (!import.meta.env.DEV || env.VITE_POSTHOG_LOCAL_DEBUG);
   const value = shouldEnablePostHog
-    ? createPostHogAnalytics(posthogConfig.key, posthogConfig.host)
+    ? createPostHogAnalytics({
+        host: posthogConfig.host,
+        key: posthogConfig.key,
+        uiHost: env.VITE_POSTHOG_UI_HOST,
+      })
     : { analytics: noopAnalytics, client: null };
 
   globalAnalytics = value.analytics;

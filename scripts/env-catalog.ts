@@ -209,6 +209,7 @@ const EXAMPLE_VALUES: Record<string, string> = {
   VITE_FEEDBACK_EMAIL_TO: "ops@example.com",
   VITE_POSTHOG_KEY: "phc_",
   VITE_POSTHOG_HOST: "https://eu.i.posthog.com",
+  VITE_POSTHOG_UI_HOST: "https://eu.posthog.com",
   VITE_PUBLIC_APP_URL: "http://localhost:3000",
 };
 
@@ -631,6 +632,7 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
   "PUBLIC_LAW_INDEXING_ENABLED",
   "PUBLIC_MICROSOFT_LOGIN_ENABLED",
   "PUBLIC_POSTHOG_HOST",
+  "PUBLIC_POSTHOG_UI_HOST",
   "PUBLIC_POSTHOG_TOKEN",
   "PUBLIC_TOOLS_ENABLED",
   "PUBLIC_TOOLS_INDEXING_ENABLED",
