@@ -116,6 +116,12 @@ type NetworkCollectorOptions = {
   apiOrigin?: string;
 };
 
+// Request boundaries are stamped when this process handles the corresponding
+// CDP event, so they carry the driver's event-loop latency. Playwright also
+// exposes the browser's own network-stack timings (`request.timing()`), which
+// are immune to a driver stall but measure a visibly shorter interval, so
+// adopting them shifts the whole depth scale and needs a deliberate baseline
+// re-derivation rather than riding along with a metric fix.
 type NetworkRecord = {
   method: string;
   pathname: string;
@@ -295,17 +301,43 @@ export const requestKey = ({
   pathname: string;
 }): string => `${method} ${normalizeApiPath(pathname)}`;
 
-// A request launched after this quiet gap starts a new observation sequence,
-// not another route-load round. This excludes idle prefetches from the route's
-// longest contiguous request sequence.
+// A request launched this long after the previous LAUNCH starts a new
+// observation sequence, not another route-load round: an idle prefetch that
+// fires once the route has settled is not a level the user waits through. The
+// split reads start times only, so how long a response takes can never move an
+// observation boundary.
+//
+// Reading launch times rather than the gap since the previous response ENDED is
+// what buys load-monotonicity, and it costs sensitivity: a dependent request
+// whose parent took longer than this gap opens a new sequence instead of
+// counting a level. The three properties are not simultaneously satisfiable —
+// separating a dependent request from an idle prefetch requires knowing how long
+// the parent ran, and any rule that reads response ends lets a response growing
+// under load close a gap it used to exceed, which is exactly the failure this
+// metric had. Under-counting a slow chain is the safer of the two errors for a
+// guard whose baselines are only ever compared upward.
 const REQUEST_SEQUENCE_GAP_MS = 500;
 
-// Longest sequence of non-overlapping request waves. A new round starts only
-// after every request in the current wave has completed. This deliberately
-// computes a lower bound: a request that depends on a fast response can be
-// hidden by an unrelated slow response, but runner load cannot serialize
-// independent completions into a false waterfall. Lengthening any response can
-// only merge rounds, never deepen them.
+// Depth = the most consecutive busy blocks inside any one observation sequence,
+// where a busy block is a maximal run of requests whose intervals overlap. Two
+// requests that were in flight at the same instant are never counted as two
+// levels, so this is a lower bound on true causal depth: a request that depends
+// on a fast response stays hidden behind an unrelated slow one.
+//
+// Load-monotonicity is the property the guard rests on: neither a slower
+// response nor a uniformly stretched timeline can raise the result, so an extra
+// level always means an extra level. Two rules buy it:
+//   1. The sequence split reads LAUNCH times only. Segment boundaries therefore
+//      cannot move when responses take longer, and a uniform slowdown widens
+//      launch gaps, which only splits a sequence further.
+//   2. Coverage (`busyUntil`) is a running max over every end seen so far and is
+//      never rewound at a boundary. A still-in-flight long request keeps masking
+//      the requests that overlap it even across a split, so a split can only
+//      lower the count, never unmask a chain hiding behind that request.
+// The previous formulation broke rule 1: it counted rounds through a counter
+// that reset on a gap measured from the END of the previous round, so a response
+// that grew under load could close that gap, skip the reset, and carry the count
+// forward into a deeper reading with no change to the route at all.
 export const waterfallDepth = (
   intervals: { start: number; end: number }[],
 ): number => {
@@ -316,22 +348,21 @@ export const waterfallDepth = (
   }
 
   let best = 1;
-  let currentDepth = 1;
-  let waveEndsAt = first.end;
+  let blocksInSequence = 1;
+  let previousStart = first.start;
+  let busyUntil = first.end;
 
   for (const interval of sorted.slice(1)) {
-    if (interval.start < waveEndsAt) {
-      waveEndsAt = Math.max(waveEndsAt, interval.end);
-      continue;
-    }
+    const launchGap = interval.start - previousStart;
+    previousStart = interval.start;
 
-    if (interval.start - waveEndsAt > REQUEST_SEQUENCE_GAP_MS) {
-      currentDepth = 1;
-    } else {
-      currentDepth += 1;
+    if (launchGap > REQUEST_SEQUENCE_GAP_MS) {
+      blocksInSequence = 1;
+    } else if (interval.start >= busyUntil) {
+      blocksInSequence += 1;
+      best = Math.max(best, blocksInSequence);
     }
-    waveEndsAt = interval.end;
-    best = Math.max(best, currentDepth);
+    busyUntil = Math.max(busyUntil, interval.end);
   }
   return best;
 };
@@ -461,9 +492,14 @@ const pushNewRequestProblems = ({
   );
 };
 
-// Browser scheduling can still split one logical wave at its boundary. Keep a
-// bounded +1 allowance; the wave calculation itself is monotonic under slower
-// responses, so load cannot accumulate arbitrary false depth.
+// Launch jitter is the one residual `waterfallDepth` cannot remove: two
+// requests issued from different ticks may overlap on one run and not the next,
+// which shifts a route by exactly one block. No metric reading launch times can
+// tell that apart from a real added round, and reading response ends instead is
+// what made the previous formulation accumulate false depth without bound.
+// One level is therefore the whole budget and must stay there: since the metric
+// can no longer carry a count across an observation boundary, a route reporting
+// two extra levels has genuinely grown one.
 const DEPTH_JITTER_ALLOWANCE = 1;
 
 const pushWaterfallDepthProblems = ({
@@ -481,7 +517,7 @@ const pushWaterfallDepthProblems = ({
     return;
   }
   problems.push(
-    `Request waterfall got deeper on ${route}: ${entry.depth} -> ${metrics.depth} (already tolerating +${DEPTH_JITTER_ALLOWANCE} for wave-boundary jitter)\n` +
+    `Request waterfall got deeper on ${route}: ${entry.depth} -> ${metrics.depth} (already tolerating +${DEPTH_JITTER_ALLOWANCE} for launch jitter)\n` +
       `  Each extra level is one more sequential network round the user waits\n` +
       `  through before the page can finish. Usually the fix is to start the\n` +
       `  query in the route loader (ensureRouteQueryData / prefetchRouteQuery in\n` +
