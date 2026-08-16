@@ -128,8 +128,13 @@ const InspectorTabList = ({
       className,
     )}
     data-slot="inspector-tab-list"
-    variant="underline"
     {...props}
+    // Pinned after the spread for the same reason as the tabs orientation: the
+    // omit above rejects a literal `variant`, but a spread of a wider props
+    // object still carries one. The default variant would draw a rounded
+    // indicator against this list's overridden `bg-background`, losing the
+    // underline strip the inspector chrome is built around.
+    variant="underline"
   />
 );
 

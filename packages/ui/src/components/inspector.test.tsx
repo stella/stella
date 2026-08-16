@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { describe, expect, test } from "bun:test";
 
-import type { Tabs } from "@stll/ui/components/tabs";
+import type { Tabs, TabsList } from "@stll/ui/components/tabs";
 
 import type * as InspectorModule from "./inspector";
 import {
@@ -107,6 +107,12 @@ describe("Inspector", () => {
     expect(markup).toContain('tabindex="-1"');
     expect(markup).toContain('data-slot="inspector-property-label"');
     expect(markup).toContain('data-slot="inspector-property-value"');
+
+    // The slot names above survive a swap to generic elements, so pin the
+    // description-list tags too: the semantics are the point of these slots.
+    expect(markup).toMatch(/<dl\b/u);
+    expect(markup).toMatch(/<dt\b/u);
+    expect(markup).toMatch(/<dd\b/u);
   });
 
   test("isolates bidi on exactly the record-data slots", () => {
@@ -188,20 +194,25 @@ describe("Inspector", () => {
     expect([...isolatedSlots].sort()).toEqual([...RECORD_DATA_SLOTS]);
   });
 
-  test("stays horizontal when a spread leaks a vertical orientation", () => {
-    // The omit on InspectorTabs only rejects a literal `orientation`; a spread
-    // of a wider props object still carries one through structural subtyping,
-    // so the runtime pin is what actually holds the layout. Typing the object
-    // as the full tabs props is exactly the shape that gets past the omit.
-    const leaked: React.ComponentProps<typeof Tabs> = {
+  test("holds forced chrome props against a widened spread", () => {
+    // The omits on these wrappers only reject a literal `orientation`/`variant`.
+    // An object annotated with the full props type satisfies `Omit<...>` under
+    // structural width subtyping and the rest spread forwards it, so the pins
+    // after each spread are what actually hold the chrome. Both forced props in
+    // the shell are exercised here; `dir` is deliberately not among them, since
+    // record-data slots stay caller-overridable.
+    const leakedTabs: React.ComponentProps<typeof Tabs> = {
       defaultValue: "overview",
       orientation: "vertical",
+    };
+    const leakedTabList: React.ComponentProps<typeof TabsList> = {
+      variant: "default",
     };
 
     const markup = renderToStaticMarkup(
       <Inspector>
-        <InspectorTabs {...leaked}>
-          <InspectorTabList aria-label="Record views">
+        <InspectorTabs {...leakedTabs}>
+          <InspectorTabList {...leakedTabList} aria-label="Record views">
             <InspectorTab value="overview">Overview</InspectorTab>
           </InspectorTabList>
           <InspectorTabPanel value="overview">Content</InspectorTabPanel>
@@ -211,6 +222,15 @@ describe("Inspector", () => {
 
     expect(markup).toContain('data-orientation="horizontal"');
     expect(markup).not.toContain('data-orientation="vertical"');
+
+    // The variant is only observable through the indicator's styling: the
+    // underline strip paints `bg-primary`, the default variant a rounded chip.
+    const indicator = /<[a-z][^>]*data-slot="tab-indicator"[^>]*>/u.exec(
+      markup,
+    )?.[0];
+
+    expect(indicator).toContain("bg-primary");
+    expect(indicator).not.toContain("rounded-md");
   });
 
   test("lets callers force a direction on a record-data slot", () => {
