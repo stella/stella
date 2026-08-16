@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { describe, expect, test } from "bun:test";
 
+import type * as InspectorModule from "./inspector";
 import {
   Inspector,
   InspectorActions,
@@ -22,13 +23,39 @@ import {
   InspectorTitle,
 } from "./inspector";
 
+// Total over the module's exports, so a new slot component cannot land without
+// being named here: `satisfies` fails to compile until it is, and the coverage
+// assertion below then fails until the fixture renders it and RECORD_DATA_SLOTS
+// classifies it as record data or chrome.
+const SLOT_BY_EXPORT = {
+  Inspector: "inspector",
+  InspectorActions: "inspector-actions",
+  InspectorContent: "inspector-content",
+  InspectorDescription: "inspector-description",
+  InspectorHeader: "inspector-header",
+  InspectorHeaderText: "inspector-header-text",
+  InspectorProperty: "inspector-property",
+  InspectorPropertyLabel: "inspector-property-label",
+  InspectorPropertyList: "inspector-property-list",
+  InspectorPropertyValue: "inspector-property-value",
+  InspectorSection: "inspector-section",
+  InspectorSectionTitle: "inspector-section-title",
+  InspectorTab: "inspector-tab",
+  InspectorTabList: "inspector-tab-list",
+  InspectorTabPanel: "inspector-tab-panel",
+  InspectorTabs: "inspector-tabs",
+  InspectorTitle: "inspector-title",
+} as const satisfies Record<keyof typeof InspectorModule, string>;
+
+type InspectorSlot = (typeof SLOT_BY_EXPORT)[keyof typeof SLOT_BY_EXPORT];
+
 // Slots carrying caller-supplied record values; each must isolate its own bidi
 // context so a Latin value inside an RTL inspector keeps its character order.
 const RECORD_DATA_SLOTS = [
   "inspector-description",
   "inspector-property-value",
   "inspector-title",
-] as const;
+] as const satisfies readonly InspectorSlot[];
 
 describe("Inspector", () => {
   test("keeps one explicit content scroll owner", () => {
@@ -142,11 +169,18 @@ describe("Inspector", () => {
       }
     }
 
-    // Guards the closed-set claim: a declared slot that stopped rendering would
-    // otherwise let the comparison below pass while testing nothing.
-    for (const slot of RECORD_DATA_SLOTS) {
-      expect(renderedSlots).toContain(slot);
-    }
+    // Closes the set in both directions against the module's exports rather
+    // than against whatever the fixture happens to use: every declared slot
+    // must be exercised, and any `inspector-*` slot the fixture renders must be
+    // declared. Slots owned by the underlying tabs primitive are not prefixed,
+    // so they stay out of this comparison.
+    const inspectorSlotsRendered = [...renderedSlots]
+      .filter((slot) => slot.startsWith("inspector"))
+      .sort();
+
+    expect(inspectorSlotsRendered).toEqual(
+      Object.values(SLOT_BY_EXPORT).toSorted(),
+    );
 
     expect([...isolatedSlots].sort()).toEqual([...RECORD_DATA_SLOTS]);
   });
