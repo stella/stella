@@ -34,7 +34,7 @@ inputs:
     required: false
     default: "true"
   frontend:
-    description: Build and publish the frontend as part of the promotion
+    description: Deploy the prebuilt frontend image as part of the promotion
     required: false
     default: "true"
   image-digest:
@@ -45,7 +45,7 @@ inputs:
     default: ""
   web-image-digest:
     description: >
-      Prebuilt web image digest (sha256:...). Required when a tagged release
+      Prebuilt web image digest (sha256:...). Required when the promotion
       includes the frontend.
     required: false
     default: ""
@@ -158,8 +158,8 @@ runs:
           echo "::error::web-image-digest must look like sha256:<64 lowercase hex chars>." >&2
           exit 1
         fi
-        if [[ "$FRONTEND" == "true" && "$RELEASE_REF" != main-* && -z "$WEB_IMAGE_DIGEST" ]]; then
-          echo "::error::Tagged frontend promotions require a prebuilt web image digest." >&2
+        if [[ "$FRONTEND" == "true" && -z "$WEB_IMAGE_DIGEST" ]]; then
+          echo "::error::Frontend promotions require a prebuilt web image digest." >&2
           exit 1
         fi
         current_app_token=""

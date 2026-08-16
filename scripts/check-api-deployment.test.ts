@@ -52,14 +52,18 @@ describe("API deployment health receipt", () => {
       new URL("../.github/workflows/deploy-staging.yml", import.meta.url),
     ).text();
     const healthJobStart = workflow.indexOf("\n  staging-health:\n");
-    const deployJobStart = workflow.indexOf("\n  build-and-deploy:\n");
-    const verifyJobStart = workflow.indexOf("\n  verify-staging:\n");
-    const healthJob = workflow.slice(healthJobStart, deployJobStart);
-    const deployJob = workflow.slice(deployJobStart, verifyJobStart);
+    const apiBuildStart = workflow.indexOf("\n  build-api:\n");
+    const webBuildStart = workflow.indexOf("\n  build-web:\n");
+    const promoteStart = workflow.indexOf("\n  promote-staging:\n");
+    const healthJob = workflow.slice(healthJobStart, apiBuildStart);
+    const apiBuild = workflow.slice(apiBuildStart, webBuildStart);
+    const webBuild = workflow.slice(webBuildStart, promoteStart);
+    const promoteJob = workflow.slice(promoteStart);
 
     expect(healthJobStart).toBeGreaterThanOrEqual(0);
-    expect(deployJobStart).toBeGreaterThan(healthJobStart);
-    expect(verifyJobStart).toBeGreaterThan(deployJobStart);
+    expect(apiBuildStart).toBeGreaterThan(healthJobStart);
+    expect(webBuildStart).toBeGreaterThan(apiBuildStart);
+    expect(promoteStart).toBeGreaterThan(webBuildStart);
     // The gate only reads: it decides whether to promote, never promotes.
     // Both delimiters are asserted so a missing block cannot slice to "" and
     // satisfy the write check by being empty.
@@ -85,10 +89,52 @@ describe("API deployment health receipt", () => {
     // An unreachable environment defers; only a wait past the budget fails.
     expect(healthJob).toContain("readonly MAX_DEFERRAL_HOURS=");
     expect(healthJob).toContain("the environment needs attention.");
-    expect(deployJob).toContain("needs: staging-health");
-    expect(deployJob).toContain(
-      "needs.staging-health.outputs.deploy == 'true'",
-    );
+    expect(apiBuild).toContain("needs: staging-health");
+    expect(apiBuild).toContain("needs.staging-health.outputs.deploy == 'true'");
+    expect(webBuild).toContain("needs: staging-health");
+    expect(webBuild).toContain("needs.staging-health.outputs.deploy == 'true'");
+    expect(apiBuild).toContain("cancel-in-progress: true");
+    expect(webBuild).toContain("cancel-in-progress: true");
+    expect(promoteJob).toContain("cancel-in-progress: false");
+    expect(promoteJob).toContain("Confirm this SHA is still main");
+    expect(promoteJob).toContain("web-image-digest:");
+    expect(promoteJob).toContain("Run staging web smoke");
+    expect(workflow).not.toContain("\n  verify-staging:\n");
+  });
+
+  test("builds web images publicly from an allowlisted browser contract", async () => {
+    const [action, contract, production, staging] = await Promise.all([
+      Bun.file(
+        new URL(
+          "../.github/actions/build-web-image/action.yml",
+          import.meta.url,
+        ),
+      ).text(),
+      Bun.file(
+        new URL("../apps/web/build-env-contract.json", import.meta.url),
+      ).text(),
+      Bun.file(
+        new URL("../apps/web/build-env/production.json", import.meta.url),
+      ).text(),
+      Bun.file(
+        new URL("../apps/web/build-env/staging.json", import.meta.url),
+      ).text(),
+    ]);
+
+    expect(action).toContain("scripts/render-web-build-args.sh");
+    expect(action).toContain("type=registry,ref=ghcr.io/");
+    expect(action).not.toContain("type=gha");
+    expect(action).not.toContain("toJSON(vars)");
+    expect(action).not.toContain("AWS_");
+
+    for (const configuration of [production, staging]) {
+      const configuredKeys = configuration.match(/"VITE_[A-Z0-9_]+"(?=:)/gu);
+      expect(configuredKeys?.length).toBeGreaterThan(0);
+      for (const quotedKey of configuredKeys ?? []) {
+        expect(contract).toContain(`${quotedKey}:`);
+      }
+      expect(configuration).not.toMatch(/AWS_|DB_|ECR_|SECRET|TOKEN/gu);
+    }
   });
 
   test("release promotion preserves the full online-migration window", async () => {
@@ -142,17 +188,20 @@ describe("API deployment health receipt", () => {
     expect(manifestJobStart).toBeGreaterThan(webBuildJobStart);
     expect(promoteJob).toContain("timeout-minutes: 360");
     expect(webBuildJob).toContain("timeout-minutes: 55");
-    expect(webBuildJob).toContain(`-f "inputs[release_sha]=\${RELEASE_SHA}"`);
-    expect(webBuildJob).toContain(`-f "inputs[request_id]=\${REQUEST_ID}"`);
+    expect(webBuildJob).toContain("Build and publish web image publicly");
+    expect(webBuildJob).toContain(
+      "uses: ./.workflow-source/.github/actions/build-web-image",
+    );
+    expect(webBuildJob).toContain("source-path: .release-source");
+    expect(webBuildJob).toContain("tooling-path: .workflow-source");
     expect(webBuildJob).toContain(".releaseSha == $release_sha");
-    expect(webBuildJob).toContain("stella-web.intoto.jsonl");
     expect(webBuildJob).toContain(
       "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6",
     );
-    expect(webBuildJob).toContain(
-      `candidate_tag="candidate-\${GITHUB_RUN_ID}-\${GITHUB_RUN_ATTEMPT}"`,
-    );
     expect(webBuildJob).toContain(".targetEnvironment == $target_environment");
+    expect(webBuildJob).not.toContain("stella-infra");
+    expect(webBuildJob).not.toContain("gh run download");
+    expect(webBuildJob).not.toContain("build-release-web.yml");
     expect(webBuildJob).not.toContain(`tags+=("\${IMAGE}:latest")`);
     expect(manifestJob).toContain(
       "bash .workflow-source/scripts/create-release-manifest.sh",
@@ -198,7 +247,7 @@ describe("API deployment health receipt", () => {
       `-f "inputs[web_image_digest]=\${WEB_IMAGE_DIGEST}"`,
     );
     expect(promoteAction).toContain(
-      "Tagged frontend promotions require a prebuilt web image digest.",
+      "Frontend promotions require a prebuilt web image digest.",
     );
     expect(promoteJob).not.toContain("steps.app-token.outputs.token");
     expect(stagingWorkflow).not.toContain(
