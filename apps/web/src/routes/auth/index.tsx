@@ -1,3 +1,5 @@
+import * as React from "react";
+
 import { createFileRoute, redirect, useLocation } from "@tanstack/react-router";
 import * as v from "valibot";
 
@@ -9,6 +11,14 @@ import {
 } from "@/lib/oauth-provider";
 import { pageTitle } from "@/lib/page-title";
 import { normalizeRedirectTo } from "@/lib/redirect";
+
+const DevQuickStartButton = import.meta.env.DEV
+  ? React.lazy(async () => {
+      const module =
+        await import("@/routes/auth/-components/dev-quick-start-button");
+      return { default: module.DevQuickStartButton };
+    })
+  : null;
 
 const searchSchema = v.object({
   redirectTo: v.optional(v.pipe(v.string(), v.transform(normalizeRedirectTo))),
@@ -51,7 +61,16 @@ function LoginOrSignup() {
   });
   const redirectTo = getOauthPostLoginRedirectTo(location) ?? defaultRedirectTo;
 
-  return <SignInPanel redirectTo={redirectTo} />;
+  return (
+    <div className="flex w-full max-w-md flex-col gap-4">
+      <SignInPanel redirectTo={redirectTo} />
+      {DevQuickStartButton === null ? null : (
+        <React.Suspense fallback={null}>
+          <DevQuickStartButton redirectTo={redirectTo} />
+        </React.Suspense>
+      )}
+    </div>
+  );
 }
 
 const getOauthPostLoginRedirectTo = ({

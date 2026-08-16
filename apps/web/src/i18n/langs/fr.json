@@ -91,6 +91,25 @@
     "createFirstOrganization": "Créez votre première organisation pour commencer",
     "createOrganization": "Créer une organisation",
     "createOrganizationButton": "Créer l'organisation",
+    "devQuickStart": {
+      "button": "Démarrage rapide du développement",
+      "error": {
+        "fallback": "Consultez le journal de l’API et réessayez.",
+        "matterImport": "L’importation de Harvey LAB n’a pas pu démarrer.",
+        "otpUnavailable": "Le code à usage unique de développement n’était pas disponible.",
+        "title": "Échec du démarrage rapide du développement"
+      },
+      "phase": {
+        "addingSkills": "Ajout des compétences",
+        "authenticating": "Connexion en cours",
+        "creatingOrganization": "Création de l’organisation",
+        "startingImport": "Importation des dossiers LAB"
+      },
+      "success": {
+        "description": "10 dossiers Harvey LAB ont été importés ; le traitement des documents se poursuit en arrière-plan.",
+        "title": "La configuration de développement est prête"
+      }
+    },
     "emailPlaceholder": "vous@example.com",
     "error": {
       "accountNotLinked": "Cette adresse e-mail se connecte d'une autre manière. Utilisez votre méthode de connexion d'origine ou réessayez.",

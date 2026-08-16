@@ -91,6 +91,25 @@
     "createFirstOrganization": "Sukurkite savo pirmąją organizaciją",
     "createOrganization": "Sukurti organizaciją",
     "createOrganizationButton": "Sukurti organizaciją",
+    "devQuickStart": {
+      "button": "Spartusis kūrimo paleidimas",
+      "error": {
+        "fallback": "Patikrinkite API žurnalą ir bandykite dar kartą.",
+        "matterImport": "Nepavyko pradėti „Harvey LAB“ importavimo.",
+        "otpUnavailable": "Kūrimo aplinkos vienkartinis kodas nebuvo pasiekiamas.",
+        "title": "Spartusis kūrimo paleidimas nepavyko"
+      },
+      "phase": {
+        "addingSkills": "Pridedami įgūdžiai",
+        "authenticating": "Prisijungiama",
+        "creatingOrganization": "Kuriama organizacija",
+        "startingImport": "Importuojamos LAB bylos"
+      },
+      "success": {
+        "description": "Importuota 10 „Harvey LAB“ bylų; dokumentai toliau apdorojami fone.",
+        "title": "Kūrimo sąranka paruošta"
+      }
+    },
     "emailPlaceholder": "jus@example.com",
     "error": {
       "accountNotLinked": "Šis el. paštas prisijungia kitu būdu. Naudokite pradinį prisijungimo būdą arba bandykite dar kartą.",

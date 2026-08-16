@@ -5,6 +5,7 @@ import { TwoFactorPanel } from "@/components/auth/two-factor-panel";
 import { redirectToSchema } from "@/lib/redirect";
 
 const searchSchema = v.strictObject({
+  devQuickStart: v.optional(v.boolean()),
   redirectTo: redirectToSchema,
 });
 
@@ -14,7 +15,10 @@ export const Route = createFileRoute("/auth/two-factor")({
     if (context.session) {
       throw redirect({
         to: "/auth/organization",
-        search: { redirectTo: search.redirectTo },
+        search: {
+          devQuickStart: search.devQuickStart,
+          redirectTo: search.redirectTo,
+        },
         replace: true,
       });
     }

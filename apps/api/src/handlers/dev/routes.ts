@@ -1,7 +1,10 @@
+import { panic, Result } from "better-result";
 import { eq, inArray } from "drizzle-orm";
 import Elysia, { t } from "elysia";
 import { rmSync } from "node:fs";
 import path from "node:path";
+
+import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 
 import {
   contacts,
@@ -14,36 +17,62 @@ import {
 import { env } from "@/api/env";
 import { authMacro } from "@/api/lib/auth";
 import { readDevOtp } from "@/api/lib/dev-otp-store";
+import {
+  mintDevSeedSession,
+  resolveMemberDevOrganization,
+} from "@/api/lib/dev-seed-session-store";
+import { fetchWithResolvedAddress } from "@/api/lib/safe-outbound-fetch";
 import { rebuildSupplementalSearchIndex } from "@/api/lib/search/index-global";
 import { getSearchProvider } from "@/api/lib/search/provider";
+
+import {
+  type FirmKnowledgeJob,
+  FirmKnowledgeJobStore,
+  type FirmKnowledgeSeedParameters,
+  type FirmKnowledgeSeedStatus,
+  isReusableFirmKnowledgeJob,
+} from "./firm-knowledge-job-store";
 
 const VITE_CACHE_DIR = path.resolve(
   import.meta.dir,
   "../../../../../apps/web/node_modules/.vite",
 );
 
-type SeedStatus =
-  | { status: "idle" }
-  | { status: "running"; startedAt: string }
-  | { status: "succeeded"; startedAt: string; finishedAt: string }
-  | {
-      status: "failed";
-      startedAt: string;
-      finishedAt: string;
-      message: string;
-    };
+type SeedStatus = FirmKnowledgeSeedStatus;
+
+const IDLE_SEED_STATUS = { status: "idle" } as const satisfies SeedStatus;
 
 let seedInFlight: Promise<void> | null = null;
-let seedStatus: SeedStatus = { status: "idle" };
+let seedStatus: SeedStatus = IDLE_SEED_STATUS;
 
 let firmKnowledgeInFlight: Promise<void> | null = null;
-let firmKnowledgeStatus: SeedStatus = { status: "idle" };
+let firmKnowledgeJobId: string | null = null;
+const firmKnowledgeJobs = new FirmKnowledgeJobStore();
 
 /** Matters to seed from the Dev menu; the CLI's own default. */
 const FIRM_KNOWLEDGE_MATTERS = 15;
+const MAX_FIRM_KNOWLEDGE_MATTERS = 50;
+const MAX_SKILL_SEED_RESPONSE_BYTES = 1024 * 1024;
+
+const INCOMPLETE_MATTER_MODE = {
+  replace: "replace",
+  skip: "skip",
+} as const;
 
 const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : "Seed failed";
+
+const getFirmKnowledgeJobResponse = (job: FirmKnowledgeJob) => ({
+  jobId: job.id,
+  ...job.status,
+});
+
+const getDevApiOrigin = (port: number | undefined): string => {
+  if (port === undefined) {
+    panic("The dev API server has no listening port.");
+  }
+  return `http://127.0.0.1:${String(port)}`;
+};
 
 export const devRoute = new Elysia({ prefix: "/dev" })
   .use(authMacro)
@@ -89,50 +118,181 @@ export const devRoute = new Elysia({ prefix: "/dev" })
 
     return seedStatus;
   })
-  .get("/seed-firm-knowledge", () => firmKnowledgeStatus)
-  // Uploads through this same API as the caller, using the caller's own cookie:
-  // the corpus must travel the real upload path to get derivatives and
-  // extraction, and running as the signed-in user is what puts the matters in
-  // the organization they are actually looking at.
-  .post("/seed-firm-knowledge", (ctx) => {
-    const cookie = ctx.request.headers.get("cookie");
-    if (!cookie) {
-      return new Response("No session cookie", { status: 401 });
-    }
-    const apiOrigin = new URL(ctx.request.url).origin;
+  .get(
+    "/seed-firm-knowledge",
+    (ctx) => {
+      const job = firmKnowledgeJobs.getOwned(ctx.query.jobId, ctx.user.id);
+      return job
+        ? getFirmKnowledgeJobResponse(job)
+        : { jobId: ctx.query.jobId, ...IDLE_SEED_STATUS };
+    },
+    {
+      query: t.Object({
+        jobId: t.String({ minLength: 1, maxLength: 128 }),
+      }),
+    },
+  )
+  .post(
+    "/seed-skills",
+    async (ctx) => {
+      const organizationId = await resolveMemberDevOrganization(
+        ctx.body.organizationId,
+        ctx.user.id,
+      );
+      if (organizationId === null) {
+        return new Response("Organization membership not found", {
+          status: 403,
+        });
+      }
 
-    if (!firmKnowledgeInFlight) {
+      const apiOrigin = getDevApiOrigin(ctx.server?.port);
+      const seedSession = await mintDevSeedSession({
+        organizationId,
+        userId: ctx.user.id,
+      });
+      // Pin the socket to loopback as well as constructing a loopback URL, so
+      // the isolated credential cannot leave this process's host.
+      const response = await fetchWithResolvedAddress({
+        addresses: [{ address: "127.0.0.1", family: 4 }],
+        body: "{}",
+        headers: {
+          cookie: seedSession.cookie,
+          "content-type": "application/json",
+        },
+        maxBytes: MAX_SKILL_SEED_RESPONSE_BYTES,
+        method: "POST",
+        timeoutMs: 30_000,
+        url: new URL(`${apiOrigin}${STELLA_API_VERSION_PREFIX}/skills/seed`),
+      });
+      if (Result.isError(response)) {
+        return new Response("Skill seed request failed", { status: 502 });
+      }
+      if (!response.value.ok) {
+        return new Response(new TextDecoder().decode(response.value.body), {
+          status: response.value.status,
+        });
+      }
+      return { ok: true };
+    },
+    {
+      body: t.Object({
+        organizationId: t.String({ minLength: 1, maxLength: 128 }),
+      }),
+    },
+  )
+  // Uploads through this same API under a short-lived job session pinned to
+  // the initiating user and organization. The corpus must travel the real
+  // upload path to get derivatives and extraction.
+  .post(
+    "/seed-firm-knowledge",
+    async (ctx) => {
+      const apiOrigin = getDevApiOrigin(ctx.server?.port);
+      const userId = ctx.user.id;
+      const organizationId =
+        ctx.body?.organizationId === undefined
+          ? ctx.session.activeOrganizationId
+          : await resolveMemberDevOrganization(ctx.body.organizationId, userId);
+      if (organizationId === null) {
+        return new Response("Organization membership not found", {
+          status: 403,
+        });
+      }
+
+      const parameters = {
+        matters: ctx.body?.matters ?? FIRM_KNOWLEDGE_MATTERS,
+        replaceIncomplete:
+          ctx.body?.incompleteMatterMode === INCOMPLETE_MATTER_MODE.replace,
+        ...(ctx.body?.selectionSeed === undefined
+          ? {}
+          : { selectionSeed: ctx.body.selectionSeed }),
+      } satisfies FirmKnowledgeSeedParameters;
+
+      if (firmKnowledgeInFlight) {
+        const job =
+          firmKnowledgeJobId === null
+            ? null
+            : firmKnowledgeJobs.get(firmKnowledgeJobId);
+        if (
+          job === null ||
+          !isReusableFirmKnowledgeJob(job, {
+            organizationId,
+            parameters,
+            userId,
+          })
+        ) {
+          return new Response("A firm-knowledge seed is already running", {
+            status: 409,
+          });
+        }
+
+        return getFirmKnowledgeJobResponse(job);
+      }
+
       const startedAt = new Date().toISOString();
-      firmKnowledgeStatus = { status: "running", startedAt };
+      const job = firmKnowledgeJobs.create({
+        organizationId,
+        parameters,
+        startedAt,
+        userId,
+      });
+      firmKnowledgeJobId = job.id;
       firmKnowledgeInFlight = (async () => {
         try {
+          const seedSession = await mintDevSeedSession({
+            organizationId,
+            userId,
+          });
           const { seedFirmKnowledge } =
             await import("../../../scripts/seed-firm-knowledge");
           await seedFirmKnowledge({
             apiOrigin,
-            cookie,
-            matters: FIRM_KNOWLEDGE_MATTERS,
+            cookie: seedSession.cookie,
+            matters: job.parameters.matters,
+            replaceIncomplete: job.parameters.replaceIncomplete,
+            ...(job.parameters.selectionSeed === undefined
+              ? {}
+              : { selectionSeed: job.parameters.selectionSeed }),
           });
-          firmKnowledgeStatus = {
+          firmKnowledgeJobs.update(job.id, {
             status: "succeeded",
             startedAt,
             finishedAt: new Date().toISOString(),
-          };
+          } satisfies FirmKnowledgeSeedStatus);
         } catch (error: unknown) {
-          firmKnowledgeStatus = {
+          firmKnowledgeJobs.update(job.id, {
             status: "failed",
             startedAt,
             finishedAt: new Date().toISOString(),
             message: getErrorMessage(error),
-          };
+          } satisfies FirmKnowledgeSeedStatus);
         } finally {
           firmKnowledgeInFlight = null;
+          firmKnowledgeJobId = null;
         }
       })();
-    }
 
-    return firmKnowledgeStatus;
-  })
+      return getFirmKnowledgeJobResponse(job);
+    },
+    {
+      body: t.Optional(
+        t.Object({
+          incompleteMatterMode: t.Optional(
+            t.Union([
+              t.Literal(INCOMPLETE_MATTER_MODE.skip),
+              t.Literal(INCOMPLETE_MATTER_MODE.replace),
+            ]),
+          ),
+          matters: t.Optional(
+            t.Integer({ minimum: 1, maximum: MAX_FIRM_KNOWLEDGE_MATTERS }),
+          ),
+          organizationId: t.Optional(
+            t.String({ minLength: 1, maxLength: 128 }),
+          ),
+          selectionSeed: t.Optional(t.String({ minLength: 1, maxLength: 128 })),
+        }),
+      ),
+    },
+  )
   .post("/clean", async (ctx) => {
     const orgId = ctx.session.activeOrganizationId;
 

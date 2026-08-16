@@ -91,6 +91,25 @@
     "createFirstOrganization": "Cree su primera organización para comenzar",
     "createOrganization": "Crear una organización",
     "createOrganizationButton": "Crear organización",
+    "devQuickStart": {
+      "button": "Inicio rápido de desarrollo",
+      "error": {
+        "fallback": "Revisa el registro de la API e inténtalo de nuevo.",
+        "matterImport": "No se pudo iniciar la importación de Harvey LAB.",
+        "otpUnavailable": "El código de un solo uso de desarrollo no estaba disponible.",
+        "title": "El inicio rápido de desarrollo ha fallado"
+      },
+      "phase": {
+        "addingSkills": "Añadiendo habilidades",
+        "authenticating": "Iniciando sesión",
+        "creatingOrganization": "Creando la organización",
+        "startingImport": "Importando asuntos de LAB"
+      },
+      "success": {
+        "description": "Se importaron 10 asuntos de Harvey LAB; el procesamiento de documentos continúa en segundo plano.",
+        "title": "La configuración de desarrollo está lista"
+      }
+    },
     "emailPlaceholder": "usted@example.com",
     "error": {
       "accountNotLinked": "Este correo inicia sesión de otra forma. Usa tu método de inicio de sesión original o inténtalo de nuevo.",

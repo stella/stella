@@ -28,6 +28,8 @@ import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 
 import { sessionCookieNameForDevPort } from "@/api/lib/auth-cookie-name";
 
+import { selectMatterNames } from "./seed-firm-knowledge.logic";
+
 const CORPUS_REPOSITORY = "https://github.com/harveyai/harvey-labs.git";
 // Pinned so every machine seeds identical documents and an upstream change
 // cannot arrive unreviewed. Bump deliberately.
@@ -211,7 +213,13 @@ const runCommand = async (command: string[], options: CommandOptions = {}) => {
 };
 
 /** Blobless sparse clone: only the seeded matters are materialised. */
-const ensureCorpus = async (matterCount: number): Promise<string> => {
+const ensureCorpus = async ({
+  matterCount,
+  selectionSeed,
+}: {
+  matterCount: number;
+  selectionSeed?: string;
+}): Promise<string> => {
   const cache = path.join(process.cwd(), CACHE_DIRECTORY);
   const cloned = await stat(path.join(cache, ".git")).then(
     () => true,
@@ -266,12 +274,15 @@ const ensureCorpus = async (matterCount: number): Promise<string> => {
   if (list.exitCode !== 0) {
     fail(`Could not list corpus matters: ${list.stderr}`);
   }
-  const matters = list.stdout
+  const matterNames = list.stdout
     .split("\n")
     .filter(Boolean)
-    .map((entry) => path.basename(entry))
-    .sort((a, b) => a.localeCompare(b))
-    .slice(0, matterCount);
+    .map((entry) => path.basename(entry));
+  const matters = selectMatterNames({
+    matterCount,
+    matterNames,
+    ...(selectionSeed === undefined ? {} : { selectionSeed }),
+  });
 
   if (matters.length === 0) {
     fail("Corpus listing returned no matters.");
@@ -452,6 +463,8 @@ export type SeedFirmKnowledgeOptions = {
   /** Session cookie header sent with every request; decides the owning org. */
   cookie: string;
   matters: number;
+  /** Stable seed for a randomized corpus subset; omitted keeps CLI ordering. */
+  selectionSeed?: string;
   /** Explicit CLI authorization to replace incomplete same-name matters. */
   replaceIncomplete?: boolean;
   /** Progress sink. The CLI prints; the dev endpoint collects. */
@@ -478,11 +491,15 @@ export const seedFirmKnowledge = async ({
   apiOrigin,
   cookie,
   matters: matterCount,
+  selectionSeed,
   replaceIncomplete = false,
   log = () => undefined,
 }: SeedFirmKnowledgeOptions): Promise<SeedFirmKnowledgeResult> => {
   const api = createApiClient(apiOrigin, cookie);
-  const corpusRoot = await ensureCorpus(matterCount);
+  const corpusRoot = await ensureCorpus({
+    matterCount,
+    ...(selectionSeed === undefined ? {} : { selectionSeed }),
+  });
   const reseeded: string[] = [];
 
   const matterDirectories = (

@@ -94,6 +94,25 @@ type Messages = {
     "createFirstOrganization": "Create your first organization to get started";
     "createOrganization": "Create an organization";
     "createOrganizationButton": "Create organization";
+    "devQuickStart": {
+      "button": "Dev quick start";
+      "error": {
+        "fallback": "Check the API log and try again.";
+        "matterImport": "The Harvey LAB import could not start.";
+        "otpUnavailable": "The development OTP was not available.";
+        "title": "Dev quick start failed";
+      };
+      "phase": {
+        "addingSkills": "Adding skills";
+        "authenticating": "Signing in";
+        "creatingOrganization": "Creating organization";
+        "startingImport": "Importing LAB matters";
+      };
+      "success": {
+        "description": "10 Harvey LAB matters were imported; document processing continues in the background.";
+        "title": "Dev setup ready";
+      };
+    };
     "emailPlaceholder": "you@example.com";
     "error": {
       "accountNotLinked": "This email already signs in a different way. Use your original sign-in method, or try again.";
