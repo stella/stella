@@ -169,7 +169,8 @@ type DictionaryRejection = "content_hash_mismatch" | "malformed_pointer";
 
 type DictionaryPayload =
   | { contentHash: string; payload: string; status: "read" }
-  | { reason: DictionaryRejection; status: "rejected" };
+  | { reason: DictionaryRejection; status: "rejected" }
+  | { status: "unchanged" };
 
 /**
  * Resolve the pointer object to the payload, under one shared deadline.
@@ -181,9 +182,17 @@ type DictionaryPayload =
  * actually hash to it. Without the second check an overwritten or mispublished
  * object at a content-addressed key would be served as though it were the
  * addressed content, which is the whole guarantee the layout exists to give.
+ *
+ * `residentHash` short-circuits the common case. A refresh exists to notice a
+ * pointer that moved, and most do not: re-fetching, decompressing, hashing and
+ * reparsing a payload of up to the ceiling every cycle would spend recurring
+ * object-store traffic and synchronous event-loop time to rebuild a map
+ * identical to the one already in memory. Only the pointer is read unless it
+ * names something new.
  */
 const readDictionaryPayload = async (
   language: MorphologyLanguage,
+  residentHash: string | undefined,
 ): Promise<DictionaryPayload> => {
   const deadline = AbortSignal.timeout(DICTIONARY_RESOLVE_TIMEOUT_MS);
   const pointer = await readCorpusS3BytesBounded({
@@ -194,6 +203,9 @@ const readDictionaryPayload = async (
   const contentHash = new TextDecoder().decode(pointer).trim();
   if (!isMorphologyDictionaryContentHash(contentHash)) {
     return { reason: "malformed_pointer", status: "rejected" };
+  }
+  if (contentHash === residentHash) {
+    return { status: "unchanged" };
   }
 
   // Bounded on the compressed transfer, not only on what it decodes to: the
@@ -219,8 +231,10 @@ const readDictionaryPayload = async (
 const loadDictionary = async (
   language: MorphologyLanguage,
 ): Promise<DictionaryLoad> => {
+  const resident = lastLoaded.get(language);
   const read = await Result.tryPromise({
-    try: async () => await readDictionaryPayload(language),
+    try: async () =>
+      await readDictionaryPayload(language, resident?.contentHash),
     catch: (cause) => cause,
   });
 
@@ -232,6 +246,14 @@ const loadDictionary = async (
         read.error instanceof Error ? read.error.constructor.name : "unknown",
     });
     return UNAVAILABLE;
+  }
+  // The pointer still names what is already in memory; nothing was fetched.
+  // Only reachable when a resident hash was passed in, so the fallback is
+  // unreachable rather than a real state — but it keeps the branch total.
+  if (read.value.status === "unchanged") {
+    return resident === undefined
+      ? UNAVAILABLE
+      : { ...resident, status: "loaded" };
   }
   if (read.value.status === "rejected") {
     logger.warn(DICTIONARY_UNAVAILABLE, {
@@ -290,6 +312,14 @@ const lastLoaded = new Map<MorphologyLanguage, LoadedDictionary>();
  * the stale-serving fast path.
  */
 const inFlight = new Set<MorphologyLanguage>();
+/**
+ * Languages whose most recent load resolved with nothing to serve. Tracked
+ * rather than inferred from `lastLoaded` being empty: those two states look
+ * identical from outside and mean opposite things — a replica still warming up
+ * versus one that cannot read its dictionary at all. Conflating them would
+ * report every persistent storage or configuration failure as a warm-up.
+ */
+const resolvedUnavailable = new Set<MorphologyLanguage>();
 
 /**
  * The per-language lazy singleton. Concurrent uses share one read, a loaded
@@ -316,8 +346,10 @@ const beginRefresh = async (
           contentHash: result.contentHash,
           entries: result.entries,
         });
+        resolvedUnavailable.delete(language);
         return result;
       }
+      resolvedUnavailable.add(language);
       const previous = lastLoaded.get(language);
       if (previous !== undefined) {
         return { ...previous, status: "loaded" };
@@ -624,7 +656,9 @@ const expanderMissReach = (
   if (language === null) {
     return "unsupported_jurisdiction";
   }
-  return lastLoaded.has(language) ? "no_dictionary" : "dictionary_warming";
+  return resolvedUnavailable.has(language)
+    ? "no_dictionary"
+    : "dictionary_warming";
 };
 
 type ResolveExpandedQueryOptions = {
