@@ -9,12 +9,9 @@
 
 import { eq } from "drizzle-orm";
 
-import { FALLBACK_CHAT_MODEL } from "@stll/ai-catalog";
-
 import type { Transaction } from "@/api/db/root";
 import { usageEntitlements, usagePolicies } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { encodeChatModelSelection } from "@/api/lib/chat-model-selection";
 import { getLaneCounterMicroUnits } from "@/api/lib/usage/lane-budget";
 import { isEntitlementConsumableAt } from "@/api/lib/usage/usage-ledger";
 
@@ -23,8 +20,12 @@ export type UsageLaneDecision =
   | { lane: "fallback"; forcedModelSelection: string }
   | { lane: "pool" };
 
-export const FALLBACK_CHAT_MODEL_SELECTION =
-  encodeChatModelSelection(FALLBACK_CHAT_MODEL);
+/**
+ * Budget verdict only: which lane the user's budgets admit. Whether a
+ * fallback verdict is actually servable (a fallback model exists on
+ * this deployment) is the pre-flight's composition concern.
+ */
+export type LaneBudgetVerdict = UsageLaneDecision["lane"];
 
 type DecideChatUsageLaneInput = {
   tx: Transaction;
@@ -44,7 +45,7 @@ export const decideChatUsageLane = async ({
   organizationId,
   userId,
   asOf = new Date(),
-}: DecideChatUsageLaneInput): Promise<UsageLaneDecision> => {
+}: DecideChatUsageLaneInput): Promise<LaneBudgetVerdict> => {
   const rows = await tx
     .select({
       status: usageEntitlements.status,
@@ -67,7 +68,7 @@ export const decideChatUsageLane = async ({
     !isEntitlementConsumableAt(entitlement, asOf) ||
     entitlement.dailyAllowanceMicroUnits === null
   ) {
-    return { lane: "pool" };
+    return "pool";
   }
 
   const dailyUsed = await getLaneCounterMicroUnits({
@@ -78,11 +79,11 @@ export const decideChatUsageLane = async ({
     asOf,
   });
   if (dailyUsed < entitlement.dailyAllowanceMicroUnits) {
-    return { lane: "allowance" };
+    return "allowance";
   }
 
   if (entitlement.fallbackWeeklyMicroUnits === null) {
-    return { lane: "pool" };
+    return "pool";
   }
   const weeklyUsed = await getLaneCounterMicroUnits({
     tx,
@@ -92,11 +93,8 @@ export const decideChatUsageLane = async ({
     asOf,
   });
   if (weeklyUsed < entitlement.fallbackWeeklyMicroUnits) {
-    return {
-      lane: "fallback",
-      forcedModelSelection: FALLBACK_CHAT_MODEL_SELECTION,
-    };
+    return "fallback";
   }
 
-  return { lane: "pool" };
+  return "pool";
 };

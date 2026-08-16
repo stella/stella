@@ -15,10 +15,7 @@ import type { UsageEntitlementStatus } from "@/api/db/schema";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { incrementLaneCounter } from "@/api/lib/usage/lane-budget";
-import {
-  decideChatUsageLane,
-  FALLBACK_CHAT_MODEL_SELECTION,
-} from "@/api/lib/usage/lane-routing";
+import { decideChatUsageLane } from "@/api/lib/usage/lane-routing";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -130,9 +127,7 @@ describe("chat usage lane routing", () => {
     await withRolledBackTx(async (tx) => {
       const fx = await setupFixture(tx);
 
-      expect(await decideChatUsageLane({ tx, ...fx, asOf: ASOF })).toEqual({
-        lane: "pool",
-      });
+      expect(await decideChatUsageLane({ tx, ...fx, asOf: ASOF })).toBe("pool");
     });
   });
 
@@ -149,9 +144,7 @@ describe("chat usage lane routing", () => {
         fallbackWeeklyMicroUnits: FALLBACK_WEEKLY,
       });
 
-      expect(await decideChatUsageLane({ tx, ...fx, asOf: ASOF })).toEqual({
-        lane: "pool",
-      });
+      expect(await decideChatUsageLane({ tx, ...fx, asOf: ASOF })).toBe("pool");
     });
   });
 
@@ -166,9 +159,7 @@ describe("chat usage lane routing", () => {
         fallbackWeeklyMicroUnits: FALLBACK_WEEKLY,
       });
 
-      expect(await decideChatUsageLane({ tx, ...fx, asOf: ASOF })).toEqual({
-        lane: "pool",
-      });
+      expect(await decideChatUsageLane({ tx, ...fx, asOf: ASOF })).toBe("pool");
     });
   });
 
@@ -185,9 +176,9 @@ describe("chat usage lane routing", () => {
 
       // An untouched bucket has no row; the missing row must read as
       // zero rather than skipping the lane.
-      expect(await decideChatUsageLane({ tx, ...fx, asOf: ASOF })).toEqual({
-        lane: "allowance",
-      });
+      expect(await decideChatUsageLane({ tx, ...fx, asOf: ASOF })).toBe(
+        "allowance",
+      );
 
       await incrementLaneCounter({
         tx,
@@ -196,9 +187,9 @@ describe("chat usage lane routing", () => {
         microUnits: DAILY_ALLOWANCE - 1,
         asOf: ASOF,
       });
-      expect(await decideChatUsageLane({ tx, ...fx, asOf: ASOF })).toEqual({
-        lane: "allowance",
-      });
+      expect(await decideChatUsageLane({ tx, ...fx, asOf: ASOF })).toBe(
+        "allowance",
+      );
     });
   });
 
@@ -221,10 +212,9 @@ describe("chat usage lane routing", () => {
         microUnits: DAILY_ALLOWANCE,
         asOf: ASOF,
       });
-      expect(await decideChatUsageLane({ tx, ...fx, asOf: ASOF })).toEqual({
-        lane: "fallback",
-        forcedModelSelection: FALLBACK_CHAT_MODEL_SELECTION,
-      });
+      expect(await decideChatUsageLane({ tx, ...fx, asOf: ASOF })).toBe(
+        "fallback",
+      );
 
       // Overshooting the daily budget (a turn that crossed it) keeps the
       // same lane while the weekly budget still has room.
@@ -242,10 +232,9 @@ describe("chat usage lane routing", () => {
         microUnits: FALLBACK_WEEKLY - 1,
         asOf: ASOF,
       });
-      expect(await decideChatUsageLane({ tx, ...fx, asOf: ASOF })).toEqual({
-        lane: "fallback",
-        forcedModelSelection: FALLBACK_CHAT_MODEL_SELECTION,
-      });
+      expect(await decideChatUsageLane({ tx, ...fx, asOf: ASOF })).toBe(
+        "fallback",
+      );
     });
   });
 
@@ -267,9 +256,7 @@ describe("chat usage lane routing", () => {
         microUnits: DAILY_ALLOWANCE,
         asOf: ASOF,
       });
-      expect(await decideChatUsageLane({ tx, ...fx, asOf: ASOF })).toEqual({
-        lane: "pool",
-      });
+      expect(await decideChatUsageLane({ tx, ...fx, asOf: ASOF })).toBe("pool");
     });
   });
 
@@ -298,9 +285,7 @@ describe("chat usage lane routing", () => {
         microUnits: FALLBACK_WEEKLY,
         asOf: ASOF,
       });
-      expect(await decideChatUsageLane({ tx, ...fx, asOf: ASOF })).toEqual({
-        lane: "pool",
-      });
+      expect(await decideChatUsageLane({ tx, ...fx, asOf: ASOF })).toBe("pool");
     });
   });
 });

@@ -21,6 +21,7 @@ import {
   ANTHROPIC_ADAPTIVE_THINKING_MODELS,
   BYOK_MODEL_OPTIONS,
   DEFAULT_MODELS,
+  FALLBACK_CHAT_MODEL_BY_PROVIDER,
   isBYOKModelRoleSupported,
   isBYOKProviderRoleSupported,
   isChatPdfAttachmentModelSupported,
@@ -1670,6 +1671,26 @@ export const getTanStackTextModelInfoForRole = (
     modelId: MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[provider][role],
     provider: supportedProvider,
   };
+};
+
+/**
+ * Selection string for the reduced-cost lane on this deployment, or
+ * null when the lane cannot be served: BYOK orgs settle on their own
+ * key, and instance deployments need a configured provider whose
+ * fallback model is adapter-servable.
+ */
+export const resolveFallbackChatSelection = (
+  orgConfig: OrgAIConfig | null | undefined,
+): string | null => {
+  if (orgConfig) {
+    return null;
+  }
+  if (!hasTanStackInstanceProvider()) {
+    return null;
+  }
+  const provider = getActiveProvider();
+  const modelId = FALLBACK_CHAT_MODEL_BY_PROVIDER[provider];
+  return modelId === null ? null : `${provider}::${modelId}`;
 };
 
 /**

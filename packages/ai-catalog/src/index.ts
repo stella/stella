@@ -792,14 +792,23 @@ type OfferedFirstPartyModelId =
  * bypass rates or capabilities and duplicated alias rows cannot drift apart.
  */
 /**
- * Model served when a user's included budget is exhausted and no
- * explicit selection overrides it. A first-party catalog entry so the
- * rate/display/context guards all apply.
+ * Per-provider model served when a user's included budget is exhausted
+ * and no explicit selection overrides it. Falls back to each
+ * provider's fast-role default; providers without a first-class
+ * adapter path cannot serve the lane. Total over providers so a new
+ * provider lands with an explicit decision.
  */
-export const FALLBACK_CHAT_MODEL = {
-  provider: "openai",
-  modelId: "gpt-5.6-luna",
-} as const;
+export const FALLBACK_CHAT_MODEL_BY_PROVIDER = {
+  google: DEFAULT_MODELS.google.fast,
+  openrouter: "openai/gpt-5.6-luna",
+  openai: "gpt-5.6-luna",
+  anthropic: DEFAULT_MODELS.anthropic.fast,
+  bedrock: DEFAULT_MODELS.bedrock.fast,
+  mistral: DEFAULT_MODELS.mistral.fast,
+  azure_foundry: null,
+  openai_compatible: null,
+  huggingface: null,
+} as const satisfies Record<AIProvider, string | null>;
 
 export const MODEL_CATALOG_ID_ALIASES = {
   "gpt-5.6-sol": "gpt-5.6",

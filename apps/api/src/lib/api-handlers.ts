@@ -43,6 +43,7 @@ import type { AnyPermissiveRouteSchema } from "@/api/lib/permissive-route-schema
 import {
   getTanStackTextModelInfoForRole,
   resolveEffectiveServiceTierForProvider,
+  resolveFallbackChatSelection,
 } from "@/api/lib/tanstack-ai-models";
 import { computeUsageUnitCost } from "@/api/lib/usage/action-weights";
 import { decideChatUsageLane } from "@/api/lib/usage/lane-routing";
@@ -234,6 +235,12 @@ export type McpExposure =
 export type UsageMeteringConfig = {
   actionType: UsageActionType;
   serviceTier?: UsageServiceTier;
+  /**
+   * Opt this endpoint's pre-flight into per-user budget-lane routing.
+   * Only the interactive chat send declares it; pricing an action as
+   * "chat" is not by itself evidence the handler can honor a lane.
+   */
+  laneRouting?: true;
   /**
    * Logical model role recorded on the consumption ledger row.
    * Defaults to `"chat"`. Set to the role the handler will pass
@@ -680,6 +687,7 @@ type ResolvedMeteringContext = {
   actionType: UsageActionType;
   serviceTier: UsageServiceTier;
   isByok: boolean;
+  laneRouting: boolean;
   cost: number;
 };
 
@@ -718,6 +726,7 @@ export const resolveMeteringContext = ({
     actionType: metering.actionType,
     serviceTier,
     isByok,
+    laneRouting: metering.laneRouting === true,
     cost,
   };
 };
@@ -744,18 +753,34 @@ const runUsagePreflight = async ({
     return { kind: "allowed", lane: { lane: "pool" } };
   }
   const checkResult = await ctx.safeDb(async (tx) => {
-    // Chat is the interactive lane surface: a chat turn inside the
-    // user's included budget settles there and skips the pool check
-    // entirely. Every other metered action stays pool until routing
-    // deliberately expands.
-    if (meteringContext.actionType === "chat" && !meteringContext.isByok) {
-      const lane = await decideChatUsageLane({
+    // Only endpoints that opted into lane routing (the interactive
+    // chat send) resolve a per-user budget lane; a turn inside the
+    // included budget settles there and skips the pool check
+    // entirely. A fallback verdict must also be servable on this
+    // deployment, otherwise it degrades to the pool path.
+    if (meteringContext.laneRouting && !meteringContext.isByok) {
+      const verdict = await decideChatUsageLane({
         tx,
         organizationId: meteringContext.organizationId,
         userId: meteringContext.userId,
       });
-      if (lane.lane !== "pool") {
-        return { ok: true as const, lane };
+      if (verdict === "allowance") {
+        return {
+          ok: true as const,
+          lane: { lane: "allowance" } satisfies UsageLaneDecision,
+        };
+      }
+      if (verdict === "fallback") {
+        const forcedModelSelection = resolveFallbackChatSelection(null);
+        if (forcedModelSelection !== null) {
+          return {
+            ok: true as const,
+            lane: {
+              lane: "fallback",
+              forcedModelSelection,
+            } satisfies UsageLaneDecision,
+          };
+        }
       }
     }
     const check = await assertUsageAvailable({
