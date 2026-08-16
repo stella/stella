@@ -10,12 +10,14 @@
  * stateless (rules reload from DB on every call).
  */
 
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawPolarityRules } from "@/api/db/schema";
 import {
   isValidPolarity,
+  POLARITIES,
+  POLARITY_PRECEDENCE,
   RULE_SOURCE,
 } from "@/api/handlers/case-law/polarity/consts";
 import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
@@ -24,16 +26,66 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { TelemetryError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
-type CompiledRule = {
+export type CompiledRule = {
   id: SafeId<"caseLawPolarityRule">;
   regex: RegExp;
   polarity: Polarity;
+  /** Kept for the specificity tiebreak; the compiled regex hides its length. */
+  pattern: string;
+  confidence: number;
 };
 
-type RuleMatch = {
+export type RuleMatch = {
   ruleId: SafeId<"caseLawPolarityRule">;
   polarity: Polarity;
+  confidence: number;
 };
+
+/**
+ * Order two rules that both match one context.
+ *
+ * Severity, then specificity, then id. Specificity is measured by pattern
+ * length, which is coarse but monotone in the usual case: `na\s+rozdíl\s+od`
+ * says more about a sentence than `viz`. The id tiebreak is what makes the
+ * order total, so two rules of equal severity and length resolve the same way
+ * on every run rather than following whatever order the rows arrived in.
+ */
+const compareRulePrecedence = (a: CompiledRule, b: CompiledRule): number => {
+  const severity =
+    POLARITY_PRECEDENCE[a.polarity] - POLARITY_PRECEDENCE[b.polarity];
+  if (severity !== 0) {
+    return severity;
+  }
+
+  const specificity = b.pattern.length - a.pattern.length;
+  if (specificity !== 0) {
+    return specificity;
+  }
+
+  if (a.id === b.id) {
+    return 0;
+  }
+
+  return a.id < b.id ? -1 : 1;
+};
+
+/**
+ * The severity tier of `compareRulePrecedence`, in SQL.
+ *
+ * This orders the truncation, not the matching: `loadRules` caps how many
+ * rules it reads, and the cap has to drop the rules that would have lost
+ * anyway. Ordering that cap by `match_count` instead would let a busy generic
+ * rule push a rare negative one out of the working set entirely, which is the
+ * same shadowing bug one layer down. Match order is re-established in memory
+ * by `compareRulePrecedence`, so only this cap depends on the clause below.
+ */
+const POLARITY_PRECEDENCE_SQL = sql`CASE ${sql.join(
+  POLARITIES.map(
+    (polarity) =>
+      sql`WHEN ${caseLawPolarityRules.polarity} = ${polarity} THEN ${sql.raw(String(POLARITY_PRECEDENCE[polarity]))}`,
+  ),
+  sql` `,
+)} END`;
 
 /** Optional caller-owned cache for batch scripts. */
 export type RuleCache = Map<string, CompiledRule[]>;
@@ -49,6 +101,75 @@ const compilePattern = (pattern: string): RegExp | null => {
 
 /** Active rule sources (proposed rules are excluded). */
 const ACTIVE_SOURCES = [RULE_SOURCE.MANUAL, RULE_SOURCE.LLM_PROMOTED];
+
+/** The columns `compileRules` reads; the DB read that produces them is the caller's. */
+type PolarityRuleRow = Pick<
+  typeof caseLawPolarityRules.$inferSelect,
+  "id" | "pattern" | "polarity" | "confidence"
+>;
+
+/**
+ * Compile stored rules into the order they are matched in.
+ *
+ * Rows whose pattern does not compile are dropped; rows carrying a polarity
+ * outside `POLARITIES` are dropped and reported, because the CHECK constraint
+ * should have made them impossible.
+ */
+export const compileRules = (
+  rows: readonly PolarityRuleRow[],
+): CompiledRule[] => {
+  const compiled: CompiledRule[] = [];
+
+  for (const row of rows) {
+    const regex = compilePattern(row.pattern);
+    if (!regex) {
+      continue;
+    }
+
+    if (!isValidPolarity(row.polarity)) {
+      captureError(
+        new TelemetryError({
+          message: "Invalid polarity value in rule",
+        }),
+        { ruleId: row.id },
+      );
+      continue;
+    }
+
+    compiled.push({
+      id: row.id,
+      regex,
+      polarity: row.polarity,
+      pattern: row.pattern,
+      confidence: row.confidence,
+    });
+  }
+
+  return compiled.sort(compareRulePrecedence);
+};
+
+/**
+ * The highest-precedence rule matching a context, or null.
+ *
+ * `rules` must be in `compileRules` order, which is what makes the first
+ * match the winning one.
+ */
+export const selectRuleMatch = (
+  rules: readonly CompiledRule[],
+  context: string,
+): RuleMatch | null => {
+  for (const rule of rules) {
+    if (rule.regex.test(context)) {
+      return {
+        ruleId: rule.id,
+        polarity: rule.polarity,
+        confidence: rule.confidence,
+      };
+    }
+  }
+
+  return null;
+};
 
 /**
  * Load and compile active rules for a language from the database.
@@ -82,61 +203,42 @@ const loadRules = async (
           inArray(caseLawPolarityRules.source, ACTIVE_SOURCES),
         ),
       )
-      .orderBy(desc(caseLawPolarityRules.matchCount))
+      .orderBy(
+        POLARITY_PRECEDENCE_SQL,
+        sql`length(${caseLawPolarityRules.pattern}) desc`,
+        caseLawPolarityRules.id,
+      )
       .limit(LIMITS.caseLawPolarityRulesPerLanguage),
   );
 
-  const compiled: CompiledRule[] = [];
-
-  for (const row of rows) {
-    const regex = compilePattern(row.pattern);
-    if (!regex) {
-      continue;
-    }
-
-    if (!isValidPolarity(row.polarity)) {
-      captureError(
-        new TelemetryError({
-          message: "Invalid polarity value in rule",
-        }),
-        { ruleId: row.id },
-      );
-      continue;
-    }
-
-    compiled.push({
-      id: row.id,
-      regex,
-      polarity: row.polarity,
-    });
-  }
+  const compiled = compileRules(rows);
 
   cache?.set(language, compiled);
   return compiled;
 };
 
 /**
- * Match a citation context against all active rules for a
- * language. Returns the first matching rule, or null.
+ * Match a citation context against all active rules for a language.
+ *
+ * Rules are held in `compareRulePrecedence` order, so the first match is the
+ * highest-precedence match rather than whichever rule happened to be read
+ * first. Returns null when nothing matches.
  */
 export const matchRule = async (
   context: string,
   language: string,
   scopedDb: ScopedDb,
   cache?: RuleCache,
-): Promise<RuleMatch | null> => {
-  const rules = await loadRules(language, scopedDb, cache);
+): Promise<RuleMatch | null> =>
+  selectRuleMatch(await loadRules(language, scopedDb, cache), context);
 
-  for (const rule of rules) {
-    if (rule.regex.test(context)) {
-      return { ruleId: rule.id, polarity: rule.polarity };
-    }
-  }
-
-  return null;
-};
-
-/** Increment the match count for a rule. */
+/**
+ * Record that a rule fired.
+ *
+ * Telemetry only: `match_count` reports how much work a rule is doing and
+ * feeds rule curation. It carries no authority over classification, and in
+ * particular must stay out of every ordering that decides which rule wins.
+ */
 type IncrementMatchCountArgs = {
   observedAt: Date;
   ruleId: SafeId<"caseLawPolarityRule">;

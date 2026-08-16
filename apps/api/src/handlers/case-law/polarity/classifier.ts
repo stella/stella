@@ -35,6 +35,15 @@ type ClassifyResult = {
   polarity: Polarity;
   ruleId: SafeId<"caseLawPolarityRule"> | null;
   source: "regex" | "llm" | "fallback";
+  /**
+   * How much the deciding tier trusts this label: the rule's stored
+   * confidence for a regex match, the model's own for an LLM call, and null
+   * on the fallback, where nothing read the text.
+   *
+   * `case_law_citations` has no column for it yet, so `persistPolarity`
+   * drops it and only in-process callers see it.
+   */
+  confidence: number | null;
 };
 
 /**
@@ -88,6 +97,7 @@ export const classifyCitation = async ({
       polarity: ruleMatch.polarity,
       ruleId: ruleMatch.ruleId,
       source: "regex",
+      confidence: ruleMatch.confidence,
     };
   }
 
@@ -102,10 +112,15 @@ export const classifyCitation = async ({
   });
 
   if (llmResult.isErr()) {
+    // `unknown` here records that classification did not happen, not that the
+    // citation was read and found unclear. The two are not distinguishable
+    // once persisted, because the column has no value for "read it, could not
+    // decide"; adding one needs a CHECK-constraint migration.
     return {
       polarity: POLARITY.UNKNOWN,
       ruleId: null,
       source: "fallback",
+      confidence: null,
     };
   }
 
@@ -124,7 +139,7 @@ export const classifyCitation = async ({
     });
   }
 
-  return { polarity, ruleId: null, source: "llm" };
+  return { polarity, ruleId: null, source: "llm", confidence };
 };
 
 /**
@@ -231,6 +246,9 @@ const trackSurfaceForm = async ({
 
 /**
  * Persist a classification result to the citations table.
+ *
+ * `result.confidence` is deliberately not written: `case_law_citations` has
+ * no column for it. Adding one is a schema change, not a write-path change.
  */
 export const persistPolarity = async (
   citationId: SafeId<"caseLawCitation">,
