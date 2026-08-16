@@ -5,8 +5,32 @@ process.env["GOTENBERG_URL"] ??= "http://localhost:3002";
 process.env["GOTENBERG_USERNAME"] ??= "test";
 process.env["GOTENBERG_PASSWORD"] ??= "test";
 
-const { readDocumentOcrWorkerAvailability, refreshDocumentOcrWorkerReadiness } =
-  await import("@/api/lib/document-processing-readiness");
+const captureErrorMock = mock();
+const realCapture = await import("@/api/lib/analytics/capture");
+void mock.module("@/api/lib/analytics/capture", () => ({
+  ...realCapture,
+  captureError: captureErrorMock,
+}));
+
+const loggerWarnMock = mock();
+const realLogger = await import("@/api/lib/observability/logger");
+void mock.module("@/api/lib/observability/logger", () => ({
+  ...realLogger,
+  logger: { ...realLogger.logger, warn: loggerWarnMock },
+}));
+
+const readinessGetMock = mock(async (): Promise<string | null> => null);
+const realRedisClient = await import("@/api/lib/redis-client");
+void mock.module("@/api/lib/redis-client", () => ({
+  ...realRedisClient,
+  createRedisClient: () => ({ get: readinessGetMock }),
+}));
+
+const {
+  isDocumentOcrWorkerAvailable,
+  readDocumentOcrWorkerAvailability,
+  refreshDocumentOcrWorkerReadiness,
+} = await import("@/api/lib/document-processing-readiness");
 
 describe("document OCR worker readiness", () => {
   test("configures readiness clients to fail fast during Redis outages", async () => {
@@ -33,6 +57,37 @@ describe("document OCR worker readiness", () => {
     expect(await readDocumentOcrWorkerAvailability(async () => "stale")).toBe(
       false,
     );
+  });
+
+  test("degrades to unavailable on a dropped socket without capturing", async () => {
+    captureErrorMock.mockClear();
+    loggerWarnMock.mockClear();
+    // The transient and non-transient fixtures must classify differently,
+    // or both assertions below would pass through the same branch.
+    const transient = Object.assign(new Error("Connection closed"), {
+      code: "ERR_REDIS_CONNECTION_CLOSED",
+    });
+    const defect = Object.assign(new Error("WRONGTYPE"), {
+      code: "ERR_REDIS_INVALID_TYPE",
+    });
+    expect(realRedisClient.isTransientRedisConnectionError(transient)).toBe(
+      true,
+    );
+    expect(realRedisClient.isTransientRedisConnectionError(defect)).toBe(false);
+
+    readinessGetMock.mockImplementationOnce(async () => {
+      throw transient;
+    });
+    expect(await isDocumentOcrWorkerAvailable()).toBe(false);
+    expect(captureErrorMock).not.toHaveBeenCalled();
+    expect(loggerWarnMock).toHaveBeenCalledTimes(1);
+
+    readinessGetMock.mockImplementationOnce(async () => {
+      throw defect;
+    });
+    expect(await isDocumentOcrWorkerAvailable()).toBe(false);
+    expect(captureErrorMock).toHaveBeenCalledTimes(1);
+    expect(loggerWarnMock).toHaveBeenCalledTimes(1);
   });
 
   test("bounds readiness reads", async () => {
