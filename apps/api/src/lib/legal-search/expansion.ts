@@ -439,10 +439,10 @@ export const expandTermWith = (
   entries: ReadonlyMap<string, string>,
   term: string,
 ): readonly string[] => {
-  // Fold first, then test the shape. The fold canonicalises and strips
-  // combining marks, so a decomposed `žalobě` (routine from extracted PDFs and
-  // from macOS keyboards) is judged as the word it is rather than rejected for
-  // the marks it carries. Digits and punctuation survive the fold, so the
+  // Fold first, then test the shape. The fold decomposes and removes the
+  // marks, so a decomposed `žalobě` (routine from extracted PDFs and from
+  // macOS keyboards) is judged as the word it is rather than rejected for the
+  // marks it carries. Digits and punctuation survive the fold, so the
   // letters-only rule still excludes every identifier it excluded before.
   const folded = foldExpansionKey(term);
   if (!isSurfaceForm(folded)) {

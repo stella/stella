@@ -13,7 +13,7 @@
  * what it emits. Neither layer is allowed to be the only one.
  */
 
-import { stripDiacritics } from "@stll/text-normalize";
+import { foldToAscii } from "@stll/text-normalize";
 
 import type { MorphologyLanguage } from "@/api/lib/legal-search/morphology/stem";
 
@@ -103,7 +103,7 @@ export const isMorphologyDictionaryContentHash = (value: string): boolean =>
   CONTENT_HASH_PATTERN.test(value);
 
 /**
- * Lookup key for a surface form: NFC, lowercased, then diacritics stripped.
+ * Lookup key for a surface form: folded to ASCII, then lowercased.
  *
  * Keys are folded, values are not. The corpus is written with diacritics and
  * queries frequently are not, so folding the key is what lets "skody" reach
@@ -111,12 +111,25 @@ export const isMorphologyDictionaryContentHash = (value: string): boolean =>
  * because the engine folds its own query terms and an accented form matches
  * strictly more index terms than its folded spelling would.
  *
+ * `foldToAscii` rather than a mark strip, because the engine's `ascii_folding`
+ * and PostgreSQL `unaccent()` fold letters that have no canonical
+ * decomposition: Polish `ł` survives NFD plus mark removal, so a key built
+ * that way is spelled differently from every lexeme the index stored for it.
+ * The fold decomposes internally, so the key is form-independent without a
+ * separate NFC pass.
+ *
+ * Case folding runs after, in the order the index applies it: `unaccent()`
+ * maps case for case, and the tokenizer lowercases what comes out. Reversing
+ * the two would key on whatever the source character's lowercase form happens
+ * to be, and that form is not always one the fold table reaches — `Ɩ` folds to
+ * `I`, but lowercases first to `ɩ`, which no lexeme can be spelled with.
+ *
  * The stemmer deliberately runs the other way round (fold after stemming),
  * which is why it is never called here: this fold destroys exactly the
  * characters the suffix tables are written over.
  */
 export const foldExpansionKey = (term: string): string =>
-  stripDiacritics(term.normalize("NFC").toLowerCase());
+  foldToAscii(term).toLowerCase();
 
 export type ExpansionBucket = {
   /** Corpus document frequency summed over the bucket's members. */
@@ -174,12 +187,12 @@ export type ParsedExpansionDictionary = {
  * line must cost one bucket rather than every query the language serves.
  *
  * Keys are folded and values are not, so two buckets whose stems differ only
- * by diacritics claim the same key: Czech `rada`/`řada` and Polish `sad`/`sąd`
- * are ordinary words, not edge cases. Letting the later line win would answer
- * a query for one family with the other family's inflections, and the
- * prefix guard cannot see it because the folded spellings agree. Such a key
- * expands to nothing instead — an ambiguous lookup is resolved by declining
- * to answer, never by serialization order.
+ * by what the fold removes claim the same key: Czech `rada`/`řada`, Polish
+ * `sad`/`sąd` and `łaska`/`laska` are ordinary words, not edge cases. Letting
+ * the later line win would answer a query for one family with the other
+ * family's inflections, and the prefix guard cannot see it because the folded
+ * spellings agree. Such a key expands to nothing instead: an ambiguous lookup
+ * is resolved by declining to answer, never by serialization order.
  */
 type ParseAccumulator = {
   collided: Set<string>;
@@ -268,9 +281,9 @@ const PARSE_BATCH_LINES = 2000;
  * The same parse, handing the event loop back between batches.
  *
  * Parsing is the CPU half of loading a dictionary and it is not cheap: every
- * line splits twice, and every form is NFC-normalised, lower-cased, decomposed
- * and stripped before it keys a Map. On a payload near the ceiling that is long
- * enough to stall an API replica, and detaching the fetch does not help —
+ * line splits twice, and every form is decomposed, folded and lower-cased
+ * before it keys a Map. On a payload near the ceiling that is long enough to
+ * stall an API replica, and detaching the fetch does not help —
  * a detached promise's continuation still runs on the same thread. A warm-up or
  * a rebuild should not pause the requests happening around it.
  */

@@ -55,6 +55,22 @@ test("an unaccented spelling reaches the accented bucket", () => {
   ]);
 });
 
+// `ł` has no canonical decomposition, so a mark-stripping fold left the key
+// spelled `wyłaczenie`: unreachable from an ASCII keyboard, and spelled unlike
+// any lexeme the index stored. The key has to fold the way the index folded.
+test("a Polish term typed without ł reaches its bucket", () => {
+  const entries = dictionaryOf([
+    {
+      documentFrequency: 600,
+      forms: ["wyłączenie", "wyłączenia"],
+      stem: "wyłącz",
+    },
+  ]);
+  expect(entries.get("wylaczenie")).toBe("wyłączenie,wyłączenia");
+  expect(expandTermWith(entries, "wylaczenie")).toEqual(["wyłączenia"]);
+  expect(expandTermWith(entries, "wyłączenie")).toEqual(["wyłączenia"]);
+});
+
 // Pinned from corpus data: `veci` and `vek`/`veku` share a stem but not a
 // word. Three shared leading characters is what separates them.
 test("a term never expands to a bucket member it shares under three characters with", () => {
