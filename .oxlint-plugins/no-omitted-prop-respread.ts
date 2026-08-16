@@ -114,6 +114,14 @@ const expandAlias = (name, localTypes, open) => {
   return localTypes.get(name)?.typeNode ?? null;
 };
 
+// Keys every set holds. No sets means no guarantee, so nothing survives.
+const intersectAll = (keySets): string[] => {
+  const first = keySets.at(0);
+  return first === undefined
+    ? []
+    : [...first].filter((key) => keySets.every((keys) => keys.has(key)));
+};
+
 // String keys from the second `Omit` argument: `"a"` or `"a" | "b"`.
 // A non-literal key set yields nothing, which is the documented boundary.
 const literalKeysOf = (keyTypeNode): string[] => {
@@ -142,19 +150,25 @@ const omittedKeysOf = (typeNode, localTypes, open = new Set()): string[] => {
   if (typeNode.type === "TSParenthesizedType") {
     return omittedKeysOf(typeNode.typeAnnotation, localTypes, open);
   }
+  // An intersection has a key when any member has it, so one member's omission
+  // is undone by another's: `Omit<P, "a"> & Omit<P, "b">` still carries both.
+  // Only keys every omitting member removes survive. Members that omit nothing
+  // (a literal, an unresolved reference) neither remove nor supply a key here;
+  // what they declare is subtracted separately, by `reintroducedKeysOf`.
   if (typeNode.type === "TSIntersectionType") {
-    return typeNode.types.flatMap((member) =>
-      omittedKeysOf(member, localTypes, open),
+    return intersectAll(
+      typeNode.types
+        .map((member) => new Set(omittedKeysOf(member, localTypes, open)))
+        .filter((keys) => keys.size > 0),
     );
   }
+  // A union only guarantees the omission its branches share.
   if (typeNode.type === "TSUnionType") {
-    const branches = typeNode.types.map(
-      (member) => new Set(omittedKeysOf(member, localTypes, open)),
+    return intersectAll(
+      typeNode.types.map(
+        (member) => new Set(omittedKeysOf(member, localTypes, open)),
+      ),
     );
-    const first = branches.at(0);
-    return first === undefined
-      ? []
-      : [...first].filter((key) => branches.every((branch) => branch.has(key)));
   }
   if (typeNode.type === "TSTypeReference") {
     const name = typeReferenceName(typeNode.typeName);
@@ -169,7 +183,6 @@ const omittedKeysOf = (typeNode, localTypes, open = new Set()): string[] => {
     if (MODIFIER_UTILITIES.has(name)) {
       return omittedKeysOf(args.at(0), localTypes, open);
     }
-    // A generic alias parameterized at the use site is not resolved here.
     const alias = expandAlias(name, localTypes, open);
     if (alias === null) {
       return [];
@@ -372,6 +385,12 @@ export default eslintCompatPlugin({
           }
           const name = declaration.id?.name;
           if (typeof name !== "string") {
+            return;
+          }
+          // A generic alias means something different per use site, and the
+          // arguments are not substituted here, so it stays unresolvable.
+          if ((declaration.typeParameters?.params?.length ?? 0) > 0) {
+            localTypes.set(name, null);
             return;
           }
           const start = declaration.range[0];

@@ -146,6 +146,19 @@ export const _ok_reTypedAlias = (props: RetypedPanelProps) => (
   <Panel {...props} />
 );
 
+// Allowed: an intersection has a key when any member has it, so each member
+// here supplies what the other omits and neither key is actually removed.
+export const _ok_intersectedOmissions = (
+  props: Omit<PanelProps, "orientation"> & Omit<PanelProps, "variant">,
+) => <Panel {...props} />;
+
+// Allowed: a generic alias means something different per use site, and the
+// argument here deliberately puts `orientation` back.
+type GenericShellProps<Extra> = Omit<PanelProps, "orientation"> & Extra;
+export const _ok_genericAliasArgument = (
+  props: GenericShellProps<{ orientation?: "vertical" }>,
+) => <Panel {...props} />;
+
 // Allowed: a union of props shapes keeps only the keys every branch omits, and
 // a value of the second branch may legitimately carry `orientation`.
 export const _ok_unionBranchOmit = (
