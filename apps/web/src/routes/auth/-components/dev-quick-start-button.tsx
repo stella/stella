@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { Result, TaggedError } from "better-result";
 import { useTranslations } from "use-intl";
@@ -19,6 +19,8 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
 import {
   DEV_QUICK_START_PHASE,
+  createDevQuickStartIdentity,
+  type DevQuickStartAttempt,
   type DevQuickStartIdentity,
   type DevQuickStartPhase,
   runDevQuickStart,
@@ -86,16 +88,30 @@ const createOrganization = async ({
   organizationName,
   organizationSlug,
 }: DevQuickStartIdentity) => {
-  const created = await authClient.organization.create({
-    name: organizationName,
-    slug: organizationSlug,
-  });
-  if (created.error) {
-    throw toAuthClientError(created.error);
+  const listed = await authClient.organization.list();
+  if (listed.error) {
+    throw toAuthClientError(listed.error);
   }
 
+  const existing = listed.data.find(({ slug }) => slug === organizationSlug);
+  const organizationId = await (async () => {
+    if (existing) {
+      return existing.id;
+    }
+
+    const created = await authClient.organization.create({
+      name: organizationName,
+      slug: organizationSlug,
+    });
+    if (created.error) {
+      throw toAuthClientError(created.error);
+    }
+
+    return created.data.id;
+  })();
+
   const active = await authClient.organization.setActive({
-    organizationId: created.data.id,
+    organizationId,
   });
   if (active.error) {
     throw toAuthClientError(active.error);
@@ -126,6 +142,7 @@ export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
   const t = useTranslations();
   const analytics = useAnalytics();
   const invalidateSession = useInvalidateSession();
+  const attemptRef = useRef<DevQuickStartAttempt | null>(null);
   const [phase, setPhase] = useState<DevQuickStartPhase | null>(null);
 
   const handleQuickStart = async () => {
@@ -133,13 +150,27 @@ export const DevQuickStartButton = ({ redirectTo }: { redirectTo: string }) => {
       return;
     }
 
+    const attempt =
+      attemptRef.current ??
+      ({
+        completedPhase: null,
+        identity: createDevQuickStartIdentity(crypto.randomUUID()),
+      } satisfies DevQuickStartAttempt);
+    attemptRef.current = attempt;
+
     const result = await Result.tryPromise({
       try: async () => {
         await runDevQuickStart({
+          attempt,
           authenticate,
           createOrganization,
           onPhase: setPhase,
-          randomId: crypto.randomUUID(),
+          onPhaseCompleted: (completedPhase) => {
+            attemptRef.current = {
+              completedPhase,
+              identity: attempt.identity,
+            };
+          },
           seedMatters,
           seedSkills,
         });
