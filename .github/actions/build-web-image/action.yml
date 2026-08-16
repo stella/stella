@@ -1,0 +1,147 @@
+name: Build and publish Stella web image
+description: Build Stella's public web source with an allowlisted browser configuration and publish it by digest.
+
+inputs:
+  release-ref:
+    description: Release tag or synthetic main-<sha> reference embedded in the image.
+    required: true
+  release-sha:
+    description: Full source commit SHA checked out by the caller.
+    required: true
+  target-environment:
+    description: Public browser configuration to compile (production or staging).
+    required: true
+  posthog-key:
+    description: Browser-visible PostHog project key; passed separately so it is never committed.
+    required: false
+    default: ""
+  source-path:
+    description: Checkout containing the exact source commit to build.
+    required: false
+    default: .
+  tooling-path:
+    description: Checkout containing the current renderer and workflow policy.
+    required: false
+    default: .
+
+outputs:
+  digest:
+    description: Immutable GHCR manifest digest.
+    value: ${{ steps.build.outputs.digest }}
+
+runs:
+  using: composite
+  steps:
+    - name: Validate web image source and target
+      shell: bash
+      env:
+        RELEASE_REF: ${{ inputs.release-ref }}
+        RELEASE_SHA: ${{ inputs.release-sha }}
+        SOURCE_PATH: ${{ inputs.source-path }}
+        TARGET_ENV: ${{ inputs.target-environment }}
+      run: |
+        set -euo pipefail
+        if [[ ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+          echo "::error::release-sha must be a full lowercase commit SHA."
+          exit 1
+        fi
+        case "$TARGET_ENV" in
+          production|staging) ;;
+          *)
+            echo "::error::target-environment must be production or staging."
+            exit 1
+            ;;
+        esac
+        if [[ "$RELEASE_REF" == main-* ]]; then
+          ref_sha="${RELEASE_REF#main-}"
+          if [[ "$TARGET_ENV" != "staging" || "${RELEASE_SHA:0:${#ref_sha}}" != "$ref_sha" ]]; then
+            echo "::error::synthetic release refs must match the source SHA and target staging."
+            exit 1
+          fi
+        elif [[ ! "$RELEASE_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(rc|beta|alpha)\.[0-9]+)?$ ]]; then
+          echo "::error::release-ref must be a release tag or main-<sha>."
+          exit 1
+        fi
+        checked_out_sha="$(git -C "$SOURCE_PATH" rev-parse HEAD)"
+        if [[ "$checked_out_sha" != "$RELEASE_SHA" ]]; then
+          echo "::error::source-path does not contain release-sha."
+          exit 1
+        fi
+        contract="${SOURCE_PATH}/apps/web/build-env-contract.json"
+        config="${SOURCE_PATH}/apps/web/build-env/${TARGET_ENV}.json"
+        if [[ ! -f "$contract" || ! -f "$config" ]]; then
+          echo "::error::Release source predates the public web build contract; rebuilding legacy release tags is unsupported."
+          exit 1
+        fi
+        if [[ "$(jq -r '.targetEnvironment' "$config")" != "$TARGET_ENV" ]]; then
+          echo "::error::web build configuration does not match the target environment."
+          exit 1
+        fi
+
+    - name: Resolve allowlisted web build arguments
+      id: args
+      shell: bash
+      env:
+        SOURCE_PATH: ${{ inputs.source-path }}
+        TARGET_ENV: ${{ inputs.target-environment }}
+        TOOLING_PATH: ${{ inputs.tooling-path }}
+      run: |
+        set -euo pipefail
+        rendered="$(
+          bash "${TOOLING_PATH}/scripts/render-web-build-args.sh" \
+            "${SOURCE_PATH}/apps/web/build-env-contract.json" \
+            "${SOURCE_PATH}/apps/web/build-env/${TARGET_ENV}.json" \
+            VITE_POSTHOG_KEY
+        )"
+        posthog_arg="$(jq -er '.variables.VITE_POSTHOG_KEY' "${SOURCE_PATH}/apps/web/build-env-contract.json")"
+        version="${{ inputs.release-ref }}"
+        if [[ "$version" == v* ]]; then
+          version="${version#v}"
+        fi
+        {
+          echo "values<<STELLA_WEB_BUILD_ARGS"
+          printf '%s\n' "$rendered"
+          echo "STELLA_WEB_BUILD_ARGS"
+          echo "posthog-name=$posthog_arg"
+          echo "version=$version"
+        } >>"$GITHUB_OUTPUT"
+
+    - name: Verify native x64 build host
+      shell: bash
+      run: |
+        if [[ "$(uname -m)" != "x86_64" ]]; then
+          echo "::error::Web compilation requires a native x64 build host."
+          exit 1
+        fi
+
+    - name: Set up ARM64 runtime emulation
+      uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
+      with:
+        platforms: arm64
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+    - name: Login to GHCR
+      uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ github.token }}
+
+    - name: Build and push web image
+      id: build
+      uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+      with:
+        context: ${{ inputs.source-path }}
+        file: ${{ inputs.source-path }}/apps/web/Dockerfile
+        platforms: linux/arm64
+        push: true
+        tags: ghcr.io/${{ github.repository_owner }}/stella-web:candidate-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.target-environment }}
+        cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/stella-web:buildcache-${{ inputs.target-environment }}
+        cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/stella-web:buildcache-${{ inputs.target-environment }},mode=max
+        build-args: |
+          STELLA_VERSION=${{ steps.args.outputs.version }}
+          STELLA_COMMIT_SHA=${{ inputs.release-sha }}
+          ${{ steps.args.outputs.values }}
+          ${{ steps.args.outputs.posthog-name }}=${{ inputs.posthog-key }}

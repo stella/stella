@@ -24,7 +24,7 @@ const extractDecideScript = (workflow: string) => {
   const stepStart = workflow.indexOf(
     "      - name: Decide deploy, defer, or escalate\n",
   );
-  const jobEnd = workflow.indexOf("\n  build-and-deploy:\n", stepStart);
+  const jobEnd = workflow.indexOf("\n  build-api:\n", stepStart);
   const runStart = workflow.indexOf("run: |\n", stepStart);
   if (stepStart === -1 || jobEnd === -1 || runStart === -1) {
     throw new Error("deploy-staging.yml no longer exposes the decide step");
@@ -84,6 +84,7 @@ type Decision = { deploy: string; exitCode: number };
 let workspace = "";
 let scriptPath = "";
 let probeScriptPath = "";
+let currentScriptPath = "";
 
 const runDecision = async ({
   committedHoursAgo = 1,
@@ -175,10 +176,42 @@ const runProbe = async ({
   };
 };
 
+const runCurrentCheck = async (currentSha: string) => {
+  const outputPath = path.join(
+    workspace,
+    `current-output-${Bun.randomUUIDv7()}.txt`,
+  );
+  const summaryPath = path.join(
+    workspace,
+    `current-summary-${Bun.randomUUIDv7()}.md`,
+  );
+  await Promise.all([Bun.write(outputPath, ""), Bun.write(summaryPath, "")]);
+
+  const result = Bun.spawnSync(["bash", currentScriptPath], {
+    env: {
+      ...process.env,
+      GH_TOKEN: "stub",
+      GITHUB_OUTPUT: outputPath,
+      GITHUB_REPOSITORY: "stella/stella",
+      GITHUB_SHA: TIP_SHA,
+      GITHUB_STEP_SUMMARY: summaryPath,
+      PATH: `${workspace}:${process.env["PATH"] ?? ""}`,
+      STUB_CURRENT_SHA: currentSha,
+    },
+  });
+
+  return {
+    exitCode: result.exitCode,
+    output: await Bun.file(outputPath).text(),
+    summary: await Bun.file(summaryPath).text(),
+  };
+};
+
 beforeAll(async () => {
   workspace = await mkdtemp(path.join(tmpdir(), "staging-deploy-decision-"));
   scriptPath = path.join(workspace, "decide.sh");
   probeScriptPath = path.join(workspace, "probe.sh");
+  currentScriptPath = path.join(workspace, "current.sh");
 
   const workflow = await Bun.file(WORKFLOW_URL).text();
   const script = extractDecideScript(workflow);
@@ -193,6 +226,14 @@ beforeAll(async () => {
       "\n      # Absent staging defers",
     ),
   );
+  await Bun.write(
+    currentScriptPath,
+    extractStepScript(
+      workflow,
+      "Confirm this SHA is still main",
+      "\n      - name: Check staging deployment target",
+    ),
+  );
   // Stands in for the reads the script makes: the last recorded staging
   // deployment, the oldest commit staging has not taken, and the tip's own
   // timestamp.
@@ -202,6 +243,7 @@ beforeAll(async () => {
     `#!/usr/bin/env bash
 for arg in "$@"; do
   case "$arg" in
+    *"/git/ref/heads/main"*) echo "\${STUB_CURRENT_SHA:-${TIP_SHA}}"; exit 0 ;;
     *"/deployments?environment="*) echo "\${STUB_DEPLOYED_SHA}"; exit 0 ;;
     *"/compare/"*) echo "\${STUB_PENDING_SINCE_EPOCH}"; exit 0 ;;
     *"/commits/"*) echo "\${STUB_COMMITTED_EPOCH}"; exit 0 ;;
@@ -419,5 +461,24 @@ describe("staging readiness cutover", () => {
     expect(stagingSetup).toContain("const READINESS_STABLE_SAMPLES = 3;");
     expect(stagingSetup).toContain(`url: \`\${API_URL}/ready\`,`);
     expect(stagingSetup).not.toContain(`url: \`\${API_URL}/health\`,`);
+  });
+});
+
+describe("private promotion coalescing", () => {
+  test("allows the exact main tip to cross the private boundary", async () => {
+    expect(await runCurrentCheck(TIP_SHA)).toEqual({
+      exitCode: 0,
+      output: "promoted=true\n",
+      summary: "",
+    });
+  });
+
+  test("turns an obsolete completed build into a successful no-op", async () => {
+    const result = await runCurrentCheck(OTHER_SHA);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toBe("promoted=false\n");
+    expect(result.summary).toContain("Skipping private promotion");
+    expect(result.summary).toContain(OTHER_SHA);
   });
 });

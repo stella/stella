@@ -17,18 +17,10 @@ on:
     - cron: "*/30 * * * *"
   workflow_dispatch:
 
-# Queue rather than cancel: build-and-deploy dispatches a promotion to the
-# infra repo and then watches it to completion. A run cancelled mid-dispatch
-# would leave that promotion in flight with nothing watching it, racing
-# whatever the next run dispatches. A dispatched promotion must always be
-# watched, so a newer push waits for the current run instead of preempting it.
-concurrency:
-  group: deploy-staging
-  cancel-in-progress: false
-
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/stella-api
+  WEB_IMAGE_NAME: ${{ github.repository_owner }}/stella-web
 
 jobs:
   # Tie promotion and its dependent smoke job to the current health of the
@@ -218,8 +210,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           echo "::notice::Staging is not answering; deploy of ${GITHUB_SHA} deferred until it does."
 
-  build-and-deploy:
-    name: Build + deploy staging
+  build-api:
+    name: Build staging API image
     needs: staging-health
     if: >-
       github.ref == 'refs/heads/main' &&
@@ -232,7 +224,12 @@ jobs:
       id-token: write
       attestations: write
       artifact-metadata: write
-      deployments: write
+    concurrency:
+      group: staging-api-build
+      cancel-in-progress: true
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+      release-ref: ${{ steps.ref.outputs.release_ref }}
 
     steps:
       - name: Resolve synthetic ref
@@ -277,20 +274,101 @@ jobs:
             STELLA_VERSION=${{ steps.ref.outputs.release_ref }}
             STELLA_COMMIT_SHA=${{ github.sha }}
 
-      # Best-effort on staging: the provenance action already retries
-      # transient Sigstore blips, but a sustained Rekor outage must not
-      # wedge continuous deploys (the image is built and pushed; only
-      # the transparency-log attestation is unavailable). The step still
-      # surfaces as failed in the UI. Production keeps attestation
-      # blocking in release.yml.
       - name: Attest image provenance
-        continue-on-error: true
         uses: ./.github/actions/provenance
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
 
+  build-web:
+    name: Build staging web image
+    needs: staging-health
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      needs.staging-health.outputs.deploy == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    concurrency:
+      group: staging-web-build
+      cancel-in-progress: true
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Resolve synthetic ref
+        id: ref
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          echo "release-ref=main-${SHA:0:7}" >>"$GITHUB_OUTPUT"
+
+      - name: Build and publish web image
+        id: build
+        uses: ./.github/actions/build-web-image
+        with:
+          release-ref: ${{ steps.ref.outputs.release-ref }}
+          release-sha: ${{ github.sha }}
+          target-environment: staging
+          posthog-key: ${{ secrets.VITE_POSTHOG_KEY }}
+
+      - name: Attest web image provenance
+        uses: ./.github/actions/provenance
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+
+  promote-staging:
+    name: Promote staging images
+    needs: [build-api, build-web]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    # Deployment and its smoke verification are one serialized side-effecting
+    # unit. Public builds may be cancelled; this job may not be interrupted
+    # after it dispatches Terraform work into the private repository.
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - name: Checkout workflow actions
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+
+      # Builds are intentionally free to finish. Only the newest main SHA may
+      # cross the private-compute boundary; an obsolete queued build is a
+      # successful no-op, and the newer workflow converges staging afterward.
+      - name: Confirm this SHA is still main
+        id: current
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          current_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')"
+          if [[ "$current_sha" != "$GITHUB_SHA" ]]; then
+            echo "promoted=false" >>"$GITHUB_OUTPUT"
+            echo "Skipping private promotion of obsolete commit \`${GITHUB_SHA}\`; main is \`${current_sha}\`." >>"$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "promoted=true" >>"$GITHUB_OUTPUT"
+
       - name: Check staging deployment target is configured
+        if: steps.current.outputs.promoted == 'true'
         env:
           DEPLOY_REPOSITORY: ${{ github.repository_owner }}/${{ vars.STAGING_DEPLOY_REPOSITORY }}
           DEPLOY_WORKFLOW: ${{ vars.STAGING_DEPLOY_WORKFLOW }}
@@ -305,21 +383,24 @@ jobs:
       # skipped by `needs` instead of blocking on a commit that will never
       # be served.
       - name: Deploy to staging
+        if: steps.current.outputs.promoted == 'true'
         uses: ./.github/actions/promote-dispatch
         with:
           app-client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
           app-private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
           infra-repo: ${{ github.repository_owner }}/${{ vars.STAGING_DEPLOY_REPOSITORY }}
           workflow-file: ${{ vars.STAGING_DEPLOY_WORKFLOW }}
-          release-ref: ${{ steps.ref.outputs.release_ref }}
+          release-ref: ${{ needs.build-api.outputs.release-ref }}
           target-environment: staging
-          image-digest: ${{ steps.build.outputs.digest }}
+          image-digest: ${{ needs.build-api.outputs.digest }}
+          web-image-digest: ${{ needs.build-web.outputs.digest }}
           git-sha: ${{ github.sha }}
 
       # The commit staging is running, recorded where it outlives this run:
       # the health gate reads it to tell a deploy that is waiting from one
       # that is stuck.
       - name: Record staging deployment
+        if: steps.current.outputs.promoted == 'true'
         env:
           DEPLOY_ENVIRONMENT: staging
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -346,36 +427,32 @@ jobs:
             gh api "repos/${GITHUB_REPOSITORY}/deployments/${deployment_id}/statuses" \
               --method POST --input - >/dev/null
 
-  # Post-deploy verification: authenticate via the secret-guarded
-  # /smoke/session endpoint and click through the deployed app so a
-  # render-breaking regression turns this workflow red instead of
-  # waiting for a human to stumble over it.
-  verify-staging:
-    name: Verify staging deploy
-    needs: build-and-deploy
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout
+      # Post-deploy verification stays in the serialized promotion job. If it
+      # were a separate job, a newer promotion could start while this smoke
+      # still measures the previous commit.
+      - name: Checkout deployed source
+        if: steps.current.outputs.promoted == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - name: Setup Bun
+        if: steps.current.outputs.promoted == 'true'
         uses: stella/.github/actions/setup-bun-cached@905280fd96d464a343fd3bf6be20af9ef3f399fb
 
       - name: Install dependencies
+        if: steps.current.outputs.promoted == 'true'
         run: bash scripts/bun-ci-retry.sh --ignore-scripts
         env:
           NPM_TOKEN: ""
 
       - name: Install Playwright browser
+        if: steps.current.outputs.promoted == 'true'
         run: cd apps/web && bunx playwright install --with-deps chromium
 
       - name: Run staging web smoke
+        if: steps.current.outputs.promoted == 'true'
         run: bun --filter @stll/web test:e2e:staging
         env:
           E2E_WEB_URL: https://staging.stll.app
@@ -386,7 +463,7 @@ jobs:
           EXPECTED_COMMIT: ${{ github.sha }}
 
       - name: Run staging API chat smoke
-        if: ${{ !cancelled() }}
+        if: ${{ steps.current.outputs.promoted == 'true' && !cancelled() }}
         run: bun apps/api/src/scripts/post-deploy-smoke.ts "$E2E_API_URL"
         env:
           E2E_API_URL: https://api-staging.stll.app
@@ -394,7 +471,7 @@ jobs:
           EXPECTED_COMMIT: ${{ github.sha }}
 
       - name: Upload Playwright report
-        if: failure()
+        if: ${{ steps.current.outputs.promoted == 'true' && failure() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: staging-smoke-report

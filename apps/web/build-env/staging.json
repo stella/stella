@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "targetEnvironment": "staging",
+  "variables": {
+    "VITE_API_URL": "https://api-staging.stll.app",
+    "VITE_AUTH_GOOGLE": "true",
+    "VITE_AUTH_MICROSOFT": "true",
+    "VITE_BETA_FEATURES_ENABLED": "true",
+    "VITE_BROWSER_API_URL": "https://staging.stll.app/api",
+    "VITE_FEEDBACK_EMAIL_TO": "help@stll.app",
+    "VITE_POSTHOG_HOST": "https://eu.i.posthog.com",
+    "VITE_PUBLIC_APP_URL": "https://staging.stll.app"
+  }
+}

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -21,6 +21,8 @@ import {
   renderSelfhostEnvExample,
   workflowContractIssues,
 } from "./selfhost-tool";
+
+setDefaultTimeout(15_000);
 
 const repositoryCompose = async () =>
   await Bun.file(

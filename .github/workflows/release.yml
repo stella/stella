@@ -453,10 +453,7 @@ jobs:
           if [[ "$RELEASE_REF" == *-* ]]; then
             target_environment=staging
           fi
-          {
-            echo "environment=${target_environment}"
-            echo "request_id=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          } >> "$GITHUB_OUTPUT"
+          echo "environment=${target_environment}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
@@ -534,176 +531,49 @@ jobs:
             echo "reused=true"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Mint App token for the web build workflow
+      # Keep current workflow tooling separate from the selected release source.
+      # The action code comes from the workflow revision; the browser build
+      # contract remains bound to the release source and fails closed when absent.
+      - name: Checkout workflow tooling
         if: steps.existing.outputs.reused != 'true'
-        id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
-          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: stella-infra
-          permission-actions: write
+          ref: ${{ github.workflow_sha }}
+          path: .workflow-source
+          persist-credentials: false
 
-      - name: Dispatch and watch web image build
+      - name: Checkout release source
         if: steps.existing.outputs.reused != 'true'
-        id: build-run
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          INFRA_REPO: ${{ github.repository_owner }}/stella-infra
-          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
-          RELEASE_SHA: ${{ needs.resolve.outputs.release_sha }}
-          REQUEST_ID: ${{ steps.target.outputs.request_id }}
-          TARGET_ENV: ${{ steps.target.outputs.environment }}
-        run: |
-          set -euo pipefail
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.resolve.outputs.release_sha }}
+          path: .release-source
+          persist-credentials: false
 
-          dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          expected_title="Build web ${RELEASE_REF} → ${TARGET_ENV} [${REQUEST_ID}]"
-          gh api --method POST \
-            "/repos/${INFRA_REPO}/actions/workflows/build-release-web.yml/dispatches" \
-            -f "ref=main" \
-            -f "inputs[release_ref]=${RELEASE_REF}" \
-            -f "inputs[release_sha]=${RELEASE_SHA}" \
-            -f "inputs[request_id]=${REQUEST_ID}" \
-            -f "inputs[target_environment]=${TARGET_ENV}"
-
-          run_id=""
-          for _ in {1..30}; do
-            if ! run_id="$(
-              gh api \
-                "/repos/${INFRA_REPO}/actions/workflows/build-release-web.yml/runs?event=workflow_dispatch&per_page=10" \
-                --jq ".workflow_runs[] | select(.created_at >= \"${dispatched_at}\") | select(.display_title == \"${expected_title}\") | .id" \
-                | head -n 1
-            )"; then
-              run_id=""
-            fi
-            if [[ -n "$run_id" ]]; then
-              break
-            fi
-            sleep 2
-          done
-
-          if [[ -z "$run_id" ]]; then
-            echo "::error::Could not correlate the dispatched web image build."
-            exit 1
-          fi
-
-          while true; do
-            if ! run_state="$(
-              gh api "/repos/${INFRA_REPO}/actions/runs/${run_id}" \
-                --jq '[.status, .conclusion, .html_url] | @tsv'
-            )"; then
-              sleep 10
-              continue
-            fi
-            status="$(cut -f1 <<<"$run_state")"
-            conclusion="$(cut -f2 <<<"$run_state")"
-            run_url="$(cut -f3 <<<"$run_state")"
-            if [[ "$status" == "completed" ]]; then
-              break
-            fi
-            sleep 10
-          done
-
-          if [[ "$conclusion" != "success" ]]; then
-            echo "::error::Web image build concluded ${conclusion}: ${run_url}"
-            exit 1
-          fi
-          echo "run_id=${run_id}" >> "$GITHUB_OUTPUT"
-
-      - name: Download web image archive
-        if: steps.existing.outputs.reused != 'true'
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          INFRA_REPO: ${{ github.repository_owner }}/stella-infra
-          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
-          TARGET_ENV: ${{ steps.target.outputs.environment }}
-        run: |
-          gh run download "${{ steps.build-run.outputs.run_id }}" \
-            --repo "$INFRA_REPO" \
-            --name "release-web-image-${RELEASE_REF}-${TARGET_ENV}" \
-            --dir release-web-image
-
-      - name: Verify web image receipt
-        if: steps.existing.outputs.reused != 'true'
-        id: archive
-        env:
-          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
-          RELEASE_SHA: ${{ needs.resolve.outputs.release_sha }}
-          TARGET_ENV: ${{ steps.target.outputs.environment }}
-        run: |
-          set -euo pipefail
-          if [[ ! -f release-web-image/stella-web.tar || -L release-web-image/stella-web.tar ]]; then
-            echo "::error::Web image archive must be a regular file."
-            exit 1
-          fi
-          if [[ ! -f release-web-image/source-receipt.json || -L release-web-image/source-receipt.json ]]; then
-            echo "::error::Web image source receipt must be a regular file."
-            exit 1
-          fi
-          if [[ ! -f release-web-image/stella-web.intoto.jsonl || -L release-web-image/stella-web.intoto.jsonl ]]; then
-            echo "::error::Web image build attestation must be a regular file."
-            exit 1
-          fi
-          jq -e \
-            --arg release_ref "$RELEASE_REF" \
-            --arg release_sha "$RELEASE_SHA" \
-            --arg target_environment "$TARGET_ENV" \
-            '.schemaVersion == 1
-              and .releaseRef == $release_ref
-              and .releaseSha == $release_sha
-              and .targetEnvironment == $target_environment' \
-            release-web-image/source-receipt.json >/dev/null
-          # The build was dispatched at ref=main above, so require the
-          # attestation's source ref to match: a same-path workflow on
-          # another branch of the infra repo must not pass.
-          gh attestation verify release-web-image/stella-web.tar \
-            --bundle release-web-image/stella-web.intoto.jsonl \
-            --repo "${GITHUB_REPOSITORY_OWNER}/stella-infra" \
-            --signer-workflow "${GITHUB_REPOSITORY_OWNER}/stella-infra/.github/workflows/build-release-web.yml" \
-            --source-ref refs/heads/main \
-            --deny-self-hosted-runners >/dev/null
-          archive_digest="$(sha256sum release-web-image/stella-web.tar | awk '{print $1}')"
-          echo "digest=sha256:${archive_digest}" >> "$GITHUB_OUTPUT"
-
-      - name: Publish web image
+      - name: Build and publish web image publicly
         if: steps.existing.outputs.reused != 'true'
         id: publish
-        env:
-          IMAGE: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE_NAME }}
-          RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
-        run: |
-          set -euo pipefail
-          docker load --input release-web-image/stella-web.tar
-          source_image="stella-web-release:${RELEASE_REF}"
-          candidate_tag="candidate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          docker tag "$source_image" "${IMAGE}:${candidate_tag}"
-          docker push "${IMAGE}:${candidate_tag}"
-
-          digest="$(docker buildx imagetools inspect "${IMAGE}:${candidate_tag}" --format '{{.Manifest.Digest}}')"
-          if [[ ! "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
-            echo "::error::Registry returned an invalid web image digest."
-            exit 1
-          fi
-          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+        uses: ./.workflow-source/.github/actions/build-web-image
+        with:
+          release-ref: ${{ needs.resolve.outputs.release_ref }}
+          release-sha: ${{ needs.resolve.outputs.release_sha }}
+          target-environment: ${{ steps.target.outputs.environment }}
+          posthog-key: ${{ secrets.VITE_POSTHOG_KEY }}
+          source-path: .release-source
+          tooling-path: .workflow-source
 
       - name: Write web image publication predicate
         if: steps.existing.outputs.reused != 'true'
         env:
-          ARCHIVE_DIGEST: ${{ steps.archive.outputs.digest }}
-          BUILD_RUN_ID: ${{ steps.build-run.outputs.run_id }}
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
           RELEASE_SHA: ${{ needs.resolve.outputs.release_sha }}
           TARGET_ENV: ${{ steps.target.outputs.environment }}
         run: |
           jq -n \
-            --arg archive_digest "$ARCHIVE_DIGEST" \
-            --arg build_run_id "$BUILD_RUN_ID" \
             --arg release_ref "$RELEASE_REF" \
             --arg release_sha "$RELEASE_SHA" \
             --arg target_environment "$TARGET_ENV" \
-            '{archiveDigest: $archive_digest, buildRunId: $build_run_id, releaseRef: $release_ref, releaseSha: $release_sha, targetEnvironment: $target_environment}' \
+            '{releaseRef: $release_ref, releaseSha: $release_sha, targetEnvironment: $target_environment}' \
             > web-image-publication.json
 
       # The registry refused this upload on v0.6.22 with a 403 on the first
