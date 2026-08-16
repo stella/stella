@@ -813,6 +813,44 @@ test("a settled slice past the recheck window is re-walked, and a grown listing 
   });
 });
 
+test("a held recheck candidate yields to the next settled row, not to idle", async () => {
+  // The recheck read is `LIMIT 1` on the oldest settled row, so a held row
+  // filtered after the query is the whole candidate set and the source reports
+  // idle with a later settled row due. Unlike the sweep frontier, skipping one
+  // costs nothing: a settled slice keeps its ledger row and is selectable on a
+  // later turn, so the only thing the hold changes is which row this turn
+  // proves.
+  const sourceId = await seedSource();
+  const longSettled = new Date(
+    NOW.getTime() - RECONCILIATION_SETTLED_RECHECK_MS - DAY_IN_MS,
+  );
+  await seedSettledHistory(sourceId, longSettled);
+  const behind = stepDay(OWED_SLICE, 1);
+  await seedSlice({
+    sourceId,
+    slice: behind,
+    reported: 1,
+    collected: 1,
+    // Younger than the held row, so it is only reached once that one is out,
+    // and still the wrong side of the recheck cutoff so it is genuinely due.
+    checkedAt: new Date(longSettled.getTime() + DAY_IN_MS / 2),
+  });
+
+  const sliceRetries: SliceRetrySchedule = new Map([
+    [OWED_SLICE, NOW.getTime() + DAY_IN_MS],
+  ]);
+
+  expect(await runUnitWith({ sourceId, sliceRetries })).toMatchObject({
+    type: "worked",
+    summary: {
+      unit: "slice",
+      slice: behind,
+      reason: SLICE_WALK_REASON.RECHECK,
+    },
+  });
+  expect(listed.map(({ slice }) => slice)).toEqual([behind]);
+});
+
 test("a settled slice inside the recheck window is left alone", async () => {
   // Otherwise proved history is re-walked at nearly the tip's own cadence, and
   // the politeness budget spent on it is budget not spent on slices that are

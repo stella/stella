@@ -492,11 +492,23 @@ const selectStaleShortSlices = async (
  * `case_law_coverage_slices_source_slice_idx`; the short partial index is the
  * exact complement of this predicate and deliberately does not serve it.
  */
+type SelectRecheckCandidateOptions = {
+  sourceId: SafeId<"caseLawSource">;
+  /** The tip window's own start; slices at or above it are re-walked anyway. */
+  belowSlice: string;
+  /**
+   * Held slices, excluded here for the same reason the backlog query excludes
+   * them: this read is `LIMIT 1`, so a held row filtered afterwards is the
+   * whole candidate set and the source reports idle while a later settled row
+   * is due. Skipping one costs nothing, unlike the sweep — a settled slice
+   * keeps its ledger row and stays selectable on a later turn.
+   */
+  heldSlices: string[];
+};
+
 const selectRecheckCandidate = async (
   scopedDb: ScopedDb,
-  sourceId: SafeId<"caseLawSource">,
-  /** The tip window's own start; slices at or above it are re-walked anyway. */
-  belowSlice: string,
+  { belowSlice, heldSlices, sourceId }: SelectRecheckCandidateOptions,
 ): Promise<LedgerSlice | null> =>
   (
     await scopedDb(
@@ -517,6 +529,9 @@ const selectRecheckCandidate = async (
                 caseLawCoverageSlices.collected,
                 caseLawCoverageSlices.reported,
               ),
+              heldSlices.length === 0
+                ? undefined
+                : notInArray(caseLawCoverageSlices.slice, heldSlices),
             ),
           )
           .orderBy(caseLawCoverageSlices.checkedAt)
@@ -968,7 +983,11 @@ export const runReconciliationWorkUnit = async ({
       // empty: idle is the steady state of a surveyed source, so the branch
       // that skipped it would almost never be taken, and one more bounded read
       // in the batch already in flight costs no extra round trip.
-      selectRecheckCandidate(scopedDb, sourceId, tipStart),
+      selectRecheckCandidate(scopedDb, {
+        sourceId,
+        belowSlice: tipStart,
+        heldSlices,
+      }),
     ]);
 
   const terminalBySlice = await countTerminalReconciliationItemsBySlice(
