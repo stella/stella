@@ -125,6 +125,33 @@ export const LEGAL_ATLAS_RUNNER_ENV = {
     fallback: 250,
     min: 100,
   }),
+  // The standing citation-resolution walk. On by default, for the same reason
+  // reconciliation is: a citator that trails its corpus is the failure this
+  // exists to prevent, and a walk that has to be switched on is off when it
+  // matters. The flag is a kill switch, not an opt-in — it exists so a
+  // database under pressure can be given room without a build.
+  caseLawCitationResolutionEnabled: readBooleanEnv({
+    name: "CASE_LAW_CITATION_RESOLUTION_ENABLED",
+    fallback: true,
+  }),
+  // Rows examined per statement. The bound on one batch's cost: candidate
+  // lookups are one indexed probe each, so this is how much work a single
+  // statement asks of the database at once.
+  citationResolutionBatchSize: readIntegerEnv({
+    name: "CITATION_RESOLUTION_BATCH_SIZE",
+    fallback: 2000,
+    min: 1,
+  }),
+  // Gap between two batches, and therefore the whole throughput of the walk.
+  // The knob to turn when the corpus database is busy serving readers: at the
+  // default batch size this paces the walk at roughly two thousand citations a
+  // second's worth of work per second, which a burn-down can be slowed from
+  // without a deployment.
+  citationResolutionBatchDelayMs: readIntegerEnv({
+    name: "CITATION_RESOLUTION_BATCH_DELAY_MS",
+    fallback: 1000,
+    min: 0,
+  }),
   // Root-pool reads/writes (source lookup + one-time seed insert) are tiny;
   // a short ceiling fails fast on a dead connection at cycle start.
   dbRootQueryTimeoutMs: readIntegerEnv({

@@ -631,6 +631,19 @@ export const bareCitationKey = (text: string): string =>
   canonicalizeDedupKey(stripPrefix(text));
 
 /**
+ * The value that goes in a `citation_key` column, for every writer of one.
+ *
+ * Null, never the empty string, when the text does not canonicalize. The two
+ * spellings are not interchangeable: null keeps a row out of the resolver's
+ * equality join, while '' matches every other row that also failed to
+ * canonicalize, drawing edges between unrelated cases. Two writers once
+ * disagreed about which to use, so the choice lives here rather than at each
+ * call site, and the database refuses the loser (`citation_key <> ''`).
+ */
+export const citationKeyOf = (text: string): string | null =>
+  bareCitationKey(text) || null;
+
+/**
  * Check whether a citation text refers to the same decision that
  * contains it (self-citation).
  */

@@ -2,9 +2,9 @@
  * One-off backfill: materialize `citation_authority` / `citation_count`
  * across the whole case-law corpus.
  *
- * The post-ingestion citation pass (resolve-citations.ts) keeps this
- * fresh going forward; this script seeds it for an existing corpus and
- * can be re-run to refresh the time-decayed values on demand.
+ * The corpus daemon's scheduled recompute keeps this fresh going forward;
+ * this script seeds it for an existing corpus and can be re-run to refresh
+ * the time-decayed values on demand.
  *
  *   bun run src/scripts/backfill-citation-authority.ts
  */

@@ -28,6 +28,14 @@ import {
   latestCitationAuthorityRecomputeAt,
   tryRecomputeCitationAuthorityForAll,
 } from "@/api/handlers/case-law/citation-authority";
+import {
+  countPendingCitations,
+  tryResolveCitationBatch,
+} from "@/api/handlers/case-law/citation-resolution";
+import {
+  loadCitationResolutionCursor,
+  saveCitationResolutionCursor,
+} from "@/api/handlers/case-law/citation-resolution-cursor";
 import { ADAPTER_KEYS, MAX_CYCLE_MS } from "@/api/handlers/case-law/consts";
 import {
   BACKFILL_STATUS,
@@ -80,6 +88,12 @@ import {
   type ReconciliationSource,
   runCaseLawReconciliationLoop,
 } from "./case-law-reconciliation";
+import {
+  CITATION_RESOLUTION_DRAIN_TIMING,
+  CITATION_RESOLUTION_STEP,
+  type CitationResolutionStep,
+  runCitationResolutionDrain,
+} from "./citation-resolution-drain";
 import {
   CORPUS_INDEX_STEP,
   type CorpusIndexStepKind,
@@ -1262,6 +1276,98 @@ export const runCaseLawIngest = async (
     }
   })();
 
+  // The standing citation-resolution walk: settles every citation the corpus
+  // holds against the decisions it holds, continuously, because the answer
+  // changes as the crawl proceeds. A decision arriving under a key nothing
+  // matched makes unmatched citations resolvable; a second decision under a
+  // key that had one holder retracts the edge drawn to the first. Both are put
+  // back in the queue by the ingestion pipeline, so the queue never
+  // permanently empties.
+  //
+  // Overlapping runner replicas during a rolling deployment take a
+  // transaction-scoped advisory lock per batch, so the replacement finds the
+  // walk held and asks again rather than duplicating its work.
+  const citationResolutionLoop = (async () => {
+    if (!LEGAL_ATLAS_RUNNER_ENV.caseLawCitationResolutionEnabled) {
+      return;
+    }
+    const batchSize = LEGAL_ATLAS_RUNNER_ENV.citationResolutionBatchSize;
+    const batchDelayMs = LEGAL_ATLAS_RUNNER_ENV.citationResolutionBatchDelayMs;
+    logInfo(
+      `[citation-resolution] Enabled (${batchSize} citations per ${batchDelayMs}ms)`,
+    );
+    await runCitationResolutionDrain({
+      settleBatch: async (after): Promise<CitationResolutionStep> => {
+        const batch = await runWithHardDeadline(
+          "citation-resolution",
+          BACKFILL_HARD_DEADLINE_MS,
+          async () =>
+            await tryResolveCitationBatch(backfillDb, {
+              limit: batchSize,
+              after,
+            }),
+        );
+        if (batch === null) {
+          return { type: CITATION_RESOLUTION_STEP.BUSY };
+        }
+        if (batch.scanned === 0) {
+          return { type: CITATION_RESOLUTION_STEP.DRAINED };
+        }
+        return {
+          type: CITATION_RESOLUTION_STEP.SETTLED,
+          counts: batch,
+          cursor: batch.cursor,
+        };
+      },
+      loadCursor: async () => await loadCitationResolutionCursor(backfillDb),
+      saveCursor: async (cursor) =>
+        await saveCitationResolutionCursor(backfillDb, cursor),
+      readPending: async () => await countPendingCitations(backfillDb),
+      errorTag,
+      isDraining,
+      now: Date.now,
+      report: (summary) => {
+        // Work waiting and nothing examined is the one outcome a log of
+        // successes cannot express, so it leaves a structured record of its
+        // own rather than a number inside the line below.
+        if (summary.idleContradictionWindows !== null) {
+          logger.error("case_law.citation_resolution.idle_contradiction", {
+            pending: summary.pending ?? 0,
+            windows: summary.idleContradictionWindows,
+            lastErrorType: summary.lastErrorTag ?? "none",
+          });
+        }
+        // A citing jurisdiction with no declared resolution policy is a
+        // registry gap, not sweep noise: those citations are never examined,
+        // and the fix is a declaration.
+        if (summary.undeclaredJurisdiction > 0) {
+          logger.error("case_law.citation_resolution.undeclared_jurisdiction", {
+            citations: summary.undeclaredJurisdiction,
+          });
+        }
+        logInfo(
+          `[citation-resolution] case_law.citation_resolution.swept ` +
+            `batches=${summary.batches} ` +
+            `scanned=${summary.scanned} ` +
+            `resolved=${summary.resolved} ` +
+            `unmatched=${summary.unmatched} ` +
+            `ambiguous=${summary.ambiguous} ` +
+            `jurisdictionBlocked=${summary.jurisdictionBlocked} ` +
+            `undeclaredJurisdiction=${summary.undeclaredJurisdiction} ` +
+            `pending=${summary.pending ?? "unknown"} ` +
+            `drained=${summary.drained} ` +
+            `busy=${summary.busy} ` +
+            `errored=${summary.errored} ` +
+            `lastErrorType=${summary.lastErrorTag ?? "none"}`,
+        );
+      },
+      sleep: async (ms) => {
+        await Bun.sleep(ms);
+      },
+      timing: { ...CITATION_RESOLUTION_DRAIN_TIMING, batchDelayMs },
+    });
+  })();
+
   // corpus index index backfill loop: pushes corpus-backed decisions into the
   // active generation. Gated so the index can warm up (and be benchmarked)
   // while search still reads pg-fts; runs outside the DB slot semaphore.
@@ -1670,6 +1776,7 @@ export const runCaseLawIngest = async (
     ...adapterLoops,
     healthLoop,
     searchIndexLoop,
+    citationResolutionLoop,
     citationAuthorityLoop,
     corpusIndexLoop,
     legislationSearchIndexLoop,

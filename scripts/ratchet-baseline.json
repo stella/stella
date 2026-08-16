@@ -232,7 +232,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 761,
+    "count": 760,
     "files": {
       "apps/api/scripts/ai-provider-canary-config.ts": 1,
       "apps/api/scripts/ai-provider-canary.ts": 4,
@@ -403,6 +403,7 @@
       "apps/api/src/mcp/template-persistence.ts": 1,
       "apps/api/src/mcp/tool-utils.ts": 1,
       "apps/api/src/scripts/adapter-health.ts": 1,
+      "apps/api/src/scripts/backfill-citation-keys.ts": 2,
       "apps/api/src/scripts/backfill-corpus-storage.ts": 1,
       "apps/api/src/scripts/backfill-fulltext.ts": 6,
       "apps/api/src/scripts/backfill-property-roles.ts": 1,
@@ -414,7 +415,7 @@
       "apps/api/src/scripts/post-deploy-smoke.ts": 3,
       "apps/api/src/scripts/redact-case-law-decision.ts": 1,
       "apps/api/src/scripts/repair-case-law-jsonb.ts": 1,
-      "apps/api/src/scripts/resolve-citations.ts": 8,
+      "apps/api/src/scripts/seed-polarity-rules.ts": 1,
       "apps/landing/src/components/anonymize-demo-engine.ts": 2,
       "apps/landing/src/components/anonymize-demo-worker-client.ts": 2,
       "apps/landing/src/components/anonymize-demo-worker.ts": 2,
@@ -424,6 +425,7 @@
       "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts": 10,
       "apps/legal-atlas-runner/src/runners/case-law-ingest.ts": 20,
       "apps/legal-atlas-runner/src/runners/case-law-reconciliation.ts": 2,
+      "apps/legal-atlas-runner/src/runners/citation-resolution-drain.ts": 4,
       "apps/legal-atlas-runner/src/runners/sk-document-drain.ts": 3,
       "apps/legal-atlas-runner/src/runners/source-total-poll.ts": 2,
       "apps/mobile/src/app/_layout.tsx": 1,

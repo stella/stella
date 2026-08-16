@@ -48,8 +48,6 @@ const executedRows = (result: unknown): unknown[] => {
   return [];
 };
 
-const rowCount = (result: unknown): number => executedRows(result).length;
-
 const firstNumber = (result: unknown, key: string): number => {
   const row = executedRows(result).at(0);
   return isRecord(row) && typeof row[key] === "number" ? row[key] : 0;
@@ -81,17 +79,34 @@ const normalizeFrom = async (done: number): Promise<number> => {
       WHERE case_number ~ ${SHEET_PATTERN}
         AND source_document_id IS NOT NULL
       LIMIT ${BATCH}
+    ),
+    normalized AS (
+      UPDATE case_law_decisions d
+      SET case_number = regexp_replace(d.case_number, ${SHEET_PATTERN}, ${String.raw`\1`}),
+          sheet_number = regexp_replace(d.case_number, ${SHEET_PATTERN}, ${String.raw`\2`}),
+          citation_key = NULL
+      FROM batch
+      WHERE d.id = batch.id
+      RETURNING d.id
     )
-    UPDATE case_law_decisions d
-    SET case_number = regexp_replace(d.case_number, ${SHEET_PATTERN}, ${String.raw`\1`}),
-        sheet_number = regexp_replace(d.case_number, ${SHEET_PATTERN}, ${String.raw`\2`}),
-        citation_key = NULL
-    FROM batch
-    WHERE d.id = batch.id
-    RETURNING d.id
+    -- Clearing a decision's key retracts every citation edge drawn to it: what
+    -- a citation matched was a docket carrying a sheet number, which was never
+    -- the docket. Putting those citations back in the pending queue lets the
+    -- standing resolver re-decide them against the normalized key, instead of
+    -- leaving edges that nothing will ever revisit.
+    reopened AS (
+      UPDATE case_law_citations c
+         SET resolution_status = 'pending',
+             cited_decision_id = NULL
+       WHERE c.cited_decision_id IN (SELECT id FROM normalized)
+         AND c.resolution_status = 'resolved'
+      RETURNING c.id
+    )
+    SELECT (SELECT count(*)::int FROM normalized) AS normalized,
+           (SELECT count(*)::int FROM reopened) AS reopened
   `);
 
-  const updated = rowCount(result);
+  const updated = firstNumber(result, "normalized");
   if (updated === 0) {
     return done;
   }
