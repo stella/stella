@@ -219,6 +219,7 @@ test("every shadow-event attribute survives the log sanitizer", () => {
 // rollout is trying to measure.
 test.each([
   "dictionary_inert",
+  "dictionary_warming",
   "expanded",
   "no_dictionary",
   "unsupported_jurisdiction",

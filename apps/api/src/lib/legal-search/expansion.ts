@@ -446,15 +446,35 @@ type ResolvedExpander = {
 };
 
 /**
+ * Whether a caller may wait for a cold dictionary.
+ *
+ * `on` must: the query it returns depends on the dictionary, so there is
+ * nothing to serve until the read finishes. `shadow` must not: it executes the
+ * unexpanded query whatever happens, so waiting on object storage would add
+ * that latency to a search purely to observe it — and on a cold replica with a
+ * slow store that is the full resolve deadline, paid by every request sharing
+ * the load. An observational mode that can slow the request path is not one
+ * anybody can safely leave on.
+ */
+type ExpanderAvailability = "await_cold_load" | "resident_only";
+
+/**
  * The expander for a request, or null when this request expands nothing.
- * Null covers an unscoped or unsupported jurisdiction and an unavailable
- * dictionary alike, so the caller has one branch rather than a mode matrix.
+ * Null covers an unscoped or unsupported jurisdiction, an unavailable
+ * dictionary, and (under `resident_only`) one not yet in memory, so the caller
+ * has one branch rather than a mode matrix.
  */
 const corpusTermExpander = async (
   country: string | undefined,
+  availability: ExpanderAvailability,
 ): Promise<ResolvedExpander | null> => {
   const language = expansionLanguageForJurisdiction(country);
   if (language === null) {
+    return null;
+  }
+  if (availability === "resident_only" && !lastLoaded.has(language)) {
+    // Warm it for the requests after this one, off the request path.
+    detached(dictionaryFor(language), "legal-search.expansion-dictionary-warm");
     return null;
   }
   const dictionary = await dictionaryFor(language);
@@ -507,6 +527,7 @@ type ShadowExpansionLog = {
    */
   reach:
     | "dictionary_inert"
+    | "dictionary_warming"
     | "expanded"
     | "no_dictionary"
     | "unsupported_jurisdiction";
@@ -591,6 +612,21 @@ const freeTextLeaves = (text: string, expand?: CorpusTermExpander): number => {
   return clause === null ? 0 : countLeaves(clause);
 };
 
+/**
+ * Why a request that routed to a supported language still got no expander.
+ * Distinguishing "not loaded yet" from "would not load" matters to the rollout:
+ * the first is a cold replica that will be answering normally in a moment, the
+ * second is an operational problem.
+ */
+const expanderMissReach = (
+  language: MorphologyLanguage | null,
+): "dictionary_warming" | "no_dictionary" | "unsupported_jurisdiction" => {
+  if (language === null) {
+    return "unsupported_jurisdiction";
+  }
+  return lastLoaded.has(language) ? "no_dictionary" : "dictionary_warming";
+};
+
 type ResolveExpandedQueryOptions = {
   /** Assemble the clause, with the expander when one is supplied. */
   build: (expand?: CorpusTermExpander) => string | null;
@@ -649,7 +685,12 @@ export const resolveExpandedCorpusQuery = async ({
   const countryScoped = jurisdiction !== undefined;
   const language = expansionLanguageForJurisdiction(jurisdiction);
   const expand =
-    language === null ? null : await corpusTermExpander(jurisdiction);
+    language === null
+      ? null
+      : await corpusTermExpander(
+          jurisdiction,
+          mode === "shadow" ? "resident_only" : "await_cold_load",
+        );
 
   // A request that reaches no dictionary still reports, or the reach metrics
   // would only ever describe the traffic expansion already covers.
@@ -662,7 +703,7 @@ export const resolveExpandedCorpusQuery = async ({
         dictionaryHash: "none",
         expandedLeaves: baseLeaves,
         language,
-        reach: language === null ? "unsupported_jurisdiction" : "no_dictionary",
+        reach: expanderMissReach(language),
       });
     }
     return baseQuery;
