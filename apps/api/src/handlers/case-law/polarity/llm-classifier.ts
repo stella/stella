@@ -15,7 +15,34 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
-import type { Polarity } from "./consts";
+import { CLASSIFIABLE_POLARITIES } from "./consts";
+import type { ClassifiablePolarity } from "./consts";
+
+/**
+ * What each polarity means, one entry per value the classifier may return.
+ *
+ * Total over `ClassifiablePolarity` by construction, so a new polarity cannot
+ * be added to the canonical list without the model being told what it means.
+ * The examples are drawn from the same phrases the seed rules key on, because
+ * the two tiers label the same corpus and used to disagree: the regex tier has
+ * always called "srov." supportive, while this prompt called it neutral.
+ */
+const POLARITY_GUIDANCE = {
+  positive: `The court follows, agrees with, applies, or builds on the
+  cited decision, and says so. Phrases like "v souladu s", "odkazuje na",
+  "jak konstatoval", "following", "in line with", "as held in".`,
+  supportive: `The court relies on the cited decision without stating
+  agreement outright: a comparison or see-also pointer offered in support
+  of what it is saying. Phrases like "srov.", "viz", "obdobně",
+  "přiměřeně", "porov.", "pozri", "cf.", "see also".`,
+  neutral: `The court names the cited decision without endorsing or
+  rejecting it, most often as part of the procedural record. Phrases like
+  "proti rozsudku", "vedené u", "veden pod". This is also the answer when
+  the excerpt does not settle the question.`,
+  negative: `The court distinguishes, overrules, departs from, or
+  criticizes the cited decision. Phrases like "na rozdíl od",
+  "překonán", "zrušen", "odlišuje se", "overruled", "distinguished".`,
+} as const satisfies Record<ClassifiablePolarity, string>;
 
 const SYSTEM_PROMPT = `You are a legal citation polarity classifier.
 
@@ -24,30 +51,26 @@ reference, classify the relationship between the citing decision and
 the cited decision.
 
 Classifications:
-- "positive": The court follows, agrees with, applies, or builds on
-  the cited decision. Phrases like "v souladu s", "odkazuje na",
-  "jak konstatoval", "following", "in line with", "as held in".
-- "neutral": The court merely references or mentions the cited
-  decision without endorsing or rejecting it. Phrases like "srov.",
-  "viz", "cf.", "see", "compare".
-- "negative": The court distinguishes, overrules, departs from, or
-  criticizes the cited decision. Phrases like "na rozdíl od",
-  "překonán", "zrušen", "odlišuje se", "overruled", "distinguished".
+${CLASSIFIABLE_POLARITIES.map(
+  (polarity) => `- "${polarity}": ${POLARITY_GUIDANCE[polarity]}`,
+).join("\n")}
 
 Extract the specific phrase (2-5 words) from the text that most
 strongly indicates the polarity. This phrase will be used to generate
 regex rules for future classification.
 
-If the context is ambiguous, classify as "neutral".`;
+Report confidence honestly. A high-confidence answer can be promoted into
+a regex rule that labels later citations without you, so an uncertain one
+must say so rather than round itself up.`;
 
 const classificationSchema = v.strictObject({
-  polarity: v.picklist(["positive", "neutral", "negative"]),
+  polarity: v.picklist(CLASSIFIABLE_POLARITIES),
   keyPhrase: v.pipe(v.string(), v.minLength(2), v.maxLength(100)),
   confidence: v.pipe(v.number(), v.minValue(0), v.maxValue(1)),
 });
 
 type ClassificationResult = {
-  polarity: Polarity;
+  polarity: ClassifiablePolarity;
   keyPhrase: string;
   confidence: number;
 };
@@ -112,9 +135,6 @@ ${context}`,
       });
 
       return {
-        // SAFETY: Valibot picklist at line 45 restricts to
-        // valid Polarity subset ("positive" | "neutral" | "negative").
-        // The picklist subset is assignable to Polarity without cast
         polarity: output.polarity,
         keyPhrase: output.keyPhrase,
         confidence: output.confidence,

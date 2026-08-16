@@ -370,22 +370,22 @@ type CorpusWritePayload = CorpusPayload & {
   jurisdiction: string;
 };
 
-type SettleCaseLawCorpusMirrorOptions = {
+type SettleCaseLawCorpusMirrorTxOptions = {
   decisionId: SafeId<"caseLawDecision">;
   persistedSourceHash: string | null;
   observationOrder: bigint;
   mirrorCarriesDocument: boolean;
-  scopedDb: ScopedDb;
   written: WriteCorpusResult;
-};
-
-type SettleCaseLawCorpusMirrorTxOptions = Omit<
-  SettleCaseLawCorpusMirrorOptions,
-  "scopedDb"
-> & {
   tx: Transaction;
 };
 
+/**
+ * Settle only the observation that owns the pending mirror.
+ *
+ * A missed compare-and-set is retryable, not terminal: another run may still
+ * leave the durable row pending, so the caller's page cursor must stay held
+ * until a replay proves the mirror settled.
+ */
 const settleCaseLawCorpusMirrorTx = async ({
   decisionId,
   persistedSourceHash,
@@ -427,38 +427,6 @@ const settleCaseLawCorpusMirrorTx = async ({
     )
     .returning({ id: caseLawDecisions.id });
   return settled.length > 0;
-};
-
-/**
- * Settle only the observation that owns the pending mirror. A missed CAS is
- * retryable, not terminal: another run may still leave the durable row
- * pending, so its page cursor must remain held until a replay proves the
- * mirror settled.
- */
-export const settleCaseLawCorpusMirror = async ({
-  decisionId,
-  persistedSourceHash,
-  observationOrder,
-  mirrorCarriesDocument,
-  scopedDb,
-  written,
-}: SettleCaseLawCorpusMirrorOptions): Promise<void> => {
-  const settled = await scopedDb(
-    async (tx) =>
-      await settleCaseLawCorpusMirrorTx({
-        decisionId,
-        persistedSourceHash,
-        observationOrder,
-        mirrorCarriesDocument,
-        tx,
-        written,
-      }),
-  );
-  if (!settled) {
-    throw new ConcurrentModificationError({
-      message: "Case-law corpus mirror owner changed before settlement",
-    });
-  }
 };
 
 /**

@@ -10,11 +10,7 @@ import {
 } from "@/api/db/schema";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { createSafeId } from "@/api/lib/branded-types";
-import {
-  ConcurrentModificationError,
-  DatabaseError,
-  TimeoutError,
-} from "@/api/lib/errors/tagged-errors";
+import { DatabaseError, TimeoutError } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type { WriteCorpusResult } from "@/api/lib/legal-search/corpus-storage";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
@@ -81,7 +77,7 @@ void mock.module("@/api/lib/legal-search/corpus-storage", () => ({
 
 const { czNsAdapter } =
   await import("@/api/handlers/case-law/ingestion/adapters/cz-ns");
-const { processDecision, runIngestionPipeline, settleCaseLawCorpusMirror } =
+const { processDecision, runIngestionPipeline } =
   await import("@/api/handlers/case-law/ingestion/pipeline");
 
 const originalCzNsFetchPage = czNsAdapter.fetchPage;
@@ -243,31 +239,6 @@ const scopedDb: ScopedDb = async (callback) => {
   // eslint-disable-next-line typescript/no-unsafe-type-assertion
   return await callback(tx as unknown as Transaction);
 };
-
-describe("settleCaseLawCorpusMirror", () => {
-  const settle = async (): Promise<unknown> =>
-    await settleCaseLawCorpusMirror({
-      decisionId: createSafeId<"caseLawDecision">(),
-      persistedSourceHash: "source-hash",
-      observationOrder: 1n,
-      mirrorCarriesDocument: true,
-      scopedDb,
-      written: { ...CORPUS_KEYS, contentHash: "content-hash" },
-    }).then(
-      () => null,
-      (error: unknown) => error,
-    );
-
-  test("accepts the observation that still owns the pending mirror", async () => {
-    expect(await settle()).toBeNull();
-  });
-
-  test("makes a missed settlement compare-and-set retryable", async () => {
-    mirrorSettlementApplied = false;
-
-    expect(await settle()).toBeInstanceOf(ConcurrentModificationError);
-  });
-});
 
 describe("processDecision — canonical storage mode", () => {
   test("reserves before upload and publishes pointers only after it succeeds", async () => {

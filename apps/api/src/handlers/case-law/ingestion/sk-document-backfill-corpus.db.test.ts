@@ -31,9 +31,7 @@ import {
 } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
-import { settleCaseLawCorpusMirror } from "@/api/handlers/case-law/ingestion/pipeline";
 import type { SafeId } from "@/api/lib/branded-types";
-import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
 import type { WriteCorpusResult } from "@/api/lib/legal-search/corpus-storage";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
 import {
@@ -641,61 +639,6 @@ if (!databaseUrl || !runPostgresTests) {
       ).toMatchObject({
         corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
         contentHash: NEW_CONTENT_HASH,
-      });
-    });
-
-    test("a redaction tombstone rejects stale mirror settlement", async () => {
-      const caseNumber = `corpus-redaction-fence-${suffix}`;
-      const id = await insertDecision({
-        caseNumber,
-        mirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
-      });
-      await db
-        .update(caseLawDecisions)
-        .set({
-          sourceHash: "redacted-source-hash",
-          sourceObservationOrder: 1n,
-        })
-        .where(eq(caseLawDecisions.id, id));
-      const redactedAt = new Date("2026-07-31T12:00:00.000Z");
-      await db
-        .update(caseLawDecisions)
-        .set({
-          redactedAt,
-          corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
-          fulltext: null,
-          sections: null,
-          documentAst: null,
-          contentHash: null,
-        })
-        .where(eq(caseLawDecisions.id, id));
-
-      const rejection = await settleCaseLawCorpusMirror({
-        decisionId: id,
-        persistedSourceHash: "redacted-source-hash",
-        observationOrder: 1n,
-        mirrorCarriesDocument: true,
-        scopedDb,
-        written: { ...NEW_KEYS, contentHash: NEW_CONTENT_HASH },
-      }).then(
-        () => null,
-        (error: unknown) => error,
-      );
-
-      expect(rejection).toBeInstanceOf(ConcurrentModificationError);
-      expect(
-        await db.query.caseLawDecisions.findFirst({
-          where: { id: { eq: id } },
-          columns: {
-            redactedAt: true,
-            textS3Key: true,
-            contentHash: true,
-          },
-        }),
-      ).toMatchObject({
-        redactedAt,
-        textS3Key: null,
-        contentHash: null,
       });
     });
 
