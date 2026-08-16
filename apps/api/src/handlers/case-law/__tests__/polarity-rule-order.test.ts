@@ -1,61 +1,57 @@
 import { describe, expect, test } from "bun:test";
+import { lte } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 
-import { caseLawPolarityRules } from "@/api/db/schema";
+import { CLASSIFIABLE_POLARITIES } from "@/api/handlers/case-law/polarity/consts";
 import {
-  POLARITIES,
-  POLARITY_PRECEDENCE,
-} from "@/api/handlers/case-law/polarity/consts";
-import { polarityRuleOrder } from "@/api/handlers/case-law/polarity/rule-engine";
+  rankPolarityRulesByTier,
+  RULES_PER_POLARITY,
+} from "@/api/handlers/case-law/polarity/rule-engine";
+import { LIMITS } from "@/api/lib/limits";
 
 /**
- * The rule query's ORDER BY is assembled from a const map rather than written
- * out, so a mistake in the assembly produces SQL no type can reject. It runs
- * in a background classifier, where a malformed clause would surface as rules
- * quietly failing to load rather than as a failing request. Rendering the
- * query through drizzle's dialect gives the exact string the driver would
- * send, without standing up a database.
+ * The rule read is a window function assembled in code, so a mistake in it
+ * produces SQL no type can reject. It runs in a background classifier, where
+ * a malformed statement would surface as rules quietly failing to load rather
+ * than as a failing request. Rendering through drizzle's dialect gives the
+ * string the driver would send, without standing up a database.
  */
+const ranked = rankPolarityRulesByTier("cs");
 const rendered = new QueryBuilder()
-  .select()
-  .from(caseLawPolarityRules)
-  .orderBy(...polarityRuleOrder)
+  .select({ id: ranked.id })
+  .from(ranked)
+  .where(lte(ranked.tierRank, RULES_PER_POLARITY))
   .toSQL();
 
-/** Only the clause under test; the select list names every column. */
-const orderBy = rendered.sql.slice(rendered.sql.indexOf("order by"));
+/** The window clause is written across lines; compare it as one. */
+const statement = rendered.sql.replaceAll(/\s+/gu, " ");
 
-describe("the polarity rule query orders by precedence", () => {
-  test("orders by severity, then pattern length, then id", () => {
-    expect(orderBy).toStartWith("order by CASE WHEN ");
-    expect(orderBy).toContain(
-      'END, length("case_law_polarity_rules"."pattern") desc, "case_law_polarity_rules"."id"',
-    );
+describe("the polarity rule read caps each tier separately", () => {
+  test("ranks within a polarity, not across the table", () => {
+    // The partition is the whole point: without it the cap is a race between
+    // tiers, and whichever tier grows fastest evicts the others.
+    expect(statement).toContain('row_number() over ( partition by "polarity"');
   });
 
-  test("scores every polarity, and none by match count", () => {
-    // Each arm binds the polarity as a parameter, so the names live in
-    // `params` while the scores are inlined into the CASE.
-    for (const polarity of POLARITIES) {
-      expect(rendered.params).toContain(polarity);
-      expect(orderBy).toContain(
-        `THEN ${String(POLARITY_PRECEDENCE[polarity])}`,
-      );
-    }
-
-    expect(orderBy).not.toContain("match_count");
+  test("keeps the most specific rules of each tier, deterministically", () => {
+    expect(statement).toContain('order by length("pattern") desc, "id"');
   });
 
-  test("negative outscores every other polarity", () => {
-    // The property the ORDER BY exists for: severity decides, and `negative`
-    // is the most severe, so it must sort ahead of everything else.
-    const negative = POLARITY_PRECEDENCE.negative;
+  test("applies the per-tier budget", () => {
+    expect(rendered.sql).toContain('"tier_rank" <=');
+    expect(rendered.params).toContain(RULES_PER_POLARITY);
+  });
 
-    for (const polarity of POLARITIES) {
-      if (polarity === "negative") {
-        continue;
-      }
-      expect(POLARITY_PRECEDENCE[polarity]).toBeGreaterThan(negative);
-    }
+  test("no ordering reads match_count", () => {
+    // The self-reinforcing order this engine used to have. It must not come
+    // back through the cap, which is the subtler place for it to hide.
+    expect(rendered.sql).not.toContain("match_count");
+  });
+
+  test("every tier gets a budget, and together they cover the limit", () => {
+    expect(RULES_PER_POLARITY).toBeGreaterThan(0);
+    expect(
+      RULES_PER_POLARITY * CLASSIFIABLE_POLARITIES.length,
+    ).toBeGreaterThanOrEqual(LIMITS.caseLawPolarityRulesPerLanguage);
   });
 });

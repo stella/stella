@@ -10,13 +10,14 @@
  * stateless (rules reload from DB on every call).
  */
 
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, lte, sql } from "drizzle-orm";
+import { QueryBuilder } from "drizzle-orm/pg-core";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawPolarityRules } from "@/api/db/schema";
 import {
+  CLASSIFIABLE_POLARITIES,
   isValidPolarity,
-  POLARITIES,
   POLARITY_PRECEDENCE,
   RULE_SOURCE,
 } from "@/api/handlers/case-law/polarity/consts";
@@ -70,29 +71,23 @@ const compareRulePrecedence = (a: CompiledRule, b: CompiledRule): number => {
 };
 
 /**
- * `compareRulePrecedence`, in SQL.
+ * How many rules one polarity may contribute to the working set.
  *
- * This orders the truncation, not the matching: `loadRules` caps how many
- * rules it reads, and the cap has to drop the rules that would have lost
- * anyway. Ordering that cap by `match_count` instead would let a busy generic
- * rule push a rare negative one out of the working set entirely, which is the
- * same shadowing bug one layer down. Match order is re-established in memory
- * by `compareRulePrecedence`, so only this cap depends on the clause below.
+ * The cap exists to bound the read, but which rules it drops is a
+ * classification decision. Ordering it by `match_count` let a busy generic
+ * rule push a rare negative one out of the working set entirely — the
+ * shadowing bug one layer down from the match order. Ordering it by severity
+ * instead would be no better: a language that accumulated a cap's worth of
+ * negative rules would load nothing else, and every context those rules
+ * missed would fall through to the LLM.
  *
- * The severity tier is built from `POLARITY_PRECEDENCE`, the map the
- * in-memory comparator reads, so the two cannot disagree about severity.
+ * So the budget is divided among the tiers rather than competed for. No tier
+ * can starve another, and severity stays a matching concern, expressed once,
+ * in `compareRulePrecedence`.
  */
-export const polarityRuleOrder = [
-  sql`CASE ${sql.join(
-    POLARITIES.map(
-      (polarity) =>
-        sql`WHEN ${caseLawPolarityRules.polarity} = ${polarity} THEN ${sql.raw(String(POLARITY_PRECEDENCE[polarity]))}`,
-    ),
-    sql` `,
-  )} END`,
-  sql`length(${caseLawPolarityRules.pattern}) desc`,
-  caseLawPolarityRules.id,
-];
+export const RULES_PER_POLARITY = Math.ceil(
+  LIMITS.caseLawPolarityRulesPerLanguage / CLASSIFIABLE_POLARITIES.length,
+);
 
 /** Optional caller-owned cache for batch scripts. */
 export type RuleCache = Map<string, CompiledRule[]>;
@@ -108,6 +103,35 @@ const compilePattern = (pattern: string): RegExp | null => {
 
 /** Active rule sources (proposed rules are excluded). */
 const ACTIVE_SOURCES = [RULE_SOURCE.MANUAL, RULE_SOURCE.LLM_PROMOTED];
+
+/**
+ * Active rules for one language, numbered within their own polarity.
+ *
+ * Ranking by pattern length keeps the most specific rules of each tier when
+ * the per-tier budget bites, which is the same axis `compareRulePrecedence`
+ * breaks ties on; the id makes the rank total, so a cap that bites lands on
+ * the same rules on every run.
+ */
+export const rankPolarityRulesByTier = (language: string) =>
+  new QueryBuilder()
+    .select({
+      id: caseLawPolarityRules.id,
+      pattern: caseLawPolarityRules.pattern,
+      polarity: caseLawPolarityRules.polarity,
+      confidence: caseLawPolarityRules.confidence,
+      tierRank: sql<number>`row_number() over (
+        partition by ${caseLawPolarityRules.polarity}
+        order by length(${caseLawPolarityRules.pattern}) desc, ${caseLawPolarityRules.id}
+      )`.as("tier_rank"),
+    })
+    .from(caseLawPolarityRules)
+    .where(
+      and(
+        eq(caseLawPolarityRules.language, language),
+        inArray(caseLawPolarityRules.source, ACTIVE_SOURCES),
+      ),
+    )
+    .as("ranked_polarity_rules");
 
 /** The columns `compileRules` reads; the DB read that produces them is the caller's. */
 type PolarityRuleRow = Pick<
@@ -200,18 +224,18 @@ const loadRules = async (
     }
   }
 
+  const ranked = rankPolarityRulesByTier(language);
+
   const rows = await scopedDb((tx) =>
     tx
-      .select()
-      .from(caseLawPolarityRules)
-      .where(
-        and(
-          eq(caseLawPolarityRules.language, language),
-          inArray(caseLawPolarityRules.source, ACTIVE_SOURCES),
-        ),
-      )
-      .orderBy(...polarityRuleOrder)
-      .limit(LIMITS.caseLawPolarityRulesPerLanguage),
+      .select({
+        id: ranked.id,
+        pattern: ranked.pattern,
+        polarity: ranked.polarity,
+        confidence: ranked.confidence,
+      })
+      .from(ranked)
+      .where(lte(ranked.tierRank, RULES_PER_POLARITY)),
   );
 
   const compiled = compileRules(rows);

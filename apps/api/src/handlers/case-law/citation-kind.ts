@@ -136,16 +136,19 @@ const withoutPrefix = (text: string): string =>
  * the digits of the case number follow it directly, so it cannot pick a word
  * out of ordinary prose. It never promotes on its own either: an unlisted
  * mark still falls through to procedural, exactly as a null did.
+ *
+ * The mark is matched as `\p{L}`, the same class the citation extractor
+ * uses. The `Á-Ž`/`á-ž` ranges this used to spell out are code-point ranges,
+ * not letter ranges: they overlap each other and take in `×` and `÷`, which
+ * sit between the accented blocks. Whatever they match is looked up in a
+ * closed set, so the sloppiness never promoted anything, but there is no
+ * reason for two spellings of "a letter" in one file.
  */
 const registryOf = (citationText: string): string | null => {
-  const roman = /^\s*[IVX]+\.?\s*(?<reg>[A-Za-zÁ-Žá-ž]{1,5})/u.exec(
-    citationText,
-  );
-  const arabic = /^\s*\d{1,3}\s*(?<reg>[A-Za-zÁ-Žá-ž]{1,6})/u.exec(
-    citationText,
-  );
+  const roman = /^\s*[IVX]+\.?\s*(?<reg>\p{L}{1,5})/u.exec(citationText);
+  const arabic = /^\s*\d{1,3}\s*(?<reg>\p{L}{1,6})/u.exec(citationText);
   const us = /ÚS|US/u.exec(citationText);
-  const bare = /^\s*(?<reg>[A-Za-zÁ-Žá-ž]{2,6})\.?\s+\d/u.exec(citationText);
+  const bare = /^\s*(?<reg>\p{L}{2,6})\.?\s+\d/u.exec(citationText);
   const raw =
     roman?.groups?.["reg"] ??
     arabic?.groups?.["reg"] ??
