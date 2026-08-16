@@ -70,7 +70,7 @@ const compareRulePrecedence = (a: CompiledRule, b: CompiledRule): number => {
 };
 
 /**
- * The severity tier of `compareRulePrecedence`, in SQL.
+ * `compareRulePrecedence`, in SQL.
  *
  * This orders the truncation, not the matching: `loadRules` caps how many
  * rules it reads, and the cap has to drop the rules that would have lost
@@ -78,14 +78,21 @@ const compareRulePrecedence = (a: CompiledRule, b: CompiledRule): number => {
  * rule push a rare negative one out of the working set entirely, which is the
  * same shadowing bug one layer down. Match order is re-established in memory
  * by `compareRulePrecedence`, so only this cap depends on the clause below.
+ *
+ * The severity tier is built from `POLARITY_PRECEDENCE`, the map the
+ * in-memory comparator reads, so the two cannot disagree about severity.
  */
-const POLARITY_PRECEDENCE_SQL = sql`CASE ${sql.join(
-  POLARITIES.map(
-    (polarity) =>
-      sql`WHEN ${caseLawPolarityRules.polarity} = ${polarity} THEN ${sql.raw(String(POLARITY_PRECEDENCE[polarity]))}`,
-  ),
-  sql` `,
-)} END`;
+export const polarityRuleOrder = [
+  sql`CASE ${sql.join(
+    POLARITIES.map(
+      (polarity) =>
+        sql`WHEN ${caseLawPolarityRules.polarity} = ${polarity} THEN ${sql.raw(String(POLARITY_PRECEDENCE[polarity]))}`,
+    ),
+    sql` `,
+  )} END`,
+  sql`length(${caseLawPolarityRules.pattern}) desc`,
+  caseLawPolarityRules.id,
+];
 
 /** Optional caller-owned cache for batch scripts. */
 export type RuleCache = Map<string, CompiledRule[]>;
@@ -203,11 +210,7 @@ const loadRules = async (
           inArray(caseLawPolarityRules.source, ACTIVE_SOURCES),
         ),
       )
-      .orderBy(
-        POLARITY_PRECEDENCE_SQL,
-        sql`length(${caseLawPolarityRules.pattern}) desc`,
-        caseLawPolarityRules.id,
-      )
+      .orderBy(...polarityRuleOrder)
       .limit(LIMITS.caseLawPolarityRulesPerLanguage),
   );
 
