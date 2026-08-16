@@ -1485,6 +1485,17 @@ export default defineConfig({
       },
     },
     {
+      // A nested callback naming its parameter `props` is the accepted case
+      // this fixture pins: the shadowed binding must not be charged to the
+      // enclosing component's omission. The shadowing is the test.
+      files: [
+        ".oxlint-plugins/__fixtures__/no-omitted-prop-respread.fixture.tsx",
+      ],
+      rules: {
+        "no-shadow": "off",
+      },
+    },
+    {
       files: ["apps/web/src/**/*.{ts,tsx}"],
       rules: {
         "no-ambient-hotkey-format/no-ambient-hotkey-format": "error",

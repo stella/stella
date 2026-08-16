@@ -53,8 +53,13 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 //     distinguished.
 //   - The omission must be written on the parameter. A props type inferred from
 //     a generic wrapper (`forwardRef<Ref, Omit<P, "k">>`) is not read.
-//   - JSX children override a spread `children` prop, so an element with
-//     children satisfies an omitted `children` key.
+//   - JSX children override a spread `children` prop, so an element with a
+//     rendered child satisfies an omitted `children` key. Whitespace and a JSX
+//     comment emit no child and do not count.
+//   - A spread of an object literal can only deliver what the literal declares,
+//     spreads in, or computes; anything else is opaque and assumed able to.
+//   - A nested function shadowing the props binding owns the name inside it, so
+//     spreading the inner value is not charged to the outer omission.
 //
 // When a key legitimately passes through by design, suppress the finding with
 // `// eslint-disable-next-line no-omitted-prop-respread/no-omitted-prop-respread`
@@ -182,6 +187,11 @@ const reintroducedKeysOf = (typeNode, localTypes, depth = 0): string[] => {
   return [];
 };
 
+// The pattern behind a default value: `(props: P = {})` parses the whole
+// parameter as an assignment, with the binding and its annotation on the left.
+const patternOf = (param) =>
+  param?.type === "AssignmentPattern" ? param.left : param;
+
 // The binding that carries the rest of the props: the parameter identifier, or
 // the rest element of a destructuring pattern.
 const propsBindingOf = (param) => {
@@ -217,11 +227,36 @@ const attributeName = (attribute) =>
     : null;
 
 // JSX children are passed positionally and override a spread `children` prop,
-// so anything other than insignificant whitespace counts as pinning the key.
-const hasMeaningfulChildren = (element) =>
-  (element.children ?? []).some(
-    (child) => child.type !== "JSXText" || child.value.trim() !== "",
+// so a real child counts as pinning the key. Whitespace-only text and a JSX
+// comment (`{/* … */}`, an expression container holding nothing) emit no child.
+const isRenderedChild = (child) => {
+  if (child.type === "JSXText") {
+    return child.value.trim() !== "";
+  }
+  return (
+    child.type !== "JSXExpressionContainer" ||
+    child.expression.type !== "JSXEmptyExpression"
   );
+};
+
+const hasMeaningfulChildren = (element) =>
+  element.children.some(isRenderedChild);
+
+// Whether a spread of this attribute could deliver `key`. An object literal is
+// statically known: it can only deliver what it declares, spreads in, or
+// computes. Anything else is opaque and assumed able to.
+const spreadCanDeliver = (attribute, key) => {
+  const argument = attribute.argument;
+  if (argument.type !== "ObjectExpression") {
+    return true;
+  }
+  return argument.properties.some(
+    (property) =>
+      property.type !== "Property" ||
+      property.computed === true ||
+      getPropertyName(property.key) === key,
+  );
+};
 
 export default eslintCompatPlugin({
   meta: { name: "no-omitted-prop-respread" },
@@ -256,7 +291,7 @@ export default eslintCompatPlugin({
         };
 
         const enterFunction = (node) => {
-          const param = node.params?.at(0);
+          const param = patternOf(node.params?.at(0));
           const binding = propsBindingOf(param);
           if (binding === null) {
             scopes.push({ binding, keys: new Set() });
@@ -299,34 +334,53 @@ export default eslintCompatPlugin({
           "FunctionExpression:exit": exitFunction,
           JSXElement(node) {
             const attributes = node.openingElement.attributes;
-            // Only a spread of a named value can smuggle a key; an object
-            // literal spread is statically known. Any spread can override an
-            // earlier attribute, so the pin has to clear the last one.
             const spreadNames = new Set<string>();
-            let lastSpreadIndex = -1;
-            for (const [index, attribute] of attributes.entries()) {
-              if (attribute.type !== "JSXSpreadAttribute") {
-                continue;
-              }
-              lastSpreadIndex = index;
-              if (isIdentifier(attribute.argument)) {
+            for (const attribute of attributes) {
+              if (
+                attribute.type === "JSXSpreadAttribute" &&
+                isIdentifier(attribute.argument)
+              ) {
                 spreadNames.add(attribute.argument.name);
               }
             }
-
-            // The innermost enclosing component whose props reach this element.
-            const scope = scopes.findLast(
-              (candidate) =>
-                candidate.binding !== null &&
-                candidate.keys.size > 0 &&
-                spreadNames.has(candidate.binding),
-            );
-            if (scope === undefined) {
+            if (spreadNames.size === 0) {
               return;
             }
 
-            for (const key of scope.keys) {
+            // Walk outwards, keeping only the innermost frame per binding name:
+            // a nested callback naming its parameter `props` shadows the
+            // component's `props`, and spreading the callback's value must not
+            // be charged to the component's omission.
+            const omitted = new Set<string>();
+            const resolved = new Set<string>();
+            for (let index = scopes.length - 1; index >= 0; index -= 1) {
+              const frame = scopes[index];
+              if (frame === undefined || frame.binding === null) {
+                continue;
+              }
+              if (resolved.has(frame.binding)) {
+                continue;
+              }
+              resolved.add(frame.binding);
+              if (!spreadNames.has(frame.binding)) {
+                continue;
+              }
+              for (const key of frame.keys) {
+                omitted.add(key);
+              }
+            }
+
+            for (const key of omitted) {
               if (key === "children" && hasMeaningfulChildren(node)) {
+                continue;
+              }
+              // Only a spread that could carry this key can override the pin.
+              const lastOverrideIndex = attributes.findLastIndex(
+                (attribute) =>
+                  attribute.type === "JSXSpreadAttribute" &&
+                  spreadCanDeliver(attribute, key),
+              );
+              if (lastOverrideIndex === -1) {
                 continue;
               }
               const pin = attributes.find(
@@ -334,7 +388,7 @@ export default eslintCompatPlugin({
               );
               if (
                 pin !== undefined &&
-                attributes.indexOf(pin) > lastSpreadIndex
+                attributes.indexOf(pin) > lastOverrideIndex
               ) {
                 continue;
               }

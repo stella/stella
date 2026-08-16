@@ -19,6 +19,7 @@ type ShellProps = Omit<PanelProps, "orientation">;
 type LabelledShellProps = ShellProps & { label?: string };
 
 const child = <span />;
+const VERTICAL = "vertical" as const;
 
 // --- Flagged: the omitted key cannot survive the props spread ---
 
@@ -142,3 +143,54 @@ export const _ok_reTypedAlias = (props: RetypedPanelProps) => (
 export const _ok_unionBranchOmit = (
   props: Omit<PanelProps, "orientation"> | Omit<PanelProps, "variant">,
 ) => <Panel {...props} />;
+
+// Allowed: a nested callback shadows `props`, so its spread is the callback's
+// value, not the component's omitting one.
+export const _ok_shadowedBinding = ({
+  ...props
+}: Omit<PanelProps, "orientation">) => (
+  <Panel {...props} orientation="horizontal">
+    {[<span key="a" />].map((props: PanelProps) => (
+      <Panel {...props} />
+    ))}
+  </Panel>
+);
+
+// Allowed: the trailing spread is a statically known object literal that does
+// not declare the omitted key, so it cannot override the pin.
+export const _ok_trailingLiteralSpread = (
+  props: Omit<PanelProps, "orientation">,
+) => <Panel {...props} orientation="horizontal" {...{ id: "panel" }} />;
+
+// --- Flagged through shapes the parameter can take ---
+
+// A defaulted props parameter parses as an assignment; the omission still binds.
+export const _defaultedParam = (
+  props: Omit<PanelProps, "orientation"> = {},
+) => (
+  // oxlint-disable-next-line no-omitted-prop-respread/no-omitted-prop-respread
+  <Panel {...props} />
+);
+
+// Defaulted destructuring, same shape.
+export const _defaultedDestructuring = ({
+  ...props
+}: Omit<PanelProps, "orientation"> = {}) => (
+  // oxlint-disable-next-line no-omitted-prop-respread/no-omitted-prop-respread
+  <Panel {...props} />
+);
+
+// A JSX comment emits no child, so it does not pin an omitted `children`.
+export const _commentOnlyChildren = (props: Omit<PanelProps, "children">) => (
+  // oxlint-disable-next-line no-omitted-prop-respread/no-omitted-prop-respread
+  <Panel {...props}>{/* nothing rendered here */}</Panel>
+);
+
+// A trailing object-literal spread that does declare the key still overrides
+// the pin.
+export const _trailingLiteralCarriesKey = (
+  props: Omit<PanelProps, "orientation">,
+) => (
+  // oxlint-disable-next-line no-omitted-prop-respread/no-omitted-prop-respread
+  <Panel {...props} orientation="horizontal" {...{ orientation: VERTICAL }} />
+);
