@@ -2032,7 +2032,7 @@
       "reviewingHint": "Pri rozsiahlych dokumentoch to môže trvať niekoľko minút.",
       "run": "Spustiť kontrolu",
       "scoreTopics": "Skontrolovať tieto témy",
-      "sizeConfirmDescription": "Odhad tejto kontroly je {estimated, number} jednotiek využitia; k dispozícii je {available, number}. Napriek tomu ju spustiť?",
+      "sizeConfirmDescription": "Odhad tejto kontroly je {estimated, plural, one {# jednotka využitia} few {# jednotky využitia} many {# jednotky využitia} other {# jednotiek využitia}}; k dispozícii {available, plural, one {je # jednotka} few {sú # jednotky} many {je # jednotky} other {je # jednotiek}}. Napriek tomu ju spustiť?",
       "sizeConfirmStart": "Spustiť kontrolu",
       "sizeConfirmTitle": "Rozsiahla kontrola",
       "targetDocument": "Cieľový dokument",

@@ -2032,7 +2032,7 @@
       "reviewingHint": "Suurte dokumentide puhul võib selleks kuluda mõni minut.",
       "run": "Alusta ülevaatust",
       "scoreTopics": "Vaata need teemad läbi",
-      "sizeConfirmDescription": "Selle kontrolli hinnanguline maht on {estimated, number} kasutusühikut; saadaval on {available, number}. Kas alustada siiski?",
+      "sizeConfirmDescription": "Selle kontrolli hinnanguline maht on {estimated, plural, one {# kasutusühik} other {# kasutusühikut}}; saadaval on {available, plural, one {# ühik} other {# ühikut}}. Kas alustada siiski?",
       "sizeConfirmStart": "Alusta kontrolli",
       "sizeConfirmTitle": "Mahukas kontroll",
       "targetDocument": "Sihtdokument",

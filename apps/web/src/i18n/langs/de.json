@@ -2032,7 +2032,7 @@
       "reviewingHint": "Bei großen Dokumenten kann dies einige Minuten dauern.",
       "run": "Prüfung starten",
       "scoreTopics": "Diese Themen prüfen",
-      "sizeConfirmDescription": "Diese Prüfung wird auf {estimated, number} Nutzungseinheiten geschätzt; {available, number} sind verfügbar. Trotzdem starten?",
+      "sizeConfirmDescription": "Diese Prüfung wird auf {estimated, plural, one {# Nutzungseinheit} other {# Nutzungseinheiten}} geschätzt; verfügbar: {available, plural, one {# Einheit} other {# Einheiten}}. Trotzdem starten?",
       "sizeConfirmStart": "Prüfung starten",
       "sizeConfirmTitle": "Umfangreiche Prüfung",
       "targetDocument": "Zieldokument",

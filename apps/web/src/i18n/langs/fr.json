@@ -2032,7 +2032,7 @@
       "reviewingHint": "Cela peut prendre quelques minutes pour les documents volumineux.",
       "run": "Lancer la révision",
       "scoreTopics": "Examiner ces thèmes",
-      "sizeConfirmDescription": "Cette révision est estimée à {estimated, number} unités d'utilisation ; {available, number} sont disponibles. La lancer quand même ?",
+      "sizeConfirmDescription": "Cette révision est estimée à {estimated, plural, one {# unité d'utilisation} other {# unités d'utilisation}} ; {available, plural, one {# est disponible} other {# sont disponibles}}. La lancer quand même ?",
       "sizeConfirmStart": "Lancer la révision",
       "sizeConfirmTitle": "Révision volumineuse",
       "targetDocument": "Document cible",

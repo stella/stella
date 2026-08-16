@@ -2032,7 +2032,7 @@
       "reviewingHint": "Esto puede tardar unos minutos con documentos grandes.",
       "run": "Iniciar revisión",
       "scoreTopics": "Revisar estos temas",
-      "sizeConfirmDescription": "Esta revisión se estima en {estimated, number} unidades de uso; hay {available, number} disponibles. ¿Iniciarla de todos modos?",
+      "sizeConfirmDescription": "Esta revisión se estima en {estimated, plural, one {# unidad de uso} other {# unidades de uso}}; hay {available, plural, one {# disponible} other {# disponibles}}. ¿Iniciarla de todos modos?",
       "sizeConfirmStart": "Iniciar revisión",
       "sizeConfirmTitle": "Revisión extensa",
       "targetDocument": "Documento objetivo",

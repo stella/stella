@@ -2032,7 +2032,7 @@
       "reviewingHint": "W przypadku obszernych dokumentów może to potrwać kilka minut.",
       "run": "Rozpocznij weryfikację",
       "scoreTopics": "Sprawdź te tematy",
-      "sizeConfirmDescription": "Szacowany rozmiar tej weryfikacji to {estimated, number} jednostek użycia; dostępnych jest {available, number}. Mimo to rozpocząć?",
+      "sizeConfirmDescription": "Szacowany rozmiar tej weryfikacji to {estimated, plural, one {# jednostka użycia} few {# jednostki użycia} many {# jednostek użycia} other {# jednostki użycia}}; {available, plural, one {dostępna jest # jednostka} few {dostępne są # jednostki} many {dostępnych jest # jednostek} other {dostępne jest # jednostki}}. Mimo to rozpocząć?",
       "sizeConfirmStart": "Rozpocznij weryfikację",
       "sizeConfirmTitle": "Obszerna weryfikacja",
       "targetDocument": "Dokument docelowy",

@@ -2032,7 +2032,7 @@
       "reviewingHint": "Didelių dokumentų peržiūra gali užtrukti kelias minutes.",
       "run": "Pradėti peržiūrą",
       "scoreTopics": "Peržiūrėti šias temas",
-      "sizeConfirmDescription": "Numatoma šios patikros apimtis – {estimated, number} naudojimo vienetų; prieinama {available, number}. Vis tiek pradėti?",
+      "sizeConfirmDescription": "Numatoma šios patikros apimtis – {estimated, plural, one {# naudojimo vienetas} few {# naudojimo vienetai} many {# naudojimo vieneto} other {# naudojimo vienetų}}; {available, plural, one {prieinamas # vienetas} few {prieinami # vienetai} many {prieinama # vieneto} other {prieinama # vienetų}}. Vis tiek pradėti?",
       "sizeConfirmStart": "Pradėti patikrą",
       "sizeConfirmTitle": "Didelės apimties patikra",
       "targetDocument": "Tikslinis dokumentas",
