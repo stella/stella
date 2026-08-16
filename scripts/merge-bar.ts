@@ -18,9 +18,11 @@
 // (b) Time-of-check to time-of-use. Review threads, reviews, and pushes land
 //     between a state read and the merge call. Gate inputs read minutes ago
 //     describe a pull request that no longer exists. Everything below is
-//     fetched in THIS invocation, and the head SHA is re-read immediately
-//     before the merge so a push mid-flight aborts instead of merging code
-//     nothing verified. The same staleness applies across pull requests:
+//     fetched in THIS invocation, the head SHA is re-read immediately before
+//     the merge, and that SHA is passed to `--match-head-commit` so GitHub
+//     rejects the write server-side if head moved in the remaining gap: the
+//     assertion is enforced by the write, not merely checked before it. The
+//     same staleness applies across pull requests:
 //     migration ordering is re-checked against the live default branch,
 //     because a branch's own CI run cannot see a migration that landed on the
 //     default branch after that run finished.
@@ -351,7 +353,15 @@ type GitHubGateway = {
   readCheckRuns: (headSha: string) => readonly CheckRunSnapshot[];
   readReviewThreads: () => readonly ReviewThreadSnapshot[];
   readMigrationDirectories: () => MigrationSnapshot;
-  merge: (input: { subject: string; body: string; admin: boolean }) => string;
+  merge: (input: {
+    subject: string;
+    body: string;
+    admin: boolean;
+    // The SHA every gate above was evaluated against. GitHub rejects the merge
+    // if head has moved since, so the head-stability assertion is enforced by
+    // the write itself rather than by the gap between the last read and it.
+    expectedHeadSha: string;
+  }) => string;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -609,12 +619,17 @@ const createGhGateway = ({
     // The body arrives already inlined: no path is passed to gh, so no
     // concurrent writer can rewrite the commit message between the check and
     // the merge.
-    merge: ({ subject, body, admin }) => {
+    merge: ({ subject, body, admin, expectedHeadSha }) => {
       runGh([
         "pr",
         "merge",
         ...prArgs,
         "--squash",
+        // Without this, the head-stability gate is only advisory: a push
+        // landing between the final SHA read and this call would merge a
+        // commit no gate ever saw. GitHub enforces the match server-side.
+        "--match-head-commit",
+        expectedHeadSha,
         "--subject",
         subject,
         "--body",
@@ -770,6 +785,7 @@ if (import.meta.main) {
     subject: `${pullRequest.title} (#${pullRequest.number})`,
     body: bodyOverride ?? pullRequest.body,
     admin: options.admin,
+    expectedHeadSha: snapshot.headShaBeforeMerge,
   });
   console.log(`\nverdict: MERGE — squashed as ${mergeSha}`);
 }

@@ -920,7 +920,10 @@ jobs:
       # a migration ordering check that always returns null passes every PR,
       # and a merge gate that reads an empty check list as green merges
       # unverified code. Neither test ran in CI before.
+      # Both scripts import `better-result`, so they need the dependency
+      # install above, which is itself conditional.
       - name: Test migration ordering and merge gate logic
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: |
           bun test scripts/check-migration-order.test.ts
           bun test scripts/merge-bar.test.ts
