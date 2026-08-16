@@ -206,6 +206,24 @@ export const _defaultedDestructuring = ({
   <Panel {...props} />
 );
 
+// A modifier utility changes property modifiers, not which keys exist, so the
+// omission underneath it still holds.
+export const _readonlyWrapper = (
+  props: Readonly<Omit<PanelProps, "orientation">>,
+) => (
+  // oxlint-disable-next-line no-omitted-prop-respread/no-omitted-prop-respread
+  <Panel {...props} />
+);
+
+// Allowed: the inner re-typing survives an outer omission of a different key,
+// so only `orientation` is forbidden and it is pinned after the spread.
+export const _ok_reTypedUnderNestedOmit = (
+  props: Omit<
+    Omit<PanelProps, "variant"> & { variant?: "ghost" },
+    "orientation"
+  >,
+) => <Panel {...props} orientation="horizontal" />;
+
 // A long alias chain still resolves: only a cycle stops the walk.
 type Shell1 = Omit<PanelProps, "orientation">;
 type Shell2 = Shell1;

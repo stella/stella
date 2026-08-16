@@ -48,7 +48,8 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 //   - Omitted keys must be string literals in the `Omit<..., "a" | "b">`
 //     position. A generic or computed key set (`Omit<P, K>`, `keyof Q`) is out
 //     of scope, as is an `Omit` reached through an imported type alias; only
-//     file-local type aliases are followed.
+//     file-local type aliases and the modifier utilities `Partial`, `Readonly`,
+//     and `Required` are unwrapped.
 //   - `Omit` is matched by name. A shadowed or re-exported `Omit` is not
 //     distinguished.
 //   - The omission must be written on the parameter. A props type inferred from
@@ -71,6 +72,11 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 import { getPropertyName, isIdentifier } from "./utils.ts";
 
 const OMIT_TYPE = "Omit";
+
+// Utility types that change property modifiers without changing which keys
+// exist, so an omission underneath one still holds and a member declared
+// underneath one is still a reintroduction.
+const MODIFIER_UTILITIES = new Set(["Partial", "Readonly", "Required"]);
 
 const typeArgumentsOf = (typeNode) =>
   typeNode?.typeArguments?.params ?? typeNode?.typeParameters?.params ?? [];
@@ -145,6 +151,9 @@ const omittedKeysOf = (typeNode, localTypes, open = new Set()): string[] => {
         ...omittedKeysOf(args.at(0), localTypes, open),
       ];
     }
+    if (MODIFIER_UTILITIES.has(name)) {
+      return omittedKeysOf(args.at(0), localTypes, open);
+    }
     // A generic alias parameterized at the use site is not resolved here.
     const alias = expandAlias(name, localTypes, open);
     if (alias === null) {
@@ -189,10 +198,17 @@ const reintroducedKeysOf = (
   }
   if (typeNode.type === "TSTypeReference") {
     const name = typeReferenceName(typeNode.typeName);
-    // `Omit`'s own source type is what the omission removes from, so its
-    // members are not a reintroduction.
+    const args = typeArgumentsOf(typeNode);
     if (name === OMIT_TYPE) {
-      return [];
+      // A member declared inside the source survives unless this `Omit` is the
+      // one removing it: `Omit<Omit<P, "x"> & { x?: T }, "y">` still re-adds x.
+      const removed = new Set(literalKeysOf(args.at(1)));
+      return reintroducedKeysOf(args.at(0), localTypes, open).filter(
+        (key) => !removed.has(key),
+      );
+    }
+    if (MODIFIER_UTILITIES.has(name)) {
+      return reintroducedKeysOf(args.at(0), localTypes, open);
     }
     const alias = expandAlias(name, localTypes, open);
     if (alias === null) {
