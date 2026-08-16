@@ -22,6 +22,7 @@ import {
   BYOK_MODEL_OPTIONS,
   DEFAULT_MODELS,
   FALLBACK_CHAT_MODEL_BY_PROVIDER,
+  getModelRate,
   isBYOKModelRoleSupported,
   isBYOKProviderRoleSupported,
   isChatPdfAttachmentModelSupported,
@@ -1568,6 +1569,25 @@ const resolveByokTextModel = ({
   });
 };
 
+/**
+ * Instance-key dispatch requires a published catalog rate for the
+ * model: consumption accounting cannot price a turn for an id outside
+ * the rate table, so an unrated id (a retired selection pinned in an
+ * old thread, a dev override, a prompted subagent override) is refused
+ * before any provider call instead of being settled at a guessed
+ * default afterwards. BYOK dispatch is exempt: the organization's own
+ * key pays and accounting records zero consumption.
+ */
+const assertInstanceModelRated = (modelId: string): void => {
+  if (getModelRate(modelId) !== undefined) {
+    return;
+  }
+  throw new HandlerError({
+    status: 400,
+    message: `Model "${modelId}" is not available on this deployment.`,
+  });
+};
+
 const resolveInstanceTextModel = ({
   role,
   modelId,
@@ -1585,6 +1605,7 @@ const resolveInstanceTextModel = ({
 }): ResolvedTanStackTextModel => {
   const supportedProvider = resolveTanStackTextProvider({ provider });
   assertTanStackProviderRoleSupport(supportedProvider, role);
+  assertInstanceModelRated(modelId);
 
   return buildResolvedTextModel({
     adapter: getInstanceFactory()(modelId),
@@ -1666,9 +1687,13 @@ export const getTanStackTextModelInfoForRole = (
   const provider = getActiveProvider();
   const supportedProvider = resolveTanStackTextProvider({ provider });
   assertTanStackProviderRoleSupport(supportedProvider, role);
+  const modelId = MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[provider][role];
+  // Metadata must agree with dispatch: never advertise an instance
+  // model that resolveInstanceTextModel would refuse as unrated.
+  assertInstanceModelRated(modelId);
   return {
     keySource: "instance",
-    modelId: MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[provider][role],
+    modelId,
     provider: supportedProvider,
   };
 };
@@ -1768,6 +1793,7 @@ export const getTanStackTextModelById = (
   const supportedProvider = resolveTanStackTextProvider({ provider });
   const resolvedModelId = override.modelId;
   if (override.provider) {
+    assertInstanceModelRated(resolvedModelId);
     const factory = createTanStackTextAdapterFactory({
       provider: supportedProvider,
     });

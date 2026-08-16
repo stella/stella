@@ -787,6 +787,48 @@ type OfferedFirstPartyModelId =
   (typeof BYOK_MODEL_OPTIONS)[FirstPartyModelProvider][number];
 
 /**
+ * Providers whose catalog is served on the platform's own credentials
+ * (no public first-party catalog). Their offered ids must be rated the
+ * same as first-party ids: instance-key dispatch refuses unrated
+ * models, so a missing rate here bricks the model, and consumption
+ * accounting cannot price it either way.
+ */
+type PlatformModelProvider = {
+  [TProvider in TanStackAIProvider]: (typeof MODEL_CATALOG_PROVIDER_KIND)[TProvider] extends "platform"
+    ? TProvider
+    : never;
+}[TanStackAIProvider];
+
+type OfferedPlatformModelId =
+  (typeof BYOK_MODEL_OPTIONS)[PlatformModelProvider][number];
+
+/**
+ * Underlying ids of the offered aggregator models, mirroring the
+ * runtime `OPENROUTER_UNDERLYING_MODEL_ID_BY_ID` strip so an offered
+ * aggregator model whose underlying id is unrated fails typecheck
+ * instead of failing at dispatch.
+ */
+type NormalizedCatalogId<TId extends string> =
+  TId extends keyof typeof MODEL_CATALOG_ID_ALIASES
+    ? (typeof MODEL_CATALOG_ID_ALIASES)[TId]
+    : TId;
+
+/** Derived, not hand-listed: a new aggregator joins the check by kind. */
+type AggregatorModelProvider = {
+  [TProvider in TanStackAIProvider]: (typeof MODEL_CATALOG_PROVIDER_KIND)[TProvider] extends "aggregator"
+    ? TProvider
+    : never;
+}[TanStackAIProvider];
+
+type OfferedAggregatorUnderlyingModelId =
+  (typeof BYOK_MODEL_OPTIONS)[AggregatorModelProvider][number] extends infer TId extends
+    string
+    ? TId extends `${string}/${infer TUnderlying}`
+      ? NormalizedCatalogId<TUnderlying>
+      : NormalizedCatalogId<TId>
+    : never;
+
+/**
  * Provider-native IDs that are exact aliases of an offered catalog ID.
  * Every metadata lookup normalizes here, so instance/dev overrides cannot
  * bypass rates or capabilities and duplicated alias rows cannot drift apart.
@@ -812,6 +854,10 @@ export const FALLBACK_CHAT_MODEL_BY_PROVIDER = {
 
 export const MODEL_CATALOG_ID_ALIASES = {
   "gpt-5.6-sol": "gpt-5.6",
+  // Aggregator listings use the dotted marketing forms; the catalog's
+  // canonical ids are the dashed API forms.
+  "claude-opus-4.8": "claude-opus-4-8",
+  "claude-sonnet-4.6": "claude-sonnet-4-6",
 } as const satisfies Readonly<Record<string, OfferedFirstPartyModelId>>;
 
 const MODEL_CATALOG_ID_ALIAS_TARGET_BY_ID: Readonly<Record<string, string>> =
@@ -1111,11 +1157,19 @@ export const MODEL_RATES = {
       cachedInputPerMTok: 100_000,
     },
   },
+  // Luna/Terra verified against the published price list 2026-08-16
+  // (Luna's 2026-07-30 price cut).
   "gpt-5.6-luna": {
     kind: "flat",
-    inputPerMTok: 50_000,
-    outputPerMTok: 300_000,
-    cachedInputPerMTok: 5000,
+    inputPerMTok: 20_000,
+    outputPerMTok: 120_000,
+    cachedInputPerMTok: 2000,
+  },
+  "gpt-5.6-terra": {
+    kind: "flat",
+    inputPerMTok: 200_000,
+    outputPerMTok: 1_200_000,
+    cachedInputPerMTok: 20_000,
   },
   "claude-haiku-4-5-20251001": {
     kind: "flat",
@@ -1205,7 +1259,57 @@ export const MODEL_RATES = {
     inputPerMTok: 200_000,
     outputPerMTok: 600_000,
   },
-} as const satisfies Record<OfferedFirstPartyModelId, ModelRate> &
+  // AWS Bedrock serverless rates (verified 2026-08-16). Cached-input
+  // rates are listed only where Bedrock publishes one; the rest settle
+  // cache reads at the full input rate, which can only over-count.
+  "us.anthropic.claude-sonnet-4-5-20250929-v1:0": {
+    kind: "flat",
+    inputPerMTok: 300_000,
+    outputPerMTok: 1_500_000,
+    cachedInputPerMTok: 30_000,
+  },
+  "us.anthropic.claude-haiku-4-5-20251001-v1:0": {
+    kind: "flat",
+    inputPerMTok: 100_000,
+    outputPerMTok: 500_000,
+    cachedInputPerMTok: 10_000,
+  },
+  "us.amazon.nova-pro-v1:0": {
+    kind: "flat",
+    inputPerMTok: 80_000,
+    outputPerMTok: 320_000,
+  },
+  "us.amazon.nova-lite-v1:0": {
+    kind: "flat",
+    inputPerMTok: 6000,
+    outputPerMTok: 24_000,
+  },
+  "us.amazon.nova-micro-v1:0": {
+    kind: "flat",
+    inputPerMTok: 3500,
+    outputPerMTok: 14_000,
+  },
+  "openai.gpt-oss-120b-1:0": {
+    kind: "flat",
+    inputPerMTok: 15_000,
+    outputPerMTok: 60_000,
+  },
+  "openai.gpt-oss-20b-1:0": {
+    kind: "flat",
+    inputPerMTok: 7000,
+    outputPerMTok: 30_000,
+  },
+  "us.deepseek.r1-v1:0": {
+    kind: "flat",
+    inputPerMTok: 135_000,
+    outputPerMTok: 540_000,
+  },
+} as const satisfies Record<
+  | OfferedAggregatorUnderlyingModelId
+  | OfferedFirstPartyModelId
+  | OfferedPlatformModelId,
+  ModelRate
+> &
   Record<string, ModelRate>;
 
 const MODEL_RATES_BY_ID: Readonly<Record<string, ModelRate>> = MODEL_RATES;
@@ -1228,7 +1332,7 @@ export const getModelRate = (modelId: string): ModelRate | undefined => {
     OPENROUTER_UNDERLYING_MODEL_ID_BY_ID[normalizedModelId];
   return underlyingModelId === undefined
     ? undefined
-    : MODEL_RATES_BY_ID[underlyingModelId];
+    : MODEL_RATES_BY_ID[normalizeModelCatalogId(underlyingModelId)];
 };
 
 /**
@@ -1268,6 +1372,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "gpt-5.5": 400_000,
   "gpt-5.6": 922_000,
   "gpt-5.6-luna": 922_000,
+  "gpt-5.6-terra": 922_000,
   // Anthropic Claude: 200K through Claude 4; Sonnet 5 and Opus 5 expose 1M.
   "claude-haiku-4-5-20251001": 200_000,
   "claude-sonnet-4-6": 200_000,

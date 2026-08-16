@@ -407,6 +407,17 @@ describe("TanStack text model resolution", () => {
     });
   });
 
+  test("refuses instance-key dispatch of a model with no published rate", () => {
+    expect(() =>
+      getTanStackTextModelById("openai::gpt-unrated-experiment", null, {
+        role: "chat",
+        organizationId: orgId,
+      }),
+    ).toThrow(
+      'Model "gpt-unrated-experiment" is not available on this deployment.',
+    );
+  });
+
   test("routes provider-qualified explicit ids through configured OpenRouter credentials", () => {
     const model = getTanStackTextModelById(
       "openrouter::google/gemini-3.5-flash",

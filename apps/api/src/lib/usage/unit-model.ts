@@ -48,9 +48,12 @@ const reportedRateMissModelIds = new Set<string>();
 
 /**
  * A miss means `modelId` isn't in the published rate table (a new or
- * mistyped model id). Billing at `FALLBACK_RATE` is a deliberate fail-open
- * so usage metering never blocks a chat turn; report the miss so an
- * unrecognized model doesn't silently under- or over-bill indefinitely.
+ * mistyped model id). Instance-key dispatch refuses unrated models
+ * pre-flight (`assertInstanceModelRated` in `tanstack-ai-models.ts`),
+ * so by the time usage reaches this post-flight path a miss should be
+ * BYOK attribution only. `FALLBACK_RATE` remains as the backstop —
+ * settlement cannot refuse retroactively — and every miss is reported
+ * so an unrecognized model cannot mis-attribute silently.
  */
 const getModelRateOrFallback = (modelId: string): ModelRate => {
   const rate = getModelRate(modelId);
