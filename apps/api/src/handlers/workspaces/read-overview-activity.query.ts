@@ -1113,6 +1113,16 @@ type DeletedEntityTargetOptions = {
   name?: string | null;
 };
 
+const deletedEntityKind = (
+  category: ActivityCategory,
+  kindSnapshot: string | null,
+): EntityTargetKind => {
+  if (isEntityKind(kindSnapshot)) {
+    return kindSnapshot;
+  }
+  return category === "tasks" ? "task" : "document";
+};
+
 const deletedEntityTarget = ({
   category = "documents",
   id,
@@ -1125,11 +1135,7 @@ const deletedEntityTarget = ({
   entityId: null,
   fieldId: null,
   id,
-  kind: isEntityKind(kindSnapshot)
-    ? kindSnapshot
-    : category === "tasks"
-      ? "task"
-      : "document",
+  kind: deletedEntityKind(category, kindSnapshot),
   mimeType: null,
   name,
   pdfFileId: null,
