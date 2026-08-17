@@ -204,8 +204,15 @@ export const DECISION_TIMESTAMP_FIELD = "decision_date_ts";
  * Far enough before any decision the corpus can hold that it cannot collide
  * with a real one, and readable as what it is in a raw document. A timestamp
  * range query therefore never returns an undated decision unless it asks for a
- * window this old, and split pruning still works: a split of undated documents
- * has a min/max nowhere near a real query window.
+ * window this old, which is the property that matters: the field decides what
+ * a date filter matches.
+ *
+ * It does not, on its own, make split pruning tight. A split's timestamp range
+ * spans everything written into it, and the generation walk writes in
+ * `(created_at, id)` order, so a split already mixes decisions from across the
+ * corpus' date range; one undated row widens its low end to here. Pruning
+ * tightens only for a generation whose splits are built date-contiguous, which
+ * is a property of the backfill's walk order rather than of this constant.
  */
 export const UNDATED_DECISION_TIMESTAMP = "1800-01-01";
 
