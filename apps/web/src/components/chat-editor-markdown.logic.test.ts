@@ -76,8 +76,7 @@ describe("chat composer Markdown", () => {
   });
 
   test("resolves escapes inside bold text and keeps code spans literal", () => {
-    const source =
-      `${String.raw`**\[Party Name\]** matches `  }\`\\(\\d+\\)\` and \`\`a\`\\*b\`\``;
+    const source = "**\\[Party Name\\]** matches `\\(\\d+\\)` and ``a`\\*b``";
     expect(createChatComposerDocument(source).content).toEqual([
       {
         type: "paragraph",
