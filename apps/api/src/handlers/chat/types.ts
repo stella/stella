@@ -90,7 +90,13 @@ export type ChatTurnOutcome =
       type: "awaiting-user";
       interaction:
         | { type: "approval"; toolCallId: string }
-        | { type: "ask-user"; toolCallId: string };
+        | { type: "ask-user"; toolCallId: string }
+        /**
+         * A client-executed tool (no server `execute`, e.g. create-document)
+         * whose input is complete and whose result the chat client posts back
+         * as a native interrupt resolution.
+         */
+        | { type: "client-tool"; toolCallId: string };
     }
   | { type: "completed" }
   | { type: "cancelled"; reason: "superseded" | "user-stop" }

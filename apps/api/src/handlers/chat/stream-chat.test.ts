@@ -1,7 +1,19 @@
-import { EventType, StreamProcessor } from "@tanstack/ai";
-import type { ModelMessage, StreamChunk, ToolCallPart } from "@tanstack/ai";
+import {
+  chat,
+  EventType,
+  maxIterations,
+  StreamProcessor,
+  toolDefinition,
+} from "@tanstack/ai";
+import type {
+  AnyTextAdapter,
+  ModelMessage,
+  StreamChunk,
+  ToolCallPart,
+} from "@tanstack/ai";
 import { Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
+import * as v from "valibot";
 
 import {
   CHAT_SEND_MODE,
@@ -18,6 +30,7 @@ import { CHAT_RUN_MODE } from "@/api/handlers/chat/chat-schema";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { resolveRegistryToolInputRefs } from "@/api/handlers/chat/tools/registry-adapter/input-ref-hydration";
 import { resolveRegistryToolOutputRefs } from "@/api/handlers/chat/tools/registry-adapter/output-ref-resolution";
+import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type {
   ChatAnonRestoration,
   ChatMessage,
@@ -149,6 +162,317 @@ describe("agent sandbox third-party boundary", () => {
         runMode: CHAT_RUN_MODE.agent,
       }),
     ).toBeNull();
+  });
+});
+
+/**
+ * A text adapter that answers every model turn with one tool call. Driving the
+ * real `chat()` loop with it derives TanStack's interrupt boundary emission
+ * (MESSAGES_SNAPSHOT, then RUN_FINISHED with an `interrupt` outcome) instead of
+ * hand-writing the sequence, so the persistence path is checked against what
+ * the loop actually emits.
+ */
+const createSingleToolCallAdapter = ({
+  arguments: argumentsText,
+  toolName,
+}: {
+  arguments: string;
+  toolName: string;
+}): AnyTextAdapter =>
+  createToolCallSequenceAdapter([{ arguments: argumentsText, toolName }]);
+
+/**
+ * Answers the n-th model turn with the n-th tool call, so a run can execute a
+ * server tool first and pause for a client tool on the next iteration.
+ */
+const createToolCallSequenceAdapter = (
+  turns: readonly { arguments: string; toolName: string }[],
+): AnyTextAdapter => {
+  let turnIndex = 0;
+  return createScriptedAdapter(turns, () => {
+    const index = turnIndex;
+    turnIndex += 1;
+    return index;
+  });
+};
+
+const createScriptedAdapter = (
+  turns: readonly { arguments: string; toolName: string }[],
+  nextTurnIndex: () => number,
+): AnyTextAdapter => ({
+  kind: "text",
+  name: "single-tool-call",
+  model: "single-tool-call",
+  "~types": {
+    providerOptions: {},
+    inputModalities: ["text"],
+    messageMetadataByModality: {},
+    toolCapabilities: [],
+    toolCallMetadata: {},
+    systemPromptMetadata: undefined,
+  },
+  async *chatStream({ model, runId, threadId }) {
+    const turnIndex = nextTurnIndex();
+    const turn = turns.at(turnIndex);
+    if (turn === undefined) {
+      throw new Error("The fixture adapter ran out of scripted turns");
+    }
+    const { arguments: argumentsText, toolName } = turn;
+    const callId = `call-${String(turnIndex + 1)}`;
+    const resolvedRunId = runId ?? "run-1";
+    const resolvedThreadId = threadId ?? "thread-1";
+    const messageId = `provider-message-${String(turnIndex + 1)}`;
+    const timestamp = Date.now();
+    yield {
+      type: EventType.RUN_STARTED,
+      runId: resolvedRunId,
+      threadId: resolvedThreadId,
+      model,
+      timestamp,
+    } satisfies StreamChunk;
+    // Provider adapters open a text message only when text arrives; a
+    // tool-only iteration (Gemini, OpenAI Responses) carries no
+    // TEXT_MESSAGE_START, so only the first scripted turn emits one.
+    if (turnIndex === 0) {
+      yield {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId,
+        role: "assistant",
+        model,
+        timestamp,
+      } satisfies StreamChunk;
+    }
+    yield {
+      type: EventType.TOOL_CALL_START,
+      toolCallId: callId,
+      toolCallName: toolName,
+      // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
+      toolName,
+      parentMessageId: messageId,
+      model,
+      timestamp,
+    } satisfies StreamChunk;
+    yield {
+      type: EventType.TOOL_CALL_ARGS,
+      toolCallId: callId,
+      delta: argumentsText,
+      model,
+      timestamp,
+    } satisfies StreamChunk;
+    yield {
+      type: EventType.TOOL_CALL_END,
+      toolCallId: callId,
+      model,
+      timestamp,
+    } satisfies StreamChunk;
+    yield {
+      type: EventType.RUN_FINISHED,
+      runId: resolvedRunId,
+      threadId: resolvedThreadId,
+      finishReason: "tool_calls",
+      model,
+      timestamp,
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    } satisfies StreamChunk;
+  },
+  structuredOutput: () => {
+    throw new Error("Structured output is not part of this fixture");
+  },
+});
+
+const draftToolInputSchema = toTanStackToolSchema(
+  v.object({ name: v.string(), source: v.string() }),
+);
+
+type ProcessedStreamFinishEvent = Parameters<
+  Parameters<typeof processServerChatStream>[0]["onFinish"]
+>[0];
+
+/** Run the loop's emission through the same persistence path as `streamChat`. */
+const persistNativeInterruptTurn = async (
+  chunks: AsyncIterable<StreamChunk>,
+) => {
+  const messageId = toSafeId<"chatMessage">(
+    "11111111-1111-4111-8111-111111111111",
+  );
+  const mapMessageId = createChatMessageIdMapper(() => messageId);
+  let responseMessage: ChatMessage | null = null;
+  const processor = new StreamProcessor({
+    events: {
+      onStreamEnd: (message) => {
+        responseMessage = toChatMessage(message);
+      },
+    },
+  });
+  const terminal: { finish: ProcessedStreamFinishEvent | null } = {
+    finish: null,
+  };
+  const source: StreamChunk[] = [];
+  const observed = async function* (): AsyncIterable<StreamChunk> {
+    for await (const chunk of chunks) {
+      source.push(chunk);
+      yield chunk;
+    }
+  };
+  const emitted = await collectChunks(
+    processServerChatStream({
+      abortSignal: new AbortController().signal,
+      getResponseMessage: () => responseMessage,
+      mapMessageId,
+      onFinish: (event) => {
+        terminal.finish = event;
+      },
+      processor,
+      source: observed(),
+    }),
+  );
+  return { emitted, finish: terminal.finish, source };
+};
+
+describe("native interrupt boundary persistence", () => {
+  test("persists a client-tool turn the loop pauses for, and awaits the client", async () => {
+    const draftTool = toolDefinition({
+      name: "create-document",
+      description: "Client-executed draft",
+      inputSchema: draftToolInputSchema,
+    });
+    const { emitted, finish, source } = await persistNativeInterruptTurn(
+      chat({
+        adapter: createSingleToolCallAdapter({
+          arguments: '{"name":"NDA","source":"@title NDA"}',
+          toolName: "create-document",
+        }),
+        agentLoopStrategy: maxIterations(3),
+        messages: [{ role: "user", content: "Draft an NDA" }],
+        threadId: "thread-1",
+        tools: [draftTool],
+      }),
+    );
+
+    // The fixture must express the fault: the loop emits a snapshot before the
+    // interrupted run's finish. Without this the assertion below is vacuous.
+    const types = source.map((chunk) => chunk.type);
+    expect(types.indexOf(EventType.MESSAGES_SNAPSHOT)).toBeGreaterThan(-1);
+    expect(types.indexOf(EventType.MESSAGES_SNAPSHOT)).toBeLessThan(
+      types.lastIndexOf(EventType.RUN_FINISHED),
+    );
+
+    expect(emitted.some((chunk) => chunk.type === EventType.RUN_ERROR)).toBe(
+      false,
+    );
+    expect(finish?.outcome).toEqual({
+      type: "awaiting-user",
+      interaction: { type: "client-tool", toolCallId: "call-1" },
+    });
+    expect(finish?.responseMessage.parts).toEqual([
+      {
+        arguments: '{"name":"NDA","source":"@title NDA"}',
+        id: "call-1",
+        input: { name: "NDA", source: "@title NDA" },
+        name: "create-document",
+        state: "input-complete",
+        type: "tool-call",
+      },
+    ]);
+  });
+
+  test("persists an approval-gated turn the loop pauses for, and awaits the approval", async () => {
+    const approvalTool = toolDefinition({
+      name: "mcp__external__delete",
+      description: "Server tool behind an approval",
+      inputSchema: draftToolInputSchema,
+      needsApproval: true,
+    }).server(async () => "deleted");
+    const { emitted, finish, source } = await persistNativeInterruptTurn(
+      chat({
+        adapter: createSingleToolCallAdapter({
+          arguments: '{"name":"NDA","source":"@title NDA"}',
+          toolName: "mcp__external__delete",
+        }),
+        agentLoopStrategy: maxIterations(3),
+        messages: [{ role: "user", content: "Delete the NDA" }],
+        threadId: "thread-1",
+        tools: [approvalTool],
+      }),
+    );
+
+    expect(source.map((chunk) => chunk.type)).toContain(
+      EventType.MESSAGES_SNAPSHOT,
+    );
+    expect(emitted.some((chunk) => chunk.type === EventType.RUN_ERROR)).toBe(
+      false,
+    );
+    expect(finish?.outcome).toMatchObject({
+      type: "awaiting-user",
+      interaction: { type: "approval", toolCallId: "call-1" },
+    });
+    expect(finish?.responseMessage.parts).toMatchObject([
+      {
+        id: "call-1",
+        name: "mcp__external__delete",
+        state: "approval-requested",
+        type: "tool-call",
+      },
+    ]);
+  });
+
+  test("keeps a server tool's iteration in the same persisted turn as the client tool it precedes", async () => {
+    const lookupTool = toolDefinition({
+      name: "mcp__external__lookup",
+      description: "Server tool that runs before the draft",
+      inputSchema: draftToolInputSchema,
+    }).server(async () => ({ templates: [] }));
+    const draftTool = toolDefinition({
+      name: "create-document",
+      description: "Client-executed draft",
+      inputSchema: draftToolInputSchema,
+    });
+    const { emitted, finish } = await persistNativeInterruptTurn(
+      chat({
+        adapter: createToolCallSequenceAdapter([
+          {
+            arguments: '{"name":"NDA","source":"@title NDA"}',
+            toolName: "mcp__external__lookup",
+          },
+          {
+            arguments: '{"name":"NDA","source":"@title NDA"}',
+            toolName: "create-document",
+          },
+        ]),
+        agentLoopStrategy: maxIterations(3),
+        messages: [{ role: "user", content: "Draft an NDA" }],
+        threadId: "thread-1",
+        tools: [lookupTool, draftTool],
+      }),
+    );
+
+    expect(emitted.some((chunk) => chunk.type === EventType.RUN_ERROR)).toBe(
+      false,
+    );
+    expect(finish?.outcome).toEqual({
+      type: "awaiting-user",
+      interaction: { type: "client-tool", toolCallId: "call-2" },
+    });
+    expect(finish?.responseMessage.parts).toMatchObject([
+      { id: "call-1", name: "mcp__external__lookup", state: "complete" },
+      { toolCallId: "call-1", type: "tool-result" },
+      { id: "call-2", name: "create-document", state: "input-complete" },
+    ]);
+    // The client-facing snapshot presents the same single assistant message,
+    // under the persisted id, so the continuation targets the persisted turn.
+    const snapshot = emitted.find(
+      (chunk) => chunk.type === EventType.MESSAGES_SNAPSHOT,
+    );
+    if (snapshot?.type !== EventType.MESSAGES_SNAPSHOT) {
+      throw new Error("Expected the loop to emit a snapshot");
+    }
+    const assistantSnapshotMessages = snapshot.messages.filter(
+      (message) => message.role === "assistant",
+    );
+    expect(assistantSnapshotMessages).toHaveLength(1);
+    expect(assistantSnapshotMessages.at(0)?.id).toBe(
+      finish?.responseMessage.id,
+    );
   });
 });
 
@@ -348,7 +672,7 @@ describe("outgoing chat stream message ids", () => {
     expect(index).toBe(1);
   });
 
-  test("normalizes only new assistant ids in native AG-UI snapshots", async () => {
+  test("folds the run's assistant snapshot messages into the one persisted assistant message", async () => {
     const messageId = toSafeId<"chatMessage">(
       "11111111-1111-4111-8111-111111111111",
     );
@@ -376,11 +700,34 @@ describe("outgoing chat stream message ids", () => {
                 id: "provider-message-1",
                 role: "assistant",
                 content: "Checking the request",
+                toolCalls: [
+                  {
+                    id: "tool-lookup",
+                    type: "function",
+                    function: { name: "list_templates", arguments: "{}" },
+                  },
+                ],
+              },
+              {
+                id: "tool-lookup-result",
+                role: "tool",
+                toolCallId: "tool-lookup",
+                content: '{"templates":[]}',
               },
               {
                 id: "provider-message-2",
                 role: "assistant",
                 content: "Waiting for approval",
+                toolCalls: [
+                  {
+                    id: "tool-draft",
+                    type: "function",
+                    function: {
+                      name: "create-document",
+                      arguments: '{"name":"NDA","source":"@title NDA"}',
+                    },
+                  },
+                ],
               },
             ],
           },
@@ -420,15 +767,34 @@ describe("outgoing chat stream message ids", () => {
             role: "assistant",
             content: "Earlier answer",
           },
-          {
-            id: expect.any(String),
-            role: "assistant",
-            content: "Checking the request",
-          },
+          // One assistant message per persisted turn: both iterations' text and
+          // tool calls, under the turn's stable id, tool messages anchoring by
+          // toolCallId behind it.
           {
             id: messageId,
             role: "assistant",
-            content: "Waiting for approval",
+            content: "Checking the request\n\nWaiting for approval",
+            toolCalls: [
+              {
+                id: "tool-lookup",
+                type: "function",
+                function: { name: "list_templates", arguments: "{}" },
+              },
+              {
+                id: "tool-draft",
+                type: "function",
+                function: {
+                  name: "create-document",
+                  arguments: '{"name":"NDA","source":"@title NDA"}',
+                },
+              },
+            ],
+          },
+          {
+            id: "tool-lookup-result",
+            role: "tool",
+            toolCallId: "tool-lookup",
+            content: '{"templates":[]}',
           },
         ],
       },
@@ -452,12 +818,6 @@ describe("outgoing chat stream message ids", () => {
         value: { messageId: "assistant-previous" },
       },
     ]);
-    const snapshot = chunks.at(0);
-    expect(snapshot?.type).toBe(EventType.MESSAGES_SNAPSHOT);
-    if (snapshot?.type !== EventType.MESSAGES_SNAPSHOT) {
-      throw new Error("Expected a native message snapshot");
-    }
-    expect(snapshot.messages.at(2)?.id).not.toBe(snapshot.messages.at(3)?.id);
   });
 
   test("normalizes tanstack generated final assistant ids before persistence", () => {

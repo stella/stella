@@ -11,7 +11,11 @@ export const CHAT_TURN_STATUSES = [
 ] as const;
 export type ChatTurnStatus = (typeof CHAT_TURN_STATUSES)[number];
 
-export const CHAT_TURN_INTERACTION_TYPES = ["ask-user", "approval"] as const;
+export const CHAT_TURN_INTERACTION_TYPES = [
+  "ask-user",
+  "approval",
+  "client-tool",
+] as const;
 export type ChatTurnInteractionType =
   (typeof CHAT_TURN_INTERACTION_TYPES)[number];
 

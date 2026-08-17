@@ -154,8 +154,92 @@ describe("persisted chat message parts", () => {
       getAwaitingUserInteractions({ parts: [...parts], role: "assistant" }),
     ).toEqual([{ toolCallId: "ask-1", type: "ask-user" }]);
     expect(
-      getResumedUserInteraction({ parts: [...parts], role: "assistant" }),
+      getResumedUserInteraction({
+        awaited: [
+          { toolCallId: "ask-1", type: "ask-user" },
+          { toolCallId: "approval-1", type: "approval" },
+        ],
+        message: { parts: [...parts], role: "assistant" },
+      }),
     ).toEqual({ toolCallId: "approval-1", type: "approval" });
+  });
+
+  test("awaits a client-executed tool call whose input is complete", () => {
+    const parts = [
+      {
+        arguments: '{"query":"nda"}',
+        id: "search-1",
+        input: { query: "nda" },
+        name: "mcp__external__search",
+        output: { matters: [] },
+        state: "complete",
+        type: "tool-call",
+      },
+      {
+        arguments: '{"name":"NDA","source":"@title NDA"}',
+        id: "draft-1",
+        input: { name: "NDA", source: "@title NDA" },
+        name: "create-document",
+        state: "input-complete",
+        type: "tool-call",
+      },
+    ] as const satisfies ChatPart[];
+
+    expect(
+      getAwaitingUserInteractions({ parts: [...parts], role: "assistant" }),
+    ).toEqual([{ toolCallId: "draft-1", type: "client-tool" }]);
+  });
+
+  test("resolves a client-tool interaction only through its awaited call", () => {
+    const awaited = [
+      { toolCallId: "draft-1", type: "client-tool" },
+    ] as const satisfies Parameters<
+      typeof getResumedUserInteraction
+    >[0]["awaited"];
+    const resolvedDraft = {
+      arguments: '{"name":"NDA","source":"@title NDA"}',
+      id: "draft-1",
+      input: { name: "NDA", source: "@title NDA" },
+      name: "create-document",
+      output: { destination: "draft", fileName: "NDA.docx", success: true },
+      state: "complete",
+      type: "tool-call",
+    } as const satisfies ChatPart;
+    // A completed server tool after the awaited call is not an answer.
+    const completedServerCall = {
+      arguments: '{"query":"nda"}',
+      id: "search-1",
+      input: { query: "nda" },
+      name: "mcp__external__search",
+      output: { matters: [] },
+      state: "complete",
+      type: "tool-call",
+    } as const satisfies ChatPart;
+
+    expect(
+      getResumedUserInteraction({
+        awaited,
+        message: {
+          parts: [resolvedDraft, completedServerCall],
+          role: "assistant",
+        },
+      }),
+    ).toEqual({ toolCallId: "draft-1", type: "client-tool" });
+    expect(
+      getResumedUserInteraction({
+        awaited,
+        message: {
+          parts: [{ ...resolvedDraft, state: "input-complete" }],
+          role: "assistant",
+        },
+      }),
+    ).toBeNull();
+    expect(
+      getResumedUserInteraction({
+        awaited: [],
+        message: { parts: [resolvedDraft], role: "assistant" },
+      }),
+    ).toBeNull();
   });
 
   test("persists every structured-output terminal and streaming state", () => {

@@ -46,6 +46,28 @@ const E2E_EMPTY_COMPLETION_MARKER = "Return an empty completion please";
 
 const EMPTY_COMPLETION_DELAY_MS = 1500;
 
+// A user message containing this marker makes the mock adapter answer with a
+// `create-document` tool call (a client-executed tool), the shape of a real
+// drafting turn: the run pauses at TanStack's native interrupt boundary, the
+// chat client compiles the draft and posts the result back, and only the
+// continuation run answers with text. This exercises the whole client-tool
+// round trip (server persistence of the paused turn, the durable-turn claim,
+// the resume continuation, and the inspector draft) deterministically.
+const E2E_CREATE_DOCUMENT_MARKER = "Draft it as a document please";
+
+const E2E_CREATE_DOCUMENT_TOOL_NAME = "create-document";
+const E2E_CREATE_DOCUMENT_NAME = "Mutual NDA";
+const E2E_CREATE_DOCUMENT_SOURCE =
+  "@doc kind=agreement locale=en page=A4\n" +
+  "@title MUTUAL NON-DISCLOSURE AGREEMENT\n" +
+  "@clause Definition of Confidential Information\n" +
+  "Confidential Information means any information disclosed by " +
+  "[[Disclosing Party]] to [[Receiving Party]].\n" +
+  "@signatures\nparty: [[Party A]]\nparty: [[Party B]]\n";
+const E2E_CREATE_DOCUMENT_REPLY =
+  "The draft is open in the panel. Placeholders left to fill: the parties " +
+  "and the effective date.";
+
 const SLOW_STREAM_REPLY =
   "This mock reply streams back in many small pieces instead of arriving all " +
   "at once, so an end to end test has a real window while the assistant is " +
@@ -100,6 +122,21 @@ const getLatestUserText = (messages: ModelMessage[]): string => {
   return textParts.join("");
 };
 
+type MockCreateDocumentPhase = "call" | "reply" | null;
+
+const resolveCreateDocumentPhase = ({
+  latestUserText,
+  messages,
+}: {
+  latestUserText: string;
+  messages: ModelMessage[];
+}): MockCreateDocumentPhase => {
+  if (!latestUserText.includes(E2E_CREATE_DOCUMENT_MARKER)) {
+    return null;
+  }
+  return messages.at(-1)?.role === "tool" ? "reply" : "call";
+};
+
 const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
   kind: "text",
   name: "mock",
@@ -119,6 +156,12 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
     const timestamp = Date.now();
     const latestUserText = getLatestUserText(messages);
     const slowStream = latestUserText.includes(E2E_SLOW_STREAM_MARKER);
+    // The continuation after the client posted the draft result ends with a
+    // tool message; only the first turn of the marker prompt calls the tool.
+    const createDocumentPhase = resolveCreateDocumentPhase({
+      latestUserText,
+      messages,
+    });
 
     yield {
       type: EventType.RUN_STARTED,
@@ -127,6 +170,52 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
       model,
       timestamp,
     } satisfies StreamChunk;
+
+    if (createDocumentPhase === "call") {
+      yield {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId,
+        role: "assistant",
+        model,
+        timestamp,
+      } satisfies StreamChunk;
+      yield {
+        type: EventType.TOOL_CALL_START,
+        toolCallId: "mock-create-document-call",
+        toolCallName: E2E_CREATE_DOCUMENT_TOOL_NAME,
+        // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
+        toolName: E2E_CREATE_DOCUMENT_TOOL_NAME,
+        parentMessageId: messageId,
+        model,
+        timestamp,
+      } satisfies StreamChunk;
+      yield {
+        type: EventType.TOOL_CALL_ARGS,
+        toolCallId: "mock-create-document-call",
+        delta: JSON.stringify({
+          name: E2E_CREATE_DOCUMENT_NAME,
+          source: E2E_CREATE_DOCUMENT_SOURCE,
+        }),
+        model,
+        timestamp,
+      } satisfies StreamChunk;
+      yield {
+        type: EventType.TOOL_CALL_END,
+        toolCallId: "mock-create-document-call",
+        model,
+        timestamp,
+      } satisfies StreamChunk;
+      yield {
+        type: EventType.RUN_FINISHED,
+        runId: resolvedRunId,
+        threadId: resolvedThreadId,
+        model,
+        timestamp,
+        finishReason: "tool_calls",
+        usage: mockUsage,
+      } satisfies StreamChunk;
+      return;
+    }
 
     if (latestUserText.includes(E2E_EMPTY_COMPLETION_MARKER)) {
       // Real providers return an empty completion only after a round-trip;
@@ -170,7 +259,10 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
       yield {
         type: EventType.TEXT_MESSAGE_CONTENT,
         messageId,
-        delta: MOCK_REPLY,
+        delta:
+          createDocumentPhase === "reply"
+            ? E2E_CREATE_DOCUMENT_REPLY
+            : MOCK_REPLY,
         model,
         timestamp,
       } satisfies StreamChunk;

@@ -714,10 +714,6 @@ const validateContinuationToolCallIntegrity = ({
     }
   }
 
-  const resumedInteraction = getResumedUserInteraction({
-    parts: [...incomingParts],
-    role: "assistant",
-  });
   const awaitedInteractions = getAwaitingUserInteractions({
     parts: [...persistedParts],
     role: "assistant",
@@ -755,8 +751,8 @@ const validateContinuationToolCallIntegrity = ({
         return [];
       }
       const resumed = getResumedUserInteraction({
-        parts: [call],
-        role: "assistant",
+        awaited: awaitedInteractions,
+        message: { parts: [call], role: "assistant" },
       });
       return resumed === null ? [] : [{ call, interaction: resumed }];
     });
@@ -794,17 +790,6 @@ const validateContinuationToolCallIntegrity = ({
     ) {
       return invalidContinuationToolCall();
     }
-  }
-  if (resumedInteraction === null) {
-    return Result.ok();
-  }
-  const interaction = awaitedInteractions.find(
-    (candidate) =>
-      candidate.toolCallId === resumedInteraction.toolCallId &&
-      candidate.type === resumedInteraction.type,
-  );
-  if (interaction === undefined) {
-    return invalidContinuationToolCall();
   }
   return Result.ok();
 };

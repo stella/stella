@@ -2,6 +2,7 @@ import { toolDefinition } from "@tanstack/ai";
 import * as v from "valibot";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { SafeId } from "@/api/lib/branded-types";
 
@@ -16,8 +17,8 @@ type OrgToolsContext = {
 };
 
 export const createOrgTools = (_context: OrgToolsContext) => ({
-  "ask-user": toolDefinition({
-    name: "ask-user",
+  [ASK_USER_TOOL_NAME]: toolDefinition({
+    name: ASK_USER_TOOL_NAME,
     description:
       "Ask the user clarifying questions before executing " +
       "a complex task. Use this when the request is " +
