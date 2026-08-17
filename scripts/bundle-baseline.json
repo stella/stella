@@ -1,15 +1,15 @@
 {
   "entry": 1229,
   "largest-route": 568513,
-  "routes": 6708430,
-  "total": 7719321,
+  "routes": 6722334,
+  "total": 7739976,
   "vendor-anonymize-data": 0,
   "vendor-base-ui": 149409,
-  "vendor-editor": 111531,
+  "vendor-editor": 115518,
   "vendor-graphs": 189570,
-  "vendor-icons": 15826,
+  "vendor-icons": 15820,
   "vendor-react": 56597,
-  "vendor-tanstack": 485197,
-  "vendor-tanstack-server-fn": 1532,
+  "vendor-tanstack": 487963,
+  "vendor-tanstack-server-fn": 1536,
   "wasm-vendor": 0
 }
