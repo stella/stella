@@ -4060,7 +4060,10 @@
           "automation": "automatizálás",
           "court": "bírósági bejegyzés",
           "document": "dokumentum",
+          "folder": "mappa",
+          "link": "hivatkozás",
           "matter": "ügy",
+          "message": "üzenet",
           "task": "napirendi elem",
           "team": "ügycsapat"
         },

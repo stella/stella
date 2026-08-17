@@ -467,15 +467,19 @@ type ActivityTarget = {
   entityId: string | null;
   fieldId: string | null;
   id: string;
-  kind: "document" | "task" | "matter" | "team" | "court" | "automation";
+  kind: EntityTargetKind | "matter" | "team" | "court" | "automation";
   mimeType: string | null;
   name: string | null;
   pdfFileId: string | null;
   propertyId: string | null;
 };
 
+// Derived from the entities column enum (itself from ENTITY_KINDS), so the
+// activity contract cannot drift from the persisted kind set.
+type EntityTargetKind = (typeof entities.$inferSelect)["kind"];
+
 type EntityTarget = Omit<ActivityTarget, "kind"> & {
-  kind: "document" | "task";
+  kind: EntityTargetKind;
 };
 
 type ActivityUser = {
@@ -963,7 +967,7 @@ const toEntityTarget = (entity: EntityRow): EntityTarget => {
     entityId: entity.id,
     fieldId: file?.id ?? null,
     id: entity.id,
-    kind: entity.kind === "task" ? "task" : "document",
+    kind: entity.kind,
     mimeType: file?.mimeType ?? null,
     name: file?.fileName ?? entity.name,
     pdfFileId: file?.pdfFileId ?? null,
@@ -1116,7 +1120,7 @@ const documentTarget = (id: string): EntityTarget => ({
 type GenericTargetOptions = {
   color: string | null;
   id: string;
-  kind: Exclude<ActivityTarget["kind"], "document" | "task">;
+  kind: Exclude<ActivityTarget["kind"], EntityTarget["kind"]>;
   name: string | null;
 };
 

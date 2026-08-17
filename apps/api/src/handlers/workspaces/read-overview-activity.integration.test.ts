@@ -10,7 +10,7 @@ import {
 import { eq, inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { auditLogs } from "@/api/db/schema";
+import { auditLogs, entities } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import {
   AUDIT_ACTION,
@@ -18,6 +18,7 @@ import {
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -46,6 +47,7 @@ let activityInOtherOrganization: SafeId<"auditLog">;
 type SeedActivityOptions = {
   action?: typeof AUDIT_ACTION.CREATE | typeof AUDIT_ACTION.UPDATE;
   organizationId: SafeId<"organization">;
+  resourceId?: string;
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
 };
@@ -54,10 +56,10 @@ type SeedActivityOptions = {
 const seedActivity = async ({
   action = AUDIT_ACTION.UPDATE,
   organizationId,
+  resourceId = Bun.randomUUIDv7(),
   workspaceId,
   userId,
 }: SeedActivityOptions): Promise<SafeId<"auditLog">> => {
-  const resourceId = Bun.randomUUIDv7();
   const recorder = createBackgroundAuditRecorder({
     organizationId,
     workspaceId,
@@ -127,6 +129,7 @@ type ActivityPerformer = {
 type ActivityItem = {
   id: SafeId<"auditLog">;
   performer: ActivityPerformer;
+  target: { kind: string; name: string | null };
 };
 
 beforeAll(async () => {
@@ -291,6 +294,34 @@ describe("matter overview activity", () => {
       "text/csv; charset=utf-8",
     );
     expect(await csvResponse.text()).toContain('"\t=2+2"');
+  });
+
+  test("a folder create surfaces the folder kind, not a document", async () => {
+    const folderId = toSafeId<"entity">(Bun.randomUUIDv7());
+    await testDb.insert(entities).values({
+      id: folderId,
+      workspaceId: ids.wsA1,
+      kind: "folder",
+      name: "Pleadings",
+    });
+
+    try {
+      const folderCreateId = await seedActivity({
+        action: AUDIT_ACTION.CREATE,
+        organizationId: ids.orgA,
+        resourceId: folderId,
+        workspaceId: ids.wsA1,
+        userId: ids.userA1,
+      });
+      const items = await readActivityOfWorkspaceA1();
+
+      expect(
+        items.find((activityItem) => activityItem.id === folderCreateId)
+          ?.target,
+      ).toMatchObject({ kind: "folder", name: "Pleadings" });
+    } finally {
+      await testDb.delete(entities).where(eq(entities.id, folderId));
+    }
   });
 
   test("pages historical performers from authorized activity, not current matter membership", async () => {

@@ -11,11 +11,9 @@ import {
   ChevronDownIcon,
   Clock3Icon,
   DownloadIcon,
-  FileTextIcon,
   ListIcon,
   ListFilterIcon,
   ScaleIcon,
-  SquareCheckIcon,
   UsersIcon,
   WorkflowIcon,
 } from "lucide-react";
@@ -72,6 +70,7 @@ import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-sto
 import { MatterIcon } from "@/components/matter-icon";
 import { PersonMentionLabel } from "@/components/person-mention-label";
 import Tooltip from "@/components/tooltip";
+import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
@@ -1692,6 +1691,12 @@ const TargetName = ({ item }: { item: MatterActivityItem }) => {
   switch (item.target.kind) {
     case "document":
       return t("workspaces.overview.activity.targets.document");
+    case "folder":
+      return t("workspaces.overview.activity.targets.folder");
+    case "message":
+      return t("workspaces.overview.activity.targets.message");
+    case "link":
+      return t("workspaces.overview.activity.targets.link");
     case "task":
       return t("workspaces.overview.activity.targets.task");
     case "matter":
@@ -1780,11 +1785,21 @@ const TriggerDetail = ({ item }: { item: MatterActivityItem }) => {
 };
 
 const targetIcon = (item: MatterActivityItem) => {
-  switch (item.target.kind) {
+  const { kind } = item.target;
+  switch (kind) {
     case "document":
-      return <FileTextIcon className="text-muted-foreground size-3.5" />;
+    case "folder":
     case "task":
-      return <SquareCheckIcon className="text-muted-foreground size-3.5" />;
+    case "message":
+    case "link":
+      return (
+        <EntityKindIcon
+          className="text-muted-foreground size-3.5"
+          fileName={item.target.name}
+          kind={kind}
+          mimeType={item.target.mimeType}
+        />
+      );
     case "matter":
       return (
         <MatterIcon
@@ -1799,7 +1814,7 @@ const targetIcon = (item: MatterActivityItem) => {
     case "automation":
       return <WorkflowIcon className="text-muted-foreground size-3.5" />;
     default: {
-      const exhaustive: never = item.target.kind;
+      const exhaustive: never = kind;
       return exhaustive;
     }
   }

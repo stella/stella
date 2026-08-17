@@ -4060,7 +4060,10 @@
           "automation": "automatizācija",
           "court": "tiesas ieraksts",
           "document": "dokuments",
+          "folder": "mape",
+          "link": "saite",
           "matter": "lieta",
+          "message": "ziņa",
           "task": "darba kārtības vienums",
           "team": "lietas komanda"
         },

@@ -38,6 +38,7 @@ type ItemOptions = {
   activityAt?: string;
   performer?: MatterActivityItem["performer"];
   runId: string | null;
+  target?: Partial<MatterActivityItem["target"]>;
 };
 
 const item = (
@@ -47,6 +48,7 @@ const item = (
     activityAt = "2026-07-30T12:00:00.000Z",
     performer = { name: "Review agent", type: "agent" },
     runId,
+    target,
   }: ItemOptions,
 ): MatterActivityItem => ({
   action,
@@ -68,6 +70,7 @@ const item = (
     name: "Agreement.pdf",
     pdfFileId: null,
     propertyId: "property-1",
+    ...target,
   },
   trigger: {
     source: "chat",
@@ -259,6 +262,140 @@ describe("groupActivityItems", () => {
 
     expect(selectedGroup?.type).toBe("single");
     expect(selectedGroup?.items[0].id).toBe(toSafeId<"auditLog">("2"));
+  });
+
+  test("folds a folder's immediate renames into its create entry", () => {
+    const performer = {
+      deletedAt: null,
+      id: "user-1",
+      image: null,
+      name: "Matter Administrator",
+      type: "user",
+    } satisfies MatterActivityItem["performer"];
+    const folder = { id: "folder-1", kind: "folder", mimeType: null } as const;
+    // Newest first, as the API returns them.
+    const groups = groupActivityItems([
+      item("3", {
+        activityAt: new Date(LOCAL_NOON + 8000).toISOString(),
+        performer,
+        runId: null,
+        target: folder,
+      }),
+      item("2", {
+        activityAt: new Date(LOCAL_NOON + 5000).toISOString(),
+        performer,
+        runId: null,
+        target: folder,
+      }),
+      item("1", {
+        action: "create",
+        activityAt: new Date(LOCAL_NOON).toISOString(),
+        performer,
+        runId: null,
+        target: folder,
+      }),
+    ]);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.items.map(({ action }) => action)).toEqual(["create"]);
+  });
+
+  test("keeps folder updates that are not part of the creation", () => {
+    const performer = {
+      deletedAt: null,
+      id: "user-1",
+      image: null,
+      name: "Matter Administrator",
+      type: "user",
+    } satisfies MatterActivityItem["performer"];
+    const folder = { id: "folder-1", kind: "folder", mimeType: null } as const;
+    const differentFolder = groupActivityItems([
+      item("2", {
+        activityAt: new Date(LOCAL_NOON + 2000).toISOString(),
+        performer,
+        runId: null,
+        target: { ...folder, id: "folder-2" },
+      }),
+      item("1", {
+        action: "create",
+        activityAt: new Date(LOCAL_NOON).toISOString(),
+        performer,
+        runId: null,
+        target: folder,
+      }),
+    ]);
+    expect(differentFolder).toHaveLength(2);
+
+    const differentPerformer = groupActivityItems([
+      item("2", {
+        activityAt: new Date(LOCAL_NOON + 2000).toISOString(),
+        performer: { ...performer, id: "user-2" },
+        runId: null,
+        target: folder,
+      }),
+      item("1", {
+        action: "create",
+        activityAt: new Date(LOCAL_NOON).toISOString(),
+        performer,
+        runId: null,
+        target: folder,
+      }),
+    ]);
+    expect(differentPerformer).toHaveLength(2);
+  });
+
+  test("keeps a folder rename outside the creation window", () => {
+    const performer = {
+      deletedAt: null,
+      id: "user-1",
+      image: null,
+      name: "Matter Administrator",
+      type: "user",
+    } satisfies MatterActivityItem["performer"];
+    const folder = { id: "folder-1", kind: "folder", mimeType: null } as const;
+    const groups = groupActivityItems([
+      item("2", {
+        activityAt: new Date(LOCAL_NOON + 61_000).toISOString(),
+        performer,
+        runId: null,
+        target: folder,
+      }),
+      item("1", {
+        action: "create",
+        activityAt: new Date(LOCAL_NOON).toISOString(),
+        performer,
+        runId: null,
+        target: folder,
+      }),
+    ]);
+
+    expect(groups).toHaveLength(2);
+  });
+
+  test("keeps folder creates out of document upload batches", () => {
+    const performer = {
+      deletedAt: null,
+      id: "user-1",
+      image: null,
+      name: "Matter Administrator",
+      type: "user",
+    } satisfies MatterActivityItem["performer"];
+    const groups = groupActivityItems([
+      item("1", { action: "create", performer, runId: null }),
+      item("2", {
+        action: "create",
+        performer,
+        runId: null,
+        target: { id: "folder-1", kind: "folder", mimeType: null },
+      }),
+      item("3", { action: "create", performer, runId: null }),
+    ]);
+
+    expect(groups.map(({ type }) => type)).toEqual([
+      "document_batch",
+      "single",
+      "document_batch",
+    ]);
   });
 
   test("uses local calendar days instead of UTC slices", () => {

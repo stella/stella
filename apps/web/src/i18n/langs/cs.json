@@ -4060,7 +4060,10 @@
           "automation": "automatizace",
           "court": "soudní záznam",
           "document": "dokument",
+          "folder": "složka",
+          "link": "odkaz",
           "matter": "spis",
+          "message": "zpráva",
           "task": "položka agendy",
           "team": "tým spisu"
         },

@@ -1,7 +1,7 @@
 import { addDays, parseIsoDateLocal } from "@/lib/dates";
 import type { MatterActivityItem } from "@/lib/workspaces/queries";
 
-const DOCUMENT_BATCH_WINDOW_MS = 60_000;
+const ACTIVITY_FOLD_WINDOW_MS = 60_000;
 
 export const toMatterActivityDateRange = ({
   from,
@@ -99,7 +99,7 @@ const hasSamePerformer = (
   return left.performer.id === right.performer.id;
 };
 
-const isWithinDocumentBatchWindow = (
+const isWithinActivityFoldWindow = (
   anchor: MatterActivityItem,
   candidate: MatterActivityItem,
 ) => {
@@ -108,9 +108,28 @@ const isWithinDocumentBatchWindow = (
   return (
     Number.isFinite(anchorTime) &&
     Number.isFinite(candidateTime) &&
-    Math.abs(anchorTime - candidateTime) <= DOCUMENT_BATCH_WINDOW_MS
+    Math.abs(anchorTime - candidateTime) <= ACTIVITY_FOLD_WINDOW_MS
   );
 };
+
+const isUserFolderAction = (
+  item: MatterActivityItem,
+  action: "create" | "update",
+) =>
+  item.runId === null &&
+  item.action === action &&
+  item.target.kind === "folder" &&
+  item.performer.type === "user";
+
+const isFoldableFolderRename = (
+  candidate: ActivityGroup | undefined,
+  createItem: MatterActivityItem,
+) =>
+  candidate?.type === "single" &&
+  isUserFolderAction(candidate.items[0], "update") &&
+  candidate.items[0].target.id === createItem.target.id &&
+  hasSamePerformer(candidate.items[0], createItem) &&
+  isWithinActivityFoldWindow(candidate.items[0], createItem);
 
 const hasSameActivityDay = (
   left: MatterActivityItem,
@@ -138,9 +157,19 @@ export const groupActivityItems = (
       previous?.type === "document_batch" &&
       hasSamePerformer(previous.items[0], item) &&
       hasSameActivityDay(previous.items[0], item) &&
-      isWithinDocumentBatchWindow(previous.items[0], item)
+      isWithinActivityFoldWindow(previous.items[0], item)
     ) {
       previous.items.push(item);
+      continue;
+    }
+    // Creating a folder in the UI records a create plus an immediate rename
+    // (the inline name edit). Items arrive newest-first, so the renames sit
+    // just before their create: fold them into the single "created" entry.
+    if (isUserFolderAction(item, "create")) {
+      while (isFoldableFolderRename(groups.at(-1), item)) {
+        groups.pop();
+      }
+      groups.push({ id: `item:${item.id}`, items: [item], type: "single" });
       continue;
     }
     if (item.runId) {
