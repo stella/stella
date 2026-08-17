@@ -36,6 +36,7 @@ import {
 import { env } from "@/api/env";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
+import { getAnalytics } from "@/api/lib/analytics/client";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditExecutionContext } from "@/api/lib/audit-log";
 import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
@@ -468,6 +469,19 @@ const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
 
 /** How often the session expiry is refreshed, in seconds (1 day). */
 const SESSION_UPDATE_AGE_SECONDS = 60 * 60 * 24;
+
+// Mirrors the organization's display name onto its PostHog group profile so
+// insights and group pages show a name instead of an opaque id. Called from
+// the organization hooks after the plugin has persisted the row.
+const identifyOrganizationName = (
+  organizationId: SafeId<"organization">,
+  name: string,
+): void => {
+  getAnalytics().identifyOrganizationGroup({
+    organizationId,
+    properties: { name },
+  });
+};
 
 /**
  * How long the signed session-cookie snapshot may satisfy `getSession`
@@ -1102,10 +1116,23 @@ const createAuth = () => {
             // here. Idempotent via the (organization_id, key) unique. Runs on
             // the owner connection (`rootDb`), which bypasses RLS the same way
             // the org row's own creation did.
-            await ensureDefaultDocumentTypes(
+            const organizationId = brandPersistedOrganizationId(org.id);
+            await ensureDefaultDocumentTypes(organizationId, rootDb);
+            identifyOrganizationName(organizationId, org.name);
+          },
+          async afterUpdateOrganization({ organization: org }) {
+            // The plugin passes `null` when the adapter returns no updated row.
+            if (!org) {
+              return;
+            }
+            // Fires for every organization update, not just renames; the
+            // group upsert is idempotent so re-sending an unchanged name is
+            // harmless.
+            identifyOrganizationName(
               brandPersistedOrganizationId(org.id),
-              rootDb,
+              org.name,
             );
+            await Promise.resolve();
           },
           async beforeDeleteOrganization({ organization: org }) {
             // Complete the deletion here, before the plugin's adapter runs.
