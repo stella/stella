@@ -15,12 +15,23 @@ import { rlsDb } from "@/api/db/root";
  * fresh: pass a new generation prefix rather than re-running into the current
  * one, where the passage fields would be dropped on ingest.
  *
+ * Optional pacing: when the CORPUS_INDEX_BACKPRESSURE_* env group is set,
+ * the loop samples the configured CloudWatch metric between batches and
+ * pauses below the low watermark until the value recovers above the high
+ * watermark (see lib/corpus-index/backfill-pacing.ts). It also emits a
+ * periodic progress heartbeat through the structured logger.
+ *
  *   CORPUS_INDEX_ENDPOINT=... CORPUS_STORAGE_MODE=dual-write \
  *     bun run src/scripts/build-corpus-index.ts [generation]
  */
 import { createIngestionDb } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
 import { backfillCorpusIndexGenerationPage } from "@/api/handlers/case-law/corpus-index";
+import {
+  createBackfillPacer,
+  createCloudWatchBackpressureSampler,
+  resolveBackpressureConfig,
+} from "@/api/lib/corpus-index/backfill-pacing";
 import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import { LIMITS } from "@/api/lib/limits";
 import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
@@ -31,10 +42,24 @@ const ingestionDb = createIngestionDb(rlsDb);
 await refreshS3();
 await refreshCorpusS3();
 
+const backpressureConfig = resolveBackpressureConfig(envBase);
+const pacer = createBackfillPacer({
+  generation,
+  backpressure:
+    backpressureConfig === null
+      ? null
+      : {
+          config: backpressureConfig,
+          sample: createCloudWatchBackpressureSampler(backpressureConfig),
+        },
+});
+
 console.log(`=== BUILD CORPUS INDEX: generation ${generation} ===`);
 
 let total = 0;
 while (true) {
+  // oxlint-disable-next-line no-await-in-loop -- pacing gate between sequential batches
+  await pacer.beforeBatch();
   // oxlint-disable-next-line no-await-in-loop -- drives backfill to completion one batch at a time until none remain
   const result = await backfillCorpusIndexGenerationPage(
     ingestionDb,
@@ -50,6 +75,7 @@ while (true) {
       });
     case "advanced":
       total += result.indexed;
+      pacer.recordBatch(result.indexed);
       console.log(`  indexed ${total}...`);
       continue;
     default:
@@ -58,6 +84,7 @@ while (true) {
   break;
 }
 
+pacer.finish();
 console.log(`Done. Indexed ${total} decisions for generation ${generation}.`);
 
 process.exit(0);

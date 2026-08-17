@@ -75,6 +75,12 @@ const INTERNAL_SERVER_KEYS = new Set([
   "BETTER_AUTH_URL",
   "CASE_LAW_DATABASE_POOL_MAX",
   "CORPUS_INDEXING_ENABLED",
+  "CORPUS_INDEX_BACKPRESSURE_DIMENSIONS",
+  "CORPUS_INDEX_BACKPRESSURE_HIGH_WATERMARK",
+  "CORPUS_INDEX_BACKPRESSURE_LOW_WATERMARK",
+  "CORPUS_INDEX_BACKPRESSURE_METRIC",
+  "CORPUS_INDEX_BACKPRESSURE_NAMESPACE",
+  "CORPUS_INDEX_BACKPRESSURE_SAMPLE_INTERVAL_MS",
   "CORPUS_INDEX_BATCH_SIZE",
   "CORPUS_INDEX_ENDPOINT",
   "CORPUS_INDEX_INTERVAL_MS",
@@ -248,6 +254,18 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Maximum connections in the optional local read-only public case-law pool.",
   CASE_LAW_DATABASE_URL:
     "Local-development-only read-only Postgres URL for a shared public case-law corpus. Unset uses DATABASE_URL.",
+  CORPUS_INDEX_BACKPRESSURE_DIMENSIONS:
+    "Name=Value[,Name=Value...] dimensions of the pacing metric.",
+  CORPUS_INDEX_BACKPRESSURE_HIGH_WATERMARK:
+    "Metric value above which a paused corpus-index build resumes.",
+  CORPUS_INDEX_BACKPRESSURE_LOW_WATERMARK:
+    "Metric value below which the corpus-index build loop pauses.",
+  CORPUS_INDEX_BACKPRESSURE_METRIC:
+    "CloudWatch metric name the corpus-index build loop samples to pace itself. Unset disables pacing.",
+  CORPUS_INDEX_BACKPRESSURE_NAMESPACE:
+    "CloudWatch namespace of the pacing metric.",
+  CORPUS_INDEX_BACKPRESSURE_SAMPLE_INTERVAL_MS:
+    "Minimum interval between pacing-metric samples.",
   CORPUS_INDEX_SEARCH_ENDPOINT:
     "Local-development-only search endpoint for a shared corpus index. Unset uses CORPUS_INDEX_ENDPOINT; this endpoint is never used for index mutations.",
   DATABASE_URL:
