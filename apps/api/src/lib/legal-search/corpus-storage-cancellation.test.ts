@@ -46,8 +46,13 @@ void mock.module("@/api/lib/s3", () => ({
   putCorpusS3ObjectWithSignal: putCorpusObjectMock,
 }));
 
-const { deleteCorpusDocument, writeCorpusDocument } =
-  await import("@/api/lib/legal-search/corpus-storage");
+const {
+  corpusContentHash,
+  corpusKeys,
+  deleteCorpusDocument,
+  writeCorpusDocument,
+} = await import("@/api/lib/legal-search/corpus-storage");
+const { EMPTY_AST } = await import("@/api/lib/legal-search/document-types");
 
 const waitForCallCount = async (
   callCount: () => number,
@@ -73,6 +78,7 @@ const writeRejection = async (signal: AbortSignal): Promise<unknown> =>
       text: "decision text",
       sections: null,
       ast: null,
+      stored: null,
     },
     { signal },
   ).then(
@@ -255,5 +261,87 @@ describe("corpus object cancellation", () => {
 
     releaseSiblings.resolve(undefined);
     expect(await pending).toBe(deleteFailure);
+  });
+});
+
+describe("corpus write redundancy refusal", () => {
+  const documentId = "7f9b1c34-52ad-4c8e-b1f0-6a2d9e4c8b21";
+  const jurisdiction = "SVK";
+  const payload = {
+    text: "Rozsudok v mene Slovenskej republiky. Súd rozhodol o veci samej.",
+    sections: null,
+    ast: null,
+  };
+
+  test("an empty payload issues no corpus PUTs", async () => {
+    putCorpusObjectMock.mockClear();
+
+    const outcome = await writeCorpusDocument({
+      documentId,
+      jurisdiction,
+      // The metadata-first shape: no text, no sections, the empty-AST
+      // placeholder an adapter without a document emits.
+      text: null,
+      sections: null,
+      ast: EMPTY_AST,
+      stored: null,
+    });
+
+    expect(outcome).toEqual({
+      type: "skipped-empty",
+      written: null,
+      contentHash: corpusContentHash({
+        text: null,
+        sections: null,
+        ast: EMPTY_AST,
+      }),
+    });
+    expect(putCorpusObjectMock).not.toHaveBeenCalled();
+  });
+
+  test("a payload the row already records issues no corpus PUTs", async () => {
+    putCorpusObjectMock.mockClear();
+    const contentHash = corpusContentHash(payload);
+    const stored = {
+      ...corpusKeys({ documentId, jurisdiction, contentHash }),
+      contentHash,
+    };
+
+    const outcome = await writeCorpusDocument({
+      documentId,
+      jurisdiction,
+      ...payload,
+      stored,
+    });
+
+    expect(outcome).toEqual({ type: "skipped-unchanged", written: stored });
+    expect(putCorpusObjectMock).not.toHaveBeenCalled();
+  });
+
+  test("a changed payload still issues all three PUTs", async () => {
+    putCorpusObjectMock.mockClear();
+    putCorpusObjectMock.mockImplementation(async () => {
+      await Promise.resolve();
+    });
+    const previousHash = corpusContentHash(payload);
+    const stored = {
+      ...corpusKeys({ documentId, jurisdiction, contentHash: previousHash }),
+      contentHash: previousHash,
+    };
+    const changed = { ...payload, text: `${payload.text} Opravené znenie.` };
+    expect(corpusContentHash(changed)).not.toBe(previousHash);
+
+    const outcome = await writeCorpusDocument({
+      documentId,
+      jurisdiction,
+      ...changed,
+      stored,
+    });
+
+    expect(outcome).toMatchObject({
+      type: "written",
+      written: { contentHash: corpusContentHash(changed) },
+    });
+    expect(putCorpusObjectMock).toHaveBeenCalledTimes(3);
   });
 });

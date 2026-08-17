@@ -75,6 +75,7 @@ import {
   corpusContentHash,
   corpusPayloadDisposition,
   EMPTY_CORPUS_CONTENT_HASHES,
+  storedCorpusWrite,
   TRIMMED_CORPUS_PAYLOAD_COLUMNS,
   writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
@@ -297,6 +298,16 @@ export const allocateSourceObservationOrder = async ({
     return allocated.order;
   });
 
+type UploadSourceRawOptions = {
+  sourceId: SafeId<"caseLawSource">;
+  data: Uint8Array | string;
+  contentType: string;
+  /** The raw-payload key the row already records, or null for none. */
+  storedKey: string | null;
+  /** The content type recorded with that key. */
+  storedContentType: string | null;
+};
+
 /**
  * Upload sourceRaw to S3 under a content-addressable key.
  * Returns the S3 object key.
@@ -304,17 +315,25 @@ export const allocateSourceObservationOrder = async ({
  * The write is retried: failing here holds the page cursor (see the caller),
  * so letting one transient transport failure through stalls the whole source
  * until the next attempt happens to succeed. The key is the payload's own
- * hash, so a retry that duplicates an attempt which landed late is a no-op.
+ * hash, so a retry that duplicates an attempt which landed late is a no-op —
+ * and a key the row already records names an object with these exact bytes,
+ * so that PUT is skipped outright. A changed content type still re-uploads:
+ * it is stored on the object, not derivable from the key.
  */
-const uploadSourceRaw = async (
-  sourceId: SafeId<"caseLawSource">,
-  data: Uint8Array | string,
-  contentType: string,
-): Promise<string> => {
+const uploadSourceRaw = async ({
+  sourceId,
+  data,
+  contentType,
+  storedKey,
+  storedContentType,
+}: UploadSourceRawOptions): Promise<string> => {
   const hasher = new Bun.CryptoHasher("sha256");
   hasher.update(data);
   const blobHash = hasher.digest("hex");
   const key = `case-law/raw/${sourceId}/${blobHash}`;
+  if (key === storedKey && contentType === storedContentType) {
+    return key;
+  }
   await writeS3ObjectWithRetry({ contentType, data, key });
   return key;
 };
@@ -376,7 +395,8 @@ type SettleCaseLawCorpusMirrorTxOptions = {
   persistedSourceHash: string | null;
   observationOrder: bigint;
   mirrorCarriesDocument: boolean;
-  written: WriteCorpusResult;
+  /** Null when the payload carried no document and nothing was stored. */
+  written: WriteCorpusResult | null;
   tx: Transaction;
 };
 
@@ -703,6 +723,12 @@ const processDecisionAttempt = async ({
       sourceObservationHash: true,
       redactedAt: true,
       corpusMirrorStatus: true,
+      // The write the row records for its canonical payload, so the corpus
+      // upload can refuse re-PUTting objects a settled row already proved.
+      contentHash: true,
+      textS3Key: true,
+      normalizedS3Key: true,
+      astS3Key: true,
       sourceRawS3Key: true,
       sourceRawContentType: true,
       sourceUrl: true,
@@ -1133,11 +1159,13 @@ const processDecisionAttempt = async ({
     sourceRawContentType = existing.sourceRawContentType;
   } else if (rawPayload !== undefined) {
     try {
-      sourceRawS3Key = await uploadSourceRaw(
+      sourceRawS3Key = await uploadSourceRaw({
         sourceId,
-        rawPayload,
-        rawContentType,
-      );
+        data: rawPayload,
+        contentType: rawContentType,
+        storedKey: existing?.sourceRawS3Key ?? null,
+        storedContentType: existing?.sourceRawContentType ?? null,
+      });
       sourceRawContentType = rawContentType;
     } catch (error) {
       if (!existing) {
@@ -1871,7 +1899,18 @@ const processDecisionAttempt = async ({
           ),
         scopedDb,
         write: async ({ signal: uploadSignal }) =>
-          await writeCorpusDocument(corpusPayload, { signal: uploadSignal }),
+          await writeCorpusDocument(
+            {
+              ...corpusPayload,
+              // From the pre-write snapshot: the row update above moved the
+              // mirror to pending, but a settled record in that snapshot
+              // still proves these content-addressed objects were confirmed,
+              // so an identical payload need not re-PUT them.
+              stored:
+                existing === undefined ? null : storedCorpusWrite(existing),
+            },
+            { signal: uploadSignal },
+          ),
       });
       if (upload.type === "redacted-or-missing") {
         return {

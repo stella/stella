@@ -12,7 +12,7 @@ import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter"
 import { createSafeId } from "@/api/lib/branded-types";
 import { DatabaseError, TimeoutError } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import type { WriteCorpusResult } from "@/api/lib/legal-search/corpus-storage";
+import type { CorpusWriteOutcome } from "@/api/lib/legal-search/corpus-storage";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 
 /**
@@ -30,19 +30,20 @@ const events: string[] = [];
 const insertedRows: Record<string, unknown>[] = [];
 const updatedDecisionRows: Record<string, unknown>[] = [];
 
-const CORPUS_KEYS = {
-  textKey: "corpus/text.zst",
-  sectionsKey: "corpus/sections.json.zst",
-  astKey: "corpus/ast.json.zst",
-} as const;
-
+// The double runs the real redundancy decision and fakes only the S3 I/O,
+// so a payload the planner refuses is refused here for the same reason it
+// would be in production, not because a fixture said so.
 const writeCorpusDocumentMock = mock(
-  async (input: { documentId: string }): Promise<WriteCorpusResult> => {
+  async (
+    input: Parameters<typeof realCorpusStorage.writeCorpusDocument>[0],
+  ): Promise<CorpusWriteOutcome> => {
+    const plan = realCorpusStorage.planCorpusDocumentWrite(input);
+    if (plan.type !== "put") {
+      events.push(`corpus-skip:${plan.type}`);
+      return await Promise.resolve(plan);
+    }
     events.push(`corpus-write:${input.documentId}`);
-    return await Promise.resolve({
-      ...CORPUS_KEYS,
-      contentHash: "content-hash",
-    });
+    return await Promise.resolve({ type: "written", written: plan.written });
   },
 );
 
@@ -77,8 +78,12 @@ void mock.module("@/api/lib/legal-search/corpus-storage", () => ({
 
 const { czNsAdapter } =
   await import("@/api/handlers/case-law/ingestion/adapters/cz-ns");
-const { processDecision, runIngestionPipeline } =
-  await import("@/api/handlers/case-law/ingestion/pipeline");
+const {
+  caseLawCanonicalPayload,
+  processDecision,
+  runIngestionPipeline,
+  sanitizeResult,
+} = await import("@/api/handlers/case-law/ingestion/pipeline");
 
 const originalCzNsFetchPage = czNsAdapter.fetchPage;
 
@@ -129,6 +134,25 @@ const decision: IngestionResult = {
   metadata: {},
   rawHash: "raw-hash",
   documentAst: {},
+};
+
+/**
+ * The write the settle path records for `decision`'s canonical payload,
+ * derived with the same functions the pipeline uses so the fixture cannot
+ * drift from what production would store.
+ */
+const recordedCorpusWrite = (documentId: string) => {
+  const contentHash = realCorpusStorage.corpusContentHash(
+    caseLawCanonicalPayload(sanitizeResult(decision)),
+  );
+  return {
+    ...realCorpusStorage.corpusKeys({
+      documentId,
+      jurisdiction: decision.country,
+      contentHash,
+    }),
+    contentHash,
+  };
 };
 
 /**
@@ -276,14 +300,15 @@ describe("processDecision — canonical storage mode", () => {
       astS3Key: null,
       contentHash: null,
     });
+    const written = recordedCorpusWrite(String(row?.["id"]));
     expect(updatedDecisionRows.at(-1)).toMatchObject({
       fulltext: null,
       sections: null,
       documentAst: null,
-      textS3Key: "corpus/text.zst",
-      normalizedS3Key: "corpus/sections.json.zst",
-      astS3Key: "corpus/ast.json.zst",
-      contentHash: "content-hash",
+      textS3Key: written.textKey,
+      normalizedS3Key: written.sectionsKey,
+      astS3Key: written.astKey,
+      contentHash: written.contentHash,
       corpusMirrorStatus: "settled",
     });
     expect(events.at(-1)).toBe("intent-delete");
@@ -328,6 +353,10 @@ describe("processDecision — canonical storage mode", () => {
       sourceObservationHash: "first-listing-hash",
       sourceObservationOrder: 1n,
       corpusMirrorStatus: "pending",
+      contentHash: null,
+      textS3Key: null,
+      normalizedS3Key: null,
+      astS3Key: null,
       redactedAt: null,
       sourceRawS3Key: "raw/recovered-detail.html",
       sourceRawContentType: "text/html",
@@ -383,6 +412,10 @@ describe("processDecision — canonical storage mode", () => {
       id: createSafeId<"caseLawDecision">(),
       metadata: {},
       sourceHash: "older-hash",
+      contentHash: null,
+      textS3Key: null,
+      normalizedS3Key: null,
+      astS3Key: null,
       sourceRawS3Key: null,
       sourceRawContentType: null,
     };
@@ -436,6 +469,157 @@ describe("processDecision — canonical storage mode", () => {
       reason: "corpus-write",
     });
     expect(writeCorpusDocumentMock).not.toHaveBeenCalled();
+  });
+
+  test("stores nothing and settles null pointers for a metadata-only decision", async () => {
+    const outcome = await processDecision({
+      // A metadata-first observation: identity fields only, the empty-AST
+      // placeholder, no fulltext — the shape a deferred-document adapter
+      // returns for every listing row.
+      input: { ...decision, fulltext: undefined },
+      observationOrder: 1n,
+      sourceId: createSafeId<"caseLawSource">(),
+      scopedDb,
+      observedAt: new Date("2026-07-31T12:00:00.000Z"),
+    });
+
+    expect(outcome).toEqual({
+      status: "complete",
+      inserted: true,
+      searchVectorFailed: false,
+    });
+    expect(events).toContain("corpus-skip:skipped-empty");
+    expect(events.filter((e) => e.startsWith("corpus-write:"))).toHaveLength(0);
+    const settled = updatedDecisionRows.at(-1);
+    expect(settled).toMatchObject({
+      corpusMirrorStatus: "settled",
+      textS3Key: null,
+      normalizedS3Key: null,
+      astS3Key: null,
+      contentHash: null,
+    });
+    // Nothing in object storage backs this row, so the settle must not
+    // trim the Postgres payload columns.
+    expect(settled).not.toHaveProperty("fulltext");
+    expect(events.at(-1)).toBe("intent-delete");
+  });
+
+  test("skips the corpus PUT when a settled row already records the payload", async () => {
+    const decisionId = createSafeId<"caseLawDecision">();
+    const recorded = recordedCorpusWrite(decisionId);
+    existingDecision = {
+      id: decisionId,
+      metadata: {},
+      // The publisher's raw hash moved (a metadata change) …
+      sourceHash: "older-hash",
+      sourceObservedAt: new Date("2026-07-31T11:00:00.000Z"),
+      sourceObservationHash: "older-hash",
+      sourceObservationOrder: 0n,
+      // … while the canonical payload the row settled did not.
+      corpusMirrorStatus: "settled",
+      contentHash: recorded.contentHash,
+      textS3Key: recorded.textKey,
+      normalizedS3Key: recorded.sectionsKey,
+      astS3Key: recorded.astKey,
+      redactedAt: null,
+      sourceRawS3Key: null,
+      sourceRawContentType: null,
+    };
+
+    const outcome = await processDecision({
+      input: decision,
+      observationOrder: 1n,
+      sourceId: createSafeId<"caseLawSource">(),
+      scopedDb,
+      observedAt: new Date("2026-07-31T12:00:00.000Z"),
+    });
+
+    expect(outcome).toEqual({
+      status: "complete",
+      inserted: true,
+      searchVectorFailed: false,
+    });
+    expect(events).toContain("corpus-skip:skipped-unchanged");
+    expect(events.filter((e) => e.startsWith("corpus-write:"))).toHaveLength(0);
+    // The mirror settles back onto the pointers it already held.
+    expect(updatedDecisionRows.at(-1)).toMatchObject({
+      corpusMirrorStatus: "settled",
+      textS3Key: recorded.textKey,
+      normalizedS3Key: recorded.sectionsKey,
+      astS3Key: recorded.astKey,
+      contentHash: recorded.contentHash,
+    });
+    expect(events.at(-1)).toBe("intent-delete");
+  });
+
+  test("a pending mirror settles once and then stops writing", async () => {
+    const decisionId = createSafeId<"caseLawDecision">();
+    existingDecision = {
+      id: decisionId,
+      metadata: {},
+      // The publisher did not move; only the mirror is stuck pending, so
+      // the source-hash skip must not swallow the settlement.
+      sourceHash: decision.rawHash,
+      sourceObservedAt: new Date("2026-07-31T11:00:00.000Z"),
+      sourceObservationHash: decision.rawHash,
+      sourceObservationOrder: 0n,
+      corpusMirrorStatus: "pending",
+      contentHash: null,
+      textS3Key: null,
+      normalizedS3Key: null,
+      astS3Key: null,
+      redactedAt: null,
+      sourceRawS3Key: null,
+      sourceRawContentType: null,
+    };
+
+    const first = await processDecision({
+      input: decision,
+      observationOrder: 1n,
+      sourceId: createSafeId<"caseLawSource">(),
+      scopedDb,
+      observedAt: new Date("2026-07-31T12:00:00.000Z"),
+    });
+
+    expect(first).toEqual({
+      status: "complete",
+      inserted: true,
+      searchVectorFailed: false,
+    });
+    // A pending row records no write, so this pass must upload and settle.
+    expect(events.filter((e) => e.startsWith("corpus-write:"))).toHaveLength(1);
+    expect(updatedDecisionRows.at(-1)).toMatchObject({
+      corpusMirrorStatus: "settled",
+    });
+
+    // The next crawl pass sees the row the settle produced; with the source
+    // unchanged it advances the watermark and touches no corpus state.
+    const recorded = recordedCorpusWrite(decisionId);
+    existingDecision = {
+      ...existingDecision,
+      corpusMirrorStatus: "settled",
+      contentHash: recorded.contentHash,
+      textS3Key: recorded.textKey,
+      normalizedS3Key: recorded.sectionsKey,
+      astS3Key: recorded.astKey,
+    };
+    events.length = 0;
+
+    const second = await processDecision({
+      input: decision,
+      observationOrder: 2n,
+      sourceId: createSafeId<"caseLawSource">(),
+      scopedDb,
+      observedAt: new Date("2026-07-31T13:00:00.000Z"),
+    });
+
+    expect(second).toEqual({
+      status: "complete",
+      inserted: false,
+      searchVectorFailed: false,
+    });
+    expect(events.filter((e) => e.startsWith("corpus-"))).toHaveLength(0);
+    expect(events).not.toContain("intent-reserve");
   });
 
   // bun-types declares `.rejects.toBe` as void, so awaiting it trips

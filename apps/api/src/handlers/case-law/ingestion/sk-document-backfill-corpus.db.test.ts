@@ -32,7 +32,7 @@ import {
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { WriteCorpusResult } from "@/api/lib/legal-search/corpus-storage";
+import type { CorpusWriteOutcome } from "@/api/lib/legal-search/corpus-storage";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
 import {
   markDocumentUnavailable,
@@ -78,6 +78,10 @@ const NEW_KEYS = {
   astKey: "legal-corpus/new/ast.json.zst",
 } as const;
 const NEW_CONTENT_HASH = "new-content-hash";
+const NEW_WRITE_OUTCOME = {
+  type: "written",
+  written: { ...NEW_KEYS, contentHash: NEW_CONTENT_HASH },
+} as const satisfies CorpusWriteOutcome;
 
 if (!databaseUrl || !runPostgresTests) {
   describe.skip("sk-courts document backfill — corpus storage", () => {
@@ -208,7 +212,7 @@ if (!databaseUrl || !runPostgresTests) {
         decision: decisionFor(id, caseNumber),
         document: parsedDocument,
         scopedDb,
-        writeCorpus: async (input): Promise<WriteCorpusResult> => {
+        writeCorpus: async (input): Promise<CorpusWriteOutcome> => {
           corpusWrites.push({
             documentId: input.documentId,
             jurisdiction: input.jurisdiction,
@@ -219,7 +223,7 @@ if (!databaseUrl || !runPostgresTests) {
             columns: { contentHash: true },
           });
           hashesDuringWrite.push(during?.contentHash ?? null);
-          return { ...NEW_KEYS, contentHash: NEW_CONTENT_HASH };
+          return NEW_WRITE_OUTCOME;
         },
       });
 
@@ -301,10 +305,7 @@ if (!databaseUrl || !runPostgresTests) {
         decision: decisionFor(id, caseNumber),
         document: parsedDocument,
         scopedDb,
-        writeCorpus: async () => ({
-          ...NEW_KEYS,
-          contentHash: NEW_CONTENT_HASH,
-        }),
+        writeCorpus: async () => NEW_WRITE_OUTCOME,
       });
 
       const stored = await db.query.caseLawDecisions.findFirst({
@@ -348,10 +349,7 @@ if (!databaseUrl || !runPostgresTests) {
         document: parsedDocument,
         mode: "canonical",
         scopedDb,
-        writeCorpus: async () => ({
-          ...NEW_KEYS,
-          contentHash: NEW_CONTENT_HASH,
-        }),
+        writeCorpus: async () => NEW_WRITE_OUTCOME,
       });
 
       expect(outcome).toBe("stored");
@@ -402,10 +400,7 @@ if (!databaseUrl || !runPostgresTests) {
         document: parsedDocument,
         mode: "canonical",
         scopedDb,
-        writeCorpus: async () => ({
-          ...NEW_KEYS,
-          contentHash: NEW_CONTENT_HASH,
-        }),
+        writeCorpus: async () => NEW_WRITE_OUTCOME,
       });
 
       // The attempt that was overtaken, finishing with nothing to store.
@@ -447,10 +442,7 @@ if (!databaseUrl || !runPostgresTests) {
           document: parsedDocument,
           mode: "canonical",
           scopedDb,
-          writeCorpus: async () => ({
-            ...NEW_KEYS,
-            contentHash: NEW_CONTENT_HASH,
-          }),
+          writeCorpus: async () => NEW_WRITE_OUTCOME,
         });
 
       expect(await store()).toBe("stored");
@@ -487,10 +479,7 @@ if (!databaseUrl || !runPostgresTests) {
         document: parsedDocument,
         mode: "canonical",
         scopedDb,
-        writeCorpus: async () => ({
-          ...NEW_KEYS,
-          contentHash: NEW_CONTENT_HASH,
-        }),
+        writeCorpus: async () => NEW_WRITE_OUTCOME,
       });
 
       expect(await stillPending()).toBe(false);
@@ -508,10 +497,7 @@ if (!databaseUrl || !runPostgresTests) {
         document: parsedDocument,
         mode: "dual-write",
         scopedDb,
-        writeCorpus: async () => ({
-          ...NEW_KEYS,
-          contentHash: NEW_CONTENT_HASH,
-        }),
+        writeCorpus: async () => NEW_WRITE_OUTCOME,
       });
 
       expect(

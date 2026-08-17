@@ -60,9 +60,9 @@ import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
  *
  * Together these make a re-run converge rather than accumulate: the second
  * pass derives the payload the row already holds, reports it unchanged, and
- * lets the pipeline advance the observation watermark alone. The stored
- * payload is uploaded again under its own content hash, so that write lands
- * on the key it already occupies.
+ * lets the pipeline advance the observation watermark alone. Where a write
+ * does run, the corpus writer compares the derived keys against the ones
+ * the row records and skips re-uploading a payload the row already holds.
  */
 
 export const REPLAY_ROW_OUTCOME = {
@@ -504,8 +504,8 @@ const replayRow = async ({
     // result it is handed, so a result that carried no payload would clear
     // the stored key and leave the row unreplayable — it would destroy the
     // one thing that makes this local. These are the bytes this run read,
-    // and the pipeline keys the object on their own hash, so re-uploading
-    // them lands on the key the row already holds.
+    // and the pipeline keys the object on their own hash, so it recognises
+    // the key the row already holds and skips the re-upload.
     input: {
       ...reparsed.result,
       sourceRawBytes: raw,

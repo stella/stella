@@ -173,6 +173,15 @@ export const EMPTY_CORPUS_CONTENT_HASHES: readonly string[] =
 type WriteCorpusInput = CorpusPayload & {
   documentId: string;
   jurisdiction: string;
+  /**
+   * The corpus write the row currently records ({@link storedCorpusWrite}),
+   * or null when it records none. A write whose derived keys and hash equal
+   * this record is refused: the objects are content-addressed and a settled
+   * record proves they were confirmed, so re-PUTting them buys nothing.
+   * Required rather than optional so no call site can forget to state what
+   * the row knows.
+   */
+  stored: WriteCorpusResult | null;
 };
 
 type CorpusIoOptions = { signal?: AbortSignal };
@@ -237,6 +246,96 @@ const settleCancellableCorpusIoGroup = async ({
 };
 
 export type WriteCorpusResult = CorpusKeys & { contentHash: string };
+
+/** The corpus pointer columns as a decision or legislation row stores them. */
+type StoredCorpusWriteColumns = {
+  textS3Key: string | null;
+  normalizedS3Key: string | null;
+  astS3Key: string | null;
+  contentHash: string | null;
+};
+
+/**
+ * The corpus write a row records, in the shape {@link writeCorpusDocument}
+ * compares against, or null when the row records none. All four columns
+ * travel together — the mirror settles them in one statement — so a partial
+ * set means no confirmed write.
+ */
+export const storedCorpusWrite = (
+  row: StoredCorpusWriteColumns,
+): WriteCorpusResult | null =>
+  row.textS3Key !== null &&
+  row.normalizedS3Key !== null &&
+  row.astS3Key !== null &&
+  row.contentHash !== null
+    ? {
+        textKey: row.textS3Key,
+        sectionsKey: row.normalizedS3Key,
+        astKey: row.astS3Key,
+        contentHash: row.contentHash,
+      }
+    : null;
+
+export type CorpusWriteOutcome =
+  /** All three objects were PUT under the derived keys. */
+  | { type: "written"; written: WriteCorpusResult }
+  /** The row already records this exact write; nothing was PUT. */
+  | { type: "skipped-unchanged"; written: WriteCorpusResult }
+  /**
+   * The payload carries no document; nothing was PUT, and the caller
+   * settles the row's mirror with null pointers to say so. The payload's
+   * hash still travels, for a caller whose index staleness tracking keys
+   * off a non-null content hash and must converge on the empty payload
+   * rather than skip the row.
+   */
+  | { type: "skipped-empty"; written: null; contentHash: string };
+
+type PlannedCorpusWrite =
+  | { type: "put"; written: WriteCorpusResult }
+  | Extract<
+      CorpusWriteOutcome,
+      { type: "skipped-unchanged" | "skipped-empty" }
+    >;
+
+/**
+ * The redundancy decision behind {@link writeCorpusDocument}, separated
+ * from the S3 I/O so it stays a pure unit and a test double can fake only
+ * the PUTs while keeping the real decision.
+ *
+ * A payload whose hash is one of the empty shapes stores nothing: a
+ * metadata-first ingest would otherwise PUT the same constant
+ * zero-information objects under a fresh key per row. A payload whose
+ * derived keys and hash equal the write the row already records stores
+ * nothing either — a settled record proves those exact objects were
+ * confirmed. The comparison is over the keys, not the hash alone, because
+ * the keys also carry the jurisdiction partition: an equal payload under a
+ * moved jurisdiction must still land at its new keys.
+ */
+export const planCorpusDocumentWrite = ({
+  documentId,
+  jurisdiction,
+  text,
+  sections,
+  ast,
+  stored,
+}: WriteCorpusInput): PlannedCorpusWrite => {
+  const contentHash = corpusContentHash({ text, sections, ast });
+  if (EMPTY_CORPUS_CONTENT_HASHES.includes(contentHash)) {
+    return { type: "skipped-empty", written: null, contentHash };
+  }
+  const written = {
+    ...corpusKeys({ documentId, jurisdiction, contentHash }),
+    contentHash,
+  };
+  const unchanged =
+    stored?.contentHash === contentHash &&
+    stored.textKey === written.textKey &&
+    stored.sectionsKey === written.sectionsKey &&
+    stored.astKey === written.astKey;
+  return unchanged
+    ? { type: "skipped-unchanged", written }
+    : { type: "put", written };
+};
 
 type CorpusMirrorState =
   | { status: typeof CASE_LAW_CORPUS_MIRROR_STATUS.PENDING }
@@ -368,11 +467,20 @@ export const corpusPayloadDisposition = ({
 };
 
 export const writeCorpusDocument = async (
-  { documentId, jurisdiction, text, sections, ast }: WriteCorpusInput,
+  input: WriteCorpusInput,
   { signal }: CorpusIoOptions = {},
-): Promise<WriteCorpusResult> => {
-  const contentHash = corpusContentHash({ text, sections, ast });
-  const keys = corpusKeys({ documentId, jurisdiction, contentHash });
+): Promise<CorpusWriteOutcome> => {
+  const plan = planCorpusDocumentWrite(input);
+  if (plan.type !== "put") {
+    return plan;
+  }
+  const { text, sections, ast } = input;
+  const { written } = plan;
+  const keys = {
+    textKey: written.textKey,
+    sectionsKey: written.sectionsKey,
+    astKey: written.astKey,
+  };
   const writeController = new AbortController();
   const groupSignal =
     signal === undefined
@@ -421,7 +529,7 @@ export const writeCorpusDocument = async (
     operations: writes,
   });
 
-  return { ...keys, contentHash };
+  return { type: "written", written };
 };
 
 type ReadCorpusTextOptions = {
