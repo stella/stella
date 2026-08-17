@@ -93,7 +93,7 @@ const requestedAggregations = (): Record<string, unknown> =>
 test("aggregates over opening passages only, so buckets count decisions", async () => {
   responseBody = engineResponse();
 
-  const result = await corpusIndexBrowseFacets({ limit: 20 });
+  const result = await corpusIndexBrowseFacets({ limit: 20 }, []);
 
   expect(Result.isError(result)).toBe(false);
   // Every passage of a decision carries the decision's court and country, so
@@ -105,7 +105,7 @@ test("aggregates over opening passages only, so buckets count decisions", async 
 test("requests exactly the aggregations the response is read from", async () => {
   responseBody = engineResponse();
 
-  const result = await corpusIndexBrowseFacets({ limit: 20 });
+  const result = await corpusIndexBrowseFacets({ limit: 20 }, []);
   if (Result.isError(result)) {
     throw result.error;
   }
@@ -123,7 +123,7 @@ test("requests exactly the aggregations the response is read from", async () => 
 test("reads string and numeric bucket keys into the same bucket shape", async () => {
   responseBody = engineResponse();
 
-  const result = await corpusIndexBrowseFacets({ limit: 20 });
+  const result = await corpusIndexBrowseFacets({ limit: 20 }, []);
   if (Result.isError(result)) {
     throw result.error;
   }
@@ -141,8 +141,8 @@ test("scopes to one jurisdiction index, and to the generation glob without one",
   responseBody = engineResponse();
   const generation = corpusGeneration("case_law");
 
-  await corpusIndexBrowseFacets({ jurisdiction: "CZE", limit: 20 });
-  await corpusIndexBrowseFacets({ limit: 20 });
+  await corpusIndexBrowseFacets({ jurisdiction: "CZE", limit: 20 }, []);
+  await corpusIndexBrowseFacets({ limit: 20 }, []);
 
   expect(requests.at(0)?.url).toContain(`/${generation}_cze/search`);
   expect(requests.at(1)?.url).toContain(`/${generation}_*/search`);
@@ -151,7 +151,7 @@ test("scopes to one jurisdiction index, and to the generation glob without one",
 test("asks for bucket depth beyond the requested size", async () => {
   responseBody = engineResponse();
 
-  await corpusIndexBrowseFacets({ limit: 20 });
+  await corpusIndexBrowseFacets({ limit: 20 }, []);
 
   // Terms aggregations merge per-split top-k lists: at a depth of `size` the
   // merged counts are approximate, which would show wrong numbers next to
@@ -163,15 +163,53 @@ test("asks for bucket depth beyond the requested size", async () => {
   expect(v.parse(segmentSizeSchema, country)).toBeGreaterThan(20);
 });
 
+test("excludes sources that may no longer be redistributed", async () => {
+  responseBody = engineResponse();
+
+  await corpusIndexBrowseFacets({ limit: 20 }, [
+    "018f0a2b-0000-7000-8000-000000000001",
+    "018f0a2b-0000-7000-8000-000000000002",
+  ]);
+
+  // Projection keeps ineligible sources out of the index, but a revocation
+  // only queues their documents for removal: without this clause the buckets
+  // keep counting them until reconciliation catches up.
+  expect(requests.at(0)?.body["query"]).toBe(
+    'seq:0 AND NOT (source:"018f0a2b-0000-7000-8000-000000000001" OR source:"018f0a2b-0000-7000-8000-000000000002")',
+  );
+});
+
+test("an approximate aggregation fails rather than serving wrong counts", async () => {
+  responseBody = {
+    aggregations: {
+      ...engineResponse().aggregations,
+      court: {
+        ...termsAggregation([{ key: "Nejvyšší soud", count: 203_722 }]),
+        // The engine's own statement that the merged top-k is not exact.
+        doc_count_error_upper_bound: 17,
+      },
+    },
+  };
+
+  const result = await corpusIndexBrowseFacets({ limit: 20 }, []);
+
+  expect(Result.isError(result)).toBe(true);
+});
+
 test("an unreadable aggregation fails rather than reporting an empty corpus", async () => {
   responseBody = {
     aggregations: {
       ...engineResponse().aggregations,
-      court: { buckets: [{ key: "Nejvyšší soud" }] },
+      // A bucket with no `doc_count` is the shape under test; the exactness
+      // bound is stated so this fails on the bucket rather than on it.
+      court: {
+        buckets: [{ key: "Nejvyšší soud" }],
+        doc_count_error_upper_bound: 0,
+      },
     },
   };
 
-  const result = await corpusIndexBrowseFacets({ limit: 20 });
+  const result = await corpusIndexBrowseFacets({ limit: 20 }, []);
 
   expect(Result.isError(result)).toBe(true);
 });
@@ -179,7 +217,7 @@ test("an unreadable aggregation fails rather than reporting an empty corpus", as
 test("a missing aggregation fails rather than reporting an empty corpus", async () => {
   responseBody = { aggregations: { country: termsAggregation([]) } };
 
-  const result = await corpusIndexBrowseFacets({ limit: 20 });
+  const result = await corpusIndexBrowseFacets({ limit: 20 }, []);
 
   expect(Result.isError(result)).toBe(true);
 });
@@ -188,7 +226,7 @@ test("an engine failure returns a typed error, not a throw", async () => {
   responseStatus = 503;
   responseBody = { message: "service unavailable" };
 
-  const result = await corpusIndexBrowseFacets({ limit: 20 });
+  const result = await corpusIndexBrowseFacets({ limit: 20 }, []);
 
   expect(Result.isError(result)).toBe(true);
   if (Result.isError(result)) {

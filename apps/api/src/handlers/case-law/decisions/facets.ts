@@ -40,8 +40,13 @@ export const listDecisionFacetsHandler = async ({
     return status(400, { message: "Invalid country" });
   }
 
+  // The accepted code is case-insensitive, but the providers are not equally
+  // so: the corpus index lowercases it into an index name while the Postgres
+  // path compares it to the stored column, which is upper-case. Canonicalising
+  // once here is what keeps the two answering the same question — and keeps
+  // one jurisdiction to one cache entry.
   const result = await browseFacets({
-    ...(country === undefined ? {} : { jurisdiction: country }),
+    ...(country === undefined ? {} : { jurisdiction: country.toUpperCase() }),
     limit: LIMITS.caseLawFacetLimit,
   });
   if (Result.isError(result)) {

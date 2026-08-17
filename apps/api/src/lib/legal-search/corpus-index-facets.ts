@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
+import { quoteCorpusValue } from "@/api/lib/legal-search/corpus-query";
 import {
   corpusIndexId,
   corpusIndexPattern,
@@ -26,12 +27,38 @@ import { isRecord } from "@/api/lib/type-guards";
  * numbers passages from zero and always emits at least one, so exactly one
  * document per decision matches — and every bucket then counts decisions.
  *
- * Source policy needs no clause here: only redistributable, unredacted
- * decisions are ever projected into the index (see `corpus-index.ts`), so the
- * index is already the gated set the public endpoint may count.
+ * Projection is only the first half of the redistribution gate: it keeps
+ * ineligible sources out of the index, but revoking a source's redistribution
+ * merely queues its documents for removal, so the caller passes the currently
+ * ineligible source ids and they are excluded here. That is the same posture
+ * the search path takes when it re-applies the predicate while rehydrating
+ * index candidates.
+ *
+ * What the index does NOT hold is also visible in these counts: a decision
+ * with no canonical payload is never projected, so it is browseable in the
+ * list yet absent from a bucket. That is the same set search can find, which
+ * is the set these filters exist to narrow.
  */
 
 const OPENING_PASSAGE_QUERY = "seq:0";
+
+/**
+ * Opening passages, minus every source that may no longer be redistributed.
+ * Exported for the test that pins the clause: an aggregation that silently
+ * dropped it would keep counting revoked decisions for a reconciliation
+ * window plus a cache window.
+ */
+export const browseFacetsQuery = (
+  excludedSourceIds: readonly string[],
+): string => {
+  if (excludedSourceIds.length === 0) {
+    return OPENING_PASSAGE_QUERY;
+  }
+  const excluded = excludedSourceIds
+    .map((id) => `source:${quoteCorpusValue(id)}`)
+    .join(" OR ");
+  return `${OPENING_PASSAGE_QUERY} AND NOT (${excluded})`;
+};
 
 /**
  * Per-split candidate depth behind each bucket. Terms aggregations merge
@@ -79,11 +106,21 @@ const buildAggregations = (limit: number): Record<string, unknown> =>
 
 /**
  * Terms buckets, or null when the engine returned a shape this facet cannot
- * be read from. Null is a hard parse failure, never an empty facet: silently
- * reporting "no courts" would look like a corpus with no decisions.
+ * be read from, or counts it will not vouch for. Null is a hard failure,
+ * never an empty facet: silently reporting "no courts" would look like a
+ * corpus with no decisions.
  */
 const parseTermsBuckets = (aggregation: unknown): FacetBucket[] | null => {
   if (!isRecord(aggregation) || !Array.isArray(aggregation["buckets"])) {
+    return null;
+  }
+
+  // `FACET_SEGMENT_SIZE` is a claim about the corpus, not a property of the
+  // engine, and corpus growth or a split-topology change can outgrow it. The
+  // engine states when it has: anything but a reported zero means the counts
+  // are approximate, and serving them would put wrong numbers next to every
+  // court with nothing to notice.
+  if (aggregation["doc_count_error_upper_bound"] !== 0) {
     return null;
   }
 
@@ -113,6 +150,7 @@ const parseTermsBuckets = (aggregation: unknown): FacetBucket[] | null => {
 
 export const corpusIndexBrowseFacets = async (
   query: LegalBrowseFacetsQuery,
+  excludedSourceIds: readonly string[],
 ): Promise<Result<LegalBrowseFacets, LegalBrowseFacetsError>> => {
   const generation = corpusGeneration(query.documentFamily ?? "case_law");
   // Scoped query → that jurisdiction's index; unscoped → the generation glob
@@ -123,7 +161,7 @@ export const corpusIndexBrowseFacets = async (
 
   const aggregated = await getCorpusIndexClient().aggregate({
     indexId,
-    query: OPENING_PASSAGE_QUERY,
+    query: browseFacetsQuery(excludedSourceIds),
     aggs: buildAggregations(query.limit),
   });
   if (Result.isError(aggregated)) {
@@ -141,7 +179,8 @@ export const corpusIndexBrowseFacets = async (
   if (country === null || court === null || year === null) {
     return Result.err(
       new LegalBrowseFacetsError({
-        message: "corpus index returned an unreadable facet aggregation",
+        message:
+          "corpus index returned an unreadable or approximate facet aggregation",
       }),
     );
   }

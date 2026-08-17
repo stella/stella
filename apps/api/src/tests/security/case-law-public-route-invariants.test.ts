@@ -28,6 +28,10 @@ const CORPUS_INDEX_FACETS_FILE =
   "apps/api/src/lib/legal-search/corpus-index-facets.ts";
 const CORPUS_INDEX_PROJECTION_FILE =
   "apps/api/src/handlers/case-law/corpus-index.ts";
+const CORPUS_INDEX_PROVIDER_FILE =
+  "apps/api/src/lib/legal-search/corpus-index-provider.ts";
+const NON_REDISTRIBUTABLE_SOURCES_FILE =
+  "apps/api/src/lib/case-law/non-redistributable-sources.ts";
 const SEARCH_DECISIONS_FILE =
   "apps/api/src/handlers/case-law/decisions/search.ts";
 const SEARCH_DECISIONS_SCHEMA_FILE =
@@ -53,6 +57,10 @@ const readCorpusIndexFacetsSource = async () =>
   await readSource(CORPUS_INDEX_FACETS_FILE);
 const readCorpusIndexProjectionSource = async () =>
   await readSource(CORPUS_INDEX_PROJECTION_FILE);
+const readCorpusIndexProviderSource = async () =>
+  await readSource(CORPUS_INDEX_PROVIDER_FILE);
+const readNonRedistributableSourcesSource = async () =>
+  await readSource(NON_REDISTRIBUTABLE_SOURCES_FILE);
 const readSearchSource = async () => await readSource(SEARCH_DECISIONS_FILE);
 const readSearchSchemaSource = async () =>
   await readSource(SEARCH_DECISIONS_SCHEMA_FILE);
@@ -308,7 +316,11 @@ describe("public case-law route boundary", () => {
     const listSource = await readListSource();
     const decisionSource = await readDecisionSource();
     const pgFtsFacetsSource = await readPgFtsFacetsSource();
+    const corpusIndexFacetsSource = await readCorpusIndexFacetsSource();
     const corpusIndexProjectionSource = await readCorpusIndexProjectionSource();
+    const corpusIndexProviderSource = await readCorpusIndexProviderSource();
+    const nonRedistributableSourcesSource =
+      await readNonRedistributableSourcesSource();
     const searchSource = await readSearchSource();
     const sitemapSource = await readSitemapSource();
 
@@ -317,11 +329,19 @@ describe("public case-law route boundary", () => {
     expect(decisionSource).toContain("isRedistributable");
     expect(pgFtsFacetsSource).toContain("redistributableCaseLawSource");
     // The corpus-index facets aggregate the index rather than the table, so
-    // their gate is the projection's: only redistributable decisions are ever
-    // indexed, which is what makes counting the index safe to serve publicly.
+    // the gate is two-sided. Projection keeps ineligible sources out of the
+    // index; because a revocation only queues their removal, the aggregation
+    // additionally excludes whatever is ineligible at query time.
     expect(corpusIndexProjectionSource).toContain(
       "redistributableCaseLawSource",
     );
+    expect(nonRedistributableSourcesSource).toContain(
+      "redistributableCaseLawSource",
+    );
+    expect(corpusIndexProviderSource).toContain(
+      "readNonRedistributableCaseLawSourceIds",
+    );
+    expect(corpusIndexFacetsSource).toContain("excludedSourceIds");
     expect(searchSource).toContain("redistributableSourceJoin");
     expect(searchSource).toContain("redistributableCaseLawSource");
     expect(sitemapSource).toContain("redistributableCaseLawSource");

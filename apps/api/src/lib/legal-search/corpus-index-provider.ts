@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import {
@@ -9,8 +10,10 @@ import { envBase } from "@/api/env-base";
 // eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { readNonRedistributableCaseLawSourceIds } from "@/api/lib/case-law/non-redistributable-sources";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { isUuid } from "@/api/lib/custom-schema";
+import { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import {
   caseLawCorpusProjectionJoin,
   currentCaseLawCorpusProjection,
@@ -30,6 +33,7 @@ import {
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
 import type {
+  LegalBrowseFacetsQuery,
   LegalSearchHit,
   LegalSearchProvider,
   LegalSearchQuery,
@@ -239,8 +243,28 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
   return { hits, facets: null, nextCursor, limit };
 };
 
+/**
+ * The aggregation counts the index, so the source-policy predicate cannot ride
+ * along in its query the way it does in SQL. It is read here instead and
+ * excluded in the corpus query, which keeps the gate query-time rather than
+ * leaving it to whenever reconciliation removes a revoked source's documents.
+ */
+const browseFacets = async (query: LegalBrowseFacetsQuery) => {
+  const excludedSourceIds = await readNonRedistributableCaseLawSourceIds();
+  if (Result.isError(excludedSourceIds)) {
+    return Result.err(
+      new LegalBrowseFacetsError({
+        message: excludedSourceIds.error.message,
+        cause: excludedSourceIds.error,
+      }),
+    );
+  }
+
+  return await corpusIndexBrowseFacets(query, excludedSourceIds.value);
+};
+
 export const corpusIndexProvider: LegalSearchProvider = {
   search,
-  browseFacets: corpusIndexBrowseFacets,
+  browseFacets,
   getDocumentContext: loadDocumentContext,
 };
