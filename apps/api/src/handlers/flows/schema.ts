@@ -107,6 +107,11 @@ export const startFlowRunBodySchema = t.Object({
   inputEntityIds: t.Array(tSafeId("entity"), {
     maxItems: LIMITS.flowRunInputEntitiesMax,
   }),
+  /**
+   * Restated size estimate from a prior 428 `usage_confirmation_required`
+   * answer; the run starts only when it covers the current estimate.
+   */
+  confirmedUnits: t.Optional(t.Integer({ minimum: 0 })),
 });
 
 export const reviewFlowRunBodySchema = t.Object({
