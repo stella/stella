@@ -37,6 +37,7 @@ type ItemOptions = {
   action?: MatterActivityItem["action"];
   activityAt?: string;
   performer?: MatterActivityItem["performer"];
+  renameOnly?: boolean;
   runId: string | null;
   target?: Partial<MatterActivityItem["target"]>;
 };
@@ -47,6 +48,7 @@ const item = (
     action = "update",
     activityAt = "2026-07-30T12:00:00.000Z",
     performer = { name: "Review agent", type: "agent" },
+    renameOnly = false,
     runId,
     target,
   }: ItemOptions,
@@ -57,6 +59,7 @@ const item = (
   category: "documents",
   id: toSafeId<"auditLog">(id),
   performer,
+  renameOnly,
   runId,
   target: {
     color: null,
@@ -278,12 +281,14 @@ describe("groupActivityItems", () => {
       item("3", {
         activityAt: new Date(LOCAL_NOON + 8000).toISOString(),
         performer,
+        renameOnly: true,
         runId: null,
         target: folder,
       }),
       item("2", {
         activityAt: new Date(LOCAL_NOON + 5000).toISOString(),
         performer,
+        renameOnly: true,
         runId: null,
         target: folder,
       }),
@@ -300,6 +305,36 @@ describe("groupActivityItems", () => {
     expect(groups[0]?.items.map(({ action }) => action)).toEqual(["create"]);
   });
 
+  test("keeps a folder move recorded right after the creation", () => {
+    const performer = {
+      deletedAt: null,
+      id: "user-1",
+      image: null,
+      name: "Matter Administrator",
+      type: "user",
+    } satisfies MatterActivityItem["performer"];
+    const folder = { id: "folder-1", kind: "folder", mimeType: null } as const;
+    const groups = groupActivityItems([
+      // A move is an update whose change set is not just the name.
+      item("2", {
+        activityAt: new Date(LOCAL_NOON + 5000).toISOString(),
+        performer,
+        renameOnly: false,
+        runId: null,
+        target: folder,
+      }),
+      item("1", {
+        action: "create",
+        activityAt: new Date(LOCAL_NOON).toISOString(),
+        performer,
+        runId: null,
+        target: folder,
+      }),
+    ]);
+
+    expect(groups).toHaveLength(2);
+  });
+
   test("keeps folder updates that are not part of the creation", () => {
     const performer = {
       deletedAt: null,
@@ -313,6 +348,7 @@ describe("groupActivityItems", () => {
       item("2", {
         activityAt: new Date(LOCAL_NOON + 2000).toISOString(),
         performer,
+        renameOnly: true,
         runId: null,
         target: { ...folder, id: "folder-2" },
       }),
@@ -330,6 +366,7 @@ describe("groupActivityItems", () => {
       item("2", {
         activityAt: new Date(LOCAL_NOON + 2000).toISOString(),
         performer: { ...performer, id: "user-2" },
+        renameOnly: true,
         runId: null,
         target: folder,
       }),
@@ -357,6 +394,7 @@ describe("groupActivityItems", () => {
       item("2", {
         activityAt: new Date(LOCAL_NOON + 61_000).toISOString(),
         performer,
+        renameOnly: true,
         runId: null,
         target: folder,
       }),

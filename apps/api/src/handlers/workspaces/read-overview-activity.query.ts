@@ -16,6 +16,7 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
+import { isEntityKind } from "@stll/api-contract";
 import type {
   MatterActivityAction,
   MatterActivityCategory,
@@ -334,6 +335,13 @@ const legacyWorkspaceTeamEvent = () =>
     OR ${auditLogs.changes} ? 'membersRemoved'
   )`;
 
+// True when the audit row's only recorded change is the name, so the client
+// can distinguish a rename from other updates (a move records `parentId`).
+const renameOnlyChange = () => sql<boolean>`coalesce((
+  ${auditLogs.changes} ? 'name'
+  and (select count(*) = 1 from jsonb_object_keys(${auditLogs.changes}))
+), false)`;
+
 const teamContactIdSnapshot = () => sql<string | null>`case
   when ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.WORKSPACE_CONTACT}
     then coalesce(
@@ -505,6 +513,8 @@ export type MatterActivityItem = {
         name: string | null;
         type: Exclude<(typeof auditLogs.$inferSelect)["performerType"], "user">;
       };
+  /** The event's only recorded change is the target's name. */
+  renameOnly: boolean;
   runId: string | null;
   target: ActivityTarget;
   trigger: {
@@ -668,6 +678,7 @@ export const readOverviewActivityPage = async ({
             resourceId: auditLogs.resourceId,
             resourceType: auditLogs.resourceType,
             relationshipChange: auditRelationshipChangeSql(auditLogs),
+            renameOnly: renameOnlyChange(),
             runId: auditLogs.runId,
             triggerSource: auditLogs.triggerSource,
             triggerType: auditLogs.triggerType,
@@ -906,6 +917,7 @@ export const readOverviewActivityPage = async ({
           category,
           id: row.id,
           performer,
+          renameOnly: row.renameOnly,
           runId: resolveActivityRunId({
             resourceId: row.resourceId,
             resourceType: row.resourceType,
@@ -915,6 +927,7 @@ export const readOverviewActivityPage = async ({
             category,
             entityMap,
             entityIdSnapshot: row.entityIdSnapshot,
+            entityKindSnapshot: row.legacyKind,
             entityNameSnapshot: row.entityNameSnapshot,
             fieldVersionMap,
             matterColor: result.workspace?.color ?? null,
@@ -979,6 +992,7 @@ type TargetForRowOptions = {
   category: ActivityCategory;
   entityMap: Map<string, EntityTarget>;
   entityIdSnapshot: string | null;
+  entityKindSnapshot: string | null;
   entityNameSnapshot: string | null;
   fieldVersionMap: Map<string, string>;
   matterColor: string | null;
@@ -993,6 +1007,7 @@ const targetForRow = ({
   category,
   entityMap,
   entityIdSnapshot,
+  entityKindSnapshot,
   entityNameSnapshot,
   fieldVersionMap,
   matterColor,
@@ -1008,6 +1023,7 @@ const targetForRow = ({
       deletedEntityTarget({
         category,
         id: resourceId,
+        kindSnapshot: entityKindSnapshot,
         name: entityNameSnapshot,
       })
     );
@@ -1020,6 +1036,7 @@ const targetForRow = ({
         deletedEntityTarget({
           category,
           id: entityId,
+          kindSnapshot: entityKindSnapshot,
           name: entityNameSnapshot,
         })
       );
@@ -1036,6 +1053,7 @@ const targetForRow = ({
         deletedEntityTarget({
           category,
           id: entityId,
+          kindSnapshot: entityKindSnapshot,
           name: entityNameSnapshot,
         })
       );
@@ -1090,12 +1108,15 @@ const targetForRow = ({
 type DeletedEntityTargetOptions = {
   category?: ActivityCategory;
   id: string;
+  /** Kind recorded in the audit snapshot; the entity row itself is gone. */
+  kindSnapshot?: string | null;
   name?: string | null;
 };
 
 const deletedEntityTarget = ({
   category = "documents",
   id,
+  kindSnapshot = null,
   name = null,
 }: DeletedEntityTargetOptions): EntityTarget => ({
   color: null,
@@ -1104,7 +1125,11 @@ const deletedEntityTarget = ({
   entityId: null,
   fieldId: null,
   id,
-  kind: category === "tasks" ? "task" : "document",
+  kind: isEntityKind(kindSnapshot)
+    ? kindSnapshot
+    : category === "tasks"
+      ? "task"
+      : "document",
   mimeType: null,
   name,
   pdfFileId: null,

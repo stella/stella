@@ -127,6 +127,7 @@ const isFoldableFolderRename = (
 ) =>
   candidate?.type === "single" &&
   isUserFolderAction(candidate.items[0], "update") &&
+  candidate.items[0].renameOnly &&
   candidate.items[0].target.id === createItem.target.id &&
   hasSamePerformer(candidate.items[0], createItem) &&
   isWithinActivityFoldWindow(candidate.items[0], createItem);
@@ -165,6 +166,7 @@ export const groupActivityItems = (
     // Creating a folder in the UI records a create plus an immediate rename
     // (the inline name edit). Items arrive newest-first, so the renames sit
     // just before their create: fold them into the single "created" entry.
+    // Only pure renames fold; a move within the window stays visible.
     if (isUserFolderAction(item, "create")) {
       while (isFoldableFolderRename(groups.at(-1), item)) {
         groups.pop();
