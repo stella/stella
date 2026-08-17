@@ -1,0 +1,274 @@
+/**
+ * What `repair-decision-dates.ts` selects and how it decides each row,
+ * separated from the script that runs it.
+ *
+ * An operator script is a module with a side effect at the top level, so
+ * nothing can import it and nothing in CI ever executes its SQL. Keeping the
+ * statements and the per-row decision here, where a database test can run them
+ * against a real PostgreSQL, is what makes them reviewable: a predicate that
+ * selects the wrong rows is a data loss the first invocation commits, and a
+ * syntax error is one no test would otherwise see.
+ */
+
+import { panic } from "better-result";
+import type { SQL } from "drizzle-orm";
+import { sql } from "drizzle-orm";
+
+import type { SafeId } from "@/api/lib/branded-types";
+import { canonicalDecisionDate, DECISION_YEAR_BOUNDS } from "@/api/lib/dates";
+import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
+import { isRecord } from "@/api/lib/type-guards";
+
+/**
+ * `canonicalDecisionDate`'s year bounds, in SQL.
+ *
+ * Both halves are derived from `DECISION_YEAR_BOUNDS`, the same declaration
+ * the write-path guard reads, so the two runtimes cannot drift into disagreeing
+ * about which stored dates are impossible. `repair-decision-dates-plan.db.test.ts`
+ * proves the agreement executably rather than by inspection.
+ *
+ * The ceiling is expressed as the first excluded day (1 January of
+ * `currentYear + yearsAhead + 1`) rather than a year comparison, so the
+ * predicate stays a pair of range scans over `case_law_decisions_date_idx`
+ * instead of a sequential scan behind `extract(...)`.
+ *
+ * `now()` is read in UTC to match the guard's `getUTCFullYear()`: a session
+ * time zone must not decide whether a stored date is corrupt.
+ *
+ * Written with `sql.raw` for the two integers so the fragment is literal SQL
+ * with no bind parameters, which is what lets the same text be reused verbatim
+ * in DDL (a CHECK constraint takes no parameters). The values are integers from
+ * an `as const` declaration, never input.
+ */
+export const decisionDateOutOfBoundsSql = (column: SQL): SQL => sql`(
+  ${column} < make_date(${sql.raw(String(DECISION_YEAR_BOUNDS.min))}, 1, 1)
+  OR ${column} >= make_date(
+       extract(year from (now() AT TIME ZONE 'UTC'))::int
+         + ${sql.raw(String(DECISION_YEAR_BOUNDS.yearsAhead + 1))},
+       1, 1)
+)`;
+
+const OUT_OF_BOUNDS = decisionDateOutOfBoundsSql(sql.raw("d.decision_date"));
+
+/**
+ * How many out-of-bounds dates each source holds, and the range they span.
+ *
+ * Bounded by `limit` like any other read: the source registry is small, but a
+ * survey that silently truncates is worse than one that says it did, and the
+ * script reports a full result set as suspect.
+ */
+export const decisionDateSourceSurveyStatement = (limit: number): SQL => sql`
+  SELECT s.adapter_key AS "adapterKey",
+         count(*)::int AS "rows",
+         min(d.decision_date)::text AS "minDate",
+         max(d.decision_date)::text AS "maxDate"
+    FROM case_law_decisions d
+    JOIN case_law_sources s ON s.id = d.source_id
+   WHERE ${OUT_OF_BOUNDS}
+   GROUP BY 1
+   ORDER BY 2 DESC, 1
+   LIMIT ${limit}
+`;
+
+/**
+ * The same population by source and year. The year is what identifies the
+ * fault: a run of rows sharing one impossible year is a publisher's repeated
+ * data-entry error, while a scatter of unrelated years is a parse fallback.
+ */
+export const decisionDateYearSurveyStatement = (limit: number): SQL => sql`
+  SELECT s.adapter_key AS "adapterKey",
+         extract(year from d.decision_date)::int AS "year",
+         count(*)::int AS "rows"
+    FROM case_law_decisions d
+    JOIN case_law_sources s ON s.id = d.source_id
+   WHERE ${OUT_OF_BOUNDS}
+   GROUP BY 1, 2
+   ORDER BY 3 DESC, 1, 2
+   LIMIT ${limit}
+`;
+
+/**
+ * One bounded batch of corrupt rows, with the only cheap re-derivation source
+ * the row itself carries.
+ *
+ * `metadata->>'decisionDate'` is the key every adapter that stores a date in
+ * metadata uses (`at-courts` stores none). It is read so the run can *prove*
+ * per row whether a better value survives rather than assume it does not: the
+ * adapters that normalize the date write the normalized value into metadata,
+ * and `cz-regional`, whose rows dominate this population, copies the
+ * publisher's string into both places unchanged. The dry-run report prints the
+ * re-derived count, so a source that does keep a usable raw value shows up as a
+ * number instead of being silently nulled.
+ *
+ * `sourceRaw` is deliberately not consulted. It lives in object storage
+ * (`source_raw_s3_key`), so reading it is a network round-trip per row, and it
+ * holds the same publisher payload the corrupt value was taken from — the cost
+ * buys a copy of what metadata already showed.
+ */
+export const selectCorruptDecisionDatesStatement = (limit: number): SQL => sql`
+  SELECT d.id AS "id",
+         s.adapter_key AS "adapterKey",
+         d.decision_date::text AS "storedDate",
+         d.metadata->>'decisionDate' AS "metadataDate",
+         d.citation_key AS "citationKey",
+         d.country AS "country"
+    FROM case_law_decisions d
+    JOIN case_law_sources s ON s.id = d.source_id
+   WHERE ${OUT_OF_BOUNDS}
+   ORDER BY d.id
+   LIMIT ${limit}
+`;
+
+/** One corrupt row as `selectCorruptDecisionDatesStatement` returns it. */
+export type CorruptDecisionDateRow = {
+  adapterKey: string;
+  /** The resolver's key and policy filters, carried so the run can reopen the
+   * edges its date change invalidates without a second read. */
+  citationKey: string | null;
+  country: string;
+  id: SafeId<"caseLawDecision">;
+  metadataDate: string | null;
+  storedDate: string;
+};
+
+const optionalString = (value: unknown): string | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value !== "string") {
+    panic("Corrupt-date selection returned a non-string where text was read");
+  }
+  return value;
+};
+
+const requiredString = (value: unknown): string => {
+  const text = optionalString(value);
+  if (text === null) {
+    panic("Corrupt-date selection returned null in a NOT NULL column");
+  }
+  return text;
+};
+
+/**
+ * One selected row, narrowed.
+ *
+ * `execute` returns untyped rows, and a repair that mis-reads a column would
+ * write a decision made from the wrong field. A shape the query cannot produce
+ * is a programmer error in the statement above it, so it panics rather than
+ * being skipped: a run that quietly dropped rows would report a repair it did
+ * not make.
+ */
+export const parseCorruptDecisionDateRow = (
+  row: unknown,
+): CorruptDecisionDateRow => {
+  if (!isRecord(row)) {
+    panic("Corrupt-date selection returned a non-row");
+  }
+  return {
+    adapterKey: requiredString(row["adapterKey"]),
+    citationKey: optionalString(row["citationKey"]),
+    country: requiredString(row["country"]),
+    id: brandPersistedCaseLawDecisionId(requiredString(row["id"])),
+    metadataDate: optionalString(row["metadataDate"]),
+    storedDate: requiredString(row["storedDate"]),
+  };
+};
+
+export const DECISION_DATE_REPAIR_OUTCOMES = {
+  /** Metadata carried a usable date the stored column had lost. */
+  REDERIVED: "rederived",
+  /** No source in the row survives; the column is set to NULL. */
+  CLEARED: "cleared",
+} as const;
+
+export type DecisionDateRepairOutcome =
+  (typeof DECISION_DATE_REPAIR_OUTCOMES)[keyof typeof DECISION_DATE_REPAIR_OUTCOMES];
+
+export type DecisionDateRepair = {
+  id: SafeId<"caseLawDecision">;
+  /** The re-derived date, or `null` where none survives. */
+  decisionDate: string | null;
+  outcome: DecisionDateRepairOutcome;
+};
+
+/**
+ * What one corrupt row becomes.
+ *
+ * Re-derivation runs the row's own metadata date through the same
+ * `canonicalDecisionDate` the ingest writes through, so a value this accepts is
+ * a value the write path would have stored. Nothing else in the row is
+ * consulted: `metadata.publishedDate` is when the court published the document,
+ * not when it decided the case, and substituting it would replace a visibly
+ * wrong date with a plausibly wrong one.
+ *
+ * Everything else is cleared. Nulling is the designed fallback, not a
+ * concession: the column is nullable, every reader already renders a decision
+ * with no date, and an absent date is a fact a search facet, a sort, and a
+ * citation can all handle correctly, while a year of 1168 is one none of them
+ * can.
+ */
+export const decideDecisionDateRepair = ({
+  id,
+  metadataDate,
+}: CorruptDecisionDateRow): DecisionDateRepair => {
+  const rederived =
+    metadataDate === null ? null : canonicalDecisionDate(metadataDate);
+  if (rederived === null) {
+    return {
+      id,
+      decisionDate: null,
+      outcome: DECISION_DATE_REPAIR_OUTCOMES.CLEARED,
+    };
+  }
+  return {
+    id,
+    decisionDate: rederived,
+    outcome: DECISION_DATE_REPAIR_OUTCOMES.REDERIVED,
+  };
+};
+
+/**
+ * Write one batch of decided repairs.
+ *
+ * Every decision leaves the selection predicate, because both outcomes are
+ * values the predicate does not match: the batch walk converges on an empty
+ * batch without a cursor, and a keyset cursor over a self-consuming predicate
+ * would only add a way to skip rows.
+ *
+ * `indexed_hash` is cleared in the same statement. The search projection
+ * carries `decision_date` and its derived year, but `content_hash` covers only
+ * the text payload, so a date-only change is invisible to the
+ * `indexed_hash IS DISTINCT FROM content_hash` staleness test and the index
+ * would keep serving the corrupt year forever. The projection trigger fires on
+ * `indexed_hash` being assigned rather than on its value changing, which is the
+ * same mechanism the ingestion pipeline uses for its own metadata-only updates.
+ *
+ * The predicate is re-checked here, against the row as it stands now rather
+ * than as the selection read it: the crawl keeps running, and a decision it
+ * re-observed in between already carries whatever date the write-path guard
+ * allowed. Overwriting that with this run's decision would undo a repair with
+ * a stale one. The returned ids are therefore the rows actually changed, which
+ * is also what the citation graph has to be told about.
+ */
+export const applyDecisionDateRepairsStatement = (
+  repairs: readonly DecisionDateRepair[],
+): SQL => {
+  if (repairs.length === 0) {
+    panic("applyDecisionDateRepairsStatement called with no repairs");
+  }
+  // Cast every VALUES row rather than only the first: PostgreSQL infers the
+  // column types from the first row, and a batch whose first date is NULL
+  // would otherwise resolve to `text` and fail the assignment.
+  const rows = repairs.map(
+    ({ decisionDate, id }) => sql`(${id}::uuid, ${decisionDate}::date)`,
+  );
+  return sql`
+    UPDATE case_law_decisions AS d
+       SET decision_date = v.decision_date,
+           indexed_hash = NULL
+      FROM (VALUES ${sql.join(rows, sql`, `)}) AS v(id, decision_date)
+     WHERE d.id = v.id
+       AND ${decisionDateOutOfBoundsSql(sql.raw("d.decision_date"))}
+    RETURNING d.id
+  `;
+};
