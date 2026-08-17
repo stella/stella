@@ -10,6 +10,7 @@ import { corpusDocumentDeleteQuery } from "@/api/lib/corpus-index/core";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import {
+  caseLawIndexConfig,
   DECISION_TIMESTAMP_FIELD,
   UNDATED_DECISION_TIMESTAMP,
 } from "@/api/lib/legal-search/corpus-index-config";
@@ -19,29 +20,35 @@ type MakeRowOptions = {
   id: string;
   contentHash: string;
   textS3Key?: string | null;
+  astS3Key?: string | null;
   decisionDate?: string | null;
+  decisionType?: string | null;
+  ecli?: string | null;
 };
 
 const makeRow = ({
   id,
   contentHash,
   textS3Key,
+  astS3Key = null,
   decisionDate = "2024-01-01",
+  decisionType = null,
+  ecli = null,
 }: MakeRowOptions) => ({
   id: toSafeId<"caseLawDecision">(id),
   sourceId: toSafeId<"caseLawSource">("src_1"),
   caseNumber: `case-${id}`,
-  ecli: null,
+  ecli,
   court: "Test Court",
   country: "CZ",
   language: "cs",
   decisionDate,
-  decisionType: null,
+  decisionType,
   citationAuthority: 0,
   citationCount: 0,
   textS3Key:
     textS3Key === undefined ? `legal-corpus/${id}/text.zst` : textS3Key,
-  astS3Key: null,
+  astS3Key,
   contentHash,
   indexedHash: null,
   indexedGeneration: null,
@@ -309,6 +316,73 @@ describe("case-law passage projection", () => {
       expect(doc["decision_date"]).toBeUndefined();
       expect(doc["year"]).toBeUndefined();
     }
+  });
+
+  test("every field the projection writes is one the doc mapping declares", async () => {
+    // A generation created from the current config maps in `strict` mode: a
+    // document carrying a field the mapping does not declare is rejected at
+    // ingest. This is the guard for that — the writer and the mapping are two
+    // halves of one shape, and the half that fails is the one nothing checks.
+    const rows = [
+      makeRow({
+        id: "dec_full",
+        contentHash: "hash_full",
+        astS3Key: "legal-corpus/dec_full/ast.zst",
+        decisionType: "rozsudek",
+        ecli: "ECLI:CZ:NS:2024:1.T.1.2024.1",
+      }),
+      makeRow({
+        id: "dec_sparse",
+        contentHash: "hash_sparse",
+        decisionDate: null,
+        textS3Key: null,
+      }),
+    ];
+
+    const { built } = await loadDocsForBatch(rows, {
+      generation: "case_law_v3",
+      fetchFulltext: async () => "slovo ".repeat(400),
+      readPayload: async (row) => ({
+        text: `${"slovo ".repeat(400)}\n\n${"jinak ".repeat(400)}`,
+        // The anchored layout on one row and the unanchored fallback on the
+        // other, so both passage shapes are in the assertion's input.
+        ast:
+          row.id === rows.at(0)?.id
+            ? astOf([heading(0, "Odůvodnění"), paragraph(1, 200)])
+            : {},
+      }),
+    });
+
+    const docs = built.flatMap((entry) => entry.docs);
+    const emitted = new Set(docs.flatMap((doc) => Object.keys(doc)));
+    const mapped = new Set(
+      caseLawIndexConfig("case_law_v3_cze").doc_mapping.field_mappings.map(
+        (field) => field.name,
+      ),
+    );
+    expect([...emitted].filter((name) => !mapped.has(name)).sort()).toEqual([]);
+
+    // The fixtures have to reach the conditional fields, or the assertion is
+    // over a shape narrower than the writer's: the rich row carries every
+    // optional field, the sparse one carries none of them, and both layouts of
+    // a passage (opening, continuation) appear.
+    for (const field of [
+      "anchor_id",
+      "canonical_ast_key",
+      "canonical_text_key",
+      "case_number",
+      "decision_date",
+      "document_type",
+      "ecli",
+      "title",
+      "year",
+      DECISION_TIMESTAMP_FIELD,
+    ]) {
+      expect(emitted.has(field)).toBe(true);
+    }
+    expect(
+      docs.filter((doc) => doc["title"] === undefined).length,
+    ).toBeGreaterThan(0);
   });
 
   test("a row with no usable AST still emits passages, unanchored", async () => {

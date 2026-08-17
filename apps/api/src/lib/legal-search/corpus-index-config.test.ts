@@ -22,13 +22,54 @@ test("searchable text fields enable fieldnorms so BM25 scoring works", () => {
   expect(fields.get("title")?.fieldnorms).toBe(true);
 });
 
-test("jurisdiction/document_type/source/court are tag fields for split pruning", () => {
+test("case-law tag fields are the filters a query prunes splits by", () => {
   expect(caseLawIndexConfig("case_law_v1").doc_mapping.tag_fields).toEqual([
     "jurisdiction",
     "document_type",
     "source",
     "court",
+    "language",
   ]);
+});
+
+// The engine never diffs an existing index, so a mode change reaches documents
+// only through a generation created from this config; an existing generation
+// keeps the mode it was made with.
+//
+// `strict` costs the whole document when a field is undeclared, and says so
+// only in the engine's log, so a family may only take it where something
+// counts the documents that should be there. Case law has the rebuild census;
+// legislation does not, and stays lenient until it does.
+test("only a family with a census maps in strict mode", () => {
+  expect(caseLawIndexConfig("case_law_v3_cze").doc_mapping.mode).toBe("strict");
+  expect(
+    corpusIndexConfig("legislation", "legislation_v2_svk").doc_mapping.mode,
+  ).toBe("lenient");
+});
+
+test("the docket is its own raw field, reachable only by an exact query", () => {
+  const config = caseLawIndexConfig("case_law_v3_cze");
+  const caseNumber = config.doc_mapping.field_mappings.find(
+    (field) => field.name === "case_number",
+  );
+  expect(caseNumber).toEqual({
+    name: "case_number",
+    type: "text",
+    tokenizer: "raw",
+  });
+  // Raw and not a default search field: a docket answers `case_number:"..."`,
+  // and no free-text term reaches it. It repeats across a decision's passages,
+  // which is the fan-out rule that keeps it out of the default fields.
+  expect(config.search_settings.default_search_fields).not.toContain(
+    "case_number",
+  );
+  // Case law only: legislation identifies a document by ELI.
+  expect(
+    corpusIndexConfig(
+      "legislation",
+      "legislation_v2_svk",
+    ).doc_mapping.field_mappings.some((field) => field.name === "case_number"),
+  ).toBe(false);
 });
 
 /**

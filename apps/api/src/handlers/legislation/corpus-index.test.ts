@@ -4,30 +4,41 @@ import { loadDocsForBatch } from "@/api/handlers/legislation/corpus-index";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import { corpusIndexConfig } from "@/api/lib/legal-search/corpus-index-config";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 
 type MakeRowOptions = {
   id: string;
   contentHash: string;
   textS3Key?: string | null;
+  astS3Key?: string | null;
+  documentType?: string | null;
+  effectiveDate?: string | null;
 };
 
-const makeRow = ({ id, contentHash, textS3Key }: MakeRowOptions) => ({
+const makeRow = ({
+  id,
+  contentHash,
+  textS3Key,
+  astS3Key = null,
+  documentType = null,
+  effectiveDate = "2024-01-01",
+}: MakeRowOptions) => ({
   id: toSafeId<"legislationDocument">(id),
   sourceId: toSafeId<"legislationSource">("src_1"),
   eli: `/eli/cz/act/2024/${id}`,
   title: `Act ${id}`,
   country: "CZ",
   language: "cs",
-  documentType: null,
+  documentType,
   status: "in_force",
-  effectiveDate: "2024-01-01",
-  versionValidFrom: null,
+  effectiveDate,
+  versionValidFrom: "2024-02-02",
   citationAuthority: 0,
   citationCount: 0,
   textS3Key:
     textS3Key === undefined ? `legal-corpus/${id}/text.zst` : textS3Key,
-  astS3Key: null,
+  astS3Key,
   contentHash,
   indexedHash: null,
   indexedGeneration: null,
@@ -102,5 +113,56 @@ describe("legislation loadDocsForBatch read-failure isolation", () => {
     expect(built.at(0)?.docs.at(0)?.["text"]).toBe("stored fulltext");
     // The lazy fallback runs only for the S3-less row, keyed by its id.
     expect(fetchedIds).toEqual([legacyRow.id]);
+  });
+
+  test("every field the projection writes is one the doc mapping declares", async () => {
+    // A generation created from the current config maps in `strict` mode: a
+    // document carrying a field the mapping does not declare is rejected at
+    // ingest. The writer and the mapping are two halves of one shape, and this
+    // is the half nothing else checks.
+    const rows = [
+      makeRow({
+        id: "leg_full",
+        astS3Key: "legal-corpus/leg_full/ast.zst",
+        contentHash: "hash_full",
+        documentType: "zákon",
+      }),
+      makeRow({
+        id: "leg_sparse",
+        contentHash: "hash_sparse",
+        effectiveDate: null,
+        textS3Key: null,
+      }),
+    ];
+
+    const { built } = await loadDocsForBatch(rows, {
+      generation: "legislation_v2",
+      fetchFulltext: async () => "stored fulltext",
+      readPayload: async () => ({ text: "text", ast: null }),
+    });
+
+    const docs = built.flatMap((entry) => entry.docs);
+    const emitted = new Set(docs.flatMap((doc) => Object.keys(doc)));
+    const mapped = new Set(
+      corpusIndexConfig(
+        "legislation",
+        "legislation_v2_svk",
+      ).doc_mapping.field_mappings.map((field) => field.name),
+    );
+    expect([...emitted].filter((name) => !mapped.has(name)).sort()).toEqual([]);
+
+    // The fixtures reach the conditional fields, so the assertion is over the
+    // writer's whole shape rather than its required half.
+    for (const field of [
+      "canonical_ast_key",
+      "canonical_text_key",
+      "document_type",
+      "effective_date",
+      "eli",
+      "status",
+      "year",
+    ]) {
+      expect(emitted.has(field)).toBe(true);
+    }
   });
 });
