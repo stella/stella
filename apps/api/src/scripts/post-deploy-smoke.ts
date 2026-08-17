@@ -38,6 +38,15 @@ const SMOKE_SESSION_TIMEOUT_MS = 15_000;
 const READ_CHECK_TIMEOUT_MS = 15_000;
 const CHAT_SEND_TIMEOUT_MS = 60_000;
 const REVISION_READINESS_TIMEOUT_MS = 600_000;
+
+// Optional edge access header, sent on every request when the deployed
+// environment's edge expects one. Absent env keeps this a no-op.
+const EDGE_HEADER_NAME = process.env["E2E_EDGE_HEADER_NAME"] ?? "";
+const EDGE_HEADER_VALUE = process.env["E2E_EDGE_HEADER_VALUE"] ?? "";
+const EDGE_HEADERS: Record<string, string> =
+  EDGE_HEADER_NAME && EDGE_HEADER_VALUE
+    ? { [EDGE_HEADER_NAME]: EDGE_HEADER_VALUE }
+    : {};
 const REVISION_READINESS_INTERVAL_MS = 5000;
 const REVISION_READINESS_LOG_INTERVAL_MS = 30_000;
 const REVISION_READINESS_STABLE_SAMPLES = 3;
@@ -357,7 +366,7 @@ const mintSmokeSession = async (
 ): Promise<SmokeSession> => {
   const response = await fetchWithTimeout(`${baseUrl}/smoke/session`, {
     method: "POST",
-    headers: { "x-smoke-secret": secret },
+    headers: { "x-smoke-secret": secret, ...EDGE_HEADERS },
     timeoutMs: SMOKE_SESSION_TIMEOUT_MS,
   });
   const evaluated = evaluateHttpCheck({
@@ -382,7 +391,7 @@ const readAuthenticated = async (
   cookie: string,
 ): Promise<EvaluatedCheck> => {
   const response = await fetchWithTimeout(`${baseUrl}${path}`, {
-    headers: { cookie },
+    headers: { cookie, ...EDGE_HEADERS },
     timeoutMs: READ_CHECK_TIMEOUT_MS,
   });
   return evaluateHttpCheck({
@@ -394,6 +403,7 @@ const readAuthenticated = async (
 
 const readHealth = async (baseUrl: string): Promise<EvaluatedCheck> => {
   const response = await fetchWithTimeout(`${baseUrl}/health`, {
+    headers: EDGE_HEADERS,
     timeoutMs: READ_CHECK_TIMEOUT_MS,
   });
   return evaluateHealthRevision({
@@ -566,6 +576,7 @@ const sendChat = async (
     headers: {
       cookie,
       "content-type": "application/json",
+      ...EDGE_HEADERS,
     },
     body: JSON.stringify(buildChatSmokeBody()),
     timeoutMs: CHAT_SEND_TIMEOUT_MS,

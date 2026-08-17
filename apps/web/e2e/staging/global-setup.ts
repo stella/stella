@@ -1,7 +1,10 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-import { STAGING_STORAGE_STATE } from "../playwright.staging.config";
+import {
+  EDGE_HEADERS,
+  STAGING_STORAGE_STATE,
+} from "../playwright.staging.config";
 
 type SmokeSession = {
   cookieName: string;
@@ -66,7 +69,10 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
 
 const fetchCommit = async (url: string): Promise<VersionProbe> => {
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+    const response = await fetch(url, {
+      headers: EDGE_HEADERS,
+      signal: AbortSignal.timeout(10_000),
+    });
     if (response.status === 404) {
       return { type: "missing-marker" };
     }
@@ -241,7 +247,7 @@ const globalSetup = async (): Promise<void> => {
 
   const response = await fetch(`${API_URL}/smoke/session`, {
     method: "POST",
-    headers: { "x-smoke-secret": secret },
+    headers: { "x-smoke-secret": secret, ...EDGE_HEADERS },
     signal: AbortSignal.timeout(15_000),
   });
   if (!response.ok) {
