@@ -1077,6 +1077,14 @@ const backfillIncrementalCorpusIndex = async (
  * page stays a single index range. Undated decisions sort first, which is
  * where the documents written for them belong — they carry the earliest
  * timestamp the mapping can hold.
+ *
+ * What this orders is the snapshot walk, which is the whole corpus. It does
+ * not order the pending queue: that drains before each page, in decision-id
+ * order, and its documents carry whatever dates live traffic corrected or
+ * ingested. Those widen the split they land in, bounded by the commit that
+ * publishes them. Holding them back until the rebuild finished is the wedge
+ * the drain exists to prevent, so the banding is a property of the rebuild's
+ * own pages, not of every document the generation ever receives.
  */
 const NEGATIVE_INFINITY_DATE = "-infinity";
 

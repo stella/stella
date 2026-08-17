@@ -11,6 +11,21 @@ SET statement_timeout = '5s';--> statement-breakpoint
 -- `(created_at, id)`, with undated decisions coalesced to `-infinity` so they
 -- form the first band and one row comparison expresses the whole cursor.
 
+-- The two orders cannot share one cursor slot, so this refuses to apply while
+-- a rebuild is in flight rather than reasoning about which release's worker
+-- wrote the position it finds. A release that stops here is recoverable: let
+-- the rebuild finish, or clear its checkpoint, and deploy again.
+DO $precondition$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM "case_law_corpus_index_backfills" WHERE "status" <> 'complete'
+  ) THEN
+    RAISE EXCEPTION
+      'corpus-index generation rebuild in flight; apply this migration between rebuilds';
+  END IF;
+END
+$precondition$;--> statement-breakpoint
+
 ALTER TABLE "case_law_corpus_index_backfills"
   ADD COLUMN "cursor_walk_date" date;--> statement-breakpoint
 

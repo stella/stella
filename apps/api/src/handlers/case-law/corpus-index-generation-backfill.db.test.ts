@@ -36,15 +36,35 @@ const generationMigrationSource = new URL(
   "../../../drizzle/20260731170000_case_law_corpus_generation_backfill/migration.sql",
   import.meta.url,
 );
+const PROJECTION_TRIGGER_FUNCTION =
+  "CREATE OR REPLACE FUNCTION enqueue_case_law_corpus_index_projection()";
+
 /**
  * The projection trigger's current definition. `db:push` builds the test
  * database from the schema, which carries no triggers, so a test that needs
- * one installs it from the migration that last defined it.
+ * one installs it from a migration. Which migration is derived, not named:
+ * migrations apply in directory order, so the last one that redefines the
+ * function is the definition a database ends up with, and a later migration
+ * replacing it moves this with it.
  */
-const projectionTriggerSource = new URL(
-  "../../../drizzle/20260817150000_corpus_generation_date_walk/migration.sql",
-  import.meta.url,
-);
+const latestProjectionTriggerMigration = async (): Promise<string> => {
+  const drizzleDir = new URL("../../../drizzle/", import.meta.url);
+  const migrations = [
+    ...new Bun.Glob("*/migration.sql").scanSync(Bun.fileURLToPath(drizzleDir)),
+  ].sort();
+  let latest: string | undefined;
+  for (const migration of migrations) {
+    // oxlint-disable-next-line no-await-in-loop -- ordered scan over a directory listing
+    const source = await Bun.file(new URL(migration, drizzleDir)).text();
+    if (source.includes(PROJECTION_TRIGGER_FUNCTION)) {
+      latest = source;
+    }
+  }
+  if (latest === undefined) {
+    throw new Error("no migration defines the corpus projection trigger");
+  }
+  return latest;
+};
 const CREATED_AT = new Date("2026-07-30T12:00:00.000Z");
 const GENERATION = "case_law_v2";
 /**
@@ -219,15 +239,16 @@ const completeRemoteEffect = async (): Promise<void> => {
  * against the deployed definition rather than a paraphrase of it.
  */
 const installProjectionTrigger = async (): Promise<void> => {
-  const migration = await Bun.file(projectionTriggerSource).text();
-  const triggerStart = migration.indexOf(
-    "CREATE OR REPLACE FUNCTION enqueue_case_law_corpus_index_projection()",
+  const migration = await latestProjectionTriggerMigration();
+  const triggerStart = migration.indexOf(PROJECTION_TRIGGER_FUNCTION);
+  const triggerEnd = migration.indexOf(
+    "CREATE TRIGGER case_law_decisions_enqueue_corpus_index_projection",
   );
-  const triggerEnd = migration.indexOf("-- Drizzle wraps pending migrations");
   expect(triggerStart).toBeGreaterThanOrEqual(0);
   expect(triggerEnd).toBeGreaterThan(triggerStart);
+  const createTriggerEnd = migration.indexOf(";", triggerEnd);
   const statements = migration
-    .slice(triggerStart, triggerEnd)
+    .slice(triggerStart, createTriggerEnd + 1)
     .split("--> statement-breakpoint")
     .map((statement) => statement.trim())
     .filter((statement) => statement.length > 0);
