@@ -4073,7 +4073,10 @@ type Messages = {
           "automation": "automation";
           "court": "court record";
           "document": "document";
+          "folder": "folder";
+          "link": "link";
           "matter": "matter";
+          "message": "message";
           "task": "agenda item";
           "team": "matter team";
         };

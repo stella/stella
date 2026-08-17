@@ -7,17 +7,19 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { auditLogs } from "@/api/db/schema";
+import { auditLogs, entities } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
   createBackgroundAuditRecorder,
+  type FieldDiffs,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -44,8 +46,13 @@ let activityInSiblingMatter: SafeId<"auditLog">;
 let activityInOtherOrganization: SafeId<"auditLog">;
 
 type SeedActivityOptions = {
-  action?: typeof AUDIT_ACTION.CREATE | typeof AUDIT_ACTION.UPDATE;
+  action?:
+    | typeof AUDIT_ACTION.CREATE
+    | typeof AUDIT_ACTION.UPDATE
+    | typeof AUDIT_ACTION.DELETE;
+  changes?: FieldDiffs;
   organizationId: SafeId<"organization">;
+  resourceId?: string;
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
 };
@@ -53,11 +60,12 @@ type SeedActivityOptions = {
 /** Write one document-category entry through the canonical recorder. */
 const seedActivity = async ({
   action = AUDIT_ACTION.UPDATE,
+  changes,
   organizationId,
+  resourceId = Bun.randomUUIDv7(),
   workspaceId,
   userId,
 }: SeedActivityOptions): Promise<SafeId<"auditLog">> => {
-  const resourceId = Bun.randomUUIDv7();
   const recorder = createBackgroundAuditRecorder({
     organizationId,
     workspaceId,
@@ -71,12 +79,15 @@ const seedActivity = async ({
     action,
     resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
     resourceId,
+    ...(changes && { changes }),
   });
 
   const written = await testDb
     .select({ id: auditLogs.id })
     .from(auditLogs)
-    .where(eq(auditLogs.resourceId, resourceId));
+    .where(
+      and(eq(auditLogs.resourceId, resourceId), eq(auditLogs.action, action)),
+    );
   const id = written.at(0)?.id;
   if (id === undefined) {
     panic("activity fixture wrote no row");
@@ -127,6 +138,7 @@ type ActivityPerformer = {
 type ActivityItem = {
   id: SafeId<"auditLog">;
   performer: ActivityPerformer;
+  target: { deleted: boolean; kind: string; name: string | null };
 };
 
 beforeAll(async () => {
@@ -291,6 +303,54 @@ describe("matter overview activity", () => {
       "text/csv; charset=utf-8",
     );
     expect(await csvResponse.text()).toContain('"\t=2+2"');
+  });
+
+  test("a folder create surfaces the folder kind, not a document", async () => {
+    const folderId = toSafeId<"entity">(Bun.randomUUIDv7());
+    await testDb.insert(entities).values({
+      id: folderId,
+      workspaceId: ids.wsA1,
+      kind: "folder",
+      name: "Pleadings",
+    });
+
+    try {
+      const folderCreateId = await seedActivity({
+        action: AUDIT_ACTION.CREATE,
+        organizationId: ids.orgA,
+        resourceId: folderId,
+        workspaceId: ids.wsA1,
+        userId: ids.userA1,
+      });
+      const items = await readActivityOfWorkspaceA1();
+
+      expect(
+        items.find((activityItem) => activityItem.id === folderCreateId)
+          ?.target,
+      ).toMatchObject({ kind: "folder", name: "Pleadings" });
+    } finally {
+      await testDb.delete(entities).where(eq(entities.id, folderId));
+    }
+  });
+
+  test("a deleted folder keeps its kind via the audit snapshot", async () => {
+    const folderId = Bun.randomUUIDv7();
+    const folderDeleteId = await seedActivity({
+      action: AUDIT_ACTION.DELETE,
+      changes: {
+        deleted: { old: { kind: "folder", name: "Pleadings" }, new: null },
+      },
+      organizationId: ids.orgA,
+      resourceId: folderId,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+    });
+
+    const items = await readActivityOfWorkspaceA1();
+
+    expect(
+      items.find((activityItem) => activityItem.id === folderDeleteId)?.target,
+    ).toMatchObject({ deleted: true, kind: "folder", name: "Pleadings" });
   });
 
   test("pages historical performers from authorized activity, not current matter membership", async () => {

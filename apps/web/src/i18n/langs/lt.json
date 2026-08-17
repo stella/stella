@@ -4070,7 +4070,10 @@
           "automation": "automatizavimas",
           "court": "teismo įrašas",
           "document": "dokumentas",
+          "folder": "aplankas",
+          "link": "nuoroda",
           "matter": "byla",
+          "message": "žinutė",
           "task": "darbotvarkės elementas",
           "team": "bylos komanda"
         },

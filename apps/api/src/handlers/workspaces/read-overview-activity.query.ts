@@ -16,6 +16,7 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
+import { isEntityKind } from "@stll/api-contract";
 import type {
   MatterActivityAction,
   MatterActivityCategory,
@@ -334,6 +335,13 @@ const legacyWorkspaceTeamEvent = () =>
     OR ${auditLogs.changes} ? 'membersRemoved'
   )`;
 
+// True when the audit row's only recorded change is the name, so the client
+// can distinguish a rename from other updates (a move records `parentId`).
+const renameOnlyChange = () => sql<boolean>`coalesce((
+  ${auditLogs.changes} ? 'name'
+  and (select count(*) = 1 from jsonb_object_keys(${auditLogs.changes}))
+), false)`;
+
 const teamContactIdSnapshot = () => sql<string | null>`case
   when ${auditLogs.resourceType} = ${AUDIT_RESOURCE_TYPE.WORKSPACE_CONTACT}
     then coalesce(
@@ -467,15 +475,19 @@ type ActivityTarget = {
   entityId: string | null;
   fieldId: string | null;
   id: string;
-  kind: "document" | "task" | "matter" | "team" | "court" | "automation";
+  kind: EntityTargetKind | "matter" | "team" | "court" | "automation";
   mimeType: string | null;
   name: string | null;
   pdfFileId: string | null;
   propertyId: string | null;
 };
 
+// Derived from the entities column enum (itself from ENTITY_KINDS), so the
+// activity contract cannot drift from the persisted kind set.
+type EntityTargetKind = (typeof entities.$inferSelect)["kind"];
+
 type EntityTarget = Omit<ActivityTarget, "kind"> & {
-  kind: "document" | "task";
+  kind: EntityTargetKind;
 };
 
 type ActivityUser = {
@@ -501,6 +513,8 @@ export type MatterActivityItem = {
         name: string | null;
         type: Exclude<(typeof auditLogs.$inferSelect)["performerType"], "user">;
       };
+  /** The event's only recorded change is the target's name. */
+  renameOnly: boolean;
   runId: string | null;
   target: ActivityTarget;
   trigger: {
@@ -664,6 +678,7 @@ export const readOverviewActivityPage = async ({
             resourceId: auditLogs.resourceId,
             resourceType: auditLogs.resourceType,
             relationshipChange: auditRelationshipChangeSql(auditLogs),
+            renameOnly: renameOnlyChange(),
             runId: auditLogs.runId,
             triggerSource: auditLogs.triggerSource,
             triggerType: auditLogs.triggerType,
@@ -902,6 +917,7 @@ export const readOverviewActivityPage = async ({
           category,
           id: row.id,
           performer,
+          renameOnly: row.renameOnly,
           runId: resolveActivityRunId({
             resourceId: row.resourceId,
             resourceType: row.resourceType,
@@ -911,6 +927,7 @@ export const readOverviewActivityPage = async ({
             category,
             entityMap,
             entityIdSnapshot: row.entityIdSnapshot,
+            entityKindSnapshot: row.legacyKind,
             entityNameSnapshot: row.entityNameSnapshot,
             fieldVersionMap,
             matterColor: result.workspace?.color ?? null,
@@ -963,7 +980,7 @@ const toEntityTarget = (entity: EntityRow): EntityTarget => {
     entityId: entity.id,
     fieldId: file?.id ?? null,
     id: entity.id,
-    kind: entity.kind === "task" ? "task" : "document",
+    kind: entity.kind,
     mimeType: file?.mimeType ?? null,
     name: file?.fileName ?? entity.name,
     pdfFileId: file?.pdfFileId ?? null,
@@ -975,6 +992,7 @@ type TargetForRowOptions = {
   category: ActivityCategory;
   entityMap: Map<string, EntityTarget>;
   entityIdSnapshot: string | null;
+  entityKindSnapshot: string | null;
   entityNameSnapshot: string | null;
   fieldVersionMap: Map<string, string>;
   matterColor: string | null;
@@ -989,6 +1007,7 @@ const targetForRow = ({
   category,
   entityMap,
   entityIdSnapshot,
+  entityKindSnapshot,
   entityNameSnapshot,
   fieldVersionMap,
   matterColor,
@@ -1004,6 +1023,7 @@ const targetForRow = ({
       deletedEntityTarget({
         category,
         id: resourceId,
+        kindSnapshot: entityKindSnapshot,
         name: entityNameSnapshot,
       })
     );
@@ -1016,6 +1036,7 @@ const targetForRow = ({
         deletedEntityTarget({
           category,
           id: entityId,
+          kindSnapshot: entityKindSnapshot,
           name: entityNameSnapshot,
         })
       );
@@ -1032,6 +1053,7 @@ const targetForRow = ({
         deletedEntityTarget({
           category,
           id: entityId,
+          kindSnapshot: entityKindSnapshot,
           name: entityNameSnapshot,
         })
       );
@@ -1086,12 +1108,25 @@ const targetForRow = ({
 type DeletedEntityTargetOptions = {
   category?: ActivityCategory;
   id: string;
+  /** Kind recorded in the audit snapshot; the entity row itself is gone. */
+  kindSnapshot?: string | null;
   name?: string | null;
+};
+
+const deletedEntityKind = (
+  category: ActivityCategory,
+  kindSnapshot: string | null,
+): EntityTargetKind => {
+  if (isEntityKind(kindSnapshot)) {
+    return kindSnapshot;
+  }
+  return category === "tasks" ? "task" : "document";
 };
 
 const deletedEntityTarget = ({
   category = "documents",
   id,
+  kindSnapshot = null,
   name = null,
 }: DeletedEntityTargetOptions): EntityTarget => ({
   color: null,
@@ -1100,7 +1135,7 @@ const deletedEntityTarget = ({
   entityId: null,
   fieldId: null,
   id,
-  kind: category === "tasks" ? "task" : "document",
+  kind: deletedEntityKind(category, kindSnapshot),
   mimeType: null,
   name,
   pdfFileId: null,
@@ -1116,7 +1151,7 @@ const documentTarget = (id: string): EntityTarget => ({
 type GenericTargetOptions = {
   color: string | null;
   id: string;
-  kind: Exclude<ActivityTarget["kind"], "document" | "task">;
+  kind: Exclude<ActivityTarget["kind"], EntityTarget["kind"]>;
   name: string | null;
 };
 

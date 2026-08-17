@@ -4070,7 +4070,10 @@
           "automation": "Automatisierung",
           "court": "Gerichtseintrag",
           "document": "Dokument",
+          "folder": "Ordner",
+          "link": "Link",
           "matter": "Akte",
+          "message": "Nachricht",
           "task": "Agendaeintrag",
           "team": "Aktenteam"
         },

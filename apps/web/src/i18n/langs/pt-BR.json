@@ -4070,7 +4070,10 @@
           "automation": "automação",
           "court": "registro judicial",
           "document": "documento",
+          "folder": "pasta",
+          "link": "link",
           "matter": "caso",
+          "message": "mensagem",
           "task": "item de agenda",
           "team": "equipe do caso"
         },

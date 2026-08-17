@@ -4070,7 +4070,10 @@
           "automation": "automatizácia",
           "court": "súdny záznam",
           "document": "dokument",
+          "folder": "priečinok",
+          "link": "odkaz",
           "matter": "spis",
+          "message": "správa",
           "task": "položka agendy",
           "team": "tím spisu"
         },

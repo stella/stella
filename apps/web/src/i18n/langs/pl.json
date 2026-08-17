@@ -4070,7 +4070,10 @@
           "automation": "automatyzacja",
           "court": "wpis sądowy",
           "document": "dokument",
+          "folder": "folder",
+          "link": "link",
           "matter": "sprawa",
+          "message": "wiadomość",
           "task": "element agendy",
           "team": "zespół sprawy"
         },

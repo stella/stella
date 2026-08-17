@@ -4070,7 +4070,10 @@
           "automation": "automatiseerimine",
           "court": "kohtukirje",
           "document": "dokument",
+          "folder": "kaust",
+          "link": "link",
           "matter": "toimik",
+          "message": "sõnum",
           "task": "päevakorrapunkt",
           "team": "toimiku meeskond"
         },

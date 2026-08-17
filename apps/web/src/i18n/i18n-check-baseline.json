@@ -155,7 +155,6 @@
     "knowledge.mcp.tokenHelp",
     "knowledge.playbooks.addOption",
     "knowledge.playbooks.addRule",
-    "knowledge.playbooks.advanced",
     "knowledge.playbooks.approval.approve",
     "knowledge.playbooks.approval.statusApproved",
     "knowledge.playbooks.approval.statusDraft",
@@ -285,7 +284,6 @@
     "workspaces.properties.chipText",
     "workspaces.properties.text",
     "workspaces.team",
-    "workspaces.views.advancedFilter",
     "workspaces.views.fieldsSelected",
     "workspaces.views.layouts.calendar"
   ],
@@ -1003,6 +1001,17 @@
     ],
     "workspaces.lead": [
       "de"
+    ],
+    "workspaces.overview.activity.targets.folder": [
+      "pl"
+    ],
+    "workspaces.overview.activity.targets.link": [
+      "et",
+      "pl",
+      "pt-BR"
+    ],
+    "workspaces.overview.activity.targets.message": [
+      "fr"
     ],
     "workspaces.ownerType.client": [
       "fr"

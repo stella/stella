@@ -4070,7 +4070,10 @@
           "automation": "automatisation",
           "court": "dossier judiciaire",
           "document": "fichier",
+          "folder": "dossier",
+          "link": "lien",
           "matter": "dossier",
+          "message": "message",
           "task": "élément d’agenda",
           "team": "équipe du dossier"
         },
