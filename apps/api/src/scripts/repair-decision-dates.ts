@@ -1,0 +1,417 @@
+/**
+ * Repair `case_law_decisions.decision_date` values no publisher could have
+ * meant.
+ *
+ * Rows written before the ingest bounded the field carry dates a court cannot
+ * have issued: years in the twelfth century, years in the fourth millennium.
+ * They sort, facet and filter as if they were real, and the corpus index seeds
+ * its date field from this column, so every projection built on top of them
+ * inherits the fault.
+ *
+ * **What a repair can recover.** Almost nothing, and the run proves it per row
+ * rather than assuming it. The only cheap alternative source a row carries is
+ * its own `metadata.decisionDate`, which is put through the same
+ * `canonicalDecisionDate` the ingest writes through. For every adapter that
+ * normalizes a date, metadata holds the normalized value, and `cz-regional` —
+ * whose rows are almost all of this population — copies the publisher's string
+ * into the column and into metadata unchanged. `sourceRaw` is not consulted: it
+ * lives in object storage, so reading it costs a network round-trip per row,
+ * and it holds the same publisher payload the corrupt value was taken from.
+ *
+ * **Nulling is the designed outcome, not a concession.** The column is
+ * nullable, readers already render a decision with no date, and an absent date
+ * is something a sort, a facet and the citation resolver can each handle
+ * correctly. A year of 1168 is something none of them can. `metadata.publishedDate`
+ * is deliberately not substituted: publication is not decision, and replacing a
+ * visibly wrong date with a plausibly wrong one is worse than an honest gap.
+ *
+ * **What a date change costs elsewhere.** Two things, both handled per batch:
+ * the search projection is re-enqueued by clearing `indexed_hash` in the same
+ * statement, and the citation graph is told, because the resolver filters
+ * candidates on `decision_date` and treats NULL on either side as permissive.
+ * Edges decided under the old date are retracted and requeued through the same
+ * helpers the ingestion pipeline uses when a stored decision's resolution
+ * identity changes, under the citation-graph lock — and in the pipeline's lock
+ * order, decision rows before the graph, so a refresh of one of these decisions
+ * running at the same time cannot deadlock against the repair.
+ *
+ * **Why the bounds are not a CHECK constraint yet.** They should be, and the
+ * predicate above is written so the same text can become one. It cannot land
+ * before this run has: `ADD CONSTRAINT … NOT VALID` skips the scan of existing
+ * rows but still enforces the constraint on every later INSERT and UPDATE, so
+ * while a corrupt row survives, any unrelated write touching it — a citation
+ * authority refresh, a corpus mirror update, an index hash — fails on a column
+ * it never mentioned. `VALIDATE CONSTRAINT` fails outright. A report-only run
+ * finding zero rows is the precondition; until then the write path's own
+ * `canonicalDecisionDate` is the guard, and `dates.test.ts` pins its bounds.
+ *
+ * Without `--apply` nothing is written and nothing is locked: the run reports
+ * the population per source and per year, then how many of those rows a repair
+ * would re-derive and how many it would clear, and exits. Those last two are
+ * what an operator authorises on, because a cleared row loses its date for
+ * good. Idempotent either way — a repaired row leaves the selection predicate,
+ * so a second pass finds nothing.
+ *
+ *   # what the repair would touch, writing nothing
+ *   bun run src/scripts/repair-decision-dates.ts
+ *
+ *   # repair, bounded and resumable by re-running
+ *   bun run src/scripts/repair-decision-dates.ts --apply [--limit 5000]
+ *
+ * Not a scheduled job: the write path has bounded new dates since the guard
+ * landed, so this is a one-shot operation on the rows that predate it, run by
+ * an operator who reads the report first.
+ */
+
+import { panic } from "better-result";
+
+import { rootDb } from "@/api/db/root";
+import {
+  lockCitationGraph,
+  reopenCitationsForDecisionKey,
+  reopenCitationsForKeys,
+  reopenCitationsFrom,
+  reopenCitationsResolvedTo,
+} from "@/api/handlers/case-law/citation-resolution";
+import { isCaseLawJurisdiction } from "@/api/lib/legal-search/ingestion-constants";
+import { isRecord } from "@/api/lib/type-guards";
+import type {
+  CorruptDecisionDateRow,
+  DecisionDateRepair,
+} from "@/api/scripts/repair-decision-dates-plan";
+import {
+  applyDecisionDateRepairsStatement,
+  DECISION_DATE_REPAIR_OUTCOMES,
+  DECISION_DATE_ROW_LOCKS,
+  decideDecisionDateRepair,
+  decisionDateSourceSurveyStatement,
+  decisionDateYearSurveyStatement,
+  parseCorruptDecisionDateRow,
+  selectCorruptDecisionDatesStatement,
+} from "@/api/scripts/repair-decision-dates-plan";
+
+/**
+ * Rows per transaction. Small on purpose: the batch holds the citation-graph
+ * advisory lock while it reopens edges, and the standing resolver waits on it.
+ */
+const BATCH = 50;
+/**
+ * Rows this run may repair. The population is bounded by construction, but an
+ * operator run that discovers otherwise should stop and report rather than walk
+ * a table for an hour.
+ */
+const DEFAULT_LIMIT = 5000;
+/** Survey rows printed. A result at the cap is reported as truncated. */
+const SURVEY_LIMIT = 200;
+
+const USAGE = `Usage: bun run src/scripts/repair-decision-dates.ts [options]
+
+  --apply        Write the repairs. Omitted, the run only reports.
+  --dry-run      Report only, the default. Accepted so it cannot be mistaken
+                 for a flag this script ignores; contradicts --apply.
+  --limit <n>    Rows this run may repair (default ${String(DEFAULT_LIMIT)}).`;
+
+const hasFlag = (name: string): boolean => process.argv.includes(`--${name}`);
+
+const DECIMAL_INTEGER = /^\d+$/u;
+
+const flagInteger = (name: string, fallback: number): number => {
+  const index = process.argv.indexOf(`--${name}`);
+  if (index === -1) {
+    return fallback;
+  }
+  const raw = process.argv[index + 1];
+  const parsed =
+    raw !== undefined && DECIMAL_INTEGER.test(raw)
+      ? Number.parseInt(raw, 10)
+      : Number.NaN;
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    console.error(
+      `--${name} must be a positive integer, got: ${raw ?? "(none)"}`,
+    );
+    console.error(USAGE);
+    process.exit(1);
+  }
+  return parsed;
+};
+
+const apply = hasFlag("apply");
+if (apply && hasFlag("dry-run")) {
+  console.error("--apply and --dry-run contradict each other; pass one.");
+  console.error(USAGE);
+  process.exit(1);
+}
+const limit = flagInteger("limit", DEFAULT_LIMIT);
+
+/** Rows from `execute` under either driver shape (bare array or `{ rows }`). */
+const executedRows = (result: unknown): unknown[] => {
+  if (Array.isArray(result)) {
+    return result;
+  }
+  if (isRecord(result) && Array.isArray(result["rows"])) {
+    return result["rows"];
+  }
+  return [];
+};
+
+const surveyNumber = (row: Record<string, unknown>, key: string): number => {
+  const value = row[key];
+  if (typeof value !== "number") {
+    panic(`Survey column ${key} is not a number`);
+  }
+  return value;
+};
+
+const surveyText = (row: Record<string, unknown>, key: string): string => {
+  const value = row[key];
+  if (value === null) {
+    return "—";
+  }
+  if (typeof value !== "string") {
+    panic(`Survey column ${key} is not text`);
+  }
+  return value;
+};
+
+const printSurvey = async (): Promise<number> => {
+  const bySource = executedRows(
+    await rootDb.execute(decisionDateSourceSurveyStatement(SURVEY_LIMIT)),
+  ).filter(isRecord);
+  const byYear = executedRows(
+    await rootDb.execute(decisionDateYearSurveyStatement(SURVEY_LIMIT)),
+  ).filter(isRecord);
+
+  console.info("--- out-of-bounds decision dates, per source ---");
+  let total = 0;
+  for (const row of bySource) {
+    const rows = surveyNumber(row, "rows");
+    total += rows;
+    console.info(
+      `${surveyText(row, "adapterKey").padEnd(14)} ${String(rows).padStart(7)}  ` +
+        `${surveyText(row, "minDate")} … ${surveyText(row, "maxDate")}`,
+    );
+  }
+  console.info(`${"total".padEnd(14)} ${String(total).padStart(7)}`);
+
+  console.info("--- and per year ---");
+  for (const row of byYear) {
+    console.info(
+      `${surveyText(row, "adapterKey").padEnd(14)} ${String(surveyNumber(row, "year")).padStart(6)}  ${String(surveyNumber(row, "rows")).padStart(7)}`,
+    );
+  }
+  if (bySource.length >= SURVEY_LIMIT || byYear.length >= SURVEY_LIMIT) {
+    console.info(
+      `survey truncated at ${String(SURVEY_LIMIT)} rows; the counts above are a floor`,
+    );
+  }
+  return total;
+};
+
+/**
+ * Tell the citation graph that this decision's date is no longer what it was.
+ *
+ * The resolver filters candidates on `decision_date` and reads NULL on either
+ * side as permissive, so clearing a date both revives citations that were time
+ * filtered away from this decision and contests edges that were drawn while it
+ * was excluded. Neither is discoverable from the citing side, and the standing
+ * walk only revisits unsettled rows, so an edge left alone here stays wrong
+ * forever. Same four steps, in the same order, as the ingestion pipeline's own
+ * resolution-identity change.
+ */
+const reopenAffectedCitations = async (
+  tx: Parameters<typeof lockCitationGraph>[0],
+  row: CorruptDecisionDateRow,
+  repaired: DecisionDateRepair,
+): Promise<void> => {
+  await reopenCitationsResolvedTo(tx, row.id);
+  await reopenCitationsFrom(tx, row.id);
+  if (row.citationKey === null) {
+    return;
+  }
+  await reopenCitationsForKeys(tx, [row.citationKey]);
+  if (!isCaseLawJurisdiction(row.country)) {
+    // A stored country nobody declares a resolution policy for. Loud rather
+    // than defaulted, matching the pipeline: guessing a reach would write
+    // cross-border edges on an assumption.
+    console.error(
+      `${row.id}: country ${row.country} declares no resolution policy; key not re-announced`,
+    );
+    return;
+  }
+  await reopenCitationsForDecisionKey(tx, {
+    citationKey: row.citationKey,
+    decisionId: row.id,
+    jurisdiction: row.country,
+    decisionDate: repaired.decisionDate,
+  });
+};
+
+type BatchResult = {
+  cleared: number;
+  rederived: number;
+  /** Rows a concurrent observation had already repaired; skipped, not undone. */
+  skipped: number;
+};
+
+/**
+ * Announce each written row to the citation graph, one after another.
+ *
+ * Recursive rather than a loop with an awaited body: the reopen statements are
+ * graph mutations under one lock, so they must not fan out, and expressing that
+ * as a walk keeps the sequencing structural instead of a suppressed lint.
+ */
+const reopenWrittenAt = async (
+  tx: Parameters<typeof lockCitationGraph>[0],
+  rows: readonly CorruptDecisionDateRow[],
+  repairs: readonly DecisionDateRepair[],
+  written: ReadonlySet<string>,
+  counts: { cleared: number; rederived: number },
+  offset = 0,
+): Promise<void> => {
+  const row = rows.at(offset);
+  if (row === undefined) {
+    return;
+  }
+  const repaired = repairs.at(offset);
+  if (repaired === undefined) {
+    panic("Repair decisions and selected rows fell out of step");
+  }
+  if (written.has(row.id)) {
+    if (repaired.outcome === DECISION_DATE_REPAIR_OUTCOMES.REDERIVED) {
+      counts.rederived += 1;
+    } else {
+      counts.cleared += 1;
+    }
+    await reopenAffectedCitations(tx, row, repaired);
+  }
+  await reopenWrittenAt(tx, rows, repairs, written, counts, offset + 1);
+};
+
+const repairBatch = async (size: number): Promise<BatchResult> =>
+  await rootDb.transaction(async (tx) => {
+    // Decision rows first, citation graph second — the order the ingestion
+    // pipeline takes them in, which is the only thing that keeps a concurrent
+    // refresh of one of these decisions from deadlocking against this batch.
+    // Holding the rows is also what makes the graph work below sound: nothing
+    // can move a claimed row's date between the reopen and the commit.
+    const rows = executedRows(
+      await tx.execute(
+        selectCorruptDecisionDatesStatement({
+          limit: size,
+          lock: DECISION_DATE_ROW_LOCKS.FOR_UPDATE,
+        }),
+      ),
+    ).map(parseCorruptDecisionDateRow);
+    if (rows.length === 0) {
+      return { cleared: 0, rederived: 0, skipped: 0 };
+    }
+    await lockCitationGraph(tx);
+
+    const repairs = rows.map(decideDecisionDateRepair);
+    const written = new Set(
+      executedRows(await tx.execute(applyDecisionDateRepairsStatement(repairs)))
+        .filter(isRecord)
+        .map((row) => String(row["id"])),
+    );
+
+    const counts = { cleared: 0, rederived: 0 };
+    await reopenWrittenAt(tx, rows, repairs, written, counts);
+    return { ...counts, skipped: rows.length - written.size };
+  });
+
+/**
+ * Repair batches until the population is empty or `--limit` is reached.
+ *
+ * Each batch depends on the previous one having committed, which is what makes
+ * this a walk rather than a fan-out.
+ */
+const repairUntilDone = async (counts: {
+  cleared: number;
+  rederived: number;
+  skipped: number;
+}): Promise<void> => {
+  const done = counts.cleared + counts.rederived + counts.skipped;
+  if (done >= limit) {
+    return;
+  }
+  const batch = await repairBatch(Math.min(BATCH, limit - done));
+  if (batch.cleared + batch.rederived + batch.skipped === 0) {
+    return;
+  }
+  counts.cleared += batch.cleared;
+  counts.rederived += batch.rederived;
+  counts.skipped += batch.skipped;
+  console.info(
+    `${String(counts.cleared + counts.rederived)} repaired (${String(counts.rederived)} re-derived)`,
+  );
+  await repairUntilDone(counts);
+};
+
+/**
+ * What the repair would decide, without writing or claiming anything.
+ *
+ * The counts an operator authorises on are these, not the population size: a
+ * cleared row loses its date for good, so how many rows that is has to be on
+ * the report rather than discovered afterwards.
+ */
+const printDecisions = async (): Promise<void> => {
+  const rows = executedRows(
+    await rootDb.execute(
+      selectCorruptDecisionDatesStatement({
+        limit,
+        lock: DECISION_DATE_ROW_LOCKS.NONE,
+      }),
+    ),
+  ).map(parseCorruptDecisionDateRow);
+  const decided = rows.map(decideDecisionDateRepair);
+  const rederived = decided.filter(
+    ({ outcome }) => outcome === DECISION_DATE_REPAIR_OUTCOMES.REDERIVED,
+  ).length;
+  console.info("--- what a repair would decide ---");
+  console.info(`re-derived from metadata: ${String(rederived)}`);
+  console.info(
+    `cleared to NULL:          ${String(decided.length - rederived)}`,
+  );
+  if (rows.length >= limit) {
+    console.info(
+      `decisions capped at --limit ${String(limit)}; the counts above are a floor`,
+    );
+  }
+};
+
+const total = await printSurvey();
+
+if (!apply) {
+  await printDecisions();
+  console.info(
+    "Report only: nothing written. Re-run with --apply to repair, and note " +
+      "that a run reporting zero rows is the precondition for adding the " +
+      "bounds CHECK constraint.",
+  );
+  process.exit(0);
+}
+
+const counts = { cleared: 0, rederived: 0, skipped: 0 };
+await repairUntilDone(counts);
+
+console.info(
+  `done: ${String(counts.cleared)} cleared, ${String(counts.rederived)} re-derived, ` +
+    `${String(counts.skipped)} already repaired by a concurrent observation ` +
+    `(survey reported ${String(total)} before the run).`,
+);
+console.info(
+  "The search projection is re-enqueued and the affected citations are back " +
+    "in the resolver's queue; both settle on their own schedules.",
+);
+
+// Re-surveyed rather than inferred from the counts above: what the constraint
+// needs is that the population is empty now, and a run that hit `--limit`, or
+// raced a crawl still writing unbounded dates, has counts that say otherwise.
+const remaining = await printSurvey();
+console.info(
+  remaining === 0
+    ? "population empty: the bounds CHECK constraint can now be added."
+    : `${String(remaining)} rows remain; re-run before adding the bounds CHECK constraint.`,
+);
+
+process.exit(0);
