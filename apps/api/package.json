@@ -60,7 +60,7 @@
     "@react-email/render": "^2.1.0",
     "@silurus/ooxml": "catalog:",
     "@sinclair/typebox": "^0.34.52",
-    "@smithy/fetch-http-handler": "^5.6.11",
+    "@smithy/fetch-http-handler": "^5.7.0",
     "@stll/agent-engine": "workspace:*",
     "@stll/ai-catalog": "workspace:*",
     "@stll/anonymize-chat": "workspace:*",
