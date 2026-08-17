@@ -11,17 +11,22 @@ import { useMemo, useState } from "react";
 
 import { useEditor } from "@tiptap/react";
 
-declare const stableExtensions: unknown[];
 declare const buildDoc: (value: string) => unknown;
 
+// Module-level fresh literal: evaluated once, stable by definition — the
+// local-binding resolution must stop at function scopes and never flag it.
+const moduleExtensions: unknown[] = [];
+
 export const FlaggedFixture = ({ value }: { value: string }) => {
+  // Local binding to a fresh literal in the same function body.
+  const localProps = { attributes: { class: "y" } };
   const editor = useEditor({
     // Fresh array literal every render — MUST flag.
     // oxlint-disable-next-line require-stable-editor-options/require-stable-editor-options
     extensions: [],
-    // Fresh object literal every render — MUST flag.
+    // Identifier resolving to a same-function fresh literal — MUST flag.
     // oxlint-disable-next-line require-stable-editor-options/require-stable-editor-options
-    editorProps: { attributes: { class: "x" } },
+    editorProps: localProps,
     // Fresh call result every render — MUST flag.
     // oxlint-disable-next-line require-stable-editor-options/require-stable-editor-options
     content: buildDoc(value),
@@ -34,14 +39,25 @@ export const FlaggedFixture = ({ value }: { value: string }) => {
   return editor;
 };
 
+export const FlaggedInlineObjectFixture = () => {
+  const editor = useEditor({
+    // Fresh object literal every render — MUST flag.
+    // oxlint-disable-next-line require-stable-editor-options/require-stable-editor-options
+    editorProps: { attributes: { class: "x" } },
+  });
+  return editor;
+};
+
 export const SafeFixture = ({ value }: { value: string }) => {
+  // Hook-captured bindings (destructured useState, useMemo result) and the
+  // module constant above must NOT flag.
   const [content] = useState(() => buildDoc(value));
   const editorProps = useMemo(() => ({}), []);
   const editor = useEditor({
     autofocus: false,
     content,
     editorProps,
-    extensions: stableExtensions,
+    extensions: moduleExtensions,
     onCreate: () => undefined,
     onUpdate: () => undefined,
   });

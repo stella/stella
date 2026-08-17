@@ -19,7 +19,9 @@
 //
 // Safe patterns (not flagged):
 //   - `useEditor({ extensions, editorProps, content: initialContent })` —
-//     identifiers pointing at memoized/captured values.
+//     identifiers bound to hook-captured values (`useMemo`, `useState`,
+//     `useRef`, custom `useX` results) or declared outside the component
+//     (module constants).
 //   - `useEditor({ autofocus: false, immediatelyRender: false })` —
 //     primitives compare by value.
 //   - `useEditor({ onUpdate: (props) => ... })` — handlers are excluded from
@@ -30,6 +32,10 @@
 //   - `useEditor({ editorProps: { ... } })` — fresh object every render.
 //   - `useEditor({ content: toDoc(value) })` — fresh call result every
 //     render; capture it once (`useState(() => toDoc(value))`) instead.
+//   - `const editorProps = { ... }; useEditor({ editorProps })` — the
+//     identifier resolves to a fresh literal declared in the same function
+//     body (one level of local-binding resolution; aliased chains and
+//     values built in nested statements stay out of scope by design).
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
@@ -80,6 +86,93 @@ const isFreshIdentity = (node) => {
     default:
       return false;
   }
+};
+
+const HOOK_NAME = /^use[A-Z0-9]/u;
+
+const isHookCall = (node) => {
+  if (!isAstNode(node) || node.type !== "CallExpression") {
+    return false;
+  }
+  const callee = node["callee"];
+  if (isIdentifier(callee)) {
+    return HOOK_NAME.test(callee.name);
+  }
+  return false;
+};
+
+const findContainingFunction = (node) => {
+  let current = isAstNode(node) ? node["parent"] : null;
+  while (isAstNode(current)) {
+    if (
+      current.type === "FunctionDeclaration" ||
+      current.type === "FunctionExpression" ||
+      current.type === "ArrowFunctionExpression"
+    ) {
+      return current;
+    }
+    current = current["parent"];
+  }
+  return null;
+};
+
+// Resolve `name` against the top-level statements of the function bodies
+// enclosing `fromNode` (innermost first). Returns the declarator's `init`
+// for a plain `const name = ...` declaration, or null when the binding is
+// not found in any enclosing function body — module-level constants and
+// imports deliberately resolve to null (stable by definition here).
+const resolveLocalBindingInit = (name, fromNode) => {
+  let scope = findContainingFunction(fromNode);
+  while (scope !== null) {
+    const body = scope["body"];
+    const statements =
+      isAstNode(body) && body.type === "BlockStatement" ? body["body"] : null;
+    if (Array.isArray(statements)) {
+      for (const statement of statements) {
+        if (!isAstNode(statement) || statement.type !== "VariableDeclaration") {
+          continue;
+        }
+        const declarations = statement["declarations"];
+        if (!Array.isArray(declarations)) {
+          continue;
+        }
+        for (const declarator of declarations) {
+          if (
+            !isAstNode(declarator) ||
+            declarator.type !== "VariableDeclarator"
+          ) {
+            continue;
+          }
+          if (isIdentifier(declarator["id"], name)) {
+            return declarator["init"] ?? null;
+          }
+        }
+      }
+    }
+    scope = findContainingFunction(scope);
+  }
+  return null;
+};
+
+// A value is unstable when it is a fresh literal/call inline, or an
+// identifier whose same-function `const` binding initializes to one. A
+// binding initialized from a hook call (`useMemo`, `useState`, `useRef`,
+// custom `useX`) counts as captured/stable; destructured hook results
+// (`const [x] = useState(...)`) never match a plain-identifier declarator
+// and so resolve to null (not flagged).
+const isUnstableOptionValue = (node, fromNode) => {
+  if (isFreshIdentity(node)) {
+    return true;
+  }
+  const unwrapped = unwrapExpression(node);
+  if (!isIdentifier(unwrapped)) {
+    return false;
+  }
+  const init = resolveLocalBindingInit(unwrapped.name, fromNode);
+  if (init === null || isHookCall(init)) {
+    return false;
+  }
+  return isFreshIdentity(init);
 };
 
 const propertyKeyName = (property) => {
@@ -151,7 +244,7 @@ export default eslintCompatPlugin({
               if (name === null || HANDLER_OPTION_KEYS.has(name)) {
                 continue;
               }
-              if (isFreshIdentity(property.value)) {
+              if (isUnstableOptionValue(property["value"], node)) {
                 context.report({
                   node: property,
                   messageId: "unstableOption",

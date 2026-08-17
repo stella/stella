@@ -844,11 +844,18 @@ export const useChatEditor = ({
     }
     const storedDraft =
       useChatDraftStore.getState().draftsByThreadKey[targetThreadKey] ?? null;
+    // `attachmentsRef` mirrors the CURRENTLY bound thread. A thread-switch
+    // flush persists the PREVIOUS thread's doc after the ref has already
+    // moved on, so it must keep that thread's stored attachments instead of
+    // borrowing the incoming thread's.
+    const isCurrentThread = targetThreadKey === committedThreadKeyRef.current;
     // Returns null for no-op updates whose document already matches the
     // stored draft, so an update burst that ends where it started writes
     // nothing.
     const nextDraft = nextDraftForEditorUpdate({
-      attachments: attachmentsRef.current,
+      attachments: isCurrentThread
+        ? attachmentsRef.current
+        : (storedDraft?.attachments ?? EMPTY_ATTACHMENTS),
       nextDoc: targetEditor.getJSON(),
       storedDoc: storedDraft?.doc ?? EMPTY_CHAT_DRAFT_DOC,
     });
@@ -862,7 +869,7 @@ export const useChatEditor = ({
     // the PREVIOUS thread's doc: the authored set was already reset for the
     // incoming thread, and the outgoing draft must count as external so it
     // restores into the editor when the user switches back.
-    if (targetThreadKey === committedThreadKeyRef.current) {
+    if (isCurrentThread) {
       getOrCreateWeakSet(editorAuthoredDocsRef).add(nextDraft.doc);
     }
     setDraft(targetThreadKey, nextDraft);
