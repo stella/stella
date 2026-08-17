@@ -319,7 +319,7 @@ jobs:
           echo "path=${tarballs[0]}" >> "$GITHUB_OUTPUT"
 
       - name: Publish package
-        uses: stella/.github/.github/actions/npm-publish-hardened@4292546b5b6e5bd8660bd727913b4038644c3d0b
+        uses: stella/.github/.github/actions/npm-publish-hardened@905280fd96d464a343fd3bf6be20af9ef3f399fb
         with:
           tarball: ${{ steps.tarball.outputs.path }}
           tag: ${{ needs.verify.outputs.dist_tag }}
@@ -419,7 +419,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish package
-        uses: stella/.github/.github/actions/npm-publish-hardened@4292546b5b6e5bd8660bd727913b4038644c3d0b
+        uses: stella/.github/.github/actions/npm-publish-hardened@905280fd96d464a343fd3bf6be20af9ef3f399fb
         with:
           tarball: ${{ steps.pack.outputs.tarball }}
           tag: ${{ needs.verify.outputs.dist_tag }}
@@ -552,7 +552,7 @@ jobs:
           echo "path=${tarballs[0]}" >> "$GITHUB_OUTPUT"
 
       - name: Publish data package
-        uses: stella/.github/.github/actions/npm-publish-hardened@4292546b5b6e5bd8660bd727913b4038644c3d0b
+        uses: stella/.github/.github/actions/npm-publish-hardened@905280fd96d464a343fd3bf6be20af9ef3f399fb
         with:
           tarball: ${{ steps.tarball.outputs.path }}
           tag: ${{ needs.pack-data.outputs.dist_tag }}
