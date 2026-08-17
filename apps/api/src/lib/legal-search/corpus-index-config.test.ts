@@ -32,16 +32,19 @@ test("case-law tag fields are the filters a query prunes splits by", () => {
   ]);
 });
 
-// The engine never diffs an existing index, so the mode change reaches
-// documents only through a generation created from this config. An existing
-// generation keeps `lenient`, which is what makes a writer field it does not
-// map land harmlessly there rather than failing its ingest.
-test("a newly created index maps in strict mode", () => {
-  for (const family of ["case_law", "legislation"] as const) {
-    expect(corpusIndexConfig(family, `${family}_v3_cze`).doc_mapping.mode).toBe(
-      "strict",
-    );
-  }
+// The engine never diffs an existing index, so a mode change reaches documents
+// only through a generation created from this config; an existing generation
+// keeps the mode it was made with.
+//
+// `strict` costs the whole document when a field is undeclared, and says so
+// only in the engine's log, so a family may only take it where something
+// counts the documents that should be there. Case law has the rebuild census;
+// legislation does not, and stays lenient until it does.
+test("only a family with a census maps in strict mode", () => {
+  expect(caseLawIndexConfig("case_law_v3_cze").doc_mapping.mode).toBe("strict");
+  expect(
+    corpusIndexConfig("legislation", "legislation_v2_svk").doc_mapping.mode,
+  ).toBe("lenient");
 });
 
 test("the docket is its own raw field, reachable only by an exact query", () => {

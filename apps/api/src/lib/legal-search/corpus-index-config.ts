@@ -88,11 +88,13 @@ const MERGE_POLICY = {
   min_level_num_docs: 100_000,
 } as const;
 
+type CorpusIndexDocMappingMode = "lenient" | "strict" | "dynamic";
+
 export type CorpusIndexConfig = {
   version: string;
   index_id: string;
   doc_mapping: {
-    mode: "lenient" | "strict" | "dynamic";
+    mode: CorpusIndexDocMappingMode;
     field_mappings: CorpusIndexFieldMapping[];
     tokenizers: readonly CorpusIndexTokenizer[];
     tag_fields: string[];
@@ -222,6 +224,11 @@ const FAMILY_FIELDS: Record<CorpusFamily, CorpusIndexFieldMapping[]> = {
     // rather than one passage of it. Until now the number reached the index
     // only inside `title`, where it is folded and tokenized with everything
     // else on that line.
+    //
+    // Nothing queries it yet, and nothing can before the generation that maps
+    // it exists: the query layer builds its filters explicitly and strips
+    // engine field syntax out of free text, so a docket filter is added there
+    // with, or after, the flip.
     { name: "case_number", type: "text", tokenizer: "raw" },
     { name: "court", type: "text", tokenizer: "raw", fast: true },
     {
@@ -281,6 +288,31 @@ const FAMILY_TAG_FIELDS: Record<CorpusFamily, string[]> = {
 };
 
 /**
+ * How the engine treats a document field the mapping does not declare.
+ *
+ * `lenient` indexes the document and drops the field, so a filter on it
+ * matches nothing, forever, with nothing to notice. `strict` drops the whole
+ * document — and not loudly: the ingest still answers 200 with the document
+ * counted as accepted, and the only direct trace is a warning in the engine's
+ * own log.
+ *
+ * So `strict` is worth its failure mode only where something counts the
+ * documents that should be there. Case law has that: the rebuild's census
+ * compares the engine's count against the corpus' per jurisdiction, and a
+ * dropped document is a difference it reports. Legislation has no census yet
+ * and stays `lenient` until it does, because a silently dropped document
+ * there would be marked indexed with nothing to find it. Both families are
+ * covered on the other side by a test that every field their writer emits is
+ * one their mapping declares.
+ *
+ * Total, so a new family answers this rather than inheriting an answer.
+ */
+const FAMILY_DOC_MAPPING_MODE = {
+  case_law: "strict",
+  legislation: "lenient",
+} as const satisfies Record<CorpusFamily, CorpusIndexDocMappingMode>;
+
+/**
  * The datetime every document of a family carries, or null for a family that
  * has none. Total so a new family has to answer the question: the engine takes
  * the timestamp field as a promise about every document, and a family whose
@@ -301,26 +333,11 @@ export const corpusIndexConfig = (
     version: CORPUS_INDEX_CONFIG_VERSION,
     index_id: indexId,
     doc_mapping: {
-      // A document may only carry fields this mapping declares.
-      //
-      // What each mode does with a writer field the mapping does not have,
-      // measured against the engine: `lenient` indexes the document and drops
-      // the field, so a filter on it matches nothing, forever, with nothing to
-      // notice. `strict` drops the whole document — and not loudly: the ingest
-      // still answers 200 with the document counted as accepted, and the only
-      // direct trace is a warning in the engine's own log. The rebuild's
-      // census is what turns that into a signal, because a dropped document is
-      // a count the corpus side does not match.
-      //
-      // Losing a document the census reports beats losing a field nothing
-      // reports, but only because the writer and this mapping are checked
-      // against each other per family (see each family's projection test).
-      //
-      // Generation-scoped, like everything else here: an index already created
-      // keeps the `lenient` mapping it was made with, which is what lets the
-      // writer emit a field that generation never mapped (`decision_date_ts`
-      // against a v2 index) without losing that document.
-      mode: "strict",
+      // Per family, and generation-scoped like everything else here: an index
+      // already created keeps the mode it was made with, which is what lets
+      // the writer emit a field that generation never mapped
+      // (`decision_date_ts` against a v2 index) without losing that document.
+      mode: FAMILY_DOC_MAPPING_MODE[family],
       field_mappings: [...CORE_FIELDS, ...FAMILY_FIELDS[family]],
       tokenizers: CUSTOM_TOKENIZERS,
       tag_fields: FAMILY_TAG_FIELDS[family],
