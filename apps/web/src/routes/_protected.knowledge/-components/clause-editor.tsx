@@ -14,6 +14,7 @@ import {
 import Paragraph from "@tiptap/extension-paragraph";
 import Placeholder from "@tiptap/extension-placeholder";
 import Text from "@tiptap/extension-text";
+import type { EditorProps } from "@tiptap/pm/view";
 import { EditorContent, useEditor } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 import {
@@ -190,59 +191,72 @@ export const ClauseEditor = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const rewriteRequestIdRef = useRef(0);
 
+  // Everything passed to `useEditor` below (except event handlers) must keep
+  // a stable identity across renders; the react binding re-applies changed
+  // options to the live editor view, which can interleave with pending
+  // ProseMirror DOM mutations and loop (require-stable-editor-options).
+  // Extensions and content are creation-only anyway — the react binding never
+  // reconfigures either after the editor exists — so capturing the first
+  // render's values is faithful; external content changes flow through
+  // `syncExternalContent` below and the placeholder through a latest getter.
+  const getPlaceholder = useLatestCallback(() => placeholder ?? "");
+  const [creationContent] = useState(() => clauseBodyToTipTap(content));
+  const [extensions] = useState(() => [
+    Document,
+    Paragraph,
+    Text,
+    Bold,
+    Italic,
+    Heading.configure({ levels: [1, 2, 3] }),
+    BulletList,
+    OrderedList,
+    ListItem,
+    // Tab / Shift-Tab nesting plus smart Backspace/Delete at list edges.
+    ListKeymap,
+    ClauseDirectiveNode,
+    InsertionMark,
+    DeletionMark,
+    History,
+    Placeholder.configure({
+      placeholder: () => getPlaceholder(),
+    }),
+  ]);
+  const [editorProps] = useState<EditorProps>(() => ({
+    handleClick: (view, position) => {
+      if (getAiState().status !== "reviewing") {
+        return false;
+      }
+      const resolvedPosition = view.state.doc.resolve(position);
+      const isTrackedChange = (mark: (typeof view.state.doc.marks)[number]) =>
+        mark.type.name === INSERTION_MARK || mark.type.name === DELETION_MARK;
+      const mark =
+        resolvedPosition.nodeBefore?.marks.find(isTrackedChange) ??
+        resolvedPosition.nodeAfter?.marks.find(isTrackedChange);
+      const revisionId = mark?.attrs["revisionId"];
+      if (typeof revisionId !== "number") {
+        setHunkMenu(null);
+        return false;
+      }
+      const coords = view.coordsAtPos(position);
+      const rect = containerRef.current?.getBoundingClientRect();
+      setHunkMenu({
+        revisionId,
+        top: coords.bottom - (rect?.top ?? 0),
+        left: coords.left - (rect?.left ?? 0),
+      });
+      return false;
+    },
+  }));
+
   const editor = useEditor({
     // Inline on an SSR'd page (unlike the old modal, which only mounted
     // client-side): defer editor creation to the client so the server and
     // client DOM agree. Without this, the hydration mismatch corrupts
     // ProseMirror's DOM<->position mapping and text selection stops working.
     immediatelyRender: false,
-    extensions: [
-      Document,
-      Paragraph,
-      Text,
-      Bold,
-      Italic,
-      Heading.configure({ levels: [1, 2, 3] }),
-      BulletList,
-      OrderedList,
-      ListItem,
-      // Tab / Shift-Tab nesting plus smart Backspace/Delete at list edges.
-      ListKeymap,
-      ClauseDirectiveNode,
-      InsertionMark,
-      DeletionMark,
-      History,
-      Placeholder.configure({
-        placeholder: placeholder ?? "",
-      }),
-    ],
-    content: clauseBodyToTipTap(content),
-    editorProps: {
-      handleClick: (view, position) => {
-        if (getAiState().status !== "reviewing") {
-          return false;
-        }
-        const resolvedPosition = view.state.doc.resolve(position);
-        const isTrackedChange = (mark: (typeof view.state.doc.marks)[number]) =>
-          mark.type.name === INSERTION_MARK || mark.type.name === DELETION_MARK;
-        const mark =
-          resolvedPosition.nodeBefore?.marks.find(isTrackedChange) ??
-          resolvedPosition.nodeAfter?.marks.find(isTrackedChange);
-        const revisionId = mark?.attrs["revisionId"];
-        if (typeof revisionId !== "number") {
-          setHunkMenu(null);
-          return false;
-        }
-        const coords = view.coordsAtPos(position);
-        const rect = containerRef.current?.getBoundingClientRect();
-        setHunkMenu({
-          revisionId,
-          top: coords.bottom - (rect?.top ?? 0),
-          left: coords.left - (rect?.left ?? 0),
-        });
-        return false;
-      },
-    },
+    content: creationContent,
+    editorProps,
+    extensions,
     onUpdate: ({ editor: e }) => {
       if (getAiState().status === "reviewing") {
         if (hasPendingTrackedChanges(e)) {
@@ -300,6 +314,17 @@ export const ClauseEditor = ({
       emitBlur(tipTapToClauseBody(e.getJSON()));
     },
   });
+
+  // With the options identity-stable, ProseMirror only re-evaluates the
+  // captured placeholder callback when view props are re-applied or a
+  // transaction commits. Re-apply them exactly when the placeholder changes
+  // so it updates without reintroducing per-render option churn.
+  useExternalSyncEffect(() => {
+    if (!isUsableEditor(editor)) {
+      return;
+    }
+    editor.setOptions({});
+  }, [editor, placeholder]);
 
   // Re-seed the editor only on an external content change (not on the user's
   // own edits, whose key we already recorded above).

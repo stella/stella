@@ -756,6 +756,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-cached-collator.ts",
     "./.oxlint-plugins/require-query-signal.ts",
     "./.oxlint-plugins/require-stable-snapshot.ts",
+    "./.oxlint-plugins/require-stable-editor-options.ts",
     "./.oxlint-plugins/require-use-shallow.ts",
     "./.oxlint-plugins/no-raw-stored-json.ts",
     "./.oxlint-plugins/no-detached-void.ts",
@@ -928,6 +929,14 @@ export default defineConfig({
     {
       files: [".oxlint-plugins/__fixtures__/require-use-shallow.fixture.tsx"],
       rules: { "require-use-shallow/require-use-shallow": "error" },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/require-stable-editor-options.fixture.tsx",
+      ],
+      rules: {
+        "require-stable-editor-options/require-stable-editor-options": "error",
+      },
     },
     {
       files: [
@@ -1689,6 +1698,11 @@ export default defineConfig({
         // A useSyncExternalStore snapshot that never stabilizes trips
         // React's getSnapshot-cache warning and can loop the same way.
         "require-stable-snapshot/require-stable-snapshot": "error",
+        // `useEditor` options rebuilt per render make the react binding
+        // re-apply editor view props on every render; on per-keystroke
+        // re-render surfaces that churn can interleave with ProseMirror's
+        // DOMObserver and loop into "Maximum update depth exceeded".
+        "require-stable-editor-options/require-stable-editor-options": "error",
         "no-restricted-imports": [
           "error",
           {

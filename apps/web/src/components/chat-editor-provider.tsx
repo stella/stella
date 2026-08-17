@@ -17,7 +17,13 @@ import History from "@tiptap/extension-history";
 import Paragraph from "@tiptap/extension-paragraph";
 import Placeholder from "@tiptap/extension-placeholder";
 import Text from "@tiptap/extension-text";
-import type { EditorState, Plugin, PluginKey } from "@tiptap/pm/state";
+import type {
+  EditorState,
+  Plugin,
+  PluginKey,
+  Transaction,
+} from "@tiptap/pm/state";
+import type { EditorProps } from "@tiptap/pm/view";
 import type { Editor, JSONContent } from "@tiptap/react";
 import { useEditor } from "@tiptap/react";
 import { panic, Result, TaggedError } from "better-result";
@@ -26,6 +32,10 @@ import { useTranslations } from "use-intl";
 
 import { CHAT_CONTEXT_FILE_MAX_BYTES } from "@stll/chat-limits";
 
+import {
+  applyDraftDocToEditor,
+  updateCarriesDraftEcho,
+} from "@/components/chat-editor-echo";
 import { createChatComposerDocument } from "@/components/chat-editor-markdown.logic";
 import {
   ChatMention,
@@ -69,6 +79,13 @@ import { viewsOptions } from "@/lib/workspaces/queries/views";
 
 const CHAT_FILES_PER_MESSAGE = 5;
 const CHAT_MAX_FILE_BYTES = CHAT_CONTEXT_FILE_MAX_BYTES;
+
+// Trailing debounce for mirroring the editor's doc into the draft store, with
+// a hard upper bound so a continuous burst still persists periodically. See
+// `debouncedPersistEditorDraft` in `useChatEditor` for why the deferral is
+// load-bearing.
+const CHAT_DRAFT_PERSIST_DEBOUNCE_MS = 250;
+const CHAT_DRAFT_PERSIST_MAX_WAIT_MS = 1500;
 
 const DOCX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -577,7 +594,6 @@ export const useChatEditor = ({
   const fileIdCounterRef = useRef(0);
   const activePluginKeysRef = useRef<(string | PluginKey)[]>([]);
   const editorRef = useRef<Editor | null>(null);
-  const isApplyingStoredDraftRef = useRef(false);
   // Every `doc` object this editor's own `onUpdate` persists to the draft
   // store is recorded here by identity. The draft-apply effect consults it to
   // avoid ever pushing editor-authored content back into the editor (see
@@ -613,10 +629,29 @@ export const useChatEditor = ({
   const setDraft = useChatDraftStore((state) => state.setDraft);
   const clearDraft = useChatDraftStore((state) => state.clearDraft);
   const draftDoc = draft?.doc ?? EMPTY_CHAT_DRAFT_DOC;
+  // `useEditor` only reads `content` at creation; later drafts reach the
+  // editor through the draft-apply effect below. Freezing the initial doc
+  // keeps the option identity-stable so the react binding never re-applies
+  // editor options mid-typing (see the `useEditor` call for why that matters).
+  const [initialDraftDoc] = useState(() => draftDoc);
   const attachments = draft?.attachments ?? EMPTY_ATTACHMENTS;
   const [isEmpty, setIsEmpty] = useState(() =>
     areDraftDocsEqual(draftDoc, EMPTY_CHAT_DRAFT_DOC),
   );
+  const isEmptyRef = useRef(isEmpty);
+  // Route every emptiness sync through this transition guard: `setIsEmpty` is
+  // called from the editor's synchronous dispatch path on every keystroke,
+  // and React's eager same-value bailout is not guaranteed while other
+  // updates are pending — each enqueued no-op still feeds the
+  // max-update-depth counter under sustained fast input. The ref makes the
+  // no-op structural: only genuine empty<->non-empty transitions reach React.
+  const applyIsEmpty = useLatestCallback((nextIsEmpty: boolean) => {
+    if (isEmptyRef.current === nextIsEmpty) {
+      return;
+    }
+    isEmptyRef.current = nextIsEmpty;
+    setIsEmpty(nextIsEmpty);
+  });
   const attachmentsRef = useRef(attachments);
   // eslint-disable-next-line react/react-compiler -- latest-ref mirror: read at submit time out-of-render, must hold this render's attachments
   attachmentsRef.current = attachments;
@@ -648,7 +683,7 @@ export const useChatEditor = ({
     }
   }, [sentMessageHistoryHtml, threadKey]);
 
-  const fetchWorkspaceEntities = useCallback(
+  const fetchWorkspaceEntities = useLatestCallback(
     async (workspace: ChatWorkspaceMentionOption, query: string) => {
       if (!workspace.sourceViewId) {
         return [];
@@ -687,7 +722,6 @@ export const useChatEditor = ({
         buildEntityMentionOption({ entity, sourceWorkspaceId }),
       );
     },
-    [queryClient, threadRef],
   );
   const debouncedFetchWorkspaceEntities = useDebouncedCallback(
     async ({
@@ -718,7 +752,7 @@ export const useChatEditor = ({
     },
     CHAT_MENTION_SEARCH_DEBOUNCE_MS,
   );
-  const loadWorkspaceEntities = useCallback(
+  const loadWorkspaceEntities = useLatestCallback(
     async (workspace: ChatWorkspaceMentionOption, query: string) => {
       const previous = pendingWorkspaceEntitySearchRef.current;
       if (previous) {
@@ -778,7 +812,6 @@ export const useChatEditor = ({
         );
       });
     },
-    [debouncedFetchWorkspaceEntities, queryClient, threadRef],
   );
 
   useExternalSyncEffect(
@@ -790,42 +823,111 @@ export const useChatEditor = ({
     [debouncedFetchWorkspaceEntities],
   );
 
-  const handleEditorUpdate = useLatestCallback((nextEditor: Editor) => {
-    setIsEmpty(nextEditor.isEmpty);
-
-    if (isApplyingStoredDraftRef.current) {
+  // Flush-time persist of the editor's live doc into the draft store. The
+  // debounce is load-bearing, not cosmetic: the draft store is a mirror of
+  // the editor, and this hook's own subscription re-renders the host surface
+  // on every store write. Persisting synchronously per keystroke made fast
+  // input outpace React's commits — every commit then finished with more
+  // sync work already pending, which React's max-update-depth counter reads
+  // as a loop (~50 keystrokes in one sustained burst) and turns into a crash
+  // that also drops the backlogged keystrokes. Deferring the mirror write
+  // caps the re-render rate while the editor remains the source of truth;
+  // `maxWait` bounds how far the store can lag a continuous burst, and
+  // submit/unmount/thread-switch below cancel or flush the pending write so
+  // the mirror never resurrects or loses a draft across those boundaries.
+  const persistEditorDraft = (
+    targetEditor: Editor,
+    targetThreadKey: string,
+  ) => {
+    if (targetEditor.isDestroyed) {
       return;
     }
-
-    // `nextDraftForEditorUpdate` returns null for no-op updates whose document
-    // already matches the stored draft. tiptap emits `update` even when a
-    // transaction leaves the document unchanged (e.g. editor props re-applied
-    // while the page re-renders during response streaming); persisting an
-    // identical draft would churn the store reference, retrigger this handler,
-    // and loop until React's max-update-depth guard throws.
+    const storedDraft =
+      useChatDraftStore.getState().draftsByThreadKey[targetThreadKey] ?? null;
+    // `attachmentsRef` mirrors the CURRENTLY bound thread. A thread-switch
+    // flush persists the PREVIOUS thread's doc after the ref has already
+    // moved on, so it must keep that thread's stored attachments instead of
+    // borrowing the incoming thread's.
+    const isCurrentThread = targetThreadKey === committedThreadKeyRef.current;
+    // Returns null for no-op updates whose document already matches the
+    // stored draft, so an update burst that ends where it started writes
+    // nothing.
     const nextDraft = nextDraftForEditorUpdate({
-      attachments: attachmentsRef.current,
-      nextDoc: nextEditor.getJSON(),
-      storedDoc: draftDoc,
+      attachments: isCurrentThread
+        ? attachmentsRef.current
+        : (storedDraft?.attachments ?? EMPTY_ATTACHMENTS),
+      nextDoc: targetEditor.getJSON(),
+      storedDoc: storedDraft?.doc ?? EMPTY_CHAT_DRAFT_DOC,
     });
     if (!nextDraft) {
       return;
     }
-
-    if (!isNavigatingHistoryRef.current) {
-      messageHistoryIndexRef.current = null;
-    }
-
     // Mark this doc as editor-authored so the (lagging) draft-apply effect
-    // never reverts the editor to it. `nextDraft.doc` is the exact object the
-    // store will hand back as `draftDoc`, so identity membership is reliable.
-    getOrCreateWeakSet(editorAuthoredDocsRef).add(nextDraft.doc);
-    setDraft(threadKey, nextDraft);
-
-    if (!nextEditor.isEmpty) {
-      markDraftStarted();
+    // never reverts the editor to it. `nextDraft.doc` is the exact object
+    // the store will hand back as `draftDoc`, so identity membership is
+    // reliable. Skip the mark when this is a thread-switch flush persisting
+    // the PREVIOUS thread's doc: the authored set was already reset for the
+    // incoming thread, and the outgoing draft must count as external so it
+    // restores into the editor when the user switches back.
+    if (isCurrentThread) {
+      getOrCreateWeakSet(editorAuthoredDocsRef).add(nextDraft.doc);
     }
-  });
+    setDraft(targetThreadKey, nextDraft);
+  };
+  const debouncedPersistEditorDraft = useDebouncedCallback(
+    persistEditorDraft,
+    CHAT_DRAFT_PERSIST_DEBOUNCE_MS,
+    { maxWait: CHAT_DRAFT_PERSIST_MAX_WAIT_MS },
+  );
+
+  // Flush a pending mirror write when the composer rebinds to another thread
+  // (the debounced call still carries the previous thread's editor + key) and
+  // on unmount, so a draft typed within the debounce window is never lost.
+  useExternalSyncEffect(
+    () => () => {
+      debouncedPersistEditorDraft.flush();
+    },
+    [debouncedPersistEditorDraft, threadKey],
+  );
+
+  const handleEditorUpdate = useLatestCallback(
+    ({
+      nextEditor,
+      transactions,
+    }: {
+      nextEditor: Editor;
+      transactions: readonly Transaction[];
+    }) => {
+      applyIsEmpty(nextEditor.isEmpty);
+
+      // A store->editor echo (the draft-apply effect or submit-restore
+      // pushing an already-stored draft back in) must never re-enter the
+      // persist path: a `setContent`/`getJSON` roundtrip can normalize the
+      // doc, and persisting the normalized variant would churn the stored
+      // reference and re-trigger the editor.
+      if (updateCarriesDraftEcho(transactions)) {
+        return;
+      }
+
+      // tiptap also emits `update` for events that leave the document alone
+      // (e.g. `setEditable` re-applied while a response streams). Those must
+      // not reset the message-history cursor, mark a draft started, or
+      // schedule a persist — only genuine document changes do.
+      if (!transactions.some((transaction) => transaction.docChanged)) {
+        return;
+      }
+
+      if (!isNavigatingHistoryRef.current) {
+        messageHistoryIndexRef.current = null;
+      }
+
+      if (!nextEditor.isEmpty) {
+        markDraftStarted();
+      }
+
+      debouncedPersistEditorDraft(nextEditor, threadKey);
+    },
+  );
 
   const handleMessageHistoryKeyDown = useCallback(
     (state: EditorState, event: KeyboardEvent) => {
@@ -899,159 +1001,176 @@ export const useChatEditor = ({
     [],
   );
 
-  const editor = useEditor({
-    autofocus: false,
-    content: draftDoc,
-    extensions: [
-      createPromptEditorDocument(),
-      Paragraph,
-      Text,
-      Bold,
-      // Shift+Enter inserts a hard break (newline) instead of
-      // splitting the paragraph; matches expected chat-input
-      // behaviour everywhere — Slack, Discord, ChatGPT, etc.
-      // Chained with `scrollIntoView()` so adding a new line at
-      // the bottom of an overflowed input keeps the cursor in
-      // view (ProseMirror's auto-scroll only fires on selection
-      // changes that already include the flag — `setHardBreak`
-      // alone doesn't).
-      HardBreak.extend({
-        addKeyboardShortcuts() {
-          return {
-            "Shift-Enter": () =>
-              this.editor.chain().setHardBreak().scrollIntoView().run(),
-          };
-        },
-      }),
-      // eslint-disable-next-line react/react-compiler -- ref read deferred into the plugin's placeholder callback (invoked out-of-render), not read during render
-      Placeholder.configure({
-        placeholder: () => placeholderRef.current,
-      }),
-      History,
-      ChatMention.configure({
-        suggestion: createChatSuggestion(
-          getMentionItems,
-          searchMentionItems,
-          // eslint-disable-next-line react/react-compiler -- editor-suggestion glue: loader closes over refs read out-of-render by the mention plugin, not during render
-          loadWorkspaceEntities,
-        ),
-        deleteTriggerWithBackspace: true,
-      }),
-      PastedText,
-      // Decorates nothing until a chat surface's anonymization layer
-      // stores pairs via `setChatAnonDecorationPairs`. Installed here
-      // unconditionally so every surface sharing this editor gets
-      // consistent in-editor highlights without a per-mount install.
-      ChatAnonDecorations,
-    ],
-    onCreate: ({ editor: nextEditor }) => {
-      editorRef.current = nextEditor;
-      setIsEmpty(nextEditor.isEmpty);
-    },
-    onUpdate: ({ editor: nextEditor }) => {
-      handleEditorUpdate(nextEditor);
-    },
-    editorProps: {
-      attributes: (state) => ({
-        // A contenteditable div has no implicit ARIA role, so without
-        // these the composer is invisible to assistive tech (and to
-        // role-based queries); the visible placeholder span is
-        // aria-hidden.
-        role: "textbox",
-        "aria-multiline": "true",
-        "aria-label": resolvedPlaceholder,
-        // While empty, inherit the ambient UI direction so the caret sits on
-        // the RTL side; once there is content, switch to first-strong-character
-        // detection to align mixed Arabic + Latin input. A static `dir="auto"`
-        // would fall back to LTR on the empty doc and strand the caret left.
-        ...(state.doc.textContent.length > 0 ? { dir: "auto" } : {}),
-        class:
-          "field-sizing-content max-h-48 min-h-10 overflow-y-auto text-sm focus-visible:outline-none",
-      }),
-      handlePaste: (_view, event) => {
-        // ProseMirror processes paste before any React `onPaste`
-        // handler, so the chip-on-large-paste logic has to live
-        // here — by the time the React handler fires, the text is
-        // already in the editor.
-        const clipboardData = event.clipboardData;
-        if (clipboardData === null) {
-          return false;
-        }
-
-        const hasFiles = Array.from(clipboardData.items).some(
-          (item) => item.kind === "file",
-        );
-        if (hasFiles) {
-          return false;
-        }
-
-        const pastedText = clipboardData.getData("text/plain");
-        if (!pastedText || !shouldChipPaste(pastedText)) {
-          return false;
-        }
-
-        const targetEditor = editorRef.current;
-        if (targetEditor === null) {
-          return false;
-        }
-
-        event.preventDefault();
-        insertPastedTextChip(targetEditor, {
-          label: "",
-          source: "paste",
-          text: pastedText,
-        });
-        return true;
+  // Everything passed to `useEditor` below (except event handlers) must keep
+  // a stable identity across renders: the react binding shallow-compares the
+  // options on every render and re-applies them to the live editor
+  // (`setOptions` -> `view.setProps` + `view.updateState`) whenever any value
+  // differs. Re-applying view props while ProseMirror's DOMObserver holds
+  // pending input mutations makes the observer flush re-parse the redrawn DOM
+  // as a fresh doc-changing transaction; with the draft store re-rendering
+  // this hook per keystroke, that feedback loop sustains itself until React
+  // throws "Maximum update depth exceeded" and drops in-flight keystrokes.
+  // Event handlers (`onCreate`, `onUpdate`, ...) are exempt: the binding
+  // excludes them from the comparison and always calls the latest one.
+  // eslint-disable-next-line react/react-compiler -- ref read deferred into the plugin's placeholder callback (invoked out-of-render), not read during render
+  const [extensions] = useState(() => [
+    createPromptEditorDocument(),
+    Paragraph,
+    Text,
+    Bold,
+    // Shift+Enter inserts a hard break (newline) instead of
+    // splitting the paragraph; matches expected chat-input
+    // behaviour everywhere — Slack, Discord, ChatGPT, etc.
+    // Chained with `scrollIntoView()` so adding a new line at
+    // the bottom of an overflowed input keeps the cursor in
+    // view (ProseMirror's auto-scroll only fires on selection
+    // changes that already include the flag — `setHardBreak`
+    // alone doesn't).
+    HardBreak.extend({
+      addKeyboardShortcuts() {
+        return {
+          "Shift-Enter": () =>
+            this.editor.chain().setHardBreak().scrollIntoView().run(),
+        };
       },
-      handleKeyDown: (view, event) => {
-        if (handleMessageHistoryKeyDown(view.state, event)) {
+    }),
+    Placeholder.configure({
+      placeholder: () => placeholderRef.current,
+    }),
+    History,
+    ChatMention.configure({
+      suggestion: createChatSuggestion(
+        getMentionItems,
+        searchMentionItems,
+        loadWorkspaceEntities,
+      ),
+      deleteTriggerWithBackspace: true,
+    }),
+    PastedText,
+    // Decorates nothing until a chat surface's anonymization layer
+    // stores pairs via `setChatAnonDecorationPairs`. Installed here
+    // unconditionally so every surface sharing this editor gets
+    // consistent in-editor highlights without a per-mount install.
+    ChatAnonDecorations,
+  ]);
+
+  const [editorProps] = useState<EditorProps>(() => ({
+    attributes: (state) => ({
+      // A contenteditable div has no implicit ARIA role, so without
+      // these the composer is invisible to assistive tech (and to
+      // role-based queries); the visible placeholder span is
+      // aria-hidden.
+      role: "textbox",
+      "aria-multiline": "true",
+      "aria-label": placeholderRef.current,
+      // While empty, inherit the ambient UI direction so the caret sits on
+      // the RTL side; once there is content, switch to first-strong-character
+      // detection to align mixed Arabic + Latin input. A static `dir="auto"`
+      // would fall back to LTR on the empty doc and strand the caret left.
+      ...(state.doc.textContent.length > 0 ? { dir: "auto" } : {}),
+      class:
+        "field-sizing-content max-h-48 min-h-10 overflow-y-auto text-sm focus-visible:outline-none",
+    }),
+    handlePaste: (_view, event) => {
+      // ProseMirror processes paste before any React `onPaste`
+      // handler, so the chip-on-large-paste logic has to live
+      // here — by the time the React handler fires, the text is
+      // already in the editor.
+      const clipboardData = event.clipboardData;
+      if (clipboardData === null) {
+        return false;
+      }
+
+      const hasFiles = Array.from(clipboardData.items).some(
+        (item) => item.kind === "file",
+      );
+      if (hasFiles) {
+        return false;
+      }
+
+      const pastedText = clipboardData.getData("text/plain");
+      if (!pastedText || !shouldChipPaste(pastedText)) {
+        return false;
+      }
+
+      const targetEditor = editorRef.current;
+      if (targetEditor === null) {
+        return false;
+      }
+
+      event.preventDefault();
+      insertPastedTextChip(targetEditor, {
+        label: "",
+        source: "paste",
+        text: pastedText,
+      });
+      return true;
+    },
+    handleKeyDown: (view, event) => {
+      if (handleMessageHistoryKeyDown(view.state, event)) {
+        return true;
+      }
+
+      // ArrowRight or Tab + empty editor + suggested followup: accept the
+      // suggestion without auto-submitting (so the user can review and press
+      // Enter). Tab is intercepted only in this narrow state — a suggestion
+      // on offer and the input empty — so it still moves focus normally (for
+      // keyboard and screen-reader users) everywhere else, including the
+      // moment the suggestion is gone.
+      if (
+        (event.key === "ArrowRight" || event.key === "Tab") &&
+        !event.shiftKey &&
+        !event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.isComposing
+      ) {
+        const suggestion = suggestedFollowupPromptRef.current;
+        const targetEditor = editorRef.current;
+        if (suggestion && targetEditor?.isEmpty) {
+          event.preventDefault();
+          targetEditor.commands.setContent(
+            createChatComposerDocument(suggestion),
+          );
           return true;
         }
+      }
 
-        // ArrowRight or Tab + empty editor + suggested followup: accept the
-        // suggestion without auto-submitting (so the user can review and press
-        // Enter). Tab is intercepted only in this narrow state — a suggestion
-        // on offer and the input empty — so it still moves focus normally (for
-        // keyboard and screen-reader users) everywhere else, including the
-        // moment the suggestion is gone.
-        if (
-          (event.key === "ArrowRight" || event.key === "Tab") &&
-          !event.shiftKey &&
-          !event.altKey &&
-          !event.ctrlKey &&
-          !event.metaKey &&
-          !event.isComposing
-        ) {
-          const suggestion = suggestedFollowupPromptRef.current;
-          const targetEditor = editorRef.current;
-          if (suggestion && targetEditor?.isEmpty) {
-            event.preventDefault();
-            targetEditor.commands.setContent(
-              createChatComposerDocument(suggestion),
-            );
-            return true;
-          }
-        }
+      // Submit on Enter or Cmd/Ctrl+Enter. Shift+Enter falls
+      // through to the HardBreak extension (newline). The
+      // mention-suggestion plugin owns Enter while its popup is
+      // open — let it pick the highlighted item instead of
+      // submitting the prompt.
+      if (event.key !== "Enter" || event.isComposing) {
+        return false;
+      }
+      if (event.shiftKey) {
+        return false;
+      }
+      if (isSuggestionPluginActive(view.state)) {
+        return false;
+      }
 
-        // Submit on Enter or Cmd/Ctrl+Enter. Shift+Enter falls
-        // through to the HardBreak extension (newline). The
-        // mention-suggestion plugin owns Enter while its popup is
-        // open — let it pick the highlighted item instead of
-        // submitting the prompt.
-        if (event.key !== "Enter" || event.isComposing) {
-          return false;
-        }
-        if (event.shiftKey) {
-          return false;
-        }
-        if (isSuggestionPluginActive(view.state)) {
-          return false;
-        }
+      event.preventDefault();
+      detached(submitHandlerRef.current?.(), "chat-editor-provider.submit");
+      return true;
+    },
+  }));
 
-        event.preventDefault();
-        detached(submitHandlerRef.current?.(), "chat-editor-provider.submit");
-        return true;
-      },
+  const editor = useEditor({
+    autofocus: false,
+    content: initialDraftDoc,
+    editorProps,
+    extensions,
+    onCreate: ({ editor: nextEditor }) => {
+      editorRef.current = nextEditor;
+      applyIsEmpty(nextEditor.isEmpty);
+    },
+    onUpdate: ({ editor: nextEditor, transaction, appendedTransactions }) => {
+      handleEditorUpdate({
+        nextEditor,
+        transactions: [transaction, ...appendedTransactions],
+      });
     },
   });
 
@@ -1092,6 +1211,20 @@ export const useChatEditor = ({
     };
   }, [editor, extensionVersion, syncEditorPlugins]);
 
+  // The root attributes callback (aria-label) reads `placeholderRef` and
+  // ProseMirror only re-evaluates it when view props are re-applied or a
+  // transaction commits — with the options now identity-stable, neither
+  // happens on a placeholder change alone. Re-apply the view props exactly
+  // when the placeholder changes (suggestion arrival, locale switch) so
+  // assistive tech and role-based queries see the current label; this stays
+  // off the per-keystroke path entirely.
+  useExternalSyncEffect(() => {
+    if (!isUsableEditor(editor)) {
+      return;
+    }
+    editor.setOptions({});
+  }, [editor, resolvedPlaceholder]);
+
   useExternalSyncEffect(() => {
     if (!isUsableEditor(editor)) {
       return undefined;
@@ -1103,8 +1236,8 @@ export const useChatEditor = ({
     // `setContent` the editor back to stale content and drop in-flight
     // keystrokes, looping until React throws "Maximum update depth exceeded".
     // Only apply genuinely external drafts (thread switch, restore, mention
-    // inserted while inactive); `isApplyingStoredDraftRef` still suppresses the
-    // resulting `onUpdate`.
+    // inserted while inactive); the draft-echo transaction meta keeps the
+    // resulting `onUpdate` out of the persist path.
     if (
       !shouldApplyStoredDraftToEditor({
         draftDoc,
@@ -1114,16 +1247,14 @@ export const useChatEditor = ({
         editorDoc: editor.getJSON(),
       })
     ) {
-      setIsEmpty(editor.isEmpty);
+      applyIsEmpty(editor.isEmpty);
       return undefined;
     }
 
-    isApplyingStoredDraftRef.current = true;
-    editor.commands.setContent(draftDoc);
-    isApplyingStoredDraftRef.current = false;
-    setIsEmpty(editor.isEmpty);
+    applyDraftDocToEditor(editor, draftDoc);
+    applyIsEmpty(editor.isEmpty);
     return undefined;
-  }, [draftDoc, editor]);
+  }, [applyIsEmpty, draftDoc, editor]);
 
   const focus = useCallback(() => {
     if (!isUsableEditor(editor)) {
@@ -1302,9 +1433,12 @@ export const useChatEditor = ({
         return;
       }
 
+      // A pending mirror write must not resurrect the draft this submit is
+      // about to clear.
+      debouncedPersistEditorDraft.cancel();
       clearDraft(threadKey);
       editor.commands.clearContent();
-      setIsEmpty(true);
+      applyIsEmpty(true);
       draftStartedThreadKeyRef.current = null;
 
       try {
@@ -1324,10 +1458,8 @@ export const useChatEditor = ({
         );
         // The editor may have been destroyed during `await send(...)`;
         if (!editor.isDestroyed) {
-          isApplyingStoredDraftRef.current = true;
-          editor.commands.setContent(doc);
-          isApplyingStoredDraftRef.current = false;
-          setIsEmpty(editor.isEmpty);
+          applyDraftDocToEditor(editor, doc);
+          applyIsEmpty(editor.isEmpty);
           if (!editor.isEmpty || files.length > 0) {
             draftStartedThreadKeyRef.current = restoreThreadKey;
           }
@@ -1335,7 +1467,14 @@ export const useChatEditor = ({
         throw error;
       }
     },
-    [clearDraft, editor, setDraft, setIsEmpty, threadKey],
+    [
+      applyIsEmpty,
+      clearDraft,
+      debouncedPersistEditorDraft,
+      editor,
+      setDraft,
+      threadKey,
+    ],
   );
 
   const canSubmit = !isEmpty || attachments.length > 0;

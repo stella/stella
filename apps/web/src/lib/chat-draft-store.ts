@@ -105,7 +105,12 @@ type NextDraftForEditorUpdateOptions = {
 // document unchanged (e.g. editor props re-applied while the page re-renders
 // during response streaming). Persisting an identical draft would churn the
 // store entry's reference, retrigger the editor's onUpdate, and loop until
-// React's max-update-depth guard throws. Only genuine edits yield a new state.
+// React's max-update-depth guard throws. Only genuine edits yield a new
+// state. Store->editor echoes never reach this decision at all: the provider
+// drops updates whose transactions carry the draft-echo meta (see
+// `updateCarriesDraftEcho` in chat-editor-echo) before scheduling a persist,
+// because a `setContent`/`getJSON` roundtrip can normalize the doc and make
+// an echo compare unequal here.
 export const nextDraftForEditorUpdate = ({
   attachments,
   nextDoc,
