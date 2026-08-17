@@ -44,13 +44,11 @@ const OPENING_PASSAGE_QUERY = "seq:0";
 
 /**
  * Opening passages, minus every source that may no longer be redistributed.
- * Exported for the test that pins the clause: an aggregation that silently
- * dropped it would keep counting revoked decisions for a reconciliation
- * window plus a cache window.
+ * An aggregation that dropped this clause would keep counting revoked
+ * decisions for a reconciliation window plus a cache window, so the test
+ * asserts it on the request the engine would receive.
  */
-export const browseFacetsQuery = (
-  excludedSourceIds: readonly string[],
-): string => {
+const browseFacetsQuery = (excludedSourceIds: readonly string[]): string => {
   if (excludedSourceIds.length === 0) {
     return OPENING_PASSAGE_QUERY;
   }
