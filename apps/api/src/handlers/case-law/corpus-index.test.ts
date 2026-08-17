@@ -9,15 +9,25 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { corpusDocumentDeleteQuery } from "@/api/lib/corpus-index/core";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
+import {
+  DECISION_TIMESTAMP_FIELD,
+  UNDATED_DECISION_TIMESTAMP,
+} from "@/api/lib/legal-search/corpus-index-config";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 
 type MakeRowOptions = {
   id: string;
   contentHash: string;
   textS3Key?: string | null;
+  decisionDate?: string | null;
 };
 
-const makeRow = ({ id, contentHash, textS3Key }: MakeRowOptions) => ({
+const makeRow = ({
+  id,
+  contentHash,
+  textS3Key,
+  decisionDate = "2024-01-01",
+}: MakeRowOptions) => ({
   id: toSafeId<"caseLawDecision">(id),
   sourceId: toSafeId<"caseLawSource">("src_1"),
   caseNumber: `case-${id}`,
@@ -25,7 +35,7 @@ const makeRow = ({ id, contentHash, textS3Key }: MakeRowOptions) => ({
   court: "Test Court",
   country: "CZ",
   language: "cs",
-  decisionDate: "2024-01-01",
+  decisionDate,
   decisionType: null,
   citationAuthority: 0,
   citationCount: 0,
@@ -260,6 +270,45 @@ describe("case-law passage projection", () => {
     expect(
       docs.filter((doc) => String(doc["text"]).includes("Odůvodnění")),
     ).toHaveLength(1);
+  });
+
+  test("every passage carries the timestamp field, dated decision or not", async () => {
+    const dated = makeRow({ id: "dec_dated", contentHash: "hash_dated" });
+    const undated = makeRow({
+      id: "dec_undated",
+      contentHash: "hash_undated",
+      decisionDate: null,
+    });
+
+    const { built } = await loadDocsForBatch([dated, undated], {
+      generation: "case_law_v2",
+      fetchFulltext: async () => null,
+      readPayload: async () => ({
+        text: `${"slovo ".repeat(400)}\n\n${"jinak ".repeat(400)}`,
+        ast: {},
+      }),
+    });
+
+    const docsOf = (id: string) =>
+      built.find((entry) => entry.row.id === id)?.docs ?? [];
+    expect(docsOf(dated.id).length).toBeGreaterThan(1);
+    expect(docsOf(undated.id).length).toBeGreaterThan(1);
+
+    // The engine rejects a document missing the timestamp field, and a
+    // decision is split across passages, so "every document" means every
+    // passage of every row — not one per decision.
+    for (const doc of docsOf(dated.id)) {
+      expect(doc[DECISION_TIMESTAMP_FIELD]).toBe("2024-01-01");
+      expect(doc["decision_date"]).toBe("2024-01-01");
+    }
+    for (const doc of docsOf(undated.id)) {
+      expect(doc[DECISION_TIMESTAMP_FIELD]).toBe(UNDATED_DECISION_TIMESTAMP);
+      // The sentinel stands in for the timestamp field alone. What the court
+      // published is still nothing, so the fields the reader and the year
+      // facet show stay absent rather than claiming a date of 1800.
+      expect(doc["decision_date"]).toBeUndefined();
+      expect(doc["year"]).toBeUndefined();
+    }
   });
 
   test("a row with no usable AST still emits passages, unanchored", async () => {

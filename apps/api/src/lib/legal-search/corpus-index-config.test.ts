@@ -3,7 +3,13 @@ import { expect, test } from "bun:test";
 import {
   caseLawIndexConfig,
   corpusIndexConfig,
+  DECISION_TIMESTAMP_FIELD,
+  TAG_FIELD_VALUE_LIMIT,
 } from "@/api/lib/legal-search/corpus-index-config";
+import {
+  CASE_LAW_JURISDICTIONS,
+  type CaseLawJurisdiction,
+} from "@/api/lib/legal-search/ingestion-constants";
 
 test("searchable text fields enable fieldnorms so BM25 scoring works", () => {
   const fields = new Map(
@@ -16,12 +22,62 @@ test("searchable text fields enable fieldnorms so BM25 scoring works", () => {
   expect(fields.get("title")?.fieldnorms).toBe(true);
 });
 
-test("jurisdiction/document_type/source are tag fields for split pruning", () => {
+test("jurisdiction/document_type/source/court are tag fields for split pruning", () => {
   expect(caseLawIndexConfig("case_law_v1").doc_mapping.tag_fields).toEqual([
     "jurisdiction",
     "document_type",
     "source",
+    "court",
   ]);
+});
+
+/**
+ * The courts one jurisdiction's index can name, bounded by the court system
+ * each source draws from. Deliberately upper bounds rather than observed
+ * counts: the corpus grows toward its sources, and the question a tag field
+ * asks is what the domain can hold, not what it holds today.
+ *
+ * - AUT: RIS publishes for OGH, VwGH and VfGH, 4 Oberlandesgerichte, the
+ *   Landesgerichte, and the Bezirksgerichte.
+ * - CZE: Ústavní soud, NS, NSS, 2 vrchní, 8 krajské (Městský soud v Praze
+ *   among them), and the okresní courts.
+ * - EU: Court of Justice, General Court, and the dissolved Civil Service
+ *   Tribunal.
+ * - POL: the SAOS `commonCourts` registry the adapter takes court names from
+ *   enumerates 374 (318 rejonowy, 45 okręgowy, 11 apelacyjny), plus Sąd
+ *   Najwyższy, NSA, Trybunał Konstytucyjny and the voivodeship
+ *   administrative courts.
+ * - SVK: Ústavný súd, NS, NSS, the krajské courts, and the okresné courts.
+ */
+const COURT_DOMAIN_BOUND = {
+  AUT: 200,
+  CZE: 200,
+  EU: 10,
+  POL: 400,
+  SVK: 200,
+} as const satisfies Record<CaseLawJurisdiction, number>;
+
+// A tag field whose values outgrow the engine's per-split limit stops being
+// recorded, and the only symptom is that every query opens every split. Court
+// is the one tag field whose domain is neither a short closed list
+// (document_type, status) nor an operator-curated catalogue (source,
+// jurisdiction), so it is the one that has to be argued.
+test("court stays a viable tag field in every jurisdiction's index", () => {
+  // Indexes are per generation and jurisdiction, so a split holds one
+  // country's courts. A bound at half the limit leaves room for court renames
+  // and reorganizations, which add values without retiring the old ones.
+  for (const bound of Object.values(COURT_DOMAIN_BOUND)) {
+    expect(bound).toBeLessThan(TAG_FIELD_VALUE_LIMIT / 2);
+  }
+
+  // Total over the jurisdictions the corpus ships, so onboarding one is a
+  // decision about its court registry rather than a silent inheritance.
+  expect(Object.keys(COURT_DOMAIN_BOUND).sort()).toEqual([
+    ...CASE_LAW_JURISDICTIONS,
+  ]);
+  expect(
+    caseLawIndexConfig("case_law_v3_pol").doc_mapping.tag_fields,
+  ).toContain("court");
 });
 
 test("index_id is the generation; citation_authority is a fast f64", () => {
@@ -125,6 +181,73 @@ test("every full-text field uses a declared tokenizer, and every declared one is
     for (const field of fullText) {
       expect(field.tokenizer).toBe("folded");
     }
+  }
+});
+
+// Same reason the tokenizer block is pinned: the engine never diffs an
+// existing index, so this shape is only ever read at creation time, and the
+// block a reviewer sees is the block the engine is asked to accept.
+test("the merge policy is declared whole, verbatim", () => {
+  for (const family of ["case_law", "legislation"] as const) {
+    expect(
+      corpusIndexConfig(family, `${family}_v3_cze`).indexing_settings,
+    ).toEqual({
+      merge_policy: {
+        type: "stable_log",
+        maturation_period: "7days",
+        merge_factor: 10,
+        max_merge_factor: 12,
+        min_level_num_docs: 100_000,
+      },
+    });
+  }
+});
+
+test("case law names decision_date_ts as its timestamp field, mapped verbatim", () => {
+  const config = caseLawIndexConfig("case_law_v3_cze");
+  expect(config.doc_mapping.timestamp_field).toBe(DECISION_TIMESTAMP_FIELD);
+  expect(
+    config.doc_mapping.field_mappings.find(
+      (f) => f.name === DECISION_TIMESTAMP_FIELD,
+    ),
+  ).toEqual({
+    name: "decision_date_ts",
+    type: "datetime",
+    fast: true,
+    fast_precision: "seconds",
+    input_formats: ["%Y-%m-%d", "rfc3339", "unix_timestamp"],
+  });
+
+  // The field it stands in for keeps its own mapping: nullable, so it is
+  // absent from an undated decision's document, and never the timestamp field.
+  const decisionDate = config.doc_mapping.field_mappings.find(
+    (f) => f.name === "decision_date",
+  );
+  expect(decisionDate?.type).toBe("datetime");
+  expect(decisionDate?.fast).toBe(true);
+});
+
+// The engine rejects an index whose timestamp field it cannot find in the doc
+// mapping, and rejects a document that omits the field. A family therefore
+// either maps a field every one of its documents carries, or declares none.
+test("a declared timestamp field is a mapped fast datetime; a family without one declares none", () => {
+  const declared = new Map(
+    (["case_law", "legislation"] as const).map((family) => [
+      family,
+      corpusIndexConfig(family, `${family}_v3_cze`).doc_mapping,
+    ]),
+  );
+
+  expect(declared.get("legislation")?.timestamp_field).toBeUndefined();
+
+  for (const mapping of declared.values()) {
+    const { timestamp_field: timestampField } = mapping;
+    if (timestampField === undefined) {
+      continue;
+    }
+    const field = mapping.field_mappings.find((f) => f.name === timestampField);
+    expect(field?.type).toBe("datetime");
+    expect(field?.fast).toBe(true);
   }
 });
 
