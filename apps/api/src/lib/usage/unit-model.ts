@@ -139,9 +139,11 @@ const sanitizeTokenCount = ({
     anomaly: `invalid-${field}`,
     context: { value: String(value) },
   });
-  if (!Number.isFinite(value) || value <= 0) {
+  if (Number.isNaN(value) || value <= 0) {
     return 0;
   }
+  // Oversized positive values (finite or +Infinity) clamp to the ceiling
+  // rather than zeroing: a too-large count must never under-meter.
   return Math.min(Math.ceil(value), MAX_TOKEN_COUNT);
 };
 
@@ -241,8 +243,11 @@ export const normalizeProviderPromptTokens = ({
       if (cacheRead > prompt) {
         // Under subset semantics the cached count can never exceed the
         // prompt count: a shape disagreement with the provider, not an
-        // internal invariant. Bill the full prompt at the input rate
-        // (never under-meters) and record the raw shape.
+        // internal invariant. Fall back to separate accounting — bill the
+        // full prompt at the input rate AND the reported cache reads at
+        // the cache rate. That over-meters relative to either consistent
+        // reading, which is the conservative direction; discarding the
+        // larger cache-read count would under-meter.
         reportUsageShapeAnomaly({
           modelId,
           anomaly: "cache-read-exceeds-included-prompt",
@@ -252,7 +257,7 @@ export const normalizeProviderPromptTokens = ({
             cacheReadTokens: String(cacheRead),
           },
         });
-        return { uncachedInputTokens: prompt, cacheReadTokens: 0 };
+        return { uncachedInputTokens: prompt, cacheReadTokens: cacheRead };
       }
       return {
         uncachedInputTokens: prompt - cacheRead,

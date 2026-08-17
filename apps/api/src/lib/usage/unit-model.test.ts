@@ -143,12 +143,7 @@ describe("computeRawUsageMicroUnits", () => {
   test("meters malformed token counts conservatively without throwing", () => {
     // Each malformed field must coerce (never throw), report the shape,
     // and leave the well-formed fields metered normally.
-    const invalidCounts = [
-      -1,
-      Number.NaN,
-      Number.POSITIVE_INFINITY,
-      Number.NEGATIVE_INFINITY,
-    ];
+    const invalidCounts = [-1, Number.NaN, Number.NEGATIVE_INFINITY];
     const fields = [
       "uncachedInputTokens",
       "outputTokens",
@@ -176,6 +171,19 @@ describe("computeRawUsageMicroUnits", () => {
       }
     }
     expect(captureErrorMock).toHaveBeenCalled();
+
+    // +Infinity is an oversized positive count, not an absent one: it must
+    // clamp to the ceiling (over-metering), never coerce to zero.
+    for (const field of fields) {
+      const units = computeRawUsageMicroUnits({
+        modelId: "gemini-2.5-flash",
+        uncachedInputTokens: 100,
+        outputTokens: 100,
+        cacheReadTokens: 0,
+        [field]: Number.POSITIVE_INFINITY,
+      });
+      expect(units).toBeGreaterThan(baseline);
+    }
   });
 
   test("rounds fractional token counts up", () => {
@@ -293,9 +301,12 @@ describe("normalizeProviderPromptTokens", () => {
       cacheWriteTokens: 0,
     });
 
+    // Shape disagreement falls back to separate accounting: full prompt at
+    // the input rate AND the reported cache reads at the cache rate, so the
+    // larger reported amount is never discarded (conservative direction).
     expect(normalized).toEqual({
       uncachedInputTokens: 1024,
-      cacheReadTokens: 0,
+      cacheReadTokens: 2048,
     });
     expect(captureErrorMock).toHaveBeenCalledWith(
       expect.any(Error),
