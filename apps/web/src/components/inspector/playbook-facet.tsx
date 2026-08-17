@@ -38,6 +38,15 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/components/combobox";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@stll/ui/components/dialog";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Input } from "@stll/ui/components/input";
 import {
@@ -107,6 +116,7 @@ import type {
   ReviewTopic,
   ReviewFindingFix,
   ReviewFixState,
+  RunSizeConfirmation,
   StartReviewResult,
 } from "@/components/ai-suggestions/playbook-review-store";
 import { DocumentIcon } from "@/components/document-icon";
@@ -170,6 +180,12 @@ export const PlaybookFacet = ({
   );
   const startReview = usePlaybookReviewStore((state) => state.startReview);
   const startRun = usePlaybookReviewStore((state) => state.startRun);
+  const confirmRunSize = usePlaybookReviewStore(
+    (state) => state.confirmRunSize,
+  );
+  const dismissRunSize = usePlaybookReviewStore(
+    (state) => state.dismissRunSize,
+  );
   const confirmTopics = usePlaybookReviewStore((state) => state.confirmTopics);
   const setTopics = usePlaybookReviewStore((state) => state.setTopics);
   const setFixState = usePlaybookReviewStore((state) => state.setFixState);
@@ -490,49 +506,129 @@ export const PlaybookFacet = ({
     return <ReviewLoadingState />;
   }
 
+  // Rendered alongside whichever branch is on screen: a refused start
+  // parks the session at "idle", where either the launcher or a restored
+  // run panel may be showing.
+  const sizeConfirmDialog = (
+    <RunSizeConfirmDialog
+      confirmation={session?.sizeConfirmation ?? null}
+      onConfirm={() => {
+        detached(
+          (async () => {
+            const result = await confirmRunSize(entityId, fileFieldId);
+            if (!result.ok) {
+              if (result.error) {
+                analytics.captureError(toAPIError(result.error));
+              }
+              stellaToast.add({
+                type: "error",
+                title: t("inspector.review.failed"),
+                description: result.message,
+              });
+            }
+          })(),
+          "playbook-facet.confirm-run-size",
+        );
+      }}
+      onDismiss={() => dismissRunSize(entityId, fileFieldId)}
+    />
+  );
+
   if (trackedRunId !== null) {
     return (
-      <ReviewRunPanel
-        commentStateByFinding={
-          session === undefined ? {} : session.commentState
-        }
-        currentEntityVersionId={currentEntityVersionId}
-        editorAvailable={editorAvailable}
-        fixStateByFinding={session === undefined ? {} : session.fixState}
-        onAcceptFix={acceptFix}
-        onAddReferenceComment={(finding) => {
-          detached(
-            addFindingComment(finding),
-            "playbook-facet.add-finding-comment",
-          );
-        }}
-        onInsertFix={(findingId, fix) => {
-          detached(insertFix(findingId, fix), "playbook-facet.insert-fix");
-        }}
-        onOpenReferenceCitation={openReferenceCitation}
-        onRejectFix={rejectFix}
-        onRetry={(retry) => {
-          detached(retryRun(retry), "playbook-facet.retry-run");
-        }}
-        onReviewAgain={() => resetSession(entityId, fileFieldId)}
-        onScrollToBlock={scrollToBlock}
-        onScrollToFix={scrollToFix}
-        organizationId={user.activeOrganizationId}
-        runId={trackedRunId}
-        workspaceId={workspaceId}
-      />
+      <>
+        {sizeConfirmDialog}
+        <ReviewRunPanel
+          commentStateByFinding={
+            session === undefined ? {} : session.commentState
+          }
+          currentEntityVersionId={currentEntityVersionId}
+          editorAvailable={editorAvailable}
+          fixStateByFinding={session === undefined ? {} : session.fixState}
+          onAcceptFix={acceptFix}
+          onAddReferenceComment={(finding) => {
+            detached(
+              addFindingComment(finding),
+              "playbook-facet.add-finding-comment",
+            );
+          }}
+          onInsertFix={(findingId, fix) => {
+            detached(insertFix(findingId, fix), "playbook-facet.insert-fix");
+          }}
+          onOpenReferenceCitation={openReferenceCitation}
+          onRejectFix={rejectFix}
+          onRetry={(retry) => {
+            detached(retryRun(retry), "playbook-facet.retry-run");
+          }}
+          onReviewAgain={() => resetSession(entityId, fileFieldId)}
+          onScrollToBlock={scrollToBlock}
+          onScrollToFix={scrollToFix}
+          organizationId={user.activeOrganizationId}
+          runId={trackedRunId}
+          workspaceId={workspaceId}
+        />
+      </>
     );
   }
 
   return (
-    <Launcher
-      playbooks={playbooks}
-      target={{ entityId, fileFieldId }}
-      workspaceId={workspaceId}
-      onReview={(basis, seededTopics) => {
-        detached(runReview(basis, seededTopics), "playbook-facet.run-review");
+    <>
+      {sizeConfirmDialog}
+      <Launcher
+        playbooks={playbooks}
+        target={{ entityId, fileFieldId }}
+        workspaceId={workspaceId}
+        onReview={(basis, seededTopics) => {
+          detached(runReview(basis, seededTopics), "playbook-facet.run-review");
+        }}
+      />
+    </>
+  );
+};
+
+type RunSizeConfirmDialogProps = {
+  confirmation: RunSizeConfirmation | null;
+  onConfirm: () => void;
+  onDismiss: () => void;
+};
+
+/** Asks the reviewer to restate a large run's estimated size before it
+ *  starts; closing without confirming abandons the parked request. */
+const RunSizeConfirmDialog = ({
+  confirmation,
+  onConfirm,
+  onDismiss,
+}: RunSizeConfirmDialogProps) => {
+  const t = useTranslations();
+  return (
+    <Dialog
+      open={confirmation !== null}
+      onOpenChange={(open) => {
+        if (!open) {
+          onDismiss();
+        }
       }}
-    />
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t("inspector.review.sizeConfirmTitle")}</DialogTitle>
+          <DialogDescription>
+            {t("inspector.review.sizeConfirmDescription", {
+              estimated: confirmation?.estimatedUnits ?? 0,
+              available: confirmation?.availableUnits ?? 0,
+            })}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <DialogClose render={<Button variant="ghost" />}>
+            {t("common.cancel")}
+          </DialogClose>
+          <Button onClick={onConfirm}>
+            {t("inspector.review.sizeConfirmStart")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 
