@@ -84,7 +84,7 @@ const ISO_DATE_LENGTH = 10;
  * slightly ahead; a fixed upper year would go stale.
  *
  * Exported because the same bounds have to hold in SQL: rows written before
- * the guard existed are found by `repair-decision-dates-sql.ts`, which derives
+ * the guard existed are found by `repair-decision-dates-plan.ts`, which derives
  * its predicate from this declaration rather than restating the numbers.
  */
 export const DECISION_YEAR_BOUNDS = {

@@ -31,7 +31,9 @@
  * candidates on `decision_date` and treats NULL on either side as permissive.
  * Edges decided under the old date are retracted and requeued through the same
  * helpers the ingestion pipeline uses when a stored decision's resolution
- * identity changes, under the citation-graph lock.
+ * identity changes, under the citation-graph lock — and in the pipeline's lock
+ * order, decision rows before the graph, so a refresh of one of these decisions
+ * running at the same time cannot deadlock against the repair.
  *
  * **Why the bounds are not a CHECK constraint yet.** They should be, and the
  * predicate above is written so the same text can become one. It cannot land
@@ -43,9 +45,12 @@
  * finding zero rows is the precondition; until then the write path's own
  * `canonicalDecisionDate` is the guard, and `dates.test.ts` pins its bounds.
  *
- * Without `--apply` nothing is written: the run reports the population per
- * source and per year and exits. Idempotent either way — a repaired row leaves
- * the selection predicate, so a second pass finds nothing.
+ * Without `--apply` nothing is written and nothing is locked: the run reports
+ * the population per source and per year, then how many of those rows a repair
+ * would re-derive and how many it would clear, and exits. Those last two are
+ * what an operator authorises on, because a cleared row loses its date for
+ * good. Idempotent either way — a repaired row leaves the selection predicate,
+ * so a second pass finds nothing.
  *
  *   # what the repair would touch, writing nothing
  *   bun run src/scripts/repair-decision-dates.ts
@@ -77,6 +82,7 @@ import type {
 import {
   applyDecisionDateRepairsStatement,
   DECISION_DATE_REPAIR_OUTCOMES,
+  DECISION_DATE_ROW_LOCKS,
   decideDecisionDateRepair,
   decisionDateSourceSurveyStatement,
   decisionDateYearSurveyStatement,
@@ -283,16 +289,23 @@ const reopenWrittenAt = async (
 
 const repairBatch = async (size: number): Promise<BatchResult> =>
   await rootDb.transaction(async (tx) => {
-    // The lock first, then the read: this changes what decisions are citable,
-    // so a resolver batch holding a snapshot from before the date moved must
-    // not commit an edge against it.
-    await lockCitationGraph(tx);
+    // Decision rows first, citation graph second — the order the ingestion
+    // pipeline takes them in, which is the only thing that keeps a concurrent
+    // refresh of one of these decisions from deadlocking against this batch.
+    // Holding the rows is also what makes the graph work below sound: nothing
+    // can move a claimed row's date between the reopen and the commit.
     const rows = executedRows(
-      await tx.execute(selectCorruptDecisionDatesStatement(size)),
+      await tx.execute(
+        selectCorruptDecisionDatesStatement({
+          limit: size,
+          lock: DECISION_DATE_ROW_LOCKS.FOR_UPDATE,
+        }),
+      ),
     ).map(parseCorruptDecisionDateRow);
     if (rows.length === 0) {
       return { cleared: 0, rederived: 0, skipped: 0 };
     }
+    await lockCitationGraph(tx);
 
     const repairs = rows.map(decideDecisionDateRepair);
     const written = new Set(
@@ -334,9 +347,42 @@ const repairUntilDone = async (counts: {
   await repairUntilDone(counts);
 };
 
+/**
+ * What the repair would decide, without writing or claiming anything.
+ *
+ * The counts an operator authorises on are these, not the population size: a
+ * cleared row loses its date for good, so how many rows that is has to be on
+ * the report rather than discovered afterwards.
+ */
+const printDecisions = async (): Promise<void> => {
+  const rows = executedRows(
+    await rootDb.execute(
+      selectCorruptDecisionDatesStatement({
+        limit,
+        lock: DECISION_DATE_ROW_LOCKS.NONE,
+      }),
+    ),
+  ).map(parseCorruptDecisionDateRow);
+  const decided = rows.map(decideDecisionDateRepair);
+  const rederived = decided.filter(
+    ({ outcome }) => outcome === DECISION_DATE_REPAIR_OUTCOMES.REDERIVED,
+  ).length;
+  console.info("--- what a repair would decide ---");
+  console.info(`re-derived from metadata: ${String(rederived)}`);
+  console.info(
+    `cleared to NULL:          ${String(decided.length - rederived)}`,
+  );
+  if (rows.length >= limit) {
+    console.info(
+      `decisions capped at --limit ${String(limit)}; the counts above are a floor`,
+    );
+  }
+};
+
 const total = await printSurvey();
 
 if (!apply) {
+  await printDecisions();
   console.info(
     "Report only: nothing written. Re-run with --apply to repair, and note " +
       "that a run reporting zero rows is the precondition for adding the " +

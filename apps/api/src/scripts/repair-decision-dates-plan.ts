@@ -104,8 +104,35 @@ export const decisionDateYearSurveyStatement = (limit: number): SQL => sql`
  * (`source_raw_s3_key`), so reading it is a network round-trip per row, and it
  * holds the same publisher payload the corrupt value was taken from — the cost
  * buys a copy of what metadata already showed.
+ *
+ * `lock` decides whether the read claims its rows. A repairing batch takes
+ * `FOR UPDATE` on the decisions alone, before the citation-graph lock, because
+ * that is the order the ingestion pipeline takes them in: it locks the row it
+ * is about to overwrite, then reopens the edges its identity change
+ * invalidates. Taking them the other way round here would let one transaction
+ * hold the row while waiting for the graph and the other hold the graph while
+ * waiting for the row, which PostgreSQL resolves by aborting one of them. A
+ * report-only read claims nothing.
  */
-export const selectCorruptDecisionDatesStatement = (limit: number): SQL => sql`
+export const DECISION_DATE_ROW_LOCKS = {
+  /** Claim the decision rows, in the pipeline's lock order. */
+  FOR_UPDATE: "for-update",
+  /** Read without claiming anything. */
+  NONE: "none",
+} as const;
+
+export type DecisionDateRowLock =
+  (typeof DECISION_DATE_ROW_LOCKS)[keyof typeof DECISION_DATE_ROW_LOCKS];
+
+type SelectCorruptDecisionDatesOptions = {
+  limit: number;
+  lock: DecisionDateRowLock;
+};
+
+export const selectCorruptDecisionDatesStatement = ({
+  limit,
+  lock,
+}: SelectCorruptDecisionDatesOptions): SQL => sql`
   SELECT d.id AS "id",
          s.adapter_key AS "adapterKey",
          d.decision_date::text AS "storedDate",
@@ -117,6 +144,7 @@ export const selectCorruptDecisionDatesStatement = (limit: number): SQL => sql`
    WHERE ${OUT_OF_BOUNDS}
    ORDER BY d.id
    LIMIT ${limit}
+   ${lock === DECISION_DATE_ROW_LOCKS.FOR_UPDATE ? sql`FOR UPDATE OF d` : sql``}
 `;
 
 /** One corrupt row as `selectCorruptDecisionDatesStatement` returns it. */

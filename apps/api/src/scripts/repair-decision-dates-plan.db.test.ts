@@ -7,10 +7,14 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionDate } from "@/api/lib/dates";
 import { isRecord } from "@/api/lib/type-guards";
-import type { CorruptDecisionDateRow } from "@/api/scripts/repair-decision-dates-plan";
+import type {
+  CorruptDecisionDateRow,
+  DecisionDateRowLock,
+} from "@/api/scripts/repair-decision-dates-plan";
 import {
   applyDecisionDateRepairsStatement,
   DECISION_DATE_REPAIR_OUTCOMES,
+  DECISION_DATE_ROW_LOCKS,
   decideDecisionDateRepair,
   decisionDateSourceSurveyStatement,
   decisionDateYearSurveyStatement,
@@ -200,9 +204,12 @@ const executedRows = (result: unknown): unknown[] => {
   return [];
 };
 
-const corruptRows = async (limit: number): Promise<CorruptDecisionDateRow[]> =>
+const corruptRows = async (
+  limit: number,
+  lock: DecisionDateRowLock = DECISION_DATE_ROW_LOCKS.NONE,
+): Promise<CorruptDecisionDateRow[]> =>
   executedRows(
-    await db.execute(selectCorruptDecisionDatesStatement(limit)),
+    await db.execute(selectCorruptDecisionDatesStatement({ limit, lock })),
   ).map(parseCorruptDecisionDateRow);
 
 test("the selection is exactly what the write-path guard rejects", async () => {
@@ -213,6 +220,14 @@ test("the selection is exactly what the write-path guard rejects", async () => {
   const rejected = new Set(rejectedByGuard.map(({ id }) => id));
 
   expect([...selected].toSorted()).toEqual([...rejected].toSorted());
+  // The repairing variant claims its rows before the citation-graph lock, in
+  // the ingestion pipeline's lock order. `FOR UPDATE OF d` over a join is only
+  // valid SQL against the right alias, and it must not change what is selected.
+  expect(
+    (await corruptRows(100, DECISION_DATE_ROW_LOCKS.FOR_UPDATE))
+      .map(({ id }) => id)
+      .toSorted(),
+  ).toEqual([...rejected].toSorted());
   // Guards the assertion above against a fixture set that made it vacuous.
   expect(selected.size).toBeGreaterThan(0);
   expect(selected.size).toBeLessThan(fixtures.length);
