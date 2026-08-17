@@ -77,6 +77,70 @@ const getModelRateOrFallback = (modelId: string): ModelRate => {
 const isNonNegativeSafeInteger = (value: number): boolean =>
   Number.isSafeInteger(value) && value >= 0;
 
+const toTokenCount = (value: number): number =>
+  isNonNegativeSafeInteger(value) ? value : 0;
+
+// Model ids already reported for a token-count anomaly this process, so a
+// hot billing path can't spam telemetry when a provider reports usage
+// consistently outside the expected range.
+const reportedTokenAnomalyModelIds = new Set<string>();
+
+/**
+ * Provider-reported token counts are external boundary data, not an
+ * internal invariant: a malformed or differently-normalized usage payload
+ * (negative, fractional, or a cache-read count that is not a subset of the
+ * input count) must be metered at clamped values and reported, never abort
+ * the process. This helper runs in the analytics `onUsage` callback, which
+ * the chat lifecycle declares nonterminal, so a panic here would escalate a
+ * data-quality problem into a process crash.
+ */
+const sanitizeProviderTokenCounts = ({
+  modelId,
+  inputTokens,
+  outputTokens,
+  cacheReadTokens,
+}: {
+  modelId: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+}): { inputTokens: number; outputTokens: number; cacheReadTokens: number } => {
+  const safeInputTokens = toTokenCount(inputTokens);
+  const safeOutputTokens = toTokenCount(outputTokens);
+  // `cacheReadTokens` is a subset of `inputTokens` (see `billedInputTokens`),
+  // so clamp into range to keep that arithmetic invariant non-negative.
+  const safeCacheReadTokens = Math.min(
+    toTokenCount(cacheReadTokens),
+    safeInputTokens,
+  );
+
+  const clamped =
+    safeInputTokens !== inputTokens ||
+    safeOutputTokens !== outputTokens ||
+    safeCacheReadTokens !== cacheReadTokens;
+  if (clamped && !reportedTokenAnomalyModelIds.has(modelId)) {
+    reportedTokenAnomalyModelIds.add(modelId);
+    captureError(
+      new TelemetryError({
+        message: "Usage token counts out of range; metering at clamped values",
+      }),
+      {
+        source: "usage-unit-model",
+        modelId,
+        inputTokens: String(inputTokens),
+        outputTokens: String(outputTokens),
+        cacheReadTokens: String(cacheReadTokens),
+      },
+    );
+  }
+
+  return {
+    inputTokens: safeInputTokens,
+    outputTokens: safeOutputTokens,
+    cacheReadTokens: safeCacheReadTokens,
+  };
+};
+
 const scaleTokenCost = (tokens: number, ratePerMTok: number): number => {
   if (!isNonNegativeSafeInteger(ratePerMTok)) {
     panic("usage rates must be non-negative safe integers");
@@ -105,8 +169,9 @@ type UsageInput = {
 
 /**
  * Convert token usage into normalized micro-units using the
- * model's public rate table. Provider token counts are validated here because
- * this helper is the shared boundary before usage reaches the ledger.
+ * model's public rate table. Provider token counts are sanitized here
+ * (see `sanitizeProviderTokenCounts`) because this helper is the shared
+ * boundary before usage reaches the ledger.
  */
 export const computeRawUsageMicroUnits = ({
   modelId,
@@ -114,22 +179,25 @@ export const computeRawUsageMicroUnits = ({
   outputTokens,
   cacheReadTokens = 0,
 }: UsageInput): number => {
-  if (
-    !isNonNegativeSafeInteger(inputTokens) ||
-    !isNonNegativeSafeInteger(outputTokens) ||
-    !isNonNegativeSafeInteger(cacheReadTokens)
-  ) {
-    panic("usage token counts must be non-negative safe integers");
-  }
-  if (cacheReadTokens > inputTokens) {
-    panic("cached input tokens cannot exceed total input tokens");
-  }
-  const rate = resolveModelRate(getModelRateOrFallback(modelId), inputTokens);
-  const billedInputTokens = inputTokens - cacheReadTokens;
+  const {
+    inputTokens: safeInputTokens,
+    outputTokens: safeOutputTokens,
+    cacheReadTokens: safeCacheReadTokens,
+  } = sanitizeProviderTokenCounts({
+    modelId,
+    inputTokens,
+    outputTokens,
+    cacheReadTokens,
+  });
+  const rate = resolveModelRate(
+    getModelRateOrFallback(modelId),
+    safeInputTokens,
+  );
+  const billedInputTokens = safeInputTokens - safeCacheReadTokens;
   const cachedRate = rate.cachedInputPerMTok ?? rate.inputPerMTok;
   const inputCost = scaleTokenCost(billedInputTokens, rate.inputPerMTok);
-  const cacheCost = scaleTokenCost(cacheReadTokens, cachedRate);
-  const outputCost = scaleTokenCost(outputTokens, rate.outputPerMTok);
+  const cacheCost = scaleTokenCost(safeCacheReadTokens, cachedRate);
+  const outputCost = scaleTokenCost(safeOutputTokens, rate.outputPerMTok);
   const rawUsageMicroUnits = inputCost + cacheCost + outputCost;
   if (!Number.isSafeInteger(rawUsageMicroUnits)) {
     panic("computed raw usage exceeds the safe integer range");

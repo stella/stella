@@ -137,18 +137,28 @@ describe("computeRawUsageMicroUnits", () => {
     ).toBe(0);
   });
 
-  test("panics on inconsistent token counts (cache > input)", () => {
-    expect(() =>
+  test("clamps a cache-read count above the input count and reports it", () => {
+    // Providers that report cache reads separately from (not as a subset
+    // of) input tokens can send cacheReadTokens > inputTokens; metering
+    // must clamp to the range the arithmetic assumes, not abort.
+    const clamped = computeRawUsageMicroUnits({
+      modelId: "gpt-5.4",
+      inputTokens: 100,
+      outputTokens: 0,
+      cacheReadTokens: 200,
+    });
+    expect(clamped).toBe(
       computeRawUsageMicroUnits({
-        modelId: "gemini-2.5-flash",
+        modelId: "gpt-5.4",
         inputTokens: 100,
         outputTokens: 0,
-        cacheReadTokens: 200,
+        cacheReadTokens: 100,
       }),
-    ).toThrow("cached input tokens cannot exceed total input tokens");
+    );
+    expect(captureErrorMock).toHaveBeenCalledTimes(1);
   });
 
-  test("rejects every token field outside the non-negative safe-integer domain", () => {
+  test("never throws on token fields outside the non-negative safe-integer domain", () => {
     const invalidCounts = [
       -1,
       0.5,
@@ -159,19 +169,35 @@ describe("computeRawUsageMicroUnits", () => {
     ];
     const fields = ["inputTokens", "outputTokens", "cacheReadTokens"] as const;
 
+    // The metering boundary must degrade to a clamped, non-negative safe
+    // integer for any malformed provider payload rather than crashing the
+    // process, since it runs in the nonterminal onUsage callback.
     for (const field of fields) {
       for (const invalidCount of invalidCounts) {
-        expect(() =>
-          computeRawUsageMicroUnits({
+        let units = -1;
+        expect(() => {
+          units = computeRawUsageMicroUnits({
             modelId: "gemini-2.5-flash",
             inputTokens: 100,
             outputTokens: 100,
             cacheReadTokens: 0,
             [field]: invalidCount,
-          }),
-        ).toThrow("usage token counts must be non-negative safe integers");
+          });
+        }).not.toThrow();
+        expect(Number.isSafeInteger(units)).toBe(true);
+        expect(units).toBeGreaterThanOrEqual(0);
       }
     }
+  });
+
+  test("reports a clamped token anomaly through telemetry", () => {
+    computeRawUsageMicroUnits({
+      modelId: "gpt-5.5",
+      inputTokens: 100,
+      outputTokens: -5,
+      cacheReadTokens: 0,
+    });
+    expect(captureErrorMock).toHaveBeenCalledTimes(1);
   });
 
   test("rejects a computed amount outside the safe-integer domain", () => {
