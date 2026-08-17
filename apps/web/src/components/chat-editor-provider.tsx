@@ -47,6 +47,7 @@ import {
   insertPastedTextChip,
   PastedText,
 } from "@/components/chat-pasted-text-extension";
+import { ChatAnonDecorations } from "@/components/chat/chat-anon-decorations-extension";
 import { createPromptEditorDocument } from "@/components/prompt-editor.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -937,6 +938,11 @@ export const useChatEditor = ({
         deleteTriggerWithBackspace: true,
       }),
       PastedText,
+      // Decorates nothing until a chat surface's anonymization layer
+      // stores pairs via `setChatAnonDecorationPairs`. Installed here
+      // unconditionally so every surface sharing this editor gets
+      // consistent in-editor highlights without a per-mount install.
+      ChatAnonDecorations,
     ],
     onCreate: ({ editor: nextEditor }) => {
       editorRef.current = nextEditor;
