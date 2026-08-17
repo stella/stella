@@ -397,9 +397,16 @@ export const caseLawDecisions = p.pgTable(
       .on(t.languageGroupKey)
       .where(isNotNull(t.languageGroupKey)),
     p.index("case_law_decisions_created_at_idx").on(t.createdAt),
+    // The generation rebuild walks its snapshot in decision-date order, so the
+    // documents one split receives cover a contiguous span of dates and a
+    // timestamp-filtered query can skip the splits outside its window. The
+    // expression, direction and tiebreaker mirror the walk's ORDER BY exactly,
+    // so a page is an index range rather than a sort of the corpus. Undated
+    // decisions coalesce to `-infinity`: they sort first, as one band, matching
+    // the earliest-possible timestamp their documents carry.
     p
-      .index("case_law_decisions_corpus_generation_cursor_idx")
-      .on(t.createdAt, t.id),
+      .index("case_law_decisions_corpus_generation_date_cursor_idx")
+      .on(sql`coalesce(${t.decisionDate}, '-infinity'::date)`, t.id),
     p
       .index("case_law_decisions_source_generation_cursor_idx")
       .on(t.sourceId, t.createdAt, t.id),
@@ -1136,7 +1143,21 @@ export const caseLawCorpusIndexBackfills = p.pgTable(
         sql`substring("generation" from '^case_law_v([1-9][0-9]*)$')::integer`,
       ),
     snapshotAt: timestamptz("snapshot_at").defaultNow().notNull(),
+    /**
+     * The walk's previous, creation-ordered cursor. Nothing reads or writes it:
+     * it stays only because a migration runs before the tasks of the release
+     * that stops selecting it have finished rolling out, and a dropped column
+     * would fail their checkpoint read. Drop it in the release after
+     * `cursor_walk_date` ships.
+     */
     cursorCreatedAt: timestamptz("cursor_created_at"),
+    /**
+     * Keyset position in the walk's own order: the decision date the last
+     * indexed page ended on, `-infinity` while the walk is still in the undated
+     * band. Paired with `cursor_id`, which carries the ties a day-granular date
+     * leaves behind.
+     */
+    cursorWalkDate: p.date("cursor_walk_date"),
     cursorId: safeUuid<"caseLawDecision">("cursor_id"),
     status: p
       .text({ enum: CASE_LAW_CORPUS_INDEX_BACKFILL_STATUSES })
@@ -1166,7 +1187,7 @@ export const caseLawCorpusIndexBackfills = p.pgTable(
     ),
     p.check(
       "case_law_corpus_index_backfills_cursor_pair",
-      sql`(${t.cursorCreatedAt} IS NULL) = (${t.cursorId} IS NULL)`,
+      sql`(${t.cursorWalkDate} IS NULL) = (${t.cursorId} IS NULL)`,
     ),
     p.check(
       "case_law_corpus_index_backfills_lease_pair",

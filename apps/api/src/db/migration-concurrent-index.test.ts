@@ -75,6 +75,11 @@ const APPROVED_PROCEDURAL_STATEMENTS = new Set([
   // Adds the chat reasoning-effort CHECK only when it is absent. The body is
   // static DDL; the conditional makes a partially applied migration retryable.
   "20260808003000_chat_reasoning_effort/migration.sql:871dd7588123b5ea2a092acac856c0427e4cf8673b8494bc94cf0a6dbd6cfd0f",
+  // Refuses to re-order the corpus-index rebuild's cursor while a rebuild is
+  // in flight. Reads one small checkpoint table and raises; it writes nothing,
+  // takes no lock beyond the read, and stopping the release is the intended
+  // outcome, since the two orders cannot share one cursor slot.
+  "20260817150000_corpus_generation_date_walk/migration.sql:06821016b65f9c0e7ab643794da37f29616a0ccbef91df3df8b1806197f5ac8c",
 ]);
 
 type TimeoutState = "bounded" | "unbounded" | "unset";

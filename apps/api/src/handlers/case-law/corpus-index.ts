@@ -1064,28 +1064,114 @@ const backfillIncrementalCorpusIndex = async (
 };
 
 /**
- * Keyset and snapshot timestamps travel as exact-precision text tokens, never
- * as `Date`: Postgres keeps microseconds, a `Date` keeps milliseconds, and a
- * truncated cursor re-selects the row it was written from forever.
+ * The order the snapshot walk visits its rows in, and the order the engine
+ * receives their documents in: by decision date, undated decisions first.
+ *
+ * A split's timestamp range spans everything written into it, so the walk's
+ * order is what decides whether a date-filtered query can skip a split or has
+ * to open it. Walking by decision date gives each split a contiguous span of
+ * dates; walking by anything else gives every split the corpus' whole range.
+ *
+ * `coalesce(..., '-infinity')` rather than a null-placement rule: the walk key
+ * is then never null, so one row comparison expresses the whole cursor and the
+ * page stays a single index range. Undated decisions sort first, which is
+ * where the documents written for them belong — they carry the earliest
+ * timestamp the mapping can hold.
+ *
+ * What this orders is the snapshot walk, which is the whole corpus. It does
+ * not order the pending queue: that drains before each page, in decision-id
+ * order, and its documents carry whatever dates live traffic corrected or
+ * ingested. Those widen the split they land in, bounded by the commit that
+ * publishes them. Holding them back until the rebuild finished is the wedge
+ * the drain exists to prevent, so the banding is a property of the rebuild's
+ * own pages, not of every document the generation ever receives.
+ */
+const NEGATIVE_INFINITY_DATE = "-infinity";
+
+// Inlined rather than bound: the planner matches an expression index by the
+// expression, and a bind parameter is not the constant the index was built on.
+const walkDate = sql`coalesce(${caseLawDecisions.decisionDate}, ${sql.raw(
+  `'${NEGATIVE_INFINITY_DATE}'`,
+)}::date)`;
+
+/**
+ * Where the walk stopped. A `date` is day-granular and round-trips exactly, so
+ * unlike a timestamp cursor it cannot be truncated into re-selecting its own
+ * row; what it does leave is large tie groups, which `id` orders.
+ */
+type GenerationWalkCursor = {
+  id: SafeId<"caseLawDecision">;
+  walkDate: string;
+};
+
+/**
+ * Snapshot timestamps travel as exact-precision text tokens, never as `Date`:
+ * Postgres keeps microseconds, a `Date` keeps milliseconds, and a truncated
+ * boundary re-selects the row it was written from forever.
  */
 type GenerationBackfillCheckpoint = {
-  cursorCreatedAt: TimestampCasToken | null;
-  cursorId: SafeId<"caseLawDecision"> | null;
+  cursor: GenerationWalkCursor | null;
   generation: string;
   generationOrder: number;
   snapshotAt: TimestampCasToken;
 };
 
 const GENERATION_CHECKPOINT_COLUMNS = {
-  cursorCreatedAt: timestampCasToken(
-    caseLawCorpusIndexBackfills.cursorCreatedAt,
-  ),
   cursorId: caseLawCorpusIndexBackfills.cursorId,
+  cursorWalkDate: caseLawCorpusIndexBackfills.cursorWalkDate,
   generation: caseLawCorpusIndexBackfills.generation,
   generationOrder: caseLawCorpusIndexBackfills.generationOrder,
   snapshotAt: timestampCasToken(caseLawCorpusIndexBackfills.snapshotAt),
   status: caseLawCorpusIndexBackfills.status,
 };
+
+type GenerationCheckpointRow = {
+  cursorId: SafeId<"caseLawDecision"> | null;
+  cursorWalkDate: string | null;
+  generation: string;
+  generationOrder: number;
+  snapshotAt: TimestampCasToken;
+};
+
+/**
+ * Read a checkpoint row as a checkpoint. The date and the id are stored
+ * together or not at all (`case_law_corpus_index_backfills_cursor_pair`), so a
+ * half-set cursor is a database invariant violation rather than a state to
+ * handle.
+ */
+const toGenerationCheckpoint = ({
+  cursorId,
+  cursorWalkDate,
+  generation,
+  generationOrder,
+  snapshotAt,
+}: GenerationCheckpointRow): GenerationBackfillCheckpoint => {
+  if (cursorWalkDate === null || cursorId === null) {
+    if (cursorWalkDate !== null || cursorId !== null) {
+      panic("case-law corpus generation cursor is half set");
+    }
+    return { cursor: null, generation, generationOrder, snapshotAt };
+  }
+  return {
+    cursor: { id: cursorId, walkDate: cursorWalkDate },
+    generation,
+    generationOrder,
+    snapshotAt,
+  };
+};
+
+/**
+ * The walk key of the row a page ended on, as checkpoint columns. An undated
+ * row stores the same `-infinity` the walk ordered it by, so the cursor is
+ * exactly the position the next page resumes from.
+ */
+const nextGenerationWalkCursorColumns = (row: {
+  decisionDate: string | null;
+  id: SafeId<"caseLawDecision">;
+}) => ({
+  cursorId: row.id,
+  cursorWalkDate: row.decisionDate ?? NEGATIVE_INFINITY_DATE,
+});
 
 type GenerationBackfillRow = IndexableRow & {
   createdAtToken: TimestampCasToken;
@@ -1246,11 +1332,8 @@ const sameCursor = ({
   checkpoint: GenerationBackfillCheckpoint;
 }) =>
   and(
-    timestampMatchesCasToken(
-      caseLawCorpusIndexBackfills.cursorCreatedAt,
-      checkpoint.cursorCreatedAt,
-    ),
-    sql`${caseLawCorpusIndexBackfills.cursorId} IS NOT DISTINCT FROM ${checkpoint.cursorId}`,
+    sql`${caseLawCorpusIndexBackfills.cursorWalkDate} IS NOT DISTINCT FROM ${checkpoint.cursor?.walkDate ?? null}::date`,
+    sql`${caseLawCorpusIndexBackfills.cursorId} IS NOT DISTINCT FROM ${checkpoint.cursor?.id ?? null}`,
   );
 
 const nextLeaseExpiry = () =>
@@ -1296,13 +1379,18 @@ const selectGenerationBackfillPage = async (
       )
       .where(
         and(
+          // The set is fixed by creation time, which no update moves; the
+          // cursor orders that set by decision date, which one can. A date
+          // correction therefore enqueues the row on the pending queue (see
+          // the projection trigger), because a row whose key moved behind the
+          // cursor is a row this walk will not reach again.
           sql`${caseLawDecisions.createdAt} <= ${checkpoint.snapshotAt}::timestamptz`,
-          checkpoint.cursorCreatedAt === null
+          checkpoint.cursor === null
             ? undefined
-            : sql`(${caseLawDecisions.createdAt}, ${caseLawDecisions.id}) > (${checkpoint.cursorCreatedAt}::timestamptz, ${checkpoint.cursorId})`,
+            : sql`(${walkDate}, ${caseLawDecisions.id}) > (${checkpoint.cursor.walkDate}::date, ${checkpoint.cursor.id})`,
         ),
       )
-      .orderBy(asc(caseLawDecisions.createdAt), asc(caseLawDecisions.id))
+      .orderBy(walkDate, asc(caseLawDecisions.id))
       .limit(batchSize),
   );
 
@@ -1508,7 +1596,7 @@ export const createCaseLawGenerationBackfill =
       return { indexed: 0, status: BACKFILL_STATUS.BUSY };
     }
     try {
-      const checkpoint = await scopedDb(async (tx) => {
+      const checkpointRow = await scopedDb(async (tx) => {
         // audit: skip — the checkpoint is the durable audit trail for this derived projection rebuild
         const existing = (
           await tx
@@ -1524,7 +1612,7 @@ export const createCaseLawGenerationBackfill =
         // Wait for decision writes that already acquired their table lock, then
         // capture statement time while new writers are held out. Together with
         // the decision column's clock_timestamp() default, no later commit can
-        // appear behind this rebuild's (created_at,id) cursor.
+        // land inside the snapshot this rebuild walks.
         await tx.execute(
           sql`LOCK TABLE ${caseLawDecisions}, ${caseLawSources} IN SHARE MODE`,
         );
@@ -1550,6 +1638,7 @@ export const createCaseLawGenerationBackfill =
         }
         return concurrent;
       });
+      const checkpoint = toGenerationCheckpoint(checkpointRow);
 
       type LeaseGuardOptions = {
         checkpoint: GenerationBackfillCheckpoint;
@@ -1853,7 +1942,7 @@ export const createCaseLawGenerationBackfill =
       };
 
       if (
-        checkpoint.status === CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE
+        checkpointRow.status === CASE_LAW_CORPUS_INDEX_BACKFILL_STATUS.COMPLETE
       ) {
         const reconciliationToken = newLeaseToken();
         const claimedReconciliation = await scopedDb(async (tx) => {
@@ -1884,13 +1973,9 @@ export const createCaseLawGenerationBackfill =
         if (!claimedReconciliation) {
           return { indexed: 0, status: BACKFILL_STATUS.BUSY };
         }
-        const reconciliationCheckpoint: GenerationBackfillCheckpoint = {
-          cursorCreatedAt: claimedReconciliation.cursorCreatedAt,
-          cursorId: claimedReconciliation.cursorId,
-          generation: claimedReconciliation.generation,
-          generationOrder: claimedReconciliation.generationOrder,
-          snapshotAt: claimedReconciliation.snapshotAt,
-        };
+        const reconciliationCheckpoint = toGenerationCheckpoint(
+          claimedReconciliation,
+        );
         try {
           return await reconcilePending({
             checkpoint: reconciliationCheckpoint,
@@ -1932,13 +2017,7 @@ export const createCaseLawGenerationBackfill =
         return { indexed: 0, status: BACKFILL_STATUS.BUSY };
       }
 
-      const claimedCheckpoint: GenerationBackfillCheckpoint = {
-        cursorCreatedAt: claimed.cursorCreatedAt,
-        cursorId: claimed.cursorId,
-        generation: claimed.generation,
-        generationOrder: claimed.generationOrder,
-        snapshotAt: claimed.snapshotAt,
-      };
+      const claimedCheckpoint = toGenerationCheckpoint(claimed);
       const runningGuards = createLeaseGuards({
         checkpoint: claimedCheckpoint,
         leaseToken,
@@ -2037,13 +2116,7 @@ export const createCaseLawGenerationBackfill =
         if (!completed) {
           return withDrained({ indexed: 0, status: BACKFILL_STATUS.BUSY });
         }
-        const completedCheckpoint: GenerationBackfillCheckpoint = {
-          cursorCreatedAt: completed.cursorCreatedAt,
-          cursorId: completed.cursorId,
-          generation: completed.generation,
-          generationOrder: completed.generationOrder,
-          snapshotAt: completed.snapshotAt,
-        };
+        const completedCheckpoint = toGenerationCheckpoint(completed);
         try {
           return withDrained(
             await reconcilePending({
@@ -2111,8 +2184,7 @@ export const createCaseLawGenerationBackfill =
         const advancedRows = await tx
           .update(caseLawCorpusIndexBackfills)
           .set({
-            cursorCreatedAt: sql`${last.createdAtToken}::timestamptz`,
-            cursorId: last.id,
+            ...nextGenerationWalkCursorColumns(last),
             leaseExpiresAt: null,
             leaseToken: null,
           })
@@ -2141,7 +2213,7 @@ export const createCaseLawGenerationBackfill =
 
 /**
  * Advance one durable generation-rebuild page. The page is bounded by the
- * `(created_at,id)` cursor before any generation comparison is made, so a
+ * `(decision_date,id)` cursor before any generation comparison is made, so a
  * cutover never turns into a table scan.
  */
 export const backfillCorpusIndexGenerationPage =

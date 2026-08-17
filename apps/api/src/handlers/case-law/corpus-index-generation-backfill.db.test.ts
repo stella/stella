@@ -36,8 +36,43 @@ const generationMigrationSource = new URL(
   "../../../drizzle/20260731170000_case_law_corpus_generation_backfill/migration.sql",
   import.meta.url,
 );
+const PROJECTION_TRIGGER_FUNCTION =
+  "CREATE OR REPLACE FUNCTION enqueue_case_law_corpus_index_projection()";
+
+/**
+ * The projection trigger's current definition. `db:push` builds the test
+ * database from the schema, which carries no triggers, so a test that needs
+ * one installs it from a migration. Which migration is derived, not named:
+ * migrations apply in directory order, so the last one that redefines the
+ * function is the definition a database ends up with, and a later migration
+ * replacing it moves this with it.
+ */
+const latestProjectionTriggerMigration = async (): Promise<string> => {
+  const drizzleDir = new URL("../../../drizzle/", import.meta.url);
+  const migrations = [
+    ...new Bun.Glob("*/migration.sql").scanSync(Bun.fileURLToPath(drizzleDir)),
+  ].sort();
+  let latest: string | undefined;
+  for (const migration of migrations) {
+    // oxlint-disable-next-line no-await-in-loop -- ordered scan over a directory listing
+    const source = await Bun.file(new URL(migration, drizzleDir)).text();
+    if (source.includes(PROJECTION_TRIGGER_FUNCTION)) {
+      latest = source;
+    }
+  }
+  if (latest === undefined) {
+    throw new Error("no migration defines the corpus projection trigger");
+  }
+  return latest;
+};
 const CREATED_AT = new Date("2026-07-30T12:00:00.000Z");
 const GENERATION = "case_law_v2";
+/**
+ * The walk's order, restated here so the fixtures read in it. Undated rows
+ * carry `-infinity`, which is the cursor value the runner stores for them.
+ */
+const UNDATED_WALK_DATE = "-infinity";
+const WALK_DATE = sql`coalesce(${caseLawDecisions.decisionDate}, '-infinity'::date)`;
 const noRemoteEffectCompensation = async (): Promise<void> => {
   await Promise.resolve();
 };
@@ -197,6 +232,36 @@ const indexedOutcome = (indexed: number) => ({
 
 const completeRemoteEffect = async (): Promise<void> => {
   await Promise.resolve();
+};
+
+/**
+ * Install the projection trigger as the migration defines it, so a test runs
+ * against the deployed definition rather than a paraphrase of it.
+ */
+const installProjectionTrigger = async (): Promise<void> => {
+  const migration = await latestProjectionTriggerMigration();
+  const triggerStart = migration.indexOf(PROJECTION_TRIGGER_FUNCTION);
+  const triggerEnd = migration.indexOf(
+    "CREATE TRIGGER case_law_decisions_enqueue_corpus_index_projection",
+  );
+  expect(triggerStart).toBeGreaterThanOrEqual(0);
+  expect(triggerEnd).toBeGreaterThan(triggerStart);
+  const createTriggerEnd = migration.indexOf(";", triggerEnd);
+  const statements = migration
+    .slice(triggerStart, createTriggerEnd + 1)
+    .split("--> statement-breakpoint")
+    .map((statement) => statement.trim())
+    .filter((statement) => statement.length > 0);
+  expect(statements).toHaveLength(3);
+  // The trigger fires on the columns that reach the document or the walk's
+  // position. A decision date now does both, so it has to be in this list.
+  expect(statements.at(-1)).toContain(
+    "UPDATE OF content_hash, indexed_hash, country, decision_date",
+  );
+  for (const statement of statements) {
+    // oxlint-disable-next-line no-await-in-loop -- function, replacement drop, and trigger creation are order-dependent DDL
+    await db.execute(sql.raw(statement));
+  }
 };
 
 const queueSourceReconciliation = async (
@@ -538,25 +603,7 @@ test("contentless inserts never create deletion projection work", async () => {
   });
 
   try {
-    const migration = await Bun.file(generationMigrationSource).text();
-    const triggerStart = migration.indexOf(
-      "CREATE OR REPLACE FUNCTION enqueue_case_law_corpus_index_projection()",
-    );
-    const triggerEnd = migration.indexOf(
-      "CREATE OR REPLACE FUNCTION enqueue_case_law_corpus_source_reconciliation()",
-    );
-    expect(triggerStart).toBeGreaterThanOrEqual(0);
-    expect(triggerEnd).toBeGreaterThan(triggerStart);
-    const triggerStatements = migration
-      .slice(triggerStart, triggerEnd)
-      .split("--> statement-breakpoint")
-      .map((statement) => statement.trim())
-      .filter((statement) => statement.length > 0);
-    expect(triggerStatements).toHaveLength(3);
-    for (const statement of triggerStatements) {
-      // oxlint-disable-next-line no-await-in-loop -- function, replacement drop, and trigger creation are order-dependent DDL
-      await db.execute(sql.raw(statement));
-    }
+    await installProjectionTrigger();
 
     await db.insert(caseLawDecisions).values({
       caseNumber: "63 T 63/2026",
@@ -659,8 +706,8 @@ test(
     expect(guardedPages).toBe(3);
     const checkpoint = await readCheckpoint(GENERATION);
     expect(checkpoint).toMatchObject({
-      cursorCreatedAt: CREATED_AT,
       cursorId: publicLastId,
+      cursorWalkDate: "2026-01-01",
       leaseExpiresAt: null,
       leaseToken: null,
       status: "complete",
@@ -1344,8 +1391,8 @@ test(
 
     const failed = await readCheckpoint(retryGeneration);
     expect(failed).toMatchObject({
-      cursorCreatedAt: null,
       cursorId: null,
+      cursorWalkDate: null,
       leaseExpiresAt: null,
       leaseToken: null,
       status: "running",
@@ -1379,8 +1426,8 @@ test(
       ),
     });
     expect(await readCheckpoint(retryGeneration)).toMatchObject({
-      cursorCreatedAt: null,
       cursorId: null,
+      cursorWalkDate: null,
       leaseExpiresAt: null,
       leaseToken: null,
       status: "running",
@@ -1460,8 +1507,8 @@ test(
     expect(winningRemoteEffects).toBe(1);
     expect(staleRemoteEffects).toBe(0);
     expect(await readCheckpoint(generation)).toMatchObject({
-      cursorCreatedAt: CREATED_AT,
       cursorId: publicFirstId,
+      cursorWalkDate: "2026-01-01",
       leaseExpiresAt: null,
       leaseToken: null,
       status: "running",
@@ -1611,8 +1658,8 @@ test(
         expect.arrayContaining([staleIndexId, successorIndexId]),
       );
       expect(await readCheckpoint(generation)).toMatchObject({
-        cursorCreatedAt: CREATED_AT,
         cursorId: staleDecisionId,
+        cursorWalkDate: "2026-01-01",
         leaseExpiresAt: null,
         leaseToken: null,
         status: "running",
@@ -2610,19 +2657,19 @@ test(
     const boundary = (
       await db
         .select({
-          createdAtToken: timestampCasToken(caseLawDecisions.createdAt),
+          decisionDate: caseLawDecisions.decisionDate,
           id: caseLawDecisions.id,
         })
         .from(caseLawDecisions)
-        .orderBy(desc(caseLawDecisions.createdAt), desc(caseLawDecisions.id))
+        .orderBy(sql`${WALK_DATE} DESC`, desc(caseLawDecisions.id))
         .limit(1)
     ).at(0);
     if (!boundary) {
       throw new Error("expected seeded decisions");
     }
     await db.insert(caseLawCorpusIndexBackfills).values({
-      cursorCreatedAt: sql`${boundary.createdAtToken}::timestamptz`,
       cursorId: boundary.id,
+      cursorWalkDate: boundary.decisionDate ?? UNDATED_WALK_DATE,
       generation,
       snapshotAt: await nextBackfillSnapshotAt(),
       status: "running",
@@ -2645,6 +2692,207 @@ test(
       await db
         .delete(caseLawCorpusIndexBackfills)
         .where(eq(caseLawCorpusIndexBackfills.generation, generation));
+    }
+  },
+  { timeout: 30_000 },
+);
+
+/**
+ * A walk fixture built to break a keyset: one date carried by many rows (the
+ * tie group a day-granular key leaves behind), dates out of insertion order,
+ * and undated rows, whose walk position is the `-infinity` band.
+ */
+const walkFixtureRows = (sourceId: SafeId<"caseLawSource">) =>
+  [
+    { date: "2026-03-04", suffix: "01" },
+    { date: null, suffix: "02" },
+    { date: "1994-11-30", suffix: "03" },
+    { date: "2026-03-04", suffix: "04" },
+    { date: "2026-03-04", suffix: "05" },
+    { date: null, suffix: "06" },
+    { date: "1994-11-30", suffix: "07" },
+    { date: "2011-07-19", suffix: "08" },
+    { date: "2026-03-04", suffix: "09" },
+    { date: "1994-11-30", suffix: "10" },
+  ].map(({ date, suffix }) => ({
+    caseNumber: `walk ${suffix}`,
+    contentHash: `walk-${suffix}`,
+    country: "CZE",
+    court: "Walk court",
+    createdAt: CREATED_AT,
+    decisionDate: date,
+    id: toSafeId<"caseLawDecision">(
+      `00000000-0000-4000-8000-0000000009${suffix}`,
+    ),
+    language: "cs",
+    languageGroupKey: `walk-${suffix}`,
+    slug: `walk-${suffix}`,
+    sourceId,
+  }));
+
+test(
+  "the walk covers its snapshot exactly once at any page size, in date order",
+  async () => {
+    // The rebuild's page boundaries are wherever the batch size and the
+    // scheduler put them, and the cursor is all that carries the walk across
+    // them. Ties and the undated band are where a keyset drops or repeats a
+    // row, so the same fixture is walked at several page sizes: a page size
+    // that divides the tie group and one that splits it mid-way both have to
+    // reach the same set.
+    const sourceId = toSafeId<"caseLawSource">(
+      "00000000-0000-4000-8000-000000000901",
+    );
+    const rows = walkFixtureRows(sourceId);
+    await db
+      .insert(caseLawSources)
+      .values({ adapterKey: "walk", id: sourceId, name: "walk" });
+    await db.insert(caseLawDecisions).values(rows);
+    const fixtureIds = new Set(rows.map((row) => row.id));
+
+    try {
+      for (const [index, batchSize] of [1, 2, 3, 7].entries()) {
+        const generation = `case_law_v7${index}`;
+        const seen: {
+          decisionDate: string | null;
+          id: SafeId<"caseLawDecision">;
+        }[] = [];
+        let lease = 0;
+        const backfill = createCaseLawGenerationBackfill({
+          backfillRows: async (_runnerDb, batch) => {
+            for (const row of batch) {
+              seen.push({ decisionDate: row.decisionDate, id: row.id });
+            }
+            return indexedOutcome(batch.length);
+          },
+          newLeaseToken: () =>
+            `00000000-0000-4000-8000-${String(++lease).padStart(12, "0")}`,
+          removeProjection: ignoreProjectionRemoval,
+        });
+
+        // Bounded so a cursor that stops advancing fails here rather than
+        // hanging: every page either moves the cursor or ends the walk.
+        let pages = 0;
+        let status = "";
+        while (status !== "complete" && pages < 200) {
+          pages += 1;
+          // oxlint-disable-next-line no-await-in-loop -- the walk is sequential by construction
+          status = (await backfill(scopedDb, batchSize, generation)).status;
+        }
+        expect(status).toBe("complete");
+
+        const fixtureSeen = seen.filter((row) => fixtureIds.has(row.id));
+        // Exactly once: no row skipped over a page boundary, none repeated.
+        expect(fixtureSeen.map((row) => row.id).sort()).toEqual(
+          [...fixtureIds].sort(),
+        );
+        // And in the order the documents will carry: undated first, then by
+        // date. Asserted over every row the walk handed out, not just the
+        // fixture's, because a break in the order anywhere is a break.
+        const walkKeys = seen.map((row) => ({
+          date: row.decisionDate ?? "",
+          id: row.id,
+        }));
+        const ordered = [...walkKeys].sort((left, right) => {
+          if (left.date !== right.date) {
+            return left.date < right.date ? -1 : 1;
+          }
+          if (left.id === right.id) {
+            return 0;
+          }
+          return left.id < right.id ? -1 : 1;
+        });
+        expect(walkKeys).toEqual(ordered);
+      }
+    } finally {
+      await db
+        .delete(caseLawCorpusIndexBackfills)
+        .where(
+          inArray(caseLawCorpusIndexBackfills.generation, [
+            "case_law_v70",
+            "case_law_v71",
+            "case_law_v72",
+            "case_law_v73",
+          ]),
+        );
+      await db
+        .delete(caseLawDecisions)
+        .where(inArray(caseLawDecisions.id, [...fixtureIds]));
+      await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+    }
+  },
+  { timeout: 60_000 },
+);
+
+test(
+  "a corrected decision date reaches the pending queue",
+  async () => {
+    // The walk's position is the decision date, so a correction to it can move
+    // a row behind the cursor, out of the range the walk has left. Nothing
+    // else would notice: the text is unchanged, so the content hash is too.
+    const generation = "case_law_v74";
+    const sourceId = toSafeId<"caseLawSource">(
+      "00000000-0000-4000-8000-000000000902",
+    );
+    const decisionId = toSafeId<"caseLawDecision">(
+      "00000000-0000-4000-8000-000000000903",
+    );
+    await db
+      .insert(caseLawSources)
+      .values({ adapterKey: "redate", id: sourceId, name: "redate" });
+    await db.insert(caseLawCorpusIndexBackfills).values({
+      generation,
+      snapshotAt: await nextBackfillSnapshotAt(),
+      status: "running",
+    });
+
+    try {
+      await installProjectionTrigger();
+      await db.insert(caseLawDecisions).values({
+        caseNumber: "74 T 74/2026",
+        contentHash: "redate",
+        country: "CZE",
+        court: "Redate court",
+        createdAt: CREATED_AT,
+        decisionDate: "2026-02-02",
+        id: decisionId,
+        indexedGeneration: corpusIndexId(generation, "CZE"),
+        indexedHash: "redate",
+        language: "cs",
+        languageGroupKey: "redate",
+        slug: "redate",
+        sourceId,
+      });
+      // The insert enqueues; clearing that is what makes the update the only
+      // thing the assertion can be reading.
+      await db
+        .delete(caseLawCorpusIndexProjections)
+        .where(eq(caseLawCorpusIndexProjections.decisionId, decisionId));
+
+      await db
+        .update(caseLawDecisions)
+        .set({ decisionDate: "1998-05-06" })
+        .where(eq(caseLawDecisions.id, decisionId));
+
+      expect(
+        await db
+          .select({
+            pendingAction: caseLawCorpusIndexProjections.pendingAction,
+            pendingHash: caseLawCorpusIndexProjections.pendingHash,
+          })
+          .from(caseLawCorpusIndexProjections)
+          .where(eq(caseLawCorpusIndexProjections.decisionId, decisionId)),
+      ).toEqual([{ pendingAction: "index", pendingHash: "redate" }]);
+    } finally {
+      await db
+        .delete(caseLawCorpusIndexProjections)
+        .where(eq(caseLawCorpusIndexProjections.decisionId, decisionId));
+      await db
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, decisionId));
+      await db
+        .delete(caseLawCorpusIndexBackfills)
+        .where(eq(caseLawCorpusIndexBackfills.generation, generation));
+      await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
     }
   },
   { timeout: 30_000 },
