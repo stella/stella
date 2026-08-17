@@ -40,6 +40,12 @@ export const CORPUS_INDEX_COMMIT_WAIT_TIMEOUT_MS = 60_000;
  */
 export const CORPUS_INDEX_INGEST_TIMEOUT_MS = 120_000;
 const ADMIN_TIMEOUT_MS = 30_000;
+/**
+ * Tighter than search: aggregations serve page chrome (facet counts), so a
+ * slow engine must give up well inside the page's own budget rather than
+ * hold the request open for the full search timeout.
+ */
+const AGGREGATION_TIMEOUT_MS = 10_000;
 
 /**
  * What "the engine accepted this batch" is allowed to mean.
@@ -77,6 +83,21 @@ export type CorpusIndexSearchInput = {
   snippetFields?: string[] | undefined;
 };
 
+export type CorpusIndexAggregateInput = {
+  indexId: string;
+  /** Full corpus index query string the aggregation runs over. */
+  query: string;
+  /** Engine-native aggregation request, keyed by aggregation name. */
+  aggs: Record<string, unknown>;
+};
+
+/**
+ * The engine's `aggregations` object, one entry per requested name. Left
+ * unparsed here: bucket shape is per aggregation kind, so the caller that
+ * asked for a shape is the one that can validate it.
+ */
+export type CorpusIndexAggregations = Record<string, unknown>;
+
 export type CorpusIndexHit = Record<string, unknown>;
 
 export type CorpusIndexSearchResponse = {
@@ -104,6 +125,9 @@ export type CorpusIndexClient = {
   search: (
     input: CorpusIndexSearchInput,
   ) => Promise<Result<CorpusIndexSearchResponse, CorpusIndexError>>;
+  aggregate: (
+    input: CorpusIndexAggregateInput,
+  ) => Promise<Result<CorpusIndexAggregations, CorpusIndexError>>;
   deleteByQuery: (
     indexId: string,
     query: string,
@@ -335,6 +359,31 @@ const buildClient = (): CorpusIndexClient => ({
           hits,
           snippets,
         };
+      },
+      catch: toCorpusIndexError,
+    }),
+
+  aggregate: async ({ indexId, query, aggs }) =>
+    await Result.tryPromise({
+      try: async () => {
+        const response = await requestJson(
+          searchBaseUrl(),
+          `/api/v1/${indexId}/search`,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            // Aggregations only: hits are the expensive part of the
+            // response and the caller wants counts, not documents.
+            body: JSON.stringify({ query, max_hits: 0, aggs }),
+          },
+          AGGREGATION_TIMEOUT_MS,
+        );
+        if (!isRecord(response) || !isRecord(response["aggregations"])) {
+          throw new CorpusIndexError({
+            message: "corpus index aggregation returned an invalid response",
+          });
+        }
+        return response["aggregations"];
       },
       catch: toCorpusIndexError,
     }),

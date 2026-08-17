@@ -16,6 +16,7 @@ import {
   currentCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
+import { corpusIndexBrowseFacets } from "@/api/lib/legal-search/corpus-index-facets";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
 import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
@@ -240,5 +241,6 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
 
 export const corpusIndexProvider: LegalSearchProvider = {
   search,
+  browseFacets: corpusIndexBrowseFacets,
   getDocumentContext: loadDocumentContext,
 };

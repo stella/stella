@@ -7,6 +7,7 @@ import {
 } from "@/api/lib/case-law/search-sql";
 import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
 import { loadFtsSearchConfigs } from "@/api/lib/legal-search/fts-config";
+import { pgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facets";
 import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
 import type {
   LegalSearchHit,
@@ -208,5 +209,6 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
 
 export const pgFtsLegalProvider: LegalSearchProvider = {
   search,
+  browseFacets: pgFtsBrowseFacets,
   getDocumentContext: loadDocumentContext,
 };

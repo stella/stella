@@ -2,7 +2,10 @@ import { Result } from "better-result";
 import Elysia, { t } from "elysia";
 
 import { env } from "@/api/env";
-import { listDecisionFacetsHandler } from "@/api/handlers/case-law/decisions/facets";
+import {
+  listDecisionFacetsHandler,
+  listDecisionFacetsQuerySchema,
+} from "@/api/handlers/case-law/decisions/facets";
 import {
   readDecisionBySlugWithDocumentHandler,
   readDecisionWithDocumentHandler,
@@ -39,12 +42,13 @@ const listDecisions = createSafePublicHandler(
 );
 
 const listDecisionFacets = createSafePublicHandler(
-  { mcp: { type: "internal", reason: "public_indexing" } },
-  async function* () {
+  {
+    mcp: { type: "internal", reason: "public_indexing" },
+    query: listDecisionFacetsQuerySchema,
+  },
+  async function* ({ query }) {
     const response = yield* Result.await(
-      Result.tryPromise(
-        async () => await listDecisionFacetsHandler(caseLawPublicReadDb),
-      ),
+      Result.tryPromise(async () => await listDecisionFacetsHandler(query)),
     );
 
     return Result.ok(response);
@@ -163,7 +167,9 @@ export const publicCaseLawRoute = new Elysia({
   .get("/decisions", listDecisions.handler, {
     query: listDecisions.config.query,
   })
-  .get("/decisions/facets", listDecisionFacets.handler)
+  .get("/decisions/facets", listDecisionFacets.handler, {
+    query: listDecisionFacets.config.query,
+  })
   .get("/decisions/by-slug/:slug", readDecisionBySlug.handler, {
     params: readDecisionBySlug.config.params,
     query: readDecisionBySlug.config.query,
