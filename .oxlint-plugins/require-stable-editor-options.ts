@@ -169,7 +169,9 @@ const isUnstableOptionValue = (node, fromNode) => {
     return false;
   }
   const init = resolveLocalBindingInit(unwrapped.name, fromNode);
-  if (init === null || isHookCall(init)) {
+  // Unwrap before classifying so `useMemo(...) as T` / `satisfies T`
+  // initializers still count as hook-captured rather than fresh calls.
+  if (init === null || isHookCall(unwrapExpression(init))) {
     return false;
   }
   return isFreshIdentity(init);

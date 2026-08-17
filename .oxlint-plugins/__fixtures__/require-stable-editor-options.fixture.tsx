@@ -63,3 +63,12 @@ export const SafeFixture = ({ value }: { value: string }) => {
   });
   return editor;
 };
+
+export const SafeAssertedHookFixture = () => {
+  // A type-asserted hook result is still hook-captured — must NOT flag.
+  const assertedProps = useMemo(() => ({}), []) as Record<string, unknown>;
+  const editor = useEditor({
+    editorProps: assertedProps,
+  });
+  return editor;
+};
