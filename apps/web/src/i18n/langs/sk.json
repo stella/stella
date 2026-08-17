@@ -2884,6 +2884,7 @@
   },
   "search": {
     "aiRefine": "Vylepšiť dotaz pomocou AI",
+    "askAI": "Opýtať sa AI",
     "continueInChat": "Pokračovať v chate",
     "dateFrom": "Od",
     "dateTo": "Do",
@@ -2913,6 +2914,8 @@
     "recentSearches": "Nedávne vyhľadávania",
     "recentlyOpenedFiles": "Nedávno otvorené súbory",
     "renameSearchTitle": "Premenovať uložené vyhľadávanie",
+    "resizeFilters": "Zmeniť šírku stĺpca filtrov",
+    "resizePreview": "Zmeniť šírku stĺpca náhľadu",
     "resultCount": "{count, plural, one {# výsledok} few {# výsledky} other {# výsledkov}}",
     "saveSearch": "Uložiť vyhľadávanie",
     "saveSearchNamePlaceholder": "napr. Nedávne súbory PDF",

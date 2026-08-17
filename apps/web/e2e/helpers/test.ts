@@ -93,7 +93,12 @@ export const createBrowserErrorCollector = (
     },
     entries: () => [...errors],
     expectCaptured: (pattern) => {
-      expectedPatterns.push(pattern);
+      // A global or sticky RegExp carries `lastIndex` between `test()`
+      // calls, so the second matching pass below could miss an entry the
+      // first pass matched. Store a stateless copy.
+      expectedPatterns.push(
+        new RegExp(pattern.source, pattern.flags.replace(/[gy]/gu, "")),
+      );
     },
     assertEmpty: (label) => {
       const collected = errors.splice(0);

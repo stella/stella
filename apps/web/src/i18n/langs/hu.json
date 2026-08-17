@@ -2884,6 +2884,7 @@
   },
   "search": {
     "aiRefine": "Keresés javítása AI-val",
+    "askAI": "AI megkérdezése",
     "continueInChat": "Folytatás chatben",
     "dateFrom": "Mettől",
     "dateTo": "Meddig",
@@ -2913,6 +2914,8 @@
     "recentSearches": "Legutóbbi keresések",
     "recentlyOpenedFiles": "Legutóbb megnyitott fájlok",
     "renameSearchTitle": "Mentett keresés átnevezése",
+    "resizeFilters": "Szűrőoszlop átméretezése",
+    "resizePreview": "Előnézeti oszlop átméretezése",
     "resultCount": "{count, plural, one {# találat} other {# találat}}",
     "saveSearch": "Keresés mentése",
     "saveSearchNamePlaceholder": "pl. Legutóbbi PDF-ek",

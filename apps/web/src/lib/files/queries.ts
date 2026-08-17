@@ -9,7 +9,6 @@ import { DOCUMENT_PROPERTIES_RESULT_SCHEMA } from "@stll/api-contract";
 
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
-import { STALE_TIME } from "@/lib/consts";
 import { APIError, shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
 import type {
@@ -19,6 +18,7 @@ import type {
 import type { EmailBodyFold } from "@/lib/files/email-preview";
 import {
   documentPropertiesQueryKey,
+  fileContentByFieldQueryRoot,
   fileContentQueryKey,
   fileMetadataQueryKey,
   filesQueryRoot,
@@ -79,6 +79,9 @@ const EMAIL_ATTACHMENT_SAVE_RESPONSE_SCHEMA = v.object({
 export const filesKeys = {
   all: filesQueryRoot,
   byFieldId: fileContentQueryKey,
+  /** Purpose-agnostic prefix of `byFieldId`: invalidating it sweeps every
+   * purpose variant of a field's downloaded bytes after a version write. */
+  contentByFieldId: fileContentByFieldQueryRoot,
   metadataByFieldId: fileMetadataQueryKey,
   emailHtmlByFieldId: (key: FileByFieldIdKey) => [
     ...filesKeys.all(),
@@ -141,12 +144,6 @@ export const fileOptions = (props: FileOptionsProps) =>
         buffer,
       } satisfies FileData;
     },
-    // Downloaded bytes are safe to reuse: every local edit path invalidates
-    // `filesKeys.byFieldId` on save (use-edit-session, file-tab-panel), so a
-    // nonzero staleTime only defers pickup of *remote* edits. Without it,
-    // every preview surface remount (e.g. hovering between search-preview
-    // documents) re-requests the presigned URL and re-downloads the file.
-    staleTime: STALE_TIME.FIVE.MINUTES,
   });
 
 export const emailHtmlPreviewOptions = (props: FileOptionsProps) =>

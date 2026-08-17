@@ -44,6 +44,7 @@ import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
+import { filesKeys } from "@/lib/files/queries";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -229,9 +230,15 @@ export const VersionsSidebar = ({
   }, [newestVersionId]);
 
   const invalidateVersions = async () => {
-    await queryClient.invalidateQueries({
-      queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
-    });
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
+      }),
+      // Upload/restore/delete rewrite the entity's current file bytes;
+      // without this, open viewers keep the previous version's cached
+      // buffer for the rest of the client-wide staleTime window.
+      queryClient.invalidateQueries({ queryKey: filesKeys.all() }),
+    ]);
   };
 
   const handleUploadVersion = async (file: File) => {

@@ -192,11 +192,12 @@ describe("createRenderStormMonitor", () => {
     }
     monitor.onRender("app", PHASE, 1, 1, time, time + 1);
 
-    const details = emitted.at(0);
-    expect(details).toBeDefined();
-    const regions = details?.regionCounts.map(([region]) => region);
-    expect(regions?.at(0)).toBe("chat-composer");
-    expect(regions).toContain("inspector");
+    // Full tuples: an implementation that records each active region once
+    // (presence without counts) would still pass a presence-only check.
+    expect(emitted.at(0)?.regionCounts).toEqual([
+      ["chat-composer", commitsPerWindow],
+      ["inspector", Math.ceil(commitsPerWindow / 4)],
+    ]);
   });
 
   it("resets region attribution between windows", () => {
@@ -223,10 +224,8 @@ describe("createRenderStormMonitor", () => {
     }
     monitor.onRender("app", PHASE, 1, 1, time, time + 1);
 
-    const details = emitted.at(0);
-    expect(details).toBeDefined();
-    const regions = details?.regionCounts.map(([region]) => region);
-    expect(regions).toContain("storming-region");
-    expect(regions).not.toContain("stale-region");
+    expect(emitted.at(0)?.regionCounts).toEqual([
+      ["storming-region", commitsPerWindow],
+    ]);
   });
 });

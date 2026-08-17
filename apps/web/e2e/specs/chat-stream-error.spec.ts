@@ -1,3 +1,4 @@
+import { EXPECTS_DEV_RUNTIME } from "../helpers/runtime-mode";
 import { expect, test } from "../helpers/test";
 
 // Marker recognized by the mock AI adapter (apps/api/src/dev/register-mock-ai.ts,
@@ -21,11 +22,14 @@ test("a first-turn stream error surfaces retry UI without a render storm", async
   browserErrors,
 }) => {
   // The server classifies the empty completion and streams the kind as the
-  // run error; the client's captureError echoes it to console.error in dev.
-  // That echo is this spec's intended outcome, not a defect — declare it so
-  // the auto fixture still fails on anything else (a render storm, a crash).
-  // One declaration covers both failed turns below.
-  browserErrors.expectCaptured(/empty_completion/u);
+  // run error; the client's captureError echoes it to console.error in dev
+  // only (logDevError), so the production build emits nothing to declare.
+  // In dev the echo is this spec's intended outcome, not a defect — declare
+  // it so the auto fixture still fails on anything else (a render storm, a
+  // crash). One declaration covers both failed turns below.
+  if (EXPECTS_DEV_RUNTIME) {
+    browserErrors.expectCaptured(/empty_completion/u);
+  }
 
   await page.goto("/chat", { waitUntil: "commit" });
 
@@ -73,10 +77,22 @@ test("a first-turn stream error surfaces retry UI without a render storm", async
 
   // The incident's render storm fired after the SECOND failed turn (resend →
   // error again), in the window where the failed turn's refetch and the new
-  // turn's optimistic state overlap. Exercise that exact sequence.
+  // turn's optimistic state overlap. Exercise that exact sequence, and prove
+  // the resend really made a second turn: its own POST leaves, and the
+  // Resend button (disabled while the turn streams) comes back enabled
+  // beside the same error copy, i.e. the second turn ended in error too.
+  const secondTurn = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname === "/v1/chat",
+  );
   await resend.click();
-  await expect(resend).toBeVisible({ timeout: 30_000 });
+  await secondTurn;
+  await expect(resend).toBeEnabled({ timeout: 30_000 });
   await expect(transcript).toContainText(EMPTY_COMPLETION_MARKER);
+  await expect(transcript).toContainText(
+    "The AI returned an empty reply. Try again or rephrase your message.",
+  );
   await expect(errorBoundary).toHaveCount(0);
 
   // Hold the settled error state open long enough for the render-storm canary

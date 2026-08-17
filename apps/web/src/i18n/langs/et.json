@@ -2884,6 +2884,7 @@
   },
   "search": {
     "aiRefine": "Täpsusta päringut AI-ga",
+    "askAI": "Küsi AI-lt",
     "continueInChat": "Jätka vestluses",
     "dateFrom": "Alates",
     "dateTo": "Kuni",
@@ -2913,6 +2914,8 @@
     "recentSearches": "Hiljutised otsingud",
     "recentlyOpenedFiles": "Hiljuti avatud failid",
     "renameSearchTitle": "Nimeta salvestatud otsing ümber",
+    "resizeFilters": "Muuda filtriveeru laiust",
+    "resizePreview": "Muuda eelvaateveeru laiust",
     "resultCount": "{count, plural, one {# tulemus} other {# tulemust}}",
     "saveSearch": "Salvesta otsing",
     "saveSearchNamePlaceholder": "nt Hiljutised PDF-id",

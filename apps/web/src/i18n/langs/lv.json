@@ -2884,6 +2884,7 @@
   },
   "search": {
     "aiRefine": "Uzlabot vaicājumu ar AI",
+    "askAI": "Jautāt AI",
     "continueInChat": "Turpināt tērzēšanā",
     "dateFrom": "No",
     "dateTo": "Līdz",
@@ -2913,6 +2914,8 @@
     "recentSearches": "Nesenie meklējumi",
     "recentlyOpenedFiles": "Nesen atvērtie faili",
     "renameSearchTitle": "Pārdēvēt saglabāto meklējumu",
+    "resizeFilters": "Mainīt filtru kolonnas platumu",
+    "resizePreview": "Mainīt priekšskatījuma kolonnas platumu",
     "resultCount": "{count, plural, zero {# rezultātu} one {# rezultāts} other {# rezultāti}}",
     "saveSearch": "Saglabāt meklējumu",
     "saveSearchNamePlaceholder": "piem., Pēdējie PDF faili",

@@ -7,6 +7,8 @@
 // and the e2e `browserErrors` fixture turns it into a CI failure. Checkboxes and
 // file inputs are deliberately excluded — only heavy interactive editors count.
 
+import { emitDevCanaryError } from "@/lib/dev-canary";
+
 const GRID_EDITOR_SELECTOR = [
   '[role="grid"] [data-slot="select-trigger"]',
   '[role="grid"] [role="combobox"]',
@@ -40,9 +42,9 @@ export const installDevPerfBudget = (): (() => void) => {
       return;
     }
     warned = true;
-    // eslint-disable-next-line no-console -- dev-only perf budget; the e2e browserErrors fixture turns this into a CI failure
-    console.error(
-      `[perf-budget] ${count} live editors mounted inside a grid (budget ${GRID_EDITOR_BUDGET}). ` +
+    emitDevCanaryError(
+      "perf-budget",
+      `${count} live editors mounted inside a grid (budget ${GRID_EDITOR_BUDGET}). ` +
         "A table is rendering a live editor per cell instead of a display-until-edit cell. " +
         "Mount the heavy control only when the cell is edited (see EditableField), or virtualize the rows.",
     );

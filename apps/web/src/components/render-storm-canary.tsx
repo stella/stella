@@ -1,6 +1,7 @@
 import { createContext, Profiler, use, useCallback, useState } from "react";
 import type { PropsWithChildren, ReactNode } from "react";
 
+import { emitDevCanaryError } from "@/lib/dev-canary";
 import type {
   RenderStormDetails,
   RenderStormMonitor,
@@ -110,9 +111,9 @@ const formatRegionBreakdown = (
 };
 
 const emitRenderStormError = (details: RenderStormDetails) => {
-  // eslint-disable-next-line no-console -- dev-only render-storm canary; this is the one sanctioned diagnostic emitter whose entire purpose is to be caught by the e2e browserErrors fixture as a CI-failing signal
-  console.error(
-    `[render-storm] sustained render storm detected: ~${details.commitsPerSecond} commits/sec ` +
+  emitDevCanaryError(
+    "render-storm",
+    `sustained render storm detected: ~${details.commitsPerSecond} commits/sec ` +
       `(phases: ${formatPhaseBreakdown(details.phaseCounts)}; ` +
       `regions: ${formatRegionBreakdown(details.regionCounts)}). A component is re-rendering ` +
       "far above legitimate streaming rates (~20/s) without tripping React's own " +

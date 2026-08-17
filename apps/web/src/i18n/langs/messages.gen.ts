@@ -2887,6 +2887,7 @@ type Messages = {
   };
   "search": {
     "aiRefine": "Improve query with AI";
+    "askAI": "Ask AI";
     "continueInChat": "Continue in chat";
     "dateFrom": "From";
     "dateTo": "To";
@@ -2916,6 +2917,8 @@ type Messages = {
     "recentSearches": "Recent searches";
     "recentlyOpenedFiles": "Recently opened files";
     "renameSearchTitle": "Rename saved search";
+    "resizeFilters": "Resize filters column";
+    "resizePreview": "Resize preview column";
     "resultCount": "{count, plural, one {# result} other {# results}}";
     "saveSearch": "Save search";
     "saveSearchNamePlaceholder": "e.g. Recent PDFs";

@@ -2884,6 +2884,7 @@
   },
   "search": {
     "aiRefine": "Améliorer la requête avec l’IA",
+    "askAI": "Demander à l’IA",
     "continueInChat": "Continuer dans le chat",
     "dateFrom": "Du",
     "dateTo": "Au",
@@ -2913,6 +2914,8 @@
     "recentSearches": "Recherches récentes",
     "recentlyOpenedFiles": "Fichiers ouverts récemment",
     "renameSearchTitle": "Renommer la recherche enregistrée",
+    "resizeFilters": "Redimensionner la colonne des filtres",
+    "resizePreview": "Redimensionner la colonne d’aperçu",
     "resultCount": "{count, plural, one {# résultat} other {# résultats}}",
     "saveSearch": "Enregistrer la recherche",
     "saveSearchNamePlaceholder": "p. ex. PDF récents",

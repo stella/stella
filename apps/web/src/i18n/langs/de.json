@@ -2884,6 +2884,7 @@
   },
   "search": {
     "aiRefine": "Suchanfrage mit KI verbessern",
+    "askAI": "KI fragen",
     "continueInChat": "Im Chat fortsetzen",
     "dateFrom": "Von",
     "dateTo": "Bis",
@@ -2913,6 +2914,8 @@
     "recentSearches": "Letzte Suchen",
     "recentlyOpenedFiles": "Zuletzt geöffnete Dateien",
     "renameSearchTitle": "Gespeicherte Suche umbenennen",
+    "resizeFilters": "Filterspalte anpassen",
+    "resizePreview": "Vorschauspalte anpassen",
     "resultCount": "{count, plural, one {# Ergebnis} other {# Ergebnisse}}",
     "saveSearch": "Suche speichern",
     "saveSearchNamePlaceholder": "z. B. Aktuelle PDFs",

@@ -2884,6 +2884,7 @@
   },
   "search": {
     "aiRefine": "تحسين الاستعلام باستخدام AI",
+    "askAI": "اسأل AI",
     "continueInChat": "المتابعة في المحادثة",
     "dateFrom": "من",
     "dateTo": "إلى",
@@ -2913,6 +2914,8 @@
     "recentSearches": "عمليات البحث الأخيرة",
     "recentlyOpenedFiles": "الملفات المفتوحة مؤخراً",
     "renameSearchTitle": "إعادة تسمية البحث المحفوظ",
+    "resizeFilters": "تغيير عرض عمود عوامل التصفية",
+    "resizePreview": "تغيير عرض عمود المعاينة",
     "resultCount": "{count, plural, zero {لا نتائج} one {نتيجة واحدة} two {نتيجتان} few {# نتائج} many {# نتيجة} other {# نتيجة}}",
     "saveSearch": "حفظ البحث",
     "saveSearchNamePlaceholder": "مثال: ملفات PDF الحديثة",

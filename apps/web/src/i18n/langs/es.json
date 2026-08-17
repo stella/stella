@@ -2884,6 +2884,7 @@
   },
   "search": {
     "aiRefine": "Mejorar consulta con IA",
+    "askAI": "Preguntar a la IA",
     "continueInChat": "Continuar en el chat",
     "dateFrom": "Desde",
     "dateTo": "Hasta",
@@ -2913,6 +2914,8 @@
     "recentSearches": "Búsquedas recientes",
     "recentlyOpenedFiles": "Archivos abiertos recientemente",
     "renameSearchTitle": "Cambiar nombre de la búsqueda guardada",
+    "resizeFilters": "Cambiar el ancho de la columna de filtros",
+    "resizePreview": "Cambiar el ancho de la columna de vista previa",
     "resultCount": "{count, plural, one {# resultado} other {# resultados}}",
     "saveSearch": "Guardar búsqueda",
     "saveSearchNamePlaceholder": "p. ej., PDF recientes",

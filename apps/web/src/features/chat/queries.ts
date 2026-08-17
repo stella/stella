@@ -50,6 +50,7 @@ import {
 } from "@/lib/chat-thread-ref";
 import { STALE_TIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
+import { emitDevCanaryError } from "@/lib/dev-canary";
 import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
@@ -2381,6 +2382,7 @@ export const installChatRuntimeCleanup = (queryClient: QueryClient): void => {
     for (const [registryKey, entry] of chatRuntimeRegistry) {
       if (entry.queryKeyString === removedKeyString) {
         chatRuntimeRegistry.delete(registryKey);
+        chatRuntimeRebuildTimes.delete(entry.threadIdentity);
       }
     }
   });
@@ -2392,11 +2394,12 @@ export const installChatRuntimeCleanup = (queryClient: QueryClient): void => {
 // swaps the store identity under `useSyncExternalStore` each pass and
 // presents in the field as an unattributed render storm. Counting rebuilds
 // per thread in a sliding window turns that failure mode into a named
-// console.error (which the e2e `browserErrors` fixture escalates to a CI
-// failure, like the render-storm canary's emitter).
+// canary error (which the e2e `browserErrors` fixture escalates to a CI
+// failure, like the render-storm canary). Entries evict with the thread's
+// runtime entries in `installChatRuntimeCleanup`.
 const CHAT_RUNTIME_REBUILD_CHURN_WINDOW_MS = 2000;
 const CHAT_RUNTIME_REBUILD_CHURN_THRESHOLD = 10;
-const chatRuntimeRebuildTimes = new Map<string, number[]>();
+const chatRuntimeRebuildTimes = new LifecycleRegistry<string, number[]>();
 
 const trackChatRuntimeRebuildChurn = (threadIdentity: string): void => {
   if (!import.meta.env.DEV) {
@@ -2413,9 +2416,9 @@ const trackChatRuntimeRebuildChurn = (threadIdentity: string): void => {
   recent.push(now);
   chatRuntimeRebuildTimes.set(threadIdentity, recent);
   if (recent.length === CHAT_RUNTIME_REBUILD_CHURN_THRESHOLD) {
-    // eslint-disable-next-line no-console -- dev-only convergence canary; the sanctioned diagnostic emitter pattern from render-storm-canary, existing to be caught by the e2e browserErrors fixture as a CI-failing signal
-    console.error(
-      `[chat-runtime-churn] rebuilt the chat runtime for thread ${threadIdentity} ` +
+    emitDevCanaryError(
+      "chat-runtime-churn",
+      `rebuilt the chat runtime for thread ${threadIdentity} ` +
         `${String(CHAT_RUNTIME_REBUILD_CHURN_THRESHOLD)} times in ${String(CHAT_RUNTIME_REBUILD_CHURN_WINDOW_MS)}ms. ` +
         "acquireChatRuntime is not converging: each render sees a seed that " +
         "differs from the cached thread data, rebuilds, and re-renders. Compare " +

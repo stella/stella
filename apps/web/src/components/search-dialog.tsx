@@ -194,6 +194,10 @@ const SEARCH_FACETS_MIN_WIDTH = 176;
 const SEARCH_FACETS_MAX_WIDTH = 400;
 const SEARCH_PREVIEW_MIN_WIDTH = 288;
 const SEARCH_PREVIEW_MAX_WIDTH = 800;
+/** Nominal width of the preview column before the user drags it — the
+ * 32rem arm of the CSS default `min(44%, 32rem)`; used for the
+ * separator's reported value until a drag pins an explicit width. */
+const SEARCH_PREVIEW_DEFAULT_WIDTH = 512;
 const SEARCH_RESULTS_MIN_WIDTH = 320;
 
 const SEARCH_PREVIEW_CONTENT_CLASS_NAME =
@@ -1222,10 +1226,21 @@ export const SearchDialog = ({
     const rect = container.getBoundingClientRect();
     const isRtl = getComputedStyle(container).direction === "rtl";
     const next = isRtl ? rect.right - clientX : clientX - rect.left;
+    // The results column absorbs what the facets take, so its current slack
+    // over the floor bounds the growth — whatever width the preview column
+    // holds right now (dragged or CSS default), the results never drop
+    // below their minimum whichever divider moves second.
+    const resultsWidth = resultsElement?.getBoundingClientRect().width;
+    const maxBesideResults =
+      resultsWidth === undefined
+        ? SEARCH_FACETS_MAX_WIDTH
+        : (facetsWidth ?? SEARCH_FACETS_DEFAULT_WIDTH) +
+          resultsWidth -
+          SEARCH_RESULTS_MIN_WIDTH;
     setFacetsWidth(
-      Math.min(
-        SEARCH_FACETS_MAX_WIDTH,
-        Math.max(SEARCH_FACETS_MIN_WIDTH, next),
+      Math.max(
+        SEARCH_FACETS_MIN_WIDTH,
+        Math.min(SEARCH_FACETS_MAX_WIDTH, maxBesideResults, next),
       ),
     );
   };
@@ -1528,7 +1543,11 @@ export const SearchDialog = ({
 
               <SearchColumnResizeHandle
                 className={cn("hidden", showPreview ? "xl:block" : "sm:block")}
+                label={t("search.resizeFilters")}
+                max={SEARCH_FACETS_MAX_WIDTH}
+                min={SEARCH_FACETS_MIN_WIDTH}
                 onResize={resizeFacetsColumn}
+                value={facetsWidth ?? SEARCH_FACETS_DEFAULT_WIDTH}
               />
 
               {/* Results */}
@@ -1712,7 +1731,11 @@ export const SearchDialog = ({
               {showPreview && (
                 <SearchColumnResizeHandle
                   className="hidden md:block"
+                  label={t("search.resizePreview")}
+                  max={SEARCH_PREVIEW_MAX_WIDTH}
+                  min={SEARCH_PREVIEW_MIN_WIDTH}
                   onResize={resizePreviewColumn}
+                  value={previewWidth ?? SEARCH_PREVIEW_DEFAULT_WIDTH}
                 />
               )}
               {showPreview && displayedPreviewHit && (
@@ -1750,7 +1773,7 @@ export const SearchDialog = ({
                 the right — everything that is not the query itself lives
                 here so the input row stays a plain input. */}
             <div className="flex shrink-0 items-center gap-4 border-t px-4 py-1.5">
-              <div className="text-muted-foreground hidden items-center gap-4 text-xs sm:flex">
+              <div className="text-muted-foreground flex items-center gap-4 text-xs">
                 <SearchFooterHint translationKey="search.hintNavigate" />
                 <SearchFooterHint translationKey="search.hintOpen" />
                 {canAskAI && (
@@ -1764,7 +1787,13 @@ export const SearchDialog = ({
                     {askAIMutation.isPending && (
                       <LoaderIcon className="size-3 animate-spin" />
                     )}
-                    <SearchFooterHintText translationKey="search.hintAskAI" />
+                    {/* Below `sm` there is no Tab key to press, so the
+                        button carries a plain label; the hint wording is
+                        keyboard-first. */}
+                    <span className="sm:hidden">{t("search.askAI")}</span>
+                    <span className="hidden sm:inline">
+                      <SearchFooterHintText translationKey="search.hintAskAI" />
+                    </span>
                   </Button>
                 )}
                 <SearchFooterHint translationKey="search.hintClose" />
@@ -1794,27 +1823,62 @@ export const SearchDialog = ({
 
 type SearchColumnResizeHandleProps = {
   className?: string;
+  label: string;
+  /** Current width of the column this separator controls (px); the CSS
+   * default when the user has not dragged yet. */
+  value: number;
+  max: number;
+  min: number;
   onResize: (clientX: number) => void;
 };
 
+const SEARCH_RESIZE_KEYBOARD_STEP_PX = 16;
+
 /**
- * Pointer-capture drag strip between two columns, mirroring the inspector
- * pane's resize handle. A 4px grab zone straddling the adjacent column
- * border via negative margins, so it adds no visible width of its own.
+ * Drag strip between two columns, mirroring the inspector pane's resize
+ * handle. A 4px grab zone straddling the adjacent column border via
+ * negative margins, so it adds no visible width of its own. Also a
+ * focusable `separator`: arrow keys move it by a fixed step in the pressed
+ * physical direction, feeding the same clamped `onResize` path as a drag
+ * (a synthetic clientX offset from the handle's own position).
  */
 const SearchColumnResizeHandle = ({
   className,
+  label,
+  value,
+  max,
+  min,
   onResize,
 }: SearchColumnResizeHandleProps) => {
   const isDraggingRef = useRef(false);
 
   return (
     <div
-      aria-hidden="true"
+      aria-label={label}
+      aria-orientation="vertical"
+      aria-valuemax={max}
+      aria-valuemin={min}
+      aria-valuenow={Math.round(value)}
       className={cn(
-        "hover:bg-border active:bg-border z-10 -mx-0.5 w-1 shrink-0 cursor-col-resize",
+        "hover:bg-border active:bg-border focus-visible:bg-border focus-visible:ring-ring z-10 -mx-0.5 w-1 shrink-0 cursor-col-resize focus-visible:ring-1 focus-visible:outline-none",
         className,
       )}
+      onKeyDown={(event) => {
+        let step: number;
+        switch (event.key) {
+          case "ArrowLeft":
+            step = -SEARCH_RESIZE_KEYBOARD_STEP_PX;
+            break;
+          case "ArrowRight":
+            step = SEARCH_RESIZE_KEYBOARD_STEP_PX;
+            break;
+          default:
+            return;
+        }
+        event.preventDefault();
+        const rect = event.currentTarget.getBoundingClientRect();
+        onResize(rect.left + rect.width / 2 + step);
+      }}
       onPointerDown={(event) => {
         event.preventDefault();
         isDraggingRef.current = true;
@@ -1828,6 +1892,11 @@ const SearchColumnResizeHandle = ({
       onPointerUp={() => {
         isDraggingRef.current = false;
       }}
+      onPointerCancel={() => {
+        isDraggingRef.current = false;
+      }}
+      role="separator"
+      tabIndex={0}
     />
   );
 };
@@ -1851,8 +1920,10 @@ const SearchFooterHintText = ({ translationKey }: SearchFooterHintProps) => {
   return <>{t.rich(translationKey, { kbd: searchFooterKbd })}</>;
 };
 
+// Keyboard hints mean nothing on touch viewports; below `sm` only the
+// footer's clickable controls (the Ask AI button) stay visible.
 const SearchFooterHint = ({ translationKey }: SearchFooterHintProps) => (
-  <span className="whitespace-nowrap">
+  <span className="hidden whitespace-nowrap sm:inline">
     <SearchFooterHintText translationKey={translationKey} />
   </span>
 );
@@ -2074,7 +2145,7 @@ const SearchPreviewContent = ({
             size="sm"
             variant="outline"
           >
-            {opensLocation && location !== null ? (
+            {opensLocation ? (
               <span className="max-w-48 truncate">
                 {t.rich("search.openMatter", {
                   bdi: (chunks) => <BidiText>{chunks}</BidiText>,

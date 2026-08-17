@@ -2884,6 +2884,7 @@
   },
   "search": {
     "aiRefine": "Ulepsz zapytanie z AI",
+    "askAI": "Zapytaj AI",
     "continueInChat": "Kontynuuj na czacie",
     "dateFrom": "Od",
     "dateTo": "Do",
@@ -2913,6 +2914,8 @@
     "recentSearches": "Ostatnie wyszukiwania",
     "recentlyOpenedFiles": "Ostatnio otwarte pliki",
     "renameSearchTitle": "Zmień nazwę zapisanego wyszukiwania",
+    "resizeFilters": "Zmień szerokość kolumny filtrów",
+    "resizePreview": "Zmień szerokość kolumny podglądu",
     "resultCount": "{count, plural, one {# wynik} few {# wyniki} many {# wyników} other {# wyników}}",
     "saveSearch": "Zapisz wyszukiwanie",
     "saveSearchNamePlaceholder": "np. Ostatnie pliki PDF",

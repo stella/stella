@@ -2884,6 +2884,7 @@
   },
   "search": {
     "aiRefine": "Patobulinti užklausą su DI",
+    "askAI": "Klausti DI",
     "continueInChat": "Tęsti pokalbyje",
     "dateFrom": "Nuo",
     "dateTo": "Iki",
@@ -2913,6 +2914,8 @@
     "recentSearches": "Naujausios paieškos",
     "recentlyOpenedFiles": "Neseniai atidaryti failai",
     "renameSearchTitle": "Pervadinti išsaugotą paiešką",
+    "resizeFilters": "Keisti filtrų stulpelio plotį",
+    "resizePreview": "Keisti peržiūros stulpelio plotį",
     "resultCount": "{count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
     "saveSearch": "Išsaugoti paiešką",
     "saveSearchNamePlaceholder": "pvz., Naujausi PDF",

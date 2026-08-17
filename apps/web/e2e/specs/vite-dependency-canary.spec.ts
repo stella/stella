@@ -2,6 +2,7 @@ import type { Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
 import { createUploadedDocumentRoute } from "../helpers/document";
+import { EXPECTS_DEV_RUNTIME } from "../helpers/runtime-mode";
 import { expect, test } from "../helpers/test";
 import {
   type TestWorkspace,
@@ -9,7 +10,6 @@ import {
   deleteTestWorkspace,
 } from "../helpers/workspace";
 
-const EXPECTS_DEV_ROUTES = process.env["E2E_EXPECT_DEV_ROUTES"] !== "false";
 const ROUTE_READY_TIMEOUT_MS = 60_000;
 const ROUTE_COUNT = 4;
 const TEST_OVERHEAD_MS = 30_000;
@@ -20,7 +20,7 @@ test.describe("Vite dependency optimizer canary", () => {
   test.setTimeout(TEST_OVERHEAD_MS + ROUTE_COUNT * ROUTE_READY_TIMEOUT_MS);
 
   test.skip(
-    !EXPECTS_DEV_ROUTES,
+    !EXPECTS_DEV_RUNTIME,
     "This optimizer canary applies only to the Vite development server",
   );
 

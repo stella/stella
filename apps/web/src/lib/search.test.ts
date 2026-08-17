@@ -3,7 +3,6 @@ import { describe, expect, test } from "bun:test";
 import { resourceRef, RESOURCE_TYPE, toResourceName } from "@stll/api-contract";
 import type { GlobalSearchHit } from "@stll/api/types";
 
-import { STALE_TIME } from "@/lib/consts";
 import { toSafeId } from "@/lib/safe-id";
 import {
   getFirstSearchHighlightText,
@@ -50,6 +49,7 @@ const {
   hasSearchQueryOrSelectiveFilter,
   recentFilePreviewFieldOptions,
   resolveRecentFilePreviewFieldId,
+  SEARCH_PREVIEW_ACCESS_RECHECK_MS,
   searchInfiniteOptions,
   searchPreviewOptions,
 } = await import("@/lib/search");
@@ -220,6 +220,7 @@ describe("search preview targets", () => {
     entityId: "entity_1",
     workspaceId: "ws_1",
     workspaceName: "Matter",
+    parentId: null,
     lastEditedByName: null,
     lastEditedByImage: null,
     fileFieldId: null,
@@ -345,7 +346,7 @@ describe("search preview targets", () => {
     // This query doubles as the access re-check for a recent file, so the
     // window must stay short — but nonzero, or hovering between recents
     // refires it on every switch.
-    expect(options.staleTime).toBe(30_000);
+    expect(options.staleTime).toBe(SEARCH_PREVIEW_ACCESS_RECHECK_MS);
   });
 
   test("caches previews within a search session", () => {
@@ -360,10 +361,12 @@ describe("search preview targets", () => {
 
     // The key is content-addressed (query + resultId + updatedAt), so caching
     // can never show stale content; it only defers the per-mount access
-    // re-check, bounded by this staleTime. No refetchOnMount override —
-    // hovering back to an already-previewed hit must be a cache hit.
+    // re-check, bounded by the same window as the recent-file re-check
+    // above. No refetchOnMount override — hovering back to an
+    // already-previewed hit must be a cache hit.
     expect(options.refetchOnMount).toBeUndefined();
-    expect(options.staleTime).toBe(STALE_TIME.FIVE.MINUTES);
+    expect(options.staleTime).toBe(SEARCH_PREVIEW_ACCESS_RECHECK_MS);
+    expect(SEARCH_PREVIEW_ACCESS_RECHECK_MS).toBeLessThanOrEqual(30_000);
   });
 
   test("shows the preview only when enabled on a non-mobile viewport", () => {
@@ -614,6 +617,7 @@ describe("search preview targets", () => {
         entityId: "entity_1",
         workspaceId: "ws_1",
         workspaceName: "Matter",
+        parentId: null,
         lastEditedByName: null,
         lastEditedByImage: null,
         fileFieldId: null,
