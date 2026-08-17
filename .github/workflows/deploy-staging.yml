@@ -42,8 +42,16 @@ jobs:
         env:
           STAGING_HEALTH_URL: https://api-staging.stll.app/ready
           STAGING_LEGACY_HEALTH_URL: https://api-staging.stll.app/health
+          EDGE_HEADER_NAME: ${{ secrets.E2E_EDGE_HEADER_NAME }}
+          EDGE_HEADER_VALUE: ${{ secrets.E2E_EDGE_HEADER_VALUE }}
         run: |
           set -euo pipefail
+
+          # Optional edge access header on the probes; no-op when unset.
+          curl_edge_args=()
+          if [[ -n "${EDGE_HEADER_NAME:-}" && -n "${EDGE_HEADER_VALUE:-}" ]]; then
+            curl_edge_args+=(--header "${EDGE_HEADER_NAME}: ${EDGE_HEADER_VALUE}")
+          fi
 
           readonly READY_STATUS="ready"
           readonly NOT_READY_STATUS="not_ready"
@@ -63,6 +71,7 @@ jobs:
                 --silent \
                 --show-error \
                 --write-out '%{http_code}' \
+                "${curl_edge_args[@]}" \
                 "$STAGING_HEALTH_URL"
             )"; then
               http_status="000"
@@ -78,6 +87,7 @@ jobs:
                   --silent \
                   --show-error \
                   --write-out '%{http_code}' \
+                  "${curl_edge_args[@]}" \
                   "$STAGING_LEGACY_HEALTH_URL"
               )"; then
                 http_status="000"
@@ -458,6 +468,8 @@ jobs:
           E2E_WEB_URL: https://staging.stll.app
           E2E_API_URL: https://api-staging.stll.app
           SMOKE_SESSION_SECRET: ${{ secrets.SMOKE_SESSION_SECRET }}
+          E2E_EDGE_HEADER_NAME: ${{ secrets.E2E_EDGE_HEADER_NAME }}
+          E2E_EDGE_HEADER_VALUE: ${{ secrets.E2E_EDGE_HEADER_VALUE }}
           # Block the smoke until staging actually serves this commit,
           # so it doesn't race the ECS task rollover.
           EXPECTED_COMMIT: ${{ github.sha }}
@@ -468,6 +480,8 @@ jobs:
         env:
           E2E_API_URL: https://api-staging.stll.app
           SMOKE_SESSION_SECRET: ${{ secrets.SMOKE_SESSION_SECRET }}
+          E2E_EDGE_HEADER_NAME: ${{ secrets.E2E_EDGE_HEADER_NAME }}
+          E2E_EDGE_HEADER_VALUE: ${{ secrets.E2E_EDGE_HEADER_VALUE }}
           EXPECTED_COMMIT: ${{ github.sha }}
 
       - name: Upload Playwright report

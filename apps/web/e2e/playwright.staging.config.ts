@@ -10,6 +10,17 @@ import path from "node:path";
 const STAGING_WEB_URL =
   process.env["E2E_WEB_URL"] ?? "https://staging.stll.app";
 
+// Optional edge access header, sent on every request the smoke makes when
+// the deployed environment's edge expects one. Absent env keeps this a
+// no-op, so the suite runs unchanged against environments without it.
+const EDGE_HEADER_NAME = process.env["E2E_EDGE_HEADER_NAME"] ?? "";
+const EDGE_HEADER_VALUE = process.env["E2E_EDGE_HEADER_VALUE"] ?? "";
+
+export const EDGE_HEADERS: Record<string, string> =
+  EDGE_HEADER_NAME && EDGE_HEADER_VALUE
+    ? { [EDGE_HEADER_NAME]: EDGE_HEADER_VALUE }
+    : {};
+
 export const STAGING_STORAGE_STATE = path.resolve(
   import.meta.dirname,
   "../../../.playwright/staging-storage-state.json",
@@ -27,6 +38,7 @@ export default defineConfig({
 
   use: {
     baseURL: STAGING_WEB_URL,
+    extraHTTPHeaders: EDGE_HEADERS,
     storageState: STAGING_STORAGE_STATE,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
