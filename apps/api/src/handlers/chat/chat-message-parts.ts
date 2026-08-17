@@ -13,6 +13,7 @@ import {
   TANSTACK_TOOL_CALL_STATE_LIFECYCLE,
   TANSTACK_TOOL_RESULT_STATE_LIFECYCLE,
 } from "@/api/handlers/chat/tanstack-chat-lifecycle";
+import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import type {
   ChatAttachmentMetadata,
   ChatAttachmentPart,
@@ -383,12 +384,19 @@ export const toProviderVisibleMessage = (
     : { ...message, parts };
 };
 
-const ASK_USER_STATE_AWAITS_USER = {
+/**
+ * Whether a client-executed tool call (ask-user, or any tool without a server
+ * `execute`) still awaits its client resolution. A server-executed call never
+ * ends a run in `input-complete`: the agent loop executes every tool of a
+ * model turn before it decides whether to call the model again, so at run end
+ * an `input-complete` call is by construction one the client must resolve.
+ */
+const CLIENT_TOOL_STATE_AWAITS_RESOLUTION = {
   "approval-requested": false,
   "approval-responded": false,
   // A terminal stream can end while the provider has only announced a call or
-  // is still emitting its JSON arguments. The card cannot render a usable
-  // question in either state, so neither may take durable user-turn ownership.
+  // is still emitting its JSON arguments. Neither state carries usable input,
+  // so neither may take durable turn ownership.
   "awaiting-input": false,
   complete: false,
   error: false,
@@ -396,18 +404,8 @@ const ASK_USER_STATE_AWAITS_USER = {
   "input-streaming": false,
 } as const satisfies Record<TanStackToolCallState, boolean>;
 
-const RESUMED_INTERACTION_TYPE_BY_TOOL_STATE = {
-  "approval-requested": null,
-  "approval-responded": "approval",
-  "awaiting-input": null,
-  complete: "ask-user",
-  error: null,
-  "input-complete": "ask-user",
-  "input-streaming": null,
-} as const satisfies Record<
-  TanStackToolCallState,
-  "approval" | "ask-user" | null
->;
+const clientToolInteractionType = (name: string): "ask-user" | "client-tool" =>
+  name === ASK_USER_TOOL_NAME ? "ask-user" : "client-tool";
 
 type AwaitingUserInteraction = Extract<
   NonNullable<ChatMessageMetadata["turnOutcome"]>,
@@ -530,8 +528,11 @@ export const getAwaitingUserInteractions = (
       interactions.push({ type: "approval", toolCallId: part.id });
       continue;
     }
-    if (part.name === "ask-user" && ASK_USER_STATE_AWAITS_USER[part.state]) {
-      interactions.push({ type: "ask-user", toolCallId: part.id });
+    if (CLIENT_TOOL_STATE_AWAITS_RESOLUTION[part.state]) {
+      interactions.push({
+        type: clientToolInteractionType(part.name),
+        toolCallId: part.id,
+      });
     }
   }
   return interactions;
@@ -543,42 +544,94 @@ export const getAwaitingUserInteraction = (
   getAwaitingUserInteractions(message).at(0) ?? null;
 
 /**
- * Return the durable interaction a client continuation is attempting to
- * resolve. The turn store compares this identity with its canonical awaited
- * interaction before any client-supplied assistant parts replace history.
+ * Whether an incoming tool-call state answers an awaited interaction:
+ * `resolved` carries the client's answer, `unchanged` leaves the call as it
+ * was awaited (an untouched call while a later interaction in the same
+ * message is answered, or a cancelled resume), and `null` is not an answer.
  */
-export const getResumedUserInteraction = (
-  message: Pick<ChatMessage, "parts" | "role">,
-): AwaitingUserInteraction | null => {
-  if (message.role !== "assistant") {
+const CLIENT_INTERACTION_RESOLUTION = {
+  approval: {
+    "approval-requested": "unchanged",
+    "approval-responded": "resolved",
+    "awaiting-input": null,
+    complete: null,
+    error: null,
+    "input-complete": null,
+    "input-streaming": null,
+  },
+  "ask-user": {
+    "approval-requested": null,
+    "approval-responded": null,
+    "awaiting-input": null,
+    complete: "resolved",
+    // A client-executed failure round-trips as an error result.
+    error: "resolved",
+    "input-complete": "unchanged",
+    "input-streaming": null,
+  },
+  "client-tool": {
+    "approval-requested": null,
+    "approval-responded": null,
+    "awaiting-input": null,
+    complete: "resolved",
+    error: "resolved",
+    "input-complete": "unchanged",
+    "input-streaming": null,
+  },
+} as const satisfies Record<
+  AwaitingUserInteraction["type"],
+  Record<TanStackToolCallState, "resolved" | "unchanged" | null>
+>;
+
+type GetResumedUserInteractionOptions = {
+  /** Interactions the persisted turn awaits (`getAwaitingUserInteractions`). */
+  awaited: readonly AwaitingUserInteraction[];
+  message: Pick<ChatMessage, "parts" | "role">;
+};
+
+/**
+ * Return the awaited interaction a client continuation is resolving. The turn
+ * store compares this identity with its canonical awaited interaction before
+ * any client-supplied assistant parts replace history. Resolution is defined
+ * against the awaited set, never by tool name or state alone: a completed
+ * server tool in the same message is not an answer to anything.
+ */
+export const getResumedUserInteraction = ({
+  awaited,
+  message,
+}: GetResumedUserInteractionOptions): AwaitingUserInteraction | null => {
+  if (message.role !== "assistant" || awaited.length === 0) {
     return null;
   }
-  let inputCompleteAskUser: AwaitingUserInteraction | null = null;
+  const awaitedByToolCallId = new Map(
+    awaited.map(
+      (interaction) => [interaction.toolCallId, interaction] as const,
+    ),
+  );
+  let unchangedInteraction: AwaitingUserInteraction | null = null;
   for (let index = message.parts.length - 1; index >= 0; index -= 1) {
     const part = message.parts[index];
-    if (part === undefined) {
+    if (part?.type !== "tool-call") {
       continue;
     }
-    if (part.type !== "tool-call") {
+    const interaction = awaitedByToolCallId.get(part.id);
+    if (interaction === undefined) {
       continue;
     }
-    const interactionType = RESUMED_INTERACTION_TYPE_BY_TOOL_STATE[part.state];
-    if (interactionType === null) {
-      continue;
+    const resolution =
+      CLIENT_INTERACTION_RESOLUTION[interaction.type][part.state];
+    if (resolution === "resolved") {
+      return interaction;
     }
-    if (interactionType === "ask-user" && part.name !== "ask-user") {
-      continue;
+    // Prefer an explicit answer elsewhere in the message. An awaited call the
+    // continuation leaves untouched still names the turn it belongs to: a
+    // cancelled native resume keeps the call as awaited, and the turn must
+    // still find its owner.
+    if (resolution === "unchanged") {
+      unchangedInteraction = interaction;
     }
-    // An unchanged ask-user call remains input-complete while the user acts
-    // on a later approval in the same message. Prefer the explicit approval
-    // response; retain input-complete only as the legacy ask-user fallback.
-    if (part.state === "input-complete") {
-      inputCompleteAskUser = { type: interactionType, toolCallId: part.id };
-      continue;
-    }
-    return { type: interactionType, toolCallId: part.id };
   }
-  return inputCompleteAskUser;
+  return unchangedInteraction;
 };
 
 export const toProviderVisibleMessages = (

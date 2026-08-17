@@ -22,6 +22,8 @@ import {
   type ActiveFileSourceForModel,
 } from "@/api/handlers/chat/active-file-model-source";
 import {
+  chatMessageFromPersisted,
+  getAwaitingUserInteractions,
   getResumedUserInteraction,
   isChatPart,
   toPersistableChatMessage,
@@ -1216,7 +1218,18 @@ const sendMessage = createSafeRootHandler(
           claim: {
             acceptedTurnId: null,
             continuationInteraction:
-              getResumedUserInteraction(parsedMessage.message) ?? undefined,
+              getResumedUserInteraction({
+                awaited: getAwaitingUserInteractions(
+                  validationThreadState.persistedMessage === null
+                    ? null
+                    : chatMessageFromPersisted({
+                        content: validationThreadState.persistedMessage.content,
+                        id: parsedMessage.message.id,
+                        role: validationThreadState.persistedMessage.role,
+                      }),
+                ),
+                message: parsedMessage.message,
+              }) ?? undefined,
             incomingMessageId: parsedMessage.message.id,
             incomingMessageRole: parsedMessage.message.role,
             organizationId: session.activeOrganizationId,

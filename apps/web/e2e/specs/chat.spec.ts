@@ -270,3 +270,51 @@ test("chat composer sends a message and renders the assistant reply", async ({
     1,
   );
 });
+
+// The mock model answers this marker with a `create-document` tool call (see
+// apps/api/src/dev/register-mock-ai.ts). That tool is client-executed, so the
+// run pauses at TanStack's native interrupt boundary, the client compiles the
+// draft into the inspector and posts the result back, and the continuation
+// answers with text. Every hop is asserted: the paused turn must persist, the
+// durable-turn claim must accept the resume, and no run error may surface.
+test("a client-executed draft tool pauses the turn, opens the draft, and resumes", async ({
+  page,
+}) => {
+  await page.goto("/chat", { waitUntil: "commit" });
+  const composer = page.getByRole("textbox", { name: /type your question/iu });
+  await expect(composer).toBeVisible({ timeout: 30_000 });
+  await composer.fill("Draft it as a document please: a mutual NDA.");
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/u, { timeout: 30_000 });
+
+  // The compiled draft opens in the inspector with its own file composer.
+  await expect(
+    page.getByRole("textbox", { name: /chat about or edit Mutual NDA/iu }),
+  ).toBeVisible({ timeout: 30_000 });
+
+  // The continuation run answered with text: the transcript carries the reply
+  // and no error bubble ("Resend" renders on every ChatErrorMessage variant).
+  const transcript = page.getByRole("log");
+  await expect(
+    transcript.getByText("The draft is open in the panel"),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(transcript.getByRole("button", { name: "Retry" })).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(transcript.getByRole("button", { name: "Resend" })).toHaveCount(
+    0,
+  );
+
+  // The paused turn and its resumption survive a reload: the draft is
+  // re-settled from the persisted tool call, and the reply is still there.
+  await page.reload({ waitUntil: "commit" });
+  await expect(
+    page.getByRole("textbox", { name: /chat about or edit Mutual NDA/iu }),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(
+    transcript.getByText("The draft is open in the panel"),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(transcript.getByRole("button", { name: "Resend" })).toHaveCount(
+    0,
+  );
+});

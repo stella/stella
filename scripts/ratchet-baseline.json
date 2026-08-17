@@ -236,7 +236,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 763,
+    "count": 764,
     "files": {
       "apps/api/scripts/ai-provider-canary-config.ts": 1,
       "apps/api/scripts/ai-provider-canary.ts": 4,
@@ -260,7 +260,7 @@
       "apps/api/src/db/schema.ts": 1,
       "apps/api/src/db/schema/case-law.ts": 1,
       "apps/api/src/db/schema/chat.ts": 2,
-      "apps/api/src/dev/register-mock-ai.ts": 1,
+      "apps/api/src/dev/register-mock-ai.ts": 2,
       "apps/api/src/handlers/agent-auth/events.ts": 1,
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/audit-logs/query.ts": 3,
@@ -444,7 +444,7 @@
       "apps/web/src/components/ai-suggestions/host.tsx": 1,
       "apps/web/src/components/ai-suggestions/review-panel.impl.tsx": 1,
       "apps/web/src/components/autocomplete/use-autocomplete-stream.ts": 1,
-      "apps/web/src/components/chat-editor-provider.tsx": 8,
+      "apps/web/src/components/chat-editor-provider.tsx": 7,
       "apps/web/src/components/chat-mention-list.tsx": 2,
       "apps/web/src/components/chat/chat-anon-decorations-extension.ts": 1,
       "apps/web/src/components/chat/chat-thread-messages.tsx": 5,
@@ -484,7 +484,7 @@
       "apps/web/src/hooks/external-file-drop.logic.ts": 5,
       "apps/web/src/hooks/use-effect.ts": 2,
       "apps/web/src/lib/analytics/posthog.ts": 1,
-      "apps/web/src/lib/anonymize/anonymize-chat-worker-client.ts": 2,
+      "apps/web/src/lib/anonymize/anonymize-chat-worker-client.ts": 3,
       "apps/web/src/lib/anonymize/use-overlay-rects.ts": 1,
       "apps/web/src/lib/desktop-bridge.ts": 6,
       "apps/web/src/lib/dev-canary.ts": 1,

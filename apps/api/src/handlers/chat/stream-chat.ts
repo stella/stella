@@ -1414,6 +1414,23 @@ const normalizeRunErrorChunk = (chunk: RunErrorChunk): RunErrorChunk => {
   };
 };
 
+type AwaitingInteraction = Extract<
+  ChatTurnOutcome,
+  { type: "awaiting-user" }
+>["interaction"];
+
+const awaitsCompleteInput = (interaction: AwaitingInteraction): boolean => {
+  switch (interaction.type) {
+    case "approval":
+      return false;
+    case "ask-user":
+    case "client-tool":
+      return true;
+    default:
+      return interaction satisfies never;
+  }
+};
+
 export const processServerChatStream = async function* ({
   abortSignal,
   existingMessageIds = new Set(),
@@ -1444,6 +1461,20 @@ export const processServerChatStream = async function* ({
     if (flushProcessor) {
       finalizeResponseProcessor(processor);
     }
+    // An empty completion is a provider outcome: the model produced no
+    // persistable part. A run that carried a complete tool call cannot be
+    // one; losing that call between the stream and the persistence
+    // processor is a defect in this pipeline, so it must not be graded as
+    // an anticipated provider state.
+    if (
+      (outcome.type === "completed" || outcome.type === "awaiting-user") &&
+      toolCallsWithCompleteInput.size > 0 &&
+      (getResponseMessage()?.parts.length ?? 0) === 0
+    ) {
+      panic(
+        "Persistence processor dropped an assistant turn that carried a complete tool call",
+      );
+    }
     const responseMessage = createTerminalResponseMessage({
       getResponseMessage,
       mapMessageId,
@@ -1473,19 +1504,34 @@ export const processServerChatStream = async function* ({
         sourceChunk.type === EventType.RUN_STARTED &&
         deferredRunFinishedChunks.length > 0
       ) {
-        // Continuation events such as `approval-requested` belong before the
-        // run's finish, but a later run does not. Register the later run with
-        // the server-side processor before closing the prior run so the
-        // processor keeps the shared assistant message active across a
-        // server-tool continuation. The client still receives the canonical
-        // FINISH(A), START(B) order. Without this internal overlap, TanStack
-        // finalizes after A and a tool-only B has no message-start event to
-        // reactivate, so its client-tool call is visible live but omitted from
-        // the persisted assistant turn.
-        processor.processChunk(sourceChunk);
+        // A later run in the same turn. The client always receives the
+        // canonical FINISH(A), START(B) order; what the persistence processor
+        // sees depends on whether B is a new run or another iteration of A.
+        //
+        // TanStack reuses one runId across the model iterations of a request
+        // (server tool executed, model called again). An intermediate finish
+        // with that same id would empty the processor's active-run set,
+        // finalize the shared assistant message, and leave a tool-only B (no
+        // TEXT_MESSAGE_START to reactivate it) appended to an inactive message
+        // that `onStreamEnd` never reports: the client-tool call is visible
+        // live but missing from the persisted turn. An intermediate finish
+        // never carries an interrupt (an interrupt ends the run), so the
+        // processor loses nothing by seeing only the terminal finish.
+        //
+        // A run with a different id (a fallback model attempt) must close the
+        // prior run for the processor, but only after B is registered, so the
+        // shared assistant message stays active across the attempts.
         const priorRunFinishedChunks = deferredRunFinishedChunks.splice(0);
-        for (const chunk of priorRunFinishedChunks) {
-          processor.processChunk(chunk);
+        const isSameRunIteration = priorRunFinishedChunks.every(
+          (chunk) =>
+            chunk.type === EventType.RUN_FINISHED &&
+            chunk.runId === sourceChunk.runId,
+        );
+        processor.processChunk(sourceChunk);
+        if (!isSameRunIteration) {
+          for (const chunk of priorRunFinishedChunks) {
+            processor.processChunk(chunk);
+          }
         }
         for (const chunk of priorRunFinishedChunks) {
           yield chunk;
@@ -1516,7 +1562,17 @@ export const processServerChatStream = async function* ({
         deferredRunFinishedChunks.push(chunk);
         continue;
       }
-      processor.processChunk(chunk);
+      // TanStack emits MESSAGES_SNAPSHOT before RUN_FINISHED at every
+      // interrupt boundary (client tool, approval) so the client can rehydrate.
+      // The persistence processor derives the assistant turn from the event
+      // stream itself; feeding it the snapshot resets its stream state, and the
+      // deferred RUN_FINISHED then finalizes with no active message, so
+      // `onStreamEnd` never fires and a turn that carries a complete tool call
+      // is persisted as an empty completion. Forward the snapshot; never
+      // process it.
+      if (chunk.type !== EventType.MESSAGES_SNAPSHOT) {
+        processor.processChunk(chunk);
+      }
       if (lifecycle === "failed") {
         if (chunk.type !== EventType.RUN_ERROR) {
           panic("Unhandled TanStack failed stream event");
@@ -1537,11 +1593,14 @@ export const processServerChatStream = async function* ({
     }
     const awaitingUserInteraction =
       getAwaitingUserInteraction(getResponseMessage());
-    const incompleteAskUserInteraction =
-      awaitingUserInteraction?.type === "ask-user" &&
+    // A client-resolved call whose input never finished (no TOOL_CALL_END)
+    // cannot be answered by any client, so the turn fails instead of waiting.
+    const incompleteClientInteraction =
+      awaitingUserInteraction !== null &&
+      awaitsCompleteInput(awaitingUserInteraction) &&
       !toolCallsWithCompleteInput.has(awaitingUserInteraction.toolCallId);
     let outcome: ChatTurnOutcome;
-    if (incompleteAskUserInteraction) {
+    if (incompleteClientInteraction) {
       outcome = { type: "failed", error: "unknown" };
     } else if (awaitingUserInteraction === null) {
       outcome = { type: "completed" };
@@ -1697,16 +1756,13 @@ export const remapOutgoingMessageIds = async function* ({
   source,
 }: RemapOutgoingMessageIdsProps): AsyncIterable<StreamChunk> {
   const snapshotMessageIds = new Map<string, SafeId<"chatMessage">>();
-  let primarySnapshotMessageIdAssigned = false;
   for await (const chunk of source) {
     yield remapChunkMessageId({
       chunk,
       existingMessageIds,
       mapMessageId,
       snapshotMessageIds,
-      primarySnapshotMessageIdAssigned,
     });
-    primarySnapshotMessageIdAssigned ||= snapshotMessageIds.size > 0;
   }
 };
 
@@ -1777,50 +1833,93 @@ type StreamChunkWithMessageId = StreamChunk & { messageId: string };
 const hasMessageId = (chunk: StreamChunk): chunk is StreamChunkWithMessageId =>
   "messageId" in chunk && typeof chunk.messageId === "string";
 
+type SnapshotMessage = Extract<
+  StreamChunk,
+  { type: EventType.MESSAGES_SNAPSHOT }
+>["messages"][number];
+
+/**
+ * A native snapshot carries one assistant message per model iteration, but the
+ * turn is persisted as ONE assistant message (every text and tool-call part of
+ * every iteration, under the id `mapMessageId` fixes for the turn). The client
+ * continues the persisted message, so the snapshot must present the same
+ * shape: the run's new assistant messages fold into that one message, and
+ * their tool messages keep anchoring by `toolCallId`.
+ */
+const mergeSnapshotAssistantMessages = ({
+  existingMessageIds,
+  mapMessageId,
+  messages,
+  snapshotMessageIds,
+}: {
+  existingMessageIds: ReadonlySet<string>;
+  mapMessageId: MessageIdMapper;
+  messages: readonly SnapshotMessage[];
+  snapshotMessageIds: Map<string, SafeId<"chatMessage">>;
+}): SnapshotMessage[] => {
+  const isNewAssistant = (
+    message: SnapshotMessage,
+  ): message is Extract<SnapshotMessage, { role: "assistant" }> =>
+    message.role === "assistant" && !existingMessageIds.has(message.id);
+  const newAssistantMessages = messages.filter(isNewAssistant);
+  const first = newAssistantMessages.at(0);
+  if (first === undefined) {
+    return [...messages];
+  }
+  const mergedId = mapMessageId(first.id);
+  const contents: string[] = [];
+  const toolCalls: NonNullable<
+    Extract<SnapshotMessage, { role: "assistant" }>["toolCalls"]
+  > = [];
+  for (const message of newAssistantMessages) {
+    snapshotMessageIds.set(message.id, mergedId);
+    if (typeof message.content === "string" && message.content.length > 0) {
+      contents.push(message.content);
+    }
+    if (message.toolCalls !== undefined) {
+      toolCalls.push(...message.toolCalls);
+    }
+  }
+  const { content: _content, toolCalls: _toolCalls, ...identity } = first;
+  const merged: SnapshotMessage = {
+    ...identity,
+    id: mergedId,
+    ...(contents.length === 0 ? {} : { content: contents.join("\n\n") }),
+    ...(toolCalls.length === 0 ? {} : { toolCalls }),
+  };
+  const result: SnapshotMessage[] = [];
+  for (const message of messages) {
+    if (message === first) {
+      result.push(merged);
+      continue;
+    }
+    if (!isNewAssistant(message)) {
+      result.push(message);
+    }
+  }
+  return result;
+};
+
 const remapChunkMessageId = ({
   chunk,
   existingMessageIds,
   mapMessageId,
-  primarySnapshotMessageIdAssigned,
   snapshotMessageIds,
 }: {
   chunk: StreamChunk;
   existingMessageIds: ReadonlySet<string>;
   mapMessageId: MessageIdMapper;
-  primarySnapshotMessageIdAssigned: boolean;
   snapshotMessageIds: Map<string, SafeId<"chatMessage">>;
 }): StreamChunk => {
   if (chunk.type === EventType.MESSAGES_SNAPSHOT) {
-    const newAssistantIds = chunk.messages
-      .filter(
-        (message) =>
-          message.role === "assistant" &&
-          !existingMessageIds.has(message.id) &&
-          !snapshotMessageIds.has(message.id),
-      )
-      .map(({ id }) => id);
-    const primarySourceId = primarySnapshotMessageIdAssigned
-      ? undefined
-      : newAssistantIds.at(-1);
     return {
       ...chunk,
-      messages: chunk.messages.map((message) =>
-        message.role !== "assistant" || existingMessageIds.has(message.id)
-          ? message
-          : {
-              ...message,
-              id:
-                snapshotMessageIds.get(message.id) ??
-                (() => {
-                  const id =
-                    message.id === primarySourceId
-                      ? mapMessageId(message.id)
-                      : createSafeId<"chatMessage">();
-                  snapshotMessageIds.set(message.id, id);
-                  return id;
-                })(),
-            },
-      ),
+      messages: mergeSnapshotAssistantMessages({
+        existingMessageIds,
+        mapMessageId,
+        messages: chunk.messages,
+        snapshotMessageIds,
+      }),
     };
   }
   const remapMessageId = (messageId: string): string =>

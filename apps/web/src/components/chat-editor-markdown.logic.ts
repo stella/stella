@@ -29,6 +29,66 @@ const collectStrongMatches = (
   return matches;
 };
 
+// CommonMark backslash escapes: a backslash before ASCII punctuation stands
+// for that character. Model-written prompts escape brackets and asterisks
+// (`\[Party Name\]`); the composer holds resolved text, and the submit
+// boundary re-escapes whatever it needs, so a literal backslash never leaks
+// into the sent prompt.
+const BACKSLASH_ESCAPE =
+  /\\(?<punctuation>[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/gu;
+
+const unescapeOutsideCodeSpans = (text: string): string =>
+  text.replace(BACKSLASH_ESCAPE, "$<punctuation>");
+
+const backtickRunLength = (text: string, index: number): number => {
+  let end = index;
+  while (text.charAt(end) === "`") {
+    end += 1;
+  }
+  return end - index;
+};
+
+/**
+ * Resolve escapes outside code spans only. A code span (a backtick run closed
+ * by a run of the same length) is literal in CommonMark: `\*` inside one stays
+ * a backslash and a star. Linear scan; an unclosed run is ordinary text.
+ */
+const unescapeMarkdownPunctuation = (text: string): string => {
+  let result = "";
+  let cursor = 0;
+  let index = 0;
+  while (index < text.length) {
+    if (text.charAt(index) !== "`") {
+      index += 1;
+      continue;
+    }
+    const fence = backtickRunLength(text, index);
+    let closeIndex = -1;
+    let scan = index + fence;
+    while (scan < text.length) {
+      if (text.charAt(scan) !== "`") {
+        scan += 1;
+        continue;
+      }
+      const run = backtickRunLength(text, scan);
+      if (run === fence) {
+        closeIndex = scan;
+        break;
+      }
+      scan += run;
+    }
+    if (closeIndex === -1) {
+      index += fence;
+      continue;
+    }
+    result += unescapeOutsideCodeSpans(text.slice(cursor, index));
+    result += text.slice(index, closeIndex + fence);
+    cursor = closeIndex + fence;
+    index = cursor;
+  }
+  return result + unescapeOutsideCodeSpans(text.slice(cursor));
+};
+
 const parseInlineStrong = (source: string): InlineNode[] => {
   const nodes: InlineNode[] = [];
   const matches = [
@@ -42,18 +102,24 @@ const parseInlineStrong = (source: string): InlineNode[] => {
       continue;
     }
     if (match.from > cursor) {
-      nodes.push({ type: "text", text: source.slice(cursor, match.from) });
+      nodes.push({
+        type: "text",
+        text: unescapeMarkdownPunctuation(source.slice(cursor, match.from)),
+      });
     }
     nodes.push({
       type: "text",
-      text: match.text,
+      text: unescapeMarkdownPunctuation(match.text),
       marks: [{ type: "bold" }],
     });
     cursor = match.to;
   }
 
   if (cursor < source.length) {
-    nodes.push({ type: "text", text: source.slice(cursor) });
+    nodes.push({
+      type: "text",
+      text: unescapeMarkdownPunctuation(source.slice(cursor)),
+    });
   }
   return nodes;
 };
