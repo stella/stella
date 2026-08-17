@@ -86,6 +86,7 @@ import {
   enrichRequestContext,
   getRequestContext,
 } from "@/api/lib/observability/request-context";
+import { createOrganizationLifecycleHooks } from "@/api/lib/organization-lifecycle-hooks";
 import {
   completeOrganizationDeletion,
   OrganizationStorageTeardownBoundError,
@@ -470,19 +471,6 @@ const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
 /** How often the session expiry is refreshed, in seconds (1 day). */
 const SESSION_UPDATE_AGE_SECONDS = 60 * 60 * 24;
 
-// Mirrors the organization's display name onto its PostHog group profile so
-// insights and group pages show a name instead of an opaque id. Called from
-// the organization hooks after the plugin has persisted the row.
-const identifyOrganizationName = (
-  organizationId: SafeId<"organization">,
-  name: string,
-): void => {
-  getAnalytics().identifyOrganizationGroup({
-    organizationId,
-    properties: { name },
-  });
-};
-
 /**
  * How long the signed session-cookie snapshot may satisfy `getSession`
  * without touching the database. Bounds revocation latency: a revoked
@@ -760,6 +748,15 @@ const createAuth = () => {
   const twoFactorWithSignInGate = withStellaTwoFactorSignInGate(
     twoFactorPlugin,
   ) satisfies BetterAuthPlugin;
+
+  const organizationLifecycleHooks = createOrganizationLifecycleHooks({
+    analytics: getAnalytics(),
+    // Idempotent via the (organization_id, key) unique. Runs on the owner
+    // connection (`rootDb`), which bypasses RLS the same way the org row's
+    // own creation did.
+    seedDefaultDocumentTypes: async (organizationId: SafeId<"organization">) =>
+      await ensureDefaultDocumentTypes(organizationId, rootDb),
+  });
 
   const auth = betterAuth({
     trustedOrigins: [
@@ -1108,32 +1105,7 @@ const createAuth = () => {
         // valid. Single-use is enforced by the plugin's invitation status.
         invitationExpiresIn: 60 * 60 * 48,
         organizationHooks: {
-          async afterCreateOrganization({ organization: org }) {
-            // Seed the org's starter document-type taxonomy at creation so
-            // listing it stays a pure read: a read-only credential must not be
-            // able to mint document types by listing them. `org.id` is read off
-            // the row the plugin just created, so it becomes the ownership id
-            // here. Idempotent via the (organization_id, key) unique. Runs on
-            // the owner connection (`rootDb`), which bypasses RLS the same way
-            // the org row's own creation did.
-            const organizationId = brandPersistedOrganizationId(org.id);
-            await ensureDefaultDocumentTypes(organizationId, rootDb);
-            identifyOrganizationName(organizationId, org.name);
-          },
-          async afterUpdateOrganization({ organization: org }) {
-            // The plugin passes `null` when the adapter returns no updated row.
-            if (!org) {
-              return;
-            }
-            // Fires for every organization update, not just renames; the
-            // group upsert is idempotent so re-sending an unchanged name is
-            // harmless.
-            identifyOrganizationName(
-              brandPersistedOrganizationId(org.id),
-              org.name,
-            );
-            await Promise.resolve();
-          },
+          ...organizationLifecycleHooks,
           async beforeDeleteOrganization({ organization: org }) {
             // Complete the deletion here, before the plugin's adapter runs.
             // Everything that names the organization cascades away with it, and

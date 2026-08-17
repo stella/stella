@@ -20,6 +20,11 @@ void mock.module("posthog-node", () => ({
 
 const { createPostHogAnalytics } = await import("./posthog");
 
+// Pinned as a literal on purpose: it must equal the browser adapter's group
+// type so client and server events land on one profile. Importing the
+// adapter's constant would make the assertion tautological.
+const EXPECTED_ORGANIZATION_GROUP_TYPE = "organization";
+
 describe("PostHog server analytics adapter", () => {
   beforeEach(() => {
     clientCaptureMock.mockClear();
@@ -41,10 +46,8 @@ describe("PostHog server analytics adapter", () => {
       properties: { name: "Acme Legal" },
     });
 
-    // `organization` must equal the browser adapter's group type; the id is
-    // the group key so client and server events land on one profile.
     expect(clientGroupIdentifyMock).toHaveBeenCalledWith({
-      groupType: "organization",
+      groupType: EXPECTED_ORGANIZATION_GROUP_TYPE,
       groupKey: organizationId,
       properties: { name: "Acme Legal" },
     });
