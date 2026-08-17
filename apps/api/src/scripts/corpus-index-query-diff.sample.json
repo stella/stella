@@ -1,0 +1,48 @@
+[
+  {
+    "id": "cze-diacritics",
+    "jurisdiction": "cze",
+    "text": "náhrada škody z prodlení"
+  },
+  {
+    "id": "cze-diacritics-stripped",
+    "jurisdiction": "cze",
+    "text": "nahrada skody z prodleni"
+  },
+  {
+    "id": "cze-quoted-phrase",
+    "jurisdiction": "cze",
+    "text": "\"dobré mravy\" výpověď"
+  },
+  {
+    "id": "cze-typographic-quotes",
+    "jurisdiction": "cze",
+    "text": "„bezdůvodné obohacení“ promlčení"
+  },
+  {
+    "id": "cze-docket-shape",
+    "jurisdiction": "cze",
+    "text": "22 Cdo 2045/2012"
+  },
+  {
+    "id": "svk-docket-shape",
+    "jurisdiction": "svk",
+    "text": "3 Cdo 111/2019"
+  },
+  {
+    "id": "cze-date-window",
+    "jurisdiction": "cze",
+    "text": "smluvní pokuta",
+    "filters": { "dateFrom": "2015-01-01", "dateTo": "2016-12-31" }
+  },
+  {
+    "id": "pol-phrase",
+    "jurisdiction": "pol",
+    "text": "\"rażące niedbalstwo\" odszkodowanie"
+  },
+  {
+    "id": "eu-docket-shape",
+    "jurisdiction": "eu",
+    "text": "C-42/19 ochrana osobních údajů"
+  }
+]

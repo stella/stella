@@ -95,6 +95,15 @@ const boundedIntegerEnv = ({ fallback, min, max }: BoundedIntegerEnvOptions) =>
     fallback,
   );
 
+const BACKPRESSURE_DIMENSIONS_PATTERN =
+  /^[^=,\s]+=[^=,]+(?:,[^=,\s]+=[^=,]+)*$/u;
+
+const nonNegativeNumberEnv = (fallback: string) =>
+  v.optional(
+    v.pipe(v.string(), v.transform(Number), v.finite(), v.minValue(0)),
+    fallback,
+  );
+
 export const envBaseServerSchema = {
   STELLA_VERSION: v.optional(v.string()),
   STELLA_COMMIT_SHA: v.optional(v.string()),
@@ -182,6 +191,33 @@ export const envBaseServerSchema = {
     min: 1,
     max: 32,
   }),
+  // Optional pacing for long-running corpus-index builds. When metric and
+  // namespace are set, the build loop samples that CloudWatch metric and
+  // pauses while the value is below the low watermark, resuming once it
+  // climbs back above the high watermark. Unset means no pacing check.
+  CORPUS_INDEX_BACKPRESSURE_METRIC: v.optional(
+    v.pipe(v.string(), v.trim(), v.nonEmpty()),
+  ),
+  CORPUS_INDEX_BACKPRESSURE_NAMESPACE: v.optional(
+    v.pipe(v.string(), v.trim(), v.nonEmpty()),
+  ),
+  // `Name=Value[,Name=Value...]` metric dimensions.
+  CORPUS_INDEX_BACKPRESSURE_DIMENSIONS: v.optional(
+    v.pipe(
+      v.string(),
+      v.regex(
+        BACKPRESSURE_DIMENSIONS_PATTERN,
+        "must be Name=Value[,Name=Value...]",
+      ),
+    ),
+  ),
+  CORPUS_INDEX_BACKPRESSURE_LOW_WATERMARK: nonNegativeNumberEnv("30"),
+  CORPUS_INDEX_BACKPRESSURE_HIGH_WATERMARK: nonNegativeNumberEnv("50"),
+  CORPUS_INDEX_BACKPRESSURE_SAMPLE_INTERVAL_MS: boundedIntegerEnv({
+    fallback: "60000",
+    min: 5000,
+    max: 3_600_000,
+  }),
   // Morphological query expansion for case-law corpus-index searches.
   // `off` is byte-identical to the pre-expansion query builder and fetches
   // no dictionary; `shadow` executes the unexpanded query and records how the
@@ -204,6 +240,11 @@ export const databaseComponentEnvSchema = {
 
 type EnvBaseInvariantInput = {
   CASE_LAW_DATABASE_URL?: string | undefined;
+  CORPUS_INDEX_BACKPRESSURE_DIMENSIONS?: string | undefined;
+  CORPUS_INDEX_BACKPRESSURE_HIGH_WATERMARK: number;
+  CORPUS_INDEX_BACKPRESSURE_LOW_WATERMARK: number;
+  CORPUS_INDEX_BACKPRESSURE_METRIC?: string | undefined;
+  CORPUS_INDEX_BACKPRESSURE_NAMESPACE?: string | undefined;
   CORPUS_INDEX_ENDPOINT?: string | undefined;
   CORPUS_INDEX_SEARCH_ENDPOINT?: string | undefined;
   CORPUS_INDEXING_ENABLED: boolean;
@@ -222,6 +263,11 @@ type EnvBaseInvariantInput = {
 
 export const envBaseInvariantViolation = ({
   CASE_LAW_DATABASE_URL,
+  CORPUS_INDEX_BACKPRESSURE_DIMENSIONS,
+  CORPUS_INDEX_BACKPRESSURE_HIGH_WATERMARK,
+  CORPUS_INDEX_BACKPRESSURE_LOW_WATERMARK,
+  CORPUS_INDEX_BACKPRESSURE_METRIC,
+  CORPUS_INDEX_BACKPRESSURE_NAMESPACE,
   CORPUS_INDEX_ENDPOINT,
   CORPUS_INDEX_SEARCH_ENDPOINT,
   CORPUS_INDEXING_ENABLED,
@@ -237,6 +283,25 @@ export const envBaseInvariantViolation = ({
   S3_SECRET_ACCESS_KEY,
   isDev,
 }: EnvBaseInvariantInput): string | null => {
+  if (
+    (CORPUS_INDEX_BACKPRESSURE_METRIC === undefined) !==
+    (CORPUS_INDEX_BACKPRESSURE_NAMESPACE === undefined)
+  ) {
+    return "CORPUS_INDEX_BACKPRESSURE_METRIC and CORPUS_INDEX_BACKPRESSURE_NAMESPACE must be set together.";
+  }
+  if (
+    CORPUS_INDEX_BACKPRESSURE_DIMENSIONS !== undefined &&
+    CORPUS_INDEX_BACKPRESSURE_METRIC === undefined
+  ) {
+    return "CORPUS_INDEX_BACKPRESSURE_DIMENSIONS requires CORPUS_INDEX_BACKPRESSURE_METRIC.";
+  }
+  if (
+    CORPUS_INDEX_BACKPRESSURE_METRIC !== undefined &&
+    CORPUS_INDEX_BACKPRESSURE_LOW_WATERMARK >=
+      CORPUS_INDEX_BACKPRESSURE_HIGH_WATERMARK
+  ) {
+    return "CORPUS_INDEX_BACKPRESSURE_LOW_WATERMARK must be below CORPUS_INDEX_BACKPRESSURE_HIGH_WATERMARK.";
+  }
   if (!isDev && !hasSecureDatabaseTransport(DATABASE_URL)) {
     return "DATABASE_URL must enable TLS outside loopback or Railway private networking.";
   }

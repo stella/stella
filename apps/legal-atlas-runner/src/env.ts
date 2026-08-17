@@ -134,6 +134,21 @@ export const LEGAL_ATLAS_RUNNER_ENV = {
     name: "CASE_LAW_CITATION_RESOLUTION_ENABLED",
     fallback: true,
   }),
+  // Decisions per statement of the periodic citation-authority sweep. The
+  // bound on one batch's cost.
+  citationAuthorityBatchSize: readIntegerEnv({
+    name: "CITATION_AUTHORITY_BATCH_SIZE",
+    fallback: 5000,
+    min: 1,
+  }),
+  // Gap between two authority-sweep batches, and therefore the sweep's
+  // throughput: the knob to slow the sweep while the database is busy
+  // serving readers, without a build.
+  citationAuthorityBatchDelayMs: readIntegerEnv({
+    name: "CITATION_AUTHORITY_BATCH_DELAY_MS",
+    fallback: 2000,
+    min: 0,
+  }),
   // Rows examined per statement. The bound on one batch's cost: candidate
   // lookups are one indexed probe each, so this is how much work a single
   // statement asks of the database at once.

@@ -272,11 +272,15 @@ const SK_DOCUMENT_REQUESTED_POLL_INTERVAL_MS = 5000;
 const CITATION_AUTHORITY_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const CITATION_AUTHORITY_STARTUP_DELAY_MS = 5 * 60 * 1000;
 // Decisions per statement, and the gap between two statements. Together they
-// are the sweep's throughput and the share of the database it takes: at these
-// values a sweep covers a few million decisions in well under the refresh
+// are the sweep's throughput and the share of the database it takes: at the
+// defaults a sweep covers a few million decisions in well under the refresh
 // interval while leaving the ingest loops and readers the rest of the time.
-const CITATION_AUTHORITY_BATCH_SIZE = 5000;
-const CITATION_AUTHORITY_BATCH_DELAY_MS = 2000;
+// Env-configurable (CITATION_AUTHORITY_BATCH_SIZE / _BATCH_DELAY_MS) like the
+// citation-resolution walk, so the sweep can be slowed without a build.
+const CITATION_AUTHORITY_BATCH_SIZE =
+  LEGAL_ATLAS_RUNNER_ENV.citationAuthorityBatchSize;
+const CITATION_AUTHORITY_BATCH_DELAY_MS =
+  LEGAL_ATLAS_RUNNER_ENV.citationAuthorityBatchDelayMs;
 // Poll gap once the corpus is current, and the ceiling any failure backoff
 // settles at. Short relative to the refresh interval, so the first decisions
 // to fall due are picked up promptly rather than at the next interval mark.
