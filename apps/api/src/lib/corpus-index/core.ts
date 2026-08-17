@@ -54,6 +54,29 @@ export type FencedBackfillBatchResult =
         | typeof FENCED_BACKFILL_BATCH_STATUS.RETRY;
     };
 
+/**
+ * What became of every row handed to one backfill call.
+ *
+ * A batch can settle fewer rows than it selected without anything having
+ * failed: a row whose compare-and-set lost to a concurrent refresh is left
+ * for a later cycle, and a row whose corpus text could not be read is
+ * recorded as a failed job. Both are deferrals, not lost updates, so the
+ * indexed count alone cannot tell a caller whether its selection was fully
+ * accounted for. Reporting the split makes that readable — and makes the
+ * accounting itself checkable, because `indexed + refreshed + unread` is
+ * always the number of rows passed in.
+ */
+export type CorpusBackfillOutcome = {
+  indexed: number;
+  /**
+   * Moved by a concurrent refresh, at the append reservation or at the mark;
+   * left in the pending set for a later cycle.
+   */
+  refreshed: number;
+  /** Corpus text could not be read; recorded as a failed job. */
+  unread: number;
+};
+
 const corpusIndexErrorFromThrown = (error: unknown): CorpusIndexError =>
   error instanceof CorpusIndexError
     ? error
@@ -1047,7 +1070,7 @@ export const createCorpusIndexer = <
       return { indexed: 0, status: FENCED_BACKFILL_BATCH_STATUS.COMPLETE };
     }
 
-    const indexed = await backfillSelectedRows(
+    const { indexed } = await backfillSelectedRows(
       scopedDb,
       rows,
       generation,
@@ -1064,11 +1087,13 @@ export const createCorpusIndexer = <
     generation: string,
     options: { readConcurrency?: number } = {},
   ): Promise<number> => {
-    const result = await backfillWithOptions(scopedDb, batchSize, generation, {
-      ...options,
-      type: "incremental",
-    });
-    return result.indexed;
+    const { indexed } = await backfillWithOptions(
+      scopedDb,
+      batchSize,
+      generation,
+      { ...options, type: "incremental" },
+    );
+    return indexed;
   };
 
   const backfillFenced = async (
@@ -1087,9 +1112,9 @@ export const createCorpusIndexer = <
     rows: TRow[],
     generation: string,
     options: BackfillSelectedRowsOptions<TBrand, TRow>,
-  ): Promise<number> => {
+  ): Promise<CorpusBackfillOutcome> => {
     if (rows.length === 0) {
-      return 0;
+      return { indexed: 0, refreshed: 0, unread: 0 };
     }
 
     // Load text (S3) with bounded concurrency, then ingest one NDJSON batch.
@@ -1125,6 +1150,7 @@ export const createCorpusIndexer = <
 
     const now = new Date();
     let indexed = 0;
+    let refreshed = 0;
     let firstError: CorpusIndexError | null = null;
 
     const reserveAndEnsureGroup = async (
@@ -1178,6 +1204,10 @@ export const createCorpusIndexer = <
         // oxlint-disable-next-line no-await-in-loop -- each jurisdiction reserves and ensures its durable target immediately before sequential remote writes
         const reservation = await reserveAndEnsureGroup(indexId, group);
         const { ensured, reservedGroup, reservedTargets } = reservation;
+        // A row the reservation dropped was moved by a concurrent refresh
+        // before this batch reached the append boundary — the same deferral
+        // the mark's compare-and-set reports below, just caught earlier.
+        refreshed += group.length - reservedGroup.length;
         if (ensured === null) {
           continue;
         }
@@ -1407,6 +1437,7 @@ export const createCorpusIndexer = <
             }
           }
           indexed += entries.length - casMissed.size;
+          refreshed += casMissed.size;
         }
       } finally {
         // Always lands, including when the code above threw. The audit
@@ -1426,7 +1457,14 @@ export const createCorpusIndexer = <
       throw firstError;
     }
 
-    return indexed;
+    // Reached only when every group was attempted, so the three counters
+    // partition the selection. Anything else is an accounting bug in this
+    // function, not a condition a caller could act on.
+    const unread = readFailures.length;
+    if (indexed + refreshed + unread !== rows.length) {
+      panic("corpus backfill outcome does not account for every selected row");
+    }
+    return { indexed, refreshed, unread };
   };
 
   const backfillRows = async (
@@ -1434,7 +1472,7 @@ export const createCorpusIndexer = <
     rows: readonly TRow[],
     generation: string,
     options: GenerationRebuildBackfillOptions<TBrand, TRow>,
-  ): Promise<number> =>
+  ): Promise<CorpusBackfillOutcome> =>
     await backfillSelectedRows(scopedDb, [...rows], generation, {
       ...options,
       type: "generation-rebuild",

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
+import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type {
   CorpusJobInput,
@@ -46,6 +47,16 @@ const ingestedIds = (requests: ReturnType<typeof splitIngestRequests>) =>
       return `${String(doc["document_id"])}:${String(doc["seq"])}`;
     }),
   );
+
+const requestUrl = (input: Parameters<typeof fetch>[0]): string => {
+  if (typeof input === "string") {
+    return input;
+  }
+  if (input instanceof URL) {
+    return input.href;
+  }
+  return input.url;
+};
 
 describe("splitIngestRequests", () => {
   test("a group that fits stays one request", () => {
@@ -721,7 +732,7 @@ describe("failed index jobs always reach the audit trail", () => {
 
     let guardedEffects = 0;
     let guardedMarks = 0;
-    const indexed = await indexer.backfillRows(scopedDb, [row], GENERATION, {
+    const outcome = await indexer.backfillRows(scopedDb, [row], GENERATION, {
       commit: CORPUS_INDEX_COMMIT.auto,
       beforeDatabaseMark: async () => {
         guardedMarks += 1;
@@ -748,7 +759,7 @@ describe("failed index jobs always reach the audit trail", () => {
         ),
     });
 
-    expect(indexed).toBe(1);
+    expect(outcome).toEqual({ indexed: 1, refreshed: 0, unread: 0 });
     const deleteCalls = calls
       .map(({ url, body }, index) => ({ url, body, index }))
       .filter(({ url }) => url.includes("/delete-tasks"));
@@ -805,7 +816,7 @@ describe("failed index jobs always reach the audit trail", () => {
             ]),
           ),
       }),
-    ).toBe(1);
+    ).toEqual({ indexed: 1, refreshed: 0, unread: 0 });
     expect(
       calls.filter(({ url }) => url.includes("/delete-tasks")),
     ).toHaveLength(1);
@@ -1070,7 +1081,7 @@ describe("first-ever fenced appends", () => {
       recordJobs: async () => undefined,
     });
 
-    const indexed = await indexer.backfillRows(scopedDb, [row], GENERATION, {
+    const outcome = await indexer.backfillRows(scopedDb, [row], GENERATION, {
       commit: CORPUS_INDEX_COMMIT.auto,
       beforeDatabaseMark: async () => undefined,
       beforeRemoteEffect: async ({ effect }) => await effect(),
@@ -1088,11 +1099,244 @@ describe("first-ever fenced appends", () => {
         ),
     });
 
-    expect(indexed).toBe(1);
+    expect(outcome).toEqual({ indexed: 1, refreshed: 0, unread: 0 });
     expect(calls.filter(({ url }) => url.includes("/delete-tasks"))).toEqual(
       [],
     );
     expect(calls.some(({ url }) => url.includes("/ingest"))).toBe(true);
+  });
+
+  // Reports back exactly as many documents as the request carried, so a test
+  // that varies how many rows survive to the ingest does not also have to
+  // restate the count the engine is expected to accept.
+  const acceptEveryIngest = async (
+    input: Parameters<typeof fetch>[0],
+    init?: Parameters<typeof fetch>[1],
+  ) => {
+    if (!requestUrl(input).includes("/ingest")) {
+      return new Response(JSON.stringify({}), { status: 200 });
+    }
+    const body = typeof init?.body === "string" ? init.body : "";
+    return new Response(
+      JSON.stringify({
+        num_docs_for_processing: body.split("\n").filter(Boolean).length,
+      }),
+      { status: 200 },
+    );
+  };
+
+  // Shared by the three outcome-accounting tests below. Each varies exactly
+  // one adapter behaviour, so the bucket a row lands in is the only thing
+  // that differs between them.
+  const outcomeRow = (id: string) => ({
+    id: toSafeId<"caseLawDecision">(id),
+    country: "CZ",
+    textS3Key: null,
+    astS3Key: null,
+    contentHash: `hash-${id}`,
+    indexedHash: null,
+    indexedGeneration: null,
+    // SAFETY: tests fabricate the branded token the adapters normally
+    // select as `updated_at::text`.
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion
+    updatedAtToken: "2026-01-01 00:00:00" as TimestampCasToken,
+    projectionIndexId: corpusIndexId(GENERATION, "CZ"),
+  });
+
+  const outcomeScopedDb: ScopedDb = async (callback) =>
+    // SAFETY: these tests' adapter ignores the transaction.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the fake transaction is deliberately inert
+    await callback({} as Transaction);
+
+  const outcomeGuards = {
+    commit: CORPUS_INDEX_COMMIT.auto,
+    beforeDatabaseMark: async () => undefined,
+    beforeRemoteEffect: async <T>({ effect }: FencedRemoteEffect<T>) =>
+      await effect(),
+    recoverRemoteEffectLeaseLoss: async () => await Promise.resolve(),
+  };
+
+  const outcomeAdapterBase = {
+    family: "case_law" as const,
+    captureStep: "test",
+    // Pinned outside the overrides below: it is the adapter union's
+    // discriminator, so letting a test widen it would erase the branch.
+    granularity: "document" as const,
+    generationProjectionIndexIds: (selected: ReturnType<typeof outcomeRow>) => [
+      selected.projectionIndexId,
+    ],
+    buildDocs: (selected: ReturnType<typeof outcomeRow>) => [
+      { document_id: selected.id, text: "body" },
+    ],
+    readCorpusText: async () => "body",
+    selectMissing: async () => [],
+    selectStale: async () => [],
+    fetchFulltext: async (
+      _db: ScopedDb,
+      _id: SafeId<"caseLawDecision">,
+    ): Promise<string | null> => "body",
+    markIndexedBatch: async (
+      _tx: Transaction,
+      { rows }: { rows: readonly ReturnType<typeof outcomeRow>[] },
+    ) => new Set(rows.map((selected) => selected.id)),
+    insertSucceededJobs: async () => undefined,
+    recordJobs: async (
+      _db: ScopedDb,
+      _jobs: readonly CorpusJobInput<"caseLawDecision">[],
+      _indexId: string,
+    ): Promise<void> => undefined,
+  };
+
+  const outcomeIndexer = (
+    overrides: Partial<Omit<typeof outcomeAdapterBase, "granularity">>,
+  ) =>
+    createCorpusIndexer<"caseLawDecision", ReturnType<typeof outcomeRow>>({
+      ...outcomeAdapterBase,
+      ...overrides,
+    });
+
+  // A caller comparing `indexed` against the rows it selected reads a lost
+  // compare-and-set as a lost update. It is neither: the refreshed row is
+  // queued for the next cycle and its unrecorded copies are deleted here.
+  // Reporting the split is what lets the caller tell the two apart, and the
+  // sum is what proves no row went unaccounted for.
+  test("a lost compare-and-set is reported as refreshed, not as a missing row", async () => {
+    globalThis.fetch = Object.assign(acceptEveryIngest, {
+      preconnect: originalFetch.preconnect,
+    });
+
+    const settled = outcomeRow("dec-settled");
+    const refreshed = outcomeRow("dec-refreshed");
+    const indexer = outcomeIndexer({
+      // The refreshed row's mark loses: another writer bumped it between
+      // selection and this transaction.
+      markIndexedBatch: async () => new Set([settled.id]),
+    });
+
+    const outcome = await indexer.backfillRows(
+      outcomeScopedDb,
+      [settled, refreshed],
+      GENERATION,
+      {
+        ...outcomeGuards,
+        reserveExternalAppend: async (
+          _tx,
+          { generation, rows: reservedRows },
+        ) =>
+          new Map(
+            reservedRows.map((selected) => [
+              selected.id,
+              {
+                indexIds: [corpusIndexId(generation, selected.country)],
+                revision: 1,
+                mayHaveCopy: false,
+              },
+            ]),
+          ),
+      },
+    );
+
+    expect(outcome).toEqual({ indexed: 1, refreshed: 1, unread: 0 });
+    expect(outcome.indexed + outcome.refreshed + outcome.unread).toBe(2);
+  });
+
+  // The reservation is the earlier of the two places a concurrent refresh can
+  // take a row out of the batch, and it drops the row before the external
+  // append rather than after it. It lands in the same bucket, so the two sites
+  // are covered separately or one of them can stop counting unnoticed.
+  test("a row the append reservation drops is reported as refreshed", async () => {
+    globalThis.fetch = Object.assign(acceptEveryIngest, {
+      preconnect: originalFetch.preconnect,
+    });
+
+    const reserved = outcomeRow("dec-reserved");
+    const dropped = outcomeRow("dec-dropped");
+    const indexer = outcomeIndexer({
+      markIndexedBatch: async (_tx, { rows: markedRows }) =>
+        new Set(markedRows.map((selected) => selected.id)),
+    });
+
+    const outcome = await indexer.backfillRows(
+      outcomeScopedDb,
+      [reserved, dropped],
+      GENERATION,
+      {
+        ...outcomeGuards,
+        // Only one of the two rows gets an epoch: the other moved after the
+        // batch read, so its old payload must not cross the append boundary.
+        reserveExternalAppend: async (_tx, { generation }) =>
+          new Map([
+            [
+              reserved.id,
+              {
+                indexIds: [corpusIndexId(generation, reserved.country)],
+                revision: 1,
+                mayHaveCopy: false,
+              },
+            ],
+          ]),
+      },
+    );
+
+    expect(outcome).toEqual({ indexed: 1, refreshed: 1, unread: 0 });
+    expect(outcome.indexed + outcome.refreshed + outcome.unread).toBe(2);
+  });
+
+  // An unreadable corpus object is the one shortfall that is a real failure.
+  // It is already recorded as a failed job, so it must be reported apart from
+  // a refresh: the two want opposite responses from whoever reads the count.
+  test("a row whose corpus text cannot be read is reported as unread", async () => {
+    globalThis.fetch = Object.assign(acceptEveryIngest, {
+      preconnect: originalFetch.preconnect,
+    });
+
+    const readable = outcomeRow("dec-readable");
+    const unreadable = outcomeRow("dec-unreadable");
+    const recorded: CorpusJobInput<"caseLawDecision">[] = [];
+    const indexer = outcomeIndexer({
+      fetchFulltext: async (_db, id) => {
+        if (id === unreadable.id) {
+          throw new Error("corpus object unavailable");
+        }
+        return "body";
+      },
+      markIndexedBatch: async (_tx, { rows: markedRows }) =>
+        new Set(markedRows.map((selected) => selected.id)),
+      recordJobs: async (_db, jobs) => {
+        recorded.push(...jobs);
+      },
+    });
+
+    const outcome = await indexer.backfillRows(
+      outcomeScopedDb,
+      [readable, unreadable],
+      GENERATION,
+      {
+        ...outcomeGuards,
+        reserveExternalAppend: async (
+          _tx,
+          { generation, rows: reservedRows },
+        ) =>
+          new Map(
+            reservedRows.map((selected) => [
+              selected.id,
+              {
+                indexIds: [corpusIndexId(generation, selected.country)],
+                revision: 1,
+                mayHaveCopy: false,
+              },
+            ]),
+          ),
+      },
+    );
+
+    expect(outcome).toEqual({ indexed: 1, refreshed: 0, unread: 1 });
+    expect(outcome.indexed + outcome.refreshed + outcome.unread).toBe(2);
+    // The audit row is what makes an unread shortfall actionable; without it
+    // the row would be invisible rather than merely uncounted.
+    expect(recorded).toMatchObject([
+      { entityId: unreadable.id, operation: "index", status: "failed" },
+    ]);
   });
 });
 
@@ -1196,7 +1440,7 @@ describe("delete-task amplification", () => {
       recordJobs: async () => undefined,
     });
 
-    const indexed = await indexer.backfillRows(scopedDb, rows, GENERATION, {
+    const { indexed } = await indexer.backfillRows(scopedDb, rows, GENERATION, {
       commit: CORPUS_INDEX_COMMIT.auto,
       beforeDatabaseMark: async () => undefined,
       beforeRemoteEffect: async ({ effect }) => await effect(),

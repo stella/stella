@@ -188,6 +188,13 @@ const ignoreProjectionRemoval = async () => {
   await Promise.resolve();
 };
 
+/** A batch where every selected row settled, with nothing deferred. */
+const indexedOutcome = (indexed: number) => ({
+  indexed,
+  refreshed: 0,
+  unread: 0,
+});
+
 const completeRemoteEffect = async (): Promise<void> => {
   await Promise.resolve();
 };
@@ -252,7 +259,7 @@ test(
     const backfill = createCaseLawGenerationBackfill({
       backfillRows: async () => {
         backfillCalls += 1;
-        return 0;
+        return indexedOutcome(0);
       },
       newLeaseToken: () =>
         `00000000-0000-4000-8000-${String(++lease).padStart(12, "0")}`,
@@ -369,7 +376,7 @@ test(
           onLeaseLost: noRemoteEffectCompensation,
         });
         writes += 1;
-        return rows.length;
+        return indexedOutcome(rows.length);
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000060",
       removeProjection: ignoreProjectionRemoval,
@@ -399,7 +406,7 @@ test(
 test("rejects an invalid generation before creating durable state", async () => {
   const generation = "invalid generation";
   const backfill = createCaseLawGenerationBackfill({
-    backfillRows: async () => 0,
+    backfillRows: async () => indexedOutcome(0),
     newLeaseToken: () => "00000000-0000-4000-8000-000000000099",
     removeProjection: ignoreProjectionRemoval,
   });
@@ -610,7 +617,7 @@ test(
               eq(caseLawCorpusIndexProjections.generation, rebuildGeneration),
             );
         });
-        return rows.length;
+        return indexedOutcome(rows.length);
       },
       newLeaseToken: () =>
         `00000000-0000-4000-8000-${String(++lease).padStart(12, "0")}`,
@@ -678,7 +685,7 @@ test(
           effect: completeRemoteEffect,
           onLeaseLost: noRemoteEffectCompensation,
         });
-        return rows.length;
+        return indexedOutcome(rows.length);
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000070",
       removeProjection: async (
@@ -767,7 +774,7 @@ test(
           });
           const row = rows.at(0);
           if (!row) {
-            return 0;
+            return indexedOutcome(0);
           }
           let indexed = 0;
           await runnerDb(async (tx) => {
@@ -796,7 +803,7 @@ test(
             );
             indexed = marked.size;
           });
-          return indexed;
+          return indexedOutcome(indexed);
         },
         newLeaseToken: () => "00000000-0000-4000-8000-000000000050",
         removeProjection: ignoreProjectionRemoval,
@@ -1122,7 +1129,7 @@ test(
               );
           });
         }
-        return rows.length;
+        return indexedOutcome(rows.length);
       },
       newLeaseToken: () =>
         `00000000-0000-4000-8000-${String(++lease).padStart(12, "0")}`,
@@ -1350,7 +1357,7 @@ test(
           effect: completeRemoteEffect,
           onLeaseLost: noRemoteEffectCompensation,
         });
-        return 0;
+        return { indexed: 0, refreshed: 1, unread: 0 };
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000101",
       removeProjection: ignoreProjectionRemoval,
@@ -1363,8 +1370,13 @@ test(
       () => null,
       (error: unknown) => error,
     );
+    // The shortfall reason is the point: a page that deferred a row to a
+    // concurrent refresh has to say so, or the log cannot tell that apart
+    // from an unreadable object or a lost update.
     expect(incompleteRejection).toMatchObject({
-      message: "generation backfill page did not reach a fixed point",
+      message: expect.stringMatching(
+        /^generation backfill page did not reach a fixed point \(selected=\d+ indexed=0 refreshed=1 unread=0\)$/u,
+      ),
     });
     expect(await readCheckpoint(retryGeneration)).toMatchObject({
       cursorCreatedAt: null,
@@ -1382,7 +1394,7 @@ test(
           onLeaseLost: noRemoteEffectCompensation,
         });
         replayed.push(rows.map((row) => row.id));
-        return rows.length;
+        return indexedOutcome(rows.length);
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000102",
       removeProjection: ignoreProjectionRemoval,
@@ -1408,7 +1420,7 @@ test(
           onLeaseLost: noRemoteEffectCompensation,
         });
         winningRemoteEffects += 1;
-        return rows.length;
+        return indexedOutcome(rows.length);
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000201",
       removeProjection: ignoreProjectionRemoval,
@@ -1432,7 +1444,7 @@ test(
           onLeaseLost: noRemoteEffectCompensation,
         });
         staleRemoteEffects += 1;
-        return rows.length;
+        return indexedOutcome(rows.length);
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000200",
       removeProjection: ignoreProjectionRemoval,
@@ -1511,7 +1523,7 @@ test(
               ),
             );
         });
-        return rows.length;
+        return indexedOutcome(rows.length);
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000401",
       removeProjection: ignoreProjectionRemoval,
@@ -1557,7 +1569,7 @@ test(
         });
         await runnerDb(options.beforeDatabaseMark);
         staleDatabaseMarks += 1;
-        return rows.length;
+        return indexedOutcome(rows.length);
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000400",
       removeProjection: ignoreProjectionRemoval,
@@ -1916,7 +1928,7 @@ test(
           onLeaseLost: noRemoteEffectCompensation,
         });
         sent.push(...rows.map(({ id }) => id));
-        return rows.length;
+        return indexedOutcome(rows.length);
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000300",
       removeProjection: ignoreProjectionRemoval,
@@ -2054,7 +2066,7 @@ test(
         indexed.push(...rows.map(({ id }) => id));
         const row = rows.at(0);
         if (!row) {
-          return 0;
+          return indexedOutcome(0);
         }
         let markedCount = 0;
         await runnerDb(async (tx) => {
@@ -2080,7 +2092,7 @@ test(
           });
           markedCount = marked.size;
         });
-        return markedCount;
+        return indexedOutcome(markedCount);
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000900",
       removeProjection: async (runnerDb, { options, row }) => {
@@ -2223,7 +2235,7 @@ test(
           onLeaseLost: noRemoteEffectCompensation,
         });
         indexed.push(...rows.map(({ id }) => id));
-        return rows.length;
+        return indexedOutcome(rows.length);
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000901",
       removeProjection: async () => {
@@ -2429,7 +2441,7 @@ test(
             onLeaseLost: noRemoteEffectCompensation,
           });
           indexed.push(...rows.map(({ id }) => id));
-          return rows.length;
+          return indexedOutcome(rows.length);
         },
         newLeaseToken: () => "00000000-0000-4000-8000-000000000940",
         removeProjection: ignoreProjectionRemoval,
@@ -2675,7 +2687,7 @@ test(
               eq(caseLawCorpusIndexProjections.generation, rebuildGeneration),
             );
         });
-        return rows.length;
+        return indexedOutcome(rows.length);
       },
       newLeaseToken: () => "00000000-0000-4000-8000-000000000640",
       removeProjection: ignoreProjectionRemoval,
