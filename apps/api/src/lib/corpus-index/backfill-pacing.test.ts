@@ -231,6 +231,25 @@ describe("createBackfillPacer", () => {
     expect(harness.sleeps).toEqual([1000, 1000]);
   });
 
+  test("heartbeats keep their cadence through a pause longer than the sample interval", async () => {
+    const harness = createHarness({
+      // Pause immediately; recover on the second real sample.
+      samples: [Result.ok(10), Result.ok(60)],
+      sampleIntervalMs: 300_000,
+      heartbeatIntervalMs: 60_000,
+    });
+    await harness.pacer.beforeBatch();
+    // The paused wait is split at heartbeat boundaries: five 60s sleeps
+    // reach the 300s sample interval, and each iteration heartbeats.
+    expect(harness.sleeps).toEqual([60_000, 60_000, 60_000, 60_000, 60_000]);
+    const paused = harness
+      .heartbeats()
+      .filter(
+        (event) => event.attributes["state"] === BACKFILL_PACING_STATE.paused,
+      );
+    expect(paused.length).toBeGreaterThanOrEqual(4);
+  });
+
   test("a sample without datapoints keeps the current state", async () => {
     const harness = createHarness({
       samples: [Result.ok(null)],

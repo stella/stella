@@ -15,14 +15,27 @@ export class GoldenQueryFileError extends TaggedError("GoldenQueryFileError")<{
   message: string;
 }> {}
 
-const goldenQueryFiltersSchema = v.strictObject({
-  court: v.optional(v.pipe(v.string(), v.nonEmpty())),
-  dateFrom: v.optional(v.pipe(v.string(), v.isoDate())),
-  dateTo: v.optional(v.pipe(v.string(), v.isoDate())),
-  documentType: v.optional(v.pipe(v.string(), v.nonEmpty())),
-  language: v.optional(v.pipe(v.string(), v.nonEmpty())),
-  source: v.optional(v.pipe(v.string(), v.nonEmpty())),
-});
+const goldenQueryFiltersSchema = v.pipe(
+  v.strictObject({
+    court: v.optional(v.pipe(v.string(), v.nonEmpty())),
+    dateFrom: v.optional(v.pipe(v.string(), v.isoDate())),
+    dateTo: v.optional(v.pipe(v.string(), v.isoDate())),
+    documentType: v.optional(v.pipe(v.string(), v.nonEmpty())),
+    language: v.optional(v.pipe(v.string(), v.nonEmpty())),
+    source: v.optional(v.pipe(v.string(), v.nonEmpty())),
+  }),
+  // A reversed range matches nothing in either generation, so the query
+  // would pass the gate while testing neither index.
+  v.forward(
+    v.partialCheck(
+      [["dateFrom"], ["dateTo"]],
+      ({ dateFrom, dateTo }) =>
+        dateFrom === undefined || dateTo === undefined || dateFrom <= dateTo,
+      "dateFrom must not be after dateTo",
+    ),
+    ["dateTo"],
+  ),
+);
 
 const goldenQuerySchema = v.strictObject({
   id: v.pipe(v.string(), v.nonEmpty()),

@@ -195,8 +195,12 @@ export const envBaseServerSchema = {
   // namespace are set, the build loop samples that CloudWatch metric and
   // pauses while the value is below the low watermark, resuming once it
   // climbs back above the high watermark. Unset means no pacing check.
-  CORPUS_INDEX_BACKPRESSURE_METRIC: v.optional(v.string()),
-  CORPUS_INDEX_BACKPRESSURE_NAMESPACE: v.optional(v.string()),
+  CORPUS_INDEX_BACKPRESSURE_METRIC: v.optional(
+    v.pipe(v.string(), v.trim(), v.nonEmpty()),
+  ),
+  CORPUS_INDEX_BACKPRESSURE_NAMESPACE: v.optional(
+    v.pipe(v.string(), v.trim(), v.nonEmpty()),
+  ),
   // `Name=Value[,Name=Value...]` metric dimensions.
   CORPUS_INDEX_BACKPRESSURE_DIMENSIONS: v.optional(
     v.pipe(

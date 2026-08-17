@@ -103,6 +103,24 @@ describe("parseGoldenQueryFile", () => {
     ]);
     expect(Result.isError(parseGoldenQueryFile(badDate))).toBe(true);
   });
+
+  test("rejects a reversed date range, which would match nothing in either index", () => {
+    const query = (dateFrom: string, dateTo: string) =>
+      JSON.stringify([
+        {
+          id: "a",
+          jurisdiction: "cze",
+          text: "x",
+          filters: { dateFrom, dateTo },
+        },
+      ]);
+    expect(
+      Result.isError(parseGoldenQueryFile(query("2016-01-01", "2015-12-31"))),
+    ).toBe(true);
+    expect(
+      Result.isError(parseGoldenQueryFile(query("2015-12-31", "2016-01-01"))),
+    ).toBe(false);
+  });
 });
 
 describe("rankDocumentHits", () => {

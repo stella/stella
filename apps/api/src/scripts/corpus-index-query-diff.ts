@@ -1,11 +1,15 @@
 import { Result } from "better-result";
 
-import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
+import {
+  type CorpusIndexHit,
+  getCorpusIndexClient,
+} from "@/api/lib/legal-search/corpus-index-client";
 import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
 import {
   corpusIndexId,
   isCorpusIndexGeneration,
 } from "@/api/lib/legal-search/index-naming";
+import { LIMITS } from "@/api/lib/limits";
 import {
   divergedQueries,
   type GoldenQueryDiffRow,
@@ -35,11 +39,6 @@ import {
 
 const DEFAULT_DEPTH = 20;
 const DEFAULT_MAX_DIVERGENCE = 0.2;
-/**
- * Passage-granularity generations return one hit per passage, so top-N
- * documents need more than N hits before dedup.
- */
-const PASSAGE_HIT_FANOUT = 5;
 
 const USAGE = `Usage: bun run src/scripts/corpus-index-query-diff.ts [options]
 
@@ -68,17 +67,47 @@ const abort: (message: string) => never = (message) => {
   process.exit(USAGE_EXIT_CODE);
 };
 
-const flagValue = (name: string): string | undefined => {
-  const index = process.argv.indexOf(`--${name}`);
-  if (index === -1) {
-    return undefined;
+const KNOWN_FLAGS = new Set([
+  "queries",
+  "base",
+  "candidate",
+  "top",
+  "max-divergence",
+]);
+
+/**
+ * Strict parse of `--flag value` pairs: unknown flags, positional
+ * arguments, and duplicates all fail rather than being silently ignored,
+ * so a typo cannot run the diff with a default it did not ask for.
+ */
+const parseFlags = (argv: readonly string[]): Map<string, string> => {
+  const flags = new Map<string, string>();
+  let index = 0;
+  while (index < argv.length) {
+    const token = argv[index];
+    if (token === undefined || !token.startsWith("--")) {
+      fail(`unexpected argument: ${token}`);
+    }
+    const name = token.slice(2);
+    if (!KNOWN_FLAGS.has(name)) {
+      fail(`unknown option: ${token}`);
+    }
+    if (flags.has(name)) {
+      fail(`--${name} was given more than once`);
+    }
+    const value = argv[index + 1];
+    if (value === undefined || value.startsWith("--")) {
+      fail(`--${name} requires a value`);
+    }
+    flags.set(name, value);
+    index += 2;
   }
-  const value = process.argv[index + 1];
-  if (value === undefined || value.startsWith("--")) {
-    fail(`--${name} requires a value`);
-  }
-  return value;
+  return flags;
 };
+
+const flags = parseFlags(process.argv.slice(2));
+
+const flagValue = (name: string): string | undefined => flags.get(name);
 
 const requiredFlag = (name: string): string =>
   flagValue(name) ?? fail(`--${name} is required`);
@@ -118,8 +147,16 @@ if (!Number.isFinite(maxDivergence) || maxDivergence < 0 || maxDivergence > 1) {
   fail(`--max-divergence must be within [0, 1], got: ${rawMaxDivergence}`);
 }
 
-const content = await Bun.file(queriesPath).text();
-const queries = parseGoldenQueryFile(content);
+const content = await Result.tryPromise({
+  try: async () => await Bun.file(queriesPath).text(),
+  catch: (cause) =>
+    cause instanceof Error ? cause.message : "query file is not readable",
+});
+if (Result.isError(content)) {
+  // A missing input file is a runtime failure (exit 2), not divergence.
+  abort(`cannot read ${queriesPath}: ${content.error}`);
+}
+const queries = parseGoldenQueryFile(content.value);
 if (Result.isError(queries)) {
   fail(queries.error.message);
 }
@@ -132,27 +169,52 @@ type RunQueryOptions = {
   engineQuery: string;
 };
 
+/**
+ * Bounded offset scan until the top-N distinct documents are collected.
+ * A passage-granularity index can put hundreds of one judgment's passages
+ * ahead of the next document, so a single fixed-size page cannot promise
+ * N distinct documents; the scan widens page by page (the production
+ * reader's shape) up to the shared scan limit.
+ */
 const runQuery = async ({
   engineQuery,
   generation,
   jurisdiction,
 }: RunQueryOptions): Promise<QueryRunOutcome> => {
   const indexId = corpusIndexId(generation, jurisdiction);
-  const searched = await client.search({
-    indexId,
-    query: engineQuery,
-    maxHits: depth * PASSAGE_HIT_FANOUT,
-    sortBy: "_score",
-  });
-  if (Result.isError(searched)) {
-    // Exit 2, not an uncaught throw: exit 1 is reserved for divergence,
-    // and an unqueryable generation must not read as a diverged one.
-    abort(`search against ${indexId} failed: ${searched.error.message}`);
+  const scanned: CorpusIndexHit[] = [];
+  let totalHits = 0;
+  let startOffset = 0;
+  let ranked = rankDocumentHits(scanned, depth);
+  for (;;) {
+    // oxlint-disable-next-line no-await-in-loop -- offset pagination: each scan depends on the previous startOffset
+    const searched = await client.search({
+      indexId,
+      query: engineQuery,
+      maxHits: LIMITS.corpusIndexSearchCandidateLimit,
+      startOffset,
+      sortBy: "_score",
+    });
+    if (Result.isError(searched)) {
+      // Exit 2, not an uncaught throw: exit 1 is reserved for divergence,
+      // and an unqueryable generation must not read as a diverged one.
+      abort(`search against ${indexId} failed: ${searched.error.message}`);
+    }
+    totalHits = searched.value.numHits;
+    scanned.push(...searched.value.hits);
+    startOffset += searched.value.hits.length;
+    ranked = rankDocumentHits(scanned, depth);
+    const exhausted =
+      searched.value.hits.length === 0 || startOffset >= totalHits;
+    if (
+      ranked.rankedDocumentIds.length >= depth ||
+      exhausted ||
+      startOffset >= LIMITS.corpusIndexSearchScanLimit
+    ) {
+      break;
+    }
   }
-  return {
-    totalHits: searched.value.numHits,
-    ...rankDocumentHits(searched.value.hits, depth),
-  };
+  return { totalHits, ...ranked };
 };
 
 const rows: GoldenQueryDiffRow[] = [];
