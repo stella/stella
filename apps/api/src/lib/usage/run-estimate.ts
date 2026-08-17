@@ -76,30 +76,29 @@ type EstimatePromptRunUnitsInput = {
   actionType: UsageActionType;
   /** Number of model calls the run will make. */
   plannedCalls: number;
-  /** Upper bound on prompt bytes per call (the executor's own caps). */
-  promptBytesPerCall: number;
-  /** Upper bound on output tokens per call. */
+  /** Upper bound on prompt tokens per call. */
+  inputTokensPerCall: number;
+  /** Upper bound on output tokens per call (enforced by the executor). */
   outputTokensPerCall: number;
   serviceTier: UsageServiceTier;
 };
 
 /**
- * Sizing for runs whose executor caps each prompt itself (flows: prior
- * step outputs and document context are both truncated to fixed
- * lengths), so the estimate is the cap times the call count, not a
- * guess from stored file sizes.
+ * Sizing for runs whose executor bounds each call itself (prompt caps
+ * on input, an enforced output cap), so the estimate is those bounds
+ * times the call count plus a settlement floor per call.
  */
 export const estimatePromptRunUnits = ({
   modelId,
   actionType,
   plannedCalls,
-  promptBytesPerCall,
+  inputTokensPerCall,
   outputTokensPerCall,
   serviceTier,
 }: EstimatePromptRunUnitsInput): number => {
   const rawMicroUnits = computeRawUsageMicroUnits({
     modelId,
-    inputTokens: Math.ceil(promptBytesPerCall / BYTES_PER_TOKEN) * plannedCalls,
+    inputTokens: inputTokensPerCall * plannedCalls,
     outputTokens: outputTokensPerCall * plannedCalls,
   });
   const tokenUnits = Math.ceil(

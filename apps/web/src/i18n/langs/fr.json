@@ -1048,6 +1048,7 @@
     "retry": "Réessayer",
     "role": "Rôle",
     "run": "Exécuter",
+    "runSizeConfirmDescription": "Cette exécution est estimée à {estimated, plural, one {# unité d'utilisation} other {# unités d'utilisation}} ; {available, plural, one {# est disponible} other {# sont disponibles}}. La lancer quand même ?",
     "running": "En cours",
     "save": "Enregistrer",
     "saveAndLeave": "Enregistrer et quitter",
@@ -1560,6 +1561,7 @@
         "title": "Revue requise"
       },
       "selectFlow": "Choisissez un flux de travail",
+      "sizeConfirmTitle": "Exécution de flux volumineuse",
       "start": "Démarrer",
       "startFailed": "Impossible de démarrer le flux de travail.",
       "started": "Flux de travail démarré",
@@ -2035,7 +2037,6 @@
       "reviewingHint": "Cela peut prendre quelques minutes pour les documents volumineux.",
       "run": "Lancer la révision",
       "scoreTopics": "Examiner ces thèmes",
-      "sizeConfirmDescription": "Cette révision est estimée à {estimated, plural, one {# unité d'utilisation} other {# unités d'utilisation}} ; {available, plural, one {# est disponible} other {# sont disponibles}}. La lancer quand même ?",
       "sizeConfirmStart": "Lancer la révision",
       "sizeConfirmTitle": "Révision volumineuse",
       "targetDocument": "Document cible",

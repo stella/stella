@@ -18,6 +18,9 @@ import {
 } from "@stll/ui/components/select";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
+import { runSizeConfirmationDetail } from "@/components/usage/run-size-confirmation";
+import type { RunSizeConfirmationDetail } from "@/components/usage/run-size-confirmation";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
@@ -44,6 +47,10 @@ export const RunLauncher = ({
   const canRun = usePermissions({ flow: ["run"] });
 
   const [definitionId, setDefinitionId] = useState<string | null>(null);
+  // A refused start whose estimated size needs an explicit go-ahead; the
+  // dialog re-issues the same request with the estimate restated.
+  const [sizeConfirmation, setSizeConfirmation] =
+    useState<RunSizeConfirmationDetail | null>(null);
   const [selectedEntityIds, setSelectedEntityIds] = useState<string[]>([]);
   const [entityFilter, setEntityFilter] = useState("");
   const [starting, setStarting] = useState(false);
@@ -71,20 +78,27 @@ export const RunLauncher = ({
     );
   };
 
-  const handleStart = async () => {
+  const handleStart = async (confirmedUnits?: number) => {
     if (!definitionId || exceedsInputEntitiesLimit) {
       return;
     }
+    setSizeConfirmation(null);
     setStarting(true);
     const response = await api
       .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
       .flows.runs.post({
         definitionId: toSafeId<"flowDefinition">(definitionId),
         inputEntityIds: selectedEntityIds.map((id) => toSafeId<"entity">(id)),
+        ...(confirmedUnits === undefined ? {} : { confirmedUnits }),
       });
     setStarting(false);
 
     if (response.error) {
+      const detail = runSizeConfirmationDetail(response.error);
+      if (detail) {
+        setSizeConfirmation(detail);
+        return;
+      }
       stellaToast.add({
         type: "error",
         title: t("flows.runs.startFailed"),
@@ -180,6 +194,19 @@ export const RunLauncher = ({
           </p>
         )}
       </div>
+
+      <RunSizeConfirmDialog
+        confirmKey="flows.runs.start"
+        detail={sizeConfirmation}
+        titleKey="flows.runs.sizeConfirmTitle"
+        onConfirm={() => {
+          detached(
+            handleStart(sizeConfirmation?.estimatedUnits),
+            "run-launcher.confirm-size",
+          );
+        }}
+        onDismiss={() => setSizeConfirmation(null)}
+      />
 
       <div className="flex justify-end">
         <Button

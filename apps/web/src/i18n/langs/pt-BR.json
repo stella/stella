@@ -1048,6 +1048,7 @@
     "retry": "Tentar novamente",
     "role": "Função",
     "run": "Executar",
+    "runSizeConfirmDescription": "Esta execução está estimada em {estimated, plural, one {# unidade de uso} other {# unidades de uso}}; há {available, plural, one {# disponível} other {# disponíveis}}. Iniciar mesmo assim?",
     "running": "Em execução",
     "save": "Salvar",
     "saveAndLeave": "Salvar e sair",
@@ -1560,6 +1561,7 @@
         "title": "Revisão necessária"
       },
       "selectFlow": "Escolha um fluxo de trabalho",
+      "sizeConfirmTitle": "Execução de fluxo extensa",
       "start": "Iniciar",
       "startFailed": "Não foi possível iniciar o fluxo de trabalho.",
       "started": "Fluxo de trabalho iniciado",
@@ -2035,7 +2037,6 @@
       "reviewingHint": "Isso pode levar alguns minutos para documentos grandes.",
       "run": "Iniciar revisão",
       "scoreTopics": "Revisar estes tópicos",
-      "sizeConfirmDescription": "Esta revisão está estimada em {estimated, plural, one {# unidade de uso} other {# unidades de uso}}; há {available, plural, one {# disponível} other {# disponíveis}}. Iniciar mesmo assim?",
       "sizeConfirmStart": "Iniciar revisão",
       "sizeConfirmTitle": "Revisão extensa",
       "targetDocument": "Documento-alvo",

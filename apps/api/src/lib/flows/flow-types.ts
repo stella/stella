@@ -53,6 +53,14 @@ export const FLOW_STEP_OUTPUT_CONTEXT_CHAR_CAP = 20_000;
 /** Per input-document char cap when an AI step includes documents. */
 export const FLOW_DOCUMENT_CONTEXT_CHAR_CAP = 60_000;
 
+/**
+ * Output cap enforced on every AI step's generation, so a run's
+ * pre-flight estimate (which assumes this per step) is a real upper
+ * bound rather than a hope. Generous for a markdown section; the next
+ * step truncates it further to FLOW_STEP_OUTPUT_CONTEXT_CHAR_CAP.
+ */
+export const FLOW_AI_STEP_MAX_OUTPUT_TOKENS = 4000;
+
 // -- Step kinds --
 
 /**

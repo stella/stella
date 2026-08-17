@@ -29,6 +29,7 @@ import {
   resolveReviewGateTransition,
 } from "@/api/lib/flows/flow-run-transitions";
 import {
+  FLOW_AI_STEP_MAX_OUTPUT_TOKENS,
   FLOW_DOCUMENT_CONTEXT_CHAR_CAP,
   FLOW_STEP_OUTPUT_CONTEXT_CHAR_CAP,
   MAX_FLOW_STEPS,
@@ -352,6 +353,9 @@ const runAiStep = async ({
     analytics,
     system: FLOW_AI_SYSTEM_PROMPT,
     prompt,
+    // Enforced, not advisory: the initiator's estimate assumes this per
+    // step, so the run cannot settle above what it was admitted for.
+    maxOutputTokens: FLOW_AI_STEP_MAX_OUTPUT_TOKENS,
     caching: resolveCaching({
       promptCachingEnabled: false,
       role: "chat",

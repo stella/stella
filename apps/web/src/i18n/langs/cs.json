@@ -1048,6 +1048,7 @@
     "retry": "Spustit znovu",
     "role": "Role",
     "run": "Spustit",
+    "runSizeConfirmDescription": "Odhad tohoto běhu je {estimated, plural, one {# jednotka využití} few {# jednotky využití} many {# jednotky využití} other {# jednotek využití}}; k dispozici {available, plural, one {je # jednotka} few {jsou # jednotky} many {je # jednotky} other {je # jednotek}}. Přesto jej spustit?",
     "running": "Běží",
     "save": "Uložit",
     "saveAndLeave": "Uložit a odejít",
@@ -1560,6 +1561,7 @@
         "title": "Vyžadována kontrola"
       },
       "selectFlow": "Vyberte pracovní postup",
+      "sizeConfirmTitle": "Rozsáhlý běh postupu",
       "start": "Spustit",
       "startFailed": "Pracovní postup se nepodařilo spustit.",
       "started": "Pracovní postup spuštěn",
@@ -2035,7 +2037,6 @@
       "reviewingHint": "U rozsáhlých dokumentů to může trvat až několik minut.",
       "run": "Spustit kontrolu",
       "scoreTopics": "Zkontrolovat tato témata",
-      "sizeConfirmDescription": "Odhad této kontroly je {estimated, plural, one {# jednotka využití} few {# jednotky využití} many {# jednotky využití} other {# jednotek využití}}; k dispozici {available, plural, one {je # jednotka} few {jsou # jednotky} many {je # jednotky} other {je # jednotek}}. Přesto ji spustit?",
       "sizeConfirmStart": "Spustit kontrolu",
       "sizeConfirmTitle": "Rozsáhlá kontrola",
       "targetDocument": "Cílový dokument",

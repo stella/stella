@@ -1051,6 +1051,7 @@ type Messages = {
     "retry": "Retry";
     "role": "Role";
     "run": "Run";
+    "runSizeConfirmDescription": "This run is estimated at {estimated, plural, one {# usage unit} other {# usage units}}, with {available, plural, one {# unit} other {# units}} available. Start it anyway?";
     "running": "Running";
     "save": "Save";
     "saveAndLeave": "Save and leave";
@@ -1563,6 +1564,7 @@ type Messages = {
         "title": "Review required";
       };
       "selectFlow": "Choose a workflow";
+      "sizeConfirmTitle": "Large flow run";
       "start": "Start";
       "startFailed": "Couldn't start the workflow.";
       "started": "Workflow started";
@@ -2038,7 +2040,6 @@ type Messages = {
       "reviewingHint": "This can take up to a couple of minutes for large documents.";
       "run": "Start review";
       "scoreTopics": "Review these topics";
-      "sizeConfirmDescription": "This review is estimated at {estimated, plural, one {# usage unit} other {# usage units}}, with {available, plural, one {# unit} other {# units}} available. Start it anyway?";
       "sizeConfirmStart": "Start review";
       "sizeConfirmTitle": "Large review";
       "targetDocument": "Target document";

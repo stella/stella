@@ -2,20 +2,26 @@
  * Pre-flight sizing for a flow run, from the definition's steps and the
  * input document count. Each AI step's prompt is bounded by the
  * executor's own caps (prior outputs and documents are truncated to
- * fixed lengths before they reach the model), so the estimate is a true
- * upper bound on prompt size times the AI-step count.
+ * fixed character lengths before they reach the model) and its output
+ * by an enforced token cap, so the estimate is a true upper bound on
+ * what the run can consume, times the AI-step count.
  */
 
 import {
+  FLOW_AI_STEP_MAX_OUTPUT_TOKENS,
   FLOW_DOCUMENT_CONTEXT_CHAR_CAP,
   FLOW_STEP_OUTPUT_CONTEXT_CHAR_CAP,
 } from "@/api/lib/flows/flow-types";
 import type { FlowStep } from "@/api/lib/flows/flow-types";
 import { estimatePromptRunUnits } from "@/api/lib/usage/run-estimate";
 
-/** Output budget assumed per AI step (a markdown section, capped later
- *  by the executor's context cap when fed to the next step). */
-const OUTPUT_TOKENS_PER_AI_STEP = 2000;
+/**
+ * Worst-case characters per model token. Latin prose runs near four,
+ * but token-dense scripts (CJK, some emoji sequences) approach one, so
+ * the bound assumes one token per capped character rather than a
+ * byte-based average that would under-count international input.
+ */
+const MIN_CHARS_PER_TOKEN = 1;
 
 type EstimateFlowRunUnitsInput = {
   modelId: string;
@@ -34,17 +40,16 @@ export const estimateFlowRunUnits = ({
   }
   const includesDocuments = aiSteps.some((step) => step.includeDocuments);
   // Every prior AI output can be replayed into a later step, and each
-  // document is capped independently; both are chars, which the
-  // estimator treats as prompt bytes.
-  const promptBytesPerCall =
+  // document is capped independently.
+  const promptCharsPerCall =
     aiSteps.length * FLOW_STEP_OUTPUT_CONTEXT_CHAR_CAP +
     (includesDocuments ? inputEntityCount * FLOW_DOCUMENT_CONTEXT_CHAR_CAP : 0);
   return estimatePromptRunUnits({
     modelId,
     actionType: "background",
     plannedCalls: aiSteps.length,
-    promptBytesPerCall,
-    outputTokensPerCall: OUTPUT_TOKENS_PER_AI_STEP,
+    inputTokensPerCall: Math.ceil(promptCharsPerCall / MIN_CHARS_PER_TOKEN),
+    outputTokensPerCall: FLOW_AI_STEP_MAX_OUTPUT_TOKENS,
     serviceTier: "standard",
   });
 };

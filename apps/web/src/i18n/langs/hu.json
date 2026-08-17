@@ -1048,6 +1048,7 @@
     "retry": "Újrapróbál",
     "role": "Szerepkör",
     "run": "Futtatás",
+    "runSizeConfirmDescription": "A futtatás becsült mérete {estimated, plural, one {# használati egység} other {# használati egység}}; {available, plural, one {# egység} other {# egység}} érhető el. Mégis elindítja?",
     "running": "Fut",
     "save": "Mentés",
     "saveAndLeave": "Mentés és kilépés",
@@ -1560,6 +1561,7 @@
         "title": "Ellenőrzés szükséges"
       },
       "selectFlow": "Válasszon munkafolyamatot",
+      "sizeConfirmTitle": "Nagy terjedelmű folyamatfuttatás",
       "start": "Indítás",
       "startFailed": "A munkafolyamatot nem sikerült elindítani.",
       "started": "Munkafolyamat elindítva",
@@ -2035,7 +2037,6 @@
       "reviewingHint": "Nagy dokumentumok esetén ez néhány percet is igénybe vehet.",
       "run": "Ellenőrzés indítása",
       "scoreTopics": "Témák ellenőrzése",
-      "sizeConfirmDescription": "Az ellenőrzés becsült mérete {estimated, plural, one {# használati egység} other {# használati egység}}; {available, plural, one {# egység} other {# egység}} érhető el. Mégis elindítja?",
       "sizeConfirmStart": "Ellenőrzés indítása",
       "sizeConfirmTitle": "Nagy terjedelmű ellenőrzés",
       "targetDocument": "Céldokumentum",

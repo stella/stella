@@ -952,6 +952,11 @@ export const assertRunSizeConfirmedForHandler = async ({
   if (!env.USAGE_ENFORCEMENT_ENABLED) {
     return null;
   }
+  // A run that makes no model calls spends nothing; refusing it for AI
+  // budget would block plain gate-only or document-only runs.
+  if (estimatedUnits <= 0) {
+    return null;
+  }
   const meteringContext = resolveMeteringContext({
     metering,
     organizationId,

@@ -1048,6 +1048,7 @@
     "retry": "Erneut versuchen",
     "role": "Rolle",
     "run": "Ausführen",
+    "runSizeConfirmDescription": "Dieser Lauf wird auf {estimated, plural, one {# Nutzungseinheit} other {# Nutzungseinheiten}} geschätzt; verfügbar: {available, plural, one {# Einheit} other {# Einheiten}}. Trotzdem starten?",
     "running": "Läuft",
     "save": "Speichern",
     "saveAndLeave": "Speichern und verlassen",
@@ -1560,6 +1561,7 @@
         "title": "Prüfung erforderlich"
       },
       "selectFlow": "Workflow auswählen",
+      "sizeConfirmTitle": "Umfangreicher Ablauf",
       "start": "Starten",
       "startFailed": "Der Workflow konnte nicht gestartet werden.",
       "started": "Workflow gestartet",
@@ -2035,7 +2037,6 @@
       "reviewingHint": "Bei großen Dokumenten kann dies einige Minuten dauern.",
       "run": "Prüfung starten",
       "scoreTopics": "Diese Themen prüfen",
-      "sizeConfirmDescription": "Diese Prüfung wird auf {estimated, plural, one {# Nutzungseinheit} other {# Nutzungseinheiten}} geschätzt; verfügbar: {available, plural, one {# Einheit} other {# Einheiten}}. Trotzdem starten?",
       "sizeConfirmStart": "Prüfung starten",
       "sizeConfirmTitle": "Umfangreiche Prüfung",
       "targetDocument": "Zieldokument",
