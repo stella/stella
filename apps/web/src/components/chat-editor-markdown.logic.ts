@@ -37,23 +37,56 @@ const collectStrongMatches = (
 const BACKSLASH_ESCAPE =
   /\\(?<punctuation>[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/gu;
 
-// A code span (a backtick run closed by a run of the same length) is literal in
-// CommonMark: `\*` inside one stays a backslash and a star.
-const CODE_SPAN = /(?<fence>`+)[\s\S]*?\k<fence>(?!`)/gu;
+const unescapeOutsideCodeSpans = (text: string): string =>
+  text.replace(BACKSLASH_ESCAPE, "$<punctuation>");
 
+const backtickRunLength = (text: string, index: number): number => {
+  let end = index;
+  while (text.charAt(end) === "`") {
+    end += 1;
+  }
+  return end - index;
+};
+
+/**
+ * Resolve escapes outside code spans only. A code span (a backtick run closed
+ * by a run of the same length) is literal in CommonMark: `\*` inside one stays
+ * a backslash and a star. Linear scan; an unclosed run is ordinary text.
+ */
 const unescapeMarkdownPunctuation = (text: string): string => {
   let result = "";
   let cursor = 0;
-  for (const match of text.matchAll(CODE_SPAN)) {
-    result += text
-      .slice(cursor, match.index)
-      .replace(BACKSLASH_ESCAPE, "$<punctuation>");
-    result += match[0];
-    cursor = match.index + match[0].length;
+  let index = 0;
+  while (index < text.length) {
+    if (text.charAt(index) !== "`") {
+      index += 1;
+      continue;
+    }
+    const fence = backtickRunLength(text, index);
+    let closeIndex = -1;
+    let scan = index + fence;
+    while (scan < text.length) {
+      if (text.charAt(scan) !== "`") {
+        scan += 1;
+        continue;
+      }
+      const run = backtickRunLength(text, scan);
+      if (run === fence) {
+        closeIndex = scan;
+        break;
+      }
+      scan += run;
+    }
+    if (closeIndex === -1) {
+      index += fence;
+      continue;
+    }
+    result += unescapeOutsideCodeSpans(text.slice(cursor, index));
+    result += text.slice(index, closeIndex + fence);
+    cursor = closeIndex + fence;
+    index = cursor;
   }
-  return (
-    result + text.slice(cursor).replace(BACKSLASH_ESCAPE, "$<punctuation>")
-  );
+  return result + unescapeOutsideCodeSpans(text.slice(cursor));
 };
 
 const parseInlineStrong = (source: string): InlineNode[] => {
