@@ -37,8 +37,24 @@ const collectStrongMatches = (
 const BACKSLASH_ESCAPE =
   /\\(?<punctuation>[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/gu;
 
-const unescapeMarkdownPunctuation = (text: string): string =>
-  text.replace(BACKSLASH_ESCAPE, "$<punctuation>");
+// A code span (a backtick run closed by a run of the same length) is literal in
+// CommonMark: `\*` inside one stays a backslash and a star.
+const CODE_SPAN = /(?<fence>`+)[\s\S]*?\k<fence>(?!`)/gu;
+
+const unescapeMarkdownPunctuation = (text: string): string => {
+  let result = "";
+  let cursor = 0;
+  for (const match of text.matchAll(CODE_SPAN)) {
+    result += text
+      .slice(cursor, match.index)
+      .replace(BACKSLASH_ESCAPE, "$<punctuation>");
+    result += match[0];
+    cursor = match.index + match[0].length;
+  }
+  return (
+    result + text.slice(cursor).replace(BACKSLASH_ESCAPE, "$<punctuation>")
+  );
+};
 
 const parseInlineStrong = (source: string): InlineNode[] => {
   const nodes: InlineNode[] = [];

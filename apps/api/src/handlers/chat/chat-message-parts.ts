@@ -546,8 +546,8 @@ export const getAwaitingUserInteraction = (
 /**
  * Whether an incoming tool-call state answers an awaited interaction:
  * `resolved` carries the client's answer, `unchanged` leaves the call as it
- * was awaited (the legacy ask-user fallback while a later approval in the
- * same message is answered), and `null` is not an answer.
+ * was awaited (an untouched call while a later interaction in the same
+ * message is answered, or a cancelled resume), and `null` is not an answer.
  */
 const CLIENT_INTERACTION_RESOLUTION = {
   approval: {
@@ -608,10 +608,10 @@ export const getResumedUserInteraction = ({
       (interaction) => [interaction.toolCallId, interaction] as const,
     ),
   );
-  let unchangedAskUser: AwaitingUserInteraction | null = null;
+  let unchangedInteraction: AwaitingUserInteraction | null = null;
   for (let index = message.parts.length - 1; index >= 0; index -= 1) {
     const part = message.parts[index];
-    if (part === undefined || part.type !== "tool-call") {
+    if (part?.type !== "tool-call") {
       continue;
     }
     const interaction = awaitedByToolCallId.get(part.id);
@@ -623,13 +623,15 @@ export const getResumedUserInteraction = ({
     if (resolution === "resolved") {
       return interaction;
     }
-    // Prefer an explicit answer elsewhere in the message; retain the untouched
-    // ask-user call only as the legacy fallback.
-    if (resolution === "unchanged" && interaction.type === "ask-user") {
-      unchangedAskUser = interaction;
+    // Prefer an explicit answer elsewhere in the message. An awaited call the
+    // continuation leaves untouched still names the turn it belongs to: a
+    // cancelled native resume keeps the call as awaited, and the turn must
+    // still find its owner.
+    if (resolution === "unchanged") {
+      unchangedInteraction = interaction;
     }
   }
-  return unchangedAskUser;
+  return unchangedInteraction;
 };
 
 export const toProviderVisibleMessages = (

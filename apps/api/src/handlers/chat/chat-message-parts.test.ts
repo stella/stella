@@ -225,15 +225,18 @@ describe("persisted chat message parts", () => {
         },
       }),
     ).toEqual({ toolCallId: "draft-1", type: "client-tool" });
+    // A cancelled native resume leaves the awaited call untouched; the turn
+    // still names its owner so the execution claim can proceed.
+    const { output: _output, ...untouchedDraft } = resolvedDraft;
     expect(
       getResumedUserInteraction({
         awaited,
         message: {
-          parts: [{ ...resolvedDraft, state: "input-complete" }],
+          parts: [{ ...untouchedDraft, state: "input-complete" }],
           role: "assistant",
         },
       }),
-    ).toBeNull();
+    ).toEqual({ toolCallId: "draft-1", type: "client-tool" });
     expect(
       getResumedUserInteraction({
         awaited: [],

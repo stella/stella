@@ -7,4 +7,17 @@ ALTER TABLE "chat_turns"
 
 ALTER TABLE "chat_turns"
   ADD CONSTRAINT "chat_turns_interaction_values_check"
-  CHECK ("interaction_type" IS NULL OR "interaction_type" IN ('ask-user', 'approval', 'client-tool'));
+  CHECK ("interaction_type" IS NULL OR "interaction_type" IN ('ask-user', 'approval', 'client-tool')) NOT VALID;--> statement-breakpoint
+
+-- Validate outside Drizzle's migration transaction so PostgreSQL does not
+-- hold the ADD CONSTRAINT lock for the duration of the table scan.
+-- squawk-ignore transaction-nesting
+COMMIT;--> statement-breakpoint
+SET statement_timeout = 0;--> statement-breakpoint
+SET lock_timeout = 0;--> statement-breakpoint
+ALTER TABLE "chat_turns"
+  VALIDATE CONSTRAINT "chat_turns_interaction_values_check";--> statement-breakpoint
+SET statement_timeout = '5s';--> statement-breakpoint
+SET lock_timeout = '1s';--> statement-breakpoint
+-- squawk-ignore transaction-nesting, ban-uncommitted-transaction
+BEGIN;

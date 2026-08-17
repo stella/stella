@@ -309,6 +309,9 @@ test("a client-executed draft tool pauses the turn, opens the draft, and resumes
   // re-settled from the persisted tool call, and the reply is still there.
   await page.reload({ waitUntil: "commit" });
   await expect(
+    page.getByRole("textbox", { name: /chat about or edit Mutual NDA/iu }),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(
     transcript.getByText("The draft is open in the panel"),
   ).toBeVisible({ timeout: 30_000 });
   await expect(transcript.getByRole("button", { name: "Resend" })).toHaveCount(
