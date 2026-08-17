@@ -9,10 +9,6 @@ import {
   updateActiveChatAnonDecorationOwner,
 } from "@/lib/anonymize/chat-anon-decoration-owner";
 import {
-  acquireChatAnonDecorationsPlugin,
-  releaseChatAnonDecorationsPlugin,
-} from "@/lib/anonymize/chat-anon-plugin-lifecycle";
-import {
   useChatAnonymizePreview,
   useChatDraftText,
 } from "@/lib/anonymize/use-chat-anonymize";
@@ -87,34 +83,11 @@ export const useChatAnonymizationLayer = ({
     });
   });
 
-  // Install the plugin directly on the editor instead of going
-  // through the chat-editor-provider's `registerExtension` path.
-  //
-  // The whole app shares one editor instance via
-  // `ChatEditorProvider`, but several chat surfaces can render at
-  // the same time (the `/chat` page, the inspector chat tab, a
-  // document overlay, …) and each one mounts its own
-  // `<ChatAnonymizationLayer>`. If every mount blindly called
-  // `unregister` + `register`, the same plugin instance ends up
-  // appended to the editor's plugins array twice and ProseMirror's
-  // `Configuration` forEach throws "Adding different instances of
-  // a keyed plugin (stll-anon-decorations$)" — the duplicate-key
-  // check fires even when the two entries are the same object.
-  //
-  // So we ref-count installs per editor: every mount performs an
-  // idempotent replace, the last unmount removes. The WeakMap
-  // lives on `globalThis` so Vite HMR cannot split bookkeeping
-  // across old and new module instances.
-  useExternalSyncEffect(() => {
-    if (!editor || !enabled) {
-      return undefined;
-    }
-    acquireChatAnonDecorationsPlugin(editor);
-    return () => {
-      releaseChatAnonDecorationsPlugin(editor);
-    };
-  }, [editor, enabled]);
-
+  // The `ChatAnonDecorations` extension is part of the shared
+  // chat editor's base extension list (see `chat-editor-provider`),
+  // so there is no per-mount install step: with no pairs stored it
+  // decorates nothing, and the owner bookkeeping below decides
+  // which surface's pairs the editor shows.
   useExternalSyncEffect(() => {
     if (!editor || !focused) {
       return undefined;

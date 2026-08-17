@@ -1,15 +1,11 @@
-import type { EditorView } from "@tiptap/pm/view";
+import type { Editor } from "@tiptap/core";
 
 import type { ChatAnonPair } from "@stll/anonymize-chat";
 
-import { setChatAnonDecorationPairs } from "@/components/chat/chat-anon-decorations-plugin";
-
-type ChatAnonDecorationEditor = {
-  view: EditorView;
-};
+import { setChatAnonDecorationPairs } from "@/components/chat/chat-anon-decorations-extension";
 
 type SetActiveChatAnonDecorationOwnerOptions = {
-  editor: ChatAnonDecorationEditor;
+  editor: Editor;
   ownerKey: string;
   pairs: readonly ChatAnonPair[];
 };
@@ -74,8 +70,8 @@ export const createChatAnonDecorationOwner = <TEditor extends object>(
 };
 
 const chatAnonDecorationOwner = createChatAnonDecorationOwner(
-  (editor: ChatAnonDecorationEditor, pairs) => {
-    setChatAnonDecorationPairs(editor.view, pairs);
+  (editor: Editor, pairs) => {
+    setChatAnonDecorationPairs(editor, pairs);
   },
 );
 

@@ -1,67 +1,29 @@
+import { Decoration } from "@tiptap/core";
 import Document from "@tiptap/extension-document";
-import { Plugin, PluginKey } from "@tiptap/pm/state";
 import type { EditorState } from "@tiptap/pm/state";
-import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type { Editor } from "@tiptap/react";
 
-type PromptSelectionDecorationState = {
-  decorationSet: DecorationSet;
-};
-
-const promptSelectionDecorationsKey =
-  new PluginKey<PromptSelectionDecorationState>(
-    "promptEditorSelectionDecorations",
-  );
-
-const buildSelectionDecorationSet = (state: EditorState): DecorationSet => {
+const buildSelectionDecorations = (state: EditorState): Decoration[] => {
   const { doc, selection } = state;
   if (selection.empty) {
-    return DecorationSet.empty;
+    return [];
   }
 
   const from = Math.max(0, Math.min(selection.from, doc.content.size));
   const to = Math.max(from, Math.min(selection.to, doc.content.size));
   if (to === from) {
-    return DecorationSet.empty;
+    return [];
   }
 
-  return DecorationSet.create(doc, [
-    Decoration.inline(
+  return [
+    Decoration.Inline(
       from,
       to,
       { class: "prompt-editor-selected-text" },
       { inclusiveEnd: false, inclusiveStart: false },
     ),
-  ]);
+  ];
 };
-
-const createSelectionDecorationPlugin = () =>
-  new Plugin<PromptSelectionDecorationState>({
-    key: promptSelectionDecorationsKey,
-    state: {
-      init(_, state): PromptSelectionDecorationState {
-        return {
-          decorationSet: buildSelectionDecorationSet(state),
-        };
-      },
-      apply(tr, previous, _oldState, newState): PromptSelectionDecorationState {
-        if (!tr.selectionSet && !tr.docChanged) {
-          return previous;
-        }
-
-        return {
-          decorationSet: buildSelectionDecorationSet(newState),
-        };
-      },
-    },
-    props: {
-      decorations(state) {
-        return (
-          promptSelectionDecorationsKey.getState(state)?.decorationSet ?? null
-        );
-      },
-    },
-  });
 
 const syncNativeSelection = (editor: Editor, from: number, to: number) => {
   const start = editor.view.domAtPos(from);
@@ -101,8 +63,11 @@ export const createPromptEditorDocument = () =>
         "Mod-a": () => selectPromptEditorContents(this.editor),
       };
     },
-    addProseMirrorPlugins() {
-      return [createSelectionDecorationPlugin()];
+    addDecorations() {
+      return {
+        shouldUpdate: ({ tr }) => tr.selectionSet || tr.docChanged,
+        create: ({ state }) => buildSelectionDecorations(state),
+      };
     },
   });
 
