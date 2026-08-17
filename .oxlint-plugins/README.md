@@ -101,6 +101,7 @@ runtime validation, or integration tests.
 - [`require-query-key-factory`](./require-query-key-factory.ts) (`require-query-key-factory`): requires query keys to come from their feature-owned factory.
 - [`require-query-signal`](./require-query-signal.ts) (`require-query-signal`): requires query functions to pass TanStack Query's abort signal into fetch or Eden calls.
 - [`require-router-select`](./require-router-select.ts) (`require-router-select`): requires route subscriptions to select only the state a component consumes.
+- [`require-stable-editor-options`](./require-stable-editor-options.ts) (`require-stable-editor-options`): requires identity-stable non-handler option values in `useEditor` calls, so the react binding never re-applies editor view props on every render.
 - [`require-stable-snapshot`](./require-stable-snapshot.ts) (`require-stable-snapshot`): rejects `useSyncExternalStore` snapshots that allocate a new reference on every read.
 - [`require-use-shallow`](./require-use-shallow.ts) (`require-use-shallow`): requires shallow comparison when Zustand selectors return fresh objects or arrays.
 

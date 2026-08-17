@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
@@ -7,6 +7,7 @@ import History from "@tiptap/extension-history";
 import Paragraph from "@tiptap/extension-paragraph";
 import Placeholder from "@tiptap/extension-placeholder";
 import Text from "@tiptap/extension-text";
+import type { EditorProps } from "@tiptap/pm/view";
 import { useEditor } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 
@@ -152,58 +153,81 @@ export const AIPromptInput = ({
         }
       : value;
 
+  // Everything passed to `useEditor` below (except event handlers) must keep
+  // a stable identity across renders; the react binding re-applies changed
+  // options to the live editor view, which can interleave with pending
+  // ProseMirror DOM mutations and loop (require-stable-editor-options).
+  // Extensions and content are creation-only anyway — the react binding never
+  // reconfigures either after the editor exists — so capturing the first
+  // render's values is faithful; dynamic bits route through latest getters.
+  const getPlaceholder = useLatestCallback(() => placeholder ?? "");
+  const getEditorClassName = useLatestCallback(() =>
+    variant === "minimal"
+      ? cn(
+          PROMPT_EDITOR_SELECTION_CLASS,
+          "placeholder:text-foreground-placeholder min-h-15 w-full text-sm leading-[1.55] focus-visible:outline-none",
+          aiEditAction !== undefined && "pe-24",
+        )
+      : cn(
+          PROMPT_EDITOR_SELECTION_CLASS,
+          "bg-muted placeholder:text-foreground-placeholder min-h-32 w-full rounded-md p-2 text-sm focus-visible:outline-none",
+          aiEditAction !== undefined && "pe-24",
+        ),
+  );
+  const editorRef = useRef<Editor | null>(null);
+  const handleEditorKeyDown = useLatestCallback(
+    (event: KeyboardEvent): boolean => {
+      if (
+        onSubmit &&
+        (event.metaKey || event.ctrlKey) &&
+        event.key === "Enter"
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        onSubmit();
+        return true;
+      }
+      const currentEditor = editorRef.current;
+      if (
+        currentEditor !== null &&
+        handlePromptEditorSelectAll(event, currentEditor)
+      ) {
+        return true;
+      }
+      return false;
+    },
+  );
+  const [creationContent] = useState(() => initialContent);
+  const [extensions] = useState(() => [
+    createPromptEditorDocument(),
+    Paragraph,
+    Text,
+    PastedText,
+    Placeholder.configure({
+      placeholder: () => getPlaceholder(),
+      showOnlyWhenEditable: false,
+    }),
+    ...(mentionExtension ? [mentionExtension] : []),
+    PromptSlash.configure({
+      suggestion: createPromptSlashSuggestion(getSlashItems),
+    }),
+    History,
+  ]);
+  const [editorProps] = useState<EditorProps>(() => ({
+    attributes: () => ({ class: getEditorClassName() }),
+    handleKeyDown: (_view, event) => handleEditorKeyDown(event),
+  }));
+
   const editor = useEditor({
-    extensions: [
-      createPromptEditorDocument(),
-      Paragraph,
-      Text,
-      PastedText,
-      Placeholder.configure({
-        placeholder: placeholder ?? "",
-        showOnlyWhenEditable: false,
-      }),
-      ...(mentionExtension ? [mentionExtension] : []),
-      PromptSlash.configure({
-        suggestion: createPromptSlashSuggestion(getSlashItems),
-      }),
-      History,
-    ],
-    content: initialContent,
+    content: creationContent,
+    editorProps,
+    extensions,
+    onBlur: () => onBlur?.(),
+    onCreate: ({ editor: createdEditor }) => {
+      editorRef.current = createdEditor;
+    },
     onUpdate: (props) => {
       onChange(readValue(props.editor));
-    },
-    onBlur: () => onBlur?.(),
-    editorProps: {
-      attributes: {
-        class:
-          variant === "minimal"
-            ? cn(
-                PROMPT_EDITOR_SELECTION_CLASS,
-                "placeholder:text-foreground-placeholder min-h-15 w-full text-sm leading-[1.55] focus-visible:outline-none",
-                aiEditAction !== undefined && "pe-24",
-              )
-            : cn(
-                PROMPT_EDITOR_SELECTION_CLASS,
-                "bg-muted placeholder:text-foreground-placeholder min-h-32 w-full rounded-md p-2 text-sm focus-visible:outline-none",
-                aiEditAction !== undefined && "pe-24",
-              ),
-      },
-      handleKeyDown: (_view, event) => {
-        if (
-          onSubmit &&
-          (event.metaKey || event.ctrlKey) &&
-          event.key === "Enter"
-        ) {
-          event.preventDefault();
-          event.stopPropagation();
-          onSubmit();
-          return true;
-        }
-        if (handlePromptEditorSelectAll(event, editor)) {
-          return true;
-        }
-        return false;
-      },
     },
   });
 

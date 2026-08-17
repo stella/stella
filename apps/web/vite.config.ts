@@ -108,7 +108,51 @@ const ensurePluginOption = (option: unknown, label: string): PluginOption => {
   throw new TypeError(`Invalid Vite plugin option from ${label}`);
 };
 
+// The exact default asset-base expression `@stll/anonymize-wasm` compiles
+// into its dist entry; the package's own Vite plugin anchors on the same
+// text for `vite build` rewrites.
+const ANONYMIZE_WASM_ASSET_URL_BASE =
+  // eslint-disable-next-line no-template-curly-in-string -- matches the literal `${NATIVE_ASSET_DIR}` text in the compiled dist entry, not an interpolation site
+  "new URL(`./${NATIVE_ASSET_DIR}/`, import.meta.url)";
+
+/**
+ * Serve-mode counterpart of the `@stll/anonymize-wasm` build plugin (which
+ * only runs for `vite build`). The package resolves its native assets
+ * against a template-literal `new URL(..., import.meta.url)`; in dev, Vite's
+ * dynamic-URL analysis expands that template into an eager
+ * `import.meta.glob` over the package's whole dist directory, and the glob's
+ * `*.mjs.map?import&url` entries come back as JSON — a MIME the module
+ * loader rejects, which fails the wasm module graph and with it the chat
+ * anonymization worker. `@vite-ignore` opts the expression out of the
+ * analysis; plain runtime URL resolution works as-is under `/@fs` serving.
+ */
+const anonymizeWasmDevAssetBasePlugin = (): Plugin => ({
+  name: "stella-anonymize-wasm-dev-asset-base",
+  apply: "serve",
+  enforce: "pre",
+  transform(code, id) {
+    const [idPath] = id.split("?");
+    if (!(idPath?.includes("anonymize-wasm") && idPath.endsWith("wasm.mjs"))) {
+      return null;
+    }
+    if (!code.includes(ANONYMIZE_WASM_ASSET_URL_BASE)) {
+      this.error(
+        `stella-anonymize-wasm-dev-asset-base: could not find the assetUrl base in ${id}. The @stll/anonymize-wasm dist shape changed; update ANONYMIZE_WASM_ASSET_URL_BASE.`,
+      );
+    }
+    return {
+      code: code.replace(
+        ANONYMIZE_WASM_ASSET_URL_BASE,
+        // eslint-disable-next-line no-template-curly-in-string -- emits the same literal template text back into the module, opted out of Vite's analysis
+        "new URL(/* @vite-ignore */ `./${NATIVE_ASSET_DIR}/`, import.meta.url)",
+      ),
+      map: null,
+    };
+  },
+});
+
 const runtimeAssetPlugins = (): PluginOption[] => [
+  anonymizeWasmDevAssetBasePlugin(),
   ensurePluginOption(
     stllAnonymizeWasm({ packages: "none" }),
     "@stll/anonymize-wasm/vite",

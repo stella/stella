@@ -1,5 +1,8 @@
 import type { ChatAnonResult } from "@stll/anonymize-chat";
 
+// eslint-disable-next-line import/default -- Vite ?worker&url import returns the emitted worker script URL as default export
+import anonymizeChatWorkerUrl from "../../workers/anonymize-chat-worker?worker&url";
+
 /**
  * Main-thread client for the chat-input anonymization Web Worker.
  *
@@ -51,14 +54,48 @@ class PendingWorkerRequests {
 
 const pendingRequests = new PendingWorkerRequests();
 
+/**
+ * Create the dedicated module worker.
+ *
+ * A cross-origin-isolated document (COOP + COEP, which the web runtime sets
+ * for wasm memory) subjects a dedicated worker's script response to an
+ * embedder-policy check: the response must itself carry a compatible COEP
+ * header. The built worker script is a static asset whose response headers
+ * depend on whichever host serves it, so a direct `new Worker(url)` fails
+ * closed (an `error` event at boot, no highlights ever) when that host omits
+ * the header. A same-origin blob bootstrap that `import`s the script inherits
+ * the document's policy instead of re-checking response headers, keeping
+ * worker boot independent of asset-host header configuration.
+ *
+ * Non-isolated contexts skip that check but may forbid blob workers via CSP
+ * (the desktop webview's `default-src 'self'` does), so each branch uses the
+ * one constructor that works in its context.
+ */
+const createAnonymizeChatWorker = (): Worker => {
+  if (!globalThis.crossOriginIsolated) {
+    return new Worker(anonymizeChatWorkerUrl, { type: "module" });
+  }
+  const scriptUrl = new URL(anonymizeChatWorkerUrl, globalThis.location.href)
+    .href;
+  const bootstrapBlob = new Blob([`import ${JSON.stringify(scriptUrl)};`], {
+    type: "text/javascript",
+  });
+  const bootstrapUrl = URL.createObjectURL(bootstrapBlob);
+  try {
+    return new Worker(bootstrapUrl, { type: "module" });
+  } finally {
+    // Revoking immediately after construction is safe — the constructor
+    // pins the blob before this line runs (Vite's own inline-worker helper
+    // uses the same pattern).
+    URL.revokeObjectURL(bootstrapUrl);
+  }
+};
+
 const ensureWorker = (): Worker => {
   if (worker !== null) {
     return worker;
   }
-  const created = new Worker(
-    new URL("../../workers/anonymize-chat-worker.ts", import.meta.url),
-    { type: "module" },
-  );
+  const created = createAnonymizeChatWorker();
   created.addEventListener("message", (event: MessageEvent<WorkerResponse>) => {
     const message = event.data;
     const entry = pendingRequests.take(message.id);
