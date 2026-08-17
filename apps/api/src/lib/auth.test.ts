@@ -5,11 +5,13 @@ import {
   describe,
   expect,
   setDefaultTimeout,
+  spyOn,
   test,
 } from "bun:test";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
+import { getAnalytics } from "@/api/lib/analytics/client";
 import {
   AUTHORITATIVE_SESSION_PATHS,
   assertNewAccountEmailAllowedForCreation,
@@ -814,5 +816,37 @@ describe("session freshness", () => {
       maxAge: SESSION_COOKIE_CACHE_MAX_AGE_SECONDS,
     });
     expect(SESSION_COOKIE_CACHE_MAX_AGE_SECONDS).toBe(60);
+  });
+});
+
+describe("organization lifecycle hook wiring", () => {
+  test("the organization plugin runs the lifecycle hooks against the live analytics sink", async () => {
+    // Pins the `...organizationLifecycleHooks` spread inside the plugin
+    // config: the hooks themselves are unit-tested in
+    // organization-lifecycle-hooks.test.ts; this checks the plugin actually
+    // received them and that they reach the analytics singleton.
+    const orgPlugin = getAuth().options.plugins.find(
+      (plugin) => plugin.id === "organization",
+    );
+    if (!orgPlugin || !("options" in orgPlugin)) {
+      throw new Error("organization plugin missing from auth config");
+    }
+    const hooks = orgPlugin.options.organizationHooks;
+    expect(hooks.afterCreateOrganization).toBeFunction();
+    expect(hooks.afterUpdateOrganization).toBeFunction();
+
+    const identify = spyOn(getAnalytics(), "identifyOrganizationGroup");
+    try {
+      const organizationId = orgId();
+      await hooks.afterUpdateOrganization({
+        organization: { id: organizationId, name: "Renamed Org" },
+      });
+      expect(identify).toHaveBeenCalledWith({
+        organizationId,
+        properties: { name: "Renamed Org" },
+      });
+    } finally {
+      identify.mockRestore();
+    }
   });
 });

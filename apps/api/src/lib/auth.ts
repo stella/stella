@@ -36,6 +36,7 @@ import {
 import { env } from "@/api/env";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
+import { getAnalytics } from "@/api/lib/analytics/client";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditExecutionContext } from "@/api/lib/audit-log";
 import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
@@ -85,6 +86,7 @@ import {
   enrichRequestContext,
   getRequestContext,
 } from "@/api/lib/observability/request-context";
+import { createOrganizationLifecycleHooks } from "@/api/lib/organization-lifecycle-hooks";
 import {
   completeOrganizationDeletion,
   OrganizationStorageTeardownBoundError,
@@ -747,6 +749,15 @@ const createAuth = () => {
     twoFactorPlugin,
   ) satisfies BetterAuthPlugin;
 
+  const organizationLifecycleHooks = createOrganizationLifecycleHooks({
+    analytics: getAnalytics(),
+    // Idempotent via the (organization_id, key) unique. Runs on the owner
+    // connection (`rootDb`), which bypasses RLS the same way the org row's
+    // own creation did.
+    seedDefaultDocumentTypes: async (organizationId: SafeId<"organization">) =>
+      await ensureDefaultDocumentTypes(organizationId, rootDb),
+  });
+
   const auth = betterAuth({
     trustedOrigins: [
       ...frontendOrigins({
@@ -1094,19 +1105,7 @@ const createAuth = () => {
         // valid. Single-use is enforced by the plugin's invitation status.
         invitationExpiresIn: 60 * 60 * 48,
         organizationHooks: {
-          async afterCreateOrganization({ organization: org }) {
-            // Seed the org's starter document-type taxonomy at creation so
-            // listing it stays a pure read: a read-only credential must not be
-            // able to mint document types by listing them. `org.id` is read off
-            // the row the plugin just created, so it becomes the ownership id
-            // here. Idempotent via the (organization_id, key) unique. Runs on
-            // the owner connection (`rootDb`), which bypasses RLS the same way
-            // the org row's own creation did.
-            await ensureDefaultDocumentTypes(
-              brandPersistedOrganizationId(org.id),
-              rootDb,
-            );
-          },
+          ...organizationLifecycleHooks,
           async beforeDeleteOrganization({ organization: org }) {
             // Complete the deletion here, before the plugin's adapter runs.
             // Everything that names the organization cascades away with it, and

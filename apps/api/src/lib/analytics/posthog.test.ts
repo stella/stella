@@ -2,12 +2,15 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { ServerAnalyticsCaptureParams } from "@/api/lib/analytics/types";
 import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/types";
+import { toSafeId } from "@/api/lib/branded-types";
 
 const clientCaptureMock = mock((_event: unknown) => undefined);
+const clientGroupIdentifyMock = mock((_params: unknown) => undefined);
 const clientFlushMock = mock(async () => undefined);
 
 class MockPostHog {
   capture = clientCaptureMock;
+  groupIdentify = clientGroupIdentifyMock;
   flush = clientFlushMock;
 }
 
@@ -17,10 +20,37 @@ void mock.module("posthog-node", () => ({
 
 const { createPostHogAnalytics } = await import("./posthog");
 
+// Pinned as a literal on purpose: it must equal the browser adapter's group
+// type so client and server events land on one profile. Importing the
+// adapter's constant would make the assertion tautological.
+const EXPECTED_ORGANIZATION_GROUP_TYPE = "organization";
+
 describe("PostHog server analytics adapter", () => {
   beforeEach(() => {
     clientCaptureMock.mockClear();
+    clientGroupIdentifyMock.mockClear();
     clientFlushMock.mockClear();
+  });
+
+  test("upserts the organization group under the shared group type", () => {
+    const analytics = createPostHogAnalytics(
+      "phc_test",
+      "https://posthog.test",
+    );
+    const organizationId = toSafeId<"organization">(
+      "3f6e0a7e-9f6f-4a53-9a3e-2b8f6f0c9d41",
+    );
+
+    analytics.identifyOrganizationGroup({
+      organizationId,
+      properties: { name: "Acme Legal" },
+    });
+
+    expect(clientGroupIdentifyMock).toHaveBeenCalledWith({
+      groupType: EXPECTED_ORGANIZATION_GROUP_TYPE,
+      groupKey: organizationId,
+      properties: { name: "Acme Legal" },
+    });
   });
 
   test("captures only explicitly allowed server telemetry events", () => {

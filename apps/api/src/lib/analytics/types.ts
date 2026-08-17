@@ -121,16 +121,19 @@ export type ServerAnalyticsCaptureParams = ServerAnalyticsCaptureBase &
       }
   );
 
-// Group-profile properties for an organization; upserted whenever the
-// settings they mirror change.
+// Group-profile properties for an organization; each is upserted by the
+// code path that owns the state it mirrors (creation/rename for `name`,
+// settings for jurisdictions). `groupIdentify` merges properties into the
+// existing profile, so a caller sends only the keys it owns.
 export type OrganizationGroupProperties = {
+  name: string;
   practice_jurisdictions: string[];
   primary_jurisdiction: string | null;
 };
 
 export type OrganizationGroupIdentifyParams = {
   organizationId: SafeId<"organization">;
-  properties: OrganizationGroupProperties;
+  properties: Partial<OrganizationGroupProperties>;
 };
 
 export type Analytics = {
