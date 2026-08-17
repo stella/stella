@@ -452,6 +452,7 @@ jobs:
         uses: stella/.github/actions/setup-bun-cached@2b8697f04b39187c934afc04f7b04ad1a18bd827
 
       - name: Install dependencies
+        id: smoke-deps
         if: steps.current.outputs.promoted == 'true'
         run: bash scripts/bun-ci-retry.sh --ignore-scripts
         env:
@@ -474,8 +475,12 @@ jobs:
           # so it doesn't race the ECS task rollover.
           EXPECTED_COMMIT: ${{ github.sha }}
 
+      # `!cancelled()` keeps this signal when the web smoke fails, but it
+      # also suppresses the implicit success() gate, so without the explicit
+      # deps condition this step ran after a failed deploy with no toolchain
+      # installed and died with `bun: command not found`.
       - name: Run staging API chat smoke
-        if: ${{ steps.current.outputs.promoted == 'true' && !cancelled() }}
+        if: ${{ steps.current.outputs.promoted == 'true' && !cancelled() && steps.smoke-deps.conclusion == 'success' }}
         run: bun apps/api/src/scripts/post-deploy-smoke.ts "$E2E_API_URL"
         env:
           E2E_API_URL: https://api-staging.stll.app
