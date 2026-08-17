@@ -47,6 +47,16 @@ const ingestedIds = (requests: ReturnType<typeof splitIngestRequests>) =>
     }),
   );
 
+const requestUrl = (input: Parameters<typeof fetch>[0]): string => {
+  if (typeof input === "string") {
+    return input;
+  }
+  if (input instanceof URL) {
+    return input.href;
+  }
+  return input.url;
+};
+
 describe("splitIngestRequests", () => {
   test("a group that fits stays one request", () => {
     const group = [builtRow("a", 3, "x"), builtRow("b", 2, "x")];
@@ -721,7 +731,7 @@ describe("failed index jobs always reach the audit trail", () => {
 
     let guardedEffects = 0;
     let guardedMarks = 0;
-    const indexed = await indexer.backfillRows(scopedDb, [row], GENERATION, {
+    const outcome = await indexer.backfillRows(scopedDb, [row], GENERATION, {
       commit: CORPUS_INDEX_COMMIT.auto,
       beforeDatabaseMark: async () => {
         guardedMarks += 1;
@@ -748,7 +758,7 @@ describe("failed index jobs always reach the audit trail", () => {
         ),
     });
 
-    expect(indexed).toBe(1);
+    expect(outcome).toEqual({ indexed: 1, refreshed: 0, unread: 0 });
     const deleteCalls = calls
       .map(({ url, body }, index) => ({ url, body, index }))
       .filter(({ url }) => url.includes("/delete-tasks"));
@@ -805,7 +815,7 @@ describe("failed index jobs always reach the audit trail", () => {
             ]),
           ),
       }),
-    ).toBe(1);
+    ).toEqual({ indexed: 1, refreshed: 0, unread: 0 });
     expect(
       calls.filter(({ url }) => url.includes("/delete-tasks")),
     ).toHaveLength(1);
@@ -1070,7 +1080,7 @@ describe("first-ever fenced appends", () => {
       recordJobs: async () => undefined,
     });
 
-    const indexed = await indexer.backfillRows(scopedDb, [row], GENERATION, {
+    const outcome = await indexer.backfillRows(scopedDb, [row], GENERATION, {
       commit: CORPUS_INDEX_COMMIT.auto,
       beforeDatabaseMark: async () => undefined,
       beforeRemoteEffect: async ({ effect }) => await effect(),
@@ -1088,11 +1098,96 @@ describe("first-ever fenced appends", () => {
         ),
     });
 
-    expect(indexed).toBe(1);
+    expect(outcome).toEqual({ indexed: 1, refreshed: 0, unread: 0 });
     expect(calls.filter(({ url }) => url.includes("/delete-tasks"))).toEqual(
       [],
     );
     expect(calls.some(({ url }) => url.includes("/ingest"))).toBe(true);
+  });
+
+  // A caller comparing `indexed` against the rows it selected reads a lost
+  // compare-and-set as a lost update. It is neither: the refreshed row is
+  // queued for the next cycle and its unrecorded copies are deleted here.
+  // Reporting the split is what lets the caller tell the two apart, and the
+  // sum is what proves no row went unaccounted for.
+  test("a lost compare-and-set is reported as refreshed, not as a missing row", async () => {
+    globalThis.fetch = Object.assign(
+      async (input: Parameters<typeof fetch>[0]) => {
+        const url = requestUrl(input);
+        return url.includes("/ingest")
+          ? new Response(JSON.stringify({ num_docs_for_processing: 2 }), {
+              status: 200,
+            })
+          : new Response(JSON.stringify({}), { status: 200 });
+      },
+      { preconnect: originalFetch.preconnect },
+    );
+
+    const makeRow = (id: string) => ({
+      id: toSafeId<"caseLawDecision">(id),
+      country: "CZ",
+      textS3Key: null,
+      astS3Key: null,
+      contentHash: `hash-${id}`,
+      indexedHash: null,
+      indexedGeneration: null,
+      // SAFETY: tests fabricate the branded token the adapters normally
+      // select as `updated_at::text`.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      updatedAtToken: "2026-01-01 00:00:00" as TimestampCasToken,
+      projectionIndexId: corpusIndexId(GENERATION, "CZ"),
+    });
+    const settled = makeRow("dec-settled");
+    const refreshed = makeRow("dec-refreshed");
+    const scopedDb: ScopedDb = async (callback) =>
+      // SAFETY: this test's adapter ignores the transaction.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the fake transaction is deliberately inert
+      await callback({} as Transaction);
+    const indexer = createCorpusIndexer<"caseLawDecision", typeof settled>({
+      family: "case_law",
+      captureStep: "test",
+      granularity: "document",
+      generationProjectionIndexIds: (selected) => [selected.projectionIndexId],
+      buildDocs: (selected) => [{ document_id: selected.id, text: "body" }],
+      readCorpusText: async () => "body",
+      selectMissing: async () => [],
+      selectStale: async () => [],
+      fetchFulltext: async () => "body",
+      // The refreshed row's mark loses: another writer bumped it between
+      // selection and this transaction.
+      markIndexedBatch: async () => new Set([settled.id]),
+      insertSucceededJobs: async () => undefined,
+      recordJobs: async () => undefined,
+    });
+
+    const outcome = await indexer.backfillRows(
+      scopedDb,
+      [settled, refreshed],
+      GENERATION,
+      {
+        commit: CORPUS_INDEX_COMMIT.auto,
+        beforeDatabaseMark: async () => undefined,
+        beforeRemoteEffect: async ({ effect }) => await effect(),
+        recoverRemoteEffectLeaseLoss: async () => await Promise.resolve(),
+        reserveExternalAppend: async (
+          _tx,
+          { generation, rows: reservedRows },
+        ) =>
+          new Map(
+            reservedRows.map((selected) => [
+              selected.id,
+              {
+                indexIds: [corpusIndexId(generation, selected.country)],
+                revision: 1,
+                mayHaveCopy: false,
+              },
+            ]),
+          ),
+      },
+    );
+
+    expect(outcome).toEqual({ indexed: 1, refreshed: 1, unread: 0 });
+    expect(outcome.indexed + outcome.refreshed + outcome.unread).toBe(2);
   });
 });
 
@@ -1196,7 +1291,7 @@ describe("delete-task amplification", () => {
       recordJobs: async () => undefined,
     });
 
-    const indexed = await indexer.backfillRows(scopedDb, rows, GENERATION, {
+    const { indexed } = await indexer.backfillRows(scopedDb, rows, GENERATION, {
       commit: CORPUS_INDEX_COMMIT.auto,
       beforeDatabaseMark: async () => undefined,
       beforeRemoteEffect: async ({ effect }) => await effect(),

@@ -27,6 +27,7 @@ import {
   formatHeadingPath,
 } from "@/api/lib/corpus-index/chunking";
 import type {
+  CorpusBackfillOutcome,
   CorpusDocumentPayload,
   CorpusIndexAdapter,
   FencedRemoteEffect,
@@ -1106,7 +1107,7 @@ type GenerationBackfillDependencies = {
     rows: readonly IndexableRow[],
     generation: string,
     options: GenerationProjectionGuards & { commit: CorpusIndexCommitMode },
-  ) => Promise<number>;
+  ) => Promise<CorpusBackfillOutcome>;
   removeProjection: (
     scopedDb: Parameters<typeof backfillIncrementalCorpusIndex>[0],
     args: {
@@ -1117,6 +1118,37 @@ type GenerationBackfillDependencies = {
   ) => Promise<void>;
   newLeaseToken: () => string;
 };
+
+const EMPTY_BACKFILL_OUTCOME = {
+  indexed: 0,
+  refreshed: 0,
+  unread: 0,
+} as const satisfies CorpusBackfillOutcome;
+
+const FIXED_POINT_STAGE = {
+  generationBackfillPage: "generation backfill page",
+  generationReconciliation: "generation reconciliation",
+  sourceEligibilityReconciliation: "source eligibility reconciliation",
+} as const;
+
+type FixedPointShortfall = {
+  outcome: CorpusBackfillOutcome;
+  selected: number;
+  stage: (typeof FIXED_POINT_STAGE)[keyof typeof FIXED_POINT_STAGE];
+};
+
+/**
+ * A page that indexed fewer rows than it selected has not settled, but the
+ * count alone does not say why, and the reasons need different answers: a
+ * concurrent refresh leaves the row queued for the next cycle, an unreadable
+ * corpus object is already recorded as a failed job, and a shortfall neither
+ * accounts for is a lost update. Carry the split so the next occurrence is
+ * readable from the log rather than only from the analytics sink.
+ */
+const fixedPointError = ({ outcome, selected, stage }: FixedPointShortfall) =>
+  new CorpusIndexError({
+    message: `${stage} did not reach a fixed point (selected=${selected} indexed=${outcome.indexed} refreshed=${outcome.refreshed} unread=${outcome.unread})`,
+  });
 
 const backfillGenerationRows: GenerationBackfillDependencies["backfillRows"] =
   async (scopedDb, rows, generation, options) =>
@@ -1624,9 +1656,9 @@ export const createCaseLawGenerationBackfill =
           const eligible = sourcePage
             .filter(isCorpusEligible)
             .map(withoutSourceDescriptor);
-          const indexed =
+          const outcome =
             eligible.length === 0
-              ? 0
+              ? EMPTY_BACKFILL_OUTCOME
               : await backfillRows(scopedDb, eligible, generation, {
                   ...guards,
                   // A source-wide re-index walks a whole source's corpus
@@ -1634,12 +1666,14 @@ export const createCaseLawGenerationBackfill =
                   // census behind it as the snapshot walk.
                   commit: CORPUS_INDEX_COMMIT.auto,
                 });
-          if (indexed !== eligible.length) {
-            throw new CorpusIndexError({
-              message:
-                "source eligibility reconciliation did not reach a fixed point",
+          if (outcome.indexed !== eligible.length) {
+            throw fixedPointError({
+              outcome,
+              selected: eligible.length,
+              stage: FIXED_POINT_STAGE.sourceEligibilityReconciliation,
             });
           }
+          const { indexed } = outcome;
           const removals = sourcePage.filter(
             (row) =>
               !isCorpusEligible(row) &&
@@ -1729,9 +1763,9 @@ export const createCaseLawGenerationBackfill =
             !isCorpusEligible(row) &&
             hasGenerationProjectionTargets({ generation, row }),
         );
-        const indexed =
+        const outcome =
           eligible.length === 0
-            ? 0
+            ? EMPTY_BACKFILL_OUTCOME
             : await backfillRows(scopedDb, eligible, generation, {
                 ...guards,
                 // The live path: every newly ingested decision waits in
@@ -1741,11 +1775,14 @@ export const createCaseLawGenerationBackfill =
                 // missing from the index while Postgres reads indexed.
                 commit: CORPUS_INDEX_COMMIT.waitFor,
               });
-        if (indexed !== eligible.length) {
-          throw new CorpusIndexError({
-            message: "generation reconciliation did not reach a fixed point",
+        if (outcome.indexed !== eligible.length) {
+          throw fixedPointError({
+            outcome,
+            selected: eligible.length,
+            stage: FIXED_POINT_STAGE.generationReconciliation,
           });
         }
+        const { indexed } = outcome;
         if (terminal.length > 0) {
           const cleared = await scopedDb(async (tx) => {
             await guards.beforeDatabaseMark(tx);
@@ -2024,9 +2061,9 @@ export const createCaseLawGenerationBackfill =
       try {
         // The drain above may have brought every row on this page current, so
         // skip the indexer rather than hand it an empty batch.
-        indexed =
+        const outcome =
           rows.length === 0
-            ? 0
+            ? EMPTY_BACKFILL_OUTCOME
             : await backfillRows(scopedDb, rows, generation, {
                 ...runningGuards,
                 // Snapshot pages of the rebuild: bulk throughput, whose
@@ -2034,11 +2071,14 @@ export const createCaseLawGenerationBackfill =
                 // than each request proving it for itself.
                 commit: CORPUS_INDEX_COMMIT.auto,
               });
-        if (indexed !== rows.length) {
-          throw new CorpusIndexError({
-            message: "generation backfill page did not reach a fixed point",
+        if (outcome.indexed !== rows.length) {
+          throw fixedPointError({
+            outcome,
+            selected: rows.length,
+            stage: FIXED_POINT_STAGE.generationBackfillPage,
           });
         }
+        indexed = outcome.indexed;
         await settleAll(
           removals.map(async (row) => {
             await removeProjection(scopedDb, {
