@@ -16,6 +16,9 @@ const BURST_TEXT =
 test("anonymized-mode typing keeps every keystroke and paints highlights", async ({
   page,
 }) => {
+  // The cold-start waits below (route compile 30s + first highlight 45s) can
+  // exceed the suite's default 60s per-test timeout on a fresh runner.
+  test.setTimeout(120_000);
   // A route is ready when its UI is ready, not when every cold resource has
   // fired the browser load event. Commit the document, then synchronize on
   // the composer below.

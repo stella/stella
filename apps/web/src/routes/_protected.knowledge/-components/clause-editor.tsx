@@ -315,6 +315,17 @@ export const ClauseEditor = ({
     },
   });
 
+  // With the options identity-stable, ProseMirror only re-evaluates the
+  // captured placeholder callback when view props are re-applied or a
+  // transaction commits. Re-apply them exactly when the placeholder changes
+  // so it updates without reintroducing per-render option churn.
+  useExternalSyncEffect(() => {
+    if (!isUsableEditor(editor)) {
+      return;
+    }
+    editor.setOptions({});
+  }, [editor, placeholder]);
+
   // Re-seed the editor only on an external content change (not on the user's
   // own edits, whose key we already recorded above).
   const contentKey = bodyKey(content);

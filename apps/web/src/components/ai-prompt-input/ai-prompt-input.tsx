@@ -237,6 +237,19 @@ export const AIPromptInput = ({
     }
   }, [editor, onEditorReady]);
 
+  // With the options identity-stable, ProseMirror only re-evaluates the
+  // captured placeholder and attributes callbacks when view props are
+  // re-applied or a transaction commits. Re-apply them exactly when a dynamic
+  // input changes so the placeholder and class (variant / edit-action
+  // padding) update without reintroducing per-render option churn.
+  const hasAiEditAction = aiEditAction !== undefined;
+  useExternalSyncEffect(() => {
+    if (editor.isDestroyed) {
+      return;
+    }
+    editor.setOptions({});
+  }, [editor, hasAiEditAction, placeholder, variant]);
+
   // `useEditor` only reads `content` once at creation, so a controlled `value`
   // that changes from outside (switching the edited prompt, or a parent reset)
   // would leave the editor showing stale text. Re-sync the document when the
