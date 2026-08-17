@@ -560,7 +560,7 @@ describe("PostHog browser analytics adapter", () => {
         "$exception_fingerprint"
       ];
     expect(fingerprint).toBe(
-      "ClientTelemetryError|pdf-viewer|matter-view-D3kfQx9a.js:renderMatter|RangeError",
+      "ClientTelemetryError|pdf-viewer|matter-view.js:renderMatter|RangeError",
     );
 
     // Deterministic: the same defect groups into the same issue.
