@@ -38,9 +38,19 @@ const assetBasename = (filename: string): string => {
   return path.slice(path.lastIndexOf("/") + 1);
 };
 
+// Vite content-hashes chunk basenames (`matter-view-D3kfQx9a.js`), so a
+// rebuild renames the chunk without the defect changing. Strip the hash
+// segment so a fingerprint survives deployments; a basename with no hash
+// passes through unchanged.
+const CHUNK_HASH_SUFFIX = /-[A-Za-z0-9_-]{8}(?=\.[a-z]+$)/u;
+const stableBasename = (basename: string): string =>
+  basename.replace(CHUNK_HASH_SUFFIX, "");
+
 const frameIdentity = (frame: FingerprintFrame): string => {
   const basename =
-    frame.filename === undefined ? "" : assetBasename(frame.filename);
+    frame.filename === undefined
+      ? ""
+      : stableBasename(assetBasename(frame.filename));
   const symbol = frame.function ?? "";
   return basename === "" && symbol === "" ? "" : `${basename}:${symbol}`;
 };

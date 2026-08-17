@@ -70,9 +70,7 @@ describe("fingerprintExceptionEvent", () => {
           { type: "TypeError", stacktrace: { frames: matterViewFrames } },
         ],
       }),
-    ).toBe(
-      "TypeError||root-BOq2mF3k.js:dispatchEvent;matter-view-D3kfQx9a.js:renderMatter|",
-    );
+    ).toBe("TypeError||root.js:dispatchEvent;matter-view.js:renderMatter|");
   });
 
   test("the area slug and cause-chain classes separate otherwise identical errors", () => {
@@ -86,7 +84,7 @@ describe("fingerprintExceptionEvent", () => {
       entries,
     });
     expect(fingerprint).toBe(
-      "ClientTelemetryError|pdf-viewer|root-BOq2mF3k.js:dispatchEvent;matter-view-D3kfQx9a.js:renderMatter|RangeError",
+      "ClientTelemetryError|pdf-viewer|root.js:dispatchEvent;matter-view.js:renderMatter|RangeError",
     );
     expect(fingerprint).not.toBe(fingerprintExceptionEvent({ entries }));
     expect(fingerprint).not.toBe(
@@ -114,9 +112,7 @@ describe("fingerprintExceptionEvent", () => {
         },
       ],
     });
-    expect(fingerprint).toBe(
-      "TypeError||matter-view-D3kfQx9a.js:renderMatter|",
-    );
+    expect(fingerprint).toBe("TypeError||matter-view.js:renderMatter|");
     expect(fingerprint).not.toContain("?");
     expect(fingerprint).not.toContain("@");
   });
@@ -134,7 +130,7 @@ describe("fingerprintExceptionEvent", () => {
         entries: [{ type: "TypeError", stacktrace: { frames: deepStack } }],
       }),
     ).toBe(
-      "TypeError||root-BOq2mF3k.js:frame7;root-BOq2mF3k.js:dispatchEvent;matter-view-D3kfQx9a.js:renderMatter|",
+      "TypeError||root.js:frame7;root.js:dispatchEvent;matter-view.js:renderMatter|",
     );
   });
 
@@ -146,4 +142,31 @@ describe("fingerprintExceptionEvent", () => {
       }),
     ).toBe("UnhandledRejection|||");
   });
+});
+
+test("fingerprint is stable across content-hashed chunk renames", () => {
+  const input = (filename: string) => ({
+    entries: [
+      {
+        type: "TypeError",
+        stacktrace: {
+          frames: [{ filename, function: "renderMatter" }],
+        },
+      },
+    ],
+  });
+  const a = fingerprintExceptionEvent(
+    input("https://app.example/assets/matter-view-D3kfQx9a.js"),
+  );
+  const b = fingerprintExceptionEvent(
+    input("https://app.example/assets/matter-view-Bx91kQwe.js"),
+  );
+  // Different content hashes must not split the issue; the fixture differs
+  // before the equivalence is asserted.
+  expect("matter-view-D3kfQx9a.js").not.toBe("matter-view-Bx91kQwe.js");
+  expect(a).toBe(b);
+  const c = fingerprintExceptionEvent(
+    input("https://app.example/assets/other-view-D3kfQx9a.js"),
+  );
+  expect(a).not.toBe(c);
 });
