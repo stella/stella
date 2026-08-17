@@ -55,8 +55,8 @@ export const estimateDocumentRunUnits = ({
   const outputTokens = plannedOutputs * OUTPUT_TOKENS_PER_PLANNED_ITEM;
   const rawMicroUnits = computeRawUsageMicroUnits({
     modelId,
-    inputTokens,
     outputTokens,
+    uncachedInputTokens: inputTokens,
   });
   const tokenUnits = Math.ceil(
     (rawMicroUnits * SERVICE_TIER_MULTIPLIERS[serviceTier]) /

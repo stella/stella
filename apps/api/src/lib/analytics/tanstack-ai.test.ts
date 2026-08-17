@@ -45,6 +45,21 @@ const createOpenAIOrgAIConfig = (): OrgAIConfig => ({
   },
 });
 
+const createAnthropicOrgAIConfig = (): OrgAIConfig => ({
+  providers: [
+    {
+      apiKey: "test-anthropic-org-key",
+      provider: "anthropic",
+    },
+  ],
+  overrideModels: {
+    chat: { provider: "anthropic", modelId: "claude-sonnet-5" },
+    fast: { provider: "anthropic", modelId: "claude-sonnet-5" },
+    pdf: { provider: "anthropic", modelId: "claude-sonnet-5" },
+    reasoning: { provider: "anthropic", modelId: "claude-sonnet-5" },
+  },
+});
+
 const createMiddlewareContext = ({
   deferred = [],
   iteration = 0,
@@ -309,6 +324,139 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     });
   });
 
+  test("meters an Anthropic warm cache where cached reads exceed input tokens", async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const insertedRows: unknown[] = [];
+    const tx = {
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => [
+              {
+                currentPeriodEnd: new Date("2026-07-01T00:00:00.000Z"),
+                currentPeriodStart: new Date("2026-06-01T00:00:00.000Z"),
+                status: "active",
+              },
+            ],
+          }),
+        }),
+      }),
+      insert: () => ({
+        values: (values: unknown) => {
+          insertedRows.push(values);
+          return {
+            onConflictDoNothing: () => ({
+              returning: async () => [{ id: "usage_event_1" }],
+            }),
+          };
+        },
+      }),
+    };
+    const { safeDb } = createScopedDbMock(tx);
+    const callbacks = createTanStackAIAnalyticsCallbacks({
+      analytics: {
+        capture: () => undefined,
+        flush: async () => undefined,
+        identifyOrganizationGroup: () => undefined,
+      },
+      feature: "chat.stream",
+      modelRole: "chat",
+      orgAIConfig: createAnthropicOrgAIConfig(),
+      traceId: "trace_anthropic_warm_cache",
+      usageMetering: {
+        actionType: "chat",
+        organizationId: orgId,
+        safeDb,
+        serviceTier: "standard",
+        userId,
+        workspaceId,
+      },
+    });
+    const deferred: Promise<unknown>[] = [];
+
+    // Production-shaped Anthropic usage on a warm cache: `input_tokens`
+    // excludes cache reads and writes, so the cached count dwarfs it.
+    await callbacks.middleware.onUsage?.(
+      createMiddlewareContext({ deferred }),
+      {
+        completionTokens: 1538,
+        promptTokens: 217,
+        promptTokensDetails: { cachedTokens: 45_082, cacheWriteTokens: 1204 },
+        totalTokens: 1755,
+      },
+    );
+    await Promise.all(deferred);
+
+    expect(insertedRows).toHaveLength(1);
+    // (217 + 1204 write) uncached at 200_000/MTok = 285, 45_082 cached at
+    // 20_000/MTok = 902, 1538 output at 1_000_000/MTok = 1538.
+    expect(insertedRows[0]).toMatchObject({
+      isByok: true,
+      rawUsageMicroUnits: 285 + 902 + 1538,
+    });
+  });
+
+  test("survives a faulty usage payload without rejecting the stream hook", async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const insertedRows: unknown[] = [];
+    const tx = {
+      insert: () => ({
+        values: (values: unknown) => {
+          insertedRows.push(values);
+          return {
+            onConflictDoNothing: () => ({
+              returning: async () => [{ id: "usage_event_1" }],
+            }),
+          };
+        },
+      }),
+    };
+    const { safeDb } = createScopedDbMock(tx);
+    const callbacks = createTanStackAIAnalyticsCallbacks({
+      analytics: {
+        capture: () => undefined,
+        flush: async () => undefined,
+        identifyOrganizationGroup: () => undefined,
+      },
+      feature: "chat.stream",
+      modelRole: "chat",
+      orgAIConfig: createOpenAIOrgAIConfig(),
+      traceId: "trace_poisoned_usage",
+      usageMetering: {
+        actionType: "chat",
+        organizationId: orgId,
+        safeDb,
+        serviceTier: "standard",
+        userId,
+        workspaceId,
+      },
+    });
+    const deferred: Promise<unknown>[] = [];
+    // Stands in for any future metering bug: reading the payload throws.
+    const poisonedUsage = Object.defineProperty(
+      { completionTokens: 0, promptTokens: 0, totalTokens: 0 },
+      "promptTokens",
+      {
+        get: (): number => {
+          throw new Error("poisoned usage payload");
+        },
+      },
+    ) satisfies TokenUsage;
+
+    // The hook is called from inside the provider stream: a metering
+    // fault must be swallowed and reported, never propagated.
+    expect(() => {
+      void callbacks.middleware.onUsage?.(
+        createMiddlewareContext({ deferred }),
+        poisonedUsage,
+      );
+    }).not.toThrow();
+    await Promise.all(deferred);
+    expect(insertedRows).toHaveLength(0);
+  });
+
   test("rates consumption against the explicitly selected model", async () => {
     const { createTanStackAIAnalyticsCallbacks } =
       await loadTanStackAIAnalytics();
@@ -383,11 +531,11 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     const ratedMicroUnits = (modelId: string) =>
       usageUnitsFromTokens({
         actionType: "chat",
-        inputTokens: usage.promptTokens,
         isByok: true,
         modelId,
         outputTokens: usage.completionTokens,
         serviceTier: "standard",
+        uncachedInputTokens: usage.promptTokens,
       }).rawUsageMicroUnits;
 
     // The org config's chat role default is gpt-5.4-mini: metering and

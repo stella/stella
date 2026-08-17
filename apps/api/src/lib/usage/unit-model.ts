@@ -11,7 +11,7 @@
 import { panic } from "better-result";
 
 import { getModelRate, resolveModelRate } from "@stll/ai-catalog";
-import type { ModelRate } from "@stll/ai-catalog";
+import type { AIProvider, ModelRate } from "@stll/ai-catalog";
 
 import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -77,6 +77,76 @@ const getModelRateOrFallback = (modelId: string): ModelRate => {
 const isNonNegativeSafeInteger = (value: number): boolean =>
   Number.isSafeInteger(value) && value >= 0;
 
+/**
+ * Highest token count the meter accepts per component: far above any real
+ * context window, and low enough that every downstream product with a
+ * catalog rate stays inside the safe-integer range.
+ */
+const MAX_TOKEN_COUNT = 2 ** 40;
+
+// Usage shape anomalies already reported this process, keyed by model id
+// and anomaly, so a systematically malformed provider response cannot spam
+// telemetry on the hot metering path.
+const reportedUsageShapeAnomalies = new Set<string>();
+
+type UsageShapeAnomalyOptions = {
+  modelId: string;
+  anomaly: string;
+  context: Record<string, string>;
+};
+
+const reportUsageShapeAnomaly = ({
+  modelId,
+  anomaly,
+  context,
+}: UsageShapeAnomalyOptions): void => {
+  const key = `${modelId}:${anomaly}`;
+  if (reportedUsageShapeAnomalies.has(key)) {
+    return;
+  }
+  reportedUsageShapeAnomalies.add(key);
+  captureError(
+    new TelemetryError({
+      message: `Provider usage shape anomaly (${anomaly}); metering fell back to a conservative value`,
+    }),
+    { source: "usage-unit-model", modelId, anomaly, ...context },
+  );
+};
+
+type SanitizeTokenCountOptions = {
+  modelId: string;
+  field: string;
+  value: number;
+};
+
+/**
+ * Provider-reported token counts are external input, so a malformed count
+ * is an expected runtime failure, never a process-fatal invariant. Coerce
+ * out-of-domain values to the nearest conservative in-domain value and
+ * report the raw shape: non-finite and negative counts meter as 0,
+ * fractional counts round up, oversized counts clamp to `MAX_TOKEN_COUNT`.
+ */
+const sanitizeTokenCount = ({
+  modelId,
+  field,
+  value,
+}: SanitizeTokenCountOptions): number => {
+  if (isNonNegativeSafeInteger(value) && value <= MAX_TOKEN_COUNT) {
+    return value;
+  }
+  reportUsageShapeAnomaly({
+    modelId,
+    anomaly: `invalid-${field}`,
+    context: { value: String(value) },
+  });
+  if (Number.isNaN(value) || value <= 0) {
+    return 0;
+  }
+  // Oversized positive values (finite or +Infinity) clamp to the ceiling
+  // rather than zeroing: a too-large count must never under-meter.
+  return Math.min(Math.ceil(value), MAX_TOKEN_COUNT);
+};
+
 const scaleTokenCost = (tokens: number, ratePerMTok: number): number => {
   if (!isNonNegativeSafeInteger(ratePerMTok)) {
     panic("usage rates must be non-negative safe integers");
@@ -90,46 +160,174 @@ const scaleTokenCost = (tokens: number, ratePerMTok: number): number => {
   return Number(scaled);
 };
 
+type CacheReadAccounting = "included-in-input" | "separate-from-input";
+
+/**
+ * How each provider's reported input/prompt token count relates to its
+ * cache-read count. OpenAI-style usage reports cached tokens as a subset
+ * of the prompt count (`prompt_tokens_details.cached_tokens` within
+ * `prompt_tokens`); Gemini's `promptTokenCount` likewise includes
+ * `cachedContentTokenCount`. Anthropic-style usage reports `input_tokens`
+ * EXCLUDING `cache_read_input_tokens` and `cache_creation_input_tokens`,
+ * so on a warm cache the cached count legitimately exceeds the input
+ * count; Bedrock's Converse usage follows the same split.
+ */
+const PROVIDER_CACHE_READ_ACCOUNTING = {
+  anthropic: "separate-from-input",
+  azure_foundry: "included-in-input",
+  bedrock: "separate-from-input",
+  google: "included-in-input",
+  huggingface: "included-in-input",
+  mistral: "included-in-input",
+  openai: "included-in-input",
+  openai_compatible: "included-in-input",
+  openrouter: "included-in-input",
+} as const satisfies Record<AIProvider, CacheReadAccounting>;
+
+type NormalizeProviderPromptTokensOptions = {
+  provider: AIProvider;
+  modelId: string;
+  /** The provider's own input/prompt token count, in its native semantics. */
+  promptTokens: number;
+  /** The provider's cache-read count, in its native semantics. */
+  cacheReadTokens: number;
+  /** Cache-write (cache creation) count for providers that report one. */
+  cacheWriteTokens: number;
+};
+
+type NormalizedPromptTokens = {
+  uncachedInputTokens: number;
+  cacheReadTokens: number;
+};
+
+/**
+ * Normalize a provider's native prompt-token accounting into the
+ * non-overlapping components the unit model bills: uncached input at the
+ * full input rate, cache reads at the cache-read rate. This is the only
+ * place provider cache semantics may be interpreted; downstream code
+ * never subtracts one provider-reported count from another.
+ */
+export const normalizeProviderPromptTokens = ({
+  provider,
+  modelId,
+  promptTokens,
+  cacheReadTokens,
+  cacheWriteTokens,
+}: NormalizeProviderPromptTokensOptions): NormalizedPromptTokens => {
+  const prompt = sanitizeTokenCount({
+    modelId,
+    field: "promptTokens",
+    value: promptTokens,
+  });
+  const cacheRead = sanitizeTokenCount({
+    modelId,
+    field: "cacheReadTokens",
+    value: cacheReadTokens,
+  });
+  const cacheWrite = sanitizeTokenCount({
+    modelId,
+    field: "cacheWriteTokens",
+    value: cacheWriteTokens,
+  });
+  const accounting = PROVIDER_CACHE_READ_ACCOUNTING[provider];
+  switch (accounting) {
+    case "separate-from-input":
+      // Cache writes are billable prompt tokens the provider excludes
+      // from its input count. The rate table carries no write-premium
+      // rate, so they meter at the full input rate.
+      return {
+        uncachedInputTokens: prompt + cacheWrite,
+        cacheReadTokens: cacheRead,
+      };
+    case "included-in-input": {
+      if (cacheRead > prompt) {
+        // Under subset semantics the cached count can never exceed the
+        // prompt count: a shape disagreement with the provider, not an
+        // internal invariant. Fall back to separate accounting — bill the
+        // full prompt at the input rate AND the reported cache reads at
+        // the cache rate. That over-meters relative to either consistent
+        // reading, which is the conservative direction; discarding the
+        // larger cache-read count would under-meter.
+        reportUsageShapeAnomaly({
+          modelId,
+          anomaly: "cache-read-exceeds-included-prompt",
+          context: {
+            provider,
+            promptTokens: String(prompt),
+            cacheReadTokens: String(cacheRead),
+          },
+        });
+        return { uncachedInputTokens: prompt, cacheReadTokens: cacheRead };
+      }
+      return {
+        uncachedInputTokens: prompt - cacheRead,
+        cacheReadTokens: cacheRead,
+      };
+    }
+    default: {
+      const _exhaustive: never = accounting;
+      return _exhaustive;
+    }
+  }
+};
+
 type UsageInput = {
   modelId: string;
-  inputTokens: number;
+  /**
+   * Input tokens billed at the full input rate. Excludes cache reads:
+   * provider usage must pass through `normalizeProviderPromptTokens`
+   * first, never a raw provider prompt total.
+   */
+  uncachedInputTokens: number;
   outputTokens: number;
   /**
-   * Tokens that were served from the provider's prompt cache.
-   * Where the model offers a cache adjustment we count these at
-   * `cachedInputPerMTok`; otherwise they're treated as normal
-   * input tokens. Defaults to 0.
+   * Tokens that were served from the provider's prompt cache, disjoint
+   * from `uncachedInputTokens`. Where the model offers a cache adjustment
+   * we count these at `cachedInputPerMTok`; otherwise they're treated as
+   * normal input tokens. Defaults to 0.
    */
   cacheReadTokens?: number;
 };
 
 /**
  * Convert token usage into normalized micro-units using the
- * model's public rate table. Provider token counts are validated here because
- * this helper is the shared boundary before usage reaches the ledger.
+ * model's public rate table. Provider token counts are sanitized here
+ * because this helper is the shared boundary before usage reaches the
+ * ledger; a malformed count meters conservatively and reports telemetry
+ * instead of failing.
  */
 export const computeRawUsageMicroUnits = ({
   modelId,
-  inputTokens,
+  uncachedInputTokens,
   outputTokens,
   cacheReadTokens = 0,
 }: UsageInput): number => {
-  if (
-    !isNonNegativeSafeInteger(inputTokens) ||
-    !isNonNegativeSafeInteger(outputTokens) ||
-    !isNonNegativeSafeInteger(cacheReadTokens)
-  ) {
-    panic("usage token counts must be non-negative safe integers");
-  }
-  if (cacheReadTokens > inputTokens) {
-    panic("cached input tokens cannot exceed total input tokens");
-  }
-  const rate = resolveModelRate(getModelRateOrFallback(modelId), inputTokens);
-  const billedInputTokens = inputTokens - cacheReadTokens;
+  const uncachedInput = sanitizeTokenCount({
+    modelId,
+    field: "uncachedInputTokens",
+    value: uncachedInputTokens,
+  });
+  const output = sanitizeTokenCount({
+    modelId,
+    field: "outputTokens",
+    value: outputTokens,
+  });
+  const cacheRead = sanitizeTokenCount({
+    modelId,
+    field: "cacheReadTokens",
+    value: cacheReadTokens,
+  });
+  // Long-context rate tiers key on what the model actually read, so tier
+  // resolution counts cached prompt tokens too.
+  const totalInputTokens = uncachedInput + cacheRead;
+  const rate = resolveModelRate(
+    getModelRateOrFallback(modelId),
+    totalInputTokens,
+  );
   const cachedRate = rate.cachedInputPerMTok ?? rate.inputPerMTok;
-  const inputCost = scaleTokenCost(billedInputTokens, rate.inputPerMTok);
-  const cacheCost = scaleTokenCost(cacheReadTokens, cachedRate);
-  const outputCost = scaleTokenCost(outputTokens, rate.outputPerMTok);
+  const inputCost = scaleTokenCost(uncachedInput, rate.inputPerMTok);
+  const cacheCost = scaleTokenCost(cacheRead, cachedRate);
+  const outputCost = scaleTokenCost(output, rate.outputPerMTok);
   const rawUsageMicroUnits = inputCost + cacheCost + outputCost;
   if (!Number.isSafeInteger(rawUsageMicroUnits)) {
     panic("computed raw usage exceeds the safe integer range");
@@ -159,7 +357,7 @@ type UsageUnitsFromTokensResult = {
  */
 export const usageUnitsFromTokens = ({
   modelId,
-  inputTokens,
+  uncachedInputTokens,
   outputTokens,
   cacheReadTokens = 0,
   actionType,
@@ -168,7 +366,7 @@ export const usageUnitsFromTokens = ({
 }: UsageUnitsFromTokensInput): UsageUnitsFromTokensResult => {
   const rawUsageMicroUnits = computeRawUsageMicroUnits({
     modelId,
-    inputTokens,
+    uncachedInputTokens,
     outputTokens,
     cacheReadTokens,
   });
