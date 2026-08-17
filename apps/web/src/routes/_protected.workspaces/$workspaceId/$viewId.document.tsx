@@ -38,6 +38,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/components/dialog";
+import { stellaToast } from "@stll/ui/components/toast";
 import "@stll/folio-react/editor.css";
 import { cn, composeRefs } from "@stll/ui/lib/utils";
 
@@ -988,11 +989,19 @@ const DocumentDisplayUnavailable = ({
         onClick={() => {
           detached(
             (async () => {
-              await navigate({
-                to: "/workspaces/$workspaceId/$viewId",
-                params: { viewId, workspaceId },
-              });
-              await openEntityInInspector(entityId, "", workspaceId);
+              try {
+                await navigate({
+                  to: "/workspaces/$workspaceId/$viewId",
+                  params: { viewId, workspaceId },
+                });
+                await openEntityInInspector(entityId, "", workspaceId);
+              } catch (openError) {
+                getAnalytics().captureError(openError);
+                stellaToast.add({
+                  title: t("errors.actionFailed"),
+                  type: "error",
+                });
+              }
             })(),
             "document.open-in-side-panel",
           );

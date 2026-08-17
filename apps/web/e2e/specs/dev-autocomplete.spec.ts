@@ -8,6 +8,12 @@ test("autocomplete playground matches the web runtime mode", async ({
 
   if (!EXPECTS_DEV_RUNTIME) {
     await expect(page).toHaveURL((url) => url.pathname === "/");
+    // Generic readiness signal (same as route-smoke): keep the test — and
+    // its browserErrors observation — open until the redirect target
+    // actually rendered.
+    await expect(page.locator("main").first()).toBeVisible({
+      timeout: 30_000,
+    });
     return;
   }
 
