@@ -29,6 +29,17 @@ const collectStrongMatches = (
   return matches;
 };
 
+// CommonMark backslash escapes: a backslash before ASCII punctuation stands
+// for that character. Model-written prompts escape brackets and asterisks
+// (`\[Party Name\]`); the composer holds resolved text, and the submit
+// boundary re-escapes whatever it needs, so a literal backslash never leaks
+// into the sent prompt.
+const BACKSLASH_ESCAPE =
+  /\\(?<punctuation>[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~])/gu;
+
+const unescapeMarkdownPunctuation = (text: string): string =>
+  text.replace(BACKSLASH_ESCAPE, "$<punctuation>");
+
 const parseInlineStrong = (source: string): InlineNode[] => {
   const nodes: InlineNode[] = [];
   const matches = [
@@ -42,18 +53,24 @@ const parseInlineStrong = (source: string): InlineNode[] => {
       continue;
     }
     if (match.from > cursor) {
-      nodes.push({ type: "text", text: source.slice(cursor, match.from) });
+      nodes.push({
+        type: "text",
+        text: unescapeMarkdownPunctuation(source.slice(cursor, match.from)),
+      });
     }
     nodes.push({
       type: "text",
-      text: match.text,
+      text: unescapeMarkdownPunctuation(match.text),
       marks: [{ type: "bold" }],
     });
     cursor = match.to;
   }
 
   if (cursor < source.length) {
-    nodes.push({ type: "text", text: source.slice(cursor) });
+    nodes.push({
+      type: "text",
+      text: unescapeMarkdownPunctuation(source.slice(cursor)),
+    });
   }
   return nodes;
 };
