@@ -287,6 +287,7 @@ describe("PostHog browser analytics adapter", () => {
     expect(initOptions?.before_send(event)).toEqual({
       event: WEB_ANALYTICS_EVENTS.exception,
       properties: {
+        $exception_fingerprint: "UnhandledRejection|||",
         $exception_list: [{ type: "UnhandledRejection", value: "" }],
         $exception_type: "UnhandledRejection",
       },
@@ -311,6 +312,7 @@ describe("PostHog browser analytics adapter", () => {
     expect(initOptions?.before_send(event)).toEqual({
       event: WEB_ANALYTICS_EVENTS.exception,
       properties: {
+        $exception_fingerprint: "TypeError||app.js:|",
         $exception_list: [
           {
             type: "TypeError",
@@ -519,6 +521,84 @@ describe("PostHog browser analytics adapter", () => {
     expect(sanitizedFreeForm?.properties).not.toContainKey("area");
   });
 
+  test("fingerprints exceptions from structure, never from message content", () => {
+    createPostHogAnalytics({ host: "https://posthog.test", key: "phc_test" });
+
+    // Production-shaped event: PII in the message, a token-bearing query
+    // string on the asset URL, and a wrapped cause.
+    const crashInMatterView = {
+      event: WEB_ANALYTICS_EVENTS.exception,
+      properties: {
+        area: "pdf-viewer",
+        $exception_list: [
+          {
+            type: "ClientTelemetryError",
+            value:
+              "Cannot render brief for jana.novakova@example.com in Client Smith v Example",
+            stacktrace: {
+              frames: [
+                {
+                  filename:
+                    "https://my.stll.app/assets/matter-view-D3kfQx9a.js?token=phx_9f3b2c&email=jana.novakova@example.com",
+                  function: "renderMatter",
+                  in_app: true,
+                  lineno: 4,
+                  colno: 18_733,
+                },
+              ],
+            },
+          },
+          {
+            type: "RangeError",
+            value: "Privileged cause detail for jana.novakova@example.com",
+          },
+        ],
+      },
+    };
+    const fingerprint =
+      initOptions?.before_send(crashInMatterView)?.properties?.[
+        "$exception_fingerprint"
+      ];
+    expect(fingerprint).toBe(
+      "ClientTelemetryError|pdf-viewer|matter-view.js:renderMatter|RangeError",
+    );
+
+    // Deterministic: the same defect groups into the same issue.
+    expect(
+      initOptions?.before_send(crashInMatterView)?.properties?.[
+        "$exception_fingerprint"
+      ],
+    ).toBe(fingerprint);
+
+    // A different defect in a different component groups separately even
+    // though the error class matches.
+    expect(
+      initOptions?.before_send({
+        event: WEB_ANALYTICS_EVENTS.exception,
+        properties: {
+          $exception_list: [
+            {
+              type: "ClientTelemetryError",
+              value: "Different failure, same class",
+              stacktrace: {
+                frames: [
+                  {
+                    filename:
+                      "https://my.stll.app/assets/document-panel-Ck2pW7dm.js",
+                    function: "openDocument",
+                    in_app: true,
+                    lineno: 2,
+                    colno: 9812,
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      })?.properties?.["$exception_fingerprint"],
+    ).not.toBe(fingerprint);
+  });
+
   test("captureError correlates a recovery reference without error details", () => {
     const { analytics } = createPostHogAnalytics({
       host: "https://posthog.test",
@@ -689,6 +769,7 @@ describe("PostHog browser analytics adapter", () => {
       properties: {
         token: "phc_test",
         distinct_id: "018f9f0e-7b42-7cc8-9a5d-42db46f6842d",
+        $exception_fingerprint: "TypeError||app.js:|",
         $exception_list: [
           {
             type: "TypeError",
@@ -788,6 +869,7 @@ describe("PostHog browser analytics adapter", () => {
       event: WEB_ANALYTICS_EVENTS.exception,
       properties: {
         error_reference: "ERR-DEAD-BEEF-1234",
+        $exception_fingerprint: "TypeError|||",
         $exception_list: [{ type: "TypeError", value: "" }],
         $exception_type: "TypeError",
       },
@@ -803,6 +885,7 @@ describe("PostHog browser analytics adapter", () => {
     expect(rejected).toEqual({
       event: WEB_ANALYTICS_EVENTS.exception,
       properties: {
+        $exception_fingerprint: "TypeError|||",
         $exception_list: [{ type: "TypeError", value: "" }],
         $exception_type: "TypeError",
       },
