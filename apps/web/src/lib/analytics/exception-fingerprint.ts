@@ -1,0 +1,76 @@
+// Grouping identity for `$exception` events. PostHog derives issues from
+// `$exception_list` content; with messages and stacks redacted by the
+// exception sanitizer, that default collapses to roughly one issue per
+// error class. `$exception_fingerprint` overrides it with a structural
+// identity built only from components the sanitizer already keeps, so
+// distinct defects create distinct issues without weakening redaction.
+
+// Frames beyond the crash site describe generic dispatch (schedulers,
+// event loops) and dilute identity more than they sharpen it.
+const FRAME_IDENTITY_LIMIT = 3;
+
+type FingerprintFrame = {
+  filename?: string;
+  function?: string;
+};
+
+type FingerprintEntry = {
+  type: string;
+  stacktrace?: { frames: readonly FingerprintFrame[] };
+};
+
+type ExceptionFingerprintInput = {
+  /**
+   * Sanitized `$exception_list`: the first entry is the thrown error, later
+   * entries its cause chain.
+   */
+  entries: readonly FingerprintEntry[];
+  /** Validated telemetry area slug, when an error boundary declared one. */
+  area?: string | undefined;
+};
+
+// The asset path up to the basename is deployment layout, not defect
+// identity, and query strings or fragments can carry tokens. Keep only
+// the final path segment.
+const assetBasename = (filename: string): string => {
+  const terminator = filename.search(/[?#]/u);
+  const path = terminator === -1 ? filename : filename.slice(0, terminator);
+  return path.slice(path.lastIndexOf("/") + 1);
+};
+
+const frameIdentity = (frame: FingerprintFrame): string => {
+  const basename =
+    frame.filename === undefined ? "" : assetBasename(frame.filename);
+  const symbol = frame.function ?? "";
+  return basename === "" && symbol === "" ? "" : `${basename}:${symbol}`;
+};
+
+// Frames are ordered caller-first, so the tail of the list is the crash
+// site. A frameless error legitimately yields no identities.
+const frameIdentities = (entry: FingerprintEntry | undefined): string[] => {
+  if (entry?.stacktrace === undefined) {
+    return [];
+  }
+  return entry.stacktrace.frames
+    .map(frameIdentity)
+    .filter((identity) => identity !== "")
+    .slice(-FRAME_IDENTITY_LIMIT);
+};
+
+/**
+ * Positions are fixed (an empty component stays empty) so one component can
+ * never collide with another — the same shape the server-side capture
+ * wrapper uses for its `$exception_fingerprint`.
+ */
+export const fingerprintExceptionEvent = ({
+  area,
+  entries,
+}: ExceptionFingerprintInput): string => {
+  const classes = entries.map((entry) => entry.type);
+  return [
+    classes.at(0) ?? "UnknownError",
+    area ?? "",
+    frameIdentities(entries.at(0)).join(";"),
+    classes.slice(1).join(";"),
+  ].join("|");
+};

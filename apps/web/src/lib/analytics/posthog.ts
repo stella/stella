@@ -8,6 +8,7 @@ import {
   telemetryErrorType,
 } from "@/lib/analytics/error-diagnostics";
 import { isErrorReference } from "@/lib/analytics/error-reference";
+import { fingerprintExceptionEvent } from "@/lib/analytics/exception-fingerprint";
 import { pickIngestionRequired } from "@/lib/analytics/posthog-ingestion";
 import type { sanitizeRouteErrorLifecycleEvent } from "@/lib/analytics/posthog-route-error";
 import { WEB_ANALYTICS_EVENTS } from "@/lib/analytics/types";
@@ -205,17 +206,23 @@ const sanitizeExceptionEvent = (event: CaptureResult): CaptureResult => {
       ? entries.map(sanitizeExceptionEntry)
       : [sanitizeExceptionEntry(undefined)];
   const type = sanitizedList.at(0)?.type ?? normalizeTelemetryErrorTypeName("");
+  const safeArea =
+    typeof area === "string" && TELEMETRY_AREA.test(area) ? area : undefined;
   return {
     ...event,
     properties: {
       ...pickIngestionRequired(properties),
+      // Grouping identity derived from the sanitized list, so nothing the
+      // redaction removed can reach it.
+      $exception_fingerprint: fingerprintExceptionEvent({
+        area: safeArea,
+        entries: sanitizedList,
+      }),
       $exception_list: sanitizedList,
       $exception_type: type,
       ...(typeof appCommit === "string" ? { app_commit: appCommit } : {}),
       ...(typeof appVersion === "string" ? { app_version: appVersion } : {}),
-      ...(typeof area === "string" && TELEMETRY_AREA.test(area)
-        ? { area }
-        : {}),
+      ...(safeArea === undefined ? {} : { area: safeArea }),
       ...(isErrorReference(errorReference)
         ? { error_reference: errorReference }
         : {}),
