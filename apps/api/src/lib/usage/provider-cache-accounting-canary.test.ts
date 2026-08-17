@@ -20,9 +20,7 @@ import { describe, expect, test } from "bun:test";
  * the anomaly telemetry (`cache-read-exceeds-included-prompt`) is the runtime
  * backstop until a canary is added for them.
  */
-// eslint-disable-next-line import/no-relative-packages -- deliberate deep import: the usage builder is not in the package exports map; breaking on adapter upgrade is this canary's purpose
 import { buildAnthropicUsage } from "../../../../../node_modules/@tanstack/ai-anthropic/dist/esm/usage.js";
-// eslint-disable-next-line import/no-relative-packages -- deliberate deep import: the usage builder is not in the package exports map; breaking on adapter upgrade is this canary's purpose
 import { buildGeminiUsage } from "../../../../../node_modules/@tanstack/ai-gemini/dist/esm/usage.js";
 
 describe("provider cache accounting canaries", () => {
@@ -30,10 +28,16 @@ describe("provider cache accounting canaries", () => {
     // Production-shaped Anthropic usage on a warm cache: input_tokens
     // excludes cache reads, so the cached count legitimately dwarfs it.
     const usage = buildAnthropicUsage({
-      input_tokens: 5,
-      output_tokens: 421,
+      cache_creation: null,
       cache_creation_input_tokens: 0,
       cache_read_input_tokens: 18_874,
+      inference_geo: null,
+      input_tokens: 5,
+      iterations: null,
+      output_tokens: 421,
+      server_tool_use: null,
+      service_tier: null,
+      speed: null,
     });
     if (usage === undefined) {
       throw new Error("adapter returned no usage for a present usage object");
@@ -46,10 +50,16 @@ describe("provider cache accounting canaries", () => {
 
   test("anthropic adapter keeps cache writes out of promptTokens too", () => {
     const usage = buildAnthropicUsage({
-      input_tokens: 12,
-      output_tokens: 50,
+      cache_creation: null,
       cache_creation_input_tokens: 9502,
       cache_read_input_tokens: 0,
+      inference_geo: null,
+      input_tokens: 12,
+      iterations: null,
+      output_tokens: 50,
+      server_tool_use: null,
+      service_tier: null,
+      speed: null,
     });
     if (usage === undefined) {
       throw new Error("adapter returned no usage for a present usage object");

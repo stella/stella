@@ -33,7 +33,12 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
-import { getImportedName, isIdentifier, unwrapExpression } from "./utils.ts";
+import {
+  getImportedName,
+  isAstNode,
+  isIdentifier,
+  unwrapExpression,
+} from "./utils.ts";
 
 const TIPTAP_REACT_MODULE = "@tiptap/react";
 
@@ -134,8 +139,12 @@ export default eslintCompatPlugin({
               return;
             }
 
-            for (const property of options.properties) {
-              if (property.type !== "Property") {
+            const properties = options["properties"];
+            if (!Array.isArray(properties)) {
+              return;
+            }
+            for (const property of properties) {
+              if (!isAstNode(property) || property.type !== "Property") {
                 continue;
               }
               const name = propertyKeyName(property);
