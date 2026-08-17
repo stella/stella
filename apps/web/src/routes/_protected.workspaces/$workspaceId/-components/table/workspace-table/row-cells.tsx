@@ -43,10 +43,7 @@ import type { PropertyId } from "@/lib/types";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
 import type { VirtualAnchor } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
-import {
-  getOcrSource,
-  getOcrSources,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
+import { getOcrSource } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
 import {
   WorkspaceGridCell,
   WorkspaceGridRow,
@@ -349,7 +346,6 @@ export const DraggableRow = ({
           propertyId: contextPropertyId,
         }) ?? undefined
       }
-      ocrSources={getOcrSources(entity.fields)}
       onOpenChange={(open) => {
         if (open) {
           setBulkEntities(getBulkSelectedEntities());

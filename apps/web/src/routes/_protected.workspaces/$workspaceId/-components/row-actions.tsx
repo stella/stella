@@ -119,6 +119,7 @@ import {
   getDesktopEditLockState,
   getOcrExportFileName,
   getOcrExportFormats,
+  getOcrSources,
   getPdfDownloadFileName,
   hasOcrExport,
   type OcrExportFormat,
@@ -132,12 +133,9 @@ export type VirtualAnchor = {
   getBoundingClientRect: () => DOMRect;
 };
 
-const EMPTY_OCR_SOURCES: readonly OcrSource[] = [];
-
 type RowActionsProps = {
   entity: WorkspaceEntity;
   ocrSource?: OcrSource | undefined;
-  ocrSources?: readonly OcrSource[] | undefined;
   workspaceId: string;
   open?: boolean | undefined;
   onOpenChange?: ((open: boolean) => void) | undefined;
@@ -207,7 +205,6 @@ export const RowActions = ({
   getAncestorIds,
   cellMetadataTarget,
   ocrSource,
-  ocrSources = EMPTY_OCR_SOURCES,
 }: RowActionsProps) => {
   const t = useTranslations();
   const analytics = useAnalytics();
@@ -232,6 +229,7 @@ export const RowActions = ({
   const bulkTargets = isBulk ? selectedEntities : [entity];
   const isCellContext =
     !isBulk && cellMetadataTarget !== null && cellMetadataTarget !== undefined;
+  const ocrSources = getOcrSources(entity.fields);
   let rowActionContext: RowActionContext = "row";
   if (isBulk) {
     rowActionContext = "bulk";
