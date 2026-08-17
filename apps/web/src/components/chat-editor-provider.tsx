@@ -1204,6 +1204,20 @@ export const useChatEditor = ({
     };
   }, [editor, extensionVersion, syncEditorPlugins]);
 
+  // The root attributes callback (aria-label) reads `placeholderRef` and
+  // ProseMirror only re-evaluates it when view props are re-applied or a
+  // transaction commits — with the options now identity-stable, neither
+  // happens on a placeholder change alone. Re-apply the view props exactly
+  // when the placeholder changes (suggestion arrival, locale switch) so
+  // assistive tech and role-based queries see the current label; this stays
+  // off the per-keystroke path entirely.
+  useExternalSyncEffect(() => {
+    if (!isUsableEditor(editor)) {
+      return;
+    }
+    editor.setOptions({});
+  }, [editor, resolvedPlaceholder]);
+
   useExternalSyncEffect(() => {
     if (!isUsableEditor(editor)) {
       return undefined;
