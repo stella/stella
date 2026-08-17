@@ -606,6 +606,7 @@ type Messages = {
     "richContentUnavailable": "This content cannot be displayed safely.";
     "sendError": "There was an issue sending your message. Contact support if the error persists.";
     "sendErrorAnonymizationBlocked": "stella could not anonymize one attachment, so nothing was sent. Remove the file or send this message without anonymization.";
+    "sendErrorEmptyCompletion": "The AI returned an empty reply. Try again or rephrase your message.";
     "sendErrorLoopDetected": "The AI response repeated too many times. Try again with a narrower request.";
     "sendErrorModelUnavailable": "The configured AI model is no longer available. Ask your workspace admin to update the model in organization settings.";
     "sendErrorProviderBilling": "The AI provider reported a billing problem. Contact your workspace admin.";
@@ -1429,7 +1430,9 @@ type Messages = {
     };
     "makeCurrent": "Make current";
     "noFileInVersion": "No file in this version";
+    "noFullScreenPreview": "This file type has no full-screen preview.";
     "noLabel": "No label";
+    "openInSidePanel": "Open in side panel";
     "redlinePreview": "Tracked changes";
     "removeLabel": "Remove label";
     "selectVersion": "Select a version";
@@ -2884,6 +2887,7 @@ type Messages = {
   };
   "search": {
     "aiRefine": "Improve query with AI";
+    "askAI": "Ask AI";
     "continueInChat": "Continue in chat";
     "dateFrom": "From";
     "dateTo": "To";
@@ -2891,7 +2895,10 @@ type Messages = {
     "deleteSearchTitle": "Delete saved search";
     "editedBy": "Edited by";
     "emptyState": "Start typing to search across all matters.";
-    "escKey": "ESC";
+    "hintAskAI": "<kbd>Tab</kbd> to ask AI";
+    "hintClose": "<kbd>Esc</kbd> to close";
+    "hintNavigate": "<kbd>↑↓</kbd> to navigate";
+    "hintOpen": "<kbd>↵</kbd> to open";
     "kinds": {
       "caseLaw": "Case law";
       "chat": "Chat";
@@ -2904,11 +2911,14 @@ type Messages = {
     };
     "mimeType": "File type";
     "noResults": "No results found for \"{query}\".";
+    "openMatter": "Open matter <bdi>{name}</bdi>";
     "placeholder": "Search across all matters...";
     "previewUnavailable": "Preview unavailable";
     "recentSearches": "Recent searches";
     "recentlyOpenedFiles": "Recently opened files";
     "renameSearchTitle": "Rename saved search";
+    "resizeFilters": "Resize filters column";
+    "resizePreview": "Resize preview column";
     "resultCount": "{count, plural, one {# result} other {# results}}";
     "saveSearch": "Save search";
     "saveSearchNamePlaceholder": "e.g. Recent PDFs";

@@ -49,6 +49,7 @@ const {
   hasSearchQueryOrSelectiveFilter,
   recentFilePreviewFieldOptions,
   resolveRecentFilePreviewFieldId,
+  SEARCH_PREVIEW_ACCESS_RECHECK_MS,
   searchInfiniteOptions,
   searchPreviewOptions,
 } = await import("@/lib/search");
@@ -219,6 +220,7 @@ describe("search preview targets", () => {
     entityId: "entity_1",
     workspaceId: "ws_1",
     workspaceName: "Matter",
+    parentId: null,
     lastEditedByName: null,
     lastEditedByImage: null,
     fileFieldId: null,
@@ -330,7 +332,7 @@ describe("search preview targets", () => {
     ).toBe("field_1");
   });
 
-  test("resolves current file identity from a fresh entity read", () => {
+  test("re-checks recent-file identity per session, not per hover", () => {
     const options = recentFilePreviewFieldOptions({
       entityId: "entity_1",
       fileFieldId: "field_1",
@@ -341,10 +343,13 @@ describe("search preview targets", () => {
       workspaceId: "workspace_1",
     });
 
-    expect(options.staleTime).toBe(0);
+    // This query doubles as the access re-check for a recent file, so the
+    // window must stay short — but nonzero, or hovering between recents
+    // refires it on every switch.
+    expect(options.staleTime).toBe(SEARCH_PREVIEW_ACCESS_RECHECK_MS);
   });
 
-  test("reauthorizes cached previews whenever they mount", () => {
+  test("caches previews within a search session", () => {
     const options = searchPreviewOptions({
       organizationId: "org_1",
       userId: "user_1",
@@ -354,8 +359,14 @@ describe("search preview targets", () => {
       updatedAt: previewHit.updatedAt,
     });
 
-    expect(options.refetchOnMount).toBe("always");
-    expect(options.staleTime).toBe(0);
+    // The key is content-addressed (query + resultId + updatedAt), so caching
+    // can never show stale content; it only defers the per-mount access
+    // re-check, bounded by the same window as the recent-file re-check
+    // above. No refetchOnMount override — hovering back to an
+    // already-previewed hit must be a cache hit.
+    expect(options.refetchOnMount).toBeUndefined();
+    expect(options.staleTime).toBe(SEARCH_PREVIEW_ACCESS_RECHECK_MS);
+    expect(SEARCH_PREVIEW_ACCESS_RECHECK_MS).toBeLessThanOrEqual(30_000);
   });
 
   test("shows the preview only when enabled on a non-mobile viewport", () => {
@@ -451,31 +462,21 @@ describe("search preview targets", () => {
     ).toBeNull();
   });
 
-  test("retains authorized data during background refetches", () => {
+  test("shows cache-hit preview data without waiting for a mount fetch", () => {
     const data = {
       type: "plain-text",
       content: "Privileged preview",
     } as const;
 
+    // Regression: the old per-mount reauthorization gate combined with
+    // searchPreviewOptions' staleTime left cache hits (no fetch after mount)
+    // on a permanent skeleton.
     expect(
       selectAuthorizedSearchPreviewData({
         data,
         isError: false,
-        isFetchedAfterMount: true,
-        isFetching: true,
       }),
     ).toBe(data);
-  });
-
-  test("withholds cached data until mount reauthorization succeeds", () => {
-    expect(
-      selectAuthorizedSearchPreviewData({
-        data: { type: "plain-text", content: "Cached preview" },
-        isError: false,
-        isFetchedAfterMount: false,
-        isFetching: true,
-      }),
-    ).toBeUndefined();
   });
 
   test("withholds stale data after a preview authorization error", () => {
@@ -486,8 +487,6 @@ describe("search preview targets", () => {
           content: "Previously authorized preview",
         },
         isError: true,
-        isFetchedAfterMount: true,
-        isFetching: false,
       }),
     ).toBeUndefined();
   });
@@ -618,6 +617,7 @@ describe("search preview targets", () => {
         entityId: "entity_1",
         workspaceId: "ws_1",
         workspaceName: "Matter",
+        parentId: null,
         lastEditedByName: null,
         lastEditedByImage: null,
         fileFieldId: null,

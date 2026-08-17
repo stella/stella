@@ -71,6 +71,7 @@ export const SearchDocumentPreview = ({
     <PeekPdfViewer
       activeSearchMatchIndex={activeSearchMatchIndex}
       activePropertyId=""
+      docxFitMode="page"
       entityId={target.entityId}
       fieldId={target.fieldId}
       filePurpose={target.filePurpose}

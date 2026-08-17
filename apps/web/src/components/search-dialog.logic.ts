@@ -63,6 +63,37 @@ export const getEntityWorkspaceRoute = ({
   params: { workspaceId, viewId: "all" },
 });
 
+type EntityLocationRoute = {
+  to: "/workspaces/$workspaceId/$viewId";
+  params: { workspaceId: string; viewId: "all" };
+  search?: { folder: string };
+};
+
+/**
+ * Cmd/Ctrl-activating a result opens the matter location containing the hit
+ * — scoped into its parent folder when it has one — instead of the hit
+ * itself. Only entity-backed hits have a containing location; every other
+ * hit type returns null and keeps its normal open behavior.
+ */
+export const getEntityLocationRoute = (
+  hit: GlobalSearchHit,
+): EntityLocationRoute | null => {
+  if (
+    hit.type === "contact" ||
+    hit.type === "case-law" ||
+    hit.type === "chat" ||
+    hit.type === "matter"
+  ) {
+    return null;
+  }
+
+  return {
+    to: "/workspaces/$workspaceId/$viewId",
+    params: { workspaceId: hit.workspaceId, viewId: "all" },
+    ...(hit.parentId === null ? {} : { search: { folder: hit.parentId } }),
+  };
+};
+
 export const getRecentFileRoute = ({
   entityId,
   fileFieldId,
@@ -135,6 +166,9 @@ export const getRecentFilePreviewHit = (
     lastEditedByImage: null,
     lastEditedByName: null,
     mimeType: file.mimeType ?? null,
+    // Recent-file entries do not persist the containing folder; the
+    // location affordance only applies to live search hits.
+    parentId: null,
     resource,
     resourceName: toResourceName(resource),
     title: file.title,
@@ -172,3 +206,13 @@ export const getChatHitRoute = (hit: ChatGlobalSearchHit): ChatHitRoute => {
     params: { threadId: hit.threadId },
   };
 };
+
+/**
+ * Chat message content travels as composer HTML; a raw search query must be
+ * entity-escaped so `<`/`&` in the query survive as literal text.
+ */
+export const toAskAIMessageHtml = (query: string): string =>
+  query
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");

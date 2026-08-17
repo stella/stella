@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/components/toast";
@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { filesKeys } from "@/lib/files/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { extensionMatches } from "@/routes/_protected.workspaces/$workspaceId/-components/file-extension";
 
@@ -22,6 +23,7 @@ type UploadVersionVars = {
 export const useUploadVersion = () => {
   const t = useTranslations();
   const analytics = useAnalytics();
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({
@@ -54,10 +56,16 @@ export const useUploadVersion = () => {
 
       return unwrapEden(response);
     },
-    onSuccess: () => {
+    onSuccess: async ({ fieldId }, { workspaceId }) => {
       stellaToast.add({
         title: t("workspaces.files.versionUploaded"),
         type: "success",
+      });
+      // The new version replaces the field's bytes; open viewers must not
+      // keep serving the previous version's cached buffer for the rest of
+      // the client-wide staleTime window.
+      await queryClient.invalidateQueries({
+        queryKey: filesKeys.contentByFieldId({ workspaceId, fieldId }),
       });
     },
     onError: (error) => {

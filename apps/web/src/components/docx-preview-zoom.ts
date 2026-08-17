@@ -16,6 +16,13 @@ const DOCX_TEXT_AREA_WIDTH = 624;
 // the loading shell sizes its placeholder page from both dimensions.
 export const DOCX_PAGE_WIDTH = 816;
 export const DOCX_PAGE_HEIGHT = 1056;
+
+// Fit target for whole-page surfaces: inflating the page width by a per-side
+// gutter reserves ~7.5% of the container width as symmetric breathing space,
+// so the fitted page never touches the panel edges.
+const DOCX_PAGE_SIDE_GUTTER = 0.075;
+export const DOCX_PAGE_FIT_WIDTH =
+  DOCX_PAGE_WIDTH / (1 - 2 * DOCX_PAGE_SIDE_GUTTER);
 const DOCX_FIT_PADDING = 4;
 const DOCX_DEFAULT_ZOOM = 1;
 const DOCX_MIN_ZOOM = 0.25;

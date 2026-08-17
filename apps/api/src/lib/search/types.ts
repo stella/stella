@@ -200,6 +200,10 @@ export type EntityGlobalSearchHit = GlobalSearchHitBase & {
   entityId: string;
   workspaceId: string;
   workspaceName: string;
+  /** Containing folder entity, null at the matter root. Lets the client
+   * offer "open the location" (matter scoped into this folder) alongside
+   * opening the hit itself. */
+  parentId: string | null;
   lastEditedByName: string | null;
   lastEditedByImage: string | null;
   fileFieldId: string | null;

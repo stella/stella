@@ -18,6 +18,7 @@ import type {
 import type { EmailBodyFold } from "@/lib/files/email-preview";
 import {
   documentPropertiesQueryKey,
+  fileContentByFieldQueryRoot,
   fileContentQueryKey,
   fileMetadataQueryKey,
   filesQueryRoot,
@@ -78,6 +79,9 @@ const EMAIL_ATTACHMENT_SAVE_RESPONSE_SCHEMA = v.object({
 export const filesKeys = {
   all: filesQueryRoot,
   byFieldId: fileContentQueryKey,
+  /** Purpose-agnostic prefix of `byFieldId`: invalidating it sweeps every
+   * purpose variant of a field's downloaded bytes after a version write. */
+  contentByFieldId: fileContentByFieldQueryRoot,
   metadataByFieldId: fileMetadataQueryKey,
   emailHtmlByFieldId: (key: FileByFieldIdKey) => [
     ...filesKeys.all(),

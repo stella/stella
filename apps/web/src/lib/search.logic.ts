@@ -1,6 +1,6 @@
 import type { GlobalSearchHit, GlobalSearchResultType } from "@stll/api/types";
 
-import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
+import { DOCX_MIME, isEmailMimeType, PDF_MIME } from "@/lib/consts";
 import { getSearchTextCandidates } from "@/lib/search-text";
 import type { SearchTextQuery } from "@/lib/search-text";
 
@@ -238,19 +238,51 @@ export const getNativeSearchDocumentPreviewTarget = (
   return null;
 };
 
+export type EmailSearchPreviewTarget = {
+  entityId: string;
+  fieldId: string;
+  workspaceId: string;
+};
+
+/**
+ * Email hits render with the same email HTML viewer the inspector uses —
+ * one renderer per format across surfaces, never a parallel one — so the
+ * search preview shows the message body, not an extracted-text stand-in.
+ */
+export const getEmailSearchPreviewTarget = (
+  hit: GlobalSearchHit,
+): EmailSearchPreviewTarget | null => {
+  if (hit.type !== "document" || hit.fileFieldId === null) {
+    return null;
+  }
+  if (!isEmailMimeType(hit.mimeType)) {
+    return null;
+  }
+  return {
+    entityId: hit.entityId,
+    fieldId: hit.fileFieldId,
+    workspaceId: hit.workspaceId,
+  };
+};
+
 type AuthorizedSearchPreviewDataArgs<T> = {
   data: T | undefined;
   isError: boolean;
-  isFetchedAfterMount: boolean;
-  isFetching: boolean;
 };
 
+/**
+ * Preview data within `searchPreviewOptions`' staleTime counts as authorized:
+ * the query key is content-addressed, so a cache hit is the same authorized
+ * response the server already returned for this user. Only an error withholds
+ * data (the fetch that produced it was rejected). The previous per-mount
+ * `isFetchedAfterMount` gate belonged to the refetch-on-every-mount posture
+ * and, combined with caching, left cache hits on a permanent skeleton.
+ */
 export const selectAuthorizedSearchPreviewData = <T>({
   data,
   isError,
-  isFetchedAfterMount,
 }: AuthorizedSearchPreviewDataArgs<T>): T | undefined =>
-  isFetchedAfterMount && !isError ? data : undefined;
+  isError ? undefined : data;
 
 type SelectSearchPreviewHitArgs = {
   highlightedHitId: string | null;

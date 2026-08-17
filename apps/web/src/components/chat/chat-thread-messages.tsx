@@ -869,6 +869,7 @@ type MappedChatErrorKind = Exclude<AIErrorKind, "unknown">;
 // Unknown and non-AI errors deliberately fall through to generic copy.
 const CHAT_ERROR_TRANSLATION_KEYS = {
   provider_billing: "chat.sendErrorProviderBilling",
+  empty_completion: "chat.sendErrorEmptyCompletion",
   loop_detected: "chat.sendErrorLoopDetected",
   model_unavailable: "chat.sendErrorModelUnavailable",
   provider_unavailable: "chat.sendErrorProviderUnavailable",

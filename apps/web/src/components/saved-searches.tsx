@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import {
+  BookmarkIcon,
   BookmarkPlusIcon,
   LoaderIcon,
   PencilIcon,
@@ -253,91 +254,95 @@ export const SavedSearches = ({
       )}
 
       {shouldShowList && (
-        <section className="space-y-1">
+        <section className="px-4 pt-4">
           <h3 className="text-muted-foreground mb-2 text-xs font-medium">
             {t("search.savedSearches")}
           </h3>
-          {savedSearchesQuery.isPending && (
-            <div className="flex h-11 items-center px-2">
-              <LoaderIcon className="text-muted-foreground size-4 animate-spin" />
-            </div>
-          )}
-          {savedSearchesQuery.isError && (
-            <Button
-              className="h-11 w-full justify-start"
-              onClick={() => {
-                detached(
-                  savedSearchesQuery.refetch(),
-                  "saved-searches.refetch",
-                );
-              }}
-              variant="ghost"
-            >
-              {t("common.retry")}
-            </Button>
-          )}
-          {savedSearches?.map((savedSearch) => (
-            <div className="flex min-w-0 items-center" key={savedSearch.id}>
+          <div className="space-y-1">
+            {savedSearchesQuery.isPending && (
+              <div className="flex h-11 items-center px-2">
+                <LoaderIcon className="text-muted-foreground size-4 animate-spin" />
+              </div>
+            )}
+            {savedSearchesQuery.isError && (
               <Button
-                className="h-11 min-w-0 flex-1 justify-start text-start text-sm"
-                onClick={() => onApply(savedSearch.criteria)}
+                className="h-11 w-full justify-start px-2"
+                onClick={() => {
+                  detached(
+                    savedSearchesQuery.refetch(),
+                    "saved-searches.refetch",
+                  );
+                }}
                 variant="ghost"
               >
-                <BidiText as="span" className="truncate">
-                  {savedSearch.name}
-                </BidiText>
+                {t("common.retry")}
               </Button>
+            )}
+            {savedSearches?.map((savedSearch) => (
+              <div className="flex min-w-0 items-center" key={savedSearch.id}>
+                <Button
+                  className="h-11 min-w-0 flex-1 justify-start gap-2 px-2 text-start text-sm"
+                  data-search-empty-row=""
+                  onClick={() => onApply(savedSearch.criteria)}
+                  variant="ghost"
+                >
+                  <BookmarkIcon className="text-muted-foreground size-4 shrink-0" />
+                  <BidiText as="span" className="truncate">
+                    {savedSearch.name}
+                  </BidiText>
+                </Button>
+                <Button
+                  aria-label={t("common.rename")}
+                  className="size-11 shrink-0"
+                  disabled={isMutatingSavedSearch}
+                  onClick={() =>
+                    setDialog({
+                      type: "rename",
+                      name: savedSearch.name,
+                      search: savedSearch,
+                    })
+                  }
+                  size="icon"
+                  title={t("common.rename")}
+                  variant="ghost"
+                >
+                  <PencilIcon className="size-4" />
+                </Button>
+                <Button
+                  aria-label={t("common.delete")}
+                  className="size-11 shrink-0"
+                  disabled={isMutatingSavedSearch}
+                  onClick={() =>
+                    setDialog({ type: "delete", search: savedSearch })
+                  }
+                  size="icon"
+                  title={t("common.delete")}
+                  variant="ghost"
+                >
+                  <Trash2Icon className="size-4" />
+                </Button>
+              </div>
+            ))}
+            {savedSearchesQuery.hasNextPage && (
               <Button
-                aria-label={t("common.rename")}
-                className="size-11 shrink-0"
-                disabled={isMutatingSavedSearch}
-                onClick={() =>
-                  setDialog({
-                    type: "rename",
-                    name: savedSearch.name,
-                    search: savedSearch,
-                  })
-                }
-                size="icon"
-                title={t("common.rename")}
+                className="h-11 w-full"
+                disabled={savedSearchesQuery.isFetchingNextPage}
+                onClick={() => {
+                  detached(
+                    savedSearchesQuery.fetchNextPage(),
+                    "saved-searches.fetch-next-page",
+                  );
+                }}
                 variant="ghost"
               >
-                <PencilIcon className="size-4" />
+                {savedSearchesQuery.isFetchingNextPage ? (
+                  <LoaderIcon className="size-4 animate-spin" />
+                ) : (
+                  t("common.loadMore")
+                )}
               </Button>
-              <Button
-                aria-label={t("common.delete")}
-                className="size-11 shrink-0"
-                disabled={isMutatingSavedSearch}
-                onClick={() =>
-                  setDialog({ type: "delete", search: savedSearch })
-                }
-                size="icon"
-                title={t("common.delete")}
-                variant="ghost"
-              >
-                <Trash2Icon className="size-4" />
-              </Button>
-            </div>
-          ))}
-          {savedSearchesQuery.hasNextPage && (
-            <Button
-              className="h-11 w-full"
-              disabled={savedSearchesQuery.isFetchingNextPage}
-              onClick={() => {
-                detached(
-                  savedSearchesQuery.fetchNextPage(),
-                  "saved-searches.fetch-next-page",
-                );
-              }}
-              variant="ghost"
-            >
-              {savedSearchesQuery.isFetchingNextPage ? (
-                <LoaderIcon className="size-4 animate-spin" />
-              ) : (
-                t("common.loadMore")
-              )}
-            </Button>
-          )}
+            )}
+          </div>
         </section>
       )}
 

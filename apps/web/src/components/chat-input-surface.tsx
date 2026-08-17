@@ -24,6 +24,7 @@ import {
   type ComposerContextMenuProps,
 } from "@/components/chat/composer-plus-menu";
 import { PromptEditorContent } from "@/components/prompt-editor";
+import { RenderStormRegion } from "@/components/render-storm-canary";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -195,157 +196,159 @@ export const ChatInputSurface = ({
     // Outer wrapper carries caller positioning (`className`) and the slim
     // status row; the inner box keeps the border and the drag/paste/focus
     // handlers so the row sits outside the border but still inside scope.
-    <div className={cn("flex flex-col", className)}>
-      <div
-        {...guideAnchor(GUIDE_ANCHORS.chatComposer, guideAnchorsEnabled)}
-        className={cn(
-          "bg-background rounded-lg border",
-          "transition-colors",
-          // Default focus border (gray) only when not in anonymized
-          // mode — otherwise the gray border landed on top of the
-          // blue ring and read as a double-ring on click.
-          !inputDisabled && !anonymized && "focus-within:border-ring",
-          anonymized &&
-            "ring-info/40 border-info/40 focus-within:border-info/60 shadow-[0_0_0_4px_rgb(from_var(--color-info)_r_g_b_/_0.08)] ring-1",
-        )}
-        onBlurCapture={handleBlur}
-        onDragOver={inputDisabled ? undefined : handleDragOver}
-        onDrop={inputDisabled ? undefined : handleDrop}
-        onFocusCapture={handleFocus}
-        onPaste={inputDisabled ? undefined : handlePaste}
-        ref={rootRef}
-      >
-        <ChatDraftAttachmentChips files={attachments} onRemove={removeFile} />
+    <RenderStormRegion name="chat-composer">
+      <div className={cn("flex flex-col", className)}>
         <div
+          {...guideAnchor(GUIDE_ANCHORS.chatComposer, guideAnchorsEnabled)}
           className={cn(
-            variant === "compact" &&
-              "grid min-h-11 grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-1 px-1.5 py-px",
+            "bg-background rounded-lg border",
+            "transition-colors",
+            // Default focus border (gray) only when not in anonymized
+            // mode — otherwise the gray border landed on top of the
+            // blue ring and read as a double-ring on click.
+            !inputDisabled && !anonymized && "focus-within:border-ring",
+            anonymized &&
+              "ring-info/40 border-info/40 focus-within:border-info/60 shadow-[0_0_0_4px_rgb(from_var(--color-info)_r_g_b_/_0.08)] ring-1",
           )}
+          onBlurCapture={handleBlur}
+          onDragOver={inputDisabled ? undefined : handleDragOver}
+          onDrop={inputDisabled ? undefined : handleDrop}
+          onFocusCapture={handleFocus}
+          onPaste={inputDisabled ? undefined : handlePaste}
+          ref={rootRef}
         >
+          <ChatDraftAttachmentChips files={attachments} onRemove={removeFile} />
           <div
             className={cn(
-              "chat-editor relative min-w-0 overflow-hidden",
-              variant === "compact"
-                ? "col-start-2 row-start-1 py-1"
-                : "ps-3 pe-3 pt-2 pb-1",
+              variant === "compact" &&
+                "grid min-h-11 grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-1 px-1.5 py-px",
             )}
-            onKeyDown={(event) => {
-              event.stopPropagation();
-            }}
-            role="presentation"
           >
-            <PromptEditorContent
-              // Compact: default to a single text line and grow with content
-              // (drop the provider's `min-h-10`), matching the inspector and
-              // file-chat bars. Large: hold ~3 text lines (`text-sm` at
-              // `leading-5` = 20px per line) so the hero box keeps its
-              // stature while empty.
+            <div
               className={cn(
-                variant === "large"
-                  ? "[&_.ProseMirror]:min-h-15"
-                  : "[&_.ProseMirror]:min-h-0",
-                inputDisabled && "pointer-events-none",
+                "chat-editor relative min-w-0 overflow-hidden",
+                variant === "compact"
+                  ? "col-start-2 row-start-1 py-1"
+                  : "ps-3 pe-3 pt-2 pb-1",
               )}
-              editor={editor}
-            />
-            {isBlank && (
-              <span
-                aria-hidden="true"
+              onKeyDown={(event) => {
+                event.stopPropagation();
+              }}
+              role="presentation"
+            >
+              <PromptEditorContent
+                // Compact: default to a single text line and grow with content
+                // (drop the provider's `min-h-10`), matching the inspector and
+                // file-chat bars. Large: hold ~3 text lines (`text-sm` at
+                // `leading-5` = 20px per line) so the hero box keeps its
+                // stature while empty.
                 className={cn(
-                  "text-foreground-placeholder pointer-events-none absolute truncate text-sm",
+                  variant === "large"
+                    ? "[&_.ProseMirror]:min-h-15"
+                    : "[&_.ProseMirror]:min-h-0",
+                  inputDisabled && "pointer-events-none",
+                )}
+                editor={editor}
+              />
+              {isBlank && (
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "text-foreground-placeholder pointer-events-none absolute truncate text-sm",
+                    variant === "compact"
+                      ? "start-0 end-0 top-1"
+                      : "start-3 end-3 top-2",
+                  )}
+                >
+                  {placeholder}
+                </span>
+              )}
+            </div>
+            <div
+              className={cn(
+                variant === "compact"
+                  ? "contents"
+                  : "flex items-center justify-end gap-0.5 px-1.5 pb-1.5",
+              )}
+            >
+              <div
+                className={cn(
+                  "flex min-w-0 items-center gap-0.5",
                   variant === "compact"
-                    ? "start-0 end-0 top-1"
-                    : "start-3 end-3 top-2",
+                    ? "col-start-1 row-start-1 self-end"
+                    : "me-auto",
                 )}
               >
-                {placeholder}
-              </span>
-            )}
-          </div>
-          <div
-            className={cn(
-              variant === "compact"
-                ? "contents"
-                : "flex items-center justify-end gap-0.5 px-1.5 pb-1.5",
-            )}
-          >
-            <div
-              className={cn(
-                "flex min-w-0 items-center gap-0.5",
-                variant === "compact"
-                  ? "col-start-1 row-start-1 self-end"
-                  : "me-auto",
-              )}
-            >
-              <ComposerPlusMenu
-                guideAnchorsEnabled={guideAnchorsEnabled}
-                context={
-                  context
-                    ? {
-                        activeOrganizationId: context.activeOrganizationId,
-                        editor,
-                        threadRef: context.threadRef,
-                      }
-                    : undefined
-                }
-                disabled={inputDisabled}
-                mcp={
-                  mcpOrganizationId
-                    ? { activeOrganizationId: mcpOrganizationId }
-                    : undefined
-                }
-                models={models}
-                onOpenFilePicker={openFilePicker}
-                skills={
-                  skillsOrganizationId
-                    ? {
-                        activeOrganizationId: skillsOrganizationId,
-                        editor,
-                        reservedCommands,
-                      }
-                    : undefined
-                }
-              />
-            </div>
-            <input
-              accept={fileInputAccept}
-              className="hidden"
-              disabled={inputDisabled}
-              multiple
-              onChange={handleFileInputChange}
-              ref={fileInputRef}
-              type="file"
-            />
-            <div
-              className={cn(
-                "flex items-center gap-0.5",
-                variant === "compact" && "col-start-3 row-start-1 self-end",
-              )}
-            >
-              <span className="me-0.5 inline-flex">
-                <ChatPromptImproveButton
-                  anonymized={anonymized}
-                  controller={controller}
-                  disabled={inputDisabled || isBlank}
+                <ComposerPlusMenu
+                  guideAnchorsEnabled={guideAnchorsEnabled}
+                  context={
+                    context
+                      ? {
+                          activeOrganizationId: context.activeOrganizationId,
+                          editor,
+                          threadRef: context.threadRef,
+                        }
+                      : undefined
+                  }
+                  disabled={inputDisabled}
+                  mcp={
+                    mcpOrganizationId
+                      ? { activeOrganizationId: mcpOrganizationId }
+                      : undefined
+                  }
+                  models={models}
+                  onOpenFilePicker={openFilePicker}
+                  skills={
+                    skillsOrganizationId
+                      ? {
+                          activeOrganizationId: skillsOrganizationId,
+                          editor,
+                          reservedCommands,
+                        }
+                      : undefined
+                  }
                 />
-              </span>
-              {/* The single primary affordance morphs in place: the button
+              </div>
+              <input
+                accept={fileInputAccept}
+                className="hidden"
+                disabled={inputDisabled}
+                multiple
+                onChange={handleFileInputChange}
+                ref={fileInputRef}
+                type="file"
+              />
+              <div
+                className={cn(
+                  "flex items-center gap-0.5",
+                  variant === "compact" && "col-start-3 row-start-1 self-end",
+                )}
+              >
+                <span className="me-0.5 inline-flex">
+                  <ChatPromptImproveButton
+                    anonymized={anonymized}
+                    controller={controller}
+                    disabled={inputDisabled || isBlank}
+                  />
+                </span>
+                {/* The single primary affordance morphs in place: the button
                   itself resolves send vs. stop from the state it is fed, so
                   this surface cannot render a second, parallel control. */}
-              <ChatComposerActionButton
-                canSend={!submitDisabled && canSubmit}
-                guideAnchorsEnabled={guideAnchorsEnabled}
-                isGenerating={isGenerating}
-                onSend={() => {
-                  detached(submitDraft(), "chat-input-surface.submit-draft");
-                }}
-                onStop={onStop}
-              />
+                <ChatComposerActionButton
+                  canSend={!submitDisabled && canSubmit}
+                  guideAnchorsEnabled={guideAnchorsEnabled}
+                  isGenerating={isGenerating}
+                  onSend={() => {
+                    detached(submitDraft(), "chat-input-surface.submit-draft");
+                  }}
+                  onStop={onStop}
+                />
+              </div>
             </div>
           </div>
         </div>
+        {dock}
       </div>
-      {dock}
-    </div>
+    </RenderStormRegion>
   );
 };

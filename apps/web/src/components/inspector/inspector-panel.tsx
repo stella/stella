@@ -47,6 +47,7 @@ import { usePdfTabZoom } from "@/components/inspector/use-pdf-tab-zoom";
 import { useTabContextMenu } from "@/components/inspector/use-tab-context-menu";
 import { useSelectedFileVersionMissing } from "@/components/inspector/versions-facet";
 import { getInspectorView } from "@/components/inspector/view-registry";
+import { RenderStormRegion } from "@/components/render-storm-canary";
 import { MatterMetadataPanel } from "@/components/workspaces/matter-metadata-sheet";
 import { TaskDetailPanel } from "@/components/workspaces/tasks/task-detail-panel";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
@@ -478,167 +479,169 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   });
 
   return (
-    <div className="bg-background flex h-full shadow-lg">
-      <div className="hidden md:contents">
-        <InspectorRail
-          activeId={activeId}
-          minimized={minimized}
-          onActivateTab={(tabId) => {
-            setActive(tabId);
-            setMinimized(false);
-          }}
-          onCloseTab={handleCloseTab}
-          onOpenChat={openChat}
-          onSetMinimized={setMinimized}
-          tabs={tabs}
-          workspaceId={workspaceId}
-        />
-      </div>
+    <RenderStormRegion name="inspector">
+      <div className="bg-background flex h-full shadow-lg">
+        <div className="hidden md:contents">
+          <InspectorRail
+            activeId={activeId}
+            minimized={minimized}
+            onActivateTab={(tabId) => {
+              setActive(tabId);
+              setMinimized(false);
+            }}
+            onCloseTab={handleCloseTab}
+            onOpenChat={openChat}
+            onSetMinimized={setMinimized}
+            tabs={tabs}
+            workspaceId={workspaceId}
+          />
+        </div>
 
-      {/* Task content */}
-      {!minimized &&
-        activeTab?.type === "task" &&
-        workspaceId !== undefined && (
-          <TaskDetailPanel taskId={activeTab.id} workspaceId={workspaceId} />
-        )}
+        {/* Task content */}
+        {!minimized &&
+          activeTab?.type === "task" &&
+          workspaceId !== undefined && (
+            <TaskDetailPanel taskId={activeTab.id} workspaceId={workspaceId} />
+          )}
 
-      {/* Chat content — sidepeek chat tab. Mounts ChatTabPanel, whose
+        {/* Chat content — sidepeek chat tab. Mounts ChatTabPanel, whose
           transcript + docked composer fill the panel instead of
           overlaying a file viewer. */}
-      {!minimized &&
-        activeTab?.type === "chat" && (
-          // Local Suspense boundary so the chat-thread fetch (cold
-          // cache: a brand-new chat tab) doesn't bubble up to the
-          // workspace route's pending component. The fallback is a
-          // visual shell that mirrors the real panel's chrome —
-          // header, empty state with saved prompts, prompt-bar
-          // shape — so the user sees the expected interface
-          // immediately and the data hydrates a frame later, no
-          // spinner.
-          <Suspense
-            fallback={
-              <ChatTabPanelShell matterColor={matterColor} tab={activeTab} />
-            }
-          >
-            <ChatTabPanel
-              matterColor={activeMatterPanelColor}
-              onClose={() => handleCloseTab(activeTab.id)}
-              onLabelContextMenu={ribbonContextMenu.openAt}
-              tab={activeTab}
-            />
-          </Suspense>
+        {!minimized &&
+          activeTab?.type === "chat" && (
+            // Local Suspense boundary so the chat-thread fetch (cold
+            // cache: a brand-new chat tab) doesn't bubble up to the
+            // workspace route's pending component. The fallback is a
+            // visual shell that mirrors the real panel's chrome —
+            // header, empty state with saved prompts, prompt-bar
+            // shape — so the user sees the expected interface
+            // immediately and the data hydrates a frame later, no
+            // spinner.
+            <Suspense
+              fallback={
+                <ChatTabPanelShell matterColor={matterColor} tab={activeTab} />
+              }
+            >
+              <ChatTabPanel
+                matterColor={activeMatterPanelColor}
+                onClose={() => handleCloseTab(activeTab.id)}
+                onLabelContextMenu={ribbonContextMenu.openAt}
+                tab={activeTab}
+              />
+            </Suspense>
+          )}
+
+        {!minimized && activeTab?.type === "external" && (
+          <ExternalReferencePanel
+            onClose={() => handleCloseTab(activeTab.id)}
+            tab={activeTab}
+            // Prefer the workspace the tab was opened from; only fall
+            // back to the current route when the tab was opened from a
+            // global chat (workspaceId === null) so the panel still
+            // resolves to *something* sensible.
+            workspaceId={activeTab.workspaceId ?? workspaceId}
+          />
         )}
 
-      {!minimized && activeTab?.type === "external" && (
-        <ExternalReferencePanel
-          onClose={() => handleCloseTab(activeTab.id)}
-          tab={activeTab}
-          // Prefer the workspace the tab was opened from; only fall
-          // back to the current route when the tab was opened from a
-          // global chat (workspaceId === null) so the panel still
-          // resolves to *something* sensible.
-          workspaceId={activeTab.workspaceId ?? workspaceId}
-        />
-      )}
-
-      {!minimized && activeTab?.type === "skill-resource" && (
-        <SkillResourcePanel
-          onClose={() => handleCloseTab(activeTab.id)}
-          tab={activeTab}
-        />
-      )}
-
-      {!minimized && activeTab?.type === "matter" && (
-        <div className="bg-background flex flex-1 flex-col overflow-hidden">
-          <InspectorTabHeader
-            label={t("workspaces.matterInfo")}
-            matter={
-              <MatterOriginLink
-                color={activeTab.color ?? null}
-                id={activeTab.workspaceId}
-                name={activeTab.label}
-                onClick={() => {
-                  detached(
-                    navigate({
-                      to: "/workspaces/$workspaceId",
-                      params: { workspaceId: activeTab.workspaceId },
-                    }),
-                    "inspector-panel.navigate",
-                  );
-                }}
-              />
-            }
-            matterColor={activeMatterPanelColor}
+        {!minimized && activeTab?.type === "skill-resource" && (
+          <SkillResourcePanel
             onClose={() => handleCloseTab(activeTab.id)}
+            tab={activeTab}
           />
-          <Suspense fallback={<MetadataPanelSkeleton />}>
-            <MatterMetadataPanel
-              onDeleted={() => handleCloseTab(activeTab.id)}
-              workspaceId={activeTab.workspaceId}
+        )}
+
+        {!minimized && activeTab?.type === "matter" && (
+          <div className="bg-background flex flex-1 flex-col overflow-hidden">
+            <InspectorTabHeader
+              label={t("workspaces.matterInfo")}
+              matter={
+                <MatterOriginLink
+                  color={activeTab.color ?? null}
+                  id={activeTab.workspaceId}
+                  name={activeTab.label}
+                  onClick={() => {
+                    detached(
+                      navigate({
+                        to: "/workspaces/$workspaceId",
+                        params: { workspaceId: activeTab.workspaceId },
+                      }),
+                      "inspector-panel.navigate",
+                    );
+                  }}
+                />
+              }
+              matterColor={activeMatterPanelColor}
+              onClose={() => handleCloseTab(activeTab.id)}
             />
-          </Suspense>
-        </div>
-      )}
+            <Suspense fallback={<MetadataPanelSkeleton />}>
+              <MatterMetadataPanel
+                onDeleted={() => handleCloseTab(activeTab.id)}
+                workspaceId={activeTab.workspaceId}
+              />
+            </Suspense>
+          </div>
+        )}
 
-      {!minimized && activeTab && isGenericInspectorTab(activeTab) && (
-        <GenericInspectorView
-          onClose={() => handleCloseTab(activeTab.id)}
-          tab={activeTab}
-        />
-      )}
+        {!minimized && activeTab && isGenericInspectorTab(activeTab) && (
+          <GenericInspectorView
+            onClose={() => handleCloseTab(activeTab.id)}
+            tab={activeTab}
+          />
+        )}
 
-      {pdfTabs.map((tab) => (
-        <CurrentFileFieldSync
-          isActive={!minimized && tab.id === activeId}
-          key={`${tab.workspaceId}:${tab.entityId}:${tab.propertyId ?? tab.id}`}
-          tab={tab}
-        />
-      ))}
-      {/* Document content — render all open document tabs, show only the active one. */}
-      {pdfTabs.map((tab) => (
-        <FileTabPanel
-          activeId={activeId}
-          canUpdateEntity={canUpdateEntity}
-          closeAll={closeAll}
-          commitRename={commitRename}
-          docxActionsRef={docxActionsRef}
-          docxCompatibilityByTab={docxCompatibilityByTab}
-          docxScrollTopByTab={docxScrollTopByTab}
-          editingDocxTabId={editingDocxTabId}
-          editingTabId={editingTabId}
-          editValue={editValue}
-          flashDocxEditButton={flashDocxEditButton}
-          flashMinimizeButton={flashMinimizeButton}
-          flashingDocxEditTabId={flashingDocxEditTabId}
-          flashingMinimizeTabId={flashingMinimizeTabId}
-          handleCloseTab={handleCloseTab}
-          handleMinimizeFromFullView={handleMinimizeFromFullView}
-          handleOpenFullView={handleOpenFullView}
-          handleResetZoom={handleResetZoom}
-          handleStartDocxEdit={handleStartDocxEdit}
-          handleWheelZoom={handleWheelZoom}
-          handleZoom={handleZoom}
-          key={tab.renderId ?? tab.id}
-          matterColor={matterColor}
-          matterOrigin={matterOrigin}
-          minimized={minimized}
-          mountedPdfIds={mountedPdfIds}
-          pdfRouteJustification={pdfRouteJustification}
-          peekPdfViewId={peekPdfViewId}
-          ribbonLabelContextMenuOpenAt={ribbonContextMenu.openAt}
-          scaleOffsets={scaleOffsets}
-          setDocxCompatibilityByTab={setDocxCompatibilityByTab}
-          setDocxScrollTopByTab={setDocxScrollTopByTab}
-          setEditingDocxTabId={setEditingDocxTabId}
-          setEditingTabId={setEditingTabId}
-          setEditValue={setEditValue}
-          setScaleOffsets={setScaleOffsets}
-          startRename={startRename}
-          tab={tab}
-        />
-      ))}
-      {ribbonContextMenu.element}
-    </div>
+        {pdfTabs.map((tab) => (
+          <CurrentFileFieldSync
+            isActive={!minimized && tab.id === activeId}
+            key={`${tab.workspaceId}:${tab.entityId}:${tab.propertyId ?? tab.id}`}
+            tab={tab}
+          />
+        ))}
+        {/* Document content — render all open document tabs, show only the active one. */}
+        {pdfTabs.map((tab) => (
+          <FileTabPanel
+            activeId={activeId}
+            canUpdateEntity={canUpdateEntity}
+            closeAll={closeAll}
+            commitRename={commitRename}
+            docxActionsRef={docxActionsRef}
+            docxCompatibilityByTab={docxCompatibilityByTab}
+            docxScrollTopByTab={docxScrollTopByTab}
+            editingDocxTabId={editingDocxTabId}
+            editingTabId={editingTabId}
+            editValue={editValue}
+            flashDocxEditButton={flashDocxEditButton}
+            flashMinimizeButton={flashMinimizeButton}
+            flashingDocxEditTabId={flashingDocxEditTabId}
+            flashingMinimizeTabId={flashingMinimizeTabId}
+            handleCloseTab={handleCloseTab}
+            handleMinimizeFromFullView={handleMinimizeFromFullView}
+            handleOpenFullView={handleOpenFullView}
+            handleResetZoom={handleResetZoom}
+            handleStartDocxEdit={handleStartDocxEdit}
+            handleWheelZoom={handleWheelZoom}
+            handleZoom={handleZoom}
+            key={tab.renderId ?? tab.id}
+            matterColor={matterColor}
+            matterOrigin={matterOrigin}
+            minimized={minimized}
+            mountedPdfIds={mountedPdfIds}
+            pdfRouteJustification={pdfRouteJustification}
+            peekPdfViewId={peekPdfViewId}
+            ribbonLabelContextMenuOpenAt={ribbonContextMenu.openAt}
+            scaleOffsets={scaleOffsets}
+            setDocxCompatibilityByTab={setDocxCompatibilityByTab}
+            setDocxScrollTopByTab={setDocxScrollTopByTab}
+            setEditingDocxTabId={setEditingDocxTabId}
+            setEditingTabId={setEditingTabId}
+            setEditValue={setEditValue}
+            setScaleOffsets={setScaleOffsets}
+            startRename={startRename}
+            tab={tab}
+          />
+        ))}
+        {ribbonContextMenu.element}
+      </div>
+    </RenderStormRegion>
   );
 };
 

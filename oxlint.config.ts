@@ -2153,6 +2153,10 @@ export default defineConfig({
               // E2E_NETWORK_BASELINE write/rewrite mode switch; e2e infra has
               // no app env module to route through.
               "apps/web/e2e/helpers/network.ts",
+              // Reads the E2E_EXPECT_DEV_ROUTES dev/production runtime
+              // switch so specs share one definition; e2e infra has no app
+              // env module to route through.
+              "apps/web/e2e/helpers/runtime-mode.ts",
               // Reads E2E_WEB_URL/E2E_API_URL (same contract as
               // helpers/api.ts) plus the MARKETING_CAPTURE and
               // MARKETING_THEME scene/theme switches; e2e infra has no app

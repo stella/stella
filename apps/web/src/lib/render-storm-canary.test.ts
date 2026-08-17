@@ -166,4 +166,66 @@ describe("createRenderStormMonitor", () => {
 
     expect(emitted).toEqual([]);
   });
+
+  it("attributes the storm window's commits to regions, highest first", () => {
+    const emitted: { regionCounts: readonly (readonly [string, number])[] }[] =
+      [];
+    const monitor = createRenderStormMonitor((details) => {
+      emitted.push(details);
+    });
+
+    let time = 0;
+    const commitsPerWindow = RENDER_STORM_THRESHOLD_COMMITS_PER_SECOND + 50;
+    for (let window = 0; window < 3; window += 1) {
+      for (let commit = 0; commit < commitsPerWindow; commit += 1) {
+        monitor.onRender("app", PHASE, 1, 1, time, time);
+        // Two regions commit in the same pass; "chat-composer" on every
+        // commit, "inspector" on every fourth, so the report must rank the
+        // composer first.
+        monitor.onRegionRender("chat-composer");
+        if (commit % 4 === 0) {
+          monitor.onRegionRender("inspector");
+        }
+        time += RENDER_STORM_WINDOW_MS / commitsPerWindow;
+      }
+      time = (window + 1) * RENDER_STORM_WINDOW_MS;
+    }
+    monitor.onRender("app", PHASE, 1, 1, time, time + 1);
+
+    // Full tuples: an implementation that records each active region once
+    // (presence without counts) would still pass a presence-only check.
+    expect(emitted.at(0)?.regionCounts).toEqual([
+      ["chat-composer", commitsPerWindow],
+      ["inspector", Math.ceil(commitsPerWindow / 4)],
+    ]);
+  });
+
+  it("resets region attribution between windows", () => {
+    const emitted: { regionCounts: readonly (readonly [string, number])[] }[] =
+      [];
+    const monitor = createRenderStormMonitor((details) => {
+      emitted.push(details);
+    });
+
+    // Window 1: quiet, but a region commits — its count must not leak into
+    // the storm report produced by later windows.
+    monitor.onRender("app", PHASE, 1, 1, 0, 0);
+    monitor.onRegionRender("stale-region");
+
+    let time = RENDER_STORM_WINDOW_MS;
+    const commitsPerWindow = RENDER_STORM_THRESHOLD_COMMITS_PER_SECOND + 50;
+    for (let window = 1; window < 4; window += 1) {
+      for (let commit = 0; commit < commitsPerWindow; commit += 1) {
+        monitor.onRender("app", PHASE, 1, 1, time, time);
+        monitor.onRegionRender("storming-region");
+        time += RENDER_STORM_WINDOW_MS / commitsPerWindow;
+      }
+      time = (window + 1) * RENDER_STORM_WINDOW_MS;
+    }
+    monitor.onRender("app", PHASE, 1, 1, time, time + 1);
+
+    expect(emitted.at(0)?.regionCounts).toEqual([
+      ["storming-region", commitsPerWindow],
+    ]);
+  });
 });

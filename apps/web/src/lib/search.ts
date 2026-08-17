@@ -243,6 +243,15 @@ type SearchPreviewParams = {
   updatedAt: string;
 };
 
+/**
+ * How long a preview body (or the recent-file identity that authorizes one)
+ * is reused before the server re-checks access. Long enough to absorb a
+ * hover burst between hits within one dialog session; short enough that an
+ * access revocation stops showing already-fetched preview content within
+ * seconds, not minutes.
+ */
+export const SEARCH_PREVIEW_ACCESS_RECHECK_MS = 30_000;
+
 export const searchPreviewOptions = ({
   organizationId,
   userId,
@@ -272,8 +281,12 @@ export const searchPreviewOptions = ({
 
       return unwrapEden(response);
     },
-    refetchOnMount: "always",
-    staleTime: 0,
+    // The key is content-addressed (query + resultId + updatedAt), so a
+    // cached preview can never show stale content for a changed document —
+    // a change rotates `updatedAt` into a new key. Caching only defers the
+    // access re-check, bounded by the shared window below, so hovering back
+    // to an already-previewed hit is a cache hit instead of a refetch.
+    staleTime: SEARCH_PREVIEW_ACCESS_RECHECK_MS,
   });
 
 type RecentFilePreviewCandidate = {
@@ -336,7 +349,10 @@ export const recentFilePreviewFieldOptions = (
 ) =>
   queryOptions({
     queryKey: searchKeys.recentFilePreviewField(params),
-    staleTime: 0,
+    // This query IS the access re-check for a recent file, so it must re-run
+    // for a fresh dialog session — but within one session it should not
+    // refire on every hover between recents.
+    staleTime: SEARCH_PREVIEW_ACCESS_RECHECK_MS,
     queryFn: async ({ signal }) => {
       const response = await api
         .entities({ workspaceId: toSafeId<"workspace">(params.workspaceId) })

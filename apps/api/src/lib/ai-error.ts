@@ -85,6 +85,9 @@ export const classifyAIError = (error: unknown): AIErrorKind => {
   if (ChatLoopDetectedError.is(error)) {
     return "loop_detected";
   }
+  if (ChatEmptyCompletionError.is(error)) {
+    return "empty_completion";
+  }
   if (isApiCallError(error)) {
     const statusCode = providerStatusCode(error);
     if (statusCode === 429) {
@@ -218,6 +221,13 @@ export const aiHandlerError = (
         status: 502,
         message:
           "The AI model repeated the same work and could not recover. Please try again with a narrower request.",
+        cause: error,
+      });
+    case "empty_completion":
+      return new HandlerError({
+        status: 502,
+        message:
+          "The AI model returned an empty reply. Please try again, or rephrase the request.",
         cause: error,
       });
     case "unknown":
