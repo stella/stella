@@ -23,7 +23,10 @@ import {
   type ResolvedTanStackTextModelInfo,
 } from "@/api/lib/tanstack-ai-models";
 import { incrementLaneCounter } from "@/api/lib/usage/lane-budget";
-import { usageUnitsFromTokens } from "@/api/lib/usage/unit-model";
+import {
+  normalizeProviderPromptTokens,
+  usageUnitsFromTokens,
+} from "@/api/lib/usage/unit-model";
 import { recordUsageEvent } from "@/api/lib/usage/usage-ledger";
 
 import { getAnalytics } from "./client";
@@ -186,10 +189,6 @@ const resolveTanStackEffectiveServiceTier = ({
     serviceTier,
   });
 
-const getUsageCacheReadTokens = (usage: {
-  promptTokensDetails?: { cachedTokens?: number | undefined } | undefined;
-}): number => usage.promptTokensDetails?.cachedTokens ?? 0;
-
 const usageServiceTierFromModelOptions = ({
   fallback,
   modelOptions,
@@ -223,18 +222,18 @@ const recordTanStackConsumption = async ({
   config,
   iteration,
   modelInfo,
-  promptTokens,
   runId,
   serviceTier,
+  uncachedInputTokens,
 }: {
   cacheReadTokens: number;
   completionTokens: number;
   config: TanStackAIAnalyticsProps;
   iteration: number;
   modelInfo: ResolvedTanStackTextModelInfo;
-  promptTokens: number;
   runId: string;
   serviceTier: UsageServiceTier;
+  uncachedInputTokens: number;
 }): Promise<void> => {
   const metering = config.usageMetering;
   if (!metering) {
@@ -248,11 +247,11 @@ const recordTanStackConsumption = async ({
   const { unitsConsumed, rawUsageMicroUnits } = usageUnitsFromTokens({
     actionType: metering.actionType,
     cacheReadTokens,
-    inputTokens: promptTokens,
     isByok: modelInfo.keySource === "byok",
     modelId: modelInfo.modelId,
     outputTokens: completionTokens,
     serviceTier: effectiveServiceTier,
+    uncachedInputTokens,
   });
 
   const lane = metering.lane ?? "pool";
@@ -499,31 +498,60 @@ export const createTanStackAIAnalyticsCallbacks = ({
           },
         });
       },
+      // Framework-hook boundary (the one place try-catch is allowed): a
+      // metering fault must never propagate into the provider stream and
+      // take the process down with it. A bug here loses one metering
+      // event and reports it; it never loses the server.
       onUsage: (ctx, usage) => {
-        const metering = config.usageMetering;
-        if (!metering) {
-          return;
-        }
+        try {
+          const metering = config.usageMetering;
+          if (!metering) {
+            return;
+          }
 
-        const resolvedModelInfo = resolveAnalyticsModelInfo();
-        if (!resolvedModelInfo) {
-          return;
-        }
+          const resolvedModelInfo = resolveAnalyticsModelInfo();
+          if (!resolvedModelInfo) {
+            return;
+          }
 
-        const consumption = recordTanStackConsumption({
-          cacheReadTokens: getUsageCacheReadTokens(usage),
-          completionTokens: usage.completionTokens,
-          config,
-          iteration: ctx.iteration,
-          modelInfo: resolvedModelInfo,
-          promptTokens: usage.promptTokens,
-          runId: ctx.runId,
-          serviceTier: usageServiceTierFromModelOptions({
-            fallback: metering.serviceTier,
-            modelOptions: ctx.modelOptions,
-          }),
-        });
-        ctx.defer(consumption);
+          const { uncachedInputTokens, cacheReadTokens } =
+            normalizeProviderPromptTokens({
+              provider: resolvedModelInfo.provider,
+              modelId: resolvedModelInfo.modelId,
+              promptTokens: usage.promptTokens,
+              cacheReadTokens: usage.promptTokensDetails?.cachedTokens ?? 0,
+              cacheWriteTokens:
+                usage.promptTokensDetails?.cacheWriteTokens ?? 0,
+            });
+          const consumption = recordTanStackConsumption({
+            cacheReadTokens,
+            completionTokens: usage.completionTokens,
+            config,
+            iteration: ctx.iteration,
+            modelInfo: resolvedModelInfo,
+            runId: ctx.runId,
+            serviceTier: usageServiceTierFromModelOptions({
+              fallback: metering.serviceTier,
+              modelOptions: ctx.modelOptions,
+            }),
+            uncachedInputTokens,
+          }).catch((error: unknown) => {
+            // A rejected deferred settles inside the stream lifecycle;
+            // capture it here so it cannot surface as an unhandled
+            // rejection there.
+            captureTelemetryError(error, {
+              organization_id: metering.organizationId,
+              source: "usage.tanstack_ai",
+              trace_id: config.traceId,
+            });
+          });
+          ctx.defer(consumption);
+        } catch (error) {
+          captureTelemetryError(error, {
+            source: "usage.tanstack_ai",
+            trace_id: config.traceId,
+          });
+        }
       },
     },
   };
