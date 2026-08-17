@@ -584,6 +584,9 @@ const buildSharedFields = (row: IndexableRow): Record<string, unknown> => {
     document_id: row.id,
     jurisdiction: row.country,
     source: row.sourceId,
+    // The docket as its own field, so an exact lookup does not have to go
+    // through `title`, where it is folded and tokenized with the court name.
+    case_number: row.caseNumber,
     court: row.court,
     language: row.language,
     citation_authority: row.citationAuthority,

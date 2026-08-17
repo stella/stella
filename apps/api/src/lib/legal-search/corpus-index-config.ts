@@ -207,17 +207,22 @@ export const DECISION_TIMESTAMP_FIELD = "decision_date_ts";
  * window this old, which is the property that matters: the field decides what
  * a date filter matches.
  *
- * It does not, on its own, make split pruning tight. A split's timestamp range
- * spans everything written into it, and the generation walk writes in
- * `(created_at, id)` order, so a split already mixes decisions from across the
- * corpus' date range; one undated row widens its low end to here. Pruning
- * tightens only for a generation whose splits are built date-contiguous, which
- * is a property of the backfill's walk order rather than of this constant.
+ * A split's timestamp range spans everything written into it, so pruning is
+ * tight only where the walk that filled the split was ordered by date. The
+ * generation walk is (see the case-law rebuild's cursor), and it puts undated
+ * decisions in their own band, at this value.
  */
 export const UNDATED_DECISION_TIMESTAMP = "1800-01-01";
 
 const FAMILY_FIELDS: Record<CorpusFamily, CorpusIndexFieldMapping[]> = {
   case_law: [
+    // The docket, exactly as the court wrote it. Raw-tokenized, so it answers
+    // an exact lookup and no free-text term reaches it; it repeats on every
+    // passage, which is what makes an exact lookup return the whole decision
+    // rather than one passage of it. Until now the number reached the index
+    // only inside `title`, where it is folded and tokenized with everything
+    // else on that line.
+    { name: "case_number", type: "text", tokenizer: "raw" },
     { name: "court", type: "text", tokenizer: "raw", fast: true },
     {
       name: "decision_date",
@@ -268,7 +273,10 @@ export const TAG_FIELD_VALUE_LIMIT = 1000;
  * by one country's court registry, not by every country's at once).
  */
 const FAMILY_TAG_FIELDS: Record<CorpusFamily, string[]> = {
-  case_law: ["jurisdiction", "document_type", "source", "court"],
+  // `language` is bounded by the languages a jurisdiction's courts publish in,
+  // which is one or a few; a jurisdiction that publishes in several is exactly
+  // where tagging it lets a language-filtered query skip splits.
+  case_law: ["jurisdiction", "document_type", "source", "court", "language"],
   legislation: ["jurisdiction", "document_type", "source", "status"],
 };
 
@@ -293,7 +301,26 @@ export const corpusIndexConfig = (
     version: CORPUS_INDEX_CONFIG_VERSION,
     index_id: indexId,
     doc_mapping: {
-      mode: "lenient",
+      // A document may only carry fields this mapping declares.
+      //
+      // What each mode does with a writer field the mapping does not have,
+      // measured against the engine: `lenient` indexes the document and drops
+      // the field, so a filter on it matches nothing, forever, with nothing to
+      // notice. `strict` drops the whole document — and not loudly: the ingest
+      // still answers 200 with the document counted as accepted, and the only
+      // direct trace is a warning in the engine's own log. The rebuild's
+      // census is what turns that into a signal, because a dropped document is
+      // a count the corpus side does not match.
+      //
+      // Losing a document the census reports beats losing a field nothing
+      // reports, but only because the writer and this mapping are checked
+      // against each other per family (see each family's projection test).
+      //
+      // Generation-scoped, like everything else here: an index already created
+      // keeps the `lenient` mapping it was made with, which is what lets the
+      // writer emit a field that generation never mapped (`decision_date_ts`
+      // against a v2 index) without losing that document.
+      mode: "strict",
       field_mappings: [...CORE_FIELDS, ...FAMILY_FIELDS[family]],
       tokenizers: CUSTOM_TOKENIZERS,
       tag_fields: FAMILY_TAG_FIELDS[family],

@@ -22,13 +22,51 @@ test("searchable text fields enable fieldnorms so BM25 scoring works", () => {
   expect(fields.get("title")?.fieldnorms).toBe(true);
 });
 
-test("jurisdiction/document_type/source/court are tag fields for split pruning", () => {
+test("case-law tag fields are the filters a query prunes splits by", () => {
   expect(caseLawIndexConfig("case_law_v1").doc_mapping.tag_fields).toEqual([
     "jurisdiction",
     "document_type",
     "source",
     "court",
+    "language",
   ]);
+});
+
+// The engine never diffs an existing index, so the mode change reaches
+// documents only through a generation created from this config. An existing
+// generation keeps `lenient`, which is what makes a writer field it does not
+// map land harmlessly there rather than failing its ingest.
+test("a newly created index maps in strict mode", () => {
+  for (const family of ["case_law", "legislation"] as const) {
+    expect(corpusIndexConfig(family, `${family}_v3_cze`).doc_mapping.mode).toBe(
+      "strict",
+    );
+  }
+});
+
+test("the docket is its own raw field, reachable only by an exact query", () => {
+  const config = caseLawIndexConfig("case_law_v3_cze");
+  const caseNumber = config.doc_mapping.field_mappings.find(
+    (field) => field.name === "case_number",
+  );
+  expect(caseNumber).toEqual({
+    name: "case_number",
+    type: "text",
+    tokenizer: "raw",
+  });
+  // Raw and not a default search field: a docket answers `case_number:"..."`,
+  // and no free-text term reaches it. It repeats across a decision's passages,
+  // which is the fan-out rule that keeps it out of the default fields.
+  expect(config.search_settings.default_search_fields).not.toContain(
+    "case_number",
+  );
+  // Case law only: legislation identifies a document by ELI.
+  expect(
+    corpusIndexConfig(
+      "legislation",
+      "legislation_v2_svk",
+    ).doc_mapping.field_mappings.some((field) => field.name === "case_number"),
+  ).toBe(false);
 });
 
 /**
