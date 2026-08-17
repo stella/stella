@@ -9,16 +9,22 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import {
   corpusContentHash,
+  corpusKeys,
   corpusMirrorColumns,
   corpusPayloadDisposition,
   EMPTY_CORPUS_CONTENT_HASHES,
   parsePersistedCorpusAst,
   parsePersistedCorpusSections,
+  planCorpusDocumentWrite,
   readCorpusPayloadOrFallback,
   readCorpusText,
+  storedCorpusWrite,
   TRIMMED_CORPUS_PAYLOAD_COLUMNS,
 } from "@/api/lib/legal-search/corpus-storage";
-import type { WriteCorpusResult } from "@/api/lib/legal-search/corpus-storage";
+import type {
+  CorpusPayload,
+  WriteCorpusResult,
+} from "@/api/lib/legal-search/corpus-storage";
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
 
 describe("corpus mirror state columns", () => {
@@ -302,5 +308,120 @@ describe("empty corpus payload hashes", () => {
         ast: EMPTY_AST,
       }),
     ).toBe("9d69e9cdfe9a15179939cc74ac6af324d03b6dc049bf4fe010971b56767bab2b");
+  });
+});
+
+describe("planCorpusDocumentWrite", () => {
+  const documentId = "0d2f4a5e-9c1b-4c62-8b1a-3f6f2f8f9e10";
+  const jurisdiction = "SVK";
+  const documentPayload: CorpusPayload = {
+    text: "Rozsudok v mene Slovenskej republiky. Súd rozhodol o veci samej.",
+    sections: [
+      {
+        index: 0,
+        type: "header",
+        title: null,
+        text: "Rozsudok v mene Slovenskej republiky.",
+      },
+    ],
+    ast: EMPTY_AST,
+  };
+  /** The write the settle path would record for `documentPayload`. */
+  const recordedWrite = (id: string, partition: string) => {
+    const contentHash = corpusContentHash(documentPayload);
+    return {
+      ...corpusKeys({ documentId: id, jurisdiction: partition, contentHash }),
+      contentHash,
+    };
+  };
+
+  test("refuses every payload shape that carries no document", () => {
+    const texts = [null, ""];
+    const sectionShapes = [null, []];
+    const astShapes = [EMPTY_AST, null];
+    for (const text of texts) {
+      for (const sections of sectionShapes) {
+        for (const ast of astShapes) {
+          expect(
+            planCorpusDocumentWrite({
+              documentId,
+              jurisdiction,
+              text,
+              sections,
+              ast,
+              stored: null,
+            }),
+          ).toEqual({
+            type: "skipped-empty",
+            written: null,
+            contentHash: corpusContentHash({ text, sections, ast }),
+          });
+        }
+      }
+    }
+  });
+
+  test("refuses re-writing the exact write the row records", () => {
+    const stored = recordedWrite(documentId, jurisdiction);
+    expect(
+      planCorpusDocumentWrite({
+        documentId,
+        jurisdiction,
+        ...documentPayload,
+        stored,
+      }),
+    ).toEqual({ type: "skipped-unchanged", written: stored });
+  });
+
+  test("writes when the payload differs from the recorded write", () => {
+    const stored = recordedWrite(documentId, jurisdiction);
+    const changed = {
+      ...documentPayload,
+      text: `${documentPayload.text} Opravené znenie.`,
+    };
+    // The fixture must express the fault: an unchanged hash would make the
+    // equality guard the thing under test trivially pass.
+    expect(corpusContentHash(changed)).not.toBe(stored.contentHash);
+
+    expect(
+      planCorpusDocumentWrite({ documentId, jurisdiction, ...changed, stored }),
+    ).toMatchObject({
+      type: "put",
+      written: { contentHash: corpusContentHash(changed) },
+    });
+  });
+
+  test("writes when the recorded write lives under another jurisdiction", () => {
+    // Same payload, same hash, different partition: the keys must move, so
+    // hash equality alone may not skip the write.
+    const stored = recordedWrite(documentId, "CZE");
+    const plan = planCorpusDocumentWrite({
+      documentId,
+      jurisdiction,
+      ...documentPayload,
+      stored,
+    });
+    expect(stored.contentHash).toBe(corpusContentHash(documentPayload));
+    expect(plan.type).toBe("put");
+  });
+
+  test("a row without all four pointer columns records no write", () => {
+    expect(
+      storedCorpusWrite({
+        textS3Key: "legal-corpus/documents/jurisdiction=SVK/x/hash/text.zst",
+        normalizedS3Key: null,
+        astS3Key: null,
+        contentHash: null,
+      }),
+    ).toBeNull();
+    const stored = recordedWrite(documentId, jurisdiction);
+    expect(
+      storedCorpusWrite({
+        textS3Key: stored.textKey,
+        normalizedS3Key: stored.sectionsKey,
+        astS3Key: stored.astKey,
+        contentHash: stored.contentHash,
+      }),
+    ).toEqual(stored);
   });
 });

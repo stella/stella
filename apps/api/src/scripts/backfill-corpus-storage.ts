@@ -56,6 +56,7 @@ import {
   corpusContentHash,
   corpusMirrorColumns,
   EMPTY_CORPUS_CONTENT_HASHES,
+  storedCorpusWrite,
   writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
 import type {
@@ -76,6 +77,9 @@ type BackfillRow = {
   sections: DecisionSection[] | null;
   documentAst: DocumentAst | EmptyAst | null;
   contentHash: string | null;
+  textS3Key: string | null;
+  normalizedS3Key: string | null;
+  astS3Key: string | null;
   updatedAtToken: TimestampCasToken;
 };
 
@@ -124,6 +128,7 @@ const backfillRow = async (row: BackfillRow): Promise<void> => {
       text: row.fulltext,
       sections: row.sections,
       ast: row.documentAst,
+      stored: storedCorpusWrite(row),
     };
     const intent = await reserveCaseLawCorpusUploadIntent({
       contentHash: corpusContentHash(payload),
@@ -204,6 +209,9 @@ while (true) {
         sections: caseLawDecisions.sections,
         documentAst: caseLawDecisions.documentAst,
         contentHash: caseLawDecisions.contentHash,
+        textS3Key: caseLawDecisions.textS3Key,
+        normalizedS3Key: caseLawDecisions.normalizedS3Key,
+        astS3Key: caseLawDecisions.astS3Key,
         updatedAtToken: timestampCasToken(caseLawDecisions.updatedAt),
       })
       .from(caseLawDecisions)

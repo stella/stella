@@ -17,7 +17,10 @@ import {
   sanitizeMetadata,
   stripDangerousChars,
 } from "@/api/lib/legal-search/corpus-sanitize";
-import { writeCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
+import {
+  storedCorpusWrite,
+  writeCorpusDocument,
+} from "@/api/lib/legal-search/corpus-storage";
 import type {
   DecisionSection,
   EmptyAst,
@@ -195,6 +198,12 @@ export const processLegislationDocument = async (
       .select({
         id: legislationDocuments.id,
         sourceHash: legislationDocuments.sourceHash,
+        // The write the row records for its corpus payload, so the corpus
+        // write below can refuse re-PUTting objects it already proved.
+        contentHash: legislationDocuments.contentHash,
+        textS3Key: legislationDocuments.textS3Key,
+        normalizedS3Key: legislationDocuments.normalizedS3Key,
+        astS3Key: legislationDocuments.astS3Key,
       })
       .from(legislationDocuments)
       .where(
@@ -268,35 +277,48 @@ export const processLegislationDocument = async (
   // decision, not an oversight.
   if (corpusStorageMode !== "off") {
     try {
-      const written = await writeCorpusDocument({
+      const outcome = await writeCorpusDocument({
         documentId: id,
         jurisdiction: input.country,
         text,
         sections,
         ast,
+        stored: existing === undefined ? null : storedCorpusWrite(existing),
       });
-      // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-      await scopedDb((tx) => {
-        // audit: skip — background corpus storage; derived state
-        return (
-          tx
-            .update(legislationDocuments)
-            .set({
-              textS3Key: written.textKey,
-              normalizedS3Key: written.sectionsKey,
-              astS3Key: written.astKey,
-              contentHash: written.contentHash,
-            })
-            // Only while the row still carries this run's sourceHash: a
-            // slower run must not overwrite a concurrent newer refresh.
-            .where(
-              and(
-                eq(legislationDocuments.id, id),
-                sql`${legislationDocuments.sourceHash} IS NOT DISTINCT FROM ${sourceHash}`,
-              ),
-            )
-        );
-      });
+      // An unchanged outcome means the row already records exactly these
+      // pointers; a written or skipped-empty outcome records the keys, or
+      // null pointers where the payload carried no document. The empty
+      // payload's hash is still recorded: the corpus indexer's missing and
+      // stale scans require a non-null content hash, so a row whose indexed
+      // document refreshed to empty must stay visible to them — with a null
+      // hash the previously indexed text would remain searchable forever.
+      if (outcome.type !== "skipped-unchanged") {
+        // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+        await scopedDb((tx) => {
+          // audit: skip — background corpus storage; derived state
+          return (
+            tx
+              .update(legislationDocuments)
+              .set({
+                textS3Key: outcome.written?.textKey ?? null,
+                normalizedS3Key: outcome.written?.sectionsKey ?? null,
+                astS3Key: outcome.written?.astKey ?? null,
+                contentHash:
+                  outcome.type === "skipped-empty"
+                    ? outcome.contentHash
+                    : outcome.written.contentHash,
+              })
+              // Only while the row still carries this run's sourceHash: a
+              // slower run must not overwrite a concurrent newer refresh.
+              .where(
+                and(
+                  eq(legislationDocuments.id, id),
+                  sql`${legislationDocuments.sourceHash} IS NOT DISTINCT FROM ${sourceHash}`,
+                ),
+              )
+          );
+        });
+      }
     } catch (error) {
       corpusWriteFailed = true;
       captureError(error, {

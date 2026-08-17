@@ -74,16 +74,17 @@ type ColumnTrimInput = {
  * Nulling the Postgres columns destroys the only other copy, so every
  * object the trim relies on must be proven present first — sections
  * included, since `sections` is nulled alongside `fulltext` and
- * `document_ast`. `writeCorpusDocument` always writes all three objects
- * (a null payload is stored as the JSON literal `null`), so a row backed
- * by object storage carries all three keys; a missing one means the row
- * was never written by the corpus writer. Keys are content-addressed,
- * which makes an existence check a sufficient verification.
+ * `document_ast`. For any payload it stores, `writeCorpusDocument` writes
+ * all three objects (a null payload field is stored as the JSON literal
+ * `null`), so a row backed by object storage carries all three keys; a
+ * missing one means the row was never written by the corpus writer. Keys
+ * are content-addressed, which makes an existence check a sufficient
+ * verification.
  *
  * Present is not the same as holding this row's document. A
- * metadata-first ingest writes all three objects before the document
- * exists, so a row can pass every existence check while object storage
- * holds nothing; and the shapes it writes are not all constants — a
+ * metadata-first ingest used to write all three objects before the
+ * document existed, so a row can pass every existence check while object
+ * storage holds nothing; and the shapes it wrote are not all constants — a
  * DocumentAst envelope with no blocks carries the decision's own
  * metadata, so no fixed hash can name it. Enumerating the empty shapes
  * therefore cannot close this: what the trim needs is the positive

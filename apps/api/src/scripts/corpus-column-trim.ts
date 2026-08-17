@@ -232,9 +232,10 @@ const trimRow = async (row: TrimRow): Promise<void> => {
       ast: row.documentAst,
     };
     // Every object whose column this run nulls has to be checked,
-    // sections included: `writeCorpusDocument` always writes a sections
-    // object, so its absence means the row is not actually backed by
-    // object storage. Where the columns hold a document, presence is not
+    // sections included: `writeCorpusDocument` writes a sections object
+    // for every payload it stores, so its absence means the row is not
+    // actually backed by object storage. Where the columns hold a document,
+    // presence is not
     // enough and the object's content is compared with the column's;
     // `Bun.deepEquals` rather than a serialization, because the columns
     // come back through jsonb with their keys reordered.

@@ -17,7 +17,10 @@ import {
   corpusKeys,
   deleteCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
-import type { WriteCorpusResult } from "@/api/lib/legal-search/corpus-storage";
+import type {
+  CorpusWriteOutcome,
+  WriteCorpusResult,
+} from "@/api/lib/legal-search/corpus-storage";
 
 const CLEANUP_RETRY_MAX_DELAY_MS = DAY_IN_MS;
 const CLEANUP_RETRY_UNIT_MS = 60 * 1000;
@@ -198,16 +201,21 @@ export type CaseLawCorpusUploadApplyResult =
   | { type: "superseded" };
 
 type WriteReservedCaseLawCorpusUploadOptions = {
+  /**
+   * Row CAS for the settled state. `written` is null when the write
+   * concluded the payload carries no document, in which case the CAS
+   * settles the mirror with null pointers instead of keys.
+   */
   apply: (args: {
     tx: Transaction;
-    written: WriteCorpusResult;
+    written: WriteCorpusResult | null;
   }) => Promise<CaseLawCorpusUploadApplyResult>;
   decisionId: SafeId<"caseLawDecision">;
   intentId: SafeId<"caseLawCorpusUploadIntent">;
   preflight: (tx: Transaction) => Promise<boolean>;
   scopedDb: ScopedDb;
   signal?: AbortSignal;
-  write: (args: { signal: AbortSignal }) => Promise<WriteCorpusResult>;
+  write: (args: { signal: AbortSignal }) => Promise<CorpusWriteOutcome>;
 };
 
 class CorpusUploadWriteError extends TaggedError("CorpusUploadWriteError")<{
@@ -293,9 +301,9 @@ export const writeReservedCaseLawCorpusUpload = async ({
         return { type: "superseded" };
       }
 
-      let written: WriteCorpusResult;
+      let writeOutcome: CorpusWriteOutcome;
       try {
-        written = await write({
+        writeOutcome = await write({
           signal: signal ?? new AbortController().signal,
         });
       } catch (error) {
@@ -304,7 +312,7 @@ export const writeReservedCaseLawCorpusUpload = async ({
           message: "Reserved corpus upload failed",
         });
       }
-      const outcome = await apply({ tx, written });
+      const outcome = await apply({ tx, written: writeOutcome.written });
       if (outcome.type === "superseded") {
         await tx
           .update(caseLawCorpusUploadIntents)

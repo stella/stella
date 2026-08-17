@@ -178,13 +178,43 @@ const backfillRow = async (
   row: BackfillRow,
 ): Promise<"written" | "skipped" | "failed"> => {
   try {
-    const result = await writeCorpusDocument({
+    // The batch snapshot can go stale while earlier rows in it write.
+    // Re-check the compare-and-set precondition first, so a row whose
+    // recording below would be refused does not pay the object PUTs.
+    const fresh = await ingestionDb((tx) =>
+      tx
+        .select({ id: caseLawDecisions.id })
+        .from(caseLawDecisions)
+        .where(
+          and(
+            eq(caseLawDecisions.id, row.id),
+            isNull(caseLawDecisions.textS3Key),
+            timestampMatchesCasToken(
+              caseLawDecisions.updatedAt,
+              row.updatedAtToken,
+            ),
+          ),
+        )
+        .limit(1),
+    );
+    if (fresh.length === 0) {
+      return "skipped";
+    }
+
+    const outcome = await writeCorpusDocument({
       documentId: row.id,
       jurisdiction: row.country,
       text: row.fulltext,
       sections: row.sections,
       ast: row.documentAst,
+      // The scan admits only rows with no recorded corpus write.
+      stored: null,
     });
+    if (outcome.type === "skipped-empty") {
+      // Nothing readable to store; null pointers already represent it.
+      return "skipped";
+    }
+    const result = outcome.written;
 
     const recorded = await ingestionDb((tx) =>
       tx
@@ -228,13 +258,42 @@ const backfillLegislationRow = async (
   row: LegislationBackfillRow,
 ): Promise<"written" | "skipped" | "failed"> => {
   try {
-    const result = await writeCorpusDocument({
+    // Same shape as the case-law pass: refuse the PUTs when the recording
+    // compare-and-set below would already refuse the row.
+    const fresh = await ingestionDb((tx) =>
+      tx
+        .select({ id: legislationDocuments.id })
+        .from(legislationDocuments)
+        .where(
+          and(
+            eq(legislationDocuments.id, row.id),
+            isNull(legislationDocuments.textS3Key),
+            timestampMatchesCasToken(
+              legislationDocuments.updatedAt,
+              row.updatedAtToken,
+            ),
+          ),
+        )
+        .limit(1),
+    );
+    if (fresh.length === 0) {
+      return "skipped";
+    }
+
+    const outcome = await writeCorpusDocument({
       documentId: row.id,
       jurisdiction: row.country,
       text: row.fulltext,
       sections: row.sections,
       ast: row.documentAst,
+      // The scan admits only rows with no recorded corpus write.
+      stored: null,
     });
+    if (outcome.type === "skipped-empty") {
+      // Nothing readable to store; null pointers already represent it.
+      return "skipped";
+    }
+    const result = outcome.written;
 
     const recorded = await ingestionDb((tx) =>
       tx

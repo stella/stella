@@ -691,7 +691,17 @@ export const storeBackfilledDocument = async ({
           ).at(0),
         ),
       scopedDb,
-      write: async ({ signal }) => await writeCorpus(payload, { signal }),
+      write: async ({ signal }) =>
+        await writeCorpus(
+          {
+            ...payload,
+            // The queue admits only rows whose corpus stores no document
+            // (`storesNoCorpusDocument`), so no recorded write can match
+            // the fetched document's payload; there is nothing to compare.
+            stored: null,
+          },
+          { signal },
+        ),
     });
     stored = outcome.type === "applied";
   }
