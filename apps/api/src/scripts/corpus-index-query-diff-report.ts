@@ -66,7 +66,7 @@ export const parseGoldenQueryFile = (
   content: string,
 ): Result<GoldenQuery[], GoldenQueryFileError> => {
   const json = Result.try({
-    try: () => JSON.parse(content) as unknown,
+    try: (): unknown => JSON.parse(content),
     catch: (cause) =>
       new GoldenQueryFileError({
         message: `query file is not valid JSON: ${cause instanceof Error ? cause.message : String(cause)}`,

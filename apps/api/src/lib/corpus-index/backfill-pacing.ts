@@ -320,23 +320,26 @@ export const createBackfillPacer = ({
     );
   };
 
+  const pauseStep = async (): Promise<void> => {
+    if (backpressure === null) {
+      panic("corpus backfill paused without backpressure configuration");
+    }
+    maybeHeartbeat();
+    // The heartbeat must keep its cadence through a pause, so the wait
+    // never exceeds either interval; resampling stays throttled to the
+    // sample interval by maybeSample itself.
+    await sleep(
+      Math.min(backpressure.config.sampleIntervalMs, heartbeatIntervalMs),
+    );
+    await maybeSample();
+  };
+
   return {
     beforeBatch: async () => {
       await maybeSample();
       while (state === BACKFILL_PACING_STATE.paused) {
-        if (backpressure === null) {
-          panic("corpus backfill paused without backpressure configuration");
-        }
-        maybeHeartbeat();
-        // The heartbeat must keep its cadence through a pause, so the wait
-        // never exceeds either interval; resampling stays throttled to the
-        // sample interval by maybeSample itself.
         // oxlint-disable-next-line no-await-in-loop -- the pause is the wait
-        await sleep(
-          Math.min(backpressure.config.sampleIntervalMs, heartbeatIntervalMs),
-        );
-        // oxlint-disable-next-line no-await-in-loop -- resample after each pause interval
-        await maybeSample();
+        await pauseStep();
       }
       maybeHeartbeat();
     },

@@ -236,7 +236,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 759,
+    "count": 763,
     "files": {
       "apps/api/scripts/ai-provider-canary-config.ts": 1,
       "apps/api/scripts/ai-provider-canary.ts": 4,
@@ -343,6 +343,7 @@
       "apps/api/src/lib/analytics/posthog.ts": 1,
       "apps/api/src/lib/auth.ts": 3,
       "apps/api/src/lib/cell-lock.ts": 1,
+      "apps/api/src/lib/corpus-index/backfill-pacing.ts": 1,
       "apps/api/src/lib/corpus-index/core.ts": 10,
       "apps/api/src/lib/deepl/client.ts": 3,
       "apps/api/src/lib/desktop-edit-session-predicates.ts": 2,
@@ -412,8 +413,9 @@
       "apps/api/src/scripts/backfill-corpus-storage.ts": 1,
       "apps/api/src/scripts/backfill-fulltext.ts": 6,
       "apps/api/src/scripts/backfill-property-roles.ts": 1,
-      "apps/api/src/scripts/build-corpus-index.ts": 1,
+      "apps/api/src/scripts/build-corpus-index.ts": 2,
       "apps/api/src/scripts/corpus-column-trim.ts": 2,
+      "apps/api/src/scripts/corpus-index-query-diff.ts": 2,
       "apps/api/src/scripts/cz-regional-repair.ts": 8,
       "apps/api/src/scripts/eu-ecj-census.ts": 3,
       "apps/api/src/scripts/eu-ecj-refetch.ts": 6,
@@ -444,7 +446,7 @@
       "apps/web/src/components/autocomplete/use-autocomplete-stream.ts": 1,
       "apps/web/src/components/chat-editor-provider.tsx": 8,
       "apps/web/src/components/chat-mention-list.tsx": 2,
-      "apps/web/src/components/chat/chat-anon-decorations-plugin.ts": 1,
+      "apps/web/src/components/chat/chat-anon-decorations-extension.ts": 1,
       "apps/web/src/components/chat/chat-thread-messages.tsx": 5,
       "apps/web/src/components/chat/tool-approval-card.tsx": 2,
       "apps/web/src/components/chat/web-search-sources.tsx": 1,
