@@ -24,7 +24,7 @@
     "yjs": "^13.6.32"
   },
   "devDependencies": {
-    "@hocuspocus/provider": "^4.5.0",
+    "@hocuspocus/provider": "^4.6.0",
     "@stll/typescript-config": "workspace:*",
     "@types/bun": "catalog:"
   },
