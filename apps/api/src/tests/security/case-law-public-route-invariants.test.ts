@@ -28,8 +28,8 @@ const CORPUS_INDEX_FACETS_FILE =
   "apps/api/src/lib/legal-search/corpus-index-facets.ts";
 const CORPUS_INDEX_PROJECTION_FILE =
   "apps/api/src/handlers/case-law/corpus-index.ts";
-const CORPUS_INDEX_PROVIDER_FILE =
-  "apps/api/src/lib/legal-search/corpus-index-provider.ts";
+const BROWSE_FACETS_CACHE_FILE =
+  "apps/api/src/lib/legal-search/browse-facets-cache.ts";
 const NON_REDISTRIBUTABLE_SOURCES_FILE =
   "apps/api/src/lib/case-law/non-redistributable-sources.ts";
 const SEARCH_DECISIONS_FILE =
@@ -57,8 +57,8 @@ const readCorpusIndexFacetsSource = async () =>
   await readSource(CORPUS_INDEX_FACETS_FILE);
 const readCorpusIndexProjectionSource = async () =>
   await readSource(CORPUS_INDEX_PROJECTION_FILE);
-const readCorpusIndexProviderSource = async () =>
-  await readSource(CORPUS_INDEX_PROVIDER_FILE);
+const readBrowseFacetsCacheSource = async () =>
+  await readSource(BROWSE_FACETS_CACHE_FILE);
 const readNonRedistributableSourcesSource = async () =>
   await readSource(NON_REDISTRIBUTABLE_SOURCES_FILE);
 const readSearchSource = async () => await readSource(SEARCH_DECISIONS_FILE);
@@ -315,10 +315,11 @@ describe("public case-law route boundary", () => {
   test("every public decision surface enforces the redistribution gate", async () => {
     const listSource = await readListSource();
     const decisionSource = await readDecisionSource();
+    const facetsHandlerSource = await readFacetsSource();
     const pgFtsFacetsSource = await readPgFtsFacetsSource();
     const corpusIndexFacetsSource = await readCorpusIndexFacetsSource();
     const corpusIndexProjectionSource = await readCorpusIndexProjectionSource();
-    const corpusIndexProviderSource = await readCorpusIndexProviderSource();
+    const browseFacetsCacheSource = await readBrowseFacetsCacheSource();
     const nonRedistributableSourcesSource =
       await readNonRedistributableSourcesSource();
     const searchSource = await readSearchSource();
@@ -338,10 +339,16 @@ describe("public case-law route boundary", () => {
     expect(nonRedistributableSourcesSource).toContain(
       "redistributableCaseLawSource",
     );
-    expect(corpusIndexProviderSource).toContain(
+    expect(nonRedistributableSourcesSource).toContain(
       "readNonRedistributableCaseLawSourceIds",
     );
-    expect(corpusIndexFacetsSource).toContain("excludedSourceIds");
+    expect(corpusIndexFacetsSource).toContain("query.excludedSourceIds");
+    // Resolved ahead of the cache, so a revocation changes the key. Behind it,
+    // the revoked source's buckets would stay public for a whole window.
+    expect(facetsHandlerSource).toContain(
+      "readNonRedistributableCaseLawSourceIds",
+    );
+    expect(browseFacetsCacheSource).toContain("excludedSourceIds");
     expect(searchSource).toContain("redistributableSourceJoin");
     expect(searchSource).toContain("redistributableCaseLawSource");
     expect(sitemapSource).toContain("redistributableCaseLawSource");

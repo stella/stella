@@ -105,6 +105,15 @@ export type LegalBrowseFacetsQuery = {
   documentFamily?: CorpusFamily | undefined;
   /** Maps from the decision's `country`; scopes every facet to it. */
   jurisdiction?: string | undefined;
+  /**
+   * Sources whose redistribution is currently revoked. Resolved by the caller
+   * on every request rather than inside a provider, because it is an input
+   * that changes the answer: a cache keyed without it would keep serving a
+   * revoked source's buckets for a whole window. Providers that re-evaluate
+   * the policy in their own query (pg-fts) need not read it; its presence in
+   * the key is what makes their cached answer expire with the policy too.
+   */
+  excludedSourceIds: readonly string[];
   /** Maximum buckets per facet. */
   limit: number;
 };

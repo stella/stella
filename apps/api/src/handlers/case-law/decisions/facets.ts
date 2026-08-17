@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
+import { readNonRedistributableCaseLawSourceIds } from "@/api/lib/case-law/non-redistributable-sources";
 import { createBrowseFacetsCache } from "@/api/lib/legal-search/browse-facets-cache";
 import { isCorpusIndexJurisdiction } from "@/api/lib/legal-search/index-naming";
 import { getLegalSearchProvider } from "@/api/lib/legal-search/provider";
@@ -40,6 +41,18 @@ export const listDecisionFacetsHandler = async ({
     return status(400, { message: "Invalid country" });
   }
 
+  // Read ahead of the cache, not inside it: source policy is an input to the
+  // answer, so a revocation has to change the cache key. Reading it behind the
+  // cache would keep a revoked source's buckets public for a whole window.
+  // Failing closed here is deliberate — no facets beats stale ones.
+  const excludedSourceIds = await readNonRedistributableCaseLawSourceIds();
+  if (Result.isError(excludedSourceIds)) {
+    logger.warn("case_law.browse_facets.unavailable", {
+      message: excludedSourceIds.error.message,
+    });
+    return EMPTY_FACETS;
+  }
+
   // The accepted code is case-insensitive, but the providers are not equally
   // so: the corpus index lowercases it into an index name while the Postgres
   // path compares it to the stored column, which is upper-case. Canonicalising
@@ -47,6 +60,7 @@ export const listDecisionFacetsHandler = async ({
   // one jurisdiction to one cache entry.
   const result = await browseFacets({
     ...(country === undefined ? {} : { jurisdiction: country.toUpperCase() }),
+    excludedSourceIds: excludedSourceIds.value,
     limit: LIMITS.caseLawFacetLimit,
   });
   if (Result.isError(result)) {

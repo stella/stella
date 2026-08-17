@@ -29,10 +29,11 @@ import { isRecord } from "@/api/lib/type-guards";
  *
  * Projection is only the first half of the redistribution gate: it keeps
  * ineligible sources out of the index, but revoking a source's redistribution
- * merely queues its documents for removal, so the caller passes the currently
+ * merely queues its documents for removal, so the query carries the currently
  * ineligible source ids and they are excluded here. That is the same posture
  * the search path takes when it re-applies the predicate while rehydrating
- * index candidates.
+ * index candidates. The caller resolves them per request, ahead of its cache,
+ * so a revocation changes the key rather than waiting out a window.
  *
  * What the index does NOT hold is also visible in these counts: a decision
  * with no canonical payload is never projected, so it is browseable in the
@@ -148,7 +149,6 @@ const parseTermsBuckets = (aggregation: unknown): FacetBucket[] | null => {
 
 export const corpusIndexBrowseFacets = async (
   query: LegalBrowseFacetsQuery,
-  excludedSourceIds: readonly string[],
 ): Promise<Result<LegalBrowseFacets, LegalBrowseFacetsError>> => {
   const generation = corpusGeneration(query.documentFamily ?? "case_law");
   // Scoped query → that jurisdiction's index; unscoped → the generation glob
@@ -159,7 +159,7 @@ export const corpusIndexBrowseFacets = async (
 
   const aggregated = await getCorpusIndexClient().aggregate({
     indexId,
-    query: browseFacetsQuery(excludedSourceIds),
+    query: browseFacetsQuery(query.excludedSourceIds),
     aggs: buildAggregations(query.limit),
   });
   if (Result.isError(aggregated)) {

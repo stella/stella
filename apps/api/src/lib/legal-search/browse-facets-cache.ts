@@ -25,7 +25,8 @@ type BrowseFacetsCacheOptions = {
    * The jurisdiction is caller-influenced (validated against a pattern, not a
    * closed list), so the key space is bounded here rather than left to grow.
    * The corpus has a handful of jurisdictions, so eviction only ever touches
-   * probing traffic.
+   * probing traffic. Source policy is not caller-influenced and changes rarely,
+   * so it adds a generation to the key space rather than a dimension.
    */
   maxEntries: number;
 };
@@ -45,10 +46,13 @@ type CacheEntry = {
  */
 const cacheKey = ({
   documentFamily,
+  excludedSourceIds,
   jurisdiction,
   limit,
 }: LegalBrowseFacetsQuery): string =>
-  `${documentFamily ?? ""}:${jurisdiction ?? ""}:${limit}`;
+  // Sorted, because the ineligible set is a set: the order it was read in
+  // must not split one source policy across two entries.
+  `${documentFamily ?? ""}:${jurisdiction ?? ""}:${limit}:${excludedSourceIds.toSorted().join(",")}`;
 
 export const createBrowseFacetsCache = ({
   load,

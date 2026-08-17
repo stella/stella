@@ -34,8 +34,8 @@ test("serves a repeat request from cache", async () => {
     return Result.ok(facets("CZE"));
   });
 
-  await browseFacets({ limit: 20 });
-  const second = await browseFacets({ limit: 20 });
+  await browseFacets({ excludedSourceIds: [], limit: 20 });
+  const second = await browseFacets({ excludedSourceIds: [], limit: 20 });
 
   expect(calls).toBe(1);
   if (Result.isError(second)) {
@@ -51,16 +51,51 @@ test("keys on every input that changes the answer", async () => {
     return Result.ok(facets(query.jurisdiction ?? "*"));
   });
 
-  await browseFacets({ limit: 20 });
-  await browseFacets({ jurisdiction: "CZE", limit: 20 });
-  const scoped = await browseFacets({ jurisdiction: "SVK", limit: 20 });
-  await browseFacets({ limit: 10 });
+  await browseFacets({ excludedSourceIds: [], limit: 20 });
+  await browseFacets({ excludedSourceIds: [], jurisdiction: "CZE", limit: 20 });
+  const scoped = await browseFacets({
+    excludedSourceIds: [],
+    jurisdiction: "SVK",
+    limit: 20,
+  });
+  await browseFacets({ excludedSourceIds: [], limit: 10 });
 
   expect(seen.length).toBe(4);
   if (Result.isError(scoped)) {
     throw scoped.error;
   }
   expect(scoped.value.country).toEqual([{ value: "SVK", count: 1 }]);
+});
+
+test("a revoked source invalidates the entry instead of waiting out its window", async () => {
+  let calls = 0;
+  const browseFacets = cacheOf(async () => {
+    calls += 1;
+    return Result.ok(facets("CZE"));
+  });
+
+  await browseFacets({ excludedSourceIds: [], limit: 20 });
+  await browseFacets({ excludedSourceIds: ["src-1"], limit: 20 });
+
+  // Source policy is an input to the answer, so it belongs in the key: a
+  // revocation that only changed the loader's behaviour would keep the
+  // revoked source's buckets public for the rest of the window.
+  expect(calls).toBe(2);
+});
+
+test("reads one source policy under either order it arrives in", async () => {
+  let calls = 0;
+  const browseFacets = cacheOf(async () => {
+    calls += 1;
+    return Result.ok(facets("CZE"));
+  });
+
+  // The ineligible set is a set; the row order it was read in is not part of
+  // the policy and must not split it across two entries.
+  await browseFacets({ excludedSourceIds: ["src-1", "src-2"], limit: 20 });
+  await browseFacets({ excludedSourceIds: ["src-2", "src-1"], limit: 20 });
+
+  expect(calls).toBe(1);
 });
 
 test("concurrent misses share one provider call", async () => {
@@ -76,9 +111,9 @@ test("concurrent misses share one provider call", async () => {
   });
 
   const inFlight = [
-    browseFacets({ limit: 20 }),
-    browseFacets({ limit: 20 }),
-    browseFacets({ limit: 20 }),
+    browseFacets({ excludedSourceIds: [], limit: 20 }),
+    browseFacets({ excludedSourceIds: [], limit: 20 }),
+    browseFacets({ excludedSourceIds: [], limit: 20 }),
   ];
   release();
   await Promise.all(inFlight);
@@ -95,8 +130,8 @@ test("a failure is not cached, so the next request retries", async () => {
       : Result.ok(facets("CZE"));
   });
 
-  const failed = await browseFacets({ limit: 20 });
-  const recovered = await browseFacets({ limit: 20 });
+  const failed = await browseFacets({ excludedSourceIds: [], limit: 20 });
+  const recovered = await browseFacets({ excludedSourceIds: [], limit: 20 });
 
   expect(Result.isError(failed)).toBe(true);
   expect(calls).toBe(2);
@@ -113,11 +148,11 @@ test("bounds the key space a caller can grow", async () => {
   // maxEntries is 3, and the entries must be filled in order, so the fourth
   // jurisdiction evicts the first: a caller probing distinct jurisdictions
   // cannot grow the map without bound.
-  await browseFacets({ jurisdiction: "cze", limit: 20 });
-  await browseFacets({ jurisdiction: "svk", limit: 20 });
-  await browseFacets({ jurisdiction: "pol", limit: 20 });
-  await browseFacets({ jurisdiction: "eu", limit: 20 });
-  await browseFacets({ jurisdiction: "cze", limit: 20 });
+  await browseFacets({ excludedSourceIds: [], jurisdiction: "cze", limit: 20 });
+  await browseFacets({ excludedSourceIds: [], jurisdiction: "svk", limit: 20 });
+  await browseFacets({ excludedSourceIds: [], jurisdiction: "pol", limit: 20 });
+  await browseFacets({ excludedSourceIds: [], jurisdiction: "eu", limit: 20 });
+  await browseFacets({ excludedSourceIds: [], jurisdiction: "cze", limit: 20 });
 
   expect(calls).toBe(5);
 });
@@ -133,8 +168,8 @@ test("expires an entry once its window closes", async () => {
     maxEntries: 3,
   });
 
-  await browseFacets({ limit: 20 });
-  await browseFacets({ limit: 20 });
+  await browseFacets({ excludedSourceIds: [], limit: 20 });
+  await browseFacets({ excludedSourceIds: [], limit: 20 });
 
   expect(calls).toBe(2);
 });
