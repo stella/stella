@@ -15708,7 +15708,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "inputEntityIds",
                   },
                 ],
-                inputOnly: [],
+                inputOnly: ["body.confirmedUnits"],
                 paginated: false,
                 destructive: false,
                 scope: "matters_write",
@@ -15737,6 +15737,20 @@ export const generatedRouteMap: RouteNode = {
                               "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                             type: "string",
                           },
+                        },
+                        confirmedUnits: {
+                          minimum: 0,
+                          anyOf: [
+                            {
+                              format: "integer",
+                              default: 0,
+                              type: "string",
+                            },
+                            {
+                              minimum: 0,
+                              type: "integer",
+                            },
+                          ],
                         },
                       },
                     },
