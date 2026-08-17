@@ -52,6 +52,10 @@ import {
 } from "@/api/lib/legal-search/corpus-index-client";
 import type { CorpusIndexCommitMode } from "@/api/lib/legal-search/corpus-index-client";
 import {
+  DECISION_TIMESTAMP_FIELD,
+  UNDATED_DECISION_TIMESTAMP,
+} from "@/api/lib/legal-search/corpus-index-config";
+import {
   isRedistributable,
   type CorpusSourceDescriptor,
 } from "@/api/lib/legal-search/corpus-source";
@@ -588,6 +592,13 @@ const buildSharedFields = (row: IndexableRow): Record<string, unknown> => {
   if (row.decisionType !== null) {
     doc["document_type"] = row.decisionType;
   }
+  // The index's timestamp field, written on every document because the engine
+  // requires it on every document: a decision the source published without a
+  // date is still indexed, standing in at the sentinel. `decision_date` and
+  // `year` stay absent for it, so display and the year facet keep telling the
+  // truth about what the court published.
+  doc[DECISION_TIMESTAMP_FIELD] =
+    row.decisionDate ?? UNDATED_DECISION_TIMESTAMP;
   if (row.decisionDate !== null) {
     doc["decision_date"] = row.decisionDate;
     doc["year"] = Number(row.decisionDate.slice(0, 4));

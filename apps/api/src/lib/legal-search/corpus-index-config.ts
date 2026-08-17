@@ -10,11 +10,11 @@ import type { CorpusFamily } from "@/api/lib/legal-search/corpus-family";
  *   (corpus index disables BM25 by default for latency).
  * - full-text fields use the custom `folded` tokenizer so a query typed
  *   without diacritics reaches text that carries them.
- * - jurisdiction / document_type / source (+ status for legislation) are
- *   `tag_fields` so queries prune irrelevant splits.
- * - date fields are fast datetime for range filtering, not the
- *   timestamp_field (dates can be null; a timestamp_field must be present
- *   on every doc).
+ * - jurisdiction / document_type / source (+ court for case law, status for
+ *   legislation) are `tag_fields` so queries prune irrelevant splits.
+ * - a family's own date field stays nullable, fast, and range-filterable, and
+ *   is never the timestamp_field. Case law carries a second, always-present
+ *   `decision_date_ts` for that role.
  */
 
 type CorpusIndexFieldType =
@@ -61,9 +61,32 @@ type CorpusIndexFieldMapping = {
   record?: "basic" | "freq" | "position";
   fieldnorms?: boolean;
   fast?: boolean;
+  /** Fast-field resolution for a datetime; coarser truncates harder. */
+  fast_precision?: "seconds" | "milliseconds" | "microseconds" | "nanoseconds";
   stored?: boolean;
   input_formats?: string[];
 };
+
+/**
+ * Split merging. The engine's default `stable_log` policy matures a split
+ * after one day, and a matured split is never merged again: a backfill that
+ * writes for longer than that leaves its early splits frozen small and
+ * numerous. That is a query-time cost, not a storage one — a cold query pays
+ * one object-store round trip per split it cannot prune, so split count
+ * multiplies cold latency for as long as the generation lives.
+ *
+ * The period is therefore set past the length of a full-corpus backfill, so
+ * splits written during one still consolidate before they mature. The rest are
+ * the engine's defaults, restated: a merge policy declared by halves is harder
+ * to reason about than one declared whole.
+ */
+const MERGE_POLICY = {
+  type: "stable_log",
+  maturation_period: "7days",
+  merge_factor: 10,
+  max_merge_factor: 12,
+  min_level_num_docs: 100_000,
+} as const;
 
 export type CorpusIndexConfig = {
   version: string;
@@ -73,7 +96,16 @@ export type CorpusIndexConfig = {
     field_mappings: CorpusIndexFieldMapping[];
     tokenizers: readonly CorpusIndexTokenizer[];
     tag_fields: string[];
+    /**
+     * Present only for a family that maps an always-present datetime. The
+     * engine stores its min/max per split and prunes on it, and it is what
+     * `start_timestamp` / `end_timestamp` search parameters address.
+     */
+    timestamp_field?: string;
     store_source: boolean;
+  };
+  indexing_settings: {
+    merge_policy: typeof MERGE_POLICY;
   };
   search_settings: {
     default_search_fields: string[];
@@ -153,6 +185,37 @@ const CORE_FIELDS: CorpusIndexFieldMapping[] = [
   },
 ];
 
+/**
+ * The timestamp field for case law, and the reason `decision_date` cannot be
+ * it: a decision whose date the source never published still has to be
+ * indexed, and the engine requires the timestamp field on every document it
+ * accepts. `decision_date` therefore stays nullable and keeps answering for
+ * display and range filters, while this field is written unconditionally,
+ * standing in for the missing date with `UNDATED_DECISION_TIMESTAMP`.
+ *
+ * Seconds precision because the source data is a calendar date. A finer fast
+ * field would spend bits encoding zeros.
+ */
+export const DECISION_TIMESTAMP_FIELD = "decision_date_ts";
+
+/**
+ * What `decision_date_ts` carries when the decision has no published date.
+ *
+ * Far enough before any decision the corpus can hold that it cannot collide
+ * with a real one, and readable as what it is in a raw document. A timestamp
+ * range query therefore never returns an undated decision unless it asks for a
+ * window this old, which is the property that matters: the field decides what
+ * a date filter matches.
+ *
+ * It does not, on its own, make split pruning tight. A split's timestamp range
+ * spans everything written into it, and the generation walk writes in
+ * `(created_at, id)` order, so a split already mixes decisions from across the
+ * corpus' date range; one undated row widens its low end to here. Pruning
+ * tightens only for a generation whose splits are built date-contiguous, which
+ * is a property of the backfill's walk order rather than of this constant.
+ */
+export const UNDATED_DECISION_TIMESTAMP = "1800-01-01";
+
 const FAMILY_FIELDS: Record<CorpusFamily, CorpusIndexFieldMapping[]> = {
   case_law: [
     { name: "court", type: "text", tokenizer: "raw", fast: true },
@@ -160,6 +223,13 @@ const FAMILY_FIELDS: Record<CorpusFamily, CorpusIndexFieldMapping[]> = {
       name: "decision_date",
       type: "datetime",
       fast: true,
+      input_formats: DATE_INPUT_FORMATS,
+    },
+    {
+      name: DECISION_TIMESTAMP_FIELD,
+      type: "datetime",
+      fast: true,
+      fast_precision: "seconds",
       input_formats: DATE_INPUT_FORMATS,
     },
     { name: "ecli", type: "text", tokenizer: "raw" },
@@ -178,36 +248,72 @@ const FAMILY_FIELDS: Record<CorpusFamily, CorpusIndexFieldMapping[]> = {
   ],
 };
 
+/**
+ * Distinct values a split may hold for a tag field before the engine stops
+ * recording that field's values in the split's metadata.
+ *
+ * Crossing it costs pruning, not correctness: a split whose tag values were
+ * dropped is opened by every query instead of only the matching ones. Silent,
+ * and visible only as latency, which is why a field joins `tag_fields` on an
+ * argument about its value domain rather than on hope. `court` per
+ * jurisdiction is the case the corpus-index config test states.
+ */
+export const TAG_FIELD_VALUE_LIMIT = 1000;
+
+/**
+ * Fields whose values a split records so a query can skip splits that cannot
+ * match. Every one of them is a filter the browse and search paths apply, and
+ * every one has a value domain bounded well under `TAG_FIELD_VALUE_LIMIT`
+ * within a single index (indexes are per jurisdiction, so `court` is bounded
+ * by one country's court registry, not by every country's at once).
+ */
 const FAMILY_TAG_FIELDS: Record<CorpusFamily, string[]> = {
-  case_law: ["jurisdiction", "document_type", "source"],
+  case_law: ["jurisdiction", "document_type", "source", "court"],
   legislation: ["jurisdiction", "document_type", "source", "status"],
 };
+
+/**
+ * The datetime every document of a family carries, or null for a family that
+ * has none. Total so a new family has to answer the question: the engine takes
+ * the timestamp field as a promise about every document, and a family whose
+ * date is nullable can only keep that promise by mapping a second field for it
+ * (see `DECISION_TIMESTAMP_FIELD`).
+ */
+const FAMILY_TIMESTAMP_FIELD = {
+  case_law: DECISION_TIMESTAMP_FIELD,
+  legislation: null,
+} as const satisfies Record<CorpusFamily, string | null>;
 
 export const corpusIndexConfig = (
   family: CorpusFamily,
   indexId: string,
-): CorpusIndexConfig => ({
-  version: CORPUS_INDEX_CONFIG_VERSION,
-  index_id: indexId,
-  doc_mapping: {
-    mode: "lenient",
-    field_mappings: [...CORE_FIELDS, ...FAMILY_FIELDS[family]],
-    tokenizers: CUSTOM_TOKENIZERS,
-    tag_fields: FAMILY_TAG_FIELDS[family],
-    store_source: false,
-  },
-  search_settings: {
-    // The rule under a passage layout: no field that repeats across a
-    // document's passages may be a default search field. One free-text term
-    // hitting such a field lets a single document answer with as many hits as
-    // it has passages and crowd everything else out of the capped scan window.
-    // `text` is the only per-passage field here, and it is per-passage
-    // *content* — each passage matches on its own words, which is the point.
-    // Everything else document-level is raw-tokenized, numeric, or (like
-    // `title`) written to one passage only.
-    default_search_fields: ["title", "text"],
-  },
-});
+): CorpusIndexConfig => {
+  const timestampField = FAMILY_TIMESTAMP_FIELD[family];
+  return {
+    version: CORPUS_INDEX_CONFIG_VERSION,
+    index_id: indexId,
+    doc_mapping: {
+      mode: "lenient",
+      field_mappings: [...CORE_FIELDS, ...FAMILY_FIELDS[family]],
+      tokenizers: CUSTOM_TOKENIZERS,
+      tag_fields: FAMILY_TAG_FIELDS[family],
+      ...(timestampField === null ? {} : { timestamp_field: timestampField }),
+      store_source: false,
+    },
+    indexing_settings: { merge_policy: MERGE_POLICY },
+    search_settings: {
+      // The rule under a passage layout: no field that repeats across a
+      // document's passages may be a default search field. One free-text term
+      // hitting such a field lets a single document answer with as many hits
+      // as it has passages and crowd everything else out of the capped scan
+      // window. `text` is the only per-passage field here, and it is
+      // per-passage *content* — each passage matches on its own words, which
+      // is the point. Everything else document-level is raw-tokenized,
+      // numeric, or (like `title`) written to one passage only.
+      default_search_fields: ["title", "text"],
+    },
+  };
+};
 
 export const caseLawIndexConfig = (indexId: string): CorpusIndexConfig =>
   corpusIndexConfig("case_law", indexId);
