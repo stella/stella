@@ -32,10 +32,17 @@ test("jurisdiction/document_type/source/court are tag fields for split pruning",
 });
 
 /**
- * The courts one jurisdiction's index can name, bounded by the court system
- * each source draws from. Deliberately upper bounds rather than observed
- * counts: the corpus grows toward its sources, and the question a tag field
- * asks is what the domain can hold, not what it holds today.
+ * The courts one jurisdiction's index may name, declared per jurisdiction
+ * against the court system its sources draw from. Upper bounds rather than
+ * observed counts: the corpus grows toward its sources, and what a tag field
+ * has to survive is what the domain can hold, not what it holds today.
+ *
+ * This is the decision, not the measurement. The other side is a court
+ * registry in a foreign jurisdiction, which nothing here can bind at compile
+ * time, so the value of the table is that the bound is written down per
+ * jurisdiction and cannot be inherited silently by the next one. Observing the
+ * live distinct-value count belongs to the generation that carries the tag,
+ * where it can be read off the index itself.
  *
  * - AUT: RIS publishes for OGH, VwGH and VfGH, 4 Oberlandesgerichte, the
  *   Landesgerichte, and the Bezirksgerichte.
