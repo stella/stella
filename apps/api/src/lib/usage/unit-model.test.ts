@@ -137,18 +137,53 @@ describe("computeRawUsageMicroUnits", () => {
     ).toBe(0);
   });
 
-  test("panics on inconsistent token counts (cache > input)", () => {
-    expect(() =>
+  test("clamps cache reads above input tokens to the fully-cached result", () => {
+    const uncached = computeRawUsageMicroUnits({
+      modelId: "gemini-2.5-flash",
+      inputTokens: 100,
+      outputTokens: 0,
+    });
+    const fullyCached = computeRawUsageMicroUnits({
+      modelId: "gemini-2.5-flash",
+      inputTokens: 100,
+      outputTokens: 0,
+      cacheReadTokens: 100,
+    });
+    // Mutation guard: the cached rate is cheaper, so the clamp target is
+    // distinguishable from both the uncached cost and zero.
+    expect(fullyCached).toBeLessThan(uncached);
+    expect(fullyCached).toBeGreaterThan(0);
+
+    // Cache reads beyond the input count clamp down to the input count
+    // instead of throwing or driving billed input negative.
+    expect(
       computeRawUsageMicroUnits({
         modelId: "gemini-2.5-flash",
         inputTokens: 100,
         outputTokens: 0,
         cacheReadTokens: 200,
       }),
-    ).toThrow("cached input tokens cannot exceed total input tokens");
+    ).toBe(fullyCached);
   });
 
-  test("rejects every token field outside the non-negative safe-integer domain", () => {
+  test("reports telemetry once when a provider count is out of domain", () => {
+    const modelId = "unit-model-test-count-anomaly";
+    computeRawUsageMicroUnits({
+      modelId,
+      inputTokens: 100,
+      outputTokens: 0,
+      cacheReadTokens: 500,
+    });
+    expect(captureErrorMock).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        source: "usage-unit-model",
+        field: "cacheReadTokens",
+      }),
+    );
+  });
+
+  test("normalizes token fields outside the non-negative safe-integer domain to zero", () => {
     const invalidCounts = [
       -1,
       0.5,
@@ -161,15 +196,26 @@ describe("computeRawUsageMicroUnits", () => {
 
     for (const field of fields) {
       for (const invalidCount of invalidCounts) {
-        expect(() =>
+        const units = computeRawUsageMicroUnits({
+          modelId: "gemini-2.5-flash",
+          inputTokens: 100,
+          outputTokens: 100,
+          cacheReadTokens: 0,
+          [field]: invalidCount,
+        });
+        // The bad field floors to zero: the call still returns a finite,
+        // safe result and matches the same input with that field set to 0,
+        // rather than aborting the metering path.
+        expect(Number.isSafeInteger(units)).toBe(true);
+        expect(units).toBe(
           computeRawUsageMicroUnits({
             modelId: "gemini-2.5-flash",
             inputTokens: 100,
             outputTokens: 100,
             cacheReadTokens: 0,
-            [field]: invalidCount,
+            [field]: 0,
           }),
-        ).toThrow("usage token counts must be non-negative safe integers");
+        );
       }
     }
   });
