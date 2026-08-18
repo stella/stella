@@ -30,6 +30,8 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
+    # Release App key lives in this environment (main and v* tags only).
+    environment: release-app
     steps:
       - name: Mint App token for the private workflows repo
         id: app-token

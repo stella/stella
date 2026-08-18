@@ -929,6 +929,8 @@ jobs:
     if: ${{ !contains(needs.resolve.outputs.release_ref, '-') }}
     permissions:
       contents: read
+    # Release App key lives in this environment (main and v* tags only).
+    environment: release-app
     steps:
       # The dispatch runs from a local composite action, so the workspace has
       # to hold the workflow's own revision rather than the release's. This
@@ -992,6 +994,7 @@ jobs:
     if: ${{ contains(needs.resolve.outputs.release_ref, '-rc.') }}
     permissions:
       contents: read
+    environment: release-app
     steps:
       # The workflow's own revision, not the release's: this job can be
       # dispatched manually against a tag cut before the composite action

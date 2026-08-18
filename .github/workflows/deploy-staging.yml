@@ -355,6 +355,8 @@ jobs:
     permissions:
       contents: read
       deployments: write
+    # Release App key lives in this environment (main and v* tags only).
+    environment: release-app
     steps:
       - name: Checkout workflow actions
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

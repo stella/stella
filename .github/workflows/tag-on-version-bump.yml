@@ -30,6 +30,8 @@ jobs:
     # through the merge-to-main review path.
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    # Release App key lives in this environment (main and v* tags only).
+    environment: release-app
     timeout-minutes: 15
     steps:
       - name: Mint App token

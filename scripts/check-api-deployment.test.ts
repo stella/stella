@@ -42,8 +42,10 @@ describe("API deployment health receipt", () => {
       new URL("../.github/workflows/publish-npm.yml", import.meta.url),
     ).text();
 
+    // Descends from the latest-pointer policy fix and adds the release job
+    // environment input.
     expect(workflow).toContain(
-      "stella/.github/.github/workflows/npm-independent-release.yml@2b8697f04b39187c934afc04f7b04ad1a18bd827 # package latest-pointer policy",
+      "stella/.github/.github/workflows/npm-independent-release.yml@48aacae31829ce15216a6b766b03a92fd2e84da3 # release job environment input",
     );
   });
 

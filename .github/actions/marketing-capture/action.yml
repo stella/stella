@@ -1,0 +1,151 @@
+name: Capture marketing screenshots
+description: Seed the app on the CI runner and either compare or rewrite the committed product screenshots
+
+# The one body behind both directions of the baselines. `check` and `update`
+# are separate jobs in marketing-screenshots.yml because only `update` may
+# declare the release-app environment, so "what CI compares" and "what CI
+# regenerates" have to meet here instead of in two drifting job bodies.
+#
+# The checkout stays with the caller: check captures the triggering ref,
+# update captures the branch it was told to regenerate.
+
+inputs:
+  mode:
+    description: check compares committed baselines; update rewrites them in the workspace
+    required: true
+  dockerhub-username:
+    description: Docker Hub username for authenticated infrastructure image pulls
+    required: false
+    default: ""
+  dockerhub-token:
+    description: Docker Hub token for authenticated infrastructure image pulls
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Validate mode
+      # Both callers gate on the mode, but only one of them can see an
+      # unrecognised value: the check job runs on anything that is not
+      # `update`, so a typo fails here instead of skipping both jobs green.
+      shell: bash
+      env:
+        MODE: ${{ inputs.mode }}
+      run: |
+        case "$MODE" in
+          check|update) ;;
+          *)
+            echo "::error::Unknown marketing screenshot mode: $MODE"
+            exit 1
+            ;;
+        esac
+
+    - name: Setup Bun
+      uses: stella/.github/actions/setup-bun-cached@2b8697f04b39187c934afc04f7b04ad1a18bd827
+
+    - name: Install dependencies
+      shell: bash
+      run: bash scripts/bun-ci-retry.sh --ignore-scripts
+      env:
+        NPM_TOKEN: ""
+
+    - name: Prepare environment
+      shell: bash
+      run: |
+        cd ./apps/api
+        cp .env.example .env
+        cd ../web
+        cp .env.example .env
+
+    - name: Start docker stack and API server
+      id: e2e-stack
+      uses: ./.github/actions/setup-e2e-stack
+      with:
+        dockerhub-username: ${{ inputs.dockerhub-username }}
+        dockerhub-token: ${{ inputs.dockerhub-token }}
+        # Document conversion backs the seeded product scenes the captures
+        # render.
+        extra-services: gotenberg
+
+    - name: Require the stack
+      # The action exits 0 with `status=rate-limited` when Docker Hub throttles
+      # the image pulls. The e2e suites accept that skip; this capture cannot: it
+      # is the only guard on assets that ship on the marketing site, so a skipped
+      # run would report success without comparing a single PNG. Every later
+      # `status == 'ready'` condition is therefore unreachable-if-false, and only
+      # the `always()` cleanup steps still test it.
+      if: steps.e2e-stack.outputs.status != 'ready'
+      shell: bash
+      env:
+        STATUS: ${{ steps.e2e-stack.outputs.status }}
+      run: |
+        echo "::error::E2E stack status is '$STATUS', not 'ready'; marketing screenshots were neither compared nor regenerated"
+        exit 1
+
+    - name: Start web dev server
+      shell: bash
+      run: |
+        cd apps/web
+        nohup bun --bun vite --port 3000 > /tmp/web.log 2>&1 &
+        echo $! > /tmp/web.pid
+
+    - name: Wait for web dev server
+      shell: bash
+      run: |
+        for i in {1..60}; do
+          if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3000 > /dev/null 2>&1; then
+            echo "Web up after ${i}s"
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "::error::Web never came up"
+        tail -200 /tmp/web.log || true
+        exit 1
+
+    - name: Install Playwright browsers
+      uses: ./.github/actions/setup-playwright
+      with:
+        dependency-mode: full
+
+    - name: Seed deterministic marketing content
+      shell: bash
+      run: bun --filter @stll/api db:seed-dev
+
+    - name: Capture marketing screenshots
+      shell: bash
+      env:
+        MODE: ${{ inputs.mode }}
+      run: |
+        # The `--update-snapshots` flag lives in the package script alone, so
+        # there is one place that knows how a baseline is rewritten.
+        if [[ "$MODE" == "update" ]]; then
+          bun --filter @stll/web test:e2e:marketing:update
+        else
+          bun --filter @stll/web test:e2e:marketing
+        fi
+
+    - name: Guard against mid-test Vite re-optimize
+      # Before the update-mode commit in the caller: a mid-session reload
+      # produces torn frames, which must never be pushed as a baseline. Also
+      # runs after a failed capture, so a reload is reported as the cause
+      # rather than as a pixel diff.
+      if: always() && steps.e2e-stack.outputs.status == 'ready'
+      shell: bash
+      run: |
+        if grep -q "optimized dependencies changed. reloading" /tmp/web.log; then
+          echo "::error::Vite re-optimized dependencies mid-session and forced a reload. Add the lazy/runtime dependency named below to optimizeDeps.include in apps/web/vite.config.ts."
+          grep -nE "new dependencies optimized|optimized dependencies changed" /tmp/web.log || true
+          exit 1
+        fi
+        echo "No mid-session dep re-optimize detected."
+
+    - name: Stop web dev server
+      if: always() && steps.e2e-stack.outputs.status == 'ready'
+      shell: bash
+      run: |
+        if [[ -f /tmp/web.pid ]]; then
+          kill "$(cat /tmp/web.pid)" || true
+          rm -f /tmp/web.pid
+        fi
