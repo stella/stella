@@ -44,6 +44,7 @@ type IndexableRow = {
   status: string;
   effectiveDate: string | null;
   versionValidFrom: string | null;
+  versionValidTo: string | null;
   citationAuthority: number;
   citationCount: number;
   textS3Key: string | null;
@@ -68,6 +69,7 @@ const SELECT_COLUMNS = {
   status: legislationDocuments.status,
   effectiveDate: legislationDocuments.effectiveDate,
   versionValidFrom: legislationDocuments.versionValidFrom,
+  versionValidTo: legislationDocuments.versionValidTo,
   citationAuthority: legislationDocuments.citationAuthority,
   citationCount: legislationDocuments.citationCount,
   textS3Key: legislationDocuments.textS3Key,
@@ -102,6 +104,16 @@ const buildDoc = (
   const dateForYear = row.effectiveDate ?? row.versionValidFrom;
   if (row.effectiveDate !== null) {
     doc["effective_date"] = row.effectiveDate;
+  }
+  // The validity window, verbatim and half-open `[from, to)`. Each bound is
+  // written only when the source published it: an absent `version_valid_to` is
+  // what marks the current consolidation, so writing a stand-in date would
+  // close a window the source left open.
+  if (row.versionValidFrom !== null) {
+    doc["version_valid_from"] = row.versionValidFrom;
+  }
+  if (row.versionValidTo !== null) {
+    doc["version_valid_to"] = row.versionValidTo;
   }
   if (dateForYear !== null) {
     doc["year"] = Number(dateForYear.slice(0, 4));

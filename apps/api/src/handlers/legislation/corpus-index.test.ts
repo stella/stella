@@ -14,6 +14,8 @@ type MakeRowOptions = {
   astS3Key?: string | null;
   documentType?: string | null;
   effectiveDate?: string | null;
+  versionValidFrom?: string | null;
+  versionValidTo?: string | null;
 };
 
 const makeRow = ({
@@ -23,6 +25,8 @@ const makeRow = ({
   astS3Key = null,
   documentType = null,
   effectiveDate = "2024-01-01",
+  versionValidFrom = "2024-02-02",
+  versionValidTo = null,
 }: MakeRowOptions) => ({
   id: toSafeId<"legislationDocument">(id),
   sourceId: toSafeId<"legislationSource">("src_1"),
@@ -33,7 +37,8 @@ const makeRow = ({
   documentType,
   status: "in_force",
   effectiveDate,
-  versionValidFrom: "2024-02-02",
+  versionValidFrom,
+  versionValidTo,
   citationAuthority: 0,
   citationCount: 0,
   textS3Key:
@@ -126,12 +131,14 @@ describe("legislation loadDocsForBatch read-failure isolation", () => {
         astS3Key: "legal-corpus/leg_full/ast.zst",
         contentHash: "hash_full",
         documentType: "zákon",
+        versionValidTo: "2025-01-01",
       }),
       makeRow({
         id: "leg_sparse",
         contentHash: "hash_sparse",
         effectiveDate: null,
         textS3Key: null,
+        versionValidFrom: null,
       }),
     ];
 
@@ -160,9 +167,68 @@ describe("legislation loadDocsForBatch read-failure isolation", () => {
       "effective_date",
       "eli",
       "status",
+      "version_valid_from",
+      "version_valid_to",
       "year",
     ]) {
       expect(emitted.has(field)).toBe(true);
+    }
+  });
+
+  test("the validity window is written verbatim, open where the source left it open", async () => {
+    const superseded = makeRow({
+      id: "leg_superseded",
+      contentHash: "hash_superseded",
+      versionValidFrom: "2020-01-01",
+      versionValidTo: "2024-07-01",
+    });
+    const current = makeRow({
+      id: "leg_current",
+      contentHash: "hash_current",
+      versionValidFrom: "2024-07-01",
+      versionValidTo: null,
+    });
+
+    const { built } = await loadDocsForBatch([superseded, current], {
+      generation: "legislation_v2",
+      fetchFulltext: async () => null,
+      readPayload: async () => ({ text: "text", ast: null }),
+    });
+
+    const docById = new Map(
+      built.map((entry) => [String(entry.row.id), entry.docs.at(0) ?? {}]),
+    );
+
+    // Half-open `[from, to)`: a superseded consolidation carries both bounds,
+    // and both reach the engine as the source published them.
+    expect(docById.get(superseded.id)?.["version_valid_from"]).toBe(
+      "2020-01-01",
+    );
+    expect(docById.get(superseded.id)?.["version_valid_to"]).toBe("2024-07-01");
+
+    // The current consolidation is open-ended, and absence is what marks it: a
+    // stand-in upper bound would make it expire on a date the source never set.
+    const currentDoc = docById.get(current.id) ?? {};
+    expect(currentDoc["version_valid_from"]).toBe("2024-07-01");
+    expect(
+      Object.keys(currentDoc).filter((name) => name.startsWith("version_")),
+    ).toEqual(["version_valid_from"]);
+
+    // The window exists to be filtered on in the engine, so both bounds have to
+    // be fast datetimes in the mapping this writer is paired with. Read off the
+    // config rather than restated, or the two halves can drift apart.
+    const mapped = new Map(
+      corpusIndexConfig(
+        "legislation",
+        "legislation_v2_svk",
+      ).doc_mapping.field_mappings.map((field) => [field.name, field]),
+    );
+    for (const name of ["version_valid_from", "version_valid_to"]) {
+      expect([name, mapped.get(name)?.type, mapped.get(name)?.fast]).toEqual([
+        name,
+        "datetime",
+        true,
+      ]);
     }
   });
 });
