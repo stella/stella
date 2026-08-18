@@ -604,7 +604,9 @@ describe("detect-e2e-changes", () => {
 
     // A job that calls a reusable workflow cannot declare an environment:
     // GitHub allows only name, uses, with, secrets, needs, if, and
-    // permissions there. Pinned so each exception stays a listed decision.
+    // permissions there. A local reusable declares it on its own job (walked
+    // below); a remote one must be handed the environment name. Pinned so
+    // each caller stays a listed decision.
     const forwardingCallers = new Set([
       "marketing-screenshots-update.yml#update",
       "publish-npm.yml#release",
@@ -633,6 +635,11 @@ describe("detect-e2e-changes", () => {
         const location = `${file}#${jobId}`;
         if (/(?:^|\n) {4}uses: /u.test(body)) {
           seenCallers.add(location);
+          if (!/(?:^|\n) {4}uses: \.\//u.test(body)) {
+            expect(`${location}: ${body}`).toContain(
+              "environment: release-app",
+            );
+          }
           continue;
         }
         expect(`${location}: ${body}`).toContain("environment: release-app");
