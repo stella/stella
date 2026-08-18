@@ -722,7 +722,6 @@ const sendMessage = createSafeRootHandler(
         editApplyMode,
         docxEditRepresentation,
         includeAllDocxEditToolsForValidation: true,
-        includeRememberToolForValidation: true,
         webSearchEnabled: validationThreadState.webSearchEnabled,
         webSearchProviders,
         externalTools: externalToolsForValidation,

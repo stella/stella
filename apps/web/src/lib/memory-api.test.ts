@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { afterEach, describe, expect, mock, test } from "bun:test";
 
 import {
+  deleteMemory,
   fetchMemoriesPage,
   fetchWorkspaceNavigationPage,
   updateMemory,
@@ -91,6 +92,21 @@ describe("memory API boundary", () => {
       body: JSON.stringify({ status: "active" }),
       credentials: "include",
       method: "PATCH",
+    });
+  });
+
+  test("permanently deletes a memory through the typed route", async () => {
+    const memoryId = "00000000-0000-0000-0000-000000000001";
+    const fetchMock = setFetch(async () => Response.json({ id: memoryId }));
+
+    const result = await deleteMemory(memoryId);
+
+    expect(String(result.id)).toBe(memoryId);
+    const [input, init] = fetchMock.mock.calls.at(0) ?? [];
+    expect(requestUrl(input).pathname).toBe(`/v1/memories/${memoryId}`);
+    expect(init).toMatchObject({
+      credentials: "include",
+      method: "DELETE",
     });
   });
 });

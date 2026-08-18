@@ -112,6 +112,13 @@ export const updateMemory = async ({ body, memoryId }: UpdateMemoryOptions) => {
   return unwrapEden(response);
 };
 
+export const deleteMemory = async (memoryId: string) => {
+  const response = await memoriesApi({
+    memoryId: toSafeId<"aiMemory">(memoryId),
+  }).delete();
+  return unwrapEden(response);
+};
+
 type FetchWorkspaceNavigationPageArgs = {
   cursor?: string | undefined;
   limit?: number | undefined;

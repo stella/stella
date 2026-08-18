@@ -106,7 +106,6 @@ const INTERNAL_SERVER_KEYS = new Set([
   "EMAIL_PROVIDER",
   "EXTENSION_ORIGIN",
   "FEATURE_AGENT_ID_JAG",
-  "FEATURE_AI_MEMORY",
   "FEATURE_CALENDAR",
   "FEATURE_CASE_LAW",
   "FEATURE_CHAT",
@@ -292,8 +291,6 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Identifying SEC EDGAR contact string. Unset disables the adapter because the SEC requires one.",
   EMAIL_PROVIDER:
     'Transactional email transport: "ses" or "smtp". Leave unset when email is not configured.',
-  FEATURE_AI_MEMORY:
-    "Enable tenant-scoped AI memory APIs, prompt retrieval, tools, and workers.",
   FEATURE_GOVERNED_WORKFLOW:
     "Enable governed work obligations, My Work, and task workflow semantics.",
   FEATURE_LEGAL_LISTS:
@@ -382,7 +379,6 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Recipient for the in-app feedback button. Unset hides the button.",
   VITE_BETA_FEATURES_ENABLED:
     "Expose Settings → Beta features without enabling any preview by default.",
-  VITE_FEATURE_AI_MEMORY: "Show tenant-scoped AI memory settings.",
   VITE_FEATURE_GOVERNED_WORKFLOW: "Show governed work obligations and My Work.",
   VITE_FEATURE_LEGAL_LISTS:
     "Show first-class legal lists and list-item task controls.",
