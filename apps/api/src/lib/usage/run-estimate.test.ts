@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { estimateDocumentRunUnits } from "./run-estimate";
+import {
+  estimateDocumentRunUnits,
+  estimatePromptRunUnits,
+} from "./run-estimate";
 
 describe("estimateDocumentRunUnits", () => {
   test("converts stored bytes and planned outputs through the model's rate", () => {
@@ -64,5 +67,21 @@ describe("estimateDocumentRunUnits", () => {
       serviceTier: "standard",
     });
     expect(estimate).toBeGreaterThanOrEqual(88);
+  });
+});
+
+describe("estimatePromptRunUnits", () => {
+  test("charges the per-call floor even with zero tokens", () => {
+    // Background floor is 1 x 1.5 standard, ceiled to 2 per call.
+    expect(
+      estimatePromptRunUnits({
+        modelId: "gpt-5.6-luna",
+        actionType: "background",
+        plannedCalls: 3,
+        inputTokensPerCall: 0,
+        outputTokensPerCall: 0,
+        serviceTier: "standard",
+      }),
+    ).toBe(6);
   });
 });

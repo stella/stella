@@ -7,14 +7,19 @@ import {
   flowRunsWorkspaceParamsSchema,
   startFlowRunBodySchema,
 } from "@/api/handlers/flows/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import {
+  assertRunSizeConfirmedForHandler,
+  createSafeHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { estimateFlowRunUnits } from "@/api/lib/flows/flow-run-estimate";
 import {
   FlowRunStartError,
   startFlowRun,
 } from "@/api/lib/flows/start-flow-run";
+import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
 
 const config = {
   description:
@@ -34,6 +39,7 @@ const startFlowRunHandler = createSafeHandler(
     session,
     body,
     user,
+    orgAIConfig,
     recordAuditEvent,
   }) {
     const organizationId = session.activeOrganizationId;
@@ -74,6 +80,30 @@ const startFlowRunHandler = createSafeHandler(
         definitionId: body.definitionId,
         triggerSource: { type: "manual", userId: user.id },
         inputEntityIds: body.inputEntityIds,
+        // Size the whole run before any row is written: every AI step's
+        // prompt is bounded by the executor's caps, so the estimate is an
+        // upper bound. Large runs need the client to restate it.
+        admit: async ({ steps }) => {
+          const stepModel = getTanStackTextModelInfoForRole(
+            "chat",
+            orgAIConfig,
+            { organizationId },
+          );
+          return await assertRunSizeConfirmedForHandler({
+            metering: { actionType: "background", modelRole: "chat" },
+            estimatedUnits: estimateFlowRunUnits({
+              modelId: stepModel.modelId,
+              steps,
+              inputEntityCount: body.inputEntityIds.length,
+            }),
+            confirmedUnits: body.confirmedUnits,
+            organizationId,
+            orgAIConfig,
+            workspaceId,
+            userId: user.id,
+            safeDb,
+          });
+        },
       }).then((result) => Result.mapError(result, toHandlerError)),
     );
 
@@ -102,6 +132,13 @@ const toHandlerError = (
         return new HandlerError({ status: 404, message: error.message });
       case "definition-disabled":
         return new HandlerError({ status: 409, message: error.message });
+      case "admission-refused":
+        // The pre-flight's own 402/428 (with its structured detail) is the
+        // response; the wrapper only carried it out of startFlowRun.
+        if (HandlerError.is(error.cause)) {
+          return error.cause;
+        }
+        return new HandlerError({ status: 500, message: error.message });
       case "enqueue-failed":
         return new HandlerError({
           status: 500,

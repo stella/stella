@@ -1048,6 +1048,7 @@
     "retry": "Proovi uuesti",
     "role": "Roll",
     "run": "Käivita",
+    "runSizeConfirmDescription": "Selle käivituse hinnanguline maht on {estimated, plural, one {# kasutusühik} other {# kasutusühikut}}; saadaval on {available, plural, one {# ühik} other {# ühikut}}. Kas alustada siiski?",
     "running": "Käib",
     "save": "Salvesta",
     "saveAndLeave": "Salvesta ja lahku",
@@ -1560,6 +1561,7 @@
         "title": "Ülevaatus on nõutav"
       },
       "selectFlow": "Vali töövoog",
+      "sizeConfirmTitle": "Mahukas töövoo käivitus",
       "start": "Alusta",
       "startFailed": "Töövoogu ei õnnestunud käivitada.",
       "started": "Töövoog käivitatud",
@@ -2035,7 +2037,6 @@
       "reviewingHint": "Suurte dokumentide puhul võib selleks kuluda mõni minut.",
       "run": "Alusta ülevaatust",
       "scoreTopics": "Vaata need teemad läbi",
-      "sizeConfirmDescription": "Selle kontrolli hinnanguline maht on {estimated, plural, one {# kasutusühik} other {# kasutusühikut}}; saadaval on {available, plural, one {# ühik} other {# ühikut}}. Kas alustada siiski?",
       "sizeConfirmStart": "Alusta kontrolli",
       "sizeConfirmTitle": "Mahukas kontroll",
       "targetDocument": "Sihtdokument",

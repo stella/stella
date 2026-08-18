@@ -70,3 +70,43 @@ export const estimateDocumentRunUnits = ({
     computeUsageUnitCost({ actionType, serviceTier, isByok: false });
   return tokenUnits + floorUnits;
 };
+
+type EstimatePromptRunUnitsInput = {
+  modelId: string;
+  actionType: UsageActionType;
+  /** Number of model calls the run will make. */
+  plannedCalls: number;
+  /** Upper bound on prompt tokens per call. */
+  inputTokensPerCall: number;
+  /** Upper bound on output tokens per call (enforced by the executor). */
+  outputTokensPerCall: number;
+  serviceTier: UsageServiceTier;
+};
+
+/**
+ * Sizing for runs whose executor bounds each call itself (prompt caps
+ * on input, an enforced output cap), so the estimate is those bounds
+ * times the call count plus a settlement floor per call.
+ */
+export const estimatePromptRunUnits = ({
+  modelId,
+  actionType,
+  plannedCalls,
+  inputTokensPerCall,
+  outputTokensPerCall,
+  serviceTier,
+}: EstimatePromptRunUnitsInput): number => {
+  const rawMicroUnits = computeRawUsageMicroUnits({
+    modelId,
+    uncachedInputTokens: inputTokensPerCall * plannedCalls,
+    outputTokens: outputTokensPerCall * plannedCalls,
+  });
+  const tokenUnits = Math.ceil(
+    (rawMicroUnits * SERVICE_TIER_MULTIPLIERS[serviceTier]) /
+      MICRO_UNITS_PER_USAGE_UNIT,
+  );
+  const floorUnits =
+    plannedCalls *
+    computeUsageUnitCost({ actionType, serviceTier, isByok: false });
+  return tokenUnits + floorUnits;
+};

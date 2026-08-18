@@ -1048,6 +1048,7 @@
     "retry": "إعادة المحاولة",
     "role": "الدور",
     "run": "تشغيل",
+    "runSizeConfirmDescription": "يُقدَّر هذا التشغيل بـ {estimated, plural, zero {# من وحدات الاستخدام} one {وحدة استخدام واحدة} two {وحدتَي استخدام} few {# وحدات استخدام} many {# وحدة استخدام} other {# وحدة استخدام}}؛ المتاح {available, plural, zero {# من الوحدات} one {وحدة واحدة} two {وحدتان} few {# وحدات} many {# وحدة} other {# وحدة}}. هل تريد بدءه على أي حال؟",
     "running": "قيد التشغيل",
     "save": "حفظ",
     "saveAndLeave": "الحفظ والمغادرة",
@@ -1560,6 +1561,7 @@
         "title": "المراجعة مطلوبة"
       },
       "selectFlow": "اختر مسار عمل",
+      "sizeConfirmTitle": "تشغيل سير عمل كبير",
       "start": "بدء",
       "startFailed": "تعذّر بدء مسار العمل.",
       "started": "تم بدء مسار العمل",
@@ -2035,7 +2037,6 @@
       "reviewingHint": "قد يستغرق ذلك بضع دقائق للمستندات الكبيرة.",
       "run": "بدء المراجعة",
       "scoreTopics": "مراجعة هذه الموضوعات",
-      "sizeConfirmDescription": "تُقدَّر هذه المراجعة بـ {estimated, plural, zero {# من وحدات الاستخدام} one {وحدة استخدام واحدة} two {وحدتَي استخدام} few {# وحدات استخدام} many {# وحدة استخدام} other {# وحدة استخدام}}؛ المتاح {available, plural, zero {# من الوحدات} one {وحدة واحدة} two {وحدتان} few {# وحدات} many {# وحدة} other {# وحدة}}. هل تريد بدءها على أي حال؟",
       "sizeConfirmStart": "بدء المراجعة",
       "sizeConfirmTitle": "مراجعة كبيرة",
       "targetDocument": "المستند المستهدف",

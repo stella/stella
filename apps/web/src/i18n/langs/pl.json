@@ -1048,6 +1048,7 @@
     "retry": "Spróbuj ponownie",
     "role": "Rola",
     "run": "Uruchom",
+    "runSizeConfirmDescription": "Szacowany rozmiar tego uruchomienia to {estimated, plural, one {# jednostka użycia} few {# jednostki użycia} many {# jednostek użycia} other {# jednostki użycia}}; {available, plural, one {dostępna jest # jednostka} few {dostępne są # jednostki} many {dostępnych jest # jednostek} other {dostępne jest # jednostki}}. Mimo to rozpocząć?",
     "running": "W toku",
     "save": "Zapisz",
     "saveAndLeave": "Zapisz i wyjdź",
@@ -1560,6 +1561,7 @@
         "title": "Wymagany przegląd"
       },
       "selectFlow": "Wybierz przepływ pracy",
+      "sizeConfirmTitle": "Obszerne uruchomienie przepływu",
       "start": "Rozpocznij",
       "startFailed": "Nie udało się uruchomić przepływu pracy.",
       "started": "Uruchomiono przepływ pracy",
@@ -2035,7 +2037,6 @@
       "reviewingHint": "W przypadku obszernych dokumentów może to potrwać kilka minut.",
       "run": "Rozpocznij weryfikację",
       "scoreTopics": "Sprawdź te tematy",
-      "sizeConfirmDescription": "Szacowany rozmiar tej weryfikacji to {estimated, plural, one {# jednostka użycia} few {# jednostki użycia} many {# jednostek użycia} other {# jednostki użycia}}; {available, plural, one {dostępna jest # jednostka} few {dostępne są # jednostki} many {dostępnych jest # jednostek} other {dostępne jest # jednostki}}. Mimo to rozpocząć?",
       "sizeConfirmStart": "Rozpocznij weryfikację",
       "sizeConfirmTitle": "Obszerna weryfikacja",
       "targetDocument": "Dokument docelowy",

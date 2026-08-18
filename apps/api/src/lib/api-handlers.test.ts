@@ -439,6 +439,18 @@ describe("assertRunSizeConfirmedForHandler", () => {
     }
   });
 
+  test("a zero estimate never touches the ledger", async () => {
+    await withInstanceEnforcement(async () => {
+      const outcome = await assertRunSizeConfirmedForHandler({
+        ...baseInput,
+        estimatedUnits: 0,
+        confirmedUnits: undefined,
+        safeDb: untouchableDb,
+      });
+      expect(outcome).toBeNull();
+    });
+  });
+
   test("no-op for BYOK settlements", async () => {
     await withInstanceEnforcement(async () => {
       const byokConfig: OrgAIConfig = {

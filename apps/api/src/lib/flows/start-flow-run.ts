@@ -4,6 +4,7 @@ import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { flowRuns, flowRunSteps } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { enqueueFlowStep } from "@/api/lib/flows/flow-run-queue";
 import type {
   FlowDefinitionSnapshot,
@@ -27,7 +28,11 @@ import type {
  */
 export class FlowRunStartError extends TaggedError("FlowRunStartError")<{
   message: string;
-  reason: "definition-not-found" | "definition-disabled" | "enqueue-failed";
+  reason:
+    | "definition-not-found"
+    | "definition-disabled"
+    | "admission-refused"
+    | "enqueue-failed";
   cause?: unknown;
 }> {}
 
@@ -44,6 +49,15 @@ export type StartFlowRunOptions = {
    * `ai` step with `includeDocuments` sees populated `extractedContent`.
    */
   enqueueDelayMs?: number;
+  /**
+   * Runs once the definition is loaded and before any row is written.
+   * Returning an error refuses the start with `admission-refused` and the
+   * returned error as its cause; the manual entry point uses this for the
+   * whole-run usage pre-flight, which needs the definition's steps.
+   */
+  admit?: (definition: {
+    steps: FlowStep[];
+  }) => Promise<HandlerError<402 | 428 | 500> | null>;
 };
 
 export type StartFlowRunResult = {
@@ -120,6 +134,7 @@ export const startFlowRun = async ({
   triggerSource,
   inputEntityIds,
   enqueueDelayMs,
+  admit,
 }: StartFlowRunOptions): Promise<
   Result<StartFlowRunResult, FlowRunStartError | SafeDbError>
 > =>
@@ -150,6 +165,19 @@ export const startFlowRun = async ({
           message: "This flow is disabled and cannot be run.",
         }),
       );
+    }
+
+    if (admit) {
+      const refusal = await admit({ steps: definition.steps });
+      if (refusal) {
+        return Result.err(
+          new FlowRunStartError({
+            reason: "admission-refused",
+            message: refusal.message,
+            cause: refusal,
+          }),
+        );
+      }
     }
 
     const runId = createSafeId<"flowRun">();

@@ -9,6 +9,7 @@ import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { flowRuns, flowRunSteps } from "@/api/db/schema";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
+import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditExecutionContext } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -28,6 +29,7 @@ import {
   resolveReviewGateTransition,
 } from "@/api/lib/flows/flow-run-transitions";
 import {
+  FLOW_AI_STEP_MAX_OUTPUT_TOKENS,
   FLOW_DOCUMENT_CONTEXT_CHAR_CAP,
   FLOW_STEP_OUTPUT_CONTEXT_CHAR_CAP,
   MAX_FLOW_STEPS,
@@ -40,7 +42,7 @@ import type {
   FlowTriggerSource,
 } from "@/api/lib/flows/flow-types";
 import { logger } from "@/api/lib/observability/logger";
-import { createRootScopedDb } from "@/api/lib/root-scoped-db";
+import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
 import {
   brandPersistedFlowRunId,
   brandPersistedUserId,
@@ -149,7 +151,13 @@ export const executeFlowStep = async (
         stepIndex,
         run,
         organizationId: scope.organizationId,
+        actorUserId,
         scopedDb,
+        safeDb: createRootSafeDb({
+          organizationId: scope.organizationId,
+          userId: actorUserId,
+          workspaceIds: [run.workspaceId],
+        }),
         signal,
       });
       await completeStepAndAdvance({
@@ -277,7 +285,9 @@ type RunAiStepArgs = {
   stepIndex: number;
   run: LoadedRun;
   organizationId: SafeId<"organization">;
+  actorUserId: SafeId<"user">;
   scopedDb: ReturnType<typeof createRootScopedDb>;
+  safeDb: SafeDb;
   signal: AbortSignal;
 };
 
@@ -289,7 +299,9 @@ const runAiStep = async ({
   stepIndex,
   run,
   organizationId,
+  actorUserId,
   scopedDb,
+  safeDb,
   signal,
 }: RunAiStepArgs): Promise<FlowStepOutput> => {
   const priorOutputs = await scopedDb(
@@ -306,6 +318,28 @@ const runAiStep = async ({
   });
 
   const orgAIConfig = await loadOrgAIConfig(organizationId);
+  // Every step settles against the organization's usage as it runs; the
+  // initiator pre-flighted the whole run's estimate under the same action
+  // type before enqueueing it.
+  const analytics = createTanStackAIAnalyticsCallbacks({
+    feature: "flows.ai-step",
+    modelRole: "chat",
+    orgAIConfig,
+    properties: {
+      organization_id: organizationId,
+      workspace_id: run.workspaceId,
+      step_index: stepIndex,
+    },
+    traceId: Bun.randomUUIDv7(),
+    usageMetering: {
+      actionType: "background",
+      organizationId,
+      safeDb,
+      serviceTier: "standard",
+      userId: actorUserId,
+      workspaceId: run.workspaceId,
+    },
+  });
 
   // `generateTanStackTextForRole` throws on provider/config failure; that is
   // exactly the retry signal the worker wants, so we let it propagate. Works
@@ -316,8 +350,12 @@ const runAiStep = async ({
     organizationId,
     tenantWorkspaceIds: [run.workspaceId],
     orgAIConfig,
+    analytics,
     system: FLOW_AI_SYSTEM_PROMPT,
     prompt,
+    // Enforced, not advisory: the initiator's estimate assumes this per
+    // step, so the run cannot settle above what it was admitted for.
+    maxOutputTokens: FLOW_AI_STEP_MAX_OUTPUT_TOKENS,
     caching: resolveCaching({
       promptCachingEnabled: false,
       role: "chat",

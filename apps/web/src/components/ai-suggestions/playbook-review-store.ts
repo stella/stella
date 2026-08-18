@@ -24,6 +24,8 @@ import {
 import { fetchDocumentReviewRuns } from "@/components/ai-suggestions/document-review-queries";
 import type { DocumentReviewFindingRow } from "@/components/ai-suggestions/document-review-queries";
 import { resolveRunConflictAttachment } from "@/components/ai-suggestions/document-review-run.logic";
+import { runSizeConfirmationDetail } from "@/components/usage/run-size-confirmation";
+import type { RunSizeConfirmationDetail } from "@/components/usage/run-size-confirmation";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
@@ -36,7 +38,6 @@ const RUN_CREATE_TIMEOUT_MS = 30_000;
  *  flight. A second run would spend twice and race the first to the same
  *  findings, so the client attaches to the active one instead. */
 const RUN_ALREADY_ACTIVE_STATUS = 409;
-const RUN_CONFIRMATION_STATUS = 428;
 
 export const SEVERITY_ORDER = ["blocker", "high", "medium", "low"] as const;
 
@@ -195,40 +196,9 @@ type ReviewRequestError = Parameters<typeof toAPIError>[0];
 const isRunAlreadyActive = (error: ReviewRequestError): boolean =>
   toAPIError(error).status === RUN_ALREADY_ACTIVE_STATUS;
 
-export type RunSizeConfirmation = {
-  estimatedUnits: number;
-  availableUnits: number;
+export type RunSizeConfirmation = RunSizeConfirmationDetail & {
   /** The refused request, replayed verbatim once the reviewer confirms. */
   args: StartRunArgs;
-};
-
-/** The 428 answer to a run whose estimated size needs an explicit
- *  go-ahead; the body carries the estimate for the dialog. */
-const runSizeConfirmationDetail = (
-  error: ReviewRequestError,
-): Pick<RunSizeConfirmation, "estimatedUnits" | "availableUnits"> | null => {
-  const apiError = toAPIError(error);
-  if (apiError.status !== RUN_CONFIRMATION_STATUS) {
-    return null;
-  }
-  const confirmation = apiError.details?.["confirmation"];
-  if (typeof confirmation !== "object" || confirmation === null) {
-    return null;
-  }
-  if (
-    !("estimatedUnits" in confirmation) ||
-    !("availableUnits" in confirmation)
-  ) {
-    return null;
-  }
-  const { estimatedUnits, availableUnits } = confirmation;
-  if (
-    typeof estimatedUnits !== "number" ||
-    typeof availableUnits !== "number"
-  ) {
-    return null;
-  }
-  return { estimatedUnits, availableUnits };
 };
 
 export const reviewSessionKey = (

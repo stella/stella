@@ -38,15 +38,6 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/components/combobox";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@stll/ui/components/dialog";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Input } from "@stll/ui/components/input";
 import {
@@ -116,7 +107,6 @@ import type {
   ReviewTopic,
   ReviewFindingFix,
   ReviewFixState,
-  RunSizeConfirmation,
   StartReviewResult,
 } from "@/components/ai-suggestions/playbook-review-store";
 import { DocumentIcon } from "@/components/document-icon";
@@ -133,6 +123,7 @@ import type { ReviewResultItem } from "@/components/inspector/playbook-review-re
 import type { OverallRisk } from "@/components/inspector/playbook-risk-rollup";
 import { computeRiskRollup } from "@/components/inspector/playbook-risk-rollup";
 import Tooltip from "@/components/tooltip";
+import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
 import { getWordEditAuthorName } from "@/features/chat/hooks/use-chat-user-context";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -511,7 +502,9 @@ export const PlaybookFacet = ({
   // run panel may be showing.
   const sizeConfirmDialog = (
     <RunSizeConfirmDialog
-      confirmation={session?.sizeConfirmation ?? null}
+      confirmLabel={t("inspector.review.sizeConfirmStart")}
+      detail={session?.sizeConfirmation ?? null}
+      title={t("inspector.review.sizeConfirmTitle")}
       onConfirm={() => {
         detached(
           (async () => {
@@ -583,52 +576,6 @@ export const PlaybookFacet = ({
         }}
       />
     </>
-  );
-};
-
-type RunSizeConfirmDialogProps = {
-  confirmation: RunSizeConfirmation | null;
-  onConfirm: () => void;
-  onDismiss: () => void;
-};
-
-/** Asks the reviewer to restate a large run's estimated size before it
- *  starts; closing without confirming abandons the parked request. */
-const RunSizeConfirmDialog = ({
-  confirmation,
-  onConfirm,
-  onDismiss,
-}: RunSizeConfirmDialogProps) => {
-  const t = useTranslations();
-  return (
-    <Dialog
-      open={confirmation !== null}
-      onOpenChange={(open) => {
-        if (!open) {
-          onDismiss();
-        }
-      }}
-    >
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{t("inspector.review.sizeConfirmTitle")}</DialogTitle>
-          <DialogDescription>
-            {t("inspector.review.sizeConfirmDescription", {
-              estimated: confirmation?.estimatedUnits ?? 0,
-              available: confirmation?.availableUnits ?? 0,
-            })}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <DialogClose render={<Button variant="ghost" />}>
-            {t("common.cancel")}
-          </DialogClose>
-          <Button onClick={onConfirm}>
-            {t("inspector.review.sizeConfirmStart")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 };
 
