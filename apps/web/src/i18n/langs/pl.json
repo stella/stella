@@ -1204,10 +1204,12 @@
       "dialogTitle": "Wyodrębnij z pełnomocnictwa",
       "extractOption": "Wyodrębnij z pełnomocnictwa (.docx)",
       "fileHint": "Stella odczytuje dokument i automatycznie odnajduje mocodawcę (osobę udzielającą pełnomocnictwa, nie prawnika). Przed potwierdzeniem sprawdź wynik.",
+      "fileTooLarge": "Plik pełnomocnictwa nie może przekraczać 50 MB.",
       "invalidFileType": "Wybierz plik .docx.",
       "manualEntryOption": "Wypełnij ręcznie",
       "noOutorganteFound": "Nie udało się zidentyfikować żadnego mocodawcy w tym dokumencie.",
-      "parseErrorGeneric": "Nie udało się wyodrębnić kontaktów z tego dokumentu."
+      "parseErrorGeneric": "Nie udało się wyodrębnić kontaktów z tego dokumentu.",
+      "sourceTruncated": "Przeanalizowano tylko pierwszą część tego długiego dokumentu. Dokładnie sprawdź wyodrębnione kontakty."
     },
     "fields": {
       "bankAccountBankName": "Nazwa banku",
@@ -1241,9 +1243,9 @@
       "dialogDescription": "Prześlij plik .txt z jednym klientem na blok (oddzielone pustą linią), aby utworzyć wiele kontaktów naraz.",
       "dialogTitle": "Importuj kontakty",
       "errors": {
-        "duplicateTaxIdInFile": "Zduplikowany NIP w tym pliku (pierwszy raz w wierszu {line})",
+        "duplicateTaxIdInFile": "Zduplikowany CPF/CNPJ w tym pliku (pierwszy raz w wierszu {line})",
         "invalidEmailFormat": "Nieprawidłowy adres e-mail",
-        "invalidTaxIdLength": "Nieprawidłowy NIP (musi mieć 11 lub 14 cyfr)",
+        "invalidTaxIdLength": "Nieprawidłowy CPF/CNPJ (musi mieć 11 lub 14 cyfr)",
         "recommendedMissing": "Zalecane pole jest puste",
         "unrecognizedLabel": "Nierozpoznana etykieta: {label}"
       },
@@ -1255,12 +1257,19 @@
         "uniaoEstavel": "Związek partnerski"
       },
       "fileHint": "Każdy klient to blok linii „Etykieta: wartość” oddzielony pustą linią.",
+      "fileTooLarge": "Plik .txt nie może przekraczać 1 MB.",
+      "invalidFileType": "Wybierz plik .txt zawierający zwykły tekst.",
+      "mappingDescription": "Etykiety w brazylijskiej odmianie portugalskiego są dopasowywane automatycznie. Przypisz etykiety, których stella nie rozpoznaje.",
+      "mappingIgnore": "Ignoruj tę etykietę",
+      "mappingPlaceholder": "Wybierz pole kontaktu",
+      "mappingTitle": "Przypisz etykiety pliku",
       "parseErrorGeneric": "W tym pliku nie znaleziono żadnych bloków klientów.",
-      "previewSummary": "{valid} gotowych, {invalid} z błędami",
-      "resultsSummary": "{created} utworzono, {skipped} pominięto",
+      "previewSummary": "{valid, plural, one {# gotowy} few {# gotowe} many {# gotowych} other {# gotowego}}, {invalid, plural, one {# z błędem} few {# z błędami} many {# z błędami} other {# z błędem}}",
+      "resultsSummary": "{created, plural, one {# utworzony} few {# utworzone} many {# utworzonych} other {# utworzonego}}, {skipped, plural, one {# pominięty} few {# pominięte} many {# pominiętych} other {# pominiętego}}",
       "rowLabel": "Klient {index}",
-      "skippedDuplicateTaxId": "Pominięto: zduplikowany NIP",
-      "skippedInvalidTaxId": "Pominięto: nieprawidłowy NIP",
+      "skippedDuplicateContactId": "Pominięto: zduplikowany identyfikator kontaktu",
+      "skippedDuplicateTaxId": "Pominięto: zduplikowany CPF/CNPJ",
+      "skippedInvalidTaxId": "Pominięto: nieprawidłowy CPF/CNPJ",
       "skippedLimitReached": "Pominięto: osiągnięto limit kontaktów"
     },
     "mattersAsClient": "Sprawy jako klient",

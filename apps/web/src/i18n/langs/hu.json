@@ -1204,10 +1204,12 @@
       "dialogTitle": "Kinyerés meghatalmazásból",
       "extractOption": "Kinyerés meghatalmazásból (.docx)",
       "fileHint": "A Stella beolvassa a dokumentumot, és automatikusan megkeresi a meghatalmazót (aki a meghatalmazást adja, nem az ügyvédet). Megerősítés előtt ellenőrizze az eredményt.",
+      "fileTooLarge": "A meghatalmazás fájlja legfeljebb 50 MB lehet.",
       "invalidFileType": "Válasszon egy .docx fájlt.",
       "manualEntryOption": "Kézi kitöltés",
       "noOutorganteFound": "Ebben a dokumentumban nem sikerült meghatalmazót azonosítani.",
-      "parseErrorGeneric": "Ebből a dokumentumból nem sikerült kapcsolatokat kinyerni."
+      "parseErrorGeneric": "Ebből a dokumentumból nem sikerült kapcsolatokat kinyerni.",
+      "sourceTruncated": "Ennek a hosszú dokumentumnak csak az első részét elemeztük. Gondosan ellenőrizze a kinyert névjegyeket."
     },
     "fields": {
       "bankAccountBankName": "Bank neve",
@@ -1255,10 +1257,17 @@
         "uniaoEstavel": "Bejegyzett élettársi kapcsolat"
       },
       "fileHint": "Minden ügyfél „Címke: érték” sorokból álló blokk, üres sorral elválasztva.",
+      "fileTooLarge": "A .txt fájl legfeljebb 1 MB lehet.",
+      "invalidFileType": "Válasszon egyszerű szöveges .txt fájlt.",
+      "mappingDescription": "A brazil portugál címkéket automatikusan párosítjuk. Rendelje hozzá a stella által fel nem ismert címkéket.",
+      "mappingIgnore": "Címke figyelmen kívül hagyása",
+      "mappingPlaceholder": "Válasszon névjegymezőt",
+      "mappingTitle": "Fájlcímkék párosítása",
       "parseErrorGeneric": "Ebben a fájlban nem található ügyfélblokk.",
-      "previewSummary": "{valid} kész, {invalid} hibás",
-      "resultsSummary": "{created} létrehozva, {skipped} kihagyva",
+      "previewSummary": "{valid, plural, one {# kész} other {# kész}}, {invalid, plural, one {# hibás} other {# hibás}}",
+      "resultsSummary": "{created, plural, one {# létrehozva} other {# létrehozva}}, {skipped, plural, one {# kihagyva} other {# kihagyva}}",
       "rowLabel": "Ügyfél {index}",
+      "skippedDuplicateContactId": "Kihagyva: ismétlődő névjegyazonosító",
       "skippedDuplicateTaxId": "Kihagyva: duplikált adóazonosító",
       "skippedInvalidTaxId": "Kihagyva: érvénytelen adóazonosító",
       "skippedLimitReached": "Kihagyva: elérte a kapcsolatlimitet"

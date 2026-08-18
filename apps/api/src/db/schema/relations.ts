@@ -41,6 +41,8 @@ import {
 import { defineRelations, user } from "./common";
 import {
   auditLogs,
+  contactExtractionUploads,
+  contactImportRequests,
   contactRelationships,
   contacts,
   infoSoudTrackedCases,
@@ -125,6 +127,8 @@ export const relations = defineRelations(
     styleSets,
     user,
     contacts,
+    contactExtractionUploads,
+    contactImportRequests,
     contactRelationships,
     workspaces,
     workspaceMembers,

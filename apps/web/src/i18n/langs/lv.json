@@ -1204,10 +1204,12 @@
       "dialogTitle": "Iegūt no pilnvaras",
       "extractOption": "Iegūt no pilnvaras (.docx)",
       "fileHint": "Stella izlasa dokumentu un automātiski atrod pilnvaras devēju (personu, kas piešķir pilnvaru, nevis juristu). Pirms apstiprināšanas pārbaudiet rezultātu.",
+      "fileTooLarge": "Pilnvaras failam jābūt ne lielākam par 50 MB.",
       "invalidFileType": "Lūdzu, izvēlieties .docx failu.",
       "manualEntryOption": "Aizpildīt manuāli",
       "noOutorganteFound": "Šajā dokumentā neizdevās identificēt nevienu pilnvaras devēju.",
-      "parseErrorGeneric": "No šī dokumenta neizdevās iegūt kontaktus."
+      "parseErrorGeneric": "No šī dokumenta neizdevās iegūt kontaktus.",
+      "sourceTruncated": "Tika analizēta tikai šī garā dokumenta pirmā daļa. Rūpīgi pārbaudiet izgūtos kontaktus."
     },
     "fields": {
       "bankAccountBankName": "Bankas nosaukums",
@@ -1255,10 +1257,17 @@
         "uniaoEstavel": "Reģistrētas partnerattiecības"
       },
       "fileHint": "Katrs klients ir rindu „Etiķete: vērtība” bloks, kas atdalīts ar tukšu rindu.",
+      "fileTooLarge": ".txt failam jābūt ne lielākam par 1 MB.",
+      "invalidFileType": "Izvēlieties vienkārša teksta .txt failu.",
+      "mappingDescription": "Brazīlijas portugāļu etiķetes tiek sasaistītas automātiski. Sasaistiet etiķetes, kuras stella neatpazīst.",
+      "mappingIgnore": "Ignorēt šo etiķeti",
+      "mappingPlaceholder": "Izvēlieties kontakta lauku",
+      "mappingTitle": "Sasaistīt faila etiķetes",
       "parseErrorGeneric": "Šajā failā netika atrasts neviens klienta bloks.",
-      "previewSummary": "{valid} gatavi, {invalid} ar kļūdām",
-      "resultsSummary": "{created} izveidoti, {skipped} izlaisti",
+      "previewSummary": "{valid, plural, zero {# gatavu} one {# gatavs} other {# gatavi}}, {invalid, plural, zero {# ar kļūdām} one {# ar kļūdu} other {# ar kļūdām}}",
+      "resultsSummary": "{created, plural, zero {# izveidotu} one {# izveidots} other {# izveidoti}}, {skipped, plural, zero {# izlaistu} one {# izlaists} other {# izlaisti}}",
       "rowLabel": "Klients {index}",
+      "skippedDuplicateContactId": "Izlaists: dublēts kontakta ID",
       "skippedDuplicateTaxId": "Izlaists: dublēts nodokļu maksātāja numurs",
       "skippedInvalidTaxId": "Izlaists: nederīgs nodokļu maksātāja numurs",
       "skippedLimitReached": "Izlaists: sasniegts kontaktu limits"

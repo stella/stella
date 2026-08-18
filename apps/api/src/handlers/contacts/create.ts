@@ -14,6 +14,7 @@ import {
   contactMetadataSchema,
   contactPhoneSchema,
 } from "@/api/db/schema-validators";
+import { lockContactCapacity } from "@/api/handlers/contacts/contact-capacity";
 import { normalizeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
 import { createContactTypeSchema } from "@/api/handlers/contacts/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -186,6 +187,8 @@ export const createContactHandler = async function* ({
 }: CreateContactHandlerProps) {
   const outcome = yield* Result.await(
     safeDb(async (tx): Promise<CreateContactOutcome> => {
+      await lockContactCapacity(tx, organizationId);
+
       const { wouldExceed } = await checkContactsCountLimit(
         tx,
         organizationId,

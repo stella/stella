@@ -1204,10 +1204,12 @@
       "dialogTitle": "Aus Vollmacht extrahieren",
       "extractOption": "Aus Vollmacht extrahieren (.docx)",
       "fileHint": "Stella liest das Dokument und findet automatisch den/die Vollmachtgeber (nicht den Anwalt). Prüfen Sie das Ergebnis, bevor Sie bestätigen.",
+      "fileTooLarge": "Die Vollmachtsdatei darf höchstens 50 MB groß sein.",
       "invalidFileType": "Bitte wählen Sie eine .docx-Datei aus.",
       "manualEntryOption": "Manuell eingeben",
       "noOutorganteFound": "In diesem Dokument konnte kein Vollmachtgeber erkannt werden.",
-      "parseErrorGeneric": "Aus diesem Dokument konnten keine Kontakte extrahiert werden."
+      "parseErrorGeneric": "Aus diesem Dokument konnten keine Kontakte extrahiert werden.",
+      "sourceTruncated": "Nur der erste Teil dieses langen Dokuments wurde analysiert. Prüfen Sie die extrahierten Kontakte sorgfältig."
     },
     "fields": {
       "bankAccountBankName": "Bankname",
@@ -1255,10 +1257,17 @@
         "uniaoEstavel": "Eingetragene Lebenspartnerschaft"
       },
       "fileHint": "Jeder Mandant ist ein Block aus Zeilen im Format „Bezeichnung: Wert“, getrennt durch eine Leerzeile.",
+      "fileTooLarge": "Die .txt-Datei darf höchstens 1 MB groß sein.",
+      "invalidFileType": "Bitte wählen Sie eine reine Textdatei im .txt-Format.",
+      "mappingDescription": "Brasilianisch-portugiesische Bezeichnungen werden automatisch zugeordnet. Ordnen Sie nicht erkannte Bezeichnungen zu.",
+      "mappingIgnore": "Diese Bezeichnung ignorieren",
+      "mappingPlaceholder": "Kontaktfeld auswählen",
+      "mappingTitle": "Dateibezeichnungen zuordnen",
       "parseErrorGeneric": "In dieser Datei wurden keine Mandantenblöcke gefunden.",
-      "previewSummary": "{valid} bereit, {invalid} mit Fehlern",
-      "resultsSummary": "{created} erstellt, {skipped} übersprungen",
+      "previewSummary": "{valid, plural, one {# bereit} other {# bereit}}, {invalid, plural, one {# mit Fehler} other {# mit Fehlern}}",
+      "resultsSummary": "{created, plural, one {# erstellt} other {# erstellt}}, {skipped, plural, one {# übersprungen} other {# übersprungen}}",
       "rowLabel": "Mandant {index}",
+      "skippedDuplicateContactId": "Übersprungen: doppelte Kontakt-ID",
       "skippedDuplicateTaxId": "Übersprungen: doppelte Steuernummer",
       "skippedInvalidTaxId": "Übersprungen: ungültige Steuernummer",
       "skippedLimitReached": "Übersprungen: Kontaktlimit erreicht"

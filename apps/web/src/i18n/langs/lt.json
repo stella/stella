@@ -1204,10 +1204,12 @@
       "dialogTitle": "Nustatyti iš įgaliojimo",
       "extractOption": "Nustatyti iš įgaliojimo (.docx)",
       "fileHint": "Stella perskaito dokumentą ir automatiškai suranda įgaliotoją (asmenį, kuris suteikia įgaliojimą, o ne advokatą). Prieš patvirtindami peržiūrėkite rezultatą.",
+      "fileTooLarge": "Įgaliojimo failas turi būti ne didesnis kaip 50 MB.",
       "invalidFileType": "Pasirinkite .docx failą.",
       "manualEntryOption": "Pildyti rankiniu būdu",
       "noOutorganteFound": "Šiame dokumente nepavyko nustatyti nė vieno įgaliotojo.",
-      "parseErrorGeneric": "Iš šio dokumento nepavyko nustatyti kontaktų."
+      "parseErrorGeneric": "Iš šio dokumento nepavyko nustatyti kontaktų.",
+      "sourceTruncated": "Išanalizuota tik pirmoji šio ilgo dokumento dalis. Atidžiai patikrinkite ištrauktus kontaktus."
     },
     "fields": {
       "bankAccountBankName": "Banko pavadinimas",
@@ -1255,10 +1257,17 @@
         "uniaoEstavel": "Registruota partnerystė"
       },
       "fileHint": "Kiekvienas klientas yra eilučių „Žymė: reikšmė“ blokas, atskirtas tuščia eilute.",
+      "fileTooLarge": ".txt failas turi būti ne didesnis kaip 1 MB.",
+      "invalidFileType": "Pasirinkite paprastojo teksto .txt failą.",
+      "mappingDescription": "Brazilijos portugalų kalbos žymos susiejamos automatiškai. Susiekite žymas, kurių stella neatpažįsta.",
+      "mappingIgnore": "Nepaisyti šios žymos",
+      "mappingPlaceholder": "Pasirinkite kontakto lauką",
+      "mappingTitle": "Susieti failo žymas",
       "parseErrorGeneric": "Šiame faile nerasta jokių klientų blokų.",
-      "previewSummary": "{valid} paruošta, {invalid} su klaidomis",
-      "resultsSummary": "{created} sukurta, {skipped} praleista",
+      "previewSummary": "{valid, plural, one {# paruoštas} few {# paruošti} other {# paruošta}}, {invalid, plural, one {# su klaida} few {# su klaidomis} other {# su klaidomis}}",
+      "resultsSummary": "{created, plural, one {# sukurtas} few {# sukurti} other {# sukurta}}, {skipped, plural, one {# praleistas} few {# praleisti} other {# praleista}}",
       "rowLabel": "Klientas {index}",
+      "skippedDuplicateContactId": "Praleista: pasikartojantis kontakto ID",
       "skippedDuplicateTaxId": "Praleista: pasikartojantis mokesčių mokėtojo kodas",
       "skippedInvalidTaxId": "Praleista: neteisingas mokesčių mokėtojo kodas",
       "skippedLimitReached": "Praleista: pasiektas kontaktų limitas"

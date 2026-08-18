@@ -23,6 +23,7 @@ import {
   EllipsisVerticalIcon,
   PlusIcon,
   SearchIcon,
+  UploadIcon,
   UserIcon,
 } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
@@ -575,6 +576,10 @@ const ContactsToolbarPlaceholder = () => {
           {t("contacts.filterOrganizations")}
         </Button>
       </div>
+      <Button disabled size="sm" variant="outline">
+        <UploadIcon />
+        {t("contacts.import.action")}
+      </Button>
       <Button disabled size="sm">
         <PlusIcon />
         {t("contacts.newContact")}

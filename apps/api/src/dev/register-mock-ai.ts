@@ -447,7 +447,7 @@ export const mockStructuredData = (
       outorgantes: [
         {
           nome: "Maria da Silva Souza",
-          taxId: "123.456.789-00",
+          taxId: "123.456.789-09",
           rg: "12.345.678-9",
           nacionalidade: "brasileira",
           estadoCivil: "casada",

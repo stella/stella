@@ -7,6 +7,7 @@ import {
   AUDIT_RESOURCE_TYPE,
 } from "@/api/lib/audit-log.constants";
 import type { AuditAction } from "@/api/lib/audit-log.constants";
+import type { SafeId } from "@/api/lib/branded-types";
 
 import {
   centsColumn,
@@ -133,6 +134,100 @@ export const contacts = p.pgTable(
 );
 
 export type ContactType = (typeof contacts.type)["enumValues"][number];
+
+export type ContactImportReceiptResult = {
+  results: (
+    | { index: number; status: "created"; contactId: SafeId<"contact"> }
+    | {
+        index: number;
+        status: "skipped";
+        reason:
+          | "contacts_limit_reached"
+          | "duplicate_contact_id"
+          | "duplicate_tax_id"
+          | "invalid_tax_id";
+      }
+  )[];
+};
+
+export const contactImportRequests = p.pgTable(
+  "contact_import_requests",
+  {
+    id: pUuid<"contactImportRequest">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    idempotencyKey: p.varchar("idempotency_key", { length: 128 }).notNull(),
+    requestFingerprint: p
+      .varchar("request_fingerprint", { length: 64 })
+      .notNull(),
+    result: jsonb().$type<ContactImportReceiptResult>().notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .uniqueIndex("contact_import_requests_org_user_key_uidx")
+      .on(table.organizationId, table.userId, table.idempotencyKey),
+    p.check(
+      "contact_import_requests_key_nonempty_check",
+      sql`length(${table.idempotencyKey}) > 0`,
+    ),
+    p.check(
+      "contact_import_requests_fingerprint_check",
+      sql`${table.requestFingerprint} ~ '^[0-9a-f]{64}$'`,
+    ),
+    ...orgPolicies(),
+  ],
+);
+
+export const contactExtractionUploads = p.pgTable(
+  "contact_extraction_uploads",
+  {
+    id: pUuid<"contactExtractionUpload">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    declaredName: p.varchar("declared_name", { length: 255 }).notNull(),
+    declaredMime: p.varchar("declared_mime", { length: 255 }).notNull(),
+    declaredSize: p.bigint("declared_size", { mode: "number" }).notNull(),
+    declaredSha256: p.varchar("declared_sha256", { length: 64 }).notNull(),
+    status: p
+      .text({ enum: ["pending", "processing", "used"] })
+      .notNull()
+      .default("pending"),
+    claimToken: p.uuid("claim_token"),
+    processingStartedAt: timestamptz("processing_started_at"),
+    expiresAt: timestamptz("expires_at").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    usedAt: timestamptz("used_at"),
+  },
+  (table) => [
+    p
+      .index("contact_extraction_uploads_org_user_expiry_idx")
+      .on(table.organizationId, table.userId, table.expiresAt),
+    p.check(
+      "contact_extraction_uploads_sha256_check",
+      sql`${table.declaredSha256} ~ '^[0-9a-f]{64}$'`,
+    ),
+    p.check(
+      "contact_extraction_uploads_lifecycle_check",
+      sql`(
+        (${table.status} = 'pending' AND ${table.claimToken} IS NULL AND ${table.processingStartedAt} IS NULL AND ${table.usedAt} IS NULL)
+        OR (${table.status} = 'processing' AND ${table.claimToken} IS NOT NULL AND ${table.processingStartedAt} IS NOT NULL AND ${table.usedAt} IS NULL)
+        OR (${table.status} = 'used' AND ${table.claimToken} IS NULL AND ${table.processingStartedAt} IS NULL AND ${table.usedAt} IS NOT NULL)
+      )`,
+    ),
+    ...orgPolicies(),
+  ],
+);
 
 export const contactRelationships = p.pgTable(
   "contact_relationships",

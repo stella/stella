@@ -1204,10 +1204,12 @@
       "dialogTitle": "استخراج من توكيل",
       "extractOption": "استخراج من توكيل (.docx)",
       "fileHint": "تقرأ Stella المستند وتحدد الموكل تلقائيًا (الشخص الذي يمنح التوكيل، وليس المحامي). راجع النتيجة قبل التأكيد.",
+      "fileTooLarge": "يجب ألا يتجاوز ملف التوكيل 50 ميغابايت.",
       "invalidFileType": "الرجاء اختيار ملف .docx.",
       "manualEntryOption": "تعبئة يدوية",
       "noOutorganteFound": "تعذر التعرف على أي موكل في هذا المستند.",
-      "parseErrorGeneric": "تعذر استخراج جهات الاتصال من هذا المستند."
+      "parseErrorGeneric": "تعذر استخراج جهات الاتصال من هذا المستند.",
+      "sourceTruncated": "تم تحليل الجزء الأول فقط من هذا المستند الطويل. راجع جهات الاتصال المستخرجة بعناية."
     },
     "fields": {
       "bankAccountBankName": "اسم المصرف",
@@ -1255,10 +1257,17 @@
         "uniaoEstavel": "شراكة مسجلة"
       },
       "fileHint": "كل عميل عبارة عن كتلة من الأسطر بصيغة \"التسمية: القيمة\"، مفصولة بسطر فارغ.",
+      "fileTooLarge": "يجب ألا يتجاوز ملف .txt حجم 1 ميغابايت.",
+      "invalidFileType": "يرجى اختيار ملف .txt بنص عادي.",
+      "mappingDescription": "تُطابق التسميات البرتغالية البرازيلية تلقائيًا. عيّن أي تسمية لا تتعرف عليها stella.",
+      "mappingIgnore": "تجاهل هذه التسمية",
+      "mappingPlaceholder": "اختر حقل جهة اتصال",
+      "mappingTitle": "ربط تسميات الملف",
       "parseErrorGeneric": "لم يتم العثور على أي كتل عملاء في هذا الملف.",
-      "previewSummary": "{valid} جاهز، {invalid} به أخطاء",
-      "resultsSummary": "تم إنشاء {created}، تم تخطي {skipped}",
+      "previewSummary": "{valid, plural, zero {لا جهات اتصال جاهزة} one {جهة اتصال واحدة جاهزة} two {جهتا اتصال جاهزتان} few {# جهات اتصال جاهزة} many {# جهة اتصال جاهزة} other {# جهة اتصال جاهزة}}، {invalid, plural, zero {لا أخطاء} one {جهة اتصال واحدة بها خطأ} two {جهتا اتصال بهما أخطاء} few {# جهات اتصال بها أخطاء} many {# جهة اتصال بها أخطاء} other {# جهة اتصال بها أخطاء}}",
+      "resultsSummary": "{created, plural, zero {لم يتم إنشاء أي جهة اتصال} one {تم إنشاء جهة اتصال واحدة} two {تم إنشاء جهتي اتصال} few {تم إنشاء # جهات اتصال} many {تم إنشاء # جهة اتصال} other {تم إنشاء # جهة اتصال}}، {skipped, plural, zero {لم يتم تخطي أي جهة اتصال} one {تم تخطي جهة اتصال واحدة} two {تم تخطي جهتي اتصال} few {تم تخطي # جهات اتصال} many {تم تخطي # جهة اتصال} other {تم تخطي # جهة اتصال}}",
       "rowLabel": "العميل {index}",
+      "skippedDuplicateContactId": "تم التخطي: معرّف جهة اتصال مكرر",
       "skippedDuplicateTaxId": "تم التخطي: رقم ضريبي مكرر",
       "skippedInvalidTaxId": "تم التخطي: رقم ضريبي غير صالح",
       "skippedLimitReached": "تم التخطي: تم الوصول للحد الأقصى لجهات الاتصال"

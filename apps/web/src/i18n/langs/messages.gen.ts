@@ -1207,10 +1207,12 @@ type Messages = {
       "dialogTitle": "Extract from power of attorney";
       "extractOption": "Extract from power of attorney (.docx)";
       "fileHint": "Stella reads the document and finds the grantor(s) — not the lawyer — automatically. Review the results before confirming.";
+      "fileTooLarge": "The power-of-attorney file must be 50 MB or smaller.";
       "invalidFileType": "Please choose a .docx file.";
       "manualEntryOption": "Fill in manually";
       "noOutorganteFound": "No grantor could be identified in this document.";
       "parseErrorGeneric": "Could not extract contacts from this document.";
+      "sourceTruncated": "Only the first part of this long document was analyzed. Review the extracted contacts carefully.";
     };
     "fields": {
       "bankAccountBankName": "Bank name";
@@ -1258,10 +1260,17 @@ type Messages = {
         "uniaoEstavel": "Civil union";
       };
       "fileHint": "Each client is a block of \"Label: value\" lines, separated by a blank line.";
+      "fileTooLarge": "The .txt file must be 1 MB or smaller.";
+      "invalidFileType": "Please choose a plain-text .txt file.";
+      "mappingDescription": "Brazilian Portuguese labels are matched automatically. Assign any labels stella does not recognize.";
+      "mappingIgnore": "Ignore this label";
+      "mappingPlaceholder": "Choose a contact field";
+      "mappingTitle": "Map file labels";
       "parseErrorGeneric": "No client blocks were found in this file.";
-      "previewSummary": "{valid} ready, {invalid} with errors";
-      "resultsSummary": "{created} created, {skipped} skipped";
+      "previewSummary": "{valid, plural, one {# ready} other {# ready}}, {invalid, plural, one {# with errors} other {# with errors}}";
+      "resultsSummary": "Import complete: {created, plural, one {# created} other {# created}}; {skipped, plural, one {# skipped} other {# skipped}}";
       "rowLabel": "Client {index}";
+      "skippedDuplicateContactId": "Skipped: duplicate contact ID";
       "skippedDuplicateTaxId": "Skipped: duplicate tax ID";
       "skippedInvalidTaxId": "Skipped: invalid tax ID";
       "skippedLimitReached": "Skipped: contacts limit reached";

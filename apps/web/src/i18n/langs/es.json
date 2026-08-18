@@ -1204,10 +1204,12 @@
       "dialogTitle": "Extraer de un poder notarial",
       "extractOption": "Extraer de un poder notarial (.docx)",
       "fileHint": "Stella lee el documento y localiza automáticamente al otorgante (quien otorga el poder, no el abogado). Revisa el resultado antes de confirmar.",
+      "fileTooLarge": "El archivo del poder debe tener 50 MB o menos.",
       "invalidFileType": "Selecciona un archivo .docx.",
       "manualEntryOption": "Completar manualmente",
       "noOutorganteFound": "No se pudo identificar ningún otorgante en este documento.",
-      "parseErrorGeneric": "No se pudieron extraer contactos de este documento."
+      "parseErrorGeneric": "No se pudieron extraer contactos de este documento.",
+      "sourceTruncated": "Solo se analizó la primera parte de este documento extenso. Revisa con cuidado los contactos extraídos."
     },
     "fields": {
       "bankAccountBankName": "Nombre del banco",
@@ -1255,10 +1257,17 @@
         "uniaoEstavel": "Unión civil"
       },
       "fileHint": "Cada cliente es un bloque de líneas \"Etiqueta: valor\", separado por una línea en blanco.",
+      "fileTooLarge": "El archivo .txt debe tener 1 MB o menos.",
+      "invalidFileType": "Elige un archivo .txt de texto sin formato.",
+      "mappingDescription": "Las etiquetas en portugués de Brasil se asignan automáticamente. Asigna las que stella no reconozca.",
+      "mappingIgnore": "Ignorar esta etiqueta",
+      "mappingPlaceholder": "Elige un campo de contacto",
+      "mappingTitle": "Asignar etiquetas del archivo",
       "parseErrorGeneric": "No se encontraron bloques de clientes en este archivo.",
-      "previewSummary": "{valid} listos, {invalid} con errores",
-      "resultsSummary": "{created} creados, {skipped} omitidos",
+      "previewSummary": "{valid, plural, one {# listo} other {# listos}}, {invalid, plural, one {# con error} other {# con errores}}",
+      "resultsSummary": "{created, plural, one {# creado} other {# creados}}, {skipped, plural, one {# omitido} other {# omitidos}}",
       "rowLabel": "Cliente {index}",
+      "skippedDuplicateContactId": "Omitido: ID de contacto duplicado",
       "skippedDuplicateTaxId": "Omitido: identificación fiscal duplicada",
       "skippedInvalidTaxId": "Omitido: identificación fiscal no válida",
       "skippedLimitReached": "Omitido: se alcanzó el límite de contactos"

@@ -1,3 +1,11 @@
+import {
+  CONTACT_IMPORT_LABELED_FIELDS,
+  CONTACT_IMPORT_VOCABULARIES,
+  type ContactImportLabeledField,
+  type ContactImportVocabularyId,
+} from "@stll/api-contract";
+
+import type { ImportContactRowVars } from "@/lib/contacts/import-types";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
 
@@ -23,7 +31,34 @@ export type ImportFieldError =
   | { code: "invalidEmailFormat" }
   | { code: "duplicateTaxIdInFile"; firstRowIndex: number };
 
-export type ImportBlockError = { code: "unrecognizedLabel"; label: string };
+export type ImportBlockError = {
+  code: "unrecognizedLabel";
+  label: string;
+  normalizedLabel: string;
+  value: string;
+};
+
+export type LabeledImportMapping = Record<
+  string,
+  ParsedImportFieldKey | "ignore"
+>;
+
+export const DEFAULT_CONTACT_IMPORT_VOCABULARY_ID =
+  "BR:pt-BR" satisfies ContactImportVocabularyId;
+
+const CONTACT_IMPORT_TEXT_MAX_BYTES = 1024 * 1024;
+
+export const contactImportTextFileIssue = (
+  file: Pick<File, "name" | "size" | "type">,
+): "file_too_large" | "invalid_file_type" | null => {
+  if (!file.name.toLowerCase().endsWith(".txt")) {
+    return "invalid_file_type";
+  }
+  if (file.size > CONTACT_IMPORT_TEXT_MAX_BYTES) {
+    return "file_too_large";
+  }
+  return null;
+};
 
 // "warning" rows have only non-blocking issues (a recommended field left
 // empty) and are still included in the submitted batch; "error" rows have
@@ -41,23 +76,30 @@ export type ParsedImportRow = {
   fieldErrors: Partial<Record<ParsedImportFieldKey, ImportFieldError>>;
   blockErrors: ImportBlockError[];
   rawLines: string[];
+  importIds?: ImportRowIds;
 };
 
-const LABEL_MAP: Record<string, ParsedImportFieldKey> = {
-  nome: "nome",
-  cpf: "taxId",
-  cnpj: "taxId",
-  "cpf/cnpj": "taxId",
-  rg: "rg",
-  nacionalidade: "nacionalidade",
-  "estado civil": "estadoCivil",
-  "uniao estavel": "uniaoEstavel",
-  profissao: "profissao",
-  email: "email",
-  "e-mail": "email",
-  "e mail": "email",
-  endereco: "endereco",
+type CustomFieldKey = Extract<
+  ParsedImportFieldKey,
+  "rg" | "nacionalidade" | "estadoCivil" | "uniaoEstavel" | "profissao"
+>;
+
+type ImportRowIds = {
+  contactId: SafeId<"contact">;
+  customFieldIds: Record<CustomFieldKey, string>;
 };
+
+const PARSED_FIELD_FOR_CANONICAL = {
+  display_name: "nome",
+  tax_id: "taxId",
+  identity_document: "rg",
+  nationality: "nacionalidade",
+  marital_status: "estadoCivil",
+  civil_union: "uniaoEstavel",
+  occupation: "profissao",
+  primary_email: "email",
+  address_line_1: "endereco",
+} as const satisfies Record<ContactImportLabeledField, ParsedImportFieldKey>;
 
 const HARD_REQUIRED_FIELDS: ParsedImportFieldKey[] = ["nome", "taxId"];
 // Nationality/marital status/occupation only apply to a pessoa física
@@ -73,7 +115,25 @@ const UNIVERSAL_SOFT_REQUIRED_FIELDS: ParsedImportFieldKey[] = [
   "endereco",
 ];
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
+const hasBasicEmailFormat = (value: string): boolean => {
+  const atIndex = value.indexOf("@");
+  if (
+    atIndex <= 0 ||
+    atIndex !== value.lastIndexOf("@") ||
+    atIndex === value.length - 1
+  ) {
+    return false;
+  }
+  for (const character of value) {
+    if (character.trim().length === 0) {
+      return false;
+    }
+  }
+
+  const domain = value.slice(atIndex + 1);
+  const dotIndex = domain.indexOf(".");
+  return dotIndex > 0 && dotIndex < domain.length - 1;
+};
 
 const onlyDigits = (value: string): string => value.replaceAll(/\D/gu, "");
 
@@ -85,6 +145,20 @@ const normalizeLabel = (raw: string): string =>
     .replaceAll(DIACRITIC_MARKS_PATTERN, "")
     .trim()
     .toLowerCase();
+
+const vocabularyLabelMap = (
+  vocabularyId: ContactImportVocabularyId,
+): Readonly<Record<string, ParsedImportFieldKey>> => {
+  const result: Record<string, ParsedImportFieldKey> = {};
+  const vocabulary = CONTACT_IMPORT_VOCABULARIES[vocabularyId];
+
+  for (const field of CONTACT_IMPORT_LABELED_FIELDS) {
+    for (const label of vocabulary.fields[field].labels) {
+      result[normalizeLabel(label)] = PARSED_FIELD_FOR_CANONICAL[field];
+    }
+  }
+  return result;
+};
 
 const emptyFields = (): ParsedImportRowFields => ({
   nome: "",
@@ -99,37 +173,65 @@ const emptyFields = (): ParsedImportRowFields => ({
   contactType: null,
 });
 
-const splitBlocks = (text: string): string[][] =>
-  text
-    .replaceAll("\r\n", "\n")
-    .split(/\n\s*\n+/u)
-    .map((block) =>
-      block
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0),
-    )
-    .filter((lines) => lines.length > 0);
+const splitBlocks = (text: string): string[][] => {
+  const blocks: string[][] = [];
+  let block: string[] = [];
+
+  for (const rawLine of text.replaceAll("\r\n", "\n").split("\n")) {
+    const line = rawLine.trim();
+    if (line.length > 0) {
+      block.push(line);
+      continue;
+    }
+    if (block.length > 0) {
+      blocks.push(block);
+      block = [];
+    }
+  }
+
+  if (block.length > 0) {
+    blocks.push(block);
+  }
+  return blocks;
+};
 
 const extractFields = (
   rawLines: string[],
+  mapping: LabeledImportMapping,
+  vocabularyId: ContactImportVocabularyId,
 ): { fields: ParsedImportRowFields; blockErrors: ImportBlockError[] } => {
   const fields = emptyFields();
   const blockErrors: ImportBlockError[] = [];
+  const knownLabels = vocabularyLabelMap(vocabularyId);
 
   for (const line of rawLines) {
     const colonIndex = line.indexOf(":");
     if (colonIndex === -1) {
-      blockErrors.push({ code: "unrecognizedLabel", label: line });
+      blockErrors.push({
+        code: "unrecognizedLabel",
+        label: line,
+        normalizedLabel: normalizeLabel(line),
+        value: "",
+      });
       continue;
     }
 
     const rawLabel = line.slice(0, colonIndex).trim();
     const rawValue = line.slice(colonIndex + 1).trim();
-    const fieldKey = LABEL_MAP[normalizeLabel(rawLabel)];
+    const normalizedLabel = normalizeLabel(rawLabel);
+    const fieldKey = mapping[normalizedLabel] ?? knownLabels[normalizedLabel];
+
+    if (fieldKey === "ignore") {
+      continue;
+    }
 
     if (!fieldKey) {
-      blockErrors.push({ code: "unrecognizedLabel", label: rawLabel });
+      blockErrors.push({
+        code: "unrecognizedLabel",
+        label: rawLabel,
+        normalizedLabel,
+        value: rawValue,
+      });
       continue;
     }
 
@@ -156,7 +258,7 @@ const validateFields = (
     }
   }
 
-  let contactType: "person" | "organization" | null = null;
+  let contactType = fields.contactType;
   if (fields.taxId) {
     const digits = onlyDigits(fields.taxId);
     if (digits.length === 11) {
@@ -194,7 +296,7 @@ const validateFields = (
     }
   }
 
-  if (fields.email && !EMAIL_PATTERN.test(fields.email)) {
+  if (fields.email && !hasBasicEmailFormat(fields.email)) {
     fieldErrors.email = { code: "invalidEmailFormat" };
   }
 
@@ -240,48 +342,76 @@ export const validateRows = (
   });
 };
 
-export const parseContactImportText = (text: string): ParsedImportRow[] => {
+export const parseContactImportText = (
+  text: string,
+  {
+    mapping = {},
+    vocabularyId = DEFAULT_CONTACT_IMPORT_VOCABULARY_ID,
+  }: {
+    mapping?: LabeledImportMapping;
+    vocabularyId?: ContactImportVocabularyId;
+  } = {},
+): ParsedImportRow[] => {
   const blocks = splitBlocks(text);
   const extracted = blocks.map((rawLines, rowIndex) => {
-    const { fields, blockErrors } = extractFields(rawLines);
+    const { fields, blockErrors } = extractFields(
+      rawLines,
+      mapping,
+      vocabularyId,
+    );
     return { rowIndex, fields, blockErrors, rawLines };
   });
 
   return validateRows(extracted);
 };
 
-type ContactEmailVars = {
-  type: "work" | "personal" | "other";
-  address: string;
-  isPrimary: boolean;
+type ApplyContactImportMappingOptions = {
+  rows: readonly ParsedImportRow[];
+  sourceText: string;
+  mapping: LabeledImportMapping;
+  normalizedLabel: string;
+  targetField: ParsedImportFieldKey | "ignore";
 };
 
-type ContactAddressVars = {
-  type: "office" | "mailing" | "billing" | "service" | "home" | "other";
-  line1: string;
-  isPrimary: boolean;
-};
+/** Apply one new label mapping without resetting edits or restoring removed rows. */
+export const applyContactImportMapping = ({
+  rows,
+  sourceText,
+  mapping,
+  normalizedLabel,
+  targetField,
+}: ApplyContactImportMappingOptions): ParsedImportRow[] => {
+  const parsedByRowIndex = new Map(
+    parseContactImportText(sourceText, { mapping }).map((row) => [
+      row.rowIndex,
+      row,
+    ]),
+  );
+  const merged = rows.map((row) => {
+    const parsed = parsedByRowIndex.get(row.rowIndex);
+    if (!parsed) {
+      return row;
+    }
 
-type ContactCustomFieldVars = {
-  id: string;
-  label: string;
-  value: string;
-};
+    const containedLabel = row.blockErrors.some(
+      (error) => error.normalizedLabel === normalizedLabel,
+    );
+    return {
+      rowIndex: row.rowIndex,
+      fields:
+        targetField === "ignore" || !containedLabel
+          ? row.fields
+          : { ...row.fields, [targetField]: parsed.fields[targetField] },
+      blockErrors: parsed.blockErrors,
+      rawLines: parsed.rawLines,
+    };
+  });
 
-export type ImportContactRowVars = {
-  id: SafeId<"contact">;
-  displayName: string;
-  taxId: string;
-  emails?: ContactEmailVars[];
-  addresses?: ContactAddressVars[];
-  metadata?: { customFields: ContactCustomFieldVars[] };
+  return assignStableImportIds(validateRows(merged), rows);
 };
 
 const CUSTOM_FIELD_LABELS: {
-  key: Extract<
-    ParsedImportFieldKey,
-    "rg" | "nacionalidade" | "estadoCivil" | "uniaoEstavel" | "profissao"
-  >;
+  key: CustomFieldKey;
   label: string;
 }[] = [
   { key: "rg", label: "RG" },
@@ -291,6 +421,40 @@ const CUSTOM_FIELD_LABELS: {
   { key: "profissao", label: "Profissão" },
 ];
 
+const createImportRowIds = (): ImportRowIds => ({
+  contactId: toSafeId<"contact">(crypto.randomUUID()),
+  customFieldIds: {
+    rg: crypto.randomUUID(),
+    nacionalidade: crypto.randomUUID(),
+    estadoCivil: crypto.randomUUID(),
+    uniaoEstavel: crypto.randomUUID(),
+    profissao: crypto.randomUUID(),
+  },
+});
+
+/** Assign submission identifiers only from event/state transitions, never render. */
+export const assignStableImportIds = (
+  rows: ParsedImportRow[],
+  previousRows: readonly ParsedImportRow[] = [],
+): ParsedImportRow[] => {
+  const previousIds = new Map(
+    previousRows.flatMap((row) =>
+      row.importIds ? [[row.rowIndex, row.importIds] as const] : [],
+    ),
+  );
+
+  return rows.map((row) => {
+    if (row.status === "error") {
+      return row;
+    }
+    return {
+      ...row,
+      importIds:
+        row.importIds ?? previousIds.get(row.rowIndex) ?? createImportRowIds(),
+    };
+  });
+};
+
 export const toImportRowVars = (
   row: ParsedImportRow,
 ): ImportContactRowVars | null => {
@@ -298,18 +462,23 @@ export const toImportRowVars = (
     return null;
   }
 
+  const { importIds } = row;
+  if (!importIds) {
+    return null;
+  }
+
   const { fields } = row;
 
   const customFields = CUSTOM_FIELD_LABELS.filter(({ key }) => fields[key]).map(
     ({ key, label }) => ({
-      id: crypto.randomUUID(),
+      id: importIds.customFieldIds[key],
       label,
       value: fields[key],
     }),
   );
 
   return {
-    id: toSafeId<"contact">(crypto.randomUUID()),
+    id: importIds.contactId,
     displayName: fields.nome,
     taxId: onlyDigits(fields.taxId),
     ...(fields.email && {

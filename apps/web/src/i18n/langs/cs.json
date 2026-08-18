@@ -1204,10 +1204,12 @@
       "dialogTitle": "Extrahovat z plné moci",
       "extractOption": "Extrahovat z plné moci (.docx)",
       "fileHint": "Stella přečte dokument a automaticky najde zmocnitele (toho, kdo uděluje plnou moc, ne advokáta). Před potvrzením výsledek zkontrolujte.",
+      "fileTooLarge": "Soubor plné moci musí mít nejvýše 50 MB.",
       "invalidFileType": "Vyberte prosím soubor .docx.",
       "manualEntryOption": "Zadat ručně",
       "noOutorganteFound": "V tomto dokumentu se nepodařilo identifikovat žádného zmocnitele.",
-      "parseErrorGeneric": "Z tohoto dokumentu se nepodařilo extrahovat kontakty."
+      "parseErrorGeneric": "Z tohoto dokumentu se nepodařilo extrahovat kontakty.",
+      "sourceTruncated": "Byla analyzována pouze první část tohoto dlouhého dokumentu. Extrahované kontakty pečlivě zkontrolujte."
     },
     "fields": {
       "bankAccountBankName": "Název banky",
@@ -1255,10 +1257,17 @@
         "uniaoEstavel": "Registrované partnerství"
       },
       "fileHint": "Každý klient je blok řádků „Popisek: hodnota“ oddělený prázdným řádkem.",
+      "fileTooLarge": "Soubor .txt musí mít nejvýše 1 MB.",
+      "invalidFileType": "Vyberte textový soubor .txt.",
+      "mappingDescription": "Brazilské portugalské popisky se přiřadí automaticky. Přiřaďte popisky, které stella nerozpozná.",
+      "mappingIgnore": "Ignorovat tento popisek",
+      "mappingPlaceholder": "Vyberte pole kontaktu",
+      "mappingTitle": "Přiřadit popisky souboru",
       "parseErrorGeneric": "V tomto souboru nebyly nalezeny žádné bloky klientů.",
-      "previewSummary": "{valid} připraveno, {invalid} s chybou",
-      "resultsSummary": "{created} vytvořeno, {skipped} přeskočeno",
+      "previewSummary": "{valid, plural, one {# připraven} few {# připraveny} other {# připraveno}}, {invalid, plural, one {# s chybou} few {# s chybami} other {# s chybami}}",
+      "resultsSummary": "{created, plural, one {# vytvořen} few {# vytvořeny} other {# vytvořeno}}, {skipped, plural, one {# přeskočen} few {# přeskočeny} other {# přeskočeno}}",
       "rowLabel": "Klient {index}",
+      "skippedDuplicateContactId": "Přeskočeno: duplicitní ID kontaktu",
       "skippedDuplicateTaxId": "Přeskočeno: duplicitní daňové identifikační číslo",
       "skippedInvalidTaxId": "Přeskočeno: neplatné daňové identifikační číslo",
       "skippedLimitReached": "Přeskočeno: dosažen limit kontaktů"

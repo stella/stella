@@ -7,6 +7,7 @@ import extractProcuracao from "@/api/handlers/contacts/extract-procuracao";
 import readContactById from "@/api/handlers/contacts/get";
 import importContacts from "@/api/handlers/contacts/import";
 import readContacts from "@/api/handlers/contacts/list";
+import presignProcuracao from "@/api/handlers/contacts/presign-procuracao";
 import searchContacts from "@/api/handlers/contacts/search";
 import updateContactById from "@/api/handlers/contacts/update";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
@@ -38,6 +39,10 @@ export const contactsRoute = new Elysia({ prefix: "/contacts" })
   .put("/import", importContacts.handler, {
     body: importContacts.config.body,
     permissions: importContacts.config.permissions,
+  })
+  .post("/procuracao-upload", presignProcuracao.handler, {
+    body: presignProcuracao.config.body,
+    permissions: presignProcuracao.config.permissions,
   })
   .post("/extract-from-procuracao", extractProcuracao.handler, {
     body: extractProcuracao.config.body,

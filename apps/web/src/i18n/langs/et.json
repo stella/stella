@@ -1204,10 +1204,12 @@
       "dialogTitle": "Tuvasta volikirjast",
       "extractOption": "Tuvasta volikirjast (.docx)",
       "fileHint": "Stella loeb dokumendi läbi ja leiab automaatselt volitaja (isiku, kes annab volituse, mitte advokaadi). Enne kinnitamist kontrollige tulemust.",
+      "fileTooLarge": "Volikirja fail peab olema kuni 50 MB.",
       "invalidFileType": "Palun valige .docx-fail.",
       "manualEntryOption": "Täida käsitsi",
       "noOutorganteFound": "Selles dokumendis ei õnnestunud ühtegi volitajat tuvastada.",
-      "parseErrorGeneric": "Sellest dokumendist ei õnnestunud kontakte tuvastada."
+      "parseErrorGeneric": "Sellest dokumendist ei õnnestunud kontakte tuvastada.",
+      "sourceTruncated": "Sellest pikast dokumendist analüüsiti ainult esimest osa. Kontrollige eraldatud kontakte hoolikalt."
     },
     "fields": {
       "bankAccountBankName": "Panga nimi",
@@ -1255,10 +1257,17 @@
         "uniaoEstavel": "Registreeritud kooselu"
       },
       "fileHint": "Iga klient on ridade „Silt: väärtus” plokk, mis on eraldatud tühja reaga.",
+      "fileTooLarge": ".txt-fail peab olema kuni 1 MB.",
+      "invalidFileType": "Valige lihttekstina .txt-fail.",
+      "mappingDescription": "Brasiilia portugali sildid sobitatakse automaatselt. Määrake väljad siltidele, mida stella ei tunne.",
+      "mappingIgnore": "Eira seda silti",
+      "mappingPlaceholder": "Valige kontakti väli",
+      "mappingTitle": "Sobita faili sildid",
       "parseErrorGeneric": "Sellest failist ei leitud ühtegi kliendiplokki.",
-      "previewSummary": "{valid} valmis, {invalid} veaga",
-      "resultsSummary": "{created} loodud, {skipped} vahele jäetud",
+      "previewSummary": "{valid, plural, one {# valmis} other {# valmis}}, {invalid, plural, one {# veaga} other {# veaga}}",
+      "resultsSummary": "{created, plural, one {# loodud} other {# loodud}}, {skipped, plural, one {# vahele jäetud} other {# vahele jäetud}}",
       "rowLabel": "Klient {index}",
+      "skippedDuplicateContactId": "Vahele jäetud: korduv kontakti ID",
       "skippedDuplicateTaxId": "Vahele jäetud: korduv maksukohustuslasena registreerimise number",
       "skippedInvalidTaxId": "Vahele jäetud: vale maksukohustuslasena registreerimise number",
       "skippedLimitReached": "Vahele jäetud: kontaktide piirmäär täis"

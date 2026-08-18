@@ -1200,14 +1200,16 @@
     "emptyVideoLabel": "Prehľad kontaktov",
     "extractProcuracao": {
       "chooseFile": "Nahrať plnomocenstvo (.docx)",
-      "dialogDescription": "Nahrajte plnomocenstvo (.docx) a stella sa pokúsi identifikovať splnomocniteľa a jeho údaje.",
+      "dialogDescription": "Nahrajte plnomocenstvo (.docx) a stella sa pokúsi identifikovať splnomocniteľov a ich údaje.",
       "dialogTitle": "Extrahovať z plnomocenstva",
       "extractOption": "Extrahovať z plnomocenstva (.docx)",
-      "fileHint": "Stella prečíta dokument a automaticky nájde splnomocniteľa (toho, kto udeľuje plnomocenstvo, nie advokáta). Pred potvrdením výsledok skontrolujte.",
+      "fileHint": "Stella prečíta dokument a automaticky nájde splnomocniteľov (tých, ktorí udeľujú plnomocenstvo, nie advokáta). Pred potvrdením výsledok skontrolujte.",
+      "fileTooLarge": "Súbor plnomocenstva môže mať najviac 50 MB.",
       "invalidFileType": "Vyberte, prosím, súbor .docx.",
       "manualEntryOption": "Zadať ručne",
       "noOutorganteFound": "V tomto dokumente sa nepodarilo identifikovať žiadneho splnomocniteľa.",
-      "parseErrorGeneric": "Z tohto dokumentu sa nepodarilo extrahovať kontakty."
+      "parseErrorGeneric": "Z tohto dokumentu sa nepodarilo extrahovať kontakty.",
+      "sourceTruncated": "Analyzovala sa iba prvá časť tohto dlhého dokumentu. Extrahované kontakty dôkladne skontrolujte."
     },
     "fields": {
       "bankAccountBankName": "Názov banky",
@@ -1255,10 +1257,17 @@
         "uniaoEstavel": "Registrované partnerstvo"
       },
       "fileHint": "Každý klient je blok riadkov „Popis: hodnota“ oddelený prázdnym riadkom.",
+      "fileTooLarge": "Súbor .txt môže mať najviac 1 MB.",
+      "invalidFileType": "Vyberte textový súbor .txt.",
+      "mappingDescription": "Brazílske portugalské popisky sa priradia automaticky. Priraďte popisky, ktoré stella nerozpozná.",
+      "mappingIgnore": "Ignorovať tento popisok",
+      "mappingPlaceholder": "Vyberte pole kontaktu",
+      "mappingTitle": "Priradiť popisky súboru",
       "parseErrorGeneric": "V tomto súbore sa nenašli žiadne bloky klientov.",
-      "previewSummary": "{valid} pripravených, {invalid} s chybou",
-      "resultsSummary": "{created} vytvorených, {skipped} preskočených",
+      "previewSummary": "{valid, plural, one {# pripravený} few {# pripravené} other {# pripravených}}, {invalid, plural, one {# s chybou} few {# s chybami} other {# s chybami}}",
+      "resultsSummary": "{created, plural, one {# vytvorený} few {# vytvorené} other {# vytvorených}}, {skipped, plural, one {# preskočený} few {# preskočené} other {# preskočených}}",
       "rowLabel": "Klient {index}",
+      "skippedDuplicateContactId": "Preskočené: duplicitné ID kontaktu",
       "skippedDuplicateTaxId": "Preskočené: duplicitné daňové identifikačné číslo",
       "skippedInvalidTaxId": "Preskočené: neplatné daňové identifikačné číslo",
       "skippedLimitReached": "Preskočené: dosiahnutý limit kontaktov"

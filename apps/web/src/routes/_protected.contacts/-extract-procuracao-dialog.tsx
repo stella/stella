@@ -2,7 +2,8 @@ import { useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
-import { UploadIcon } from "lucide-react";
+import { Result } from "better-result";
+import { AlertTriangleIcon, UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -25,13 +26,19 @@ import { useImportContacts } from "@/lib/contacts/mutations";
 import { contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
+import { ClientOperationError } from "@/lib/errors/client";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { fetchWithTimeout } from "@/lib/fetch";
+import { sha256Hex } from "@/lib/files/sha256";
+import { toSafeId } from "@/lib/safe-id";
+import type { SafeId } from "@/lib/safe-id";
 import {
   ImportResultsList,
   ImportRowCard,
 } from "@/routes/_protected.contacts/-import-dialog";
 import type { ImportContactResult } from "@/routes/_protected.contacts/-import-dialog";
 import {
+  assignStableImportIds,
   toImportRowVars,
   validateRows,
 } from "@/routes/_protected.contacts/-parse-import";
@@ -46,6 +53,9 @@ type ExtractProcuracaoDialogProps = {
   onOpenChange: (open: boolean) => void;
 };
 
+const EXTRACTION_SOURCE_MAX_BYTES = 50 * 1024 * 1024;
+const EXTRACTION_UPLOAD_TIMEOUT_MS = 30 * 60 * 1000;
+
 export const ExtractProcuracaoDialog = ({
   open,
   onOpenChange,
@@ -58,11 +68,16 @@ export const ExtractProcuracaoDialog = ({
   const [isExtracting, setIsExtracting] = useState(false);
   const [rows, setRows] = useState<ParsedImportRow[]>([]);
   const [results, setResults] = useState<ImportContactResult[] | null>(null);
+  const [sourceTruncated, setSourceTruncated] = useState(false);
+  const [importRequestId, setImportRequestId] =
+    useState<SafeId<"contactImportRequest"> | null>(null);
 
   const reset = () => {
     setIsExtracting(false);
     setRows([]);
     setResults(null);
+    setSourceTruncated(false);
+    setImportRequestId(null);
   };
 
   const handleFileChange = async (file: File) => {
@@ -73,40 +88,81 @@ export const ExtractProcuracaoDialog = ({
       });
       return;
     }
+    if (file.size > EXTRACTION_SOURCE_MAX_BYTES) {
+      stellaToast.add({
+        title: t("contacts.extractProcuracao.fileTooLarge"),
+        type: "error",
+      });
+      return;
+    }
 
     setIsExtracting(true);
-    try {
-      const response = await api.contacts["extract-from-procuracao"].post({
-        file,
-      });
-
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      const { outorgantes } = response.data;
-      if (outorgantes.length === 0) {
-        stellaToast.add({
-          title: t("contacts.extractProcuracao.noOutorganteFound"),
-          type: "info",
+    const extraction = await Result.tryPromise({
+      try: async () => {
+        const fileBuffer = await file.arrayBuffer();
+        const presignResponse = await api.contacts["procuracao-upload"].post({
+          name: file.name,
+          mimeType: file.type || "application/octet-stream",
+          size: file.size,
+          sha256Hex: await sha256Hex(fileBuffer),
         });
-        return;
-      }
 
-      setResults(null);
-      setRows(candidatesToRows(outorgantes));
-    } catch (error) {
-      getAnalytics().captureError(error);
+        if (presignResponse.error) {
+          throw toAPIError(presignResponse.error);
+        }
+
+        const putResponse = await fetchWithTimeout(presignResponse.data.url, {
+          method: "PUT",
+          headers: presignResponse.data.headers,
+          body: file,
+          timeoutMs: EXTRACTION_UPLOAD_TIMEOUT_MS,
+        });
+        if (!putResponse.ok) {
+          throw new ClientOperationError({
+            action: "upload-procuracao-source",
+            message: `Upload failed with status ${putResponse.status}`,
+          });
+        }
+
+        const response = await api.contacts["extract-from-procuracao"].post({
+          uploadId: presignResponse.data.uploadId,
+        });
+
+        if (response.error) {
+          throw toAPIError(response.error);
+        }
+
+        return response.data;
+      },
+      catch: (error) => error,
+    });
+    setIsExtracting(false);
+
+    if (Result.isError(extraction)) {
+      getAnalytics().captureError(extraction.error);
       stellaToast.add({
         title: userErrorFromThrown(
-          error,
+          extraction.error,
           t("contacts.extractProcuracao.parseErrorGeneric"),
         ),
         type: "error",
       });
-    } finally {
-      setIsExtracting(false);
+      return;
     }
+
+    const { outorgantes, truncated } = extraction.value;
+    setSourceTruncated(truncated);
+    if (outorgantes.length === 0) {
+      stellaToast.add({
+        title: t("contacts.extractProcuracao.noOutorganteFound"),
+        type: "info",
+      });
+      return;
+    }
+
+    setResults(null);
+    setImportRequestId(toSafeId<"contactImportRequest">(crypto.randomUUID()));
+    setRows(assignStableImportIds(candidatesToRows(outorgantes)));
   };
 
   const updateField = (
@@ -115,33 +171,58 @@ export const ExtractProcuracaoDialog = ({
     value: string,
   ) => {
     setRows((prev) =>
-      validateRows(
-        prev.map((row) =>
-          row.rowIndex === rowIndex
-            ? { ...row, fields: { ...row.fields, [key]: value } }
-            : row,
+      assignStableImportIds(
+        validateRows(
+          prev.map((row) =>
+            row.rowIndex === rowIndex
+              ? { ...row, fields: { ...row.fields, [key]: value } }
+              : row,
+          ),
         ),
+        prev,
       ),
     );
   };
 
   const removeRow = (rowIndex: number) => {
     setRows((prev) =>
-      validateRows(prev.filter((row) => row.rowIndex !== rowIndex)),
+      assignStableImportIds(
+        validateRows(prev.filter((row) => row.rowIndex !== rowIndex)),
+        prev,
+      ),
     );
   };
 
-  const validRowVars = rows
-    .map((row) => toImportRowVars(row))
-    .filter((vars) => vars !== null);
+  const validRows = rows.flatMap((row) => {
+    const vars = toImportRowVars(row);
+    return vars ? [{ originalRowIndex: row.rowIndex, vars }] : [];
+  });
+  const validRowVars = validRows.map(({ vars }) => vars);
   const invalidCount = rows.length - validRowVars.length;
 
   const handleConfirm = async () => {
+    if (!importRequestId) {
+      return;
+    }
     try {
       const importResults = await importContacts.mutateAsync({
+        importRequestId,
         rows: validRowVars,
       });
-      setResults(importResults);
+      setResults(
+        importResults.map((result) => {
+          const index =
+            validRows.at(result.index)?.originalRowIndex ?? result.index;
+          if (result.status === "created") {
+            return {
+              index,
+              status: result.status,
+              contactId: result.contactId,
+            };
+          }
+          return { index, status: result.status, reason: result.reason };
+        }),
+      );
       setRows([]);
       await queryClient.invalidateQueries({ queryKey: contactsKeys.all });
     } catch (error) {
@@ -171,12 +252,8 @@ export const ExtractProcuracaoDialog = ({
           <DialogDescription>
             {results
               ? t("contacts.import.resultsSummary", {
-                  created: String(
-                    results.filter((r) => r.status === "created").length,
-                  ),
-                  skipped: String(
-                    results.filter((r) => r.status === "skipped").length,
-                  ),
+                  created: results.filter((r) => r.status === "created").length,
+                  skipped: results.filter((r) => r.status === "skipped").length,
                 })
               : t("contacts.extractProcuracao.dialogDescription")}
           </DialogDescription>
@@ -196,6 +273,7 @@ export const ExtractProcuracaoDialog = ({
             onRemoveRow={removeRow}
             results={results}
             rows={rows}
+            sourceTruncated={sourceTruncated}
             validCount={validRowVars.length}
           />
         </DialogPanel>
@@ -205,7 +283,7 @@ export const ExtractProcuracaoDialog = ({
           </DialogClose>
           {!results && rows.length > 0 && (
             <Button
-              disabled={validRowVars.length === 0}
+              disabled={validRowVars.length === 0 || !importRequestId}
               loading={importContacts.isPending}
               onClick={() =>
                 detached(handleConfirm(), "contact-extract-procuracao.confirm")
@@ -225,6 +303,7 @@ type ExtractProcuracaoDialogBodyProps = {
   isExtracting: boolean;
   results: ImportContactResult[] | null;
   rows: ParsedImportRow[];
+  sourceTruncated: boolean;
   validCount: number;
   invalidCount: number;
   fileInputRef: RefObject<HTMLInputElement | null>;
@@ -241,6 +320,7 @@ const ExtractProcuracaoDialogBody = ({
   isExtracting,
   results,
   rows,
+  sourceTruncated,
   validCount,
   invalidCount,
   fileInputRef,
@@ -249,6 +329,12 @@ const ExtractProcuracaoDialogBody = ({
   onRemoveRow,
 }: ExtractProcuracaoDialogBodyProps) => {
   const t = useTranslations();
+  const truncationWarning = sourceTruncated ? (
+    <p className="bg-warning/10 text-warning-foreground flex items-start gap-2 rounded-md p-3 text-xs">
+      <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" />
+      {t("contacts.extractProcuracao.sourceTruncated")}
+    </p>
+  ) : null;
 
   if (results) {
     return <ImportResultsList results={results} />;
@@ -257,6 +343,7 @@ const ExtractProcuracaoDialogBody = ({
   if (rows.length === 0) {
     return (
       <div className="flex flex-col items-start gap-2">
+        {truncationWarning}
         <Button
           disabled={isExtracting}
           loading={isExtracting}
@@ -291,10 +378,11 @@ const ExtractProcuracaoDialogBody = ({
 
   return (
     <>
+      {truncationWarning}
       <p className="text-muted-foreground text-xs">
         {t("contacts.import.previewSummary", {
-          valid: String(validCount),
-          invalid: String(invalidCount),
+          valid: validCount,
+          invalid: invalidCount,
         })}
       </p>
       {rows.map((row) => (

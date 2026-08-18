@@ -151,6 +151,9 @@ export const CAPABILITY_DISPATCH = {
   "contacts.get": {
     load: async () => await import("@/api/handlers/contacts/get"),
   },
+  "contacts.import": {
+    load: async () => await import("@/api/handlers/contacts/import"),
+  },
   "contacts.list": {
     load: async () => await import("@/api/handlers/contacts/list"),
   },

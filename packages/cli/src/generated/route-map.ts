@@ -8371,6 +8371,207 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            import: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "contacts", "import"],
+                capabilityId: "contacts.import",
+                description:
+                  "Import a reviewed batch of up to 500 contacts into the organization address book. Supply a caller-generated importRequestId: replaying it with the same rows returns the original result, while changing the rows is rejected. Invalid, duplicate, and over-limit rows are skipped; all accepted rows commit atomically.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--import-request-id",
+                    prop: "importRequestId",
+                    required: true,
+                    part: "body",
+                    partPath: "importRequestId",
+                  },
+                ],
+                inputOnly: ["body.rows"],
+                paginated: false,
+                destructive: false,
+                scope: "contacts_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["importRequestId", "rows"],
+                      properties: {
+                        importRequestId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        rows: {
+                          maxItems: 500,
+                          type: "array",
+                          items: {
+                            type: "object",
+                            required: ["id", "displayName", "taxId"],
+                            properties: {
+                              id: {
+                                minLength: 36,
+                                maxLength: 36,
+                                pattern:
+                                  "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                type: "string",
+                              },
+                              displayName: {
+                                minLength: 1,
+                                maxLength: 512,
+                                type: "string",
+                              },
+                              taxId: {
+                                minLength: 1,
+                                maxLength: 64,
+                                type: "string",
+                              },
+                              emails: {
+                                maxItems: 1,
+                                type: "array",
+                                items: {
+                                  type: "object",
+                                  required: ["type", "address", "isPrimary"],
+                                  properties: {
+                                    type: {
+                                      default: "work",
+                                      type: "string",
+                                      enum: ["work", "personal", "other"],
+                                    },
+                                    address: {
+                                      format: "email",
+                                      maxLength: 320,
+                                      type: "string",
+                                    },
+                                    isPrimary: {
+                                      type: "boolean",
+                                    },
+                                    label: {
+                                      maxLength: 128,
+                                      type: "string",
+                                    },
+                                  },
+                                },
+                              },
+                              addresses: {
+                                maxItems: 1,
+                                type: "array",
+                                items: {
+                                  type: "object",
+                                  required: ["type", "line1", "isPrimary"],
+                                  properties: {
+                                    type: {
+                                      default: "office",
+                                      type: "string",
+                                      enum: [
+                                        "office",
+                                        "mailing",
+                                        "billing",
+                                        "service",
+                                        "home",
+                                        "other",
+                                      ],
+                                    },
+                                    line1: {
+                                      maxLength: 512,
+                                      type: "string",
+                                    },
+                                    line2: {
+                                      maxLength: 512,
+                                      type: "string",
+                                    },
+                                    city: {
+                                      maxLength: 256,
+                                      type: "string",
+                                    },
+                                    state: {
+                                      maxLength: 256,
+                                      type: "string",
+                                    },
+                                    postalCode: {
+                                      maxLength: 32,
+                                      type: "string",
+                                    },
+                                    country: {
+                                      maxLength: 128,
+                                      type: "string",
+                                    },
+                                    isPrimary: {
+                                      type: "boolean",
+                                    },
+                                    label: {
+                                      maxLength: 128,
+                                      type: "string",
+                                    },
+                                  },
+                                },
+                              },
+                              metadata: {
+                                type: "object",
+                                properties: {
+                                  dataBoxes: {
+                                    maxItems: 20,
+                                    type: "array",
+                                    items: {
+                                      type: "object",
+                                      required: ["id", "isPrimary"],
+                                      properties: {
+                                        id: {
+                                          pattern: "^[A-Za-z0-9]{7}$",
+                                          type: "string",
+                                        },
+                                        isPrimary: {
+                                          type: "boolean",
+                                        },
+                                        label: {
+                                          maxLength: 128,
+                                          type: "string",
+                                        },
+                                      },
+                                    },
+                                  },
+                                  customFields: {
+                                    maxItems: 50,
+                                    type: "array",
+                                    items: {
+                                      type: "object",
+                                      required: ["id", "label", "value"],
+                                      properties: {
+                                        id: {
+                                          minLength: 1,
+                                          maxLength: 64,
+                                          type: "string",
+                                        },
+                                        label: {
+                                          minLength: 1,
+                                          maxLength: 128,
+                                          type: "string",
+                                        },
+                                        value: {
+                                          maxLength: 2000,
+                                          type: "string",
+                                        },
+                                      },
+                                    },
+                                  },
+                                },
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             list: {
               kind: "capability-leaf",
               spec: {

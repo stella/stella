@@ -1204,10 +1204,12 @@
       "dialogTitle": "Extrair de procuração",
       "extractOption": "Extrair de procuração (.docx)",
       "fileHint": "A Stella lê o documento e localiza o(s) outorgante(s) (quem concede a procuração, não o advogado) automaticamente. Revise o resultado antes de confirmar.",
+      "fileTooLarge": "O arquivo da procuração deve ter no máximo 50 MB.",
       "invalidFileType": "Selecione um arquivo .docx.",
       "manualEntryOption": "Preencher manualmente",
       "noOutorganteFound": "Não foi possível identificar nenhum outorgante neste documento.",
-      "parseErrorGeneric": "Não foi possível extrair contatos deste documento."
+      "parseErrorGeneric": "Não foi possível extrair contatos deste documento.",
+      "sourceTruncated": "Apenas a primeira parte deste documento longo foi analisada. Revise com atenção os contatos extraídos."
     },
     "fields": {
       "bankAccountBankName": "Nome do banco",
@@ -1255,10 +1257,17 @@
         "uniaoEstavel": "União estável"
       },
       "fileHint": "Cada cliente é um bloco de linhas \"Rótulo: valor\", separado por uma linha em branco.",
+      "fileTooLarge": "O arquivo .txt deve ter no máximo 1 MB.",
+      "invalidFileType": "Escolha um arquivo .txt de texto simples.",
+      "mappingDescription": "Os rótulos em português do Brasil são associados automaticamente. Associe os rótulos que a stella não reconhecer.",
+      "mappingIgnore": "Ignorar este rótulo",
+      "mappingPlaceholder": "Escolha um campo do contato",
+      "mappingTitle": "Associar rótulos do arquivo",
       "parseErrorGeneric": "Nenhum bloco de cliente foi encontrado neste arquivo.",
-      "previewSummary": "{valid} prontos, {invalid} com erro",
-      "resultsSummary": "{created} criados, {skipped} ignorados",
+      "previewSummary": "{valid, plural, one {# pronto} other {# prontos}}, {invalid, plural, one {# com erro} other {# com erros}}",
+      "resultsSummary": "{created, plural, one {# criado} other {# criados}}, {skipped, plural, one {# ignorado} other {# ignorados}}",
       "rowLabel": "Cliente {index}",
+      "skippedDuplicateContactId": "Ignorado: ID de contato duplicado",
       "skippedDuplicateTaxId": "Ignorado: CPF/CNPJ duplicado",
       "skippedInvalidTaxId": "Ignorado: CPF/CNPJ inválido",
       "skippedLimitReached": "Ignorado: limite de contatos atingido"

@@ -19,6 +19,13 @@ import {
 } from "@stll/ui/components/dialog";
 import { Field, FieldLabel } from "@stll/ui/components/field";
 import { Input } from "@stll/ui/components/input";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/components/select";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import type { TranslationKey } from "@/i18n/types";
@@ -27,13 +34,19 @@ import { useImportContacts } from "@/lib/contacts/mutations";
 import { contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { toSafeId } from "@/lib/safe-id";
+import type { SafeId } from "@/lib/safe-id";
 import {
+  applyContactImportMapping,
+  assignStableImportIds,
+  contactImportTextFileIssue,
   parseContactImportText,
   toImportRowVars,
   validateRows,
 } from "@/routes/_protected.contacts/-parse-import";
 import type {
   ImportFieldError,
+  LabeledImportMapping,
   ParsedImportFieldKey,
   ParsedImportRow,
 } from "@/routes/_protected.contacts/-parse-import";
@@ -68,6 +81,7 @@ export const FIELD_ERROR_MESSAGE_KEY = {
 type SkippedResult = Extract<ImportContactResult, { status: "skipped" }>;
 
 const SKIP_REASON_MESSAGE_KEY = {
+  duplicate_contact_id: "contacts.import.skippedDuplicateContactId",
   duplicate_tax_id: "contacts.import.skippedDuplicateTaxId",
   invalid_tax_id: "contacts.import.skippedInvalidTaxId",
   contacts_limit_reached: "contacts.import.skippedLimitReached",
@@ -76,6 +90,12 @@ const SKIP_REASON_MESSAGE_KEY = {
 type ImportContactsDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+};
+
+type UnrecognizedImportLabel = {
+  label: string;
+  normalizedLabel: string;
+  sample: string;
 };
 
 export const ImportContactsDialog = ({
@@ -89,13 +109,36 @@ export const ImportContactsDialog = ({
 
   const [rows, setRows] = useState<ParsedImportRow[]>([]);
   const [results, setResults] = useState<ImportContactResult[] | null>(null);
+  const [importRequestId, setImportRequestId] =
+    useState<SafeId<"contactImportRequest"> | null>(null);
+  const [sourceText, setSourceText] = useState("");
+  const [mapping, setMapping] = useState<LabeledImportMapping>({});
 
   const reset = () => {
     setRows([]);
     setResults(null);
+    setImportRequestId(null);
+    setSourceText("");
+    setMapping({});
   };
 
   const handleFileChange = async (file: File) => {
+    const fileIssue = contactImportTextFileIssue(file);
+    if (fileIssue === "invalid_file_type") {
+      stellaToast.add({
+        title: t("contacts.import.invalidFileType"),
+        type: "error",
+      });
+      return;
+    }
+    if (fileIssue === "file_too_large") {
+      stellaToast.add({
+        title: t("contacts.import.fileTooLarge"),
+        type: "error",
+      });
+      return;
+    }
+
     const text = await file.text();
     const parsed = parseContactImportText(text);
     if (parsed.length === 0) {
@@ -106,7 +149,27 @@ export const ImportContactsDialog = ({
       return;
     }
     setResults(null);
-    setRows(parsed);
+    setSourceText(text);
+    setMapping({});
+    setImportRequestId(toSafeId<"contactImportRequest">(crypto.randomUUID()));
+    setRows(assignStableImportIds(parsed));
+  };
+
+  const updateMapping = (
+    normalizedLabel: string,
+    targetField: ParsedImportFieldKey | "ignore",
+  ) => {
+    const nextMapping = { ...mapping, [normalizedLabel]: targetField };
+    setMapping(nextMapping);
+    setRows((prev) =>
+      applyContactImportMapping({
+        rows: prev,
+        sourceText,
+        mapping: nextMapping,
+        normalizedLabel,
+        targetField,
+      }),
+    );
   };
 
   const updateField = (
@@ -115,33 +178,78 @@ export const ImportContactsDialog = ({
     value: string,
   ) => {
     setRows((prev) =>
-      validateRows(
-        prev.map((row) =>
-          row.rowIndex === rowIndex
-            ? { ...row, fields: { ...row.fields, [key]: value } }
-            : row,
+      assignStableImportIds(
+        validateRows(
+          prev.map((row) =>
+            row.rowIndex === rowIndex
+              ? { ...row, fields: { ...row.fields, [key]: value } }
+              : row,
+          ),
         ),
+        prev,
       ),
     );
   };
 
   const removeRow = (rowIndex: number) => {
     setRows((prev) =>
-      validateRows(prev.filter((row) => row.rowIndex !== rowIndex)),
+      assignStableImportIds(
+        validateRows(prev.filter((row) => row.rowIndex !== rowIndex)),
+        prev,
+      ),
     );
   };
 
-  const validRowVars = rows
-    .map((row) => toImportRowVars(row))
-    .filter((vars) => vars !== null);
+  const validRows = rows.flatMap((row) => {
+    const vars = toImportRowVars(row);
+    return vars ? [{ originalRowIndex: row.rowIndex, vars }] : [];
+  });
+  const validRowVars = validRows.map(({ vars }) => vars);
   const invalidCount = rows.length - validRowVars.length;
+  const unrecognizedLabels = [
+    ...new Map(
+      rows.flatMap((row) =>
+        row.blockErrors.flatMap((error) =>
+          error.value
+            ? [
+                [
+                  error.normalizedLabel,
+                  {
+                    label: error.label,
+                    normalizedLabel: error.normalizedLabel,
+                    sample: error.value,
+                  },
+                ] as const,
+              ]
+            : [],
+        ),
+      ),
+    ).values(),
+  ];
 
   const handleConfirm = async () => {
+    if (!importRequestId) {
+      return;
+    }
     try {
       const importResults = await importContacts.mutateAsync({
+        importRequestId,
         rows: validRowVars,
       });
-      setResults(importResults);
+      setResults(
+        importResults.map((result) => {
+          const index =
+            validRows.at(result.index)?.originalRowIndex ?? result.index;
+          if (result.status === "created") {
+            return {
+              index,
+              status: result.status,
+              contactId: result.contactId,
+            };
+          }
+          return { index, status: result.status, reason: result.reason };
+        }),
+      );
       setRows([]);
       await queryClient.invalidateQueries({ queryKey: contactsKeys.all });
     } catch (error) {
@@ -173,12 +281,8 @@ export const ImportContactsDialog = ({
           <DialogDescription>
             {results
               ? t("contacts.import.resultsSummary", {
-                  created: String(
-                    results.filter((r) => r.status === "created").length,
-                  ),
-                  skipped: String(
-                    results.filter((r) => r.status === "skipped").length,
-                  ),
+                  created: results.filter((r) => r.status === "created").length,
+                  skipped: results.filter((r) => r.status === "skipped").length,
                 })
               : t("contacts.import.dialogDescription")}
           </DialogDescription>
@@ -191,9 +295,11 @@ export const ImportContactsDialog = ({
               detached(handleFileChange(file), "contact-import.choose-file")
             }
             onFieldChange={updateField}
+            onMappingChange={updateMapping}
             onRemoveRow={removeRow}
             results={results}
             rows={rows}
+            unrecognizedLabels={unrecognizedLabels}
             validCount={validRowVars.length}
           />
         </DialogPanel>
@@ -203,7 +309,7 @@ export const ImportContactsDialog = ({
           </DialogClose>
           {!results && rows.length > 0 && (
             <Button
-              disabled={validRowVars.length === 0}
+              disabled={validRowVars.length === 0 || !importRequestId}
               loading={importContacts.isPending}
               onClick={() =>
                 detached(handleConfirm(), "contact-import.confirm")
@@ -231,7 +337,12 @@ type ImportDialogBodyProps = {
     key: ParsedImportFieldKey,
     value: string,
   ) => void;
+  onMappingChange: (
+    normalizedLabel: string,
+    targetField: ParsedImportFieldKey | "ignore",
+  ) => void;
   onRemoveRow: (rowIndex: number) => void;
+  unrecognizedLabels: UnrecognizedImportLabel[];
 };
 
 const ImportDialogBody = ({
@@ -242,7 +353,9 @@ const ImportDialogBody = ({
   fileInputRef,
   onFileChange,
   onFieldChange,
+  onMappingChange,
   onRemoveRow,
+  unrecognizedLabels,
 }: ImportDialogBodyProps) => {
   const t = useTranslations();
 
@@ -285,10 +398,16 @@ const ImportDialogBody = ({
 
   return (
     <>
+      {unrecognizedLabels.length > 0 && (
+        <ImportLabelMapping
+          labels={unrecognizedLabels}
+          onMappingChange={onMappingChange}
+        />
+      )}
       <p className="text-muted-foreground text-xs">
         {t("contacts.import.previewSummary", {
-          valid: String(validCount),
-          invalid: String(invalidCount),
+          valid: validCount,
+          invalid: invalidCount,
         })}
       </p>
       {rows.map((row) => (
@@ -302,6 +421,71 @@ const ImportDialogBody = ({
         />
       ))}
     </>
+  );
+};
+
+const ImportLabelMapping = ({
+  labels,
+  onMappingChange,
+}: {
+  labels: UnrecognizedImportLabel[];
+  onMappingChange: (
+    normalizedLabel: string,
+    targetField: ParsedImportFieldKey | "ignore",
+  ) => void;
+}) => {
+  const t = useTranslations();
+
+  return (
+    <section className="flex flex-col gap-3 rounded-lg border p-3">
+      <div>
+        <h3 className="text-sm font-medium">
+          {t("contacts.import.mappingTitle")}
+        </h3>
+        <p className="text-muted-foreground text-xs">
+          {t("contacts.import.mappingDescription")}
+        </p>
+      </div>
+      {labels.map(({ label, normalizedLabel, sample }) => (
+        <div
+          className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-3"
+          key={normalizedLabel}
+        >
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium">{label}</p>
+            <p className="text-muted-foreground truncate text-xs">{sample}</p>
+          </div>
+          <Select
+            onValueChange={(value) => {
+              if (value === "ignore") {
+                onMappingChange(normalizedLabel, value);
+                return;
+              }
+              const target = FIELD_CONFIG.find(({ key }) => key === value);
+              if (target) {
+                onMappingChange(normalizedLabel, target.key);
+              }
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue
+                placeholder={t("contacts.import.mappingPlaceholder")}
+              />
+            </SelectTrigger>
+            <SelectPopup>
+              {FIELD_CONFIG.map(({ key, labelKey }) => (
+                <SelectItem key={key} value={key}>
+                  {t(labelKey)}
+                </SelectItem>
+              ))}
+              <SelectItem value="ignore">
+                {t("contacts.import.mappingIgnore")}
+              </SelectItem>
+            </SelectPopup>
+          </Select>
+        </div>
+      ))}
+    </section>
   );
 };
 

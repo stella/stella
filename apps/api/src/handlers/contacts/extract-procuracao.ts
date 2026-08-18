@@ -1,26 +1,34 @@
 import { Result } from "better-result";
+import { and, eq, gt, lt, or } from "drizzle-orm";
 import { t } from "elysia";
 import * as v from "valibot";
 
+import { contactExtractionUploads } from "@/api/db/schema";
+import { contactExtractionUploadKey } from "@/api/handlers/contacts/contact-extraction-upload";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
-import { extractFileText } from "@/api/lib/search/extract-content";
+import { getS3 } from "@/api/lib/s3";
+import { headObject, readTenantS3ArrayBuffer } from "@/api/lib/s3-presign";
+import {
+  extractFileText,
+  resolveExtractionMimeType,
+} from "@/api/lib/search/extract-content";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
+import { sha256Base64ToHex } from "@/api/lib/uploads/runtime";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const MAX_SOURCE_CHARS = 30_000;
 const EXTRACT_TIMEOUT_MS = 60_000;
+const PROCESSING_LEASE_MS = 3 * 60 * 1000;
 
 const extractProcuracaoBodySchema = t.Object({
-  /** The uploaded procuração (power-of-attorney) DOCX; the server extracts
-   *  the text and identifies the outorgante(s) — clients never parse
-   *  anything themselves. */
-  file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
+  uploadId: tSafeId("contactExtractionUpload"),
 });
 
 // strictObject + nullable-required members: OpenAI strict structured output
@@ -41,6 +49,10 @@ const outorganteCandidateSchema = v.strictObject({
 const extractProcuracaoOutputSchema = v.strictObject({
   outorgantes: v.array(outorganteCandidateSchema),
 });
+
+type ProcuracaoExtraction = v.InferOutput<
+  typeof extractProcuracaoOutputSchema
+> & { truncated: boolean };
 
 const SYSTEM_PROMPT = `You extract the OUTORGANTE(S) — the person or entity granting power of attorney — from a Brazilian "procuração" (power of attorney) document. Never extract the OUTORGADO (the lawyer/attorney receiving the power) as an outorgante, even when their qualification (OAB number, address) appears alongside the outorgante's.
 
@@ -65,16 +77,7 @@ const buildPrompt = (documentText: string): string =>
 
 const config = {
   permissions: { contact: ["create"] },
-  mcp: { type: "capability", reason: "contact_extraction_ui" },
-  transport: {
-    type: "file-input",
-    input: { field: "file", required: true, mediaTypes: [DOCX_MIME_TYPE] },
-    alternative: {
-      type: "none",
-      reason:
-        "extraction reads the uploaded document's bytes directly; there is no JSON-only equivalent",
-    },
-  },
+  mcp: { type: "internal", reason: "upload_mechanics" },
   body: extractProcuracaoBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;
@@ -96,20 +99,114 @@ const extractProcuracao = createSafeRootHandler(
       role: "fast",
     });
 
-    const file = body.file;
-    if (file.type !== DOCX_MIME_TYPE) {
+    const claimToken = Bun.randomUUIDv7();
+    const processingStartedAt = new Date();
+    const upload = yield* Result.await(
+      safeDb(async (tx) => {
+        // audit: skip — this row is an ephemeral upload-processing lease
+        const [claimed] = await tx
+          .update(contactExtractionUploads)
+          .set({
+            status: "processing",
+            claimToken,
+            processingStartedAt,
+          })
+          .where(
+            and(
+              eq(contactExtractionUploads.id, body.uploadId),
+              eq(contactExtractionUploads.organizationId, organizationId),
+              eq(contactExtractionUploads.userId, user.id),
+              gt(contactExtractionUploads.expiresAt, new Date()),
+              or(
+                eq(contactExtractionUploads.status, "pending"),
+                and(
+                  eq(contactExtractionUploads.status, "processing"),
+                  lt(
+                    contactExtractionUploads.processingStartedAt,
+                    new Date(Date.now() - PROCESSING_LEASE_MS),
+                  ),
+                ),
+              ),
+            ),
+          )
+          .returning();
+        return claimed ?? null;
+      }),
+    );
+    if (!upload) {
       return Result.err(
         new HandlerError({
-          status: 400,
-          message: "The source file must be a DOCX document.",
+          status: 404,
+          message: "Extraction upload was not found or has expired",
         }),
       );
     }
 
-    const text = yield* Result.await(
-      Result.tryPromise({
+    const key = contactExtractionUploadKey({
+      organizationId,
+      uploadId: upload.id,
+    });
+    const extractionResult = await (async (): Promise<
+      Result<ProcuracaoExtraction, HandlerError>
+    > => {
+      const mimeType = resolveExtractionMimeType({
+        fileName: upload.declaredName,
+        mimeType: upload.declaredMime,
+      });
+      if (mimeType !== DOCX_MIME_TYPE) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "The source file must be a DOCX document.",
+          }),
+        );
+      }
+
+      const objectHead = await headObject(key);
+      if (Result.isError(objectHead)) {
+        return Result.err(
+          new HandlerError({
+            status: 422,
+            message: "The source upload is incomplete",
+            cause: objectHead.error,
+          }),
+        );
+      }
+      if (
+        objectHead.value.contentLength !== upload.declaredSize ||
+        objectHead.value.checksumSHA256 === null ||
+        sha256Base64ToHex(objectHead.value.checksumSHA256) !==
+          upload.declaredSha256
+      ) {
+        return Result.err(
+          new HandlerError({
+            status: 422,
+            message: "The source upload failed its integrity check",
+          }),
+        );
+      }
+
+      const fileBufferResult = await Result.tryPromise({
         try: async () =>
-          await extractFileText(await file.arrayBuffer(), file.type, {
+          await readTenantS3ArrayBuffer({
+            key,
+            scope: { organizationId, workspaceId: null },
+            signal: AbortSignal.timeout(30_000),
+          }),
+        catch: (cause) =>
+          new HandlerError({
+            status: 500,
+            message: "Failed to read the source upload",
+            cause,
+          }),
+      });
+      if (Result.isError(fileBufferResult)) {
+        return fileBufferResult;
+      }
+
+      const textResult = await Result.tryPromise({
+        try: async () =>
+          await extractFileText(fileBufferResult.value, mimeType, {
             source: "contacts-extract-procuracao",
           }),
         catch: (cause) =>
@@ -118,40 +215,46 @@ const extractProcuracao = createSafeRootHandler(
             message: "Failed to read the source document",
             cause,
           }),
-      }),
-    );
-    if (text === null || text.trim() === "") {
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: "No text could be extracted from the source document.",
-        }),
-      );
-    }
+      });
+      if (Result.isError(textResult)) {
+        return textResult;
+      }
 
-    const aiAnalytics = createTanStackAIAnalyticsCallbacks({
-      usageMetering: {
-        actionType: "chat",
-        organizationId,
-        safeDb,
-        serviceTier: "standard",
-        userId: user.id,
-        workspaceId: null,
-      },
-      feature: "contacts.extractProcuracao",
-      modelRole: "fast",
-      orgAIConfig,
-      properties: { organization_id: organizationId },
-      traceId: Bun.randomUUIDv7(),
-    });
+      const text = textResult.value;
+      if (text === null || text.trim() === "") {
+        return Result.err(
+          new HandlerError({
+            status: 422,
+            message: "No text could be extracted from the source document.",
+          }),
+        );
+      }
 
-    const { outorgantes } = yield* Result.await(
-      Result.tryPromise({
+      const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+        usageMetering: {
+          actionType: "chat",
+          organizationId,
+          safeDb,
+          serviceTier: "standard",
+          userId: user.id,
+          workspaceId: null,
+        },
+        feature: "contacts.extractProcuracao",
+        modelRole: "fast",
+        orgAIConfig,
+        properties: { organization_id: organizationId },
+        traceId: Bun.randomUUIDv7(),
+      });
+
+      const normalizedText = text.trim();
+      const truncated = normalizedText.length > MAX_SOURCE_CHARS;
+      const generated = await Result.tryPromise({
         try: async () =>
           await generateTanStackObjectForRole({
             role: "fast",
             orgAIConfig,
             organizationId,
+            tenantWorkspaceIds: [],
             analytics: aiAnalytics,
             caching: resolveCaching({
               promptCachingEnabled: false,
@@ -159,7 +262,7 @@ const extractProcuracao = createSafeRootHandler(
               scopeKey: organizationId,
             }),
             system: SYSTEM_PROMPT,
-            prompt: buildPrompt(text.trim().slice(0, MAX_SOURCE_CHARS)),
+            prompt: buildPrompt(normalizedText.slice(0, MAX_SOURCE_CHARS)),
             outputSchema: extractProcuracaoOutputSchema,
             abortSignal: AbortSignal.timeout(EXTRACT_TIMEOUT_MS),
             serviceTier: "standard",
@@ -172,10 +275,75 @@ const extractProcuracao = createSafeRootHandler(
             cause,
           });
         },
+      });
+      if (Result.isError(generated)) {
+        return generated;
+      }
+
+      return Result.ok({ ...generated.value, truncated });
+    })();
+
+    if (Result.isError(extractionResult)) {
+      yield* Result.await(
+        safeDb(async (tx) => {
+          // audit: skip — releasing ephemeral upload-processing coordination
+          await tx
+            .update(contactExtractionUploads)
+            .set({
+              status: "pending",
+              claimToken: null,
+              processingStartedAt: null,
+            })
+            .where(
+              and(
+                eq(contactExtractionUploads.id, upload.id),
+                eq(contactExtractionUploads.organizationId, organizationId),
+                eq(contactExtractionUploads.userId, user.id),
+                eq(contactExtractionUploads.status, "processing"),
+                eq(contactExtractionUploads.claimToken, claimToken),
+              ),
+            );
+        }),
+      );
+      return Result.err(extractionResult.error);
+    }
+
+    const finalized = yield* Result.await(
+      safeDb(async (tx) => {
+        // audit: skip — terminal upload bookkeeping, not a domain mutation
+        const [row] = await tx
+          .update(contactExtractionUploads)
+          .set({
+            status: "used",
+            claimToken: null,
+            processingStartedAt: null,
+            usedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(contactExtractionUploads.id, upload.id),
+              eq(contactExtractionUploads.organizationId, organizationId),
+              eq(contactExtractionUploads.userId, user.id),
+              eq(contactExtractionUploads.status, "processing"),
+              eq(contactExtractionUploads.claimToken, claimToken),
+            ),
+          )
+          .returning({ id: contactExtractionUploads.id });
+        return row ?? null;
       }),
     );
+    if (!finalized) {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: "The extraction upload lease expired; retry the upload.",
+        }),
+      );
+    }
 
-    return Result.ok({ outorgantes });
+    getS3().delete(key).catch(captureError);
+
+    return extractionResult;
   },
 );
 
