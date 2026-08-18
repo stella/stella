@@ -363,7 +363,7 @@ const terminalProviderCode = (error: unknown, depth = 0): string | null => {
 // indistinguishable from a capability regression by status alone. Each signature
 // is matched case-insensitively against the message, code, and type fields on
 // the error chain.
-const CREDENTIAL_REJECTION_SIGNATURES = [
+export const CREDENTIAL_REJECTION_SIGNATURES = [
   "authentication failed", // bedrock-converse: bearer-key rejection body
   "authentication_error", // ai-anthropic: error body type
   "invalid x-api-key", // ai-anthropic: error body message
@@ -376,7 +376,10 @@ const CREDENTIAL_REJECTION_SIGNATURES = [
   "unauthorized", // ai-mistral: 401 body message
 ] as const;
 
-const CREDENTIAL_REJECTION_STATUSES = [401, 403] as const;
+// Only 401 rejects a credential on status alone: a 403 is also how a provider
+// answers a valid key that lacks entitlement to a model, so it must carry an
+// auth signature as well.
+export const CREDENTIAL_REJECTION_STATUSES = [401] as const;
 
 type CredentialRejectionReason =
   | (typeof CREDENTIAL_REJECTION_SIGNATURES)[number]

@@ -12,7 +12,10 @@ import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-sc
 import {
   CanaryCredentialRejectedError,
   CanaryProviderRunError,
+  classifyCanaryFailure,
   createPdfCanaryMessages,
+  CREDENTIAL_REJECTION_SIGNATURES,
+  CREDENTIAL_REJECTION_STATUSES,
   errorSummary,
   isRetryableCanaryError,
   PDF_CANARY_TOKEN,
@@ -480,17 +483,50 @@ describe("AI provider canary retry contract", () => {
   });
 });
 
-// The shared generate path rethrows a provider RUN_ERROR as HTTP 502 while
-// keeping the provider's message, so this is the exact shape an expired key
-// reached the canary as.
+// The shared generate path rethrows a provider RUN_ERROR as HTTP 502, keeping
+// the provider message or the raw error body, so this is the exact shape an
+// expired key reached the canary as.
 class ProviderAuthError extends Error {
   readonly status = 502;
+  readonly rawEvent: Record<string, unknown> | undefined;
 
-  constructor(message: string) {
+  constructor(message: string, rawEvent?: Record<string, unknown>) {
     super(message);
     this.name = "ProviderAuthError";
+    this.rawEvent = rawEvent;
   }
 }
+
+type CredentialSignatureField = "code" | "message" | "type";
+
+// The adapter field each declared signature actually arrives on. One standalone
+// fixture per signature keeps a removed matcher from being masked by a sibling
+// match on the same error.
+const CREDENTIAL_SIGNATURE_FIELDS = {
+  "authentication failed": "message",
+  authentication_error: "type",
+  "invalid x-api-key": "message",
+  invalid_api_key: "code",
+  "incorrect api key": "message",
+  "api key not valid": "message",
+  permission_denied: "message",
+  unauthenticated: "message",
+  "no auth credentials found": "message",
+  unauthorized: "message",
+} as const satisfies Record<
+  (typeof CREDENTIAL_REJECTION_SIGNATURES)[number],
+  CredentialSignatureField
+>;
+
+const credentialFixture = (
+  signature: string,
+  field: CredentialSignatureField,
+): ProviderAuthError =>
+  field === "message"
+    ? new ProviderAuthError(signature)
+    : new ProviderAuthError("Provider request failed.", {
+        error: { [field]: signature },
+      });
 
 const runProbeWithoutBackoff = async ({
   run,
@@ -507,6 +543,40 @@ const runProbeWithoutBackoff = async ({
   });
 
 describe("AI provider canary credential rejection", () => {
+  test("classifies every declared signature on its own", () => {
+    const exercised = Object.keys(CREDENTIAL_SIGNATURE_FIELDS);
+    expect(new Set(exercised)).toEqual(
+      new Set(CREDENTIAL_REJECTION_SIGNATURES),
+    );
+
+    for (const signature of CREDENTIAL_REJECTION_SIGNATURES) {
+      const fixture = credentialFixture(
+        signature,
+        CREDENTIAL_SIGNATURE_FIELDS[signature],
+      );
+      expect(classifyCanaryFailure(fixture)).toEqual({
+        kind: "credential-rejected",
+        reason: signature,
+      });
+    }
+  });
+
+  test("treats a bare 403 as a provider failure, a bare 401 as a rejection", () => {
+    // A valid key without entitlement to a model also answers 403.
+    expect(classifyCanaryFailure({ status: 403 })).toEqual({
+      kind: "provider-failure",
+    });
+    expect(
+      classifyCanaryFailure({ status: 403, message: "PERMISSION_DENIED" }),
+    ).toEqual({ kind: "credential-rejected", reason: "permission_denied" });
+    for (const status of CREDENTIAL_REJECTION_STATUSES) {
+      expect(classifyCanaryFailure({ status })).toEqual({
+        kind: "credential-rejected",
+        reason: `HTTP ${status}`,
+      });
+    }
+  });
+
   test("summarizes auth statuses and adapter auth signatures as credential rejection", () => {
     const signal = new AbortController().signal;
     const credentialFailures = [
@@ -548,7 +618,8 @@ describe("AI provider canary credential rejection", () => {
       new ProviderAuthError(
         '{"error":{"code":400,"message":"API key not valid. Please pass a valid API key.","status":"INVALID_ARGUMENT"}}',
       ),
-      { status: 403 },
+      // ai-gemini: restricted key, 403 alongside an auth signature.
+      { status: 403, message: "PERMISSION_DENIED" },
     ];
 
     expect(
