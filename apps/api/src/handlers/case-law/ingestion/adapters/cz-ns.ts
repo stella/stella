@@ -527,9 +527,35 @@ const czNsSliceDate = (slice: string): string => {
  * A result row. The docket and the universal id come out of the same anchor,
  * so a row that names one names the other, and a row that names neither is
  * not a row at all.
+ *
+ * The docket runs to the anchor's close rather than to the first tag inside
+ * it: one decision can settle several dockets, and the publisher prints those
+ * inside the one anchor separated by `<br />`. A group that stopped at markup
+ * skipped such a row entirely, and the day it fell in then counted one more
+ * decision than it listed and could never settle.
  */
 const LISTING_ROW_PATTERN =
-  /<a\s+class="odk"\s+href="[^"]*\/WebSearch\/(?<unid>[0-9A-Fa-f]{32})\?openDocument"[^>]*>(?<caseNumber>[^<]*)<\/a>/gu;
+  /<a\s+class="odk"\s+href="[^"]*\/WebSearch\/(?<unid>[0-9A-Fa-f]{32})\?openDocument"[^>]*>(?<caseNumber>[\s\S]*?)<\/a>/gu;
+
+/** What several dockets settled by one decision are joined with. */
+const CASE_NUMBER_SEPARATOR = ", ";
+
+/**
+ * The docket an anchor names, as one field.
+ *
+ * `stripHtml` turns the publisher's `<br />` between co-settled dockets into
+ * a line break; the store holds one case number per decision, so the parts
+ * are joined into a single number. Identity is unaffected: this adapter keys
+ * a decision on its universal id, and the docket is descriptive.
+ */
+const parseListingCaseNumber = (raw: string): string =>
+  stripHtml(raw)
+    .split("\n")
+    .flatMap((part) => {
+      const trimmed = part.trim();
+      return trimmed.length === 0 ? [] : [trimmed];
+    })
+    .join(CASE_NUMBER_SEPARATOR);
 
 /**
  * The two counts the publisher may state about a listing, both captured under
@@ -560,7 +586,7 @@ const parseListingCount = (
 const parseListingRows = (html: string): CzNsListingRow[] =>
   [...html.matchAll(LISTING_ROW_PATTERN)].map((match) => ({
     unid: match.groups?.["unid"] ?? "",
-    caseNumber: stripHtml(match.groups?.["caseNumber"] ?? ""),
+    caseNumber: parseListingCaseNumber(match.groups?.["caseNumber"] ?? ""),
   }));
 
 /**
