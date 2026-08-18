@@ -1,11 +1,12 @@
 import { Kind, OptionalKind } from "@sinclair/typebox";
 import type { TObject, TSchema } from "@sinclair/typebox";
+import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
 import { Elysia } from "elysia";
-import { readdir } from "node:fs/promises";
-import nodePath from "node:path";
 
 import { multipartFormParser } from "@/api/lib/multipart-form-parser";
+
+import { discoverSafeHandlers } from "../../../scripts/lib/enumerate-safe-handlers";
 
 // Elysia's built-in multipart parser runs before route validation and turns
 // any form field whose value starts with `{` or `[` into a parsed object. A
@@ -17,31 +18,16 @@ import { multipartFormParser } from "@/api/lib/multipart-form-parser";
 // posts a JSON-shaped value into every free-text string field, so a handler
 // that would regress fails here instead of in the browser.
 
-const HANDLERS_DIR = nodePath.join(import.meta.dir, "../../handlers");
+/** Endpoint ids are repo-relative; trim the tree prefix so an offender reads
+ *  as `templates/fill.ts`. */
+const HANDLERS_PREFIX = "apps/api/src/handlers/";
 const JSON_SHAPED_VALUE = '{"probe":true}';
 const PLAIN_VALUE = "probe";
 
 /** Floor on the number of multipart handlers the census must discover, a
  *  small margin under the current count. It fails loudly if discovery breaks
  *  and stops finding the handlers it is supposed to be probing. */
-const MIN_MULTIPART_HANDLERS = 14;
-
-const listTypeScriptFiles = async (dir: string): Promise<string[]> => {
-  const entries = await readdir(dir, { withFileTypes: true });
-  const files: string[] = [];
-  for (const entry of entries) {
-    const path = nodePath.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      // oxlint-disable-next-line no-await-in-loop -- recursive depth-first traversal accumulates files in directory order
-      files.push(...(await listTypeScriptFiles(path)));
-      continue;
-    }
-    if (entry.isFile() && entry.name.endsWith(".ts")) {
-      files.push(path);
-    }
-  }
-  return files;
-};
+const MIN_MULTIPART_HANDLERS = 16;
 
 const isObjectSchema = (schema: unknown): schema is TObject =>
   typeof schema === "object" &&
@@ -110,11 +96,24 @@ const isFreeTextField = (schema: TSchema): boolean => {
 
 const isOptional = (schema: TSchema): boolean => OptionalKind in schema;
 
-const UUID_FILLER = "00000000-0000-4000-8000-000000000000";
+/**
+ * Candidates for a required string-shaped field, offered in order. The field's
+ * own schema decides which one it accepts, so a patterned id, a hash, or a
+ * plain string all get filled without this test restating their rules. The
+ * hash is computed, not pasted, so it is a real digest rather than a literal
+ * that could drift out of the shape a `sha256` field demands.
+ */
+const STRING_FILLERS = [
+  PLAIN_VALUE,
+  "00000000-0000-4000-8000-000000000000",
+  new Bun.CryptoHasher("sha256").update(PLAIN_VALUE).digest("hex"),
+];
 
 /**
- * A representative value for a required non-string, non-file field so the
- * probe request is valid apart from the JSON-shaped strings under test.
+ * A representative value for a required non-file field so the probe request is
+ * valid apart from the JSON-shaped strings under test. Kinds Elysia coerces
+ * from the wire (numbers, booleans, literals) get their coercible text; every
+ * string-shaped kind is filled by asking the schema itself.
  */
 const filler = (schema: TSchema): string | null => {
   switch (kindOf(schema)) {
@@ -125,11 +124,6 @@ const filler = (schema: TSchema): string | null => {
     case "Number":
     case "Integer":
       return "1";
-    case "String":
-      return stringKeyword(schema, "format") === "uuid" ||
-        numberKeyword(schema, "minLength") === UUID_FILLER.length
-        ? UUID_FILLER
-        : PLAIN_VALUE;
     case "Union": {
       for (const member of unionMembers(schema)) {
         const value = filler(member);
@@ -139,8 +133,17 @@ const filler = (schema: TSchema): string | null => {
       }
       return null;
     }
-    default:
-      return null;
+    default: {
+      // Closed value sets (`t.UnionEnum`) carry their members as `enum`.
+      const members: unknown = schema["enum"];
+      if (Array.isArray(members) && members.length > 0) {
+        return String(members[0]);
+      }
+      return (
+        STRING_FILLERS.find((candidate) => Value.Check(schema, candidate)) ??
+        null
+      );
+    }
   }
 };
 
@@ -152,53 +155,23 @@ type MultipartHandler = {
 
 type MultipartCensus = {
   handlers: MultipartHandler[];
-  importFailures: string[];
+  importErrors: { id: string; message: string }[];
 };
 
-/** The body schema a handler module declares, or `undefined` when the module
- *  is not a `{ config, handler }` endpoint. Read structurally: a handler can
- *  import its schema from a sibling module, so nothing about the schema is
- *  visible in the handler's own source text. */
-const declaredBody = (module: unknown): unknown =>
-  typeof module === "object" &&
-  module !== null &&
-  "default" in module &&
-  typeof module.default === "object" &&
-  module.default !== null &&
-  "config" in module.default &&
-  typeof module.default.config === "object" &&
-  module.default.config !== null &&
-  "body" in module.default.config
-    ? module.default.config.body
-    : undefined;
-
 /**
- * Imports every handler module and keeps the ones whose body schema carries a
- * file field. A module that cannot be imported is reported, never skipped: a
- * silent skip would shrink the census without shrinking the risk.
+ * Keeps the endpoints whose declared body carries a file field. Discovery is
+ * `discoverSafeHandlers()`, the same enumerator the MCP coverage guard and the
+ * capability-catalog exporter use, so the census and those guards can never
+ * disagree about what the handler universe is. It also imports only modules
+ * that call a safe-handler factory, which is what keeps a standalone CLI
+ * script in the handler tree from running its side effects here.
  */
 const loadMultipartHandlers = async (): Promise<MultipartCensus> => {
+  const { endpoints, importErrors } = await discoverSafeHandlers();
   const handlers: MultipartHandler[] = [];
-  const importFailures: string[] = [];
 
-  for (const file of await listTypeScriptFiles(HANDLERS_DIR)) {
-    if (file.endsWith(".test.ts") || file.endsWith(".d.ts")) {
-      continue;
-    }
-    const relative = nodePath.relative(HANDLERS_DIR, file);
-
-    let module: unknown;
-    try {
-      // oxlint-disable-next-line no-await-in-loop -- sequential loads keep the census deterministic
-      module = await import(file);
-    } catch (error) {
-      importFailures.push(
-        `${relative}: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      continue;
-    }
-
-    const body = declaredBody(module);
+  for (const { id, config } of endpoints) {
+    const body = config["body"];
     if (!isObjectSchema(body)) {
       continue;
     }
@@ -207,7 +180,9 @@ const loadMultipartHandlers = async (): Promise<MultipartCensus> => {
       continue;
     }
     handlers.push({
-      file: relative,
+      file: id.startsWith(HANDLERS_PREFIX)
+        ? id.slice(HANDLERS_PREFIX.length)
+        : id,
       body,
       stringFields: properties
         .filter(([, schema]) => isFreeTextField(schema))
@@ -215,7 +190,7 @@ const loadMultipartHandlers = async (): Promise<MultipartCensus> => {
     });
   }
 
-  return { handlers, importFailures };
+  return { handlers, importErrors };
 };
 
 const buildForm = (body: TObject, stringValue: string): FormData => {
@@ -265,11 +240,11 @@ const postForm = async (
 
 describe("multipart body string fields", () => {
   test("every multipart handler string field survives a JSON-shaped value", async () => {
-    const { handlers, importFailures } = await loadMultipartHandlers();
+    const { handlers, importErrors } = await loadMultipartHandlers();
 
     // An unimportable module is an unmeasured handler, so say so rather than
     // letting the census quietly cover less than it claims.
-    expect(importFailures).toEqual([]);
+    expect(importErrors).toEqual([]);
 
     // The census only means something if it actually found the handlers.
     expect(handlers.length).toBeGreaterThanOrEqual(MIN_MULTIPART_HANDLERS);
