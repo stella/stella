@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { rlsDb } from "@/api/db/root";
 /**
  * GDPR redaction / takedown for a single case-law decision: strips
@@ -24,15 +26,40 @@ const ingestionDb = createIngestionDb(rlsDb);
 await refreshS3();
 await refreshCorpusS3();
 
-const found = await redactCaseLawDecision({
+const outcome = await redactCaseLawDecision({
   decisionId: toSafeId<"caseLawDecision">(decisionIdArg),
   scopedDb: ingestionDb,
 });
 
-console.log(
-  found
-    ? `Redacted decision ${decisionIdArg} across all stores.`
-    : `Decision ${decisionIdArg} not found.`,
-);
+const report = ((): { exitCode: 0 | 1; message: string } => {
+  switch (outcome.type) {
+    case "redacted":
+      return {
+        exitCode: 0,
+        message: `Redacted decision ${decisionIdArg} across all stores.`,
+      };
+    case "not-found":
+      return { exitCode: 1, message: `Decision ${decisionIdArg} not found.` };
+    case "corpus-objects-remain": {
+      const cause =
+        outcome.error instanceof Error
+          ? outcome.error.message
+          : String(outcome.error);
+      return {
+        exitCode: 1,
+        message: `Redacted decision ${decisionIdArg}, but corpus objects remain; pointer columns are kept for a retry: ${cause}`,
+      };
+    }
+    default: {
+      const unhandled: never = outcome;
+      return panic(`Unhandled redaction outcome: ${String(unhandled)}`);
+    }
+  }
+})();
 
-process.exit(found ? 0 : 1);
+if (report.exitCode === 0) {
+  console.log(report.message);
+} else {
+  console.error(report.message);
+}
+process.exit(report.exitCode);

@@ -9,11 +9,18 @@ import {
 import { CASE_LAW_CORPUS_MIRROR_STATUS } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
+  PayloadBudgetError,
   zstdCompressAsync,
+  zstdCompressBound,
   zstdDecompressToStringBounded,
 } from "@/api/lib/compression";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import { CorpusPayloadUnavailableError } from "@/api/lib/errors/tagged-errors";
+import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
+import type {
+  CorpusLocation,
+  PackedCorpusLocation,
+} from "@/api/lib/legal-search/corpus-location";
 import {
   emptyAstSchema,
   EMPTY_AST,
@@ -27,7 +34,8 @@ import { LIMITS } from "@/api/lib/limits";
 import {
   deleteCorpusS3ObjectWithSignal,
   putCorpusS3ObjectWithSignal,
-  readCorpusS3Bytes,
+  readCorpusS3BytesBounded,
+  readCorpusS3Range,
 } from "@/api/lib/s3";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -37,6 +45,11 @@ import { withTimeout } from "@/api/lib/with-timeout";
  * jurisdiction partition so a re-parse produces a new immutable object
  * and the row's key columns point at the current version. Payloads are
  * zstd-compressed JSON.
+ *
+ * A row's key column may also hold a packed address (corpus-location.ts):
+ * the same bytes as a member of a larger pack object (corpus-pack.ts),
+ * read by byte range. Every reader below parses the stored value, so
+ * callers pass the column through unchanged whichever form it holds.
  */
 
 const CONTENT_TYPE = "application/zstd";
@@ -44,6 +57,15 @@ const CONTENT_TYPE = "application/zstd";
 const CORPUS_IO_TIMEOUT_MS = LIMITS.corpusObjectIoTimeoutMs;
 
 const PAYLOAD_MAX_BYTES = LIMITS.corpusPayloadMaxDecompressedBytes;
+
+/**
+ * Ceiling on the transferred (still-compressed) bytes of one payload. A
+ * zstd frame can exceed what it decodes to by frame and block overhead, so
+ * a frame whose output sits at the decompressed ceiling must still fit the
+ * transfer; the bound is zstd's worst case over that ceiling. Both the
+ * whole-object read and the packed range read are checked against it.
+ */
+export const CORPUS_TRANSFER_MAX_BYTES = zstdCompressBound(PAYLOAD_MAX_BYTES);
 
 const persistedCorpusAstSchema = v.nullable(
   v.union([persistedDocumentAstSchema, emptyAstSchema]),
@@ -532,34 +554,118 @@ export const writeCorpusDocument = async (
   return { type: "written", written };
 };
 
-type ReadCorpusTextOptions = {
-  /**
-   * Override the bounded corpus GET. Defaults to the corpus bucket read; a
-   * caller (or a test proving the ceiling fires) can supply a different byte
-   * source without bypassing the wall-clock bound.
-   */
-  read?: () => Promise<Uint8Array>;
+type BoundedObjectReader = (options: {
+  key: string;
+  maxBytes: number;
+  signal: AbortSignal;
+}) => Promise<Uint8Array>;
+
+type RangeReader = (options: {
+  key: string;
+  offset: number;
+  length: number;
+  signal: AbortSignal;
+}) => Promise<Uint8Array>;
+
+type ReadCorpusBytesAtOptions = {
+  location: CorpusLocation;
+  /** Ceiling on the transferred (still-compressed) bytes. */
+  maxBytes: number;
+  signal: AbortSignal;
+  /** Test seams; production reads through the corpus bucket client. */
+  readObject?: BoundedObjectReader;
+  readRange?: RangeReader;
+};
+
+/**
+ * The bytes a corpus location names, transferred under `maxBytes`.
+ *
+ * An object location is a bounded whole-object GET. A packed location is a
+ * range GET of exactly the member; its declared length is checked against
+ * the ceiling before any request is made.
+ */
+export const readCorpusBytesAt = async ({
+  location,
+  maxBytes,
+  signal,
+  readObject = readCorpusS3BytesBounded,
+  readRange = readCorpusS3Range,
+}: ReadCorpusBytesAtOptions): Promise<Uint8Array> => {
+  switch (location.type) {
+    case "object":
+      return await readObject({ key: location.key, maxBytes, signal });
+    case "packed": {
+      if (location.length > maxBytes) {
+        throw new PayloadBudgetError({
+          message: `Packed corpus member declares ${location.length} bytes, past the ${maxBytes}-byte ceiling`,
+        });
+      }
+      return await readRange({
+        key: location.packKey,
+        offset: location.offset,
+        length: location.length,
+        signal,
+      });
+    }
+    default: {
+      const unhandled: never = location;
+      return panic(`Unhandled corpus location: ${String(unhandled)}`);
+    }
+  }
+};
+
+/** Test seams for the two byte sources; production reads through the corpus bucket client. */
+type CorpusByteSourceSeams = {
+  readObject?: BoundedObjectReader;
+  readRange?: RangeReader;
+};
+
+type ReadStoredCorpusBytesOptions = CorpusByteSourceSeams & {
+  storedKey: string;
+  signal: AbortSignal;
+};
+
+const readStoredCorpusBytes = async ({
+  storedKey,
+  signal,
+  ...seams
+}: ReadStoredCorpusBytesOptions): Promise<Uint8Array> =>
+  await readCorpusBytesAt({
+    location: parseCorpusLocation(storedKey),
+    maxBytes: CORPUS_TRANSFER_MAX_BYTES,
+    signal,
+    ...seams,
+  });
+
+type ReadCorpusTextOptions = CorpusByteSourceSeams & {
   timeoutMs?: number;
 };
 
+/**
+ * Every reader takes the row's key column as stored: a plain object key or a
+ * packed address (see {@link parseCorpusLocation}). The seams replace only
+ * the byte source behind that routing, never the routing or the wall-clock
+ * bound.
+ */
 export const readCorpusText = async (
-  key: string,
-  { read, timeoutMs = CORPUS_IO_TIMEOUT_MS }: ReadCorpusTextOptions = {},
+  storedKey: string,
+  { timeoutMs = CORPUS_IO_TIMEOUT_MS, ...seams }: ReadCorpusTextOptions = {},
 ): Promise<string> => {
   const bytes = await boundedCorpusIo(
     "corpus-read-text",
-    read ?? (async (signal) => await readCorpusS3Bytes(key, signal)),
+    async (signal) =>
+      await readStoredCorpusBytes({ storedKey, signal, ...seams }),
     { timeoutMs },
   );
   return await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES);
 };
 
 export const readCorpusSections = async (
-  key: string,
+  storedKey: string,
 ): Promise<DecisionSection[] | null> => {
   const bytes = await boundedCorpusIo(
     "corpus-read-sections",
-    async (signal) => await readCorpusS3Bytes(key, signal),
+    async (signal) => await readStoredCorpusBytes({ storedKey, signal }),
   );
   const parsed: unknown = JSON.parse(
     await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES),
@@ -568,11 +674,11 @@ export const readCorpusSections = async (
 };
 
 export const readCorpusAst = async (
-  key: string,
+  storedKey: string,
 ): Promise<DocumentAst | EmptyAst | null> => {
   const bytes = await boundedCorpusIo(
     "corpus-read-ast",
-    async (signal) => await readCorpusS3Bytes(key, signal),
+    async (signal) => await readStoredCorpusBytes({ storedKey, signal }),
   );
   const parsed: unknown = JSON.parse(
     await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES),
@@ -582,6 +688,7 @@ export const readCorpusAst = async (
 
 type CorpusReadWithFallbackInput<T> = {
   documentId: string;
+  /** The row's key column as stored (object key or packed address). */
   key: string;
   /** Telemetry label for the degraded (fallback-served) path. */
   step: string;
@@ -627,6 +734,24 @@ export const readCorpusPayloadOrFallback = async <T>({
   return postgresCopy;
 };
 
+export type CorpusDeleteOutcome =
+  /** Every present pointer named a standalone object; each DELETE settled. */
+  | { type: "deleted"; keys: string[] }
+  /**
+   * At least one pointer addresses a range inside a shared object; that
+   * object is left in place. Standalone siblings were deleted.
+   */
+  | {
+      type: "shared-object-retained";
+      deletedKeys: string[];
+      retained: PackedCorpusLocation[];
+    };
+
+type DeleteCorpusDocumentOptions = CorpusIoOptions & {
+  /** Test seam; production deletes through the corpus bucket client. */
+  deleteObject?: (key: string, signal: AbortSignal) => Promise<void>;
+};
+
 /**
  * Delete all corpus objects for a decision version (GDPR erasure).
  * Keys are individually nullable: a partially ingested decision may have
@@ -638,21 +763,33 @@ export const deleteCorpusDocument = async (
     sectionsKey: string | null;
     astKey: string | null;
   },
-  { signal }: CorpusIoOptions = {},
-): Promise<void> => {
-  const present = [keys.textKey, keys.sectionsKey, keys.astKey].filter(
-    (key): key is string => key !== null,
-  );
+  {
+    signal,
+    deleteObject = deleteCorpusS3ObjectWithSignal,
+  }: DeleteCorpusDocumentOptions = {},
+): Promise<CorpusDeleteOutcome> => {
+  const objectKeys: string[] = [];
+  const retained: PackedCorpusLocation[] = [];
+  for (const storedKey of [keys.textKey, keys.sectionsKey, keys.astKey]) {
+    if (storedKey === null) {
+      continue;
+    }
+    const location = parseCorpusLocation(storedKey);
+    if (location.type === "packed") {
+      retained.push(location);
+    } else {
+      objectKeys.push(location.key);
+    }
+  }
   const deleteController = new AbortController();
   const groupSignal =
     signal === undefined
       ? deleteController.signal
       : AbortSignal.any([deleteController.signal, signal]);
-  const operations = present.map((key) =>
+  const operations = objectKeys.map((key) =>
     startCancellableCorpusIo(
       "corpus-delete",
-      async (deleteSignal) =>
-        await deleteCorpusS3ObjectWithSignal(key, deleteSignal),
+      async (deleteSignal) => await deleteObject(key, deleteSignal),
       { signal: groupSignal },
     ),
   );
@@ -660,4 +797,7 @@ export const deleteCorpusDocument = async (
     controller: deleteController,
     operations,
   });
+  return retained.length === 0
+    ? { type: "deleted", keys: objectKeys }
+    : { type: "shared-object-retained", deletedKeys: objectKeys, retained };
 };

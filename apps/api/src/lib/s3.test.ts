@@ -1,9 +1,10 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 
 import {
   getS3,
   isMissingS3ObjectError,
   isS3Stale,
+  readCorpusS3Range,
   resolveS3Credentials,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
@@ -369,5 +370,157 @@ describe("isMissingS3ObjectError", () => {
     expect(unanswered.map(isMissingS3ObjectError)).toEqual(
       unanswered.map(() => false),
     );
+  });
+});
+
+/**
+ * The range reader is the only path that hands a caller a slice of a larger
+ * object, so it is exercised against a fake store that serves exactly what
+ * the request header names. A one-byte error in the header end would surface
+ * as a body of the wrong length here.
+ */
+describe("readCorpusS3Range", () => {
+  const originalFetch = globalThis.fetch;
+  const object = new Uint8Array(256).map((_, index) => index);
+  const seenRangeHeaders: string[] = [];
+
+  // Serves the byte range the header names, the way an object store does.
+  const rangeServingFetch = async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ): Promise<Response> => {
+    const headers = new Headers(
+      init?.headers ?? (input instanceof Request ? input.headers : undefined),
+    );
+    const range = headers.get("range");
+    if (range === null) {
+      return await Promise.resolve(new Response(object, { status: 200 }));
+    }
+    seenRangeHeaders.push(range);
+    const match = /^bytes=(?<first>\d+)-(?<last>\d+)$/u.exec(range);
+    const first = Number(match?.groups?.["first"]);
+    const last = Number(match?.groups?.["last"]);
+    const body = object.slice(first, last + 1);
+    return await Promise.resolve(
+      new Response(body, {
+        status: 206,
+        headers: {
+          "content-range": `bytes ${first}-${last}/${object.byteLength}`,
+          "content-length": String(body.byteLength),
+        },
+      }),
+    );
+  };
+
+  const installFetch = (
+    stub: (
+      input: string | URL | Request,
+      init?: RequestInit,
+    ) => Promise<Response>,
+  ) => {
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+  };
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    seenRangeHeaders.length = 0;
+  });
+
+  test("asks for the inclusive range and returns exactly those bytes", async () => {
+    installFetch(rangeServingFetch);
+
+    const bytes = await readCorpusS3Range({
+      key: "legal-corpus/packs/jurisdiction=SVK/p.pack",
+      offset: 100,
+      length: 7,
+      signal: new AbortController().signal,
+    });
+
+    expect(seenRangeHeaders).toEqual(["bytes=100-106"]);
+    expect([...bytes]).toEqual([100, 101, 102, 103, 104, 105, 106]);
+  });
+
+  test("refuses a store that ignores the range and answers 200", async () => {
+    installFetch(async (input, init) => {
+      const full = await rangeServingFetch(input, {
+        ...init,
+        headers: undefined,
+      });
+      return full;
+    });
+
+    const rejection: unknown = await readCorpusS3Range({
+      key: "legal-corpus/packs/jurisdiction=SVK/p.pack",
+      offset: 0,
+      length: 8,
+      signal: new AbortController().signal,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toMatchObject({
+      message: expect.stringContaining("not 206"),
+    });
+  });
+
+  test("refuses a 206 whose Content-Range is not the requested range", async () => {
+    installFetch(
+      async () =>
+        await Promise.resolve(
+          new Response(object.slice(0, 8), {
+            status: 206,
+            headers: {
+              "content-range": `bytes 1-8/${object.byteLength}`,
+              "content-length": "8",
+            },
+          }),
+        ),
+    );
+
+    const rejection: unknown = await readCorpusS3Range({
+      key: "legal-corpus/packs/jurisdiction=SVK/p.pack",
+      offset: 0,
+      length: 8,
+      signal: new AbortController().signal,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toMatchObject({
+      message: expect.stringContaining("different range"),
+    });
+  });
+
+  test("refuses a body whose length differs from the range", async () => {
+    installFetch(
+      async () =>
+        await Promise.resolve(
+          new Response(object.slice(0, 9), {
+            status: 206,
+            headers: {
+              "content-range": `bytes 0-7/${object.byteLength}`,
+              "content-length": "9",
+            },
+          }),
+        ),
+    );
+
+    const rejection: unknown = await readCorpusS3Range({
+      key: "legal-corpus/packs/jurisdiction=SVK/p.pack",
+      offset: 0,
+      length: 8,
+      signal: new AbortController().signal,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toMatchObject({
+      message: expect.stringContaining("expected 8"),
+    });
   });
 });

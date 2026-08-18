@@ -191,6 +191,33 @@ test("redaction fences uploads before inspecting or deleting object keys", async
   expect(objectDelete).toBeGreaterThan(intentFence);
 });
 
+test("pointer columns and the success audit depend on every corpus object being gone", async () => {
+  const source = await Bun.file(caseLawErasureSource).text();
+  const erasure = source.indexOf("corpusErasure = await eraseCorpusObjects({");
+  const incompleteAudit = source.indexOf(
+    "await recordFailedRedactionAudit({",
+    erasure,
+  );
+  const pointerClear = source.indexOf(
+    ".set({ textS3Key: null, normalizedS3Key: null, astS3Key: null })",
+  );
+  const pointerGuard = source.lastIndexOf(
+    'if (corpusErasure.type === "deleted") {',
+    pointerClear,
+  );
+  const incompleteReturn = source.indexOf(
+    'return { type: "corpus-objects-remain", error: corpusErasure.error };',
+  );
+  const successAudit = source.indexOf('status: "succeeded"');
+
+  expect(erasure).toBeGreaterThan(-1);
+  expect(incompleteAudit).toBeGreaterThan(erasure);
+  expect(pointerGuard).toBeGreaterThan(incompleteAudit);
+  expect(pointerClear).toBeGreaterThan(pointerGuard);
+  expect(incompleteReturn).toBeGreaterThan(pointerClear);
+  expect(successAudit).toBeGreaterThan(incompleteReturn);
+});
+
 test("lease acquisition failures are audited after local redaction", async () => {
   const source = await Bun.file(caseLawErasureSource).text();
   const firstIrreversibleMutation = source.indexOf(

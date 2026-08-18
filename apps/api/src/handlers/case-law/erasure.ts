@@ -1,3 +1,4 @@
+import { Result, TaggedError } from "better-result";
 import { and, eq, isNotNull, isNull, or } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -23,6 +24,7 @@ import {
 } from "@/api/lib/legal-search/case-law-corpus-upload-intents";
 import { removeDecisionFromIndex } from "@/api/lib/legal-search/case-law-search-index";
 import { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
+import { formatCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import { deleteCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
 import {
   corpusIndexId,
@@ -44,13 +46,84 @@ import {
  * The decision row itself is kept (citation-graph node) but stripped of
  * personal text. `content_hash` is nulled so neither backfill loop
  * re-indexes the body. The erasure is recorded in case_law_index_jobs.
- *
- * Returns false if the decision does not exist.
  */
 type RedactInput = {
   decisionId: SafeId<"caseLawDecision">;
   scopedDb: ScopedDb;
   generation?: string;
+  /** Test seam; production deletes through the corpus bucket client. */
+  deleteCorpus?: typeof deleteCorpusDocument;
+};
+
+export type RedactCaseLawDecisionOutcome =
+  | { type: "not-found" }
+  /** Every store was scrubbed. */
+  | { type: "redacted" }
+  /**
+   * The row is redacted and every index copy removed, but at least one
+   * corpus object still holds the payload. Its pointer columns are kept as
+   * retry targets and a failed audit row records the cause.
+   */
+  | { type: "corpus-objects-remain"; error: unknown };
+
+/** A pointer named a range inside an object that holds other members. */
+export class CorpusObjectRetainedError extends TaggedError(
+  "CorpusObjectRetainedError",
+)<{
+  message: string;
+  retained: string[];
+}> {}
+
+type CorpusObjectErasure =
+  | { type: "deleted" }
+  /**
+   * At least one object still holds the payload, whether its DELETE failed
+   * or it holds other members and was left in place. Either way the pointer
+   * columns must stay as retry targets.
+   */
+  | { type: "incomplete"; error: unknown };
+
+type EraseCorpusObjectsOptions = {
+  keys: Parameters<typeof deleteCorpusDocument>[0];
+  deleteCorpus?: typeof deleteCorpusDocument;
+};
+
+/**
+ * Delete a decision's corpus objects and say whether every payload is gone.
+ * A pointer into an object that holds other members leaves that object in
+ * place, so its payload is not erased; that is reported the same way as a
+ * failed DELETE rather than as success.
+ */
+export const eraseCorpusObjects = async ({
+  keys,
+  deleteCorpus = deleteCorpusDocument,
+}: EraseCorpusObjectsOptions): Promise<CorpusObjectErasure> => {
+  const outcome = await Result.tryPromise({
+    try: async () => await deleteCorpus(keys),
+    // The cause travels unchanged into the audit row and telemetry.
+    catch: (cause) => cause,
+  });
+  if (Result.isError(outcome)) {
+    return { type: "incomplete", error: outcome.error };
+  }
+  switch (outcome.value.type) {
+    case "deleted":
+      return { type: "deleted" };
+    case "shared-object-retained": {
+      const retained = outcome.value.retained.map(formatCorpusLocation);
+      return {
+        type: "incomplete",
+        error: new CorpusObjectRetainedError({
+          message: `Corpus objects hold other members and are left in place: ${retained.join(", ")}`,
+          retained,
+        }),
+      };
+    }
+    default: {
+      const unhandled: never = outcome.value;
+      return unhandled;
+    }
+  }
 };
 
 type FailedRedactionAuditOptions = {
@@ -86,7 +159,8 @@ export const redactCaseLawDecision = async ({
   decisionId,
   scopedDb,
   generation = envBase.LEGAL_SEARCH_INDEX_GENERATION,
-}: RedactInput): Promise<boolean> => {
+  deleteCorpus = deleteCorpusDocument,
+}: RedactInput): Promise<RedactCaseLawDecisionOutcome> => {
   if (!isCaseLawCorpusGeneration(generation)) {
     const error = new CorpusIndexError({
       message: "Invalid corpus index generation",
@@ -140,7 +214,7 @@ export const redactCaseLawDecision = async ({
   });
 
   if (!fenced) {
-    return false;
+    return { type: "not-found" };
   }
   const { cancelledIntents, decision } = fenced;
 
@@ -173,24 +247,33 @@ export const redactCaseLawDecision = async ({
 
   // 2. Object-storage corpus payloads. Delete if ANY key is present: a
   // partially ingested decision (e.g. text written but AST not yet) must
-  // still have its personal data erased, not skipped.
-  let corpusObjectsDeleted = true;
+  // still have its personal data erased, not skipped. An incomplete erasure
+  // (a failed DELETE, or an object left in place because it holds other
+  // members) is recorded as a failed audit row so the outcome is visible.
+  let corpusErasure: CorpusObjectErasure = { type: "deleted" };
   if (
     decision.textS3Key !== null ||
     decision.normalizedS3Key !== null ||
     decision.astS3Key !== null
   ) {
-    try {
-      await deleteCorpusDocument({
+    corpusErasure = await eraseCorpusObjects({
+      keys: {
         textKey: decision.textS3Key,
         sectionsKey: decision.normalizedS3Key,
         astKey: decision.astS3Key,
-      });
-    } catch (error) {
-      corpusObjectsDeleted = false;
-      captureError(error, {
+      },
+      deleteCorpus,
+    });
+    if (corpusErasure.type === "incomplete") {
+      captureError(corpusErasure.error, {
         decisionId,
         step: "redactCaseLawDecision.deleteCorpusDocument",
+      });
+      await recordFailedRedactionAudit({
+        decisionId,
+        error: corpusErasure.error,
+        generation,
+        scopedDb,
       });
     }
   }
@@ -217,9 +300,10 @@ export const redactCaseLawDecision = async ({
     }
   }
 
-  // Clear pointers only after their delete succeeds; failed deletes retain
-  // exact retry targets while the tombstone already blocks every reader.
-  if (corpusObjectsDeleted) {
+  // Clear pointers only once every object is gone; an incomplete erasure
+  // retains exact retry targets while the tombstone already blocks every
+  // reader.
+  if (corpusErasure.type === "deleted") {
     // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
     await scopedDb((tx) => {
       // audit: skip — GDPR redaction; recorded in case_law_index_jobs below
@@ -456,6 +540,11 @@ export const redactCaseLawDecision = async ({
     auditedViaCorpusIndex = targets.size > 0;
   }
 
+  if (corpusErasure.type === "incomplete") {
+    // The failed audit row recorded above is the record of this erasure.
+    return { type: "corpus-objects-remain", error: corpusErasure.error };
+  }
+
   // Ensure the erasure is auditable even when corpus index isn't configured.
   if (!auditedViaCorpusIndex) {
     // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
@@ -471,5 +560,5 @@ export const redactCaseLawDecision = async ({
     });
   }
 
-  return true;
+  return { type: "redacted" };
 };
