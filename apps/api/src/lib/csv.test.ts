@@ -64,6 +64,27 @@ describe("parseCSV", () => {
     });
   });
 
+  test("parses semicolon and tab delimited records", () => {
+    expect(
+      parseCSV('name;email\n"Doe, Jane";jane@example.com', { delimiter: ";" }),
+    ).toEqual({
+      status: CSV_PARSE_STATUS.SUCCESS,
+      rows: [
+        ["name", "email"],
+        ["Doe, Jane", "jane@example.com"],
+      ],
+    });
+    expect(
+      parseCSV("name\temail\nJane\tjane@example.com", { delimiter: "\t" }),
+    ).toEqual({
+      status: CSV_PARSE_STATUS.SUCCESS,
+      rows: [
+        ["name", "email"],
+        ["Jane", "jane@example.com"],
+      ],
+    });
+  });
+
   test("rejects an unterminated quoted cell", () => {
     expect(
       parseCSV(
@@ -86,6 +107,15 @@ describe("parseCSV", () => {
     expect(parseCSV('"\tplain",plain')).toEqual({
       status: CSV_PARSE_STATUS.SUCCESS,
       rows: [["\tplain", "plain"]],
+    });
+  });
+
+  test("stops parsing when the record limit is exceeded", () => {
+    expect(
+      parseCSV('name\nfirst\nsecond\n"unterminated', { maxRows: 2 }),
+    ).toEqual({
+      status: CSV_PARSE_STATUS.ROW_LIMIT_EXCEEDED,
+      rows: [["name"], ["first"]],
     });
   });
 });

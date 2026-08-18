@@ -8377,7 +8377,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "contacts", "import"],
                 capabilityId: "contacts.import",
                 description:
-                  "Import a reviewed batch of up to 500 contacts into the organization address book. Supply a caller-generated importRequestId: replaying it with the same rows returns the original result, while changing the rows is rejected. Invalid, duplicate, and over-limit rows are skipped; all accepted rows commit atomically.",
+                  "Import a reviewed batch of up to 500 contacts into the organization address book. Supply a caller-generated importRequestId: replaying it with the same rows returns the original result, while changing the rows is rejected. taxIdScheme selects tax-id validation (none, or br_cpf_cnpj checksums with duplicate detection). Invalid, duplicate, and over-limit rows are skipped; all accepted rows commit atomically.",
                 access: "write",
                 flags: [
                   {
@@ -8390,7 +8390,7 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "importRequestId",
                   },
                 ],
-                inputOnly: ["body.rows"],
+                inputOnly: ["body.taxIdScheme", "body.rows"],
                 paginated: false,
                 destructive: false,
                 scope: "contacts_write",
@@ -8400,7 +8400,7 @@ export const generatedRouteMap: RouteNode = {
                   properties: {
                     body: {
                       type: "object",
-                      required: ["importRequestId", "rows"],
+                      required: ["importRequestId", "taxIdScheme", "rows"],
                       properties: {
                         importRequestId: {
                           minLength: 36,
@@ -8409,12 +8409,24 @@ export const generatedRouteMap: RouteNode = {
                             "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                           type: "string",
                         },
+                        taxIdScheme: {
+                          anyOf: [
+                            {
+                              const: "none",
+                              type: "string",
+                            },
+                            {
+                              const: "br_cpf_cnpj",
+                              type: "string",
+                            },
+                          ],
+                        },
                         rows: {
                           maxItems: 500,
                           type: "array",
                           items: {
                             type: "object",
-                            required: ["id", "displayName", "taxId"],
+                            required: ["id", "type", "displayName"],
                             properties: {
                               id: {
                                 minLength: 36,
@@ -8423,18 +8435,48 @@ export const generatedRouteMap: RouteNode = {
                                   "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
                                 type: "string",
                               },
+                              type: {
+                                default: "person",
+                                description:
+                                  "Contact kind; required when creating",
+                                type: "string",
+                                enum: ["person", "organization"],
+                              },
                               displayName: {
                                 minLength: 1,
                                 maxLength: 512,
                                 type: "string",
                               },
-                              taxId: {
-                                minLength: 1,
-                                maxLength: 64,
+                              prefix: {
+                                maxLength: 32,
+                                type: "string",
+                              },
+                              firstName: {
+                                maxLength: 256,
+                                type: "string",
+                              },
+                              middleName: {
+                                maxLength: 256,
+                                type: "string",
+                              },
+                              lastName: {
+                                maxLength: 256,
+                                type: "string",
+                              },
+                              suffix: {
+                                maxLength: 32,
+                                type: "string",
+                              },
+                              organizationName: {
+                                maxLength: 512,
+                                type: "string",
+                              },
+                              notes: {
+                                maxLength: 50000,
                                 type: "string",
                               },
                               emails: {
-                                maxItems: 1,
+                                maxItems: 20,
                                 type: "array",
                                 items: {
                                   type: "object",
@@ -8460,8 +8502,41 @@ export const generatedRouteMap: RouteNode = {
                                   },
                                 },
                               },
+                              phones: {
+                                maxItems: 20,
+                                type: "array",
+                                items: {
+                                  type: "object",
+                                  required: ["type", "number", "isPrimary"],
+                                  properties: {
+                                    type: {
+                                      default: "mobile",
+                                      type: "string",
+                                      enum: [
+                                        "mobile",
+                                        "office",
+                                        "home",
+                                        "fax",
+                                        "other",
+                                      ],
+                                    },
+                                    number: {
+                                      minLength: 1,
+                                      maxLength: 32,
+                                      type: "string",
+                                    },
+                                    isPrimary: {
+                                      type: "boolean",
+                                    },
+                                    label: {
+                                      maxLength: 128,
+                                      type: "string",
+                                    },
+                                  },
+                                },
+                              },
                               addresses: {
-                                maxItems: 1,
+                                maxItems: 10,
                                 type: "array",
                                 items: {
                                   type: "object",
@@ -8512,6 +8587,23 @@ export const generatedRouteMap: RouteNode = {
                                     },
                                   },
                                 },
+                              },
+                              tags: {
+                                maxItems: 50,
+                                type: "array",
+                                items: {
+                                  maxLength: 256,
+                                  type: "string",
+                                },
+                              },
+                              registrationNumber: {
+                                maxLength: 64,
+                                type: "string",
+                              },
+                              taxId: {
+                                minLength: 1,
+                                maxLength: 64,
+                                type: "string",
                               },
                               metadata: {
                                 type: "object",

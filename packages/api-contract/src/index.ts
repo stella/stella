@@ -60,6 +60,27 @@ export type {
   ChatReferenceHrefPrefix,
 } from "./chat-references";
 export {
+  CONTACT_IMPORT_CUSTOM_FIELD_DESTINATION,
+  CONTACT_IMPORT_FIELDS,
+  CONTACT_IMPORT_IGNORE_DESTINATION,
+  CONTACT_IMPORT_ISSUE_CODE,
+  CONTACT_IMPORT_MAX_COLUMNS,
+  CONTACT_IMPORT_MAX_ROWS,
+  CONTACT_IMPORT_SCHEMA_VERSION,
+  CONTACT_IMPORT_TARGET_FIELDS,
+  CONTACT_IMPORT_TAX_ID_SCHEMES,
+  parseContactImportMapping,
+} from "./contact-import";
+export type {
+  ContactImportColumnMapping,
+  ContactImportField,
+  ContactImportIssueCode,
+  ContactImportMapping,
+  ContactImportMappingParseResult,
+  ContactImportTargetField,
+  ContactImportTaxIdScheme,
+} from "./contact-import";
+export {
   AUTHORED_DOCUMENT_PROPERTY_KEYS,
   DOCUMENT_PROPERTIES_RESULT_SCHEMA,
   DOCUMENT_PROPERTIES_MAX_BYTES,

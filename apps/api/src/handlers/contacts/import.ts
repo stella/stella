@@ -3,21 +3,22 @@ import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { CONTACT_IMPORT_TAX_ID_SCHEMES } from "@stll/api-contract";
+
 import {
   contactImportRequests,
   contacts,
   type ContactImportReceiptResult,
 } from "@/api/db/schema";
-import {
-  contactAddressSchema,
-  contactEmailSchema,
-  contactMetadataSchema,
-} from "@/api/db/schema-validators";
 import { lockContactCapacity } from "@/api/handlers/contacts/contact-capacity";
 import {
   classifyBrazilianTaxId,
   fingerprintContactImport,
 } from "@/api/handlers/contacts/contact-import-receipt";
+import {
+  contactImportCandidateSchema,
+  taxIdSchemeSchema,
+} from "@/api/handlers/contacts/contact-import-schema";
 import { normalizeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -34,19 +35,18 @@ import {
   flushContactSearchRepairs,
 } from "@/api/lib/search/projection-repair-queue";
 
-const importContactRowSchema = t.Object({
-  id: tSafeId("contact"),
-  displayName: t.String({ minLength: 1, maxLength: 512 }),
-  taxId: t.String({ minLength: 1, maxLength: 64 }),
-  emails: t.Optional(t.Array(contactEmailSchema, { maxItems: 1 })),
-  addresses: t.Optional(t.Array(contactAddressSchema, { maxItems: 1 })),
-  metadata: t.Optional(contactMetadataSchema),
-});
+// The reviewed row plus the caller-generated id. The field set itself lives in
+// `contact-import-schema.ts`, shared with the validate handler.
+const importContactRowSchema = t.Composite([
+  t.Object({ id: tSafeId("contact") }),
+  contactImportCandidateSchema,
+]);
 
 type ImportContactRow = Static<typeof importContactRowSchema>;
 
 const importContactsBodySchema = t.Object({
   importRequestId: tSafeId("contactImportRequest"),
+  taxIdScheme: taxIdSchemeSchema,
   rows: t.Array(importContactRowSchema, {
     maxItems: LIMITS.contactsImportRowsMax,
   }),
@@ -65,8 +65,43 @@ type ImportResultRow =
 type ClassifiedImportRow = {
   index: number;
   row: ImportContactRow;
-  taxId: string;
-  type: "person" | "organization";
+  /** Normalized digits under `br_cpf_cnpj`; null when no scheme dedupes. */
+  dedupeTaxId: string | null;
+  taxId: string | undefined;
+};
+
+type TaxIdScheme = (typeof CONTACT_IMPORT_TAX_ID_SCHEMES)[number];
+
+type TaxIdResolution =
+  | { status: "ok"; taxId: string | undefined; dedupeTaxId: string | null }
+  | { status: "invalid" };
+
+const resolveTaxId = (
+  scheme: TaxIdScheme,
+  row: ImportContactRow,
+): TaxIdResolution => {
+  switch (scheme) {
+    case "none":
+      return { status: "ok", taxId: row.taxId, dedupeTaxId: null };
+    case "br_cpf_cnpj": {
+      if (row.taxId === undefined) {
+        return { status: "invalid" };
+      }
+      const classification = classifyBrazilianTaxId(row.taxId);
+      if (!classification || classification.type !== row.type) {
+        return { status: "invalid" };
+      }
+      return {
+        status: "ok",
+        taxId: classification.digits,
+        dedupeTaxId: classification.digits,
+      };
+    }
+    default: {
+      const exhaustive: never = scheme;
+      return exhaustive;
+    }
+  }
 };
 
 const config = {
@@ -74,8 +109,9 @@ const config = {
     "Import a reviewed batch of up to 500 contacts into the organization " +
     "address book. Supply a caller-generated importRequestId: replaying it " +
     "with the same rows returns the original result, while changing the rows " +
-    "is rejected. Invalid, duplicate, and over-limit rows are skipped; all " +
-    "accepted rows commit atomically.",
+    "is rejected. taxIdScheme selects tax-id validation (none, or " +
+    "br_cpf_cnpj checksums with duplicate detection). Invalid, duplicate, " +
+    "and over-limit rows are skipped; all accepted rows commit atomically.",
   permissions: { contact: ["create"] },
   mcp: { type: "covered", by: "save_contact" },
   body: importContactsBodySchema,
@@ -85,7 +121,10 @@ const importContacts = createSafeRootHandler(
   config,
   async function* ({ body, safeDb, session, user, recordAuditEvent }) {
     const organizationId = session.activeOrganizationId;
-    const requestFingerprint = fingerprintContactImport(body.rows);
+    const requestFingerprint = fingerprintContactImport([
+      body.taxIdScheme,
+      ...body.rows,
+    ]);
 
     const outcome = yield* Result.await(
       safeDb(async (tx) => {
@@ -114,8 +153,8 @@ const importContacts = createSafeRootHandler(
         const seenTaxIds = new Set<string>();
 
         for (const [index, row] of body.rows.entries()) {
-          const classification = classifyBrazilianTaxId(row.taxId);
-          if (!classification) {
+          const resolution = resolveTaxId(body.taxIdScheme, row);
+          if (resolution.status === "invalid") {
             resultByIndex.set(index, {
               index,
               status: "skipped",
@@ -131,7 +170,10 @@ const importContacts = createSafeRootHandler(
             });
             continue;
           }
-          if (seenTaxIds.has(classification.digits)) {
+          if (
+            resolution.dedupeTaxId !== null &&
+            seenTaxIds.has(resolution.dedupeTaxId)
+          ) {
             resultByIndex.set(index, {
               index,
               status: "skipped",
@@ -141,12 +183,14 @@ const importContacts = createSafeRootHandler(
           }
 
           seenContactIds.add(row.id);
-          seenTaxIds.add(classification.digits);
+          if (resolution.dedupeTaxId !== null) {
+            seenTaxIds.add(resolution.dedupeTaxId);
+          }
           classifiedRows.push({
             index,
             row,
-            taxId: classification.digits,
-            type: classification.type,
+            dedupeTaxId: resolution.dedupeTaxId,
+            taxId: resolution.taxId,
           });
         }
 
@@ -160,7 +204,9 @@ const importContacts = createSafeRootHandler(
                 .where(inArray(contacts.id, candidateIds));
         const existingIdSet = new Set(existingIds.map(({ id }) => id));
 
-        const candidateTaxIds = classifiedRows.map(({ taxId }) => taxId);
+        const candidateTaxIds = classifiedRows.flatMap(({ dedupeTaxId }) =>
+          dedupeTaxId === null ? [] : [dedupeTaxId],
+        );
         const normalizedTaxId = sql<string>`regexp_replace(${contacts.taxId}, '\\D', '', 'g')`;
         const existingTaxIds =
           candidateTaxIds.length === 0
@@ -199,7 +245,10 @@ const importContacts = createSafeRootHandler(
             });
             continue;
           }
-          if (existingTaxIdSet.has(candidate.taxId)) {
+          if (
+            candidate.dedupeTaxId !== null &&
+            existingTaxIdSet.has(candidate.dedupeTaxId)
+          ) {
             resultByIndex.set(candidate.index, {
               index: candidate.index,
               status: "skipped",
@@ -226,18 +275,29 @@ const importContacts = createSafeRootHandler(
             : await tx
                 .insert(contacts)
                 .values(
-                  rowsToInsert.map(({ row, taxId, type }) => ({
+                  rowsToInsert.map(({ row, taxId }) => ({
                     id: row.id,
                     organizationId,
                     createdBy: user.id,
-                    type,
+                    type: row.type,
                     displayName: row.displayName,
-                    taxId,
-                    ...(type === "organization" && {
-                      organizationName: row.displayName,
-                    }),
+                    prefix: row.prefix,
+                    firstName: row.firstName,
+                    middleName: row.middleName,
+                    lastName: row.lastName,
+                    suffix: row.suffix,
+                    organizationName:
+                      row.organizationName ??
+                      (row.type === "organization"
+                        ? row.displayName
+                        : undefined),
+                    notes: row.notes,
                     emails: row.emails,
+                    phones: row.phones,
                     addresses: row.addresses,
+                    tags: row.tags,
+                    registrationNumber: row.registrationNumber,
+                    taxId,
                     metadata: normalizeContactMetadata(row.metadata),
                   })),
                 )

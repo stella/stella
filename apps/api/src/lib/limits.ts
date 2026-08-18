@@ -226,9 +226,11 @@ export const LIMITS = {
   contactsCount: 10_000,
   contactsPageSizeDefault: 50,
   contactsPageSizeMax: 100,
-  /** Max rows in one `.txt` bulk contact import. Generous for a hand-typed
-   *  file (mirrors clauseImportBatchLimit's role for clause JSON import). */
+  /** Max rows in one reviewed contact import batch (mirrors
+   *  clauseImportBatchLimit's role for clause JSON import). */
   contactsImportRowsMax: 500,
+  /** Max characters in one imported contact's notes cell. */
+  contactsImportNotesMaxChars: 50_000,
   contactRelationshipsCount: 50,
   workspaceContactsCount: 100,
   /** Better Auth organization member cap and full-org read bound. */

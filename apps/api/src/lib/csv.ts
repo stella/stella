@@ -10,17 +10,36 @@ const FORMULA_PREFIX_RE = /^\s*[=+\-@\t\r\n]/u;
 
 export const CSV_PARSE_STATUS = {
   INVALID: "invalid",
+  ROW_LIMIT_EXCEEDED: "row-limit-exceeded",
   SUCCESS: "success",
 } as const;
+
+export const CSV_DELIMITERS = [",", ";", "\t"] as const;
+
+export type CSVDelimiter = (typeof CSV_DELIMITERS)[number];
 
 type CSVParseResult =
   | {
       status: typeof CSV_PARSE_STATUS.INVALID;
     }
   | {
+      status: typeof CSV_PARSE_STATUS.ROW_LIMIT_EXCEEDED;
+      rows: string[][];
+    }
+  | {
       status: typeof CSV_PARSE_STATUS.SUCCESS;
       rows: string[][];
     };
+
+type CSVParseOptions = {
+  delimiter?: CSVDelimiter;
+  /**
+   * Stop as soon as record `maxRows + 1` is reached and report
+   * `ROW_LIMIT_EXCEEDED` with the records parsed so far, so an
+   * oversized upload is rejected without parsing its whole suffix.
+   */
+  maxRows?: number;
+};
 
 const restoreGuardedFormula = (value: string): string => {
   if (!value.startsWith("\t")) {
@@ -37,7 +56,10 @@ const restoreGuardedFormula = (value: string): string => {
  * Blank records are ignored. Quotes may only open at the start of a cell, and
  * after a closing quote only a delimiter, record boundary, or EOF is valid.
  */
-export const parseCSV = (text: string): CSVParseResult => {
+export const parseCSV = (
+  text: string,
+  { delimiter = ",", maxRows }: CSVParseOptions = {},
+): CSVParseResult => {
   const rows: string[][] = [];
   let row: string[] = [];
   let cell = "";
@@ -50,12 +72,16 @@ export const parseCSV = (text: string): CSVParseResult => {
     closedQuote = false;
   };
 
-  const finishRow = () => {
+  const finishRow = (): boolean => {
     finishCell();
     if (row.length > 1 || row.at(0) !== "") {
+      if (maxRows !== undefined && rows.length >= maxRows) {
+        return false;
+      }
       rows.push(row);
     }
     row = [];
+    return true;
   };
 
   for (let index = 0; index < text.length; index += 1) {
@@ -80,12 +106,14 @@ export const parseCSV = (text: string): CSVParseResult => {
     }
 
     if (closedQuote) {
-      if (character === ",") {
+      if (character === delimiter) {
         finishCell();
         continue;
       }
       if (character === "\r" || character === "\n") {
-        finishRow();
+        if (!finishRow()) {
+          return { rows, status: CSV_PARSE_STATUS.ROW_LIMIT_EXCEEDED };
+        }
         if (character === "\r" && nextCharacter === "\n") {
           index += 1;
         }
@@ -101,12 +129,14 @@ export const parseCSV = (text: string): CSVParseResult => {
       inQuotes = true;
       continue;
     }
-    if (character === ",") {
+    if (character === delimiter) {
       finishCell();
       continue;
     }
     if (character === "\r" || character === "\n") {
-      finishRow();
+      if (!finishRow()) {
+        return { rows, status: CSV_PARSE_STATUS.ROW_LIMIT_EXCEEDED };
+      }
       if (character === "\r" && nextCharacter === "\n") {
         index += 1;
       }
@@ -119,8 +149,8 @@ export const parseCSV = (text: string): CSVParseResult => {
     return { status: CSV_PARSE_STATUS.INVALID };
   }
 
-  if (row.length > 0 || cell.length > 0 || closedQuote) {
-    finishRow();
+  if ((row.length > 0 || cell.length > 0 || closedQuote) && !finishRow()) {
+    return { rows, status: CSV_PARSE_STATUS.ROW_LIMIT_EXCEEDED };
   }
 
   return { rows, status: CSV_PARSE_STATUS.SUCCESS };
