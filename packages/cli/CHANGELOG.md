@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 0.6.1
+
+### Patch Changes
+
+- [#2150](https://github.com/stella/stella/pull/2150) [`001496f`](https://github.com/stella/stella/commit/001496fdb43bee8301f50048e151187e011a9fed) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Accept an optional restated size estimate when starting a flow run through the generated capability surface.
+
 ## 0.6.0
 
 ### Minor Changes
