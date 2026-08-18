@@ -28,10 +28,11 @@ for file in "$@"; do
       echo true
       exit 0
       ;;
-    # Whatever the captured product surfaces render: the web app, the API that
-    # serves their data, the shared UI and copy, the seed that builds the
-    # scenes, the capture suite itself, and the committed PNGs.
-    marketing:apps/web/src/*|marketing:apps/web/e2e/marketing/*|marketing:apps/web/e2e/playwright.marketing.config.ts|marketing:apps/web/package.json|marketing:apps/api/src/*|marketing:apps/api/scripts/seed-*|marketing:packages/ui/*|marketing:packages/locales/*|marketing:apps/landing/public/media/products/*.png)
+    # Whatever the captured product surfaces render: the web app, the fonts
+    # and static assets it serves itself, the API that serves their data, the
+    # shared UI and copy, the seed that builds the scenes, the capture suite
+    # itself, and the committed PNGs.
+    marketing:apps/web/src/*|marketing:apps/web/public/*|marketing:apps/web/e2e/marketing/*|marketing:apps/web/e2e/playwright.marketing.config.ts|marketing:apps/web/package.json|marketing:apps/api/src/*|marketing:apps/api/scripts/seed-*|marketing:packages/ui/*|marketing:packages/locales/*|marketing:apps/landing/public/media/products/*.png)
       echo true
       exit 0
       ;;

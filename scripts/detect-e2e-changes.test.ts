@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 const script = path.join(import.meta.dirname, "detect-e2e-changes.sh");
@@ -132,7 +132,21 @@ describe("detect-e2e-changes", () => {
   });
 
   test("routes every input of a product screenshot through the marketing scope", () => {
+    // A file that really ships: a font the captured app renders with, so a
+    // rename breaks this list instead of leaving the scope pointing at
+    // nothing.
+    const renderedFont =
+      "apps/web/public/fonts/dm-sans-latin-wght-normal.woff2";
+    expect(existsSync(path.join(import.meta.dirname, "..", renderedFont))).toBe(
+      true,
+    );
+    // Public assets are already product code to the core scope; the marketing
+    // scope is what changes here.
+    expect(detects("core", [renderedFont])).toBe("true");
+    expect(detects("landing", [renderedFont])).toBe("false");
+
     for (const file of [
+      renderedFont,
       "apps/web/src/components/inspector/entity-metadata-panel.tsx",
       "apps/web/e2e/marketing/product-screenshots.spec.ts",
       "apps/web/e2e/playwright.marketing.config.ts",
