@@ -10,11 +10,16 @@ The `.png` baselines come from CI, never from a developer machine. PR CI runs
 the `marketing-screenshots` check whenever a change can reach a captured
 surface, so a UI change fails the PR that makes it instead of the next nightly
 run. When the diff is intended, dispatch **Update marketing screenshots**
-(`.github/workflows/marketing-screenshots-update.yml`) on the PR branch:
+(`.github/workflows/marketing-screenshots-update.yml`) from the default
+branch, naming the PR's branch:
 
 ```sh
-gh workflow run marketing-screenshots-update.yml --ref <branch>
+gh workflow run marketing-screenshots-update.yml -f branch=<pr-branch>
 ```
+
+Dispatching on `main` is what keeps the release App key on workflow code from
+`main`: only the app and spec code checked out from `branch` is
+branch-controlled, and the token never leaves the push step.
 
 It regenerates every baseline on the CI runner and pushes them to the branch,
 which re-runs the PR's checks against the new head. Because baselines and

@@ -1726,7 +1726,8 @@ jobs:
   # captured PNGs ship as landing-page assets, so a silent baseline
   # invalidation puts a stale product shot on the marketing site. Regeneration
   # happens on the runner (`marketing-screenshots-update.yml` dispatched on
-  # this branch), which is also why the comparison tolerance can stay tight:
+  # main with `-f branch=<this branch>`), which is also why the comparison
+  # tolerance can stay tight:
   # baselines and comparison render on the same image.
   marketing-screenshots:
     needs: ci-plan

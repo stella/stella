@@ -1,19 +1,31 @@
 name: Update marketing screenshots
 
 # When a PR fails the `marketing-screenshots` check because its UI change is
-# intended, dispatch this workflow on that PR's branch (Actions UI branch
-# picker, or `gh workflow run marketing-screenshots-update.yml --ref <branch>`).
-# It regenerates every baseline on the CI runner and pushes the PNGs to the
-# branch, which re-runs the PR's checks against the new head. Baselines are
-# never regenerated on a developer machine, so the comparison tolerance only
-# has to cover run-to-run noise on one runner image.
+# intended, dispatch this workflow on the default branch and name the PR's
+# branch:
+#
+#   gh workflow run marketing-screenshots-update.yml -f branch=<pr-branch>
+#
+# Dispatching on main is what keeps the release App key on trusted workflow
+# code: this job body and the reusable workflow it calls are resolved from
+# main, only the app and spec code checked out from `branch` is
+# branch-controlled, and the token stays confined to the push step's
+# environment. Regeneration rewrites every baseline on the CI runner and
+# pushes the PNGs to the branch, which re-runs the PR's checks against the new
+# head. Baselines are never regenerated on a developer machine, so the
+# comparison tolerance only has to cover run-to-run noise on one runner image.
 
 on:
   workflow_dispatch:
+    inputs:
+      branch:
+        description: The same-repository branch whose baselines to regenerate
+        required: true
+        type: string
 
 concurrency:
   # Two regenerations of one branch would race on the same push target.
-  group: marketing-screenshots-update-${{ github.ref }}
+  group: marketing-screenshots-update-${{ inputs.branch }}
   cancel-in-progress: false
 
 permissions: {}
@@ -25,6 +37,7 @@ jobs:
       contents: read
     with:
       mode: update
+      ref: ${{ inputs.branch }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

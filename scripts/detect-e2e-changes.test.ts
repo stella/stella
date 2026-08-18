@@ -36,6 +36,13 @@ const marketingWorkflow = readFileSync(
   ),
   "utf-8",
 );
+const marketingUpdateWorkflow = readFileSync(
+  path.join(
+    import.meta.dirname,
+    "../.github/workflows/marketing-screenshots-update.yml",
+  ),
+  "utf-8",
+);
 
 const workflowJob = (jobId: string): string => {
   const marker = `\n  ${jobId}:\n`;
@@ -365,6 +372,51 @@ describe("detect-e2e-changes", () => {
     );
     expect(result).toContain('$MARKETING_SCREENSHOTS_RESULT" == "failure"');
     expect(result).toContain('$MARKETING_SCREENSHOTS_RESULT" == "cancelled"');
+  });
+
+  test("regenerates a branch's baselines from workflow code on main", () => {
+    // The release App key must only ever run workflow code from main, so the
+    // update workflow is dispatched on the default branch and told which
+    // branch to rewrite; a `--ref <branch>` dispatch would hand the key that
+    // branch's copy of both files.
+    expect(marketingUpdateWorkflow).toContain(
+      [
+        "      branch:",
+        "        description: The same-repository branch whose baselines to regenerate",
+        "        required: true",
+      ].join("\n"),
+    );
+    expect(marketingUpdateWorkflow).toContain(
+      `group: marketing-screenshots-update-${githubExpression("inputs.branch")}`,
+    );
+    expect(marketingUpdateWorkflow).toContain(
+      `ref: ${githubExpression("inputs.branch")}`,
+    );
+    expect(marketingUpdateWorkflow).not.toContain("--ref");
+
+    const validate = workflowStep(marketingWorkflow, "Validate inputs");
+    expect(validate).toContain('if [[ "$WORKFLOW_REF" != "main" ]]');
+    expect(validate).toContain('if [[ "$BRANCH" == "main" ]]');
+    expect(validate).toContain('"$BRANCH" =~ ^[A-Za-z0-9._/-]+$');
+    expect(validate).toContain('"$BRANCH" == *".."*');
+    expect(validate).toContain('"$BRANCH" == -*');
+    // Nothing is minted for a branch that does not exist here.
+    expect(
+      marketingWorkflow.indexOf("- name: Verify the branch exists"),
+    ).toBeLessThan(marketingWorkflow.indexOf("- name: Mint App token"));
+
+    // The checked-out code and the push target are the named branch, never
+    // the ref the workflow itself runs from.
+    expect(workflowStep(marketingWorkflow, "Checkout")).toContain(
+      `ref: ${githubExpression("inputs.ref")}`,
+    );
+    expect(
+      workflowStep(marketingWorkflow, "Push regenerated baselines"),
+    ).toContain(`BRANCH: ${githubExpression("inputs.ref || github.ref_name")}`);
+
+    // Check-mode callers pass no ref and stay on their own triggering ref.
+    expect(workflowJob("marketing-screenshots")).not.toContain("ref:");
+    expect(nightlyWorkflow).not.toContain("ref: ");
   });
 
   test("builds the production web artifact once per workflow run", () => {
