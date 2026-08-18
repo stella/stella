@@ -111,6 +111,19 @@ test("search accepts a response without snippets", async () => {
   }
 });
 
+test("search rejects a response without snippets when snippet fields were requested", async () => {
+  responseBody = { num_hits: 1, hits: [{ id: "a" }] };
+
+  const result = await getCorpusIndexClient().search({
+    indexId: "legal_corpus_v1_cze",
+    query: "text:smlouva",
+    maxHits: 10,
+    snippetFields: ["text"],
+  });
+
+  expect(result.isErr()).toBe(true);
+});
+
 test("search rejects a malformed snippets value", async () => {
   responseBody = { num_hits: 1, hits: [], snippets: "no" };
 
