@@ -96,6 +96,9 @@ export const DECISION_DATE_ROW_LOCKS = {
 export type DecisionDateRowLock =
   (typeof DECISION_DATE_ROW_LOCKS)[keyof typeof DECISION_DATE_ROW_LOCKS];
 
+/** Pages of ids the corrupt-id collection may hold before it is paged. */
+const CORRUPT_SCAN_PAGES = 100;
+
 type SelectCorruptDecisionDatesOptions = {
   limit: number;
   lock: DecisionDateRowLock;
@@ -103,7 +106,10 @@ type SelectCorruptDecisionDatesOptions = {
 
 /*
  * The corrupt ids are collected in one materialized CTE and paged in a
- * second on purpose. Written as one statement over the join, the planner
+ * second on purpose. The collection is capped at a multiple of the page
+ * (unordered, so the date index still answers it) rather than materializing
+ * an unexpectedly large population; a page drawn from a capped set is still
+ * a page of corrupt rows, and the caller loops until a page is empty. Written as one statement over the join, the planner
  * estimates the date bounds to match a large share of the table and either
  * merge-joins over a full primary-key scan or walks the primary key in order
  * filtering every row; both outrun the statement timeout while the bounds
@@ -121,6 +127,7 @@ export const selectCorruptDecisionDatesStatement = ({
     SELECT d.id
       FROM case_law_decisions d
      WHERE ${OUT_OF_BOUNDS}
+     LIMIT ${limit * CORRUPT_SCAN_PAGES}
   ),
   page AS MATERIALIZED (
     SELECT c.id

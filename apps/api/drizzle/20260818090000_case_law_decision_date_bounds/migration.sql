@@ -1,6 +1,21 @@
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 
+-- Rows still holding a date outside the bounds cannot survive the
+-- constraint: NOT VALID is enforced on every later UPDATE of such a row,
+-- whatever column it touches, and VALIDATE fails while one remains. Clear
+-- them first, the way `repair-decision-dates.ts` does (`decision_date` to
+-- NULL, `indexed_hash` cleared so the search projection is rebuilt); the
+-- script additionally reopens the citation edges decided under the old
+-- date and is the intended pre-step, this statement is the floor. Bounded
+-- by the date index; the population is what the script's report counts.
+UPDATE "case_law_decisions"
+   SET "decision_date" = NULL,
+       "indexed_hash" = NULL
+ WHERE "decision_date" < make_date(1800, 1, 1)
+    OR "decision_date" >= make_date(
+         extract(year from (now() AT TIME ZONE 'UTC'))::int + 2, 1, 1);--> statement-breakpoint
+
 -- The year bounds the write path enforces through `canonicalDecisionDate`
 -- (`DECISION_YEAR_BOUNDS` in apps/api/src/lib/dates.ts), enforced at the
 -- table. A NULL date is allowed. The ceiling is the first excluded day rather
