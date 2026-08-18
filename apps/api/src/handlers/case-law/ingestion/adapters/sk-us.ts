@@ -50,6 +50,7 @@ import type {
   IngestionResult,
   ListingIdentity,
   ReconciliationBuildOutcome,
+  ReconciliationListingItem,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
 } from "@/api/handlers/case-law/ingestion/adapter";
@@ -76,6 +77,12 @@ const DOC_DOWNLOAD_URL = `${BASE_URL}/docDownload`;
 
 const PAGE_SIZE = 10;
 const SEARCH_RETRY_DELAY_MS = 500;
+
+/**
+ * Shortest gap between two requests this adapter makes to the court, both as
+ * the pipeline's pacing and as the pause it takes between requests of its own.
+ */
+const MIN_REQUEST_INTERVAL_MS = 500;
 
 /**
  * Page size for a listing walk. The crawl takes ten at a time because every
@@ -664,15 +671,104 @@ const sliceDateRange = (slice: string): SearchDateRange => {
  * observed answering 500 and 524 under load), a 204, a body the validator
  * rejects — is an error the engine retries on a later pass.
  */
-const listSkUsSlicePage = async ({
-  page,
+/**
+ * One listed item for a result the DMS will not serve.
+ *
+ * With no body there is no document id and no docket, so there is nothing to
+ * key the decision on and nothing that could be invented: an identity guessed
+ * from the offset would name a row the ingest can never write. The engine
+ * counts an item like this as unidentifiable and leaves it out of both
+ * `reported` and `collected`, which is what lets the month settle on the
+ * records that do exist instead of standing one short of a number no walk can
+ * reach.
+ */
+const unservedListingItem = (offset: number): ReconciliationListingItem => ({
+  identity: { type: "unidentifiable" },
+  payload: { unservedResultIndex: offset },
+});
+
+/** What one window of a month's results answered. */
+type ListedWindow = {
+  items: ReconciliationListingItem[];
+  /** The month's size, from whichever sub-window stated it; null if none did. */
+  numFound: number | null;
+};
+
+/**
+ * Requests one unservable record costs to isolate: the endpoint answers each
+ * halving twice, once for the half that carries the record and once for the
+ * half that does not.
+ */
+const SPLIT_REQUESTS_PER_UNSERVED_RECORD =
+  2 * Math.ceil(Math.log2(LISTING_PAGE_SIZE));
+
+/**
+ * Extra requests one page may spend isolating what the DMS refuses.
+ *
+ * Two records' worth. A page needing more than that is not a page with a
+ * poisoned record on it, and spending a full binary subdivision (2·pageSize-1
+ * requests) to establish that would be a worse answer than leaving the slice
+ * its previous ledger row.
+ */
+const SPLIT_REQUEST_BUDGET = 2 * SPLIT_REQUESTS_PER_UNSERVED_RECORD;
+
+/** Extra requests a page's splitting may still spend. */
+type SplitBudget = { remaining: number };
+
+type ListSkUsWindowOptions = {
+  budget: SplitBudget;
+  /** 0-indexed result offset within the month. */
+  offset: number;
+  pageSize: number;
+  slice: string;
+  signal?: AbortSignal | undefined;
+};
+
+const unservedWindowError = (
+  slice: string,
+  detail: string,
+): AdapterFetchError =>
+  new AdapterFetchError({
+    message: `SK ÚS search returned no body for ${slice}: ${detail}`,
+    adapterKey: ADAPTER_KEYS.SK_US,
+    cursor: slice,
+  });
+
+/**
+ * List one window of a month, splitting it around whatever the DMS refuses.
+ *
+ * The endpoint answers 204 with an empty body for any window containing a
+ * record it cannot serialise, and it does so deterministically: for 2025-04,
+ * `start=194&pageSize=1` answered 204 while 193 and 195 answered 200, and
+ * every wider window covering 194 answered 204 too. One such record therefore
+ * refuses the whole page it falls on, and a page read as an outage held the
+ * slice for an hour, every hour, with no pass ever able to get past it.
+ *
+ * So a refused window is halved until the refusal is one record wide. What
+ * surrounds it lists normally, the record itself is reported with nothing to
+ * key on, and the month settles honestly: 277 reported, 277 collected, one
+ * unidentifiable. The halving terminates at a window of one record, costs
+ * {@link SPLIT_REQUESTS_PER_UNSERVED_RECORD} per such record, and each of
+ * those requests waits the same pause as every other request here.
+ *
+ * A refusal that survives the halving with nothing served on either side is
+ * the endpoint being down for that window rather than a record it cannot
+ * serialise, and is thrown: reporting the window as that many unidentifiable
+ * items would settle the month over an outage. Two unservable records lying
+ * side by side read the same way and are refused with it, which is the safe
+ * direction to be wrong in.
+ */
+const listSkUsWindow = async ({
+  budget,
+  offset,
+  pageSize,
   signal,
   slice,
-}: ReconciliationSlicePageOptions): Promise<ReconciliationSlicePage> => {
+}: ListSkUsWindowOptions): Promise<ListedWindow> => {
   const searchResult = await executeSearchWithRetry({
     cursor: slice,
-    offset: page * LISTING_PAGE_SIZE,
-    pageSize: LISTING_PAGE_SIZE,
+    offset,
+    pageSize,
     range: sliceDateRange(slice),
     signal,
   });
@@ -681,21 +777,78 @@ const listSkUsSlicePage = async ({
   }
 
   const data = searchResult.value;
-  if (data === null) {
-    throw new AdapterFetchError({
-      message: `SK ÚS search returned no body for ${slice}`,
-      adapterKey: ADAPTER_KEYS.SK_US,
-      cursor: slice,
-    });
+  if (data !== null) {
+    return {
+      items: data.documents.map((doc) => ({
+        identity: skUsListingIdentity(doc),
+        payload: doc,
+      })),
+      numFound: data.numFound,
+    };
   }
 
-  return {
-    items: data.documents.map((doc) => ({
-      identity: skUsListingIdentity(doc),
-      payload: doc,
-    })),
-    totalPages: Math.ceil(data.numFound / LISTING_PAGE_SIZE),
-  };
+  if (pageSize <= 1) {
+    return { items: [unservedListingItem(offset)], numFound: null };
+  }
+
+  if (budget.remaining < 2) {
+    throw unservedWindowError(
+      slice,
+      `splitting a refused window at offset ${offset} spent its ${SPLIT_REQUEST_BUDGET}-request budget`,
+    );
+  }
+  budget.remaining -= 2;
+
+  const half = Math.ceil(pageSize / 2);
+  await Bun.sleep(MIN_REQUEST_INTERVAL_MS);
+  const lower = await listSkUsWindow({
+    budget,
+    offset,
+    pageSize: half,
+    signal,
+    slice,
+  });
+  await Bun.sleep(MIN_REQUEST_INTERVAL_MS);
+  const upper = await listSkUsWindow({
+    budget,
+    offset: offset + half,
+    pageSize: pageSize - half,
+    signal,
+    slice,
+  });
+
+  // Either half that answered states the same month-wide count.
+  const numFound = lower.numFound ?? upper.numFound;
+  if (numFound === null) {
+    throw unservedWindowError(
+      slice,
+      `${pageSize} records from offset ${offset} served nothing`,
+    );
+  }
+
+  return { items: [...lower.items, ...upper.items], numFound };
+};
+
+const listSkUsSlicePage = async ({
+  page,
+  signal,
+  slice,
+}: ReconciliationSlicePageOptions): Promise<ReconciliationSlicePage> => {
+  const { items, numFound } = await listSkUsWindow({
+    budget: { remaining: SPLIT_REQUEST_BUDGET },
+    offset: page * LISTING_PAGE_SIZE,
+    pageSize: LISTING_PAGE_SIZE,
+    signal,
+    slice,
+  });
+
+  if (numFound === null) {
+    // Only reachable where a page is one record wide: the split refuses a
+    // wider window that served nothing before it can answer with one.
+    throw unservedWindowError(slice, `offset ${page * LISTING_PAGE_SIZE}`);
+  }
+
+  return { items, totalPages: Math.ceil(numFound / LISTING_PAGE_SIZE) };
 };
 
 /**
@@ -745,7 +898,7 @@ export const skUsAdapter = defineSourceAdapter({
   name: "ustavnysud.sk",
   country: "SVK",
   language: "sk",
-  minRequestIntervalMs: 500,
+  minRequestIntervalMs: MIN_REQUEST_INTERVAL_MS,
   pageTimeoutMs: 120_000,
   maxSyncPages: 10,
 
