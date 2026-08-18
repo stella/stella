@@ -615,7 +615,7 @@ describe("detect-e2e-changes", () => {
 
     const workflowsDir = path.join(import.meta.dirname, "../.github/workflows");
     for (const file of readdirSync(workflowsDir)) {
-      if (!file.endsWith(".yml")) {
+      if (!(file.endsWith(".yml") || file.endsWith(".yaml"))) {
         continue;
       }
       const source = readFileSync(path.join(workflowsDir, file), "utf-8");

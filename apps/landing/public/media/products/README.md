@@ -21,6 +21,10 @@ Dispatching on `main` is what keeps the release App key on workflow code from
 `main`: only the app and spec code checked out from `branch` is
 branch-controlled, and the token never leaves the push step.
 
+The capture body is the composite action `.github/actions/marketing-capture`
+resolved from the branch, so a branch created before that action existed
+must be rebased onto `main` first.
+
 It regenerates every baseline on the CI runner and pushes them to the branch,
 which re-runs the PR's checks against the new head. Because baselines and
 comparison render on the same runner image, the pixel tolerance only has to
