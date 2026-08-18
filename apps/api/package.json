@@ -119,7 +119,7 @@
     "nodemailer": "^9.0.5",
     "onnxruntime-node": "1.27.0",
     "postal-mime": "^2.7.6",
-    "posthog-node": "^5.48.1",
+    "posthog-node": "^5.48.2",
     "quickjs-emscripten": "^0.32.0",
     "quickjs-emscripten-core": "^0.32.0",
     "sharp": "0.35.3",

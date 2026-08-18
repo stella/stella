@@ -114,7 +114,7 @@
     "jszip": "catalog:",
     "lucide-react": "catalog:",
     "pdfjs-dist": "^6.2.108",
-    "posthog-js": "^1.415.6",
+    "posthog-js": "^1.416.0",
     "prism-react-renderer": "^2.4.1",
     "prosemirror-commands": "^1.7.2",
     "prosemirror-history": "^1.5.0",
