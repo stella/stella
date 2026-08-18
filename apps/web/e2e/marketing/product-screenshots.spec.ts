@@ -375,14 +375,11 @@ test("capture landing product screenshots", async ({
               : { x: 255, y: 0, width: 1137, height: 710 },
           // Baselines are produced on the CI runner by the "Update marketing
           // screenshots" workflow (.github/workflows/
-          // marketing-screenshots-update.yml), and compared on that same runner
-          // image, so this tolerance no longer has to absorb a macOS-to-Linux
-          // font-rendering gap (~2% on these text-heavy captures): only
-          // run-to-run rendering noise. The value is still the cross-platform
-          // one and gets tightened once every baseline has been regenerated on
-          // Linux. Dispatch that workflow on this branch when the UI change is
-          // intended.
-          maxDiffPixelRatio: 0.03,
+          // marketing-screenshots-update.yml) and compared on that same runner
+          // image, so this only has to absorb run-to-run rendering noise, not
+          // a macOS-to-Linux font gap. Dispatch that workflow on the branch
+          // when the UI change is intended.
+          maxDiffPixelRatio: 0.005,
           scale: "css",
         });
     }
