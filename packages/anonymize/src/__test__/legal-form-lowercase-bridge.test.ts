@@ -79,6 +79,20 @@ describe("closed lowercase bridge (en)", () => {
     ).toEqual(["Acme Holdings Ltd.", "Northwind Ventures LLC"]);
   });
 
+  test("a list separator before 'and' closes the name", async () => {
+    // "…Priya Ramanathan, and Northwind Capital Partners LLC" is a party
+    // list; the conjunction after a comma is not part of the second name.
+    expect(
+      await orgs(
+        "represented by its Chief Executive Officer Priya Ramanathan, and Northwind Capital Partners LLC, represented by Jonathan H. Whitaker.",
+        ["en"],
+      ),
+    ).toEqual(["Northwind Capital Partners LLC"]);
+    expect(await orgs("Acme Widgets and Bar, Inc. signed.", ["en"])).toEqual([
+      "Acme Widgets and Bar, Inc.",
+    ]);
+  });
+
   test("closed connectors still bridge inside a name", async () => {
     expect(
       await orgs(

@@ -536,6 +536,11 @@ fn walk_backward(
         .and_connector_words
         .contains(lowercase_lookup(token.text).as_ref())
       {
+        // "Priya Ramanathan, and Northwind Capital Partners LLC": a list
+        // separator directly before the conjunction closes the name.
+        if list_separator_precedes(text, token.start) {
+          break;
+        }
         let upper_before = count_upper_before(text, token.start, data);
         if upper_before <= 2 || has_middle_initial_before(text, token.start) {
           break;
@@ -986,6 +991,19 @@ fn is_grouped_number_fragment(text: &str, token: &Token<'_>) -> bool {
     })
     .is_some_and(|(_, ch)| ch.is_ascii_digit());
   joined_before || joined_after
+}
+
+/// Whether a `,` or `;` sits directly before `pos` (ignoring spaces).
+fn list_separator_precedes(text: &str, pos: usize) -> bool {
+  let mut cursor = pos;
+  while let Some((char_start, ch)) = previous_char(text, cursor) {
+    if is_inter_token_space(ch) {
+      cursor = char_start;
+      continue;
+    }
+    return matches!(ch, ',' | ';');
+  }
+  false
 }
 
 fn starts_upper(text: &str) -> bool {
