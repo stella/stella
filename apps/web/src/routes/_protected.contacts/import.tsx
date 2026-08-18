@@ -348,77 +348,86 @@ function ContactImportStudio() {
 
       <main
         aria-busy={busy !== "idle"}
-        className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6"
+        className={cn(
+          "min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6",
+          state.status === "upload" && "flex flex-col p-4 sm:p-6",
+        )}
       >
-        <div className="mx-auto max-w-6xl">
-          {state.status === "upload" && (
-            <UploadStep
-              busy={busy}
-              onFile={(file) => {
-                detached(inspectFile(file), "contact-import-studio.inspect");
-              }}
-              stepHeadingRef={stepHeadingRef}
-            />
-          )}
-
-          {state.status === "mapping" && (
+        {state.status === "upload" && (
+          <UploadStep
+            busy={busy}
+            onFile={(file) => {
+              detached(inspectFile(file), "contact-import-studio.inspect");
+            }}
+            stepHeadingRef={stepHeadingRef}
+          />
+        )}
+        {state.status === "mapping" && (
+          <div className="mx-auto max-w-6xl">
             <MappingStep
               busy={busy}
               onMappingChange={updateMapping}
               state={state}
               stepHeadingRef={stepHeadingRef}
             />
-          )}
-
-          {state.status === "review" && (
+          </div>
+        )}
+        {state.status === "review" && (
+          <div className="mx-auto max-w-6xl">
             <ReviewStep
               fields={editableFieldsForMapping(state.mapping)}
               review={review}
               stepHeadingRef={stepHeadingRef}
             />
-          )}
-        </div>
+          </div>
+        )}
       </main>
 
-      <footer className="bg-background border-t px-4 py-3 sm:px-6">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
-          {state.status === "upload" || review.results !== null ? (
-            <Button render={<Link to="/contacts" />} variant="ghost">
-              <DirectionalIcon icon={ArrowLeftIcon} />
-              {t("contacts.importStudio.backToContacts")}
-            </Button>
-          ) : (
-            <Button disabled={busy !== "idle"} onClick={goBack} variant="ghost">
-              <DirectionalIcon icon={ArrowLeftIcon} />
-              {t("common.back")}
-            </Button>
-          )}
-          {state.status === "mapping" && (
-            <Button
-              loading={busy === "previewing"}
-              onClick={() =>
-                detached(buildPreview(), "contact-import-studio.preview")
-              }
-            >
-              {t("contacts.importStudio.preview")}
-              <DirectionalIcon icon={ArrowRightIcon} />
-            </Button>
-          )}
-          {state.status === "review" && review.results === null && (
-            <Button
-              disabled={!review.canImport}
-              loading={review.isImporting}
-              onClick={() =>
-                detached(review.commit(), "contact-import-studio.commit")
-              }
-            >
-              {t("contacts.importStudio.importCount", {
-                count: review.validCount,
-              })}
-            </Button>
-          )}
-        </div>
-      </footer>
+      {state.status !== "upload" && (
+        <footer className="bg-background border-t px-4 py-3 sm:px-6">
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
+            {review.results !== null ? (
+              <Button render={<Link to="/contacts" />} variant="ghost">
+                <DirectionalIcon icon={ArrowLeftIcon} />
+                {t("contacts.importStudio.backToContacts")}
+              </Button>
+            ) : (
+              <Button
+                disabled={busy !== "idle"}
+                onClick={goBack}
+                variant="ghost"
+              >
+                <DirectionalIcon icon={ArrowLeftIcon} />
+                {t("common.back")}
+              </Button>
+            )}
+            {state.status === "mapping" && (
+              <Button
+                loading={busy === "previewing"}
+                onClick={() =>
+                  detached(buildPreview(), "contact-import-studio.preview")
+                }
+              >
+                {t("contacts.importStudio.preview")}
+                <DirectionalIcon icon={ArrowRightIcon} />
+              </Button>
+            )}
+            {state.status === "review" && review.results === null && (
+              <Button
+                disabled={!review.canImport}
+                loading={review.isImporting}
+                onClick={() =>
+                  detached(review.commit(), "contact-import-studio.commit")
+                }
+              >
+                {t("contacts.importStudio.importCount", {
+                  count: review.validCount,
+                })}
+              </Button>
+            )}
+          </div>
+        </footer>
+      )}
     </div>
   );
 }
@@ -452,40 +461,40 @@ const UploadStep = ({
     enabled: !isInspecting,
   });
 
+  // The whole step is the drop target: the section fills the main area and
+  // the button stretches with it, so any drop on the screen counts.
   return (
-    <section className="mx-auto max-w-2xl">
+    <section className="flex min-h-0 flex-1 flex-col" ref={ref}>
       <h2 className="sr-only" ref={stepHeadingRef} tabIndex={-1}>
         {t("contacts.importStudio.stepUpload")}
       </h2>
-      <div ref={ref}>
-        <button
-          aria-busy={isInspecting}
-          className={cn(
-            "bg-muted/20 hover:bg-muted/40 focus-visible:ring-ring flex min-h-72 w-full flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-8 text-center transition-colors focus-visible:ring-2 focus-visible:outline-none",
-            isDropTarget && "border-primary bg-primary/5",
-            isInspecting && "cursor-progress",
-          )}
-          disabled={isInspecting}
-          onClick={() => fileInputRef.current?.click()}
-          type="button"
-        >
-          {isInspecting ? (
-            <Loader2Icon className="text-muted-foreground size-10 animate-spin" />
-          ) : (
-            <FileSpreadsheetIcon className="text-muted-foreground size-10" />
-          )}
-          <span className="font-medium">
-            {t("contacts.importStudio.dropFile")}
-          </span>
-          <span className="text-muted-foreground text-sm">
-            {t("contacts.importStudio.supportedFiles")}
-          </span>
-          <span className="text-muted-foreground flex items-center gap-1.5 text-sm">
-            <UploadIcon className="size-4" />
-            {t("contacts.importStudio.chooseFile")}
-          </span>
-        </button>
-      </div>
+      <button
+        aria-busy={isInspecting}
+        className={cn(
+          "bg-muted/20 hover:bg-muted/40 focus-visible:ring-ring flex min-h-72 w-full flex-1 flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-8 text-center transition-colors focus-visible:ring-2 focus-visible:outline-none",
+          isDropTarget && "border-primary bg-primary/5",
+          isInspecting && "cursor-progress",
+        )}
+        disabled={isInspecting}
+        onClick={() => fileInputRef.current?.click()}
+        type="button"
+      >
+        {isInspecting ? (
+          <Loader2Icon className="text-muted-foreground size-10 animate-spin" />
+        ) : (
+          <FileSpreadsheetIcon className="text-muted-foreground size-10" />
+        )}
+        <span className="font-medium">
+          {t("contacts.importStudio.dropFile")}
+        </span>
+        <span className="text-muted-foreground text-sm">
+          {t("contacts.importStudio.supportedFiles")}
+        </span>
+        <span className="text-muted-foreground flex items-center gap-1.5 text-sm">
+          <UploadIcon className="size-4" />
+          {t("contacts.importStudio.chooseFile")}
+        </span>
+      </button>
       <input
         accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values,text/plain"
         className="hidden"
