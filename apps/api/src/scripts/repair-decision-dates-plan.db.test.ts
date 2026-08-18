@@ -1,11 +1,12 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { canonicalDecisionDate } from "@/api/lib/dates";
+import { CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT } from "@/api/lib/decision-date-bounds-sql";
 import { isRecord } from "@/api/lib/type-guards";
 import type {
   CorruptDecisionDateRow,
@@ -161,6 +162,13 @@ beforeAll(
   async () => {
     client = await createTestPglite();
     db = drizzle({ client });
+
+    // The fixtures are rows the table's bounds CHECK refuses: they model what
+    // was stored before the constraint existed, which is the population the
+    // repair walks. `decision-date-bounds-sql.db.test.ts` covers the CHECK.
+    await db.execute(
+      sql`ALTER TABLE case_law_decisions DROP CONSTRAINT ${sql.identifier(CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT)}`,
+    );
 
     await db.insert(caseLawSources).values([
       { id: czSourceId, adapterKey: "cz-regional", name: "cz source" },

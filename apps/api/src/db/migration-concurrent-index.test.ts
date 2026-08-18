@@ -80,6 +80,10 @@ const APPROVED_PROCEDURAL_STATEMENTS = new Set([
   // takes no lock beyond the read, and stopping the release is the intended
   // outcome, since the two orders cannot share one cursor slot.
   "20260817150000_corpus_generation_date_walk/migration.sql:06821016b65f9c0e7ab643794da37f29616a0ccbef91df3df8b1806197f5ac8c",
+  // Adds the decision-date bounds CHECK NOT VALID only when it is absent. The
+  // body is static DDL; the conditional makes the file retryable after the
+  // VALIDATE that follows it outside the migrator transaction.
+  "20260818090000_case_law_decision_date_bounds/migration.sql:31f2786a7f7aed2d2e55bd3161acad6ad49e606ec1bc75e9235de07cdadd96e0",
 ]);
 
 type TimeoutState = "bounded" | "unbounded" | "unset";

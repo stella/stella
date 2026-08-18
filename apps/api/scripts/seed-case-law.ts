@@ -29,6 +29,7 @@ import { rootDb, rlsDb } from "@/api/db/root";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { createIngestionDb } from "@/api/db/scoped";
 import { backfillCaseLawSlugs } from "@/api/handlers/case-law/decisions/slug-backfill";
+import { canonicalDecisionDate } from "@/api/lib/dates";
 import { indexDecision } from "@/api/lib/legal-search/case-law-search-index";
 import type {
   DecisionSection,
@@ -229,7 +230,13 @@ export async function seedCaseLaw() {
           country: d.country,
           language: d.language,
           languageGroupKey: d.language_group_key,
-          decisionDate: d.decision_date,
+          // Fixtures are verbatim rows, some of them older than the write-path
+          // guard; the same guard runs here so the table's bounds CHECK sees
+          // what the ingest would have stored.
+          decisionDate:
+            d.decision_date === null
+              ? null
+              : canonicalDecisionDate(d.decision_date),
           decisionType: d.decision_type,
           fulltext,
           sections: d.sections,

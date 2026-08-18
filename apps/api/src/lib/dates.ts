@@ -83,9 +83,9 @@ const ISO_DATE_LENGTH = 10;
  * relative to the current year because a publisher may date a decision
  * slightly ahead; a fixed upper year would go stale.
  *
- * Exported because the same bounds have to hold in SQL: rows written before
- * the guard existed are found by `repair-decision-dates-plan.ts`, which derives
- * its predicate from this declaration rather than restating the numbers.
+ * Exported because the same bounds have to hold in SQL:
+ * `decision-date-bounds-sql.ts` derives the table's CHECK constraint and the
+ * repair predicate from this declaration rather than restating the numbers.
  */
 export const DECISION_YEAR_BOUNDS = {
   min: 1800,

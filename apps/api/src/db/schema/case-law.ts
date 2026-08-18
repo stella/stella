@@ -18,6 +18,10 @@ import type {
   RuleSource,
 } from "@/api/handlers/case-law/polarity/consts";
 import type { ConstantMap } from "@/api/lib/constant-map";
+import {
+  CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
+  decisionDateWithinBoundsSql,
+} from "@/api/lib/decision-date-bounds-sql";
 
 import {
   caseLawIngestionOnlyPolicies,
@@ -370,6 +374,14 @@ export const caseLawDecisions = p.pgTable(
     p.check(
       "case_law_decisions_redacted_payload_erased",
       sql`${t.redactedAt} IS NULL OR (${t.fulltext} IS NULL AND ${t.sections} IS NULL AND ${t.documentAst} IS NULL AND ${t.contentHash} IS NULL)`,
+    ),
+    // The year bounds `canonicalDecisionDate` enforces on the write path,
+    // enforced at the table as well; both derive from `DECISION_YEAR_BOUNDS`.
+    // A NULL date is allowed: it is how a decision without a usable date is
+    // stored.
+    p.check(
+      CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT,
+      sql`${t.decisionDate} IS NULL OR ${decisionDateWithinBoundsSql(t.decisionDate)}`,
     ),
     // Identity, in two halves that together cover every row exactly once.
     // Where the publisher states an id, that is the key. Where it does not,

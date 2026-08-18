@@ -35,15 +35,15 @@
  * order, decision rows before the graph, so a refresh of one of these decisions
  * running at the same time cannot deadlock against the repair.
  *
- * **Why the bounds are not a CHECK constraint yet.** They should be, and the
- * predicate above is written so the same text can become one. It cannot land
- * before this run has: `ADD CONSTRAINT … NOT VALID` skips the scan of existing
- * rows but still enforces the constraint on every later INSERT and UPDATE, so
- * while a corrupt row survives, any unrelated write touching it — a citation
- * authority refresh, a corpus mirror update, an index hash — fails on a column
- * it never mentioned. `VALIDATE CONSTRAINT` fails outright. A report-only run
- * finding zero rows is the precondition; until then the write path's own
- * `canonicalDecisionDate` is the guard, and `dates.test.ts` pins its bounds.
+ * **The bounds are also a CHECK constraint.** `case_law_decisions_decision_date_bounds`
+ * (migration 20260818090000) holds the same predicate, derived from the same
+ * `DECISION_YEAR_BOUNDS`. Its `VALIDATE CONSTRAINT` fails while a corrupt row
+ * survives, and until then `ADD CONSTRAINT … NOT VALID` makes any unrelated
+ * write touching such a row — a citation authority refresh, a corpus mirror
+ * update, an index hash — fail on a column it never mentioned. So this runs
+ * against a database before that migration is applied to it; a report finding
+ * zero rows is the precondition, and once the constraint is validated the
+ * selection is empty by construction.
  *
  * Without `--apply` nothing is written and nothing is locked: the run reports
  * the population per source and per year, then how many of those rows a repair
