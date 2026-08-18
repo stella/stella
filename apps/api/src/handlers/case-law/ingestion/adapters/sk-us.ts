@@ -734,6 +734,36 @@ const unservedWindowError = (
     cursor: slice,
   });
 
+type SearchWindowOptions = Omit<ListSkUsWindowOptions, "budget">;
+
+/** One search request for a window: its body, or null where it answered 204. */
+const searchWindow = async ({
+  offset,
+  pageSize,
+  signal,
+  slice,
+}: SearchWindowOptions): Promise<SearchResponse | null> => {
+  const searchResult = await executeSearchWithRetry({
+    cursor: slice,
+    offset,
+    pageSize,
+    range: sliceDateRange(slice),
+    signal,
+  });
+  if (Result.isError(searchResult)) {
+    throw searchResult.error;
+  }
+  return searchResult.value;
+};
+
+const listedWindow = (data: SearchResponse): ListedWindow => ({
+  items: data.documents.map((doc) => ({
+    identity: skUsListingIdentity(doc),
+    payload: doc,
+  })),
+  numFound: data.numFound,
+});
+
 /**
  * List one window of a month, splitting it around whatever the DMS refuses.
  *
@@ -748,8 +778,9 @@ const unservedWindowError = (
  * surrounds it lists normally, the record itself is reported with nothing to
  * key on, and the month settles honestly: 277 reported, 277 collected, one
  * unidentifiable. The halving terminates at a window of one record, costs
- * {@link SPLIT_REQUESTS_PER_UNSERVED_RECORD} per such record, and each of
- * those requests waits the same pause as every other request here.
+ * {@link SPLIT_REQUESTS_PER_UNSERVED_RECORD} plus the one confirming request
+ * below per such record, and each of those requests waits the same pause as
+ * every other request here.
  *
  * A refusal that survives the halving with nothing served on either side is
  * the endpoint being down for that window rather than a record it cannot
@@ -757,6 +788,13 @@ const unservedWindowError = (
  * items would settle the month over an outage. Two unservable records lying
  * side by side read the same way and are refused with it, which is the safe
  * direction to be wrong in.
+ *
+ * A one-record refusal is confirmed by a second request before it is reported
+ * unserved. An unidentifiable item is excluded from the slice rather than
+ * parked, so nothing retries it later: a single 204 taken at face value would
+ * drop a real decision out of `reported` permanently, and this endpoint is
+ * known to answer badly under load. One request is a reading; two agreeing
+ * requests are a property of the record.
  */
 const listSkUsWindow = async ({
   budget,
@@ -765,30 +803,22 @@ const listSkUsWindow = async ({
   signal,
   slice,
 }: ListSkUsWindowOptions): Promise<ListedWindow> => {
-  const searchResult = await executeSearchWithRetry({
-    cursor: slice,
-    offset,
-    pageSize,
-    range: sliceDateRange(slice),
-    signal,
-  });
-  if (Result.isError(searchResult)) {
-    throw searchResult.error;
-  }
-
-  const data = searchResult.value;
+  const data = await searchWindow({ offset, pageSize, signal, slice });
   if (data !== null) {
-    return {
-      items: data.documents.map((doc) => ({
-        identity: skUsListingIdentity(doc),
-        payload: doc,
-      })),
-      numFound: data.numFound,
-    };
+    return listedWindow(data);
   }
 
   if (pageSize <= 1) {
-    return { items: [unservedListingItem(offset)], numFound: null };
+    await Bun.sleep(MIN_REQUEST_INTERVAL_MS);
+    const confirmation = await searchWindow({
+      offset,
+      pageSize,
+      signal,
+      slice,
+    });
+    return confirmation === null
+      ? { items: [unservedListingItem(offset)], numFound: null }
+      : listedWindow(confirmation);
   }
 
   if (budget.remaining < 2) {
@@ -817,7 +847,22 @@ const listSkUsWindow = async ({
     slice,
   });
 
-  // Either half that answered states the same month-wide count.
+  // Both halves state the size of the same month, so two different counts mean
+  // the month changed under the walk or the endpoint answered about something
+  // else. Either way the page cannot be sized, and banking it would write a
+  // `reported` the slice can never reach.
+  if (
+    lower.numFound !== null &&
+    upper.numFound !== null &&
+    lower.numFound !== upper.numFound
+  ) {
+    throw new AdapterFetchError({
+      message: `SK ÚS search sized ${slice} as ${lower.numFound} and ${upper.numFound} while splitting ${pageSize} records from offset ${offset}`,
+      adapterKey: ADAPTER_KEYS.SK_US,
+      cursor: slice,
+    });
+  }
+
   const numFound = lower.numFound ?? upper.numFound;
   if (numFound === null) {
     throw unservedWindowError(
