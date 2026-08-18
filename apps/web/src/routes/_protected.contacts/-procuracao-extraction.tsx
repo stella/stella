@@ -12,33 +12,94 @@ import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { isDocxFile } from "@/lib/consts";
-import { useImportContacts } from "@/lib/contacts/mutations";
 import { contactsKeys } from "@/lib/contacts/queries";
 import { toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { sha256Hex } from "@/lib/files/sha256";
-import { toSafeId } from "@/lib/safe-id";
-import type { SafeId } from "@/lib/safe-id";
-import {
-  ImportResultsList,
-  ImportRowCard,
-} from "@/routes/_protected.contacts/-import-dialog";
-import type { ImportContactResult } from "@/routes/_protected.contacts/-import-dialog";
-import {
-  assignStableImportIds,
-  toImportRowVars,
-  validateRows,
-} from "@/routes/_protected.contacts/-parse-import";
+import { customFieldId } from "@/routes/_protected.contacts/-import-candidate";
 import type {
-  ParsedImportFieldKey,
-  ParsedImportRow,
-} from "@/routes/_protected.contacts/-parse-import";
-import { candidatesToRows } from "@/routes/_protected.contacts/-parse-procuracao";
+  ImportCandidate,
+  ImportEditableField,
+} from "@/routes/_protected.contacts/-import-candidate";
+import {
+  ImportCandidateCard,
+  ImportResultsList,
+  useImportReview,
+} from "@/routes/_protected.contacts/-import-review";
+import type { ImportReview } from "@/routes/_protected.contacts/-import-review";
 
 const EXTRACTION_SOURCE_MAX_BYTES = 50 * 1024 * 1024;
 const EXTRACTION_UPLOAD_TIMEOUT_MS = 30 * 60 * 1000;
+
+/** A procuração states Brazilian tax ids, so the batch is checksum-checked. */
+const PROCURACAO_TAX_ID_SCHEME = "br_cpf_cnpj" as const;
+
+type ExtractResponse = Awaited<
+  ReturnType<(typeof api.contacts)["extract-from-procuracao"]["post"]>
+>;
+
+type ExtractData = Exclude<
+  NonNullable<Extract<ExtractResponse, { data: unknown }>["data"]>,
+  Response
+>;
+
+type OutorganteCandidate = ExtractData["outorgantes"][number];
+
+/**
+ * The qualification a procuração states about a grantor has no first-class
+ * contact field, so each label lands in `metadata.customFields` under its own
+ * Brazilian-Portuguese name — the wording the source document itself uses.
+ */
+const PROCURACAO_CUSTOM_FIELDS = [
+  { key: "rg", label: "RG" },
+  { key: "nacionalidade", label: "Nacionalidade" },
+  { key: "estadoCivil", label: "Estado civil" },
+  { key: "profissao", label: "Profissão" },
+  { key: "uniaoEstavel", label: "União estável" },
+] as const satisfies readonly {
+  key: keyof OutorganteCandidate;
+  label: string;
+}[];
+
+/** What a reviewer may edit on an extracted grantor. */
+const PROCURACAO_REVIEW_FIELDS = [
+  "type",
+  "display_name",
+  "tax_id",
+  "primary_email",
+  "address_line_1",
+] as const satisfies readonly ImportEditableField[];
+
+const trimmedOrUndefined = (value: string | null): string | undefined =>
+  value?.trim() || undefined;
+
+const toImportCandidate = (
+  outorgante: OutorganteCandidate,
+): ImportCandidate => {
+  const customFields = PROCURACAO_CUSTOM_FIELDS.flatMap(
+    ({ key, label }, index) => {
+      const value = trimmedOrUndefined(outorgante[key]);
+      return value ? [{ id: customFieldId(label, index), label, value }] : [];
+    },
+  );
+  const email = trimmedOrUndefined(outorgante.email);
+  const address = trimmedOrUndefined(outorgante.endereco);
+
+  return {
+    type: outorgante.contactType ?? "person",
+    displayName: outorgante.nome?.trim() ?? "",
+    taxId: trimmedOrUndefined(outorgante.taxId),
+    emails: email
+      ? [{ type: "work", address: email, isPrimary: true }]
+      : undefined,
+    addresses: address
+      ? [{ type: "office", line1: address, isPrimary: true }]
+      : undefined,
+    metadata: customFields.length > 0 ? { customFields } : undefined,
+  };
+};
 
 /**
  * Where the procuração flow currently sits, as seen by the host dialog:
@@ -47,23 +108,14 @@ const EXTRACTION_UPLOAD_TIMEOUT_MS = 30 * 60 * 1000;
  */
 export type ProcuracaoExtractionStage = "idle" | "review" | "done";
 
-type ProcuracaoExtractionState = {
+export type ProcuracaoExtractionState = {
   stage: ProcuracaoExtractionStage;
   isExtracting: boolean;
   isConfirming: boolean;
-  rows: ParsedImportRow[];
-  results: ImportContactResult[] | null;
-  sourceTruncated: boolean;
-  validCount: number;
-  invalidCount: number;
   canConfirm: boolean;
+  sourceTruncated: boolean;
+  review: ImportReview;
   extractFile: (file: File) => Promise<void>;
-  updateField: (
-    rowIndex: number,
-    key: ParsedImportFieldKey,
-    value: string,
-  ) => void;
-  removeRow: (rowIndex: number) => void;
   confirm: () => Promise<void>;
   reset: () => void;
 };
@@ -77,21 +129,19 @@ type ProcuracaoExtractionState = {
 export const useProcuracaoExtraction = (): ProcuracaoExtractionState => {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const importContacts = useImportContacts();
+  const review = useImportReview({
+    onImported: async () => {
+      await queryClient.invalidateQueries({ queryKey: contactsKeys.all });
+    },
+  });
 
   const [isExtracting, setIsExtracting] = useState(false);
-  const [rows, setRows] = useState<ParsedImportRow[]>([]);
-  const [results, setResults] = useState<ImportContactResult[] | null>(null);
   const [sourceTruncated, setSourceTruncated] = useState(false);
-  const [importRequestId, setImportRequestId] =
-    useState<SafeId<"contactImportRequest"> | null>(null);
 
   const reset = () => {
     setIsExtracting(false);
-    setRows([]);
-    setResults(null);
     setSourceTruncated(false);
-    setImportRequestId(null);
+    review.reset();
   };
 
   const extractFile = async (file: File) => {
@@ -174,111 +224,30 @@ export const useProcuracaoExtraction = (): ProcuracaoExtractionState => {
       return;
     }
 
-    setResults(null);
-    setImportRequestId(toSafeId<"contactImportRequest">(crypto.randomUUID()));
-    setRows(assignStableImportIds(candidatesToRows(outorgantes)));
+    await review.seedValidated({
+      candidates: outorgantes.map(toImportCandidate),
+      taxIdScheme: PROCURACAO_TAX_ID_SCHEME,
+    });
   };
-
-  const updateField = (
-    rowIndex: number,
-    key: ParsedImportFieldKey,
-    value: string,
-  ) => {
-    setRows((prev) =>
-      assignStableImportIds(
-        validateRows(
-          prev.map((row) =>
-            row.rowIndex === rowIndex
-              ? { ...row, fields: { ...row.fields, [key]: value } }
-              : row,
-          ),
-        ),
-        prev,
-      ),
-    );
-  };
-
-  const removeRow = (rowIndex: number) => {
-    setRows((prev) =>
-      assignStableImportIds(
-        validateRows(prev.filter((row) => row.rowIndex !== rowIndex)),
-        prev,
-      ),
-    );
-  };
-
-  const validRows = rows.flatMap((row) => {
-    const vars = toImportRowVars(row);
-    return vars ? [{ originalRowIndex: row.rowIndex, vars }] : [];
-  });
-  const validRowVars = validRows.map(({ vars }) => vars);
-  const invalidCount = rows.length - validRowVars.length;
-
-  const confirm = async () => {
-    if (!importRequestId) {
-      return;
-    }
-    try {
-      const importResults = await importContacts.mutateAsync({
-        importRequestId,
-        rows: validRowVars,
-      });
-      setResults(
-        importResults.map((result) => {
-          const index =
-            validRows.at(result.index)?.originalRowIndex ?? result.index;
-          if (result.status === "created") {
-            return {
-              index,
-              status: result.status,
-              contactId: result.contactId,
-            };
-          }
-          return { index, status: result.status, reason: result.reason };
-        }),
-      );
-      setRows([]);
-      await queryClient.invalidateQueries({ queryKey: contactsKeys.all });
-    } catch (error) {
-      getAnalytics().captureError(error);
-      stellaToast.add({
-        title: userErrorFromThrown(error, t("errors.actionFailed")),
-        type: "error",
-      });
-    }
-  };
-
-  const stage = resolveStage({ results, rowCount: rows.length });
 
   return {
-    stage,
-    isExtracting,
-    isConfirming: importContacts.isPending,
-    rows,
-    results,
+    stage: resolveStage(review),
+    isExtracting: isExtracting || review.isSeeding,
+    isConfirming: review.isImporting,
+    canConfirm: review.canImport,
     sourceTruncated,
-    validCount: validRowVars.length,
-    invalidCount,
-    canConfirm: validRowVars.length > 0 && importRequestId !== null,
+    review,
     extractFile,
-    updateField,
-    removeRow,
-    confirm,
+    confirm: review.commit,
     reset,
   };
 };
 
-const resolveStage = ({
-  results,
-  rowCount,
-}: {
-  results: ImportContactResult[] | null;
-  rowCount: number;
-}): ProcuracaoExtractionStage => {
-  if (results) {
+const resolveStage = (review: ImportReview): ProcuracaoExtractionStage => {
+  if (review.results) {
     return "done";
   }
-  if (rowCount > 0) {
+  if (review.rows.length > 0) {
     return "review";
   }
   return "idle";
@@ -363,33 +332,16 @@ export const ProcuracaoDropZone = ({
 };
 
 type ProcuracaoReviewProps = {
-  extraction: Pick<
-    ProcuracaoExtractionState,
-    | "invalidCount"
-    | "removeRow"
-    | "results"
-    | "rows"
-    | "sourceTruncated"
-    | "updateField"
-    | "validCount"
-  >;
+  extraction: Pick<ProcuracaoExtractionState, "review" | "sourceTruncated">;
 };
 
 /** Editable outorgante rows before confirmation, or the receipt after it. */
 export const ProcuracaoReview = ({ extraction }: ProcuracaoReviewProps) => {
   const t = useTranslations();
-  const {
-    invalidCount,
-    removeRow,
-    results,
-    rows,
-    sourceTruncated,
-    updateField,
-    validCount,
-  } = extraction;
+  const { review, sourceTruncated } = extraction;
 
-  if (results) {
-    return <ImportResultsList results={results} />;
+  if (review.results) {
+    return <ImportResultsList results={review.results} />;
   }
 
   return (
@@ -400,17 +352,24 @@ export const ProcuracaoReview = ({ extraction }: ProcuracaoReviewProps) => {
           {t("contacts.extractProcuracao.sourceTruncated")}
         </p>
       )}
+      {review.validation.status === "failed" && (
+        <p className="text-destructive flex items-start gap-2 text-xs">
+          <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" />
+          {review.validation.message}
+        </p>
+      )}
       <p className="text-muted-foreground text-xs">
         {t("contacts.import.previewSummary", {
-          valid: validCount,
-          invalid: invalidCount,
+          invalid: review.errorCount,
+          valid: review.validCount,
         })}
       </p>
-      {rows.map((row) => (
-        <ImportRowCard
-          key={row.rowIndex}
-          onFieldChange={(key, value) => updateField(row.rowIndex, key, value)}
-          onRemove={() => removeRow(row.rowIndex)}
+      {review.rows.map((row) => (
+        <ImportCandidateCard
+          fields={PROCURACAO_REVIEW_FIELDS}
+          key={row.id}
+          onChange={(candidate) => review.updateRow(row.id, candidate)}
+          onRemove={() => review.removeRow(row.id)}
           row={row}
         />
       ))}

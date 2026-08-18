@@ -31,6 +31,7 @@ const config = {
 
 const validateContactImport = createSafeRootHandler(
   config,
+  // eslint-disable-next-line require-yield, typescript/require-await -- safe handlers must remain async generators for Result.gen error capture.
   async function* ({ body: { rows, taxIdScheme } }) {
     const validated = rows.map((candidate, index) => {
       const { contact, issues } = validateContactImportCandidate({

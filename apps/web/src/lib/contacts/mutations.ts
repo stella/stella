@@ -4,7 +4,6 @@ import type { ContactType } from "@stll/api-contract";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import type { ImportContactRowVars } from "@/lib/contacts/import-types";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import type { SafeId } from "@/lib/safe-id";
@@ -124,30 +123,6 @@ export type ContactUpdateFields = {
 };
 
 export type ContactUpdate = NonEmptyPatch<ContactUpdateFields>;
-
-type ImportContactsVars = {
-  importRequestId: SafeId<"contactImportRequest">;
-  rows: ImportContactRowVars[];
-};
-
-export const useImportContacts = () => {
-  const analytics = useAnalytics();
-
-  return useMutation({
-    mutationFn: async ({ importRequestId, rows }: ImportContactsVars) => {
-      const response = await api.contacts.import.put({ importRequestId, rows });
-
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data.results;
-    },
-    onError: (error) => {
-      analytics.captureError(error);
-    },
-  });
-};
 
 type UpdateContactVars = {
   contactId: SafeId<"contact">;

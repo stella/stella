@@ -8377,7 +8377,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "contacts", "import"],
                 capabilityId: "contacts.import",
                 description:
-                  "Import a reviewed batch of up to 500 contacts into the organization address book. Supply a caller-generated importRequestId: replaying it with the same rows returns the original result, while changing the rows is rejected. taxIdScheme selects tax-id validation (none, or br_cpf_cnpj checksums with duplicate detection). Invalid, duplicate, and over-limit rows are skipped; all accepted rows commit atomically.",
+                  "Import a reviewed batch of up to 500 contacts into the organization address book. Supply a caller-generated importRequestId: replaying it with the same rows returns the original result, while changing the rows is rejected. taxIdScheme selects tax-id validation (none, or br_cpf_cnpj checksums with duplicate detection). Rows failing the import rules, duplicates, and over-limit rows are skipped; all accepted rows commit atomically.",
                 access: "write",
                 flags: [
                   {
@@ -8443,32 +8443,31 @@ export const generatedRouteMap: RouteNode = {
                                 enum: ["person", "organization"],
                               },
                               displayName: {
-                                minLength: 1,
-                                maxLength: 512,
+                                maxLength: 50000,
                                 type: "string",
                               },
                               prefix: {
-                                maxLength: 32,
+                                maxLength: 50000,
                                 type: "string",
                               },
                               firstName: {
-                                maxLength: 256,
+                                maxLength: 50000,
                                 type: "string",
                               },
                               middleName: {
-                                maxLength: 256,
+                                maxLength: 50000,
                                 type: "string",
                               },
                               lastName: {
-                                maxLength: 256,
+                                maxLength: 50000,
                                 type: "string",
                               },
                               suffix: {
-                                maxLength: 32,
+                                maxLength: 50000,
                                 type: "string",
                               },
                               organizationName: {
-                                maxLength: 512,
+                                maxLength: 50000,
                                 type: "string",
                               },
                               notes: {
@@ -8476,21 +8475,16 @@ export const generatedRouteMap: RouteNode = {
                                 type: "string",
                               },
                               emails: {
-                                maxItems: 20,
+                                maxItems: 200,
                                 type: "array",
                                 items: {
                                   type: "object",
-                                  required: ["type", "address", "isPrimary"],
+                                  required: ["type", "isPrimary", "address"],
                                   properties: {
                                     type: {
                                       default: "work",
                                       type: "string",
                                       enum: ["work", "personal", "other"],
-                                    },
-                                    address: {
-                                      format: "email",
-                                      maxLength: 320,
-                                      type: "string",
                                     },
                                     isPrimary: {
                                       type: "boolean",
@@ -8499,15 +8493,19 @@ export const generatedRouteMap: RouteNode = {
                                       maxLength: 128,
                                       type: "string",
                                     },
+                                    address: {
+                                      maxLength: 50000,
+                                      type: "string",
+                                    },
                                   },
                                 },
                               },
                               phones: {
-                                maxItems: 20,
+                                maxItems: 200,
                                 type: "array",
                                 items: {
                                   type: "object",
-                                  required: ["type", "number", "isPrimary"],
+                                  required: ["type", "isPrimary", "number"],
                                   properties: {
                                     type: {
                                       default: "mobile",
@@ -8520,11 +8518,6 @@ export const generatedRouteMap: RouteNode = {
                                         "other",
                                       ],
                                     },
-                                    number: {
-                                      minLength: 1,
-                                      maxLength: 32,
-                                      type: "string",
-                                    },
                                     isPrimary: {
                                       type: "boolean",
                                     },
@@ -8532,15 +8525,19 @@ export const generatedRouteMap: RouteNode = {
                                       maxLength: 128,
                                       type: "string",
                                     },
+                                    number: {
+                                      maxLength: 50000,
+                                      type: "string",
+                                    },
                                   },
                                 },
                               },
                               addresses: {
-                                maxItems: 10,
+                                maxItems: 200,
                                 type: "array",
                                 items: {
                                   type: "object",
-                                  required: ["type", "line1", "isPrimary"],
+                                  required: ["type", "isPrimary", "line1"],
                                   properties: {
                                     type: {
                                       default: "office",
@@ -8554,30 +8551,6 @@ export const generatedRouteMap: RouteNode = {
                                         "other",
                                       ],
                                     },
-                                    line1: {
-                                      maxLength: 512,
-                                      type: "string",
-                                    },
-                                    line2: {
-                                      maxLength: 512,
-                                      type: "string",
-                                    },
-                                    city: {
-                                      maxLength: 256,
-                                      type: "string",
-                                    },
-                                    state: {
-                                      maxLength: 256,
-                                      type: "string",
-                                    },
-                                    postalCode: {
-                                      maxLength: 32,
-                                      type: "string",
-                                    },
-                                    country: {
-                                      maxLength: 128,
-                                      type: "string",
-                                    },
                                     isPrimary: {
                                       type: "boolean",
                                     },
@@ -8585,52 +8558,54 @@ export const generatedRouteMap: RouteNode = {
                                       maxLength: 128,
                                       type: "string",
                                     },
+                                    line1: {
+                                      maxLength: 50000,
+                                      type: "string",
+                                    },
+                                    line2: {
+                                      maxLength: 50000,
+                                      type: "string",
+                                    },
+                                    city: {
+                                      maxLength: 50000,
+                                      type: "string",
+                                    },
+                                    state: {
+                                      maxLength: 50000,
+                                      type: "string",
+                                    },
+                                    postalCode: {
+                                      maxLength: 50000,
+                                      type: "string",
+                                    },
+                                    country: {
+                                      maxLength: 50000,
+                                      type: "string",
+                                    },
                                   },
                                 },
                               },
                               tags: {
-                                maxItems: 50,
+                                maxItems: 200,
                                 type: "array",
                                 items: {
-                                  maxLength: 256,
+                                  maxLength: 50000,
                                   type: "string",
                                 },
                               },
                               registrationNumber: {
-                                maxLength: 64,
+                                maxLength: 50000,
                                 type: "string",
                               },
                               taxId: {
-                                minLength: 1,
-                                maxLength: 64,
+                                maxLength: 50000,
                                 type: "string",
                               },
                               metadata: {
                                 type: "object",
                                 properties: {
-                                  dataBoxes: {
-                                    maxItems: 20,
-                                    type: "array",
-                                    items: {
-                                      type: "object",
-                                      required: ["id", "isPrimary"],
-                                      properties: {
-                                        id: {
-                                          pattern: "^[A-Za-z0-9]{7}$",
-                                          type: "string",
-                                        },
-                                        isPrimary: {
-                                          type: "boolean",
-                                        },
-                                        label: {
-                                          maxLength: 128,
-                                          type: "string",
-                                        },
-                                      },
-                                    },
-                                  },
                                   customFields: {
-                                    maxItems: 50,
+                                    maxItems: 200,
                                     type: "array",
                                     items: {
                                       type: "object",
@@ -8647,7 +8622,7 @@ export const generatedRouteMap: RouteNode = {
                                           type: "string",
                                         },
                                         value: {
-                                          maxLength: 2000,
+                                          maxLength: 50000,
                                           type: "string",
                                         },
                                       },

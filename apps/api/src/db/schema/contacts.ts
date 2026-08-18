@@ -145,6 +145,7 @@ export type ContactImportReceiptResult = {
           | "contacts_limit_reached"
           | "duplicate_contact_id"
           | "duplicate_tax_id"
+          | "invalid_row"
           | "invalid_tax_id";
       }
   )[];

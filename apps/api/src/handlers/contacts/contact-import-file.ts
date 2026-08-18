@@ -774,7 +774,14 @@ export const validateContactImportCandidate = ({
     report(CONTACT_IMPORT_ISSUE_CODE.TOO_LONG, null);
   }
 
-  if (taxIdScheme === "none" || !candidate.taxId) {
+  if (taxIdScheme === "none") {
+    return { contact: candidate, issues };
+  }
+  // Under a checksum scheme the tax id is the row's identity: a row without
+  // one cannot be deduplicated or committed, so it is an issue here rather
+  // than a surprise skip at commit time.
+  if (!candidate.taxId) {
+    report(CONTACT_IMPORT_ISSUE_CODE.TAX_ID_REQUIRED, "tax_id");
     return { contact: candidate, issues };
   }
   const classified = classifyBrazilianTaxId(candidate.taxId);

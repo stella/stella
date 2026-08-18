@@ -453,6 +453,25 @@ describe("candidate validation", () => {
     expect(input.taxId).toBe(VALID_CPF);
   });
 
+  test("requires a tax id under a checksum scheme, not under none", () => {
+    const missing = candidate({ taxId: undefined });
+
+    expect(
+      validateContactImportCandidate({
+        candidate: missing,
+        taxIdScheme: "br_cpf_cnpj",
+        rowNumber: 2,
+      }).issues,
+    ).toEqual([{ code: "tax_id_required", field: "tax_id", rowNumber: 2 }]);
+    expect(
+      validateContactImportCandidate({
+        candidate: missing,
+        taxIdScheme: "none",
+        rowNumber: 2,
+      }).issues,
+    ).toEqual([]);
+  });
+
   test("reports a checksum-invalid tax id and keeps the value", () => {
     const { contact, issues } = validateContactImportCandidate({
       candidate: candidate({ taxId: INVALID_CPF }),

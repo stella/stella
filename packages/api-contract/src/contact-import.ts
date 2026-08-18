@@ -60,6 +60,7 @@ export const CONTACT_IMPORT_ISSUE_CODE = {
   INVALID_TAX_ID: "invalid_tax_id",
   INVALID_TYPE: "invalid_type",
   ROW_LENGTH_MISMATCH: "row_length_mismatch",
+  TAX_ID_REQUIRED: "tax_id_required",
   TOO_LONG: "too_long",
   TOO_MANY_TAGS: "too_many_tags",
 } as const;
