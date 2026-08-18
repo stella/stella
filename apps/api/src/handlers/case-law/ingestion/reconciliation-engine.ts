@@ -96,6 +96,14 @@ const PARKED_RETRY_BATCH = 25;
  * rather than forgotten.
  */
 export const DEFAULT_SLICE_INGEST_BUDGET = 50;
+/**
+ * The most a unit may be asked to ingest. One walk holds the source lease
+ * for its whole run and the runner's hard deadline ends an overrun by
+ * exiting the process, so the option is bounded here rather than trusted:
+ * a thousand sequential fetches at the loop's politeness gap stay well
+ * inside that deadline.
+ */
+export const MAX_SLICE_INGEST_BUDGET = 1000;
 /** Identity lookups per query, matching the publishers' own page size. */
 const HELD_LOOKUP_CHUNK = 100;
 /** Short ledger rows examined per unit when looking for an unsettled one. */
@@ -211,8 +219,8 @@ export type ReconciliationWorkUnitOptions = {
   /** Gap between two document fetches; the loop's politeness contract. */
   fetchDelayMs: number;
   /**
-   * Decisions one slice walk may ingest; `DEFAULT_SLICE_INGEST_BUDGET` when
-   * absent. Deployment configuration like the fetch delay: a walk lists the
+   * Decisions one slice walk may ingest, at most `MAX_SLICE_INGEST_BUDGET`;
+   * `DEFAULT_SLICE_INGEST_BUDGET` when absent. Deployment configuration like the fetch delay: a walk lists the
    * whole slice whatever the budget, so the budget sets how much of one
    * listing a unit turns into writes before its deadline.
    */
@@ -962,9 +970,13 @@ export const runReconciliationWorkUnit = async ({
   sliceRetries,
   sourceId,
 }: ReconciliationWorkUnitOptions): Promise<ReconciliationUnitOutcome> => {
-  if (!Number.isInteger(sliceIngestBudget) || sliceIngestBudget < 1) {
+  if (
+    !Number.isInteger(sliceIngestBudget) ||
+    sliceIngestBudget < 1 ||
+    sliceIngestBudget > MAX_SLICE_INGEST_BUDGET
+  ) {
     panic(
-      `reconciliation slice ingest budget must be a positive integer: ${sliceIngestBudget}`,
+      `reconciliation slice ingest budget must be an integer in 1..${MAX_SLICE_INGEST_BUDGET}: ${sliceIngestBudget}`,
     );
   }
   const startedAt = now();

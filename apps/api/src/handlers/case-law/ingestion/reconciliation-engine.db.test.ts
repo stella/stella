@@ -16,7 +16,10 @@ import {
   relations,
 } from "@/api/db/schema";
 import type { SliceRetrySchedule } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
-import { runReconciliationWorkUnit } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
+import {
+  MAX_SLICE_INGEST_BUDGET,
+  runReconciliationWorkUnit,
+} from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import {
   RECONCILIATION_SETTLED_RECHECK_MS,
   SLICE_WALK_REASON,
@@ -435,6 +438,17 @@ test("a walk ingests no more than the unit's slice budget and defers the rest", 
     summary: { slice: OWED_SLICE, keyable: 2, parked: 1, deferred: 1 },
   });
   expect(builds).toHaveLength(1);
+});
+
+test("a slice budget outside 1..MAX is refused before any work", async () => {
+  const sourceId = await seedSource();
+  for (const sliceIngestBudget of [0, MAX_SLICE_INGEST_BUDGET + 1, 1.5]) {
+    // oxlint-disable-next-line no-await-in-loop -- each refusal is asserted in turn
+    await expect(runUnitWith({ sourceId, sliceIngestBudget })).rejects.toThrow(
+      /slice ingest budget/u,
+    );
+  }
+  expect(listed).toHaveLength(0);
 });
 
 test("a slice the publisher will not serve parks its items rather than storing them", async () => {
