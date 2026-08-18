@@ -1,4 +1,8 @@
-import type { ChatMiddleware, ChatMiddlewareContext } from "@tanstack/ai";
+import type {
+  ChatMiddleware,
+  ChatMiddlewareContext,
+  TokenUsage,
+} from "@tanstack/ai";
 import { Result } from "better-result";
 
 import type { ModelRole } from "@stll/ai-catalog";
@@ -314,6 +318,15 @@ export const createTanStackAIAnalyticsCallbacks = ({
   const selectedModelId = config.selectedModelId;
   let modelInfo: ResolvedTanStackTextModelInfo | null | undefined;
   const startedAt = performance.now();
+  // Each agent-loop iteration is one model call: `onIteration` marks its
+  // start and `onUsage` closes it, so per-generation latency covers only
+  // that call (the run-level `duration` spans every iteration and tool).
+  let iterationStartedAt = startedAt;
+  // Token totals across every iteration that reported usage. TanStack's
+  // `onFinish` usage is the LAST iteration's only (`finishedEvent` resets per
+  // iteration), so the run-level completion event sums these instead.
+  const runUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+  let runUsageReported = false;
   let hasCapturedGenerationError = false;
   let toolCount = 0;
 
@@ -439,10 +452,47 @@ export const createTanStackAIAnalyticsCallbacks = ({
     });
   };
 
+  // The standard $ai_* schema feeds the analytics platform's LLM
+  // observability product: one `$ai_generation` per model call, correlated
+  // by `$ai_trace_id`. Captured from `onUsage` (once per iteration that
+  // reports usage) rather than from `onFinish`: a run that pauses at an
+  // interrupt (client tool, approval) reaches no terminal hook at all, and
+  // `onFinish` only carries the last iteration's usage. Privacy mode by
+  // construction: model, token counts, latency, and trace correlation only —
+  // prompt and completion content never leave the service.
+  const captureGeneration = ({
+    ctx,
+    modelInfo: resolvedModelInfo,
+    usage,
+  }: {
+    ctx: ChatMiddlewareContext;
+    modelInfo: ResolvedTanStackTextModelInfo;
+    usage: TokenUsage;
+  }) => {
+    analytics.capture({
+      distinctId,
+      ...groups,
+      event: SERVER_ANALYTICS_EVENTS.aiGeneration,
+      properties: {
+        $ai_input_tokens: usage.promptTokens,
+        $ai_latency: (performance.now() - iterationStartedAt) / ONE_SECOND_MS,
+        $ai_model: resolvedModelInfo.modelId,
+        $ai_output_tokens: usage.completionTokens,
+        $ai_provider: resolvedModelInfo.provider,
+        $ai_span_id: `${ctx.runId}:${ctx.iteration}`,
+        $ai_trace_id: config.traceId,
+        feature: config.feature,
+      },
+    });
+  };
+
   return {
     captureError: captureGenerationError,
     middleware: {
       name: "stella-tanstack-analytics",
+      onIteration: () => {
+        iterationStartedAt = performance.now();
+      },
       onAfterToolCall: () => {
         toolCount += 1;
       },
@@ -450,32 +500,17 @@ export const createTanStackAIAnalyticsCallbacks = ({
         captureGenerationError(error, duration);
       },
       onFinish: (_ctx, { duration, usage }) => {
-        if (!usage) {
+        // Sum of every iteration's reported usage; the hook's own `usage`
+        // (last iteration only) is the fallback for a run whose provider
+        // never reached `onUsage`.
+        const totals = runUsageReported ? runUsage : usage;
+        if (!totals) {
           return;
         }
         const resolvedModelInfo = resolveAnalyticsModelInfo();
         if (!resolvedModelInfo) {
           return;
         }
-
-        // The standard $ai_* schema feeds the analytics platform's LLM
-        // observability product. Privacy mode by construction: model, token
-        // counts, latency, and trace correlation only — prompt and completion
-        // content never leave the service.
-        analytics.capture({
-          distinctId,
-          ...groups,
-          event: SERVER_ANALYTICS_EVENTS.aiGeneration,
-          properties: {
-            $ai_input_tokens: usage.promptTokens,
-            $ai_latency: duration / ONE_SECOND_MS,
-            $ai_model: resolvedModelInfo.modelId,
-            $ai_output_tokens: usage.completionTokens,
-            $ai_provider: resolvedModelInfo.provider,
-            $ai_trace_id: config.traceId,
-            feature: config.feature,
-          },
-        });
 
         analytics.capture({
           distinctId,
@@ -484,17 +519,17 @@ export const createTanStackAIAnalyticsCallbacks = ({
           properties: {
             ...pickSafeMetadata(config.properties),
             feature: config.feature,
-            input_tokens_bucket: bucketTokenCount(usage.promptTokens),
+            input_tokens_bucket: bucketTokenCount(totals.promptTokens),
             latency_bucket: bucketLatency(duration / ONE_SECOND_MS),
             model: resolvedModelInfo.modelId,
             model_key_source: resolvedModelInfo.keySource,
-            output_tokens_bucket: bucketTokenCount(usage.completionTokens),
+            output_tokens_bucket: bucketTokenCount(totals.completionTokens),
             provider: resolvedModelInfo.provider,
             ...(resolvedModelInfo.region
               ? { region: resolvedModelInfo.region }
               : {}),
             tool_count_bucket: bucketCount(toolCount),
-            total_tokens_bucket: bucketTokenCount(usage.totalTokens),
+            total_tokens_bucket: bucketTokenCount(totals.totalTokens),
           },
         });
       },
@@ -504,13 +539,19 @@ export const createTanStackAIAnalyticsCallbacks = ({
       // event and reports it; it never loses the server.
       onUsage: (ctx, usage) => {
         try {
-          const metering = config.usageMetering;
-          if (!metering) {
+          const resolvedModelInfo = resolveAnalyticsModelInfo();
+          if (!resolvedModelInfo) {
             return;
           }
 
-          const resolvedModelInfo = resolveAnalyticsModelInfo();
-          if (!resolvedModelInfo) {
+          runUsage.promptTokens += usage.promptTokens;
+          runUsage.completionTokens += usage.completionTokens;
+          runUsage.totalTokens += usage.totalTokens;
+          runUsageReported = true;
+          captureGeneration({ ctx, modelInfo: resolvedModelInfo, usage });
+
+          const metering = config.usageMetering;
+          if (!metering) {
             return;
           }
 

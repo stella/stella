@@ -133,6 +133,11 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     });
     const ctx = createMiddlewareContext();
 
+    await callbacks.middleware.onIteration?.(ctx, {
+      iteration: 0,
+      messageId: "msg_1",
+    });
+    await callbacks.middleware.onUsage?.(ctx, usage);
     await callbacks.middleware.onAfterToolCall?.(ctx, {
       duration: 10,
       ok: true,
@@ -146,6 +151,13 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       toolCallId: "tool_1",
       toolName: "search",
     });
+    // The generation event belongs to the model call, not the run: it is
+    // already captured before the terminal hook.
+    expect(
+      events.filter(
+        (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGeneration,
+      ),
+    ).toHaveLength(1);
     await callbacks.middleware.onFinish?.(ctx, {
       content: "Done",
       duration: 4200,
@@ -160,8 +172,12 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     expect(generation).toMatchObject({
       distinctId: "user_123",
       properties: {
+        $ai_input_tokens: usage.promptTokens,
         $ai_model: "gpt-5.4-mini",
+        $ai_output_tokens: usage.completionTokens,
         $ai_provider: "openai",
+        $ai_span_id: "run_1:0",
+        $ai_trace_id: "trace_complete",
         feature: "chat.stream",
       },
     });
@@ -211,6 +227,8 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     });
     const ctx = createMiddlewareContext();
 
+    // No metering: the generation event still fires from usage.
+    await callbacks.middleware.onUsage?.(ctx, usage);
     await callbacks.middleware.onFinish?.(ctx, {
       content: "Done",
       duration: 4200,
@@ -767,6 +785,118 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       errorSpy.mockRestore();
       warnSpy.mockRestore();
     }
+  });
+
+  test("captures one generation per model call and sums the run's usage", async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const events: Parameters<Analytics["capture"]>[0][] = [];
+    const analytics: Analytics = {
+      capture: (event) => {
+        events.push(event);
+      },
+      flush: async () => undefined,
+      identifyOrganizationGroup: () => undefined,
+    };
+    const callbacks = createTanStackAIAnalyticsCallbacks({
+      analytics,
+      feature: "chat.stream",
+      orgAIConfig: createOpenAIOrgAIConfig(),
+      traceId: "trace_iterations",
+    });
+    // A tool-calling turn: two model calls, each reporting its own usage;
+    // TanStack hands `onFinish` only the second one.
+    // Chosen so the run total lands in a different bucket than the last
+    // iteration alone: prompt 1200 + 4300 = 5500 (5k_20k, not 1k_5k) and
+    // completion 200 + 900 = 1100 (1k_5k, not 0_1k).
+    const first = {
+      promptTokens: 1200,
+      completionTokens: 200,
+      totalTokens: 1400,
+    } satisfies TokenUsage;
+    const second = {
+      promptTokens: 4300,
+      completionTokens: 900,
+      totalTokens: 5200,
+    } satisfies TokenUsage;
+
+    const ctx0 = createMiddlewareContext({ iteration: 0 });
+    const ctx1 = createMiddlewareContext({ iteration: 1 });
+    await callbacks.middleware.onIteration?.(ctx0, {
+      iteration: 0,
+      messageId: "msg_1",
+    });
+    await callbacks.middleware.onUsage?.(ctx0, first);
+    await callbacks.middleware.onIteration?.(ctx1, {
+      iteration: 1,
+      messageId: "msg_2",
+    });
+    await callbacks.middleware.onUsage?.(ctx1, second);
+    await callbacks.middleware.onFinish?.(ctx1, {
+      content: "Done",
+      duration: 4200,
+      finishReason: "stop",
+      usage: second,
+    });
+
+    const generations = events.filter(
+      (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGeneration,
+    );
+    expect(generations.map((event) => event.properties)).toMatchObject([
+      {
+        $ai_input_tokens: first.promptTokens,
+        $ai_output_tokens: first.completionTokens,
+        $ai_span_id: "run_1:0",
+        $ai_trace_id: "trace_iterations",
+      },
+      {
+        $ai_input_tokens: second.promptTokens,
+        $ai_output_tokens: second.completionTokens,
+        $ai_span_id: "run_1:1",
+        $ai_trace_id: "trace_iterations",
+      },
+    ]);
+    const completed = events.find(
+      (event) => event.event === SERVER_ANALYTICS_EVENTS.aiGenerationCompleted,
+    );
+    expect(completed?.properties).toMatchObject({
+      input_tokens_bucket: "5k_20k",
+      output_tokens_bucket: "1k_5k",
+    });
+  });
+
+  test("an interrupted run still reports its generation", async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const events: Parameters<Analytics["capture"]>[0][] = [];
+    const analytics: Analytics = {
+      capture: (event) => {
+        events.push(event);
+      },
+      flush: async () => undefined,
+      identifyOrganizationGroup: () => undefined,
+    };
+    const callbacks = createTanStackAIAnalyticsCallbacks({
+      analytics,
+      feature: "chat.stream",
+      orgAIConfig: createOpenAIOrgAIConfig(),
+      traceId: "trace_interrupted",
+    });
+    const ctx = createMiddlewareContext();
+
+    // A run that pauses at a client-tool or approval interrupt reports usage
+    // for the model call and then reaches no terminal hook at all
+    // (onFinish/onAbort/onError never fire; see the TanStack chat engine's
+    // `toolPhase !== "wait"` guard).
+    await callbacks.middleware.onIteration?.(ctx, {
+      iteration: 0,
+      messageId: "msg_1",
+    });
+    await callbacks.middleware.onUsage?.(ctx, usage);
+
+    expect(events.map((event) => event.event)).toEqual([
+      SERVER_ANALYTICS_EVENTS.aiGeneration,
+    ]);
   });
 
   test("logs a configuration refusal at WARN with its status", async () => {
