@@ -12,7 +12,7 @@ import { zstdDecompress } from "node:zlib";
  * event-loop latency is irrelevant.
  */
 
-/** A corpus payload exceeded the decompressed-size ceiling. */
+/** A corpus payload exceeded a size ceiling (transfer or decompressed). */
 export class PayloadBudgetError extends TaggedError("PayloadBudgetError")<{
   message: string;
 }> {}

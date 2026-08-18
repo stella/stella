@@ -5,7 +5,7 @@ import {
   PutObjectCommand,
   S3Client as AwsS3Client,
 } from "@aws-sdk/client-s3";
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { S3Client } from "bun";
 
 import { envBase } from "@/api/env-base";
@@ -751,6 +751,91 @@ export const readCorpusS3BytesBounded = async ({
     });
   }
   return await response.bytes();
+};
+
+type CorpusRangeReadOptions = {
+  key: string;
+  /** First byte of the range, inclusive. */
+  offset: number;
+  /** Byte count; must be positive, a range GET cannot express zero bytes. */
+  length: number;
+  signal: AbortSignal;
+};
+
+// `Content-Range: bytes <first>-<last>/<complete-length>`; the complete
+// length may be `*` when the store does not know it (RFC 9110 §14.4).
+const CONTENT_RANGE_PATTERN = /^bytes (?<first>\d+)-(?<last>\d+)\/(?:\d+|\*)$/u;
+
+/**
+ * Read `length` bytes of a legal-corpus object starting at `offset` with a
+ * range GET, so a member of a pack transfers without the pack around it.
+ *
+ * The response is accepted only as a 206 whose `Content-Range` names exactly
+ * the requested range and whose `Content-Length` equals `length`. A store
+ * that ignores the header answers 200 with the whole object; taking that
+ * body would silently hand the caller the wrong bytes (and an unbounded
+ * transfer), so anything but the exact partial response is refused. The
+ * transfer is bounded by `length`, which the caller checks against its
+ * ceiling before asking.
+ */
+export const readCorpusS3Range = async ({
+  key,
+  offset,
+  length,
+  signal,
+}: CorpusRangeReadOptions): Promise<Uint8Array> => {
+  if (!Number.isSafeInteger(offset) || offset < 0) {
+    return panic(
+      `Corpus range read offset must be a non-negative integer, got ${offset}`,
+    );
+  }
+  if (!Number.isSafeInteger(length) || length < 1) {
+    return panic(
+      `Corpus range read length must be a positive integer, got ${length}`,
+    );
+  }
+  const last = offset + length - 1;
+  const response = await fetchWithTimeout(
+    getCorpusS3().presign(key, { expiresIn: OBJECT_READ_PRESIGN_TTL_SECONDS }),
+    {
+      headers: { Range: `bytes=${offset}-${last}` },
+      signal,
+      timeoutMs: OBJECT_READ_TIMEOUT_MS,
+    },
+  );
+  if (response.status !== 206) {
+    throw new S3ObjectReadError({
+      message: `Range read for ${key} answered ${response.status}, not 206`,
+    });
+  }
+  const contentRange = CONTENT_RANGE_PATTERN.exec(
+    response.headers.get("content-range") ?? "",
+  );
+  const first = contentRange?.groups?.["first"];
+  const servedLast = contentRange?.groups?.["last"];
+  if (
+    first === undefined ||
+    servedLast === undefined ||
+    Number(first) !== offset ||
+    Number(servedLast) !== last
+  ) {
+    throw new S3ObjectReadError({
+      message: `Range read for ${key} served a different range than bytes=${offset}-${last}`,
+    });
+  }
+  const contentLength = response.headers.get("content-length");
+  if (contentLength === null || Number(contentLength.trim()) !== length) {
+    throw new S3ObjectReadError({
+      message: `Range read for ${key} declared ${contentLength ?? "no"} bytes, expected ${length}`,
+    });
+  }
+  const bytes = await response.bytes();
+  if (bytes.byteLength !== length) {
+    throw new S3ObjectReadError({
+      message: `Range read for ${key} returned ${bytes.byteLength} bytes, expected ${length}`,
+    });
+  }
+  return bytes;
 };
 
 /** Read a documents-bucket object. See `fetchObject`. */

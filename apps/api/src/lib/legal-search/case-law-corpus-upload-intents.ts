@@ -18,6 +18,7 @@ import {
   deleteCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
 import type {
+  CorpusDeleteOutcome,
   CorpusWriteOutcome,
   WriteCorpusResult,
 } from "@/api/lib/legal-search/corpus-storage";
@@ -454,7 +455,7 @@ type ReconcileCaseLawCorpusUploadIntentsOptions = {
       textKey: string | null;
     },
     options?: { signal?: AbortSignal },
-  ) => Promise<void>;
+  ) => Promise<CorpusDeleteOutcome>;
   limit: number;
   safeDb: SafeDb;
   signal?: AbortSignal;
