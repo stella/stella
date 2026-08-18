@@ -329,14 +329,19 @@ export type ReconciliationBuildOutcome =
   | { type: "detail-unavailable" };
 
 /**
- * The capability that makes a source reconcilable: the publisher can be asked
- * what it holds for a slice, independently of the cursor the crawl advanced.
+ * How a source's history divides into addressable slices.
  *
  * Slices are opaque strings to the loop and must sort lexicographically in
- * walk order, so the ledger's `(source, slice)` rows can be ordered and
+ * walk order, so a ledger's `(source, slice)` rows can be ordered and
  * compared without the loop knowing what a slice means to the adapter.
+ *
+ * Separated from {@link SourceReconciliation} because it is the half that
+ * says nothing about what a slice contains: `reconciliation-plan.ts` selects
+ * work off these five fields alone, so any corpus family with a slice-walk —
+ * legislation included — feeds the same selector rather than a second copy of
+ * its ordering rules.
  */
-export type SourceReconciliation = {
+export type SourceSliceWalk = {
   /**
    * The discriminant against `ReconciliationUnsupported`, absent here so an
    * implemented capability is written plainly rather than wrapped. Declared so
@@ -359,6 +364,13 @@ export type SourceReconciliation = {
   previousSlice: (slice: string) => string | null;
   /** Slices near the tip that get re-walked on a fast cadence. */
   tipWindowDays: number;
+};
+
+/**
+ * The capability that makes a source reconcilable: the publisher can be asked
+ * what it holds for a slice, independently of the cursor the crawl advanced.
+ */
+export type SourceReconciliation = SourceSliceWalk & {
   /**
    * Whether a stored row counts as held only when it carries the document,
    * and not when it carries the listing metadata alone.

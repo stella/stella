@@ -1,4 +1,9 @@
-type OutboundHostPolicy =
+/**
+ * The hosts a trusted upstream protocol is allowed to name. Exported so a
+ * source adapter can declare its publisher's origins as data and a framework
+ * — rather than each adapter — applies the check to every URL it returns.
+ */
+export type OutboundHostPolicy =
   | { type: "exact-origin"; origins: readonly string[] }
   | { type: "https-host-suffix"; suffixes: readonly string[] };
 

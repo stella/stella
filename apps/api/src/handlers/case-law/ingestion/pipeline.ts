@@ -86,9 +86,13 @@ import {
   sanitizeResult,
 } from "@/api/lib/legal-search/ingestion-normalization";
 import { storedDecisionSignal } from "@/api/lib/legal-search/parsers/validate-ast";
+import {
+  RAW_SOURCE_FAMILY,
+  writeRawSourcePayload,
+} from "@/api/lib/legal-search/raw-source-storage";
+import type { WriteRawSourcePayloadOptions } from "@/api/lib/legal-search/raw-source-storage";
 import { logger } from "@/api/lib/observability/logger";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
-import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 
 export { sanitizeResult };
 
@@ -298,45 +302,23 @@ export const allocateSourceObservationOrder = async ({
     return allocated.order;
   });
 
-type UploadSourceRawOptions = {
-  sourceId: SafeId<"caseLawSource">;
-  data: Uint8Array | string;
-  contentType: string;
-  /** The raw-payload key the row already records, or null for none. */
-  storedKey: string | null;
-  /** The content type recorded with that key. */
-  storedContentType: string | null;
-};
+type UploadSourceRawOptions = Omit<
+  WriteRawSourcePayloadOptions,
+  "family" | "sourceId"
+> & { sourceId: SafeId<"caseLawSource"> };
 
 /**
- * Upload sourceRaw to S3 under a content-addressable key.
- * Returns the S3 object key.
- *
- * The write is retried: failing here holds the page cursor (see the caller),
- * so letting one transient transport failure through stalls the whole source
- * until the next attempt happens to succeed. The key is the payload's own
- * hash, so a retry that duplicates an attempt which landed late is a no-op —
- * and a key the row already records names an object with these exact bytes,
- * so that PUT is skipped outright. A changed content type still re-uploads:
- * it is stored on the object, not derivable from the key.
+ * Upload sourceRaw to S3 under a content-addressable key, in the case-law
+ * partition. Returns the S3 object key. Failing here holds the page cursor;
+ * see the caller and {@link writeRawSourcePayload} for why that is safe.
  */
-const uploadSourceRaw = async ({
-  sourceId,
-  data,
-  contentType,
-  storedKey,
-  storedContentType,
-}: UploadSourceRawOptions): Promise<string> => {
-  const hasher = new Bun.CryptoHasher("sha256");
-  hasher.update(data);
-  const blobHash = hasher.digest("hex");
-  const key = `case-law/raw/${sourceId}/${blobHash}`;
-  if (key === storedKey && contentType === storedContentType) {
-    return key;
-  }
-  await writeS3ObjectWithRetry({ contentType, data, key });
-  return key;
-};
+const uploadSourceRaw = async (
+  options: UploadSourceRawOptions,
+): Promise<string> =>
+  await writeRawSourcePayload({
+    ...options,
+    family: RAW_SOURCE_FAMILY.CASE_LAW,
+  });
 
 /**
  * Row values for one extracted citation, including what the citation is
