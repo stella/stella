@@ -5,8 +5,9 @@
  * nothing selects it again. What can go wrong here is therefore the
  * census staying quiet — either because ordinary churn is mistaken for
  * drift and the warning is tuned out, or because an unreachable index
- * reads as an empty one and the drift is reported against a jurisdiction
- * that is fine.
+ * reads as an empty one and the drift is reported against an index that
+ * is fine — and, since generation 3 shares one index between several
+ * countries, the sweep counting the same index once per country.
  */
 
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
@@ -17,9 +18,9 @@ import {
   CENSUS_CYCLE_INTERVAL,
   CENSUS_DISPOSITION,
   CENSUS_TOLERANCE,
-  censusJurisdiction,
+  censusIndex,
   createCaseLawCensus,
-  reportJurisdictionCensus,
+  reportIndexCensus,
 } from "@/api/lib/corpus-index/census";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 import { LIMITS } from "@/api/lib/limits";
@@ -33,6 +34,12 @@ const INDEX_ID = corpusIndexId(GENERATION, JURISDICTION);
 const LAST_CYCLE_START = 0.99;
 
 const originalFetch = globalThis.fetch;
+
+/** Index ids the engine was asked to count, in request order. */
+let countedIndexIds: string[];
+
+const indexIdOfCountRequest = (url: string): string | undefined =>
+  /\/api\/v1\/(?<indexId>[^/]+)\/search/u.exec(url)?.groups?.["indexId"];
 
 /** Serves the engine's document count, and nothing else. */
 const engineHolding = (numHits: number, ok = true): void => {
@@ -48,6 +55,10 @@ const engineHolding = (numHits: number, ok = true): void => {
       return new Response("index not found", { status: 404 });
     }
     if (url.includes("/search")) {
+      const indexId = indexIdOfCountRequest(url);
+      if (indexId !== undefined) {
+        countedIndexIds.push(indexId);
+      }
       return new Response(
         JSON.stringify({ num_hits: numHits, hits: [], snippets: [] }),
         { status: 200 },
@@ -91,18 +102,22 @@ const databaseHolding = (
   return handle as unknown as ScopedDb;
 };
 
+beforeEach(() => {
+  countedIndexIds = [];
+});
+
 afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-describe("jurisdiction census", () => {
+describe("index census", () => {
   test("noise inside the tolerance is not a shortfall", async () => {
     engineHolding(10_000 - CENSUS_TOLERANCE);
 
-    const census = await censusJurisdiction({
+    const census = await censusIndex({
       scopedDb: databaseHolding(10_000),
       generation: GENERATION,
-      jurisdiction: JURISDICTION,
+      indexId: INDEX_ID,
     });
 
     expect(census.isOk()).toBe(true);
@@ -111,24 +126,25 @@ describe("jurisdiction census", () => {
     );
   });
 
-  test("one lost ingest batch is visible on a large jurisdiction", async () => {
+  test("one lost ingest batch is visible on a large index", async () => {
     // The whole failure this detects is a fixed-size batch going
     // missing, so the tolerance must stay below one — and must not grow
-    // with the corpus, or a large jurisdiction hides more the larger it
-    // gets. `corpusIndexBatchSize` is the size of the smallest real loss.
+    // with the corpus, or a large index hides more the larger it gets.
+    // `corpusIndexBatchSize` is the size of the smallest real loss.
     const marked = 5_000_000;
     engineHolding(marked - LIMITS.corpusIndexBatchSize);
 
-    const census = await censusJurisdiction({
+    const census = await censusIndex({
       scopedDb: databaseHolding(marked),
       generation: GENERATION,
-      jurisdiction: JURISDICTION,
+      indexId: INDEX_ID,
     });
 
     expect(census.isOk() && census.value.disposition).toBe(
       CENSUS_DISPOSITION.short,
     );
     expect(census.isOk() && census.value.indexId).toBe(INDEX_ID);
+    expect(countedIndexIds).toEqual([INDEX_ID]);
   });
 
   test("an engine holding more than Postgres claims is a surplus, not silence", async () => {
@@ -138,10 +154,10 @@ describe("jurisdiction census", () => {
     // the surplus is what stops the pair going quiet together.
     engineHolding(50_000);
 
-    const census = await censusJurisdiction({
+    const census = await censusIndex({
       scopedDb: databaseHolding(10_000),
       generation: GENERATION,
-      jurisdiction: JURISDICTION,
+      indexId: INDEX_ID,
     });
 
     expect(census.isOk() && census.value.shortfall).toBeLessThan(0);
@@ -151,14 +167,14 @@ describe("jurisdiction census", () => {
   });
 
   test("an unreachable index is a failure, not an empty index", async () => {
-    // Counting it as empty would report the whole jurisdiction as
-    // drifted and point the repair at rows that are perfectly indexed.
+    // Counting it as empty would report the whole index as drifted and
+    // point the repair at rows that are perfectly indexed.
     engineHolding(0, false);
 
-    const census = await censusJurisdiction({
+    const census = await censusIndex({
       scopedDb: databaseHolding(10_000),
       generation: GENERATION,
-      jurisdiction: JURISDICTION,
+      indexId: INDEX_ID,
     });
 
     expect(census.isErr()).toBe(true);
@@ -177,11 +193,10 @@ describe("census reporting", () => {
   });
 
   test("confirmed drift is reported with both counts", () => {
-    reportJurisdictionCensus({
+    reportIndexCensus({
       generation: GENERATION,
       previous: CENSUS_DISPOSITION.short,
       census: {
-        jurisdiction: JURISDICTION,
         indexId: INDEX_ID,
         engineDocuments: 900,
         markedIndexed: 10_000,
@@ -205,11 +220,10 @@ describe("census reporting", () => {
   });
 
   test("agreement is silent", () => {
-    reportJurisdictionCensus({
+    reportIndexCensus({
       generation: GENERATION,
       previous: CENSUS_DISPOSITION.aligned,
       census: {
-        jurisdiction: JURISDICTION,
         indexId: INDEX_ID,
         engineDocuments: 10_000,
         markedIndexed: 10_000,
@@ -225,11 +239,10 @@ describe("census reporting", () => {
     // A bulk page marks its rows before the engine publishes their
     // split, so one short reading may be work in flight. Warning on it
     // would make every rebuild noisy, and a noisy warning is not read.
-    reportJurisdictionCensus({
+    reportIndexCensus({
       generation: GENERATION,
       previous: undefined,
       census: {
-        jurisdiction: JURISDICTION,
         indexId: INDEX_ID,
         engineDocuments: 900,
         markedIndexed: 10_000,
@@ -242,11 +255,10 @@ describe("census reporting", () => {
   });
 
   test("a surplus is reported rather than read as agreement", () => {
-    reportJurisdictionCensus({
+    reportIndexCensus({
       generation: GENERATION,
       previous: CENSUS_DISPOSITION.surplus,
       census: {
-        jurisdiction: JURISDICTION,
         indexId: INDEX_ID,
         engineDocuments: 12_000,
         markedIndexed: 10_000,
@@ -277,6 +289,7 @@ describe("census reporting", () => {
     expect(warn.mock.calls.at(0)?.at(0)).toBe(
       "case_law.corpus_index.census_unavailable",
     );
+    expect(warn.mock.calls.at(0)?.at(1)).toMatchObject({ indexId: INDEX_ID });
   });
 
   test("the census does not run on every cycle", async () => {
@@ -350,5 +363,50 @@ describe("census reporting", () => {
     expect(warn.mock.calls.at(0)?.at(0)).toBe(
       "case_law.corpus_index.census_failed",
     );
+  });
+});
+
+describe("census sweep unit", () => {
+  /** Runs the sweep long enough to census `count` indexes. */
+  const sweep = async (
+    generation: string,
+    jurisdictions: string[],
+    count: number,
+  ): Promise<string[]> => {
+    engineHolding(10_000);
+    const census = createCaseLawCensus({
+      generation,
+      scopedDb: databaseHolding(10_000, jurisdictions),
+      startAt: 0,
+    });
+    for (let cycle = 0; cycle < CENSUS_CYCLE_INTERVAL * count; cycle += 1) {
+      // oxlint-disable-next-line no-await-in-loop -- the cycles are the subject of the test
+      await census.step();
+    }
+    return countedIndexIds;
+  };
+
+  test("countries sharing an index are one observation from generation 3", async () => {
+    // Two countries, one physical index: censusing it once per country
+    // would count the same engine index twice and compare it against half
+    // its rows each time. Three censuses' worth of cycles must visit the
+    // shared index, then the other index, then wrap round to the shared
+    // one; a per-country sweep would visit the shared index twice before
+    // reaching the other.
+    const counted = await sweep("case_law_v3", ["CZE", "SVK", "POL"], 3);
+    expect(counted).toEqual([
+      "case_law_v3_cs_sk",
+      "case_law_v3_pol",
+      "case_law_v3_cs_sk",
+    ]);
+  });
+
+  test("countries keep their own observation before generation 3", async () => {
+    const counted = await sweep("case_law_v2", ["CZE", "SVK", "POL"], 3);
+    expect(counted).toEqual([
+      "case_law_v2_cze",
+      "case_law_v2_svk",
+      "case_law_v2_pol",
+    ]);
   });
 });

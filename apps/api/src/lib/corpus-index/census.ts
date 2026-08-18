@@ -1,6 +1,6 @@
 /**
  * Count what the search engine actually holds against what Postgres says
- * it holds, one jurisdiction at a time.
+ * it holds, one physical index at a time.
  *
  * The ingest path marks a row indexed on the strength of the engine
  * accepting its batch. `commit=wait_for` makes that acceptance mean the
@@ -14,19 +14,25 @@
  *
  * A census is what makes it visible. It is a count on both sides, not a
  * diff: naming the missing documents would mean streaming the whole
- * jurisdiction out of the engine, while the number alone is one cheap
- * aggregate per side and is enough to decide that a jurisdiction needs
+ * index out of the engine, while the number alone is one cheap
+ * aggregate per side and is enough to decide that an index needs
  * re-indexing. The repair is correspondingly blunt — un-mark a slice of
- * the jurisdiction and let the ordinary backfill re-project it — because
+ * the index's rows and let the ordinary backfill re-project it — because
  * the projection is idempotent and re-ingesting a document the engine
  * already holds converges on the same split.
  *
- * Bounded by construction: one jurisdiction per call, one aggregate
- * query per side, and a caller that decides how often to run it.
+ * The unit is the physical index, not the country: from generation 3 on
+ * several countries share one index (`corpusIndexId`), and the engine
+ * count is per index either way. The rows an index answers for are the
+ * ones whose country the index holds (`corpusIndexJurisdictions`, the
+ * inverse of that derivation), in the state the search path accepts.
+ *
+ * Bounded by construction: one index per call, one aggregate query per
+ * side, and a caller that decides how often to run it.
  */
 
 import { Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { inArray, type SQL, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -40,7 +46,10 @@ import {
 } from "@/api/lib/legal-search/case-law-corpus-projection";
 import type { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
-import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
+import {
+  corpusIndexIdsFor,
+  corpusIndexJurisdictions,
+} from "@/api/lib/legal-search/index-naming";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -56,7 +65,7 @@ const DOCUMENT_COUNT_QUERY = "seq:0";
  * How far the two sides may disagree in one observation.
  *
  * Small and absolute, never proportional: a fraction of the corpus lets
- * a large jurisdiction hide more documents the larger it gets, which is
+ * a large index hide more documents the larger it gets, which is
  * backwards — the whole failure this detects is a fixed-size batch going
  * missing. A tolerance at or above the ingest batch size would make the
  * smallest real loss, exactly one lost commit window, invisible.
@@ -65,13 +74,13 @@ const DOCUMENT_COUNT_QUERY = "seq:0";
  * the engine publishes their split, so an in-flight page reads as a
  * shortfall for as long as it takes to commit. That transient is what
  * the confirmation below is for: a shortfall has to survive into the
- * jurisdiction's next census before it is reported, and an in-flight
- * page will have published by then while a lost split never will.
+ * index's next census before it is reported, and an in-flight page will
+ * have published by then while a lost split never will.
  */
 export const CENSUS_TOLERANCE = 5;
 
 /**
- * What one observation says about a jurisdiction.
+ * What one observation says about an index.
  *
  * Two counts can only report their difference, and the difference nets
  * two independent defects: documents the engine never received, and
@@ -82,8 +91,8 @@ export const CENSUS_TOLERANCE = 5;
  * itself worth acting on, and it says the shortfall number cannot be
  * trusted until it is cleared. Exact cancellation to inside the
  * tolerance remains this mechanism's blind spot; closing it needs an
- * identity comparison, which means streaming the jurisdiction rather
- * than counting it.
+ * identity comparison, which means streaming the index rather than
+ * counting it.
  */
 export const CENSUS_DISPOSITION = {
   /** Both sides agree inside the tolerance. */
@@ -97,8 +106,7 @@ export const CENSUS_DISPOSITION = {
 export type CensusDisposition =
   (typeof CENSUS_DISPOSITION)[keyof typeof CENSUS_DISPOSITION];
 
-export type JurisdictionCensus = {
-  jurisdiction: string;
+export type IndexCensus = {
   indexId: string;
   /** Documents the engine reports for this index. */
   engineDocuments: number;
@@ -119,17 +127,25 @@ const dispositionOf = (shortfall: number): CensusDisposition => {
 };
 
 /**
- * Rows this generation has marked as indexed into this jurisdiction's
- * physical index.
+ * Rows this generation has marked as indexed into this physical index:
+ * every row whose country the index holds, in the state the search path
+ * accepts.
  *
- * The same predicate the search path rehydrates through, so the census
- * counts exactly the rows a query would expect the engine to answer for.
- * Defining it a second time here would let the two drift, which is the
- * failure this whole module exists to catch.
+ * The country list is the inverse of the id derivation, so the census
+ * counts exactly the rows a query would expect the engine to answer for,
+ * and `country` is a plain column predicate the country index serves. The
+ * projection state is the same predicate the search path rehydrates
+ * through; defining it a second time here would let the two drift, which
+ * is the failure this whole module exists to catch.
  */
+const censusPopulation = (generation: string, indexId: string): SQL =>
+  sql`${inArray(caseLawDecisions.country, [
+    ...corpusIndexJurisdictions(generation, indexId),
+  ])} AND ${currentCaseLawCorpusProjection(generation)}`;
+
 const countMarkedIndexed = async (
   scopedDb: ScopedDb,
-  { generation, jurisdiction }: { generation: string; jurisdiction: string },
+  { generation, indexId }: { generation: string; indexId: string },
 ): Promise<number> => {
   const rows = await scopedDb((tx) =>
     tx
@@ -139,39 +155,31 @@ const countMarkedIndexed = async (
         caseLawCorpusIndexProjections,
         caseLawCorpusProjectionJoin(generation),
       )
-      .where(
-        and(
-          eq(caseLawDecisions.country, jurisdiction),
-          currentCaseLawCorpusProjection(generation),
-        ),
-      ),
+      .where(censusPopulation(generation, indexId)),
   );
   return rows.at(0)?.marked ?? 0;
 };
 
-export type CensusJurisdictionOptions = {
+export type CensusIndexOptions = {
   scopedDb: ScopedDb;
   generation: string;
-  /** The `country` value, which also names the physical index. */
-  jurisdiction: string;
+  /** The physical index id, as `corpusIndexId` derives it. */
+  indexId: string;
 };
 
 /**
- * One jurisdiction's census, or the engine error that stopped it.
+ * One index's census, or the engine error that stopped it.
  *
  * A census that cannot reach the engine is not drift, so it is reported
  * as a failure rather than folded into the count: treating an
- * unreachable index as an empty one would clear every row in the
- * jurisdiction and re-ingest the whole corpus.
+ * unreachable index as an empty one would clear every row in the index
+ * and re-ingest the whole corpus.
  */
-export const censusJurisdiction = async ({
+export const censusIndex = async ({
   scopedDb,
   generation,
-  jurisdiction,
-}: CensusJurisdictionOptions): Promise<
-  Result<JurisdictionCensus, CorpusIndexError>
-> => {
-  const indexId = corpusIndexId(generation, jurisdiction);
+  indexId,
+}: CensusIndexOptions): Promise<Result<IndexCensus, CorpusIndexError>> => {
   // Postgres first, deliberately. The two counts are taken at different
   // instants, and a batch landing between them shifts the difference by
   // a whole batch; taking the claim before the evidence makes that shift
@@ -181,7 +189,7 @@ export const censusJurisdiction = async ({
   // size of the smallest loss worth finding.
   const markedIndexed = await countMarkedIndexed(scopedDb, {
     generation,
-    jurisdiction,
+    indexId,
   });
   const counted = await getCorpusIndexClient().search({
     indexId,
@@ -195,7 +203,6 @@ export const censusJurisdiction = async ({
   const shortfall = markedIndexed - counted.value.numHits;
 
   return Result.ok({
-    jurisdiction,
     indexId,
     engineDocuments: counted.value.numHits,
     markedIndexed,
@@ -204,13 +211,13 @@ export const censusJurisdiction = async ({
   });
 };
 
-export type ReportJurisdictionCensusOptions = {
+export type ReportIndexCensusOptions = {
   generation: string;
-  census: JurisdictionCensus;
+  census: IndexCensus;
   /**
-   * The disposition this jurisdiction had when it was last censused. A
-   * bulk page marks its rows before the engine publishes their split, so
-   * a single disagreeing observation may just be work in flight; a lost
+   * The disposition this index had when it was last censused. A bulk
+   * page marks its rows before the engine publishes their split, so a
+   * single disagreeing observation may just be work in flight; a lost
    * split or an orphaned entry is there forever, so it survives into the
    * next observation and a publishing page does not.
    */
@@ -229,11 +236,11 @@ export type ReportJurisdictionCensusOptions = {
  * the missing documents are unsearchable, not wrong, and the repair
  * below is an operator decision rather than something to page on.
  */
-export const reportJurisdictionCensus = ({
+export const reportIndexCensus = ({
   generation,
   census,
   previous,
-}: ReportJurisdictionCensusOptions): void => {
+}: ReportIndexCensusOptions): void => {
   if (
     census.disposition === CENSUS_DISPOSITION.aligned ||
     census.disposition !== previous
@@ -244,7 +251,6 @@ export const reportJurisdictionCensus = ({
     generation,
     disposition: census.disposition,
     indexId: census.indexId,
-    jurisdiction: census.jurisdiction,
     engineDocuments: census.engineDocuments,
     markedIndexed: census.markedIndexed,
     shortfall: census.shortfall,
@@ -261,10 +267,9 @@ export const reportJurisdictionCensus = ({
 const MAX_CENSUSED_JURISDICTIONS = 256;
 
 /**
- * Jurisdictions the corpus holds, which is also the set of physical
- * indexes it should have. Read from the decisions themselves rather than
- * from a hand-kept list, so a new country's index cannot be uncensused
- * because nobody remembered to add it.
+ * Jurisdictions the corpus holds. Read from the decisions themselves
+ * rather than from a hand-kept list, so a new country's index cannot be
+ * uncensused because nobody remembered to add it.
  */
 export const listCaseLawJurisdictions = async (
   scopedDb: ScopedDb,
@@ -280,13 +285,24 @@ export const listCaseLawJurisdictions = async (
 };
 
 /**
+ * Physical indexes the corpus should have for this generation: the
+ * distinct ids its jurisdictions derive to, one per country up to
+ * generation 2 and one per index group from generation 3 on.
+ */
+export const listCaseLawIndexIds = async (
+  scopedDb: ScopedDb,
+  generation: string,
+): Promise<string[]> =>
+  corpusIndexIdsFor(generation, await listCaseLawJurisdictions(scopedDb));
+
+/**
  * Backfill cycles between one census and the next.
  *
  * The census is a diagnostic, not a gate: it costs an aggregate on each
  * side and the drift it looks for accumulates over hours, so running it
  * on every batch would spend real query budget to answer the same
- * question. One jurisdiction per census means a corpus of N
- * jurisdictions is fully covered every N of these.
+ * question. One index per census means a corpus of N indexes is fully
+ * covered every N of these.
  */
 export const CENSUS_CYCLE_INTERVAL = 20;
 
@@ -294,7 +310,7 @@ export type CaseLawCensusOptions = {
   scopedDb: ScopedDb;
   generation: string;
   /**
-   * Where in the cycle and the jurisdiction list this process starts, in
+   * Where in the cycle and the index list this process starts, in
    * `[0, 1)`. Random per process so restarts spread their coverage;
    * tests pin it.
    */
@@ -307,9 +323,8 @@ export type CaseLawCensusOptions = {
  *
  * A census that throws would take the backfill down with it, which
  * would trade a silent index gap for a stopped index. It reports and
- * moves on instead; the next pass round-robins to the next
- * jurisdiction either way, so one unreachable index cannot pin the
- * sweep.
+ * moves on instead; the next pass round-robins to the next index either
+ * way, so one unreachable index cannot pin the sweep.
  */
 export const createCaseLawCensus = ({
   scopedDb,
@@ -320,60 +335,53 @@ export const createCaseLawCensus = ({
   // They live in this process, so a runner replaced mid-sweep loses them;
   // starting every replacement at the same place would mean frequent
   // deployments always censusing the head of the alphabet and never the
-  // tail. A random phase covers every jurisdiction in expectation
-  // instead. A durable cursor would remove the "in expectation", and is
-  // the next step if deployments ever outpace the sweep.
+  // tail. A random phase covers every index in expectation instead. A
+  // durable cursor would remove the "in expectation", and is the next
+  // step if deployments ever outpace the sweep.
   let cyclesUntilCensus = 1 + Math.floor(startAt * CENSUS_CYCLE_INTERVAL);
   let pending: string[] = [];
-  /** Each jurisdiction's last disposition, awaiting confirmation. */
+  /** Each index's last disposition, awaiting confirmation. */
   const lastDisposition = new Map<string, CensusDisposition>();
 
-  const takeNextJurisdiction = async (): Promise<string | undefined> => {
+  const takeNextIndexId = async (): Promise<string | undefined> => {
     if (pending.length > 0) {
       return pending.shift();
     }
-    const jurisdictions = await listCaseLawJurisdictions(scopedDb);
-    if (jurisdictions.length === 0) {
+    const indexIds = await listCaseLawIndexIds(scopedDb, generation);
+    if (indexIds.length === 0) {
       return undefined;
     }
-    const offset = Math.floor(startAt * jurisdictions.length);
-    pending = [
-      ...jurisdictions.slice(offset),
-      ...jurisdictions.slice(0, offset),
-    ];
+    const offset = Math.floor(startAt * indexIds.length);
+    pending = [...indexIds.slice(offset), ...indexIds.slice(0, offset)];
     return pending.shift();
   };
 
   const censusNext = async (): Promise<void> => {
-    const jurisdiction = await takeNextJurisdiction();
-    if (jurisdiction === undefined) {
+    const indexId = await takeNextIndexId();
+    if (indexId === undefined) {
       return;
     }
 
-    const census = await censusJurisdiction({
-      scopedDb,
-      generation,
-      jurisdiction,
-    });
+    const census = await censusIndex({ scopedDb, generation, indexId });
     if (Result.isError(census)) {
       // An unreachable index is not a short one. Saying so keeps the
-      // repair from being pointed at a jurisdiction whose engine simply
-      // did not answer. The pending confirmation is left alone: a
-      // failed observation neither confirms nor clears one.
+      // repair from being pointed at an index whose engine simply did
+      // not answer. The pending confirmation is left alone: a failed
+      // observation neither confirms nor clears one.
       logger.warn("case_law.corpus_index.census_unavailable", {
         generation,
-        jurisdiction,
+        indexId,
         "error.type": census.error._tag,
       });
       return;
     }
 
-    reportJurisdictionCensus({
+    reportIndexCensus({
       generation,
       census: census.value,
-      previous: lastDisposition.get(jurisdiction),
+      previous: lastDisposition.get(indexId),
     });
-    lastDisposition.set(jurisdiction, census.value.disposition);
+    lastDisposition.set(indexId, census.value.disposition);
   };
 
   return {
@@ -395,16 +403,17 @@ export const createCaseLawCensus = ({
   };
 };
 
-export type ClearJurisdictionIndexMarksOptions = {
+export type ClearIndexMarksOptions = {
   scopedDb: ScopedDb;
   generation: string;
-  jurisdiction: string;
+  /** The physical index id, as `corpusIndexId` derives it. */
+  indexId: string;
   /**
    * Most rows to un-mark in this call. The repair is a deliberately
-   * bounded operator action: a whole jurisdiction can be millions of
-   * rows, and un-marking them all at once would hand the backfill a
-   * backlog that starves every newly ingested decision behind it. Run it
-   * again to clear the next slice.
+   * bounded operator action: a whole index can be millions of rows, and
+   * un-marking them all at once would hand the backfill a backlog that
+   * starves every newly ingested decision behind it. Run it again to
+   * clear the next slice.
    */
   limit: number;
 };
@@ -429,15 +438,15 @@ const countReturnedRows = (result: unknown): number => {
 };
 
 /**
- * Un-mark a slice of a short jurisdiction so the backfill re-selects it.
+ * Un-mark a slice of a short index so the backfill re-selects it.
  *
  * The slice is the census's own population — rows this generation counts
- * as indexed into this jurisdiction — rather than rows carrying the
- * legacy marker. The two are not the same set: a generation rebuild
- * records success in the projection and leaves `case_law_decisions`
- * alone, so a repair keyed off that column would be inert for exactly
- * the rows a rebuild lost. Sharing the predicate with the count also
- * means the repair cannot drift away from what was measured.
+ * as indexed into this index — rather than rows carrying the legacy
+ * marker. The two are not the same set: a generation rebuild records
+ * success in the projection and leaves `case_law_decisions` alone, so a
+ * repair keyed off that column would be inert for exactly the rows a
+ * rebuild lost. Sharing the predicate with the count also means the
+ * repair cannot drift away from what was measured.
  *
  * The write is still only `indexed_hash`, and deliberately so: the
  * projection trigger on that column enqueues the decision for every
@@ -449,23 +458,22 @@ const countReturnedRows = (result: unknown): number => {
  * column being assigned, not on its value changing, so a row whose
  * legacy marker is already null is enqueued just the same.
  *
- * That enqueue is also what makes repeated runs walk the jurisdiction:
- * a queued row is no longer counted as current, so the next slice starts
- * past it.
+ * That enqueue is also what makes repeated runs walk the index: a queued
+ * row is no longer counted as current, so the next slice starts past it.
  *
  * Nothing is deleted from the engine — re-ingesting a document it
- * already holds replaces it at the same id — so running this against a
- * jurisdiction that was not short costs re-indexing and nothing else.
+ * already holds replaces it at the same id — so running this against an
+ * index that was not short costs re-indexing and nothing else.
  * `updated_at` is left alone, like every other index-mark write: an
  * index repair is not a change to the decision, and the public reads key
  * their freshness off that column.
  */
-export const clearJurisdictionIndexMarks = async ({
+export const clearIndexMarks = async ({
   scopedDb,
   generation,
-  jurisdiction,
+  indexId,
   limit,
-}: ClearJurisdictionIndexMarksOptions): Promise<number> =>
+}: ClearIndexMarksOptions): Promise<number> =>
   await scopedDb(async (tx) => {
     // audit: skip — search index maintenance; rebuilds derived state
     const cleared = await tx.execute(sql`
@@ -476,8 +484,7 @@ export const clearJurisdictionIndexMarks = async ({
         FROM ${caseLawDecisions}
         LEFT JOIN ${caseLawCorpusIndexProjections}
           ON ${caseLawCorpusProjectionJoin(generation)}
-        WHERE ${caseLawDecisions.country} = ${jurisdiction}
-          AND ${currentCaseLawCorpusProjection(generation)}
+        WHERE ${censusPopulation(generation, indexId)}
         ORDER BY ${caseLawDecisions.id}
         LIMIT ${Math.min(limit, MAX_REPAIR_SLICE)}
       )

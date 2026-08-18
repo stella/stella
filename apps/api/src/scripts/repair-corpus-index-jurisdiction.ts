@@ -1,9 +1,9 @@
 /**
- * Heal a jurisdiction the census reported as short.
+ * Heal an index the census reported as short.
  *
  * `case_law.corpus_index.census_drift` says the engine holds fewer
- * documents than Postgres has marked indexed for one jurisdiction. Those
- * rows are invisible to the backfill: an `indexedHash` equal to the
+ * documents than Postgres has marked indexed for one physical index.
+ * Those rows are invisible to the backfill: an `indexedHash` equal to the
  * content hash means neither missing nor stale, so nothing selects them
  * again and the gap never closes on its own.
  *
@@ -11,13 +11,17 @@
  * the ordinary backfill re-projects it through the same path as a newly
  * ingested decision, and re-ingesting a document the engine already
  * holds replaces it at the same id. Nothing is deleted, so running this
- * on a jurisdiction that was not actually short costs re-indexing and
- * nothing else.
+ * on an index that was not actually short costs re-indexing and nothing
+ * else.
  *
- * Bounded on purpose: a jurisdiction can be millions of rows, and
- * un-marking them all at once hands the backfill a backlog that starves
- * every newly ingested decision behind it. Each run clears one slice;
- * re-run until the census agrees.
+ * Bounded on purpose: an index can be millions of rows, and un-marking
+ * them all at once hands the backfill a backlog that starves every newly
+ * ingested decision behind it. Each run clears one slice; re-run until
+ * the census agrees.
+ *
+ * The argument is a jurisdiction; the index repaired is the one that
+ * jurisdiction derives to under the serving generation (`corpusIndexId`),
+ * which from generation 3 on may hold other jurisdictions as well.
  *
  *   CORPUS_INDEX_ENDPOINT=... \
  *     bun run src/scripts/repair-corpus-index-jurisdiction.ts SVK [limit]
@@ -28,11 +32,14 @@ import { rlsDb } from "@/api/db/root";
 import { createIngestionDb } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
 import {
-  censusJurisdiction,
-  clearJurisdictionIndexMarks,
+  censusIndex,
+  clearIndexMarks,
   MAX_REPAIR_SLICE,
 } from "@/api/lib/corpus-index/census";
-import { isCorpusIndexJurisdiction } from "@/api/lib/legal-search/index-naming";
+import {
+  corpusIndexId,
+  isCorpusIndexJurisdiction,
+} from "@/api/lib/legal-search/index-naming";
 
 const jurisdiction = process.argv[2];
 if (jurisdiction === undefined || !isCorpusIndexJurisdiction(jurisdiction)) {
@@ -40,11 +47,10 @@ if (jurisdiction === undefined || !isCorpusIndexJurisdiction(jurisdiction)) {
 }
 
 // A mistyped digit must not turn a bounded repair into one transaction
-// updating every row in the jurisdiction and firing the projection
-// trigger for each of them, so the ceiling is enforced here rather than
-// trusted from the argument. `clearJurisdictionIndexMarks` clamps too;
-// rejecting loudly here is what tells the operator their number was
-// ignored.
+// updating every row in the index and firing the projection trigger for
+// each of them, so the ceiling is enforced here rather than trusted from
+// the argument. `clearIndexMarks` clamps too; rejecting loudly here is
+// what tells the operator their number was ignored.
 const limitArgument = process.argv[3];
 const limit =
   limitArgument === undefined ? MAX_REPAIR_SLICE : Number(limitArgument);
@@ -55,14 +61,15 @@ if (!Number.isSafeInteger(limit) || limit <= 0 || limit > MAX_REPAIR_SLICE) {
 }
 
 const generation = envBase.LEGAL_SEARCH_INDEX_GENERATION;
+const indexId = corpusIndexId(generation, jurisdiction);
 const ingestionDb = createIngestionDb(rlsDb);
 
 // Reported before and after so the operator sees the shortfall the repair
 // was pointed at, rather than trusting the alert that sent them here.
-const before = await censusJurisdiction({
+const before = await censusIndex({
   scopedDb: ingestionDb,
   generation,
-  jurisdiction,
+  indexId,
 });
 if (before.isErr()) {
   panic("census failed before the repair", before.error);
@@ -71,10 +78,10 @@ console.log(
   `=== ${before.value.indexId}: engine ${before.value.engineDocuments}, marked ${before.value.markedIndexed}, short ${before.value.shortfall} ===`,
 );
 
-const cleared = await clearJurisdictionIndexMarks({
+const cleared = await clearIndexMarks({
   scopedDb: ingestionDb,
   generation,
-  jurisdiction,
+  indexId,
   limit,
 });
 console.log(

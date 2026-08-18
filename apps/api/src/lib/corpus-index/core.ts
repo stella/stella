@@ -1131,8 +1131,9 @@ export const createCorpusIndexer = <
     });
     await recordReadFailures(scopedDb, readFailures, generation);
 
-    // Route each row's documents to its jurisdiction's index
-    // (<family>_v1_<country>), grouping so each index gets one NDJSON ingest.
+    // Route each row's documents to its physical index (`corpusIndexId`: per
+    // jurisdiction, or per index group), grouping so each index gets one
+    // NDJSON ingest.
     // A group that fails to ensure/ingest is recorded and retried next cycle;
     // other groups still commit. The group's unit stays the row, so counting,
     // marking, and auditing below are unaffected by how many documents a row

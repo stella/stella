@@ -36,18 +36,24 @@ const generationMigrationSource = new URL(
   "../../../drizzle/20260731170000_case_law_corpus_generation_backfill/migration.sql",
   import.meta.url,
 );
+const INDEX_ID_FUNCTION =
+  "CREATE OR REPLACE FUNCTION case_law_corpus_index_id(generation text, country text)";
 const PROJECTION_TRIGGER_FUNCTION =
   "CREATE OR REPLACE FUNCTION enqueue_case_law_corpus_index_projection()";
+const PROJECTION_TRIGGER =
+  "CREATE TRIGGER case_law_decisions_enqueue_corpus_index_projection";
+const PROJECTION_TRIGGER_STATEMENT =
+  /\b(?:CREATE|DROP) TRIGGER (?:IF EXISTS )?case_law_decisions_enqueue_corpus_index_projection\b/u;
 
 /**
- * The projection trigger's current definition. `db:push` builds the test
- * database from the schema, which carries no triggers, so a test that needs
- * one installs it from a migration. Which migration is derived, not named:
- * migrations apply in directory order, so the last one that redefines the
- * function is the definition a database ends up with, and a later migration
- * replacing it moves this with it.
+ * The statements of the last migration containing `marker`. `db:push` builds
+ * the test database from the schema, which carries no triggers or functions,
+ * so a test that needs them installs them from a migration. Which migration
+ * is derived, not named: migrations apply in directory order, so the last one
+ * that redefines an object is the definition a database ends up with, and a
+ * later migration replacing it moves this with it.
  */
-const latestProjectionTriggerMigration = async (): Promise<string> => {
+const latestMigrationStatements = async (marker: string): Promise<string[]> => {
   const drizzleDir = new URL("../../../drizzle/", import.meta.url);
   const migrations = [
     ...new Bun.Glob("*/migration.sql").scanSync(Bun.fileURLToPath(drizzleDir)),
@@ -56,14 +62,17 @@ const latestProjectionTriggerMigration = async (): Promise<string> => {
   for (const migration of migrations) {
     // oxlint-disable-next-line no-await-in-loop -- ordered scan over a directory listing
     const source = await Bun.file(new URL(migration, drizzleDir)).text();
-    if (source.includes(PROJECTION_TRIGGER_FUNCTION)) {
+    if (source.includes(marker)) {
       latest = source;
     }
   }
   if (latest === undefined) {
-    throw new Error("no migration defines the corpus projection trigger");
+    throw new Error(`no migration contains ${marker}`);
   }
-  return latest;
+  return latest
+    .split("--> statement-breakpoint")
+    .map((statement) => statement.trim())
+    .filter((statement) => statement.length > 0);
 };
 const CREATED_AT = new Date("2026-07-30T12:00:00.000Z");
 const GENERATION = "case_law_v2";
@@ -235,31 +244,32 @@ const completeRemoteEffect = async (): Promise<void> => {
 };
 
 /**
- * Install the projection trigger as the migration defines it, so a test runs
- * against the deployed definition rather than a paraphrase of it.
+ * Install the projection trigger as the migrations define it, so a test runs
+ * against the deployed definition rather than a paraphrase of it: the index
+ * id function the trigger calls, the trigger function, then the trigger, each
+ * from the last migration defining it.
  */
 const installProjectionTrigger = async (): Promise<void> => {
-  const migration = await latestProjectionTriggerMigration();
-  const triggerStart = migration.indexOf(PROJECTION_TRIGGER_FUNCTION);
-  const triggerEnd = migration.indexOf(
-    "CREATE TRIGGER case_law_decisions_enqueue_corpus_index_projection",
-  );
-  expect(triggerStart).toBeGreaterThanOrEqual(0);
-  expect(triggerEnd).toBeGreaterThan(triggerStart);
-  const createTriggerEnd = migration.indexOf(";", triggerEnd);
-  const statements = migration
-    .slice(triggerStart, createTriggerEnd + 1)
-    .split("--> statement-breakpoint")
-    .map((statement) => statement.trim())
-    .filter((statement) => statement.length > 0);
-  expect(statements).toHaveLength(3);
+  const functionStatements = [
+    ...(await latestMigrationStatements(INDEX_ID_FUNCTION)).filter(
+      (statement) => statement.includes(INDEX_ID_FUNCTION),
+    ),
+    ...(await latestMigrationStatements(PROJECTION_TRIGGER_FUNCTION)).filter(
+      (statement) => statement.includes(PROJECTION_TRIGGER_FUNCTION),
+    ),
+  ];
+  expect(functionStatements).toHaveLength(2);
+  // The replacement drop (`DROP TRIGGER IF EXISTS ...`) and the creation.
+  const triggerStatements = (
+    await latestMigrationStatements(PROJECTION_TRIGGER)
+  ).filter((statement) => PROJECTION_TRIGGER_STATEMENT.test(statement));
   // The trigger fires on the columns that reach the document or the walk's
   // position. A decision date now does both, so it has to be in this list.
-  expect(statements.at(-1)).toContain(
+  expect(triggerStatements.at(-1)).toContain(
     "UPDATE OF content_hash, indexed_hash, country, decision_date",
   );
-  for (const statement of statements) {
-    // oxlint-disable-next-line no-await-in-loop -- function, replacement drop, and trigger creation are order-dependent DDL
+  for (const statement of [...functionStatements, ...triggerStatements]) {
+    // oxlint-disable-next-line no-await-in-loop -- functions, replacement drop, and trigger creation are order-dependent DDL
     await db.execute(sql.raw(statement));
   }
 };
@@ -900,14 +910,14 @@ test(
       });
       await db
         .update(caseLawDecisions)
-        .set({ country: "SVK" })
+        .set({ country: "POL" })
         .where(eq(caseLawDecisions.id, publicFirstId));
       await db
         .update(caseLawCorpusIndexProjections)
         .set({
           pendingAction: "index",
           pendingHash: "first",
-          pendingIndexIds: [corpusIndexId(generation, "SVK")],
+          pendingIndexIds: [corpusIndexId(generation, "POL")],
         })
         .where(eq(caseLawCorpusIndexProjections.generation, generation));
       expect(await backfill(scopedDb, 10, generation)).toEqual({
@@ -924,7 +934,7 @@ test(
           .where(eq(caseLawCorpusIndexProjections.generation, generation))
           .limit(1)
       ).at(0);
-      expect(movedProjection?.indexId).toBe(corpusIndexId(generation, "SVK"));
+      expect(movedProjection?.indexId).toBe(corpusIndexId(generation, "POL"));
     } finally {
       await db
         .update(caseLawDecisions)
@@ -1525,7 +1535,8 @@ test(
       "00000000-0000-4000-8000-000000000010",
     );
     const staleIndexId = corpusIndexId(generation, "CZE");
-    const successorIndexId = corpusIndexId(generation, "SVK");
+    // POL sits in another index group, so this is a different physical index.
+    const successorIndexId = corpusIndexId(generation, "POL");
     await db.insert(caseLawDecisions).values({
       caseNumber: "stale fence",
       contentHash: "stale",
@@ -1604,7 +1615,7 @@ test(
               .where(eq(caseLawCorpusIndexWriterLeases.generation, generation));
             await db
               .update(caseLawDecisions)
-              .set({ country: "SVK", indexedHash: null })
+              .set({ country: "POL", indexedHash: null })
               .where(eq(caseLawDecisions.id, staleDecisionId));
             winnerResult = await winner(scopedDb, 1, generation);
           },
@@ -1878,7 +1889,7 @@ test(
     const decisionId = toSafeId<"caseLawDecision">(
       "00000000-0000-4000-8000-000000000097",
     );
-    const staleIndexId = corpusIndexId(generation, "SVK");
+    const staleIndexId = corpusIndexId(generation, "POL");
     await db.insert(caseLawCorpusIndexBackfills).values({
       generation,
       snapshotAt: await nextBackfillSnapshotAt(),
@@ -2059,10 +2070,13 @@ test(
         .where(eq(caseLawCorpusIndexProjections.generation, generation));
       expect(await visible()).toBe(false);
 
+      // A country from another index group: under this generation CZE and
+      // SVK share one physical index, so only a different group is a
+      // different index.
       await db
         .update(caseLawCorpusIndexProjections)
         .set({
-          indexId: corpusIndexId(generation, "SVK"),
+          indexId: corpusIndexId(generation, "POL"),
           pendingAction: null,
           pendingHash: null,
           pendingIndexIds: [],

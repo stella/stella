@@ -17,8 +17,9 @@ export const parseCorpusFamily = (value: unknown): CorpusFamily | null =>
 /**
  * Blue-green generation prefix per family. Index ids are
  * `<generation>_<jurisdiction>` (e.g. `case_law_v1_svk`,
- * `legislation_v1_svk`). Bumping a prefix rebuilds that family across all
- * jurisdictions, then you flip to it. case_law keeps its existing env
+ * `legislation_v1_svk`), or `<generation>_<group>` for case-law generations
+ * from 3 on (`corpusIndexId`). Bumping a prefix rebuilds that family across
+ * all jurisdictions, then you flip to it. case_law keeps its existing env
  * override for back-compat; other families default to `<family>_v1`.
  */
 export const corpusGeneration = (family: CorpusFamily): string => {

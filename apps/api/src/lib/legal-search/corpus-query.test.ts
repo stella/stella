@@ -205,11 +205,13 @@ test("the assembler ANDs filter clauses onto the free-text clause", () => {
       dateFrom: "2020-01-01",
       dateTo: "2024-12-31",
       documentType: "rozsudek",
+      jurisdiction: "CZE",
       language: "cs",
       source: "7449df27-2067-4827-b22f-3091f564ae50",
     }),
   ).toBe(
     '("náhrada škody")' +
+      ' AND jurisdiction:"CZE"' +
       ' AND document_type:"rozsudek"' +
       ' AND source:"7449df27-2067-4827-b22f-3091f564ae50"' +
       ' AND language:"cs"' +

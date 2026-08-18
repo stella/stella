@@ -46,6 +46,8 @@ import {
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
 import { ConcurrentModificationError } from "@/api/lib/errors/tagged-errors";
+import { caseLawDecisionCorpusIndexIdSql } from "@/api/lib/legal-search/case-law-corpus-projection";
+import { caseLawIndexIdSql } from "@/api/lib/legal-search/case-law-index-groups";
 import {
   CORPUS_INDEX_COMMIT,
   CorpusIndexError,
@@ -76,9 +78,9 @@ import {
  * Domain adapter over the shared core (lib/corpus-index/core.ts): supplies the
  * case-law tables, batch queries, and per-decision document shape; the core
  * owns the S3-chunked load, per-group ingest, compare-and-set commit, and audit
- * trail (case_law_index_jobs). Per-jurisdiction indexes (`case_law_v1_<country>`)
- * with the license gate in SQL so non-redistributable sources never enter the
- * scan.
+ * trail (case_law_index_jobs). Physical indexes are named by `corpusIndexId`
+ * (per jurisdiction, or per index group from generation 3 on), with the
+ * license gate in SQL so non-redistributable sources never enter the scan.
  *
  * Case law is indexed at passage granularity: a decision projects to one
  * search document per passage of its AST, all carrying the same doc-level
@@ -431,7 +433,7 @@ const recoverLostGenerationProjectionEffect = async (
                SELECT DISTINCT target
                FROM unnest(ARRAY[
                  ${indexId},
-               ${generation} || '_' || lower(decision.country)
+                 ${caseLawIndexIdSql(sql`${generation}`, sql.raw("decision.country"))}
                ]) AS target
              ), 1, now()
       FROM ${caseLawDecisions} AS decision
@@ -751,7 +753,7 @@ export const caseLawCorpusIndexAdapter = {
             hasCorpusJurisdiction,
             redistributableCaseLawSource,
             isNotNull(caseLawDecisions.indexedHash),
-            sql`${caseLawDecisions.indexedGeneration} = (${generation} || '_' || lower(${caseLawDecisions.country}))`,
+            sql`${caseLawDecisions.indexedGeneration} = (${caseLawDecisionCorpusIndexIdSql(generation)})`,
             sql`${caseLawDecisions.indexedHash} IS DISTINCT FROM ${caseLawDecisions.contentHash}`,
           ),
         )

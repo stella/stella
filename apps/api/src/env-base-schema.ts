@@ -147,8 +147,9 @@ export const envBaseServerSchema = {
     "pg-fts",
   ),
   // Blue-green generation prefix. Each jurisdiction gets its own index
-  // (`<generation>_<country>`, e.g. case_law_v1_svk); bump the prefix to
-  // rebuild all jurisdictions and flip to it.
+  // (`<generation>_<country>`, e.g. case_law_v1_svk) up to generation 2, and
+  // each index group from generation 3 on (`corpusIndexId`); bump the prefix
+  // to rebuild all jurisdictions and flip to it.
   LEGAL_SEARCH_INDEX_GENERATION: v.optional(v.string(), "case_law_v1"),
   // Local-development-only search endpoint for consuming a shared corpus.
   // Request-path searches use it while mutations remain bound to the separate

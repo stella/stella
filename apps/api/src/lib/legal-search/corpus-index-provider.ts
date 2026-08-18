@@ -21,10 +21,7 @@ import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-p
 import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
 import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
 import { resolveExpandedCorpusQuery } from "@/api/lib/legal-search/expansion";
-import {
-  corpusIndexId,
-  corpusIndexPattern,
-} from "@/api/lib/legal-search/index-naming";
+import { corpusIndexRoute } from "@/api/lib/legal-search/index-naming";
 import {
   blendStableCitationAuthority,
   stableBlendUpperBound,
@@ -74,17 +71,18 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
   const limit = query.limit;
   const generation = corpusGeneration(query.documentFamily ?? "case_law");
 
-  // Scoped query → that jurisdiction's index; unscoped → the generation
-  // glob (corpus index multi-index search across all jurisdiction indexes).
-  const indexId = query.jurisdiction
-    ? corpusIndexId(generation, query.jurisdiction)
-    : corpusIndexPattern(generation);
+  // Scoped query → that jurisdiction's index, plus a jurisdiction clause when
+  // that index holds other jurisdictions; unscoped → the generation glob
+  // (corpus index multi-index search across all of the generation's indexes).
+  const { indexId, jurisdictionClause } = corpusIndexRoute(
+    generation,
+    query.jurisdiction,
+  );
 
   const parsedCursor = query.cursor ? decodeCursor(query.cursor) : null;
 
-  // jurisdiction is deliberately absent from the filters: it selected the
-  // index above, so a scoped query never needs a clause for it. It does select
-  // the expansion dictionary, which is why the resolver takes it separately.
+  // The jurisdiction also selects the expansion dictionary, which is why the
+  // resolver takes it separately from the clause.
   const engineQuery = await resolveExpandedCorpusQuery({
     build: (expand) =>
       caseLawCorpusQuery(
@@ -94,6 +92,7 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
           dateFrom: query.dateFrom,
           dateTo: query.dateTo,
           documentType: query.documentType,
+          jurisdiction: jurisdictionClause,
           language: query.language,
           source: query.source,
         },
