@@ -31,6 +31,7 @@ import { useShallow } from "zustand/react/shallow";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import {
   Conversation,
@@ -54,6 +55,10 @@ import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
+import {
+  COMPOSER_COMPACT_CONTROL_SLOT_CLASS,
+  COMPOSER_COMPACT_TEXT_CELL_CLASS,
+} from "@/components/chat/composer-control-style";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
@@ -888,15 +893,20 @@ const PromptBarPlaceholder = ({ tab }: { tab: ChatTab }) => {
   const chatContextLabel = useChatContextLabel(tab, activeOrganizationId);
   return (
     <PromptBarShell aria-hidden="true">
-      <div className="flex min-h-8 min-w-0 flex-1 items-center px-1.5">
+      <div
+        className={cn(
+          COMPOSER_COMPACT_TEXT_CELL_CLASS,
+          "flex flex-1 items-center px-1.5",
+        )}
+      >
         <PromptBarPlaceholderContent>
           {t("chat.contextPlaceholder", { context: chatContextLabel })}
         </PromptBarPlaceholderContent>
       </div>
-      {/* Same h-8 centering wrapper the live send button uses, so the
-          placeholder stays pixel-identical; the disabled action button
-          renders the canonical Send look without re-copying its styling. */}
-      <span className="flex h-8 shrink-0 items-center">
+      {/* Same control slot the live send button uses, so the placeholder
+          stays pixel-identical; the disabled action button renders the
+          canonical Send look without re-copying its styling. */}
+      <span className={COMPOSER_COMPACT_CONTROL_SLOT_CLASS}>
         <ChatComposerActionButton
           canSend={false}
           isGenerating={false}
