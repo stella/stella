@@ -455,6 +455,24 @@ describe("detect-e2e-changes", () => {
     );
   });
 
+  test("never passes the screenshot check without comparing a PNG", () => {
+    // setup-e2e-stack exits 0 with `status=rate-limited`, which the e2e suites
+    // treat as a skip. Here it would report success on assets nothing looked
+    // at, so the stack is mandatory.
+    const requireStack = workflowStep(marketingWorkflow, "Require the stack");
+    expect(requireStack).toContain("steps.e2e-stack.outputs.status != 'ready'");
+    expect(requireStack).toContain("::error::");
+    expect(requireStack).toContain("exit 1");
+    expect(marketingWorkflow.indexOf("- name: Require the stack")).toBeLessThan(
+      marketingWorkflow.indexOf("- name: Start web dev server"),
+    );
+    // No capture, upload, or push step may still carry the skip that step
+    // makes fatal; only `always()` cleanup and `failure()` diagnostics test it.
+    expect(marketingWorkflow).not.toContain(
+      "if: steps.e2e-stack.outputs.status == 'ready'",
+    );
+  });
+
   test("builds the production web artifact once per workflow run", () => {
     const webBuild = workflowJob("web-build");
     expect(webBuild).toContain("needs: ci-plan");

@@ -156,15 +156,27 @@ jobs:
           # render.
           extra-services: gotenberg
 
+      - name: Require the stack
+        # The action exits 0 with `status=rate-limited` when Docker Hub throttles
+        # the image pulls. The e2e suites accept that skip; this job cannot: it is
+        # the only guard on assets that ship on the marketing site, so a skipped
+        # run would report success without comparing a single PNG. Every later
+        # `status == 'ready'` condition is therefore unreachable-if-false, and
+        # only the `always()` cleanup steps still test it.
+        if: steps.e2e-stack.outputs.status != 'ready'
+        env:
+          STATUS: ${{ steps.e2e-stack.outputs.status }}
+        run: |
+          echo "::error::E2E stack status is '$STATUS', not 'ready'; marketing screenshots were neither compared nor regenerated"
+          exit 1
+
       - name: Start web dev server
-        if: steps.e2e-stack.outputs.status == 'ready'
         run: |
           cd apps/web
           nohup bun --bun vite --port 3000 > /tmp/web.log 2>&1 &
           echo $! > /tmp/web.pid
 
       - name: Wait for web dev server
-        if: steps.e2e-stack.outputs.status == 'ready'
         run: |
           for i in {1..60}; do
             if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3000 > /dev/null 2>&1; then
@@ -178,17 +190,14 @@ jobs:
           exit 1
 
       - name: Install Playwright browsers
-        if: steps.e2e-stack.outputs.status == 'ready'
         uses: ./.github/actions/setup-playwright
         with:
           dependency-mode: full
 
       - name: Seed deterministic marketing content
-        if: steps.e2e-stack.outputs.status == 'ready'
         run: bun --filter @stll/api db:seed-dev
 
       - name: Capture marketing screenshots
-        if: steps.e2e-stack.outputs.status == 'ready'
         env:
           MODE: ${{ inputs.mode }}
         run: |
@@ -224,7 +233,7 @@ jobs:
         # The App token can only push to a branch of this repository, so the
         # PNGs are published unconditionally: a pull request from a fork takes
         # them from here.
-        if: inputs.mode == 'update' && steps.e2e-stack.outputs.status == 'ready'
+        if: inputs.mode == 'update'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: marketing-screenshots-${{ github.run_id }}
@@ -233,7 +242,7 @@ jobs:
           retention-days: 7
 
       - name: Note the artifact for fork pull requests
-        if: inputs.mode == 'update' && steps.e2e-stack.outputs.status == 'ready'
+        if: inputs.mode == 'update'
         env:
           ARTIFACT: marketing-screenshots-${{ github.run_id }}
         run: |
@@ -244,7 +253,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Push regenerated baselines
-        if: inputs.mode == 'update' && steps.e2e-stack.outputs.status == 'ready'
+        if: inputs.mode == 'update'
         env:
           APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
           BRANCH: ${{ inputs.ref || github.ref_name }}
