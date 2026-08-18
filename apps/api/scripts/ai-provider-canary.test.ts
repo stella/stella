@@ -10,6 +10,7 @@ import {
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 
 import {
+  CanaryCredentialRejectedError,
   CanaryProviderRunError,
   createPdfCanaryMessages,
   errorSummary,
@@ -18,6 +19,7 @@ import {
   pdfCanarySelection,
   requireWeeklyToolExecution,
   runCanaryProbe,
+  runCanaryProbeSequence,
   toolRoundTripInputSchema,
   toolRoundTripInputSchemaForProvider,
   toolRoundTripPromptForProvider,
@@ -475,6 +477,188 @@ describe("AI provider canary retry contract", () => {
     expect(
       cases.map(({ error }) => isRetryableCanaryError(error, signal)),
     ).toEqual(cases.map(({ retryable }) => retryable));
+  });
+});
+
+// The shared generate path rethrows a provider RUN_ERROR as HTTP 502 while
+// keeping the provider's message, so this is the exact shape an expired key
+// reached the canary as.
+class ProviderAuthError extends Error {
+  readonly status = 502;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "ProviderAuthError";
+  }
+}
+
+const runProbeWithoutBackoff = async ({
+  run,
+  timeoutMs,
+}: {
+  run: (signal: AbortSignal) => Promise<void>;
+  timeoutMs: number;
+}) =>
+  await runCanaryProbe({
+    retryDelayMs: 0,
+    run,
+    timeoutMs,
+    wait: async () => {},
+  });
+
+describe("AI provider canary credential rejection", () => {
+  test("summarizes auth statuses and adapter auth signatures as credential rejection", () => {
+    const signal = new AbortController().signal;
+    const credentialFailures = [
+      // bedrock-converse: bearer-key rejection relayed as a RUN_ERROR message.
+      new CanaryProviderRunError(
+        {
+          error: {
+            message:
+              "Authentication failed: Please make sure your API Key is valid.",
+          },
+        },
+        "before-tool-call",
+      ),
+      // openai-base: 401 response body forwarded as rawEvent.
+      new CanaryProviderRunError(
+        {
+          rawEvent: {
+            error: {
+              code: "invalid_api_key",
+              message: "Incorrect API key provided: sk-***",
+            },
+          },
+        },
+        "before-tool-call",
+      ),
+      // ai-anthropic: SDK message carrying the error body.
+      new CanaryProviderRunError(
+        {
+          message:
+            '401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}',
+        },
+        "before-tool-call",
+      ),
+      new CanaryProviderRunError(
+        { rawEvent: { statusCode: 401 } },
+        "after-tool-call",
+      ),
+      // ai-gemini: rejection body rethrown by the shared generate path.
+      new ProviderAuthError(
+        '{"error":{"code":400,"message":"API key not valid. Please pass a valid API key.","status":"INVALID_ARGUMENT"}}',
+      ),
+      { status: 403 },
+    ];
+
+    expect(
+      credentialFailures.map((error) => errorSummary(error, signal)),
+    ).toEqual(credentialFailures.map(() => "credential rejected"));
+  });
+
+  test("keeps capability failures out of the credential class", () => {
+    const signal = new AbortController().signal;
+
+    expect(
+      errorSummary(
+        new CanaryProviderRunError(
+          { error: { code: "provider_error" } },
+          "after-tool-result",
+        ),
+        signal,
+      ),
+    ).toBe("provider stream error after tool result (provider_error)");
+    expect(
+      errorSummary(
+        new ProviderAuthError("Upstream model is overloaded."),
+        signal,
+      ),
+    ).toBe("provider HTTP 502");
+  });
+
+  test("does not retry a credential rejection wrapped in a retryable status", async () => {
+    let calls = 0;
+    const result = await runCanaryProbe({
+      retryDelayMs: 0,
+      run: async () => {
+        calls += 1;
+        throw new ProviderAuthError(
+          "Authentication failed: Please make sure your API Key is valid.",
+        );
+      },
+      timeoutMs: 1000,
+      wait: async () => {},
+    });
+
+    expect(result.attempts).toBe(1);
+    expect(result.status).toBe("failed");
+    expect(calls).toBe(1);
+  });
+
+  test("aborts the remaining probes after a first-probe credential rejection", async () => {
+    const invoked: string[] = [];
+    const probeRuns = [
+      "role-fast:model",
+      "role-chat:model",
+      "prompt-caching",
+    ].map((label) => ({
+      label,
+      run: async () => {
+        invoked.push(label);
+        throw new ProviderAuthError(
+          "Authentication failed: Please make sure your API Key is valid.",
+        );
+      },
+      timeoutMs: 1000,
+    }));
+
+    const failure = await runCanaryProbeSequence({
+      probeRuns,
+      provider: "bedrock",
+      runProbe: runProbeWithoutBackoff,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(failure).toBeInstanceOf(CanaryCredentialRejectedError);
+    expect(failure).toHaveProperty(
+      "message",
+      "bedrock: credential rejected (role-fast:model, authentication failed); " +
+        "rotate AI_CANARY_API_KEY for this provider",
+    );
+    expect(invoked).toEqual(["role-fast:model"]);
+  });
+
+  test("runs the remaining probes when the first probe fails for another reason", async () => {
+    const invoked: string[] = [];
+    const probeRuns = [
+      "role-fast:model",
+      "role-chat:model",
+      "prompt-caching",
+    ].map((label, index) => ({
+      label,
+      run: async () => {
+        invoked.push(label);
+        if (index === 0) {
+          throw new TypeError("Provider returned no text.");
+        }
+      },
+      timeoutMs: 1000,
+    }));
+
+    const failures = await runCanaryProbeSequence({
+      probeRuns,
+      provider: "bedrock",
+      runProbe: runProbeWithoutBackoff,
+    });
+
+    expect(failures).toBe(1);
+    expect(invoked).toEqual([
+      "role-fast:model",
+      "role-chat:model",
+      "prompt-caching",
+    ]);
   });
 });
 
