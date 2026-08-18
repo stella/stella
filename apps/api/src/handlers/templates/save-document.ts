@@ -89,8 +89,9 @@ const saveDocumentBodySchema = t.Object({
   // Optional edited manifest (the Studio's field settings and conditions).
   // When present it is the base manifest, so the editor's field
   // metadata is persisted without a separate binary re-embed round-trip.
-  // t.Unknown() (not t.String()) because Elysia auto-parses JSON-looking
-  // multipart fields into objects; the handler validates the shape below.
+  // t.Unknown() (not t.String()) because the field is a JSON string over the
+  // multipart HTTP body and an object when an MCP invocation calls the handler
+  // directly; the handler validates the shape below.
   manifest: t.Optional(t.Unknown()),
 });
 
@@ -133,8 +134,8 @@ const saveTemplateDocument = createSafeRootHandler(
     const { file, manifest: manifestJson } = body;
 
     // Parse the optional client manifest; ignore it if malformed and fall back
-    // to the manifest embedded in the uploaded DOCX. Elysia may hand us either
-    // the raw JSON string or an already-parsed object, so handle both.
+    // to the manifest embedded in the uploaded DOCX. Either the raw JSON
+    // string (HTTP) or an object (MCP) can arrive, so handle both.
     let clientManifest: TemplateManifest | undefined;
     if (manifestJson !== undefined) {
       let candidate: unknown = manifestJson;

@@ -36,8 +36,8 @@ export const manifestHandler = async ({
     );
   }
 
-  // Handle both string (JSON body) and already-parsed object
-  // (FormData auto-parsed by Elysia).
+  // A JSON string over the multipart HTTP body, an object when an MCP
+  // invocation calls the handler directly.
   let parsed: unknown = manifestJson;
   if (typeof manifestJson === "string") {
     const parseResult = Result.try((): unknown => JSON.parse(manifestJson));
