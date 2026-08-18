@@ -363,7 +363,7 @@ describe("staging deploy decision", () => {
   test("fails once a commit has waited past the deferral budget", async () => {
     expect(
       await runDecision({
-        committedHoursAgo: 20,
+        committedHoursAgo: 48,
         event: "schedule",
         status: "not_ready",
       }),
@@ -377,7 +377,7 @@ describe("staging deploy decision", () => {
       await runDecision({
         committedHoursAgo: 1,
         event: "schedule",
-        pendingSinceHoursAgo: 20,
+        pendingSinceHoursAgo: 48,
         status: "not_ready",
       }),
     ).toEqual({ deploy: "deploy=false", exitCode: 1 });
@@ -397,7 +397,7 @@ describe("staging deploy decision", () => {
   test("escalates when no deployment has ever been recorded", async () => {
     expect(
       await runDecision({
-        committedHoursAgo: 20,
+        committedHoursAgo: 48,
         deployedSha: "",
         event: "schedule",
         status: "not_ready",

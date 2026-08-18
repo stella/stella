@@ -122,8 +122,10 @@ jobs:
           set -euo pipefail
 
           # A passing interruption resolves well inside this budget; anything
-          # longer is a stalled delivery worth waking someone.
-          readonly MAX_DEFERRAL_HOURS=12
+          # longer is a stalled delivery worth waking someone. The gate is
+          # sampled once a day, so the budget spans more than one sample: an
+          # outage that outlives the first daily run is observed by the next.
+          readonly MAX_DEFERRAL_HOURS=36
 
           if [[ "$STATUS" == "ready" ]]; then
             # A dispatch always deploys what it carries. The schedule only
