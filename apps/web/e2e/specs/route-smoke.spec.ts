@@ -109,7 +109,6 @@ const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   },
   staticRoute("/chat/new", { expectation: { kind: "settles" } }),
   staticRoute("/contacts"),
-  staticRoute("/contacts/import"),
   staticRoute("/dev/autocomplete", { expectation: { kind: "settles" } }),
   staticRoute("/knowledge"),
   staticRoute("/knowledge/clauses"),
@@ -203,6 +202,10 @@ const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
     path: (world) => world.documentRoute.path,
     settleMs: 2000,
   },
+  // Routes are partitioned round-robin into serial groups whose shared state
+  // (threads, contacts created by earlier routes) shapes the recorded network
+  // baseline. Append new routes here so existing routes keep their group.
+  staticRoute("/contacts/import"),
 ];
 
 // Redirect targets for workspace-scoped aliases depend on the runtime view id,
