@@ -3635,11 +3635,20 @@ const notes = [
   "Archived after matter closure",
 ];
 
-/** Deterministic future date within ~6 months of 2025-03-01. */
+/**
+ * Deterministic future date within ~6 months of 2025-03-01.
+ *
+ * Built and read back in UTC. Constructing the base with `new Date(y, m, d)`
+ * anchors it to the seeding machine's local midnight, which `toISOString()`
+ * then renders in UTC: east of Greenwich every seeded due date lands a day
+ * earlier than it does on a UTC runner. The marketing screenshot baselines
+ * render this field, so the drift showed up as a permanent one-day diff
+ * between locally regenerated baselines and CI.
+ */
 const seedDueDate = (index: number): string => {
-  const base = new Date(2025, 2, 1); // 2025-03-01
   const offsetDays = ((index * 37 + 13) % 180) + 1; // 1..180
-  base.setDate(base.getDate() + offsetDays);
+  const base = new Date(Date.UTC(2025, 2, 1)); // 2025-03-01
+  base.setUTCDate(base.getUTCDate() + offsetDays);
   return base.toISOString().slice(0, 10);
 };
 
