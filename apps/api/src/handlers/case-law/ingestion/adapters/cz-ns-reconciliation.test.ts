@@ -37,12 +37,18 @@ const UNID = {
   FIRST: "05D11F4FB3ACC585C1258E27004D2F09",
   SECOND: "137FECBC92321C61C1258E27004D2ECB",
   THIRD: "2E70B2C9AF8044CFC1258E27004D2EF8",
+  /** The decision that settles two dockets in one anchor, from 2025-09-03. */
+  CO_SETTLED: "EB8B51F4C8354470C1258CFA004D3FC3",
 } as const;
 
 const DOCKET = {
   FIRST: "30 Cdo 3000/2025",
   SECOND: "29 ICdo 83/2026",
   SUFFIXED: "21 Cdo 288/2026- III.",
+  /** Two dockets in one anchor, with the publisher's own separator markup. */
+  CO_SETTLED: "22 Cdo 807/2025<br />22 ND 148/2025",
+  /** Those two dockets as the single case number the store holds. */
+  CO_SETTLED_JOINED: "22 Cdo 807/2025, 22 ND 148/2025",
 } as const;
 
 /** The anchor the search view prints for one result row. */
@@ -378,6 +384,35 @@ describe("cz-ns listSlicePage", () => {
     const parked = JSON.stringify(listed.items.at(0)?.payload);
     const replayed: unknown = JSON.parse(parked);
     expect(replayed).toEqual({ unid: UNID.FIRST, caseNumber: DOCKET.SUFFIXED });
+  });
+
+  test("an anchor settling two dockets is one row carrying both", async () => {
+    // The fault this guards needs markup inside the anchor; without it the
+    // row parses either way and the test proves nothing.
+    expect(DOCKET.CO_SETTLED).toContain("<br />");
+
+    mockFetch({
+      listing: {
+        body: listingPageHtml({
+          rows: [
+            [UNID.FIRST, DOCKET.FIRST],
+            [UNID.CO_SETTLED, DOCKET.CO_SETTLED],
+          ],
+          shown: 2,
+        }),
+      },
+    });
+
+    const listed = await listSlice("2025-09-03");
+
+    expect(listed.items.map(({ payload }) => payload)).toEqual([
+      { unid: UNID.FIRST, caseNumber: DOCKET.FIRST },
+      { unid: UNID.CO_SETTLED, caseNumber: DOCKET.CO_SETTLED_JOINED },
+    ]);
+    expect(listed.items.map(({ identity }) => identity)).toEqual([
+      { type: "document", sourceDocumentId: UNID.FIRST },
+      { type: "document", sourceDocumentId: UNID.CO_SETTLED },
+    ]);
   });
 
   test("a lone hit, which the publisher states no count for, still lists", async () => {

@@ -18,6 +18,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import {
   listingIdentityKey,
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
@@ -111,6 +112,8 @@ type DownloadStub =
 type MockOptions = {
   /** Search responses, one per request, in order. */
   search: readonly SearchStub[];
+  /** Answers derived from the window asked for; takes precedence over `search`. */
+  searchFor?: (body: SearchBody) => SearchStub;
   download?: DownloadStub;
   onSearch?: (body: SearchBody, headers: Headers) => void;
 };
@@ -176,14 +179,18 @@ const mockFetch = ({
   download = { type: "pdf" },
   onSearch,
   search,
+  searchFor,
 }: MockOptions): { calls: () => number } => {
   let searchCall = 0;
   globalThis.fetch = asFetchMock(
     (input: string | URL | Request, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
       if (url.pathname === SEARCH_PATH) {
-        onSearch?.(parseSearchBody(init), new Headers(init?.headers));
-        const next = search.at(Math.min(searchCall, search.length - 1));
+        const body = parseSearchBody(init);
+        onSearch?.(body, new Headers(init?.headers));
+        const next =
+          searchFor?.(body) ??
+          search.at(Math.min(searchCall, search.length - 1));
         searchCall += 1;
         return Promise.resolve(
           next === undefined
@@ -425,8 +432,58 @@ describe("sk-us listSlicePage", () => {
     expect(stub.calls()).toBe(2);
   });
 
+  // ── A record the DMS will not serialise ──────────────────
+  //
+  // 2025-04 states 278 decisions, and every window containing result index
+  // 194 answers 204 with an empty body: start=193&pageSize=1 answers 200,
+  // start=194&pageSize=1 answers 204, start=195&pageSize=1 answers 200.
+
+  /** Result index the stubbed DMS refuses, exactly as 2025-04's does. */
+  const UNSERVED_INDEX = 194;
+  const POISONED_NUM_FOUND = 278;
+
+  /**
+   * What one refused page may cost: two requests per halving of the adapter's
+   * 100-record listing page, the refused request that started it, and the one
+   * that confirms the isolated record is refused rather than unlucky.
+   */
+  const SPLIT_REQUEST_BOUND = 2 * Math.ceil(Math.log2(100)) + 1 + 1;
+
+  /**
+   * What a window that serves nothing costs: one halving per level down the
+   * spine, plus the two one-record windows at the bottom that establish it,
+   * each of which is asked twice before it counts as refused.
+   */
+  const OUTAGE_REQUEST_COUNT = Math.ceil(Math.log2(100)) + 2 * 2;
+
+  /** A DMS document for result index `index`, keyed the way the real ones are. */
+  const documentAt = (index: number) => ({
+    ...PLENARY_OPINION,
+    documentId: `7964d54e-6708-48e9-92cc-5cc4${String(index).padStart(8, "0")}`,
+    mkRSAPNumberOfFile: `III. ÚS ${index}/2025`,
+    mkDateOfDecision: "04/15/2025 00:00:00",
+  });
+
+  /** The DMS as 2025-04's is: 204 for any window covering `UNSERVED_INDEX`. */
+  const poisonedDms = ({
+    pageSize,
+    start,
+  }: Pick<SearchBody, "start" | "pageSize">): SearchStub => {
+    if (start <= UNSERVED_INDEX && UNSERVED_INDEX < start + pageSize) {
+      return { type: "status", status: 204 };
+    }
+    const end = Math.min(start + pageSize, POISONED_NUM_FOUND);
+    return {
+      type: "page",
+      documents: Array.from({ length: Math.max(0, end - start) }, (_, offset) =>
+        documentAt(start + offset),
+      ),
+      numFound: POISONED_NUM_FOUND,
+    };
+  };
+
   test("an empty 204 throws rather than settling the slice", async () => {
-    mockFetch({ search: [{ type: "status", status: 204 }] });
+    const stub = mockFetch({ search: [{ type: "status", status: 204 }] });
 
     const rejection = await rejectionOf(
       reconciliation.listSlicePage({ slice: "2026-06", page: 0 }),
@@ -435,7 +492,126 @@ describe("sk-us listSlicePage", () => {
     expect(rejection instanceof Error ? rejection.message : "").toContain(
       "no body",
     );
+    // A window that serves nothing however narrowly it is cut is the endpoint
+    // being down, and is established by walking one spine of the halving
+    // rather than by subdividing the whole page.
+    expect(stub.calls()).toBe(OUTAGE_REQUEST_COUNT);
+  }, 30_000);
+
+  test("a record the DMS refuses is isolated, not allowed to refuse its page", async () => {
+    // Without a split this page answers 204 whole and the month is held.
+    expect(poisonedDms({ start: 100, pageSize: 100 })).toEqual({
+      type: "status",
+      status: 204,
+    });
+
+    const stub = mockFetch({ search: [], searchFor: poisonedDms });
+
+    const page = await reconciliation.listSlicePage({
+      slice: "2025-04",
+      page: 1,
+    });
+
+    // The page is whole: 99 keyed records plus the one that cannot be keyed,
+    // which the engine counts as unidentifiable and leaves out of both
+    // `reported` and `collected`.
+    expect(page.items).toHaveLength(100);
+    expect(page.totalPages).toBe(3);
+    const unkeyableAt = page.items.findIndex(
+      ({ identity }) => listingIdentityKey(identity) === null,
+    );
+    // In place, not appended: the walk must not reorder what the publisher
+    // lists, or a replay would key the wrong payloads.
+    expect(unkeyableAt).toBe(UNSERVED_INDEX - 100);
+    expect(page.items.at(unkeyableAt)?.identity).toEqual({
+      type: "unidentifiable",
+    });
+    expect(
+      page.items.filter(
+        ({ identity }) => listingIdentityKey(identity) === null,
+      ),
+    ).toHaveLength(1);
+    expect(stub.calls()).toBe(SPLIT_REQUEST_BOUND);
+  }, 30_000);
+
+  test("a page of a poisoned month that carries no refused record costs one request", async () => {
+    const stub = mockFetch({ search: [], searchFor: poisonedDms });
+
+    const page = await reconciliation.listSlicePage({
+      slice: "2025-04",
+      page: 0,
+    });
+
+    expect(page.items).toHaveLength(100);
+    expect(stub.calls()).toBe(1);
   });
+
+  test("a one-record 204 that does not repeat lists the record it named", async () => {
+    // An unidentifiable item is excluded from the slice rather than parked, so
+    // nothing retries it: a 204 the endpoint answered once under load and not
+    // again would drop a real decision out of `reported` for good.
+    let singletonCalls = 0;
+    const transientDms = (
+      body: Pick<SearchBody, "start" | "pageSize">,
+    ): SearchStub => {
+      const isTheRecord = body.start === UNSERVED_INDEX && body.pageSize === 1;
+      if (!isTheRecord) {
+        return poisonedDms(body);
+      }
+      singletonCalls += 1;
+      return singletonCalls === 1
+        ? { type: "status", status: 204 }
+        : {
+            type: "page",
+            documents: [documentAt(UNSERVED_INDEX)],
+            numFound: POISONED_NUM_FOUND,
+          };
+    };
+
+    const stub = mockFetch({ search: [], searchFor: transientDms });
+
+    const page = await reconciliation.listSlicePage({
+      slice: "2025-04",
+      page: 1,
+    });
+
+    // The record is asked for twice and served the second time, so it is a
+    // listed decision like any other and nothing is unidentifiable.
+    expect(singletonCalls).toBe(2);
+    expect(page.items).toHaveLength(100);
+    expect(
+      page.items.filter(
+        ({ identity }) => listingIdentityKey(identity) === null,
+      ),
+    ).toHaveLength(0);
+    expect(page.items.at(UNSERVED_INDEX - 100)?.identity).toEqual({
+      type: "document",
+      sourceDocumentId: documentAt(UNSERVED_INDEX).documentId,
+    });
+    expect(stub.calls()).toBe(SPLIT_REQUEST_BOUND);
+  }, 30_000);
+
+  test("halves that disagree on the month's size throw rather than bank a page", async () => {
+    // Both halves size the same month, so two counts mean the page cannot be
+    // sized; keeping either would write a `reported` the slice never reaches.
+    const stub = mockFetch({
+      search: [
+        { type: "status", status: 204 },
+        { type: "page", documents: [PLENARY_OPINION], numFound: 200 },
+        { type: "page", documents: [CHAMBER_RESOLUTION], numFound: 201 },
+      ],
+    });
+
+    const rejection = await rejectionOf(
+      reconciliation.listSlicePage({ slice: "2025-04", page: 0 }),
+    );
+
+    expect(rejection).toBeInstanceOf(AdapterFetchError);
+    expect(rejection instanceof Error ? rejection.message : "").toContain(
+      "200 and 201",
+    );
+    expect(stub.calls()).toBe(3);
+  }, 30_000);
 
   test("a payload without a count throws rather than reporting zero pages", async () => {
     mockFetch({

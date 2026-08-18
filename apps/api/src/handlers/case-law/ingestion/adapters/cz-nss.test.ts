@@ -7,6 +7,7 @@
  * predecessor came to assert a citation pattern the adapter no longer had.
  */
 
+import { Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -20,9 +21,12 @@ import {
 import {
   buildCzNssDecision,
   czNssAdapter,
+  czNssExpectedRows,
   czNssListingIdentity,
+  czNssTotalPages,
+  CZ_NSS_CONTINUATION_PAGE_ROWS,
   CZ_NSS_FIRST_SLICE,
-  CZ_NSS_RESULTS_PER_PAGE,
+  CZ_NSS_FIRST_PAGE_ROWS,
   parseResultRows,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import type { ParsedRow } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
@@ -446,6 +450,38 @@ describe("cz-nss listing rows", () => {
   });
 });
 
+// ── Page arithmetic ──────────────────────────────────────
+
+describe("cz-nss page arithmetic", () => {
+  test("the two page sizes the portal serves are not the same size", () => {
+    // Every case below is vacuous under one size for both.
+    expect(CZ_NSS_CONTINUATION_PAGE_ROWS).not.toBe(CZ_NSS_FIRST_PAGE_ROWS);
+  });
+
+  const cases = [
+    { statedCount: 0, pages: 0, rows: [] },
+    { statedCount: 1, pages: 1, rows: [1] },
+    { statedCount: 40, pages: 1, rows: [40] },
+    { statedCount: 41, pages: 2, rows: [40, 1] },
+    { statedCount: 60, pages: 2, rows: [40, 20] },
+    { statedCount: 61, pages: 3, rows: [40, 20, 1] },
+    { statedCount: 68, pages: 3, rows: [40, 20, 8] },
+  ] as const;
+
+  for (const { pages, rows, statedCount } of cases) {
+    test(`a day of ${statedCount} records spans ${pages} pages`, () => {
+      expect(czNssTotalPages(statedCount)).toBe(pages);
+      expect(
+        rows.map((_, page) => czNssExpectedRows({ page, statedCount })),
+      ).toEqual([...rows]);
+      // Every stated record lands on exactly one page, and no page expects a
+      // row past the day's end.
+      expect(rows.reduce((sum, count) => sum + count, 0)).toBe(statedCount);
+      expect(czNssExpectedRows({ page: pages, statedCount })).toBe(0);
+    });
+  }
+});
+
 // ── Listing walk ─────────────────────────────────────────
 
 describe("cz-nss listSlicePage", () => {
@@ -546,13 +582,13 @@ describe("cz-nss listSlicePage", () => {
   });
 
   test("derives the page count from the court's own record count", async () => {
-    const statedCount = CZ_NSS_RESULTS_PER_PAGE + 10;
+    const statedCount = CZ_NSS_FIRST_PAGE_ROWS + 10;
     installStub({
       search: [
         htmlResponse(
           searchPage({
             statedCount,
-            rows: fullPageRows(CZ_NSS_RESULTS_PER_PAGE),
+            rows: fullPageRows(CZ_NSS_FIRST_PAGE_ROWS),
           }),
         ),
       ],
@@ -563,6 +599,53 @@ describe("cz-nss listSlicePage", () => {
       (await reconciliation.listSlicePage({ slice: SLICE, page: 0 }))
         .totalPages,
     ).toBe(2);
+  });
+
+  test("pages a day of 68 records as 40 inline then 20 and 8", async () => {
+    // The day that exposed this: 68 decisions, of which the inline page
+    // carries 40 and the continuation endpoint serves 20 at a time.
+    const statedCount = 68;
+    const { requests } = installStub({
+      search: [
+        htmlResponse(
+          searchPage({
+            statedCount,
+            rows: fullPageRows(CZ_NSS_FIRST_PAGE_ROWS),
+          }),
+        ),
+        htmlResponse(
+          searchPage({
+            statedCount,
+            rows: fullPageRows(CZ_NSS_FIRST_PAGE_ROWS),
+          }),
+        ),
+      ],
+      continuation: [
+        htmlResponse(
+          fullPageRows(CZ_NSS_CONTINUATION_PAGE_ROWS).map(rowBlock).join("\n"),
+        ),
+        htmlResponse(fullPageRows(8).map(rowBlock).join("\n")),
+      ],
+    });
+
+    const second = await reconciliation.listSlicePage({
+      slice: SLICE,
+      page: 1,
+    });
+    const third = await reconciliation.listSlicePage({ slice: SLICE, page: 2 });
+
+    expect(second.totalPages).toBe(3);
+    expect(second.items).toHaveLength(CZ_NSS_CONTINUATION_PAGE_ROWS);
+    expect(third.totalPages).toBe(3);
+    expect(third.items).toHaveLength(8);
+
+    // The engine's page index is the portal's own `pageNum`.
+    const paginated = requests.filter(({ url }) =>
+      url.endsWith("/Home/MyResTRowsCont"),
+    );
+    expect(
+      paginated.map(({ body }) => new URLSearchParams(body).get("pageNum")),
+    ).toEqual(["1", "2"]);
   });
 
   test("refuses a first page shorter than the stated count requires", async () => {
@@ -592,8 +675,8 @@ describe("cz-nss listSlicePage", () => {
       search: [
         htmlResponse(
           searchPage({
-            statedCount: CZ_NSS_RESULTS_PER_PAGE + 10,
-            rows: fullPageRows(CZ_NSS_RESULTS_PER_PAGE),
+            statedCount: CZ_NSS_FIRST_PAGE_ROWS + 10,
+            rows: fullPageRows(CZ_NSS_FIRST_PAGE_ROWS),
           }),
         ),
       ],
@@ -612,8 +695,8 @@ describe("cz-nss listSlicePage", () => {
       search: [
         htmlResponse(
           searchPage({
-            statedCount: CZ_NSS_RESULTS_PER_PAGE + 1,
-            rows: fullPageRows(CZ_NSS_RESULTS_PER_PAGE),
+            statedCount: CZ_NSS_FIRST_PAGE_ROWS + 1,
+            rows: fullPageRows(CZ_NSS_FIRST_PAGE_ROWS),
           }),
         ),
       ],
@@ -719,6 +802,52 @@ describe("cz-nss listSlicePage", () => {
       ),
     ).toBeInstanceOf(Error);
   });
+});
+
+// ── Crawl cursor ─────────────────────────────────────────
+
+describe("cz-nss fetchPage", () => {
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    setSystemTime(new Date("2026-08-11T09:30:00.000Z"));
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  afterAll(() => {
+    setSystemTime();
+  });
+
+  test("a full continuation page moves the cursor on within the day", async () => {
+    // A continuation page is full at half the inline page's size, so a crawl
+    // measuring it against the inline size ends the day here and never asks
+    // for the records past it.
+    installStub({
+      search: [
+        htmlResponse(
+          searchPage({
+            statedCount: 68,
+            rows: fullPageRows(CZ_NSS_FIRST_PAGE_ROWS),
+          }),
+        ),
+      ],
+      continuation: [
+        htmlResponse(
+          fullPageRows(CZ_NSS_CONTINUATION_PAGE_ROWS).map(rowBlock).join("\n"),
+        ),
+      ],
+    });
+
+    const page = await czNssAdapter.fetchPage(`${SLICE}:1`, {});
+
+    expect(Result.isError(page)).toBe(false);
+    expect(Result.isError(page) ? null : page.value.nextCursor).toBe(
+      `${SLICE}:2`,
+    );
+  }, 30_000);
 });
 
 // ── Per-item build ───────────────────────────────────────

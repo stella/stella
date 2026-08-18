@@ -81,12 +81,62 @@ const CZ_NSS_LANGUAGE = "cs";
 const CZ_NSS_COURT = "Nejvyšší správní soud";
 
 /**
- * Results the portal renders per page, matching the page size its own
- * infinite-scroll script requests. Read from the live search rather than
- * assumed: a day-filtered search stating 50 records renders 40 rows inline and
- * serves the remaining 10 as the next page.
+ * Rows the portal renders inline on the results page a search returns.
  */
-export const CZ_NSS_RESULTS_PER_PAGE = 40;
+export const CZ_NSS_FIRST_PAGE_ROWS = 40;
+
+/**
+ * Rows `/Home/MyResTRowsCont` serves for one `pageNum`, which is half what
+ * the inline page carries.
+ *
+ * The two sizes are separate because the portal's are: a day stating 68
+ * records renders 40 inline, then answers `pageNum` 1 with 20 and `pageNum` 2
+ * with the last 8. One size for both made every page after the first expect
+ * twice the rows it can hold, so every day above 40 decisions failed its own
+ * count check and held its slice out of the sweep.
+ */
+export const CZ_NSS_CONTINUATION_PAGE_ROWS = 20;
+
+/** Rows page `page` of a day carries when the day is larger than it. */
+const czNssRowsOnPage = (page: number): number =>
+  page === 0 ? CZ_NSS_FIRST_PAGE_ROWS : CZ_NSS_CONTINUATION_PAGE_ROWS;
+
+/** Rows of a day preceding page `page`. */
+const czNssRowsBeforePage = (page: number): number =>
+  page === 0
+    ? 0
+    : CZ_NSS_FIRST_PAGE_ROWS + (page - 1) * CZ_NSS_CONTINUATION_PAGE_ROWS;
+
+/**
+ * Pages the walk must ask for to see a day of `statedCount` records: the
+ * inline one, plus one continuation page per {@link
+ * CZ_NSS_CONTINUATION_PAGE_ROWS} beyond it.
+ */
+export const czNssTotalPages = (statedCount: number): number =>
+  statedCount <= 0
+    ? 0
+    : 1 +
+      Math.ceil(
+        Math.max(0, statedCount - CZ_NSS_FIRST_PAGE_ROWS) /
+          CZ_NSS_CONTINUATION_PAGE_ROWS,
+      );
+
+type CzNssExpectedRowsOptions = {
+  /** 0-indexed page within the day. */
+  page: number;
+  /** What the portal says the day holds. */
+  statedCount: number;
+};
+
+/** Rows page `page` must carry for a day of `statedCount` records. */
+export const czNssExpectedRows = ({
+  page,
+  statedCount,
+}: CzNssExpectedRowsOptions): number =>
+  Math.max(
+    0,
+    Math.min(czNssRowsOnPage(page), statedCount - czNssRowsBeforePage(page)),
+  );
 
 /**
  * How many records the court says its own search matched, as the results page
@@ -1189,10 +1239,10 @@ const listCzNssSlicePage = async ({
   // `reported` reads as a fully collected day and settles it forever. Left
   // unwritten, the day keeps its previous row and the failure surfaces in the
   // loop's tally.
-  const expectedRows = Math.min(
-    CZ_NSS_RESULTS_PER_PAGE,
-    search.statedCount - page * CZ_NSS_RESULTS_PER_PAGE,
-  );
+  const expectedRows = czNssExpectedRows({
+    page,
+    statedCount: search.statedCount,
+  });
   if (rows.length < expectedRows) {
     throw new AdapterFetchError({
       message: `NSS page ${page} of ${slice} carried ${rows.length} of the ${expectedRows} rows its stated count of ${search.statedCount} requires`,
@@ -1206,7 +1256,7 @@ const listCzNssSlicePage = async ({
       identity: czNssListingIdentity(row),
       payload: row,
     })),
-    totalPages: Math.ceil(search.statedCount / CZ_NSS_RESULTS_PER_PAGE),
+    totalPages: czNssTotalPages(search.statedCount),
   };
 };
 
@@ -1436,8 +1486,11 @@ export const czNssAdapter = defineSourceAdapter({
           decisions.push(built.decision);
         }
 
-        // Determine next cursor
-        if (rows.length >= CZ_NSS_RESULTS_PER_PAGE) {
+        // Determine next cursor. Against the size this page can hold, not the
+        // inline one: a continuation page tops out at half of it, so measuring
+        // every page against the inline size ended the day at the first
+        // continuation page and skipped everything past record 60.
+        if (rows.length >= czNssRowsOnPage(page)) {
           // More pages for this date
           return {
             decisions,
