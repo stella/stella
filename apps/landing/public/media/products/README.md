@@ -26,6 +26,11 @@ which re-runs the PR's checks against the new head. Because baselines and
 comparison render on the same runner image, the pixel tolerance only has to
 cover run-to-run noise.
 
+Every update run also uploads the PNGs as a `marketing-screenshots-<run id>`
+artifact. Only branches of this repository can be regenerated in place, so for
+a fork PR run the update against a same-repository branch carrying the change
+and commit the artifact's PNGs to the PR.
+
 Running `bun --filter @stll/web test:e2e:marketing:update` locally is for
 debugging a capture; do not commit macOS-generated PNGs.
 

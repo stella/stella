@@ -419,6 +419,28 @@ describe("detect-e2e-changes", () => {
     expect(nightlyWorkflow).not.toContain("ref: ");
   });
 
+  test("publishes regenerated baselines a fork pull request can commit itself", () => {
+    const upload = workflowStep(
+      marketingWorkflow,
+      "Upload regenerated baselines",
+    );
+    expect(upload).toContain(
+      "uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+    );
+    expect(upload).toContain(
+      `name: marketing-screenshots-${githubExpression("github.run_id")}`,
+    );
+    expect(upload).toContain("path: apps/landing/public/media/products/*.png");
+    expect(upload).toContain("retention-days: 7");
+    // Published before the push, so a run that cannot push still hands over
+    // the PNGs.
+    expect(
+      marketingWorkflow.indexOf("- name: Upload regenerated baselines"),
+    ).toBeLessThan(
+      marketingWorkflow.indexOf("- name: Push regenerated baselines"),
+    );
+  });
+
   test("builds the production web artifact once per workflow run", () => {
     const webBuild = workflowJob("web-build");
     expect(webBuild).toContain("needs: ci-plan");

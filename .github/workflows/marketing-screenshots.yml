@@ -220,6 +220,29 @@ jobs:
             rm -f /tmp/web.pid
           fi
 
+      - name: Upload regenerated baselines
+        # The App token can only push to a branch of this repository, so the
+        # PNGs are published unconditionally: a pull request from a fork takes
+        # them from here.
+        if: inputs.mode == 'update' && steps.e2e-stack.outputs.status == 'ready'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: marketing-screenshots-${{ github.run_id }}
+          path: apps/landing/public/media/products/*.png
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Note the artifact for fork pull requests
+        if: inputs.mode == 'update' && steps.e2e-stack.outputs.status == 'ready'
+        env:
+          ARTIFACT: marketing-screenshots-${{ github.run_id }}
+        run: |
+          {
+            echo "### Regenerated PNGs: \`$ARTIFACT\`"
+            echo
+            echo "The push below only reaches a branch of this repository. A pull request from a fork downloads that artifact and commits the PNGs itself."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Push regenerated baselines
         if: inputs.mode == 'update' && steps.e2e-stack.outputs.status == 'ready'
         env:
