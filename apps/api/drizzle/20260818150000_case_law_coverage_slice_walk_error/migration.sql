@@ -16,17 +16,28 @@ SET statement_timeout = '5s';--> statement-breakpoint
 ALTER TABLE "case_law_coverage_slices" ALTER COLUMN "reported" DROP NOT NULL;--> statement-breakpoint
 -- squawk-ignore ban-drop-not-null
 ALTER TABLE "case_law_coverage_slices" ALTER COLUMN "collected" DROP NOT NULL;--> statement-breakpoint
-ALTER TABLE "case_law_coverage_slices" ADD COLUMN "walk_error" text;--> statement-breakpoint
+ALTER TABLE "case_law_coverage_slices" ADD COLUMN IF NOT EXISTS "walk_error" text;--> statement-breakpoint
 
 -- NOT VALID here, VALIDATE below: adding a validating CHECK scans every row
 -- while holding ACCESS EXCLUSIVE. NOT VALID takes the lock only long enough
 -- to record the constraint, which then applies to every later INSERT and
 -- UPDATE. Every existing row has both counts and no error, so both checks
 -- validate without a repair step.
+--
+-- Re-runnable as it stands: everything up to the COMMIT below is committed
+-- before the VALIDATEs and the index build, so a failure after it leaves the
+-- file to run again without Drizzle's migration row. The column add is
+-- guarded, and each constraint is dropped by name and re-added in one
+-- statement, so a second run re-records the same NOT VALID constraint.
+-- stella-migration-safety: reviewed destructive-change - drops only this
+-- migration's own two check constraints by name immediately before
+-- re-adding them; no row data is touched.
 ALTER TABLE "case_law_coverage_slices"
+  DROP CONSTRAINT IF EXISTS "case_law_coverage_slices_counts_pair",
   ADD CONSTRAINT "case_law_coverage_slices_counts_pair"
   CHECK (("reported" IS NULL) = ("collected" IS NULL)) NOT VALID;--> statement-breakpoint
 ALTER TABLE "case_law_coverage_slices"
+  DROP CONSTRAINT IF EXISTS "case_law_coverage_slices_counted_or_failed",
   ADD CONSTRAINT "case_law_coverage_slices_counted_or_failed"
   CHECK ("reported" IS NOT NULL OR "walk_error" IS NOT NULL) NOT VALID;--> statement-breakpoint
 

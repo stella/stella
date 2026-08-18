@@ -813,6 +813,45 @@ test("a slice the publisher will not list is recorded, and the sweep moves past 
   expect(listed.map(({ slice }) => slice)).toEqual([refused, behind]);
 });
 
+test("a failed walk of a counted slice keeps its counts and marks it failed", async () => {
+  // A short row the backlog owes, whose publisher then refuses it: the row
+  // must not lose what the last successful listing said, and it must leave
+  // the backlog's window for the retry arm's.
+  const sourceId = await seedSource();
+  await seedFreshTip(sourceId);
+  await seedSlice({
+    sourceId,
+    slice: OWED_SLICE,
+    reported: 2,
+    collected: 0,
+    checkedAt: addUtcDays(NOW, -2),
+  });
+
+  const rejection = await runUnitWith({
+    sourceId,
+    reconciliation: unwalkableSliceStub,
+  }).then(
+    () => null,
+    (error: unknown) => error,
+  );
+  expect(rejection).toBeInstanceOf(AdapterFetchError);
+  expect(await ledgerRow(sourceId, OWED_SLICE)).toEqual({
+    reported: 2,
+    collected: 0,
+    walkError: "AdapterFetchError: listing refused",
+  });
+
+  // A fresh process (no hold) with the same publisher: the failed row is
+  // resting, the backlog no longer offers it, and the source is idle.
+  expect(
+    await runUnitWith({
+      sourceId,
+      reconciliation: unwalkableSliceStub,
+      sliceRetries: new Map(),
+    }),
+  ).toEqual({ type: "idle" });
+});
+
 test("a failed slice is walked again once it has rested, and a listing clears it", async () => {
   const sourceId = await seedSource();
   await seedFreshTip(sourceId);

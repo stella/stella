@@ -194,7 +194,9 @@ export const getIngestionStatus = async (
       // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential per-source aggregation reads on a single scoped connection
       const [sliceRow] = await db
         .select({
-          slices: count(),
+          // Surveyed means listed at least once; a row that only ever failed
+          // is counted under `failedSlices` alone.
+          slices: sql<number>`coalesce(sum(case when ${caseLawCoverageSlices.reported} is not null then 1 else 0 end), 0)::int`,
           shortSlices: sql<number>`coalesce(sum(case when ${caseLawCoverageSlices.collected} < ${caseLawCoverageSlices.reported} then 1 else 0 end), 0)::int`,
           failedSlices: sql<number>`coalesce(sum(case when ${caseLawCoverageSlices.walkError} is not null then 1 else 0 end), 0)::int`,
           lastCheckedAt: sql<Date | null>`max(${caseLawCoverageSlices.checkedAt})`,

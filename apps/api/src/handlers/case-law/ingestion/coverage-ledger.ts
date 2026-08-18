@@ -12,7 +12,7 @@
  * describes the latest attempt.
  */
 
-import { sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawCoverageSlices } from "@/api/db/schema";
@@ -50,6 +50,38 @@ export const recordSliceCoverage = async (
           walkError: null,
         },
       });
+  });
+};
+
+export type TouchSliceCoverageInput = {
+  sourceId: SafeId<"caseLawSource">;
+  slice: string;
+};
+
+/**
+ * Re-stamp a counted row's `checkedAt` without touching what it says.
+ *
+ * Bookkeeping outside the source lease, so it must not overwrite what a
+ * leased walk on another replica may have recorded since the row was read:
+ * the counts stay, and a row that has meanwhile failed is left to the retry
+ * arm rather than quietly restored to counted.
+ */
+export const touchSliceCoverage = async (
+  scopedDb: ScopedDb,
+  { slice, sourceId }: TouchSliceCoverageInput,
+): Promise<void> => {
+  await scopedDb(async (tx) => {
+    // audit: skip — crawl bookkeeping, not a user action
+    await tx
+      .update(caseLawCoverageSlices)
+      .set({ checkedAt: sql`now()` })
+      .where(
+        and(
+          eq(caseLawCoverageSlices.sourceId, sourceId),
+          eq(caseLawCoverageSlices.slice, slice),
+          isNull(caseLawCoverageSlices.walkError),
+        ),
+      );
   });
 };
 

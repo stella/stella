@@ -46,6 +46,7 @@ import {
 import {
   recordSliceCoverage,
   recordSliceWalkFailure,
+  touchSliceCoverage,
 } from "@/api/handlers/case-law/ingestion/coverage-ledger";
 import {
   allocateSourceObservationOrder,
@@ -195,17 +196,14 @@ export type ReconciliationUnitOutcome =
   | { type: "leased" };
 
 /**
- * How long a slice whose walk threw is held out of the selection order.
- *
  * How long this process holds a slice whose walk threw before offering it
  * again. The ledger records the failure durably and re-tests it on its own
- * cadence (`RECONCILIATION_FAILED_SLICE_RETRY_MS`); this hold is for the tip,
- * which is re-derived from the clock each turn and would otherwise be handed
- * straight back. An hour is the trade: short against the tip's daily
- * staleness, so a publisher that recovers is picked up within the same
- * cadence the slice would have been walked on anyway, and long enough that a
- * tip slice nothing can serve costs its source one turn an hour instead of
- * one a minute.
+ * cadence (`RECONCILIATION_FAILED_SLICE_RETRY_MS`, and the tip's own
+ * staleness for tip slices); this hold is the process's short memory of a
+ * failure it has just seen, so a walk whose ledger write itself failed is not
+ * handed straight back. An hour: short against the daily cadences, long
+ * enough that a slice nothing can serve costs its source one turn an hour
+ * instead of one a minute.
  */
 export const RECONCILIATION_SLICE_RETRY_MS = 60 * 60_000;
 
@@ -449,26 +447,28 @@ const countedLedgerSlice = ({
   return { slice, reported, collected, checkedAt };
 };
 
+type TipCheckedAt = { slice: string; checkedAt: Date };
+
 /**
- * Counted ledger rows for the named slices. Bounded by the tip window. A tip
- * slice whose last walk failed is absent here on purpose: absent is what the
- * tip arm walks, and the retry hold is what keeps it from walking it at once.
+ * When each of the named slices was last walked, counted or failed alike.
+ * Bounded by the tip window. A failed tip row keeps its `checkedAt` here on
+ * purpose: the tip arm walks a slice once it is stale, so a tip slice whose
+ * walk failed rests the tip's own day, on every replica and across restarts,
+ * rather than being taken for never walked and offered straight back.
  */
-const selectLedgerSlices = async (
+const selectTipCheckedAt = async (
   scopedDb: ScopedDb,
   sourceId: SafeId<"caseLawSource">,
   slices: readonly string[],
-): Promise<LedgerSlice[]> => {
+): Promise<TipCheckedAt[]> => {
   if (slices.length === 0) {
     return [];
   }
-  const rows = await scopedDb(
+  return await scopedDb(
     async (tx) =>
       await tx
         .select({
           slice: caseLawCoverageSlices.slice,
-          reported: caseLawCoverageSlices.reported,
-          collected: caseLawCoverageSlices.collected,
           checkedAt: caseLawCoverageSlices.checkedAt,
         })
         .from(caseLawCoverageSlices)
@@ -476,12 +476,10 @@ const selectLedgerSlices = async (
           and(
             eq(caseLawCoverageSlices.sourceId, sourceId),
             inArray(caseLawCoverageSlices.slice, [...slices]),
-            isNull(caseLawCoverageSlices.walkError),
           ),
         )
         .limit(slices.length),
   );
-  return rows.map(countedLedgerSlice);
 };
 
 type SelectStaleShortSlicesOptions = {
@@ -1096,14 +1094,14 @@ export const runReconciliationWorkUnit = async ({
   const heldSlices = [...sliceRetries.keys()];
 
   const [
-    tipLedger,
+    tipCheckedAt,
     shortRows,
     oldestLedgerSlice,
     dueParked,
     recheckCandidate,
     failedCandidate,
   ] = await Promise.all([
-    selectLedgerSlices(scopedDb, sourceId, tipSlices),
+    selectTipCheckedAt(scopedDb, sourceId, tipSlices),
     selectStaleShortSlices(scopedDb, { sourceId, staleBefore, heldSlices }),
     selectOldestLedgerSlice(scopedDb, sourceId),
     hasDueParkedItems(scopedDb, sourceId, startedAt),
@@ -1147,12 +1145,9 @@ export const runReconciliationWorkUnit = async ({
   // Not a work unit: touching is bookkeeping, and selection continues over
   // whatever is genuinely owed in the same iteration. Outside the lease, like
   // the crawl's own ledger writes.
-  for (const { collected, reported, slice } of settled) {
-    // oxlint-disable-next-line no-await-in-loop -- bounded by the candidate window; sequential upserts on one scoped connection rather than a fan-out
-    await recordSliceCoverage(scopedDb, {
-      sourceId,
-      coverage: { slice, reported, collected },
-    });
+  for (const { slice } of settled) {
+    // oxlint-disable-next-line no-await-in-loop -- bounded by the candidate window; sequential updates on one scoped connection rather than a fan-out
+    await touchSliceCoverage(scopedDb, { sourceId, slice });
   }
 
   // The sweep frontier: the oldest slice with any row, bounded above by the
@@ -1167,7 +1162,7 @@ export const runReconciliationWorkUnit = async ({
     hasDueParkedItems: dueParked,
     tipSlices,
     tipCheckedAt: new Map(
-      tipLedger.map(({ slice, checkedAt }) => [slice, checkedAt]),
+      tipCheckedAt.map(({ slice, checkedAt }) => [slice, checkedAt]),
     ),
     unsettledShortSlices: unsettled,
     failedCandidate,
