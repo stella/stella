@@ -14,6 +14,7 @@ import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
 import { applyFilters, buildFilterConditions } from "@/api/lib/entity-filters";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
+import { createPropertyRunReclaimer } from "@/api/tests/property-run-reclaim";
 
 // ── Differential property test ──────────────────────────────
 //
@@ -29,6 +30,7 @@ type RawDb = ReturnType<typeof drizzle>;
 
 let client: Awaited<ReturnType<typeof createTestPglite>> | undefined;
 let db: RawDb;
+let reclaimRun: () => Promise<void>;
 
 const ORG_ID = toSafeId<"organization">(Bun.randomUUIDv7());
 const WS_ID = toSafeId<"workspace">(Bun.randomUUIDv7());
@@ -84,6 +86,11 @@ beforeAll(
   async () => {
     client = await createTestPglite();
     db = drizzle({ client });
+    reclaimRun = createPropertyRunReclaimer(db, [
+      entities,
+      entityVersions,
+      fields,
+    ]);
 
     await db.insert(authSchema.user).values({
       id: "user_diff_test",
@@ -464,6 +471,8 @@ const clearRows = async () => {
     .where(eq(entities.workspaceId, WS_ID));
   await db.delete(entityVersions).where(eq(entityVersions.workspaceId, WS_ID));
   await db.delete(entities).where(eq(entities.workspaceId, WS_ID));
+  // Otherwise the process grows with numRuns, not with the generated input.
+  await reclaimRun();
 };
 
 const sqlMatchIds = async (condition: ConditionNode): Promise<Set<string>> => {
