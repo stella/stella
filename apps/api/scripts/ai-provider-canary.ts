@@ -357,8 +357,113 @@ const terminalProviderCode = (error: unknown, depth = 0): string | null => {
   return null;
 };
 
+// Every adapter collapses a provider failure into a RUN_ERROR carrying only the
+// provider's message and code (@tanstack/ai `toRunErrorPayload`), and the shared
+// generate path rethrows that event as HTTP 502, so a rejected key is
+// indistinguishable from a capability regression by status alone. Each signature
+// is matched case-insensitively against the message, code, and type fields on
+// the error chain.
+export const CREDENTIAL_REJECTION_SIGNATURES = [
+  "authentication failed", // bedrock-converse: bearer-key rejection body
+  "authentication_error", // ai-anthropic: error body type
+  "invalid x-api-key", // ai-anthropic: error body message
+  "invalid_api_key", // ai-openai, openrouter: error body code
+  "incorrect api key", // ai-openai: error body message
+  "api key not valid", // ai-gemini: rejection message
+  "permission_denied", // ai-gemini: status for a revoked or restricted key
+  "unauthenticated", // ai-gemini: status for a missing or expired key
+  "no auth credentials found", // openrouter: 401 body message
+  "unauthorized", // ai-mistral: 401 body message
+] as const;
+
+// Only 401 rejects a credential on status alone: a 403 is also how a provider
+// answers a valid key that lacks entitlement to a model, so it must carry an
+// auth signature as well.
+export const CREDENTIAL_REJECTION_STATUSES = [401] as const;
+
+type CredentialRejectionReason =
+  | (typeof CREDENTIAL_REJECTION_SIGNATURES)[number]
+  | `HTTP ${(typeof CREDENTIAL_REJECTION_STATUSES)[number]}`;
+
+export type CanaryFailure =
+  | { kind: "credential-rejected"; reason: CredentialRejectionReason }
+  | { kind: "provider-failure" };
+
+const PROVIDER_FAILURE = {
+  kind: "provider-failure",
+} as const satisfies CanaryFailure;
+
+const CREDENTIAL_SIGNATURE_KEYS = ["message", "code", "type"] as const;
+
+const credentialSignature = (
+  value: unknown,
+): CredentialRejectionReason | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.toLowerCase();
+  return (
+    CREDENTIAL_REJECTION_SIGNATURES.find((signature) =>
+      normalized.includes(signature),
+    ) ?? null
+  );
+};
+
+const credentialRejectionSignature = (
+  error: unknown,
+  depth = 0,
+): CredentialRejectionReason | null => {
+  const direct = credentialSignature(error);
+  if (direct !== null) {
+    return direct;
+  }
+  if (!isRecord(error)) {
+    return null;
+  }
+
+  for (const key of CREDENTIAL_SIGNATURE_KEYS) {
+    const signature = credentialSignature(error[key]);
+    if (signature !== null) {
+      return signature;
+    }
+  }
+  if (depth >= 3) {
+    return null;
+  }
+  for (const key of PROVIDER_ERROR_NESTED_KEYS) {
+    const nested = credentialRejectionSignature(error[key], depth + 1);
+    if (nested !== null) {
+      return nested;
+    }
+  }
+  return null;
+};
+
+const credentialRejectionStatus = (
+  status: number | null,
+): CredentialRejectionReason | null => {
+  const match = CREDENTIAL_REJECTION_STATUSES.find(
+    (candidate) => candidate === status,
+  );
+  return match === undefined ? null : `HTTP ${match}`;
+};
+
+const canaryEventFailure = (event: unknown): CanaryFailure => {
+  const statusReason = credentialRejectionStatus(providerStatus(event));
+  if (statusReason !== null) {
+    return { kind: "credential-rejected", reason: statusReason };
+  }
+
+  const signature = credentialRejectionSignature(event);
+  return signature === null
+    ? PROVIDER_FAILURE
+    : { kind: "credential-rejected", reason: signature };
+};
+
 export class CanaryProviderRunError extends TypeError {
   readonly code: string | null;
+  readonly failure: CanaryFailure;
   readonly retryCode: string | null;
   readonly retryable: boolean | null;
   readonly stage: CanaryRunStage;
@@ -371,9 +476,33 @@ export class CanaryProviderRunError extends TypeError {
     this.retryCode = rawProviderCode(event);
     this.retryable = explicitRetryability(event);
     this.code = safeProviderCode(this.retryCode);
+    this.failure = canaryEventFailure(event);
     this.stage = stage;
     this.status = providerStatus(event);
     this.terminalCode = terminalProviderCode(event);
+  }
+}
+
+export const classifyCanaryFailure = (error: unknown): CanaryFailure =>
+  error instanceof CanaryProviderRunError
+    ? error.failure
+    : canaryEventFailure(error);
+
+type CanaryCredentialRejectedOptions = {
+  label: string;
+  provider: CanaryProvider;
+  reason: CredentialRejectionReason;
+};
+
+// A TypeError so the top-level handler prints this bounded message; every part
+// of it is either a canary literal or a canary-built label.
+export class CanaryCredentialRejectedError extends TypeError {
+  constructor({ label, provider, reason }: CanaryCredentialRejectedOptions) {
+    super(
+      `${provider}: credential rejected (${label}, ${reason}); ` +
+        "rotate AI_CANARY_API_KEY for this provider",
+    );
+    this.name = "CanaryCredentialRejectedError";
   }
 }
 
@@ -383,6 +512,11 @@ export const isRetryableCanaryError = (
 ): boolean => {
   if (signal.aborted) {
     return true;
+  }
+
+  // A rejected credential fails every remaining attempt identically.
+  if (classifyCanaryFailure(error).kind === "credential-rejected") {
+    return false;
   }
 
   if (error instanceof CanaryProviderRunError) {
@@ -1156,6 +1290,10 @@ export const errorSummary = (error: unknown, signal: AbortSignal): string => {
     return "timeout";
   }
 
+  if (classifyCanaryFailure(error).kind === "credential-rejected") {
+    return "credential rejected";
+  }
+
   if (error instanceof CanaryProviderRunError) {
     if (error.status !== null) {
       return `provider HTTP ${error.status}`;
@@ -1218,6 +1356,55 @@ const recordProbeResult = ({
   return 1;
 };
 
+type CanaryProbeRun = {
+  label: string;
+  run: (signal: AbortSignal) => Promise<void>;
+  timeoutMs: number;
+};
+
+type RunCanaryProbeSequenceOptions = {
+  index?: number;
+  probeRuns: readonly CanaryProbeRun[];
+  provider: CanaryProvider;
+  runProbe?: (options: RunCanaryProbeOptions) => Promise<CanaryProbeResult>;
+};
+
+// A credential rejected by the very first probe rejects every later probe too:
+// abort so the run reports a rotation task instead of a capability regression.
+export const runCanaryProbeSequence = async ({
+  index = 0,
+  probeRuns,
+  provider,
+  runProbe = runCanaryProbe,
+}: RunCanaryProbeSequenceOptions): Promise<number> => {
+  const probeRun = probeRuns.at(index);
+  if (!probeRun) {
+    return 0;
+  }
+
+  const { label, run, timeoutMs } = probeRun;
+  const result = await runProbe({ run, timeoutMs });
+  const failures = recordProbeResult({ label, provider, result });
+  if (index === 0 && result.status === "failed") {
+    const failure = classifyCanaryFailure(result.error);
+    if (failure.kind === "credential-rejected") {
+      throw new CanaryCredentialRejectedError({
+        label,
+        provider,
+        reason: failure.reason,
+      });
+    }
+  }
+
+  const remaining = await runCanaryProbeSequence({
+    index: index + 1,
+    probeRuns,
+    provider,
+    runProbe,
+  });
+  return failures + remaining;
+};
+
 const run = async (): Promise<void> => {
   const args = parseCanaryRunArgs(Bun.argv.slice(2));
   const { provider } = args;
@@ -1230,7 +1417,10 @@ const run = async (): Promise<void> => {
     config: createCanaryConfig({ apiKey, provider }),
     provider,
   } satisfies CanaryContext;
-  let failures = await runProbes(context, 0, 0);
+  let failures = await runCanaryProbeSequence({
+    probeRuns: canaryProbeRuns(context),
+    provider,
+  });
 
   if (args.tier === "weekly") {
     const rotation = weeklyCanaryRotation({
@@ -1261,44 +1451,38 @@ const run = async (): Promise<void> => {
   }
 };
 
-const runProbes = async (
-  context: CanaryContext,
-  index: number,
-  failures: number,
-): Promise<number> => {
-  const probe = probes.at(index);
-  if (!probe) {
-    return failures;
+const isSkippedProbe = (context: CanaryContext, probe: Probe): boolean => {
+  if (probe.type === "capability") {
+    return false;
   }
 
-  const label = probeLabel(context, probe);
-  if (
-    probe.type !== "capability" &&
-    (probe.type === "model-role" && probe.role === "pdf"
-      ? pdfCanarySelection(context.provider) === null
-      : !isBYOKProviderRoleSupported({
-          provider: context.provider,
-          role: probe.role,
-        }))
-  ) {
-    console.log(
-      `[ai-canary] ${context.provider}/${label}: skipped (unsupported role)`,
-    );
-    return await runProbes(context, index + 1, failures);
-  }
+  return probe.type === "model-role" && probe.role === "pdf"
+    ? pdfCanarySelection(context.provider) === null
+    : !isBYOKProviderRoleSupported({
+        provider: context.provider,
+        role: probe.role,
+      });
+};
 
-  const result = await runCanaryProbe({
-    run: async (signal) => {
-      await probe.run(context, signal);
-    },
-    timeoutMs: probe.timeoutMs,
-  });
-  const failureDelta = recordProbeResult({
-    label,
-    provider: context.provider,
-    result,
-  });
-  return await runProbes(context, index + 1, failures + failureDelta);
+const canaryProbeRuns = (context: CanaryContext): CanaryProbeRun[] => {
+  const probeRuns: CanaryProbeRun[] = [];
+  for (const probe of probes) {
+    const label = probeLabel(context, probe);
+    if (isSkippedProbe(context, probe)) {
+      console.log(
+        `[ai-canary] ${context.provider}/${label}: skipped (unsupported role)`,
+      );
+      continue;
+    }
+    probeRuns.push({
+      label,
+      run: async (signal) => {
+        await probe.run(context, signal);
+      },
+      timeoutMs: probe.timeoutMs,
+    });
+  }
+  return probeRuns;
 };
 
 const runWeeklyCanaryProbes = async (
