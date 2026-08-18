@@ -1295,6 +1295,7 @@ type Messages = {
         "row_length_mismatch": "The number of cells does not match the header.";
         "tax_id_required": "A tax ID is required under this validation scheme.";
         "too_long": "A value is too long.";
+        "too_many_custom_fields": "There are too many custom fields.";
         "too_many_tags": "There are too many tags, or a tag is too long.";
       };
       "mapDescription": "Check the suggested mapping. Each stella field can be used once.";

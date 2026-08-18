@@ -1292,6 +1292,7 @@
         "row_length_mismatch": "Počet buniek nezodpovedá hlavičke.",
         "tax_id_required": "Pri tejto kontrole je daňové identifikačné číslo povinné.",
         "too_long": "Hodnota je príliš dlhá.",
+        "too_many_custom_fields": "Vlastných polí je príliš veľa.",
         "too_many_tags": "Značiek je príliš veľa alebo je niektorá značka príliš dlhá."
       },
       "mapDescription": "Skontrolujte navrhované priradenie. Každé pole stella možno použiť iba raz.",

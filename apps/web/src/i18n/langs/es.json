@@ -1292,6 +1292,7 @@
         "row_length_mismatch": "El número de celdas no coincide con el encabezado.",
         "tax_id_required": "Con este esquema de validación el NIF es obligatorio.",
         "too_long": "Hay un valor demasiado largo.",
+        "too_many_custom_fields": "Hay demasiados campos personalizados.",
         "too_many_tags": "Hay demasiadas etiquetas o alguna es demasiado larga."
       },
       "mapDescription": "Comprueba la asociación sugerida. Cada campo de stella solo se puede usar una vez.",

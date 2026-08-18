@@ -1292,6 +1292,7 @@
         "row_length_mismatch": "Liczba komórek nie odpowiada nagłówkowi.",
         "tax_id_required": "W tym schemacie weryfikacji identyfikator podatkowy jest wymagany.",
         "too_long": "Wartość jest zbyt długa.",
+        "too_many_custom_fields": "Jest zbyt wiele pól niestandardowych.",
         "too_many_tags": "Tagów jest zbyt wiele lub jeden z nich jest zbyt długi."
       },
       "mapDescription": "Sprawdź sugerowane przypisanie. Każde pole stella może być użyte tylko raz.",

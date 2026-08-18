@@ -11,7 +11,10 @@ import {
   type ContactImportTargetField,
 } from "@stll/api-contract";
 
-import { contactCustomFieldSchema } from "@/api/db/schema-validators";
+import {
+  contactCustomFieldSchema,
+  contactMetadataSchema,
+} from "@/api/db/schema-validators";
 import {
   inspectContactImportDocument,
   parseContactImportDocument,
@@ -100,7 +103,9 @@ describe("contact import document", () => {
       "Name, legal;Email\nAcme, s.r.o.;a@example.com",
     );
 
-    expect(Result.isError(result)).toBe(true);
+    expect(Result.isError(result) && result.error.message).toBe(
+      "Ambiguous contact import delimiter",
+    );
   });
 
   test("rejects rows beyond the import bound without parsing the suffix", () => {
@@ -112,7 +117,11 @@ describe("contact import document", () => {
       `Name\n${rows.join("\n")}\n"unterminated`,
     );
 
-    expect(Result.isError(result)).toBe(true);
+    // The row bound must fire before the parser reaches the broken suffix;
+    // an "invalid file" rejection would mean the whole text was parsed.
+    expect(Result.isError(result) && result.error.message).toBe(
+      `Too many contacts. Maximum ${CONTACT_IMPORT_MAX_ROWS} per import.`,
+    );
   });
 
   test("previews normalized contacts and reports invalid rows", () => {
@@ -194,6 +203,15 @@ describe("labeled contact import blocks", () => {
       ],
       ["Acme Ltda", VALID_CNPJ, "", "", "", "", "contato@acme.com", ""],
     ]);
+  });
+
+  test("keeps every value of a label repeated inside one block", () => {
+    const document = parseDocument(
+      "Nome: Dupla\nE-mail: a@example.com\nE-mail: b@example.com",
+    );
+
+    expect(document.headers).toEqual(["Nome", "E-mail"]);
+    expect(document.rows).toEqual([["Dupla", "a@example.com; b@example.com"]]);
   });
 
   test("collapses labels that alias one field into a single column", () => {
@@ -463,6 +481,46 @@ describe("candidate validation", () => {
     expect(issues).toEqual([]);
     expect(contact.taxId).toBe("12345678909");
     expect(input.taxId).toBe(VALID_CPF);
+  });
+
+  test("reports custom fields the contact schema could not store", () => {
+    const labelLimit = contactCustomFieldSchema.properties.label.maxLength ?? 0;
+    const countLimit =
+      contactMetadataSchema.properties.customFields.maxItems ?? 0;
+    expect(labelLimit).toBeGreaterThan(0);
+    expect(countLimit).toBeGreaterThan(0);
+
+    const tooManyIssues = validateContactImportCandidate({
+      candidate: candidate({
+        metadata: {
+          customFields: Array.from({ length: countLimit + 1 }, (_, index) => ({
+            id: `f-${index}`,
+            label: `Field ${index}`,
+            value: "x",
+          })),
+        },
+      }),
+      taxIdScheme: "none",
+      rowNumber: 1,
+    }).issues;
+    expect(tooManyIssues).toEqual([
+      { code: "too_many_custom_fields", field: null, rowNumber: 1 },
+    ]);
+
+    const longLabelIssues = validateContactImportCandidate({
+      candidate: candidate({
+        metadata: {
+          customFields: [
+            { id: "f", label: "L".repeat(labelLimit + 1), value: "x" },
+          ],
+        },
+      }),
+      taxIdScheme: "none",
+      rowNumber: 1,
+    }).issues;
+    expect(longLabelIssues).toEqual([
+      { code: "too_long", field: null, rowNumber: 1 },
+    ]);
   });
 
   test("requires a tax id under a checksum scheme, not under none", () => {

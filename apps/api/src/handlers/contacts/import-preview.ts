@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { CONTACT_IMPORT_MAPPING_MAX_CHARS } from "@stll/api-contract";
+
 import {
   parseContactImportDocument,
   parseContactImportMappingText,
@@ -12,8 +14,8 @@ import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 
 const importPreviewBodySchema = t.Object({
   file: t.File({ maxSize: FILE_SIZE_LIMITS.dataImport }),
-  /** The mapping, JSON-encoded by the client. */
-  mapping: t.String(),
+  /** The mapping, JSON-encoded by the client; bounded before it is parsed. */
+  mapping: t.String({ maxLength: CONTACT_IMPORT_MAPPING_MAX_CHARS }),
 });
 
 const config = {

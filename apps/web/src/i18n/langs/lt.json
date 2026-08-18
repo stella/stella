@@ -1292,6 +1292,7 @@
         "row_length_mismatch": "Langelių skaičius neatitinka antraštės.",
         "tax_id_required": "Pagal šią tikrinimo schemą mokesčių mokėtojo kodas privalomas.",
         "too_long": "Reikšmė per ilga.",
+        "too_many_custom_fields": "Per daug pasirinktinių laukų.",
         "too_many_tags": "Žymų per daug arba žyma yra per ilga."
       },
       "mapDescription": "Patikrinkite siūlomą susiejimą. Kiekvieną „stella“ lauką galima naudoti tik vieną kartą.",

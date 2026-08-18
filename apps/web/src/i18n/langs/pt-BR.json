@@ -1292,6 +1292,7 @@
         "row_length_mismatch": "O número de células não corresponde ao cabeçalho.",
         "tax_id_required": "Neste esquema de validação o CPF/CNPJ é obrigatório.",
         "too_long": "Um valor é muito longo.",
+        "too_many_custom_fields": "Há campos personalizados demais.",
         "too_many_tags": "Há etiquetas demais ou alguma etiqueta é muito longa."
       },
       "mapDescription": "Confira a associação sugerida. Cada campo do stella pode ser usado apenas uma vez.",

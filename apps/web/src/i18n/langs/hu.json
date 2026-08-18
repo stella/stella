@@ -1292,6 +1292,7 @@
         "row_length_mismatch": "A cellák száma nem egyezik a fejlécével.",
         "tax_id_required": "Ennél az ellenőrzési sémánál az adóazonosító kötelező.",
         "too_long": "Az érték túl hosszú.",
+        "too_many_custom_fields": "Túl sok az egyéni mező.",
         "too_many_tags": "Túl sok címke van, vagy valamelyik címke túl hosszú."
       },
       "mapDescription": "Ellenőrizze a javasolt párosítást. Minden stella-mező csak egyszer használható.",

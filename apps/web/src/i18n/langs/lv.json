@@ -1292,6 +1292,7 @@
         "row_length_mismatch": "Šūnu skaits neatbilst galvenei.",
         "tax_id_required": "Šajā pārbaudes shēmā nodokļu maksātāja numurs ir obligāts.",
         "too_long": "Vērtība ir pārāk gara.",
+        "too_many_custom_fields": "Pārāk daudz pielāgoto lauku.",
         "too_many_tags": "Atzīmju ir pārāk daudz vai kāda atzīme ir pārāk gara."
       },
       "mapDescription": "Pārbaudiet ieteikto sasaisti. Katru stella lauku var izmantot tikai vienreiz.",

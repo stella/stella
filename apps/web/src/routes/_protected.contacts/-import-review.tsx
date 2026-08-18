@@ -107,6 +107,8 @@ const IMPORT_ISSUE_LABELS = {
   [CONTACT_IMPORT_ISSUE_CODE.TAX_ID_REQUIRED]:
     "contacts.importStudio.issue.tax_id_required",
   [CONTACT_IMPORT_ISSUE_CODE.TOO_LONG]: "contacts.importStudio.issue.too_long",
+  [CONTACT_IMPORT_ISSUE_CODE.TOO_MANY_CUSTOM_FIELDS]:
+    "contacts.importStudio.issue.too_many_custom_fields",
   [CONTACT_IMPORT_ISSUE_CODE.TOO_MANY_TAGS]:
     "contacts.importStudio.issue.too_many_tags",
 } as const satisfies Record<ContactImportIssueCode, TranslationKey>;

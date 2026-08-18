@@ -280,6 +280,7 @@ const delimiterScore = (rows: readonly string[][]): number => {
 // A `Label: value` line: the label carries no delimiter character, so a real
 // CSV/TSV record can never be mistaken for one.
 const LABELED_LINE_RE = /^[^:\t,;]{1,64}:/u;
+const LABELED_REPEAT_SEPARATOR = "; ";
 
 const splitLines = (text: string): string[] =>
   text.replaceAll("\r\n", "\n").split("\n");
@@ -365,13 +366,21 @@ const parseLabeledDocument = (text: string): ContactImportDocument => {
     }
   }
 
+  // A label repeated inside one block (two `E-mail:` lines) keeps every
+  // value, joined so the reviewer sees both; for a single-valued field the
+  // validator then reports the combined value instead of a value vanishing.
   const rows = blocks.map((block) => {
     const row = Array.from({ length: headers.length }, () => "");
     for (const { token, value } of block) {
       const index = headerIndexes.get(columnKey(token));
-      if (index !== undefined) {
-        row[index] = value;
+      if (index === undefined) {
+        continue;
       }
+      const existing = row[index];
+      row[index] =
+        existing && value
+          ? `${existing}${LABELED_REPEAT_SEPARATOR}${value}`
+          : existing || value;
     }
     return row;
   });
@@ -767,12 +776,20 @@ export const validateContactImportCandidate = ({
     report(CONTACT_IMPORT_ISSUE_CODE.TOO_MANY_TAGS, "tags");
   }
 
-  if (
-    candidate.metadata?.customFields?.some(
-      ({ value }) => value.length > CONTACT_IMPORT_CUSTOM_FIELD_VALUE_LIMIT,
-    )
-  ) {
-    report(CONTACT_IMPORT_ISSUE_CODE.TOO_LONG, null);
+  const customFields = candidate.metadata?.customFields;
+  if (customFields) {
+    if (customFields.length > CONTACT_IMPORT_CUSTOM_FIELDS_LIMIT) {
+      report(CONTACT_IMPORT_ISSUE_CODE.TOO_MANY_CUSTOM_FIELDS, null);
+    }
+    if (
+      customFields.some(
+        ({ label, value }) =>
+          label.length > CONTACT_IMPORT_CUSTOM_FIELD_LABEL_LIMIT ||
+          value.length > CONTACT_IMPORT_CUSTOM_FIELD_VALUE_LIMIT,
+      )
+    ) {
+      report(CONTACT_IMPORT_ISSUE_CODE.TOO_LONG, null);
+    }
   }
 
   if (taxIdScheme === "none") {

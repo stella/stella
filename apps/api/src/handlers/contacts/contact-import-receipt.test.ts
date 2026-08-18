@@ -26,4 +26,28 @@ describe("contact import receipt", () => {
       fingerprintContactImport([{ ...rows[0], displayName: "Mariana" }]),
     );
   });
+
+  test("ignores property order and absent optionals", () => {
+    const rows = [
+      {
+        id: "one",
+        displayName: "Maria",
+        emails: [{ address: "m@example.com", type: "work", isPrimary: true }],
+        notes: undefined,
+      },
+    ];
+    const reordered = [
+      {
+        emails: [{ isPrimary: true, type: "work", address: "m@example.com" }],
+        displayName: "Maria",
+        id: "one",
+      },
+    ];
+
+    // The fixture must differ textually, or the equality proves nothing.
+    expect(JSON.stringify(rows)).not.toBe(JSON.stringify(reordered));
+    expect(fingerprintContactImport(rows)).toBe(
+      fingerprintContactImport(reordered),
+    );
+  });
 });

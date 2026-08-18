@@ -1292,6 +1292,7 @@
         "row_length_mismatch": "Lahtrite arv ei vasta päisele.",
         "tax_id_required": "Selle kontrolliskeemi puhul on maksukohustuslase number kohustuslik.",
         "too_long": "Väärtus on liiga pikk.",
+        "too_many_custom_fields": "Kohandatud välju on liiga palju.",
         "too_many_tags": "Silte on liiga palju või mõni silt on liiga pikk."
       },
       "mapDescription": "Kontrolli soovitatud vastendust. Iga stella välja saab kasutada ühe korra.",
