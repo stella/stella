@@ -24,6 +24,11 @@ import type {
   CourtWeightEntry,
   CourtWeightMap,
 } from "@/api/handlers/case-law/court-weights";
+import {
+  POLARITY,
+  POLARITY_AUTHORITY_WEIGHT,
+} from "@/api/handlers/case-law/polarity/consts";
+import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
 
 /** Average (Julian) year, used for citation-age decay. A duration. */
 const MS_PER_YEAR = 365.25 * DAY_IN_MS;
@@ -131,16 +136,33 @@ export const recencyFactor = (
 
 // -- Combined score ------------------------------------------------------
 
-type CitationInput = {
+/**
+ * Authority weight for a citation's polarity. An unclassified citation (null)
+ * weighs the same as `unknown`, which is what keeps the score from moving as
+ * classification coverage grows rather than as the case law changes.
+ */
+export const polarityWeight = (polarity: Polarity | null): number =>
+  POLARITY_AUTHORITY_WEIGHT[polarity ?? POLARITY.UNKNOWN];
+
+/** One incoming citation, as the score reads it. */
+export type CitationInput = {
   citingCourt: string;
   citingDate: Date | string | null;
+  /** Null while the citation has not been classified. */
+  polarity?: Polarity | null;
 };
 
 /**
  * Compute the weighted citation sum for a single decision.
  * Each citation contributes:
  *
- *   courtWeight(citingCourt) * recencyFactor(citingDate)
+ *   polarityWeight(polarity)
+ *     * courtWeight(citingCourt)
+ *     * recencyFactor(citingDate)
+ *
+ * A negative treatment therefore adds nothing: the court that overruled or
+ * distinguished the decision is not vouching for it. It is still a citation
+ * everywhere else — `citation_count` and the citator both keep it.
  */
 export const weightedCitationSum = (
   citations: CitationInput[],
@@ -150,7 +172,9 @@ export const weightedCitationSum = (
   let sum = 0;
   for (const c of citations) {
     sum +=
-      courtWeight(c.citingCourt, weightMap) * recencyFactor(c.citingDate, now);
+      polarityWeight(c.polarity ?? null) *
+      courtWeight(c.citingCourt, weightMap) *
+      recencyFactor(c.citingDate, now);
   }
   return sum;
 };
@@ -169,6 +193,23 @@ export const citationScore = (
 ): number => Math.log(1 + weightedCitationSum(citations, now, weightMap));
 
 // -- SQL fragments -------------------------------------------------------
+
+/**
+ * The SQL twin of `polarityWeight()`, rendered from the same map so a new
+ * polarity cannot reach the database with no weight decided for it. NULL
+ * falls to the ELSE branch, which is `unknown`'s weight by construction.
+ */
+export const polarityWeightSql = (polarityColumn: string): string => {
+  const cases = Object.entries(POLARITY_AUTHORITY_WEIGHT)
+    .filter(([polarity]) => polarity !== POLARITY.UNKNOWN)
+    .map(
+      ([polarity, weight]) =>
+        `WHEN ${polarityColumn} = '${polarity}' THEN ${weight}`,
+    )
+    .join("\n      ");
+
+  return `CASE ${cases}\n      ELSE ${POLARITY_AUTHORITY_WEIGHT[POLARITY.UNKNOWN]} END`;
+};
 
 /**
  * Build a SQL CASE expression for court weights.

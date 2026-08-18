@@ -4,9 +4,15 @@ import {
   citationScore,
   courtWeight,
   courtWeightSql,
+  polarityWeightSql,
   recencyFactor,
   weightedCitationSum,
 } from "@/api/handlers/case-law/citation-score";
+import {
+  POLARITIES,
+  POLARITY,
+  POLARITY_AUTHORITY_WEIGHT,
+} from "@/api/handlers/case-law/polarity/consts";
 
 describe("courtWeight", () => {
   test("constitutional court → tier 4", () => {
@@ -241,6 +247,66 @@ describe("citationScore", () => {
       withDecisionAgeDivisor(weightedCitationSum(landmarkCitations, now), 20),
     ).toBeLessThan(
       withDecisionAgeDivisor(weightedCitationSum(recentCitations, now), 2),
+    );
+  });
+});
+
+describe("polarity weighting", () => {
+  const now = new Date("2025-01-01");
+  const citation = {
+    citingCourt: "Nejvyšší soud",
+    citingDate: "2024-01-01",
+  };
+
+  test("a negative treatment adds exactly nothing to the sum", () => {
+    const followed = weightedCitationSum(
+      [citation, { ...citation, polarity: POLARITY.POSITIVE }],
+      now,
+    );
+    const overruled = weightedCitationSum(
+      [citation, { ...citation, polarity: POLARITY.NEGATIVE }],
+      now,
+    );
+
+    // The two sets differ in one citation's polarity and nothing else, so the
+    // gap is that citation's whole contribution: court weight times decay.
+    const contribution = weightedCitationSum([citation], now);
+    expect(followed - overruled).toBeCloseTo(contribution, 12);
+    expect(overruled).toBeCloseTo(contribution, 12);
+    expect(
+      citationScore([{ ...citation, polarity: POLARITY.NEGATIVE }], now),
+    ).toBe(0);
+  });
+
+  test("an unclassified citation weighs the same as a classified neutral one", () => {
+    // The corpus is mostly unclassified; scoring null below `neutral` would
+    // rank classification coverage instead of case law.
+    const unclassified = weightedCitationSum([citation], now);
+    for (const polarity of POLARITIES) {
+      if (polarity !== POLARITY.NEGATIVE) {
+        expect(
+          weightedCitationSum([{ ...citation, polarity }], now),
+        ).toBeCloseTo(unclassified, 12);
+      }
+    }
+  });
+});
+
+describe("polarityWeightSql", () => {
+  test("renders one branch per non-default polarity, from the shared map", () => {
+    const generated = polarityWeightSql("c.polarity");
+    for (const polarity of POLARITIES) {
+      if (polarity === POLARITY.UNKNOWN) {
+        // `unknown` is the ELSE branch, which is also where NULL lands.
+        expect(generated).not.toContain(`= '${polarity}'`);
+      } else {
+        expect(generated).toContain(
+          `WHEN c.polarity = '${polarity}' THEN ${POLARITY_AUTHORITY_WEIGHT[polarity]}`,
+        );
+      }
+    }
+    expect(generated).toContain(
+      `ELSE ${POLARITY_AUTHORITY_WEIGHT[POLARITY.UNKNOWN]} END`,
     );
   });
 });

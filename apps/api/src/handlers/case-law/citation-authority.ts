@@ -47,7 +47,10 @@ import { panic } from "better-result";
 import type { SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
-import { courtWeightSql } from "@/api/handlers/case-law/citation-score";
+import {
+  courtWeightSql,
+  polarityWeightSql,
+} from "@/api/handlers/case-law/citation-score";
 import type { CourtWeightEntry } from "@/api/handlers/case-law/court-weights";
 import { redistributableCaseLawSourceSqlFor } from "@/api/lib/case-law/redistribution";
 import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
@@ -97,34 +100,33 @@ export type CitationContributionOptions = {
 /**
  * What one incoming citation adds to a decision's weighted sum.
  *
- * A seam, not an abstraction for its own sake. The ranking's open question is
- * whether a citation that distinguishes or overrules a decision should count
- * for less than one that follows it, and answering it must not mean rewriting
- * the aggregate, the batching and the equality test against `citationScore` at
- * the same time. Everything outside this expression is arithmetic that would
- * not change; a polarity multiplier is a change to this expression alone.
+ * A seam, not an abstraction for its own sake: the polarity term below landed
+ * as a change to this expression alone, leaving the aggregate, the batching
+ * and the equality test against `citationScore` untouched.
  *
- * No polarity term today, deliberately. `case_law_citations.polarity` is
- * populated for almost nothing, so a discount keyed on it would not express
- * "endorsements rank above criticism" — it would express "classified citations
- * rank below unclassified ones", which misranks the corpus in proportion to
- * how little of it has been classified.
+ * The polarity weighting is binary for the reason a graded one was rejected.
+ * `case_law_citations.polarity` is populated for almost nothing, so any scheme
+ * that moved unclassified citations off full weight would express "classified
+ * citations rank below unclassified ones" rather than "endorsements rank above
+ * criticism". Zeroing negative treatments alone leaves every unclassified
+ * citation exactly where it was.
  */
 export type CitationContributionWeight = (
   options: CitationContributionOptions,
 ) => SQL;
 
 /**
- * Court authority multiplied by a hyperbolic decay on the citing decision's
- * age. Mirrors `courtWeight(...) * recencyFactor(...)` in citation-score.ts,
- * which is the equality the tests assert.
+ * Polarity, court authority, and a hyperbolic decay on the citing decision's
+ * age. Mirrors `polarityWeight(...) * courtWeight(...) * recencyFactor(...)`
+ * in citation-score.ts, which is the equality the tests assert.
  */
-export const courtRecencyContributionWeight: CitationContributionWeight = ({
+export const citationContributionWeight: CitationContributionWeight = ({
   aliases,
   courtWeightEntries,
   now,
 }) =>
-  sql`(${sql.raw(courtWeightSql(`${aliases.citing}.court`, courtWeightEntries))})
+  sql`(${sql.raw(polarityWeightSql(`${aliases.citation}.polarity`))})
+      * (${sql.raw(courtWeightSql(`${aliases.citing}.court`, courtWeightEntries))})
       * (1.0 / (1 + COALESCE(
           extract(
             epoch FROM (
@@ -186,7 +188,7 @@ export type CitationAuthorityBatchOptions = {
    */
   window: CitationAuthoritySweepWindow;
   courtWeightEntries?: CourtWeightEntry[] | undefined;
-  /** Defaults to `courtRecencyContributionWeight`. */
+  /** Defaults to `citationContributionWeight`. */
   contributionWeight?: CitationContributionWeight | undefined;
 };
 
@@ -298,7 +300,7 @@ export const oldestCitationAuthorityRecomputeAt = async (
 export const recomputeCitationAuthorityBatch = async (
   tx: CitationAuthorityTx,
   {
-    contributionWeight = courtRecencyContributionWeight,
+    contributionWeight = citationContributionWeight,
     courtWeightEntries,
     limit,
     window,

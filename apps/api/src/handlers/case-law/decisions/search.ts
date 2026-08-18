@@ -9,7 +9,10 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
-import { courtWeightSql } from "@/api/handlers/case-law/citation-score";
+import {
+  courtWeightSql,
+  polarityWeightSql,
+} from "@/api/handlers/case-law/citation-score";
 import { loadCourtWeightEntriesForSql } from "@/api/handlers/case-law/court-weights";
 import { validCaseLawLanguageAlternateCountSql } from "@/api/handlers/case-law/decisions/language";
 import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
@@ -172,7 +175,8 @@ const searchPostgresDecisions = async (
     LATERAL (
       SELECT ln(1 + coalesce(
         sum(
-          (${courtWeightExpr})
+          (${polarityWeightSql("c.polarity")})
+          * (${courtWeightExpr})
           * (1.0 / (1 + COALESCE(extract(epoch FROM (now() - citing_d.decision_date)) / (365.25 * 86400), 1.0)))
         ),
         0
