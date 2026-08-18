@@ -1199,14 +1199,11 @@
     "emptyTitle": "Cree su primer contacto",
     "emptyVideoLabel": "Vista general de contactos",
     "extractProcuracao": {
-      "chooseFile": "Subir poder notarial (.docx)",
-      "dialogDescription": "Sube un poder notarial (.docx) y stella intentará identificar al otorgante o los otorgantes y sus datos.",
-      "dialogTitle": "Extraer de un poder notarial",
-      "extractOption": "Extraer de un poder notarial (.docx)",
+      "dropZone": "Suelta aquí el poder notarial (.docx) o haz clic para elegir un archivo",
+      "extracting": "Extrayendo poderdante(s)…",
       "fileHint": "Stella lee el documento y localiza automáticamente al otorgante (quien otorga el poder, no el abogado). Revisa el resultado antes de confirmar.",
       "fileTooLarge": "El archivo del poder debe tener 50 MB o menos.",
       "invalidFileType": "Selecciona un archivo .docx.",
-      "manualEntryOption": "Completar manualmente",
       "noOutorganteFound": "No se pudo identificar ningún otorgante en este documento.",
       "parseErrorGeneric": "No se pudieron extraer contactos de este documento.",
       "sourceTruncated": "Solo se analizó la primera parte de este documento extenso. Revisa con cuidado los contactos extraídos."

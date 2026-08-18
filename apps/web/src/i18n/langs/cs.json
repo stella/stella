@@ -1199,14 +1199,11 @@
     "emptyTitle": "Vytvořte první kontakt",
     "emptyVideoLabel": "Přehled kontaktů",
     "extractProcuracao": {
-      "chooseFile": "Nahrát plnou moc (.docx)",
-      "dialogDescription": "Nahrajte plnou moc (.docx) a stella se pokusí identifikovat zmocnitele a jejich údaje.",
-      "dialogTitle": "Extrahovat z plné moci",
-      "extractOption": "Extrahovat z plné moci (.docx)",
+      "dropZone": "Přetáhněte sem plnou moc (.docx), nebo klikněte a vyberte soubor",
+      "extracting": "Zjišťujeme zmocnitele…",
       "fileHint": "Stella přečte dokument a automaticky najde zmocnitele (toho, kdo uděluje plnou moc, ne advokáta). Před potvrzením výsledek zkontrolujte.",
       "fileTooLarge": "Soubor plné moci musí mít nejvýše 50 MB.",
       "invalidFileType": "Vyberte prosím soubor .docx.",
-      "manualEntryOption": "Zadat ručně",
       "noOutorganteFound": "V tomto dokumentu se nepodařilo identifikovat žádného zmocnitele.",
       "parseErrorGeneric": "Z tohoto dokumentu se nepodařilo extrahovat kontakty.",
       "sourceTruncated": "Byla analyzována pouze první část tohoto dlouhého dokumentu. Extrahované kontakty pečlivě zkontrolujte."

@@ -1199,14 +1199,11 @@
     "emptyTitle": "Crie seu primeiro contato",
     "emptyVideoLabel": "Visão geral dos contatos",
     "extractProcuracao": {
-      "chooseFile": "Enviar procuração (.docx)",
-      "dialogDescription": "Envie uma procuração (.docx) e a stella vai tentar identificar o(s) outorgante(s) e seus dados.",
-      "dialogTitle": "Extrair de procuração",
-      "extractOption": "Extrair de procuração (.docx)",
+      "dropZone": "Solte a procuração (.docx) aqui ou clique para escolher um arquivo",
+      "extracting": "Extraindo outorgante(s)…",
       "fileHint": "A Stella lê o documento e localiza o(s) outorgante(s) (quem concede a procuração, não o advogado) automaticamente. Revise o resultado antes de confirmar.",
       "fileTooLarge": "O arquivo da procuração deve ter no máximo 50 MB.",
       "invalidFileType": "Selecione um arquivo .docx.",
-      "manualEntryOption": "Preencher manualmente",
       "noOutorganteFound": "Não foi possível identificar nenhum outorgante neste documento.",
       "parseErrorGeneric": "Não foi possível extrair contatos deste documento.",
       "sourceTruncated": "Apenas a primeira parte deste documento longo foi analisada. Revise com atenção os contatos extraídos."

@@ -1,30 +1,19 @@
 import { useRef, useState } from "react";
-import type { RefObject } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
-import { AlertTriangleIcon, UploadIcon } from "lucide-react";
+import { AlertTriangleIcon, FileTextIcon, Loader2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-import {
-  Dialog,
-  DialogClose,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogPanel,
-  DialogPopup,
-  DialogTitle,
-} from "@stll/ui/components/dialog";
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
+import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { isDocxFile } from "@/lib/consts";
 import { useImportContacts } from "@/lib/contacts/mutations";
 import { contactsKeys } from "@/lib/contacts/queries";
-import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -48,21 +37,46 @@ import type {
 } from "@/routes/_protected.contacts/-parse-import";
 import { candidatesToRows } from "@/routes/_protected.contacts/-parse-procuracao";
 
-type ExtractProcuracaoDialogProps = {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-};
-
 const EXTRACTION_SOURCE_MAX_BYTES = 50 * 1024 * 1024;
 const EXTRACTION_UPLOAD_TIMEOUT_MS = 30 * 60 * 1000;
 
-export const ExtractProcuracaoDialog = ({
-  open,
-  onOpenChange,
-}: ExtractProcuracaoDialogProps) => {
+/**
+ * Where the procuração flow currently sits, as seen by the host dialog:
+ * `idle` shows the drop zone (plus whatever else the host renders),
+ * `review` shows editable outorgante rows, `done` shows the import receipt.
+ */
+export type ProcuracaoExtractionStage = "idle" | "review" | "done";
+
+type ProcuracaoExtractionState = {
+  stage: ProcuracaoExtractionStage;
+  isExtracting: boolean;
+  isConfirming: boolean;
+  rows: ParsedImportRow[];
+  results: ImportContactResult[] | null;
+  sourceTruncated: boolean;
+  validCount: number;
+  invalidCount: number;
+  canConfirm: boolean;
+  extractFile: (file: File) => Promise<void>;
+  updateField: (
+    rowIndex: number,
+    key: ParsedImportFieldKey,
+    value: string,
+  ) => void;
+  removeRow: (rowIndex: number) => void;
+  confirm: () => Promise<void>;
+  reset: () => void;
+};
+
+/**
+ * Upload a procuração, extract outorgante candidates, let the user edit them,
+ * and commit them through the reviewed contact import. Presentation lives in
+ * `ProcuracaoDropZone` and `ProcuracaoReview`; the host dialog decides where
+ * to place them.
+ */
+export const useProcuracaoExtraction = (): ProcuracaoExtractionState => {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const importContacts = useImportContacts();
 
   const [isExtracting, setIsExtracting] = useState(false);
@@ -80,7 +94,7 @@ export const ExtractProcuracaoDialog = ({
     setImportRequestId(null);
   };
 
-  const handleFileChange = async (file: File) => {
+  const extractFile = async (file: File) => {
     if (!isDocxFile(file)) {
       stellaToast.add({
         title: t("contacts.extractProcuracao.invalidFileType"),
@@ -200,7 +214,7 @@ export const ExtractProcuracaoDialog = ({
   const validRowVars = validRows.map(({ vars }) => vars);
   const invalidCount = rows.length - validRowVars.length;
 
-  const handleConfirm = async () => {
+  const confirm = async () => {
     if (!importRequestId) {
       return;
     }
@@ -234,151 +248,158 @@ export const ExtractProcuracaoDialog = ({
     }
   };
 
+  const stage = resolveStage({ results, rowCount: rows.length });
+
+  return {
+    stage,
+    isExtracting,
+    isConfirming: importContacts.isPending,
+    rows,
+    results,
+    sourceTruncated,
+    validCount: validRowVars.length,
+    invalidCount,
+    canConfirm: validRowVars.length > 0 && importRequestId !== null,
+    extractFile,
+    updateField,
+    removeRow,
+    confirm,
+    reset,
+  };
+};
+
+const resolveStage = ({
+  results,
+  rowCount,
+}: {
+  results: ImportContactResult[] | null;
+  rowCount: number;
+}): ProcuracaoExtractionStage => {
+  if (results) {
+    return "done";
+  }
+  if (rowCount > 0) {
+    return "review";
+  }
+  return "idle";
+};
+
+type ProcuracaoDropZoneProps = {
+  isExtracting: boolean;
+  onFile: (file: File) => void;
+};
+
+/**
+ * Visible drop target for a procuração `.docx`: drag a file onto it, or click
+ * (Enter/Space) to open the file picker. The host owns what happens with the
+ * file; this only guards for a single file and hands it over.
+ */
+export const ProcuracaoDropZone = ({
+  isExtracting,
+  onFile,
+}: ProcuracaoDropZoneProps) => {
+  const t = useTranslations();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { ref, isDropTarget } = useExternalFileDrop({
+    onDrop: (files) => {
+      const file = files.at(0);
+      if (file) {
+        onFile(file);
+      }
+    },
+    enabled: !isExtracting,
+  });
+
+  const openPicker = () => {
+    if (!isExtracting) {
+      fileInputRef.current?.click();
+    }
+  };
+
   return (
-    <Dialog
-      onOpenChange={(nextOpen) => {
-        onOpenChange(nextOpen);
-        if (!nextOpen) {
-          reset();
-        }
-      }}
-      open={open}
-    >
-      <DialogPopup className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>
-            {t("contacts.extractProcuracao.dialogTitle")}
-          </DialogTitle>
-          <DialogDescription>
-            {results
-              ? t("contacts.import.resultsSummary", {
-                  created: results.filter((r) => r.status === "created").length,
-                  skipped: results.filter((r) => r.status === "skipped").length,
-                })
-              : t("contacts.extractProcuracao.dialogDescription")}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogPanel className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto">
-          <ExtractProcuracaoDialogBody
-            fileInputRef={fileInputRef}
-            invalidCount={invalidCount}
-            isExtracting={isExtracting}
-            onFieldChange={updateField}
-            onFileChange={(file) =>
-              detached(
-                handleFileChange(file),
-                "contact-extract-procuracao.upload",
-              )
-            }
-            onRemoveRow={removeRow}
-            results={results}
-            rows={rows}
-            sourceTruncated={sourceTruncated}
-            validCount={validRowVars.length}
-          />
-        </DialogPanel>
-        <DialogFooter>
-          <DialogClose render={<Button variant="outline" />}>
-            {t(results ? "common.close" : "common.cancel")}
-          </DialogClose>
-          {!results && rows.length > 0 && (
-            <Button
-              disabled={validRowVars.length === 0 || !importRequestId}
-              loading={importContacts.isPending}
-              onClick={() =>
-                detached(handleConfirm(), "contact-extract-procuracao.confirm")
-              }
-              type="button"
-            >
-              {t("contacts.import.confirmAction")}
-            </Button>
+    <div ref={ref}>
+      <button
+        aria-busy={isExtracting}
+        className={cn(
+          "bg-muted/20 hover:bg-muted/40 focus-visible:ring-ring flex w-full flex-col items-center gap-1.5 rounded-lg border border-dashed px-4 py-5 text-center transition-colors focus-visible:ring-2 focus-visible:outline-none",
+          isDropTarget && "border-primary bg-primary/5",
+          isExtracting && "cursor-progress",
+        )}
+        disabled={isExtracting}
+        onClick={openPicker}
+        type="button"
+      >
+        {isExtracting ? (
+          <Loader2Icon className="text-muted-foreground size-5 animate-spin" />
+        ) : (
+          <FileTextIcon className="text-muted-foreground size-5" />
+        )}
+        <span className="text-sm font-medium">
+          {t(
+            isExtracting
+              ? "contacts.extractProcuracao.extracting"
+              : "contacts.extractProcuracao.dropZone",
           )}
-        </DialogFooter>
-      </DialogPopup>
-    </Dialog>
+        </span>
+        <span className="text-muted-foreground text-xs">
+          {t("contacts.extractProcuracao.fileHint")}
+        </span>
+      </button>
+      <input
+        accept=".docx"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) {
+            onFile(file);
+          }
+          event.target.value = "";
+        }}
+        ref={fileInputRef}
+        type="file"
+      />
+    </div>
   );
 };
 
-type ExtractProcuracaoDialogBodyProps = {
-  isExtracting: boolean;
-  results: ImportContactResult[] | null;
-  rows: ParsedImportRow[];
-  sourceTruncated: boolean;
-  validCount: number;
-  invalidCount: number;
-  fileInputRef: RefObject<HTMLInputElement | null>;
-  onFileChange: (file: File) => void;
-  onFieldChange: (
-    rowIndex: number,
-    key: ParsedImportFieldKey,
-    value: string,
-  ) => void;
-  onRemoveRow: (rowIndex: number) => void;
+type ProcuracaoReviewProps = {
+  extraction: Pick<
+    ProcuracaoExtractionState,
+    | "invalidCount"
+    | "removeRow"
+    | "results"
+    | "rows"
+    | "sourceTruncated"
+    | "updateField"
+    | "validCount"
+  >;
 };
 
-const ExtractProcuracaoDialogBody = ({
-  isExtracting,
-  results,
-  rows,
-  sourceTruncated,
-  validCount,
-  invalidCount,
-  fileInputRef,
-  onFileChange,
-  onFieldChange,
-  onRemoveRow,
-}: ExtractProcuracaoDialogBodyProps) => {
+/** Editable outorgante rows before confirmation, or the receipt after it. */
+export const ProcuracaoReview = ({ extraction }: ProcuracaoReviewProps) => {
   const t = useTranslations();
-  const truncationWarning = sourceTruncated ? (
-    <p className="bg-warning/10 text-warning-foreground flex items-start gap-2 rounded-md p-3 text-xs">
-      <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" />
-      {t("contacts.extractProcuracao.sourceTruncated")}
-    </p>
-  ) : null;
+  const {
+    invalidCount,
+    removeRow,
+    results,
+    rows,
+    sourceTruncated,
+    updateField,
+    validCount,
+  } = extraction;
 
   if (results) {
     return <ImportResultsList results={results} />;
   }
 
-  if (rows.length === 0) {
-    return (
-      <div className="flex flex-col items-start gap-2">
-        {truncationWarning}
-        <Button
-          disabled={isExtracting}
-          loading={isExtracting}
-          onClick={() => fileInputRef.current?.click()}
-          size="sm"
-          type="button"
-          variant="outline"
-        >
-          <UploadIcon className="size-3.5" />
-          {t("contacts.extractProcuracao.chooseFile")}
-        </Button>
-        <span className="text-muted-foreground text-xs">
-          {t("contacts.extractProcuracao.fileHint")}
-        </span>
-        <input
-          accept=".docx"
-          className="hidden"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (!file) {
-              return;
-            }
-            onFileChange(file);
-            event.target.value = "";
-          }}
-          ref={fileInputRef}
-          type="file"
-        />
-      </div>
-    );
-  }
-
   return (
     <>
-      {truncationWarning}
+      {sourceTruncated && (
+        <p className="bg-warning/10 text-warning-foreground flex items-start gap-2 rounded-md p-3 text-xs">
+          <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" />
+          {t("contacts.extractProcuracao.sourceTruncated")}
+        </p>
+      )}
       <p className="text-muted-foreground text-xs">
         {t("contacts.import.previewSummary", {
           valid: validCount,
@@ -388,10 +409,8 @@ const ExtractProcuracaoDialogBody = ({
       {rows.map((row) => (
         <ImportRowCard
           key={row.rowIndex}
-          onFieldChange={(key, value) =>
-            onFieldChange(row.rowIndex, key, value)
-          }
-          onRemove={() => onRemoveRow(row.rowIndex)}
+          onFieldChange={(key, value) => updateField(row.rowIndex, key, value)}
+          onRemove={() => removeRow(row.rowIndex)}
           row={row}
         />
       ))}

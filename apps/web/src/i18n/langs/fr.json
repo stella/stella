@@ -1199,14 +1199,11 @@
     "emptyTitle": "Créer votre premier contact",
     "emptyVideoLabel": "Vue d’ensemble des contacts",
     "extractProcuracao": {
-      "chooseFile": "Téléverser une procuration (.docx)",
-      "dialogDescription": "Téléversez une procuration (.docx) et stella tentera d'identifier le(s) mandant(s) et leurs informations.",
-      "dialogTitle": "Extraire d'une procuration",
-      "extractOption": "Extraire d'une procuration (.docx)",
+      "dropZone": "Déposez la procuration (.docx) ici ou cliquez pour choisir un fichier",
+      "extracting": "Extraction du ou des mandants…",
       "fileHint": "Stella lit le document et repère automatiquement le(s) mandant(s) (celui qui donne procuration, pas l'avocat). Vérifiez le résultat avant de confirmer.",
       "fileTooLarge": "Le fichier de procuration ne doit pas dépasser 50 Mo.",
       "invalidFileType": "Veuillez choisir un fichier .docx.",
-      "manualEntryOption": "Saisir manuellement",
       "noOutorganteFound": "Aucun mandant n'a pu être identifié dans ce document.",
       "parseErrorGeneric": "Impossible d'extraire des contacts de ce document.",
       "sourceTruncated": "Seule la première partie de ce long document a été analysée. Vérifiez attentivement les contacts extraits."

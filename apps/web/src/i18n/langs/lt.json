@@ -1199,14 +1199,11 @@
     "emptyTitle": "Sukurkite pirmąjį kontaktą",
     "emptyVideoLabel": "Kontaktų apžvalga",
     "extractProcuracao": {
-      "chooseFile": "Įkelti įgaliojimą (.docx)",
-      "dialogDescription": "Įkelkite įgaliojimą (.docx), o stella pabandys nustatyti įgaliotoją (-us) ir jų duomenis.",
-      "dialogTitle": "Nustatyti iš įgaliojimo",
-      "extractOption": "Nustatyti iš įgaliojimo (.docx)",
+      "dropZone": "Nutempkite įgaliojimą (.docx) čia arba spustelėkite ir pasirinkite failą",
+      "extracting": "Nustatomas (-i) įgaliotojas (-ai)…",
       "fileHint": "Stella perskaito dokumentą ir automatiškai suranda įgaliotoją (asmenį, kuris suteikia įgaliojimą, o ne advokatą). Prieš patvirtindami peržiūrėkite rezultatą.",
       "fileTooLarge": "Įgaliojimo failas turi būti ne didesnis kaip 50 MB.",
       "invalidFileType": "Pasirinkite .docx failą.",
-      "manualEntryOption": "Pildyti rankiniu būdu",
       "noOutorganteFound": "Šiame dokumente nepavyko nustatyti nė vieno įgaliotojo.",
       "parseErrorGeneric": "Iš šio dokumento nepavyko nustatyti kontaktų.",
       "sourceTruncated": "Išanalizuota tik pirmoji šio ilgo dokumento dalis. Atidžiai patikrinkite ištrauktus kontaktus."

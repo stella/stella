@@ -1199,14 +1199,11 @@
     "emptyTitle": "Utwórz pierwszy kontakt",
     "emptyVideoLabel": "Przegląd kontaktów",
     "extractProcuracao": {
-      "chooseFile": "Prześlij pełnomocnictwo (.docx)",
-      "dialogDescription": "Prześlij pełnomocnictwo (.docx), a stella spróbuje zidentyfikować mocodawcę (mocodawców) i ich dane.",
-      "dialogTitle": "Wyodrębnij z pełnomocnictwa",
-      "extractOption": "Wyodrębnij z pełnomocnictwa (.docx)",
+      "dropZone": "Upuść tutaj pełnomocnictwo (.docx) lub kliknij, aby wybrać plik",
+      "extracting": "Wyodrębnianie mocodawcy(-ów)…",
       "fileHint": "Stella odczytuje dokument i automatycznie odnajduje mocodawcę (osobę udzielającą pełnomocnictwa, nie prawnika). Przed potwierdzeniem sprawdź wynik.",
       "fileTooLarge": "Plik pełnomocnictwa nie może przekraczać 50 MB.",
       "invalidFileType": "Wybierz plik .docx.",
-      "manualEntryOption": "Wypełnij ręcznie",
       "noOutorganteFound": "Nie udało się zidentyfikować żadnego mocodawcy w tym dokumencie.",
       "parseErrorGeneric": "Nie udało się wyodrębnić kontaktów z tego dokumentu.",
       "sourceTruncated": "Przeanalizowano tylko pierwszą część tego długiego dokumentu. Dokładnie sprawdź wyodrębnione kontakty."

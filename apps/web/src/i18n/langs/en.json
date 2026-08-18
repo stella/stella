@@ -1199,14 +1199,11 @@
     "emptyTitle": "Create your first contact",
     "emptyVideoLabel": "Contacts overview",
     "extractProcuracao": {
-      "chooseFile": "Upload power of attorney (.docx)",
-      "dialogDescription": "Upload a power-of-attorney document (.docx) and stella will try to identify the grantor(s) and their details.",
-      "dialogTitle": "Extract from power of attorney",
-      "extractOption": "Extract from power of attorney (.docx)",
+      "dropZone": "Drop a power of attorney (.docx) here, or click to choose a file",
+      "extracting": "Extracting grantor(s)…",
       "fileHint": "Stella reads the document and finds the grantor(s) — not the lawyer — automatically. Review the results before confirming.",
       "fileTooLarge": "The power-of-attorney file must be 50 MB or smaller.",
       "invalidFileType": "Please choose a .docx file.",
-      "manualEntryOption": "Fill in manually",
       "noOutorganteFound": "No grantor could be identified in this document.",
       "parseErrorGeneric": "Could not extract contacts from this document.",
       "sourceTruncated": "Only the first part of this long document was analyzed. Review the extracted contacts carefully."
