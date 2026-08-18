@@ -329,3 +329,31 @@ test("the legislation family gets its own fields + status tag, sharing the core"
   // status joins the tag fields for split pruning
   expect(config.doc_mapping.tag_fields).toContain("status");
 });
+
+// The point-in-time question — which consolidation was in force on date D — is
+// answered off these two fields, so they are fast: the engine evaluates the
+// window during the scan instead of the API re-deriving it per hit. Both stay
+// out of `tag_fields`, whose values a split records: a date's domain is
+// unbounded, and a tag field past the engine's per-split limit stops being
+// recorded, costing pruning everywhere.
+test("the legislation validity window is a pair of fast datetimes", () => {
+  const config = corpusIndexConfig("legislation", "legislation_v1_svk");
+  const window = ["version_valid_from", "version_valid_to"] as const;
+
+  for (const name of window) {
+    expect(
+      config.doc_mapping.field_mappings.find((f) => f.name === name),
+    ).toEqual({
+      name,
+      type: "datetime",
+      fast: true,
+      input_formats: ["%Y-%m-%d", "rfc3339", "unix_timestamp"],
+    });
+    expect(config.doc_mapping.tag_fields).not.toContain(name);
+  }
+
+  // Nullable on both ends, and neither is the timestamp field: a source that
+  // publishes no window still has to be indexed, and an open-ended
+  // `version_valid_to` is how the current consolidation says it has no end.
+  expect(config.doc_mapping.timestamp_field).toBeUndefined();
+});

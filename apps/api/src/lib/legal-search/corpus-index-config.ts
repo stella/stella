@@ -4,7 +4,8 @@ import type { CorpusFamily } from "@/api/lib/legal-search/corpus-family";
  * corpus index index configuration, generic over document family. Shared
  * core fields apply to every family; each family adds its own
  * (case_law: court/decision_date/ecli/citation_*; legislation:
- * status/effective_date/eli). Notes that matter:
+ * status/effective_date/version_valid_from/version_valid_to/eli). Notes that
+ * matter:
  *
  * - `text` and `title` enable `fieldnorms` so BM25 scoring works
  *   (corpus index disables BM25 by default for latency).
@@ -251,6 +252,35 @@ const FAMILY_FIELDS: Record<CorpusFamily, CorpusIndexFieldMapping[]> = {
     { name: "status", type: "text", tokenizer: "raw", fast: true },
     {
       name: "effective_date",
+      type: "datetime",
+      fast: true,
+      input_formats: DATE_INPUT_FORMATS,
+    },
+    // The consolidation's point-in-time validity window, half-open
+    // `[version_valid_from, version_valid_to)`: the text in force on date D is
+    // the version with `version_valid_from <= D` and `version_valid_to > D`.
+    // A missing `version_valid_to` is the current consolidation, open-ended,
+    // so the upper half of that test is asked as a negation — a document
+    // without the field cannot match a range over it.
+    //
+    // Fast so an as-of filter is pushed into the engine and evaluated off the
+    // fast field, instead of being re-derived per hit after the scan. Both
+    // stay nullable (a source that publishes no window still has to be
+    // indexed) and neither is the timestamp field, for the same reason.
+    //
+    // Like every mapping here, these reach only indexes created after this
+    // change: the engine never diffs the mapping of an index that exists, and
+    // in `lenient` mode it would take the fields and drop them. An existing
+    // legislation index would therefore need a generation bump to serve an
+    // as-of filter — `corpusGeneration("legislation")` is the flip.
+    {
+      name: "version_valid_from",
+      type: "datetime",
+      fast: true,
+      input_formats: DATE_INPUT_FORMATS,
+    },
+    {
+      name: "version_valid_to",
       type: "datetime",
       fast: true,
       input_formats: DATE_INPUT_FORMATS,
