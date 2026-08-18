@@ -1,11 +1,10 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { legislationDocuments } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
+import { restrictLegislationDocumentUrls } from "@/api/handlers/legislation/ingestion/outbound-urls";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -21,68 +20,56 @@ import {
   storedCorpusWrite,
   writeCorpusDocument,
 } from "@/api/lib/legal-search/corpus-storage";
+import {
+  ADAPTER_TIMEOUT,
+  MAX_CYCLE_MS,
+  MAX_SYNC_PAGES,
+} from "@/api/lib/legal-search/ingestion-constants";
+import type { SliceCoverage } from "@/api/lib/legal-search/ingestion-types";
 import type {
-  DecisionSection,
-  EmptyAst,
-} from "@/api/lib/legal-search/document-types";
+  LegislationDocumentInput,
+  LegislationSourceAdapter,
+} from "@/api/lib/legal-search/legislation-ingestion-types";
+import {
+  RAW_SOURCE_FAMILY,
+  writeRawSourcePayload,
+} from "@/api/lib/legal-search/raw-source-storage";
+import type { WriteRawSourcePayload } from "@/api/lib/legal-search/raw-source-storage";
 import { logger } from "@/api/lib/observability/logger";
 
 /**
  * Legislation ingestion. The canonical, source-agnostic entry is
- * `processLegislationDocument` (store + upsert), which any source feeds —
- * a structured import today, or a `LegislationAdapter` (Slov-Lex /
- * eSbírka / Polish Sejm) once its source-specific fetch+parse is built.
- * The substrate (object storage, corpus index index, pg-fts projection,
- * search, erasure) is shared with case law via the `legislation` family.
+ * `processLegislationDocument` (store + upsert), which any source feeds;
+ * `runLegislationIngestion` drives one `LegislationSourceAdapter` through it.
+ * The substrate (object storage, corpus index, pg-fts projection, search,
+ * erasure) is shared with case law via the `legislation` family, and so is
+ * the adapter contract — see
+ * `apps/api/src/lib/legal-search/legislation-ingestion-types.ts`.
+ *
+ * Sanitisation is pipeline-level (`sanitizeInput`), so adapters must not
+ * sanitise. So is the outbound URL boundary (`restrictLegislationDocumentUrls`),
+ * so adapters declare their origins and do not check them.
  */
 
-export type LegislationStatus = "current" | "historical" | "repealed" | "draft";
-
-/** Normalized legislation document — what every source produces. */
-export type LegislationDocumentInput = {
-  sourceId: SafeId<"legislationSource">;
-  /** Work identifier (ELI / national statute id), shared across versions. */
-  eli: string;
-  title: string;
-  country: string;
-  language: string;
-  documentType?: string | null;
-  status?: LegislationStatus;
-  effectiveDate?: string | null;
-  /** Point-in-time consolidation window; null versionValidTo = current. */
-  versionValidFrom?: string | null;
-  versionValidTo?: string | null;
-  fulltext?: string | null;
-  sections?: DecisionSection[] | null;
-  ast?: DocumentAst | EmptyAst | null;
-  sourceUrl?: string | null;
-  documentUrl?: string | null;
-  metadata?: Record<string, unknown>;
-};
-
-export type ProcessLegislationResult = {
-  id: SafeId<"legislationDocument">;
-  inserted: boolean;
-  skipped: boolean;
-  /** Object-storage write failed; the row keeps its previous sourceHash so a re-ingest retries. */
-  corpusWriteFailed: boolean;
-};
-
-/**
- * A legislation source. Implement one per provider (Slov-Lex, eSbírka,
- * Polish Sejm ELI API). `fetchPage` returns normalized documents + the
- * next cursor; the runner persists them via processLegislationDocument.
- */
-export type LegislationAdapter = {
-  adapterKey: string;
-  fetchPage: (
-    cursor: string | null,
-    signal: AbortSignal,
-  ) => Promise<{
-    documents: LegislationDocumentInput[];
-    nextCursor: string | null;
-  }>;
-};
+/** What storing one legislation document produced. */
+export type ProcessLegislationResult =
+  | {
+      type: "stored";
+      id: SafeId<"legislationDocument">;
+      inserted: boolean;
+      skipped: boolean;
+      /** Object-storage write failed; the row keeps its previous sourceHash so a re-ingest retries. */
+      corpusWriteFailed: boolean;
+    }
+  | {
+      /**
+       * The publisher's payload could not be stored, so no row was
+       * written either. Writing one would persist the new sourceHash without
+       * its raw payload, and the dedup check would then skip this document
+       * forever — losing the payload rather than retrying it.
+       */
+      type: "source-raw-write-failed";
+    };
 
 const sanitizeInput = (
   input: LegislationDocumentInput,
@@ -94,6 +81,10 @@ const sanitizeInput = (
     input.fulltext === null || input.fulltext === undefined
       ? null
       : stripDangerousChars(input.fulltext),
+  sourceRaw:
+    input.sourceRaw === undefined
+      ? undefined
+      : stripDangerousChars(input.sourceRaw),
   metadata: sanitizeMetadata(input.metadata ?? {}),
 });
 
@@ -147,6 +138,11 @@ const preserveLegislationCorpusWriteRetry = async ({
  * payload — so a source re-emitting identical text with changed metadata
  * (title, status, dates, URLs) still updates the row instead of hitting
  * the dedup skip.
+ *
+ * `rawHash` is in it for the opposite reason: a publisher may change
+ * something this parser does not yet read, and without the observation
+ * fingerprint that change hashes identically and the row can never be
+ * refreshed once a later parser learns to read it.
  */
 const legislationSourceHash = (input: LegislationDocumentInput): string => {
   const hasher = new Bun.CryptoHasher("sha256");
@@ -167,23 +163,97 @@ const legislationSourceHash = (input: LegislationDocumentInput): string => {
       input.sourceUrl ?? null,
       input.documentUrl ?? null,
       input.metadata ?? {},
+      input.rawHash,
+      input.sourceRawContentType ?? null,
     ]),
   );
   return hasher.digest("hex");
 };
 
+/** The raw-payload pointers a row carries, and what a run may write to them. */
+type StoredSourceRaw = {
+  sourceRawS3Key: string | null;
+  sourceRawContentType: string | null;
+};
+
+const DEFAULT_SOURCE_RAW_CONTENT_TYPE = "text/plain";
+
+type StoreSourceRawOptions = {
+  input: LegislationDocumentInput;
+  existing: StoredSourceRaw | undefined;
+  writeSourceRaw: WriteRawSourcePayload;
+};
+
+/**
+ * Store this observation's payload and return the pointers the row
+ * should carry, or null when the write failed.
+ *
+ * An observation that carries no payload keeps whatever the row already
+ * records: a later listing-only refresh must not erase a payload an earlier
+ * fetch proved.
+ */
+const storeSourceRaw = async ({
+  input,
+  existing,
+  writeSourceRaw,
+}: StoreSourceRawOptions): Promise<StoredSourceRaw | null> => {
+  const stored = {
+    sourceRawS3Key: existing?.sourceRawS3Key ?? null,
+    sourceRawContentType: existing?.sourceRawContentType ?? null,
+  };
+  const data = input.sourceRaw;
+  if (data === undefined) {
+    return stored;
+  }
+  const contentType =
+    input.sourceRawContentType ?? DEFAULT_SOURCE_RAW_CONTENT_TYPE;
+  const written = await Result.tryPromise({
+    try: async () =>
+      await writeSourceRaw({
+        family: RAW_SOURCE_FAMILY.LEGISLATION,
+        sourceId: input.sourceId,
+        data,
+        contentType,
+        storedKey: stored.sourceRawS3Key,
+        storedContentType: stored.sourceRawContentType,
+      }),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(written)) {
+    logger.error("legislation.ingestion.source_raw_write_failed", {
+      sourceId: input.sourceId,
+      eli: input.eli,
+    });
+    captureError(written.error, {
+      sourceId: input.sourceId,
+      step: "processLegislationDocument.sourceRawWrite",
+    });
+    return null;
+  }
+  return { sourceRawS3Key: written.value, sourceRawContentType: contentType };
+};
+
+type ProcessLegislationDocumentOptions = {
+  /** Test seam; production writes through the object-storage client. */
+  writeSourceRaw?: WriteRawSourcePayload | undefined;
+};
+
 /**
  * Store + upsert one legislation document. Deduplicates by a source hash
  * over the corpus payload plus all persisted metadata: an unchanged
- * re-ingest is skipped. When corpus storage is on, the canonical
- * payload is written to object storage (outside the tx) and the row's
- * S3 keys + content hash are recorded so the indexers pick it up. The
- * pg-fts and corpus index projections are maintained by the backfill
- * loops (not inline), matching the case-law pipeline.
+ * re-ingest is skipped. The publisher's payload is stored first,
+ * because a row written without it would dedup-skip forever. When corpus
+ * storage is on, the canonical payload is written to object storage (outside
+ * the tx) and the row's S3 keys + content hash are recorded so the indexers
+ * pick it up. The pg-fts and corpus index projections are maintained by the
+ * backfill loops (not inline), matching the case-law pipeline.
  */
 export const processLegislationDocument = async (
   raw: LegislationDocumentInput,
   scopedDb: ScopedDb,
+  {
+    writeSourceRaw = writeRawSourcePayload,
+  }: ProcessLegislationDocumentOptions = {},
 ): Promise<ProcessLegislationResult> => {
   const input = sanitizeInput(raw);
   const text = input.fulltext ?? null;
@@ -204,6 +274,8 @@ export const processLegislationDocument = async (
         textS3Key: legislationDocuments.textS3Key,
         normalizedS3Key: legislationDocuments.normalizedS3Key,
         astS3Key: legislationDocuments.astS3Key,
+        sourceRawS3Key: legislationDocuments.sourceRawS3Key,
+        sourceRawContentType: legislationDocuments.sourceRawContentType,
       })
       .from(legislationDocuments)
       .where(
@@ -219,11 +291,17 @@ export const processLegislationDocument = async (
 
   if (existing?.sourceHash === sourceHash) {
     return {
+      type: "stored",
       id: existing.id,
       inserted: false,
       skipped: true,
       corpusWriteFailed: false,
     };
+  }
+
+  const sourceRaw = await storeSourceRaw({ input, existing, writeSourceRaw });
+  if (sourceRaw === null) {
+    return { type: "source-raw-write-failed" };
   }
 
   const values = {
@@ -244,6 +322,7 @@ export const processLegislationDocument = async (
     documentUrl: input.documentUrl ?? null,
     metadata: input.metadata ?? {},
     sourceHash,
+    ...sourceRaw,
   };
 
   const id = await scopedDb(async (tx) => {
@@ -334,12 +413,57 @@ export const processLegislationDocument = async (
     }
   }
 
-  return { id, inserted: !existing, skipped: false, corpusWriteFailed };
+  return {
+    type: "stored",
+    id,
+    inserted: !existing,
+    skipped: false,
+    corpusWriteFailed,
+  };
+};
+
+export type LegislationIngestionSource = {
+  id: SafeId<"legislationSource">;
+  syncCursor: string | null;
+  config?: Record<string, unknown> | undefined;
+};
+
+export type RunLegislationIngestionOptions = {
+  adapter: LegislationSourceAdapter;
+  source: LegislationIngestionSource;
+  scopedDb: ScopedDb;
+  signal: AbortSignal;
+  /** Cap for this cycle; defaults to the adapter's own, then MAX_SYNC_PAGES. */
+  maxPages?: number | undefined;
+  /** Test seam; production writes through the object-storage client. */
+  writeSourceRaw?: WriteRawSourcePayload;
+};
+
+export type RunLegislationIngestionResult = {
+  inserted: number;
+  skipped: number;
+  /**
+   * URL fields nulled at the outbound boundary, across every document of
+   * every page. Fields, not documents: the document is still stored, since a
+   * statute must not become unreachable because one of its links was
+   * off-policy.
+   */
+  urlsRefused: number;
+  /**
+   * What the source said each fully persisted slice holds. Returned rather
+   * than persisted: legislation has no coverage ledger yet (it arrives with
+   * the census), and dropping the adapter's own count on the floor is how a
+   * short crawl becomes indistinguishable from a quiet slice.
+   */
+  coverage: SliceCoverage[];
+  nextCursor: string | null;
 };
 
 /**
- * Drive a legislation adapter: fetch pages, persist each document, and
- * advance the source cursor. Bounded by maxPages per cycle.
+ * Drive a legislation adapter: fetch pages, check every URL against the
+ * adapter's declared origins, persist each document, and advance the source
+ * cursor. Bounded by pages per cycle, by the adapter's cycle timeout, and by
+ * its per-page timeout.
  */
 export const runLegislationIngestion = async ({
   adapter,
@@ -347,31 +471,91 @@ export const runLegislationIngestion = async ({
   scopedDb,
   signal,
   maxPages,
-}: {
-  adapter: LegislationAdapter;
-  source: { id: SafeId<"legislationSource">; syncCursor: string | null };
-  scopedDb: ScopedDb;
-  signal: AbortSignal;
-  maxPages: number;
-}): Promise<{
-  inserted: number;
-  skipped: number;
-  nextCursor: string | null;
-}> => {
+  writeSourceRaw,
+}: RunLegislationIngestionOptions): Promise<RunLegislationIngestionResult> => {
   let cursor = source.syncCursor;
   let inserted = 0;
   let skipped = 0;
+  let urlsRefused = 0;
+  const coverage: SliceCoverage[] = [];
 
-  for (let page = 0; page < maxPages; page += 1) {
-    if (signal.aborted) {
+  const pageLimit = maxPages ?? adapter.maxSyncPages ?? MAX_SYNC_PAGES;
+  const cycleSignal = AbortSignal.any([
+    signal,
+    AbortSignal.timeout(adapter.maxCycleMs ?? MAX_CYCLE_MS),
+  ]);
+
+  /**
+   * The publisher pause and the request as one step, so the pause spaces this
+   * page from the previous one and the page timeout starts at the request.
+   */
+  const fetchPagePaced = async (
+    pageIndex: number,
+    pageCursor: string | null,
+  ) => {
+    if (pageIndex > 0 && adapter.minRequestIntervalMs > 0) {
+      await Bun.sleep(adapter.minRequestIntervalMs);
+    }
+    return await adapter.fetchPage(
+      pageCursor,
+      source.config ?? {},
+      AbortSignal.any([
+        cycleSignal,
+        AbortSignal.timeout(adapter.pageTimeoutMs ?? ADAPTER_TIMEOUT.PAGE),
+      ]),
+    );
+  };
+
+  for (let page = 0; page < pageLimit; page += 1) {
+    if (cycleSignal.aborted) {
       break;
     }
     // oxlint-disable-next-line no-await-in-loop -- cursor pagination: each page consumes the cursor returned by the prior page
-    const { documents, nextCursor } = await adapter.fetchPage(cursor, signal);
+    const pageResult = await fetchPagePaced(page, cursor);
+    if (Result.isError(pageResult)) {
+      // Hold the cursor: the page this cursor names was never read, so
+      // advancing past it would skip whatever it held, permanently.
+      logger.error("legislation.ingestion.page_fetch_failed", {
+        adapterKey: adapter.key,
+        sourceId: source.id,
+        cursor: cursor ?? "",
+      });
+      break;
+    }
+
+    const { documents, nextCursor, coverage: pageCoverage } = pageResult.value;
     let corpusWriteFailures = 0;
-    for (const doc of documents) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential ingestion: ordered counters and per-page cursor hold on corpus-write failure
-      const result = await processLegislationDocument(doc, scopedDb);
+    let sourceRawWriteFailures = 0;
+    for (const document of documents) {
+      const checked = restrictLegislationDocumentUrls({
+        // The runner holds the source row, so it stamps the identity rather
+        // than making every adapter recover it from its config.
+        document: { ...document, sourceId: source.id },
+        hostPolicy: adapter.outboundHostPolicy,
+      });
+      for (const refusal of checked.refusals) {
+        urlsRefused += 1;
+        // Redacted by construction: the refused value stays inside the
+        // boundary, which reports only the field, host and reason.
+        logger.error("legislation.ingestion.document_url_refused", {
+          adapterKey: adapter.key,
+          sourceId: source.id,
+          eli: document.eli,
+          field: refusal.field,
+          host: refusal.host,
+          reason: refusal.reason,
+        });
+      }
+      // oxlint-disable-next-line no-await-in-loop -- sequential ingestion: ordered counters and per-page cursor hold on write failure
+      const result = await processLegislationDocument(
+        checked.document,
+        scopedDb,
+        { writeSourceRaw },
+      );
+      if (result.type === "source-raw-write-failed") {
+        sourceRawWriteFailures += 1;
+        continue;
+      }
       if (result.skipped) {
         skipped += 1;
       } else {
@@ -381,12 +565,17 @@ export const runLegislationIngestion = async ({
         corpusWriteFailures += 1;
       }
     }
-    if (corpusWriteFailures > 0) {
-      // Hold the cursor on a page with failed corpus writes: cursor
+    if (corpusWriteFailures > 0 || sourceRawWriteFailures > 0) {
+      // Hold the cursor on a page with failed object-storage writes: cursor
       // sources do not re-emit consumed pages, so advancing would leave
       // the preserved source-hash retry unreachable until the source
       // changes again.
       break;
+    }
+    // Only now: `collected` counts durably held records, so a page whose
+    // writes failed must not report coverage for what it did not store.
+    if (pageCoverage !== undefined) {
+      coverage.push(pageCoverage);
     }
     cursor = nextCursor;
     if (nextCursor === null || documents.length === 0) {
@@ -410,5 +599,5 @@ export const runLegislationIngestion = async ({
   }
   cursor = checkpoint.cursor;
 
-  return { inserted, skipped, nextCursor: cursor };
+  return { inserted, skipped, urlsRefused, coverage, nextCursor: cursor };
 };

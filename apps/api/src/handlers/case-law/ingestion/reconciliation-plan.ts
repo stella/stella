@@ -13,7 +13,7 @@ import { panic } from "better-result";
 
 import { DAY_IN_MS } from "@stll/time";
 
-import type { SourceReconciliation } from "@/api/lib/legal-search/ingestion-types";
+import type { SourceSliceWalk } from "@/api/lib/legal-search/ingestion-types";
 
 /**
  * How long a slice's ledger row stays authoritative. A publisher keeps adding
@@ -160,7 +160,7 @@ export const partitionShortSliceCandidates = (
  * the window yields only the slices that exist.
  */
 export const tipWindowSlices = (
-  reconciliation: SourceReconciliation,
+  reconciliation: SourceSliceWalk,
   now: Date,
 ): string[] => {
   if (reconciliation.tipWindowDays < 1) {

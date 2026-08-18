@@ -88,6 +88,13 @@ export const legislationDocuments = p.pgTable(
     documentUrl: p.varchar("document_url", { length: 2048 }),
     metadata: jsonb().$type<Record<string, unknown>>().default({}),
     sourceHash: p.varchar("source_hash", { length: 64 }),
+    /**
+     * Where the publisher's response for this Expression is kept, so
+     * a later parser can be replayed without re-crawling. Content-addressed;
+     * the twin of `case_law_decisions.source_raw_s3_key`.
+     */
+    sourceRawS3Key: p.varchar("source_raw_s3_key", { length: 512 }),
+    sourceRawContentType: p.varchar("source_raw_content_type", { length: 128 }),
     // Reuse the corpus ranking signal (cross-reference authority); 0 until
     // a legislation-specific signal is computed.
     citationAuthority: p
