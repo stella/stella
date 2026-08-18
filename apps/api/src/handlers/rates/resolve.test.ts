@@ -24,6 +24,7 @@ import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 import type { ValidatedOrgUserId } from "@/api/lib/validated-org-user-id";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createPropertyRunReclaimer } from "@/api/tests/property-run-reclaim";
 import {
   createTestIds,
   setupRlsTestData,
@@ -61,9 +62,11 @@ const isoDate = (dayOffset: number): string =>
 let testDb: TestDatabase;
 let ids: TestIds;
 let defaultTableId: SafeId<"rateTable">;
+let reclaimRun: () => Promise<void>;
 
 beforeAll(async () => {
   testDb = await getTestDb();
+  reclaimRun = createPropertyRunReclaimer(testDb, [rateEntries]);
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
 
@@ -217,6 +220,8 @@ describe("effective-dated rate resolution", () => {
             await testDb
               .delete(rateEntries)
               .where(eq(rateEntries.rateTableId, defaultTableId));
+            // Otherwise the process grows with numRuns, not with the input.
+            await reclaimRun();
             if (rows.length > 0) {
               await testDb.insert(rateEntries).values(
                 rows.map((row) => ({
