@@ -90,11 +90,12 @@ import { logger } from "@/api/lib/observability/logger";
 /** Parked items rebuilt in one unit; each costs a publisher fetch. */
 const PARKED_RETRY_BATCH = 25;
 /**
- * Decisions ingested per slice walk. A slice the source barely stored can be
- * missing hundreds; the cap keeps one unit finite, and the slice records short
- * afterwards, so it is selected again rather than forgotten.
+ * Decisions ingested per slice walk unless the unit says otherwise. A slice
+ * the source barely stored can be missing hundreds; the cap keeps one unit
+ * finite, and the slice records short afterwards, so it is selected again
+ * rather than forgotten.
  */
-const SLICE_INGEST_BUDGET = 50;
+export const DEFAULT_SLICE_INGEST_BUDGET = 50;
 /** Identity lookups per query, matching the publishers' own page size. */
 const HELD_LOOKUP_CHUNK = 100;
 /** Short ledger rows examined per unit when looking for an unsettled one. */
@@ -209,6 +210,13 @@ export type ReconciliationWorkUnitOptions = {
   now: () => Date;
   /** Gap between two document fetches; the loop's politeness contract. */
   fetchDelayMs: number;
+  /**
+   * Decisions one slice walk may ingest; `DEFAULT_SLICE_INGEST_BUDGET` when
+   * absent. Deployment configuration like the fetch delay: a walk lists the
+   * whole slice whatever the budget, so the budget sets how much of one
+   * listing a unit turns into writes before its deadline.
+   */
+  sliceIngestBudget?: number | undefined;
   sleep: (ms: number) => Promise<void>;
   /** Read and updated in place; see `SliceRetrySchedule`. */
   sliceRetries: SliceRetrySchedule;
@@ -695,6 +703,7 @@ const ingestListedItem = async ({
 type WalkSliceOptions = {
   adapterKey: string;
   fetchDelayMs: number;
+  ingestBudget: number;
   lease: CaseLawSourceIngestionLease;
   now: () => Date;
   reason: SliceWalkReason;
@@ -716,6 +725,7 @@ type WalkSliceOptions = {
 const walkSlice = async ({
   adapterKey,
   fetchDelayMs,
+  ingestBudget,
   lease,
   now,
   reason,
@@ -798,7 +808,7 @@ const walkSlice = async ({
   );
   summary.scheduled = missing.length - untracked.length;
 
-  const fillable = untracked.slice(0, SLICE_INGEST_BUDGET);
+  const fillable = untracked.slice(0, ingestBudget);
   summary.deferred = untracked.length - fillable.length;
   for (const [index, item] of fillable.entries()) {
     if (index > 0) {
@@ -948,9 +958,15 @@ export const runReconciliationWorkUnit = async ({
   reconciliation,
   scopedDb,
   sleep,
+  sliceIngestBudget = DEFAULT_SLICE_INGEST_BUDGET,
   sliceRetries,
   sourceId,
 }: ReconciliationWorkUnitOptions): Promise<ReconciliationUnitOutcome> => {
+  if (!Number.isInteger(sliceIngestBudget) || sliceIngestBudget < 1) {
+    panic(
+      `reconciliation slice ingest budget must be a positive integer: ${sliceIngestBudget}`,
+    );
+  }
   const startedAt = now();
   const tipSlices = tipWindowSlices(reconciliation, startedAt);
   const staleBefore = new Date(
@@ -1082,6 +1098,7 @@ export const runReconciliationWorkUnit = async ({
           summary: await walkSlice({
             adapterKey,
             fetchDelayMs,
+            ingestBudget: sliceIngestBudget,
             lease,
             now,
             reason: unit.reason,

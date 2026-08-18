@@ -287,12 +287,14 @@ const checkedAtBySlice = async (
 type RunUnitOptions = {
   sourceId: SafeId<"caseLawSource">;
   reconciliation?: SourceReconciliation;
+  sliceIngestBudget?: number;
   /** Shared across turns only where a test is about what a failure leaves. */
   sliceRetries?: SliceRetrySchedule;
 };
 
 const runUnitWith = async ({
   reconciliation = stubReconciliation,
+  sliceIngestBudget,
   sliceRetries = new Map(),
   sourceId,
 }: RunUnitOptions) =>
@@ -306,6 +308,7 @@ const runUnitWith = async ({
     sleep: async () => {
       await Promise.resolve();
     },
+    sliceIngestBudget,
     sliceRetries,
   });
 
@@ -401,6 +404,37 @@ test("a settled slice is touched out of the window so the one behind it is reach
     },
   });
   expect(listed.map(({ slice }) => slice)).toEqual([OWED_SLICE]);
+});
+
+test("a walk ingests no more than the unit's slice budget and defers the rest", async () => {
+  // Two listed misses, a budget of one: the walk fetches one and records the
+  // other as deferred, so the slice stays short and is selected again.
+  const sourceId = await seedSource();
+  await seedSlice({
+    sourceId,
+    slice: OWED_SLICE,
+    reported: 2,
+    collected: 0,
+    checkedAt: addUtcDays(NOW, -2),
+  });
+  for (const offset of [0, -1]) {
+    // oxlint-disable-next-line no-await-in-loop -- fixture seeding, sequential on one pglite handle
+    await seedSlice({
+      sourceId,
+      slice: day(offset),
+      reported: 0,
+      collected: 0,
+      checkedAt: NOW,
+    });
+  }
+
+  const outcome = await runUnitWith({ sourceId, sliceIngestBudget: 1 });
+
+  expect(outcome).toMatchObject({
+    type: "worked",
+    summary: { slice: OWED_SLICE, keyable: 2, parked: 1, deferred: 1 },
+  });
+  expect(builds).toHaveLength(1);
 });
 
 test("a slice the publisher will not serve parks its items rather than storing them", async () => {
