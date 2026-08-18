@@ -443,10 +443,20 @@ test("a walk ingests no more than the unit's slice budget and defers the rest", 
 test("a slice budget outside 1..MAX is refused before any work", async () => {
   const sourceId = await seedSource();
   for (const sliceIngestBudget of [0, MAX_SLICE_INGEST_BUDGET + 1, 1.5]) {
+    // Bun's matcher type declares `.rejects.toThrow` as void; capture the
+    // rejection explicitly so type-aware lint and the runtime agree.
     // oxlint-disable-next-line no-await-in-loop -- each refusal is asserted in turn
-    await expect(runUnitWith({ sourceId, sliceIngestBudget })).rejects.toThrow(
-      /slice ingest budget/u,
+    const rejection: unknown = await runUnitWith({
+      sourceId,
+      sliceIngestBudget,
+    }).then(
+      () => null,
+      (error: unknown) => error,
     );
+    expect(rejection).toBeInstanceOf(Error);
+    expect(rejection).toMatchObject({
+      message: expect.stringContaining("slice ingest budget"),
+    });
   }
   expect(listed).toHaveLength(0);
 });
