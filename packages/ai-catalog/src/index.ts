@@ -1160,16 +1160,33 @@ export const MODEL_RATES = {
   // Luna/Terra verified against the published price list 2026-08-16
   // (Luna's 2026-07-30 price cut).
   "gpt-5.6-luna": {
-    kind: "flat",
-    inputPerMTok: 20_000,
-    outputPerMTok: 120_000,
-    cachedInputPerMTok: 2000,
+    kind: "input-token-tiered",
+    inputTokenThreshold: 272_000,
+    standard: {
+      inputPerMTok: 20_000,
+      outputPerMTok: 120_000,
+      cachedInputPerMTok: 2000,
+    },
+    aboveThreshold: {
+      // OpenAI prices the entire >272K request at 2x input and 1.5x output.
+      inputPerMTok: 40_000,
+      outputPerMTok: 180_000,
+      cachedInputPerMTok: 4000,
+    },
   },
   "gpt-5.6-terra": {
-    kind: "flat",
-    inputPerMTok: 200_000,
-    outputPerMTok: 1_200_000,
-    cachedInputPerMTok: 20_000,
+    kind: "input-token-tiered",
+    inputTokenThreshold: 272_000,
+    standard: {
+      inputPerMTok: 200_000,
+      outputPerMTok: 1_200_000,
+      cachedInputPerMTok: 20_000,
+    },
+    aboveThreshold: {
+      inputPerMTok: 400_000,
+      outputPerMTok: 1_800_000,
+      cachedInputPerMTok: 40_000,
+    },
   },
   "claude-haiku-4-5-20251001": {
     kind: "flat",

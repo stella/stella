@@ -4,10 +4,11 @@ import { estimateDocumentRunUnits } from "./run-estimate";
 
 describe("estimateDocumentRunUnits", () => {
   test("converts stored bytes and planned outputs through the model's rate", () => {
-    // 1 MiB stored inflates 4x into 4 MiB of prompt -> 1048576 tokens
-    // at 20_000/MTok = 20972 micro-units; 10 outputs -> 2500 tokens at
-    // 120_000/MTok = 300; standard tier multiplies by 1.5 before the
-    // 100 micro-unit -> unit conversion (320 units), then 11 planned
+    // 1 MiB stored inflates 4x into 4 MiB of prompt -> 1048576 tokens,
+    // past the model's 272K long-context threshold, so the above-threshold
+    // rate applies: 40_000/MTok = 41944 micro-units; 10 outputs -> 2500
+    // tokens at 180_000/MTok = 450; standard tier multiplies by 1.5 before
+    // the 100 micro-unit -> unit conversion (636 units), then 11 planned
     // calls x the doc_review floor of 8 add 88.
     expect(
       estimateDocumentRunUnits({
@@ -17,7 +18,7 @@ describe("estimateDocumentRunUnits", () => {
         plannedOutputs: 10,
         serviceTier: "standard",
       }),
-    ).toBe(408);
+    ).toBe(724);
   });
 
   test("small documents stay under the confirmation threshold", () => {
