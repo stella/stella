@@ -114,6 +114,7 @@ import { initFlowRunWorker } from "@/api/lib/flows/flow-run-worker";
 import { markScheduledJobsReady } from "@/api/lib/health/readiness";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { FORMATTING_LOCALE_HEADER } from "@/api/lib/locale";
+import { multipartFormParser } from "@/api/lib/multipart-form-parser";
 import {
   logger,
   type RequestErrorFingerprint,
@@ -280,6 +281,9 @@ const buildRequestLogDetails = ({
 const CORS_PREFLIGHT_MAX_AGE_SECONDS = 60 * 60;
 
 const api = new Elysia()
+  // Body parsing is decided before any route runs, so the multipart parser has
+  // to sit ahead of every route registration.
+  .use(multipartFormParser)
   .onRequest(async (context) => {
     const { request, set } = context;
 

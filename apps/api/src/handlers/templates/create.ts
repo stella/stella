@@ -30,15 +30,14 @@ const createTemplateBodySchema = t.Object({
   file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
   name: withDescription(tDefaultVarchar, "Template display name"),
   categoryId: t.Optional(tSafeId("templateCategory")),
-  // Elysia auto-parses JSON strings from FormData, so the
-  // manifest may arrive as a string or an already-parsed
-  // object depending on transport. Accept any and validate
-  // in the handler.
+  // A JSON string over the multipart HTTP body, an object when an MCP
+  // invocation calls the handler directly. Accept any and validate in the
+  // handler.
   manifest: t.Optional(t.Any()),
 });
 
-/** Accept a string (JSON body) or already-parsed object
- *  (FormData auto-parsed by Elysia). */
+/** Accept the JSON string an HTTP client sends or the object an MCP
+ *  invocation passes straight through. */
 const parseClientManifest = (value: unknown): ClientTemplateManifest | null => {
   let parsed: unknown = value;
   if (typeof value === "string") {
