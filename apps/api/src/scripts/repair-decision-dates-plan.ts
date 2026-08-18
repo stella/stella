@@ -129,19 +129,42 @@ type SelectCorruptDecisionDatesOptions = {
   lock: DecisionDateRowLock;
 };
 
+/*
+ * The corrupt ids are collected in one materialized CTE and paged in a
+ * second on purpose. Written as one statement over the join, the planner
+ * estimates the date bounds to match a large share of the table and either
+ * merge-joins over a full primary-key scan or walks the primary key in order
+ * filtering every row; both outrun the statement timeout while the bounds
+ * actually match a handful of rows. The first CTE keeps the predicate on its
+ * own, where the date index answers it; the second applies the ordering and
+ * the page limit to that set, so the join and the lock cost one primary-key
+ * lookup per id.
+ */
+
 export const selectCorruptDecisionDatesStatement = ({
   limit,
   lock,
 }: SelectCorruptDecisionDatesOptions): SQL => sql`
+  WITH corrupt AS MATERIALIZED (
+    SELECT d.id
+      FROM case_law_decisions d
+     WHERE ${OUT_OF_BOUNDS}
+  ),
+  page AS MATERIALIZED (
+    SELECT c.id
+      FROM corrupt c
+     ORDER BY c.id
+     LIMIT ${limit}
+  )
   SELECT d.id AS "id",
          s.adapter_key AS "adapterKey",
          d.decision_date::text AS "storedDate",
          d.metadata->>'decisionDate' AS "metadataDate",
          d.citation_key AS "citationKey",
          d.country AS "country"
-    FROM case_law_decisions d
+    FROM page c
+    JOIN case_law_decisions d ON d.id = c.id
     JOIN case_law_sources s ON s.id = d.source_id
-   WHERE ${OUT_OF_BOUNDS}
    ORDER BY d.id
    LIMIT ${limit}
    ${lock === DECISION_DATE_ROW_LOCKS.FOR_UPDATE ? sql`FOR UPDATE OF d` : sql``}
