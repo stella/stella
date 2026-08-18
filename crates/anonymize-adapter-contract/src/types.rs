@@ -273,6 +273,31 @@ pub struct BindingLegalFormData {
   pub institutional_complement_connectors: Vec<String>,
   pub institutional_generic_words: Vec<String>,
   pub institutional_prefix_generic_words: Vec<String>,
+  #[serde(default)]
+  pub lowercase_bridge: BindingLowercaseBridge,
+}
+
+/// Lowercase-bridge policy of the legal-form name walk. A struct with a unit
+/// discriminator rather than a tagged enum so the binding payload stays
+/// postcard-encodable without a wire mirror.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct BindingLowercaseBridge {
+  pub policy: BindingLowercaseBridgePolicy,
+  /// Connector words admitted between capitalized name words; only read for
+  /// `closed`.
+  #[serde(default)]
+  pub words: Vec<String>,
+}
+
+#[derive(
+  Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum BindingLowercaseBridgePolicy {
+  #[default]
+  Open,
+  Closed,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -309,6 +334,8 @@ pub struct BindingAmountWordsData {
   #[serde(default)]
   pub written_amount_patterns: Vec<BindingWrittenAmountPatternData>,
   #[serde(default)]
+  pub number_words: Vec<BindingNumberWordData>,
+  #[serde(default)]
   pub magnitude_suffixes: Vec<BindingMagnitudeSuffixData>,
   #[serde(default)]
   pub share_quantity_terms: Vec<BindingShareQuantityTermData>,
@@ -323,6 +350,15 @@ pub struct BindingWrittenAmountPatternData {
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
+pub struct BindingNumberWordData {
+  #[serde(default)]
+  pub words: Vec<String>,
+  #[serde(default)]
+  pub joiners: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingMagnitudeSuffixData {
   #[serde(default)]
   pub words: Vec<String>,
@@ -330,6 +366,8 @@ pub struct BindingMagnitudeSuffixData {
   pub abbreviations_case_insensitive: Vec<String>,
   #[serde(default)]
   pub abbreviations_case_sensitive: Vec<String>,
+  #[serde(default)]
+  pub abbreviations_attached: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]

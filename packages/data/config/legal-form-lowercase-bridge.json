@@ -1,0 +1,79 @@
+{
+  "_comment": "How the legal-form organization detector treats lowercase words while walking back from a suffix ('Ltd.', 'a.s.') across an already-admitted capitalized word. Languages that capitalize only the first word of a name ('Česká spořitelna, a.s.', 'Société générale S.A.', 'Gesellschaft für internationale Zusammenarbeit GmbH') are 'open': any lowercase word may sit inside the name. English capitalizes every name word except a closed set of connectors, so a lowercase word outside 'words' ends the name and prose such as 'invested in' or 'round of' is not bridged. Lowercase words between the suffix and the first capitalized word are always admitted regardless of policy. Every manifest language needs an entry; when several selected languages disagree, one open language keeps the walk open. Closed lists carry connectors of foreign names that appear in that language's documents ('Banco de Sabadell S.A.', 'Bank für Sozialwirtschaft AG').",
+  "cs": {
+    "policy": "open"
+  },
+  "de": {
+    "policy": "open"
+  },
+  "en": {
+    "policy": "closed",
+    "words": [
+      "of",
+      "the",
+      "and",
+      "for",
+      "&",
+      "de",
+      "del",
+      "della",
+      "delle",
+      "dei",
+      "degli",
+      "di",
+      "da",
+      "du",
+      "des",
+      "la",
+      "le",
+      "les",
+      "el",
+      "los",
+      "las",
+      "y",
+      "e",
+      "et",
+      "von",
+      "van",
+      "der",
+      "den",
+      "die",
+      "das",
+      "dem",
+      "zur",
+      "zum",
+      "für",
+      "und",
+      "op",
+      "aan",
+      "het"
+    ]
+  },
+  "es": {
+    "policy": "open"
+  },
+  "fr": {
+    "policy": "open"
+  },
+  "hu": {
+    "policy": "open"
+  },
+  "it": {
+    "policy": "open"
+  },
+  "pl": {
+    "policy": "open"
+  },
+  "pt-br": {
+    "policy": "open"
+  },
+  "ro": {
+    "policy": "open"
+  },
+  "sk": {
+    "policy": "open"
+  },
+  "sv": {
+    "policy": "open"
+  }
+}

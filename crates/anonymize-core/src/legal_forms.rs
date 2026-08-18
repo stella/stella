@@ -38,6 +38,30 @@ pub struct LegalFormData {
   pub institutional_complement_connectors: Vec<String>,
   pub institutional_generic_words: Vec<String>,
   pub institutional_prefix_generic_words: Vec<String>,
+  pub lowercase_bridge: LowercaseBridge,
+}
+
+/// Whether the backward name walk may cross arbitrary lowercase words once a
+/// capitalized word is already part of the span.
+///
+/// Languages that capitalize only the first word of a name are open; English
+/// admits only a closed connector set, so prose such as `invested in` ends
+/// the name.
+#[derive(
+  Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
+)]
+pub enum LowercaseBridge {
+  #[default]
+  Open,
+  Closed {
+    words: Vec<String>,
+  },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum PreparedLowercaseBridge {
+  Open,
+  Closed(HashSet<String>),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -68,6 +92,7 @@ pub(crate) struct PreparedLegalFormData {
   institutional_complement_connectors: HashSet<String>,
   institutional_generic_words: HashSet<String>,
   institutional_prefix_generic_words: HashSet<String>,
+  lowercase_bridge: PreparedLowercaseBridge,
 }
 
 impl PreparedLegalFormData {
@@ -104,7 +129,20 @@ impl PreparedLegalFormData {
       institutional_complement_connectors,
       institutional_generic_words,
       institutional_prefix_generic_words,
+      lowercase_bridge,
     } = data;
+    // Connector words and in-name prepositions bridge in every policy; a
+    // closed list only adds to them.
+    let lowercase_bridge = match lowercase_bridge {
+      LowercaseBridge::Open => PreparedLowercaseBridge::Open,
+      LowercaseBridge::Closed { words } => {
+        let mut allowed = lower_set(words);
+        allowed.extend(connector_words.iter().map(|word| word.to_lowercase()));
+        allowed
+          .extend(in_name_prepositions.iter().map(|word| word.to_lowercase()));
+        PreparedLowercaseBridge::Closed(allowed)
+      }
+    };
     let list_suffix_indices_by_last_char =
       suffix_indices_by_last_char_matching(&suffixes, |suffix| {
         !is_roman_legal_suffix(suffix)
@@ -144,6 +182,16 @@ impl PreparedLegalFormData {
       institutional_prefix_generic_words: lower_set(
         institutional_prefix_generic_words,
       ),
+      lowercase_bridge,
+    }
+  }
+
+  fn bridges_lowercase(&self, token: &str) -> bool {
+    match &self.lowercase_bridge {
+      PreparedLowercaseBridge::Open => true,
+      PreparedLowercaseBridge::Closed(allowed) => {
+        contains_lowercase(allowed, token)
+      }
     }
   }
 }
@@ -457,8 +505,17 @@ fn walk_backward(
     if !is_acceptable_token(token.text, data) {
       break;
     }
+    // `45,000,000` splits into digit tokens at the skipped commas; a grouped
+    // number is an amount, never a name word, so the walk ends before it
+    // ("USD 45,000,000 Acme Holdings Ltd." keeps "Acme Holdings Ltd.").
+    if is_grouped_number_fragment(text, &token) {
+      break;
+    }
 
     if starts_lower(token.text) && leftmost_cap.is_some() {
+      if !data.bridges_lowercase(token.text) {
+        break;
+      }
       let after_token = text.get(token.end..pos).unwrap_or_default();
       if starts_with_list_separator(after_token)
         && is_legal_form_suffix_word(token.text, data)
@@ -889,6 +946,46 @@ fn is_acceptable_token(token: &str, data: &PreparedLegalFormData) -> bool {
     .next()
     .is_some_and(|ch| ch.is_alphabetic() || ch.is_ascii_digit())
     || contains_lowercase(&data.connector_words, token)
+}
+
+/// A grouped number, or one group of it: `45,000,000` splits into digit
+/// tokens at the skipped commas, while `3.750.000` stays one token because
+/// `.` is a token character. Either way it is an amount, not a name word.
+fn is_grouped_number_fragment(text: &str, token: &Token<'_>) -> bool {
+  if token.text.is_empty()
+    || !token
+      .text
+      .bytes()
+      .all(|byte| byte.is_ascii_digit() || matches!(byte, b'.' | b','))
+    || !token.text.bytes().any(|byte| byte.is_ascii_digit())
+  {
+    return false;
+  }
+  // A separator between two digits inside the token ("3.750.000").
+  let grouped_inside = token.text.as_bytes().windows(3).any(|window| {
+    matches!(
+      window,
+      [left, b'.' | b',', right]
+        if left.is_ascii_digit() && right.is_ascii_digit()
+    )
+  });
+  if grouped_inside {
+    return true;
+  }
+  if !token.text.bytes().all(|byte| byte.is_ascii_digit()) {
+    return false;
+  }
+  let joined_before = previous_char(text, token.start)
+    .filter(|(_, ch)| matches!(ch, ',' | '.'))
+    .and_then(|(separator_start, _)| previous_char(text, separator_start))
+    .is_some_and(|(_, ch)| ch.is_ascii_digit());
+  let joined_after = next_char(text, token.end)
+    .filter(|(_, ch)| matches!(ch, ',' | '.'))
+    .and_then(|(separator_start, ch)| {
+      next_char(text, separator_start.saturating_add(ch.len_utf8()))
+    })
+    .is_some_and(|(_, ch)| ch.is_ascii_digit());
+  joined_before || joined_after
 }
 
 fn starts_upper(text: &str) -> bool {
@@ -2452,6 +2549,12 @@ fn trim_embedded_legal_form_list_prefix<'a>(
   )
 }
 
+fn is_digit_grouping_comma(before: &str, after: &str) -> bool {
+  before.ends_with(|ch: char| ch.is_ascii_digit())
+    && after.len() >= 3
+    && after.bytes().take(3).all(|byte| byte.is_ascii_digit())
+}
+
 fn comma_upper_boundary_len(text: &str) -> usize {
   let Some(stripped) = text.strip_prefix(',') else {
     return 0;
@@ -2562,6 +2665,10 @@ fn trim_leading_clause(
       continue;
     }
     let after = text.get(comma.saturating_add(1)..).unwrap_or_default();
+    // A thousands separator ("45,000,000") is not a clause boundary.
+    if is_digit_grouping_comma(before, after) {
+      continue;
+    }
     let ws = leading_ws_len(after);
     let candidate = after.get(ws..).unwrap_or_default();
     let upper_words = word_tokens(candidate, 0, candidate.len())

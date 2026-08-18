@@ -1349,6 +1349,68 @@
         { "type": "copy", "start": 176, "end": 177 },
         { "type": "copy", "start": 220, "end": 308 }
       ]
+    },
+    {
+      "type": "set",
+      "path": ["legal_form_data", "lowercase_bridge"],
+      "value": {
+        "policy": "closed",
+        "words": [
+          "of",
+          "the",
+          "and",
+          "for",
+          "&",
+          "de",
+          "del",
+          "della",
+          "delle",
+          "dei",
+          "degli",
+          "di",
+          "da",
+          "du",
+          "des",
+          "la",
+          "le",
+          "les",
+          "el",
+          "los",
+          "las",
+          "y",
+          "e",
+          "et",
+          "von",
+          "van",
+          "der",
+          "den",
+          "die",
+          "das",
+          "dem",
+          "zur",
+          "zum",
+          "für",
+          "und",
+          "op",
+          "aan",
+          "het"
+        ]
+      }
+    },
+    {
+      "type": "array",
+      "path": ["monetary_data", "amount_words", "written_amount_patterns"],
+      "segments": [{ "type": "copy", "start": 3, "end": 4 }]
+    },
+    {
+      "type": "array",
+      "path": ["monetary_data", "amount_words", "magnitude_suffixes"],
+      "segments": [{ "type": "copy", "start": 2, "end": 3 }]
+    },
+    {
+      "type": "array",
+      "path": ["monetary_data", "amount_words", "share_quantity_terms"],
+      "segments": [{ "type": "copy", "start": 2, "end": 3 }]
     }
   ]
 }

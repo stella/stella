@@ -1,5 +1,5 @@
 {
-  "_comment": "Patterns for written-out monetary amounts, magnitude suffixes, share-quantity guards, and numeric percentage phrases, by language.",
+  "_comment": "Patterns for written-out monetary amounts, number words, magnitude suffixes, and share-quantity guards, by language. Only entries whose lang is in the configured content-language scope are assembled. Abbreviations that are conventionally written with a period list the dotted form explicitly ('mio.', 'mld.') so a sentence period after any other abbreviation is never consumed.",
   "patterns": [
     { "lang": "cs", "keywords": ["slovy", "slovně"] },
     { "lang": "sk", "keywords": ["slovom", "slovami"] },
@@ -19,12 +19,13 @@
     { "lang": "it", "keywords": ["in lettere"] },
     { "lang": "es", "keywords": ["en letras"] }
   ],
-  "percentages": [
+  "_numberWordsComment": "Number vocabulary for free-standing written-out amounts ('twenty-five million dollars', 'one hundred and fifty thousand euros', 'a million dollars'): number words (including the article that stands for one) plus joiners, combined at runtime with the magnitude words below and a trailing currency name. Only English ships: German and Czech write compound numerals as inflected single words ('fünfundzwanzig', 'dvacet pět milionů'), which need per-language morphology; those languages are covered through the keyword forms above ('in Worten:', 'slovy:').",
+  "numberWords": [
     {
       "lang": "en",
-      "keywords": ["percent"],
-      "standalone": ["zero", "one hundred"],
-      "ones": [
+      "words": [
+        "a",
+        "zero",
         "one",
         "two",
         "three",
@@ -33,9 +34,7 @@
         "six",
         "seven",
         "eight",
-        "nine"
-      ],
-      "teens": [
+        "nine",
         "ten",
         "eleven",
         "twelve",
@@ -45,9 +44,7 @@
         "sixteen",
         "seventeen",
         "eighteen",
-        "nineteen"
-      ],
-      "tens": [
+        "nineteen",
         "twenty",
         "thirty",
         "forty",
@@ -57,7 +54,7 @@
         "eighty",
         "ninety"
       ],
-      "allowSpaceCompoundSeparator": true
+      "joiners": ["and"]
     }
   ],
   "magnitudeSuffixes": [
@@ -84,8 +81,9 @@
         "biliony",
         "bilionů"
       ],
-      "abbreviationsCaseInsensitive": ["mld"],
-      "abbreviationsCaseSensitive": ["K", "M"]
+      "abbreviationsCaseInsensitive": ["mld", "mld."],
+      "abbreviationsCaseSensitive": ["K", "M"],
+      "abbreviationsAttached": ["k", "m"]
     },
     {
       "lang": "de",
@@ -101,8 +99,9 @@
         "billion",
         "billionen"
       ],
-      "abbreviationsCaseInsensitive": ["mio", "mrd"],
-      "abbreviationsCaseSensitive": ["K", "M"]
+      "abbreviationsCaseInsensitive": ["mio", "mio.", "mrd", "mrd."],
+      "abbreviationsCaseSensitive": ["K", "M"],
+      "abbreviationsAttached": ["k", "m"]
     },
     {
       "lang": "en",
@@ -121,7 +120,8 @@
         "quadrillions"
       ],
       "abbreviationsCaseInsensitive": ["bn", "bln", "tn", "trn"],
-      "abbreviationsCaseSensitive": ["K", "M"]
+      "abbreviationsCaseSensitive": ["K", "M", "MM", "B"],
+      "abbreviationsAttached": ["k", "m", "mm"]
     },
     {
       "lang": "es",
@@ -134,8 +134,9 @@
         "billón",
         "billones"
       ],
-      "abbreviationsCaseInsensitive": ["mln"],
-      "abbreviationsCaseSensitive": ["K", "M"]
+      "abbreviationsCaseInsensitive": ["mln", "mln."],
+      "abbreviationsCaseSensitive": ["K", "M"],
+      "abbreviationsAttached": ["k", "m"]
     },
     {
       "lang": "fr",
@@ -152,8 +153,16 @@
         "billion",
         "billions"
       ],
-      "abbreviationsCaseInsensitive": ["mio", "md", "mrd"],
-      "abbreviationsCaseSensitive": ["K", "M"]
+      "abbreviationsCaseInsensitive": [
+        "mio",
+        "mio.",
+        "md",
+        "md.",
+        "mrd",
+        "mrd."
+      ],
+      "abbreviationsCaseSensitive": ["K", "M"],
+      "abbreviationsAttached": ["k", "m"]
     },
     {
       "lang": "it",
@@ -169,8 +178,9 @@
         "bilione",
         "bilioni"
       ],
-      "abbreviationsCaseInsensitive": ["mln", "mld"],
-      "abbreviationsCaseSensitive": ["K", "M"]
+      "abbreviationsCaseInsensitive": ["mln", "mln.", "mld", "mld."],
+      "abbreviationsCaseSensitive": ["K", "M"],
+      "abbreviationsAttached": ["k", "m"]
     },
     {
       "lang": "pl",
@@ -194,8 +204,9 @@
         "biliony",
         "bilionów"
       ],
-      "abbreviationsCaseInsensitive": ["mln", "mld"],
-      "abbreviationsCaseSensitive": ["K", "M"]
+      "abbreviationsCaseInsensitive": ["mln", "mln.", "mld", "mld."],
+      "abbreviationsCaseSensitive": ["K", "M"],
+      "abbreviationsAttached": ["k", "m"]
     },
     {
       "lang": "pt-br",
@@ -212,7 +223,8 @@
         "trilhões"
       ],
       "abbreviationsCaseInsensitive": [],
-      "abbreviationsCaseSensitive": ["K", "M"]
+      "abbreviationsCaseSensitive": ["K", "M"],
+      "abbreviationsAttached": ["k", "m"]
     },
     {
       "lang": "sk",
@@ -238,8 +250,9 @@
         "bilióny",
         "biliónov"
       ],
-      "abbreviationsCaseInsensitive": ["mld"],
-      "abbreviationsCaseSensitive": ["K", "M"]
+      "abbreviationsCaseInsensitive": ["mld", "mld."],
+      "abbreviationsCaseSensitive": ["K", "M"],
+      "abbreviationsAttached": ["k", "m"]
     }
   ],
   "shareQuantityTerms": [

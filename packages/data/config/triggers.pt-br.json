@@ -154,7 +154,10 @@
   {
     "id": "pt-br-amount-prefix",
     "label": "monetary amount",
-    "strategy": { "type": "to-next-comma" },
+    "strategy": {
+      "type": "match-pattern",
+      "pattern": "^(?:[+\\-\u2010\u2011\u2012\u2013\u2014\u2015\u2e3a\u2e3b\u2043\u05be\u2212][ \\u00a0]?)?(?:[A-Z]{1,3}\\p{Sc}|\\p{Sc}|[A-Z]{3}[ \\u00a0]?)?\\d{1,3}(?:(?:[.,' \\u00a0]\\d{3})+|\\d*)(?:[.,]\\d{1,2})?(?:,-+)?(?:[ \\u00a0]?(?:\\p{Sc}|[A-Z]{3}))?"
+    },
     "triggers": [
       "no valor de",
       "no valor total de",

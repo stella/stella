@@ -8,10 +8,11 @@ use stella_anonymize_core::{
   CoreferencePatternData, CountryMatchData, CountryVariant, CurrencyData,
   DateData, DenyListFilterData, DenyListMatchData, DenyListPatternMetaSet,
   FuzzySearchOptions, GazetteerMatchData, HotwordRule, HotwordRuleData,
-  LegalFormData, LiteralSearchOptions, MagnitudeSuffixData, MaskConfig,
-  MaskDirection, MonetaryData, NameCorpusData, NameCorpusMode, Operator,
-  OperatorConfig, PERSON_OR_ORGANIZATION_TRIGGER_LABEL, PatternSlice,
-  PreparedArtifactPolicy, PreparedEngineConfig, PreparedEngineDetectorConfig,
+  LegalFormData, LiteralSearchOptions, LowercaseBridge, MagnitudeSuffixData,
+  MaskConfig, MaskDirection, MonetaryData, NameCorpusData, NameCorpusMode,
+  NumberWordData, Operator, OperatorConfig,
+  PERSON_OR_ORGANIZATION_TRIGGER_LABEL, PatternSlice, PreparedArtifactPolicy,
+  PreparedEngineConfig, PreparedEngineDetectorConfig,
   PreparedEnginePolicyConfig, PreparedEngineSearchConfig, PreparedEngineSlices,
   RegexArtifactPolicy, RegexMatchMeta, RegexSearchOptions, SearchOptions,
   SearchPattern, ShareQuantityTermData, SignatureData, SigningPlaceGuardData,
@@ -24,14 +25,15 @@ use crate::error::{ContractError, Result};
 use crate::types::{
   BindingAddressSeedData, BindingCoreferenceData, BindingCountryMatchData,
   BindingCountryVariant, BindingDenyListFilterData, BindingDenyListMatchData,
-  BindingHotwordRuleData, BindingLegalFormData, BindingMonetaryData,
-  BindingNameCorpusData, BindingNameCorpusMode, BindingOperator,
-  BindingOperatorConfig, BindingPatternSlice, BindingPreparedArtifactPolicy,
-  BindingPreparedSearchConfig, BindingPreparedSearchSlices,
-  BindingRegexArtifactPolicy, BindingRegexMatchMeta, BindingSearchOptions,
-  BindingSearchPattern, BindingSignatureData, BindingTaggedOperator,
-  BindingTriggerData, BindingTriggerRule, BindingTriggerStrategy,
-  BindingTriggerValidation, BindingZoneData,
+  BindingHotwordRuleData, BindingLegalFormData, BindingLowercaseBridgePolicy,
+  BindingMonetaryData, BindingNameCorpusData, BindingNameCorpusMode,
+  BindingOperator, BindingOperatorConfig, BindingPatternSlice,
+  BindingPreparedArtifactPolicy, BindingPreparedSearchConfig,
+  BindingPreparedSearchSlices, BindingRegexArtifactPolicy,
+  BindingRegexMatchMeta, BindingSearchOptions, BindingSearchPattern,
+  BindingSignatureData, BindingTaggedOperator, BindingTriggerData,
+  BindingTriggerRule, BindingTriggerStrategy, BindingTriggerValidation,
+  BindingZoneData,
 };
 
 pub fn prepared_search_config_from_binding(
@@ -203,6 +205,12 @@ fn legal_form_data_from_binding(data: BindingLegalFormData) -> LegalFormData {
       .institutional_complement_connectors,
     institutional_generic_words: data.institutional_generic_words,
     institutional_prefix_generic_words: data.institutional_prefix_generic_words,
+    lowercase_bridge: match data.lowercase_bridge.policy {
+      BindingLowercaseBridgePolicy::Open => LowercaseBridge::Open,
+      BindingLowercaseBridgePolicy::Closed => LowercaseBridge::Closed {
+        words: data.lowercase_bridge.words,
+      },
+    },
   }
 }
 
@@ -320,6 +328,15 @@ fn monetary_data_from_binding(data: BindingMonetaryData) -> MonetaryData {
           keywords: entry.keywords,
         })
         .collect(),
+      number_words: data
+        .amount_words
+        .number_words
+        .into_iter()
+        .map(|entry| NumberWordData {
+          words: entry.words,
+          joiners: entry.joiners,
+        })
+        .collect(),
       magnitude_suffixes: data
         .amount_words
         .magnitude_suffixes
@@ -328,6 +345,7 @@ fn monetary_data_from_binding(data: BindingMonetaryData) -> MonetaryData {
           words: entry.words,
           abbreviations_case_insensitive: entry.abbreviations_case_insensitive,
           abbreviations_case_sensitive: entry.abbreviations_case_sensitive,
+          abbreviations_attached: entry.abbreviations_attached,
         })
         .collect(),
       share_quantity_terms: data

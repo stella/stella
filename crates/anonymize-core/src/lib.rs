@@ -48,10 +48,10 @@ pub use diagnostics::{
   DiagnosticScope, DiagnosticStage, StaticRedactionDiagnostics,
 };
 pub use hotwords::{HotwordRule, HotwordRuleData};
-pub use legal_forms::LegalFormData;
+pub use legal_forms::{LegalFormData, LowercaseBridge};
 pub use money::{
   AmountWordsData, CurrencyData, MagnitudeSuffixData, MonetaryData,
-  ShareQuantityTermData, WrittenAmountPatternData,
+  NumberWordData, ShareQuantityTermData, WrittenAmountPatternData,
 };
 pub use name_corpus::{NameCorpusData, NameCorpusMode, PreparedNameCorpusData};
 pub use normalize::normalize_for_search;

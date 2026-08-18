@@ -135,13 +135,157 @@ describe("monetary amounts with magnitude suffix", () => {
   });
 
   test("'$25 m cable' is not extended (lowercase m = metre, not million)", async () => {
-    // Single-letter K/M are case-sensitive: lowercase
-    // `m` after a price is overwhelmingly metres, not
-    // million ("$25 m cable", "$10 m above sea level").
-    // Finance/journalism shorthand always capitalises.
+    // Uppercase K/M are case-sensitive abbreviations. A
+    // lowercase `m` separated by a space reads as metres
+    // ("$25 m cable", "$10 m above sea level"), so it only
+    // counts when attached to the digits.
     const money = findMoney(await detect("Need a $25 m cable for the rig."));
     expect(money).toHaveLength(1);
     expect(money[0]!.text).toBe("$25");
+  });
+
+  test("attached lowercase 'm' and 'k' are magnitudes ('$25m', '£250m', '€1.2m', '$500k')", async () => {
+    const dollars = findMoney(await detect("Buyer shall pay $25m at Closing."));
+    expect(dollars.map((e) => e.text)).toEqual(["$25m"]);
+
+    const pounds = findMoney(
+      await detect("A term loan of £250m and a revolver of £50m."),
+    );
+    expect(pounds.map((e) => e.text)).toEqual(["£250m", "£50m"]);
+
+    const euros = findMoney(await detect("The fee is €1.2m."));
+    expect(euros.map((e) => e.text)).toEqual(["€1.2m"]);
+
+    const thousands = findMoney(await detect("Seed round of $500k closed."));
+    expect(thousands.map((e) => e.text)).toEqual(["$500k"]);
+
+    const trailingCode = findMoney(
+      await detect("Consideration of approximately 640m EUR."),
+    );
+    expect(trailingCode.map((e) => e.text)).toEqual(["640m EUR"]);
+  });
+
+  test("attached abbreviations still require a word boundary ('$25km')", async () => {
+    const km = findMoney(await detect("The site is $25km from town."));
+    expect(km).toHaveLength(0);
+  });
+
+  test("'mm' and 'MM' are English million shorthand ('$25mm', '$25 MM')", async () => {
+    const attached = findMoney(await detect("Valued at $25mm by the bank."));
+    expect(attached.map((e) => e.text)).toEqual(["$25mm"]);
+
+    const upper = findMoney(await detect("Valued at $25 MM by the bank."));
+    expect(upper.map((e) => e.text)).toEqual(["$25 MM"]);
+
+    // Spaced lowercase `mm` is a length unit.
+    const length = findMoney(await detect("A $25 mm bolt."));
+    expect(length.map((e) => e.text)).toEqual(["$25"]);
+  });
+
+  test("dash-joined ranges are one amount ('USD 10-15 million', '$10 – 15 million')", async () => {
+    const tight = findMoney(await detect("The fee is USD 10-15 million."));
+    expect(tight.map((e) => e.text)).toEqual(["USD 10-15 million"]);
+
+    const spaced = findMoney(await detect("The fee is $10 – 15 million."));
+    expect(spaced.map((e) => e.text)).toEqual(["$10 – 15 million"]);
+
+    const trailing = findMoney(await detect("A fee of 10-15 million EUR."));
+    expect(trailing.map((e) => e.text)).toEqual(["10-15 million EUR"]);
+
+    // The Czech `,-` suffix is not a range dash.
+    const czech = findMoney(await detect("Pokuta 500.000,- Kč je splatná."));
+    expect(czech.map((e) => e.text)).toEqual(["500.000,- Kč"]);
+  });
+
+  test("free-standing written-out amounts before a currency name are amounts", async () => {
+    const compound = findMoney(
+      await detect(
+        "A purchase price of twenty-five million dollars was agreed.",
+      ),
+    );
+    expect(compound.map((e) => e.text)).toEqual([
+      "twenty-five million dollars",
+    ]);
+
+    const joined = findMoney(
+      await detect(
+        "Damages of one hundred and fifty thousand euros were paid.",
+      ),
+    );
+    expect(joined.map((e) => e.text)).toEqual([
+      "one hundred and fifty thousand euros",
+    ]);
+
+    const article = findMoney(await detect("He owed a million dollars."));
+    expect(article.map((e) => e.text)).toEqual(["a million dollars"]);
+
+    // A magnitude word alone, or prose before the currency, is not enough.
+    const bare = findMoney(
+      await detect("Several million dollars changed hands."),
+    );
+    expect(bare).toHaveLength(0);
+    const prose = findMoney(await detect("Payments in dollars and cents."));
+    expect(prose).toHaveLength(0);
+  });
+
+  test("uppercase 'B' is an English billion abbreviation ('$1.5B')", async () => {
+    const money = findMoney(
+      await detect("Revenue was $1.5B and EBITDA $300M."),
+    );
+    expect(money.map((e) => e.text)).toEqual(["$1.5B", "$300M"]);
+  });
+
+  test("dotted abbreviations are explicit data ('12,5 Mio. Euro'), a sentence period is not", async () => {
+    const dotted = findMoney(
+      await detect("Die Gesellschaft wurde für 12,5 Mio. Euro übernommen."),
+    );
+    expect(dotted.map((e) => e.text)).toEqual(["12,5 Mio. Euro"]);
+
+    const code = findMoney(await detect("Der Preis beträgt 25 Mio. EUR."));
+    expect(code.map((e) => e.text)).toEqual(["25 Mio. EUR"]);
+
+    // Abbreviations without a dotted form ('M', 'bn') and full words never
+    // consume a sentence period before a currency token.
+    const sentence = findMoney(
+      await detect("It cost 25 million. EUR is the reporting currency."),
+    );
+    expect(sentence.map((e) => e.text)).not.toContain("25 million. EUR");
+    const abbreviated = findMoney(
+      await detect("The price was $25 M. EUR is the reporting currency."),
+    );
+    expect(abbreviated.map((e) => e.text)).toEqual(["$25 M"]);
+  });
+
+  test("magnitude vocabulary follows the content-language scope", async () => {
+    // `B` and `mm` are English shorthand; a German-only scope does not
+    // detect them, and an English-only scope does not know `Mio.`.
+    const german = (
+      await detectNative(
+        { ...CONFIG, languages: ["de"] },
+        "Umsatz von $1.5B und $25mm.",
+      )
+    )
+      .filter((e) => e.label === "monetary amount")
+      .map((e) => e.text);
+    expect(german).toEqual([]);
+    const englishGerman = (
+      await detectNative(
+        { ...CONFIG, languages: ["en"] },
+        "Ein Preis von 25 Mio. EUR.",
+      )
+    )
+      .filter((e) => e.label === "monetary amount")
+      .map((e) => e.text);
+    expect(englishGerman).toEqual([]);
+    const english = (
+      await detectNative(
+        { ...CONFIG, languages: ["en"] },
+        "Revenue of $1.5B and $25mm.",
+      )
+    )
+      .filter((e) => e.label === "monetary amount")
+      .map((e) => e.text);
+    expect(english).toEqual(["$1.5B", "$25mm"]);
   });
 
   test("short PT-BR abbreviations do not apply globally", async () => {

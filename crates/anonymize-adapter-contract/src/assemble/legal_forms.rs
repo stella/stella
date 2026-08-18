@@ -23,7 +23,9 @@ use stella_anonymize_core::assemble::{
 };
 
 use super::{AssembleContext, language};
-use crate::BindingLegalFormData;
+use crate::{
+  BindingLegalFormData, BindingLowercaseBridge, BindingLowercaseBridgePolicy,
+};
 
 /// `RAW_LEGAL_SUFFIXES` from `config/legal-forms.ts`. Sorted longest-first
 /// (stable) at use to form `LEGAL_SUFFIXES`.
@@ -133,6 +135,98 @@ fn legal_role_head_languages(
       .map(|(code, _)| code.clone())
       .collect(),
   )
+}
+
+/// Every `manifest.json` language code, in declaration order.
+fn manifest_language_codes() -> Result<Vec<String>, AssembleError> {
+  #[derive(Deserialize)]
+  struct Manifest {
+    languages: OrderedMap<Value>,
+  }
+  let manifest: Manifest = parse_data_file("manifest.json")?;
+  Ok(
+    manifest
+      .languages
+      .iter()
+      .map(|(code, _)| code.clone())
+      .collect(),
+  )
+}
+
+const LOWERCASE_BRIDGE_FILE: &str = "legal-form-lowercase-bridge.json";
+
+#[derive(Deserialize)]
+#[serde(tag = "policy", rename_all = "kebab-case", deny_unknown_fields)]
+enum LowercaseBridgeEntry {
+  Open,
+  Closed { words: Vec<String> },
+}
+
+/// Lowercase-bridge policy for the selected content languages: open when any
+/// selected language is open (or nothing is selected), otherwise the union of
+/// the selected closed word lists. Every manifest language must have an
+/// entry so a new language cannot silently inherit English behavior.
+fn lowercase_bridge(
+  languages: Option<&[String]>,
+) -> Result<BindingLowercaseBridge, AssembleError> {
+  let configured: OrderedMap<Value> =
+    parse_ordered_data_file(LOWERCASE_BRIDGE_FILE)?;
+  for code in manifest_language_codes()? {
+    if configured.get(&code).is_none() {
+      return Err(AssembleError::DataParse {
+        name: String::from(LOWERCASE_BRIDGE_FILE),
+        message: format!("manifest language {code} has no entry"),
+      });
+    }
+  }
+  let mut selected_any = false;
+  let mut seen = HashSet::new();
+  let mut words = Vec::new();
+  for (language_key, value) in &configured {
+    if language_key.starts_with('_')
+      || !language::language_config_matches(language_key, languages)
+    {
+      continue;
+    }
+    let entry = LowercaseBridgeEntry::deserialize(value).map_err(|error| {
+      AssembleError::DataParse {
+        name: String::from(LOWERCASE_BRIDGE_FILE),
+        message: format!("language {language_key}: {error}"),
+      }
+    })?;
+    selected_any = true;
+    match entry {
+      LowercaseBridgeEntry::Open => {
+        return Ok(BindingLowercaseBridge {
+          policy: BindingLowercaseBridgePolicy::Open,
+          words: Vec::new(),
+        });
+      }
+      LowercaseBridgeEntry::Closed { words: entry_words } => {
+        for word in entry_words {
+          if word.is_empty() {
+            return Err(AssembleError::DataParse {
+              name: String::from(LOWERCASE_BRIDGE_FILE),
+              message: format!(
+                "language {language_key}: words must be non-empty strings"
+              ),
+            });
+          }
+          push_unique(word, &mut seen, &mut words);
+        }
+      }
+    }
+  }
+  if !selected_any {
+    return Ok(BindingLowercaseBridge {
+      policy: BindingLowercaseBridgePolicy::Open,
+      words: Vec::new(),
+    });
+  }
+  Ok(BindingLowercaseBridge {
+    policy: BindingLowercaseBridgePolicy::Closed,
+    words,
+  })
 }
 
 /// JS `\s` (with the `u` flag) whitespace set, used by `normalizeLegalSuffixToken`
@@ -703,6 +797,7 @@ pub(super) fn build_legal_form_data(
       "institutional-organization-prefix-generic-name-words.json",
       ctx.content_languages.as_deref(),
     )?,
+    lowercase_bridge: lowercase_bridge(ctx.content_languages.as_deref())?,
   }))
 }
 

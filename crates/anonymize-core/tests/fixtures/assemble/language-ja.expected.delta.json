@@ -1187,6 +1187,26 @@
       "type": "array",
       "path": ["address_seed_data", "boundary_words"],
       "segments": [{ "type": "copy", "start": 154, "end": 163 }]
+    },
+    {
+      "type": "array",
+      "path": ["monetary_data", "amount_words", "written_amount_patterns"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["monetary_data", "amount_words", "number_words"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["monetary_data", "amount_words", "magnitude_suffixes"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["monetary_data", "amount_words", "share_quantity_terms"],
+      "segments": []
     }
   ]
 }

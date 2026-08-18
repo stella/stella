@@ -73,12 +73,56 @@ fn frozen_package_digest(
   Ok(hex)
 }
 
+/// Set to `1` to rewrite `manifest.json` with the digests of the current
+/// frozen oracles instead of failing on a mismatch. The digests derive from
+/// the reviewed `*.expected*.json` fixtures, never from the assembler under
+/// test, so this is the sanctioned refresh after an intentional oracle edit.
+const UPDATE_MANIFEST_ENV: &str = "ANONYMIZE_UPDATE_ASSEMBLE_MANIFEST";
+
+fn write_manifest_digests(
+  path: &Path,
+  digests: &[(String, String)],
+) -> Result<(), String> {
+  // Edit the text in place so key order and formatting survive; a JSON
+  // round-trip would reorder the hand-maintained manifest.
+  let mut text = fs::read_to_string(path)
+    .map_err(|error| format!("read {}: {error}", path.display()))?;
+  for (name, digest) in digests {
+    let name_key =
+      format!("\"name\": {}", serde_json::Value::from(name.as_str()));
+    let name_at = text
+      .find(&name_key)
+      .ok_or_else(|| format!("manifest.json has no fixture named {name}"))?;
+    let digest_key = "\"packageDigest\": \"";
+    let digest_at = text
+      .get(name_at..)
+      .and_then(|tail| tail.find(digest_key))
+      .map(|offset| {
+        name_at
+          .saturating_add(offset)
+          .saturating_add(digest_key.len())
+      })
+      .ok_or_else(|| format!("{name}: manifest.json has no packageDigest"))?;
+    let digest_end = text
+      .get(digest_at..)
+      .and_then(|tail| tail.find('"'))
+      .map(|offset| digest_at.saturating_add(offset))
+      .ok_or_else(|| format!("{name}: unterminated packageDigest"))?;
+    text.replace_range(digest_at..digest_end, digest);
+  }
+  fs::write(path, text)
+    .map_err(|error| format!("write {}: {error}", path.display()))
+}
+
 #[test]
 fn assemble_package_digests_match_manifest() -> Result<(), String> {
   let dir = fixtures_dir();
-  let manifest: Manifest = read_json(&dir.join("manifest.json"))?;
+  let manifest_path = dir.join("manifest.json");
+  let manifest: Manifest = read_json(&manifest_path)?;
+  let update = std::env::var(UPDATE_MANIFEST_ENV).is_ok_and(|v| v == "1");
 
   let mut failures = Vec::new();
+  let mut refreshed = Vec::new();
   let mut checked = 0usize;
   for fixture in &manifest.fixtures {
     let Some(expected) = fixture.package_digest.as_ref() else {
@@ -98,9 +142,14 @@ fn assemble_package_digests_match_manifest() -> Result<(), String> {
       };
     match frozen_package_digest(expected_binding) {
       Ok(oracle_digest) if &oracle_digest == expected => checked += 1,
+      Ok(oracle_digest) if update => {
+        refreshed.push((fixture.name.clone(), oracle_digest));
+        checked += 1;
+      }
       Ok(oracle_digest) => {
         failures.push(format!(
-          "{}: frozen oracle digest {oracle_digest} != {expected}",
+          "{}: frozen oracle digest {oracle_digest} != {expected} \
+           (set {UPDATE_MANIFEST_ENV}=1 to refresh manifest.json)",
           fixture.name
         ));
       }
@@ -110,6 +159,9 @@ fn assemble_package_digests_match_manifest() -> Result<(), String> {
     }
   }
 
+  if !refreshed.is_empty() {
+    write_manifest_digests(&manifest_path, &refreshed)?;
+  }
   if !failures.is_empty() {
     return Err(format!(
       "digest gate mismatches ({} of {}):\n{}",

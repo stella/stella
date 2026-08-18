@@ -1542,6 +1542,26 @@
       "type": "set",
       "path": ["false_positive_filters", "us_state_abbreviations"],
       "value": []
+    },
+    {
+      "type": "array",
+      "path": ["monetary_data", "amount_words", "written_amount_patterns"],
+      "segments": [{ "type": "copy", "start": 2, "end": 3 }]
+    },
+    {
+      "type": "array",
+      "path": ["monetary_data", "amount_words", "number_words"],
+      "segments": []
+    },
+    {
+      "type": "array",
+      "path": ["monetary_data", "amount_words", "magnitude_suffixes"],
+      "segments": [{ "type": "copy", "start": 1, "end": 2 }]
+    },
+    {
+      "type": "array",
+      "path": ["monetary_data", "amount_words", "share_quantity_terms"],
+      "segments": [{ "type": "copy", "start": 1, "end": 2 }]
     }
   ]
 }
