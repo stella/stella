@@ -20,12 +20,14 @@ import { DAY_IN_MS } from "@stll/time";
 import { czRegionalAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import type {
+  FailedSliceCandidate,
   LedgerSlice,
   ShortSliceCandidate,
   SelectReconciliationWorkUnitInput,
   SliceWalkReason,
 } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import {
+  RECONCILIATION_FAILED_SLICE_RETRY_MS,
   RECONCILIATION_SETTLED_RECHECK_MS,
   RECONCILIATION_SLICE_STALE_MS,
   SLICE_WALK_REASON,
@@ -54,13 +56,25 @@ const baseInput = (
   tipSlices: [],
   tipCheckedAt: new Map(),
   unsettledShortSlices: [],
+  failedCandidate: null,
   sweepSlice: null,
   recheckCandidate: null,
   slicesHeldForRetry: new Set(),
   staleAfterMs: RECONCILIATION_SLICE_STALE_MS,
   recheckAfterMs: RECONCILIATION_SETTLED_RECHECK_MS,
+  failedRetryAfterMs: RECONCILIATION_FAILED_SLICE_RETRY_MS,
   ...overrides,
 });
+
+/** A ledger row whose last walk failed at `checkedAt`. */
+const failedCandidate = (checkedAt: Date): FailedSliceCandidate => ({
+  slice: "2024-02-02",
+  checkedAt,
+});
+
+const RESTED = new Date(
+  NOW.getTime() - RECONCILIATION_FAILED_SLICE_RETRY_MS - 60_000,
+);
 
 /** A settled ledger row, checked long enough ago to be worth proving again. */
 const recheckCandidate = (checkedAt: Date): LedgerSlice => ({
@@ -346,6 +360,7 @@ describe("selectReconciliationWorkUnit", () => {
       { hasDueParkedItems: true },
       { tipSlices: ["2026-08-11"], tipCheckedAt: new Map<string, Date>() },
       { unsettledShortSlices: [shortSlice()] },
+      { failedCandidate: failedCandidate(RESTED) },
       { sweepSlice: "2023-06-01" },
     ] as const satisfies readonly Partial<SelectReconciliationWorkUnitInput>[];
 
@@ -371,6 +386,9 @@ describe("selectReconciliationWorkUnit", () => {
       [SLICE_WALK_REASON.SHORT]: baseInput({
         unsettledShortSlices: [shortSlice()],
       }),
+      [SLICE_WALK_REASON.RETRY]: baseInput({
+        failedCandidate: failedCandidate(RESTED),
+      }),
       [SLICE_WALK_REASON.SWEEP]: baseInput({ sweepSlice: "2023-06-01" }),
       [SLICE_WALK_REASON.RECHECK]: baseInput({
         recheckCandidate: recheckCandidate(LONG_SETTLED),
@@ -386,6 +404,56 @@ describe("selectReconciliationWorkUnit", () => {
         reason,
       });
     }
+  });
+});
+
+describe("a slice whose last walk failed", () => {
+  // The failure is recorded in the ledger, so the sweep and the backlog move
+  // on around it; what remains to decide is when it is tried again, and that
+  // it is tried ahead of new history but never ahead of work something owes.
+  test("is walked again once it has rested, ahead of the sweep", () => {
+    expect(
+      selectReconciliationWorkUnit(
+        baseInput({
+          failedCandidate: failedCandidate(RESTED),
+          sweepSlice: "2023-06-01",
+        }),
+      ),
+    ).toEqual({
+      type: "slice",
+      slice: "2024-02-02",
+      reason: SLICE_WALK_REASON.RETRY,
+    });
+  });
+
+  test("still resting, it yields to the sweep", () => {
+    expect(
+      selectReconciliationWorkUnit(
+        baseInput({
+          failedCandidate: failedCandidate(
+            new Date(
+              NOW.getTime() - RECONCILIATION_FAILED_SLICE_RETRY_MS + 60_000,
+            ),
+          ),
+          sweepSlice: "2023-06-01",
+        }),
+      ),
+    ).toEqual({
+      type: "slice",
+      slice: "2023-06-01",
+      reason: SLICE_WALK_REASON.SWEEP,
+    });
+  });
+
+  test("held in this process, it yields even when rested", () => {
+    expect(
+      selectReconciliationWorkUnit(
+        baseInput({
+          failedCandidate: failedCandidate(RESTED),
+          slicesHeldForRetry: new Set(["2024-02-02"]),
+        }),
+      ),
+    ).toEqual({ type: "idle" });
   });
 });
 

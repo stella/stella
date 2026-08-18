@@ -617,11 +617,21 @@ export const caseLawCoverageSlices = p.pgTable(
       .references(() => caseLawSources.id, { onDelete: "cascade" }),
     /** The crawl slice, e.g. an ISO day for date-cursor adapters. */
     slice: p.varchar({ length: 64 }).notNull(),
-    /** The source's own count for this slice. */
-    reported: p.integer().notNull(),
-    /** What the crawl produced for it. */
-    collected: p.integer().notNull(),
+    /**
+     * The source's own count for this slice; null while the slice has never
+     * been listed successfully (see `walkError`).
+     */
+    reported: p.integer(),
+    /** What the crawl produced for it; null with `reported`. */
+    collected: p.integer(),
     checkedAt: timestamptz("checked_at").defaultNow().notNull(),
+    /**
+     * Why the last listing walk of this slice failed, null when it listed.
+     * A row is either counted or failed, never neither: a slice the publisher
+     * cannot list is still recorded, so the historical sweep moves past it
+     * and the retry arm owns it instead.
+     */
+    walkError: p.text("walk_error"),
   },
   (t) => [
     p
@@ -633,6 +643,19 @@ export const caseLawCoverageSlices = p.pgTable(
       .index("case_law_coverage_slices_short_idx")
       .on(t.sourceId, t.slice)
       .where(sql`${t.collected} < ${t.reported}`),
+    // The retry arm reads failed rows oldest-checked first.
+    p
+      .index("case_law_coverage_slices_failed_idx")
+      .on(t.sourceId, t.checkedAt)
+      .where(sql`${t.walkError} IS NOT NULL`),
+    p.check(
+      "case_law_coverage_slices_counts_pair",
+      sql`(${t.reported} IS NULL) = (${t.collected} IS NULL)`,
+    ),
+    p.check(
+      "case_law_coverage_slices_counted_or_failed",
+      sql`${t.reported} IS NOT NULL OR ${t.walkError} IS NOT NULL`,
+    ),
     ...globalCaseLawPolicies(),
   ],
 );
