@@ -1,4 +1,8 @@
-import type { ChatMiddleware, ChatMiddlewareContext } from "@tanstack/ai";
+import type {
+  ChatMiddleware,
+  ChatMiddlewareContext,
+  TokenUsage,
+} from "@tanstack/ai";
 import { Result } from "better-result";
 
 import type { ModelRole } from "@stll/ai-catalog";
@@ -41,6 +45,20 @@ import {
 } from "./types";
 
 type AnalyticsMetadata = Record<string, AnalyticsPrimitive>;
+
+/** What one run accumulates across its middleware hooks. */
+type RunAnalyticsState = {
+  /** Start of the current agent-loop iteration (one model call). */
+  iterationStartedAt: number;
+  toolCount: number;
+  /** Sum of every iteration's reported usage. */
+  usage: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
+  usageReported: boolean;
+};
 
 export type TanStackAIUsageMetering = {
   actionType: UsageActionType;
@@ -314,8 +332,28 @@ export const createTanStackAIAnalyticsCallbacks = ({
   const selectedModelId = config.selectedModelId;
   let modelInfo: ResolvedTanStackTextModelInfo | null | undefined;
   const startedAt = performance.now();
+  // Per-run state, keyed by `ctx.runId`: one callbacks instance may serve
+  // several `chat()` requests (template filling shares one across up to
+  // four concurrent field resolutions), so nothing a hook accumulates may
+  // live on the closure. Entries are dropped by the terminal hooks; a run
+  // that parks at an interrupt keeps its entry for the instance's lifetime.
+  const runs = new Map<string, RunAnalyticsState>();
+  const runState = (ctx: ChatMiddlewareContext): RunAnalyticsState => {
+    const existing = runs.get(ctx.runId);
+    if (existing) {
+      return existing;
+    }
+    const now = performance.now();
+    const created: RunAnalyticsState = {
+      iterationStartedAt: now,
+      toolCount: 0,
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      usageReported: false,
+    };
+    runs.set(ctx.runId, created);
+    return created;
+  };
   let hasCapturedGenerationError = false;
-  let toolCount = 0;
 
   const resolveAnalyticsModelInfo =
     (): ResolvedTanStackTextModelInfo | null => {
@@ -439,43 +477,77 @@ export const createTanStackAIAnalyticsCallbacks = ({
     });
   };
 
+  // The standard $ai_* schema feeds the analytics platform's LLM
+  // observability product: one `$ai_generation` per model call, correlated
+  // by `$ai_trace_id`. Captured from `onUsage` (once per iteration that
+  // reports usage) rather than from `onFinish`: a run that pauses at an
+  // interrupt (client tool, approval) reaches no terminal hook at all, and
+  // `onFinish` only carries the last iteration's usage. Privacy mode by
+  // construction: model, token counts, latency, and trace correlation only —
+  // prompt and completion content never leave the service.
+  const captureGeneration = ({
+    ctx,
+    iterationStartedAt,
+    modelInfo: resolvedModelInfo,
+    usage,
+  }: {
+    ctx: ChatMiddlewareContext;
+    iterationStartedAt: number;
+    modelInfo: ResolvedTanStackTextModelInfo;
+    usage: TokenUsage;
+  }) => {
+    analytics.capture({
+      distinctId,
+      ...groups,
+      event: SERVER_ANALYTICS_EVENTS.aiGeneration,
+      properties: {
+        $ai_input_tokens: usage.promptTokens,
+        $ai_latency: (performance.now() - iterationStartedAt) / ONE_SECOND_MS,
+        $ai_model: resolvedModelInfo.modelId,
+        $ai_output_tokens: usage.completionTokens,
+        $ai_provider: resolvedModelInfo.provider,
+        $ai_span_id: `${ctx.runId}:${ctx.iteration}`,
+        $ai_trace_id: config.traceId,
+        feature: config.feature,
+      },
+    });
+  };
+
   return {
     captureError: captureGenerationError,
     middleware: {
       name: "stella-tanstack-analytics",
-      onAfterToolCall: () => {
-        toolCount += 1;
+      // Each agent-loop iteration is one model call: `onIteration` marks its
+      // start and `onUsage` closes it, so per-generation latency covers only
+      // that call (the run-level `duration` spans every iteration and tool).
+      onIteration: (ctx) => {
+        runState(ctx).iterationStartedAt = performance.now();
       },
-      onError: (_ctx, { duration, error }) => {
+      onAfterToolCall: (ctx) => {
+        runState(ctx).toolCount += 1;
+      },
+      onAbort: (ctx) => {
+        runs.delete(ctx.runId);
+      },
+      onError: (ctx, { duration, error }) => {
+        runs.delete(ctx.runId);
         captureGenerationError(error, duration);
       },
-      onFinish: (_ctx, { duration, usage }) => {
-        if (!usage) {
+      onFinish: (ctx, { duration, usage }) => {
+        const run = runs.get(ctx.runId);
+        runs.delete(ctx.runId);
+        // Sum of every iteration's reported usage. TanStack's `onFinish`
+        // usage is the LAST iteration's only (`finishedEvent` resets per
+        // iteration); it is the fallback for a run whose provider never
+        // reached `onUsage`.
+        const totals = run?.usageReported ? run.usage : usage;
+        if (!totals) {
           return;
         }
         const resolvedModelInfo = resolveAnalyticsModelInfo();
         if (!resolvedModelInfo) {
           return;
         }
-
-        // The standard $ai_* schema feeds the analytics platform's LLM
-        // observability product. Privacy mode by construction: model, token
-        // counts, latency, and trace correlation only — prompt and completion
-        // content never leave the service.
-        analytics.capture({
-          distinctId,
-          ...groups,
-          event: SERVER_ANALYTICS_EVENTS.aiGeneration,
-          properties: {
-            $ai_input_tokens: usage.promptTokens,
-            $ai_latency: duration / ONE_SECOND_MS,
-            $ai_model: resolvedModelInfo.modelId,
-            $ai_output_tokens: usage.completionTokens,
-            $ai_provider: resolvedModelInfo.provider,
-            $ai_trace_id: config.traceId,
-            feature: config.feature,
-          },
-        });
 
         analytics.capture({
           distinctId,
@@ -484,71 +556,99 @@ export const createTanStackAIAnalyticsCallbacks = ({
           properties: {
             ...pickSafeMetadata(config.properties),
             feature: config.feature,
-            input_tokens_bucket: bucketTokenCount(usage.promptTokens),
+            input_tokens_bucket: bucketTokenCount(totals.promptTokens),
             latency_bucket: bucketLatency(duration / ONE_SECOND_MS),
             model: resolvedModelInfo.modelId,
             model_key_source: resolvedModelInfo.keySource,
-            output_tokens_bucket: bucketTokenCount(usage.completionTokens),
+            output_tokens_bucket: bucketTokenCount(totals.completionTokens),
             provider: resolvedModelInfo.provider,
             ...(resolvedModelInfo.region
               ? { region: resolvedModelInfo.region }
               : {}),
-            tool_count_bucket: bucketCount(toolCount),
-            total_tokens_bucket: bucketTokenCount(usage.totalTokens),
+            tool_count_bucket: bucketCount(run?.toolCount ?? 0),
+            total_tokens_bucket: bucketTokenCount(totals.totalTokens),
           },
         });
       },
-      // Framework-hook boundary (the one place try-catch is allowed): a
-      // metering fault must never propagate into the provider stream and
-      // take the process down with it. A bug here loses one metering
-      // event and reports it; it never loses the server.
+      // Framework-hook boundaries (the one place try-catch is allowed): a
+      // fault here must never propagate into the provider stream and take
+      // the process down with it, and metering and observability are
+      // isolated from each other so an analytics fault cannot drop a
+      // billable usage event. A bug loses that one event and reports it; it
+      // never loses the server.
       onUsage: (ctx, usage) => {
+        const resolvedModelInfo = resolveAnalyticsModelInfo();
+        if (!resolvedModelInfo) {
+          return;
+        }
+        const run = runState(ctx);
         try {
-          const metering = config.usageMetering;
-          if (!metering) {
-            return;
-          }
+          run.usage.promptTokens += usage.promptTokens;
+          run.usage.completionTokens += usage.completionTokens;
+          run.usage.totalTokens += usage.totalTokens;
+          run.usageReported = true;
+        } catch (error) {
+          // The payload itself is unreadable: neither side effect can use it.
+          captureTelemetryError(error, {
+            source: "usage.tanstack_ai",
+            trace_id: config.traceId,
+          });
+          return;
+        }
 
-          const resolvedModelInfo = resolveAnalyticsModelInfo();
-          if (!resolvedModelInfo) {
-            return;
-          }
-
-          const { uncachedInputTokens, cacheReadTokens } =
-            normalizeProviderPromptTokens({
-              provider: resolvedModelInfo.provider,
-              modelId: resolvedModelInfo.modelId,
-              promptTokens: usage.promptTokens,
-              cacheReadTokens: usage.promptTokensDetails?.cachedTokens ?? 0,
-              cacheWriteTokens:
-                usage.promptTokensDetails?.cacheWriteTokens ?? 0,
+        const metering = config.usageMetering;
+        if (metering) {
+          try {
+            const { uncachedInputTokens, cacheReadTokens } =
+              normalizeProviderPromptTokens({
+                provider: resolvedModelInfo.provider,
+                modelId: resolvedModelInfo.modelId,
+                promptTokens: usage.promptTokens,
+                cacheReadTokens: usage.promptTokensDetails?.cachedTokens ?? 0,
+                cacheWriteTokens:
+                  usage.promptTokensDetails?.cacheWriteTokens ?? 0,
+              });
+            const consumption = recordTanStackConsumption({
+              cacheReadTokens,
+              completionTokens: usage.completionTokens,
+              config,
+              iteration: ctx.iteration,
+              modelInfo: resolvedModelInfo,
+              runId: ctx.runId,
+              serviceTier: usageServiceTierFromModelOptions({
+                fallback: metering.serviceTier,
+                modelOptions: ctx.modelOptions,
+              }),
+              uncachedInputTokens,
+            }).catch((error: unknown) => {
+              // A rejected deferred settles inside the stream lifecycle;
+              // capture it here so it cannot surface as an unhandled
+              // rejection there.
+              captureTelemetryError(error, {
+                organization_id: metering.organizationId,
+                source: "usage.tanstack_ai",
+                trace_id: config.traceId,
+              });
             });
-          const consumption = recordTanStackConsumption({
-            cacheReadTokens,
-            completionTokens: usage.completionTokens,
-            config,
-            iteration: ctx.iteration,
-            modelInfo: resolvedModelInfo,
-            runId: ctx.runId,
-            serviceTier: usageServiceTierFromModelOptions({
-              fallback: metering.serviceTier,
-              modelOptions: ctx.modelOptions,
-            }),
-            uncachedInputTokens,
-          }).catch((error: unknown) => {
-            // A rejected deferred settles inside the stream lifecycle;
-            // capture it here so it cannot surface as an unhandled
-            // rejection there.
+            ctx.defer(consumption);
+          } catch (error) {
             captureTelemetryError(error, {
-              organization_id: metering.organizationId,
               source: "usage.tanstack_ai",
               trace_id: config.traceId,
             });
+          }
+        }
+
+        try {
+          captureGeneration({
+            ctx,
+            iterationStartedAt: run.iterationStartedAt,
+            modelInfo: resolvedModelInfo,
+            usage,
           });
-          ctx.defer(consumption);
         } catch (error) {
           captureTelemetryError(error, {
-            source: "usage.tanstack_ai",
+            source: "analytics.tanstack_ai",
             trace_id: config.traceId,
           });
         }
