@@ -98,7 +98,7 @@ export const estimatePromptRunUnits = ({
 }: EstimatePromptRunUnitsInput): number => {
   const rawMicroUnits = computeRawUsageMicroUnits({
     modelId,
-    inputTokens: inputTokensPerCall * plannedCalls,
+    uncachedInputTokens: inputTokensPerCall * plannedCalls,
     outputTokens: outputTokensPerCall * plannedCalls,
   });
   const tokenUnits = Math.ceil(
