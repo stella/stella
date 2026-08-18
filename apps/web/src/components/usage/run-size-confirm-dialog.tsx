@@ -12,13 +12,12 @@ import {
 } from "@stll/ui/components/dialog";
 
 import type { RunSizeConfirmationDetail } from "@/components/usage/run-size-confirmation";
-import type { TranslationKey } from "@/i18n/types";
 
 type RunSizeConfirmDialogProps = {
   detail: RunSizeConfirmationDetail | null;
-  /** Copy for the run kind (a review, a flow); title and confirm label. */
-  titleKey: TranslationKey;
-  confirmKey: TranslationKey;
+  /** Copy for the run kind (a review, a flow), already translated. */
+  title: string;
+  confirmLabel: string;
   onConfirm: () => void;
   onDismiss: () => void;
 };
@@ -28,8 +27,8 @@ type RunSizeConfirmDialogProps = {
  *  abandons the parked request. */
 export const RunSizeConfirmDialog = ({
   detail,
-  titleKey,
-  confirmKey,
+  title,
+  confirmLabel,
   onConfirm,
   onDismiss,
 }: RunSizeConfirmDialogProps) => {
@@ -45,7 +44,7 @@ export const RunSizeConfirmDialog = ({
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t(titleKey)}</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
             {t("common.runSizeConfirmDescription", {
               estimated: detail?.estimatedUnits ?? 0,
@@ -57,7 +56,7 @@ export const RunSizeConfirmDialog = ({
           <DialogClose render={<Button variant="ghost" />}>
             {t("common.cancel")}
           </DialogClose>
-          <Button onClick={onConfirm}>{t(confirmKey)}</Button>
+          <Button onClick={onConfirm}>{confirmLabel}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

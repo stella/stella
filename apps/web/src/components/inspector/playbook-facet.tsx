@@ -502,9 +502,9 @@ export const PlaybookFacet = ({
   // run panel may be showing.
   const sizeConfirmDialog = (
     <RunSizeConfirmDialog
-      confirmKey="inspector.review.sizeConfirmStart"
+      confirmLabel={t("inspector.review.sizeConfirmStart")}
       detail={session?.sizeConfirmation ?? null}
-      titleKey="inspector.review.sizeConfirmTitle"
+      title={t("inspector.review.sizeConfirmTitle")}
       onConfirm={() => {
         detached(
           (async () => {

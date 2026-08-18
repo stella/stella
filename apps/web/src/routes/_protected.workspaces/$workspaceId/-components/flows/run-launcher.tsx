@@ -196,9 +196,9 @@ export const RunLauncher = ({
       </div>
 
       <RunSizeConfirmDialog
-        confirmKey="flows.runs.start"
+        confirmLabel={t("flows.runs.start")}
         detail={sizeConfirmation}
-        titleKey="flows.runs.sizeConfirmTitle"
+        title={t("flows.runs.sizeConfirmTitle")}
         onConfirm={() => {
           detached(
             handleStart(sizeConfirmation?.estimatedUnits),
