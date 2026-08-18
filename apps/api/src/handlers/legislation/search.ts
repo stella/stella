@@ -18,6 +18,7 @@ import {
   tPaginationLimit,
   tSafeId,
 } from "@/api/lib/custom-schema";
+import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
@@ -127,7 +128,9 @@ const pgSearch = async (
     ${body.dateTo ? sql`AND d.effective_date <= ${body.dateTo}` : sql``}
   `;
 
-  const scoreExpr = sql`(${ftsSearch.rank} + 0.3 * d.citation_authority)`;
+  // One fragment for the ORDER BY and the cursor predicate alike: keyset
+  // pagination is only stable while the two are the same expression.
+  const scoreExpr = blendedRankSql(ftsSearch.rank, sql`d.citation_authority`);
   const cursorFilter = parsedCursor
     ? sql`AND (${scoreExpr}, sd.document_id) < (${parsedCursor.score}::float8, ${parsedCursor.id})`
     : sql``;

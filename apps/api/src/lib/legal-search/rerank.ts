@@ -24,7 +24,11 @@ export type RankedHit = {
 };
 
 const DEFAULT_RRF_K = 60;
-const DEFAULT_AUTHORITY_WEIGHT = 0.3;
+/**
+ * Default weight on the authority term. Exported because the Postgres
+ * ranking paths blend in SQL and must not retype it.
+ */
+export const DEFAULT_AUTHORITY_WEIGHT = 0.3;
 
 /**
  * Half-saturation point of the log-scaled citation authority: the authority
