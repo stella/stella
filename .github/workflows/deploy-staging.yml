@@ -1,20 +1,20 @@
 name: Deploy main to staging
 
-# Continuous deploy of every push to main into staging. The tagged
-# release workflow remains the production path.
+# Deploys the tip of main into staging once a day, and on demand. The
+# tagged release workflow remains the production path.
 #
-# Staging can be unreachable for reasons that say nothing about the commit, so
-# an unreachable environment defers the deploy instead of failing it, and the
-# schedule below resumes the deploy once staging answers again. What still
-# fails is a commit that cannot reach staging for MAX_DEFERRAL_HOURS: that is
-# a stalled delivery rather than a passing interruption.
+# The scheduled run deploys only when staging serves a different commit than
+# main, so a day without merges deploys nothing. Staging can be unreachable
+# for reasons that say nothing about the commit, so an unreachable
+# environment defers the deploy instead of failing it, and the next
+# scheduled run resumes it once staging answers again. What still fails is a
+# commit that cannot reach staging for MAX_DEFERRAL_HOURS: that is a stalled
+# delivery rather than a passing interruption.
 
 on:
-  push:
-    branches: [main]
   schedule:
-    # Resume deferred deploys once staging is reachable again.
-    - cron: "*/30 * * * *"
+    # Daily, after the staging environment's own morning start.
+    - cron: "0 6 * * *"
   workflow_dispatch:
 
 env:
@@ -122,14 +122,16 @@ jobs:
           set -euo pipefail
 
           # A passing interruption resolves well inside this budget; anything
-          # longer is a stalled delivery worth waking someone.
-          readonly MAX_DEFERRAL_HOURS=12
+          # longer is a stalled delivery worth waking someone. The gate is
+          # sampled once a day, so the budget spans more than one sample: an
+          # outage that outlives the first daily run is observed by the next.
+          readonly MAX_DEFERRAL_HOURS=36
 
           if [[ "$STATUS" == "ready" ]]; then
-            # A push or dispatch always deploys what it carries. The schedule
-            # only resumes a deploy it can prove is missing, so an unreadable
-            # commit stamp leaves staging alone instead of redeploying it on
-            # every tick.
+            # A dispatch always deploys what it carries. The schedule only
+            # deploys when it can prove staging serves something else, so an
+            # unreadable commit stamp leaves staging alone instead of
+            # redeploying it on every tick.
             if [[ "$GITHUB_EVENT_NAME" == "schedule" ]]; then
               if [[ ! "$SERVED_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
                 echo "deploy=false" >> "$GITHUB_OUTPUT"
@@ -154,9 +156,9 @@ jobs:
 
           echo "deploy=false" >> "$GITHUB_OUTPUT"
 
-          # Only the schedule escalates. A push has just started waiting, and
-          # the schedule revisits it well before the budget runs out, so the
-          # decision is made in one place against a measured wait.
+          # Only the schedule escalates: a dispatch has just started waiting,
+          # and the schedule revisits it against a measured wait, so the
+          # decision is made in one place.
           if [[ "$GITHUB_EVENT_NAME" == "schedule" ]]; then
             # The last commit recorded as deployed. Empty before this workflow
             # has recorded one, which reads as "still pending" and so can only
