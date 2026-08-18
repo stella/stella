@@ -22,11 +22,18 @@ test("declared keys and registered adapters are the same set", () => {
   );
 });
 
-test("a key nothing declares resolves to no adapter", () => {
+test.each([
+  ["not-a-declared-key"],
+  [""],
+  // Inherited members are not adapters: a bare object read would answer these.
+  ["toString"],
+  ["constructor"],
+  ["__proto__"],
+  ["hasOwnProperty"],
+])("the undeclared key %p resolves to no adapter", (key) => {
   // Not a fallback, not a default: an adapter_key no build declares is a
   // source row the runner must refuse to run rather than guess at.
-  expect(getLegislationAdapter("not-a-declared-key")).toBeUndefined();
-  expect(getLegislationAdapter("")).toBeUndefined();
+  expect(getLegislationAdapter(key)).toBeUndefined();
 });
 
 // The half the runtime census cannot reach while both sets are empty: that a

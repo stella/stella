@@ -63,7 +63,7 @@ export type ProcessLegislationResult =
     }
   | {
       /**
-       * The publisher's verbatim payload could not be stored, so no row was
+       * The publisher's payload could not be stored, so no row was
        * written either. Writing one would persist the new sourceHash without
        * its raw payload, and the dedup check would then skip this document
        * forever — losing the payload rather than retrying it.
@@ -185,7 +185,7 @@ type StoreSourceRawOptions = {
 };
 
 /**
- * Store this observation's verbatim payload and return the pointers the row
+ * Store this observation's payload and return the pointers the row
  * should carry, or null when the write failed.
  *
  * An observation that carries no payload keeps whatever the row already
@@ -241,7 +241,7 @@ type ProcessLegislationDocumentOptions = {
 /**
  * Store + upsert one legislation document. Deduplicates by a source hash
  * over the corpus payload plus all persisted metadata: an unchanged
- * re-ingest is skipped. The publisher's verbatim payload is stored first,
+ * re-ingest is skipped. The publisher's payload is stored first,
  * because a row written without it would dedup-skip forever. When corpus
  * storage is on, the canonical payload is written to object storage (outside
  * the tx) and the row's S3 keys + content hash are recorded so the indexers
@@ -443,15 +443,16 @@ export type RunLegislationIngestionResult = {
   inserted: number;
   skipped: number;
   /**
-   * Documents dropped at the URL boundary. Counted rather than retried: a
-   * refused URL is a property of the publisher's payload, so holding the
-   * cursor on it would stall every later document behind one poison record.
+   * URL fields nulled at the outbound boundary, across every document of
+   * every page. Fields, not documents: the document is still stored, since a
+   * statute must not become unreachable because one of its links was
+   * off-policy.
    */
-  rejected: number;
+  urlsRefused: number;
   /**
-   * What the source said each completed slice holds. Returned rather than
-   * persisted: legislation has no coverage ledger yet (it arrives with the
-   * census), and dropping the adapter's own count on the floor is how a
+   * What the source said each fully persisted slice holds. Returned rather
+   * than persisted: legislation has no coverage ledger yet (it arrives with
+   * the census), and dropping the adapter's own count on the floor is how a
    * short crawl becomes indistinguishable from a quiet slice.
    */
   coverage: SliceCoverage[];
@@ -475,7 +476,7 @@ export const runLegislationIngestion = async ({
   let cursor = source.syncCursor;
   let inserted = 0;
   let skipped = 0;
-  let rejected = 0;
+  let urlsRefused = 0;
   const coverage: SliceCoverage[] = [];
 
   const pageLimit = maxPages ?? adapter.maxSyncPages ?? MAX_SYNC_PAGES;
@@ -523,9 +524,6 @@ export const runLegislationIngestion = async ({
     }
 
     const { documents, nextCursor, coverage: pageCoverage } = pageResult.value;
-    if (pageCoverage !== undefined) {
-      coverage.push(pageCoverage);
-    }
     let corpusWriteFailures = 0;
     let sourceRawWriteFailures = 0;
     for (const document of documents) {
@@ -535,16 +533,18 @@ export const runLegislationIngestion = async ({
         document: { ...document, sourceId: source.id },
         hostPolicy: adapter.outboundHostPolicy,
       });
-      if (checked.type === "refused") {
-        rejected += 1;
+      for (const refusal of checked.refusals) {
+        urlsRefused += 1;
+        // Redacted by construction: the refused value stays inside the
+        // boundary, which reports only the field, host and reason.
         logger.error("legislation.ingestion.document_url_refused", {
           adapterKey: adapter.key,
           sourceId: source.id,
           eli: document.eli,
-          field: checked.field,
-          url: checked.rawUrl,
+          field: refusal.field,
+          host: refusal.host,
+          reason: refusal.reason,
         });
-        continue;
       }
       // oxlint-disable-next-line no-await-in-loop -- sequential ingestion: ordered counters and per-page cursor hold on write failure
       const result = await processLegislationDocument(
@@ -572,6 +572,11 @@ export const runLegislationIngestion = async ({
       // changes again.
       break;
     }
+    // Only now: `collected` counts durably held records, so a page whose
+    // writes failed must not report coverage for what it did not store.
+    if (pageCoverage !== undefined) {
+      coverage.push(pageCoverage);
+    }
     cursor = nextCursor;
     if (nextCursor === null || documents.length === 0) {
       break;
@@ -594,5 +599,5 @@ export const runLegislationIngestion = async ({
   }
   cursor = checkpoint.cursor;
 
-  return { inserted, skipped, rejected, coverage, nextCursor: cursor };
+  return { inserted, skipped, urlsRefused, coverage, nextCursor: cursor };
 };

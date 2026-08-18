@@ -55,7 +55,10 @@ const REGISTRY_BY_KEY: Readonly<Record<string, LegislationSourceAdapter>> =
  */
 export const getLegislationAdapter = (
   key: string,
-): LegislationSourceAdapter | undefined => REGISTRY_BY_KEY[key];
+): LegislationSourceAdapter | undefined =>
+  // Own properties only: the registry is an object literal, so a bare read
+  // would answer `toString` and `constructor` with inherited members.
+  Object.hasOwn(REGISTRY_BY_KEY, key) ? REGISTRY_BY_KEY[key] : undefined;
 
 /** Every key that has an adapter registered against it. */
 export const listRegisteredLegislationAdapterKeys = (): readonly string[] =>

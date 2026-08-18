@@ -1,7 +1,7 @@
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 
 /**
- * Where a publisher's verbatim response is kept, for both corpus families.
+ * Where a publisher's response is kept, for both corpus families.
  *
  * One implementation rather than one per family: the rule ("store the bytes
  * the publisher served under a key that is their own hash, and do not re-PUT
@@ -32,7 +32,7 @@ export type WriteRawSourcePayloadOptions = {
 };
 
 /**
- * Store one verbatim publisher payload and return its object key.
+ * Store one publisher payload and return its object key.
  *
  * The write is retried: failing here holds the ingestion cursor, so letting
  * one transient transport failure through stalls the whole source until the

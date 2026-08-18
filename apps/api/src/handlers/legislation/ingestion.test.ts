@@ -21,7 +21,7 @@ import type { WriteRawSourcePayload } from "@/api/lib/legal-search/raw-source-st
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 // Validates the legislation ingestion entry: store + upsert + source-hash
-// dedup, the verbatim-payload round trip, and the runner's URL boundary. The
+// dedup, the payload round trip, and the runner's URL boundary. The
 // corpus storage mode is "off" in tests, so no S3 is touched; the raw-payload
 // write is injected.
 
@@ -32,6 +32,7 @@ let scopedDb: ScopedDb;
 const sourceId = createSafeId<"legislationSource">();
 const runnerSourceId = createSafeId<"legislationSource">();
 const heldCursorSourceId = createSafeId<"legislationSource">();
+const coverageSourceId = createSafeId<"legislationSource">();
 
 beforeAll(
   async () => {
@@ -54,6 +55,11 @@ beforeAll(
         adapterKey: "test-runner-held-cursor",
         name: "Test legislation held-cursor source",
         syncCursor: "page-1",
+      },
+      {
+        id: coverageSourceId,
+        adapterKey: "test-runner-coverage",
+        name: "Test legislation coverage source",
       },
     ]);
 
@@ -107,9 +113,11 @@ const recordingRawWriter = () => {
 };
 
 test("ingesting a legislation document inserts a row with its fields", async () => {
+  // Its own ELI: the suite shares one database, so a test that asserts an
+  // insert cannot key on a row the upsert tests below also write.
   const result = stored(
     await processLegislationDocument(
-      docInput("the obligations of the parties"),
+      { ...docInput("the obligations of the parties"), eli: "SK/2020/39" },
       scopedDb,
     ),
   );
@@ -125,7 +133,7 @@ test("ingesting a legislation document inserts a row with its fields", async () 
     })
     .from(legislationDocuments)
     .where(eq(legislationDocuments.id, result.id));
-  expect(row?.eli).toBe("SK/2020/40");
+  expect(row?.eli).toBe("SK/2020/39");
   expect(row?.status).toBe("current");
   expect(row?.country).toBe("SVK");
   expect(row?.sourceHash).toBeTruthy();
@@ -214,7 +222,7 @@ test("a changed observation fingerprint alone refreshes the row", async () => {
   expect(refreshed.skipped).toBe(false);
 });
 
-test("the publisher's verbatim payload round-trips onto the row", async () => {
+test("the publisher's payload round-trips onto the row", async () => {
   const sourceRaw =
     '<html lang="sk"><body><div class="paragraf" id="paragraf-1">§ 1</div></body></html>';
   const raw = recordingRawWriter();
@@ -328,7 +336,7 @@ const runnerAdapter = (
   },
 });
 
-test("a document URL off the adapter's declared origins is never stored", async () => {
+test("a document URL off the adapter's declared origins is nulled, not dropped", async () => {
   const result = await runLegislationIngestion({
     adapter: runnerAdapter({
       documents: [
@@ -344,8 +352,9 @@ test("a document URL off the adapter's declared origins is never stored", async 
     signal: new AbortController().signal,
   });
 
-  expect(result.rejected).toBe(1);
-  expect(result.inserted).toBe(1);
+  expect(result.urlsRefused).toBe(1);
+  // Both documents are stored: the statute survives its off-policy link.
+  expect(result.inserted).toBe(2);
 
   const rows = await db
     .select({
@@ -353,9 +362,11 @@ test("a document URL off the adapter's declared origins is never stored", async 
       documentUrl: legislationDocuments.documentUrl,
     })
     .from(legislationDocuments)
-    .where(eq(legislationDocuments.sourceId, runnerSourceId));
+    .where(eq(legislationDocuments.sourceId, runnerSourceId))
+    .orderBy(legislationDocuments.eli);
   expect(rows).toEqual([
     { eli: "SVK/act/1", documentUrl: `${PUBLISHER_ORIGIN}/act/1` },
+    { eli: "SVK/act/2", documentUrl: null },
   ]);
 });
 
@@ -386,10 +397,12 @@ test("a document naming a foreign source is stored under the source being run", 
 
 test("a page the adapter could not fetch holds the cursor", async () => {
   const adapter = runnerAdapter({ documents: [], nextCursor: null });
+  let fetchCalls = 0;
   const failing: LegislationSourceAdapter = {
     ...adapter,
-    fetchPage: async () =>
-      await Promise.resolve(
+    fetchPage: async () => {
+      fetchCalls += 1;
+      return await Promise.resolve(
         Result.err(
           new AdapterFetchError({
             message: "publisher unavailable",
@@ -397,7 +410,8 @@ test("a page the adapter could not fetch holds the cursor", async () => {
             cursor: "page-1",
           }),
         ),
-      ),
+      );
+    },
   };
   const result = await runLegislationIngestion({
     adapter: failing,
@@ -409,4 +423,44 @@ test("a page the adapter could not fetch holds the cursor", async () => {
   // skip whatever it held, permanently: a forward-only cursor never returns.
   expect(result.nextCursor).toBe("page-1");
   expect(result.inserted).toBe(0);
+  // One attempt: without the break the cycle would re-ask a down publisher
+  // once per page budget, and the two assertions above would still hold.
+  expect(fetchCalls).toBe(1);
+});
+
+test("coverage is reported only for a page that fully persisted", async () => {
+  const coverage = { slice: "2026-08-18", reported: 1, collected: 1 };
+  const page = {
+    documents: [
+      {
+        ...runnerDocument("SVK/act/4", `${PUBLISHER_ORIGIN}/act/4`),
+        sourceRaw: "<html><body>unstorable</body></html>",
+      },
+    ],
+    nextCursor: null,
+    coverage,
+  };
+  const failing: WriteRawSourcePayload = async () =>
+    await Promise.reject(new Error("object storage unavailable"));
+
+  const held = await runLegislationIngestion({
+    adapter: runnerAdapter(page),
+    source: { id: coverageSourceId, syncCursor: null },
+    scopedDb,
+    signal: new AbortController().signal,
+    writeSourceRaw: failing,
+  });
+  // `collected` counts durably held records, so a page whose writes failed
+  // must report none of it.
+  expect(held.coverage).toEqual([]);
+
+  const raw = recordingRawWriter();
+  const settled = await runLegislationIngestion({
+    adapter: runnerAdapter(page),
+    source: { id: coverageSourceId, syncCursor: null },
+    scopedDb,
+    signal: new AbortController().signal,
+    writeSourceRaw: raw.write,
+  });
+  expect(settled.coverage).toEqual([coverage]);
 });

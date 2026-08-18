@@ -61,11 +61,18 @@ export type LegislationDocumentInput = {
   documentUrl?: string | null;
   metadata?: Record<string, unknown>;
   /**
-   * The publisher's response verbatim (HTML, a JSON string, a structured
-   * envelope over several responses), stored so a later parser can be
-   * replayed without re-crawling. Case-law rule 3 applies unchanged: a
-   * parser improvement is free while this is kept and needs a fresh crawl of
-   * a publisher that may have moved once it is not.
+   * The publisher's response as received (HTML, a JSON string, a structured
+   * envelope over several responses), after the pipeline's
+   * dangerous-character pass — NUL, BOM, C0 controls and zero-width
+   * characters removed, NBSP normalised — the same pass every stored field
+   * gets. Not byte-exact, and deliberately so: case-law rule 5 applies it to
+   * all fields including this one, and Postgres rejects some of what it
+   * strips.
+   *
+   * Stored so a later parser can be replayed without re-crawling; case-law
+   * rule 3 applies unchanged. `rawHash` fingerprints the observation as the
+   * adapter saw it, while the storage key addresses the bytes as stored, so
+   * the two answer different questions and need not agree.
    *
    * Optional only for a source that publishes no retrievable payload; every
    * adapter that fetches one sets it.

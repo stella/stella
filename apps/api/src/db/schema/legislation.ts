@@ -89,7 +89,7 @@ export const legislationDocuments = p.pgTable(
     metadata: jsonb().$type<Record<string, unknown>>().default({}),
     sourceHash: p.varchar("source_hash", { length: 64 }),
     /**
-     * Where the publisher's verbatim response for this Expression is kept, so
+     * Where the publisher's response for this Expression is kept, so
      * a later parser can be replayed without re-crawling. Content-addressed;
      * the twin of `case_law_decisions.source_raw_s3_key`.
      */
