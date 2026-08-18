@@ -4,16 +4,14 @@ import {
   type CorpusIndexHit,
   getCorpusIndexClient,
 } from "@/api/lib/legal-search/corpus-index-client";
-import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
-import {
-  corpusIndexId,
-  isCorpusIndexGeneration,
-} from "@/api/lib/legal-search/index-naming";
+import { isCorpusIndexGeneration } from "@/api/lib/legal-search/index-naming";
 import { LIMITS } from "@/api/lib/limits";
 import {
   divergedQueries,
+  type GoldenQuery,
   type GoldenQueryDiffRow,
   diffRankedDocuments,
+  goldenQueryRequest,
   parseGoldenQueryFile,
   type QueryRunOutcome,
   rankDocumentHits,
@@ -163,25 +161,25 @@ if (Result.isError(queries)) {
 
 const client = getCorpusIndexClient();
 
-type RunQueryOptions = {
-  generation: string;
-  jurisdiction: string;
-  engineQuery: string;
-};
-
 /**
  * Bounded offset scan until the top-N distinct documents are collected.
  * A passage-granularity index can put hundreds of one judgment's passages
  * ahead of the next document, so a single fixed-size page cannot promise
  * N distinct documents; the scan widens page by page (the production
  * reader's shape) up to the shared scan limit.
+ *
+ * Each generation gets its own route: from generation 3 on a physical
+ * index may hold several jurisdictions, and the query then carries the
+ * jurisdiction clause the search paths carry.
  */
-const runQuery = async ({
-  engineQuery,
-  generation,
-  jurisdiction,
-}: RunQueryOptions): Promise<QueryRunOutcome> => {
-  const indexId = corpusIndexId(generation, jurisdiction);
+const runQuery = async (
+  generation: string,
+  query: GoldenQuery,
+): Promise<QueryRunOutcome> => {
+  const request =
+    goldenQueryRequest(generation, query) ??
+    fail(`query ${query.id} holds no searchable term: ${query.text}`);
+  const { indexId, engineQuery } = request;
   const scanned: CorpusIndexHit[] = [];
   let totalHits = 0;
   let startOffset = 0;
@@ -219,22 +217,10 @@ const runQuery = async ({
 
 const rows: GoldenQueryDiffRow[] = [];
 for (const query of queries.value) {
-  const engineQuery = caseLawCorpusQuery(query.text, query.filters ?? {});
-  if (engineQuery === null) {
-    fail(`query ${query.id} holds no searchable term: ${query.text}`);
-  }
   // oxlint-disable-next-line no-await-in-loop -- one query at a time keeps the load on the engine bounded
   const [base, candidate] = await Promise.all([
-    runQuery({
-      generation: baseGeneration,
-      jurisdiction: query.jurisdiction,
-      engineQuery,
-    }),
-    runQuery({
-      generation: candidateGeneration,
-      jurisdiction: query.jurisdiction,
-      engineQuery,
-    }),
+    runQuery(baseGeneration, query),
+    runQuery(candidateGeneration, query),
   ]);
   rows.push({
     query,

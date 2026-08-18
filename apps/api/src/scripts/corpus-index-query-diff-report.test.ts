@@ -8,7 +8,9 @@ import { tokenizeCorpusFreeText } from "@/api/lib/legal-search/corpus-query";
 import {
   diffRankedDocuments,
   divergedQueries,
+  type GoldenQuery,
   type GoldenQueryDiffRow,
+  goldenQueryRequest,
   parseGoldenQueryFile,
   type QueryRunOutcome,
   rankDocumentHits,
@@ -120,6 +122,40 @@ describe("parseGoldenQueryFile", () => {
     expect(
       Result.isError(parseGoldenQueryFile(query("2015-12-31", "2016-01-01"))),
     ).toBe(false);
+  });
+});
+
+describe("goldenQueryRequest", () => {
+  const query: GoldenQuery = {
+    id: "q",
+    jurisdiction: "cze",
+    text: "náhrada škody",
+    filters: { court: "Nejvyšší soud" },
+  };
+
+  test("a generation whose index is shared carries the jurisdiction clause", () => {
+    // Base and candidate are routed separately: comparing a per-country
+    // index against a shared one without the clause would set one
+    // jurisdiction's hits against several jurisdictions' hits.
+    const perCountry = goldenQueryRequest("case_law_v2", query);
+    const shared = goldenQueryRequest("case_law_v3", query);
+    expect(perCountry).toEqual({
+      indexId: "case_law_v2_cze",
+      engineQuery: '("náhrada" AND "škody") AND court:"Nejvyšší soud"',
+    });
+    expect(shared).toEqual({
+      indexId: "case_law_v3_cs_sk",
+      engineQuery:
+        '("náhrada" AND "škody") AND jurisdiction:"CZE" AND court:"Nejvyšší soud"',
+    });
+    // Non-vacuity: the two requests differ only by index and clause.
+    expect(perCountry?.engineQuery).not.toBe(shared?.engineQuery);
+  });
+
+  test("a query without a searchable term has no request", () => {
+    expect(goldenQueryRequest("case_law_v3", { ...query, text: "..." })).toBe(
+      null,
+    );
   });
 });
 

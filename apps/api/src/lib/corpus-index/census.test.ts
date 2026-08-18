@@ -389,14 +389,24 @@ describe("census sweep unit", () => {
   test("countries sharing an index are one observation from generation 3", async () => {
     // Two countries, one physical index: censusing it once per country
     // would count the same engine index twice and compare it against half
-    // its rows each time. Two censuses' worth of cycles must visit the
-    // same index twice, not two indexes once.
-    const counted = await sweep("case_law_v3", ["CZE", "SVK"], 2);
-    expect(counted).toEqual(["case_law_v3_cs_sk", "case_law_v3_cs_sk"]);
+    // its rows each time. Three censuses' worth of cycles must visit the
+    // shared index, then the other index, then wrap round to the shared
+    // one; a per-country sweep would visit the shared index twice before
+    // reaching the other.
+    const counted = await sweep("case_law_v3", ["CZE", "SVK", "POL"], 3);
+    expect(counted).toEqual([
+      "case_law_v3_cs_sk",
+      "case_law_v3_pol",
+      "case_law_v3_cs_sk",
+    ]);
   });
 
   test("countries keep their own observation before generation 3", async () => {
-    const counted = await sweep("case_law_v2", ["CZE", "SVK"], 2);
-    expect(counted).toEqual(["case_law_v2_cze", "case_law_v2_svk"]);
+    const counted = await sweep("case_law_v2", ["CZE", "SVK", "POL"], 3);
+    expect(counted).toEqual([
+      "case_law_v2_cze",
+      "case_law_v2_svk",
+      "case_law_v2_pol",
+    ]);
   });
 });

@@ -10,7 +10,6 @@ import {
 import {
   CASE_LAW_JURISDICTIONS,
   type CaseLawJurisdiction,
-  isCaseLawJurisdiction,
 } from "@/api/lib/legal-search/ingestion-constants";
 
 test("searchable text fields enable fieldnorms so BM25 scoring works", () => {
@@ -122,10 +121,12 @@ test("court stays a viable tag field in every index", () => {
   for (const bound of Object.values(COURT_DOMAIN_BOUND)) {
     expect(bound).toBeLessThan(TAG_FIELD_VALUE_LIMIT / 2);
   }
-  for (const [group, countries] of Object.entries(CASE_LAW_INDEX_GROUPS)) {
-    const groupBound = countries
-      .filter(isCaseLawJurisdiction)
-      .reduce((total, country) => total + COURT_DOMAIN_BOUND[country], 0);
+  // Group members are declared jurisdictions, so every member has a bound.
+  for (const [group, countries] of CASE_LAW_INDEX_GROUPS) {
+    const groupBound = countries.reduce(
+      (total, country) => total + COURT_DOMAIN_BOUND[country],
+      0,
+    );
     expect([group, groupBound < TAG_FIELD_VALUE_LIMIT / 2]).toEqual([
       group,
       true,

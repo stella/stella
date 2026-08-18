@@ -2,7 +2,11 @@ import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
-import { isCorpusIndexJurisdiction } from "@/api/lib/legal-search/index-naming";
+import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
+import {
+  corpusIndexRoute,
+  isCorpusIndexJurisdiction,
+} from "@/api/lib/legal-search/index-naming";
 
 /**
  * Pure half of the golden-query diff harness: query-file parsing, top-N
@@ -85,6 +89,34 @@ export const parseGoldenQueryFile = (
     );
   }
   return Result.ok(parsed.output);
+};
+
+export type GoldenQueryRequest = {
+  /** Physical index the query is sent to. */
+  indexId: string;
+  /** The engine query, jurisdiction clause included where the index needs one. */
+  engineQuery: string;
+};
+
+/**
+ * What one golden query asks one generation's engine for: the same route and
+ * the same query assembly the search paths use, so a generation whose index
+ * holds several jurisdictions is compared on the query's jurisdiction alone.
+ * Null when the query text carries no searchable term.
+ */
+export const goldenQueryRequest = (
+  generation: string,
+  query: GoldenQuery,
+): GoldenQueryRequest | null => {
+  const { indexId, jurisdictionClause } = corpusIndexRoute(
+    generation,
+    query.jurisdiction,
+  );
+  const engineQuery = caseLawCorpusQuery(query.text, {
+    ...query.filters,
+    jurisdiction: jurisdictionClause,
+  });
+  return engineQuery === null ? null : { indexId, engineQuery };
 };
 
 export type QueryRunOutcome = {

@@ -5,6 +5,8 @@ import {
   CASE_LAW_INDEX_GROUPING_FROM_GENERATION,
   caseLawIndexGroup,
   caseLawIndexGroupCountries,
+  isCaseLawIndexGroup,
+  POSTGRES_INTEGER_MAX,
 } from "@/api/lib/legal-search/case-law-index-groups";
 
 /**
@@ -14,7 +16,7 @@ import {
  * except that case-law generations from
  * `CASE_LAW_INDEX_GROUPING_FROM_GENERATION` on use `<generation>_<group>`
  * (e.g. `case_law_v3_cs_sk`), where the group is the jurisdiction's entry in
- * `CASE_LAW_INDEX_GROUPS`. So reindex, retention, and query scope are
+ * `CASE_LAW_INDEX_GROUP_OF`. So reindex, retention, and query scope are
  * isolated per family AND per index, and a scoped query only touches that
  * one index. A single shared searcher pool serves them all (corpus index
  * routes splits to searchers by consistent hashing) — index-level isolation,
@@ -36,7 +38,6 @@ export const isCorpusIndexGeneration = (value: string): boolean =>
   GENERATION_PATTERN.test(value);
 
 const CASE_LAW_CORPUS_GENERATION_PATTERN = /^case_law_v([1-9][0-9]*)$/u;
-const POSTGRES_INTEGER_MAX = 2_147_483_647;
 
 /** Numeric precedence for the one canonical case-law generation form. */
 export const caseLawCorpusGenerationOrder = (value: string): number | null => {
@@ -103,6 +104,30 @@ export const corpusIndexIdsFor = (
 ];
 
 /**
+ * Jurisdictions whose rows `corpusIndexId` places in this physical index of
+ * this generation, in canonical (uppercase) form: the inverse of
+ * `corpusIndexId`, so a predicate over `country` can address exactly the
+ * rows an index answers for.
+ */
+export const corpusIndexJurisdictions = (
+  generation: string,
+  indexId: string,
+): readonly string[] => {
+  const prefix = `${generation}_`;
+  if (!indexId.startsWith(prefix)) {
+    panic(`Corpus index id ${indexId} is not of generation ${generation}`);
+  }
+  const suffix = indexId.slice(prefix.length);
+  if (isGroupedCaseLawGeneration(generation) && isCaseLawIndexGroup(suffix)) {
+    return caseLawIndexGroupCountries(suffix);
+  }
+  if (!isCorpusIndexJurisdiction(suffix)) {
+    panic(`Invalid corpus index index id: ${indexId}`);
+  }
+  return [suffix.toUpperCase()];
+};
+
+/**
  * Whether the physical index a scoped query selects for this jurisdiction
  * also holds other jurisdictions, so the query needs a jurisdiction clause
  * of its own to stay exact.
@@ -118,9 +143,10 @@ export type CorpusIndexRoute = {
   /** Physical index, or the generation glob when the query is unscoped. */
   indexId: string;
   /**
-   * Jurisdiction the engine query must carry as a clause: the scoped one
-   * when its physical index holds other jurisdictions, otherwise undefined
-   * because the index itself already bounds the query.
+   * Jurisdiction the engine query must carry as a clause, in the canonical
+   * uppercase form indexed documents carry: the scoped one when its physical
+   * index holds other jurisdictions, otherwise undefined because the index
+   * itself already bounds the query.
    */
   jurisdictionClause: string | undefined;
 };
@@ -136,13 +162,14 @@ export const corpusIndexRoute = (
       jurisdictionClause: undefined,
     };
   }
+  const canonical = jurisdiction.toUpperCase();
   return {
-    indexId: corpusIndexId(generation, jurisdiction),
+    indexId: corpusIndexId(generation, canonical),
     jurisdictionClause: corpusIndexHoldsOtherJurisdictions(
       generation,
-      jurisdiction,
+      canonical,
     )
-      ? jurisdiction
+      ? canonical
       : undefined,
   };
 };

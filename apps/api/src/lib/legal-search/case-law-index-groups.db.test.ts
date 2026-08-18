@@ -3,7 +3,6 @@ import { sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 import { readFileSync } from "node:fs";
-import nodePath from "node:path";
 
 import {
   caseLawCorpusIndexBackfills,
@@ -13,35 +12,34 @@ import {
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
-  CASE_LAW_INDEX_GROUPS,
+  CASE_LAW_INDEX_GROUP_OF,
   caseLawIndexIdSql,
 } from "@/api/lib/legal-search/case-law-index-groups";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 import { isRecord } from "@/api/lib/type-guards";
+import {
+  INDEX_ID_FUNCTION,
+  installCaseLawProjectionTrigger,
+  latestMigrationContaining,
+} from "@/api/tests/helpers/case-law-projection-trigger";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 /**
  * The physical index id is derived in three runtimes: `corpusIndexId` in
  * TypeScript, `caseLawIndexIdSql` in the queries, and
  * `case_law_corpus_index_id` in the projection trigger. Each is proved equal
- * to the others here against a real PostgreSQL, over every group member in
- * both letter cases, countries outside every group, and generations on both
- * sides of the grouping threshold plus one from another family.
+ * to the others here against a real PostgreSQL, over every declared
+ * jurisdiction in both letter cases, countries outside the declaration, and
+ * generations on both sides of the grouping threshold, at and past the
+ * integer bound, plus one from another family.
  */
 
-const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../../drizzle");
-const INDEX_ID_FUNCTION =
-  "CREATE OR REPLACE FUNCTION case_law_corpus_index_id(generation text, country text)";
-const PROJECTION_TRIGGER_FUNCTION =
-  "CREATE OR REPLACE FUNCTION enqueue_case_law_corpus_index_projection()";
-const PROJECTION_TRIGGER =
-  "CREATE TRIGGER case_law_decisions_enqueue_corpus_index_projection";
-
+const DECLARED: readonly string[] = Object.keys(CASE_LAW_INDEX_GROUP_OF);
 const COUNTRIES: readonly string[] = [
-  ...Object.values(CASE_LAW_INDEX_GROUPS).flat(),
-  ...Object.values(CASE_LAW_INDEX_GROUPS)
-    .flat()
-    .map((country) => country.toLowerCase()),
+  ...DECLARED,
+  ...DECLARED.map((country) => country.toLowerCase()),
+  // A code that spells a language tag derives an index of its own.
+  "PL",
   "HUN",
   "ROU",
   "xyz",
@@ -51,45 +49,16 @@ const GENERATIONS: readonly string[] = [
   "case_law_v2",
   "case_law_v3",
   "case_law_v12",
+  // The last order the checkpoint column holds, and the first past it: the
+  // former is grouped, the latter is not a case-law generation and stays per
+  // country rather than failing an integer cast.
+  "case_law_v2147483647",
+  "case_law_v2147483648",
   "legislation_v1",
 ];
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
-
-/** Statements of a migration file, in order, comments included. */
-const statementsOf = (path: string): string[] =>
-  readFileSync(path, "utf-8")
-    .split("--> statement-breakpoint")
-    .map((statement) => statement.trim())
-    .filter((statement) => statement.length > 0);
-
-/**
- * The last migration whose text contains `marker`. Migrations apply in
- * directory order, so that is the definition a database ends up with.
- */
-const latestMigrationContaining = (marker: string): string => {
-  const path = [...new Bun.Glob("*/migration.sql").scanSync(DRIZZLE_DIR)]
-    .sort()
-    .map((file) => nodePath.join(DRIZZLE_DIR, file))
-    .findLast((file) => readFileSync(file, "utf-8").includes(marker));
-  if (path === undefined) {
-    throw new Error(`no migration contains ${marker}`);
-  }
-  return path;
-};
-
-/** Statements matching `statementMarker` from the last migration containing `marker`. */
-const latestStatements = (
-  marker: string,
-  statementMarker: RegExp,
-): string[] => {
-  const statements = statementsOf(latestMigrationContaining(marker)).filter(
-    (statement) => statementMarker.test(statement),
-  );
-  expect(statements.length).toBeGreaterThan(0);
-  return statements;
-};
 
 /** Rows from `execute` under either driver shape (bare array or `{ rows }`). */
 const executedRows = (result: unknown): unknown[] => {
@@ -116,25 +85,7 @@ beforeAll(
     db = drizzle({ client });
     // The function under test, and the trigger that calls it, come from the
     // last migrations that define them, so the test runs the deployed text.
-    const statements = [
-      ...latestStatements(
-        INDEX_ID_FUNCTION,
-        /FUNCTION case_law_corpus_index_id\(/u,
-      ),
-      ...latestStatements(
-        PROJECTION_TRIGGER_FUNCTION,
-        /enqueue_case_law_corpus_index_projection\(\)\s+RETURNS trigger/u,
-      ),
-      // The replacement drop (`DROP TRIGGER IF EXISTS ...`) and the creation.
-      ...latestStatements(
-        PROJECTION_TRIGGER,
-        /\b(?:CREATE|DROP) TRIGGER (?:IF EXISTS )?case_law_decisions_enqueue_corpus_index_projection\b/u,
-      ),
-    ];
-    for (const statement of statements) {
-      // oxlint-disable-next-line no-await-in-loop -- order-dependent DDL
-      await db.execute(sql.raw(statement));
-    }
+    await installCaseLawProjectionTrigger(db);
   },
   { timeout: 120_000 },
 );
@@ -181,6 +132,15 @@ test("the SQL function, the query fragment, and corpusIndexId derive the same id
   expect(corpusIndexId("case_law_v3", "CZE")).not.toBe("case_law_v3_cze");
   expect(corpusIndexId("case_law_v2", "CZE")).toBe("case_law_v2_cze");
   expect(corpusIndexId("legislation_v1", "CZE")).toBe("legislation_v1_cze");
+  expect(corpusIndexId("case_law_v2147483647", "CZE")).toBe(
+    "case_law_v2147483647_cs_sk",
+  );
+  expect(corpusIndexId("case_law_v2147483648", "CZE")).toBe(
+    "case_law_v2147483648_cze",
+  );
+  expect(corpusIndexId("case_law_v3", "PL")).not.toBe(
+    corpusIndexId("case_law_v3", "POL"),
+  );
 });
 
 test("the migration's function body is the rendered query fragment", () => {

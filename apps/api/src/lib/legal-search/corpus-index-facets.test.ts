@@ -187,7 +187,7 @@ test("a scoped query on a shared index carries its jurisdiction as a clause", as
   expect(requests.at(0)?.url).toContain("/case_law_v3_cs_sk/search");
   expect(requests.at(0)?.body["query"]).toBe('seq:0 AND jurisdiction:"CZE"');
   // A single-country index needs no clause; the source exclusion still lands.
-  expect(requests.at(1)?.url).toContain("/case_law_v3_pl/search");
+  expect(requests.at(1)?.url).toContain("/case_law_v3_pol/search");
   expect(requests.at(1)?.body["query"]).toBe(
     'seq:0 AND NOT (source:"018f0a2b-0000-7000-8000-000000000001")',
   );

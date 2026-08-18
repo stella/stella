@@ -24,15 +24,15 @@
  * The unit is the physical index, not the country: from generation 3 on
  * several countries share one index (`corpusIndexId`), and the engine
  * count is per index either way. The rows an index answers for are the
- * ones whose derived index id is that index, the same derivation the
- * search path rehydrates through.
+ * ones whose country the index holds (`corpusIndexJurisdictions`, the
+ * inverse of that derivation), in the state the search path accepts.
  *
  * Bounded by construction: one index per call, one aggregate query per
  * side, and a caller that decides how often to run it.
  */
 
 import { Result } from "better-result";
-import { and, sql } from "drizzle-orm";
+import { inArray, type SQL, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -42,12 +42,14 @@ import {
 import { errorTag } from "@/api/lib/errors/error-tag";
 import {
   caseLawCorpusProjectionJoin,
-  caseLawDecisionCorpusIndexIdSql,
   currentCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
 import type { CorpusIndexError } from "@/api/lib/legal-search/corpus-index-client";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
-import { corpusIndexIdsFor } from "@/api/lib/legal-search/index-naming";
+import {
+  corpusIndexIdsFor,
+  corpusIndexJurisdictions,
+} from "@/api/lib/legal-search/index-naming";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -126,14 +128,21 @@ const dispositionOf = (shortfall: number): CensusDisposition => {
 
 /**
  * Rows this generation has marked as indexed into this physical index:
- * every row whose country derives to it, in the state the search path
+ * every row whose country the index holds, in the state the search path
  * accepts.
  *
- * The same predicates the search path rehydrates through, so the census
- * counts exactly the rows a query would expect the engine to answer for.
- * Defining them a second time here would let the two drift, which is the
- * failure this whole module exists to catch.
+ * The country list is the inverse of the id derivation, so the census
+ * counts exactly the rows a query would expect the engine to answer for,
+ * and `country` is a plain column predicate the country index serves. The
+ * projection state is the same predicate the search path rehydrates
+ * through; defining it a second time here would let the two drift, which
+ * is the failure this whole module exists to catch.
  */
+const censusPopulation = (generation: string, indexId: string): SQL =>
+  sql`${inArray(caseLawDecisions.country, [
+    ...corpusIndexJurisdictions(generation, indexId),
+  ])} AND ${currentCaseLawCorpusProjection(generation)}`;
+
 const countMarkedIndexed = async (
   scopedDb: ScopedDb,
   { generation, indexId }: { generation: string; indexId: string },
@@ -146,12 +155,7 @@ const countMarkedIndexed = async (
         caseLawCorpusIndexProjections,
         caseLawCorpusProjectionJoin(generation),
       )
-      .where(
-        and(
-          sql`(${caseLawDecisionCorpusIndexIdSql(generation)}) = ${indexId}`,
-          currentCaseLawCorpusProjection(generation),
-        ),
-      ),
+      .where(censusPopulation(generation, indexId)),
   );
   return rows.at(0)?.marked ?? 0;
 };
@@ -480,8 +484,7 @@ export const clearIndexMarks = async ({
         FROM ${caseLawDecisions}
         LEFT JOIN ${caseLawCorpusIndexProjections}
           ON ${caseLawCorpusProjectionJoin(generation)}
-        WHERE (${caseLawDecisionCorpusIndexIdSql(generation)}) = ${indexId}
-          AND ${currentCaseLawCorpusProjection(generation)}
+        WHERE ${censusPopulation(generation, indexId)}
         ORDER BY ${caseLawDecisions.id}
         LIMIT ${Math.min(limit, MAX_REPAIR_SLICE)}
       )
