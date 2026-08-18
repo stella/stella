@@ -82,7 +82,7 @@
   },
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.0",
-    "@changesets/cli": "^2.31.0",
+    "@changesets/cli": "^3.0.0",
     "@oxlint/plugins": "catalog:",
     "@stll/oxlint-config": "0.6.0",
     "@stll/typescript-config": "workspace:^0.0.0",
