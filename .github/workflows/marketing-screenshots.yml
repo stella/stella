@@ -1,0 +1,207 @@
+name: Marketing screenshots
+
+# One runner definition for both directions of the marketing screenshot
+# baselines, so "what CI compares" and "what CI regenerates" can never be
+# produced by two drifting job bodies:
+#
+#   check  — PR CI and the nightly run compare the committed PNGs against a
+#            freshly seeded app.
+#   update — dispatched on a branch whose UI legitimately changed; rewrites
+#            every baseline on the runner and pushes the result to that branch.
+#
+# Both render on the same runner image, which is why the baselines can be
+# treated as reproducible artifacts rather than a developer's local output.
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        description: check compares committed baselines; update regenerates and pushes them
+        required: true
+        type: string
+    secrets:
+      DOCKERHUB_USERNAME:
+        description: Docker Hub username for authenticated infrastructure image pulls
+        required: false
+      DOCKERHUB_TOKEN:
+        description: Docker Hub token for authenticated infrastructure image pulls
+        required: false
+      STELLA_RELEASE_APP_PRIVATE_KEY:
+        description: Private key of the release App; update mode pushes the regenerated PNGs with its token
+        required: false
+
+permissions: {}
+
+jobs:
+  marketing-screenshots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      # The update push runs on the App token, not GITHUB_TOKEN: a push made
+      # with GITHUB_TOKEN does not re-trigger the PR's checks, so the branch
+      # would sit on a failed marketing check with the fix already committed.
+      contents: read
+
+    steps:
+      - name: Validate mode
+        env:
+          MODE: ${{ inputs.mode }}
+        run: |
+          case "$MODE" in
+            check|update) ;;
+            *)
+              echo "::error::Unknown marketing screenshot mode: $MODE"
+              exit 1
+              ;;
+          esac
+
+      - name: Mint App token
+        if: inputs.mode == 'update'
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The App token is injected into the push command only, so it never
+          # reaches disk as a persisted git credential that repository code
+          # could read.
+          persist-credentials: false
+          submodules: true
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@2b8697f04b39187c934afc04f7b04ad1a18bd827
+
+      - name: Install dependencies
+        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        run: |
+          cd ./apps/api
+          cp .env.example .env
+          cd ../web
+          cp .env.example .env
+
+      - name: Start docker stack and API server
+        id: e2e-stack
+        uses: ./.github/actions/setup-e2e-stack
+        with:
+          dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
+          # Document conversion backs the seeded product scenes the captures
+          # render.
+          extra-services: gotenberg
+
+      - name: Start web dev server
+        if: steps.e2e-stack.outputs.status == 'ready'
+        run: |
+          cd apps/web
+          nohup bun --bun vite --port 3000 > /tmp/web.log 2>&1 &
+          echo $! > /tmp/web.pid
+
+      - name: Wait for web dev server
+        if: steps.e2e-stack.outputs.status == 'ready'
+        run: |
+          for i in {1..60}; do
+            if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3000 > /dev/null 2>&1; then
+              echo "Web up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::Web never came up"
+          tail -200 /tmp/web.log || true
+          exit 1
+
+      - name: Install Playwright browsers
+        if: steps.e2e-stack.outputs.status == 'ready'
+        uses: ./.github/actions/setup-playwright
+        with:
+          dependency-mode: full
+
+      - name: Seed deterministic marketing content
+        if: steps.e2e-stack.outputs.status == 'ready'
+        run: bun --filter @stll/api db:seed-dev
+
+      - name: Capture marketing screenshots
+        if: steps.e2e-stack.outputs.status == 'ready'
+        env:
+          MODE: ${{ inputs.mode }}
+        run: |
+          # The `--update-snapshots` flag lives in the package script alone, so
+          # there is one place that knows how a baseline is rewritten.
+          if [[ "$MODE" == "update" ]]; then
+            bun --filter @stll/web test:e2e:marketing:update
+          else
+            bun --filter @stll/web test:e2e:marketing
+          fi
+
+      - name: Guard against mid-test Vite re-optimize
+        # Before the update-mode commit below: a mid-session reload produces
+        # torn frames, which must never be pushed as a baseline.
+        if: always() && steps.e2e-stack.outputs.status == 'ready'
+        run: |
+          if grep -q "optimized dependencies changed. reloading" /tmp/web.log; then
+            echo "::error::Vite re-optimized dependencies mid-session and forced a reload. Add the lazy/runtime dependency named below to optimizeDeps.include in apps/web/vite.config.ts."
+            grep -nE "new dependencies optimized|optimized dependencies changed" /tmp/web.log || true
+            exit 1
+          fi
+          echo "No mid-session dep re-optimize detected."
+
+      - name: Stop web dev server
+        if: always() && steps.e2e-stack.outputs.status == 'ready'
+        run: |
+          if [[ -f /tmp/web.pid ]]; then
+            kill "$(cat /tmp/web.pid)" || true
+            rm -f /tmp/web.pid
+          fi
+
+      - name: Push regenerated baselines
+        if: inputs.mode == 'update' && steps.e2e-stack.outputs.status == 'ready'
+        env:
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          BRANCH: ${{ github.ref_name }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+
+          changed="$(git status --porcelain -- 'apps/landing/public/media/products/*.png')"
+          if [[ -z "$changed" ]]; then
+            echo "Baselines already match this branch; nothing to push." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          {
+            echo "### Regenerated marketing screenshots"
+            echo
+            echo "$changed" | cut -c4- | sed 's/^/- /'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          bot_id="$(gh api "users/${APP_SLUG}[bot]" --jq '.id')"
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${bot_id}+${APP_SLUG}[bot]@users.noreply.github.com"
+
+          git add -- 'apps/landing/public/media/products/*.png'
+          git commit -m "chore(landing): regenerate marketing screenshots"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/${BRANCH}"
+
+      - name: Upload failure diagnostics
+        if: failure() && steps.e2e-stack.outputs.status == 'ready'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          # Mode and run keep the nightly, PR, and dispatched artifacts apart.
+          name: marketing-screenshots-${{ inputs.mode }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /tmp/api.log
+            /tmp/web.log
+            apps/web/test-results/
+          if-no-files-found: ignore
+          retention-days: 7

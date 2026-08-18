@@ -46,6 +46,7 @@ jobs:
       e2e_landing_required: ${{ steps.changed-files.outputs.e2e_landing_required }}
       landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
       legal_atlas_image_required: ${{ steps.changed-files.outputs.legal_atlas_image_required }}
+      marketing_screenshots_required: ${{ steps.changed-files.outputs.marketing_screenshots_required }}
       mobile_build_required: ${{ steps.changed-files.outputs.mobile_build_required }}
       package_checks_required: ${{ steps.changed-files.outputs.package_checks_required }}
       release_typecheck_required: ${{ steps.changed-files.outputs.release_typecheck_required }}
@@ -99,6 +100,7 @@ jobs:
               echo "e2e_landing_required=true"
               echo "landing_build_required=true"
               echo "legal_atlas_image_required=true"
+              echo "marketing_screenshots_required=true"
               echo "mobile_build_required=true"
               echo "package_checks_required=true"
               echo "release_typecheck_required=false"
@@ -121,6 +123,7 @@ jobs:
               echo "e2e_landing_required=false"
               echo "landing_build_required=false"
               echo "legal_atlas_image_required=false"
+              echo "marketing_screenshots_required=false"
               echo "mobile_build_required=false"
               echo "package_checks_required=true"
               echo "release_typecheck_required=false"
@@ -134,6 +137,7 @@ jobs:
           desktop_rust_checks_required=$(bash scripts/detect-tauri-rust-changes.sh "${changed_files[@]}")
           e2e_core_required=$(bash scripts/detect-e2e-changes.sh core "${changed_files[@]}")
           e2e_landing_required=$(bash scripts/detect-e2e-changes.sh landing "${changed_files[@]}")
+          marketing_screenshots_required=$(bash scripts/detect-e2e-changes.sh marketing "${changed_files[@]}")
           package_checks_required=false
           for file in "${changed_files[@]}"; do
             case "$file" in
@@ -228,6 +232,7 @@ jobs:
             echo "e2e_landing_required=$e2e_landing_required"
             echo "landing_build_required=$landing_build_required"
             echo "legal_atlas_image_required=$legal_atlas_image_required"
+            echo "marketing_screenshots_required=$marketing_screenshots_required"
             echo "mobile_build_required=$mobile_build_required"
             echo "package_checks_required=$package_checks_required"
             echo "release_typecheck_required=$release_typecheck_required"
@@ -1717,6 +1722,27 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  # A UI change must fail the PR that makes it, not the next nightly run: the
+  # captured PNGs ship as landing-page assets, so a silent baseline
+  # invalidation puts a stale product shot on the marketing site. Regeneration
+  # happens on the runner (`marketing-screenshots-update.yml` dispatched on
+  # this branch), which is also why the comparison tolerance can stay tight:
+  # baselines and comparison render on the same image.
+  marketing-screenshots:
+    needs: ci-plan
+    if: >-
+      (needs.ci-plan.outputs.trusted == 'true'
+       || github.event_name == 'workflow_dispatch')
+      && needs.ci-plan.outputs.marketing_screenshots_required == 'true'
+    uses: ./.github/workflows/marketing-screenshots.yml
+    permissions:
+      contents: read
+    with:
+      mode: check
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
   e2e:
     if: always()
     needs: [ci-plan, e2e-production-shard, e2e-vite-canary, e2e-landing]
@@ -2108,6 +2134,7 @@ jobs:
         web-image-smoke,
         mobile-build,
         landing-build,
+        marketing-screenshots,
         e2e,
         api-image-deps,
         legal-atlas-image,
@@ -2130,6 +2157,7 @@ jobs:
           LANDING_RESULT: ${{ needs.landing-build.result }}
           CODE_QUALITY_RESULT: ${{ needs.code-quality.result }}
           LEGAL_ATLAS_IMAGE_RESULT: ${{ needs.legal-atlas-image.result }}
+          MARKETING_SCREENSHOTS_RESULT: ${{ needs.marketing-screenshots.result }}
           MOBILE_RESULT: ${{ needs.mobile-build.result }}
           TRUSTED: ${{ needs.ci-plan.outputs.trusted }}
           PLAN_RESULT: ${{ needs.ci-plan.result }}
@@ -2159,6 +2187,7 @@ jobs:
                   || "$WEB_IMAGE_SMOKE_RESULT" == "failure" || "$WEB_IMAGE_SMOKE_RESULT" == "cancelled" \
                   || "$MOBILE_RESULT" == "failure" || "$MOBILE_RESULT" == "cancelled" \
                   || "$LANDING_RESULT" == "failure" || "$LANDING_RESULT" == "cancelled" \
+                  || "$MARKETING_SCREENSHOTS_RESULT" == "failure" || "$MARKETING_SCREENSHOTS_RESULT" == "cancelled" \
                   || "$E2E_RESULT" == "failure" || "$E2E_RESULT" == "cancelled" \
                   || "$API_IMAGE_DEPS_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "cancelled" \
                   || "$LEGAL_ATLAS_IMAGE_RESULT" == "failure" || "$LEGAL_ATLAS_IMAGE_RESULT" == "cancelled" \
@@ -2189,12 +2218,12 @@ jobs:
 
           # "cancelled" means cancel-in-progress replaced this
           # run with a newer one; the newer run is authoritative.
-          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "cancelled" || "$CI_RESULT" == "cancelled" || "$CODE_QUALITY_RESULT" == "cancelled" || "$POSTGRES_SUITES_RESULT" == "cancelled" || "$RELEASE_TYPECHECK_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$WEB_IMAGE_SMOKE_RESULT" == "cancelled" || "$MOBILE_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$LEGAL_ATLAS_IMAGE_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CHANGESET_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
+          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "cancelled" || "$CI_RESULT" == "cancelled" || "$CODE_QUALITY_RESULT" == "cancelled" || "$POSTGRES_SUITES_RESULT" == "cancelled" || "$RELEASE_TYPECHECK_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$WEB_IMAGE_SMOKE_RESULT" == "cancelled" || "$MOBILE_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$MARKETING_SCREENSHOTS_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$LEGAL_ATLAS_IMAGE_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CHANGESET_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
             echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
             exit 0
           fi
 
-          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "failure" || "$CI_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "failure" || "$POSTGRES_SUITES_RESULT" == "failure" || "$RELEASE_TYPECHECK_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$WEB_IMAGE_SMOKE_RESULT" == "failure" || "$MOBILE_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$LEGAL_ATLAS_IMAGE_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CHANGESET_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
+          if [[ "$AGENT_SANDBOX_DOCKER_RESULT" == "failure" || "$CI_RESULT" == "failure" || "$CODE_QUALITY_RESULT" == "failure" || "$POSTGRES_SUITES_RESULT" == "failure" || "$RELEASE_TYPECHECK_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$WEB_IMAGE_SMOKE_RESULT" == "failure" || "$MOBILE_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$MARKETING_SCREENSHOTS_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$LEGAL_ATLAS_IMAGE_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CHANGESET_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
             echo "::error::CI checks failed."
             exit 1
           fi

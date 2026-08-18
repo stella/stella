@@ -1,0 +1,31 @@
+name: Update marketing screenshots
+
+# When a PR fails the `marketing-screenshots` check because its UI change is
+# intended, dispatch this workflow on that PR's branch (Actions UI branch
+# picker, or `gh workflow run marketing-screenshots-update.yml --ref <branch>`).
+# It regenerates every baseline on the CI runner and pushes the PNGs to the
+# branch, which re-runs the PR's checks against the new head. Baselines are
+# never regenerated on a developer machine, so the comparison tolerance only
+# has to cover run-to-run noise on one runner image.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  # Two regenerations of one branch would race on the same push target.
+  group: marketing-screenshots-update-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  update:
+    uses: ./.github/workflows/marketing-screenshots.yml
+    permissions:
+      contents: read
+    with:
+      mode: update
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      STELLA_RELEASE_APP_PRIVATE_KEY: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}

@@ -4,6 +4,9 @@ import path from "node:path";
 
 const script = path.join(import.meta.dirname, "detect-e2e-changes.sh");
 const githubExpression = (value: string) => ["$", "{{ ", value, " }}"].join("");
+// Built, not written literally: a `${...}` in a plain string reads as a
+// broken template literal to the linter.
+const shellExpansion = (value: string) => ["$", "{", value, "}"].join("");
 const workflow = readFileSync(
   path.join(import.meta.dirname, "../.github/workflows/ci.yml"),
   "utf-8",
@@ -23,6 +26,13 @@ const e2eStackSetup = readFileSync(
   path.join(
     import.meta.dirname,
     "../.github/actions/setup-e2e-stack/action.yml",
+  ),
+  "utf-8",
+);
+const marketingWorkflow = readFileSync(
+  path.join(
+    import.meta.dirname,
+    "../.github/workflows/marketing-screenshots.yml",
   ),
   "utf-8",
 );
@@ -67,7 +77,7 @@ const workflowStepRun = (job: string, stepName: string): string => {
   return (runEnd === -1 ? run : run.slice(0, runEnd)).trimEnd();
 };
 
-const detects = (scope: "core" | "landing", files: string[]) =>
+const detects = (scope: "core" | "landing" | "marketing", files: string[]) =>
   Bun.spawnSync(["bash", script, scope, ...files], {
     stdout: "pipe",
   })
@@ -112,6 +122,34 @@ describe("detect-e2e-changes", () => {
     const files = ["apps/web/package.json"];
     expect(detects("core", files)).toBe("true");
     expect(detects("landing", files)).toBe("true");
+  });
+
+  test("routes every input of a product screenshot through the marketing scope", () => {
+    for (const file of [
+      "apps/web/src/components/inspector/entity-metadata-panel.tsx",
+      "apps/web/e2e/marketing/product-screenshots.spec.ts",
+      "apps/web/e2e/playwright.marketing.config.ts",
+      "apps/web/package.json",
+      "apps/api/src/handlers/entities/routes.ts",
+      "apps/api/scripts/seed-dev.ts",
+      "apps/api/scripts/seed-test-user.ts",
+      "apps/api/scripts/seed-utils.ts",
+      "packages/ui/src/components/button.tsx",
+      "packages/locales/src/en.ts",
+      "apps/landing/public/media/products/editor.png",
+      ".github/workflows/marketing-screenshots.yml",
+    ]) {
+      expect(detects("marketing", [file])).toBe("true");
+    }
+
+    for (const file of [
+      "README.md",
+      "docs/changelog/0.7.8.md",
+      "apps/landing/src/pages/index.astro",
+      "apps/web/e2e/specs/route-smoke.spec.ts",
+    ]) {
+      expect(detects("marketing", [file])).toBe("false");
+    }
   });
 
   test("runs both PR scopes when their orchestration changes", () => {
@@ -192,9 +230,13 @@ describe("detect-e2e-changes", () => {
       .filter((line) => line.includes("docker compose --profile dev up"))
       .map((line) => line.trim());
     expect(composeStartLines).toEqual([
-      "if docker compose --profile dev up -d --wait postgres rustfs valkey 2>&1 \\",
+      `if docker compose --profile dev up -d --wait postgres rustfs valkey "${shellExpansion("extra_services[@]")}" 2>&1 \\`,
     ]);
+    // The shared action names no optional service itself; each caller declares
+    // what it exercises, so a new consumer cannot quietly widen the stack the
+    // PR jobs pay for.
     expect(e2eStackSetup).not.toContain("gotenberg");
+    expect(marketingWorkflow).toContain("extra-services: gotenberg");
   });
 
   test("skips browser execution only for an explicit Docker Hub pull rate limit", () => {
@@ -291,6 +333,40 @@ describe("detect-e2e-changes", () => {
     expect(result).toContain('$RELEASE_TYPECHECK_RESULT" == "cancelled"');
   });
 
+  test("fails the pull request that invalidates a shipped product screenshot", () => {
+    const plan = workflowJob("ci-plan");
+    expect(plan).toContain(
+      `marketing_screenshots_required: ${githubExpression("steps.changed-files.outputs.marketing_screenshots_required")}`,
+    );
+    expect(plan).toContain(
+      "marketing_screenshots_required=$(bash scripts/detect-e2e-changes.sh marketing",
+    );
+    expect(plan).toContain('echo "marketing_screenshots_required=true"');
+    expect(plan).toContain('echo "marketing_screenshots_required=false"');
+
+    const screenshots = workflowJob("marketing-screenshots");
+    expect(screenshots).toContain(
+      "needs.ci-plan.outputs.marketing_screenshots_required == 'true'",
+    );
+    expect(screenshots).toContain(
+      "uses: ./.github/workflows/marketing-screenshots.yml",
+    );
+    expect(screenshots).toContain("mode: check");
+
+    // Only the update path pushes, and only with the App token, so the check
+    // job stays read-only.
+    expect(screenshots).toContain("contents: read");
+    expect(screenshots).not.toContain("STELLA_RELEASE_APP_PRIVATE_KEY");
+
+    const result = workflowJob("ci-result");
+    expect(result).toContain("marketing-screenshots");
+    expect(result).toContain(
+      `MARKETING_SCREENSHOTS_RESULT: ${githubExpression("needs.marketing-screenshots.result")}`,
+    );
+    expect(result).toContain('$MARKETING_SCREENSHOTS_RESULT" == "failure"');
+    expect(result).toContain('$MARKETING_SCREENSHOTS_RESULT" == "cancelled"');
+  });
+
   test("builds the production web artifact once per workflow run", () => {
     const webBuild = workflowJob("web-build");
     expect(webBuild).toContain("needs: ci-plan");
@@ -311,13 +387,19 @@ describe("detect-e2e-changes", () => {
     expect(
       workflow.match(/uses: \.\/\.github\/actions\/setup-playwright/gu),
     ).toHaveLength(3);
-    expect(nightlyWorkflow).toContain(
+    expect(marketingWorkflow).toContain(
       [
         "uses: ./.github/actions/setup-playwright",
         "        with:",
         "          dependency-mode: full",
       ].join("\n"),
     );
+    // The nightly and PR checks share that one definition instead of
+    // re-declaring the capture job.
+    expect(nightlyWorkflow).toContain(
+      "uses: ./.github/workflows/marketing-screenshots.yml",
+    );
+    expect(nightlyWorkflow).not.toContain("test:e2e:marketing");
     expect(playwrightSetup).toContain(
       'import metadata from "@playwright/test/package.json"',
     );
