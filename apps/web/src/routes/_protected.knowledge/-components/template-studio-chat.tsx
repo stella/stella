@@ -38,6 +38,7 @@ import type {
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import {
   ChatThreadCard,
@@ -63,6 +64,7 @@ import type {
   PersistedChatMessage,
   UnresolvedActiveDocxEditToolCallPart,
 } from "@/components/chat/chat-ui-tools";
+import { COMPOSER_TEXT_CLASS } from "@/components/chat/composer-control-style";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { isInputType } from "@/components/templates/template-field-manifest";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
@@ -1347,7 +1349,12 @@ const TemplateStudioChatInner = ({
           canSubmitNow={canSubmitWithCurrentSnapshot}
           editorController={editorController}
           emptyPlaceholder={
-            <span className="text-foreground-ghost flex min-w-0 items-center gap-1.5 text-[13px] leading-5">
+            <span
+              className={cn(
+                "text-foreground-ghost flex min-w-0 items-center gap-1.5",
+                COMPOSER_TEXT_CLASS,
+              )}
+            >
               <span className="shrink-0">
                 {t("chat.editableFilePlaceholderAction")}
               </span>

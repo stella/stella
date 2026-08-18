@@ -58,7 +58,17 @@ import { ChatComposerActionButton } from "@/components/chat/chat-composer-action
 import { resolveChatComposerAction } from "@/components/chat/chat-composer-action-button.logic";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
 import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-options-menu";
-import { COMPOSER_CONTROL_BUTTON_SIZE } from "@/components/chat/composer-control-style";
+import {
+  COMPOSER_BOX_ANONYMIZED_CLASS,
+  COMPOSER_BOX_CLASS,
+  COMPOSER_BOX_FOCUS_CLASS,
+  COMPOSER_COMPACT_CONTROL_SLOT_CLASS,
+  COMPOSER_COMPACT_ROW_CLASS,
+  COMPOSER_COMPACT_TEXT_CELL_CLASS,
+  COMPOSER_CONTROL_BUTTON_SIZE,
+  COMPOSER_PLACEHOLDER_CLASS,
+  COMPOSER_TEXT_CLASS,
+} from "@/components/chat/composer-control-style";
 import { ComposerPlusMenu } from "@/components/chat/composer-plus-menu";
 import type { ComposerContextMenuProps } from "@/components/chat/composer-plus-menu";
 import { ComposerVeil } from "@/components/chat/composer-veil";
@@ -288,7 +298,12 @@ export const PromptBarPlaceholderContent = ({
 }: {
   children: ReactNode;
 }) => (
-  <span className="text-foreground-muted block min-w-0 truncate text-[13px] leading-5">
+  <span
+    className={cn(
+      "text-foreground-placeholder block min-w-0 truncate",
+      COMPOSER_TEXT_CLASS,
+    )}
+  >
     {children}
   </span>
 );
@@ -311,12 +326,13 @@ const DOC_FLOAT_SURFACE_CLASS =
   "[--doc-float-surface:var(--color-white)] dark:[--doc-float-surface:var(--popover)] bg-(--doc-float-surface)";
 
 /**
- * The bar box itself — border, shadow, and the doc-anchored
- * surface — with no positioning or sizing of its own. `DockedComposer`
- * owns where the bar sits and how wide it is; this shell just paints the
- * box and fills the width it is given (`w-full`). Both the live
- * `PromptBar` and the loading `PromptBarPlaceholder` render through it so
- * they can never drift apart.
+ * The bar box itself — the shared composer box (same radius, border, focus
+ * ring and compact row stature as the main chat bar), plus the shadow and
+ * doc-anchored surface a bar floating over a document needs — with no
+ * positioning or sizing of its own. `DockedComposer` owns where the bar sits
+ * and how wide it is; this shell just paints the box and fills the width it
+ * is given (`w-full`). Both the live `PromptBar` and the loading
+ * `PromptBarPlaceholder` render through it so they can never drift apart.
  *
  * The surface is solid on purpose: the separate pane veil softens document
  * content around the stack while the controls themselves remain crisp.
@@ -329,12 +345,10 @@ export const PromptBarShell = ({
   <div
     {...rest}
     className={cn(
-      "group/bar border-foreground/15 relative flex w-full items-end gap-1 rounded-2xl border transition-[box-shadow,border-color]",
+      COMPOSER_BOX_CLASS,
+      "group/bar relative flex w-full transition-[box-shadow,border-color]",
+      COMPOSER_COMPACT_ROW_CLASS,
       "shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
-      // py-0.5 keeps the single-line pill slim (the inner editor cell's
-      // min-h-8 sets the line height; the shell adds only a hairline of
-      // breathing room) so the bar reads lighter than the transcript.
-      "py-0.5 ps-1.5 pe-1",
       DOC_FLOAT_SURFACE_CLASS,
       className,
     )}
@@ -354,12 +368,12 @@ export const PromptBarShell = ({
  *
  * Stack, measured from the pane's bottom edge: 14px column offset +
  * ~24px status row (icon-xs controls) + 6px bar-to-row gap (`mt-1.5`) +
- * ~38px bar (min-h-8 cell + py-0.5 + border) ⇒ the bar's TOP sits ~82px
- * up. `bottom-24` (96px) drops the card ~14px above that, matching the
- * transcript's rhythm. (Both floating surfaces render a status row; a
- * bar-only stack would clear this offset with room to spare.)
+ * ~46px bar (the shared compact row, `min-h-11` + border) ⇒ the bar's TOP
+ * sits ~90px up. `bottom-26` (104px) drops the card ~14px above that,
+ * matching the transcript's rhythm. (Both floating surfaces render a status
+ * row; a bar-only stack would clear this offset with room to spare.)
  */
-const FLOATING_THREAD_CARD_OFFSET_CLASS = "bottom-24";
+const FLOATING_THREAD_CARD_OFFSET_CLASS = "bottom-26";
 
 /**
  * Taller bottom offset for the thread card when the floating DOCX
@@ -821,9 +835,8 @@ export const PromptBar = (props: PromptBarProps) => {
       onFocusCapture={handleShellFocus}
       onKeyDownCapture={handleShellKeyDown}
       className={cn(
-        !inputDisabled && !anonymized && "focus-within:border-foreground/30",
-        anonymized &&
-          "ring-info/40 border-info/40 focus-within:border-info/60 shadow-[0_0_0_4px_rgb(from_var(--color-info)_r_g_b_/_0.08)] ring-1",
+        !inputDisabled && !anonymized && COMPOSER_BOX_FOCUS_CLASS,
+        anonymized && COMPOSER_BOX_ANONYMIZED_CLASS,
         // Attention pulse — kicked by the inspector chip click to
         // close the panel→producer loop visually. Stronger ring
         // than the busy state because it's transient and meant to
@@ -927,11 +940,11 @@ export const PromptBar = (props: PromptBarProps) => {
           />
           {/* Shared (+) affordance on the left, identical to the main chat
               composer; opens the attach-file picker via the same controller.
-              The h-8 wrapper (same pattern the pending badge below uses)
-              centers the size-7 circle on the editor cell's single-line
-              height: the shell is items-end, so the bare 28px button would
-              otherwise ride 2px below the placeholder's center line. */}
-          <span className="flex h-8 shrink-0 items-center">
+              The control slot (same pattern the pending badge below uses)
+              seats the circle on the editor cell's single text line: the
+              shell is items-end, so a bare button would otherwise ride
+              below the placeholder's center line. */}
+          <span className={COMPOSER_COMPACT_CONTROL_SLOT_CLASS}>
             {minimizedThreadAction ? (
               <Button
                 aria-label={minimizedThreadAction.label}
@@ -978,15 +991,25 @@ export const PromptBar = (props: PromptBarProps) => {
         </>
       )}
       {layout === "floating" && pendingCount > 0 && (
-        <span className="flex h-8 shrink-0 items-center ps-0.5">
+        <span className={cn(COMPOSER_COMPACT_CONTROL_SLOT_CLASS, "ps-0.5")}>
           <span className="bg-muted text-foreground inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[11px] font-semibold tabular-nums">
             {format.number(pendingCount)}
           </span>
         </span>
       )}
-      <div className="relative flex min-h-8 min-w-0 flex-1 items-center gap-1.5 px-1.5">
+      <div
+        className={cn(
+          COMPOSER_COMPACT_TEXT_CELL_CLASS,
+          "flex flex-1 items-center gap-1.5 px-1.5",
+        )}
+      >
         {showBusyPlaceholder && (
-          <div className="text-muted-foreground pointer-events-none absolute inset-x-1.5 top-1/2 z-10 flex min-w-0 -translate-y-1/2 items-center gap-2 text-[13px]">
+          <div
+            className={cn(
+              COMPOSER_PLACEHOLDER_CLASS,
+              "inset-x-1.5 top-1/2 z-10 flex min-w-0 -translate-y-1/2 items-center gap-2",
+            )}
+          >
             <LoaderCircleIcon
               aria-hidden="true"
               className="size-3.5 shrink-0 animate-spin"
@@ -995,7 +1018,12 @@ export const PromptBar = (props: PromptBarProps) => {
           </div>
         )}
         {isEmpty && !busy && isSendBlocked && (
-          <div className="text-muted-foreground pointer-events-none absolute inset-x-1.5 top-1/2 z-10 flex min-w-0 -translate-y-1/2 items-center gap-2 text-[13px]">
+          <div
+            className={cn(
+              COMPOSER_PLACEHOLDER_CLASS,
+              "inset-x-1.5 top-1/2 z-10 flex min-w-0 -translate-y-1/2 items-center gap-2",
+            )}
+          >
             <LoaderCircleIcon
               aria-hidden="true"
               className="size-3.5 shrink-0 animate-spin"
@@ -1016,15 +1044,13 @@ export const PromptBar = (props: PromptBarProps) => {
             </div>
           )}
         <PromptEditorContent
-          // Height is content-driven: a single line of 13px text
-          // is ~20px tall (`leading-5`) and the cell's `min-h-8`
-          // (2rem) + `items-center` centres it vertically;
-          // multiple wrapped lines stay tight. The cell grows up
-          // to `max-h-32` before scrolling, and `min-h-0`
-          // overrides the provider's `min-h-10` so it shrinks
+          // Height is content-driven: the shared compact text cell seats
+          // one `text-sm` line at `leading-5`; multiple wrapped lines stay
+          // tight. The cell grows up to `max-h-32` before scrolling, and
+          // `min-h-0` overrides the provider's `min-h-10` so it shrinks
           // back as the user deletes content.
           className={cn(
-            "folio-ai-bar-editor text-foreground min-w-0 flex-1 [&_.ProseMirror]:field-sizing-fixed [&_.ProseMirror]:max-h-32 [&_.ProseMirror]:min-h-0 [&_.ProseMirror]:overflow-y-auto [&_.ProseMirror]:py-1.5 [&_.ProseMirror]:text-[13px] [&_.ProseMirror]:leading-5 [&_.ProseMirror]:select-text [&_.ProseMirror]:focus-visible:outline-none [&_.ProseMirror_p]:my-0",
+            "folio-ai-bar-editor text-foreground min-w-0 flex-1 [&_.ProseMirror]:field-sizing-fixed [&_.ProseMirror]:max-h-32 [&_.ProseMirror]:min-h-0 [&_.ProseMirror]:overflow-y-auto [&_.ProseMirror]:leading-5 [&_.ProseMirror]:select-text [&_.ProseMirror]:focus-visible:outline-none [&_.ProseMirror_p]:my-0",
             // Suppress the composer's own placeholder whenever the host
             // renders an overlay in the same cell (custom placeholder, the
             // busy "working" label, or the editor-loading label) — otherwise
@@ -1043,13 +1069,10 @@ export const PromptBar = (props: PromptBarProps) => {
       <Tooltip>
         <TooltipTrigger
           render={
-            // The h-8 wrapper mirrors the (+) menu's centering: the shell
-            // is items-end, so a bare size-7 circle would sit 2px below
-            // the editor cell's single-line center. Bottom-aligned at the
-            // cell's min-h-8, the wrapper centers the circle on the
-            // placeholder line and rides the bottom text line as the
+            // The control slot mirrors the (+) menu's seating: the shell
+            // is items-end, so the slot rides the bottom text line as the
             // editor grows.
-            <span className="flex h-8 shrink-0 items-center">
+            <span className={COMPOSER_COMPACT_CONTROL_SLOT_CLASS}>
               <ChatComposerActionButton
                 canSend={!composerSubmitDisabled && canSubmit}
                 isGenerating={isGenerating}

@@ -20,6 +20,17 @@ import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachmen
 import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-options-menu";
 import { ChatPromptImproveButton } from "@/components/chat/chat-prompt-improve-button";
 import {
+  COMPOSER_BOX_ANONYMIZED_CLASS,
+  COMPOSER_BOX_CLASS,
+  COMPOSER_BOX_FOCUS_CLASS,
+  COMPOSER_COMPACT_ROW_CLASS,
+  COMPOSER_COMPACT_TEXT_CELL_CLASS,
+  COMPOSER_LARGE_ACTION_ROW_CLASS,
+  COMPOSER_LARGE_TEXT_WELL_CLASS,
+  COMPOSER_LEADING_GROUP_CLASS,
+  COMPOSER_PLACEHOLDER_CLASS,
+} from "@/components/chat/composer-control-style";
+import {
   ComposerPlusMenu,
   type ComposerContextMenuProps,
 } from "@/components/chat/composer-plus-menu";
@@ -201,14 +212,12 @@ export const ChatInputSurface = ({
         <div
           {...guideAnchor(GUIDE_ANCHORS.chatComposer, guideAnchorsEnabled)}
           className={cn(
-            "bg-background rounded-lg border",
-            "transition-colors",
+            COMPOSER_BOX_CLASS,
             // Default focus border (gray) only when not in anonymized
             // mode — otherwise the gray border landed on top of the
             // blue ring and read as a double-ring on click.
-            !inputDisabled && !anonymized && "focus-within:border-ring",
-            anonymized &&
-              "ring-info/40 border-info/40 focus-within:border-info/60 shadow-[0_0_0_4px_rgb(from_var(--color-info)_r_g_b_/_0.08)] ring-1",
+            !inputDisabled && !anonymized && COMPOSER_BOX_FOCUS_CLASS,
+            anonymized && COMPOSER_BOX_ANONYMIZED_CLASS,
           )}
           onBlurCapture={handleBlur}
           onDragOver={inputDisabled ? undefined : handleDragOver}
@@ -220,16 +229,21 @@ export const ChatInputSurface = ({
           <ChatDraftAttachmentChips files={attachments} onRemove={removeFile} />
           <div
             className={cn(
-              variant === "compact" &&
-                "grid min-h-11 grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-1 px-1.5 py-px",
+              variant === "compact" && [
+                "grid grid-cols-[auto_minmax(0,1fr)_auto]",
+                COMPOSER_COMPACT_ROW_CLASS,
+              ],
             )}
           >
             <div
               className={cn(
-                "chat-editor relative min-w-0 overflow-hidden",
+                "chat-editor overflow-hidden",
                 variant === "compact"
-                  ? "col-start-2 row-start-1 py-1"
-                  : "ps-3 pe-3 pt-2 pb-1",
+                  ? [
+                      "col-start-2 row-start-1",
+                      COMPOSER_COMPACT_TEXT_CELL_CLASS,
+                    ]
+                  : ["relative min-w-0", COMPOSER_LARGE_TEXT_WELL_CLASS],
               )}
               onKeyDown={(event) => {
                 event.stopPropagation();
@@ -254,7 +268,7 @@ export const ChatInputSurface = ({
                 <span
                   aria-hidden="true"
                   className={cn(
-                    "text-foreground-placeholder pointer-events-none absolute truncate text-sm",
+                    COMPOSER_PLACEHOLDER_CLASS,
                     variant === "compact"
                       ? "start-0 end-0 top-1"
                       : "start-3 end-3 top-2",
@@ -268,12 +282,12 @@ export const ChatInputSurface = ({
               className={cn(
                 variant === "compact"
                   ? "contents"
-                  : "flex items-center justify-end gap-0.5 px-1.5 pb-1.5",
+                  : COMPOSER_LARGE_ACTION_ROW_CLASS,
               )}
             >
               <div
                 className={cn(
-                  "flex min-w-0 items-center gap-0.5",
+                  COMPOSER_LEADING_GROUP_CLASS,
                   variant === "compact"
                     ? "col-start-1 row-start-1 self-end"
                     : "me-auto",

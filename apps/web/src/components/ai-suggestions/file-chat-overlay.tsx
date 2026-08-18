@@ -45,6 +45,7 @@ import type {
 } from "@stll/folio-react";
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import { resolveDocxSuggestionRequest } from "@/components/ai-suggestions/docx-suggestion-persistence";
 import { resolveFileReviewSessionId } from "@/components/ai-suggestions/file-review-session";
@@ -92,6 +93,7 @@ import type {
   UnresolvedActiveDocxEditToolCallPart,
   UnresolvedFolioAgentDocToolCallPart,
 } from "@/components/chat/chat-ui-tools";
+import { COMPOSER_TEXT_CLASS } from "@/components/chat/composer-control-style";
 import {
   getCreateDocumentDraftPersistence,
   type CreateDocumentDraftPersistence,
@@ -2422,7 +2424,12 @@ const FileChatOverlayInner = ({
           emptyPlaceholder={
             (activeFile || activeDraft || activeExternal) &&
             filePlaceholderAction ? (
-              <span className="text-foreground-ghost flex min-w-0 items-center gap-1.5 text-[13px] leading-5">
+              <span
+                className={cn(
+                  "text-foreground-ghost flex min-w-0 items-center gap-1.5",
+                  COMPOSER_TEXT_CLASS,
+                )}
+              >
                 <span className="shrink-0">{filePlaceholderAction}</span>
                 <BidiText
                   as="span"
