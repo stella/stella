@@ -9,9 +9,9 @@
  *   authority = ln(1 + weightedCitationSum)
  *
  * where each incoming citation contributes
- * `courtWeight(citingCourt) * 1/(1 + ageYears(citing))`. See citation-score.ts
- * for the reference TS implementation; this SQL must stay equal to
- * `citationScore(...)` evaluated at the same instant.
+ * `polarityWeight(polarity) * courtWeight(citingCourt) * 1/(1 + ageYears(citing))`.
+ * See citation-score.ts for the reference TS implementation; this SQL must
+ * stay equal to `citationScore(...)` evaluated at the same instant.
  *
  * Because the value decays with time (the citing decision's age references
  * "now"), it is a point-in-time snapshot refreshed on a schedule — the search

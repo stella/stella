@@ -1,9 +1,12 @@
 /**
  * Citation authority scoring for case law decisions.
  *
- * Every incoming citation is weighted by two signals:
- * 1. Court-level weight — Supreme Court citations count more
- * 2. Recency decay — recent citations are stronger evidence
+ * Every incoming citation is weighted by three signals:
+ * 1. Polarity — a citation classified as negative treatment confers no
+ *    authority (weight 0); every other reading, including unclassified,
+ *    counts in full
+ * 2. Court-level weight — Supreme Court citations count more
+ * 3. Recency decay — recent citations are stronger evidence
  *
  * Their sum is log-scaled to prevent outliers from dominating search results.
  *
