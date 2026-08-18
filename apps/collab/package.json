@@ -15,7 +15,7 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@hocuspocus/server": "^4.5.0",
+    "@hocuspocus/server": "^4.6.0",
     "@stll/errors": "workspace:*",
     "@t3-oss/env-core": "catalog:",
     "better-result": "catalog:",
