@@ -96,10 +96,18 @@ export type ContactImportPreviewRow = {
   rowNumber: number;
 };
 
-export const parseContactImportMappingText = (
-  text: string,
+/**
+ * The mapping travels as a JSON string in the multipart body. Elysia already
+ * turns a JSON-shaped multipart field into an object before validation, so
+ * the handler sees either form; both go through the contract's parser.
+ */
+export const parseContactImportMappingField = (
+  field: string | Record<string, unknown>,
 ): Result<ContactImportMapping, HandlerError> => {
-  const parsed = Result.try((): unknown => JSON.parse(text));
+  const parsed =
+    typeof field === "string"
+      ? Result.try((): unknown => JSON.parse(field))
+      : Result.ok<unknown>(field);
   if (Result.isError(parsed)) {
     return Result.err(
       new HandlerError({

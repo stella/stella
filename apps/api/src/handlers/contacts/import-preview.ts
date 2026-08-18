@@ -3,7 +3,7 @@ import { t } from "elysia";
 
 import {
   parseContactImportDocument,
-  parseContactImportMappingText,
+  parseContactImportMappingField,
   previewContactImport,
 } from "@/api/handlers/contacts/contact-import-file";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -12,7 +12,9 @@ import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 
 const importPreviewBodySchema = t.Object({
   file: t.File({ maxSize: FILE_SIZE_LIMITS.dataImport }),
-  mapping: t.String(),
+  // Sent as a JSON string; Elysia parses a JSON-shaped multipart field into
+  // an object before validation, so both forms must pass.
+  mapping: t.Union([t.String(), t.Record(t.String(), t.Unknown())]),
 });
 
 const config = {
@@ -23,10 +25,10 @@ const config = {
 
 const previewContactImportHandler = createSafeRootHandler(
   config,
-  async function* ({ body: { file, mapping: mappingText } }) {
+  async function* ({ body: { file, mapping: mappingField } }) {
     const text = await file.text();
     const document = yield* parseContactImportDocument(text);
-    const mapping = yield* parseContactImportMappingText(mappingText);
+    const mapping = yield* parseContactImportMappingField(mappingField);
     const preview = yield* previewContactImport({ document, mapping });
     // The full candidate goes back, not a projection of it: the commit call
     // (`PUT /contacts/import`) submits exactly the rows shown here, so a
