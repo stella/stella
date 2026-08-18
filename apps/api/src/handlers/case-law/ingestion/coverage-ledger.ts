@@ -46,7 +46,49 @@ export const recordSliceCoverage = async (
           reported: coverage.reported,
           collected: coverage.collected,
           checkedAt: sql`now()`,
+          // A slice that lists again is no longer failed, whatever it was.
+          walkError: null,
         },
+      });
+  });
+};
+
+export type RecordSliceWalkFailureInput = {
+  sourceId: SafeId<"caseLawSource">;
+  slice: string;
+  /** Why the walk failed, as the retry arm and an operator will read it. */
+  walkError: string;
+};
+
+/**
+ * Record that a slice's listing walk failed.
+ *
+ * Without a row a failed slice is indistinguishable from one never surveyed,
+ * and the historical sweep, which fills downward from the newest surveyed
+ * slice, would hand it back on every turn and never move past it. The row
+ * keeps whatever counts an earlier walk recorded and stamps `checkedAt`, so
+ * the failed slice leaves the sweep's frontier and the short backlog's stale
+ * window alike and is owned by the retry arm until a walk lists it again.
+ */
+export const recordSliceWalkFailure = async (
+  scopedDb: ScopedDb,
+  { slice, sourceId, walkError }: RecordSliceWalkFailureInput,
+): Promise<void> => {
+  await scopedDb(async (tx) => {
+    // audit: skip — crawl bookkeeping, not a user action
+    await tx
+      .insert(caseLawCoverageSlices)
+      .values({
+        id: createSafeId<"caseLawCoverageSlice">(),
+        sourceId,
+        slice,
+        reported: null,
+        collected: null,
+        walkError,
+      })
+      .onConflictDoUpdate({
+        target: [caseLawCoverageSlices.sourceId, caseLawCoverageSlices.slice],
+        set: { walkError, checkedAt: sql`now()` },
       });
   });
 };

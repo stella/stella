@@ -21,6 +21,7 @@ import {
   runReconciliationWorkUnit,
 } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import {
+  RECONCILIATION_FAILED_SLICE_RETRY_MS,
   RECONCILIATION_SETTLED_RECHECK_MS,
   SLICE_WALK_REASON,
 } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
@@ -761,6 +762,103 @@ test("a slice the publisher will not serve does not hold the ones behind it", as
   expect(listed.map(({ slice }) => slice)).toEqual([OWED_SLICE, reachable]);
 });
 
+/** The stub publisher, refusing to list exactly one slice. */
+const refusingSlice = (refused: string): SourceReconciliation => ({
+  ...stubReconciliation,
+  listSlicePage: async (options): Promise<ReconciliationSlicePage> => {
+    listed.push(options);
+    if (options.slice === refused) {
+      throw new AdapterFetchError({
+        message: "listing refused",
+        adapterKey: "engine-fixture",
+        cursor: options.slice,
+      });
+    }
+    return await Promise.resolve({ items: [], totalPages: 1 });
+  },
+});
+
+test("a slice the publisher will not list is recorded, and the sweep moves past it", async () => {
+  // The sweep fills downward from the newest surveyed slice. Without a row
+  // for the refused slice it stays the frontier, and the sweep offers it on
+  // every turn its hold allows and nothing else in between: one slice the
+  // publisher cannot serve ends the survey of everything older. Recording
+  // the failure moves the frontier past it.
+  const sourceId = await seedSource();
+  await seedFreshTip(sourceId);
+  const refused = day(-TIP_WINDOW_DAYS);
+  const behind = stepDay(refused, -1);
+  const options = {
+    sourceId,
+    reconciliation: refusingSlice(refused),
+    sliceRetries: new Map(),
+  };
+
+  const rejection = await runUnitWith(options).then(
+    () => null,
+    (error: unknown) => error,
+  );
+  expect(rejection).toBeInstanceOf(AdapterFetchError);
+  expect(await ledgerRow(sourceId, refused)).toEqual({
+    reported: null,
+    collected: null,
+    walkError: "AdapterFetchError: listing refused",
+  });
+
+  // The next turn sweeps the slice behind the refused one.
+  expect(await runUnitWith(options)).toMatchObject({
+    type: "worked",
+    summary: { slice: behind, reason: SLICE_WALK_REASON.SWEEP },
+  });
+  expect(listed.map(({ slice }) => slice)).toEqual([refused, behind]);
+});
+
+test("a failed slice is walked again once it has rested, and a listing clears it", async () => {
+  const sourceId = await seedSource();
+  await seedFreshTip(sourceId);
+  // The feed's first slice, so the sweep has nothing left to offer and the
+  // retry arm is what answers the turn.
+  await db.insert(caseLawCoverageSlices).values({
+    id: createSafeId<"caseLawCoverageSlice">(),
+    sourceId,
+    slice: OWED_SLICE,
+    reported: null,
+    collected: null,
+    walkError: "AdapterFetchError: listing refused",
+    checkedAt: new Date(
+      NOW.getTime() - RECONCILIATION_FAILED_SLICE_RETRY_MS - DAY_IN_MS,
+    ),
+  });
+
+  expect(await runUnit(sourceId)).toMatchObject({
+    type: "worked",
+    summary: { slice: OWED_SLICE, reason: SLICE_WALK_REASON.RETRY, keyable: 2 },
+  });
+  // Listed again: counted, no longer failed.
+  expect(await ledgerRow(sourceId, OWED_SLICE)).toEqual({
+    reported: 2,
+    collected: 0,
+    walkError: null,
+  });
+});
+
+test("a failed slice still resting is left alone", async () => {
+  const sourceId = await seedSource();
+  await seedFreshTip(sourceId);
+  await db.insert(caseLawCoverageSlices).values({
+    id: createSafeId<"caseLawCoverageSlice">(),
+    sourceId,
+    slice: OWED_SLICE,
+    reported: null,
+    collected: null,
+    walkError: "AdapterFetchError: listing refused",
+    checkedAt: addUtcDays(NOW, 0),
+  });
+
+  expect(await runUnit(sourceId)).toEqual({ type: "idle" });
+  expect(listed).toHaveLength(0);
+});
+
 test("held slices are excluded from the backlog window, not filtered after it", async () => {
   // The backlog read is a bounded oldest-first window. A held row filtered
   // out afterwards still occupies a place in it, so a full window of held
@@ -823,15 +921,22 @@ const seedSettledHistory = async (
   });
 };
 
+type LedgerRowRead = {
+  reported: number | null;
+  collected: number | null;
+  walkError: string | null;
+};
+
 const ledgerRow = async (
   sourceId: SafeId<"caseLawSource">,
   slice: string,
-): Promise<{ reported: number; collected: number } | undefined> =>
+): Promise<LedgerRowRead | undefined> =>
   (
     await db
       .select({
         reported: caseLawCoverageSlices.reported,
         collected: caseLawCoverageSlices.collected,
+        walkError: caseLawCoverageSlices.walkError,
       })
       .from(caseLawCoverageSlices)
       .where(
@@ -868,6 +973,7 @@ test("a settled slice past the recheck window is re-walked, and a grown listing 
   expect(await ledgerRow(sourceId, OWED_SLICE)).toEqual({
     reported: 2,
     collected: 0,
+    walkError: null,
   });
 });
 

@@ -30,6 +30,7 @@ import {
   eq,
   gte,
   inArray,
+  isNotNull,
   isNull,
   lt,
   min,
@@ -42,18 +43,23 @@ import {
   caseLawDecisions,
   RECONCILIATION_ITEM_STATUS,
 } from "@/api/db/schema";
-import { recordSliceCoverage } from "@/api/handlers/case-law/ingestion/coverage-ledger";
+import {
+  recordSliceCoverage,
+  recordSliceWalkFailure,
+} from "@/api/handlers/case-law/ingestion/coverage-ledger";
 import {
   allocateSourceObservationOrder,
   PROCESS_DECISION_STATUS,
   processDecision,
 } from "@/api/handlers/case-law/ingestion/pipeline";
 import type {
+  FailedSliceCandidate,
   LedgerSlice,
   ReconciliationWorkUnit,
   SliceWalkReason,
 } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import {
+  RECONCILIATION_FAILED_SLICE_RETRY_MS,
   RECONCILIATION_SETTLED_RECHECK_MS,
   RECONCILIATION_SLICE_STALE_MS,
   partitionShortSliceCandidates,
@@ -191,14 +197,26 @@ export type ReconciliationUnitOutcome =
 /**
  * How long a slice whose walk threw is held out of the selection order.
  *
- * The walk writes nothing when it fails, so the slice is owed exactly as much
- * afterwards as before and the selection would hand it back on the next turn
- * forever. An hour is the trade: short against the tip's daily staleness, so a
- * publisher that recovers is picked up within the same cadence the slice would
- * have been walked on anyway, and long enough that a slice nothing can serve
- * costs its source one turn an hour instead of one a minute.
+ * How long this process holds a slice whose walk threw before offering it
+ * again. The ledger records the failure durably and re-tests it on its own
+ * cadence (`RECONCILIATION_FAILED_SLICE_RETRY_MS`); this hold is for the tip,
+ * which is re-derived from the clock each turn and would otherwise be handed
+ * straight back. An hour is the trade: short against the tip's daily
+ * staleness, so a publisher that recovers is picked up within the same
+ * cadence the slice would have been walked on anyway, and long enough that a
+ * tip slice nothing can serve costs its source one turn an hour instead of
+ * one a minute.
  */
 export const RECONCILIATION_SLICE_RETRY_MS = 60 * 60_000;
+
+/** Longest `walk_error` text recorded; the ledger is a note, not a log. */
+const WALK_ERROR_MAX_LENGTH = 500;
+
+/** The failure as the ledger records it: its tag, then its message. */
+const describeWalkError = (error: unknown): string => {
+  const message = error instanceof Error ? error.message : String(error);
+  return `${errorTag(error)}: ${message}`.slice(0, WALK_ERROR_MAX_LENGTH);
+};
 
 /**
  * When each slice whose walk threw may be tried again, by slice.
@@ -406,7 +424,36 @@ const selectHeldIdentityKeys = async (
   return held;
 };
 
-/** Ledger rows for the named slices. Bounded by the tip window. */
+type LedgerRow = {
+  slice: string;
+  reported: number | null;
+  collected: number | null;
+  checkedAt: Date;
+};
+
+/**
+ * The counted shape of a ledger row. Every read below that hands rows to the
+ * selection filters on `walk_error IS NULL`, and the table's counted-or-failed
+ * check makes both counts present on such a row; a null here is a violated
+ * invariant, not a case.
+ */
+const countedLedgerSlice = ({
+  checkedAt,
+  collected,
+  reported,
+  slice,
+}: LedgerRow): LedgerSlice => {
+  if (reported === null || collected === null) {
+    panic(`coverage slice ${slice} is neither counted nor failed`);
+  }
+  return { slice, reported, collected, checkedAt };
+};
+
+/**
+ * Counted ledger rows for the named slices. Bounded by the tip window. A tip
+ * slice whose last walk failed is absent here on purpose: absent is what the
+ * tip arm walks, and the retry hold is what keeps it from walking it at once.
+ */
 const selectLedgerSlices = async (
   scopedDb: ScopedDb,
   sourceId: SafeId<"caseLawSource">,
@@ -415,7 +462,7 @@ const selectLedgerSlices = async (
   if (slices.length === 0) {
     return [];
   }
-  return await scopedDb(
+  const rows = await scopedDb(
     async (tx) =>
       await tx
         .select({
@@ -429,10 +476,12 @@ const selectLedgerSlices = async (
           and(
             eq(caseLawCoverageSlices.sourceId, sourceId),
             inArray(caseLawCoverageSlices.slice, [...slices]),
+            isNull(caseLawCoverageSlices.walkError),
           ),
         )
         .limit(slices.length),
   );
+  return rows.map(countedLedgerSlice);
 };
 
 type SelectStaleShortSlicesOptions = {
@@ -455,8 +504,8 @@ type SelectStaleShortSlicesOptions = {
 const selectStaleShortSlices = async (
   scopedDb: ScopedDb,
   { heldSlices, sourceId, staleBefore }: SelectStaleShortSlicesOptions,
-): Promise<LedgerSlice[]> =>
-  await scopedDb(
+): Promise<LedgerSlice[]> => {
+  const rows = await scopedDb(
     async (tx) =>
       await tx
         .select({
@@ -470,6 +519,8 @@ const selectStaleShortSlices = async (
           and(
             eq(caseLawCoverageSlices.sourceId, sourceId),
             lt(caseLawCoverageSlices.collected, caseLawCoverageSlices.reported),
+            // A short row whose later walk failed belongs to the retry arm.
+            isNull(caseLawCoverageSlices.walkError),
             // eslint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison -- staleness cutoff derived from the clock, not a cursor boundary: a slice landing within a microsecond of it is walked one turn earlier or later, which the widening tip cadence already tolerates
             lt(caseLawCoverageSlices.checkedAt, staleBefore),
             heldSlices.length === 0
@@ -480,6 +531,8 @@ const selectStaleShortSlices = async (
         .orderBy(caseLawCoverageSlices.checkedAt)
         .limit(SHORT_SLICE_CANDIDATES),
   );
+  return rows.map(countedLedgerSlice);
+};
 
 /**
  * The oldest-checked settled slice below the tip window, or null. Whether it
@@ -525,8 +578,8 @@ type SelectRecheckCandidateOptions = {
 const selectRecheckCandidate = async (
   scopedDb: ScopedDb,
   { belowSlice, heldSlices, sourceId }: SelectRecheckCandidateOptions,
-): Promise<LedgerSlice | null> =>
-  (
+): Promise<LedgerSlice | null> => {
+  const row = (
     await scopedDb(
       async (tx) =>
         await tx
@@ -545,6 +598,47 @@ const selectRecheckCandidate = async (
                 caseLawCoverageSlices.collected,
                 caseLawCoverageSlices.reported,
               ),
+              isNull(caseLawCoverageSlices.walkError),
+              heldSlices.length === 0
+                ? undefined
+                : notInArray(caseLawCoverageSlices.slice, heldSlices),
+            ),
+          )
+          .orderBy(caseLawCoverageSlices.checkedAt)
+          .limit(1),
+    )
+  ).at(0);
+  return row === undefined ? null : countedLedgerSlice(row);
+};
+
+type SelectFailedSliceCandidateOptions = {
+  sourceId: SafeId<"caseLawSource">;
+  /** Held slices, excluded for the same reason the recheck excludes them. */
+  heldSlices: string[];
+};
+
+/**
+ * The oldest-checked slice whose last walk failed, or null. Whether it has
+ * rested long enough is the selection's decision, not this query's. Served by
+ * the ledger's failed partial index.
+ */
+const selectFailedSliceCandidate = async (
+  scopedDb: ScopedDb,
+  { heldSlices, sourceId }: SelectFailedSliceCandidateOptions,
+): Promise<FailedSliceCandidate | null> =>
+  (
+    await scopedDb(
+      async (tx) =>
+        await tx
+          .select({
+            slice: caseLawCoverageSlices.slice,
+            checkedAt: caseLawCoverageSlices.checkedAt,
+          })
+          .from(caseLawCoverageSlices)
+          .where(
+            and(
+              eq(caseLawCoverageSlices.sourceId, sourceId),
+              isNotNull(caseLawCoverageSlices.walkError),
               heldSlices.length === 0
                 ? undefined
                 : notInArray(caseLawCoverageSlices.slice, heldSlices),
@@ -1001,22 +1095,29 @@ export const runReconciliationWorkUnit = async ({
   }
   const heldSlices = [...sliceRetries.keys()];
 
-  const [tipLedger, shortRows, oldestLedgerSlice, dueParked, recheckCandidate] =
-    await Promise.all([
-      selectLedgerSlices(scopedDb, sourceId, tipSlices),
-      selectStaleShortSlices(scopedDb, { sourceId, staleBefore, heldSlices }),
-      selectOldestLedgerSlice(scopedDb, sourceId),
-      hasDueParkedItems(scopedDb, sourceId, startedAt),
-      // Asked every turn rather than only once the higher priorities come up
-      // empty: idle is the steady state of a surveyed source, so the branch
-      // that skipped it would almost never be taken, and one more bounded read
-      // in the batch already in flight costs no extra round trip.
-      selectRecheckCandidate(scopedDb, {
-        sourceId,
-        belowSlice: tipStart,
-        heldSlices,
-      }),
-    ]);
+  const [
+    tipLedger,
+    shortRows,
+    oldestLedgerSlice,
+    dueParked,
+    recheckCandidate,
+    failedCandidate,
+  ] = await Promise.all([
+    selectLedgerSlices(scopedDb, sourceId, tipSlices),
+    selectStaleShortSlices(scopedDb, { sourceId, staleBefore, heldSlices }),
+    selectOldestLedgerSlice(scopedDb, sourceId),
+    hasDueParkedItems(scopedDb, sourceId, startedAt),
+    // Asked every turn rather than only once the higher priorities come up
+    // empty: idle is the steady state of a surveyed source, so the branch
+    // that skipped it would almost never be taken, and one more bounded read
+    // in the batch already in flight costs no extra round trip.
+    selectRecheckCandidate(scopedDb, {
+      sourceId,
+      belowSlice: tipStart,
+      heldSlices,
+    }),
+    selectFailedSliceCandidate(scopedDb, { sourceId, heldSlices }),
+  ]);
 
   const terminalBySlice = await countTerminalReconciliationItemsBySlice(
     scopedDb,
@@ -1069,11 +1170,13 @@ export const runReconciliationWorkUnit = async ({
       tipLedger.map(({ slice, checkedAt }) => [slice, checkedAt]),
     ),
     unsettledShortSlices: unsettled,
+    failedCandidate,
     sweepSlice: reconciliation.previousSlice(frontier),
     recheckCandidate,
     slicesHeldForRetry: new Set(heldSlices),
     staleAfterMs: RECONCILIATION_SLICE_STALE_MS,
     recheckAfterMs: RECONCILIATION_SETTLED_RECHECK_MS,
+    failedRetryAfterMs: RECONCILIATION_FAILED_SLICE_RETRY_MS,
   });
 
   if (unit.type === "idle") {
@@ -1119,22 +1222,30 @@ export const runReconciliationWorkUnit = async ({
             slice: unit.slice,
             sleep,
             sourceId,
-          }).catch((error: unknown) => {
+          }).catch(async (error: unknown) => {
             // The walk is all-or-nothing by design: a listing that failed part
-            // way through writes no ledger row, so the slice is owed exactly
-            // as much as before and would be selected again immediately. Held
-            // for its retry instead, and named here because the loop's window
-            // tally reports how many turns threw without saying over what;
-            // the slice a source cannot walk is the one fact that turns a
-            // standing error rate into something an operator can reproduce.
-            // Measured from the failure, not from the unit's start: a slice
-            // is several paginated requests and a walk can spend most of the
-            // runner's deadline before it throws, which would leave the hold
-            // shorter than it says or already expired.
+            // way through writes no counts, so the slice is owed exactly as
+            // much as before. Recorded as failed, so the sweep's frontier and
+            // the backlog move past it and the retry arm owns it; and held in
+            // this process for its retry, because the tip is re-derived from
+            // the clock and would otherwise be handed straight back. Named
+            // here because the loop's window tally reports how many turns
+            // threw without saying over what; the slice a source cannot walk
+            // is the one fact that turns a standing error rate into something
+            // an operator can reproduce. Measured from the failure, not from
+            // the unit's start: a slice is several paginated requests and a
+            // walk can spend most of the runner's deadline before it throws,
+            // which would leave the hold shorter than it says or already
+            // expired.
             sliceRetries.set(
               unit.slice,
               now().getTime() + RECONCILIATION_SLICE_RETRY_MS,
             );
+            await recordSliceWalkFailure(scopedDb, {
+              sourceId,
+              slice: unit.slice,
+              walkError: describeWalkError(error),
+            });
             logger.warn("case_law.reconciliation.slice_failed", {
               adapterKey,
               slice: unit.slice,

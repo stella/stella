@@ -43,12 +43,25 @@ export const RECONCILIATION_SLICE_STALE_MS = DAY_IN_MS;
  */
 export const RECONCILIATION_SETTLED_RECHECK_MS = 30 * DAY_IN_MS;
 
+/**
+ * How long a slice whose last walk failed rests before it is walked again.
+ *
+ * A failed walk records its slice, so the source's other work goes on around
+ * it; this decides only how soon the failure is re-tested. A day: the tip's
+ * own cadence, and long enough that a slice nothing can list costs one turn a
+ * day rather than one an hour, while a publisher fix or an adapter release
+ * is picked up within the same day.
+ */
+export const RECONCILIATION_FAILED_SLICE_RETRY_MS = DAY_IN_MS;
+
 /** Why a slice was chosen, for the summary and nothing else. */
 export const SLICE_WALK_REASON = {
   /** Inside the tip window, where the publisher is still filling in. */
   TIP: "tip",
   /** Held fewer identities than were listed, and the row has gone stale. */
   SHORT: "short",
+  /** Its last walk failed and the retry has come due. */
+  RETRY: "retry",
   /** Never surveyed at all; the sweep works backward through history. */
   SWEEP: "sweep",
   /** Settled long ago; walked again to prove the ledger still describes it. */
@@ -191,19 +204,23 @@ export type SelectReconciliationWorkUnitInput = {
    * touch the row.
    */
   unsettledShortSlices: readonly ShortSliceCandidate[];
+  /**
+   * The oldest-checked slice whose last walk failed, if the source has one.
+   * Whether it has rested long enough is decided here, against
+   * `failedRetryAfterMs`.
+   */
+  failedCandidate: FailedSliceCandidate | null;
   /** The newest never-surveyed slice below the tip window, if any remain. */
   sweepSlice: string | null;
   /**
-   * Slices whose last walk threw and whose retry is not yet due.
+   * Slices whose last walk threw in this process and whose retry is not yet
+   * due.
    *
-   * A walk that fails writes nothing, so nothing about the source's state
-   * changes and this selection would return the same slice on the next turn,
-   * and on every turn after it. One slice the publisher cannot serve would
-   * then hold every other slice the source owes, indefinitely: the tip stops
-   * being re-walked, the backlog stops draining and the sweep stops advancing,
-   * while the source still looks busy. Holding the failed slice out of the
-   * order until its retry comes due costs that slice its turns and nobody
-   * else's.
+   * A failed walk is recorded in the ledger, so the sweep and the backlog
+   * move on around it; but the tip is re-derived from the clock each turn
+   * and a failed tip slice would be handed straight back. Holding the failed
+   * slice out of the order until its retry comes due costs that slice its
+   * turns and nobody else's.
    */
   slicesHeldForRetry: ReadonlySet<string>;
   /**
@@ -215,6 +232,13 @@ export type SelectReconciliationWorkUnitInput = {
   recheckCandidate: LedgerSlice | null;
   staleAfterMs: number;
   recheckAfterMs: number;
+  failedRetryAfterMs: number;
+};
+
+/** A ledger row whose last walk failed, as the selection reads it. */
+export type FailedSliceCandidate = {
+  slice: string;
+  checkedAt: Date;
 };
 
 /**
@@ -225,8 +249,12 @@ export type SelectReconciliationWorkUnitInput = {
  *  2. the tip, where the publisher is still adding to slices and a miss is
  *     both most likely and most visible;
  *  3. slices known to be short and gone stale — the ledger's own backlog;
- *  4. history never surveyed at all, newest first;
- *  5. a slice that settled long enough ago that its ledger row is no longer
+ *  4. a slice whose last walk failed and has rested its day: ahead of new
+ *     history because it is history already reached, and a publisher fix or
+ *     an adapter release should show within a day rather than after the
+ *     sweep;
+ *  5. history never surveyed at all, newest first;
+ *  6. a slice that settled long enough ago that its ledger row is no longer
  *     evidence of anything — the only work that re-does work.
  *
  * Anything else is idle. The order is deliberately not round-robin between
@@ -240,6 +268,8 @@ export type SelectReconciliationWorkUnitInput = {
  * verification, and a source with real work never spends a turn on it.
  */
 export const selectReconciliationWorkUnit = ({
+  failedCandidate,
+  failedRetryAfterMs,
   hasDueParkedItems,
   now,
   recheckAfterMs,
@@ -296,6 +326,21 @@ export const selectReconciliationWorkUnit = ({
       type: "slice",
       slice: owed.slice,
       reason: SLICE_WALK_REASON.SHORT,
+    };
+  }
+
+  // The rest, like the recheck's, is decided here rather than in the query
+  // that reads the row: same clock arithmetic as the tip's staleness, kept
+  // where a test can reach it without a database.
+  if (
+    failedCandidate !== null &&
+    !slicesHeldForRetry.has(failedCandidate.slice) &&
+    failedCandidate.checkedAt.getTime() < now.getTime() - failedRetryAfterMs
+  ) {
+    return {
+      type: "slice",
+      slice: failedCandidate.slice,
+      reason: SLICE_WALK_REASON.RETRY,
     };
   }
 
