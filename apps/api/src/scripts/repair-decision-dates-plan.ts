@@ -15,38 +15,10 @@ import type { SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
 import type { SafeId } from "@/api/lib/branded-types";
-import { canonicalDecisionDate, DECISION_YEAR_BOUNDS } from "@/api/lib/dates";
+import { canonicalDecisionDate } from "@/api/lib/dates";
+import { decisionDateOutOfBoundsSql } from "@/api/lib/decision-date-bounds-sql";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
-
-/**
- * `canonicalDecisionDate`'s year bounds, in SQL.
- *
- * Both halves are derived from `DECISION_YEAR_BOUNDS`, the same declaration
- * the write-path guard reads, so the two runtimes cannot drift into disagreeing
- * about which stored dates are impossible. `repair-decision-dates-plan.db.test.ts`
- * proves the agreement executably rather than by inspection.
- *
- * The ceiling is expressed as the first excluded day (1 January of
- * `currentYear + yearsAhead + 1`) rather than a year comparison, so the
- * predicate stays a pair of range scans over `case_law_decisions_date_idx`
- * instead of a sequential scan behind `extract(...)`.
- *
- * `now()` is read in UTC to match the guard's `getUTCFullYear()`: a session
- * time zone must not decide whether a stored date is corrupt.
- *
- * Written with `sql.raw` for the two integers so the fragment is literal SQL
- * with no bind parameters, which is what lets the same text be reused verbatim
- * in DDL (a CHECK constraint takes no parameters). The values are integers from
- * an `as const` declaration, never input.
- */
-export const decisionDateOutOfBoundsSql = (column: SQL): SQL => sql`(
-  ${column} < make_date(${sql.raw(String(DECISION_YEAR_BOUNDS.min))}, 1, 1)
-  OR ${column} >= make_date(
-       extract(year from (now() AT TIME ZONE 'UTC'))::int
-         + ${sql.raw(String(DECISION_YEAR_BOUNDS.yearsAhead + 1))},
-       1, 1)
-)`;
 
 const OUT_OF_BOUNDS = decisionDateOutOfBoundsSql(sql.raw("d.decision_date"));
 
@@ -124,24 +96,54 @@ export const DECISION_DATE_ROW_LOCKS = {
 export type DecisionDateRowLock =
   (typeof DECISION_DATE_ROW_LOCKS)[keyof typeof DECISION_DATE_ROW_LOCKS];
 
+/** Pages of ids the corrupt-id collection may hold before it is paged. */
+const CORRUPT_SCAN_PAGES = 100;
+
 type SelectCorruptDecisionDatesOptions = {
   limit: number;
   lock: DecisionDateRowLock;
 };
 
+/*
+ * The corrupt ids are collected in one materialized CTE and paged in a
+ * second on purpose. The collection is capped at a multiple of the page
+ * (unordered, so the date index still answers it) rather than materializing
+ * an unexpectedly large population; a page drawn from a capped set is still
+ * a page of corrupt rows, and the caller loops until a page is empty. Written as one statement over the join, the planner
+ * estimates the date bounds to match a large share of the table and either
+ * merge-joins over a full primary-key scan or walks the primary key in order
+ * filtering every row; both outrun the statement timeout while the bounds
+ * actually match a handful of rows. The first CTE keeps the predicate on its
+ * own, where the date index answers it; the second applies the ordering and
+ * the page limit to that set, so the join and the lock cost one primary-key
+ * lookup per id.
+ */
+
 export const selectCorruptDecisionDatesStatement = ({
   limit,
   lock,
 }: SelectCorruptDecisionDatesOptions): SQL => sql`
+  WITH corrupt AS MATERIALIZED (
+    SELECT d.id
+      FROM case_law_decisions d
+     WHERE ${OUT_OF_BOUNDS}
+     LIMIT ${limit * CORRUPT_SCAN_PAGES}
+  ),
+  page AS MATERIALIZED (
+    SELECT c.id
+      FROM corrupt c
+     ORDER BY c.id
+     LIMIT ${limit}
+  )
   SELECT d.id AS "id",
          s.adapter_key AS "adapterKey",
          d.decision_date::text AS "storedDate",
          d.metadata->>'decisionDate' AS "metadataDate",
          d.citation_key AS "citationKey",
          d.country AS "country"
-    FROM case_law_decisions d
+    FROM page c
+    JOIN case_law_decisions d ON d.id = c.id
     JOIN case_law_sources s ON s.id = d.source_id
-   WHERE ${OUT_OF_BOUNDS}
    ORDER BY d.id
    LIMIT ${limit}
    ${lock === DECISION_DATE_ROW_LOCKS.FOR_UPDATE ? sql`FOR UPDATE OF d` : sql``}
