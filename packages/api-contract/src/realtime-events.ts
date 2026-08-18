@@ -19,6 +19,7 @@ export const REALTIME_EVENT_TYPE = {
   SESSION_TAKEN_OVER: "session-taken-over",
   TAKEOVER_REQUESTED: "takeover-requested",
   WORKFLOW_EXTRACTION_PREVIEW: "workflow-extraction-preview",
+  NEW_NOTIFICATION: "new-notification",
 } as const;
 
 export const RESOURCE_CHANGE_TYPE = {
@@ -100,6 +101,19 @@ const flowRunUpdateEventSchema = v.object({
   }),
 });
 
+const newNotificationEventSchema = v.object({
+  type: v.literal("new-notification"),
+  data: v.object({
+    id: nonEmptyStringSchema,
+    title: nonEmptyStringSchema,
+    message: nonEmptyStringSchema,
+    isRead: v.boolean(),
+    createdAt: nonEmptyStringSchema,
+    entityType: v.nullable(v.string()),
+    entityId: v.nullable(v.string()),
+  }),
+});
+
 const workspaceRealtimeEventSchema = v.variant("type", [
   resourceUpdatedEventSchema,
   resourceDeletedEventSchema,
@@ -107,6 +121,7 @@ const workspaceRealtimeEventSchema = v.variant("type", [
   resourceSetUpdatedEventSchema,
   workflowExtractionPreviewEventSchema,
   flowRunUpdateEventSchema,
+  newNotificationEventSchema,
 ]);
 
 const organizationRealtimeEventSchema = resourceSetUpdatedEventSchema;

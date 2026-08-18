@@ -65,6 +65,7 @@ import { ratesRoute } from "@/api/handlers/rates/routes";
 import { initBuiltinReportTemplates } from "@/api/handlers/reports/builtin-templates";
 import { initReportExportWorker } from "@/api/handlers/reports/report-export-queue";
 import { reportsRoute } from "@/api/handlers/reports/routes";
+import { notificationsRoute } from "@/api/handlers/notifications/routes";
 import { savedSearchesRoute } from "@/api/handlers/saved-searches/routes";
 import { searchRoute } from "@/api/handlers/search/routes";
 import { sharepointRoute } from "@/api/handlers/sharepoint/routes";
@@ -583,6 +584,7 @@ const api = new Elysia()
       .use(documentReviewsRoute)
       .use(bilingualTranslationsRoute)
       .use(reportsRoute)
+      .use(notificationsRoute)
       .use(flowsRoute)
       .use(flowRunsRoute)
       .use(documentTypesRoute)

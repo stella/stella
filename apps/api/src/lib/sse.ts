@@ -19,6 +19,7 @@ import {
   parseRedisPayload,
   publishOrganizationEvent,
   publishSessionEvent,
+  publishUserNotification,
   publishWorkspaceAccessRevoked,
   publishWorkspaceEvent,
   REDIS_CHANNEL,
@@ -279,6 +280,30 @@ const broadcastLocalToOrganization = (
   }
 };
 
+/** Push an SSE event to local connections for a specific user. */
+const broadcastLocalToUser = (
+  userId: SafeId<"user">,
+  event: WorkspaceRealtimeEvent,
+): void => {
+  const chunk = formatSSE(event);
+
+  for (const [workspaceId, set] of connections) {
+    for (const conn of set) {
+      if (conn.userId !== userId) {
+        continue;
+      }
+      try {
+        conn.controller.enqueue(chunk);
+      } catch {
+        set.delete(conn);
+      }
+    }
+    if (set.size === 0 && connections.get(workspaceId) === set) {
+      connections.delete(workspaceId);
+    }
+  }
+};
+
 // ── Cross-instance broadcast via Redis pub/sub ──────────
 //
 // The subscriber receives messages from all instances and delivers to
@@ -325,6 +350,9 @@ const handleMessage = (message: string): void => {
       queueWorkspaceDelivery(workspaceId, async () =>
         broadcastLocal(workspaceId, parsed.event),
       );
+    } else if (parsed.scope === "user") {
+      const userId = brandPersistedUserId(parsed.id);
+      broadcastLocalToUser(userId, parsed.event);
     } else if (parsed.scope === "organization") {
       if (isOwnInlineDelivery(parsed)) {
         return;
@@ -426,6 +454,28 @@ export const broadcastToOrganization = (
     });
     if (!deliveredLocally) {
       broadcastLocalToOrganization(organizationId, event);
+    }
+  });
+};
+
+export const broadcastUserNotification = (
+  userId: SafeId<"user">,
+  event: WorkspaceRealtimeEvent,
+): void => {
+  const deliveredLocally = !hasAttachedSubscriber();
+  if (deliveredLocally) {
+    broadcastLocalToUser(userId, event);
+  }
+
+  publishUserNotification(userId, event, {
+    originInstanceId: INSTANCE_ID,
+    deliveredInline: deliveredLocally,
+  }).catch((error: unknown) => {
+    logger.warn("sse.redis_publish_failed", {
+      "error.type": errorTag(error),
+    });
+    if (!deliveredLocally) {
+      broadcastLocalToUser(userId, event);
     }
   });
 };

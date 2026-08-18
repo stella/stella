@@ -1133,6 +1133,7 @@ type Messages = {
     "loadMore": "Load more";
     "loading": "Loading";
     "logTime": "Log time";
+    "markAllAsRead": "Mark all as read";
     "matter": "Matter";
     "matters": "Matters";
     "members": "Members";
@@ -1143,10 +1144,12 @@ type Messages = {
     "newMatter": "New matter";
     "newRow": "New row";
     "next": "Next";
+    "noNotifications": "No notifications yet";
     "noResults": "No results";
     "noVersions": "No version history";
     "none": "None";
     "notes": "Notes";
+    "notifications": "Notifications";
     "open": "Open";
     "openInNewTab": "Open in new tab";
     "options": "Options";

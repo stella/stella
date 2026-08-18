@@ -154,6 +154,10 @@ export const brandPersistedLegislationDocumentId = (
 export const brandPersistedContactId = (contactId: string): SafeId<"contact"> =>
   toSafeId<"contact">(contactId);
 
+export const brandPersistedNotificationId = (
+  notificationId: string,
+): SafeId<"notification"> => toSafeId<"notification">(notificationId);
+
 export const brandPersistedWorkspaceContactId = (
   workspaceContactId: string,
 ): SafeId<"workspaceContact"> =>

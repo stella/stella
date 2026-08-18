@@ -110,6 +110,7 @@ export const LIMITS = {
   usageAssignmentsMax: 1000,
   viewsCount: 20,
   viewTemplatesPerUser: 50,
+  notificationsPageSizeDefault: 50,
   /** Per-org cap on saved playbook definitions. Per-playbook size is bounded
    *  by the positions schema's maxItems (200). */
   playbookDefinitionsCount: 100,

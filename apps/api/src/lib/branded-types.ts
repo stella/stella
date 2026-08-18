@@ -101,6 +101,7 @@ export type SafeIdType =
   | "legalListSection"
   | "matter"
   | "matterCounter"
+  | "notification"
   | "mcpConnector"
   | "mcpOAuthClient"
   | "mcpUserConnection"

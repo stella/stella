@@ -1,5 +1,6 @@
 import { Result, TaggedError } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
+import { createNotification } from "@/api/lib/notifications";
 
 import { resolveUiLocale } from "@stll/locales";
 
@@ -102,6 +103,20 @@ export const notifyReportExportStatus = async ({
   if (claim === undefined) {
     return { status: "skipped" };
   }
+
+  // Create in-app notification
+  const exportStatus = claim.status === "completed" ? "completed" : "failed";
+  await scopedDb(async (tx) => {
+    await createNotification(tx, {
+      userId,
+      title: "Report Export Ready",
+      message: exportStatus === "completed"
+        ? "Your report export has finished successfully."
+        : "Your report export has failed.",
+      entityType: "report_export",
+      entityId: exportId,
+    });
+  });
 
   const configuredResult = Result.try(() => delivery.isConfigured());
   if (Result.isError(configuredResult)) {

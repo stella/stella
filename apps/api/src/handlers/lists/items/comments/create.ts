@@ -4,6 +4,7 @@ import { t } from "elysia";
 import { legalListItemComments } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { detectAndNotifyMentions } from "@/api/lib/notifications";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -48,6 +49,7 @@ const createItemComment = createSafeHandler(
           body: body.body,
           authorId: user.id,
         });
+        await detectAndNotifyMentions(tx, body.body, user.id, "entity", body.itemEntityId);
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM,

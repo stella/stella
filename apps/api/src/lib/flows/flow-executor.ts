@@ -1,5 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, asc, eq, inArray, lt } from "drizzle-orm";
+import { createNotification } from "@/api/lib/notifications";
 
 import { compileLegalSourceToDocx } from "@stll/docx-core";
 
@@ -143,6 +144,7 @@ export const executeFlowStep = async (
         stepIndex,
         workspaceId: run.workspaceId,
         scopedDb,
+        actorUserId,
       });
       return;
     case "ai": {
@@ -167,6 +169,7 @@ export const executeFlowStep = async (
         output,
         workspaceId: run.workspaceId,
         scopedDb,
+        actorUserId,
       });
       return;
     }
@@ -186,6 +189,7 @@ export const executeFlowStep = async (
         output,
         workspaceId: run.workspaceId,
         scopedDb,
+        actorUserId,
       });
       return;
     }
@@ -613,9 +617,10 @@ type CompleteStepArgs = {
   runId: SafeId<"flowRun">;
   stepIndex: number;
   stepCount: number;
-  output: FlowStepOutput;
+  output?: FlowStepOutput;
   workspaceId: SafeId<"workspace">;
   scopedDb: ReturnType<typeof createRootScopedDb>;
+  actorUserId: SafeId<"user">;
 };
 
 const completeStepAndAdvance = async ({
@@ -625,6 +630,7 @@ const completeStepAndAdvance = async ({
   output,
   workspaceId,
   scopedDb,
+  actorUserId,
 }: CompleteStepArgs): Promise<void> => {
   const advance = advanceAfterStep({ stepIndex, stepCount });
   const now = new Date();
@@ -642,6 +648,13 @@ const completeStepAndAdvance = async ({
         .update(flowRuns)
         .set({ status: "completed", finishedAt: now })
         .where(eq(flowRuns.id, runId));
+      await createNotification(tx, {
+        userId: actorUserId,
+        title: "Workflow Run Completed",
+        message: "Your workflow run has completed successfully.",
+        entityType: "flow_run",
+        entityId: runId,
+      });
     } else {
       await tx
         .update(flowRuns)
@@ -663,11 +676,13 @@ const pauseAtReviewGate = async ({
   stepIndex,
   workspaceId,
   scopedDb,
+  actorUserId,
 }: {
   runId: SafeId<"flowRun">;
   stepIndex: number;
   workspaceId: SafeId<"workspace">;
   scopedDb: ReturnType<typeof createRootScopedDb>;
+  actorUserId: SafeId<"user">;
 }): Promise<void> => {
   const payload = await scopedDb(async (tx) => {
     await tx
@@ -680,6 +695,13 @@ const pauseAtReviewGate = async ({
       .update(flowRuns)
       .set({ status: "awaiting_review" })
       .where(eq(flowRuns.id, runId));
+    await createNotification(tx, {
+      userId: actorUserId,
+      title: "Workflow Run Awaiting Approval",
+      message: `A workflow run is waiting on your approval (review-gate at step ${stepIndex + 1}).`,
+      entityType: "flow_run",
+      entityId: runId,
+    });
     return await readRunProgress(tx, runId);
   });
   broadcastFlowRunUpdate(workspaceId, payload);
@@ -751,6 +773,15 @@ export const failFlowRunFromWorker = async (
       .update(flowRuns)
       .set({ status: "failed", error: message, finishedAt: now })
       .where(eq(flowRuns.id, runId));
+    if (scope.actorUserId !== null) {
+      await createNotification(tx, {
+        userId: scope.actorUserId,
+        title: "Workflow Run Failed",
+        message: `Your workflow run has failed: ${message}`,
+        entityType: "flow_run",
+        entityId: runId,
+      });
+    }
     return await readRunProgress(tx, runId);
   };
 
