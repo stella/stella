@@ -184,7 +184,6 @@ const EditorSurface = ({ source }: EditorSurfaceProps) => {
       key={`doc-${source.loadId}`}
       className="folio-docx-preview h-full"
       documentBuffer={source.buffer}
-      documentKey={`docx-editor-tool-${source.loadId}`}
       // Fit each opened document to the workbench width so it never overflows
       // and clips on the right; folio re-fits on resize.
       initialZoom="fit-width"
