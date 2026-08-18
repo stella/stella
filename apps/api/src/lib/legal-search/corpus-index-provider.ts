@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import {
   caseLawCorpusIndexProjections,
@@ -106,17 +106,6 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
     return { hits: [], facets: null, nextCursor: null, limit };
   }
 
-  // Upper bound for the pagination early-stop: scanning may end only
-  // once no unseen candidate could out-blend the page cursor.
-  const [authorityBound] = await caseLawPublicReadDb((tx) =>
-    tx
-      .select({
-        max: sql<number>`coalesce(max(${caseLawDecisions.citationAuthority}), 0)`,
-      })
-      .from(caseLawDecisions),
-  );
-  const maxAuthority = authorityBound?.max ?? 0;
-
   const searchPage = await readCorpusIndexSearchPage({
     indexId,
     query: engineQuery,
@@ -128,8 +117,10 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
       return typeof id === "string" && isUuid(id) ? id : null;
     },
     extractSnippet,
-    unseenScoreUpperBound: (nextLexicalScore) =>
-      stableBlendUpperBound(nextLexicalScore, maxAuthority),
+    // Upper bound for the pagination early-stop: scanning may end only once
+    // no unseen candidate could out-blend the page cursor. Saturated
+    // authority is bounded by 1, so the bound reads nothing from the corpus.
+    unseenScoreUpperBound: stableBlendUpperBound,
     rankCandidates: async (candidates) => {
       const ids = candidates.map((candidate) =>
         toSafeId<"caseLawDecision">(candidate.id),

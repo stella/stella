@@ -5,6 +5,7 @@ import {
   bodyPreviewJoin,
   redistributableSourceJoin,
 } from "@/api/lib/case-law/search-sql";
+import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
 import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
 import { loadFtsSearchConfigs } from "@/api/lib/legal-search/fts-config";
 import { pgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facets";
@@ -72,7 +73,9 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
     ? sql`AND d.language = ${query.language}`
     : sql``;
 
-  const scoreExpr = sql`(${ftsSearch.rank} + 0.3 * d.citation_authority)`;
+  // One fragment for the ORDER BY and the cursor predicate alike: keyset
+  // pagination is only stable while the two are the same expression.
+  const scoreExpr = blendedRankSql(ftsSearch.rank, sql`d.citation_authority`);
 
   const cursorFilter = parsedCursor
     ? sql`AND (${scoreExpr}, sd.decision_id) < (${parsedCursor.score}::float8, ${parsedCursor.id})`

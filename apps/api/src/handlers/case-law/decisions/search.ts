@@ -9,7 +9,10 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
-import { courtWeightSql } from "@/api/handlers/case-law/citation-score";
+import {
+  courtWeightSql,
+  polarityWeightSql,
+} from "@/api/handlers/case-law/citation-score";
 import { loadCourtWeightEntriesForSql } from "@/api/handlers/case-law/court-weights";
 import { validCaseLawLanguageAlternateCountSql } from "@/api/handlers/case-law/decisions/language";
 import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
@@ -26,6 +29,7 @@ import {
   redistributableSourceJoin,
 } from "@/api/lib/case-law/search-sql";
 import { isUuid } from "@/api/lib/custom-schema";
+import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
 import {
   caseLawCorpusProjectionJoin,
   currentCaseLawCorpusProjection,
@@ -137,10 +141,13 @@ const searchPostgresDecisions = async (
     ? sql`AND d.language = ${body.language}`
     : sql``;
 
+  // One fragment for the ORDER BY and the cursor predicate alike: keyset
+  // pagination is only stable while the two are the same expression.
+  const scoreExpr = blendedRankSql(ftsSearch.rank, sql`cb.authority`);
+
   const cursorFilter = parsedCursor
     ? sql`AND (
-        (${ftsSearch.rank}
-          + 0.3 * ln(1 + cb.boost)),
+        ${scoreExpr},
         sd.decision_id
       ) < (
         ${parsedCursor.score}::float8,
@@ -164,18 +171,16 @@ const searchPostgresDecisions = async (
   const courtWeightEntries = await loadCourtWeightEntriesForSql();
   const courtWeightExpr = courtWeightSql("citing_d.court", courtWeightEntries);
 
-  const citationBoost = sql.raw(`
+  const citationAuthorityLateral = sql.raw(`
     LATERAL (
-      SELECT coalesce(
+      SELECT ln(1 + coalesce(
         sum(
-          (${courtWeightExpr})
+          (${polarityWeightSql("c.polarity")})
+          * (${courtWeightExpr})
           * (1.0 / (1 + COALESCE(extract(epoch FROM (now() - citing_d.decision_date)) / (365.25 * 86400), 1.0)))
         ),
         0
-      ) / GREATEST(
-        extract(epoch FROM (now() - d.decision_date)) / (365.25 * 86400),
-        1.0
-      ) AS boost,
+      )) AS authority,
       count(*)::int AS cnt
       FROM case_law_citations c
       JOIN case_law_decisions citing_d
@@ -206,9 +211,7 @@ const searchPostgresDecisions = async (
         ${ftsSearch.headlineQuery},
         ${TS_HEADLINE_CONFIG}
       ) AS headline,
-      (${ftsSearch.rank}
-        + 0.3 * ln(1 + cb.boost)
-      ) AS score,
+      ${scoreExpr} AS score,
       cb.cnt AS citation_count,
       d.created_at
     FROM case_law_search_documents sd
@@ -216,7 +219,7 @@ const searchPostgresDecisions = async (
       ON d.id = sd.decision_id
     ${redistributableSourceJoin}
     ${bodyPreviewJoin}
-    LEFT JOIN ${citationBoost} ON true
+    LEFT JOIN ${citationAuthorityLateral} ON true
     WHERE ${ftsSearch.predicate}
       ${allFilters}
       ${cursorFilter}
@@ -508,17 +511,6 @@ const searchCorpusIndexDecisions = async (
     return { hits: [], facets: null, totalCount: null, nextCursor: null };
   }
 
-  // Upper bound for the pagination early-stop: scanning may end only
-  // once no unseen candidate could out-blend the page cursor.
-  const [authorityBound] = await caseLawDb((tx) =>
-    tx
-      .select({
-        max: sql<number>`coalesce(max(${caseLawDecisions.citationAuthority}), 0)`,
-      })
-      .from(caseLawDecisions),
-  );
-  const maxAuthority = authorityBound?.max ?? 0;
-
   const searchPage = await readCorpusIndexSearchPage({
     indexId,
     query,
@@ -530,8 +522,10 @@ const searchCorpusIndexDecisions = async (
       return typeof id === "string" && isUuid(id) ? id : null;
     },
     extractSnippet: extractCorpusSnippet,
-    unseenScoreUpperBound: (nextLexicalScore) =>
-      stableBlendUpperBound(nextLexicalScore, maxAuthority),
+    // Upper bound for the pagination early-stop: scanning may end only once
+    // no unseen candidate could out-blend the page cursor. Saturated
+    // authority is bounded by 1, so the bound reads nothing from the corpus.
+    unseenScoreUpperBound: stableBlendUpperBound,
     rankCandidates: async (candidates) => {
       const ids = candidates.map((candidate) =>
         toSafeId<"caseLawDecision">(candidate.id),

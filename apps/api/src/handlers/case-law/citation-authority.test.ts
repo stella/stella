@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import {
@@ -9,13 +9,17 @@ import {
 } from "@/api/db/schema";
 import {
   type CitationContributionWeight,
-  courtRecencyContributionWeight,
+  citationContributionWeight,
   hasResolvedCitations,
   oldestCitationAuthorityRecomputeAt,
   recomputeCitationAuthorityBatch,
 } from "@/api/handlers/case-law/citation-authority";
-import { citationScore } from "@/api/handlers/case-law/citation-score";
+import {
+  citationScore,
+  type CitationInput,
+} from "@/api/handlers/case-law/citation-score";
 import type { CourtWeightEntry } from "@/api/handlers/case-law/court-weights";
+import { POLARITY } from "@/api/handlers/case-law/polarity/consts";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -32,6 +36,23 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const NOW = new Date("2026-06-05T00:00:00.000Z");
 
+/**
+ * What cites the fixture's cited decision, as `citationScore` sees it.
+ *
+ * Two unclassified citations and one negative treatment: the corpus is mostly
+ * unclassified, so the fixture has to carry both cases or the SQL could weigh
+ * NULL polarity any way it liked and still match.
+ */
+const CITED_CITATIONS = [
+  { citingCourt: "Nejvyšší soud", citingDate: "2025-01-01" },
+  { citingCourt: "Krajský soud", citingDate: "2018-01-01" },
+  {
+    citingCourt: "Nejvyšší soud",
+    citingDate: "2024-01-01",
+    polarity: POLARITY.NEGATIVE,
+  },
+] as const satisfies readonly CitationInput[];
+
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
 
@@ -39,6 +60,7 @@ const sourceId = createSafeId<"caseLawSource">();
 const citedId = createSafeId<"caseLawDecision">();
 const supremeCitingId = createSafeId<"caseLawDecision">();
 const regionalCitingId = createSafeId<"caseLawDecision">();
+const overrulingCitingId = createSafeId<"caseLawDecision">();
 const orphanId = createSafeId<"caseLawDecision">();
 
 type SweepOptions = {
@@ -157,6 +179,15 @@ beforeAll(
         language: "cs",
         decisionDate: "2021-01-01",
       },
+      {
+        id: overrulingCitingId,
+        sourceId,
+        caseNumber: "5 Cdo 5/2024",
+        court: "Nejvyšší soud",
+        country: "CZE",
+        language: "cs",
+        decisionDate: "2024-01-01",
+      },
     ]);
 
     await db.insert(caseLawCitations).values([
@@ -169,6 +200,12 @@ beforeAll(
         citingDecisionId: regionalCitingId,
         citedDecisionId: citedId,
         citationText: "1 Cdo 1/2020",
+      },
+      {
+        citingDecisionId: overrulingCitingId,
+        citedDecisionId: citedId,
+        citationText: "1 Cdo 1/2020",
+        polarity: POLARITY.NEGATIVE,
       },
     ]);
 
@@ -210,17 +247,24 @@ const snapshot = async (): Promise<
     .orderBy(caseLawDecisions.id);
 
 test("materialized authority equals citationScore() at the same instant", async () => {
-  const expected = citationScore(
-    [
-      { citingCourt: "Nejvyšší soud", citingDate: "2025-01-01" },
-      { citingCourt: "Krajský soud", citingDate: "2018-01-01" },
-    ],
-    "2020-01-01",
+  const expected = citationScore([...CITED_CITATIONS], NOW);
+
+  // Not vacuous: the negative treatment is a citation the sum has to drop.
+  // Ignoring polarity would score the same fixture higher, so a SQL twin that
+  // forgot the polarity CASE could not pass the equality below.
+  const ignoringPolarity = citationScore(
+    CITED_CITATIONS.map(({ citingCourt, citingDate }) => ({
+      citingCourt,
+      citingDate,
+    })),
     NOW,
   );
+  expect(ignoringPolarity).toBeGreaterThan(expected);
 
   expect(await authorityOf(citedId)).toBeCloseTo(expected, 9);
-  expect(await countOf(citedId)).toBe(2);
+  // The overruling citation still counts: it is a citation, and the citator
+  // exists to surface exactly that one.
+  expect(await countOf(citedId)).toBe(3);
 });
 
 test("a decision with no incoming citations has zero authority", async () => {
@@ -236,12 +280,10 @@ test("a more authoritative citing court yields higher authority", async () => {
   // controlling for date so only court weight differs.
   const supreme = citationScore(
     [{ citingCourt: "Nejvyšší soud", citingDate: "2024-01-01" }],
-    "2020-01-01",
     NOW,
   );
   const regional = citationScore(
     [{ citingCourt: "Krajský soud", citingDate: "2024-01-01" }],
-    "2020-01-01",
     NOW,
   );
   expect(supreme).toBeGreaterThan(regional);
@@ -405,24 +447,17 @@ test("the contribution weight is a seam the aggregate reads through", async () =
   // this expression alone. Doubling it must double the weighted sum and touch
   // nothing else, including the citation count.
   const doubled: CitationContributionWeight = (options) =>
-    sql`2 * (${courtRecencyContributionWeight(options)})`;
+    sql`2 * (${citationContributionWeight(options)})`;
   await markAllDue();
   await sweep(1000, { contributionWeight: doubled });
 
-  const expected = citationScore(
-    [
-      { citingCourt: "Nejvyšší soud", citingDate: "2025-01-01" },
-      { citingCourt: "Krajský soud", citingDate: "2018-01-01" },
-    ],
-    "2020-01-01",
-    NOW,
-  );
-  // score = ln(1 + sum/age), so doubling the sum is ln(1 + 2*(e^score - 1)).
+  const expected = citationScore([...CITED_CITATIONS], NOW);
+  // score = ln(1 + sum), so doubling the sum is ln(1 + 2*(e^score - 1)).
   expect(await authorityOf(citedId)).toBeCloseTo(
     Math.log(1 + 2 * (Math.E ** expected - 1)),
     9,
   );
-  expect(await countOf(citedId)).toBe(2);
+  expect(await countOf(citedId)).toBe(3);
 
   await markAllDue();
   await sweep(1000);
@@ -479,7 +514,6 @@ test("courtWeightEntries option drives the SQL instead of the legacy tiers", asy
   expect(await authorityOf(customCitedId)).toBeCloseTo(
     citationScore(
       [{ citingCourt: "Custom Seeded Court", citingDate: "2025-01-01" }],
-      "2020-01-01",
       NOW,
       new Map([["CZE", CUSTOM_ENTRIES]]),
     ),
@@ -491,7 +525,6 @@ test("courtWeightEntries option drives the SQL instead of the legacy tiers", asy
   expect(await authorityOf(customCitedId)).not.toBeCloseTo(
     citationScore(
       [{ citingCourt: "Custom Seeded Court", citingDate: "2025-01-01" }],
-      "2020-01-01",
       NOW,
     ),
     2,
@@ -500,4 +533,70 @@ test("courtWeightEntries option drives the SQL instead of the legacy tiers", asy
 
 test("an unrankable corpus is detected before a sweep walks it", async () => {
   expect(await db.transaction(hasResolvedCitations)).toBe(true);
+});
+
+test("the cited decision's own age does not change its authority", async () => {
+  // Two decisions with identical citation sets, published twenty-nine years
+  // apart. Authority reads the citing side only, so they have to score the
+  // same value: the removed divisor — the cited decision's own age — put the
+  // older one far below the newer for nothing but having existed longer.
+  const oldId = createSafeId<"caseLawDecision">();
+  const youngId = createSafeId<"caseLawDecision">();
+  await db.insert(caseLawDecisions).values([
+    {
+      id: oldId,
+      sourceId,
+      caseNumber: "7 Cdo 7/1995",
+      court: "Okresní soud",
+      country: "CZE",
+      language: "cs",
+      decisionDate: "1995-01-01",
+    },
+    {
+      id: youngId,
+      sourceId,
+      caseNumber: "8 Cdo 8/2024",
+      court: "Okresní soud",
+      country: "CZE",
+      language: "cs",
+      decisionDate: "2024-01-01",
+    },
+  ]);
+  await db.insert(caseLawCitations).values([
+    {
+      citingDecisionId: supremeCitingId,
+      citedDecisionId: oldId,
+      citationText: "7 Cdo 7/1995",
+    },
+    {
+      citingDecisionId: regionalCitingId,
+      citedDecisionId: oldId,
+      citationText: "7 Cdo 7/1995",
+    },
+    {
+      citingDecisionId: supremeCitingId,
+      citedDecisionId: youngId,
+      citationText: "8 Cdo 8/2024",
+    },
+    {
+      citingDecisionId: regionalCitingId,
+      citedDecisionId: youngId,
+      citationText: "8 Cdo 8/2024",
+    },
+  ]);
+
+  await markAllDue();
+  await sweep(1000);
+
+  // Not vacuous: the fixture differs precisely where the removed term read.
+  const dates = await db
+    .select({ id: caseLawDecisions.id, date: caseLawDecisions.decisionDate })
+    .from(caseLawDecisions)
+    .where(inArray(caseLawDecisions.id, [oldId, youngId]));
+  expect(new Set(dates.map((row) => row.date)).size).toBe(2);
+
+  const older = await authorityOf(oldId);
+  expect(older).toBe(await authorityOf(youngId));
+  expect(older).toBeGreaterThan(0);
+  expect(await countOf(oldId)).toBe(await countOf(youngId));
 });

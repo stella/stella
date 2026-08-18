@@ -99,13 +99,29 @@ export const RULE_SOURCE = {
  */
 export const PROMOTION_THRESHOLD = 5;
 
-/** Polarity weights for citation scoring. */
-export const POLARITY_WEIGHT = {
+/**
+ * What each polarity contributes to citation authority.
+ *
+ * Binary on purpose. A court that overrules or distinguishes a decision is
+ * not vouching for it, so a negative treatment confers no authority; every
+ * other reading does, in full. Grading the middle (neutral below supportive
+ * below positive) would rank a decision by how enthusiastically it happens to
+ * have been cited, and it would make the score move as classification
+ * coverage grows rather than as the case law changes.
+ *
+ * A citation with no polarity yet weighs the same as `unknown`: the corpus is
+ * mostly unclassified, and anything else would rank unclassified citations
+ * against classified ones instead of ranking decisions.
+ *
+ * This governs authority only. A negative treatment is still a citation: it
+ * counts in `citation_count` and it is exactly what the citator must surface.
+ */
+export const POLARITY_AUTHORITY_WEIGHT = {
   positive: 1,
-  supportive: 0.8,
-  neutral: 0.5,
+  supportive: 1,
+  neutral: 1,
   negative: 0,
-  unknown: 0.5,
+  unknown: 1,
 } as const satisfies Record<Polarity, number>;
 
 /**

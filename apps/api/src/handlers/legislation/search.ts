@@ -18,6 +18,7 @@ import {
   tPaginationLimit,
   tSafeId,
 } from "@/api/lib/custom-schema";
+import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
@@ -127,7 +128,9 @@ const pgSearch = async (
     ${body.dateTo ? sql`AND d.effective_date <= ${body.dateTo}` : sql``}
   `;
 
-  const scoreExpr = sql`(${ftsSearch.rank} + 0.3 * d.citation_authority)`;
+  // One fragment for the ORDER BY and the cursor predicate alike: keyset
+  // pagination is only stable while the two are the same expression.
+  const scoreExpr = blendedRankSql(ftsSearch.rank, sql`d.citation_authority`);
   const cursorFilter = parsedCursor
     ? sql`AND (${scoreExpr}, sd.document_id) < (${parsedCursor.score}::float8, ${parsedCursor.id})`
     : sql``;
@@ -247,17 +250,6 @@ const corpusIndexSearch = async (
     return { hits: [], nextCursor: null };
   }
 
-  // Upper bound for the pagination early-stop: scanning may end only
-  // once no unseen candidate could out-blend the page cursor.
-  const [authorityBound] = await scopedDb((tx) =>
-    tx
-      .select({
-        max: sql<number>`coalesce(max(${legislationDocuments.citationAuthority}), 0)`,
-      })
-      .from(legislationDocuments),
-  );
-  const maxAuthority = authorityBound?.max ?? 0;
-
   const searchPage = await readCorpusIndexSearchPage({
     indexId,
     query,
@@ -269,8 +261,10 @@ const corpusIndexSearch = async (
       return typeof id === "string" && isUuid(id) ? id : null;
     },
     extractSnippet: extractCorpusSnippet,
-    unseenScoreUpperBound: (nextLexicalScore) =>
-      stableBlendUpperBound(nextLexicalScore, maxAuthority),
+    // Upper bound for the pagination early-stop: scanning may end only once
+    // no unseen candidate could out-blend the page cursor. Saturated
+    // authority is bounded by 1, so the bound reads nothing from the corpus.
+    unseenScoreUpperBound: stableBlendUpperBound,
     rankCandidates: async (candidates) => {
       const ids = candidates.map((candidate) =>
         toSafeId<"legislationDocument">(candidate.id),

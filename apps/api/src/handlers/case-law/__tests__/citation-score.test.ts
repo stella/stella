@@ -4,9 +4,15 @@ import {
   citationScore,
   courtWeight,
   courtWeightSql,
+  polarityWeightSql,
   recencyFactor,
   weightedCitationSum,
 } from "@/api/handlers/case-law/citation-score";
+import {
+  POLARITIES,
+  POLARITY,
+  POLARITY_AUTHORITY_WEIGHT,
+} from "@/api/handlers/case-law/polarity/consts";
 
 describe("courtWeight", () => {
   test("constitutional court → tier 4", () => {
@@ -134,7 +140,7 @@ describe("citationScore", () => {
   const now = new Date("2025-01-01");
 
   test("no citations → 0", () => {
-    expect(citationScore([], "2020-01-01", now)).toBe(0);
+    expect(citationScore([], now)).toBe(0);
   });
 
   test("positive with citations", () => {
@@ -145,7 +151,6 @@ describe("citationScore", () => {
           citingDate: "2024-06-01",
         },
       ],
-      "2020-01-01",
       now,
     );
     expect(score).toBeGreaterThan(0);
@@ -158,49 +163,151 @@ describe("citationScore", () => {
         citingDate: "2024-06-01",
       }));
 
-    const ten = citationScore(makeCitations(10), "2015-01-01", now);
-    const hundred = citationScore(makeCitations(100), "2015-01-01", now);
+    const ten = citationScore(makeCitations(10), now);
+    const hundred = citationScore(makeCitations(100), now);
 
     expect(hundred).toBeGreaterThan(ten);
     expect(hundred / ten).toBeLessThan(4);
   });
 
-  test("density: recent few citations beat old many", () => {
-    // 2024 decision with 5 recent supreme citations
-    const recent = citationScore(
+  test("a decision still being cited beats one whose citations went stale", () => {
+    // The citing side carries recency on its own, which is why the cited
+    // decision's own age is not part of the score: 5 citations from this year
+    // outweigh 20 from twenty years ago.
+    const stillCited = citationScore(
       Array.from({ length: 5 }, () => ({
         citingCourt: "Nejvyšší soud",
-        citingDate: "2025-06-01",
+        citingDate: "2024-11-01",
       })),
-      "2024-01-01",
       now,
     );
 
-    // 2000 decision with 20 old district citations
-    const old = citationScore(
+    const stale = citationScore(
       Array.from({ length: 20 }, () => ({
         citingCourt: "Okresní soud v Ostravě",
         citingDate: "2005-01-01",
       })),
-      "2000-01-01",
       now,
     );
 
-    expect(recent).toBeGreaterThan(old);
+    expect(stillCited).toBeGreaterThan(stale);
   });
 
-  test("null decision date → yearsOld defaults to 1", () => {
-    const score = citationScore(
-      [
-        {
-          citingCourt: "Nejvyšší soud",
-          citingDate: "2024-06-01",
-        },
-      ],
-      null,
+  test("a landmark decision is no longer buried under a recent one", () => {
+    // 200 citations, ten a year across the twenty years since publication.
+    const landmarkCitations = Array.from({ length: 20 }, (_, year) =>
+      Array.from({ length: 10 }, () => ({
+        citingCourt: "Okresní soud v Ostravě",
+        citingDate: `${2006 + year}-01-01`,
+      })),
+    ).flat();
+    // 8 citations, all from today, on a decision two years old.
+    const recentCitations = Array.from({ length: 8 }, () => ({
+      citingCourt: "Okresní soud v Ostravě",
+      citingDate: "2025-01-01",
+    }));
+
+    // Expected sums derived from the fixture, not from the implementation: a
+    // district court weighs 1 and a citation k years old contributes
+    // 1/(1 + k), so the landmark's sum is ten harmonic terms a year and the
+    // recent decision's is 8 citations at full weight. The harmonic form
+    // holds to a decimal rather than exactly, because the decay counts Julian
+    // years while the fixture's dates are calendar years.
+    const harmonic = Array.from({ length: 20 }, (_, k) => 1 / (1 + k)).reduce(
+      (a, b) => a + b,
+      0,
+    );
+    expect(weightedCitationSum(landmarkCitations, now)).toBeCloseTo(
+      10 * harmonic,
+      1,
+    );
+    expect(weightedCitationSum(recentCitations, now)).toBe(8);
+
+    const landmark = citationScore(landmarkCitations, now);
+    const recent = citationScore(recentCitations, now);
+
+    expect(landmark).toBeCloseTo(Math.log(1 + 10 * harmonic), 3);
+    expect(recent).toBeCloseTo(Math.log(9), 12);
+    // The two numbers the module doc quotes, so the doc cannot drift.
+    expect(landmark).toBeCloseTo(3.61, 2);
+    expect(recent).toBeCloseTo(2.2, 2);
+    expect(landmark).toBeGreaterThan(recent);
+
+    // Under the removed divisor this ordering was inverted: the landmark's
+    // sum was charged for all twenty years it had been available to be cited.
+    const withDecisionAgeDivisor = (sum: number, yearsOld: number): number =>
+      Math.log(1 + sum / Math.max(yearsOld, 1));
+    expect(
+      withDecisionAgeDivisor(weightedCitationSum(landmarkCitations, now), 20),
+    ).toBeCloseTo(1.03, 2);
+    expect(
+      withDecisionAgeDivisor(weightedCitationSum(recentCitations, now), 2),
+    ).toBeCloseTo(1.61, 2);
+    expect(
+      withDecisionAgeDivisor(weightedCitationSum(landmarkCitations, now), 20),
+    ).toBeLessThan(
+      withDecisionAgeDivisor(weightedCitationSum(recentCitations, now), 2),
+    );
+  });
+});
+
+describe("polarity weighting", () => {
+  const now = new Date("2025-01-01");
+  const citation = {
+    citingCourt: "Nejvyšší soud",
+    citingDate: "2024-01-01",
+  };
+
+  test("a negative treatment adds exactly nothing to the sum", () => {
+    const followed = weightedCitationSum(
+      [citation, { ...citation, polarity: POLARITY.POSITIVE }],
       now,
     );
-    expect(score).toBeGreaterThan(0);
+    const overruled = weightedCitationSum(
+      [citation, { ...citation, polarity: POLARITY.NEGATIVE }],
+      now,
+    );
+
+    // The two sets differ in one citation's polarity and nothing else, so the
+    // gap is that citation's whole contribution: court weight times decay.
+    const contribution = weightedCitationSum([citation], now);
+    expect(followed - overruled).toBeCloseTo(contribution, 12);
+    expect(overruled).toBeCloseTo(contribution, 12);
+    expect(
+      citationScore([{ ...citation, polarity: POLARITY.NEGATIVE }], now),
+    ).toBe(0);
+  });
+
+  test("an unclassified citation weighs the same as a classified neutral one", () => {
+    // The corpus is mostly unclassified; scoring null below `neutral` would
+    // rank classification coverage instead of case law.
+    const unclassified = weightedCitationSum([citation], now);
+    for (const polarity of POLARITIES) {
+      if (polarity !== POLARITY.NEGATIVE) {
+        expect(
+          weightedCitationSum([{ ...citation, polarity }], now),
+        ).toBeCloseTo(unclassified, 12);
+      }
+    }
+  });
+});
+
+describe("polarityWeightSql", () => {
+  test("renders one branch per non-default polarity, from the shared map", () => {
+    const generated = polarityWeightSql("c.polarity");
+    for (const polarity of POLARITIES) {
+      if (polarity === POLARITY.UNKNOWN) {
+        // `unknown` is the ELSE branch, which is also where NULL lands.
+        expect(generated).not.toContain(`= '${polarity}'`);
+      } else {
+        expect(generated).toContain(
+          `WHEN c.polarity = '${polarity}' THEN ${POLARITY_AUTHORITY_WEIGHT[polarity]}`,
+        );
+      }
+    }
+    expect(generated).toContain(
+      `ELSE ${POLARITY_AUTHORITY_WEIGHT[POLARITY.UNKNOWN]} END`,
+    );
   });
 });
 
