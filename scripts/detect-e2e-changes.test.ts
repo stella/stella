@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 const script = path.join(import.meta.dirname, "detect-e2e-changes.sh");
@@ -43,34 +43,52 @@ const marketingUpdateWorkflow = readFileSync(
   ),
   "utf-8",
 );
+const marketingCapture = readFileSync(
+  path.join(
+    import.meta.dirname,
+    "../.github/actions/marketing-capture/action.yml",
+  ),
+  "utf-8",
+);
 
-const workflowJob = (jobId: string): string => {
+const jobOf = (source: string, jobId: string): string => {
   const marker = `\n  ${jobId}:\n`;
-  const start = workflow.indexOf(marker);
+  const start = source.indexOf(marker);
   if (start === -1) {
-    throw new Error(`CI workflow is missing ${jobId}`);
+    throw new Error(`Workflow is missing job ${jobId}`);
   }
   const bodyStart = start + marker.length;
-  const nextJob = workflow.slice(bodyStart).search(/\n {2}[a-z][\w-]*:\n/u);
+  const nextJob = source.slice(bodyStart).search(/\n {2}[a-z][\w-]*:\n/u);
   return nextJob === -1
-    ? workflow.slice(bodyStart)
-    : workflow.slice(bodyStart, bodyStart + nextJob);
+    ? source.slice(bodyStart)
+    : source.slice(bodyStart, bodyStart + nextJob);
 };
 
-const workflowStep = (job: string, stepName: string): string => {
-  const marker = `\n      - name: ${stepName}\n`;
-  const start = job.indexOf(marker);
+const workflowJob = (jobId: string): string => jobOf(workflow, jobId);
+
+// Workflow steps sit two levels deeper than composite-action steps, so the
+// marker indent is what tells the two apart.
+const stepOf = (source: string, stepName: string, indent: number): string => {
+  const pad = " ".repeat(indent);
+  const marker = `\n${pad}- name: ${stepName}\n`;
+  const start = source.indexOf(marker);
   if (start === -1) {
-    throw new Error(`CI job is missing step ${stepName}`);
+    throw new Error(`Missing step ${stepName}`);
   }
   const bodyStart = start + marker.length;
-  const nextStep = job.slice(bodyStart).search(/\n {6}- name:/u);
-  const step =
-    nextStep === -1
-      ? job.slice(bodyStart)
-      : job.slice(bodyStart, bodyStart + nextStep);
-  return step;
+  const nextStep = source
+    .slice(bodyStart)
+    .search(new RegExp(`\\n {${indent}}- name:`, "u"));
+  return nextStep === -1
+    ? source.slice(bodyStart)
+    : source.slice(bodyStart, bodyStart + nextStep);
 };
+
+const workflowStep = (job: string, stepName: string): string =>
+  stepOf(job, stepName, 6);
+
+const actionStep = (action: string, stepName: string): string =>
+  stepOf(action, stepName, 4);
 
 const workflowStepRun = (job: string, stepName: string): string => {
   const step = workflowStep(job, stepName);
@@ -159,6 +177,7 @@ describe("detect-e2e-changes", () => {
       "packages/locales/src/en.ts",
       "apps/landing/public/media/products/editor.png",
       ".github/workflows/marketing-screenshots.yml",
+      ".github/actions/marketing-capture/action.yml",
     ]) {
       expect(detects("marketing", [file])).toBe("true");
     }
@@ -257,7 +276,8 @@ describe("detect-e2e-changes", () => {
     // what it exercises, so a new consumer cannot quietly widen the stack the
     // PR jobs pay for.
     expect(e2eStackSetup).not.toContain("gotenberg");
-    expect(marketingWorkflow).toContain("extra-services: gotenberg");
+    expect(marketingWorkflow).not.toContain("gotenberg");
+    expect(marketingCapture).toContain("extra-services: gotenberg");
   });
 
   test("skips browser execution only for an explicit Docker Hub pull rate limit", () => {
@@ -408,25 +428,30 @@ describe("detect-e2e-changes", () => {
     );
     expect(marketingUpdateWorkflow).not.toContain("--ref");
 
-    const validate = workflowStep(marketingWorkflow, "Validate inputs");
+    const update = jobOf(marketingWorkflow, "update");
+    const validate = workflowStep(update, "Validate inputs");
     expect(validate).toContain('if [[ "$WORKFLOW_REF" != "main" ]]');
     expect(validate).toContain('if [[ "$BRANCH" == "main" ]]');
     expect(validate).toContain('"$BRANCH" =~ ^[A-Za-z0-9._/-]+$');
     expect(validate).toContain('"$BRANCH" == *".."*');
     expect(validate).toContain('"$BRANCH" == -*');
     // Nothing is minted for a branch that does not exist here.
-    expect(
-      marketingWorkflow.indexOf("- name: Verify the branch exists"),
-    ).toBeLessThan(marketingWorkflow.indexOf("- name: Mint App token"));
+    expect(update.indexOf("- name: Verify the branch exists")).toBeLessThan(
+      update.indexOf("- name: Mint App token"),
+    );
 
     // The checked-out code and the push target are the named branch, never
-    // the ref the workflow itself runs from.
-    expect(workflowStep(marketingWorkflow, "Checkout")).toContain(
+    // the ref the workflow itself runs from. The check job takes no ref and
+    // stays on its triggering one.
+    expect(workflowStep(update, "Checkout")).toContain(
       `ref: ${githubExpression("inputs.ref")}`,
     );
     expect(
-      workflowStep(marketingWorkflow, "Push regenerated baselines"),
-    ).toContain(`BRANCH: ${githubExpression("inputs.ref || github.ref_name")}`);
+      workflowStep(jobOf(marketingWorkflow, "check"), "Checkout"),
+    ).not.toContain("ref:");
+    expect(workflowStep(update, "Push regenerated baselines")).toContain(
+      `BRANCH: ${githubExpression("inputs.ref || github.ref_name")}`,
+    );
 
     // Check-mode callers pass no ref and stay on their own triggering ref.
     expect(workflowJob("marketing-screenshots")).not.toContain("ref:");
@@ -435,7 +460,7 @@ describe("detect-e2e-changes", () => {
 
   test("publishes regenerated baselines a fork pull request can commit itself", () => {
     const upload = workflowStep(
-      marketingWorkflow,
+      jobOf(marketingWorkflow, "update"),
       "Upload regenerated baselines",
     );
     expect(upload).toContain(
@@ -459,17 +484,47 @@ describe("detect-e2e-changes", () => {
     // setup-e2e-stack exits 0 with `status=rate-limited`, which the e2e suites
     // treat as a skip. Here it would report success on assets nothing looked
     // at, so the stack is mandatory.
-    const requireStack = workflowStep(marketingWorkflow, "Require the stack");
+    const requireStack = actionStep(marketingCapture, "Require the stack");
     expect(requireStack).toContain("steps.e2e-stack.outputs.status != 'ready'");
     expect(requireStack).toContain("::error::");
     expect(requireStack).toContain("exit 1");
-    expect(marketingWorkflow.indexOf("- name: Require the stack")).toBeLessThan(
-      marketingWorkflow.indexOf("- name: Start web dev server"),
+    expect(marketingCapture.indexOf("- name: Require the stack")).toBeLessThan(
+      marketingCapture.indexOf("- name: Start web dev server"),
     );
     // No capture, upload, or push step may still carry the skip that step
     // makes fatal; only `always()` cleanup and `failure()` diagnostics test it.
-    expect(marketingWorkflow).not.toContain(
+    expect(marketingCapture).not.toContain(
       "if: steps.e2e-stack.outputs.status == 'ready'",
+    );
+    expect(marketingWorkflow).not.toContain("steps.e2e-stack");
+  });
+
+  test("keeps one capture body behind both screenshot directions", () => {
+    // The shared body is a composite action so check and update cannot drift;
+    // only the checkout differs, because update captures a named branch.
+    expect(
+      marketingWorkflow.match(
+        /uses: \.\/\.github\/actions\/marketing-capture/gu,
+      ),
+    ).toHaveLength(2);
+    expect(marketingWorkflow).not.toContain("test:e2e:marketing");
+    expect(marketingCapture).toContain("test:e2e:marketing:update");
+    // Cleanup and the torn-frame guard stay inside the action so a failed
+    // capture still reports a mid-session reload as the cause.
+    for (const stepName of [
+      "Guard against mid-test Vite re-optimize",
+      "Stop web dev server",
+    ]) {
+      expect(actionStep(marketingCapture, stepName)).toContain("if: always()");
+    }
+    // An unrecognised mode must fail loudly: the check job runs on anything
+    // that is not update, so it reaches this validation instead of leaving
+    // both jobs skipped and green.
+    expect(jobOf(marketingWorkflow, "check")).toContain(
+      "if: inputs.mode != 'update'",
+    );
+    expect(actionStep(marketingCapture, "Validate mode")).toContain(
+      "Unknown marketing screenshot mode",
     );
   });
 
@@ -493,11 +548,11 @@ describe("detect-e2e-changes", () => {
     expect(
       workflow.match(/uses: \.\/\.github\/actions\/setup-playwright/gu),
     ).toHaveLength(3);
-    expect(marketingWorkflow).toContain(
+    expect(marketingCapture).toContain(
       [
         "uses: ./.github/actions/setup-playwright",
-        "        with:",
-        "          dependency-mode: full",
+        "      with:",
+        "        dependency-mode: full",
       ].join("\n"),
     );
     // The nightly and PR checks share that one definition instead of
@@ -535,6 +590,55 @@ describe("detect-e2e-changes", () => {
     );
     expect(playwrightSetup).toContain("if verify_chromium; then");
     expect(playwrightSetup).toContain("bunx playwright install-deps chromium");
+  });
+
+  test("mints the release App token only inside its deployment environment", () => {
+    // The key is an environment secret of `release-app`, whose deployment
+    // policy is main and release tags. A job that reads it without declaring
+    // the environment would be a job the policy never sees, so the census
+    // below covers every workflow rather than the two edited here.
+    expect(jobOf(marketingWorkflow, "update")).toContain(
+      "environment: release-app",
+    );
+    expect(jobOf(marketingWorkflow, "check")).not.toContain("environment:");
+
+    // A job that calls a reusable workflow cannot declare an environment:
+    // GitHub allows only name, uses, with, secrets, needs, if, and
+    // permissions there. Pinned so each exception stays a listed decision.
+    const forwardingCallers = new Set([
+      "marketing-screenshots-update.yml#update",
+      "publish-npm.yml#release",
+    ]);
+    const seenCallers = new Set<string>();
+
+    const workflowsDir = path.join(import.meta.dirname, "../.github/workflows");
+    for (const file of readdirSync(workflowsDir)) {
+      if (!file.endsWith(".yml")) {
+        continue;
+      }
+      const source = readFileSync(path.join(workflowsDir, file), "utf-8");
+      const jobsStart = source.indexOf("\njobs:\n");
+      if (jobsStart === -1) {
+        continue;
+      }
+      const jobs = source.slice(jobsStart + "\njobs:".length);
+      for (const [, jobId] of jobs.matchAll(/\n {2}([A-Za-z0-9_-]+):\n/gu)) {
+        const body = jobOf(jobs, jobId);
+        if (!/(?:STELLA_)?RELEASE_APP_PRIVATE_KEY/u.test(body)) {
+          continue;
+        }
+        const location = `${file}#${jobId}`;
+        if (/(?:^|\n) {4}uses: /u.test(body)) {
+          seenCallers.add(location);
+          continue;
+        }
+        expect(`${location}: ${body}`).toContain("environment: release-app");
+      }
+    }
+
+    // Both directions: an exception that stops existing must be deleted, and
+    // a new caller job must be a deliberate entry rather than a silent skip.
+    expect([...seenCallers].sort()).toEqual([...forwardingCallers].sort());
   });
 
   test("uploads blob reports from the configured Playwright output directory", () => {

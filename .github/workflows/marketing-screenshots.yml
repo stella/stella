@@ -1,14 +1,19 @@
 name: Marketing screenshots
 
-# One runner definition for both directions of the marketing screenshot
-# baselines, so "what CI compares" and "what CI regenerates" can never be
-# produced by two drifting job bodies:
+# Both directions of the marketing screenshot baselines, driven by one
+# capture body (`.github/actions/marketing-capture`) so "what CI compares" and
+# "what CI regenerates" can never be produced by two drifting definitions:
 #
 #   check  — PR CI and the nightly run compare the committed PNGs against a
 #            freshly seeded app.
 #   update — dispatched on main against the branch whose UI legitimately
 #            changed; rewrites every baseline on the runner and pushes the
 #            result to that branch.
+#
+# They are separate jobs because only update may hold the release App key:
+# update runs in the `release-app` environment, whose deployment policy
+# allows main and release tags only, so the key is structurally unavailable
+# to a run on any other ref.
 #
 # Both render on the same runner image, which is why the baselines can be
 # treated as reproducible artifacts rather than a developer's local output.
@@ -39,7 +44,44 @@ on:
 permissions: {}
 
 jobs:
-  marketing-screenshots:
+  check:
+    # Anything that is not update, so an unrecognised mode reaches the
+    # capture action's validation instead of skipping both jobs green.
+    if: inputs.mode != 'update'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Capture marketing screenshots
+        uses: ./.github/actions/marketing-capture
+        with:
+          mode: ${{ inputs.mode }}
+          dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          # Mode and run keep the nightly, PR, and dispatched artifacts apart.
+          name: marketing-screenshots-${{ inputs.mode }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /tmp/api.log
+            /tmp/web.log
+            apps/web/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  update:
+    if: inputs.mode == 'update'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -47,22 +89,15 @@ jobs:
       # with GITHUB_TOKEN does not re-trigger the PR's checks, so the branch
       # would sit on a failed marketing check with the fix already committed.
       contents: read
+    # Release App key lives in this environment (main and v* tags only).
+    environment: release-app
 
     steps:
       - name: Validate inputs
         env:
           BRANCH: ${{ inputs.ref }}
-          MODE: ${{ inputs.mode }}
           WORKFLOW_REF: ${{ github.ref_name }}
         run: |
-          case "$MODE" in
-            check|update) ;;
-            *)
-              echo "::error::Unknown marketing screenshot mode: $MODE"
-              exit 1
-              ;;
-          esac
-
           # `ref` reaches a checkout and a push refspec, so it has to be a
           # plain branch name and nothing that reads as an option or a path
           # traversal.
@@ -75,10 +110,6 @@ jobs:
               echo "::error::Not a plain branch name: $BRANCH"
               exit 1
             fi
-          fi
-
-          if [[ "$MODE" != "update" ]]; then
-            exit 0
           fi
 
           # The release App key must only ever run workflow code from main
@@ -99,7 +130,6 @@ jobs:
         # Before the token is minted: a typo must not reach the App, and a
         # fork PR's branch does not exist here at all (its baselines travel as
         # the artifact uploaded below).
-        if: inputs.ref != ''
         env:
           BRANCH: ${{ inputs.ref }}
           GH_TOKEN: ${{ github.token }}
@@ -110,7 +140,6 @@ jobs:
           fi
 
       - name: Mint App token
-        if: inputs.mode == 'update'
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
@@ -127,113 +156,20 @@ jobs:
           # so it never reaches disk as a persisted git credential, and the
           # code checked out here never sees it.
           persist-credentials: false
-          # Empty in check mode, which resolves to the triggering ref.
           ref: ${{ inputs.ref }}
           submodules: true
 
-      - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@2b8697f04b39187c934afc04f7b04ad1a18bd827
-
-      - name: Install dependencies
-        run: bash scripts/bun-ci-retry.sh --ignore-scripts
-        env:
-          NPM_TOKEN: ""
-
-      - name: Prepare environment
-        run: |
-          cd ./apps/api
-          cp .env.example .env
-          cd ../web
-          cp .env.example .env
-
-      - name: Start docker stack and API server
-        id: e2e-stack
-        uses: ./.github/actions/setup-e2e-stack
+      - name: Capture marketing screenshots
+        uses: ./.github/actions/marketing-capture
         with:
+          mode: ${{ inputs.mode }}
           dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
-          # Document conversion backs the seeded product scenes the captures
-          # render.
-          extra-services: gotenberg
-
-      - name: Require the stack
-        # The action exits 0 with `status=rate-limited` when Docker Hub throttles
-        # the image pulls. The e2e suites accept that skip; this job cannot: it is
-        # the only guard on assets that ship on the marketing site, so a skipped
-        # run would report success without comparing a single PNG. Every later
-        # `status == 'ready'` condition is therefore unreachable-if-false, and
-        # only the `always()` cleanup steps still test it.
-        if: steps.e2e-stack.outputs.status != 'ready'
-        env:
-          STATUS: ${{ steps.e2e-stack.outputs.status }}
-        run: |
-          echo "::error::E2E stack status is '$STATUS', not 'ready'; marketing screenshots were neither compared nor regenerated"
-          exit 1
-
-      - name: Start web dev server
-        run: |
-          cd apps/web
-          nohup bun --bun vite --port 3000 > /tmp/web.log 2>&1 &
-          echo $! > /tmp/web.pid
-
-      - name: Wait for web dev server
-        run: |
-          for i in {1..60}; do
-            if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3000 > /dev/null 2>&1; then
-              echo "Web up after ${i}s"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "::error::Web never came up"
-          tail -200 /tmp/web.log || true
-          exit 1
-
-      - name: Install Playwright browsers
-        uses: ./.github/actions/setup-playwright
-        with:
-          dependency-mode: full
-
-      - name: Seed deterministic marketing content
-        run: bun --filter @stll/api db:seed-dev
-
-      - name: Capture marketing screenshots
-        env:
-          MODE: ${{ inputs.mode }}
-        run: |
-          # The `--update-snapshots` flag lives in the package script alone, so
-          # there is one place that knows how a baseline is rewritten.
-          if [[ "$MODE" == "update" ]]; then
-            bun --filter @stll/web test:e2e:marketing:update
-          else
-            bun --filter @stll/web test:e2e:marketing
-          fi
-
-      - name: Guard against mid-test Vite re-optimize
-        # Before the update-mode commit below: a mid-session reload produces
-        # torn frames, which must never be pushed as a baseline.
-        if: always() && steps.e2e-stack.outputs.status == 'ready'
-        run: |
-          if grep -q "optimized dependencies changed. reloading" /tmp/web.log; then
-            echo "::error::Vite re-optimized dependencies mid-session and forced a reload. Add the lazy/runtime dependency named below to optimizeDeps.include in apps/web/vite.config.ts."
-            grep -nE "new dependencies optimized|optimized dependencies changed" /tmp/web.log || true
-            exit 1
-          fi
-          echo "No mid-session dep re-optimize detected."
-
-      - name: Stop web dev server
-        if: always() && steps.e2e-stack.outputs.status == 'ready'
-        run: |
-          if [[ -f /tmp/web.pid ]]; then
-            kill "$(cat /tmp/web.pid)" || true
-            rm -f /tmp/web.pid
-          fi
 
       - name: Upload regenerated baselines
         # The App token can only push to a branch of this repository, so the
         # PNGs are published unconditionally: a pull request from a fork takes
         # them from here.
-        if: inputs.mode == 'update'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: marketing-screenshots-${{ github.run_id }}
@@ -242,7 +178,6 @@ jobs:
           retention-days: 7
 
       - name: Note the artifact for fork pull requests
-        if: inputs.mode == 'update'
         env:
           ARTIFACT: marketing-screenshots-${{ github.run_id }}
         run: |
@@ -253,7 +188,6 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Push regenerated baselines
-        if: inputs.mode == 'update'
         env:
           APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
           BRANCH: ${{ inputs.ref || github.ref_name }}
@@ -282,7 +216,7 @@ jobs:
           git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/${BRANCH}"
 
       - name: Upload failure diagnostics
-        if: failure() && steps.e2e-stack.outputs.status == 'ready'
+        if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           # Mode and run keep the nightly, PR, and dispatched artifacts apart.
