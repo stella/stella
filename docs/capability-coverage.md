@@ -88,6 +88,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `contacts.create`                     | write              | stella:contacts_write | —       | curated tool `save_contact`                          |
 | `contacts.delete`                     | write, destructive | stella:contacts_write | —       | curated tool `delete_contact`                        |
 | `contacts.get`                        | read               | stella:read           | —       | curated tool `read_contact`                          |
+| `contacts.import`                     | write              | stella:contacts_write | —       | covered by `save_contact`                            |
 | `contacts.list`                       | read               | stella:read           | —       | curated tool `list_contacts`                         |
 | `contacts.search`                     | read               | stella:read           | —       | generic invoke → `stella capability contacts search` |
 | `contacts.update`                     | write              | stella:contacts_write | —       | covered by `save_contact`                            |
@@ -508,7 +509,7 @@ mechanics, and similar), not gaps in coverage.
 | search_ui              | 5     |
 | session_token_exchange | 13    |
 | ui_navigation_state    | 8     |
-| upload_mechanics       | 9     |
+| upload_mechanics       | 11    |
 | url_preview            | 2     |
 
-Total: 129
+Total: 131
