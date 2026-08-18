@@ -15,6 +15,7 @@ const {
   usageUnitsFromTokens,
   MICRO_UNITS_PER_USAGE_UNIT,
 } = await import("@/api/lib/usage/unit-model");
+const { MODEL_RATES } = await import("@stll/ai-catalog");
 
 beforeEach(() => {
   captureErrorMock.mockReset();
@@ -59,20 +60,43 @@ describe("computeRawUsageMicroUnits", () => {
     expect(withCache).toBeLessThan(noCache);
   });
 
-  for (const [modelId, atThresholdUnits, aboveThresholdUnits] of [
-    ["gpt-5.4", 69_500, 138_251],
-    ["gpt-5.5", 139_000, 276_501],
-    ["gpt-5.6", 139_000, 276_501],
-  ] as const) {
-    test(`${modelId} switches the entire request above 272K input tokens`, () => {
+  // Every tiered schedule, pinned at and just past its threshold: exactly at
+  // the threshold stays on the standard rate, one token past it reprices the
+  // whole request.
+  const TIER_BOUNDARY_UNITS = {
+    "gemini-3.1-pro-preview": [200_000, 41_200, 81_801],
+    "gpt-5.4": [272_000, 69_500, 138_251],
+    "gpt-5.5": [272_000, 139_000, 276_501],
+    "gpt-5.6": [272_000, 139_000, 276_501],
+    "gpt-5.6-luna": [272_000, 5560, 11_061],
+    "gpt-5.6-terra": [272_000, 55_600, 110_601],
+  } as const;
+
+  test("the tier boundary table covers exactly the tiered rate schedules", () => {
+    const tiered = Object.entries(MODEL_RATES).flatMap(([modelId, rate]) =>
+      rate.kind === "input-token-tiered"
+        ? [[modelId, rate.inputTokenThreshold] as const]
+        : [],
+    );
+    const pinned = Object.entries(TIER_BOUNDARY_UNITS).map(
+      ([modelId, [threshold]]) => [modelId, threshold] as const,
+    );
+    expect(new Map(tiered)).toEqual(new Map(pinned));
+  });
+
+  for (const [
+    modelId,
+    [threshold, atThresholdUnits, aboveThresholdUnits],
+  ] of Object.entries(TIER_BOUNDARY_UNITS)) {
+    test(`${modelId} switches the entire request above ${String(threshold)} input tokens`, () => {
       const atThreshold = computeRawUsageMicroUnits({
         modelId,
-        uncachedInputTokens: 272_000,
+        uncachedInputTokens: threshold,
         outputTokens: 1000,
       });
       const aboveThreshold = computeRawUsageMicroUnits({
         modelId,
-        uncachedInputTokens: 272_001,
+        uncachedInputTokens: threshold + 1,
         outputTokens: 1000,
       });
 
@@ -80,23 +104,6 @@ describe("computeRawUsageMicroUnits", () => {
       expect(aboveThreshold).toBe(aboveThresholdUnits);
     });
   }
-
-  test("Gemini 3.1 Pro switches the entire request above 200K input tokens", () => {
-    expect(
-      computeRawUsageMicroUnits({
-        modelId: "gemini-3.1-pro-preview",
-        uncachedInputTokens: 200_000,
-        outputTokens: 1000,
-      }),
-    ).toBe(41_200);
-    expect(
-      computeRawUsageMicroUnits({
-        modelId: "gemini-3.1-pro-preview",
-        uncachedInputTokens: 200_001,
-        outputTokens: 1000,
-      }),
-    ).toBe(81_801);
-  });
 
   test("GPT-5.6 applies its long-context multiplier to cached input", () => {
     // Tier resolution counts cached prompt tokens too: 300K cached reads
