@@ -1,12 +1,17 @@
-import { use, useCallback, useMemo, useRef, useState } from "react";
+import { use, useCallback, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
+import { FILE_CHAT_OVERLAY_ACTIVATION } from "@/components/ai-suggestions/file-viewer-with-ai-config";
 import { ReviewBar } from "@/components/ai-suggestions/review-bar";
-import { compileCreateDocumentSourceToDocument } from "@/components/chat/create-document-compiler";
 import { attachCreateDocumentDraftEditor } from "@/components/chat/create-document-draft-inspector-editor.logic";
+import {
+  advanceCreateDocumentDraftPreview,
+  CREATE_DOCUMENT_DRAFT_STREAM_PREVIEW_INTERVAL_MS,
+} from "@/components/chat/create-document-draft-preview.logic";
 import {
   bindCreateDocumentDraftChatThread as retainCreateDocumentDraftChatThread,
   clearCreateDocumentDraftChatThreadBinding,
@@ -47,16 +52,35 @@ export const CreateDocumentDraftInspectorEditor = ({
     }),
     enabled: payload.status === "persisted",
   });
-  const compiled = useMemo(
-    () =>
-      payload.source.trim()
-        ? compileCreateDocumentSourceToDocument(payload.source, {
-            titleFallback: payload.name || "Draft",
-          })
-        : null,
-    [payload.name, payload.source],
+  // The stream delivers the source per token and every accepted revision
+  // reloads the editor: coalesce while streaming, apply the final source at once.
+  const [throttledSource] = useDebounce(
+    payload.source,
+    CREATE_DOCUMENT_DRAFT_STREAM_PREVIEW_INTERVAL_MS,
+    {
+      leading: true,
+      maxWait: CREATE_DOCUMENT_DRAFT_STREAM_PREVIEW_INTERVAL_MS,
+    },
   );
-  const compiledDocument = compiled?.status === "ok" ? compiled.document : null;
+  const previewInput = {
+    name: payload.name,
+    source: payload.status === "streaming" ? throttledSource : payload.source,
+    status: payload.status,
+  };
+  // Adjusting state during render: the preview carries the last compiled
+  // document across streaming revisions that fail to compile, which needs the
+  // previous render's result rather than a pure derivation of the payload.
+  const [previewState, setPreviewState] = useState(() =>
+    advanceCreateDocumentDraftPreview(null, previewInput),
+  );
+  const nextPreviewState = advanceCreateDocumentDraftPreview(
+    previewState,
+    previewInput,
+  );
+  if (nextPreviewState !== previewState) {
+    setPreviewState(nextPreviewState);
+  }
+  const preview = nextPreviewState.preview;
   const availableRestoration = getCreateDocumentDraftRestoration(
     payload.toolCallId,
   );
@@ -139,7 +163,7 @@ export const CreateDocumentDraftInspectorEditor = ({
     );
   }
 
-  if (payload.status !== "persisted" && compiled?.status !== "ok") {
+  if (payload.status !== "persisted" && preview === null) {
     return (
       <div className="text-muted-foreground flex min-h-0 flex-1 items-center justify-center p-6 text-sm">
         {payload.status === "streaming"
@@ -158,15 +182,12 @@ export const CreateDocumentDraftInspectorEditor = ({
         document={
           payload.status === "persisted" || restoredBuffer !== null
             ? null
-            : compiledDocument
+            : (preview?.document ?? null)
         }
         documentBuffer={
           payload.status === "persisted"
             ? (persistedFileQuery.data?.buffer ?? null)
             : restoredBuffer
-        }
-        documentKey={
-          payload.status === "persisted" ? payload.fieldId : payload.toolCallId
         }
         initialZoom="fit-width"
         loadingIndicator={null}
@@ -178,13 +199,17 @@ export const CreateDocumentDraftInspectorEditor = ({
     </div>
   );
 
-  if (payload.status === "streaming") {
-    return editor;
-  }
-
+  // The streaming draft renders inside the same viewer shell with the AI
+  // overlay deferred, so the editor keeps its tree position (no remount, no
+  // fresh parse and layout) when the draft becomes ready.
   return (
     <FileViewerWithAI
       className="min-h-0 flex-1"
+      overlayActivation={
+        payload.status === "streaming"
+          ? FILE_CHAT_OVERLAY_ACTIVATION.deferred
+          : FILE_CHAT_OVERLAY_ACTIVATION.active
+      }
       activeDraft={
         payload.status === "persisted"
           ? undefined
@@ -213,7 +238,7 @@ export const CreateDocumentDraftInspectorEditor = ({
       workspaceId={payload.workspaceId}
     >
       {editor}
-      {payload.status !== "persisted" && (
+      {(payload.status === "ready" || payload.status === "saving") && (
         <ReviewBar
           docxEditable={draftEditable}
           docxEditorRef={editorRef}

@@ -95,7 +95,6 @@ export const EditorLiveDemo = () => {
           <DocxEditor
             className="folio-docx-preview h-full"
             documentBuffer={sample.documentBuffer}
-            documentKey="editor-live-demo"
             // Fit the page to the embed width so the SAFE never overflows and
             // clips on the right; folio re-fits as the hero frame resizes.
             initialZoom="fit-width"
