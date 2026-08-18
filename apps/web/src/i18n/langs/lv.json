@@ -1302,6 +1302,7 @@
       "reviewSummary": "{ready, plural, zero {Gatavas # kontaktpersonas} one {Gatava # kontaktpersona} other {Gatavas # kontaktpersonas}}. {errors, plural, =0 {Kļūdu nav.} zero {Kļūdu nav.} one {Jāizlabo # kļūda.} other {Jāizlabo # kļūdas.}}",
       "sampleValues": "Vērtību piemēri",
       "sourceColumn": "Avota kolonna",
+      "sourceRow": "{index}. rinda",
       "stellaField": "stella lauks",
       "stepMap": "Lauku sasaiste",
       "stepUpload": "Augšupielāde",

@@ -1302,6 +1302,7 @@
       "reviewSummary": "{ready, plural, one {# kapcsolat készen áll} other {# kapcsolat készen áll}}. {errors, plural, =0 {Nincs hiba.} one {# hibát ki kell javítani.} other {# hibát ki kell javítani.}}",
       "sampleValues": "Mintaértékek",
       "sourceColumn": "Forrásoszlop",
+      "sourceRow": "{index}. sor",
       "stellaField": "stella-mező",
       "stepMap": "Mezők párosítása",
       "stepUpload": "Feltöltés",

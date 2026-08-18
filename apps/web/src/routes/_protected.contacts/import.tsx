@@ -783,12 +783,13 @@ const ReviewStep = ({
       </div>
       <ImportReviewSummary review={review} />
       <div className="space-y-3">
-        {review.rows.map((row) => (
+        {review.rows.map((row, index) => (
           <ImportCandidateCard
             fields={fields}
             key={row.id}
             onChange={(candidate) => review.updateRow(row.id, candidate)}
             onRemove={() => review.removeRow(row.id)}
+            ordinal={index + 1}
             row={row}
           />
         ))}

@@ -331,9 +331,21 @@ describe("custom field columns", () => {
       ],
     });
 
+    // A labeled document has no header line, so its first block is row 1.
     expect(result.rows.at(0)?.issues).toEqual([
-      { code: "too_long", field: null, rowNumber: 2 },
+      { code: "too_long", field: null, rowNumber: 1 },
     ]);
+  });
+
+  test("numbers delimited rows from the line under the header", () => {
+    const result = preview("Name\nJane\nJohn", {
+      defaultType: "person",
+      generateDisplayName: false,
+      taxIdScheme: "none",
+      columns: [{ sourceIndex: 0, targetField: "display_name" }],
+    });
+
+    expect(result.rows.map(({ rowNumber }) => rowNumber)).toEqual([2, 3]);
   });
 
   test("rejects a mapping whose custom field label exceeds the schema bound", () => {

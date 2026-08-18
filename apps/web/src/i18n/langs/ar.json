@@ -1302,6 +1302,7 @@
       "reviewSummary": "{ready, plural, zero {لا توجد جهات اتصال جاهزة} one {جهة اتصال واحدة جاهزة} two {جهتا اتصال جاهزتان} few {# جهات اتصال جاهزة} many {# جهة اتصال جاهزة} other {# جهة اتصال جاهزة}}. {errors, plural, =0 {لا توجد أخطاء.} zero {لا توجد أخطاء.} one {يجب تصحيح خطأ واحد.} two {يجب تصحيح خطأين.} few {يجب تصحيح # أخطاء.} many {يجب تصحيح # خطأً.} other {يجب تصحيح # خطأ.}}",
       "sampleValues": "قيم نموذجية",
       "sourceColumn": "عمود المصدر",
+      "sourceRow": "الصف {index}",
       "stellaField": "حقل stella",
       "stepMap": "تعيين الحقول",
       "stepUpload": "رفع",

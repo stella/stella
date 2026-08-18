@@ -891,8 +891,13 @@ export const previewContactImport = ({
     );
   }
 
+  // Row numbers point back into the source: a delimited file's first data
+  // row sits under the header on line 2, a labeled document's first block is
+  // block 1.
+  const firstRowNumber =
+    document.source.kind === CONTACT_IMPORT_LABELED_SOURCE ? 1 : 2;
   const rows = document.rows.map((row, rowIndex): ContactImportPreviewRow => {
-    const rowNumber = rowIndex + 2;
+    const rowNumber = rowIndex + firstRowNumber;
     const issues: ContactImportIssue[] = [];
     const values = new Map<ContactImportField, string>();
     if (row.length !== document.headers.length) {

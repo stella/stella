@@ -1302,6 +1302,7 @@
       "reviewSummary": "{ready, plural, one {# contacto está listo} other {# contactos están listos}}. {errors, plural, =0 {No hay errores.} one {Hay que corregir # error.} other {Hay que corregir # errores.}}",
       "sampleValues": "Valores de ejemplo",
       "sourceColumn": "Columna de origen",
+      "sourceRow": "Fila {index}",
       "stellaField": "Campo de stella",
       "stepMap": "Asociar campos",
       "stepUpload": "Subir",

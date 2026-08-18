@@ -1302,6 +1302,7 @@
       "reviewSummary": "{ready, plural, one {# kontaktas paruoštas} few {# kontaktai paruošti} other {# kontaktų paruošta}}. {errors, plural, =0 {Klaidų nėra.} one {Reikia ištaisyti # klaidą.} few {Reikia ištaisyti # klaidas.} other {Reikia ištaisyti # klaidų.}}",
       "sampleValues": "Reikšmių pavyzdžiai",
       "sourceColumn": "Šaltinio stulpelis",
+      "sourceRow": "{index} eilutė",
       "stellaField": "„stella“ laukas",
       "stepMap": "Laukų susiejimas",
       "stepUpload": "Įkėlimas",

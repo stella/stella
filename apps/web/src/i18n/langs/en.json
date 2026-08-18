@@ -1302,6 +1302,7 @@
       "reviewSummary": "{ready, plural, one {# contact is ready} other {# contacts are ready}}. {errors, plural, =0 {No errors.} one {# error must be fixed.} other {# errors must be fixed.}}",
       "sampleValues": "Sample values",
       "sourceColumn": "Source column",
+      "sourceRow": "Row {index}",
       "stellaField": "stella field",
       "stepMap": "Map fields",
       "stepUpload": "Upload",

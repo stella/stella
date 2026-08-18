@@ -1302,6 +1302,7 @@
       "reviewSummary": "{ready, plural, one {# kontakt jest gotowy} few {# kontakty są gotowe} many {# kontaktów jest gotowych} other {# kontaktu jest gotowego}}. {errors, plural, =0 {Brak błędów.} one {Trzeba poprawić # błąd.} few {Trzeba poprawić # błędy.} many {Trzeba poprawić # błędów.} other {Trzeba poprawić # błędu.}}",
       "sampleValues": "Przykładowe wartości",
       "sourceColumn": "Kolumna źródłowa",
+      "sourceRow": "Wiersz {index}",
       "stellaField": "Pole stella",
       "stepMap": "Przypisanie pól",
       "stepUpload": "Przesyłanie",

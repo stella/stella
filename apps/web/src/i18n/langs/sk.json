@@ -1302,6 +1302,7 @@
       "reviewSummary": "{ready, plural, one {# kontakt je pripravený} few {# kontakty sú pripravené} other {# kontaktov je pripravených}}. {errors, plural, =0 {Žiadne chyby.} one {Treba opraviť # chybu.} few {Treba opraviť # chyby.} other {Treba opraviť # chýb.}}",
       "sampleValues": "Ukážkové hodnoty",
       "sourceColumn": "Zdrojový stĺpec",
+      "sourceRow": "Riadok {index}",
       "stellaField": "Pole stella",
       "stepMap": "Priradenie polí",
       "stepUpload": "Nahratie",

@@ -1302,6 +1302,7 @@
       "reviewSummary": "{ready, plural, one {# Kontakt ist bereit} other {# Kontakte sind bereit}}. {errors, plural, =0 {Keine Fehler.} one {# Fehler muss behoben werden.} other {# Fehler müssen behoben werden.}}",
       "sampleValues": "Beispielwerte",
       "sourceColumn": "Quellspalte",
+      "sourceRow": "Zeile {index}",
       "stellaField": "stella-Feld",
       "stepMap": "Felder zuordnen",
       "stepUpload": "Hochladen",

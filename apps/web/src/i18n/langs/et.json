@@ -1302,6 +1302,7 @@
       "reviewSummary": "{ready, plural, one {# kontakt on valmis} other {# kontakti on valmis}}. {errors, plural, =0 {Vigu pole.} one {# viga tuleb parandada.} other {# viga tuleb parandada.}}",
       "sampleValues": "Näidisväärtused",
       "sourceColumn": "Lähteveerg",
+      "sourceRow": "Rida {index}",
       "stellaField": "stella väli",
       "stepMap": "Väljade vastendamine",
       "stepUpload": "Üleslaadimine",

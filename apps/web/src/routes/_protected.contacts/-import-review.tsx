@@ -426,6 +426,8 @@ type ImportCandidateCardProps = {
   fields: readonly ImportEditableField[];
   onChange: (candidate: ImportCandidate) => void;
   onRemove: () => void;
+  /** 1-based position in the review list; the title falls back to it. */
+  ordinal: number;
 };
 
 /** One reviewed contact, editable, with the issues the server reported on it. */
@@ -434,6 +436,7 @@ export const ImportCandidateCard = ({
   fields,
   onChange,
   onRemove,
+  ordinal,
 }: ImportCandidateCardProps) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -470,9 +473,17 @@ export const ImportCandidateCard = ({
           ) : (
             <AlertTriangleIcon className="text-destructive size-4" />
           )}
-          {t("contacts.import.rowLabel", {
-            index: format.number(row.rowNumber),
-          })}
+          <span>
+            {row.candidate.displayName.trim() ||
+              t("contacts.import.rowLabel", {
+                index: format.number(ordinal),
+              })}
+          </span>
+          <span className="text-muted-foreground font-normal">
+            {t("contacts.importStudio.sourceRow", {
+              index: format.number(row.rowNumber),
+            })}
+          </span>
         </h3>
         <Button
           aria-label={t("common.remove")}
