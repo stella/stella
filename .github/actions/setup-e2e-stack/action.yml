@@ -10,6 +10,10 @@ inputs:
     description: Docker Hub token for authenticated image pulls; leave empty to pull anonymously
     required: false
     default: ""
+  extra-services:
+    description: Space-separated docker compose services to start beyond the default stack; each caller declares what it actually exercises
+    required: false
+    default: ""
 
 outputs:
   status:
@@ -57,13 +61,19 @@ runs:
       # on CI runners. Tear the stack down between attempts so a half-started
       # stack does not poison the retry.
       shell: bash
+      env:
+        EXTRA_SERVICES: ${{ inputs.extra-services }}
       run: |
         stack_log=$(mktemp)
         trap 'rm -f "$stack_log"' EXIT
 
+        # Callers pass extra services as one space-separated string; split it
+        # into argv words so an empty input adds no arguments at all.
+        read -ra extra_services <<< "$EXTRA_SERVICES"
+
         for attempt in 1 2 3; do
           : > "$stack_log"
-          if docker compose --profile dev up -d --wait postgres rustfs valkey 2>&1 \
+          if docker compose --profile dev up -d --wait postgres rustfs valkey "${extra_services[@]}" 2>&1 \
             | tee "$stack_log" \
             && docker compose --profile dev run --rm --no-deps rustfs-setup 2>&1 \
               | tee -a "$stack_log"; then

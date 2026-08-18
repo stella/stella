@@ -8,7 +8,9 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: 0,
-  timeout: 240_000,
+  // One test walks every capture in both themes (20 shots), each first visit
+  // paying a cold route compile; a full pass on the CI runner takes ~4 min.
+  timeout: 600_000,
   expect: { timeout: 15_000 },
   snapshotPathTemplate: path.join(
     REPO_ROOT,
@@ -24,7 +26,7 @@ export default defineConfig({
     // The dev server compiles route chunks on demand, and a module the entry
     // is still waiting on holds DOMContentLoaded open. The test runner puts
     // no timeout on navigation by default, so a wedged compile would burn the
-    // whole 240s test budget before failing; this bounds the navigation while
+    // whole test budget before failing; this bounds the navigation while
     // leaving room for the one-time compile. Matches COLD_COMPILE_TIMEOUT in
     // the app specs.
     navigationTimeout: 60_000,

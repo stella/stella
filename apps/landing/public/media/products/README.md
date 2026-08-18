@@ -4,16 +4,45 @@ These are deterministic captures of the real Stella application, not hand-built
 marketing mockups. The capture suite uses the development seed so the UI, copy,
 and available product states stay tied to production code.
 
-## Refreshing the images
+## Refreshing the PNG screenshots
 
-Start the local stack, seed the authenticated test user and development data,
-then update the snapshots:
+The `.png` baselines come from CI, never from a developer machine. PR CI runs
+the `marketing-screenshots` check whenever a change can reach a captured
+surface, so a UI change fails the PR that makes it instead of the next nightly
+run. When the diff is intended, dispatch **Update marketing screenshots**
+(`.github/workflows/marketing-screenshots-update.yml`) from the default
+branch, naming the PR's branch:
+
+```sh
+gh workflow run marketing-screenshots-update.yml -f branch=<pr-branch>
+```
+
+Dispatching on `main` is what keeps the release App key on workflow code from
+`main`: only the app and spec code checked out from `branch` is
+branch-controlled, and the token never leaves the push step.
+
+It regenerates every baseline on the CI runner and pushes them to the branch,
+which re-runs the PR's checks against the new head. Because baselines and
+comparison render on the same runner image, the pixel tolerance only has to
+cover run-to-run noise.
+
+Every update run also uploads the PNGs as a `marketing-screenshots-<run id>`
+artifact. Only branches of this repository can be regenerated in place, so for
+a fork PR run the update against a same-repository branch carrying the change
+and commit the artifact's PNGs to the PR.
+
+Running `bun --filter @stll/web test:e2e:marketing:update` locally is for
+debugging a capture; do not commit macOS-generated PNGs.
+
+## Recording the MP4 clips
+
+The videos are still recorded locally. Start the stack, seed the authenticated
+test user and development data, then record:
 
 ```sh
 bun run dev --no-browser
 bun --filter @stll/api db:seed-test-user
 bun --filter @stll/api db:seed-dev
-bun --filter @stll/web test:e2e:marketing:update
 bun --filter @stll/web capture:product-story
 ```
 
@@ -108,13 +137,14 @@ cd apps/landing && bun run build
 
 ## Keeping them current
 
-CI runs the screenshot suite without `--update-snapshots`. Product UI changes
-therefore produce a reviewable screenshot diff instead of silently leaving the
-landing page stale; update the paired MP4 clips in the same review. The marketing
+The PR check runs the screenshot suite without `--update-snapshots`, so a
+product UI change produces a reviewable screenshot diff instead of silently
+leaving the landing page stale; update the paired MP4 clips in the same review.
+The nightly run repeats the check against the default branch, covering drift a
+per-file allowlist cannot see (dependency upgrades, seed changes). The marketing
 content check verifies that every light/dark clip and poster referenced by the
-shared scene registry exists. A small pixel tolerance covers operating-system
-font rendering; route and content guards prevent sign-in, loading, and
-organization-selection screens from being accepted as product screenshots.
+shared scene registry exists. Route and content guards prevent sign-in, loading,
+and organization-selection screens from being accepted as product screenshots.
 
 The recorder additionally stamps every capture into
 `recordings-manifest.json` (in this directory): capture id, theme, viewport,
