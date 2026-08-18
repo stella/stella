@@ -23,19 +23,29 @@ export const classifyBrazilianTaxId = (
  * only in property order serialize identically. `JSON.stringify` alone would
  * fingerprint a rebuilt-but-equal retry as a different request.
  */
+const compareKeys = (left: string, right: string): number => {
+  if (left < right) {
+    return -1;
+  }
+  return left > right ? 1 : 0;
+};
+
 const canonicalJson = (value: unknown): string => {
+  if (value === undefined) {
+    return "null";
+  }
   if (Array.isArray(value)) {
     return `[${value.map(canonicalJson).join(",")}]`;
   }
   if (value !== null && typeof value === "object") {
     const entries = Object.entries(value)
       .filter(([, entry]) => entry !== undefined)
-      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
+      .sort(([left], [right]) => compareKeys(left, right));
     return `{${entries
       .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`)
       .join(",")}}`;
   }
-  return JSON.stringify(value) ?? "null";
+  return JSON.stringify(value);
 };
 
 export const fingerprintContactImport = (rows: readonly unknown[]): string =>
