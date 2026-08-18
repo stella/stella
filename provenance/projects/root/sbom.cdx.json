@@ -846,6 +846,9 @@
             "location": "apps/web/src/components/search-dialog.tsx#9"
           },
           {
+            "location": "apps/web/src/components/search-dialog.tsx#14"
+          },
+          {
             "location": "apps/web/src/components/search-document-preview.tsx#1"
           },
           {
@@ -2974,7 +2977,70 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1106.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-cloudwatch@3.1108.0",
+      "description": "AWS SDK for JavaScript Cloudwatch Client for Node.js, Browser and React Native",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@aws-sdk/client-cloudwatch/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@aws-sdk/client-cloudwatch/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/corpus-index/backfill-pacing.ts#4"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/aws/aws-sdk-js-v3/tree/main/clients/client-cloudwatch"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/aws/aws-sdk-js-v3.git"
+        }
+      ],
+      "group": "@aws-sdk",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
+          }
+        }
+      ],
+      "name": "client-cloudwatch",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@aws-sdk/client-cloudwatch/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40aws-sdk/client-cloudwatch@3.1108.0",
+      "scope": "required",
+      "tags": [
+        "framework"
+      ],
+      "type": "framework",
+      "version": "3.1108.0"
+    },
+    {
+      "authors": [
+        {
+          "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
+        }
+      ],
+      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1108.0",
       "description": "AWS SDK for JavaScript S3 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -3026,13 +3092,13 @@
           "value": "node_modules/@aws-sdk/client-s3/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1106.0",
+      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1108.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1106.0"
+      "version": "3.1108.0"
     },
     {
       "authors": [
@@ -3040,7 +3106,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1106.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1108.0",
       "description": "AWS SDK for JavaScript Sesv2 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -3089,13 +3155,13 @@
           "value": "node_modules/@aws-sdk/client-sesv2/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1106.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1108.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1106.0"
+      "version": "3.1108.0"
     },
     {
       "authors": [
@@ -3103,7 +3169,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1106.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1108.0",
       "description": "AWS SDK for JavaScript Sts Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -3152,13 +3218,13 @@
           "value": "node_modules/@aws-sdk/client-sts/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1106.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1108.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1106.0"
+      "version": "3.1108.0"
     },
     {
       "authors": [
@@ -3166,7 +3232,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1106.0",
+      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1108.0",
       "evidence": {
         "identity": [
           {
@@ -3214,13 +3280,13 @@
           "value": "node_modules/@aws-sdk/s3-request-presigner/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1106.0",
+      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1108.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1106.0"
+      "version": "3.1108.0"
     },
     {
       "authors": [
@@ -4130,6 +4196,9 @@
           },
           {
             "location": "apps/web/src/components/search-dialog.tsx#9"
+          },
+          {
+            "location": "apps/web/src/components/search-dialog.tsx#14"
           },
           {
             "location": "apps/web/src/components/search-document-preview.tsx#1"
@@ -5905,6 +5974,9 @@
             "location": "apps/web/src/components/search-dialog.tsx#9"
           },
           {
+            "location": "apps/web/src/components/search-dialog.tsx#14"
+          },
+          {
             "location": "apps/web/src/components/search-document-preview.tsx#1"
           },
           {
@@ -7467,7 +7539,7 @@
       "version": "2.16.0"
     },
     {
-      "bom-ref": "pkg:npm/@hocuspocus/provider@4.5.0",
+      "bom-ref": "pkg:npm/@hocuspocus/provider@4.6.0",
       "description": "hocuspocus provider",
       "evidence": {
         "identity": [
@@ -7519,10 +7591,10 @@
           "value": "node_modules/@hocuspocus/provider/package.json"
         }
       ],
-      "purl": "pkg:npm/%40hocuspocus/provider@4.5.0",
+      "purl": "pkg:npm/%40hocuspocus/provider@4.6.0",
       "scope": "required",
       "type": "library",
-      "version": "4.5.0"
+      "version": "4.6.0"
     },
     {
       "bom-ref": "pkg:npm/@hocuspocus/server@4.5.0",
@@ -9038,6 +9110,9 @@
             "location": "apps/web/src/components/search-dialog.tsx#9"
           },
           {
+            "location": "apps/web/src/components/search-dialog.tsx#14"
+          },
+          {
             "location": "apps/web/src/components/search-document-preview.tsx#1"
           },
           {
@@ -10517,6 +10592,78 @@
       "evidence": {
         "identity": [
           {
+            "concludedValue": "node_modules/@aws-sdk/client-bedrock-runtime/node_modules/@smithy/fetch-http-handler/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@aws-sdk/client-bedrock-runtime/node_modules/@smithy/fetch-http-handler/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#2"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/smithy-lang/smithy-typescript/tree/main/packages/fetch-http-handler"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/smithy-lang/smithy-typescript.git"
+        }
+      ],
+      "group": "@smithy",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
+          }
+        }
+      ],
+      "name": "fetch-http-handler",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@aws-sdk/nested-clients/node_modules/@smithy/fetch-http-handler/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@aws-sdk/middleware-websocket/node_modules/@smithy/fetch-http-handler/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@aws-sdk/credential-provider-http/node_modules/@smithy/fetch-http-handler/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@aws-sdk/client-bedrock-runtime/node_modules/@smithy/fetch-http-handler/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40smithy/fetch-http-handler@5.6.13",
+      "scope": "required",
+      "type": "library",
+      "version": "5.6.13"
+    },
+    {
+      "authors": [
+        {
+          "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
+        }
+      ],
+      "bom-ref": "pkg:npm/@smithy/fetch-http-handler@5.7.0",
+      "description": "Provides a way to make requests",
+      "evidence": {
+        "identity": [
+          {
             "concludedValue": "node_modules/@smithy/fetch-http-handler/package.json",
             "confidence": 0.7,
             "field": "purl",
@@ -10561,10 +10708,10 @@
           "value": "node_modules/@smithy/fetch-http-handler/package.json"
         }
       ],
-      "purl": "pkg:npm/%40smithy/fetch-http-handler@5.6.13",
+      "purl": "pkg:npm/%40smithy/fetch-http-handler@5.7.0",
       "scope": "required",
       "type": "library",
-      "version": "5.6.13"
+      "version": "5.7.0"
     },
     {
       "authors": [
@@ -12011,7 +12158,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-devtools@0.10.9",
+      "bom-ref": "pkg:npm/@tanstack/react-devtools@0.10.10",
       "description": "TanStack Devtools is a set of tools for building advanced devtools for your React application.",
       "evidence": {
         "identity": [
@@ -12060,13 +12207,13 @@
           "value": "node_modules/@tanstack/react-devtools/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-devtools@0.10.9",
+      "purl": "pkg:npm/%40tanstack/react-devtools@0.10.10",
       "scope": "required",
       "tags": [
         "tools"
       ],
       "type": "library",
-      "version": "0.10.9"
+      "version": "0.10.10"
     },
     {
       "authors": [
@@ -12074,7 +12221,7 @@
           "name": "tannerlinsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-form@1.33.4",
+      "bom-ref": "pkg:npm/@tanstack/react-form@1.33.5",
       "description": "Powerful, type-safe forms for React.",
       "evidence": {
         "identity": [
@@ -12159,10 +12306,10 @@
           "value": "node_modules/@tanstack/react-form/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-form@1.33.4",
+      "purl": "pkg:npm/%40tanstack/react-form@1.33.5",
       "scope": "required",
       "type": "library",
-      "version": "1.33.4"
+      "version": "1.33.5"
     },
     {
       "authors": [
@@ -12897,10 +13044,10 @@
             "location": "apps/web/src/components/saved-searches.tsx#7"
           },
           {
-            "location": "apps/web/src/components/search-dialog.tsx#11"
+            "location": "apps/web/src/components/search-dialog.tsx#16"
           },
           {
-            "location": "apps/web/src/components/search-dialog.tsx#17"
+            "location": "apps/web/src/components/search-dialog.tsx#22"
           },
           {
             "location": "apps/web/src/components/sidebar-user-menu.tsx#1"
@@ -13505,7 +13652,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.24",
+      "bom-ref": "pkg:npm/@tanstack/react-router@1.170.25",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -13689,7 +13836,7 @@
             "location": "apps/web/src/components/route-components.tsx#5"
           },
           {
-            "location": "apps/web/src/components/search-dialog.tsx#18"
+            "location": "apps/web/src/components/search-dialog.tsx#23"
           },
           {
             "location": "apps/web/src/components/sidebar-user-menu.tsx#2"
@@ -14133,10 +14280,10 @@
           "value": "node_modules/@tanstack/react-router/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-router@1.170.24",
+      "purl": "pkg:npm/%40tanstack/react-router@1.170.25",
       "scope": "required",
       "type": "library",
-      "version": "1.170.24"
+      "version": "1.170.25"
     },
     {
       "authors": [
@@ -14144,7 +14291,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-start@1.168.41",
+      "bom-ref": "pkg:npm/@tanstack/react-start@1.168.42",
       "description": "Modern and scalable routing for React applications",
       "evidence": {
         "identity": [
@@ -14208,10 +14355,10 @@
           "value": "node_modules/@tanstack/react-start/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-start@1.168.41",
+      "purl": "pkg:npm/%40tanstack/react-start@1.168.42",
       "scope": "required",
       "type": "library",
-      "version": "1.168.41"
+      "version": "1.168.42"
     },
     {
       "authors": [
@@ -14580,7 +14727,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/search-dialog.tsx#19"
+            "location": "apps/web/src/components/search-dialog.tsx#24"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#20"
@@ -14683,7 +14830,7 @@
       "version": "2.11.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/core@3.29.2",
+      "bom-ref": "pkg:npm/@tiptap/core@3.30.0",
       "description": "headless rich text editor",
       "evidence": {
         "identity": [
@@ -14702,6 +14849,12 @@
         ],
         "occurrences": [
           {
+            "location": "apps/web/src/components/chat/chat-anon-decorations-extension.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-anon-decorations-extension.ts#2"
+          },
+          {
             "location": "apps/web/src/components/chat/prompt-slash-extension.ts#1"
           },
           {
@@ -14715,6 +14868,12 @@
           },
           {
             "location": "apps/web/src/components/chat-pasted-text-extension.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/prompt-editor.logic.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/anonymize/chat-anon-decoration-owner.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-directive-extension.ts#3"
@@ -14756,13 +14915,13 @@
           "value": "node_modules/@tiptap/core/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/core@3.29.2",
+      "purl": "pkg:npm/%40tiptap/core@3.30.0",
       "scope": "required",
       "type": "library",
-      "version": "3.29.2"
+      "version": "3.30.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-bold@3.29.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-bold@3.30.0",
       "description": "bold extension for tiptap",
       "evidence": {
         "identity": [
@@ -14817,13 +14976,13 @@
           "value": "node_modules/@tiptap/extension-bold/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-bold@3.29.2",
+      "purl": "pkg:npm/%40tiptap/extension-bold@3.30.0",
       "scope": "required",
       "type": "library",
-      "version": "3.29.2"
+      "version": "3.30.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-document@3.29.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-document@3.30.0",
       "description": "document extension for tiptap",
       "evidence": {
         "identity": [
@@ -14842,7 +15001,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/prompt-editor.logic.ts#1"
+            "location": "apps/web/src/components/prompt-editor.logic.ts#2"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-editor.tsx#4"
@@ -14875,13 +15034,13 @@
           "value": "node_modules/@tiptap/extension-document/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-document@3.29.2",
+      "purl": "pkg:npm/%40tiptap/extension-document@3.30.0",
       "scope": "required",
       "type": "library",
-      "version": "3.29.2"
+      "version": "3.30.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-hard-break@3.29.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-hard-break@3.30.0",
       "description": "hard break extension for tiptap",
       "evidence": {
         "identity": [
@@ -14930,13 +15089,13 @@
           "value": "node_modules/@tiptap/extension-hard-break/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-hard-break@3.29.2",
+      "purl": "pkg:npm/%40tiptap/extension-hard-break@3.30.0",
       "scope": "required",
       "type": "library",
-      "version": "3.29.2"
+      "version": "3.30.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-heading@3.29.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-heading@3.30.0",
       "description": "heading extension for tiptap",
       "evidence": {
         "identity": [
@@ -14985,13 +15144,13 @@
           "value": "node_modules/@tiptap/extension-heading/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-heading@3.29.2",
+      "purl": "pkg:npm/%40tiptap/extension-heading@3.30.0",
       "scope": "required",
       "type": "library",
-      "version": "3.29.2"
+      "version": "3.30.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-history@3.29.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-history@3.30.0",
       "description": "history extension for tiptap",
       "evidence": {
         "identity": [
@@ -15046,13 +15205,13 @@
           "value": "node_modules/@tiptap/extension-history/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-history@3.29.2",
+      "purl": "pkg:npm/%40tiptap/extension-history@3.30.0",
       "scope": "required",
       "type": "library",
-      "version": "3.29.2"
+      "version": "3.30.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-italic@3.29.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-italic@3.30.0",
       "description": "italic extension for tiptap",
       "evidence": {
         "identity": [
@@ -15101,13 +15260,13 @@
           "value": "node_modules/@tiptap/extension-italic/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-italic@3.29.2",
+      "purl": "pkg:npm/%40tiptap/extension-italic@3.30.0",
       "scope": "required",
       "type": "library",
-      "version": "3.29.2"
+      "version": "3.30.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-list@3.29.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-list@3.30.0",
       "description": "List extension for tiptap",
       "evidence": {
         "identity": [
@@ -15156,13 +15315,13 @@
           "value": "node_modules/@tiptap/extension-list/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-list@3.29.2",
+      "purl": "pkg:npm/%40tiptap/extension-list@3.30.0",
       "scope": "required",
       "type": "library",
-      "version": "3.29.2"
+      "version": "3.30.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-mention@3.29.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-mention@3.30.0",
       "description": "mention extension for tiptap",
       "evidence": {
         "identity": [
@@ -15229,13 +15388,13 @@
           "value": "node_modules/@tiptap/extension-mention/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-mention@3.29.2",
+      "purl": "pkg:npm/%40tiptap/extension-mention@3.30.0",
       "scope": "required",
       "type": "library",
-      "version": "3.29.2"
+      "version": "3.30.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-paragraph@3.29.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-paragraph@3.30.0",
       "description": "paragraph extension for tiptap",
       "evidence": {
         "identity": [
@@ -15290,13 +15449,13 @@
           "value": "node_modules/@tiptap/extension-paragraph/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-paragraph@3.29.2",
+      "purl": "pkg:npm/%40tiptap/extension-paragraph@3.30.0",
       "scope": "required",
       "type": "library",
-      "version": "3.29.2"
+      "version": "3.30.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-placeholder@3.29.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-placeholder@3.30.0",
       "description": "placeholder extension for tiptap",
       "evidence": {
         "identity": [
@@ -15351,13 +15510,13 @@
           "value": "node_modules/@tiptap/extension-placeholder/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-placeholder@3.29.2",
+      "purl": "pkg:npm/%40tiptap/extension-placeholder@3.30.0",
       "scope": "required",
       "type": "library",
-      "version": "3.29.2"
+      "version": "3.30.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-text@3.29.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-text@3.30.0",
       "description": "text extension for tiptap",
       "evidence": {
         "identity": [
@@ -15412,13 +15571,13 @@
           "value": "node_modules/@tiptap/extension-text/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-text@3.29.2",
+      "purl": "pkg:npm/%40tiptap/extension-text@3.30.0",
       "scope": "required",
       "type": "library",
-      "version": "3.29.2"
+      "version": "3.30.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/pm@3.29.2",
+      "bom-ref": "pkg:npm/@tiptap/pm@3.30.0",
       "description": "prosemirror wrapper package for tiptap",
       "evidence": {
         "identity": [
@@ -15437,34 +15596,25 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/chat/chat-anon-decorations-plugin.ts#1"
+            "location": "apps/web/src/components/chat/chat-anon-decorations-extension.ts#3"
           },
           {
-            "location": "apps/web/src/components/chat/chat-anon-decorations-plugin.ts#2"
-          },
-          {
-            "location": "apps/web/src/components/prompt-editor.logic.ts#2"
+            "location": "apps/web/src/components/chat-editor-echo.ts#1"
           },
           {
             "location": "apps/web/src/components/prompt-editor.logic.ts#3"
           },
           {
-            "location": "apps/web/src/lib/anonymize/chat-anon-plugin-lifecycle.ts#1"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#25"
           },
           {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#20"
+            "location": "apps/web/src/components/ai-prompt-input/ai-prompt-input.tsx#10"
           },
           {
-            "location": "apps/web/src/components/chat/chat-anon-decorations-plugin.ts#3"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#26"
           },
           {
-            "location": "apps/web/src/components/chat/chat-anon-decorations-plugin.ts#4"
-          },
-          {
-            "location": "apps/web/src/components/prompt-editor.logic.ts#4"
-          },
-          {
-            "location": "apps/web/src/lib/anonymize/chat-anon-decoration-owner.ts#1"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/clause-editor.tsx#17"
           }
         ]
       },
@@ -15494,13 +15644,13 @@
           "value": "node_modules/@tiptap/pm/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/pm@3.29.2",
+      "purl": "pkg:npm/%40tiptap/pm@3.30.0",
       "scope": "required",
       "type": "library",
-      "version": "3.29.2"
+      "version": "3.30.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/react@3.29.2",
+      "bom-ref": "pkg:npm/@tiptap/react@3.30.0",
       "description": "React components for tiptap",
       "evidence": {
         "identity": [
@@ -16282,6 +16432,9 @@
           },
           {
             "location": "apps/web/src/components/search-dialog.tsx#9"
+          },
+          {
+            "location": "apps/web/src/components/search-dialog.tsx#14"
           },
           {
             "location": "apps/web/src/components/search-document-preview.tsx#1"
@@ -17262,13 +17415,13 @@
           "value": "node_modules/@tiptap/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/react@3.29.2",
+      "purl": "pkg:npm/%40tiptap/react@3.30.0",
       "scope": "required",
       "type": "library",
-      "version": "3.29.2"
+      "version": "3.30.0"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/suggestion@3.29.2",
+      "bom-ref": "pkg:npm/@tiptap/suggestion@3.30.0",
       "description": "suggestion plugin for tiptap",
       "evidence": {
         "identity": [
@@ -17335,10 +17488,10 @@
           "value": "node_modules/@tiptap/suggestion/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/suggestion@3.29.2",
+      "purl": "pkg:npm/%40tiptap/suggestion@3.30.0",
       "scope": "required",
       "type": "library",
-      "version": "3.29.2"
+      "version": "3.30.0"
     },
     {
       "authors": [
@@ -17474,7 +17627,7 @@
           "name": "withastro"
         }
       ],
-      "bom-ref": "pkg:npm/astro@7.2.0",
+      "bom-ref": "pkg:npm/astro@7.2.1",
       "description": "Astro is a modern site builder with web best practices, performance, and DX front-of-mind.",
       "evidence": {
         "identity": [
@@ -17535,13 +17688,13 @@
           "value": "node_modules/astro/package.json"
         }
       ],
-      "purl": "pkg:npm/astro@7.2.0",
+      "purl": "pkg:npm/astro@7.2.1",
       "scope": "required",
       "tags": [
         "web"
       ],
       "type": "library",
-      "version": "7.2.0"
+      "version": "7.2.1"
     },
     {
       "bom-ref": "pkg:npm/babel-plugin-react-compiler@1.0.0",
@@ -17897,6 +18050,9 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/document-on-demand.ts#35"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/decisions/facets.ts#1"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/get.ts#1"
@@ -19531,6 +19687,9 @@
             "location": "apps/api/src/lib/business-registries/dispatch.ts#10"
           },
           {
+            "location": "apps/api/src/lib/case-law/non-redistributable-sources.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/case-law-public-read-db.ts#1"
           },
           {
@@ -19565,6 +19724,9 @@
           },
           {
             "location": "apps/api/src/lib/confirmation-otp.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/corpus-index/backfill-pacing.ts#5"
           },
           {
             "location": "apps/api/src/lib/corpus-index/census.ts#28"
@@ -19744,10 +19906,19 @@
             "location": "apps/api/src/lib/huggingface.ts#1"
           },
           {
+            "location": "apps/api/src/lib/legal-search/browse-facets-cache.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/browse-facets.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts#1"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-index-client.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-facets.ts#1"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-storage.ts#1"
@@ -19769,6 +19940,12 @@
           },
           {
             "location": "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts#48"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/pg-fts-browse-facets.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/types.ts#1"
           },
           {
             "location": "apps/api/src/lib/matter-reference.ts#1"
@@ -20086,6 +20263,12 @@
             "location": "apps/api/src/scripts/corpus-column-trim.ts#1"
           },
           {
+            "location": "apps/api/src/scripts/corpus-index-query-diff-report.ts#1"
+          },
+          {
+            "location": "apps/api/src/scripts/corpus-index-query-diff.ts#1"
+          },
+          {
             "location": "apps/api/src/scripts/cz-regional-repair-plan.ts#1"
           },
           {
@@ -20105,6 +20288,12 @@
           },
           {
             "location": "apps/api/src/scripts/repair-corpus-index-jurisdiction.ts#25"
+          },
+          {
+            "location": "apps/api/src/scripts/repair-decision-dates-plan.ts#13"
+          },
+          {
+            "location": "apps/api/src/scripts/repair-decision-dates.ts#66"
           },
           {
             "location": "apps/api/src/scripts/replay-case-law-source.ts#1"
@@ -20156,9 +20345,6 @@
           },
           {
             "location": "apps/web/src/components/app-sidebar.logic.ts#1"
-          },
-          {
-            "location": "apps/web/src/components/chat/chat-anon-decorations-plugin.ts#5"
           },
           {
             "location": "apps/web/src/components/chat/chat-thread-messages.logic.ts#1"
@@ -20563,7 +20749,7 @@
             "location": "apps/web/src/components/chat/tool-approval-card.tsx#4"
           },
           {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#23"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#29"
           },
           {
             "location": "apps/web/src/components/chat-mention-providers.tsx#5"
@@ -20928,6 +21114,9 @@
             "location": "apps/api/src/handlers/case-law/decisions/document-on-demand.ts#35"
           },
           {
+            "location": "apps/api/src/handlers/case-law/decisions/facets.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/decisions/get.ts#1"
           },
           {
@@ -22560,6 +22749,9 @@
             "location": "apps/api/src/lib/business-registries/dispatch.ts#10"
           },
           {
+            "location": "apps/api/src/lib/case-law/non-redistributable-sources.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/case-law-public-read-db.ts#1"
           },
           {
@@ -22594,6 +22786,9 @@
           },
           {
             "location": "apps/api/src/lib/confirmation-otp.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/corpus-index/backfill-pacing.ts#5"
           },
           {
             "location": "apps/api/src/lib/corpus-index/census.ts#28"
@@ -22773,10 +22968,19 @@
             "location": "apps/api/src/lib/huggingface.ts#1"
           },
           {
+            "location": "apps/api/src/lib/legal-search/browse-facets-cache.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/browse-facets.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts#1"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-index-client.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-facets.ts#1"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-storage.ts#1"
@@ -22798,6 +23002,12 @@
           },
           {
             "location": "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts#48"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/pg-fts-browse-facets.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/types.ts#1"
           },
           {
             "location": "apps/api/src/lib/matter-reference.ts#1"
@@ -23115,6 +23325,12 @@
             "location": "apps/api/src/scripts/corpus-column-trim.ts#1"
           },
           {
+            "location": "apps/api/src/scripts/corpus-index-query-diff-report.ts#1"
+          },
+          {
+            "location": "apps/api/src/scripts/corpus-index-query-diff.ts#1"
+          },
+          {
             "location": "apps/api/src/scripts/cz-regional-repair-plan.ts#1"
           },
           {
@@ -23134,6 +23350,12 @@
           },
           {
             "location": "apps/api/src/scripts/repair-corpus-index-jurisdiction.ts#25"
+          },
+          {
+            "location": "apps/api/src/scripts/repair-decision-dates-plan.ts#13"
+          },
+          {
+            "location": "apps/api/src/scripts/repair-decision-dates.ts#66"
           },
           {
             "location": "apps/api/src/scripts/replay-case-law-source.ts#1"
@@ -23185,9 +23407,6 @@
           },
           {
             "location": "apps/web/src/components/app-sidebar.logic.ts#1"
-          },
-          {
-            "location": "apps/web/src/components/chat/chat-anon-decorations-plugin.ts#5"
           },
           {
             "location": "apps/web/src/components/chat/chat-thread-messages.logic.ts#1"
@@ -23592,7 +23811,7 @@
             "location": "apps/web/src/components/chat/tool-approval-card.tsx#4"
           },
           {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#23"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#29"
           },
           {
             "location": "apps/web/src/components/chat-mention-providers.tsx#5"
@@ -23949,6 +24168,9 @@
             "location": "apps/api/src/handlers/case-law/decisions/document-on-demand.ts#35"
           },
           {
+            "location": "apps/api/src/handlers/case-law/decisions/facets.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/decisions/get.ts#1"
           },
           {
@@ -25581,6 +25803,9 @@
             "location": "apps/api/src/lib/business-registries/dispatch.ts#10"
           },
           {
+            "location": "apps/api/src/lib/case-law/non-redistributable-sources.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/case-law-public-read-db.ts#1"
           },
           {
@@ -25615,6 +25840,9 @@
           },
           {
             "location": "apps/api/src/lib/confirmation-otp.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/corpus-index/backfill-pacing.ts#5"
           },
           {
             "location": "apps/api/src/lib/corpus-index/census.ts#28"
@@ -25794,10 +26022,19 @@
             "location": "apps/api/src/lib/huggingface.ts#1"
           },
           {
+            "location": "apps/api/src/lib/legal-search/browse-facets-cache.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/browse-facets.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts#1"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-index-client.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-facets.ts#1"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-storage.ts#1"
@@ -25819,6 +26056,12 @@
           },
           {
             "location": "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts#48"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/pg-fts-browse-facets.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/types.ts#1"
           },
           {
             "location": "apps/api/src/lib/matter-reference.ts#1"
@@ -26136,6 +26379,12 @@
             "location": "apps/api/src/scripts/corpus-column-trim.ts#1"
           },
           {
+            "location": "apps/api/src/scripts/corpus-index-query-diff-report.ts#1"
+          },
+          {
+            "location": "apps/api/src/scripts/corpus-index-query-diff.ts#1"
+          },
+          {
             "location": "apps/api/src/scripts/cz-regional-repair-plan.ts#1"
           },
           {
@@ -26155,6 +26404,12 @@
           },
           {
             "location": "apps/api/src/scripts/repair-corpus-index-jurisdiction.ts#25"
+          },
+          {
+            "location": "apps/api/src/scripts/repair-decision-dates-plan.ts#13"
+          },
+          {
+            "location": "apps/api/src/scripts/repair-decision-dates.ts#66"
           },
           {
             "location": "apps/api/src/scripts/replay-case-law-source.ts#1"
@@ -26206,9 +26461,6 @@
           },
           {
             "location": "apps/web/src/components/app-sidebar.logic.ts#1"
-          },
-          {
-            "location": "apps/web/src/components/chat/chat-anon-decorations-plugin.ts#5"
           },
           {
             "location": "apps/web/src/components/chat/chat-thread-messages.logic.ts#1"
@@ -26613,7 +26865,7 @@
             "location": "apps/web/src/components/chat/tool-approval-card.tsx#4"
           },
           {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#23"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#29"
           },
           {
             "location": "apps/web/src/components/chat-mention-providers.tsx#5"
@@ -26792,7 +27044,7 @@
           "name": "Taskforce.sh Inc."
         }
       ],
-      "bom-ref": "pkg:npm/bullmq@6.0.9",
+      "bom-ref": "pkg:npm/bullmq@6.1.0",
       "description": "Queue for messages and jobs based on Redis",
       "evidence": {
         "identity": [
@@ -26880,10 +27132,10 @@
           "value": "node_modules/bullmq/package.json"
         }
       ],
-      "purl": "pkg:npm/bullmq@6.0.9",
+      "purl": "pkg:npm/bullmq@6.1.0",
       "scope": "required",
       "type": "library",
-      "version": "6.0.9"
+      "version": "6.1.0"
     },
     {
       "authors": [
@@ -27968,9 +28220,6 @@
             "location": "apps/api/src/handlers/case-law/corpus-index.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/case-law/decisions/facets.ts#1"
-          },
-          {
             "location": "apps/api/src/handlers/case-law/decisions/get.ts#2"
           },
           {
@@ -29039,6 +29288,9 @@
             "location": "apps/api/src/lib/case-law/case-law-config-store.ts#1"
           },
           {
+            "location": "apps/api/src/lib/case-law/non-redistributable-sources.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/case-law/redistribution.ts#1"
           },
           {
@@ -29280,6 +29532,12 @@
           },
           {
             "location": "apps/api/src/lib/legal-search/ingestion-normalization.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/pg-fts-browse-facets.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/pg-fts-browse-facets.ts#3"
           },
           {
             "location": "apps/api/src/lib/legal-search/pg-fts-legal-provider.ts#1"
@@ -29630,6 +29888,12 @@
             "location": "apps/api/src/scripts/repair-case-law-jsonb.ts#35"
           },
           {
+            "location": "apps/api/src/scripts/repair-decision-dates-plan.ts#14"
+          },
+          {
+            "location": "apps/api/src/scripts/repair-decision-dates-plan.ts#15"
+          },
+          {
             "location": "apps/api/src/scripts/replay-case-law-source.ts#2"
           },
           {
@@ -29943,6 +30207,12 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/analysis/generate.ts#11"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/decisions/facets.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/decisions/facets.ts#3"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/get.ts#3"
@@ -32432,10 +32702,10 @@
             "location": "apps/web/src/components/route-components.tsx#6"
           },
           {
-            "location": "apps/web/src/components/saved-searches.tsx#13"
+            "location": "apps/web/src/components/saved-searches.tsx#14"
           },
           {
-            "location": "apps/web/src/components/search-dialog.tsx#30"
+            "location": "apps/web/src/components/search-dialog.tsx#35"
           },
           {
             "location": "apps/web/src/components/search-match-controls.tsx#1"
@@ -32612,7 +32882,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-detail.tsx#14"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/clause-editor.tsx#34"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/clause-editor.tsx#35"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-import-dialog.tsx#3"
@@ -32756,7 +33026,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#21"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#19"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx#11"
@@ -33350,7 +33620,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-js@1.414.0",
+      "bom-ref": "pkg:npm/posthog-js@1.415.6",
       "description": "Posthog-js allows you to automatically capture usage and send events to PostHog.",
       "evidence": {
         "identity": [
@@ -33409,10 +33679,10 @@
           "value": "node_modules/posthog-js/lib/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-js@1.414.0",
+      "purl": "pkg:npm/posthog-js@1.415.6",
       "scope": "required",
       "type": "library",
-      "version": "1.414.0"
+      "version": "1.415.6"
     },
     {
       "authors": [
@@ -33517,57 +33787,6 @@
       "scope": "required",
       "type": "library",
       "version": "2.4.1"
-    },
-    {
-      "bom-ref": "pkg:npm/prosemirror-commands@1.7.1",
-      "description": "Editing commands for ProseMirror",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@tiptap/pm/node_modules/prosemirror-commands/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@tiptap/pm/node_modules/prosemirror-commands/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/web/src/components/dev/autocomplete-playground.tsx#3"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "git://github.com/prosemirror/prosemirror-commands.git"
-        }
-      ],
-      "group": "",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
-        }
-      ],
-      "name": "prosemirror-commands",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@tiptap/pm/node_modules/prosemirror-commands/package.json"
-        }
-      ],
-      "purl": "pkg:npm/prosemirror-commands@1.7.1",
-      "scope": "required",
-      "type": "library",
-      "version": "1.7.1"
     },
     {
       "bom-ref": "pkg:npm/prosemirror-commands@1.7.2",
@@ -33814,7 +34033,7 @@
             "location": "apps/web/src/components/dev/autocomplete-playground.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/clause-editor.tsx#35"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/clause-editor.tsx#36"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-selection-gesture.tsx#15"
@@ -35121,6 +35340,9 @@
           },
           {
             "location": "apps/web/src/components/search-dialog.tsx#9"
+          },
+          {
+            "location": "apps/web/src/components/search-dialog.tsx#14"
           },
           {
             "location": "apps/web/src/components/search-document-preview.tsx#1"
@@ -36900,7 +37122,7 @@
             "location": "apps/web/src/components/chat/composer-plus-menu.tsx#19"
           },
           {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#24"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#30"
           },
           {
             "location": "apps/web/src/components/contact-picker.tsx#6"
@@ -36912,7 +37134,7 @@
             "location": "apps/web/src/components/markdown/markdown-folio-editor.impl.tsx#4"
           },
           {
-            "location": "apps/web/src/components/search-dialog.tsx#31"
+            "location": "apps/web/src/components/search-dialog.tsx#36"
           },
           {
             "location": "apps/web/src/features/case-law/components/decision-filters.tsx#3"
@@ -36945,7 +37167,7 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/matter-numbering-card.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#22"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#20"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#16"
@@ -37257,7 +37479,7 @@
             "location": "apps/web/src/components/chat/web-search-sources.tsx#2"
           },
           {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#25"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#31"
           },
           {
             "location": "apps/web/src/components/chat-input-surface.tsx#5"
@@ -37413,10 +37635,10 @@
             "location": "apps/web/src/components/route-components.tsx#7"
           },
           {
-            "location": "apps/web/src/components/saved-searches.tsx#14"
+            "location": "apps/web/src/components/saved-searches.tsx#15"
           },
           {
-            "location": "apps/web/src/components/search-dialog.tsx#32"
+            "location": "apps/web/src/components/search-dialog.tsx#37"
           },
           {
             "location": "apps/web/src/components/search-match-controls.tsx#2"
@@ -37602,6 +37824,9 @@
             "location": "apps/web/src/features/style-sets/style-set-preview.tsx#3"
           },
           {
+            "location": "apps/web/src/lib/pdf/pdf-error-boundary.tsx#4"
+          },
+          {
             "location": "apps/web/src/lib/pdf/pdf-viewport.tsx#7"
           },
           {
@@ -37668,7 +37893,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-detail.tsx#16"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/clause-editor.tsx#36"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/clause-editor.tsx#37"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-form-dialog.tsx#3"
@@ -37905,7 +38130,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#27"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#23"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx#21"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx#12"
@@ -38754,6 +38979,9 @@
             "location": "apps/api/src/scripts/corpus-column-trim-plan.ts#1"
           },
           {
+            "location": "apps/api/src/scripts/corpus-index-query-diff-report.ts#2"
+          },
+          {
             "location": "apps/api/src/scripts/mcp-canary.ts#27"
           },
           {
@@ -39370,6 +39598,9 @@
           },
           {
             "location": "apps/api/src/scripts/corpus-column-trim-plan.ts#1"
+          },
+          {
+            "location": "apps/api/src/scripts/corpus-index-query-diff-report.ts#2"
           },
           {
             "location": "apps/api/src/scripts/mcp-canary.ts#27"
