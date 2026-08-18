@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.7.8
+
+### Patch Changes
+
+- [#455](https://github.com/stella/anonymize/pull/455) [`b184ff7`](https://github.com/stella/anonymize/commit/b184ff77269a3831af4537713f33f2f1a0c97156) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A list separator directly before an and-connector closes a legal-form organization name (`…Priya Ramanathan, and Northwind Capital Partners LLC` yields `Northwind Capital Partners LLC`).
+
 ## 2.7.7
 
 ### Patch Changes
