@@ -505,17 +505,6 @@ const searchCorpusIndexDecisions = async (
     return { hits: [], facets: null, totalCount: null, nextCursor: null };
   }
 
-  // Upper bound for the pagination early-stop: scanning may end only
-  // once no unseen candidate could out-blend the page cursor.
-  const [authorityBound] = await caseLawDb((tx) =>
-    tx
-      .select({
-        max: sql<number>`coalesce(max(${caseLawDecisions.citationAuthority}), 0)`,
-      })
-      .from(caseLawDecisions),
-  );
-  const maxAuthority = authorityBound?.max ?? 0;
-
   const searchPage = await readCorpusIndexSearchPage({
     indexId,
     query,
@@ -527,8 +516,10 @@ const searchCorpusIndexDecisions = async (
       return typeof id === "string" && isUuid(id) ? id : null;
     },
     extractSnippet: extractCorpusSnippet,
-    unseenScoreUpperBound: (nextLexicalScore) =>
-      stableBlendUpperBound(nextLexicalScore, maxAuthority),
+    // Upper bound for the pagination early-stop: scanning may end only once
+    // no unseen candidate could out-blend the page cursor. Saturated
+    // authority is bounded by 1, so the bound reads nothing from the corpus.
+    unseenScoreUpperBound: stableBlendUpperBound,
     rankCandidates: async (candidates) => {
       const ids = candidates.map((candidate) =>
         toSafeId<"caseLawDecision">(candidate.id),

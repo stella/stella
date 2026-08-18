@@ -247,17 +247,6 @@ const corpusIndexSearch = async (
     return { hits: [], nextCursor: null };
   }
 
-  // Upper bound for the pagination early-stop: scanning may end only
-  // once no unseen candidate could out-blend the page cursor.
-  const [authorityBound] = await scopedDb((tx) =>
-    tx
-      .select({
-        max: sql<number>`coalesce(max(${legislationDocuments.citationAuthority}), 0)`,
-      })
-      .from(legislationDocuments),
-  );
-  const maxAuthority = authorityBound?.max ?? 0;
-
   const searchPage = await readCorpusIndexSearchPage({
     indexId,
     query,
@@ -269,8 +258,10 @@ const corpusIndexSearch = async (
       return typeof id === "string" && isUuid(id) ? id : null;
     },
     extractSnippet: extractCorpusSnippet,
-    unseenScoreUpperBound: (nextLexicalScore) =>
-      stableBlendUpperBound(nextLexicalScore, maxAuthority),
+    // Upper bound for the pagination early-stop: scanning may end only once
+    // no unseen candidate could out-blend the page cursor. Saturated
+    // authority is bounded by 1, so the bound reads nothing from the corpus.
+    unseenScoreUpperBound: stableBlendUpperBound,
     rankCandidates: async (candidates) => {
       const ids = candidates.map((candidate) =>
         toSafeId<"legislationDocument">(candidate.id),

@@ -1,9 +1,12 @@
 import { expect, test } from "bun:test";
 
 import {
+  AUTHORITY_PIVOT,
   blendCitationAuthority,
   blendStableCitationAuthority,
   rrfMerge,
+  saturateAuthority,
+  stableBlendUpperBound,
   type ScoredCandidate,
 } from "@/api/lib/legal-search/rerank";
 
@@ -138,4 +141,72 @@ test("rrfMerge feeds blendCitationAuthority as the lexical signal", () => {
   });
   // y is fused from both lists, so it must outrank x on lexical alone.
   expect(ranked.at(0)?.id).toBe("y");
+});
+
+test("saturation is bounded, monotone, and half-saturated at the pivot", () => {
+  expect(saturateAuthority(0)).toBe(0);
+  expect(saturateAuthority(AUTHORITY_PIVOT)).toBe(0.5);
+  // Bounded below 1 however authoritative the decision, which is what lets the
+  // pagination bound be `weight` alone.
+  expect(saturateAuthority(1e6)).toBeLessThan(1);
+  expect(saturateAuthority(1e6)).toBeGreaterThan(0.999);
+  // A corrupt negative value cannot invert the signal.
+  expect(saturateAuthority(-5)).toBe(0);
+
+  const sampled = [0, 0.25, 0.5, 1, 2, 5, 12, 40].map(saturateAuthority);
+  for (const [i, value] of sampled.entries()) {
+    if (i > 0) {
+      expect(value).toBeGreaterThan(sampled[i - 1] ?? 0);
+    }
+  }
+});
+
+test("the stable blend adds the saturated authority, not the raw value", () => {
+  const [hit] = blendStableCitationAuthority({
+    candidates: [{ id: "a", score: 2 }],
+    authorityById: authority({ a: 5 }),
+    weight: 0.3,
+  });
+  // 5 / (5 + 1) = 0.8333…, so the blend adds 0.25 — the raw value would add
+  // 1.5 and swamp the lexical score it is meant to nudge.
+  expect(hit?.score).toBeCloseTo(2 + 0.3 * (5 / 6), 12);
+  // The hit still reports the raw column value.
+  expect(hit?.citationAuthority).toBe(5);
+});
+
+test("a candidate's authority contribution does not depend on the page it lands on", () => {
+  // Equal lexical scores, so min-max collapses the lexical side to 0 and what
+  // is left is the authority contribution alone.
+  const contributionOf = (candidates: ScoredCandidate[]): number =>
+    blendCitationAuthority({
+      candidates,
+      authorityById: authority({ a: 1, b: 0.2, c: 40 }),
+      weight: 0.3,
+    }).find((hit) => hit.id === "a")?.score ?? Number.NaN;
+
+  const alone = contributionOf([
+    { id: "a", score: 5 },
+    { id: "b", score: 5 },
+  ]);
+  const besideALandmark = contributionOf([
+    { id: "a", score: 5 },
+    { id: "b", score: 5 },
+    { id: "c", score: 5 },
+  ]);
+
+  expect(alone).toBeCloseTo(0.3 * saturateAuthority(1), 12);
+  expect(besideALandmark).toBe(alone);
+});
+
+test("the pagination bound is the next lexical score plus the whole weight", () => {
+  expect(stableBlendUpperBound(1.5, 0.3)).toBeCloseTo(1.8, 12);
+  // No unseen candidate can reach past it: saturation is strictly below 1.
+  const blended = blendStableCitationAuthority({
+    candidates: [{ id: "a", score: 1.5 }],
+    authorityById: authority({ a: 1e9 }),
+    weight: 0.3,
+  });
+  expect(blended.at(0)?.score).toBeLessThan(stableBlendUpperBound(1.5, 0.3));
+  // And it defaults to the same weight the blends default to.
+  expect(stableBlendUpperBound(1.5)).toBe(stableBlendUpperBound(1.5, 0.3));
 });

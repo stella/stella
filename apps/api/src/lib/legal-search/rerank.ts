@@ -26,6 +26,32 @@ export type RankedHit = {
 const DEFAULT_RRF_K = 60;
 const DEFAULT_AUTHORITY_WEIGHT = 0.3;
 
+/**
+ * Half-saturation point of the log-scaled citation authority: the authority
+ * value at which the signal contributes half of `weight`, i.e. half of all it
+ * can ever contribute. Authority is already `ln(1 + weightedCitationSum)`, so
+ * 1 is roughly a decision with a couple of recent higher-court citations.
+ *
+ * A tuning constant, not a law: move it with relevance judgments, which is
+ * also the only thing that can say whether it is in the right place.
+ */
+export const AUTHORITY_PIVOT = 1;
+
+/**
+ * Map citation authority onto [0, 1) on an absolute scale:
+ *
+ *   saturate(a) = a / (a + AUTHORITY_PIVOT)
+ *
+ * Monotone, bounded, and independent of every other candidate — a decision's
+ * authority contribution is a property of the decision, not of the page it
+ * lands on. Negative authority is not representable in the corpus; clamping
+ * keeps a corrupt row from inverting the signal.
+ */
+export const saturateAuthority = (authority: number): number => {
+  const bounded = Math.max(authority, 0);
+  return bounded / (bounded + AUTHORITY_PIVOT);
+};
+
 /** Larger id first — deterministic, keyset-cursor-stable tiebreak. */
 const byScoreThenId = (
   a: { id: string; score: number },
@@ -80,10 +106,16 @@ type BlendOptions = {
 /**
  * Blend lexical relevance with citation authority:
  *
- *   blended = norm(lexical) + weight * norm(authority)
+ *   blended = minMax(lexical) + weight * saturate(authority)
  *
- * Normalizing both sides keeps the weight meaningful regardless of
- * BM25's unbounded scale. Equal lexical scores let authority decide;
+ * The lexical side is min-max normalized because BM25's scale is unbounded
+ * and query-dependent, so it is only comparable within one result set.
+ * Authority is not: it is a static, log-scaled property of the decision, and
+ * min-max normalizing it made a decision's contribution depend on which other
+ * candidates happened to share its page — the same decision scoring 1.0 next
+ * to unremarkable neighbours and 0.01 next to one landmark. Search engines
+ * bound static signals on an absolute scale for exactly this reason, which is
+ * what `saturateAuthority` is. Equal lexical scores let authority decide;
  * ties break deterministically by id for cursor stability.
  */
 export const blendCitationAuthority = ({
@@ -101,11 +133,10 @@ export const blendCitationAuthority = ({
     authority: authorityById.get(c.id) ?? 0,
   }));
   const lexicalNorm = normalize(scored.map((s) => s.lexical));
-  const authorityNorm = normalize(scored.map((s) => s.authority));
 
   const hits = scored.map((s, i) => ({
     id: s.id,
-    score: (lexicalNorm[i] ?? 0) + weight * (authorityNorm[i] ?? 0),
+    score: (lexicalNorm[i] ?? 0) + weight * saturateAuthority(s.authority),
     lexicalScore: s.lexical,
     citationAuthority: s.authority,
   }));
@@ -116,21 +147,25 @@ export const blendCitationAuthority = ({
 
 /**
  * Highest blended score any not-yet-scanned candidate could reach under
- * blendStableCitationAuthority, given the next rank's lexical score and
- * an upper bound on citation authority. Pagination scans until this
- * drops below the page cursor so reranking cannot promote an unseen
- * candidate past an already-emitted page.
+ * blendStableCitationAuthority, given the next rank's lexical score.
+ * Pagination scans until this drops below the page cursor so reranking cannot
+ * promote an unseen candidate past an already-emitted page.
+ *
+ * Saturated authority is strictly below 1, so `weight` is the whole of what
+ * authority can add and the bound needs nothing from the corpus. That is why
+ * search no longer pays for a `max(citation_authority)` aggregate per query.
  */
 export const stableBlendUpperBound = (
   nextLexicalScore: number,
-  maxAuthority: number,
   weight: number = DEFAULT_AUTHORITY_WEIGHT,
-): number => nextLexicalScore + weight * Math.max(0, maxAuthority);
+): number => nextLexicalScore + weight;
 
 /**
  * Stable cursor score for corpus-index pagination. Callers provide a lexical
  * score already normalized against the index-wide hit count, so adding later
  * candidate windows does not change scores for earlier hits.
+ *
+ * `citationAuthority` stays the raw column value; only the blend saturates.
  */
 export const blendStableCitationAuthority = ({
   candidates,
@@ -141,7 +176,7 @@ export const blendStableCitationAuthority = ({
     const authority = authorityById.get(candidate.id) ?? 0;
     return {
       id: candidate.id,
-      score: candidate.score + weight * authority,
+      score: candidate.score + weight * saturateAuthority(authority),
       lexicalScore: candidate.score,
       citationAuthority: authority,
     };
