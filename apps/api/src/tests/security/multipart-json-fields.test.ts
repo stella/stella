@@ -2,7 +2,7 @@ import { Kind, OptionalKind } from "@sinclair/typebox";
 import type { TObject, TSchema } from "@sinclair/typebox";
 import { describe, expect, test } from "bun:test";
 import { Elysia } from "elysia";
-import { readdir, readFile } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import nodePath from "node:path";
 
 import { multipartFormParser } from "@/api/lib/multipart-form-parser";
@@ -20,6 +20,11 @@ import { multipartFormParser } from "@/api/lib/multipart-form-parser";
 const HANDLERS_DIR = nodePath.join(import.meta.dir, "../../handlers");
 const JSON_SHAPED_VALUE = '{"probe":true}';
 const PLAIN_VALUE = "probe";
+
+/** Floor on the number of multipart handlers the census must discover, a
+ *  small margin under the current count. It fails loudly if discovery breaks
+ *  and stops finding the handlers it is supposed to be probing. */
+const MIN_MULTIPART_HANDLERS = 14;
 
 const listTypeScriptFiles = async (dir: string): Promise<string[]> => {
   const entries = await readdir(dir, { withFileTypes: true });
@@ -145,31 +150,55 @@ type MultipartHandler = {
   stringFields: string[];
 };
 
-const loadMultipartHandlers = async (): Promise<MultipartHandler[]> => {
+type MultipartCensus = {
+  handlers: MultipartHandler[];
+  importFailures: string[];
+};
+
+/** The body schema a handler module declares, or `undefined` when the module
+ *  is not a `{ config, handler }` endpoint. Read structurally: a handler can
+ *  import its schema from a sibling module, so nothing about the schema is
+ *  visible in the handler's own source text. */
+const declaredBody = (module: unknown): unknown =>
+  typeof module === "object" &&
+  module !== null &&
+  "default" in module &&
+  typeof module.default === "object" &&
+  module.default !== null &&
+  "config" in module.default &&
+  typeof module.default.config === "object" &&
+  module.default.config !== null &&
+  "body" in module.default.config
+    ? module.default.config.body
+    : undefined;
+
+/**
+ * Imports every handler module and keeps the ones whose body schema carries a
+ * file field. A module that cannot be imported is reported, never skipped: a
+ * silent skip would shrink the census without shrinking the risk.
+ */
+const loadMultipartHandlers = async (): Promise<MultipartCensus> => {
   const handlers: MultipartHandler[] = [];
+  const importFailures: string[] = [];
+
   for (const file of await listTypeScriptFiles(HANDLERS_DIR)) {
-    if (file.endsWith(".test.ts")) {
+    if (file.endsWith(".test.ts") || file.endsWith(".d.ts")) {
       continue;
     }
-    // oxlint-disable-next-line no-await-in-loop -- sequential loads keep the census deterministic
-    const source = await readFile(file, "utf-8");
-    if (!source.includes("t.File(") && !source.includes("t.Files(")) {
+    const relative = nodePath.relative(HANDLERS_DIR, file);
+
+    let module: unknown;
+    try {
+      // oxlint-disable-next-line no-await-in-loop -- sequential loads keep the census deterministic
+      module = await import(file);
+    } catch (error) {
+      importFailures.push(
+        `${relative}: ${error instanceof Error ? error.message : String(error)}`,
+      );
       continue;
     }
-    // oxlint-disable-next-line no-await-in-loop -- sequential loads keep the census deterministic
-    const module: unknown = await import(file);
-    const body =
-      typeof module === "object" &&
-      module !== null &&
-      "default" in module &&
-      typeof module.default === "object" &&
-      module.default !== null &&
-      "config" in module.default &&
-      typeof module.default.config === "object" &&
-      module.default.config !== null &&
-      "body" in module.default.config
-        ? module.default.config.body
-        : undefined;
+
+    const body = declaredBody(module);
     if (!isObjectSchema(body)) {
       continue;
     }
@@ -178,14 +207,15 @@ const loadMultipartHandlers = async (): Promise<MultipartHandler[]> => {
       continue;
     }
     handlers.push({
-      file: nodePath.relative(HANDLERS_DIR, file),
+      file: relative,
       body,
       stringFields: properties
         .filter(([, schema]) => isFreeTextField(schema))
         .map(([name]) => name),
     });
   }
-  return handlers;
+
+  return { handlers, importFailures };
 };
 
 const buildForm = (body: TObject, stringValue: string): FormData => {
@@ -235,9 +265,21 @@ const postForm = async (
 
 describe("multipart body string fields", () => {
   test("every multipart handler string field survives a JSON-shaped value", async () => {
-    const handlers = await loadMultipartHandlers();
+    const { handlers, importFailures } = await loadMultipartHandlers();
+
+    // An unimportable module is an unmeasured handler, so say so rather than
+    // letting the census quietly cover less than it claims.
+    expect(importFailures).toEqual([]);
+
     // The census only means something if it actually found the handlers.
-    expect(handlers.length).toBeGreaterThan(5);
+    expect(handlers.length).toBeGreaterThanOrEqual(MIN_MULTIPART_HANDLERS);
+
+    // A handler whose schema lives in a sibling module is exactly the case a
+    // source-text scan misses, so pin one: `entities/upload-version.ts` names
+    // no file field of its own, it imports `uploadVersionBodySchema`.
+    expect(handlers.map(({ file }) => file)).toContain(
+      "entities/upload-version.ts",
+    );
 
     const offenders: string[] = [];
     for (const { file, body, stringFields } of handlers) {
