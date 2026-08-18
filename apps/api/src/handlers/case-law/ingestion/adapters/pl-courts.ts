@@ -61,6 +61,34 @@ const LEGACY_PAGE_SIZE = 100;
 const ITEM_CONCURRENCY = 10;
 
 /**
+ * Judgments the slice listing asks the search endpoint for at a time, which
+ * is half what the crawl asks the dump for.
+ *
+ * The dump serves an id-ordered window and is fast at 100. The search filters
+ * by judgment date over the whole corpus and is not: on a date holding 149
+ * judgments, its second page at 100 took a minute and then answered with the
+ * publisher's maintenance page, while at 50 it answered JSON. The size the
+ * crawl uses is therefore not the size this listing can use, so it is stated
+ * separately rather than shared.
+ */
+export const PL_COURTS_SLICE_PAGE_SIZE = 50;
+
+/**
+ * How long the slice listing waits for one search page.
+ *
+ * Longer than {@link ADAPTER_TIMEOUT.LIST}, and for the same reason the crawl
+ * gives its dump 60 s: a date-filtered search is a scan, and repeated
+ * sampling of one 149-judgment date measured its later pages between 1 s and
+ * 44 s. Aborting such a page raises a bare DOMException that holds the slice
+ * for an hour, which is a worse answer than waiting for the one the publisher
+ * is still producing.
+ */
+const SLICE_LIST_TIMEOUT_MS = 60_000;
+
+/** What a listing answer must be, before it is read as one. */
+const JSON_MEDIA_TYPE = "application/json";
+
+/**
  * SAOS numbers `pageNumber` from zero, on both the dump the crawl walks and
  * the search the slice listing walks: the listing asks for the slice's page
  * number unchanged, and the crawl derives the same number from its offset.
@@ -956,7 +984,7 @@ export const listPlCourtsDayPage = async ({
   signal,
 }: ListPlCourtsDayPageOptions): Promise<PlCourtsDayPage> => {
   const url = `${SEARCH_URL}?${new URLSearchParams({
-    pageSize: String(PAGE_SIZE),
+    pageSize: String(PL_COURTS_SLICE_PAGE_SIZE),
     pageNumber: String(page + FIRST_PAGE),
     sortingField: SLICE_SORTING_FIELD,
     sortingDirection: SLICE_SORTING_DIRECTION,
@@ -966,7 +994,7 @@ export const listPlCourtsDayPage = async ({
 
   const response = await fetchWithTimeout(url, {
     signal,
-    timeoutMs: ADAPTER_TIMEOUT.LIST,
+    timeoutMs: SLICE_LIST_TIMEOUT_MS,
     headers: {
       Accept: "application/json",
       "User-Agent": INGESTION_USER_AGENT,
@@ -976,6 +1004,21 @@ export const listPlCourtsDayPage = async ({
   if (!response.ok) {
     throw new AdapterFetchError({
       message: `SAOS search API error: ${response.status}`,
+      adapterKey: ADAPTER_KEYS.PL_COURTS,
+      cursor: date,
+      httpStatus: response.status,
+    });
+  }
+
+  // The publisher answers a 200 carrying an HTML maintenance page when the
+  // search is under load, and `response.json()` meets that with a raw
+  // SyntaxError: no adapter, no cursor, nothing naming the publisher as the
+  // cause. Refused here instead, as the tagged failure every other answer
+  // this function will not read is.
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().includes(JSON_MEDIA_TYPE)) {
+    throw new AdapterFetchError({
+      message: `SAOS search API answered ${contentType.length === 0 ? "no content type" : contentType} rather than ${JSON_MEDIA_TYPE}`,
       adapterKey: ADAPTER_KEYS.PL_COURTS,
       cursor: date,
       httpStatus: response.status,
@@ -1001,7 +1044,7 @@ export const listPlCourtsDayPage = async ({
   }
 
   const items = normalizeOptionalArray(json.items).map(normalizeSaosDumpItem);
-  const totalPages = Math.ceil(totalResults / PAGE_SIZE);
+  const totalPages = Math.ceil(totalResults / PL_COURTS_SLICE_PAGE_SIZE);
 
   // A page the publisher's own total says holds judgments has to return them.
   // Checked against the total rather than against the key's presence, because

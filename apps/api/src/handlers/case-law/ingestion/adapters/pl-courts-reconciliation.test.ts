@@ -17,6 +17,7 @@ import type { SaosItem } from "@/api/handlers/case-law/ingestion/adapters/pl-cou
 import {
   PL_COURTS_FIRST_SLICE,
   PL_COURTS_LANGUAGE,
+  PL_COURTS_SLICE_PAGE_SIZE,
   plCourtsAdapter,
   plCourtsListingIdentity,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
@@ -64,6 +65,8 @@ type MockRoute = {
   pattern: string;
   body: string;
   status?: number | undefined;
+  /** What the publisher labels the body; JSON unless a route says otherwise. */
+  contentType?: string | undefined;
 };
 
 const originalFetch = globalThis.fetch;
@@ -93,7 +96,9 @@ const mockFetchWithBodies = (routes: MockRoute[]) => {
       }
       return new Response(match.body, {
         status: match.status ?? 200,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": match.contentType ?? "application/json;charset=UTF-8",
+        },
       });
     },
     { preconnect: originalFetch.preconnect.bind(originalFetch) },
@@ -252,7 +257,12 @@ describe("pl-courts listSlicePage", () => {
     expect(requested.searchParams.get("judgmentDateFrom")).toBe(SLICE);
     expect(requested.searchParams.get("judgmentDateTo")).toBe(SLICE);
     expect(requested.searchParams.get("pageNumber")).toBe("2");
-    expect(requested.searchParams.get("pageSize")).toBe("100");
+    // Half the crawl's dump page: the date-filtered search is a scan, and at
+    // 100 its later pages time out into the publisher's maintenance page.
+    expect(requested.searchParams.get("pageSize")).toBe(
+      String(PL_COURTS_SLICE_PAGE_SIZE),
+    );
+    expect(PL_COURTS_SLICE_PAGE_SIZE).toBe(50);
     // Ids are assigned once, so a judgment published mid-walk appends past the
     // last page instead of shifting items onto pages already read.
     expect(requested.searchParams.get("sortingField")).toBe("DATABASE_ID");
@@ -269,9 +279,9 @@ describe("pl-courts listSlicePage", () => {
 
     const page = await reconciliation.listSlicePage({ slice: SLICE, page: 0 });
 
-    // 283 filtered results at 100 a page is three pages; the API states no
-    // page count of its own.
-    expect(page.totalPages).toBe(3);
+    // 283 filtered results at 50 a page is six pages; the API states no page
+    // count of its own.
+    expect(page.totalPages).toBe(6);
     expect(page.items.map(({ identity }) => identity)).toEqual([
       { type: "document", sourceDocumentId: "130600" },
       { type: "document", sourceDocumentId: "168472" },
@@ -331,13 +341,49 @@ describe("pl-courts listSlicePage", () => {
     // The last page of a day is genuinely empty when the total divides evenly;
     // only a page the total still covers is a contradiction.
     mockFetchWithBodies([
-      { pattern: SEARCH_PATTERN, body: searchBody([], 200) },
+      {
+        pattern: SEARCH_PATTERN,
+        body: searchBody([], PL_COURTS_SLICE_PAGE_SIZE * 2),
+      },
     ]);
 
     const page = await reconciliation.listSlicePage({ slice: SLICE, page: 2 });
 
     expect(page.items).toEqual([]);
     expect(page.totalPages).toBe(2);
+  });
+
+  test("pages a day of 149 judgments at the slice listing's own size", async () => {
+    // The day that exposed this: 149 judgments, whose second page at 100 the
+    // publisher answered with a maintenance page after a minute.
+    mockFetchWithBodies([
+      { pattern: SEARCH_PATTERN, body: searchBody([COMMON_COURT_ITEM], 149) },
+    ]);
+
+    const page = await reconciliation.listSlicePage({
+      slice: "2019-05-20",
+      page: 0,
+    });
+
+    expect(page.totalPages).toBe(3);
+  });
+
+  test("an answer that is not JSON is a tagged failure naming its type", async () => {
+    // What SAOS serves under load: a 200 carrying its maintenance page. Left
+    // to `response.json()` this is a bare SyntaxError, which names neither the
+    // adapter nor the slice it held.
+    mockFetchWithBodies([
+      {
+        pattern: SEARCH_PATTERN,
+        body: "<html><body><h1>Przerwa techniczna</h1></body></html>",
+        contentType: "text/html;charset=UTF-8",
+      },
+    ]);
+
+    const error = await sliceRejection("2019-05-20");
+
+    expect(error).toBeInstanceOf(AdapterFetchError);
+    expect(String(error)).toContain("text/html");
   });
 });
 
