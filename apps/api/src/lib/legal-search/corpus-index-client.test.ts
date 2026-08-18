@@ -88,6 +88,41 @@ test("search sends the documented sort_by parameter", async () => {
   expect(body).not.toHaveProperty("sort_by_field");
 });
 
+test("search accepts a response without snippets", async () => {
+  // A count-only search (`maxHits: 0`, no snippet fields) is answered
+  // without a `snippets` key.
+  responseBody = {
+    num_hits: 1_197_000,
+    hits: [],
+    elapsed_time_micros: 4,
+    errors: [],
+  };
+
+  const result = await getCorpusIndexClient().search({
+    indexId: "legal_corpus_v1_cze",
+    query: "seq:0",
+    maxHits: 0,
+  });
+
+  expect(result.isOk()).toBe(true);
+  if (result.isOk()) {
+    expect(result.value.numHits).toBe(1_197_000);
+    expect(result.value.snippets).toEqual([]);
+  }
+});
+
+test("search rejects a malformed snippets value", async () => {
+  responseBody = { num_hits: 1, hits: [], snippets: "no" };
+
+  const result = await getCorpusIndexClient().search({
+    indexId: "legal_corpus_v1_cze",
+    query: "seq:0",
+    maxHits: 0,
+  });
+
+  expect(result.isErr()).toBe(true);
+});
+
 test("search falls back to the shared corpus index endpoint", async () => {
   responseBody = { num_hits: 0, hits: [], snippets: [] };
   Object.assign(envBase, {

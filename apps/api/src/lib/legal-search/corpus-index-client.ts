@@ -342,7 +342,12 @@ const buildClient = (): CorpusIndexClient => ({
         }
         const numHits = response["num_hits"];
         const hits = parseRecordArray(response["hits"]);
-        const snippets = parseRecordArray(response["snippets"]);
+        // The engine includes `snippets` only when snippet fields were
+        // requested; a response without the key carries no snippets.
+        const snippets =
+          response["snippets"] === undefined
+            ? []
+            : parseRecordArray(response["snippets"]);
         if (
           typeof numHits !== "number" ||
           !Number.isFinite(numHits) ||
