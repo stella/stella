@@ -319,7 +319,7 @@ export const caseLawDecisions = p.pgTable(
       .notNull(),
     /**
      * Materialized citation-authority ranking signal: the
-     * ln(1 + weighted-citation-density) value that `citationScore()`
+     * ln(1 + weighted-citation-sum) value that `citationScore()`
      * computes. Precomputed by the post-ingestion citation pass so
      * search reads it instead of recomputing the citation-graph
      * aggregate per query. Decays slowly with time; refreshed on a

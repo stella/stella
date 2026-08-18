@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import {
@@ -215,7 +215,6 @@ test("materialized authority equals citationScore() at the same instant", async 
       { citingCourt: "Nejvyšší soud", citingDate: "2025-01-01" },
       { citingCourt: "Krajský soud", citingDate: "2018-01-01" },
     ],
-    "2020-01-01",
     NOW,
   );
 
@@ -236,12 +235,10 @@ test("a more authoritative citing court yields higher authority", async () => {
   // controlling for date so only court weight differs.
   const supreme = citationScore(
     [{ citingCourt: "Nejvyšší soud", citingDate: "2024-01-01" }],
-    "2020-01-01",
     NOW,
   );
   const regional = citationScore(
     [{ citingCourt: "Krajský soud", citingDate: "2024-01-01" }],
-    "2020-01-01",
     NOW,
   );
   expect(supreme).toBeGreaterThan(regional);
@@ -414,7 +411,6 @@ test("the contribution weight is a seam the aggregate reads through", async () =
       { citingCourt: "Nejvyšší soud", citingDate: "2025-01-01" },
       { citingCourt: "Krajský soud", citingDate: "2018-01-01" },
     ],
-    "2020-01-01",
     NOW,
   );
   // score = ln(1 + sum/age), so doubling the sum is ln(1 + 2*(e^score - 1)).
@@ -479,7 +475,6 @@ test("courtWeightEntries option drives the SQL instead of the legacy tiers", asy
   expect(await authorityOf(customCitedId)).toBeCloseTo(
     citationScore(
       [{ citingCourt: "Custom Seeded Court", citingDate: "2025-01-01" }],
-      "2020-01-01",
       NOW,
       new Map([["CZE", CUSTOM_ENTRIES]]),
     ),
@@ -491,7 +486,6 @@ test("courtWeightEntries option drives the SQL instead of the legacy tiers", asy
   expect(await authorityOf(customCitedId)).not.toBeCloseTo(
     citationScore(
       [{ citingCourt: "Custom Seeded Court", citingDate: "2025-01-01" }],
-      "2020-01-01",
       NOW,
     ),
     2,
@@ -500,4 +494,70 @@ test("courtWeightEntries option drives the SQL instead of the legacy tiers", asy
 
 test("an unrankable corpus is detected before a sweep walks it", async () => {
   expect(await db.transaction(hasResolvedCitations)).toBe(true);
+});
+
+test("the cited decision's own age does not change its authority", async () => {
+  // Two decisions with identical citation sets, published twenty-nine years
+  // apart. Authority reads the citing side only, so they have to score the
+  // same value: the removed divisor — the cited decision's own age — put the
+  // older one far below the newer for nothing but having existed longer.
+  const oldId = createSafeId<"caseLawDecision">();
+  const youngId = createSafeId<"caseLawDecision">();
+  await db.insert(caseLawDecisions).values([
+    {
+      id: oldId,
+      sourceId,
+      caseNumber: "7 Cdo 7/1995",
+      court: "Okresní soud",
+      country: "CZE",
+      language: "cs",
+      decisionDate: "1995-01-01",
+    },
+    {
+      id: youngId,
+      sourceId,
+      caseNumber: "8 Cdo 8/2024",
+      court: "Okresní soud",
+      country: "CZE",
+      language: "cs",
+      decisionDate: "2024-01-01",
+    },
+  ]);
+  await db.insert(caseLawCitations).values([
+    {
+      citingDecisionId: supremeCitingId,
+      citedDecisionId: oldId,
+      citationText: "7 Cdo 7/1995",
+    },
+    {
+      citingDecisionId: regionalCitingId,
+      citedDecisionId: oldId,
+      citationText: "7 Cdo 7/1995",
+    },
+    {
+      citingDecisionId: supremeCitingId,
+      citedDecisionId: youngId,
+      citationText: "8 Cdo 8/2024",
+    },
+    {
+      citingDecisionId: regionalCitingId,
+      citedDecisionId: youngId,
+      citationText: "8 Cdo 8/2024",
+    },
+  ]);
+
+  await markAllDue();
+  await sweep(1000);
+
+  // Not vacuous: the fixture differs precisely where the removed term read.
+  const dates = await db
+    .select({ id: caseLawDecisions.id, date: caseLawDecisions.decisionDate })
+    .from(caseLawDecisions)
+    .where(inArray(caseLawDecisions.id, [oldId, youngId]));
+  expect(new Set(dates.map((row) => row.date)).size).toBe(2);
+
+  const older = await authorityOf(oldId);
+  expect(older).toBe(await authorityOf(youngId));
+  expect(older).toBeGreaterThan(0);
+  expect(await countOf(oldId)).toBe(await countOf(youngId));
 });

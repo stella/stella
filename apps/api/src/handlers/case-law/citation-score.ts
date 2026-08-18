@@ -1,13 +1,21 @@
 /**
  * Citation authority scoring for case law decisions.
  *
- * Combines three signals:
- * 1. Citation density — citations per year since publication
- * 2. Court-level weight — Supreme Court citations count more
- * 3. Recency decay — recent citations are stronger evidence
+ * Every incoming citation is weighted by two signals:
+ * 1. Court-level weight — Supreme Court citations count more
+ * 2. Recency decay — recent citations are stronger evidence
  *
- * The final score is log-scaled to prevent outliers from
- * dominating search results.
+ * Their sum is log-scaled to prevent outliers from dominating search results.
+ *
+ * The cited decision's own age is deliberately not part of this. The score
+ * used to be a density — the weighted sum divided by the years since
+ * publication — which charged recency twice: the citing-side decay already
+ * says whether a decision is still being cited, and a decision nobody cites
+ * any more decays through that term alone. Dividing again only penalized
+ * decisions for having been available to be cited, so the divisor buried
+ * landmark decisions under recent ones. Under the density, 200 citations
+ * spread over 20 years scored 1.03 while 8 citations from the past year
+ * scored 1.61; on the weighted sum alone the same two score 3.61 and 2.20.
  */
 
 import { DAY_IN_MS } from "@stll/time";
@@ -150,32 +158,15 @@ export const weightedCitationSum = (
 /**
  * Full citation authority score for a decision.
  *
- *   density = weightedSum / max(yearsSinceDecision, 1)
- *   score   = ln(1 + density)
+ *   score = ln(1 + weightedSum)
  *
  * Returns a non-negative float. Zero means no citations.
  */
 export const citationScore = (
   citations: CitationInput[],
-  decisionDate: Date | string | null,
   now: Date = new Date(),
   weightMap?: CourtWeightMap,
-): number => {
-  if (citations.length === 0) {
-    return 0;
-  }
-
-  const wSum = weightedCitationSum(citations, now, weightMap);
-
-  let yearsOld = 1;
-  if (decisionDate !== null) {
-    const d =
-      typeof decisionDate === "string" ? new Date(decisionDate) : decisionDate;
-    yearsOld = Math.max((now.getTime() - d.getTime()) / MS_PER_YEAR, 1);
-  }
-
-  return Math.log(1 + wSum / yearsOld);
-};
+): number => Math.log(1 + weightedCitationSum(citations, now, weightMap));
 
 // -- SQL fragments -------------------------------------------------------
 

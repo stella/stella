@@ -172,9 +172,6 @@ const searchPostgresDecisions = async (
           * (1.0 / (1 + COALESCE(extract(epoch FROM (now() - citing_d.decision_date)) / (365.25 * 86400), 1.0)))
         ),
         0
-      ) / GREATEST(
-        extract(epoch FROM (now() - d.decision_date)) / (365.25 * 86400),
-        1.0
       ) AS boost,
       count(*)::int AS cnt
       FROM case_law_citations c

@@ -6,18 +6,18 @@
  * value the search SQL used to compute inline per query with a LATERAL over
  * the citation graph:
  *
- *   authority = ln(1 + weightedCitationSum / max(ageYears(decision), 1))
+ *   authority = ln(1 + weightedCitationSum)
  *
  * where each incoming citation contributes
  * `courtWeight(citingCourt) * 1/(1 + ageYears(citing))`. See citation-score.ts
  * for the reference TS implementation; this SQL must stay equal to
  * `citationScore(...)` evaluated at the same instant.
  *
- * Because the value decays with time (both age terms reference "now"), it is a
- * point-in-time snapshot refreshed on a schedule — the search blend tolerates
- * being stale by up to one refresh interval. Pass a fixed `now` to make the
- * computation deterministic (used by tests to assert equality against
- * `citationScore`).
+ * Because the value decays with time (the citing decision's age references
+ * "now"), it is a point-in-time snapshot refreshed on a schedule — the search
+ * blend tolerates being stale by up to one refresh interval. Pass a fixed
+ * `now` to make the computation deterministic (used by tests to assert
+ * equality against `citationScore`).
  *
  * **It runs in bounded batches, and it has to.** The whole-corpus form was one
  * UPDATE over every decision, which on a corpus of this size outruns the
@@ -314,7 +314,7 @@ export const recomputeCitationAuthorityBatch = async (
   await setCorpusBackfillStatementTimeout(tx);
   const result: unknown = await tx.execute(sql`
     WITH batch AS (
-      SELECT d.id, d.decision_date
+      SELECT d.id
         FROM case_law_decisions d
        WHERE d.citation_authority_computed_at IS NULL
           OR d.citation_authority_computed_at < ${staleBefore}::timestamptz
@@ -323,7 +323,6 @@ export const recomputeCitationAuthorityBatch = async (
     ),
     agg AS (
       SELECT b.id AS decision_id,
-             b.decision_date,
              coalesce(sum(
                CASE WHEN c.id IS NULL THEN 0 ELSE ${contribution} END
              ), 0) AS raw_sum,
@@ -341,24 +340,11 @@ export const recomputeCitationAuthorityBatch = async (
            -- authority being invoked; counting them would rank a decision by
            -- how often it was appealed.
            AND c.kind = 'precedent'
-       GROUP BY b.id, b.decision_date
+       GROUP BY b.id
     ),
     updated AS (
       UPDATE case_law_decisions d
-         SET citation_authority = ln(1 + (
-               agg.raw_sum / GREATEST(
-                 COALESCE(
-                   extract(
-                     epoch FROM (
-                       ${nowExpr}
-                       - (agg.decision_date::timestamp AT TIME ZONE 'UTC')
-                     )
-                   ) / ${SECONDS_PER_YEAR},
-                   1.0
-                 ),
-                 1.0
-               )
-             )),
+         SET citation_authority = ln(1 + agg.raw_sum),
              citation_count = agg.cnt,
              citation_authority_computed_at = ${nowExpr}
         FROM agg
