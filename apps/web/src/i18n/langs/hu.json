@@ -1246,7 +1246,6 @@
       "skippedLimitReached": "Kihagyva: elérte a kapcsolatlimitet"
     },
     "importStudio": {
-      "backToContacts": "Vissza a kapcsolatokhoz",
       "chooseFile": "Fájl kiválasztása",
       "customFieldTarget": "Importálás egyéni mezőként",
       "defaultType": "Ezt a típust használja, ha a fájl nem tartalmaz kapcsolattípus-oszlopot",
@@ -1278,6 +1277,7 @@
       "fileSummary": "{name}, {count, plural, one {# kapcsolat} other {# kapcsolat}}",
       "generateDisplayName": "Megjelenítési nevek létrehozása a párosított névmezőkből",
       "ignore": "Ne legyen importálva",
+      "importAnother": "Másik fájl importálása",
       "importCount": "{count, plural, one {# kapcsolat} other {# kapcsolat}} importálása",
       "importFailed": "Nem sikerült importálni a kapcsolatokat.",
       "inspectFailed": "Nem sikerült beolvasni ezt a kapcsolatfájlt.",
@@ -1295,6 +1295,7 @@
         "too_many_tags": "Túl sok címke van, vagy valamelyik címke túl hosszú."
       },
       "mapDescription": "Ellenőrizze a javasolt párosítást. Minden stella-mező csak egyszer használható.",
+      "openContacts": "Névjegyek megnyitása",
       "preview": "Importálás ellenőrzése",
       "previewFailed": "Nem sikerült elkészíteni az importálás előnézetét.",
       "reviewDescription": "Még semmi sem lett importálva. Szerkessze az alábbi sorokat, majd importálja a kész kapcsolatokat.",

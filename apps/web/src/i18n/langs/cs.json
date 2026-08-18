@@ -1246,7 +1246,6 @@
       "skippedLimitReached": "Přeskočeno: dosažen limit kontaktů"
     },
     "importStudio": {
-      "backToContacts": "Zpět na kontakty",
       "chooseFile": "Vybrat soubor",
       "customFieldTarget": "Importovat jako vlastní pole",
       "defaultType": "Tento typ se použije, pokud soubor neobsahuje sloupec s typem kontaktu",
@@ -1278,6 +1277,7 @@
       "fileSummary": "{name}, {count, plural, one {# kontakt} few {# kontakty} other {# kontaktů}}",
       "generateDisplayName": "Vytvořit zobrazované názvy z přiřazených polí se jmény",
       "ignore": "Neimportovat",
+      "importAnother": "Importovat další soubor",
       "importCount": "Importovat {count, plural, one {# kontakt} few {# kontakty} other {# kontaktů}}",
       "importFailed": "Kontakty se nepodařilo importovat.",
       "inspectFailed": "Soubor s kontakty se nepodařilo načíst.",
@@ -1295,6 +1295,7 @@
         "too_many_tags": "Štítků je příliš mnoho nebo je některý štítek příliš dlouhý."
       },
       "mapDescription": "Zkontrolujte navržené přiřazení. Každé pole stella lze použít pouze jednou.",
+      "openContacts": "Otevřít kontakty",
       "preview": "Zkontrolovat import",
       "previewFailed": "Náhled importu se nepodařilo vytvořit.",
       "reviewDescription": "Zatím nebylo nic importováno. Upravte libovolný řádek níže a poté importujte připravené kontakty.",

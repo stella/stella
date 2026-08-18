@@ -1246,7 +1246,6 @@
       "skippedLimitReached": "Praleista: pasiektas kontaktų limitas"
     },
     "importStudio": {
-      "backToContacts": "Grįžti į kontaktus",
       "chooseFile": "Pasirinkti failą",
       "customFieldTarget": "Importuoti kaip pasirinktinį lauką",
       "defaultType": "Naudokite šį tipą, jei faile nėra kontakto tipo stulpelio",
@@ -1278,6 +1277,7 @@
       "fileSummary": "{name}, {count, plural, one {# kontaktas} few {# kontaktai} other {# kontaktų}}",
       "generateDisplayName": "Kurti rodomus pavadinimus iš susietų vardo laukų",
       "ignore": "Neimportuoti",
+      "importAnother": "Importuoti kitą failą",
       "importCount": "Importuoti {count, plural, one {# kontaktą} few {# kontaktus} other {# kontaktų}}",
       "importFailed": "Nepavyko importuoti kontaktų.",
       "inspectFailed": "Nepavyko perskaityti šio kontaktų failo.",
@@ -1295,6 +1295,7 @@
         "too_many_tags": "Žymų per daug arba žyma yra per ilga."
       },
       "mapDescription": "Patikrinkite siūlomą susiejimą. Kiekvieną „stella“ lauką galima naudoti tik vieną kartą.",
+      "openContacts": "Atidaryti kontaktus",
       "preview": "Peržiūrėti importavimą",
       "previewFailed": "Nepavyko parengti importavimo peržiūros.",
       "reviewDescription": "Dar niekas neimportuota. Pataisykite bet kurią eilutę žemiau ir importuokite paruoštus kontaktus.",

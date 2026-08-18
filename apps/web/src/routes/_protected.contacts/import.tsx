@@ -308,6 +308,12 @@ function ContactImportStudio() {
     focusStepHeading();
   };
 
+  const restart = () => {
+    review.reset();
+    setState({ status: "upload" });
+    focusStepHeading();
+  };
+
   const step = currentStep(state, review.results !== null);
 
   return (
@@ -376,6 +382,7 @@ function ContactImportStudio() {
           <div className="mx-auto max-w-6xl">
             <ReviewStep
               fields={editableFieldsForMapping(state.mapping)}
+              onRestart={restart}
               review={review}
               stepHeadingRef={stepHeadingRef}
             />
@@ -383,24 +390,13 @@ function ContactImportStudio() {
         )}
       </main>
 
-      {state.status !== "upload" && (
+      {state.status !== "upload" && review.results === null && (
         <footer className="bg-background border-t px-4 py-3 sm:px-6">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
-            {review.results !== null ? (
-              <Button render={<Link to="/contacts" />} variant="ghost">
-                <DirectionalIcon icon={ArrowLeftIcon} />
-                {t("contacts.importStudio.backToContacts")}
-              </Button>
-            ) : (
-              <Button
-                disabled={busy !== "idle"}
-                onClick={goBack}
-                variant="ghost"
-              >
-                <DirectionalIcon icon={ArrowLeftIcon} />
-                {t("common.back")}
-              </Button>
-            )}
+            <Button disabled={busy !== "idle"} onClick={goBack} variant="ghost">
+              <DirectionalIcon icon={ArrowLeftIcon} />
+              {t("common.back")}
+            </Button>
             {state.status === "mapping" && (
               <Button
                 loading={busy === "previewing"}
@@ -412,7 +408,7 @@ function ContactImportStudio() {
                 <DirectionalIcon icon={ArrowRightIcon} />
               </Button>
             )}
-            {state.status === "review" && review.results === null && (
+            {state.status === "review" && (
               <Button
                 disabled={!review.canImport}
                 loading={review.isImporting}
@@ -726,10 +722,12 @@ const MappingStep = ({
 
 const ReviewStep = ({
   fields,
+  onRestart,
   review,
   stepHeadingRef,
 }: {
   fields: readonly ImportEditableField[];
+  onRestart: () => void;
   review: ImportReview;
   stepHeadingRef: StepHeadingRef;
 }) => {
@@ -757,6 +755,14 @@ const ReviewStep = ({
           </p>
         </div>
         <ImportResultsList results={results} />
+        <div className="flex flex-wrap gap-2 pt-2">
+          <Button render={<Link to="/contacts" />}>
+            {t("contacts.importStudio.openContacts")}
+          </Button>
+          <Button onClick={onRestart} variant="outline">
+            {t("contacts.importStudio.importAnother")}
+          </Button>
+        </div>
       </section>
     );
   }

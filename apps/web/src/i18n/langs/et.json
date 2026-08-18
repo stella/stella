@@ -1246,7 +1246,6 @@
       "skippedLimitReached": "Vahele jäetud: kontaktide piirmäär täis"
     },
     "importStudio": {
-      "backToContacts": "Tagasi kontaktide juurde",
       "chooseFile": "Vali fail",
       "customFieldTarget": "Impordi kohandatud väljana",
       "defaultType": "Kasuta seda tüüpi, kui failis pole kontakti tüübi veergu",
@@ -1278,6 +1277,7 @@
       "fileSummary": "{name}, {count, plural, one {# kontakt} other {# kontakti}}",
       "generateDisplayName": "Koosta kuvatavad nimed seotud nimeväljadest",
       "ignore": "Ära impordi",
+      "importAnother": "Impordi veel üks fail",
       "importCount": "Impordi {count, plural, one {# kontakt} other {# kontakti}}",
       "importFailed": "Kontaktide importimine ebaõnnestus.",
       "inspectFailed": "Seda kontaktifaili ei õnnestunud lugeda.",
@@ -1295,6 +1295,7 @@
         "too_many_tags": "Silte on liiga palju või mõni silt on liiga pikk."
       },
       "mapDescription": "Kontrolli soovitatud vastendust. Iga stella välja saab kasutada ühe korra.",
+      "openContacts": "Ava kontaktid",
       "preview": "Kontrolli importi",
       "previewFailed": "Impordi eelvaadet ei õnnestunud koostada.",
       "reviewDescription": "Midagi pole veel imporditud. Muuda allolevaid ridu ja impordi seejärel valmis kontaktid.",

@@ -1246,7 +1246,6 @@
       "skippedLimitReached": "Izlaists: sasniegts kontaktu limits"
     },
     "importStudio": {
-      "backToContacts": "Atpakaļ uz kontaktpersonām",
       "chooseFile": "Izvēlēties failu",
       "customFieldTarget": "Importēt kā pielāgotu lauku",
       "defaultType": "Izmantot šo tipu, ja failā nav kontaktpersonas tipa kolonnas",
@@ -1278,6 +1277,7 @@
       "fileSummary": "{name}, {count, plural, zero {# kontaktpersonu} one {# kontaktpersona} other {# kontaktpersonas}}",
       "generateDisplayName": "Veidot parādāmos nosaukumus no sasaistītajiem vārda laukiem",
       "ignore": "Neimportēt",
+      "importAnother": "Importēt vēl vienu failu",
       "importCount": "Importēt {count, plural, zero {# kontaktpersonu} one {# kontaktpersonu} other {# kontaktpersonas}}",
       "importFailed": "Neizdevās importēt kontaktpersonas.",
       "inspectFailed": "Neizdevās nolasīt šo kontaktpersonu failu.",
@@ -1295,6 +1295,7 @@
         "too_many_tags": "Atzīmju ir pārāk daudz vai kāda atzīme ir pārāk gara."
       },
       "mapDescription": "Pārbaudiet ieteikto sasaisti. Katru stella lauku var izmantot tikai vienreiz.",
+      "openContacts": "Atvērt kontaktus",
       "preview": "Pārskatīt importēšanu",
       "previewFailed": "Neizdevās izveidot importēšanas priekšskatījumu.",
       "reviewDescription": "Vēl nekas nav importēts. Rediģējiet jebkuru rindu zemāk un pēc tam importējiet sagatavotās kontaktpersonas.",

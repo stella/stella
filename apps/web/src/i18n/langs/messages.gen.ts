@@ -1249,7 +1249,6 @@ type Messages = {
       "skippedLimitReached": "Skipped: contacts limit reached";
     };
     "importStudio": {
-      "backToContacts": "Back to contacts";
       "chooseFile": "Choose a file";
       "customFieldTarget": "Import as custom field";
       "defaultType": "Use this type when the file has no contact type column";
@@ -1281,6 +1280,7 @@ type Messages = {
       "fileSummary": "{name}, {count, plural, one {# contact} other {# contacts}}";
       "generateDisplayName": "Build display names from the mapped name fields";
       "ignore": "Do not import";
+      "importAnother": "Import another file";
       "importCount": "Import {count, plural, one {# contact} other {# contacts}}";
       "importFailed": "Couldn't import contacts.";
       "inspectFailed": "Couldn't read this contacts file.";
@@ -1298,6 +1298,7 @@ type Messages = {
         "too_many_tags": "There are too many tags, or a tag is too long.";
       };
       "mapDescription": "Check the suggested mapping. Each stella field can be used once.";
+      "openContacts": "Open contacts";
       "preview": "Review import";
       "previewFailed": "Couldn't build the import preview.";
       "reviewDescription": "Nothing has been imported yet. Edit any row below, then import the ones that are ready.";

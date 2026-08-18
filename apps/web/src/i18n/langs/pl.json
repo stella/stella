@@ -1246,7 +1246,6 @@
       "skippedLimitReached": "Pominięto: osiągnięto limit kontaktów"
     },
     "importStudio": {
-      "backToContacts": "Wróć do kontaktów",
       "chooseFile": "Wybierz plik",
       "customFieldTarget": "Importuj jako pole niestandardowe",
       "defaultType": "Użyj tego typu, jeśli plik nie zawiera kolumny z typem kontaktu",
@@ -1278,6 +1277,7 @@
       "fileSummary": "{name}, {count, plural, one {# kontakt} few {# kontakty} many {# kontaktów} other {# kontaktu}}",
       "generateDisplayName": "Twórz nazwy wyświetlane na podstawie przypisanych pól nazwy",
       "ignore": "Nie importuj",
+      "importAnother": "Importuj kolejny plik",
       "importCount": "Importuj {count, plural, one {# kontakt} few {# kontakty} many {# kontaktów} other {# kontaktu}}",
       "importFailed": "Nie udało się zaimportować kontaktów.",
       "inspectFailed": "Nie udało się odczytać tego pliku z kontaktami.",
@@ -1295,6 +1295,7 @@
         "too_many_tags": "Tagów jest zbyt wiele lub jeden z nich jest zbyt długi."
       },
       "mapDescription": "Sprawdź sugerowane przypisanie. Każde pole stella może być użyte tylko raz.",
+      "openContacts": "Otwórz kontakty",
       "preview": "Sprawdź import",
       "previewFailed": "Nie udało się przygotować podglądu importu.",
       "reviewDescription": "Nic nie zostało jeszcze zaimportowane. Popraw dowolny wiersz poniżej, a następnie zaimportuj gotowe kontakty.",

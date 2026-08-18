@@ -1246,7 +1246,6 @@
       "skippedLimitReached": "Omitido: se alcanzó el límite de contactos"
     },
     "importStudio": {
-      "backToContacts": "Volver a contactos",
       "chooseFile": "Elegir un archivo",
       "customFieldTarget": "Importar como campo personalizado",
       "defaultType": "Usar este tipo si el archivo no tiene una columna de tipo de contacto",
@@ -1278,6 +1277,7 @@
       "fileSummary": "{name}, {count, plural, one {# contacto} other {# contactos}}",
       "generateDisplayName": "Crear los nombres para mostrar a partir de los campos de nombre asociados",
       "ignore": "No importar",
+      "importAnother": "Importar otro archivo",
       "importCount": "Importar {count, plural, one {# contacto} other {# contactos}}",
       "importFailed": "No se pudieron importar los contactos.",
       "inspectFailed": "No se pudo leer este archivo de contactos.",
@@ -1295,6 +1295,7 @@
         "too_many_tags": "Hay demasiadas etiquetas o alguna es demasiado larga."
       },
       "mapDescription": "Comprueba la asociación sugerida. Cada campo de stella solo se puede usar una vez.",
+      "openContacts": "Abrir contactos",
       "preview": "Revisar importación",
       "previewFailed": "No se pudo crear la vista previa de la importación.",
       "reviewDescription": "Todavía no se ha importado nada. Edita cualquier fila y después importa los contactos que estén listos.",

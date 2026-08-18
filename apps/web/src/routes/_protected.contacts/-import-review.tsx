@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 
-import { getRouteApi } from "@tanstack/react-router";
+import { getRouteApi, Link } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { AlertTriangleIcon, CheckIcon, PlusIcon, XIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
@@ -145,8 +145,8 @@ export type ImportReviewRow = ImportReviewSeedRow & {
   id: SafeId<"contact">;
 };
 
-export type ImportReviewResult = { rowNumber: number } & (
-  | { status: "created" }
+export type ImportReviewResult = { rowNumber: number; displayName: string } & (
+  | { status: "created"; contactId: SafeId<"contact"> }
   | { status: "skipped"; reason: ImportSkipReason }
 );
 
@@ -380,10 +380,22 @@ export const useImportReview = ({
     clearContactImportRequest({ storageKey: outcome.value.request.storageKey });
     setResults(
       outcome.value.data.results.map((result) => {
-        const rowNumber = validRows.at(result.index)?.rowNumber ?? result.index;
+        const row = validRows.at(result.index);
+        const rowNumber = row?.rowNumber ?? result.index;
+        const displayName = row?.candidate.displayName ?? "";
         return result.status === "created"
-          ? { rowNumber, status: "created" }
-          : { rowNumber, status: "skipped", reason: result.reason };
+          ? {
+              rowNumber,
+              displayName,
+              status: "created",
+              contactId: result.contactId,
+            }
+          : {
+              rowNumber,
+              displayName,
+              status: "skipped",
+              reason: result.reason,
+            };
       }),
     );
     setRows([]);
@@ -650,22 +662,38 @@ export const ImportResultsList = ({
   const t = useTranslations();
   const format = useFormatter();
 
+  // Each line names the contact; a created one links to its page so the
+  // receipt is a way into the imported data, not just a tally.
   return (
     <ul className="flex flex-col gap-1.5 text-sm">
       {results.map((result) => (
         <li className="flex items-center gap-1.5" key={result.rowNumber}>
           {result.status === "created" ? (
-            <CheckIcon className="text-success size-4" />
-          ) : (
-            <AlertTriangleIcon className="text-destructive size-4" />
-          )}
-          {t("contacts.import.rowLabel", {
-            index: format.number(result.rowNumber),
-          })}
-          {result.status === "skipped" && (
             <>
-              {" — "}
-              {t(IMPORT_SKIP_REASON_LABELS[result.reason])}
+              <CheckIcon className="text-success size-4 shrink-0" />
+              <Link
+                className="hover:underline"
+                params={{ contactId: result.contactId }}
+                to="/contacts/$contactId"
+              >
+                {result.displayName ||
+                  t("contacts.import.rowLabel", {
+                    index: format.number(result.rowNumber),
+                  })}
+              </Link>
+            </>
+          ) : (
+            <>
+              <AlertTriangleIcon className="text-destructive size-4 shrink-0" />
+              <span>
+                {result.displayName ||
+                  t("contacts.import.rowLabel", {
+                    index: format.number(result.rowNumber),
+                  })}
+              </span>
+              <span className="text-muted-foreground">
+                {t(IMPORT_SKIP_REASON_LABELS[result.reason])}
+              </span>
             </>
           )}
         </li>
