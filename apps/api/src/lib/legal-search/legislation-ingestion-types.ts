@@ -37,6 +37,11 @@ export type LegislationStatus = "current" | "historical" | "repealed" | "draft";
 
 /** Normalized legislation document — what every source produces. */
 export type LegislationDocumentInput = {
+  /**
+   * The source row this document belongs to. Stamped by
+   * `runLegislationIngestion`, which holds it: whatever an adapter sets is
+   * overwritten, so no adapter needs to recover it from its config.
+   */
   sourceId: SafeId<"legislationSource">;
   /** Work identifier (ELI / national statute id), shared across versions. */
   eli: string;

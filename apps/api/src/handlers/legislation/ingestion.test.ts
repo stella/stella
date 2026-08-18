@@ -359,6 +359,31 @@ test("a document URL off the adapter's declared origins is never stored", async 
   ]);
 });
 
+test("a document naming a foreign source is stored under the source being run", async () => {
+  const result = await runLegislationIngestion({
+    adapter: runnerAdapter({
+      documents: [
+        {
+          ...runnerDocument("SVK/act/3", `${PUBLISHER_ORIGIN}/act/3`),
+          // What an adapter that guessed its own identity would emit.
+          sourceId,
+        },
+      ],
+      nextCursor: null,
+    }),
+    source: { id: runnerSourceId, syncCursor: null },
+    scopedDb,
+    signal: new AbortController().signal,
+  });
+  expect(result.inserted).toBe(1);
+
+  const rows = await db
+    .select({ sourceId: legislationDocuments.sourceId })
+    .from(legislationDocuments)
+    .where(eq(legislationDocuments.eli, "SVK/act/3"));
+  expect(rows).toEqual([{ sourceId: runnerSourceId }]);
+});
+
 test("a page the adapter could not fetch holds the cursor", async () => {
   const adapter = runnerAdapter({ documents: [], nextCursor: null });
   const failing: LegislationSourceAdapter = {

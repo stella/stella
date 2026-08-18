@@ -484,24 +484,33 @@ export const runLegislationIngestion = async ({
     AbortSignal.timeout(adapter.maxCycleMs ?? MAX_CYCLE_MS),
   ]);
 
+  /**
+   * The publisher pause and the request as one step, so the pause spaces this
+   * page from the previous one and the page timeout starts at the request.
+   */
+  const fetchPagePaced = async (
+    pageIndex: number,
+    pageCursor: string | null,
+  ) => {
+    if (pageIndex > 0 && adapter.minRequestIntervalMs > 0) {
+      await Bun.sleep(adapter.minRequestIntervalMs);
+    }
+    return await adapter.fetchPage(
+      pageCursor,
+      source.config ?? {},
+      AbortSignal.any([
+        cycleSignal,
+        AbortSignal.timeout(adapter.pageTimeoutMs ?? ADAPTER_TIMEOUT.PAGE),
+      ]),
+    );
+  };
+
   for (let page = 0; page < pageLimit; page += 1) {
     if (cycleSignal.aborted) {
       break;
     }
-    if (page > 0 && adapter.minRequestIntervalMs > 0) {
-      // oxlint-disable-next-line no-await-in-loop -- publisher rate limit: the pause is between one page and the next
-      await Bun.sleep(adapter.minRequestIntervalMs);
-    }
-    const pageSignal = AbortSignal.any([
-      cycleSignal,
-      AbortSignal.timeout(adapter.pageTimeoutMs ?? ADAPTER_TIMEOUT.PAGE),
-    ]);
     // oxlint-disable-next-line no-await-in-loop -- cursor pagination: each page consumes the cursor returned by the prior page
-    const pageResult = await adapter.fetchPage(
-      cursor,
-      source.config ?? {},
-      pageSignal,
-    );
+    const pageResult = await fetchPagePaced(page, cursor);
     if (Result.isError(pageResult)) {
       // Hold the cursor: the page this cursor names was never read, so
       // advancing past it would skip whatever it held, permanently.
@@ -521,7 +530,9 @@ export const runLegislationIngestion = async ({
     let sourceRawWriteFailures = 0;
     for (const document of documents) {
       const checked = restrictLegislationDocumentUrls({
-        document,
+        // The runner holds the source row, so it stamps the identity rather
+        // than making every adapter recover it from its config.
+        document: { ...document, sourceId: source.id },
         hostPolicy: adapter.outboundHostPolicy,
       });
       if (checked.type === "refused") {
