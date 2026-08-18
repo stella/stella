@@ -623,6 +623,9 @@ describe("detect-e2e-changes", () => {
       }
       const jobs = source.slice(jobsStart + "\njobs:".length);
       for (const [, jobId] of jobs.matchAll(/\n {2}([A-Za-z0-9_-]+):\n/gu)) {
+        if (jobId === undefined) {
+          continue;
+        }
         const body = jobOf(jobs, jobId);
         if (!/(?:STELLA_)?RELEASE_APP_PRIVATE_KEY/u.test(body)) {
           continue;
