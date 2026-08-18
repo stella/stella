@@ -865,6 +865,97 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     });
   });
 
+  test("keeps concurrent runs on one callbacks instance apart", async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const events: Parameters<Analytics["capture"]>[0][] = [];
+    const analytics: Analytics = {
+      capture: (event) => {
+        events.push(event);
+      },
+      flush: async () => undefined,
+      identifyOrganizationGroup: () => undefined,
+    };
+    // Template filling shares one callbacks instance across concurrent
+    // field resolutions: each run's totals and tool count must stay its own.
+    const callbacks = createTanStackAIAnalyticsCallbacks({
+      analytics,
+      feature: "templates.fill",
+      orgAIConfig: createOpenAIOrgAIConfig(),
+      traceId: "trace_shared",
+    });
+    const runA = createMiddlewareContext({ runId: "run_a" });
+    const runB = createMiddlewareContext({ runId: "run_b" });
+    const small = {
+      promptTokens: 300,
+      completionTokens: 50,
+      totalTokens: 350,
+    } satisfies TokenUsage;
+    const large = {
+      promptTokens: 30_000,
+      completionTokens: 2000,
+      totalTokens: 32_000,
+    } satisfies TokenUsage;
+    const toolCall = {
+      duration: 1,
+      ok: true,
+      result: {},
+      tool: undefined,
+      toolCall: {
+        id: "tool_1",
+        type: "function" as const,
+        function: { name: "search", arguments: "{}" },
+      },
+      toolCallId: "tool_1",
+      toolName: "search",
+    };
+
+    // Interleaved: A reports usage, B reports usage and calls two tools, A
+    // finishes, B finishes.
+    await callbacks.middleware.onUsage?.(runA, small);
+    await callbacks.middleware.onUsage?.(runB, large);
+    await callbacks.middleware.onAfterToolCall?.(runB, toolCall);
+    await callbacks.middleware.onAfterToolCall?.(runB, toolCall);
+    await callbacks.middleware.onFinish?.(runA, {
+      content: "",
+      duration: 100,
+      finishReason: "stop",
+      usage: small,
+    });
+    await callbacks.middleware.onFinish?.(runB, {
+      content: "",
+      duration: 100,
+      finishReason: "stop",
+      usage: large,
+    });
+
+    const completedProperties = () =>
+      events
+        .filter(
+          (event) =>
+            event.event === SERVER_ANALYTICS_EVENTS.aiGenerationCompleted,
+        )
+        .map((event) => event.properties);
+    expect(completedProperties()).toMatchObject([
+      { input_tokens_bucket: "0_1k", tool_count_bucket: "0" },
+      { input_tokens_bucket: "20k_plus", tool_count_bucket: "2_3" },
+    ]);
+
+    // A finished run leaves no state behind: a later run under the same id
+    // starts from zero rather than inheriting the earlier totals.
+    await callbacks.middleware.onUsage?.(runA, small);
+    await callbacks.middleware.onFinish?.(runA, {
+      content: "",
+      duration: 100,
+      finishReason: "stop",
+      usage: small,
+    });
+    expect(completedProperties().at(-1)).toMatchObject({
+      input_tokens_bucket: "0_1k",
+      tool_count_bucket: "0",
+    });
+  });
+
   test("an interrupted run still reports its generation", async () => {
     const { createTanStackAIAnalyticsCallbacks } =
       await loadTanStackAIAnalytics();

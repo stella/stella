@@ -46,6 +46,20 @@ import {
 
 type AnalyticsMetadata = Record<string, AnalyticsPrimitive>;
 
+/** What one run accumulates across its middleware hooks. */
+type RunAnalyticsState = {
+  /** Start of the current agent-loop iteration (one model call). */
+  iterationStartedAt: number;
+  toolCount: number;
+  /** Sum of every iteration's reported usage. */
+  usage: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
+  usageReported: boolean;
+};
+
 export type TanStackAIUsageMetering = {
   actionType: UsageActionType;
   /**
@@ -318,17 +332,28 @@ export const createTanStackAIAnalyticsCallbacks = ({
   const selectedModelId = config.selectedModelId;
   let modelInfo: ResolvedTanStackTextModelInfo | null | undefined;
   const startedAt = performance.now();
-  // Each agent-loop iteration is one model call: `onIteration` marks its
-  // start and `onUsage` closes it, so per-generation latency covers only
-  // that call (the run-level `duration` spans every iteration and tool).
-  let iterationStartedAt = startedAt;
-  // Token totals across every iteration that reported usage. TanStack's
-  // `onFinish` usage is the LAST iteration's only (`finishedEvent` resets per
-  // iteration), so the run-level completion event sums these instead.
-  const runUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
-  let runUsageReported = false;
+  // Per-run state, keyed by `ctx.runId`: one callbacks instance may serve
+  // several `chat()` requests (template filling shares one across up to
+  // four concurrent field resolutions), so nothing a hook accumulates may
+  // live on the closure. Entries are dropped by the terminal hooks; a run
+  // that parks at an interrupt keeps its entry for the instance's lifetime.
+  const runs = new Map<string, RunAnalyticsState>();
+  const runState = (ctx: ChatMiddlewareContext): RunAnalyticsState => {
+    const existing = runs.get(ctx.runId);
+    if (existing) {
+      return existing;
+    }
+    const now = performance.now();
+    const created: RunAnalyticsState = {
+      iterationStartedAt: now,
+      toolCount: 0,
+      usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      usageReported: false,
+    };
+    runs.set(ctx.runId, created);
+    return created;
+  };
   let hasCapturedGenerationError = false;
-  let toolCount = 0;
 
   const resolveAnalyticsModelInfo =
     (): ResolvedTanStackTextModelInfo | null => {
@@ -462,10 +487,12 @@ export const createTanStackAIAnalyticsCallbacks = ({
   // prompt and completion content never leave the service.
   const captureGeneration = ({
     ctx,
+    iterationStartedAt,
     modelInfo: resolvedModelInfo,
     usage,
   }: {
     ctx: ChatMiddlewareContext;
+    iterationStartedAt: number;
     modelInfo: ResolvedTanStackTextModelInfo;
     usage: TokenUsage;
   }) => {
@@ -490,20 +517,30 @@ export const createTanStackAIAnalyticsCallbacks = ({
     captureError: captureGenerationError,
     middleware: {
       name: "stella-tanstack-analytics",
-      onIteration: () => {
-        iterationStartedAt = performance.now();
+      // Each agent-loop iteration is one model call: `onIteration` marks its
+      // start and `onUsage` closes it, so per-generation latency covers only
+      // that call (the run-level `duration` spans every iteration and tool).
+      onIteration: (ctx) => {
+        runState(ctx).iterationStartedAt = performance.now();
       },
-      onAfterToolCall: () => {
-        toolCount += 1;
+      onAfterToolCall: (ctx) => {
+        runState(ctx).toolCount += 1;
       },
-      onError: (_ctx, { duration, error }) => {
+      onAbort: (ctx) => {
+        runs.delete(ctx.runId);
+      },
+      onError: (ctx, { duration, error }) => {
+        runs.delete(ctx.runId);
         captureGenerationError(error, duration);
       },
-      onFinish: (_ctx, { duration, usage }) => {
-        // Sum of every iteration's reported usage; the hook's own `usage`
-        // (last iteration only) is the fallback for a run whose provider
-        // never reached `onUsage`.
-        const totals = runUsageReported ? runUsage : usage;
+      onFinish: (ctx, { duration, usage }) => {
+        const run = runs.get(ctx.runId);
+        runs.delete(ctx.runId);
+        // Sum of every iteration's reported usage. TanStack's `onFinish`
+        // usage is the LAST iteration's only (`finishedEvent` resets per
+        // iteration); it is the fallback for a run whose provider never
+        // reached `onUsage`.
+        const totals = run?.usageReported ? run.usage : usage;
         if (!totals) {
           return;
         }
@@ -528,68 +565,90 @@ export const createTanStackAIAnalyticsCallbacks = ({
             ...(resolvedModelInfo.region
               ? { region: resolvedModelInfo.region }
               : {}),
-            tool_count_bucket: bucketCount(toolCount),
+            tool_count_bucket: bucketCount(run?.toolCount ?? 0),
             total_tokens_bucket: bucketTokenCount(totals.totalTokens),
           },
         });
       },
-      // Framework-hook boundary (the one place try-catch is allowed): a
-      // metering fault must never propagate into the provider stream and
-      // take the process down with it. A bug here loses one metering
-      // event and reports it; it never loses the server.
+      // Framework-hook boundaries (the one place try-catch is allowed): a
+      // fault here must never propagate into the provider stream and take
+      // the process down with it, and metering and observability are
+      // isolated from each other so an analytics fault cannot drop a
+      // billable usage event. A bug loses that one event and reports it; it
+      // never loses the server.
       onUsage: (ctx, usage) => {
+        const resolvedModelInfo = resolveAnalyticsModelInfo();
+        if (!resolvedModelInfo) {
+          return;
+        }
+        const run = runState(ctx);
         try {
-          const resolvedModelInfo = resolveAnalyticsModelInfo();
-          if (!resolvedModelInfo) {
-            return;
-          }
+          run.usage.promptTokens += usage.promptTokens;
+          run.usage.completionTokens += usage.completionTokens;
+          run.usage.totalTokens += usage.totalTokens;
+          run.usageReported = true;
+        } catch (error) {
+          // The payload itself is unreadable: neither side effect can use it.
+          captureTelemetryError(error, {
+            source: "usage.tanstack_ai",
+            trace_id: config.traceId,
+          });
+          return;
+        }
 
-          runUsage.promptTokens += usage.promptTokens;
-          runUsage.completionTokens += usage.completionTokens;
-          runUsage.totalTokens += usage.totalTokens;
-          runUsageReported = true;
-          captureGeneration({ ctx, modelInfo: resolvedModelInfo, usage });
-
-          const metering = config.usageMetering;
-          if (!metering) {
-            return;
-          }
-
-          const { uncachedInputTokens, cacheReadTokens } =
-            normalizeProviderPromptTokens({
-              provider: resolvedModelInfo.provider,
-              modelId: resolvedModelInfo.modelId,
-              promptTokens: usage.promptTokens,
-              cacheReadTokens: usage.promptTokensDetails?.cachedTokens ?? 0,
-              cacheWriteTokens:
-                usage.promptTokensDetails?.cacheWriteTokens ?? 0,
+        const metering = config.usageMetering;
+        if (metering) {
+          try {
+            const { uncachedInputTokens, cacheReadTokens } =
+              normalizeProviderPromptTokens({
+                provider: resolvedModelInfo.provider,
+                modelId: resolvedModelInfo.modelId,
+                promptTokens: usage.promptTokens,
+                cacheReadTokens: usage.promptTokensDetails?.cachedTokens ?? 0,
+                cacheWriteTokens:
+                  usage.promptTokensDetails?.cacheWriteTokens ?? 0,
+              });
+            const consumption = recordTanStackConsumption({
+              cacheReadTokens,
+              completionTokens: usage.completionTokens,
+              config,
+              iteration: ctx.iteration,
+              modelInfo: resolvedModelInfo,
+              runId: ctx.runId,
+              serviceTier: usageServiceTierFromModelOptions({
+                fallback: metering.serviceTier,
+                modelOptions: ctx.modelOptions,
+              }),
+              uncachedInputTokens,
+            }).catch((error: unknown) => {
+              // A rejected deferred settles inside the stream lifecycle;
+              // capture it here so it cannot surface as an unhandled
+              // rejection there.
+              captureTelemetryError(error, {
+                organization_id: metering.organizationId,
+                source: "usage.tanstack_ai",
+                trace_id: config.traceId,
+              });
             });
-          const consumption = recordTanStackConsumption({
-            cacheReadTokens,
-            completionTokens: usage.completionTokens,
-            config,
-            iteration: ctx.iteration,
-            modelInfo: resolvedModelInfo,
-            runId: ctx.runId,
-            serviceTier: usageServiceTierFromModelOptions({
-              fallback: metering.serviceTier,
-              modelOptions: ctx.modelOptions,
-            }),
-            uncachedInputTokens,
-          }).catch((error: unknown) => {
-            // A rejected deferred settles inside the stream lifecycle;
-            // capture it here so it cannot surface as an unhandled
-            // rejection there.
+            ctx.defer(consumption);
+          } catch (error) {
             captureTelemetryError(error, {
-              organization_id: metering.organizationId,
               source: "usage.tanstack_ai",
               trace_id: config.traceId,
             });
+          }
+        }
+
+        try {
+          captureGeneration({
+            ctx,
+            iterationStartedAt: run.iterationStartedAt,
+            modelInfo: resolvedModelInfo,
+            usage,
           });
-          ctx.defer(consumption);
         } catch (error) {
           captureTelemetryError(error, {
-            source: "usage.tanstack_ai",
+            source: "analytics.tanstack_ai",
             trace_id: config.traceId,
           });
         }
