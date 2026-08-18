@@ -3,7 +3,12 @@ import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
-import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
+import type {
+  Block,
+  DocumentAst,
+  HeadingLevel,
+  Inline,
+} from "@stll/legal-ast/document-ast";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { cn } from "@stll/ui/lib/utils";
 
@@ -413,6 +418,19 @@ const EditorialSupplement = ({
   );
 };
 
+/**
+ * Class per heading depth. Total over `HeadingLevel`, so a depth the AST can
+ * carry cannot reach the reader with no styling of its own.
+ */
+const HEADING_CLASS = {
+  1: "mt-4 mb-5 text-center text-lg leading-tight font-bold tracking-widest first:mt-0",
+  2: "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-center text-[0.95rem] leading-snug font-bold tracking-wider",
+  3: "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-center text-sm leading-snug font-semibold",
+  4: "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-center text-sm leading-snug font-medium",
+  5: "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-sm leading-snug font-semibold",
+  6: "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-sm leading-snug font-medium",
+} as const satisfies Record<HeadingLevel, string>;
+
 const BlockRenderer = ({
   activeMatchIndex,
   block,
@@ -428,12 +446,7 @@ const BlockRenderer = ({
       <Tag
         className={cn(
           "scroll-mt-[var(--reader-anchor-offset)]",
-          block.level === 1 &&
-            "mt-4 mb-5 text-center text-lg leading-tight font-bold tracking-widest first:mt-0",
-          block.level === 2 &&
-            "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-center text-[0.95rem] leading-snug font-bold tracking-wider",
-          block.level === 3 &&
-            "mt-[var(--reader-section-gap-top)] mb-[var(--reader-section-gap-bottom)] text-center text-sm leading-snug font-semibold",
+          HEADING_CLASS[block.level],
         )}
         id={block.anchorId}
       >

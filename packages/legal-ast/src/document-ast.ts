@@ -16,11 +16,19 @@ export type {
   InlineText,
 } from "./inline.js";
 
+/**
+ * Heading depth, one to six.
+ *
+ * A depth a document reaches has to be expressible: a level clamped away
+ * turns a real container into a sibling of its parent.
+ */
+export type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
+
 export type HeadingBlock = {
   id: string;
   anchorId: string;
   type: "heading";
-  level: 1 | 2 | 3;
+  level: HeadingLevel;
   role?: "decision-title" | "section-heading" | undefined;
   inlines: Inline[];
   plainText: string;
@@ -102,7 +110,7 @@ const blockSchema: v.GenericSchema<Block> = v.variant("type", [
     id: v.string(),
     anchorId: v.string(),
     type: v.literal("heading"),
-    level: v.picklist([1, 2, 3]),
+    level: v.picklist([1, 2, 3, 4, 5, 6]),
     role: v.optional(v.picklist(["decision-title", "section-heading"])),
     inlines: inlineArraySchema,
     plainText: v.string(),
