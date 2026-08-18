@@ -16,7 +16,10 @@ import {
   relations,
 } from "@/api/db/schema";
 import type { SliceRetrySchedule } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
-import { runReconciliationWorkUnit } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
+import {
+  MAX_SLICE_INGEST_BUDGET,
+  runReconciliationWorkUnit,
+} from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import {
   RECONCILIATION_SETTLED_RECHECK_MS,
   SLICE_WALK_REASON,
@@ -287,12 +290,14 @@ const checkedAtBySlice = async (
 type RunUnitOptions = {
   sourceId: SafeId<"caseLawSource">;
   reconciliation?: SourceReconciliation;
+  sliceIngestBudget?: number;
   /** Shared across turns only where a test is about what a failure leaves. */
   sliceRetries?: SliceRetrySchedule;
 };
 
 const runUnitWith = async ({
   reconciliation = stubReconciliation,
+  sliceIngestBudget,
   sliceRetries = new Map(),
   sourceId,
 }: RunUnitOptions) =>
@@ -306,6 +311,7 @@ const runUnitWith = async ({
     sleep: async () => {
       await Promise.resolve();
     },
+    sliceIngestBudget,
     sliceRetries,
   });
 
@@ -401,6 +407,58 @@ test("a settled slice is touched out of the window so the one behind it is reach
     },
   });
   expect(listed.map(({ slice }) => slice)).toEqual([OWED_SLICE]);
+});
+
+test("a walk ingests no more than the unit's slice budget and defers the rest", async () => {
+  // Two listed misses, a budget of one: the walk fetches one and records the
+  // other as deferred, so the slice stays short and is selected again.
+  const sourceId = await seedSource();
+  await seedSlice({
+    sourceId,
+    slice: OWED_SLICE,
+    reported: 2,
+    collected: 0,
+    checkedAt: addUtcDays(NOW, -2),
+  });
+  for (const offset of [0, -1]) {
+    // oxlint-disable-next-line no-await-in-loop -- fixture seeding, sequential on one pglite handle
+    await seedSlice({
+      sourceId,
+      slice: day(offset),
+      reported: 0,
+      collected: 0,
+      checkedAt: NOW,
+    });
+  }
+
+  const outcome = await runUnitWith({ sourceId, sliceIngestBudget: 1 });
+
+  expect(outcome).toMatchObject({
+    type: "worked",
+    summary: { slice: OWED_SLICE, keyable: 2, parked: 1, deferred: 1 },
+  });
+  expect(builds).toHaveLength(1);
+});
+
+test("a slice budget outside 1..MAX is refused before any work", async () => {
+  const sourceId = await seedSource();
+  for (const sliceIngestBudget of [0, MAX_SLICE_INGEST_BUDGET + 1, 1.5]) {
+    // Bun's matcher type declares `.rejects.toThrow` as void; capture the
+    // rejection explicitly so type-aware lint and the runtime agree.
+    // oxlint-disable-next-line no-await-in-loop -- each refusal is asserted in turn
+    const rejection: unknown = await runUnitWith({
+      sourceId,
+      sliceIngestBudget,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(rejection).toBeInstanceOf(Error);
+    expect(rejection).toMatchObject({
+      message: expect.stringContaining("slice ingest budget"),
+    });
+  }
+  expect(listed).toHaveLength(0);
 });
 
 test("a slice the publisher will not serve parks its items rather than storing them", async () => {
