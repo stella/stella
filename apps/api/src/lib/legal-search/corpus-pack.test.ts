@@ -138,6 +138,26 @@ describe("corpus pack round-trip", () => {
     }
     expect(captured).toBeInstanceOf(Error);
   });
+
+  test("a zero-byte member is refused before any entry is generated", async () => {
+    // A zero-length range has no address a range read can express, so an
+    // encoder that accepted it would hand out an unreadable location.
+    const first = members.at(0);
+    if (first === undefined) {
+      throw new Error("fixture has no members");
+    }
+    const captured: unknown = await encodePack({
+      packKey: PACK_KEY,
+      members: [first, { ...first, kind: "ast", bytes: new Uint8Array() }],
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(captured).toBeInstanceOf(Error);
+    expect(captured).toMatchObject({
+      message: expect.stringContaining("carries no bytes"),
+    });
+  });
 });
 
 describe("decodePackFooter refuses malformed packs", () => {
@@ -254,6 +274,64 @@ describe("decodePackFooter refuses malformed packs", () => {
 
   test("a buffer shorter than the trailer", async () => {
     expect(await rejection(new Uint8Array(3))).toBeInstanceOf(CorpusPackError);
+  });
+
+  test("a buffer shorter than the trailer that still ends with the magic", async () => {
+    // 8 to 15 bytes: long enough to carry the magic, too short for the
+    // footer length field in front of it. Every length in the window must
+    // fail with the decoder's error, not a raw buffer-range error.
+    const magic = new TextEncoder().encode(PACK_MAGIC);
+    const window = Array.from(
+      { length: 16 - magic.byteLength },
+      (_, index) => magic.byteLength + index,
+    );
+    const errors = await Promise.all(
+      window.map(async (length) => {
+        const bytes = new Uint8Array(length);
+        bytes.set(magic, length - magic.byteLength);
+        return await rejection(bytes);
+      }),
+    );
+
+    expect(errors).toHaveLength(8);
+    for (const error of errors) {
+      expect(error).toBeInstanceOf(CorpusPackError);
+      expect(error).toMatchObject({
+        message: expect.stringContaining("shorter than"),
+      });
+    }
+  });
+
+  test("a footer member of zero length", async () => {
+    const footer = zstdCompress(
+      JSON.stringify({
+        version: PACK_FORMAT_VERSION,
+        members: [
+          {
+            offset: 0,
+            length: 0,
+            kind: "text",
+            documentId: "d",
+            contentHash: "h",
+            sha256: "0".repeat(64),
+          },
+        ],
+      }),
+    );
+    const bytes = new Uint8Array(footer.byteLength + 16);
+    bytes.set(footer, 0);
+    new DataView(bytes.buffer, footer.byteLength, 8).setBigUint64(
+      0,
+      BigInt(footer.byteLength),
+      true,
+    );
+    bytes.set(new TextEncoder().encode(PACK_MAGIC), footer.byteLength + 8);
+
+    const error = await rejection(bytes);
+    expect(error).toBeInstanceOf(CorpusPackError);
+    expect(error).toMatchObject({
+      message: expect.stringContaining("malformed"),
+    });
   });
 });
 

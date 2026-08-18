@@ -1,11 +1,41 @@
 import { describe, expect, test } from "bun:test";
+import { randomFillSync } from "node:crypto";
 
 import {
   PayloadBudgetError,
   zstdCompress,
   zstdCompressAsync,
+  zstdCompressBound,
   zstdDecompressToStringBounded,
 } from "@/api/lib/compression";
+
+describe("zstdCompressBound", () => {
+  test("bounds the frame of incompressible input at every block regime", () => {
+    // Random bytes do not compress, so the frame carries the input plus
+    // frame and block overhead: larger than the input, never past the bound.
+    // Sizes straddle the 128 KiB point where zstd's own margin changes.
+    for (const size of [1, 17, 4096, 131_071, 131_072, 262_144, 1_000_003]) {
+      const input = new Uint8Array(size);
+      randomFillSync(input);
+      const frame = zstdCompress(input);
+      expect(frame.byteLength).toBeGreaterThan(size);
+      expect(frame.byteLength).toBeLessThanOrEqual(zstdCompressBound(size));
+    }
+    expect(zstdCompress(new Uint8Array()).byteLength).toBeLessThanOrEqual(
+      zstdCompressBound(0),
+    );
+  });
+
+  test("is monotonic and never below its input", () => {
+    let previous = zstdCompressBound(0);
+    for (let size = 1; size <= 4096; size += 1) {
+      const bound = zstdCompressBound(size);
+      expect(bound).toBeGreaterThan(size);
+      expect(bound).toBeGreaterThanOrEqual(previous);
+      previous = bound;
+    }
+  });
+});
 
 describe("bounded corpus compression", () => {
   test("async round-trip preserves the payload", async () => {

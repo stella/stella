@@ -11,6 +11,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import {
   PayloadBudgetError,
   zstdCompressAsync,
+  zstdCompressBound,
   zstdDecompressToStringBounded,
 } from "@/api/lib/compression";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
@@ -57,9 +58,14 @@ const CORPUS_IO_TIMEOUT_MS = LIMITS.corpusObjectIoTimeoutMs;
 
 const PAYLOAD_MAX_BYTES = LIMITS.corpusPayloadMaxDecompressedBytes;
 
-// A zstd frame is at most a few bytes larger than what it decodes to, so
-// the decompressed ceiling also bounds the transfer.
-const TRANSFER_MAX_BYTES = PAYLOAD_MAX_BYTES;
+/**
+ * Ceiling on the transferred (still-compressed) bytes of one payload. A
+ * zstd frame can exceed what it decodes to by frame and block overhead, so
+ * a frame whose output sits at the decompressed ceiling must still fit the
+ * transfer; the bound is zstd's worst case over that ceiling. Both the
+ * whole-object read and the packed range read are checked against it.
+ */
+export const CORPUS_TRANSFER_MAX_BYTES = zstdCompressBound(PAYLOAD_MAX_BYTES);
 
 const persistedCorpusAstSchema = v.nullable(
   v.union([persistedDocumentAstSchema, emptyAstSchema]),
@@ -608,37 +614,47 @@ export const readCorpusBytesAt = async ({
   }
 };
 
-const readStoredCorpusBytes = async (
-  storedKey: string,
-  signal: AbortSignal,
-): Promise<Uint8Array> =>
+/** Test seams for the two byte sources; production reads through the corpus bucket client. */
+type CorpusByteSourceSeams = {
+  readObject?: BoundedObjectReader;
+  readRange?: RangeReader;
+};
+
+type ReadStoredCorpusBytesOptions = CorpusByteSourceSeams & {
+  storedKey: string;
+  signal: AbortSignal;
+};
+
+const readStoredCorpusBytes = async ({
+  storedKey,
+  signal,
+  ...seams
+}: ReadStoredCorpusBytesOptions): Promise<Uint8Array> =>
   await readCorpusBytesAt({
     location: parseCorpusLocation(storedKey),
-    maxBytes: TRANSFER_MAX_BYTES,
+    maxBytes: CORPUS_TRANSFER_MAX_BYTES,
     signal,
+    ...seams,
   });
 
-type ReadCorpusTextOptions = {
-  /**
-   * Override the bounded corpus GET. Defaults to the corpus bucket read; a
-   * caller (or a test proving the ceiling fires) can supply a different byte
-   * source without bypassing the wall-clock bound.
-   */
-  read?: () => Promise<Uint8Array>;
+type ReadCorpusTextOptions = CorpusByteSourceSeams & {
   timeoutMs?: number;
 };
 
 /**
  * Every reader takes the row's key column as stored: a plain object key or a
- * packed address (see {@link parseCorpusLocation}).
+ * packed address (see {@link parseCorpusLocation}). The seams replace only
+ * the byte source behind that routing, never the routing or the wall-clock
+ * bound.
  */
 export const readCorpusText = async (
   storedKey: string,
-  { read, timeoutMs = CORPUS_IO_TIMEOUT_MS }: ReadCorpusTextOptions = {},
+  { timeoutMs = CORPUS_IO_TIMEOUT_MS, ...seams }: ReadCorpusTextOptions = {},
 ): Promise<string> => {
   const bytes = await boundedCorpusIo(
     "corpus-read-text",
-    read ?? (async (signal) => await readStoredCorpusBytes(storedKey, signal)),
+    async (signal) =>
+      await readStoredCorpusBytes({ storedKey, signal, ...seams }),
     { timeoutMs },
   );
   return await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES);
@@ -649,7 +665,7 @@ export const readCorpusSections = async (
 ): Promise<DecisionSection[] | null> => {
   const bytes = await boundedCorpusIo(
     "corpus-read-sections",
-    async (signal) => await readStoredCorpusBytes(storedKey, signal),
+    async (signal) => await readStoredCorpusBytes({ storedKey, signal }),
   );
   const parsed: unknown = JSON.parse(
     await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES),
@@ -662,7 +678,7 @@ export const readCorpusAst = async (
 ): Promise<DocumentAst | EmptyAst | null> => {
   const bytes = await boundedCorpusIo(
     "corpus-read-ast",
-    async (signal) => await readStoredCorpusBytes(storedKey, signal),
+    async (signal) => await readStoredCorpusBytes({ storedKey, signal }),
   );
   const parsed: unknown = JSON.parse(
     await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES),

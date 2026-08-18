@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { randomFillSync } from "node:crypto";
 
 import { CASE_LAW_CORPUS_MIRROR_STATUS } from "@/api/db/schema";
-import { PayloadBudgetError, zstdCompress } from "@/api/lib/compression";
+import {
+  PayloadBudgetError,
+  zstdCompress,
+  zstdCompressBound,
+} from "@/api/lib/compression";
 import { CORPUS_STORAGE_MODES } from "@/api/lib/corpus-storage-mode";
 import {
   CorpusPayloadUnavailableError,
@@ -17,6 +22,7 @@ import {
   corpusKeys,
   corpusMirrorColumns,
   corpusPayloadDisposition,
+  CORPUS_TRANSFER_MAX_BYTES,
   deleteCorpusDocument,
   EMPTY_CORPUS_CONTENT_HASHES,
   parsePersistedCorpusAst,
@@ -33,6 +39,7 @@ import type {
   WriteCorpusResult,
 } from "@/api/lib/legal-search/corpus-storage";
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
+import { LIMITS } from "@/api/lib/limits";
 
 describe("corpus mirror state columns", () => {
   test("partition pending and settled pointer states", () => {
@@ -127,7 +134,7 @@ describe("readCorpusText bounded corpus read", () => {
         // Intentionally never calls resolve/reject.
       });
       await readCorpusText("legal-corpus/never/text.zst", {
-        read: async () => await neverSettles,
+        readObject: async () => await neverSettles,
         timeoutMs: 25,
       });
     } catch (error) {
@@ -139,12 +146,39 @@ describe("readCorpusText bounded corpus read", () => {
   });
 
   test("returns the decompressed text when the read settles in time", async () => {
+    const seen: { key: string; maxBytes: number }[] = [];
     const text = await readCorpusText("legal-corpus/ok/text.zst", {
-      read: async () => zstdCompress("hello corpus"),
+      readObject: async ({ key, maxBytes }) => {
+        seen.push({ key, maxBytes });
+        return await Promise.resolve(zstdCompress("hello corpus"));
+      },
       timeoutMs: 1000,
     });
 
     expect(text).toBe("hello corpus");
+    expect(seen).toEqual([
+      { key: "legal-corpus/ok/text.zst", maxBytes: CORPUS_TRANSFER_MAX_BYTES },
+    ]);
+  });
+
+  test("the transfer ceiling admits a frame at zstd's bound over the decompressed ceiling", () => {
+    // Incompressible input yields a frame larger than the input; the
+    // transfer ceiling must therefore sit above the decompressed one by at
+    // least that overhead, or a valid payload at the decompressed ceiling
+    // could be refused before decoding.
+    const random = new Uint8Array(4096);
+    randomFillSync(random);
+    const frame = zstdCompress(random);
+    expect(frame.byteLength).toBeGreaterThan(random.byteLength);
+    expect(frame.byteLength).toBeLessThanOrEqual(
+      zstdCompressBound(random.byteLength),
+    );
+    expect(CORPUS_TRANSFER_MAX_BYTES).toBe(
+      zstdCompressBound(LIMITS.corpusPayloadMaxDecompressedBytes),
+    );
+    expect(CORPUS_TRANSFER_MAX_BYTES).toBeGreaterThan(
+      LIMITS.corpusPayloadMaxDecompressedBytes,
+    );
   });
 });
 
@@ -513,12 +547,64 @@ describe("readCorpusBytesAt", () => {
     });
     expect(parseCorpusLocation(address)).toMatchObject({ type: "packed" });
 
+    // Only the byte sources are stubbed; the stored value still travels
+    // through the reader's own parsing and routing, so the range reader is
+    // what must serve it, with the offset and length the address carries.
+    const seen: { key: string; offset: number; length: number }[] = [];
     const text = await readCorpusText(address, {
-      read: async () => await Promise.resolve(member),
+      readObject: neverObject,
+      readRange: async ({ key, offset, length }) => {
+        seen.push({ key, offset, length });
+        return await Promise.resolve(member);
+      },
       timeoutMs: 1000,
     });
 
     expect(text).toBe("packed corpus text");
+    expect(seen).toEqual([
+      { key: packKey, offset: 3, length: member.byteLength },
+    ]);
+  });
+
+  test("the packed length check and the object ceiling share the transfer bound", async () => {
+    const seen: number[] = [];
+    await readCorpusText("legal-corpus/x/text.zst", {
+      readObject: async ({ maxBytes }) => {
+        seen.push(maxBytes);
+        return await Promise.resolve(zstdCompress("x"));
+      },
+      timeoutMs: 1000,
+    });
+    const atBound = formatCorpusLocation({
+      type: "packed",
+      packKey,
+      offset: 0,
+      length: CORPUS_TRANSFER_MAX_BYTES,
+    });
+    const pastBound = formatCorpusLocation({
+      type: "packed",
+      packKey,
+      offset: 0,
+      length: CORPUS_TRANSFER_MAX_BYTES + 1,
+    });
+    const rangeReads: number[] = [];
+    const readRange = async ({ length }: { length: number }) => {
+      rangeReads.push(length);
+      return await Promise.resolve(zstdCompress("x"));
+    };
+
+    await readCorpusText(atBound, { readObject: neverObject, readRange });
+    const rejection: unknown = await readCorpusText(pastBound, {
+      readObject: neverObject,
+      readRange,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(seen).toEqual([CORPUS_TRANSFER_MAX_BYTES]);
+    expect(rangeReads).toEqual([CORPUS_TRANSFER_MAX_BYTES]);
+    expect(rejection).toBeInstanceOf(PayloadBudgetError);
   });
 });
 

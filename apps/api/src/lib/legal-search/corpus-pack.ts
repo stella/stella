@@ -50,7 +50,8 @@ export class CorpusPackError extends TaggedError("CorpusPackError")<{
 
 const packMemberSchema = v.object({
   offset: v.pipe(v.number(), v.safeInteger(), v.minValue(0)),
-  length: v.pipe(v.number(), v.safeInteger(), v.minValue(0)),
+  // A member is a zstd frame, which is never empty; see encodePack.
+  length: v.pipe(v.number(), v.safeInteger(), v.minValue(1)),
   kind: v.picklist(PACK_MEMBER_KINDS),
   documentId: v.string(),
   contentHash: v.string(),
@@ -108,6 +109,14 @@ export const encodePack = async ({
   const entries: PackedEntry[] = [];
   let offset = 0;
   for (const { kind, documentId, contentHash, bytes } of members) {
+    // A zstd frame is never empty, and a zero-length range has no address
+    // a range read can express, so an empty member is refused before any
+    // entry is generated for it.
+    if (bytes.byteLength === 0) {
+      return panic(
+        `Corpus pack member ${kind} for ${documentId} carries no bytes`,
+      );
+    }
     const member = {
       offset,
       length: bytes.byteLength,
@@ -153,19 +162,26 @@ export const encodePack = async ({
 };
 
 const magicMatches = (bytes: Uint8Array): boolean =>
-  bytes.byteLength >= MAGIC_LENGTH &&
   PACK_MAGIC_BYTES.every(
     (byte, index) => bytes[bytes.byteLength - MAGIC_LENGTH + index] === byte,
   );
 
 /**
  * Decode a whole pack's footer, refusing anything that does not read as a
- * version-1 pack: wrong magic, a footer length that does not fit inside the
- * object, or a member that points outside the payload region.
+ * version-1 pack: an object shorter than the trailer, wrong magic, a footer
+ * length that does not fit inside the object, or a member that points
+ * outside the payload region. Every refusal is a {@link CorpusPackError}.
  */
 export const decodePackFooter = async (
   bytes: Uint8Array,
 ): Promise<PackFooter> => {
+  // The trailer (footer length + magic) is read as a whole; checking the
+  // full length first keeps the magic and length reads inside the buffer.
+  if (bytes.byteLength < TRAILER_LENGTH) {
+    throw new CorpusPackError({
+      message: `Corpus pack of ${bytes.byteLength} bytes is shorter than the ${TRAILER_LENGTH}-byte trailer`,
+    });
+  }
   if (!magicMatches(bytes)) {
     throw new CorpusPackError({
       message: "Corpus pack does not end with the pack magic",
