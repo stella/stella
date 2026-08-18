@@ -19,6 +19,10 @@ const sharedSearchProviderSource = new URL(
   "../../lib/legal-search/corpus-index-provider.ts",
   import.meta.url,
 );
+const caseLawCorpusProjectionSource = new URL(
+  "../../lib/legal-search/case-law-corpus-projection.ts",
+  import.meta.url,
+);
 const generationMigrationSource = new URL(
   "../../../drizzle/20260731170000_case_law_corpus_generation_backfill/migration.sql",
   import.meta.url,
@@ -510,6 +514,43 @@ test("every case-law corpus query is assembled by the shared builder", async () 
     // the expander made reachable.
     expect(source).not.toMatch(/"\s+OR\s+"/u);
   }
+});
+
+// The physical index id has one SQL derivation, `caseLawIndexIdSql`, and its
+// migration twin `case_law_corpus_index_id`. A hand-written concatenation in
+// a query or the trigger would be a second answer to which index a decision
+// belongs to, and from generation 3 on a wrong one.
+test("no case-law SQL derives the physical index id by hand", async () => {
+  const consumers = await Promise.all(
+    [caseLawCorpusIndexSource, caseLawCorpusProjectionSource].map(
+      async (source) => await Bun.file(source).text(),
+    ),
+  );
+  for (const source of consumers) {
+    expect(source).not.toMatch(/\|\|\s*'_'\s*\|\|/u);
+  }
+  const triggerMigrations = readdirSync(DRIZZLE_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => nodePath.join(DRIZZLE_DIR, entry.name, "migration.sql"))
+    .filter((file) => existsSync(file))
+    .sort()
+    .filter((file) =>
+      readFileSync(file, "utf-8").includes(
+        "CREATE OR REPLACE FUNCTION enqueue_case_law_corpus_index_projection()",
+      ),
+    );
+  const latestTrigger = triggerMigrations.at(-1);
+  if (latestTrigger === undefined) {
+    throw new Error("no migration defines the projection trigger");
+  }
+  const trigger = readFileSync(latestTrigger, "utf-8");
+  expect(trigger).toContain(
+    "NEW.indexed_generation =\n          case_law_corpus_index_id(projection.generation, NEW.country)",
+  );
+  expect(trigger).toContain(
+    "ARRAY[case_law_corpus_index_id(checkpoint.generation, NEW.country)]",
+  );
+  expect(trigger).not.toContain("|| '_' || lower(NEW.country)");
 });
 
 test("every case-law corpus search boundary uses generation projection state", async () => {

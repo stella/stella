@@ -39,8 +39,7 @@ import {
 import { resolveExpandedCorpusQuery } from "@/api/lib/legal-search/expansion";
 import { loadFtsSearchConfigs } from "@/api/lib/legal-search/fts-config";
 import {
-  corpusIndexId,
-  corpusIndexPattern,
+  corpusIndexRoute,
   isCorpusIndexJurisdiction,
 } from "@/api/lib/legal-search/index-naming";
 import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
@@ -438,6 +437,7 @@ const searchPostgresDecisions = async (
 // expander is resolved from it here rather than inside the query builder.
 const buildCorpusIndexQuery = (
   body: SearchDecisionsBody,
+  jurisdictionClause: string | undefined,
   expand?: CorpusTermExpander,
 ): string | null =>
   caseLawCorpusQuery(
@@ -447,6 +447,7 @@ const buildCorpusIndexQuery = (
       dateFrom: body.dateFrom,
       dateTo: body.dateTo,
       documentType: body.decisionType,
+      jurisdiction: jurisdictionClause,
       language: body.language,
       source: body.sourceId,
     },
@@ -456,9 +457,10 @@ const buildCorpusIndexQuery = (
 /** Mode, dictionary, and shadow accounting are the shared resolver's. */
 const resolveCorpusIndexQuery = async (
   body: SearchDecisionsBody,
+  jurisdictionClause: string | undefined,
 ): Promise<string | null> =>
   await resolveExpandedCorpusQuery({
-    build: (expand) => buildCorpusIndexQuery(body, expand),
+    build: (expand) => buildCorpusIndexQuery(body, jurisdictionClause, expand),
     jurisdiction: body.country,
     mode: envBase.QUERY_EXPANSION_MODE,
     text: body.query,
@@ -494,11 +496,14 @@ const searchCorpusIndexDecisions = async (
   }
 
   const generation = corpusGeneration("case_law");
-  const indexId = body.country
-    ? corpusIndexId(generation, body.country)
-    : corpusIndexPattern(generation);
+  // Scoped query → that country's index, plus a jurisdiction clause when that
+  // index holds other countries; unscoped → the generation glob.
+  const { indexId, jurisdictionClause } = corpusIndexRoute(
+    generation,
+    body.country,
+  );
 
-  const query = await resolveCorpusIndexQuery(body);
+  const query = await resolveCorpusIndexQuery(body, jurisdictionClause);
   if (query === null) {
     return { hits: [], facets: null, totalCount: null, nextCursor: null };
   }

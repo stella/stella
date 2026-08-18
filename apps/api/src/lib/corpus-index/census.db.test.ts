@@ -1,6 +1,7 @@
 /**
- * The repair behind a census drift warning: un-mark a jurisdiction so
- * the ordinary backfill re-selects it.
+ * The repair behind a census drift warning: un-mark an index so the
+ * ordinary backfill re-selects it. Under this generation every index is
+ * one jurisdiction's, so the two are named interchangeably below.
  *
  * Four things can go wrong, and all of them are SQL. It can miss the
  * rows the census counted — a generation rebuild records success in the
@@ -27,7 +28,7 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
-import { clearJurisdictionIndexMarks } from "@/api/lib/corpus-index/census";
+import { clearIndexMarks } from "@/api/lib/corpus-index/census";
 import {
   caseLawCorpusProjectionJoin,
   currentCaseLawCorpusProjection,
@@ -167,10 +168,10 @@ test("the repair reaches rows marked only through the generation projection", as
     DECISIONS_PER_JURISDICTION,
   );
 
-  const cleared = await clearJurisdictionIndexMarks({
+  const cleared = await clearIndexMarks({
     scopedDb,
     generation: GENERATION,
-    jurisdiction: SHORT_JURISDICTION,
+    indexId: corpusIndexId(GENERATION, SHORT_JURISDICTION),
     limit: SLICE,
   });
 
@@ -186,10 +187,10 @@ test("the repair reaches rows marked only through the generation projection", as
 });
 
 test("re-running walks the jurisdiction instead of re-clearing the first page", async () => {
-  const cleared = await clearJurisdictionIndexMarks({
+  const cleared = await clearIndexMarks({
     scopedDb,
     generation: GENERATION,
-    jurisdiction: SHORT_JURISDICTION,
+    indexId: corpusIndexId(GENERATION, SHORT_JURISDICTION),
     limit: SLICE,
   });
 
@@ -198,10 +199,10 @@ test("re-running walks the jurisdiction instead of re-clearing the first page", 
   expect(cleared).toBe(DECISIONS_PER_JURISDICTION - SLICE);
   expect(await currentRows(SHORT_JURISDICTION)).toHaveLength(0);
 
-  const exhausted = await clearJurisdictionIndexMarks({
+  const exhausted = await clearIndexMarks({
     scopedDb,
     generation: GENERATION,
-    jurisdiction: SHORT_JURISDICTION,
+    indexId: corpusIndexId(GENERATION, SHORT_JURISDICTION),
     limit: SLICE,
   });
   expect(exhausted).toBe(0);

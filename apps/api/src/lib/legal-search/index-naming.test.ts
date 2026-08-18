@@ -4,19 +4,83 @@ import fc from "fast-check";
 import { propertyConfig } from "@stll/property-testing";
 
 import {
+  CASE_LAW_INDEX_GROUPS,
+  CASE_LAW_INDEX_GROUPING_FROM_GENERATION,
+} from "@/api/lib/legal-search/case-law-index-groups";
+import {
   CORPUS_INDEX_GENERATION_MAX_LENGTH,
   CORPUS_INDEX_ID_MAX_LENGTH,
   caseLawCorpusGenerationOrder,
   corpusIndexGeneration,
   corpusIndexId,
+  corpusIndexIdsFor,
   corpusIndexPattern,
+  corpusIndexRoute,
   isCaseLawCorpusGeneration,
   tryCorpusIndexGeneration,
 } from "@/api/lib/legal-search/index-naming";
 
 test("index id is the generation prefix + lowercased jurisdiction", () => {
   expect(corpusIndexId("case_law_v1", "SVK")).toBe("case_law_v1_svk");
+  expect(corpusIndexId("case_law_v2", "CZE")).toBe("case_law_v2_cze");
   expect(corpusIndexId("legislation_v1", "cze")).toBe("legislation_v1_cze");
+});
+
+test("case-law ids are per index group from the grouping generation on", () => {
+  expect(CASE_LAW_INDEX_GROUPING_FROM_GENERATION).toBe(3);
+  for (const [group, countries] of Object.entries(CASE_LAW_INDEX_GROUPS)) {
+    for (const country of countries) {
+      expect(corpusIndexId("case_law_v3", country)).toBe(
+        `case_law_v3_${group}`,
+      );
+      expect(corpusIndexId("case_law_v12", country.toLowerCase())).toBe(
+        `case_law_v12_${group}`,
+      );
+      // Grouping is a rule about the case-law family's generations only.
+      expect(corpusIndexId("case_law_v2", country)).toBe(
+        `case_law_v2_${country.toLowerCase()}`,
+      );
+      expect(corpusIndexId("legislation_v3", country)).toBe(
+        `legislation_v3_${country.toLowerCase()}`,
+      );
+    }
+  }
+  // A country outside every group is its own group.
+  expect(corpusIndexId("case_law_v3", "HUN")).toBe("case_law_v3_hun");
+});
+
+test("distinct physical ids for a jurisdiction list", () => {
+  expect(corpusIndexIdsFor("case_law_v3", ["CZE", "POL", "SVK"])).toEqual([
+    "case_law_v3_cs_sk",
+    "case_law_v3_pl",
+  ]);
+  expect(corpusIndexIdsFor("case_law_v2", ["CZE", "POL", "SVK"])).toEqual([
+    "case_law_v2_cze",
+    "case_law_v2_pol",
+    "case_law_v2_svk",
+  ]);
+});
+
+test("a scoped query names its index, and a clause only where the index is shared", () => {
+  // Shared index: the clause keeps the query to the scoped jurisdiction.
+  expect(corpusIndexRoute("case_law_v3", "CZE")).toEqual({
+    indexId: "case_law_v3_cs_sk",
+    jurisdictionClause: "CZE",
+  });
+  // A single-country group is bounded by its index alone.
+  expect(corpusIndexRoute("case_law_v3", "POL")).toEqual({
+    indexId: "case_law_v3_pl",
+    jurisdictionClause: undefined,
+  });
+  // Before grouping every index is one jurisdiction's.
+  expect(corpusIndexRoute("case_law_v2", "CZE")).toEqual({
+    indexId: "case_law_v2_cze",
+    jurisdictionClause: undefined,
+  });
+  expect(corpusIndexRoute("case_law_v3", undefined)).toEqual({
+    indexId: "case_law_v3_*",
+    jurisdictionClause: undefined,
+  });
 });
 
 test("pattern globs all jurisdiction indexes for a generation", () => {
@@ -100,4 +164,13 @@ test("rejects malformed physical index ids", () => {
   );
   expect(tryCorpusIndexGeneration("case_law_v1")).toBeNull();
   expect(tryCorpusIndexGeneration("case_law_v1_svk")).toBe("case_law_v1");
+});
+
+test("generation extraction reads a group suffix that contains the separator", () => {
+  for (const generation of ["case_law_v3", "case_law_v12"]) {
+    for (const group of Object.keys(CASE_LAW_INDEX_GROUPS)) {
+      expect(corpusIndexGeneration(`${generation}_${group}`)).toBe(generation);
+    }
+    expect(corpusIndexGeneration(`${generation}_hun`)).toBe(generation);
+  }
 });

@@ -4,10 +4,7 @@ import { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import { quoteCorpusValue } from "@/api/lib/legal-search/corpus-query";
-import {
-  corpusIndexId,
-  corpusIndexPattern,
-} from "@/api/lib/legal-search/index-naming";
+import { corpusIndexRoute } from "@/api/lib/legal-search/index-naming";
 import type {
   LegalBrowseFacets,
   LegalBrowseFacetsQuery,
@@ -43,20 +40,34 @@ import { isRecord } from "@/api/lib/type-guards";
 
 const OPENING_PASSAGE_QUERY = "seq:0";
 
+type BrowseFacetsQueryOptions = {
+  excludedSourceIds: readonly string[];
+  /** Set when the selected index holds other jurisdictions too. */
+  jurisdictionClause: string | undefined;
+};
+
 /**
- * Opening passages, minus every source that may no longer be redistributed.
- * An aggregation that dropped this clause would keep counting revoked
- * decisions for a reconciliation window plus a cache window, so the test
- * asserts it on the request the engine would receive.
+ * Opening passages, minus every source that may no longer be redistributed,
+ * within the scoped jurisdiction where its index is shared. An aggregation
+ * that dropped the source clause would keep counting revoked decisions for a
+ * reconciliation window plus a cache window, so the test asserts it on the
+ * request the engine would receive.
  */
-const browseFacetsQuery = (excludedSourceIds: readonly string[]): string => {
-  if (excludedSourceIds.length === 0) {
-    return OPENING_PASSAGE_QUERY;
+const browseFacetsQuery = ({
+  excludedSourceIds,
+  jurisdictionClause,
+}: BrowseFacetsQueryOptions): string => {
+  const clauses = [OPENING_PASSAGE_QUERY];
+  if (jurisdictionClause !== undefined) {
+    clauses.push(`jurisdiction:${quoteCorpusValue(jurisdictionClause)}`);
   }
-  const excluded = excludedSourceIds
-    .map((id) => `source:${quoteCorpusValue(id)}`)
-    .join(" OR ");
-  return `${OPENING_PASSAGE_QUERY} AND NOT (${excluded})`;
+  if (excludedSourceIds.length > 0) {
+    const excluded = excludedSourceIds
+      .map((id) => `source:${quoteCorpusValue(id)}`)
+      .join(" OR ");
+    clauses.push(`NOT (${excluded})`);
+  }
+  return clauses.join(" AND ");
 };
 
 /**
@@ -151,15 +162,20 @@ export const corpusIndexBrowseFacets = async (
   query: LegalBrowseFacetsQuery,
 ): Promise<Result<LegalBrowseFacets, LegalBrowseFacetsError>> => {
   const generation = corpusGeneration(query.documentFamily ?? "case_law");
-  // Scoped query → that jurisdiction's index; unscoped → the generation glob
-  // (one multi-index aggregation across every jurisdiction).
-  const indexId = query.jurisdiction
-    ? corpusIndexId(generation, query.jurisdiction)
-    : corpusIndexPattern(generation);
+  // Scoped query → that jurisdiction's index, plus a jurisdiction clause when
+  // that index holds other jurisdictions; unscoped → the generation glob (one
+  // multi-index aggregation across every index of the generation).
+  const { indexId, jurisdictionClause } = corpusIndexRoute(
+    generation,
+    query.jurisdiction,
+  );
 
   const aggregated = await getCorpusIndexClient().aggregate({
     indexId,
-    query: browseFacetsQuery(query.excludedSourceIds),
+    query: browseFacetsQuery({
+      excludedSourceIds: query.excludedSourceIds,
+      jurisdictionClause,
+    }),
     aggs: buildAggregations(query.limit),
   });
   if (Result.isError(aggregated)) {

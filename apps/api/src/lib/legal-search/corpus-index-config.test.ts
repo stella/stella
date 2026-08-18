@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 
+import { CASE_LAW_INDEX_GROUPS } from "@/api/lib/legal-search/case-law-index-groups";
 import {
   caseLawIndexConfig,
   corpusIndexConfig,
@@ -9,6 +10,7 @@ import {
 import {
   CASE_LAW_JURISDICTIONS,
   type CaseLawJurisdiction,
+  isCaseLawJurisdiction,
 } from "@/api/lib/legal-search/ingestion-constants";
 
 test("searchable text fields enable fieldnorms so BM25 scoring works", () => {
@@ -110,12 +112,24 @@ const COURT_DOMAIN_BOUND = {
 // is the one tag field whose domain is neither a short closed list
 // (document_type, status) nor an operator-curated catalogue (source,
 // jurisdiction), so it is the one that has to be argued.
-test("court stays a viable tag field in every jurisdiction's index", () => {
-  // Indexes are per generation and jurisdiction, so a split holds one
-  // country's courts. A bound at half the limit leaves room for court renames
-  // and reorganizations, which add values without retiring the old ones.
+test("court stays a viable tag field in every index", () => {
+  // Indexes are per generation and jurisdiction up to generation 2, and per
+  // index group from generation 3 on, so a split holds the courts of one
+  // group's countries. A bound at half the limit leaves room for court
+  // renames and reorganizations, which add values without retiring the old
+  // ones. Summing per group is what makes adding a country to a group a
+  // decision about the group's court domain rather than a silent inheritance.
   for (const bound of Object.values(COURT_DOMAIN_BOUND)) {
     expect(bound).toBeLessThan(TAG_FIELD_VALUE_LIMIT / 2);
+  }
+  for (const [group, countries] of Object.entries(CASE_LAW_INDEX_GROUPS)) {
+    const groupBound = countries
+      .filter(isCaseLawJurisdiction)
+      .reduce((total, country) => total + COURT_DOMAIN_BOUND[country], 0);
+    expect([group, groupBound < TAG_FIELD_VALUE_LIMIT / 2]).toEqual([
+      group,
+      true,
+    ]);
   }
 
   // Total over the jurisdictions the corpus ships, so onboarding one is a

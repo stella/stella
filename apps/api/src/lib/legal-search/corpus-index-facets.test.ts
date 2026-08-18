@@ -1,7 +1,8 @@
 import { Result } from "better-result";
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import * as v from "valibot";
 
+import * as corpusFamily from "@/api/lib/legal-search/corpus-family";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import {
   browseFacetNames,
@@ -159,6 +160,37 @@ test("scopes to one jurisdiction index, and to the generation glob without one",
 
   expect(requests.at(0)?.url).toContain(`/${generation}_cze/search`);
   expect(requests.at(1)?.url).toContain(`/${generation}_*/search`);
+});
+
+test("a scoped query on a shared index carries its jurisdiction as a clause", async () => {
+  responseBody = engineResponse();
+  // From generation 3 on CZE and SVK share one physical index, so selecting
+  // the index alone would aggregate over both countries.
+  const generation = spyOn(corpusFamily, "corpusGeneration").mockReturnValue(
+    "case_law_v3",
+  );
+  try {
+    await corpusIndexBrowseFacets({
+      excludedSourceIds: [],
+      jurisdiction: "CZE",
+      limit: 20,
+    });
+    await corpusIndexBrowseFacets({
+      excludedSourceIds: ["018f0a2b-0000-7000-8000-000000000001"],
+      jurisdiction: "POL",
+      limit: 20,
+    });
+  } finally {
+    generation.mockRestore();
+  }
+
+  expect(requests.at(0)?.url).toContain("/case_law_v3_cs_sk/search");
+  expect(requests.at(0)?.body["query"]).toBe('seq:0 AND jurisdiction:"CZE"');
+  // A single-country index needs no clause; the source exclusion still lands.
+  expect(requests.at(1)?.url).toContain("/case_law_v3_pl/search");
+  expect(requests.at(1)?.body["query"]).toBe(
+    'seq:0 AND NOT (source:"018f0a2b-0000-7000-8000-000000000001")',
+  );
 });
 
 test("asks for bucket depth beyond the requested size", async () => {

@@ -4,11 +4,16 @@ import {
   caseLawCorpusIndexProjections,
   caseLawDecisions,
 } from "@/api/db/schema";
+import { caseLawIndexIdSql } from "@/api/lib/legal-search/case-law-index-groups";
 
 /** Join one decision to its durable state for the selected generation. */
 export const caseLawCorpusProjectionJoin = (generation: string) =>
   sql`${caseLawCorpusIndexProjections.decisionId} = ${caseLawDecisions.id}
     AND ${caseLawCorpusIndexProjections.generation} = ${generation}`;
+
+/** The physical index this generation projects a decision's current country into. */
+export const caseLawDecisionCorpusIndexIdSql = (generation: string) =>
+  caseLawIndexIdSql(sql`${generation}`, caseLawDecisions.country);
 
 /**
  * Accept a physical hit only when this generation recorded the current
@@ -19,7 +24,7 @@ export const currentCaseLawCorpusProjection = (generation: string) =>
   sql`(
     (
       ${caseLawCorpusIndexProjections.indexedHash} = ${caseLawDecisions.contentHash}
-      AND ${caseLawCorpusIndexProjections.indexId} = (${generation} || '_' || lower(${caseLawDecisions.country}))
+      AND ${caseLawCorpusIndexProjections.indexId} = (${caseLawDecisionCorpusIndexIdSql(generation)})
       AND ${caseLawCorpusIndexProjections.pendingAction} IS NULL
     )
     OR (

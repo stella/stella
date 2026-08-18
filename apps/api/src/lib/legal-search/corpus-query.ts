@@ -210,14 +210,18 @@ export const corpusFreeTextClause = (
 
 /**
  * Filters a case-law corpus query may carry, named after the index fields
- * rather than after either caller's request shape. `jurisdiction` is absent by
- * design: it selects the index, so a scoped query never needs a clause for it.
+ * rather than after either caller's request shape. `jurisdiction` selects the
+ * index first; it is a clause here only when that index holds other
+ * jurisdictions too (`corpusIndexRoute` decides), so a scoped query stays
+ * exact without every scoped query paying for a clause its index already
+ * implies.
  */
 export type CaseLawCorpusFilters = {
   court?: string | undefined;
   dateFrom?: string | undefined;
   dateTo?: string | undefined;
   documentType?: string | undefined;
+  jurisdiction?: string | undefined;
   language?: string | undefined;
   source?: string | undefined;
 };
@@ -240,6 +244,9 @@ export const caseLawCorpusQuery = (
   }
 
   const clauses: string[] = [freeText];
+  if (filters.jurisdiction) {
+    clauses.push(`jurisdiction:${quoteCorpusValue(filters.jurisdiction)}`);
+  }
   if (filters.documentType) {
     clauses.push(`document_type:${quoteCorpusValue(filters.documentType)}`);
   }

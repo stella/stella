@@ -276,8 +276,9 @@ export const TAG_FIELD_VALUE_LIMIT = 1000;
  * Fields whose values a split records so a query can skip splits that cannot
  * match. Every one of them is a filter the browse and search paths apply, and
  * every one has a value domain bounded well under `TAG_FIELD_VALUE_LIMIT`
- * within a single index (indexes are per jurisdiction, so `court` is bounded
- * by one country's court registry, not by every country's at once).
+ * within a single index (indexes are per jurisdiction, or per index group
+ * from case-law generation 3 on, so `court` is bounded by one group's court
+ * registries, not by every country's at once).
  */
 const FAMILY_TAG_FIELDS: Record<CorpusFamily, string[]> = {
   // `language` is bounded by the languages a jurisdiction's courts publish in,
