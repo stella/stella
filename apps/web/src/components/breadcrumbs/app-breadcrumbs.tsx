@@ -129,6 +129,10 @@ export const AppBreadcrumbs = () => {
         {t("navigation.contacts")}
       </BreadcrumbLink>,
     ),
+    defineBreadcrumb(
+      ["/contacts/import"],
+      <BreadcrumbItem>{t("contacts.importStudio.title")}</BreadcrumbItem>,
+    ),
     defineBreadcrumb(["/knowledge/clauses"], <ClausesBreadcrumb />),
     defineBreadcrumb(["/knowledge/playbooks"], <PlaybooksBreadcrumb />),
     defineBreadcrumb(["/contacts/$contactId"], renderContactBreadcrumb),

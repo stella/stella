@@ -45,6 +45,8 @@ export type SafeIdType =
   | "clauseVariant"
   | "clauseVersion"
   | "contact"
+  | "contactExtractionUpload"
+  | "contactImportRequest"
   | "contactRelationship"
   | "usageAllocation"
   | "usageLaneCounter"

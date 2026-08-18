@@ -60,6 +60,28 @@ export type {
   ChatReferenceHrefPrefix,
 } from "./chat-references";
 export {
+  CONTACT_IMPORT_CUSTOM_FIELD_DESTINATION,
+  CONTACT_IMPORT_FIELDS,
+  CONTACT_IMPORT_IGNORE_DESTINATION,
+  CONTACT_IMPORT_ISSUE_CODE,
+  CONTACT_IMPORT_MAPPING_MAX_CHARS,
+  CONTACT_IMPORT_MAX_COLUMNS,
+  CONTACT_IMPORT_MAX_ROWS,
+  CONTACT_IMPORT_SCHEMA_VERSION,
+  CONTACT_IMPORT_TARGET_FIELDS,
+  CONTACT_IMPORT_TAX_ID_SCHEMES,
+  parseContactImportMapping,
+} from "./contact-import";
+export type {
+  ContactImportColumnMapping,
+  ContactImportField,
+  ContactImportIssueCode,
+  ContactImportMapping,
+  ContactImportMappingParseResult,
+  ContactImportTargetField,
+  ContactImportTaxIdScheme,
+} from "./contact-import";
+export {
   AUTHORED_DOCUMENT_PROPERTY_KEYS,
   DOCUMENT_PROPERTIES_RESULT_SCHEMA,
   DOCUMENT_PROPERTIES_MAX_BYTES,
@@ -217,6 +239,14 @@ export { isSafeIdValue } from "./safe-id";
 export type { SafeId } from "./safe-id";
 export { CONTACT_TYPES, WORKSPACE_CONTACT_ROLES } from "./workspace-contacts";
 export type { ContactType, WorkspaceContactRole } from "./workspace-contacts";
+export {
+  CONTACT_IMPORT_LABELED_FIELDS,
+  CONTACT_IMPORT_VOCABULARIES,
+} from "./contact-import-labeled";
+export type {
+  ContactImportLabeledField,
+  ContactImportVocabularyId,
+} from "./contact-import-labeled";
 export {
   DIRECTLY_CREATABLE_VIEW_LAYOUTS,
   isRequiredViewLayout,

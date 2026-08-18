@@ -1,9 +1,10 @@
-import { queryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import type { ContactType } from "@stll/api-contract";
 
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
+import { stringCursorSeed } from "@/lib/infinite-query";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { contactsQueryRoot } from "@/lib/resource-query-roots.logic";
 
@@ -36,12 +37,15 @@ export const contactsOptions = (
   activeOrganizationId: string,
   filters: ContactsListKey = {},
 ) =>
-  queryOptions({
+  infiniteQueryOptions({
     queryKey: contactsKeys.list(activeOrganizationId, filters),
-    queryFn: async ({ signal }) => {
+    initialPageParam: stringCursorSeed(),
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    queryFn: async ({ signal, pageParam }) => {
       const response = await api.contacts.get({
         query: {
           limit: 50,
+          ...(pageParam !== undefined && { cursor: pageParam }),
           ...(filters.type !== undefined && { type: filters.type }),
           ...(filters.q !== undefined && { q: filters.q }),
         },
@@ -50,6 +54,7 @@ export const contactsOptions = (
 
       return unwrapEden(response);
     },
+    getNextPageParam: ({ nextCursor }) => nextCursor ?? undefined,
   });
 
 export const contactOptions = (

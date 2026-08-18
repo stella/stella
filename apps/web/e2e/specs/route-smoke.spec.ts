@@ -202,6 +202,10 @@ const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
     path: (world) => world.documentRoute.path,
     settleMs: 2000,
   },
+  // Routes are partitioned round-robin into serial groups whose shared state
+  // (threads, contacts created by earlier routes) shapes the recorded network
+  // baseline. Append new routes here so existing routes keep their group.
+  staticRoute("/contacts/import"),
 ];
 
 // Redirect targets for workspace-scoped aliases depend on the runtime view id,

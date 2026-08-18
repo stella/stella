@@ -104,6 +104,9 @@ export type McpToolName = (typeof MCP_STATIC_TOOL_NAMES)[number];
  *   cannot carry a `File`, so the multipart endpoints stay unreachable and
  *   clients drive presign -> PUT -> finalize instead. Bulk tree/preflight
  *   helpers stay `internal` under `upload_mechanics`.
+ * - `contact_extraction_ui`: AI-assisted contact intake from an uploaded
+ *   source document (e.g. a procuração); review-before-create only, not a
+ *   standing agent capability. Mirrors `template_authoring_ui`.
  */
 export type McpCapabilityReason =
   | "template_authoring_ui"
@@ -119,7 +122,8 @@ export type McpCapabilityReason =
   | "document_processing"
   | "assistant_chat"
   | "chat_thread_ui"
-  | "file_transport";
+  | "file_transport"
+  | "contact_extraction_ui";
 
 /**
  * Approved, permanent reasons an endpoint is intentionally never reachable from

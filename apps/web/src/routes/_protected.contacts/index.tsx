@@ -2,7 +2,11 @@ import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useForm } from "@tanstack/react-form";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   createFileRoute,
   getRouteApi,
@@ -18,11 +22,14 @@ import {
   useTable,
 } from "@tanstack/react-table";
 import type { Column, ReactTable, Row } from "@tanstack/react-table";
+import { Result } from "better-result";
 import {
   BuildingIcon,
+  DownloadIcon,
   EllipsisVerticalIcon,
   PlusIcon,
   SearchIcon,
+  UploadIcon,
   UserIcon,
 } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
@@ -41,7 +48,6 @@ import {
   DialogPanel,
   DialogPopup,
   DialogTitle,
-  DialogTrigger,
 } from "@stll/ui/components/dialog";
 import { Field, FieldError, FieldLabel } from "@stll/ui/components/field";
 import { Form } from "@stll/ui/components/form";
@@ -67,8 +73,13 @@ import {
   TableRow,
 } from "@stll/ui/components/table";
 import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
 
 import { EmptyScreen } from "@/components/empty-screen";
+import {
+  ResponsiveActionToolbar,
+  ResponsiveActionToolbarItem,
+} from "@/components/responsive-action-toolbar";
 import { TableSkeletonRows } from "@/components/table-skeleton-rows";
 import Tooltip from "@/components/tooltip";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -81,14 +92,27 @@ import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { pageTitle } from "@/lib/page-title";
+import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import { toFormErrors } from "@/lib/schema";
+import { downloadFile } from "@/lib/utils";
+import {
+  ProcuracaoDropZone,
+  ProcuracaoReview,
+  useProcuracaoExtraction,
+} from "@/routes/_protected.contacts/-procuracao-extraction";
 
 const ARES_NATIVE_TOOL_SLUG = "ares";
 
 type ContactFilter = "all" | ContactType;
 
 export const Route = createFileRoute("/_protected/contacts/")({
+  loader: async ({ context }) => {
+    await ensureRouteInfiniteQueryData(
+      context.queryClient,
+      contactsOptions(context.user.activeOrganizationId),
+    );
+  },
   head: () => ({
     meta: [{ title: pageTitle("navigation.contacts") }],
   }),
@@ -103,6 +127,7 @@ function ContactsPage() {
   const tContacts = useTranslations("contacts");
   const canCreateContact = usePermissions({ contact: ["create"] });
   const [createContactOpen, setCreateContactOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [filter, setFilter] = useState<ContactFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -116,14 +141,17 @@ function ContactsPage() {
     select: (ctx) => ctx.user.activeOrganizationId,
   });
 
-  const { data, isLoading } = useQuery(
-    contactsOptions(activeOrganizationId, {
-      type: typeFilter,
-      q: debouncedQuery || undefined,
-    }),
-  );
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
+    useInfiniteQuery(
+      contactsOptions(activeOrganizationId, {
+        type: typeFilter,
+        q: debouncedQuery || undefined,
+      }),
+    );
 
-  const items: ContactItem[] = data ? data.items : [];
+  const items: ContactItem[] = data
+    ? data.pages.flatMap((page) => page.items)
+    : [];
   const isFirstUseEmpty =
     !isLoading &&
     items.length === 0 &&
@@ -139,47 +167,120 @@ function ContactsPage() {
     getRowId: (row) => row.id,
   });
 
+  const handleExport = async () => {
+    setIsExporting(true);
+    const result = await Result.tryPromise(async () => {
+      const response = await api.contacts.export.get({
+        query: { format: "csv" },
+      });
+      const exportData = unwrapEden(response);
+      return exportData instanceof Response
+        ? await exportData.blob()
+        : new Blob([String(exportData)], { type: "text/csv;charset=utf-8" });
+    });
+    setIsExporting(false);
+
+    if (Result.isError(result)) {
+      stellaToast.add({
+        title: userErrorFromThrown(result.error, t("contacts.exportFailed")),
+        type: "error",
+      });
+      return;
+    }
+
+    downloadFile(result.value, "contacts-export.csv");
+  };
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto border-t p-4">
-      <div className="flex items-center gap-2">
-        <InputGroup className="me-auto max-w-sm flex-1">
-          <InputGroupInput
-            onChange={(e) => {
-              const val = e.target.value;
-              setSearchQuery(val);
-              updateSearch(val);
-            }}
-            placeholder={t("contacts.search")}
-            value={searchQuery}
-          />
-          <InputGroupAddon>
-            <SearchIcon />
-          </InputGroupAddon>
-        </InputGroup>
-        <div className="flex gap-1">
-          <FilterButton
-            active={filter === "all"}
-            label={t("common.all")}
-            onClick={() => setFilter("all")}
-          />
-          <FilterButton
-            active={filter === "person"}
-            label={t("contacts.filterPersons")}
-            onClick={() => setFilter("person")}
-          />
-          <FilterButton
-            active={filter === "organization"}
-            label={t("contacts.filterOrganizations")}
-            onClick={() => setFilter("organization")}
-          />
-        </div>
-        {canCreateContact && (
-          <CreateContactDialog
-            onOpenChange={setCreateContactOpen}
-            open={createContactOpen}
-          />
-        )}
-      </div>
+      <ResponsiveActionToolbar>
+        <ResponsiveActionToolbarItem slot="primary">
+          <InputGroup className="min-h-11 sm:min-h-0 sm:max-w-sm">
+            <InputGroupInput
+              onChange={(e) => {
+                const val = e.target.value;
+                setSearchQuery(val);
+                updateSearch(val);
+              }}
+              placeholder={t("contacts.search")}
+              value={searchQuery}
+            />
+            <InputGroupAddon>
+              <SearchIcon />
+            </InputGroupAddon>
+          </InputGroup>
+        </ResponsiveActionToolbarItem>
+        <ResponsiveActionToolbarItem slot="secondary">
+          <div className="flex gap-1 overflow-x-auto">
+            <FilterButton
+              active={filter === "all"}
+              label={t("common.all")}
+              onClick={() => setFilter("all")}
+            />
+            <FilterButton
+              active={filter === "person"}
+              label={t("contacts.filterPersons")}
+              onClick={() => setFilter("person")}
+            />
+            <FilterButton
+              active={filter === "organization"}
+              label={t("contacts.filterOrganizations")}
+              onClick={() => setFilter("organization")}
+            />
+          </div>
+        </ResponsiveActionToolbarItem>
+        <ResponsiveActionToolbarItem className="ms-auto sm:ms-0" slot="action">
+          <div className="flex gap-1">
+            {canCreateContact && (
+              <Button
+                aria-label={t("common.import")}
+                render={<Link to="/contacts/import" />}
+                size="sm"
+                title={t("common.import")}
+                variant="outline"
+              >
+                <UploadIcon />
+                <span className="hidden sm:inline">{t("common.import")}</span>
+              </Button>
+            )}
+            <Button
+              aria-busy={isExporting}
+              aria-label={t("workspaces.views.exportCsv")}
+              disabled={isExporting}
+              onClick={() => {
+                detached(handleExport(), "contacts-page.export");
+              }}
+              size="sm"
+              title={t("workspaces.views.exportCsv")}
+              variant="outline"
+            >
+              <DownloadIcon />
+              <span className="hidden sm:inline">
+                {t("workspaces.views.exportCsv")}
+              </span>
+            </Button>
+            {canCreateContact && (
+              <>
+                <Button
+                  aria-label={t("contacts.newContact")}
+                  onClick={() => setCreateContactOpen(true)}
+                  size="sm"
+                  title={t("contacts.newContact")}
+                >
+                  <PlusIcon />
+                  <span className="hidden sm:inline">
+                    {t("contacts.newContact")}
+                  </span>
+                </Button>
+                <CreateContactDialog
+                  onOpenChange={setCreateContactOpen}
+                  open={createContactOpen}
+                />
+              </>
+            )}
+          </div>
+        </ResponsiveActionToolbarItem>
+      </ResponsiveActionToolbar>
 
       {isFirstUseEmpty && canCreateContact ? (
         <EmptyScreen
@@ -192,7 +293,34 @@ function ContactsPage() {
           title={tContacts("emptyTitle")}
         />
       ) : (
-        <ContactsTable isLoading={isLoading} table={table} />
+        <>
+          <ContactsTable isLoading={isLoading} table={table} />
+          {hasNextPage && (
+            <Button
+              className="self-center"
+              loading={isFetchingNextPage}
+              onClick={() => {
+                const request = fetchNextPage().then((result) => {
+                  if (result.isError) {
+                    stellaToast.add({
+                      description: userErrorFromThrown(
+                        result.error,
+                        t("common.unexpectedError"),
+                      ),
+                      title: t("errors.actionFailed"),
+                      type: "error",
+                    });
+                  }
+                  return result;
+                });
+                detached(request, "contacts-page.fetch-next-page");
+              }}
+              variant="outline"
+            >
+              {t("common.loadMore")}
+            </Button>
+          )}
+        </>
       )}
     </div>
   );
@@ -205,7 +333,12 @@ type FilterButtonProps = {
 };
 
 const FilterButton = ({ label, active, onClick }: FilterButtonProps) => (
-  <Button onClick={onClick} size="sm" variant={active ? "default" : "outline"}>
+  <Button
+    aria-pressed={active}
+    onClick={onClick}
+    size="sm"
+    variant={active ? "default" : "outline"}
+  >
     {label}
   </Button>
 );
@@ -528,31 +661,68 @@ const ContactsTable = ({ table, isLoading }: ContactsTableProps) => {
 // same space and the page does not jump when it swaps in.
 const ContactsToolbarPlaceholder = () => {
   const t = useTranslations();
+  const canCreateContact = usePermissions({ contact: ["create"] });
 
   return (
-    <div className="flex items-center gap-2">
-      <InputGroup className="me-auto max-w-sm flex-1">
-        <InputGroupInput disabled placeholder={t("contacts.search")} />
-        <InputGroupAddon>
-          <SearchIcon />
-        </InputGroupAddon>
-      </InputGroup>
-      <div className="flex gap-1">
-        <Button disabled size="sm" variant="default">
-          {t("common.all")}
-        </Button>
-        <Button disabled size="sm" variant="outline">
-          {t("contacts.filterPersons")}
-        </Button>
-        <Button disabled size="sm" variant="outline">
-          {t("contacts.filterOrganizations")}
-        </Button>
-      </div>
-      <Button disabled size="sm">
-        <PlusIcon />
-        {t("contacts.newContact")}
-      </Button>
-    </div>
+    <ResponsiveActionToolbar>
+      <ResponsiveActionToolbarItem slot="primary">
+        <InputGroup className="min-h-11 sm:min-h-0 sm:max-w-sm">
+          <InputGroupInput disabled placeholder={t("contacts.search")} />
+          <InputGroupAddon>
+            <SearchIcon />
+          </InputGroupAddon>
+        </InputGroup>
+      </ResponsiveActionToolbarItem>
+      <ResponsiveActionToolbarItem slot="secondary">
+        <div className="flex gap-1 overflow-x-auto">
+          <Button disabled size="sm" variant="default">
+            {t("common.all")}
+          </Button>
+          <Button disabled size="sm" variant="outline">
+            {t("contacts.filterPersons")}
+          </Button>
+          <Button disabled size="sm" variant="outline">
+            {t("contacts.filterOrganizations")}
+          </Button>
+        </div>
+      </ResponsiveActionToolbarItem>
+      <ResponsiveActionToolbarItem className="ms-auto sm:ms-0" slot="action">
+        <div className="flex gap-1">
+          {canCreateContact && (
+            <Button
+              aria-label={t("common.import")}
+              disabled
+              size="sm"
+              title={t("common.import")}
+              variant="outline"
+            >
+              <UploadIcon />
+              <span className="hidden sm:inline">{t("common.import")}</span>
+            </Button>
+          )}
+          <Button
+            aria-label={t("workspaces.views.exportCsv")}
+            disabled
+            size="sm"
+            title={t("workspaces.views.exportCsv")}
+            variant="outline"
+          >
+            <DownloadIcon />
+            <span className="hidden sm:inline">
+              {t("workspaces.views.exportCsv")}
+            </span>
+          </Button>
+          {canCreateContact && (
+            <Button disabled size="sm">
+              <PlusIcon />
+              <span className="hidden sm:inline">
+                {t("contacts.newContact")}
+              </span>
+            </Button>
+          )}
+        </div>
+      </ResponsiveActionToolbarItem>
+    </ResponsiveActionToolbar>
   );
 };
 
@@ -667,6 +837,7 @@ const CreateContactDialog = ({
   const [aresBillingAddress, setAresBillingAddress] =
     useState<BillingAddress | null>(null);
   const createContact = useCreateContact();
+  const extraction = useProcuracaoExtraction();
   const schema = createContactSchema(t("common.required"));
   const { data: mcpCatalog } = useQuery(
     mcpConnectorsOptions(activeOrganizationId),
@@ -787,15 +958,14 @@ const CreateContactDialog = ({
           form.reset();
           setAresBillingAddress(null);
           setIsAresLoading(false);
+          extraction.reset();
         }
       }}
       open={open}
     >
-      <DialogTrigger render={<Button size="sm" />}>
-        <PlusIcon />
-        {t("contacts.newContact")}
-      </DialogTrigger>
-      <DialogPopup>
+      <DialogPopup
+        className={cn(extraction.stage !== "idle" && "sm:max-w-2xl")}
+      >
         <Form
           className="gap-0"
           errors={formErrors}
@@ -806,222 +976,271 @@ const CreateContactDialog = ({
         >
           <DialogHeader>
             <DialogTitle>{t("contacts.newContact")}</DialogTitle>
-            <DialogDescription />
+            <DialogDescription>
+              {extraction.review.results
+                ? t("contacts.import.resultsSummary", {
+                    created: extraction.review.results.filter(
+                      (r) => r.status === "created",
+                    ).length,
+                    skipped: extraction.review.results.filter(
+                      (r) => r.status === "skipped",
+                    ).length,
+                  })
+                : null}
+            </DialogDescription>
           </DialogHeader>
-          <DialogPanel className="flex flex-col gap-4">
-            <form.Field name="type">
-              {(field) => (
-                <Field name={field.name}>
-                  <FieldLabel>{t("common.type")}</FieldLabel>
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={() => {
-                        field.handleChange("person");
-                        form.setFieldValue("displayName", "");
-                        setAresBillingAddress(null);
-                      }}
-                      size="sm"
-                      type="button"
-                      variant={
-                        field.state.value === "person" ? "default" : "outline"
-                      }
-                    >
-                      <UserIcon className="size-4" />
-                      {t("contacts.type.person")}
-                    </Button>
-                    <Button
-                      onClick={() => {
-                        field.handleChange("organization");
-                        form.setFieldValue("displayName", "");
-                      }}
-                      size="sm"
-                      type="button"
-                      variant={
-                        field.state.value === "organization"
-                          ? "default"
-                          : "outline"
-                      }
-                    >
-                      <BuildingIcon className="size-4" />
-                      {t("contacts.type.organization")}
-                    </Button>
-                  </div>
-                  <FieldError />
-                </Field>
-              )}
-            </form.Field>
-
-            {contactType === "person" && (
-              <>
-                <form.Field name="firstName">
-                  {(field) => (
-                    <Field name={field.name}>
-                      <FieldLabel>{t("contacts.fields.firstName")}</FieldLabel>
-                      <Input
-                        autoFocus
-                        onBlur={field.handleBlur}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          field.handleChange(val);
-                          const last = form.state.values.lastName;
-                          form.setFieldValue(
-                            "displayName",
-                            [val, last].filter(Boolean).join(" "),
-                          );
+          {extraction.stage === "idle" ? (
+            <DialogPanel className="flex flex-col gap-4">
+              <ProcuracaoDropZone
+                isExtracting={extraction.isExtracting}
+                onFile={(file) =>
+                  detached(
+                    extraction.extractFile(file),
+                    "contact-extract-procuracao.upload",
+                  )
+                }
+              />
+              <form.Field name="type">
+                {(field) => (
+                  <Field name={field.name}>
+                    <FieldLabel>{t("common.type")}</FieldLabel>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={() => {
+                          field.handleChange("person");
+                          form.setFieldValue("displayName", "");
+                          setAresBillingAddress(null);
                         }}
-                        value={field.state.value}
-                      />
-                      <FieldError />
-                    </Field>
-                  )}
-                </form.Field>
-                <form.Field name="lastName">
-                  {(field) => (
-                    <Field name={field.name}>
-                      <FieldLabel>{t("contacts.fields.lastName")}</FieldLabel>
-                      <Input
-                        onBlur={field.handleBlur}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          field.handleChange(val);
-                          const first = form.state.values.firstName;
-                          form.setFieldValue(
-                            "displayName",
-                            [first, val].filter(Boolean).join(" "),
-                          );
+                        size="sm"
+                        type="button"
+                        variant={
+                          field.state.value === "person" ? "default" : "outline"
+                        }
+                      >
+                        <UserIcon className="size-4" />
+                        {t("contacts.type.person")}
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          field.handleChange("organization");
+                          form.setFieldValue("displayName", "");
                         }}
-                        value={field.state.value}
-                      />
-                      <FieldError />
-                    </Field>
-                  )}
-                </form.Field>
-              </>
-            )}
-
-            {contactType === "organization" && (
-              <>
-                <form.Field name="organizationName">
-                  {(field) => (
-                    <Field name={field.name}>
-                      <FieldLabel>{t("common.organizationName")}</FieldLabel>
-                      <Input
-                        autoFocus
-                        onBlur={field.handleBlur}
-                        onChange={(e) => {
-                          field.handleChange(e.target.value);
-                          form.setFieldValue("displayName", e.target.value);
-                        }}
-                        value={field.state.value}
-                      />
-                      <FieldError />
-                    </Field>
-                  )}
-                </form.Field>
-
-                {isAresEnabled ? (
-                  <div className="bg-muted/20 flex flex-col gap-3 rounded-md border p-3">
-                    <div>
-                      <p className="text-sm font-medium">
-                        {t("contacts.create.aresTitle")}
-                      </p>
-                      <p className="text-muted-foreground text-xs">
-                        {t("contacts.create.aresHint")}
-                      </p>
+                        size="sm"
+                        type="button"
+                        variant={
+                          field.state.value === "organization"
+                            ? "default"
+                            : "outline"
+                        }
+                      >
+                        <BuildingIcon className="size-4" />
+                        {t("contacts.type.organization")}
+                      </Button>
                     </div>
-                    <form.Field name="registrationNumber">
-                      {(field) => (
-                        <Field name={field.name}>
-                          <div className="flex gap-2">
-                            <Input
-                              dir="ltr"
-                              inputMode="numeric"
-                              onBlur={field.handleBlur}
-                              onChange={(e) => {
-                                field.handleChange(
-                                  normalizeIcoInput(e.target.value),
-                                );
-                                setAresBillingAddress(null);
-                              }}
-                              placeholder={t("contacts.create.icoPlaceholder")}
-                              value={field.state.value}
-                            />
-                            <Button
-                              loading={isAresLoading}
-                              onClick={() => {
-                                detached(
-                                  handleAresLookup(),
-                                  "contacts.ares-lookup",
-                                );
-                              }}
-                              type="button"
-                              variant="outline"
-                            >
-                              {t("contacts.create.aresLookup")}
-                            </Button>
-                          </div>
-                          <FieldError />
-                        </Field>
-                      )}
-                    </form.Field>
-                    {aresBillingAddress?.line1 && (
-                      <p className="text-muted-foreground text-xs">
-                        {[
-                          aresBillingAddress.line1,
-                          aresBillingAddress.city,
-                          aresBillingAddress.postalCode,
-                          aresBillingAddress.country,
-                        ]
-                          .filter(Boolean)
-                          .join(", ")}
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <form.Field name="registrationNumber">
+                    <FieldError />
+                  </Field>
+                )}
+              </form.Field>
+
+              {contactType === "person" && (
+                <>
+                  <form.Field name="firstName">
                     {(field) => (
                       <Field name={field.name}>
                         <FieldLabel>
-                          {t("contacts.fields.registrationNumber")}
+                          {t("contacts.fields.firstName")}
                         </FieldLabel>
                         <Input
+                          autoFocus
                           onBlur={field.handleBlur}
-                          onChange={(e) => field.handleChange(e.target.value)}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            field.handleChange(val);
+                            const last = form.state.values.lastName;
+                            form.setFieldValue(
+                              "displayName",
+                              [val, last].filter(Boolean).join(" "),
+                            );
+                          }}
                           value={field.state.value}
                         />
                         <FieldError />
                       </Field>
                     )}
                   </form.Field>
-                )}
-              </>
-            )}
-
-            <form.Field name="displayName">
-              {(field) => (
-                <Field name={field.name}>
-                  <FieldLabel>{t("contacts.create.contactName")}</FieldLabel>
-                  <Input
-                    onBlur={field.handleBlur}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                    value={field.state.value}
-                  />
-                  <FieldError />
-                </Field>
+                  <form.Field name="lastName">
+                    {(field) => (
+                      <Field name={field.name}>
+                        <FieldLabel>{t("contacts.fields.lastName")}</FieldLabel>
+                        <Input
+                          onBlur={field.handleBlur}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            field.handleChange(val);
+                            const first = form.state.values.firstName;
+                            form.setFieldValue(
+                              "displayName",
+                              [first, val].filter(Boolean).join(" "),
+                            );
+                          }}
+                          value={field.state.value}
+                        />
+                        <FieldError />
+                      </Field>
+                    )}
+                  </form.Field>
+                </>
               )}
-            </form.Field>
-          </DialogPanel>
+
+              {contactType === "organization" && (
+                <>
+                  <form.Field name="organizationName">
+                    {(field) => (
+                      <Field name={field.name}>
+                        <FieldLabel>{t("common.organizationName")}</FieldLabel>
+                        <Input
+                          autoFocus
+                          onBlur={field.handleBlur}
+                          onChange={(e) => {
+                            field.handleChange(e.target.value);
+                            form.setFieldValue("displayName", e.target.value);
+                          }}
+                          value={field.state.value}
+                        />
+                        <FieldError />
+                      </Field>
+                    )}
+                  </form.Field>
+
+                  {isAresEnabled ? (
+                    <div className="bg-muted/20 flex flex-col gap-3 rounded-md border p-3">
+                      <div>
+                        <p className="text-sm font-medium">
+                          {t("contacts.create.aresTitle")}
+                        </p>
+                        <p className="text-muted-foreground text-xs">
+                          {t("contacts.create.aresHint")}
+                        </p>
+                      </div>
+                      <form.Field name="registrationNumber">
+                        {(field) => (
+                          <Field name={field.name}>
+                            <div className="flex gap-2">
+                              <Input
+                                dir="ltr"
+                                inputMode="numeric"
+                                onBlur={field.handleBlur}
+                                onChange={(e) => {
+                                  field.handleChange(
+                                    normalizeIcoInput(e.target.value),
+                                  );
+                                  setAresBillingAddress(null);
+                                }}
+                                placeholder={t(
+                                  "contacts.create.icoPlaceholder",
+                                )}
+                                value={field.state.value}
+                              />
+                              <Button
+                                loading={isAresLoading}
+                                onClick={() => {
+                                  detached(
+                                    handleAresLookup(),
+                                    "contacts.ares-lookup",
+                                  );
+                                }}
+                                type="button"
+                                variant="outline"
+                              >
+                                {t("contacts.create.aresLookup")}
+                              </Button>
+                            </div>
+                            <FieldError />
+                          </Field>
+                        )}
+                      </form.Field>
+                      {aresBillingAddress?.line1 && (
+                        <p className="text-muted-foreground text-xs">
+                          {[
+                            aresBillingAddress.line1,
+                            aresBillingAddress.city,
+                            aresBillingAddress.postalCode,
+                            aresBillingAddress.country,
+                          ]
+                            .filter(Boolean)
+                            .join(", ")}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <form.Field name="registrationNumber">
+                      {(field) => (
+                        <Field name={field.name}>
+                          <FieldLabel>
+                            {t("contacts.fields.registrationNumber")}
+                          </FieldLabel>
+                          <Input
+                            onBlur={field.handleBlur}
+                            onChange={(e) => field.handleChange(e.target.value)}
+                            value={field.state.value}
+                          />
+                          <FieldError />
+                        </Field>
+                      )}
+                    </form.Field>
+                  )}
+                </>
+              )}
+
+              <form.Field name="displayName">
+                {(field) => (
+                  <Field name={field.name}>
+                    <FieldLabel>{t("contacts.create.contactName")}</FieldLabel>
+                    <Input
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      value={field.state.value}
+                    />
+                    <FieldError />
+                  </Field>
+                )}
+              </form.Field>
+            </DialogPanel>
+          ) : (
+            <DialogPanel className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto">
+              <ProcuracaoReview extraction={extraction} />
+            </DialogPanel>
+          )}
           <DialogFooter>
             <DialogClose render={<Button variant="outline" />}>
-              {t("common.cancel")}
-            </DialogClose>
-            <form.Subscribe selector={(s) => s.isSubmitting}>
-              {(isSubmitting) => (
-                <Button loading={isSubmitting} type="submit">
-                  {t("common.save")}
-                </Button>
+              {t(
+                extraction.stage === "done" ? "common.close" : "common.cancel",
               )}
-            </form.Subscribe>
+            </DialogClose>
+            {extraction.stage === "idle" && (
+              <form.Subscribe selector={(s) => s.isSubmitting}>
+                {(isSubmitting) => (
+                  <Button loading={isSubmitting} type="submit">
+                    {t("common.save")}
+                  </Button>
+                )}
+              </form.Subscribe>
+            )}
+            {extraction.stage === "review" && (
+              <Button
+                disabled={!extraction.canConfirm}
+                loading={extraction.isConfirming}
+                onClick={() =>
+                  detached(
+                    extraction.confirm(),
+                    "contact-extract-procuracao.confirm",
+                  )
+                }
+                type="button"
+              >
+                {t("contacts.import.confirmAction")}
+              </Button>
+            )}
           </DialogFooter>
         </Form>
       </DialogPopup>

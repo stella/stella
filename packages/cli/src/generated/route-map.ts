@@ -8371,6 +8371,274 @@ export const generatedRouteMap: RouteNode = {
                 },
               },
             },
+            import: {
+              kind: "capability-leaf",
+              spec: {
+                commandPath: ["capability", "contacts", "import"],
+                capabilityId: "contacts.import",
+                description:
+                  "Import a reviewed batch of up to 500 contacts into the organization address book. Supply a caller-generated importRequestId: replaying it with the same rows returns the original result, while changing the rows is rejected. taxIdScheme selects tax-id validation (none, or br_cpf_cnpj checksums with duplicate detection). Rows failing the import rules, duplicates, and over-limit rows are skipped; all accepted rows commit atomically.",
+                access: "write",
+                flags: [
+                  {
+                    kind: "string",
+                    repeatable: false,
+                    flag: "--import-request-id",
+                    prop: "importRequestId",
+                    required: true,
+                    part: "body",
+                    partPath: "importRequestId",
+                  },
+                ],
+                inputOnly: ["body.taxIdScheme", "body.rows"],
+                paginated: false,
+                destructive: false,
+                scope: "contacts_write",
+                inputSchema: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    body: {
+                      type: "object",
+                      required: ["importRequestId", "taxIdScheme", "rows"],
+                      properties: {
+                        importRequestId: {
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
+                        },
+                        taxIdScheme: {
+                          anyOf: [
+                            {
+                              const: "none",
+                              type: "string",
+                            },
+                            {
+                              const: "br_cpf_cnpj",
+                              type: "string",
+                            },
+                          ],
+                        },
+                        rows: {
+                          maxItems: 500,
+                          type: "array",
+                          items: {
+                            type: "object",
+                            required: ["id", "type", "displayName"],
+                            properties: {
+                              id: {
+                                minLength: 36,
+                                maxLength: 36,
+                                pattern:
+                                  "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                type: "string",
+                              },
+                              type: {
+                                default: "person",
+                                description:
+                                  "Contact kind; required when creating",
+                                type: "string",
+                                enum: ["person", "organization"],
+                              },
+                              displayName: {
+                                maxLength: 50000,
+                                type: "string",
+                              },
+                              prefix: {
+                                maxLength: 50000,
+                                type: "string",
+                              },
+                              firstName: {
+                                maxLength: 50000,
+                                type: "string",
+                              },
+                              middleName: {
+                                maxLength: 50000,
+                                type: "string",
+                              },
+                              lastName: {
+                                maxLength: 50000,
+                                type: "string",
+                              },
+                              suffix: {
+                                maxLength: 50000,
+                                type: "string",
+                              },
+                              organizationName: {
+                                maxLength: 50000,
+                                type: "string",
+                              },
+                              notes: {
+                                maxLength: 50000,
+                                type: "string",
+                              },
+                              emails: {
+                                maxItems: 200,
+                                type: "array",
+                                items: {
+                                  type: "object",
+                                  required: ["type", "isPrimary", "address"],
+                                  properties: {
+                                    type: {
+                                      default: "work",
+                                      type: "string",
+                                      enum: ["work", "personal", "other"],
+                                    },
+                                    isPrimary: {
+                                      type: "boolean",
+                                    },
+                                    label: {
+                                      maxLength: 128,
+                                      type: "string",
+                                    },
+                                    address: {
+                                      maxLength: 50000,
+                                      type: "string",
+                                    },
+                                  },
+                                },
+                              },
+                              phones: {
+                                maxItems: 200,
+                                type: "array",
+                                items: {
+                                  type: "object",
+                                  required: ["type", "isPrimary", "number"],
+                                  properties: {
+                                    type: {
+                                      default: "mobile",
+                                      type: "string",
+                                      enum: [
+                                        "mobile",
+                                        "office",
+                                        "home",
+                                        "fax",
+                                        "other",
+                                      ],
+                                    },
+                                    isPrimary: {
+                                      type: "boolean",
+                                    },
+                                    label: {
+                                      maxLength: 128,
+                                      type: "string",
+                                    },
+                                    number: {
+                                      maxLength: 50000,
+                                      type: "string",
+                                    },
+                                  },
+                                },
+                              },
+                              addresses: {
+                                maxItems: 200,
+                                type: "array",
+                                items: {
+                                  type: "object",
+                                  required: ["type", "isPrimary", "line1"],
+                                  properties: {
+                                    type: {
+                                      default: "office",
+                                      type: "string",
+                                      enum: [
+                                        "office",
+                                        "mailing",
+                                        "billing",
+                                        "service",
+                                        "home",
+                                        "other",
+                                      ],
+                                    },
+                                    isPrimary: {
+                                      type: "boolean",
+                                    },
+                                    label: {
+                                      maxLength: 128,
+                                      type: "string",
+                                    },
+                                    line1: {
+                                      maxLength: 50000,
+                                      type: "string",
+                                    },
+                                    line2: {
+                                      maxLength: 50000,
+                                      type: "string",
+                                    },
+                                    city: {
+                                      maxLength: 50000,
+                                      type: "string",
+                                    },
+                                    state: {
+                                      maxLength: 50000,
+                                      type: "string",
+                                    },
+                                    postalCode: {
+                                      maxLength: 50000,
+                                      type: "string",
+                                    },
+                                    country: {
+                                      maxLength: 50000,
+                                      type: "string",
+                                    },
+                                  },
+                                },
+                              },
+                              tags: {
+                                maxItems: 200,
+                                type: "array",
+                                items: {
+                                  maxLength: 50000,
+                                  type: "string",
+                                },
+                              },
+                              registrationNumber: {
+                                maxLength: 50000,
+                                type: "string",
+                              },
+                              taxId: {
+                                maxLength: 50000,
+                                type: "string",
+                              },
+                              metadata: {
+                                type: "object",
+                                properties: {
+                                  customFields: {
+                                    maxItems: 200,
+                                    type: "array",
+                                    items: {
+                                      type: "object",
+                                      required: ["id", "label", "value"],
+                                      properties: {
+                                        id: {
+                                          minLength: 1,
+                                          maxLength: 64,
+                                          type: "string",
+                                        },
+                                        label: {
+                                          minLength: 1,
+                                          maxLength: 128,
+                                          type: "string",
+                                        },
+                                        value: {
+                                          maxLength: 50000,
+                                          type: "string",
+                                        },
+                                      },
+                                    },
+                                  },
+                                },
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             list: {
               kind: "capability-leaf",
               spec: {

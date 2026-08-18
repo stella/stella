@@ -439,6 +439,40 @@ export const mockStructuredData = (
     return { fields: TMPL_SUPPLY_PREFILL_FIXTURE };
   }
 
+  // contacts.extractProcuracao — outorgante candidates from an uploaded
+  // procuração. Two fake rows so the review grid exercises multi-outorgante
+  // rendering without needing a real provider key.
+  if ("outorgantes" in properties) {
+    return {
+      outorgantes: [
+        {
+          nome: "Maria da Silva Souza",
+          taxId: "123.456.789-09",
+          rg: "12.345.678-9",
+          nacionalidade: "brasileira",
+          estadoCivil: "casada",
+          uniaoEstavel: null,
+          profissao: "empresária",
+          email: null,
+          endereco: "Rua das Flores, 123, São Paulo/SP",
+          contactType: "person",
+        },
+        {
+          nome: "João Pedro Souza",
+          taxId: "987.654.321-00",
+          rg: null,
+          nacionalidade: "brasileiro",
+          estadoCivil: "casado",
+          uniaoEstavel: null,
+          profissao: "engenheiro",
+          email: null,
+          endereco: "Rua das Flores, 123, São Paulo/SP",
+          contactType: "person",
+        },
+      ],
+    };
+  }
+
   return synthesizeJsonSchemaObject(outputSchema);
 };
 

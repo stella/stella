@@ -22,6 +22,8 @@ type ServerLike = {
 };
 
 export const ORGANIZATION_AUDIT_LOG_RESOURCE_ID = "organization-logs";
+/** The directory itself, for events about the whole contact set (exports). */
+export const CONTACT_DIRECTORY_AUDIT_RESOURCE_ID = "contact-directory";
 
 // Generic field-diff shape. Every existing audit payload in the
 // codebase is `{ [field]: { old, new } }` — see entities/move.ts,
@@ -230,6 +232,7 @@ const activityCategoryForEvent = (event: AuditEvent): AuditActivityCategory => {
     case "clause_template_link":
     case "clause_variant":
     case "contact":
+    case "contact_directory":
     case "document_type":
     case "usage_allocation":
     case "usage_entitlement":
