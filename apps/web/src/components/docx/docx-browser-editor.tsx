@@ -1638,7 +1638,6 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
             comments={docxComments}
             onCommentsChange={handleEditorDocxCommentsChange}
             documentBuffer={editorBuffer}
-            documentKey={previewIdentity}
             initialZoom={targetZoom}
             mode={isUnlocked ? editorMode : "viewing"}
             onModeChange={(mode) => {
