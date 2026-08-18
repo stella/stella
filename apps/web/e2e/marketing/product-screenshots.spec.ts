@@ -8,6 +8,10 @@ const EXPORT_REVIEW_WORKSPACE_ID = "bb8641dc-0667-574c-8e30-152a1fd4b3f5";
 // `ws-akvizice-energo-doc-7`).
 const SUPPLIER_AGREEMENT_ENTITY_ID = "84824638-eb81-58c5-8a81-5d7e961fb7d5";
 const SUPPLIER_AGREEMENT_FIELD_ID = "3f985a8b-26be-5a07-89d3-2a05acb94354";
+// Seeded `Redacted_Due_Diligence_Extract.docx` in the same matter, opened by
+// the anonymization capture.
+const ANONYMIZED_EXTRACT_ENTITY_ID = "c3dc74a6-7855-5157-84db-ddf14f886df4";
+const ANONYMIZED_EXTRACT_FIELD_ID = "e98a6746-dae9-5509-888b-d58bfbca9a33";
 // Seeded "Change-of-control" thread in the Export Review matter (seed-dev.ts
 // `marketing-agent-thread`), already containing the cited Q&A; keep in sync
 // with record-product-story.ts's MARKETING_AGENT_THREAD_TITLE. Resolved by
@@ -33,6 +37,15 @@ const requestedCapture = process.env["MARKETING_CAPTURE"];
 // each route pays a cold build that the config's 15s expect timeout cannot
 // cover on a CI runner. Mirrors the same allowance in e2e/specs/route-smoke.
 const COLD_COMPILE_TIMEOUT = 60_000;
+
+// The document inspector renders `${versionLabel} · ${formatRelativeTime(...)}`
+// against the current version's timestamp, so the caption changes with wall
+// clock time and drifts every baseline it appears in. Captures carrying a
+// `versionAnchor` pin the page clock this far past that timestamp, so the
+// caption renders the same string on every run: five minutes sits well inside
+// `formatRelativeTime`'s minute bucket (one minute to one hour), far from
+// either boundary, and reads as a natural "just edited" label.
+const VERSION_CAPTION_OFFSET_MS = 5 * 60_000;
 
 const captures = [
   {
@@ -84,6 +97,13 @@ const captures = [
       `&field=${SUPPLIER_AGREEMENT_FIELD_ID}`,
     readyText: "Supplier_Agreement.docx",
     readySelector: ".layout-run-text",
+    // `?editing=true` is a request, not a state: without this the shot can
+    // land on the read-only viewer while the editor is still unlocking.
+    readyControl: { role: "button", name: "Finish editing" },
+    versionAnchor: {
+      workspaceId: AKVIZICE_WORKSPACE_ID,
+      entityId: SUPPLIER_AGREEMENT_ENTITY_ID,
+    },
   },
   {
     name: "agent",
@@ -105,10 +125,14 @@ const captures = [
     name: "anonymization",
     path:
       `/workspaces/${AKVIZICE_WORKSPACE_ID}/all/document` +
-      "?entity=c3dc74a6-7855-5157-84db-ddf14f886df4" +
-      "&field=e98a6746-dae9-5509-888b-d58bfbca9a33",
+      `?entity=${ANONYMIZED_EXTRACT_ENTITY_ID}` +
+      `&field=${ANONYMIZED_EXTRACT_FIELD_ID}`,
     readyText: "Redacted_Due_Diligence_Extract.docx",
     readySelector: ".layout-run-text",
+    versionAnchor: {
+      workspaceId: AKVIZICE_WORKSPACE_ID,
+      entityId: ANONYMIZED_EXTRACT_ENTITY_ID,
+    },
   },
 ] as const;
 
@@ -146,6 +170,10 @@ test("capture landing product screenshots", async ({
       ? await resolveAgentThreadPath(page.request)
       : undefined;
 
+  // Whether the shared page still carries a pinned clock from a previous
+  // capture; see the anchor block in the capture loop.
+  let clockPinned = false;
+
   for (const theme of ["light", "dark"] as const) {
     // eslint-disable-next-line no-await-in-loop -- captures reuse one authenticated page, so each theme switch and capture must be prepared and shot in order
     await page.emulateMedia({ colorScheme: theme });
@@ -169,6 +197,27 @@ test("capture landing product screenshots", async ({
       if (!capturePath) {
         throw new Error(`${capture.name}: no path resolved for this capture`);
       }
+      // Anchor the inspector's relative timestamp before navigating, so the
+      // caption paints with the pinned clock on its first render. Captures
+      // without an anchor run on real time; the clock is only restored when a
+      // previous capture actually pinned it, so the eight captures that never
+      // show a timestamp keep an untouched Date/timer implementation.
+      if ("versionAnchor" in capture) {
+        // eslint-disable-next-line no-await-in-loop -- see above
+        const versionCreatedAt = await resolveCurrentVersionCreatedAt(
+          page.request,
+          capture.versionAnchor,
+        );
+        // eslint-disable-next-line no-await-in-loop -- see above
+        await page.clock.setFixedTime(
+          versionCreatedAt.getTime() + VERSION_CAPTION_OFFSET_MS,
+        );
+        clockPinned = true;
+      } else if (clockPinned) {
+        // eslint-disable-next-line no-await-in-loop -- see above
+        await page.clock.setSystemTime(Date.now());
+        clockPinned = false;
+      }
       // eslint-disable-next-line no-await-in-loop -- see above
       await page.goto(capturePath, { waitUntil: "domcontentloaded" });
       // eslint-disable-next-line no-await-in-loop -- see above
@@ -185,6 +234,18 @@ test("capture landing product screenshots", async ({
         await expect(page.locator(capture.readySelector).first()).toBeVisible({
           timeout: COLD_COMPILE_TIMEOUT,
         });
+      }
+      if ("readyControl" in capture) {
+        // A control that only exists in the target mode, so readiness asserts
+        // the mode itself rather than the route that requested it.
+        // eslint-disable-next-line no-await-in-loop -- see above
+        await expect(
+          page
+            .getByRole(capture.readyControl.role, {
+              name: capture.readyControl.name,
+            })
+            .first(),
+        ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT });
       }
       if ("prepare" in capture && capture.prepare === "open-decision") {
         // Film a specific national decision deterministically, rather than
@@ -312,12 +373,15 @@ test("capture landing product screenshots", async ({
             "clip" in capture
               ? capture.clip
               : { x: 255, y: 0, width: 1137, height: 710 },
-          // Baselines are generated by a developer (macOS) but CI renders on
-          // Linux; font anti-aliasing alone differs by ~2% on these text-heavy
-          // captures, so a near-zero ratio can never pass cross-platform. This
-          // tolerance still catches gross regressions (blank/wrong content) while
-          // absorbing sub-pixel rendering differences. Regenerate the images with
-          // `bun --filter @stll/web test:e2e:marketing:update` when the UI changes.
+          // Baselines are produced on the CI runner by the "Update marketing
+          // screenshots" workflow (.github/workflows/
+          // marketing-screenshots-update.yml), and compared on that same runner
+          // image, so this tolerance no longer has to absorb a macOS-to-Linux
+          // font-rendering gap (~2% on these text-heavy captures): only
+          // run-to-run rendering noise. The value is still the cross-platform
+          // one and gets tightened once every baseline has been regenerated on
+          // Linux. Dispatch that workflow on this branch when the UI change is
+          // intended.
           maxDiffPixelRatio: 0.03,
           scale: "css",
         });
@@ -341,6 +405,62 @@ const resolveAgentThreadPath = async (request: APIRequestContext) => {
     );
   }
   return `/chat/workspaces/${EXPORT_REVIEW_WORKSPACE_ID}/${threadId}`;
+};
+
+// Reads the timestamp the inspector's version caption formats, from the same
+// endpoint the panel's query uses
+// (apps/api/src/handlers/entities/routes.ts, `/entity/:entityId/versions`).
+const resolveCurrentVersionCreatedAt = async (
+  request: APIRequestContext,
+  { workspaceId, entityId }: { workspaceId: string; entityId: string },
+) => {
+  const apiBaseURL = process.env["E2E_API_URL"] ?? "http://localhost:3001";
+  const response = await request.get(
+    `${apiBaseURL}/v1/entities/${workspaceId}/entity/${entityId}/versions`,
+  );
+  expect(response.ok(), await response.text()).toBe(true);
+  const createdAt = getCurrentVersionCreatedAt(await response.json());
+  if (createdAt === undefined) {
+    throw new Error(
+      `Entity ${entityId} has no current version timestamp; the capture would ` +
+        "record a relative caption that changes on every run",
+    );
+  }
+  const parsed = new Date(createdAt);
+  expect(
+    Number.isNaN(parsed.getTime()),
+    `Entity ${entityId} reported an unparseable version timestamp: ${createdAt}`,
+  ).toBe(false);
+  return parsed;
+};
+
+const getCurrentVersionCreatedAt = (payload: unknown): string | undefined => {
+  if (
+    typeof payload !== "object" ||
+    payload === null ||
+    !("versions" in payload) ||
+    !isUnknownArray(payload.versions) ||
+    !("currentVersionId" in payload) ||
+    typeof payload.currentVersionId !== "string"
+  ) {
+    return undefined;
+  }
+
+  const { currentVersionId } = payload;
+  for (const version of payload.versions) {
+    if (
+      typeof version === "object" &&
+      version !== null &&
+      "id" in version &&
+      version.id === currentVersionId &&
+      "createdAt" in version &&
+      typeof version.createdAt === "string"
+    ) {
+      return version.createdAt;
+    }
+  }
+
+  return undefined;
 };
 
 // `Array.isArray` narrows `unknown` to `any[]`; this keeps elements `unknown`.
