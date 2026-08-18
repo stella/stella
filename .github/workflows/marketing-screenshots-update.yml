@@ -10,6 +10,13 @@ name: Update marketing screenshots
 
 on:
   workflow_dispatch:
+  # Bootstrap only: workflow_dispatch registers once the file is on the default
+  # branch, so the first Linux regeneration runs from a push to this branch.
+  # Removed before merge.
+  push:
+    branches: [feat/marketing-screenshots-ci]
+    paths-ignore:
+      - apps/landing/public/media/products/**
 
 concurrency:
   # Two regenerations of one branch would race on the same push target.
