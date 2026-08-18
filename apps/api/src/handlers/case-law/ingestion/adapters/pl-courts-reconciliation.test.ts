@@ -385,6 +385,42 @@ describe("pl-courts listSlicePage", () => {
     expect(error).toBeInstanceOf(AdapterFetchError);
     expect(String(error)).toContain("text/html");
   });
+
+  test("the media type is read whole, not searched for", async () => {
+    // Both of these carry the JSON media type as a substring and neither is
+    // it, so a `Content-Type` containing it is not a `Content-Type` naming it.
+    for (const contentType of [
+      "application/jsonp",
+      "text/html; note=application/json",
+    ]) {
+      expect(contentType).toContain("application/json");
+      mockFetchWithBodies([
+        {
+          pattern: SEARCH_PATTERN,
+          body: searchBody([COMMON_COURT_ITEM], 1),
+          contentType,
+        },
+      ]);
+      // oxlint-disable-next-line no-await-in-loop -- one mocked response at a time; the mock is process-global
+      expect(await sliceRejection(SLICE)).toBeInstanceOf(AdapterFetchError);
+    }
+  });
+
+  test("the JSON media type is read past its parameters", async () => {
+    // What SAOS actually labels a listing with; the charset must not make it
+    // a different media type.
+    mockFetchWithBodies([
+      {
+        pattern: SEARCH_PATTERN,
+        body: searchBody([COMMON_COURT_ITEM], 1),
+        contentType: "Application/JSON; charset=utf-8",
+      },
+    ]);
+
+    const page = await reconciliation.listSlicePage({ slice: SLICE, page: 0 });
+
+    expect(page.items).toHaveLength(1);
+  });
 });
 
 describe("pl-courts buildDecision", () => {

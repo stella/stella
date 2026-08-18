@@ -89,6 +89,16 @@ const SLICE_LIST_TIMEOUT_MS = 60_000;
 const JSON_MEDIA_TYPE = "application/json";
 
 /**
+ * The media type a `Content-Type` names, without its parameters.
+ *
+ * Compared whole rather than searched for: `application/jsonp` contains the
+ * JSON media type and is not it, and a parameter can carry the string into a
+ * header that names something else entirely (`text/html; note=application/json`).
+ */
+const mediaTypeOf = (contentType: string): string =>
+  (contentType.split(";").at(0) ?? "").trim().toLowerCase();
+
+/**
  * SAOS numbers `pageNumber` from zero, on both the dump the crawl walks and
  * the search the slice listing walks: the listing asks for the slice's page
  * number unchanged, and the crawl derives the same number from its offset.
@@ -1015,10 +1025,10 @@ export const listPlCourtsDayPage = async ({
   // SyntaxError: no adapter, no cursor, nothing naming the publisher as the
   // cause. Refused here instead, as the tagged failure every other answer
   // this function will not read is.
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.toLowerCase().includes(JSON_MEDIA_TYPE)) {
+  const mediaType = mediaTypeOf(response.headers.get("content-type") ?? "");
+  if (mediaType !== JSON_MEDIA_TYPE) {
     throw new AdapterFetchError({
-      message: `SAOS search API answered ${contentType.length === 0 ? "no content type" : contentType} rather than ${JSON_MEDIA_TYPE}`,
+      message: `SAOS search API answered ${mediaType.length === 0 ? "no content type" : mediaType} rather than ${JSON_MEDIA_TYPE}`,
       adapterKey: ADAPTER_KEYS.PL_COURTS,
       cursor: date,
       httpStatus: response.status,
