@@ -53,6 +53,9 @@ export const FLOW_STEP_OUTPUT_CONTEXT_CHAR_CAP = 20_000;
 /** Per input-document char cap when an AI step includes documents. */
 export const FLOW_DOCUMENT_CONTEXT_CHAR_CAP = 60_000;
 
+/** Char cap on a step's own instruction text (AI prompt, gate instructions). */
+export const FLOW_STEP_INSTRUCTION_CHAR_CAP = 10_000;
+
 /**
  * Output cap enforced on every AI step's generation, so a run's
  * pre-flight estimate (which assumes this per step) is a real upper
@@ -190,14 +193,23 @@ const flowStepNameSchema = v.pipe(
 const aiFlowStepSchema = v.strictObject({
   kind: v.literal("ai"),
   name: flowStepNameSchema,
-  prompt: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(10_000)),
+  prompt: v.pipe(
+    v.string(),
+    v.trim(),
+    v.minLength(1),
+    v.maxLength(FLOW_STEP_INSTRUCTION_CHAR_CAP),
+  ),
   includeDocuments: v.boolean(),
 });
 
 const reviewGateFlowStepSchema = v.strictObject({
   kind: v.literal("review-gate"),
   name: flowStepNameSchema,
-  instructions: v.pipe(v.string(), v.trim(), v.maxLength(10_000)),
+  instructions: v.pipe(
+    v.string(),
+    v.trim(),
+    v.maxLength(FLOW_STEP_INSTRUCTION_CHAR_CAP),
+  ),
 });
 
 const createDocumentFlowStepSchema = v.strictObject({

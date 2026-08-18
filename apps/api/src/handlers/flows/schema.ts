@@ -9,6 +9,7 @@ import {
   FLOW_REVIEW_DECISIONS,
   FLOW_RUN_STATUSES,
   FLOW_SCHEDULE_FREQUENCIES,
+  FLOW_STEP_INSTRUCTION_CHAR_CAP,
   MAX_FLOW_STEPS,
 } from "@/api/lib/flows/flow-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -24,13 +25,16 @@ const tFlowStep = t.Union([
   t.Object({
     kind: t.Literal("ai"),
     name: tStepName,
-    prompt: t.String({ minLength: 1, maxLength: 10_000 }),
+    prompt: t.String({
+      minLength: 1,
+      maxLength: FLOW_STEP_INSTRUCTION_CHAR_CAP,
+    }),
     includeDocuments: t.Boolean(),
   }),
   t.Object({
     kind: t.Literal("review-gate"),
     name: tStepName,
-    instructions: t.String({ maxLength: 10_000 }),
+    instructions: t.String({ maxLength: FLOW_STEP_INSTRUCTION_CHAR_CAP }),
   }),
   t.Object({
     kind: t.Literal("create-document"),

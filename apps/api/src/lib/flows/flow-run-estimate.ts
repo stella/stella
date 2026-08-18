@@ -10,6 +10,7 @@
 import {
   FLOW_AI_STEP_MAX_OUTPUT_TOKENS,
   FLOW_DOCUMENT_CONTEXT_CHAR_CAP,
+  FLOW_STEP_INSTRUCTION_CHAR_CAP,
   FLOW_STEP_OUTPUT_CONTEXT_CHAR_CAP,
 } from "@/api/lib/flows/flow-types";
 import type { FlowStep } from "@/api/lib/flows/flow-types";
@@ -39,9 +40,10 @@ export const estimateFlowRunUnits = ({
     return 0;
   }
   const includesDocuments = aiSteps.some((step) => step.includeDocuments);
-  // Every prior AI output can be replayed into a later step, and each
-  // document is capped independently.
+  // The step's own instruction, every prior AI output replayed into a
+  // later step, and each document capped independently.
   const promptCharsPerCall =
+    FLOW_STEP_INSTRUCTION_CHAR_CAP +
     aiSteps.length * FLOW_STEP_OUTPUT_CONTEXT_CHAR_CAP +
     (includesDocuments ? inputEntityCount * FLOW_DOCUMENT_CONTEXT_CHAR_CAP : 0);
   return estimatePromptRunUnits({
