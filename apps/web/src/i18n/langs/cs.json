@@ -3263,14 +3263,23 @@
     }
   },
   "statutes": {
+    "asOf": "Znění účinné k",
     "backToList": "Všechny předpisy",
+    "diffInserted": "Vloženo:",
+    "diffRemoved": "Vypuštěno:",
     "emptyDocument": "Toto znění nemá dostupný text.",
     "emptyState": "Nenalezeny žádné předpisy.",
     "inForceSince": "Účinné od {date}",
+    "noVersionInForce": "K vybranému dni nebylo účinné žádné znění tohoto předpisu.",
     "openEnded": "současnost",
     "outline": "Obsah",
     "outlineJumpLabel": "Přejít na ustanovení",
     "outlineJumpPlaceholder": "§ 10 nebo název",
+    "provisionHistoryEarliest": "Nejstarší dochované znění.",
+    "provisionHistoryEmpty": "K tomuto ustanovení není dochováno žádné znění.",
+    "provisionHistoryFor": "Historie změn: {provision}",
+    "provisionHistoryLoadOlder": "Načtěte starší znění a porovnejte je.",
+    "provisionHistoryUnavailable": "Historii tohoto ustanovení se nepodařilo načíst.",
     "searchLabel": "Hledat v právních předpisech",
     "searchPlaceholder": "Hledat podle názvu nebo čísla...",
     "status": {

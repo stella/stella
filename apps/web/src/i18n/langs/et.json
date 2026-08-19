@@ -3263,14 +3263,23 @@
     }
   },
   "statutes": {
+    "asOf": "Kehtinud tekst kuupäeval",
     "backToList": "Kõik õigusaktid",
+    "diffInserted": "Lisatud:",
+    "diffRemoved": "Välja jäetud:",
     "emptyDocument": "Sellel redaktsioonil puudub tekst.",
     "emptyState": "Õigusakte ei leitud.",
     "inForceSince": "Kehtib alates {date}",
+    "noVersionInForce": "Valitud kuupäeval ei kehtinud ükski selle õigusakti redaktsioon.",
     "openEnded": "praeguseni",
     "outline": "Sisukord",
     "outlineJumpLabel": "Liigu sättele",
     "outlineJumpPlaceholder": "§ 10 või pealkiri",
+    "provisionHistoryEarliest": "Varaseim teadaolev redaktsioon.",
+    "provisionHistoryEmpty": "Selle sätte kohta ei ole ühtegi redaktsiooni.",
+    "provisionHistoryFor": "Muudatuste ajalugu: {provision}",
+    "provisionHistoryLoadOlder": "Laadi vanemad redaktsioonid võrdlemiseks.",
+    "provisionHistoryUnavailable": "Selle sätte ajalugu ei õnnestunud laadida.",
     "searchLabel": "Otsi õigusaktidest",
     "searchPlaceholder": "Otsi pealkirja või numbri järgi...",
     "status": {

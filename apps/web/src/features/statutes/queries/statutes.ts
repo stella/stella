@@ -2,7 +2,7 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
 import { assertPublicLawApiData } from "@/lib/public-law-api";
@@ -10,6 +10,7 @@ import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
 const DEFAULT_PAGE_SIZE = 50;
+const NOT_FOUND_STATUS = 404;
 const VERSIONS_PAGE_SIZE = 200;
 /**
  * Consolidated versions are read as a whole, because the switcher offers the
@@ -24,6 +25,16 @@ export type StatuteListFilters = {
   query?: string;
 };
 
+/**
+ * A Work plus the date to read it at. The identifier addresses the Work and
+ * the date picks the consolidation, so the trio is the cache identity.
+ */
+export type StatuteAsOfKey = {
+  asOf: string;
+  eli: string;
+  language: string;
+};
+
 export const statuteKeys = {
   all: ["statutes"],
   list: (filters: StatuteListFilters) => [
@@ -36,6 +47,11 @@ export const statuteKeys = {
     },
   ],
   byId: (documentId: string) => [...statuteKeys.all, "detail", documentId],
+  asOf: (key: StatuteAsOfKey) => [
+    ...statuteKeys.all,
+    "asOf",
+    { asOf: key.asOf, eli: key.eli, language: key.language },
+  ],
   versions: (documentId: string) => [
     ...statuteKeys.all,
     "detail",
@@ -69,16 +85,53 @@ export const statutesInfiniteOptions = (filters: StatuteListFilters) =>
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
+const readStatute = async (documentId: string, signal: AbortSignal) => {
+  const response = await api.law
+    .statutes({ documentId: toSafeId<"legislationDocument">(documentId) })
+    .get({ fetch: { signal } });
+
+  const data = unwrapEden(response);
+  assertPublicLawApiData(data, "readPublicStatute");
+
+  return data;
+};
+
+/** One consolidation of a statute, as the public reader sees it. */
+export type PublicStatute = Awaited<ReturnType<typeof readStatute>>;
+
 export const statuteOptions = (documentId: string) =>
   queryOptions({
     queryKey: statuteKeys.byId(documentId),
-    queryFn: async ({ signal }) => {
-      const response = await api.law
-        .statutes({ documentId: toSafeId<"legislationDocument">(documentId) })
-        .get({ fetch: { signal } });
+    queryFn: async ({ signal }) => await readStatute(documentId, signal),
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  });
 
-      const data = unwrapEden(response);
-      assertPublicLawApiData(data, "readPublicStatute");
+/**
+ * The consolidation of a Work that applied on a given date, or null when the
+ * corpus covers no version on it. A date outside the covered range is a real
+ * answer the reader shows, not a failed request.
+ */
+export const statuteAsOfOptions = (key: StatuteAsOfKey) =>
+  queryOptions({
+    queryKey: statuteKeys.asOf(key),
+    queryFn: async ({ signal }) => {
+      const response = await api.law.statutes["by-eli"].get({
+        query: { asOf: key.asOf, eli: key.eli, language: key.language },
+        fetch: { signal },
+      });
+
+      if (response.error) {
+        const error = toAPIError(response.error);
+
+        if (error.status === NOT_FOUND_STATUS) {
+          return null;
+        }
+
+        throw error;
+      }
+
+      const { data } = response;
+      assertPublicLawApiData(data, "readPublicStatuteAsOf");
 
       return data;
     },
@@ -157,6 +210,9 @@ const readStatuteVersionsFrom = async ({
     signal,
   });
 };
+
+/** One entry of a Work's version list. */
+export type PublicStatuteVersion = StatuteVersionsPage["items"][number];
 
 /** Every consolidated version of the work, newest window first. */
 export const statuteVersionsOptions = (documentId: string) =>

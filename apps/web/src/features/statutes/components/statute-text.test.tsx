@@ -25,6 +25,8 @@ const renderWithIntl = (children: ReactNode) =>
 
 const inlineText = (text: string) => [{ type: "text" as const, text }];
 
+const DOCUMENT_ID = "0198f4c1-2b3d-7a41-9c88-4a1c0e2f5d6b";
+
 const blocks = [
   // The publisher states a division's designation and its title as two
   // lines of one heading, joined by a line break.
@@ -91,8 +93,10 @@ describe("StatuteText", () => {
       <StatuteText
         blocks={blocks}
         citationWork={null}
+        documentId={DOCUMENT_ID}
         fulltext={null}
         language="cs"
+        versionCount={1}
       />,
     );
 
@@ -110,8 +114,10 @@ describe("StatuteText", () => {
       <StatuteText
         blocks={blocks}
         citationWork={null}
+        documentId={DOCUMENT_ID}
         fulltext={null}
         language="cs"
+        versionCount={1}
       />,
     );
 
@@ -124,8 +130,10 @@ describe("StatuteText", () => {
       <StatuteText
         blocks={blocks}
         citationWork={null}
+        documentId={DOCUMENT_ID}
         fulltext={null}
         language="cs"
+        versionCount={1}
       />,
     );
 
@@ -140,8 +148,10 @@ describe("StatuteText", () => {
       <StatuteText
         blocks={blocks}
         citationWork={null}
+        documentId={DOCUMENT_ID}
         fulltext={null}
         language="cs"
+        versionCount={1}
       />,
     );
 
@@ -159,8 +169,10 @@ describe("StatuteText", () => {
       <StatuteText
         blocks={blocks}
         citationWork={null}
+        documentId={DOCUMENT_ID}
         fulltext={null}
         language="cs"
+        versionCount={1}
       />,
     );
 
@@ -177,8 +189,10 @@ describe("StatuteText", () => {
       <StatuteText
         blocks={[]}
         citationWork={null}
+        documentId={DOCUMENT_ID}
         fulltext={"First paragraph.\n\nSecond paragraph."}
         language="cs"
+        versionCount={1}
       />,
     );
 
@@ -186,13 +200,47 @@ describe("StatuteText", () => {
     expect(markup).toContain("Second paragraph.");
   });
 
+  test("offers no drafting history while the work has one consolidation", () => {
+    const markup = renderWithIntl(
+      <StatuteText
+        blocks={blocks}
+        documentId={DOCUMENT_ID}
+        fulltext={null}
+        language="cs"
+        versionCount={1}
+      />,
+    );
+
+    expect(markup).not.toContain(messages.common.history);
+  });
+
+  test("offers a drafting history per provision, not per container", () => {
+    const markup = renderWithIntl(
+      <StatuteText
+        blocks={blocks}
+        documentId={DOCUMENT_ID}
+        fulltext={null}
+        language="cs"
+        versionCount={3}
+      />,
+    );
+
+    // Same rule as the citation affordance: of the fixture's four headings
+    // only `§ 47` opens a provision, and a container heading has no drafting
+    // history of its own.
+    expect(blocks.filter((block) => block.type === "heading")).toHaveLength(4);
+    expect(markup.split(messages.common.history)).toHaveLength(2);
+  });
+
   test("says so when neither a parsed document nor plain text exists", () => {
     const markup = renderWithIntl(
       <StatuteText
         blocks={[]}
         citationWork={null}
+        documentId={DOCUMENT_ID}
         fulltext={null}
         language="cs"
+        versionCount={1}
       />,
     );
 
@@ -207,8 +255,10 @@ describe("StatuteText", () => {
           <StatuteText
             blocks={blocks}
             citationWork={{ eli: "/eli/cz/sb/2012/89", jurisdiction: "CZE" }}
+            documentId={DOCUMENT_ID}
             fulltext={null}
             language="cs"
+            versionCount={1}
           />
         </FormattingProvider>
       </QueryClientProvider>,
@@ -229,8 +279,10 @@ describe("StatuteText", () => {
           <StatuteText
             blocks={blocks}
             citationWork={{ eli: "/eli/cz/sb/2012/89", jurisdiction: "CZE" }}
+            documentId={DOCUMENT_ID}
             fulltext={null}
             language="cs"
+            versionCount={1}
           />
         </FormattingProvider>
       </QueryClientProvider>,

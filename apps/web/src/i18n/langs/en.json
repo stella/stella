@@ -3263,14 +3263,23 @@
     }
   },
   "statutes": {
+    "asOf": "Text in force on",
     "backToList": "All statutes",
+    "diffInserted": "Inserted:",
+    "diffRemoved": "Deleted:",
     "emptyDocument": "This version has no text available.",
     "emptyState": "No statutes found.",
     "inForceSince": "In force since {date}",
+    "noVersionInForce": "No version of this act was in force on the selected date.",
     "openEnded": "present",
     "outline": "Contents",
     "outlineJumpLabel": "Jump to a provision",
     "outlineJumpPlaceholder": "§ 10 or a heading",
+    "provisionHistoryEarliest": "Earliest wording on record.",
+    "provisionHistoryEmpty": "No wording of this provision is on record.",
+    "provisionHistoryFor": "Change history: {provision}",
+    "provisionHistoryLoadOlder": "Load older versions to compare wordings.",
+    "provisionHistoryUnavailable": "This provision's history could not be loaded.",
     "searchLabel": "Search statutes",
     "searchPlaceholder": "Search by title or number...",
     "status": {

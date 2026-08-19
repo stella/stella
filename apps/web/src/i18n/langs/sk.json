@@ -3263,14 +3263,23 @@
     }
   },
   "statutes": {
+    "asOf": "Znenie účinné k",
     "backToList": "Všetky predpisy",
+    "diffInserted": "Vložené:",
+    "diffRemoved": "Vypustené:",
     "emptyDocument": "Toto znenie nemá dostupný text.",
     "emptyState": "Nenašli sa žiadne predpisy.",
     "inForceSince": "Účinné od {date}",
+    "noVersionInForce": "K vybranému dňu nebolo účinné žiadne znenie tohto predpisu.",
     "openEnded": "súčasnosť",
     "outline": "Obsah",
     "outlineJumpLabel": "Prejsť na ustanovenie",
     "outlineJumpPlaceholder": "§ 10 alebo názov",
+    "provisionHistoryEarliest": "Najstaršie zachované znenie.",
+    "provisionHistoryEmpty": "K tomuto ustanoveniu nie je zachované žiadne znenie.",
+    "provisionHistoryFor": "História zmien: {provision}",
+    "provisionHistoryLoadOlder": "Načítajte staršie znenia a porovnajte ich.",
+    "provisionHistoryUnavailable": "Históriu tohto ustanovenia sa nepodarilo načítať.",
     "searchLabel": "Hľadať v právnych predpisoch",
     "searchPlaceholder": "Hľadať podľa názvu alebo čísla...",
     "status": {

@@ -3263,14 +3263,23 @@
     }
   },
   "statutes": {
+    "asOf": "Tekstas, galiojęs",
     "backToList": "Visi teisės aktai",
+    "diffInserted": "Įterpta:",
+    "diffRemoved": "Išbraukta:",
     "emptyDocument": "Ši redakcija neturi teksto.",
     "emptyState": "Teisės aktų nerasta.",
     "inForceSince": "Galioja nuo {date}",
+    "noVersionInForce": "Pasirinktą dieną negaliojo nė viena šio akto redakcija.",
     "openEnded": "dabar",
     "outline": "Turinys",
     "outlineJumpLabel": "Pereiti prie nuostatos",
     "outlineJumpPlaceholder": "§ 10 arba pavadinimas",
+    "provisionHistoryEarliest": "Seniausia žinoma redakcija.",
+    "provisionHistoryEmpty": "Šios nuostatos redakcijų nėra.",
+    "provisionHistoryFor": "Pakeitimų istorija: {provision}",
+    "provisionHistoryLoadOlder": "Įkelkite senesnes redakcijas palyginimui.",
+    "provisionHistoryUnavailable": "Nepavyko įkelti šios nuostatos istorijos.",
     "searchLabel": "Ieškoti teisės aktų",
     "searchPlaceholder": "Ieškoti pagal pavadinimą arba numerį...",
     "status": {

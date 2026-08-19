@@ -3263,14 +3263,23 @@
     }
   },
   "statutes": {
+    "asOf": "Texto em vigor em",
     "backToList": "Todas as normas",
+    "diffInserted": "Inserido:",
+    "diffRemoved": "Suprimido:",
     "emptyDocument": "Esta versão não tem texto disponível.",
     "emptyState": "Nenhuma norma encontrada.",
     "inForceSince": "Em vigor desde {date}",
+    "noVersionInForce": "Nenhuma versão desta norma estava em vigor na data escolhida.",
     "openEnded": "hoje",
     "outline": "Sumário",
     "outlineJumpLabel": "Ir para um dispositivo",
     "outlineJumpPlaceholder": "§ 10 ou um título",
+    "provisionHistoryEarliest": "Versão mais antiga disponível.",
+    "provisionHistoryEmpty": "Não há nenhuma versão deste dispositivo.",
+    "provisionHistoryFor": "Histórico de alterações: {provision}",
+    "provisionHistoryLoadOlder": "Carregue versões anteriores para comparar.",
+    "provisionHistoryUnavailable": "Não foi possível carregar o histórico deste dispositivo.",
     "searchLabel": "Buscar na legislação",
     "searchPlaceholder": "Buscar por título ou número...",
     "status": {

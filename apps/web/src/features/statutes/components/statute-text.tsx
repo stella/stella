@@ -10,6 +10,7 @@ import {
 } from "@/components/legal-reader/document-ast-text";
 import { parseProvisionDesignation } from "@/components/legal-reader/reader-outline";
 import { ProvisionCitingDecisions } from "@/features/statutes/components/provision-citing-decisions";
+import { ProvisionHistory } from "@/features/statutes/components/provision-history";
 
 /**
  * What a provision's incoming citations are filed under: the work's own
@@ -26,9 +27,22 @@ type StatuteTextProps = {
   /** Parsed blocks. The route owns the parse: it also builds the outline. */
   blocks: readonly Block[];
   citationWork: StatuteCitationWork | null;
+  /** The consolidation on screen; a provision's history is read from it. */
+  documentId: string;
   fulltext: string | null;
   language: string;
+  /** A Work with a single consolidation has no history to offer. */
+  versionCount: number;
 };
+
+/**
+ * A heading that opens a provision. It is the unit case law cites and the
+ * unit a drafting history is about, so both affordances key off the one
+ * designation parser rather than each guessing at the shape of a heading.
+ */
+const isProvisionHeading = (block: Block): boolean =>
+  block.type === "heading" &&
+  parseProvisionDesignation(block.plainText) !== null;
 
 const READER_STYLE = {
   fontFamily: "var(--reader-body-font)",
@@ -49,15 +63,12 @@ const NO_ACTIVE_MATCH = -1;
 export const StatuteText = ({
   blocks,
   citationWork,
+  documentId,
   fulltext,
   language,
+  versionCount,
 }: StatuteTextProps) => {
   const t = useTranslations();
-
-  /** A heading that opens a provision is the unit case law cites. */
-  const isProvisionHeading = (block: Block): boolean =>
-    block.type === "heading" &&
-    parseProvisionDesignation(block.plainText) !== null;
 
   if (blocks.length > 0) {
     return (
@@ -74,7 +85,14 @@ export const StatuteText = ({
               rangesByPieceId={NO_RANGES}
               variant="statute"
             />
-            {citationWork !== null && isProvisionHeading(block) && (
+            {isProvisionHeading(block) && versionCount > 1 && (
+              <ProvisionHistory
+                anchorId={block.anchorId}
+                documentId={documentId}
+                provision={block.plainText}
+              />
+            )}
+            {isProvisionHeading(block) && citationWork !== null && (
               <ProvisionCitingDecisions
                 anchorId={block.anchorId}
                 eli={citationWork.eli}
