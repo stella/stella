@@ -4,7 +4,7 @@ import { t } from "elysia";
 import { legalListItemComments } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { detectAndNotifyMentions } from "@/api/lib/notifications";
+import { detectMentionTargets, createAndBroadcastNotifications } from "@/api/lib/notifications";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -49,14 +49,14 @@ const createItemComment = createSafeHandler(
           body: body.body,
           authorId: user.id,
         });
-        await detectAndNotifyMentions(tx, body.body, user.id, "entity", body.itemEntityId);
+        const mentionResult = await detectMentionTargets(tx, body.body, user.id, workspaceId);
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_ITEM,
           resourceId: body.itemEntityId,
           metadata: { operation: "comment_added", commentId: id },
         });
-        return id;
+        return { id, mentionResult };
       }),
     );
     if (!result) {
@@ -64,7 +64,16 @@ const createItemComment = createSafeHandler(
         new HandlerError({ status: 404, message: "List item not found" }),
       );
     }
-    return Result.ok({ id: result });
+    if (result.mentionResult.targets.length > 0) {
+      const preview = body.body.substring(0, 50) + (body.body.length > 50 ? "..." : "");
+      await createAndBroadcastNotifications(result.mentionResult.targets, {
+        title: "New Mention",
+        message: `${result.mentionResult.authorName} @-mentioned you: "${preview}"`,
+        entityType: "entity",
+        entityId: body.itemEntityId,
+      });
+    }
+    return Result.ok({ id: result.id });
   },
 );
 

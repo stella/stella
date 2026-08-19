@@ -32,7 +32,14 @@ const listNotifications = createSafeRootHandler(
   config,
   async function* ({ safeDb, user, query }) {
     const rawLimit = query["limit"] ?? LIMITS.notificationsPageSizeDefault;
-    const limit = typeof rawLimit === "string" ? Number(rawLimit) : rawLimit;
+    let limit = typeof rawLimit === "string" ? Number(rawLimit) : rawLimit;
+
+    if (!Number.isInteger(limit) || limit <= 0) {
+      limit = LIMITS.notificationsPageSizeDefault;
+    } else if (limit > LIMITS.notificationsPageSizeMax) {
+      limit = LIMITS.notificationsPageSizeMax;
+    }
+
     const conditions = [eq(notifications.userId, user.id)];
 
     const queryCursor = query["cursor"];

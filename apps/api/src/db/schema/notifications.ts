@@ -20,6 +20,7 @@ export const notifications = p.pgTable(
     readAt: timestamptz("read_at"),
     entityType: p.text("entity_type"), // Optional type, e.g. "matter", "document", etc.
     entityId: p.text("entity_id"),     // Optional ID
+    idempotencyKey: p.text("idempotency_key").unique(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
       .notNull()

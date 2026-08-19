@@ -61,7 +61,7 @@ beforeAll(async () => {
   await activeTestDb.insert(authUser).values([
     {
       id: userId,
-      email: `${userId}@example.test`,
+      email: `${userId}@stella.dev`,
       name: "Notif User 1",
     },
     {
@@ -85,13 +85,13 @@ afterAll(async () => {
 describe("notifications backend logic", () => {
   test("creates notifications and lists them for the authenticated user", async () => {
     // 1. Create a notification
-    const notifId = await createNotification(activeTestDb, {
+    const notifId = (await createNotification(activeTestDb, {
       userId,
       title: "Test Alert",
       message: "This is a test notification",
       entityType: "document",
       entityId: "doc-123",
-    });
+    }))!;
 
     expect(notifId).toBeDefined();
 
@@ -122,11 +122,11 @@ describe("notifications backend logic", () => {
   });
 
   test("marks a single notification as read", async () => {
-    const notifId = await createNotification(activeTestDb, {
+    const notifId = (await createNotification(activeTestDb, {
       userId,
       title: "Mark Read Alert",
       message: "Unread message",
-    });
+    }))!;
 
     const readResult = await markNotificationRead.handler(
       createTestHandlerContext<MarkReadCtx>({
@@ -194,6 +194,7 @@ describe("notifications backend logic", () => {
     const newsResult = await publishProductNews.handler(
       createTestHandlerContext<ProductNewsCtx>({
         safeDb: asTestRaw<any>(createSafeDb(activeTestDb, [], orgId, userId)),
+        user: { id: userId },
         body: {
           title: "Product Launch",
           message: "Stella v2.0 is live!",
