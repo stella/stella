@@ -48,14 +48,47 @@ describe("context decides when it speaks", () => {
     ).toBe(CITATION_KIND.PRECEDENT);
   });
 
-  test("a constitutional-complaint recital is procedural even for a supreme-court registry", () => {
+  // One cue per test, so removing any single alternative fails its test.
+  test("a complaint against a court's conduct is procedural even for a supreme-court registry", () => {
     expect(
       classifyCitation({
         citationText: "sp. zn. 1 Tdo 4/2008",
         context:
-          "postupom Najvyššieho súdu Slovenskej republiky v konaní vedenom pod sp. zn. 1 Tdo 4/2008 a jeho uznesením z 20. februára 2008 a takto",
+          "postupom Najvyššieho súdu Slovenskej republiky sp. zn. 1 Tdo 4/2008 a jeho uznesením z 20. februára 2008",
       }),
     ).toBe(CITATION_KIND.PROCEDURAL);
+  });
+
+  test("the proceedings a complaint names are procedural", () => {
+    expect(
+      classifyCitation({
+        citationText: "sp. zn. 1 Tdo 4/2008",
+        context:
+          "Najvyššieho súdu Slovenskej republiky v konaní vedenom pod sp. zn. 1 Tdo 4/2008 a jeho uznesením z 20. februára 2008",
+      }),
+    ).toBe(CITATION_KIND.PROCEDURAL);
+  });
+
+  test("the operative-part lead-in marks the recitals", () => {
+    expect(
+      classifyCitation({
+        citationText: "sp. zn. 3 Tdo 48/2015",
+        context:
+          "a uznesením Najvyššieho súdu Slovenskej republiky sp. zn. 3 Tdo 48/2015 z 11. novembra 2015 a takto rozhodol:",
+      }),
+    ).toBe(CITATION_KIND.PROCEDURAL);
+  });
+
+  test("a precedent invoked by the ordinary Slovak formula stays precedent", () => {
+    // `v konaní vedenom` alone would read as a recital; the Slovak
+    // precedent verb makes it a tie, and the registry settles it.
+    expect(
+      classifyCitation({
+        citationText: "sp. zn. II. ÚS 251/04",
+        context:
+          "Ústavný súd v konaní vedenom pod sp. zn. II. ÚS 251/04 konštatoval, že",
+      }),
+    ).toBe(CITATION_KIND.PRECEDENT);
   });
 
   test("a file kept by the court below is procedural on context, not registry", () => {
