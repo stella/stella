@@ -21,6 +21,7 @@ import {
 import {
   buildCzNssDecision,
   courtFromEcli,
+  CZ_ECLI_COURTS,
   czNssAdapter,
   czNssExpectedRows,
   czNssListingIdentity,
@@ -181,6 +182,8 @@ type StubOptions = {
   continuation?: readonly Response[];
   /** Status for both document endpoints; 200 serves the fixture. */
   documentStatus?: number;
+  /** Status for the detail page alone; defaults to `documentStatus`. */
+  detailStatus?: number;
 };
 
 const htmlResponse = (body: string, status = 200): Response =>
@@ -192,6 +195,7 @@ const htmlResponse = (body: string, status = 200): Response =>
 const installStub = ({
   continuation = [],
   documentStatus = 200,
+  detailStatus = documentStatus,
   search = [],
 }: StubOptions): { requests: RecordedRequest[] } => {
   const requests: RecordedRequest[] = [];
@@ -222,9 +226,9 @@ const installStub = ({
           return next ?? htmlResponse("", 200);
         }
         if (url.pathname.startsWith("/DokumentDetail/Index/")) {
-          return documentStatus === 200
+          return detailStatus === 200
             ? htmlResponse(detailPage("ECLI:CZ:MSPH:2026:1.Az.4.2026.79"))
-            : htmlResponse("", documentStatus);
+            : htmlResponse("", detailStatus);
         }
         if (url.pathname.startsWith("/DokumentOriginal/Html/")) {
           return documentStatus === 200
@@ -854,15 +858,25 @@ describe("cz-nss fetchPage", () => {
 // ── Per-item build ───────────────────────────────────────
 
 describe("cz-nss court from ECLI", () => {
-  test("each published court code names its court", () => {
-    expect(courtFromEcli("ECLI:CZ:NSS:2020:1.As.1.2020.20")).toBe(
-      "Nejvyšší správní soud",
-    );
+  test("every declared court code resolves to its court, and nothing else does", () => {
+    // Driven from the map, so a code added to it is exercised here without
+    // anyone remembering to; the one non-member proves the lookup is closed.
+    for (const [code, court] of Object.entries(CZ_ECLI_COURTS)) {
+      expect(courtFromEcli(`ECLI:CZ:${code}:2021:52.Af.4.2020.66`)).toBe(court);
+    }
+    expect(Object.keys(CZ_ECLI_COURTS).toSorted()).toEqual([
+      "KSBR",
+      "KSCB",
+      "KSHK",
+      "KSOS",
+      "KSPH",
+      "KSPL",
+      "KSUL",
+      "MSPH",
+      "NSS",
+    ]);
     expect(courtFromEcli("ECLI:CZ:KSHK:2021:52.Af.4.2020.66")).toBe(
       "Krajský soud v Hradci Králové",
-    );
-    expect(courtFromEcli("ECLI:CZ:MSPH:2026:1.Az.4.2026.79")).toBe(
-      "Městský soud v Praze",
     );
   });
 
@@ -942,6 +956,32 @@ describe("cz-nss buildDecision", () => {
     expect((await reconciliation.buildDecision(payload)).type).toBe(
       "detail-unavailable",
     );
+  });
+
+  test("a detail page the portal failed to serve is not a row without metadata", async () => {
+    // The document came back but the metadata did not. Built as is, the row
+    // would carry the fallback court and no ECLI for good, since the refresh
+    // hashes only listing fields; reported unavailable, the walk comes back
+    // for it.
+    const payload = await listedRow();
+    installStub({ search: [], detailStatus: 503 });
+
+    expect((await reconciliation.buildDecision(payload)).type).toBe(
+      "detail-unavailable",
+    );
+  });
+
+  test("a detail page the portal has none of still builds the row", async () => {
+    const payload = await listedRow();
+    installStub({ search: [], detailStatus: 404 });
+
+    const built = await reconciliation.buildDecision(payload);
+    expect(built.type).toBe("built");
+    if (built.type !== "built") {
+      return;
+    }
+    expect(built.decision.ecli).toBeUndefined();
+    expect(built.decision.court).toBe("Nejvyšší správní soud");
   });
 
   test("refuses a row that names no document at all", async () => {

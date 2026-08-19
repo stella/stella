@@ -84,7 +84,7 @@ const CZ_NSS_COURT = "Nejvyšší správní soud";
  * reported rather than mapped, and the row keeps the fallback label so the
  * document is still stored.
  */
-const CZ_ECLI_COURTS = {
+export const CZ_ECLI_COURTS = {
   NSS: CZ_NSS_COURT,
   MSPH: "Městský soud v Praze",
   KSBR: "Krajský soud v Brně",
@@ -687,13 +687,25 @@ const EMPTY_DETAIL: DetailMetadata = {
   citation: undefined,
 };
 
+/**
+ * The detail page, or the fact that it could not be read.
+ *
+ * A portal that answers 404 has no metadata for the document, and the row is
+ * built without it. A timeout or a server error is not that: the metadata
+ * exists and was not read, and a row built from it would carry the fallback
+ * court and no ECLI for good, since the refresh hashes only listing fields.
+ * Such a row is reported as unavailable, which the reconciliation treats as
+ * a document not yet read and comes back for.
+ */
+type DetailFetch =
+  | { type: "fetched"; detail: DetailMetadata }
+  | { type: "unavailable" };
+
 const fetchDetailMetadata = async (
   documentId: string,
   session: SessionState,
   signal: AbortSignal,
-): Promise<DetailMetadata> => {
-  const empty = EMPTY_DETAIL;
-
+): Promise<DetailFetch> => {
   try {
     const response = await fetchWithTimeout(
       `${BASE_URL}/DokumentDetail/Index/${documentId}`,
@@ -706,28 +718,34 @@ const fetchDetailMetadata = async (
         timeoutMs: ADAPTER_TIMEOUT.REQUEST,
       },
     );
+    if (response.status === 404) {
+      return { type: "fetched", detail: EMPTY_DETAIL };
+    }
     if (!response.ok) {
-      return empty;
+      return { type: "unavailable" };
     }
 
     const html = await response.text();
 
     return {
-      ecli: extractDivText(html, "ecli"),
-      judge: extractDivText(html, "soudcezpravodaj"),
-      senate: extractDivText(html, "soudsenat"),
-      legalArea: extractDivText(html, "oblastupravy"),
-      decisionType: extractDivText(html, "druhdokumentuavyrokrozhodnuti"),
-      decisionDate: extractDivText(html, "datumvydanirozhodnuti"),
-      outcome: extractDivText(html, "vyrokrozhodnuti"),
-      caseType: extractDivText(html, "typrizeni"),
-      parties: extractDivText(html, "ucastnicirizeniz"),
-      caseStatus: extractDivText(html, "stavrizeni"),
-      administrativeAuthority: extractDivText(html, "nazevspravnihoorganu"),
-      citation: extractDivText(html, "citace"),
+      type: "fetched",
+      detail: {
+        ecli: extractDivText(html, "ecli"),
+        judge: extractDivText(html, "soudcezpravodaj"),
+        senate: extractDivText(html, "soudsenat"),
+        legalArea: extractDivText(html, "oblastupravy"),
+        decisionType: extractDivText(html, "druhdokumentuavyrokrozhodnuti"),
+        decisionDate: extractDivText(html, "datumvydanirozhodnuti"),
+        outcome: extractDivText(html, "vyrokrozhodnuti"),
+        caseType: extractDivText(html, "typrizeni"),
+        parties: extractDivText(html, "ucastnicirizeniz"),
+        caseStatus: extractDivText(html, "stavrizeni"),
+        administrativeAuthority: extractDivText(html, "nazevspravnihoorganu"),
+        citation: extractDivText(html, "citace"),
+      },
     };
   } catch {
-    return empty;
+    return { type: "unavailable" };
   }
 };
 
@@ -1068,7 +1086,14 @@ export const buildCzNssDecision = async ({
     };
   }
 
-  const detail = await fetchDetailMetadata(documentId, session, signal);
+  const detailFetch = await fetchDetailMetadata(documentId, session, signal);
+  if (detailFetch.type === "unavailable") {
+    return {
+      type: "detail-unavailable",
+      decision: rowToResult(row, EMPTY_CONTENT, EMPTY_DETAIL),
+    };
+  }
+  const { detail } = detailFetch;
   const content = await fetchDecisionContent(
     documentId,
     row,
