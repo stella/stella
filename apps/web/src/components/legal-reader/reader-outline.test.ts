@@ -293,6 +293,17 @@ describe("withProvisionRanges", () => {
     expect(withProvisionRanges(items).at(2)?.label).toBe("§ 976");
   });
 
+  test("a container numbering both units states the marker at both ends", () => {
+    const mixed = withProvisionRanges([
+      outlineItem({ id: "hlava", label: "HLAVA I", level: 0 }),
+      outlineItem({ id: "p-1", label: "§ 1", level: 1 }),
+      outlineItem({ id: "cl-2", label: "Čl. 2", level: 1 }),
+    ]);
+
+    // `§ 1–2` would state the article as a section, which it is not.
+    expect(mixed.at(0)?.label).toBe("HLAVA I (§ 1–Čl. 2)");
+  });
+
   test("a container with no provisions under it is left as the act states it", () => {
     const ranged = withProvisionRanges([
       outlineItem({ id: "cast", label: "ČÁST PRVNÍ", level: 0 }),

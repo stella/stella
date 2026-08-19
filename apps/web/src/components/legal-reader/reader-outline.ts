@@ -201,13 +201,26 @@ export const withProvisionRanges = (
       return item;
     }
 
-    const span =
-      first.number === last.number
-        ? first.number
-        : `${first.number}${RANGE_DASH}${last.number}`;
-
-    return { ...item, label: `${item.label} (${first.marker} ${span})` };
+    return { ...item, label: `${item.label} (${spanOf(first, last)})` };
   });
+
+/**
+ * The span between two designations. A container that numbers sections and
+ * articles alike states the marker at both ends: `§ 1` through `Art. 2` is
+ * not two sections, and dropping the second marker would say it was.
+ */
+const spanOf = (
+  first: ProvisionDesignation,
+  last: ProvisionDesignation,
+): string => {
+  if (first.unit !== last.unit) {
+    return `${first.marker} ${first.number}${RANGE_DASH}${last.marker} ${last.number}`;
+  }
+
+  return first.number === last.number
+    ? `${first.marker} ${first.number}`
+    : `${first.marker} ${first.number}${RANGE_DASH}${last.number}`;
+};
 
 /**
  * What the reader typed into the rail's jump field.

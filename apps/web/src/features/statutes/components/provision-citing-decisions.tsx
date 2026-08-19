@@ -43,15 +43,22 @@ export const ProvisionCitingDecisions = ({
   const format = useFormatter();
   const [open, setOpen] = useState(false);
 
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isPending } =
-    useInfiniteQuery({
-      ...citingDecisionsInfiniteOptions({
-        anchor: anchorId,
-        eli,
-        jurisdiction,
-      }),
-      enabled: open,
-    });
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isError,
+    isFetchingNextPage,
+    isPending,
+    refetch,
+  } = useInfiniteQuery({
+    ...citingDecisionsInfiniteOptions({
+      anchor: anchorId,
+      eli,
+      jurisdiction,
+    }),
+    enabled: open,
+  });
 
   const decisions = optionalArray(data?.pages).flatMap((page) => page.items);
   const isLoading = open && isPending;
@@ -63,7 +70,26 @@ export const ProvisionCitingDecisions = ({
       </PopoverTrigger>
       <PopoverPanel className="w-80" contentClassName="gap-1">
         {isLoading && <CitingDecisionsLoader />}
-        {!isLoading && decisions.length === 0 && (
+        {/* A failed read is not an answer: saying "no results" here would
+            state as legal fact that nothing cites this provision. */}
+        {isError && (
+          <div className="flex flex-col items-center gap-1 py-2">
+            <p className="text-muted-foreground text-xs">
+              {t("errors.actionFailed")}
+            </p>
+            <Button
+              className="text-xs"
+              onClick={() => {
+                detached(refetch(), "statutes.citing-decisions-retry");
+              }}
+              size="sm"
+              variant="ghost"
+            >
+              {t("common.retry")}
+            </Button>
+          </div>
+        )}
+        {!isLoading && !isError && decisions.length === 0 && (
           <p className="text-muted-foreground py-2 text-center text-xs">
             {t("common.noResults")}
           </p>

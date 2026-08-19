@@ -17,7 +17,12 @@ import { formatProvisionReference } from "@/features/case-law/provision-label";
 import {
   decisionProvisionsInfiniteOptions,
   statuteByEliOptions,
+  statuteVersionsOptions,
 } from "@/features/case-law/queries/provisions";
+import {
+  pickVersionAt,
+  versionCoversDate,
+} from "@/features/case-law/statute-version";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 import type { SafeId } from "@/lib/safe-id";
@@ -36,6 +41,8 @@ type ProvisionRow = ProvisionReference & {
   jurisdiction: string;
   /** Where in the decision the reference stands; two can share an anchor. */
   spanStart: number;
+  /** Opening date of the consolidation the reference was made against. */
+  versionValidFrom: string | null;
   workCollection: string;
   workEli: string | null;
   workIdentifier: string;
@@ -118,14 +125,23 @@ export const ProvisionsCited = ({
     }
   };
 
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
-    useInfiniteQuery(decisionProvisionsInfiniteOptions(decisionId));
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isError,
+    isFetchingNextPage,
+    refetch,
+  } = useInfiniteQuery(decisionProvisionsInfiniteOptions(decisionId));
 
   const groups = groupByWork(
     optionalArray(data?.pages).flatMap((page) => page.items),
   );
 
-  if (groups.length === 0) {
+  // Absent is the answer for a decision that applies no provisions. A failed
+  // read is not that answer, so it keeps the panel and says so instead of
+  // disappearing as though the decision cited nothing.
+  if (groups.length === 0 && !isError) {
     return null;
   }
 
@@ -144,6 +160,23 @@ export const ProvisionsCited = ({
       </button>
       {open && (
         <div className="flex flex-col gap-3 px-3 pb-3">
+          {isError && (
+            <div className="flex items-center gap-2">
+              <p className="text-muted-foreground text-xs">
+                {t("errors.actionFailed")}
+              </p>
+              <Button
+                className="text-xs"
+                onClick={() => {
+                  detached(refetch(), "case-law.provisions-retry");
+                }}
+                size="sm"
+                variant="ghost"
+              >
+                {t("common.retry")}
+              </Button>
+            </div>
+          )}
           {groups.map((group, index) => (
             <WorkReferences
               group={group}
@@ -188,6 +221,38 @@ const WorkReferences = ({
     enabled: isLinked && group.workEli !== null,
   });
 
+  // A reference to wording the current consolidation still carries is
+  // answered by the document already resolved; only a citation reaching
+  // further back needs the work's other versions.
+  const needsVersions =
+    statute !== undefined &&
+    statute !== null &&
+    group.rows.some(
+      (row) =>
+        row.versionValidFrom !== null &&
+        !versionCoversDate(statute, row.versionValidFrom),
+    );
+
+  const { data: versions } = useQuery({
+    ...statuteVersionsOptions(statute?.id ?? ""),
+    enabled: needsVersions,
+  });
+
+  /** The consolidation a reference was made against, current wording last. */
+  const documentFor = (row: ProvisionRow) => {
+    if (statute === undefined || statute === null) {
+      return null;
+    }
+
+    if (row.versionValidFrom === null) {
+      return statute;
+    }
+
+    return (
+      pickVersionAt(optionalArray(versions), row.versionValidFrom) ?? statute
+    );
+  };
+
   return (
     <div className="flex flex-col gap-1">
       <p className="text-muted-foreground text-[0.7rem] tracking-wide uppercase">
@@ -197,8 +262,9 @@ const WorkReferences = ({
         {group.rows.map((row) => {
           const label = formatProvisionReference(row, renderPart);
           const key = `${row.anchor}-${row.spanStart}`;
+          const document = documentFor(row);
 
-          if (statute === undefined || statute === null) {
+          if (document === null) {
             return (
               <li className="text-foreground-strong-muted text-xs" key={key}>
                 {label}
@@ -212,8 +278,8 @@ const WorkReferences = ({
                 className="text-primary text-xs hover:underline"
                 hash={row.anchor}
                 params={{
-                  country: toStatuteCountrySegment(statute.country),
-                  documentId: statute.id,
+                  country: toStatuteCountrySegment(document.country),
+                  documentId: document.id,
                 }}
                 to="/law/$country/statutes/$documentId"
               >

@@ -19,6 +19,7 @@ import {
   type RefObject,
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -173,11 +174,17 @@ export const OutlineRail = ({
   const [pctById, setPctById] = useState<Record<string, number>>({});
   const [derivedActive, setDerivedActive] = useState<string | null>(null);
   const [hovered, setHovered] = useState(false);
+  // Held open by keyboard. The pointer path reveals the panel on hover, which
+  // a keyboard has no equivalent of, and an `inert` panel cannot take focus to
+  // open itself — so the way in is a control outside it that latches this.
+  const [pinned, setPinned] = useState(false);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   // Rows the reader has opened or closed by hand. Their state is theirs: the
   // active-chain auto-expand below must not reopen a branch they just shut.
   const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set());
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const panelId = useId();
+  const panelOpen = hovered || pinned;
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const manualLockUntil = useRef(0);
   const panelRef = useRef<HTMLElement>(null);
@@ -399,6 +406,23 @@ export const OutlineRail = ({
     closeTimer.current = setTimeout(() => setHovered(false), 120);
   }, []);
 
+  // Opening by keyboard has to land the reader in the panel; it is `inert`
+  // until this render commits, so the move cannot happen in the click.
+  useEffect(() => {
+    if (pinned) {
+      panelRef.current?.focus();
+    }
+  }, [pinned]);
+
+  const closePanel = useCallback(() => {
+    if (closeTimer.current !== null) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+    setHovered(false);
+    setPinned(false);
+  }, []);
+
   useEffect(
     () => () => {
       if (closeTimer.current !== null) {
@@ -532,6 +556,26 @@ export const OutlineRail = ({
       role="group"
       style={{ top: topOffset, bottom: 0, width: RAIL_WIDTH }}
     >
+      {/* The panel is revealed by hover, which a keyboard cannot perform, and
+          it is `inert` until then, so no control inside it can be the way in.
+          This one sits outside the panel and stays out of the layout until it
+          takes focus, leaving the rail as drawn for pointer readers. */}
+      <button
+        aria-controls={panelId}
+        aria-expanded={panelOpen}
+        className="focus-visible:ring-ring bg-popover text-popover-foreground sr-only absolute end-0 top-2 z-30 w-max -translate-x-6 rounded-md border px-2 py-1 text-xs focus:not-sr-only focus-visible:ring-2 focus-visible:outline-none"
+        onClick={() => {
+          if (pinned) {
+            closePanel();
+            return;
+          }
+          setPinned(true);
+          openPanel();
+        }}
+        type="button"
+      >
+        {ariaLabel}
+      </button>
       <div
         className="relative h-full"
         onMouseEnter={openPanel}
@@ -595,11 +639,13 @@ export const OutlineRail = ({
 
       {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- hover-reveal disclosure on a nav landmark; onMouseEnter/Leave drive a supplementary pointer affordance, panel visibility gated by inert/aria-hidden */}
       <nav
-        aria-hidden={!hovered}
-        inert={hovered ? undefined : true}
+        aria-hidden={!panelOpen}
+        id={panelId}
+        inert={panelOpen ? undefined : true}
+        tabIndex={-1}
         className={cn(
           "border-border bg-popover text-popover-foreground absolute overflow-y-auto rounded-xl border pb-2 shadow-lg transition-[opacity,transform] duration-150",
-          hovered
+          panelOpen
             ? "translate-x-0 opacity-100"
             : "pointer-events-none translate-x-2 opacity-0",
         )}
@@ -607,8 +653,22 @@ export const OutlineRail = ({
         // open, and typing in it moves the pointer nowhere: hold the panel
         // open for as long as focus is inside it, or `inert` would take the
         // focused control away mid-keystroke.
-        onBlurCapture={scheduleClose}
+        onBlurCapture={(event) => {
+          // A panel latched open by keyboard releases when focus leaves it;
+          // the hover path keeps its grace period so a click inside the panel
+          // (blur, then focus) does not flicker it shut.
+          if (pinned && !event.currentTarget.contains(event.relatedTarget)) {
+            closePanel();
+            return;
+          }
+          scheduleClose();
+        }}
         onFocusCapture={openPanel}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            closePanel();
+          }
+        }}
         onMouseEnter={openPanel}
         onMouseLeave={scheduleClose}
         ref={panelRef}

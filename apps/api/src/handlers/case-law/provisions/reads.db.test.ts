@@ -376,6 +376,14 @@ test("citing decisions refuse a request that names neither key or both", async (
     work: WORK,
   });
 
-  expect("items" in neither).toBe(false);
-  expect("items" in both).toBe(false);
+  // The status and the message are the contract a caller reads: an unrelated
+  // failure would also leave `items` absent.
+  expect(neither).toMatchObject({
+    code: 400,
+    response: { message: "Name exactly one of work or eli" },
+  });
+  expect(both).toMatchObject({
+    code: 400,
+    response: { message: "Name exactly one of work or eli" },
+  });
 });

@@ -10,6 +10,12 @@ import { toSafeId } from "@/lib/safe-id";
 const PROVISIONS_PAGE_SIZE = 50;
 /** One work resolves to one act; the extra rows absorb a loose title match. */
 const STATUTE_LOOKUP_PAGE_SIZE = 5;
+/**
+ * Consolidations read in one request. An act amended more times than this is
+ * a corpus outlier, and the reference then follows the current wording rather
+ * than growing the read into a walk.
+ */
+const STATUTE_VERSIONS_PAGE_SIZE = 200;
 
 export const decisionProvisionKeys = {
   all: ["case-law-decisions", "provisions"],
@@ -21,6 +27,12 @@ export const decisionProvisionKeys = {
     ...decisionProvisionKeys.all,
     "statute",
     { country: key.country, eli: key.eli },
+  ],
+  statuteVersions: (documentId: string) => [
+    ...decisionProvisionKeys.all,
+    "statute",
+    documentId,
+    "versions",
   ],
 };
 
@@ -82,6 +94,31 @@ export const statuteByEliOptions = ({ country, eli }: StatuteByEliKey) =>
       assertPublicLawApiData(data, "resolvePublicStatuteByEli");
 
       return data.items.find((statute) => statute.eli === eli) ?? null;
+    },
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  });
+
+/**
+ * Every consolidation of the work a document belongs to, newest first.
+ *
+ * Read only when a reference states a version the current consolidation does
+ * not cover: a citation to the wording still in force needs no second read.
+ */
+export const statuteVersionsOptions = (documentId: string) =>
+  queryOptions({
+    queryKey: decisionProvisionKeys.statuteVersions(documentId),
+    queryFn: async ({ signal }) => {
+      const response = await api.law
+        .statutes({ documentId: toSafeId<"legislationDocument">(documentId) })
+        .versions.get({
+          query: { limit: STATUTE_VERSIONS_PAGE_SIZE },
+          fetch: { signal },
+        });
+
+      const data = unwrapEden(response);
+      assertPublicLawApiData(data, "listPublicStatuteVersionsForProvision");
+
+      return data.items;
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });

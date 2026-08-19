@@ -8,6 +8,7 @@ import { IntlProvider } from "use-intl";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import { StatuteText } from "@/features/statutes/components/statute-text";
+import { citingDecisionKeys } from "@/features/statutes/queries/citing-decisions";
 import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 
@@ -235,10 +236,19 @@ describe("StatuteText", () => {
       </QueryClientProvider>,
     );
 
+    // The provision's read has to be the one this assertion is about, or an
+    // empty cache would pass it without anything having been rendered.
+    const provisionQuery = queryClient.getQueryCache().find({
+      queryKey: citingDecisionKeys.forProvision({
+        anchor: "paragraf-47",
+        eli: "/eli/cz/sb/2012/89",
+        jurisdiction: "CZE",
+      }),
+    });
+
+    expect(provisionQuery).toBeDefined();
     // A consolidated code renders thousands of provisions: one read per
     // provision at mount would be one request per heading on the page.
-    for (const query of queryClient.getQueryCache().getAll()) {
-      expect(query.state.fetchStatus).toBe("idle");
-    }
+    expect(provisionQuery?.state.fetchStatus).toBe("idle");
   });
 });
