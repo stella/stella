@@ -4,7 +4,6 @@ import { status, t } from "elysia";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import type { ScopedDb } from "@/api/db/safe-db";
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
@@ -19,52 +18,56 @@ import {
   parsePersistedCorpusAst,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
+import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 
 /**
  * Read one legislation document for display. Prefers canonical text/AST
  * from object storage when enabled, falling back to the Postgres columns
- * (mirrors case-law read-by-id). Global corpus tables are readable by the
- * scoped role, so reads go through scopedDb.
+ * (mirrors case-law read-by-id). The corpus tables are global, so the same
+ * read serves the workspace route and the public reader; the caller passes
+ * the database handle its own boundary allows.
  */
 export const readLegislationHandler = async (
   documentId: SafeId<"legislationDocument">,
-  scopedDb: ScopedDb,
+  legislationDb: LegislationReadDb,
 ) => {
-  const [document] = await scopedDb((tx) =>
-    tx
-      .select({
-        id: legislationDocuments.id,
-        eli: legislationDocuments.eli,
-        title: legislationDocuments.title,
-        country: legislationDocuments.country,
-        language: legislationDocuments.language,
-        documentType: legislationDocuments.documentType,
-        status: legislationDocuments.status,
-        effectiveDate: legislationDocuments.effectiveDate,
-        versionValidFrom: legislationDocuments.versionValidFrom,
-        versionValidTo: legislationDocuments.versionValidTo,
-        sourceUrl: legislationDocuments.sourceUrl,
-        documentUrl: legislationDocuments.documentUrl,
-        metadata: legislationDocuments.metadata,
-        createdAt: legislationDocuments.createdAt,
-        updatedAt: legislationDocuments.updatedAt,
-        documentAst: legislationDocuments.documentAst,
-        fulltext: legislationDocuments.fulltext,
-        astS3Key: legislationDocuments.astS3Key,
-        textS3Key: legislationDocuments.textS3Key,
-      })
-      .from(legislationDocuments)
-      .innerJoin(
-        legislationSources,
-        eq(legislationSources.id, legislationDocuments.sourceId),
-      )
-      .where(
-        and(
-          eq(legislationDocuments.id, documentId),
-          redistributableLegislationSource,
-        ),
-      )
-      .limit(1),
+  const [document] = await legislationDb(
+    async (tx) =>
+      await tx
+        .select({
+          id: legislationDocuments.id,
+          eli: legislationDocuments.eli,
+          title: legislationDocuments.title,
+          country: legislationDocuments.country,
+          language: legislationDocuments.language,
+          documentType: legislationDocuments.documentType,
+          status: legislationDocuments.status,
+          effectiveDate: legislationDocuments.effectiveDate,
+          versionValidFrom: legislationDocuments.versionValidFrom,
+          versionValidTo: legislationDocuments.versionValidTo,
+          sections: legislationDocuments.sections,
+          sourceUrl: legislationDocuments.sourceUrl,
+          documentUrl: legislationDocuments.documentUrl,
+          metadata: legislationDocuments.metadata,
+          createdAt: legislationDocuments.createdAt,
+          updatedAt: legislationDocuments.updatedAt,
+          documentAst: legislationDocuments.documentAst,
+          fulltext: legislationDocuments.fulltext,
+          astS3Key: legislationDocuments.astS3Key,
+          textS3Key: legislationDocuments.textS3Key,
+        })
+        .from(legislationDocuments)
+        .innerJoin(
+          legislationSources,
+          eq(legislationSources.id, legislationDocuments.sourceId),
+        )
+        .where(
+          and(
+            eq(legislationDocuments.id, documentId),
+            redistributableLegislationSource,
+          ),
+        )
+        .limit(1),
   );
 
   if (!document) {
@@ -104,6 +107,26 @@ export const readLegislationHandler = async (
       : pgText;
 
   return { ...rest, documentAst, fulltext };
+};
+
+/**
+ * The unauthenticated reader's projection. `metadata` is an open JSONB bag
+ * filled from whatever the publisher shipped, so it stays on the
+ * workspace-scoped read and never reaches a public response.
+ */
+export const readPublicLegislationHandler = async (
+  documentId: SafeId<"legislationDocument">,
+  legislationDb: LegislationReadDb,
+) => {
+  const document = await readLegislationHandler(documentId, legislationDb);
+
+  if (!("metadata" in document)) {
+    return document;
+  }
+
+  const { metadata: _metadata, ...publicFields } = document;
+
+  return publicFields;
 };
 
 const config = {

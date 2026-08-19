@@ -47,6 +47,7 @@ import { healthRoute } from "@/api/handlers/health/routes";
 import { hostedUsageWebhookRoute } from "@/api/handlers/hosted-usage-webhook/routes";
 import { invoicesRoute } from "@/api/handlers/invoices/routes";
 import { legislationCorpusRoute } from "@/api/handlers/legislation/corpus-routes";
+import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
 import { legislationRoute } from "@/api/handlers/legislation/routes";
 import { listsRoute } from "@/api/handlers/lists/routes";
 import { handleMcpAppSandboxRequest } from "@/api/handlers/mcp-app-sandbox/routes";
@@ -627,6 +628,7 @@ const api = new Elysia()
       .use(contactsRoute)
       .use(legislationRoute)
       .use(legislationCorpusRoute)
+      .use(publicLegislationRoute)
       .use(searchRoute)
       .use(savedSearchesRoute)
       .use(auditLogsRoute)

@@ -329,8 +329,7 @@
         "decisionCategory": "Categoria da decisão",
         "publishedOnWeb": "Publicado na web"
       },
-      "statutes": "Normas aplicáveis",
-      "viewOriginal": "Ver fonte"
+      "statutes": "Normas aplicáveis"
     }
   },
   "catalogue": {
@@ -1003,6 +1002,7 @@
       "ZH-HANS": "Chinês (simplificado)",
       "ZH-HANT": "Chinês (tradicional)"
     },
+    "legalDatabase": "Base de dados jurídica",
     "loadMore": "Carregar mais",
     "loading": "Carregando",
     "logTime": "Registrar tempo",
@@ -1097,6 +1097,7 @@
     "verify": "Verificar",
     "version": "Versão",
     "versionLabel": "Versão {version}",
+    "viewSource": "Ver fonte",
     "workflows": "Fluxos de trabalho"
   },
   "consent": {
@@ -3251,6 +3252,24 @@
       "usageUnitsBalanceTemplate": "{remaining} unidades disponíveis",
       "usageUnitsThisPeriod": "Unidades de uso neste período"
     }
+  },
+  "statutes": {
+    "backToList": "Todas as normas",
+    "emptyDocument": "Esta versão não tem texto disponível.",
+    "emptyState": "Nenhuma norma encontrada.",
+    "inForceSince": "Em vigor desde {date}",
+    "openEnded": "hoje",
+    "outline": "Sumário",
+    "searchLabel": "Buscar na legislação",
+    "searchPlaceholder": "Buscar por título ou número...",
+    "status": {
+      "current": "Em vigor",
+      "draft": "Em projeto",
+      "historical": "Substituída",
+      "repealed": "Revogada"
+    },
+    "title": "Legislação",
+    "validity": "Vigente de {from} a {to}"
   },
   "styleSets": {
     "create": "Criar",

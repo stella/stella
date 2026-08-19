@@ -329,8 +329,7 @@
         "decisionCategory": "Döntés kategóriája",
         "publishedOnWeb": "Weben közzétéve"
       },
-      "statutes": "Alkalmazandó jogszabályok",
-      "viewOriginal": "Forrás megtekintése"
+      "statutes": "Alkalmazandó jogszabályok"
     }
   },
   "catalogue": {
@@ -1003,6 +1002,7 @@
       "ZH-HANS": "Kínai (egyszerűsített)",
       "ZH-HANT": "kínai (hagyományos)"
     },
+    "legalDatabase": "Jogi adatbázis",
     "loadMore": "Több betöltése",
     "loading": "Betöltés",
     "logTime": "Idő rögzítése",
@@ -1097,6 +1097,7 @@
     "verify": "Ellenőrzés",
     "version": "Verzió",
     "versionLabel": "{version}. verzió",
+    "viewSource": "Forrás megtekintése",
     "workflows": "Munkafolyamatok"
   },
   "consent": {
@@ -3251,6 +3252,24 @@
       "usageUnitsBalanceTemplate": "{remaining} egység elérhető",
       "usageUnitsThisPeriod": "Használati egységek ebben az időszakban"
     }
+  },
+  "statutes": {
+    "backToList": "Összes jogszabály",
+    "emptyDocument": "Ehhez a változathoz nem érhető el szöveg.",
+    "emptyState": "Nem található jogszabály.",
+    "inForceSince": "Hatályos {date} óta",
+    "openEnded": "jelenleg is",
+    "outline": "Tartalom",
+    "searchLabel": "Keresés a jogszabályok között",
+    "searchPlaceholder": "Keresés cím vagy szám alapján...",
+    "status": {
+      "current": "Hatályos",
+      "draft": "Tervezetben",
+      "historical": "Felváltott",
+      "repealed": "Hatályon kívül helyezett"
+    },
+    "title": "Jogszabályok",
+    "validity": "Hatályos {from} és {to} között"
   },
   "styleSets": {
     "create": "Létrehozás",

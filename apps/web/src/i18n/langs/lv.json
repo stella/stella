@@ -329,8 +329,7 @@
         "decisionCategory": "Nolēmuma kategorija",
         "publishedOnWeb": "Publicēts tīmeklī"
       },
-      "statutes": "Piemērojamie tiesību akti",
-      "viewOriginal": "Skatīt avotu"
+      "statutes": "Piemērojamie tiesību akti"
     }
   },
   "catalogue": {
@@ -1003,6 +1002,7 @@
       "ZH-HANS": "Ķīniešu (vienkāršotā)",
       "ZH-HANT": "Ķīniešu (tradicionālā)"
     },
+    "legalDatabase": "Juridiskā datubāze",
     "loadMore": "Ielādēt vairāk",
     "loading": "Ielādē",
     "logTime": "Reģistrēt laiku",
@@ -1097,6 +1097,7 @@
     "verify": "Verificēt",
     "version": "Versija",
     "versionLabel": "{version}. versija",
+    "viewSource": "Skatīt avotu",
     "workflows": "Darbplūsmas"
   },
   "consent": {
@@ -3251,6 +3252,24 @@
       "usageUnitsBalanceTemplate": "Pieejamas {remaining} vienības",
       "usageUnitsThisPeriod": "Šī perioda lietojuma vienības"
     }
+  },
+  "statutes": {
+    "backToList": "Visi tiesību akti",
+    "emptyDocument": "Šai redakcijai nav pieejams teksts.",
+    "emptyState": "Tiesību akti nav atrasti.",
+    "inForceSince": "Spēkā no {date}",
+    "openEnded": "šobrīd",
+    "outline": "Saturs",
+    "searchLabel": "Meklēt tiesību aktos",
+    "searchPlaceholder": "Meklēt pēc nosaukuma vai numura...",
+    "status": {
+      "current": "Spēkā",
+      "draft": "Projektā",
+      "historical": "Aizstāts",
+      "repealed": "Zaudējis spēku"
+    },
+    "title": "Tiesību akti",
+    "validity": "Spēkā no {from} līdz {to}"
   },
   "styleSets": {
     "create": "Izveidot",

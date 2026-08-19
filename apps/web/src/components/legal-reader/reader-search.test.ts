@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { buildSearchResults } from "./decision-search";
+import { buildSearchResults } from "./reader-search";
 
 describe("buildSearchResults", () => {
   it("matches case-insensitively and ignores diacritics", () => {

@@ -329,8 +329,7 @@
         "decisionCategory": "Lahendi kategooria",
         "publishedOnWeb": "Veebis avaldatud"
       },
-      "statutes": "Kohaldatavad õigusaktid",
-      "viewOriginal": "Vaata allikat"
+      "statutes": "Kohaldatavad õigusaktid"
     }
   },
   "catalogue": {
@@ -1003,6 +1002,7 @@
       "ZH-HANS": "Hiina (lihtsustatud)",
       "ZH-HANT": "Hiina (traditsiooniline)"
     },
+    "legalDatabase": "Õigusandmebaas",
     "loadMore": "Laadi rohkem",
     "loading": "Laadimine",
     "logTime": "Salvesta aeg",
@@ -1097,6 +1097,7 @@
     "verify": "Kinnita",
     "version": "Versioon",
     "versionLabel": "Versioon {version}",
+    "viewSource": "Vaata allikat",
     "workflows": "Töövood"
   },
   "consent": {
@@ -3251,6 +3252,24 @@
       "usageUnitsBalanceTemplate": "Saadaval on {remaining} ühikut",
       "usageUnitsThisPeriod": "Selle perioodi kasutusühikud"
     }
+  },
+  "statutes": {
+    "backToList": "Kõik õigusaktid",
+    "emptyDocument": "Sellel redaktsioonil puudub tekst.",
+    "emptyState": "Õigusakte ei leitud.",
+    "inForceSince": "Kehtib alates {date}",
+    "openEnded": "praeguseni",
+    "outline": "Sisukord",
+    "searchLabel": "Otsi õigusaktidest",
+    "searchPlaceholder": "Otsi pealkirja või numbri järgi...",
+    "status": {
+      "current": "Kehtiv",
+      "draft": "Eelnõus",
+      "historical": "Asendatud",
+      "repealed": "Kehtetu"
+    },
+    "title": "Õigusaktid",
+    "validity": "Kehtib {from} kuni {to}"
   },
   "styleSets": {
     "create": "Loo",

@@ -329,8 +329,7 @@
         "decisionCategory": "Kategorie rozhodnutí",
         "publishedOnWeb": "Zveřejněno na webu"
       },
-      "statutes": "Dotčené předpisy",
-      "viewOriginal": "Zobrazit zdroj"
+      "statutes": "Dotčené předpisy"
     }
   },
   "catalogue": {
@@ -1003,6 +1002,7 @@
       "ZH-HANS": "čínština (zjednodušená)",
       "ZH-HANT": "čínština (tradiční)"
     },
+    "legalDatabase": "Právní databáze",
     "loadMore": "Načíst další",
     "loading": "Načítám",
     "logTime": "Zaznamenat čas",
@@ -1097,6 +1097,7 @@
     "verify": "Ověřit",
     "version": "Verze",
     "versionLabel": "Verze {version}",
+    "viewSource": "Zobrazit zdroj",
     "workflows": "Pracovní postupy"
   },
   "consent": {
@@ -3251,6 +3252,24 @@
       "usageUnitsBalanceTemplate": "K dispozici je {remaining} jednotek",
       "usageUnitsThisPeriod": "Jednotky využití za toto období"
     }
+  },
+  "statutes": {
+    "backToList": "Všechny předpisy",
+    "emptyDocument": "Toto znění nemá dostupný text.",
+    "emptyState": "Nenalezeny žádné předpisy.",
+    "inForceSince": "Účinné od {date}",
+    "openEnded": "současnost",
+    "outline": "Obsah",
+    "searchLabel": "Hledat v právních předpisech",
+    "searchPlaceholder": "Hledat podle názvu nebo čísla...",
+    "status": {
+      "current": "Účinné",
+      "draft": "Navrhované",
+      "historical": "Nahrazené",
+      "repealed": "Zrušené"
+    },
+    "title": "Právní předpisy",
+    "validity": "Platné od {from} do {to}"
   },
   "styleSets": {
     "create": "Vytvořit",

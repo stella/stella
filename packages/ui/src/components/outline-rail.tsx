@@ -53,6 +53,11 @@ export type OutlineRailProps = {
   onJump: (id: string, container: HTMLElement) => void;
   /** Controlled active id; when omitted, derived from `resolvePct`. */
   activeId?: string | null;
+  /** Depth from which entries start collapsed. Their ancestors still open on
+   *  their own while one of their descendants is active, so a deep outline
+   *  reads as the chain down to where the reader is rather than as every
+   *  branch at once. Omitted: everything starts expanded. */
+  collapsedFromLevel?: number;
   topOffset?: number;
   panelWidth?: number;
   ariaLabel?: string;
@@ -154,6 +159,7 @@ export const OutlineRail = ({
   resolvePct,
   onJump,
   activeId,
+  collapsedFromLevel,
   topOffset = 0,
   panelWidth = 300,
   ariaLabel = "Outline",
@@ -162,6 +168,9 @@ export const OutlineRail = ({
   const [derivedActive, setDerivedActive] = useState<string | null>(null);
   const [hovered, setHovered] = useState(false);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  // Rows the reader has opened or closed by hand. Their state is theirs: the
+  // active-chain auto-expand below must not reopen a branch they just shut.
+  const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set());
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const manualLockUntil = useRef(0);
@@ -175,6 +184,25 @@ export const OutlineRail = ({
   const onJumpRef = useRef(onJump);
 
   const tree = useMemo(() => buildTree(items), [items]);
+
+  // Seed the default-collapsed set from the items, and reset it when the
+  // items change (a different document). Adjusting state during render rather
+  // than in an effect keeps the first paint correct.
+  const [seededItems, setSeededItems] = useState<OutlineItem[] | null>(null);
+  if (seededItems !== items) {
+    setSeededItems(items);
+    setToggled(new Set());
+    setCollapsed(
+      collapsedFromLevel === undefined
+        ? new Set()
+        : new Set(
+            items
+              .filter((item) => item.level >= collapsedFromLevel)
+              .map((item) => item.id),
+          ),
+    );
+  }
+
   const maxLevel = useMemo(() => {
     let max = 0;
     for (const item of items) {
@@ -286,6 +314,29 @@ export const OutlineRail = ({
 
   const active = activeId === undefined ? derivedActive : activeId;
 
+  // Ancestors of the active entry, so the chain down to it stays open. Walks
+  // the flat list backwards by the same rule `buildTree` nests on: a parent is
+  // the nearest preceding entry at a shallower level.
+  const activeAncestorIds = useMemo(() => {
+    const ancestors = new Set<string>();
+    const activeIndex = items.findIndex((item) => item.id === active);
+    let level = items.at(activeIndex)?.level;
+
+    if (activeIndex === -1 || level === undefined) {
+      return ancestors;
+    }
+
+    for (let index = activeIndex - 1; index >= 0 && level > 0; index -= 1) {
+      const candidate = items[index];
+      if (candidate !== undefined && candidate.level < level) {
+        ancestors.add(candidate.id);
+        level = candidate.level;
+      }
+    }
+
+    return ancestors;
+  }, [active, items]);
+
   const jumpTo = useCallback(
     (id: string) => {
       const container = scrollContainerRef.current;
@@ -303,6 +354,7 @@ export const OutlineRail = ({
 
   const toggleCollapse = useCallback(
     (id: string, level: number, rowEl: HTMLElement | null) => {
+      setToggled((prev) => new Set(prev).add(id));
       setCollapsed((prev) => {
         const next = new Set(prev);
         if (next.has(id)) {
@@ -352,7 +404,9 @@ export const OutlineRail = ({
 
   const renderNode = (node: TreeNode): ReactNode => {
     const hasChildren = node.children.length > 0;
-    const isCollapsed = collapsed.has(node.item.id);
+    const isCollapsed =
+      collapsed.has(node.item.id) &&
+      !(activeAncestorIds.has(node.item.id) && !toggled.has(node.item.id));
     const isActive = active === node.item.id;
     const isHovered = hoveredId === node.item.id;
     const highlighted = isActive || isHovered;

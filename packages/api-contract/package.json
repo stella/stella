@@ -9,6 +9,7 @@
     ".": "./src/index.ts",
     "./chat": "./src/chat.ts",
     "./entity-options": "./src/entity-options.ts",
+    "./legislation-status": "./src/legislation-status.ts",
     "./matter-activity": "./src/matter-activity.ts",
     "./safe-id": "./src/safe-id.ts",
     "./time-entry-types": "./src/time-entry-types.ts",

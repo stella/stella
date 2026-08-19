@@ -1,3 +1,5 @@
+import { LEGISLATION_DOCUMENT_STATUSES } from "@stll/api-contract/legislation-status";
+
 import {
   globalCaseLawPolicies,
   isNotNull,
@@ -28,15 +30,9 @@ import type {
 /**
  * Lifecycle of a legislative text at a given point in time. The column stays
  * an unnarrowed varchar (the search filter accepts a free-form status string);
- * the CHECK below is what actually constrains the values.
+ * the CHECK below is what actually constrains the values, from the same
+ * declaration every client renders.
  */
-const LEGISLATION_DOCUMENT_STATUSES = [
-  "current",
-  "historical",
-  "repealed",
-  "draft",
-] as const;
-
 const LEGISLATION_DOCUMENT_STATUS_SQL_VALUES =
   LEGISLATION_DOCUMENT_STATUSES.map((status) => sql.raw(`'${status}'`));
 
@@ -127,6 +123,19 @@ export const legislationDocuments = p.pgTable(
       .where(isNull(t.versionValidFrom)),
     p.index("legislation_documents_eli_idx").on(t.eli),
     p.index("legislation_documents_country_idx").on(t.country),
+    // The public statute list, in its own order: the country seeks, the
+    // title/id pair is both the sort and the cursor.
+    p
+      .index("legislation_documents_country_title_id_idx")
+      .on(t.country, t.title, t.id),
+    // Its search filter matches anywhere in the title or the identifier, so
+    // the access path has to be trigram rather than btree.
+    p
+      .index("legislation_documents_title_trgm_idx")
+      .using("gin", sql`${t.title} gin_trgm_ops`),
+    p
+      .index("legislation_documents_eli_trgm_idx")
+      .using("gin", sql`${t.eli} gin_trgm_ops`),
     p.index("legislation_documents_status_idx").on(t.status),
     p.index("legislation_documents_effective_date_idx").on(t.effectiveDate),
     p.index("legislation_documents_created_at_idx").on(t.createdAt),

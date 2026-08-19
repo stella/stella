@@ -329,8 +329,7 @@
         "decisionCategory": "فئة القرار",
         "publishedOnWeb": "منشور على الويب"
       },
-      "statutes": "النصوص التشريعية المطبَّقة",
-      "viewOriginal": "عرض المصدر"
+      "statutes": "النصوص التشريعية المطبَّقة"
     }
   },
   "catalogue": {
@@ -1003,6 +1002,7 @@
       "ZH-HANS": "الصينية (المبسطة)",
       "ZH-HANT": "الصينية (التقليدية)"
     },
+    "legalDatabase": "قاعدة البيانات القانونية",
     "loadMore": "تحميل المزيد",
     "loading": "جارٍ التحميل",
     "logTime": "تسجيل الوقت",
@@ -1097,6 +1097,7 @@
     "verify": "تحقّق",
     "version": "الإصدار",
     "versionLabel": "الإصدار {version}",
+    "viewSource": "عرض المصدر",
     "workflows": "مسارات العمل"
   },
   "consent": {
@@ -3251,6 +3252,24 @@
       "usageUnitsBalanceTemplate": "{remaining} وحدة متاحة",
       "usageUnitsThisPeriod": "وحدات الاستخدام في هذه الفترة"
     }
+  },
+  "statutes": {
+    "backToList": "جميع التشريعات",
+    "emptyDocument": "لا يتوفر نص لهذه النسخة.",
+    "emptyState": "لم يُعثر على تشريعات.",
+    "inForceSince": "نافذ منذ {date}",
+    "openEnded": "الآن",
+    "outline": "المحتويات",
+    "searchLabel": "البحث في التشريعات",
+    "searchPlaceholder": "ابحث بالعنوان أو الرقم...",
+    "status": {
+      "current": "نافذ",
+      "draft": "مقترح",
+      "historical": "مُستبدَل",
+      "repealed": "مُلغى"
+    },
+    "title": "التشريعات",
+    "validity": "نافذ من {from} إلى {to}"
   },
   "styleSets": {
     "create": "إنشاء",

@@ -11,6 +11,45 @@
   --reader-section-gap-top: 2.5em;
   --reader-section-gap-bottom: 0.8em;
   --reader-anchor-offset: 88px;
+
+  /* Statute heading rhythm: the shallower the container, the wider the
+     approach to it. Absolute rather than em, so the gap ordering is the
+     level ordering and does not compound with the heading's own size. */
+  --reader-heading-gap-1: 3rem;
+  --reader-heading-gap-2: 2.4rem;
+  --reader-heading-gap-3: 1.9rem;
+  --reader-heading-gap-4: 1.5rem;
+  --reader-heading-gap-5: 1.25rem;
+  /* A section designation opens a provision, so it keeps a little more
+     approach than its depth alone would give it. */
+  --reader-heading-gap-6: 1.4rem;
+  --reader-heading-gap-bottom: 0.5rem;
+  --reader-heading-chain-gap: 0.4rem;
+}
+
+/* A heading that opens the container above it belongs to that container,
+   not to the text before it: ČÁST → HLAVA → Díl → § reads as one nested
+   stack, while the first heading after body text keeps its full approach.
+   Scoped to the statute reader; case law states its own h3 rule below. */
+.reader-statute :is(h1, h2, h3, h4, h5, h6) + :is(h1, h2, h3, h4, h5, h6) {
+  margin-top: var(--reader-heading-chain-gap);
+}
+
+/* The block a permalink was followed to, named for a moment. */
+@keyframes reader-target {
+  0%,
+  35% {
+    background-color: color-mix(in srgb, var(--color-primary) 14%, transparent);
+  }
+
+  100% {
+    background-color: transparent;
+  }
+}
+
+[data-anchor]:target {
+  animation: reader-target 2.4s ease-out;
+  border-radius: 0.25rem;
 }
 
 /* Justified body on desktop only. No hyphenation:

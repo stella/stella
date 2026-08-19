@@ -329,8 +329,7 @@
         "decisionCategory": "Catégorie de décision",
         "publishedOnWeb": "Publié sur le web"
       },
-      "statutes": "Textes applicables",
-      "viewOriginal": "Voir la source"
+      "statutes": "Textes applicables"
     }
   },
   "catalogue": {
@@ -1003,6 +1002,7 @@
       "ZH-HANS": "Chinois (simplifié)",
       "ZH-HANT": "Chinois (traditionnel)"
     },
+    "legalDatabase": "Base de données juridique",
     "loadMore": "Charger plus",
     "loading": "Chargement",
     "logTime": "Saisir le temps",
@@ -1097,6 +1097,7 @@
     "verify": "Vérifier",
     "version": "Version",
     "versionLabel": "Version {version}",
+    "viewSource": "Voir la source",
     "workflows": "Flux de travail"
   },
   "consent": {
@@ -3251,6 +3252,24 @@
       "usageUnitsBalanceTemplate": "{remaining} unités disponibles",
       "usageUnitsThisPeriod": "Unités d’utilisation sur cette période"
     }
+  },
+  "statutes": {
+    "backToList": "Tous les textes",
+    "emptyDocument": "Aucun texte disponible pour cette version.",
+    "emptyState": "Aucun texte trouvé.",
+    "inForceSince": "En vigueur depuis le {date}",
+    "openEnded": "aujourd’hui",
+    "outline": "Sommaire",
+    "searchLabel": "Rechercher dans la législation",
+    "searchPlaceholder": "Rechercher par titre ou numéro...",
+    "status": {
+      "current": "En vigueur",
+      "draft": "En projet",
+      "historical": "Remplacé",
+      "repealed": "Abrogé"
+    },
+    "title": "Législation",
+    "validity": "En vigueur du {from} au {to}"
   },
   "styleSets": {
     "create": "Créer",

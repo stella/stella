@@ -310,6 +310,11 @@ export const LIMITS = {
   /** Max child sitemap entries in one sitemap index by protocol. */
   caseLawSitemapIndexEntryLimit: 50_000,
   caseLawFacetLimit: 20,
+  legislationListPageSizeDefault: 20,
+  legislationListPageSizeMax: 100,
+  /** Consolidated versions of one work returned per page. */
+  legislationVersionsPageSizeDefault: 50,
+  legislationVersionsPageSizeMax: 200,
   caseLawPolarityRulesPerLanguage: 500,
   // corpus index two-stage search: lexical candidates fetched per index window
   // before the citation-authority rerank.
