@@ -2162,6 +2162,12 @@ export const createCaseLawGenerationBackfill =
         }
         if (drained.status === BACKFILL_STATUS.BUSY) {
           await releaseRunningLease();
+          reportPage({
+            outcome: "busy",
+            selected: 0,
+            indexed: 0,
+            drainedIndexed: 0,
+          });
           return drained;
         }
         drainedIndexed = drained.indexed;
