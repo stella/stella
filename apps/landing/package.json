@@ -30,7 +30,7 @@
     "@stll/ui": "workspace:*",
     "@stll/workspace-ui": "workspace:*",
     "@tailwindcss/vite": "catalog:",
-    "astro": "^7.2.1",
+    "astro": "^7.2.2",
     "better-result": "catalog:",
     "buffer": "^6.0.3",
     "lucide-react": "catalog:",
