@@ -283,6 +283,27 @@ const rewrittenMigrationHistories = {
     ],
     requiredIndexes: [],
   },
+  // 0.7.12 repaired the citations of retired rules with a scan of the whole
+  // citation table, which exceeded the statement budget on a large corpus.
+  // 0.7.13 builds a partial index on the rule id concurrently first and runs
+  // the repair under its own budget. A database that applied the 0.7.12 file
+  // completed the repair within budget, so only the index is owed to it.
+  "20260819100000_polarity_rule_retired_source": {
+    currentHash:
+      "f75c91e75a1536e3bc2ba0f748684e67d01c79d2561651f1144d2f7323d1ca75",
+    priorHashes: [
+      "6924ba9c25cd6957c052479ceb73a9a1ae0252e086b8202c72c6b04a84279b97",
+    ],
+    requiredIndexes: [
+      {
+        definitionBody:
+          "ON public.case_law_citations USING btree (polarity_rule_id) WHERE (polarity_rule_id IS NOT NULL)",
+        isUnique: false,
+        name: "case_law_citations_polarity_rule_idx",
+        tableName: "case_law_citations",
+      },
+    ],
+  },
 } as const satisfies Readonly<Record<string, RewrittenMigrationHistory>>;
 
 export const REWRITTEN_MIGRATION_HISTORIES: Readonly<
