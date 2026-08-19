@@ -41,6 +41,7 @@ import {
   ColorPickerContent,
   DEFAULT_PRESETS,
 } from "@stll/ui/color-picker";
+import { KanbanColumnHeader } from "@stll/ui/kanban";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
@@ -342,143 +343,119 @@ export const KanbanColumn = ({
           <div className="bg-primary -mt-0.5 size-2 rounded-full" />
         </div>
       )}
-      <div className="flex items-center gap-2 px-3 py-2">
-        {(() => {
-          if (color && onChangeColor) {
-            return (
-              <ColorPicker
-                moreLabel={t("common.showMore")}
-                value={optionColor}
-                onSelect={handleColorSelect}
-                side="bottom"
+      <KanbanColumnHeader
+        actions={
+          hasColumnActions ? (
+            <Menu>
+              <MenuTrigger
+                aria-label={t("common.actions")}
+                render={<Button size="icon-xs" variant="ghost" />}
               >
-                <button className="shrink-0 cursor-pointer" type="button">
-                  <span
-                    className="block size-2.5 rounded-full"
-                    style={{ backgroundColor: color }}
-                  />
-                </button>
-              </ColorPicker>
-            );
-          }
-          if (color) {
-            return (
-              <span
-                className="size-2.5 rounded-full"
-                style={{ backgroundColor: color }}
-              />
-            );
-          }
-          return null;
-        })()}
-        {editing ? (
-          <InlineEdit
-            className="flex-1"
-            inputClassName="flex-1 font-medium"
-            onChange={setEditValue}
-            onCancel={cancelEditing}
-            onCommit={commitRename}
-            value={editValue}
+                <EllipsisVerticalIcon />
+              </MenuTrigger>
+              <MenuPopup>
+                {onChangeColor && (
+                  <Popover modal>
+                    <PopoverTrigger render={<MenuItem closeOnClick={false} />}>
+                      <PaletteIcon />
+                      {t("common.changeColor")}
+                    </PopoverTrigger>
+                    <PopoverPopup
+                      className="*:data-[slot=popover-viewport]:p-1!"
+                      side="right"
+                    >
+                      <ColorPickerContent
+                        columns={9}
+                        defaultExpanded={false}
+                        moreLabel={t("common.showMore")}
+                        onSelect={handleColorSelect}
+                        presets={DEFAULT_PRESETS}
+                        value={optionColor}
+                      />
+                    </PopoverPopup>
+                  </Popover>
+                )}
+                {onHideColumn && (
+                  <MenuItem onClick={onHideColumn}>
+                    <EyeOffIcon />
+                    {t("workspaces.kanban.hideColumn")}
+                  </MenuItem>
+                )}
+                {onDeleteAll && entities.length > 0 && (
+                  <AlertDialog>
+                    <AlertDialogTrigger
+                      render={
+                        <MenuItem closeOnClick={false} variant="destructive" />
+                      }
+                    >
+                      <Trash2Icon />
+                      {t("workspaces.kanban.deleteAll")}
+                    </AlertDialogTrigger>
+                    <AlertDialogPopup>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>
+                          {t("workspaces.kanban.deleteAll")}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                          {t("workspaces.kanban.deleteAllConfirm", {
+                            count: String(entities.length),
+                            column: title,
+                          })}
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogClose render={<Button variant="ghost" />}>
+                          {t("common.cancel")}
+                        </AlertDialogClose>
+                        <AlertDialogClose
+                          render={
+                            <Button
+                              onClick={onDeleteAll}
+                              variant="destructive"
+                            />
+                          }
+                        >
+                          {t("workspaces.kanban.deleteAll")}
+                        </AlertDialogClose>
+                      </AlertDialogFooter>
+                    </AlertDialogPopup>
+                  </AlertDialog>
+                )}
+              </MenuPopup>
+            </Menu>
+          ) : null
+        }
+        dragHandle={
+          isDraggable ? (
+            <div
+              className="text-muted-foreground hover:text-foreground shrink-0 cursor-grab opacity-0 transition-opacity group-hover/column:opacity-100"
+              ref={dragHandleRef}
+            >
+              <GripVerticalIcon className="size-3.5" />
+            </div>
+          ) : null
+        }
+        meta={editing ? undefined : format.number(entities.length)}
+        swatch={
+          <ColumnSwatch
+            color={color}
+            onSelect={handleColorSelect}
+            optionColor={optionColor}
+            showPicker={onChangeColor !== undefined}
           />
-        ) : (
-          <span className="flex flex-1 items-center gap-1.5 truncate">
-            <button
-              className="truncate text-start text-sm font-medium"
-              onClick={startEditing}
-              type="button"
-            >
-              {title}
-            </button>
-            <span className="text-muted-foreground text-xs">
-              {format.number(entities.length)}
-            </span>
-          </span>
-        )}
-        {isDraggable && (
-          <div
-            className="text-muted-foreground hover:text-foreground shrink-0 cursor-grab opacity-0 transition-opacity group-hover/column:opacity-100"
-            ref={dragHandleRef}
-          >
-            <GripVerticalIcon className="size-3.5" />
-          </div>
-        )}
-        {hasColumnActions && (
-          <Menu>
-            <MenuTrigger
-              aria-label={t("common.actions")}
-              render={<Button size="icon-xs" variant="ghost" />}
-            >
-              <EllipsisVerticalIcon />
-            </MenuTrigger>
-            <MenuPopup>
-              {onChangeColor && (
-                <Popover modal>
-                  <PopoverTrigger render={<MenuItem closeOnClick={false} />}>
-                    <PaletteIcon />
-                    {t("common.changeColor")}
-                  </PopoverTrigger>
-                  <PopoverPopup
-                    className="*:data-[slot=popover-viewport]:p-1!"
-                    side="right"
-                  >
-                    <ColorPickerContent
-                      columns={9}
-                      defaultExpanded={false}
-                      moreLabel={t("common.showMore")}
-                      onSelect={handleColorSelect}
-                      presets={DEFAULT_PRESETS}
-                      value={optionColor}
-                    />
-                  </PopoverPopup>
-                </Popover>
-              )}
-              {onHideColumn && (
-                <MenuItem onClick={onHideColumn}>
-                  <EyeOffIcon />
-                  {t("workspaces.kanban.hideColumn")}
-                </MenuItem>
-              )}
-              {onDeleteAll && entities.length > 0 && (
-                <AlertDialog>
-                  <AlertDialogTrigger
-                    render={
-                      <MenuItem closeOnClick={false} variant="destructive" />
-                    }
-                  >
-                    <Trash2Icon />
-                    {t("workspaces.kanban.deleteAll")}
-                  </AlertDialogTrigger>
-                  <AlertDialogPopup>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>
-                        {t("workspaces.kanban.deleteAll")}
-                      </AlertDialogTitle>
-                      <AlertDialogDescription>
-                        {t("workspaces.kanban.deleteAllConfirm", {
-                          count: String(entities.length),
-                          column: title,
-                        })}
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogClose render={<Button variant="ghost" />}>
-                        {t("common.cancel")}
-                      </AlertDialogClose>
-                      <AlertDialogClose
-                        render={
-                          <Button onClick={onDeleteAll} variant="destructive" />
-                        }
-                      >
-                        {t("workspaces.kanban.deleteAll")}
-                      </AlertDialogClose>
-                    </AlertDialogFooter>
-                  </AlertDialogPopup>
-                </AlertDialog>
-              )}
-            </MenuPopup>
-          </Menu>
-        )}
-      </div>
+        }
+        title={
+          <ColumnTitle
+            editValue={editValue}
+            editing={editing}
+            onCancel={cancelEditing}
+            onChange={setEditValue}
+            onCommit={commitRename}
+            onStartEditing={onRenameColumn ? startEditing : undefined}
+            title={title}
+          />
+        }
+      />
       <div
         className="flex-1 overflow-y-auto p-2"
         onContextMenu={containedEventHandler(handleContextMenu)}
@@ -582,5 +559,109 @@ export const KanbanColumn = ({
         )
       )}
     </div>
+  );
+};
+
+type ColumnTitleProps = {
+  title: string;
+  editing: boolean;
+  editValue: string;
+  onChange: (value: string) => void;
+  onCommit: () => void;
+  onCancel: () => void;
+  /** Omitted when the column's name is not the reader's to change. */
+  onStartEditing?: (() => void) | undefined;
+};
+
+/**
+ * The column's name: the editor while it is being renamed, a button when
+ * renaming is offered, and plain text otherwise — a button that does nothing
+ * is still a tab stop, and reaching it and pressing Enter would answer with
+ * silence.
+ */
+const ColumnTitle = ({
+  title,
+  editing,
+  editValue,
+  onChange,
+  onCommit,
+  onCancel,
+  onStartEditing,
+}: ColumnTitleProps) => {
+  if (editing) {
+    return (
+      <InlineEdit
+        className="flex-1"
+        inputClassName="flex-1 font-medium"
+        onCancel={onCancel}
+        onChange={onChange}
+        onCommit={onCommit}
+        value={editValue}
+      />
+    );
+  }
+
+  if (!onStartEditing) {
+    return <span className="truncate text-sm font-medium">{title}</span>;
+  }
+
+  return (
+    <button
+      className="truncate text-start text-sm font-medium"
+      onClick={onStartEditing}
+      type="button"
+    >
+      {title}
+    </button>
+  );
+};
+
+type ColumnSwatchProps = {
+  color?: string | undefined;
+  optionColor?: OptionColor | undefined;
+  showPicker: boolean;
+  onSelect: (color: string) => void;
+};
+
+/** The column's colour dot, and the picker behind it when it is editable. */
+const ColumnSwatch = ({
+  color,
+  optionColor,
+  showPicker,
+  onSelect,
+}: ColumnSwatchProps) => {
+  const t = useTranslations();
+
+  if (color === undefined) {
+    return null;
+  }
+
+  if (!showPicker) {
+    return (
+      <span
+        className="size-2.5 rounded-full"
+        style={{ backgroundColor: color }}
+      />
+    );
+  }
+
+  return (
+    <ColorPicker
+      moreLabel={t("common.showMore")}
+      onSelect={onSelect}
+      side="bottom"
+      value={optionColor}
+    >
+      <button
+        aria-label={t("common.changeColor")}
+        className="shrink-0 cursor-pointer"
+        type="button"
+      >
+        <span
+          className="block size-2.5 rounded-full"
+          style={{ backgroundColor: color }}
+        />
+      </button>
+    </ColorPicker>
   );
 };
